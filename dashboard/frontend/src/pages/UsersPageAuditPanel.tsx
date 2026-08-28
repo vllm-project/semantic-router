@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { DataTable, type Column } from '../components/DataTable'
+import ProductIcon from '../components/ProductIcon'
 import ProductLoadingState from '../components/ProductLoadingState'
 import styles from './UsersPage.module.css'
 import {
@@ -237,81 +238,37 @@ const UsersPageAuditPanel: React.FC = () => {
       </div>
 
       <div className={styles.auditFilterPanel}>
-        <div className={styles.auditFilterGrid}>
-          <label className={`${styles.auditFilterGroup} ${styles.auditSearchGroup}`}>
-            <span>Search</span>
+        <div className={styles.auditPrimaryFilters}>
+          <label className={styles.auditSearchControl}>
+            <ProductIcon name="search" aria-hidden="true" />
             <input
-              className={styles.search}
               type="search"
               value={query}
               onChange={(event) => {
                 setQuery(event.target.value)
                 setPage(1)
               }}
-              placeholder="Action, path, IP, user agent, or status code"
+              placeholder="Search activity"
+              aria-label="Search audit activity"
             />
           </label>
-
-          <label className={styles.auditFilterGroup}>
-            <span>Status</span>
-            <select
-              className={styles.filter}
-              value={statusFilter}
-              onChange={(event) => {
-                setStatusFilter(event.target.value)
-                setPage(1)
-              }}
-            >
-              <option value="all">All responses</option>
-              <option value="success">Successful (2xx–3xx)</option>
-              <option value="client_error">Client error (4xx)</option>
-              <option value="server_error">Server error (5xx)</option>
-            </select>
-          </label>
-
-          <label className={styles.auditFilterGroup}>
-            <span>User ID</span>
-            <input
-              className={styles.filterInput}
-              value={userFilter}
-              onChange={(event) => {
-                setUserFilter(event.target.value)
-                setPage(1)
-              }}
-              placeholder="Exact user ID"
-            />
-          </label>
-
-          <label className={styles.auditFilterGroup}>
-            <span>Action</span>
-            <input
-              className={styles.filterInput}
-              value={actionFilter}
-              onChange={(event) => {
-                setActionFilter(event.target.value)
-                setPage(1)
-              }}
-              placeholder="e.g. user.update"
-            />
-          </label>
-
-          <label className={styles.auditFilterGroup}>
-            <span>Resource</span>
-            <input
-              className={styles.filterInput}
-              value={resourceFilter}
-              onChange={(event) => {
-                setResourceFilter(event.target.value)
-                setPage(1)
-              }}
-              placeholder="Exact resource"
-            />
-          </label>
-
-          <label className={styles.auditFilterGroup}>
+          <select
+            className={styles.auditCompactControl}
+            value={statusFilter}
+            onChange={(event) => {
+              setStatusFilter(event.target.value)
+              setPage(1)
+            }}
+            aria-label="Response status"
+          >
+            <option value="all">All responses</option>
+            <option value="success">Successful</option>
+            <option value="client_error">Client error</option>
+            <option value="server_error">Server error</option>
+          </select>
+          <label className={styles.auditDateControl}>
             <span>From</span>
             <input
-              className={styles.filterInput}
               type="date"
               value={fromDate}
               max={toDate || undefined}
@@ -321,11 +278,9 @@ const UsersPageAuditPanel: React.FC = () => {
               }}
             />
           </label>
-
-          <label className={styles.auditFilterGroup}>
+          <label className={styles.auditDateControl}>
             <span>To</span>
             <input
-              className={styles.filterInput}
               type="date"
               value={toDate}
               min={fromDate || undefined}
@@ -335,77 +290,117 @@ const UsersPageAuditPanel: React.FC = () => {
               }}
             />
           </label>
-
-          <label className={styles.auditFilterGroup}>
-            <span>Sort</span>
-            <select
-              className={styles.filter}
-              value={sortField}
-              onChange={(event) => {
-                setSortField(event.target.value)
-                setPage(1)
-              }}
-            >
-              {AUDIT_SORT_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className={styles.auditFilterGroup}>
-            <span>Order</span>
-            <select
-              className={styles.filter}
-              value={sortOrder}
-              onChange={(event) => {
-                setSortOrder(event.target.value === 'asc' ? 'asc' : 'desc')
-                setPage(1)
-              }}
-            >
-              <option value="desc">Descending</option>
-              <option value="asc">Ascending</option>
-            </select>
-          </label>
-
-          <label className={styles.auditFilterGroup}>
-            <span>Page size</span>
-            <select
-              className={styles.filter}
-              value={pageSize}
-              onChange={(event) => {
-                setPageSize(Number.parseInt(event.target.value, 10))
-                setPage(1)
-              }}
-            >
-              {AUDIT_PAGE_SIZE_OPTIONS.map((size) => (
-                <option key={size} value={size}>
-                  {size}
-                </option>
-              ))}
-            </select>
-          </label>
+          <button
+            className={styles.auditIconButton}
+            type="button"
+            onClick={() => void fetchLogs()}
+            disabled={loading}
+            aria-label="Refresh audit logs"
+          >
+            <ProductIcon name="refresh" aria-hidden="true" />
+          </button>
         </div>
 
-        <div className={styles.auditToolbarActions}>
+        <details className={styles.auditAdvanced}>
+          <summary>
+            <span>More filters</span>
+            <ProductIcon name="chevron-down" aria-hidden="true" />
+          </summary>
+          <div className={styles.auditAdvancedGrid}>
+            <label className={styles.auditFilterGroup}>
+              <span>User ID</span>
+              <input
+                className={styles.filterInput}
+                value={userFilter}
+                onChange={(event) => {
+                  setUserFilter(event.target.value)
+                  setPage(1)
+                }}
+                placeholder="Exact user ID"
+              />
+            </label>
+            <label className={styles.auditFilterGroup}>
+              <span>Action</span>
+              <input
+                className={styles.filterInput}
+                value={actionFilter}
+                onChange={(event) => {
+                  setActionFilter(event.target.value)
+                  setPage(1)
+                }}
+                placeholder="user.update"
+              />
+            </label>
+            <label className={styles.auditFilterGroup}>
+              <span>Resource</span>
+              <input
+                className={styles.filterInput}
+                value={resourceFilter}
+                onChange={(event) => {
+                  setResourceFilter(event.target.value)
+                  setPage(1)
+                }}
+                placeholder="Exact resource"
+              />
+            </label>
+            <label className={styles.auditFilterGroup}>
+              <span>Sort</span>
+              <select
+                className={styles.filter}
+                value={sortField}
+                onChange={(event) => {
+                  setSortField(event.target.value)
+                  setPage(1)
+                }}
+              >
+                {AUDIT_SORT_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className={styles.auditFilterGroup}>
+              <span>Order</span>
+              <select
+                className={styles.filter}
+                value={sortOrder}
+                onChange={(event) => {
+                  setSortOrder(event.target.value === 'asc' ? 'asc' : 'desc')
+                  setPage(1)
+                }}
+              >
+                <option value="desc">Newest first</option>
+                <option value="asc">Oldest first</option>
+              </select>
+            </label>
+            <label className={styles.auditFilterGroup}>
+              <span>Rows</span>
+              <select
+                className={styles.filter}
+                value={pageSize}
+                onChange={(event) => {
+                  setPageSize(Number.parseInt(event.target.value, 10))
+                  setPage(1)
+                }}
+              >
+                {AUDIT_PAGE_SIZE_OPTIONS.map((size) => (
+                  <option key={size} value={size}>
+                    {size}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
           <button
-            className={styles.secondaryButton}
+            className={styles.auditReset}
             type="button"
             onClick={resetFilters}
             disabled={!hasFilters && sortField === 'createdAt' && sortOrder === 'desc'}
           >
             Reset filters
           </button>
-          <button
-            className={styles.secondaryButton}
-            type="button"
-            onClick={() => void fetchLogs()}
-            disabled={loading}
-          >
-            {loading ? 'Refreshing…' : 'Refresh'}
-          </button>
-        </div>
+        </details>
       </div>
 
       {error ? (

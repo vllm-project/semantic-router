@@ -12,7 +12,6 @@ const SECTION_PRESENTATION: Record<
   'Plugin Status': { size: 'compact' },
   'Routing Metadata': { size: 'wide', collapsible: true, defaultExpanded: false },
   'Projection Trace': { size: 'wide', collapsible: true, defaultExpanded: true },
-  'Tool Trace': { size: 'wide', collapsible: true, defaultExpanded: false },
   'Request / Response': { size: 'wide', collapsible: true, defaultExpanded: false },
 }
 

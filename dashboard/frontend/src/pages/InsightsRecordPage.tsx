@@ -3,27 +3,27 @@ import { useNavigate, useParams } from 'react-router-dom'
 
 import ProductLoadingState from '../components/ProductLoadingState'
 import ProductIcon from '../components/ProductIcon'
-import { useAuth } from '../contexts/AuthContext'
 import { useReadonly } from '../contexts/ReadonlyContext'
-import { canAccessReplayFlowDetails } from '../utils/accessControl'
 
 import styles from './InsightsPage.module.css'
-import { fetchInsightsRecord } from './insightsPageApi'
+import { fetchInsightsRecord, fetchInsightsTrajectory } from './insightsPageApi'
 import {
   buildInsightsRecordSections,
   buildInsightsRecordTitle,
   getInsightsLifecyclePresentation,
   getInsightsRecordPath,
 } from './insightsPageSupport'
-import type { InsightsRecord } from './insightsPageTypes'
+import type { InsightsRecord, InsightsTrajectory } from './insightsPageTypes'
 import InsightsRecordSection from './InsightsRecordSection'
+import InsightsRecordTrace from './InsightsRecordTrace'
 
 export default function InsightsRecordPage() {
   const navigate = useNavigate()
   const { recordId } = useParams<{ recordId: string }>()
-  const { user } = useAuth()
   const { isReadonly } = useReadonly()
   const [record, setRecord] = useState<InsightsRecord | null>(null)
+  const [trajectory, setTrajectory] = useState<InsightsTrajectory | null>(null)
+  const [traceError, setTraceError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [copyState, setCopyState] = useState<'idle' | 'copied'>('idle')
@@ -37,11 +37,20 @@ export default function InsightsRecordPage() {
     }
 
     setLoading(true)
+    setTrajectory(null)
+    setTraceError(null)
 
     try {
       const nextRecord = await fetchInsightsRecord(recordId)
       setRecord(nextRecord)
       setError(null)
+      if (nextRecord.session_id) {
+        try {
+          setTrajectory(await fetchInsightsTrajectory(nextRecord.session_id))
+        } catch (traceCause) {
+          setTraceError(traceCause instanceof Error ? traceCause.message : 'Unknown error')
+        }
+      }
     } catch (err) {
       setRecord(null)
       setError(err instanceof Error ? err.message : 'Unknown error')
@@ -88,14 +97,8 @@ export default function InsightsRecordPage() {
   }, [shareUrl])
 
   const sections = useMemo(
-    () =>
-      record
-        ? buildInsightsRecordSections(record, {
-            isReadonly,
-            canViewReplayFlowDetails: canAccessReplayFlowDetails(user),
-          })
-        : [],
-    [isReadonly, record, user],
+    () => (record ? buildInsightsRecordSections(record, { isReadonly }) : []),
+    [isReadonly, record],
   )
 
   const lifecycle = record ? getInsightsLifecyclePresentation(record) : null
@@ -163,6 +166,8 @@ export default function InsightsRecordPage() {
               </span>
             ) : null}
           </header>
+
+          <InsightsRecordTrace record={record} trajectory={trajectory} error={traceError} />
 
           <div className={styles.recordSections}>
             {sections.map((section, sectionIndex) => (

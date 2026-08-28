@@ -2,25 +2,13 @@ import { useEffect, useMemo, useState } from 'react'
 
 import ProductIcon from '../components/ProductIcon'
 import useAccessibleDialog from '../hooks/useAccessibleDialog'
+import type { DashboardInvitation, DashboardRole, InvitationKind } from './dashboardInvitationTypes'
 import styles from './DashboardInviteDialog.module.css'
-
-type DashboardRole = 'admin' | 'write' | 'read'
-type InvitationKind = 'personal' | 'shared'
-
-interface Invitation {
-  id: string
-  email: string
-  name: string
-  role: DashboardRole
-  kind: InvitationKind
-  maxUses: number
-  remainingUses: number
-  expiresAt: number
-}
 
 interface Props {
   isOpen: boolean
   onClose: () => void
+  onCreated?: () => void
 }
 
 const roles: Array<{ value: DashboardRole; label: string; description: string }> = [
@@ -48,7 +36,7 @@ async function copyText(value: string) {
   if (!copied) throw new Error('Copy is not available in this browser.')
 }
 
-export default function DashboardInviteDialog({ isOpen, onClose }: Props) {
+export default function DashboardInviteDialog({ isOpen, onClose, onCreated }: Props) {
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
   const [role, setRole] = useState<DashboardRole>('read')
@@ -57,7 +45,10 @@ export default function DashboardInviteDialog({ isOpen, onClose }: Props) {
   const [pending, setPending] = useState(false)
   const [error, setError] = useState('')
   const [copied, setCopied] = useState(false)
-  const [created, setCreated] = useState<{ invitation: Invitation; url: string } | null>(null)
+  const [created, setCreated] = useState<{
+    invitation: DashboardInvitation
+    url: string
+  } | null>(null)
   const dialogRef = useAccessibleDialog<HTMLDivElement>({ isOpen, onClose, dismissible: !pending })
 
   useEffect(() => {
@@ -104,12 +95,16 @@ export default function DashboardInviteDialog({ isOpen, onClose }: Props) {
         }),
       })
       if (!response.ok) throw new Error(await responseError(response))
-      const payload = (await response.json()) as { invitation: Invitation; token: string }
+      const payload = (await response.json()) as {
+        invitation: DashboardInvitation
+        token: string
+      }
       const url = new URL(
         `/invite/${encodeURIComponent(payload.token)}`,
         window.location.origin,
       ).toString()
       setCreated({ invitation: payload.invitation, url })
+      onCreated?.()
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not create invitation.')
     } finally {
@@ -159,8 +154,8 @@ export default function DashboardInviteDialog({ isOpen, onClose }: Props) {
               <div>
                 <strong>
                   {created.invitation.kind === 'shared'
-                    ? `${created.invitation.maxUses} places are ready.`
-                    : 'A place in this workspace is reserved.'}
+                    ? `${created.invitation.maxUses} tickets are ready.`
+                    : 'A workspace ticket is reserved.'}
                 </strong>
                 <span>
                   {created.invitation.kind === 'shared'
@@ -208,7 +203,7 @@ export default function DashboardInviteDialog({ isOpen, onClose }: Props) {
               <span>
                 {kind === 'personal'
                   ? 'Reserve their identity. They only choose a password.'
-                  : 'One link, one role, and a clear number of places.'}
+                  : 'One link, one role, and a clear number of tickets.'}
               </span>
             </div>
             <div className={styles.kindSwitch} aria-label="Invitation type">
@@ -259,13 +254,13 @@ export default function DashboardInviteDialog({ isOpen, onClose }: Props) {
             ) : (
               <div className={styles.capacityField}>
                 <div>
-                  <span>Available places</span>
-                  <small>Each completed registration uses one place.</small>
+                  <span>Available tickets</span>
+                  <small>Each completed registration uses one ticket.</small>
                 </div>
                 <div className={styles.capacityControl}>
                   <button
                     type="button"
-                    aria-label="Remove one place"
+                    aria-label="Remove one ticket"
                     onClick={() => setCapacity((value) => Math.max(2, value - 1))}
                     disabled={capacity <= 2}
                   >
@@ -284,7 +279,7 @@ export default function DashboardInviteDialog({ isOpen, onClose }: Props) {
                   />
                   <button
                     type="button"
-                    aria-label="Add one place"
+                    aria-label="Add one ticket"
                     onClick={() => setCapacity((value) => Math.min(100, value + 1))}
                     disabled={capacity >= 100}
                   >

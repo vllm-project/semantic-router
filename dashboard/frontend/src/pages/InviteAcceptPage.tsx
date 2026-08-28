@@ -101,7 +101,7 @@ export default function InviteAcceptPage() {
       <div className={authStyles.storyCopy}>
         <p className={authStyles.storyEyebrow}>Your invitation is here</p>
         <h1 className={`${authStyles.storyTitle} ${styles.inviteStoryTitle}`}>
-          {isShared ? 'Your place is ready.' : `You’re in, ${firstName}.`}
+          {isShared ? 'Your invitation is ready.' : `You’re in, ${firstName}.`}
         </h1>
         <p className={styles.storySlogan}>Build what one model can’t.</p>
         <p className={authStyles.storyDescription}>Your Mixture-of-Models workspace is ready.</p>
@@ -112,8 +112,8 @@ export default function InviteAcceptPage() {
           <strong>{invitationValidity(invitation.expiresAt)}</strong>
         </div>
         <div className={styles.ticketIdentity}>
-          <small>{isShared ? 'Available places' : 'Reserved for'}</small>
-          <strong>{isShared ? `${invitation.remainingUses} places` : invitation.name}</strong>
+          <small>{isShared ? 'Available tickets' : 'Reserved for'}</small>
+          <strong>{isShared ? `${invitation.remainingUses} tickets` : invitation.name}</strong>
           <span>Dashboard · {invitation.role}</span>
         </div>
         <div className={styles.ticketExpiry}>

@@ -7,7 +7,7 @@ import { Link } from 'react-router-dom'
 
 import type { InsightsCostSummary, InsightsRecord, Signal } from './insightsPageTypes'
 import { buildProjectionTraceFields } from './insightsPageProjectionTrace'
-import { buildToolTraceFields, renderToolNamesCell } from './insightsPageToolTrace'
+import { renderToolNamesCell } from './insightsPageToolTrace'
 import styles from './InsightsPage.module.css'
 
 export { filterInsightsRecords } from './insightsPageFilters'
@@ -283,7 +283,7 @@ export function createInsightsTableColumns(): Column<InsightsRecord>[] {
 
 export function buildInsightsRecordSections(
   record: InsightsRecord,
-  options: { isReadonly: boolean; canViewReplayFlowDetails: boolean },
+  options: { isReadonly: boolean },
 ): ViewSection[] {
   const sections: ViewSection[] = []
 
@@ -381,16 +381,6 @@ export function buildInsightsRecordSections(
     sections.push({
       title: 'Projection Trace',
       fields: projectionTraceFields,
-    })
-  }
-
-  const toolTraceFields = buildToolTraceFields(record, {
-    canViewFlowDetails: options.canViewReplayFlowDetails,
-  })
-  if (toolTraceFields.length > 0) {
-    sections.push({
-      title: 'Tool Trace',
-      fields: toolTraceFields,
     })
   }
 

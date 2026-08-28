@@ -25,6 +25,7 @@ import {
 } from '../utils/accessControl'
 import UsersPageAuditPanel from './UsersPageAuditPanel'
 import DashboardInviteDialog from './DashboardInviteDialog'
+import UsersPageInvitationsPanel from './UsersPageInvitationsPanel'
 
 type AdminUser = {
   id: string
@@ -43,6 +44,8 @@ type ToastState = {
   type: ToastType
   message: string
 }
+
+type UsersView = 'users' | 'invitations' | 'audit'
 
 const ROLE_OPTIONS = ['admin', 'write', 'read'] as const
 const STATUS_OPTIONS = ['active', 'inactive'] as const
@@ -101,7 +104,8 @@ const UsersPage: React.FC = () => {
 
   const [toast, setToast] = useState<ToastState | null>(null)
 
-  const [showAudit, setShowAudit] = useState(false)
+  const [activeView, setActiveView] = useState<UsersView>('users')
+  const [invitationRefreshToken, setInvitationRefreshToken] = useState(0)
   const [dialogMode, setDialogMode] = useState<UsersPageUserDialogMode | null>(null)
   const [inviteOpen, setInviteOpen] = useState(false)
   const inviteButtonRef = useRef<HTMLButtonElement>(null)
@@ -443,16 +447,24 @@ const UsersPage: React.FC = () => {
           <nav className={styles.viewTabs} aria-label="User management views">
             <button
               type="button"
-              className={!showAudit ? styles.viewTabActive : styles.viewTab}
-              onClick={() => setShowAudit(false)}
+              className={activeView === 'users' ? styles.viewTabActive : styles.viewTab}
+              onClick={() => setActiveView('users')}
             >
               <ProductIcon name="user" aria-hidden="true" />
               <span>Users</span>
             </button>
             <button
               type="button"
-              className={showAudit ? styles.viewTabActive : styles.viewTab}
-              onClick={() => setShowAudit(true)}
+              className={activeView === 'invitations' ? styles.viewTabActive : styles.viewTab}
+              onClick={() => setActiveView('invitations')}
+            >
+              <ProductIcon name="link" aria-hidden="true" />
+              <span>Invitations</span>
+            </button>
+            <button
+              type="button"
+              className={activeView === 'audit' ? styles.viewTabActive : styles.viewTab}
+              onClick={() => setActiveView('audit')}
             >
               <ProductIcon name="audit" aria-hidden="true" />
               <span>Audit log</span>
@@ -470,8 +482,13 @@ const UsersPage: React.FC = () => {
               </div>
             </div>
           </section>
-        ) : showAudit && canManageUsers ? (
+        ) : activeView === 'audit' && canManageUsers ? (
           <UsersPageAuditPanel />
+        ) : activeView === 'invitations' && canManageUsers ? (
+          <UsersPageInvitationsPanel
+            onInvite={openInviteDialog}
+            refreshToken={invitationRefreshToken}
+          />
         ) : (
           <section className={styles.card}>
             <div className={styles.sectionHeader}>
@@ -642,7 +659,11 @@ const UsersPage: React.FC = () => {
         onSubmit={handleDialogSubmit}
       />
 
-      <DashboardInviteDialog isOpen={inviteOpen} onClose={closeInviteDialog} />
+      <DashboardInviteDialog
+        isOpen={inviteOpen}
+        onClose={closeInviteDialog}
+        onCreated={() => setInvitationRefreshToken((value) => value + 1)}
+      />
 
       <ConfirmDialog
         isOpen={deleteTarget !== null}

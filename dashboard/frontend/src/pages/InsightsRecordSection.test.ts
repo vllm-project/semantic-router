@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { getInsightsRecordSectionPresentation } from './insightsRecordSectionSupport'
 
 describe('insight record section layout', () => {
-  it.each(['Routing Metadata', 'Projection Trace', 'Tool Trace', 'Request / Response'])(
+  it.each(['Routing Metadata', 'Projection Trace', 'Request / Response'])(
     'keeps %s on its own full-width row',
     (title) => {
       expect(getInsightsRecordSectionPresentation(title)).toMatchObject({
@@ -23,9 +23,6 @@ describe('insight record section layout', () => {
       defaultExpanded: true,
     })
     expect(getInsightsRecordSectionPresentation('Routing Metadata')).toMatchObject({
-      defaultExpanded: false,
-    })
-    expect(getInsightsRecordSectionPresentation('Tool Trace')).toMatchObject({
       defaultExpanded: false,
     })
     expect(getInsightsRecordSectionPresentation('Request / Response')).toMatchObject({

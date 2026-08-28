@@ -121,6 +121,36 @@
   cursor: not-allowed;
 }
 
+.primaryButton {
+  display: inline-flex;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0 0.95rem;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 0.85rem;
+  background: rgba(255, 255, 255, 0.94);
+  color: #0c0c0f;
+  font-size: 0.84rem;
+  font-weight: 680;
+}
+
+.primaryButton:hover {
+  background: #fff;
+}
+
+.primaryButton svg {
+  width: 0.92rem;
+  height: 0.92rem;
+}
+
+.sectionActions {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
 .toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -153,18 +183,167 @@
 .auditFilterPanel {
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
-  padding: 1rem;
+  gap: 0.6rem;
+  padding: 0.7rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--color-bg-tertiary) 78%, transparent);
 }
 
-.auditFilterGrid {
+.auditPrimaryFilters {
   display: grid;
-  grid-template-columns: minmax(250px, 2fr) repeat(4, minmax(135px, 1fr));
-  gap: 0.8rem;
-  align-items: end;
+  grid-template-columns: minmax(240px, 1fr) 150px 180px 180px 40px;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.auditSearchControl,
+.auditDateControl {
+  display: flex;
+  min-width: 0;
+  height: 40px;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 0.7rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 9px;
+  background: rgba(0, 0, 0, 0.22);
+  color: rgba(255, 255, 255, 0.38);
+}
+
+.auditSearchControl:focus-within,
+.auditDateControl:focus-within,
+.auditCompactControl:focus {
+  border-color: rgba(255, 255, 255, 0.28);
+  outline: none;
+}
+
+.auditSearchControl svg {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+}
+
+.auditSearchControl input,
+.auditDateControl input {
+  min-width: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.76rem;
+  color-scheme: dark;
+}
+
+.auditSearchControl input::placeholder {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.auditDateControl > span {
+  flex: 0 0 auto;
+  color: rgba(255, 255, 255, 0.38);
+  font-size: 0.66rem;
+  font-weight: 650;
+}
+
+.auditCompactControl {
+  width: 100%;
+  height: 40px;
+  padding: 0 0.65rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 9px;
+  outline: none;
+  background: rgba(0, 0, 0, 0.22);
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.76rem;
+}
+
+.auditIconButton {
+  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 9px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.58);
+}
+
+.auditIconButton:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #fff;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.auditIconButton:disabled {
+  opacity: 0.42;
+}
+
+.auditIconButton svg {
+  width: 15px;
+  height: 15px;
+}
+
+.auditAdvanced {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.auditAdvanced summary {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0 0.25rem;
+  color: rgba(255, 255, 255, 0.43);
+  font-size: 0.7rem;
+  font-weight: 650;
+  cursor: pointer;
+  list-style: none;
+}
+
+.auditAdvanced summary::-webkit-details-marker {
+  display: none;
+}
+
+.auditAdvanced summary svg {
+  width: 13px;
+  height: 13px;
+  transition: transform 160ms ease;
+}
+
+.auditAdvanced[open] summary svg {
+  transform: rotate(180deg);
+}
+
+.auditAdvancedGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem;
+  padding: 0.35rem 0 0.7rem;
+}
+
+.auditReset {
+  min-height: 32px;
+  margin-bottom: 0.1rem;
+  padding: 0 0.25rem;
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 0.7rem;
+  font-weight: 650;
+}
+
+.auditReset:hover:not(:disabled) {
+  color: #fff;
+}
+
+.auditReset:disabled {
+  opacity: 0.3;
 }
 
 .auditFilterGroup {
@@ -175,10 +354,6 @@
   color: var(--color-text-secondary);
   font-size: 0.75rem;
   font-weight: 600;
-}
-
-.auditSearchGroup {
-  grid-column: span 2;
 }
 
 .auditFilterGroup .search,
@@ -359,9 +534,110 @@
   --table-min-width: 1240px;
 }
 
+.invitationTable {
+  --table-min-width: 1060px;
+}
+
+.invitationIdentity,
+.invitationProgress,
+.invitationProgressCopy {
+  display: grid;
+  min-width: 0;
+}
+
+.invitationIdentity,
+.invitationProgressCopy {
+  gap: 0.22rem;
+}
+
+.invitationIdentity strong,
+.invitationProgress strong,
+.invitationProgressCopy strong {
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 0.78rem;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.invitationIdentity span,
+.invitationProgress span,
+.invitationProgressCopy span {
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.7rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.invitationRole {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.76rem;
+}
+
+.invitationProgress {
+  gap: 0.5rem;
+}
+
+.invitationProgress > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+}
+
+.invitationProgressTrack {
+  display: block;
+  width: 100%;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.invitationProgressTrack > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.invitationStatus {
+  display: inline-flex;
+  min-width: 74px;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem 0.55rem;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.035);
+  color: rgba(255, 255, 255, 0.54);
+  font-size: 0.68rem;
+  font-weight: 650;
+}
+
+.invitationStatusPending {
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.invitationStatusAccepted {
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+.invitationStatusRevoked,
+.invitationStatusExpired {
+  opacity: 0.72;
+}
+
 @media (max-width: 1150px) {
-  .auditFilterGrid {
-    grid-template-columns: repeat(3, minmax(150px, 1fr));
+  .auditPrimaryFilters {
+    grid-template-columns: minmax(220px, 1fr) 150px 170px 40px;
+  }
+
+  .auditDateControl:last-of-type {
+    display: none;
   }
 }
 
@@ -384,7 +660,15 @@
     min-width: 0;
   }
 
-  .auditFilterGrid {
+  .auditPrimaryFilters {
+    grid-template-columns: minmax(0, 1fr) 150px 40px;
+  }
+
+  .auditDateControl {
+    display: none;
+  }
+
+  .auditAdvancedGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -398,12 +682,23 @@
     width: 100%;
   }
 
-  .auditFilterGrid {
+  .sectionActions {
+    width: 100%;
+  }
+
+  .sectionActions .secondaryButton,
+  .sectionActions .primaryButton {
+    flex: 1;
+  }
+
+  .auditPrimaryFilters,
+  .auditAdvancedGrid {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .auditSearchGroup {
-    grid-column: auto;
+  .auditPrimaryFilters .auditCompactControl,
+  .auditPrimaryFilters .auditIconButton {
+    width: 100%;
   }
 
   .auditToolbarActions {
