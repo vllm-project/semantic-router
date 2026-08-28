@@ -52,10 +52,8 @@ func registerRecipeRoutes(mux *http.ServeMux, cfg *config.Config, stores ...*rec
 	recipeDir := dashboardActiveRecipeDirectory(cfg)
 	store := selectedRecipeStore(cfg, stores)
 	service := recipe.NewService(recipe.Options{
-		Directory:         recipeDir,
-		Store:             store,
-		RuntimeConfigPath: cfg.AbsConfigPath,
-		RouterAPIURL:      cfg.RouterAPIURL,
+		Directory:    recipeDir,
+		RouterAPIURL: cfg.RouterAPIURL,
 	})
 	activator := handlers.NewRecipeActivator(handlers.RecipeActivatorOptions{
 		Store:        store,

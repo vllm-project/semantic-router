@@ -317,6 +317,7 @@ export interface RecipeProbeValidationResult {
 export interface RecipeProbeRunPlan {
   probe_id: string
   recipe_digest: string
+  recipe: string
   model?: string
   messages: RecipeProbeMessage[]
   tools?: unknown[]

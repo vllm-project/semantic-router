@@ -259,6 +259,7 @@ type ChatRequest struct {
 type RunPlan struct {
 	ProbeID      string           `json:"probe_id"`
 	RecipeDigest string           `json:"recipe_digest"`
+	Recipe       string           `json:"recipe"`
 	Model        string           `json:"model,omitempty"`
 	Messages     []map[string]any `json:"messages"`
 	Tools        []map[string]any `json:"tools,omitempty"`
@@ -275,6 +276,13 @@ type EvalRequest struct {
 
 type Evaluator interface {
 	Evaluate(context.Context, EvalRequest) (json.RawMessage, error)
+}
+
+// RequestModelResolver resolves a Recipe to one request-facing model exposed
+// by the active Router. Model-free Recipe packages use this seam instead of
+// embedding environment-specific Entrypoint names in their probe catalog.
+type RequestModelResolver interface {
+	ResolveRequestModel(context.Context, string) (string, error)
 }
 
 type ActualOutcome struct {

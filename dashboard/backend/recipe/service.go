@@ -72,6 +72,7 @@ type Service struct {
 	store             *Store
 	runtimeConfigPath string
 	evaluator         Evaluator
+	modelResolver     RequestModelResolver
 	snapshots         parsedSnapshotCache
 }
 
@@ -92,12 +93,16 @@ func NewService(options Options) *Service {
 			CredentialProvider: options.Store,
 		}
 	}
-	return &Service{
+	service := &Service{
 		directory:         filepath.Clean(options.Directory),
 		store:             options.Store,
 		runtimeConfigPath: filepath.Clean(options.RuntimeConfigPath),
 		evaluator:         evaluator,
 	}
+	if resolver, ok := evaluator.(RequestModelResolver); ok {
+		service.modelResolver = resolver
+	}
+	return service
 }
 
 func (s *Service) Describe() (Descriptor, error) {
@@ -210,6 +215,7 @@ func (s *Service) RunPlan(decisionID, variantID string, expectedDigest ...string
 	return RunPlan{
 		ProbeID:      probe.ID,
 		RecipeDigest: snapshot.recipeDigest,
+		Recipe:       normalizeExpectedRecipe(probe.Expected.Recipe),
 		Model:        request.Model,
 		Messages:     request.Messages,
 		Tools:        request.Tools,
@@ -230,6 +236,10 @@ func (s *Service) Validate(ctx context.Context, decisionID, variantID string, ex
 	probe, ok := snapshot.byID[probeKey(decisionID, variantID)]
 	if !ok {
 		return ValidationResult{}, ErrProbeNotFound
+	}
+	probe, err = s.resolveActiveProbeModel(ctx, probe)
+	if err != nil {
+		return ValidationResult{}, err
 	}
 
 	result := ValidationResult{
@@ -274,6 +284,19 @@ func (s *Service) Validate(ctx context.Context, decisionID, variantID string, ex
 	result.Passed = len(failures) == 0
 	result.Provenance = s.finishValidationProvenance(ctx, snapshot, provenanceSession)
 	return result, nil
+}
+
+func (s *Service) resolveActiveProbeModel(ctx context.Context, probe ProbeDetail) (ProbeDetail, error) {
+	if strings.TrimSpace(probe.Model) != "" || s.modelResolver == nil {
+		return probe, nil
+	}
+	recipeName := normalizeExpectedRecipe(probe.Expected.Recipe)
+	model, err := s.modelResolver.ResolveRequestModel(ctx, recipeName)
+	if err != nil {
+		return ProbeDetail{}, fmt.Errorf("%w: resolve request model for Recipe %q: %w", ErrUpstream, recipeName, err)
+	}
+	probe.Model = model
+	return probe, nil
 }
 
 func requireExpectedDigest(actual string, expected []string) error {
@@ -493,7 +516,9 @@ func resolveModelLessProbeModels(probes []ProbeDetail, byID map[string]ProbeDeta
 			model, err = projection.requestModelFor(expectedRecipe)
 		}
 		if err != nil {
-			return fmt.Errorf("probe %s: %w", probe.ID, err)
+			// A reusable Recipe package can intentionally omit Entrypoints. Its
+			// request model is resolved from the active Router when the probe runs.
+			continue
 		}
 		probe.Model = model
 		probes[index] = probe
