@@ -18,9 +18,7 @@ import {
 import type { ConfigData, EntrypointConfig, NormalizedModel } from './configPageSupport'
 import styles from './ConfigPageMixtureDialog.module.css'
 
-function initialOpenAssignments(decisionNames: string[]): Set<string> {
-  return new Set(decisionNames.slice(0, 1))
-}
+const firstDecisionName = (decisionNames: string[]) => decisionNames[0] ?? ''
 
 interface ConfigPageMixtureDialogProps {
   config: ConfigData
@@ -51,10 +49,8 @@ export default function ConfigPageMixtureDialog({
   const [assignments, setAssignments] = useState<ModelAssignments>(() =>
     assignmentState(initialRecipe?.routing.decisions ?? []),
   )
-  const [openAssignments, setOpenAssignments] = useState<Set<string>>(() =>
-    initialOpenAssignments(
-      (initialRecipe?.routing.decisions ?? []).map((decision) => decision.name),
-    ),
+  const [activeDecisionName, setActiveDecisionName] = useState(() =>
+    firstDecisionName((initialRecipe?.routing.decisions ?? []).map((decision) => decision.name)),
   )
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -78,10 +74,8 @@ export default function ConfigPageMixtureDialog({
     const nextRecipe = getRecipeByName(config, nextRecipeName)
     setRecipeName(nextRecipeName)
     setAssignments(assignmentState(nextRecipe?.routing.decisions ?? []))
-    setOpenAssignments(
-      initialOpenAssignments(
-        (nextRecipe?.routing.decisions ?? []).map((decision) => decision.name),
-      ),
+    setActiveDecisionName(
+      firstDecisionName((nextRecipe?.routing.decisions ?? []).map((decision) => decision.name)),
     )
     setError(null)
   }
@@ -115,7 +109,7 @@ export default function ConfigPageMixtureDialog({
       (decision) => (assignments[decision.name]?.length ?? 0) === 0,
     )
     if (incompleteDecision) {
-      setOpenAssignments((current) => new Set(current).add(incompleteDecision.name))
+      setActiveDecisionName(incompleteDecision.name)
       setError(`Choose at least one model for “${incompleteDecision.name}”.`)
       return
     }
@@ -143,6 +137,10 @@ export default function ConfigPageMixtureDialog({
       setSaving(false)
     }
   }
+
+  const activeDecision =
+    decisions.find((decision) => decision.name === activeDecisionName) ?? decisions[0]
+  const activeSelection = activeDecision ? (assignments[activeDecision.name] ?? []) : []
 
   return (
     <div
@@ -260,68 +258,84 @@ export default function ConfigPageMixtureDialog({
               </div>
               <p>{recipe?.description || 'Complete every decision before publishing.'}</p>
             </div>
-            <div className={styles.assignments}>
-              {decisions.map((decision, decisionIndex) => {
-                const selected = assignments[decision.name] ?? []
-                return (
-                  <details
-                    key={decision.name}
-                    className={styles.assignment}
-                    open={openAssignments.has(decision.name)}
-                    onToggle={(event) => {
-                      const isOpen = event.currentTarget.open
-                      setOpenAssignments((current) => {
-                        if (current.has(decision.name) === isOpen) return current
-                        const next = new Set(current)
-                        if (isOpen) next.add(decision.name)
-                        else next.delete(decision.name)
-                        return next
-                      })
-                    }}
-                  >
-                    <summary>
-                      <span className={styles.decisionIndex}>
-                        {String(decisionIndex + 1).padStart(2, '0')}
-                      </span>
-                      <span className={styles.decisionCopy}>
-                        <strong>{decision.name}</strong>
-                        <small>{decision.description || 'Model path'}</small>
-                      </span>
-                      <span
-                        className={selected.length ? styles.selectionCount : styles.missingCount}
+            {decisions.length > 0 && activeDecision ? (
+              <div className={styles.assignmentWorkspace}>
+                <div
+                  className={styles.decisionRail}
+                  role="tablist"
+                  aria-label="Recipe decisions"
+                >
+                  {decisions.map((decision, decisionIndex) => {
+                    const selected = assignments[decision.name] ?? []
+                    const isActive = decision.name === activeDecision.name
+                    return (
+                      <button
+                        key={decision.name}
+                        type="button"
+                        role="tab"
+                        aria-selected={isActive}
+                        className={isActive ? styles.activeDecision : ''}
+                        onClick={() => setActiveDecisionName(decision.name)}
                       >
-                        {selected.length ? `${selected.length} selected` : 'Choose models'}
-                      </span>
-                      <ProductIcon name="chevron-right" />
-                    </summary>
-                    <div className={styles.modelPicker}>
-                      {modelOptions.map((modelName) => (
-                        <label
-                          key={modelName}
-                          className={selected.includes(modelName) ? styles.selectedModel : ''}
+                        <span className={styles.decisionIndex}>
+                          {String(decisionIndex + 1).padStart(2, '0')}
+                        </span>
+                        <span className={styles.decisionCopy}>
+                          <strong>{decision.name}</strong>
+                          <small>{decision.description || 'Model path'}</small>
+                        </span>
+                        <span
+                          className={selected.length ? styles.selectionCount : styles.missingCount}
                         >
-                          <input
-                            type="checkbox"
-                            checked={selected.includes(modelName)}
-                            onChange={() => toggleModel(decision.name, modelName)}
-                          />
-                          <span aria-hidden="true">
-                            <ProductIcon name="check" />
-                          </span>
-                          <code>{modelName}</code>
-                        </label>
-                      ))}
-                      {modelOptions.length === 0 ? (
-                        <p>Connect a model before publishing this mixture.</p>
-                      ) : null}
+                          {selected.length || '—'}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+
+                <div
+                  className={styles.assignmentPanel}
+                  role="tabpanel"
+                  aria-label={`${activeDecision.name} model assignment`}
+                >
+                  <div className={styles.assignmentPanelHeader}>
+                    <div>
+                      <strong>{activeDecision.name}</strong>
+                      <span>{activeDecision.description || 'Choose the models for this path.'}</span>
                     </div>
-                  </details>
-                )
-              })}
-              {decisions.length === 0 ? (
-                <div className={styles.empty}>Add decisions to this recipe first.</div>
-              ) : null}
-            </div>
+                    <span>
+                      {activeSelection.length
+                        ? `${activeSelection.length} selected`
+                        : 'Choose at least one'}
+                    </span>
+                  </div>
+                  <div className={styles.modelPicker}>
+                    {modelOptions.map((modelName) => (
+                      <label
+                        key={modelName}
+                        className={activeSelection.includes(modelName) ? styles.selectedModel : ''}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={activeSelection.includes(modelName)}
+                          onChange={() => toggleModel(activeDecision.name, modelName)}
+                        />
+                        <span aria-hidden="true">
+                          <ProductIcon name="check" />
+                        </span>
+                        <code>{modelName}</code>
+                      </label>
+                    ))}
+                    {modelOptions.length === 0 ? (
+                      <p>Connect a model before publishing this mixture.</p>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className={styles.empty}>Add decisions to this recipe first.</div>
+            )}
           </section>
         </div>
 

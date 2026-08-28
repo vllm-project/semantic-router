@@ -196,49 +196,89 @@
   text-align: right;
 }
 
-.assignments {
+.assignmentWorkspace {
   display: grid;
-  max-height: min(430px, 44vh);
-  min-height: 220px;
-  gap: 0.55rem;
-  padding: 0.65rem;
+  grid-template-columns: minmax(210px, 0.38fr) minmax(0, 1fr);
+  min-height: 300px;
+  height: min(420px, 44vh);
+  overflow: hidden;
+}
+
+.decisionRail {
+  min-width: 0;
+  padding: 0.55rem;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
+  border-right: 1px solid rgba(255, 255, 255, 0.075);
 }
 
-.assignment {
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.075);
-  border-radius: 9px;
-  background: rgba(255, 255, 255, 0.018);
-}
-
-.assignment summary {
+.decisionRail > button {
+  width: 100%;
+  min-height: 58px;
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) auto 16px;
-  min-height: 62px;
+  grid-template-columns: 26px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.55rem 0.65rem;
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 9px;
+}
+
+.decisionRail > button + button {
+  margin-top: 0.2rem;
+}
+
+.decisionRail > button:hover {
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.decisionRail > .activeDecision {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.assignmentPanel {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: rgba(255, 255, 255, 0.012);
+}
+
+.assignmentPanelHeader {
+  display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.65rem 1rem;
-  cursor: pointer;
-  list-style: none;
+  gap: 1rem;
+  padding: 0.85rem 0.95rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.075);
 }
 
-.assignment summary::-webkit-details-marker {
-  display: none;
+.assignmentPanelHeader > div {
+  min-width: 0;
+  display: grid;
+  gap: 0.22rem;
 }
 
-.assignment summary > svg {
-  width: 14px;
-  height: 14px;
-  color: rgba(255, 255, 255, 0.35);
-  transition: transform 150ms ease;
+.assignmentPanelHeader strong {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.8rem;
 }
 
-.assignment[open] summary > svg {
-  transform: rotate(90deg);
+.assignmentPanelHeader span {
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 0.68rem;
+  line-height: 1.4;
+}
+
+.assignmentPanelHeader > span {
+  flex: 0 0 auto;
+  color: rgba(255, 255, 255, 0.58);
+  white-space: nowrap;
 }
 
 .decisionIndex {
@@ -259,12 +299,12 @@
   gap: 0.25rem;
 }
 
-.assignment summary strong {
+.decisionRail strong {
   color: rgba(255, 255, 255, 0.86);
   font-size: 0.78rem;
 }
 
-.assignment summary small {
+.decisionRail small {
   overflow: hidden;
   color: rgba(255, 255, 255, 0.38);
   font-size: 0.67rem;
@@ -274,8 +314,12 @@
 
 .selectionCount,
 .missingCount {
-  padding: 0.3rem 0.5rem;
-  border-radius: 999px;
+  min-width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  padding: 0 0.35rem;
+  border-radius: 7px;
   font-size: 0.64rem;
   white-space: nowrap;
 }
@@ -291,14 +335,17 @@
 }
 
 .modelPicker {
+  flex: 1 1 auto;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  max-height: 230px;
+  align-content: start;
+  min-height: 0;
   gap: 0.4rem;
-  padding: 0.25rem 0.75rem 0.85rem 3rem;
+  padding: 0.75rem;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scroll-padding-bottom: 0.85rem;
+  scrollbar-gutter: stable;
+  scroll-padding-block: 0.75rem;
 }
 
 .modelPicker label {
@@ -540,17 +587,43 @@
     grid-template-columns: 1fr;
   }
 
-  .assignment summary {
-    grid-template-columns: 26px minmax(0, 1fr) 16px;
+  .decisionSection {
+    flex: 0 0 auto;
+    overflow: visible;
   }
 
-  .selectionCount,
-  .missingCount {
-    display: none;
+  .assignmentWorkspace {
+    grid-template-columns: 1fr;
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .decisionRail {
+    display: flex;
+    gap: 0.35rem;
+    padding: 0.55rem;
+    overflow-x: auto;
+    overflow-y: hidden;
+    border-right: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.075);
+    scrollbar-gutter: auto;
+  }
+
+  .decisionRail > button {
+    min-width: min(220px, 74vw);
+  }
+
+  .decisionRail > button + button {
+    margin-top: 0;
+  }
+
+  .assignmentPanel {
+    overflow: visible;
   }
 
   .modelPicker {
-    padding-left: 0.75rem;
+    overflow: visible;
   }
 
   .sectionHeader {

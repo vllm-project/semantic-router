@@ -146,14 +146,21 @@ test('creates a Mixture-of-Models without clipped aliases or assignments', async
   await expect(dialog.getByText('new-mixture', { exact: true })).toBeVisible()
 
   const assignment = dialog.getByText('balanced-route', { exact: true }).first()
+  const decisionTab = dialog.getByRole('tab', { name: /balanced-route/ })
+  const assignmentPanel = dialog.getByRole('tabpanel', {
+    name: 'balanced-route model assignment',
+  })
   const aliasBox = await aliasInput.boundingBox()
   const assignmentBox = await assignment.boundingBox()
   expect(aliasBox).not.toBeNull()
   expect(assignmentBox).not.toBeNull()
   expect((aliasBox?.y ?? 0) + (aliasBox?.height ?? 0)).toBeLessThan(assignmentBox?.y ?? 0)
   expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
+  await expect(decisionTab).toHaveAttribute('aria-selected', 'true')
+  await expect(assignmentPanel).toBeVisible()
+  await expect(assignmentPanel).toContainText('1 selected')
 
-  await dialog.getByRole('checkbox').check()
+  await expect(assignmentPanel.getByRole('checkbox')).toBeChecked()
   await dialog.getByRole('button', { name: 'Create model' }).click()
   await expect(dialog).toBeHidden()
 

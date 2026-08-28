@@ -175,12 +175,20 @@ test.describe('Models inventory at 300+ scale', () => {
     const connectionDialog = page.getByRole('dialog', { name: 'vLLM' })
     await connectionDialog.getByLabel('Base URL').fill('http://localhost:8000/v1')
     await connectionDialog.getByLabel(/API key/).fill('test-provider-key')
-    await connectionDialog
-      .getByPlaceholder('Or enter a model ID')
-      .fill('physical/Qwen-Scale-305')
+    await connectionDialog.getByPlaceholder('Or enter a model ID').fill('physical/Qwen-Scale-305')
     await connectionDialog.getByRole('button', { name: 'Add', exact: true }).click()
 
-    await connectionDialog.getByText('Advanced settings', { exact: true }).click()
+    const manualModelInput = connectionDialog.getByPlaceholder('Or enter a model ID')
+    const advancedSettings = connectionDialog.getByText('Advanced settings', { exact: true })
+    const manualModelBox = await manualModelInput.boundingBox()
+    const advancedSettingsBox = await advancedSettings.boundingBox()
+    expect(manualModelBox).not.toBeNull()
+    expect(advancedSettingsBox).not.toBeNull()
+    expect(
+      (advancedSettingsBox?.y ?? 0) - ((manualModelBox?.y ?? 0) + (manualModelBox?.height ?? 0)),
+    ).toBeGreaterThanOrEqual(14)
+
+    await advancedSettings.click()
     await connectionDialog.getByLabel('Name prefix Optional').fill('model-305-added')
     await connectionDialog.getByLabel('Reasoning family Optional').selectOption('family-alpha')
     await connectionDialog
@@ -250,9 +258,7 @@ test.describe('Models inventory at 300+ scale', () => {
     const search = page.getByPlaceholder('Search name, ID, family, tag, or capability...')
     await search.fill('model-305-added/physical/Qwen-Scale-305')
     await expect(page.getByText('1–1 of 1 models', { exact: true })).toBeVisible()
-    await page
-      .getByRole('button', { name: 'Edit model-305-added/physical/Qwen-Scale-305' })
-      .click()
+    await page.getByRole('button', { name: 'Edit model-305-added/physical/Qwen-Scale-305' }).click()
 
     const editDialog = page.getByRole('dialog', {
       name: 'Edit Model: model-305-added/physical/Qwen-Scale-305',

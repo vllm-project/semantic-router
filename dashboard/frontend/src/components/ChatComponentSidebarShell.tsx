@@ -33,10 +33,11 @@ export default function ChatComponentSidebarShell({
           title={isOpen ? 'Close sidebar' : 'Open sidebar'}
           aria-label={isOpen ? 'Close sidebar' : 'Open sidebar'}
         >
-          <img
-            src={isOpen ? '/vllm-sr-logo.white.png' : '/vllm.png'}
-            alt={isOpen ? 'vLLM Semantic Router' : 'vLLM'}
-          />
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+            <rect x="3.5" y="4" width="17" height="16" rx="2.5" />
+            <path d="M9 4v16" />
+          </svg>
+          {isOpen ? <span>History</span> : null}
         </button>
         <button
           type="button"

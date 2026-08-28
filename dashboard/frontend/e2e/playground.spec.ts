@@ -488,6 +488,7 @@ test.describe('Playground Chat Component', () => {
 
     await page.getByRole('button', { name: 'Open sidebar' }).click();
     await expect(sidebarItem).toBeVisible();
+    await expect(shell.locator('img')).toHaveCount(0);
 
     await page.getByRole('button', { name: 'Close sidebar' }).click();
     await expect(sidebarItem).not.toBeVisible();
@@ -589,6 +590,26 @@ test.describe('Playground Chat Component', () => {
     const input = page.getByPlaceholder('Ask me anything...');
     await input.fill('Hello, this is a test message');
     await expect(input).toHaveValue('Hello, this is a test message');
+  });
+
+  test('grows the composer with multiline input and caps it before the page layout shifts', async ({
+    page,
+  }) => {
+    const input = page.getByPlaceholder('Ask me anything...');
+    const initialBox = await input.boundingBox();
+    expect(initialBox).not.toBeNull();
+
+    await input.fill(Array.from({ length: 7 }, (_, index) => `Line ${index + 1}`).join('\n'));
+    const expandedBox = await input.boundingBox();
+    expect(expandedBox).not.toBeNull();
+    expect(expandedBox!.height).toBeGreaterThan(initialBox!.height + 50);
+    await expect(input).toHaveCSS('overflow-y', 'hidden');
+
+    await input.fill(Array.from({ length: 40 }, (_, index) => `Long line ${index + 1}`).join('\n'));
+    const cappedBox = await input.boundingBox();
+    expect(cappedBox).not.toBeNull();
+    expect(cappedBox!.height).toBeLessThanOrEqual(222);
+    await expect(input).toHaveCSS('overflow-y', 'auto');
   });
 
   test('shows a copy button for user messages and copies their content', async ({ page }) => {

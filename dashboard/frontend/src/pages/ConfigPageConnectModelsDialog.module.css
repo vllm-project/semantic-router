@@ -491,6 +491,7 @@
 }
 
 .advanced {
+  margin-top: 1.25rem;
   overflow: hidden;
   border: 1px solid var(--border-subtle);
   border-radius: 12px;
