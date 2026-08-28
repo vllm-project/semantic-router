@@ -1,7 +1,7 @@
 import React from 'react'
 import Link from '@docusaurus/Link'
 import Translate, { translate } from '@docusaurus/Translate'
-import { PillLink } from '@site/src/components/site/Chrome'
+import { PillLink, SectionLabel } from '@site/src/components/site/Chrome'
 import ScrollReveal from '@site/src/components/site/ScrollReveal'
 import shared from './homepageShared.module.css'
 import styles from './CompatibilityBand.module.css'
@@ -46,9 +46,9 @@ export default function CompatibilityBand(): JSX.Element {
       <div className={`site-shell-container ${shared.sectionInner}`}>
         <ScrollReveal>
           <header className={`site-section-intro ${shared.sectionHeader}`}>
-            <span className={shared.eyebrow}>
+            <SectionLabel>
               <Translate id="homepage.compat.label">Deployment options</Translate>
-            </span>
+            </SectionLabel>
             <h2 id="compatibility-title" className={shared.sectionTitle}>
               <Translate id="homepage.compat.title">One router, supported deployment paths</Translate>
             </h2>

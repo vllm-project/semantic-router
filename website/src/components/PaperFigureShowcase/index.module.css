@@ -35,19 +35,6 @@
   margin-bottom: 3rem;
 }
 
-.paperLabel {
-  margin: 0;
-  font-size: 0.875rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #6366F1;
-}
-
-[data-theme='dark'] .paperLabel {
-  color: #A5B4FC;
-}
-
 .paperTitle {
   margin: 0;
   font-size: var(--site-text-h2);
