@@ -17,21 +17,28 @@ func (c *RedisCache) FindExact(ctx context.Context, partition string, fingerprin
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	responseBody, err := c.client.Get(
-		ctx,
-		exactCacheStorageKey(partition, fingerprint),
-	).Bytes()
-	if errors.Is(err, redis.Nil) {
-		return LookupResult{}, nil
-	}
-	if err != nil {
+	key := exactCacheStorageKey(partition, fingerprint)
+	fields, err := c.client.HGetAll(ctx, key).Result()
+	if err != nil && !errors.Is(err, redis.Nil) {
+		// Fallback for legacy plain-string keys if present
+		if responseBody, getErr := c.client.Get(ctx, key).Bytes(); getErr == nil && len(responseBody) > 0 {
+			return LookupResult{
+				ResponseBody: responseBody,
+				Found:        true,
+				Similarity:   1,
+			}, nil
+		}
 		return LookupResult{}, fmt.Errorf("redis exact lookup failed: %w", err)
 	}
-	return LookupResult{
-		ResponseBody: responseBody,
-		Found:        true,
-		Similarity:   1,
-	}, nil
+	if len(fields) == 0 {
+		return LookupResult{}, nil
+	}
+	responseBodyStr, exists := fields["response_body"]
+	if !exists || responseBodyStr == "" {
+		return LookupResult{}, nil
+	}
+	storedAt, expiresAt := parseExactTimingFields(fields)
+	return lookupResultFromTimestamps([]byte(responseBodyStr), 1.0, storedAt, expiresAt), nil
 }
 
 // AddExact writes a Redis exact-response entry with the effective cache TTL.
@@ -49,14 +56,23 @@ func (c *RedisCache) AddExact(
 		ctx = context.Background()
 	}
 	effectiveTTL := effectiveExactTTL(ttlSeconds, c.ttlSeconds)
-	expiration := time.Duration(0)
+	key := exactCacheStorageKey(partition, fingerprint)
+	now := time.Now()
+	var expiresAt time.Time
 	if effectiveTTL > 0 {
-		expiration = time.Duration(effectiveTTL) * time.Second
+		expiresAt = now.Add(time.Duration(effectiveTTL) * time.Second)
 	}
-	return c.client.Set(
-		ctx,
-		exactCacheStorageKey(partition, fingerprint),
-		responseBody,
-		expiration,
-	).Err()
+	hashFields := map[string]interface{}{
+		"response_body": string(responseBody),
+		"timestamp":     now.Unix(),
+		"expires_at":    expiresAt.Unix(),
+		"ttl_seconds":   effectiveTTL,
+	}
+	if err := c.client.HSet(ctx, key, hashFields).Err(); err != nil {
+		return err
+	}
+	if effectiveTTL > 0 {
+		return c.client.Expire(ctx, key, time.Duration(effectiveTTL)*time.Second).Err()
+	}
+	return nil
 }

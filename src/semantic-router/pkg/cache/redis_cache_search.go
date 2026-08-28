@@ -1,5 +1,3 @@
-//go:build !windows && cgo
-
 package cache
 
 import (
