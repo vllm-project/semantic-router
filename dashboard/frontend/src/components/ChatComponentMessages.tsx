@@ -1,22 +1,27 @@
 import { memo } from 'react'
+import { ThinkingOrb } from 'thinking-orbs'
 
 import styles from './ChatComponent.module.css'
 import HeaderDisplay from './HeaderDisplay'
+import ThinkingAnimation from './ThinkingAnimation'
 import ThinkingBlock from './ThinkingBlock'
 import ErrorBoundary from './ErrorBoundary'
 import ReMoMResponsesDisplay from './ReMoMResponsesDisplay'
 import FeedbackButtons from './FeedbackButtons'
-import { MessageActionBar, TypingGreeting } from './ChatComponentControls'
+import { MessageActionBar } from './ChatComponentControls'
 import { ContentWithCitations } from './ChatComponentCitations'
 import { ToolCard } from './ChatComponentToolCards'
-import { GREETING_LINES, type Message } from './ChatComponentTypes'
+import type { Message } from './ChatComponentTypes'
 import { formatPlaygroundFileSize } from './playgroundFileAttachments'
 import { getTranslateAttr } from '../hooks/useNoTranslate'
+import { useAuth } from '../contexts/AuthContext'
 
 interface ChatComponentMessagesProps {
   expandedToolCards: Set<string>
   messages: Message[]
   onToggleToolCard: (toolCallId: string) => void
+  thinking?: boolean
+  thinkingProcess?: string
 }
 
 interface ToolCallsProps {
@@ -24,6 +29,14 @@ interface ToolCallsProps {
   message: Message
   onToggleToolCard: (toolCallId: string) => void
   wrapInBoundary?: boolean
+}
+
+function StreamingResponseIndicator() {
+  return (
+    <span className={styles.streamingIndicator} role="status" aria-label="Generating response">
+      <ThinkingOrb state="composing" size={20} theme="dark" />
+    </span>
+  )
 }
 
 function getSearchSources(message: Message) {
@@ -123,7 +136,7 @@ function AssistantRatingsMessage({
                   isStreaming={message.isStreaming}
                 />
               </ErrorBoundary>
-              {message.isStreaming && index === 0 ? <span className={styles.cursor}>▊</span> : null}
+              {message.isStreaming && index === 0 ? <StreamingResponseIndicator /> : null}
             </div>
             {!message.isStreaming && choice.model && message.headers?.['x-vsr-replay-id'] ? (
               <div className={styles.choiceActions}>
@@ -177,10 +190,8 @@ function AssistantSingleMessage({
                 isStreaming={message.isStreaming}
               />
             </ErrorBoundary>
-            {message.isStreaming ? <span className={styles.cursor}>▊</span> : null}
+            {message.isStreaming ? <StreamingResponseIndicator /> : null}
           </>
-        ) : message.isStreaming ? (
-          <span className={styles.cursor}>▊</span>
         ) : null}
       </div>
     </>
@@ -217,7 +228,7 @@ function UserOrSystemMessage({ message }: Pick<MessageCardProps, 'message'>) {
       ) : null}
       <MessageImages message={message} />
       {message.content || message.isStreaming ? <span>{message.content}</span> : null}
-      {message.isStreaming ? <span className={styles.cursor}>▊</span> : null}
+      {message.isStreaming ? <StreamingResponseIndicator /> : null}
     </div>
   )
 }
@@ -298,12 +309,19 @@ export default function ChatComponentMessages({
   expandedToolCards,
   messages,
   onToggleToolCard,
+  thinking = false,
+  thinkingProcess,
 }: ChatComponentMessagesProps) {
-  if (messages.length === 0) {
+  const { user } = useAuth()
+
+  if (messages.length === 0 && !thinking) {
+    const firstName = user?.name?.trim().split(/\s+/)[0] || 'there'
+
     return (
       <div className={`${styles.messagesContainer} ${styles.messagesContainerEmpty}`}>
         <div className={styles.emptyState}>
-          <TypingGreeting lines={GREETING_LINES} />
+          <h2>Welcome, {firstName}</h2>
+          <p>What should we build, test, or route?</p>
         </div>
       </div>
     )
@@ -311,7 +329,7 @@ export default function ChatComponentMessages({
 
   return (
     <div className={styles.messagesContainer}>
-      <div className={styles.messages}>
+      <div className={styles.messages} data-testid="chat-message-rail">
         {messages.map((message, index) => {
           const prevUserQuery =
             messages[index - 1]?.role === 'user' ? messages[index - 1].content : undefined
@@ -326,6 +344,7 @@ export default function ChatComponentMessages({
             />
           )
         })}
+        {thinking ? <ThinkingAnimation thinkingProcess={thinkingProcess} /> : null}
       </div>
     </div>
   )

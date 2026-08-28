@@ -1562,7 +1562,7 @@ global:
       - auto
       - exhaustive-reference
     include_config_models_in_list: true
-    clear_route_cache: false
+    clear_route_cache: true
     streamed_body:
       enabled: true
       max_bytes: 1048576

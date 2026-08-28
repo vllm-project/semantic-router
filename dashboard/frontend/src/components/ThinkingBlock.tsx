@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { ThinkingOrb } from 'thinking-orbs'
 import styles from './ThinkingBlock.module.css'
 import MarkdownRenderer from './MarkdownRenderer'
 import { getTranslateAttr } from '../hooks/useNoTranslate'
@@ -31,7 +32,7 @@ const ThinkingBlock = ({ content, isStreaming = false, thinkingTime }: ThinkingB
   useEffect(() => {
     if (isStreaming) {
       const interval = setInterval(() => {
-        setDisplayTime(prev => prev + 0.1)
+        setDisplayTime((prev) => prev + 0.1)
       }, 100)
       return () => clearInterval(interval)
     } else if (thinkingTime !== undefined) {
@@ -49,7 +50,11 @@ const ThinkingBlock = ({ content, isStreaming = false, thinkingTime }: ThinkingB
   }
 
   return (
-    <div className={styles.container} translate={getTranslateAttr(isStreaming)}>
+    <div
+      className={styles.container}
+      translate={getTranslateAttr(isStreaming)}
+      data-testid="thinking-block"
+    >
       <button
         className={styles.header}
         onClick={() => setIsExpanded(!isExpanded)}
@@ -69,30 +74,16 @@ const ThinkingBlock = ({ content, isStreaming = false, thinkingTime }: ThinkingB
           >
             <polyline points="6 9 12 15 18 9" />
           </svg>
-          <svg
-            className={styles.thinkingIcon}
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            {/* Light bulb icon */}
-            <path d="M9 18h6" />
-            <path d="M10 22h4" />
-            <path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8c0-3.31-2.69-6-6-6S6 4.69 6 8c0 1.33.47 2.55 1.5 3.5.76.76 1.23 1.52 1.41 2.5" />
-          </svg>
-          <span className={`${styles.title} ${isStreaming ? styles.titleStreaming : ''}`}>
-            {isStreaming ? 'Thinking' : 'My Thoughts'}
-          </span>
+          <ThinkingOrb
+            className={styles.thinkingOrb}
+            state={isStreaming ? 'working' : 'composing'}
+            size={20}
+            theme="dark"
+          />
+          <span className={styles.title}>{isStreaming ? 'Thinking' : 'Reasoning'}</span>
         </div>
         <div className={styles.headerRight}>
-          {displayTime > 0 && (
-            <span className={styles.time}>{formatTime(displayTime)}</span>
-          )}
+          {displayTime > 0 && <span className={styles.time}>{formatTime(displayTime)}</span>}
           <svg
             className={styles.expandIcon}
             width="14"
@@ -109,13 +100,8 @@ const ThinkingBlock = ({ content, isStreaming = false, thinkingTime }: ThinkingB
           </svg>
         </div>
       </button>
-      {isStreaming && (
-        <div className={styles.progressBar}>
-          <div className={styles.progressFill} />
-        </div>
-      )}
       {isExpanded && (
-        <div className={styles.content}>
+        <div className={styles.content} data-testid="thinking-content">
           <MarkdownRenderer content={content} />
         </div>
       )}

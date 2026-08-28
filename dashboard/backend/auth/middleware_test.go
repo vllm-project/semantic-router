@@ -22,7 +22,7 @@ func TestRequiresAuthentication(t *testing.T) {
 		{path: "/api/auth/bootstrap/can-register", expected: false},
 		{path: "/api/setup/state", expected: false},
 		{path: "/api/auth/me", expected: true},
-		{path: "/api/status", expected: true},
+		{path: "/api/status", expected: false},
 		{path: "/embedded/grafana/", expected: true},
 		{path: "/embedded/wizmap/", expected: true},
 		{path: "/embedded/wizmap/assets/index.js", expected: false},
@@ -52,6 +52,7 @@ func TestServiceUnavailableGuard(t *testing.T) {
 		{name: "embedded denied", path: "/embedded/grafana/", wantCode: http.StatusServiceUnavailable, wantNext: false},
 		{name: "login public", path: "/api/auth/login", wantCode: http.StatusOK, wantNext: true},
 		{name: "setup state public", path: "/api/setup/state", wantCode: http.StatusOK, wantNext: true},
+		{name: "system status public", path: "/api/status", wantCode: http.StatusOK, wantNext: true},
 		{name: "static frontend public", path: "/dashboard", wantCode: http.StatusOK, wantNext: true},
 	}
 
@@ -179,6 +180,7 @@ func TestRequiredPermission(t *testing.T) {
 		{method: http.MethodPost, path: "/api/setup/activate", expected: PermConfigWrite},
 		{method: http.MethodPost, path: "/api/setup/import-remote", expected: PermConfigWrite},
 		{method: http.MethodGet, path: "/api/models/catalog", expected: PermConfigRead},
+		{method: http.MethodPost, path: "/api/models/discover", expected: PermConfigWrite},
 		{method: http.MethodPost, path: "/api/models/verify", expected: PermEvalRun},
 		{method: http.MethodGet, path: "/api/models/verify", expected: PermEvalRun},
 		{method: http.MethodGet, path: "/api/mcp/servers", expected: PermMcpRead},
@@ -224,9 +226,6 @@ func TestRequiredPermission(t *testing.T) {
 		{method: http.MethodPost, path: "/api/recipe/probes/lane/variant/validate", expected: PermTopologyRead},
 		{method: http.MethodPost, path: "/api/recipe/probes/lane/variant/validate/", expected: PermTopologyRead},
 		{method: http.MethodPost, path: "/api/recipe/probes/lane/variant/validate///", expected: PermTopologyRead},
-		{method: http.MethodGet, path: "/api/security/policy", expected: PermConfigRead},
-		{method: http.MethodPut, path: "/api/security/policy", expected: PermSecurityManage},
-		{method: http.MethodPost, path: "/api/security/policy/preview", expected: PermSecurityManage},
 	}
 
 	for _, tc := range testCases {

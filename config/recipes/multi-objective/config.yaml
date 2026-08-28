@@ -13,6 +13,15 @@ providers:
         parameter: enable_thinking
     default_reasoning_effort: low
   models:
+  - name: local/omni
+    provider_model_id: local/omni
+    api_format: openai
+    backend_refs:
+    - name: local-omni
+      endpoint: vllm-omni:8000
+      protocol: http
+      type: vllm
+      weight: 1
   - name: local/qwen3.5-122b-frontier
     reasoning_family: qwen3
     provider_model_id: qwen/qwen3.5-rocm
@@ -141,6 +150,9 @@ providers:
       vllm: deepseek-ai/DeepSeek-V4-Flash-0731
 routing:
   modelCards:
+  - name: local/omni
+    capabilities: [chat, image_understanding, multimodal, omni, text, vision]
+    modality: omni
   - name: local/qwen3.5-122b-frontier
     context_window_size: 262144
     description: Large local MoE tier for accuracy-first synthesis and review.
@@ -418,6 +430,12 @@ recipes:
         description: German-language requests.
         threshold: 0.5
       conversation:
+      - description: Request contains at least one image content part.
+        feature:
+          source:
+            type: image_content
+          type: exists
+        name: unified_balance_has_images
       - name: unified_balance_multi_turn
         description: Multi-turn conversations benefit from a small synthesis allowance.
         feature:
@@ -546,6 +564,18 @@ recipes:
         - name: unified_balance_deliberate
           gte: 0.3
     decisions:
+    - algorithm:
+        type: static
+      description: Understand image-bearing requests with the dedicated visual-language model.
+      modelRefs:
+      - model: local/omni
+      name: omni
+      priority: 400
+      rules:
+        conditions:
+        - name: unified_balance_has_images
+          type: conversation
+        operator: AND
     - name: unified_balance_recovery
       description: Recover from explicit dissatisfaction with a stronger reasoning pool and corrective prompt.
       priority: 300
@@ -578,12 +608,6 @@ recipes:
             load: 0.15
           latency_percentile: 95
           on_no_candidates: first
-      plugins:
-      - type: system_prompt
-        configuration:
-          enabled: true
-          mode: insert
-          system_prompt: Rebuild the answer from first principles, correct the earlier miss directly, and make the improvement explicit.
     - name: unified_balance_deliberate_route
       description: Increase quality for complex, constrained, long-context, or verification-heavy work.
       priority: 200
@@ -645,6 +669,13 @@ recipes:
   description: Prefer the lowest observed latency while preserving a bounded lane for heavy requests.
   routing:
     signals:
+      conversation:
+      - description: Request contains at least one image content part.
+        feature:
+          source:
+            type: image_content
+          type: exists
+        name: unified_speed_has_images
       keywords:
       - name: unified_speed_heavy_markers
         operator: OR
@@ -710,6 +741,18 @@ recipes:
         - name: unified_speed_heavy
           gte: 0.35
     decisions:
+    - algorithm:
+        type: static
+      description: Keep visual requests on the dedicated low-latency visual-language model.
+      modelRefs:
+      - model: local/omni
+      name: omni
+      priority: 300
+      rules:
+        conditions:
+        - name: unified_speed_has_images
+          type: conversation
+        operator: AND
     - name: unified_speed_heavy_route
       description: Use live TTFT and TPOT percentiles across efficient models for heavier requests.
       priority: 200
@@ -771,6 +814,13 @@ recipes:
   description: Keep every request local and spend additional compute only when the request justifies reasoning.
   routing:
     signals:
+      conversation:
+      - description: Request contains at least one image content part.
+        feature:
+          source:
+            type: image_content
+          type: exists
+        name: unified_cost_has_images
       keywords:
       - name: unified_cost_reasoning_markers
         operator: OR
@@ -842,6 +892,18 @@ recipes:
         - name: unified_cost_reasoning
           gte: 0.35
     decisions:
+    - algorithm:
+        type: static
+      description: Keep visual requests on the dedicated local visual-language model.
+      modelRefs:
+      - model: local/omni
+      name: omni
+      priority: 300
+      rules:
+        conditions:
+        - name: unified_cost_has_images
+          type: conversation
+        operator: AND
     - name: unified_cost_local_reasoning
       description: Enable bounded reasoning on the self-hosted model for genuinely demanding requests.
       priority: 200
@@ -1043,6 +1105,12 @@ recipes:
         description: German-language requests.
         threshold: 0.5
       conversation:
+      - description: Request contains at least one image content part.
+        feature:
+          source:
+            type: image_content
+          type: exists
+        name: unified_frontier_has_images
       - name: unified_frontier_tooling_available
         description: Tool-rich requests are candidates for Router Flow decomposition.
         feature:
@@ -1237,6 +1305,18 @@ recipes:
         - name: unified_frontier_deliberate
           gte: 0.35
     decisions:
+    - algorithm:
+        type: static
+      description: Understand image-bearing requests directly before text-only orchestration.
+      modelRefs:
+      - model: local/omni
+      name: omni
+      priority: 500
+      rules:
+        conditions:
+        - name: unified_frontier_has_images
+          type: conversation
+        operator: AND
     - name: unified_frontier_workflow
       description: Use Router Flow for explicit investigate-plan-execute tasks with separable roles.
       priority: 400
@@ -1422,6 +1502,13 @@ recipes:
   description: Keep every request local, using recipe-scoped risk projections to isolate sensitive and suspicious prompts.
   routing:
     signals:
+      conversation:
+      - description: Request contains at least one image content part.
+        feature:
+          source:
+            type: image_content
+          type: exists
+        name: unified_privacy_has_images
       keywords:
       - name: unified_privacy_local_only_markers
         operator: OR
@@ -1557,6 +1644,24 @@ recipes:
         configuration:
           enabled: true
           mode: none
+    - algorithm:
+        type: static
+      description: Understand private image-bearing requests on the local visual-language model.
+      modelRefs:
+      - model: local/omni
+      name: omni
+      plugins:
+      - configuration:
+          enabled: true
+          mode: none
+        type: tools
+      priority: 250
+      rules:
+        conditions:
+        - name: unified_privacy_has_images
+          type: conversation
+        operator: AND
+      tier: 2
     - name: unified_privacy_sensitive_route
       description: Keep PII, private-domain, and explicit local-only work on the local model with no tools.
       priority: 200
