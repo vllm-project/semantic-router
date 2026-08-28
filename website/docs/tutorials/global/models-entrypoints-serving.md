@@ -5,12 +5,20 @@ description: Connect inference backends, compose a Mixture-of-Model, and expose 
 
 # Models, Entrypoints, and Serving
 
+## Overview
+
 Semantic Router gives applications stable model names while operators can
 change the physical models and routing policy behind them. The Dashboard is the
 fastest path to a working topology; YAML remains available for reviewed,
 version-controlled deployments.
 
-## The four objects
+## What Problem Does It Solve?
+
+Applications should call a durable model name without coupling themselves to a
+provider, endpoint, or checkpoint. Entrypoints keep that public contract stable
+while Recipes and connected Models can evolve independently.
+
+The topology has four user-facing objects:
 
 | Object | What it represents |
 | --- | --- |
@@ -25,6 +33,12 @@ client model -> entrypoint -> recipe decision -> selected model -> inference end
 
 The public model name is the client contract. It does not identify a checkpoint
 and is never forwarded as the selected backend model ID.
+
+## When to Use
+
+Use this workflow whenever one public model should route across several
+connected Models, or when the routing policy must change without updating every
+client. A direct Model remains the simpler choice for single-backend testing.
 
 ## Build a model path
 
@@ -88,6 +102,12 @@ curl http://localhost:8899/v1/chat/completions \
 The Router resolves the entrypoint, evaluates only its Recipe, selects an
 eligible Model, and rewrites the upstream request to the provider-facing model
 ID.
+
+## Configuration
+
+The Dashboard writes the same model, Recipe, and Entrypoint contract that the
+Router reads from YAML. Use the Dashboard for interactive authoring and checked
+in YAML for reviewed deployments; avoid splitting ownership between them.
 
 ## Operate the stack
 
