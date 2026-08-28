@@ -19,7 +19,11 @@ CLI_ROOT = REPO_ROOT / "src" / "vllm-sr"
 if str(CLI_ROOT) not in sys.path:
     sys.path.insert(0, str(CLI_ROOT))
 
-from cli.model_bundle import MODEL_BUNDLE_FILES, model_bundle_digest  # noqa: E402
+from cli.model_bundle import (  # noqa: E402
+    MODEL_BUNDLE_FILES,
+    model_bundle_digest,
+    model_bundle_optional_files,
+)
 
 _VERSION_DIRECTORY = re.compile(r"^(?:latest|v\d+\.\d+)$")
 
@@ -63,10 +67,15 @@ def _resource_paths(version_dir: Path) -> tuple[Path, ...]:
             "built-in catalog version contents differ from the declared assets; "
             f"missing={sorted(declared - actual)}, extra={sorted(actual - declared)}"
         )
-    return (
-        Path("catalog.yaml"),
-        *(Path(bundle) / name for bundle in bundles for name in MODEL_BUNDLE_FILES),
-    )
+    resource_paths: list[Path] = [Path("catalog.yaml")]
+    for bundle in bundles:
+        bundle_path = version_dir / bundle
+        resource_paths.extend(Path(bundle) / name for name in MODEL_BUNDLE_FILES)
+        resource_paths.extend(
+            Path(bundle) / name
+            for name in model_bundle_optional_files(bundle_path)
+        )
+    return tuple(resource_paths)
 
 
 def _expected_files() -> dict[Path, Path]:
