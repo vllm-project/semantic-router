@@ -52,6 +52,10 @@ type Config struct {
 	// SetupMode is a separate trusted bootstrap path for dashboard-first local install.
 	AllowOpenBootstrap bool
 
+	// Browser origins permitted to make state-changing requests, "scheme://host[:port]".
+	// Empty means our own origin only, which rejects the Vite dev proxy.
+	AllowedOrigins []string
+
 	// Platform branding (e.g., "amd" for AMD GPU deployments)
 	Platform string
 
@@ -152,6 +156,7 @@ type parsedFlags struct {
 	recipeStoreWritable    *bool
 	setupMode              *bool
 	allowOpenBootstrap     *bool
+	allowedOrigins         *string
 	platform               *string
 	evaluationEnabled      *bool
 	evaluationDBPath       *string
@@ -185,7 +190,21 @@ func applyCoreConfig(cfg *Config, flags parsedFlags) {
 	cfg.RecipeStoreWritable = *flags.recipeStoreWritable
 	cfg.SetupMode = *flags.setupMode
 	cfg.AllowOpenBootstrap = *flags.allowOpenBootstrap
+	cfg.AllowedOrigins = parseAllowedOrigins(*flags.allowedOrigins)
 	cfg.Platform = *flags.platform
+}
+
+func parseAllowedOrigins(raw string) []string {
+	var origins []string
+	for _, entry := range strings.Split(raw, ",") {
+		// An Origin header never has a trailing slash, so an entry with one would
+		// silently match nothing.
+		entry = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(entry)), "/")
+		if entry != "" {
+			origins = append(origins, entry)
+		}
+	}
+	return origins
 }
 
 func applyFeatureConfig(cfg *Config, flags parsedFlags) {
@@ -278,6 +297,10 @@ func bindCoreFlags() parsedFlags {
 		allowOpenBootstrap: flag.Bool(
 			"allow-open-bootstrap", env("DASHBOARD_ALLOW_OPEN_BOOTSTRAP", "false") == "true",
 			"allow first-admin creation via the public web-form bootstrap endpoint (off by default; production should provision the admin via DASHBOARD_ADMIN_*)",
+		),
+		allowedOrigins: flag.String(
+			"allowed-origins", env("DASHBOARD_ALLOWED_ORIGINS", ""),
+			"comma-separated origins permitted to make state-changing requests, e.g. http://localhost:3001 for the Vite dev proxy (empty = own origin only)",
 		),
 		platform: flag.String("platform", env("DASHBOARD_PLATFORM", ""), "platform branding (e.g., 'amd' for AMD GPU deployments)"),
 	}

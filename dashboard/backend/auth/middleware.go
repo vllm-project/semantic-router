@@ -33,7 +33,7 @@ func AuthenticateRequest(service *Service) func(http.Handler) http.Handler {
 				next.ServeHTTP(w, r)
 				return
 			}
-			token := extractAccessToken(r)
+			token, tokenSource := extractAccessTokenWithSource(r)
 			if token == "" {
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return
@@ -43,6 +43,30 @@ func AuthenticateRequest(service *Service) func(http.Handler) http.Handler {
 			if err != nil {
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return
+			}
+
+			// Repairs sessions minted before this shipped, which would otherwise 403 on
+			// every write. Safe methods too, so a page load fixes it. Sets a response
+			// cookie only; it must not authorise this request.
+			if tokenSource == tokenSourceCookie {
+				if existing, cookieErr := r.Cookie(csrfCookieName); cookieErr != nil ||
+					!csrfTokenValid(service.jwtSecret, claims.ID, existing.Value) {
+					setCSRFCookie(w, r, claims.ID, service.jwtSecret, service.ttlDuration)
+				}
+			}
+
+			// The browser attaches the session cookie to any request aimed here, including
+			// one a hostile page caused, so a cookie-authenticated write must prove it
+			// originated here. Bearer is exempt: a browser never sets it. See #2465.
+			if tokenSource != tokenSourceHeader && requiresCSRFCheck(r.Method) {
+				if !originAllowed(r, service.allowedOrigins) {
+					http.Error(w, "Forbidden: request origin is not permitted", http.StatusForbidden)
+					return
+				}
+				if !csrfTokenValid(service.jwtSecret, claims.ID, r.Header.Get(csrfHeaderName)) {
+					http.Error(w, "Forbidden: missing or invalid CSRF token", http.StatusForbidden)
+					return
+				}
 			}
 
 			user, perms, err := service.ResolveSessionUser(r.Context(), claims)
@@ -404,18 +428,41 @@ func extractBearer(raw string) string {
 	return normalizeAccessToken(parts[1])
 }
 
-func extractAccessToken(r *http.Request) string {
+// Which transport supplied the credential, so the CSRF check can apply to cookies only.
+type accessTokenSource int
+
+const (
+	tokenSourceNone accessTokenSource = iota
+	tokenSourceHeader
+	tokenSourceCookie
+	tokenSourceQuery // removed in the follow-up PR
+)
+
+func extractAccessTokenWithSource(r *http.Request) (string, accessTokenSource) {
 	if token := extractBearer(r.Header.Get("Authorization")); token != "" {
-		return token
+		return token, tokenSourceHeader
 	}
 
 	if cookie, err := r.Cookie(authSessionCookieName); err == nil {
 		if token := normalizeAccessToken(cookie.Value); token != "" {
-			return token
+			return token, tokenSourceCookie
 		}
 	}
 
-	return normalizeAccessToken(r.URL.Query().Get("authToken"))
+	if token := normalizeAccessToken(r.URL.Query().Get("authToken")); token != "" {
+		// Log that it happened so an operator can find the stale bookmark, never the value.
+		// %q because this runs before ParseToken, so the path is still attacker-controlled
+		// and arrives percent-decoded, newlines included.
+		log.Printf("WARNING: request to %q authenticated with the deprecated ?authToken= "+
+			"query parameter; use the session cookie or an Authorization: Bearer header", r.URL.Path)
+		return token, tokenSourceQuery
+	}
+	return "", tokenSourceNone
+}
+
+func extractAccessToken(r *http.Request) string {
+	token, _ := extractAccessTokenWithSource(r)
+	return token
 }
 
 func normalizeAccessToken(raw string) string {
