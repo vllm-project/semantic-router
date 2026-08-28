@@ -19,6 +19,7 @@ from cli.consts import (
 
 STACK_NAME_ENV = "VLLM_SR_STACK_NAME"
 PORT_OFFSET_ENV = "VLLM_SR_PORT_OFFSET"
+DEFAULT_ENVOY_CONTAINER_NAME = "vllm-sr-envoy-container"
 
 DEFAULT_JAEGER_OTLP_PORT = 4318
 DEFAULT_JAEGER_UI_PORT = 16686
@@ -191,7 +192,7 @@ def resolve_runtime_stack(
 
     if resolved_stack_name == DEFAULT_STACK_NAME:
         router_container_name = "vllm-sr-router-container"
-        envoy_container_name = "vllm-sr-envoy-container"
+        envoy_container_name = DEFAULT_ENVOY_CONTAINER_NAME
         dashboard_container_name = "vllm-sr-dashboard-container"
         fleet_sim_container_name = VLLM_SR_SIM_CONTAINER_NAME
         network_name = f"{DEFAULT_STACK_NAME}-network"
