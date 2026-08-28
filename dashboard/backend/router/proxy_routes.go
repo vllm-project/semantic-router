@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"net/http/httputil"
+	"net/url"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
@@ -11,6 +12,36 @@ import (
 	"github.com/vllm-project/semantic-router/dashboard/backend/proxy"
 	"github.com/vllm-project/semantic-router/dashboard/backend/routerauth"
 )
+
+// The Referer of a request made from a page whose URL carried ?authToken= holds a live
+// session token, so logging it verbatim put a working credential in stdout. See #2465.
+func redactCredentialParams(raw string) string {
+	if raw == "" {
+		return ""
+	}
+
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		// Say so rather than risk logging a credential.
+		return "[unparsable]"
+	}
+
+	query := parsed.Query()
+	changed := false
+	for _, name := range []string{"authToken", "token", "access_token"} {
+		if query.Has(name) {
+			query.Set(name, "[REDACTED]")
+			changed = true
+		}
+	}
+	if !changed {
+		// Byte for byte: this log line is how proxy routing gets debugged.
+		return raw
+	}
+
+	parsed.RawQuery = query.Encode()
+	return parsed.String()
+}
 
 type dashboardProxySet struct {
 	envoy         *httputil.ReverseProxy
@@ -314,7 +345,8 @@ func registerSmartAPIRouter(mux *http.ServeMux, proxies dashboardProxySet) {
 			return
 		}
 
-		log.Printf("API request: %s %s (from: %s)", r.Method, r.URL.Path, r.Header.Get("Referer"))
+		log.Printf("API request: %s %s (from: %s)",
+			r.Method, r.URL.Path, redactCredentialParams(r.Header.Get("Referer")))
 
 		if proxies.jaegerAPI != nil && isJaegerAPIPath(r.URL.Path) {
 			log.Printf("Routing to Jaeger API: %s", r.URL.Path)
