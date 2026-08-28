@@ -50,6 +50,18 @@ NON_PR_E2E_RULES = {
         "response-api-redis-cluster",
     )
 }
+HARNESS_EXEC_PATTERNS = (
+    "tools/agent/*.yaml",
+    "tools/agent/requirements.txt",
+    "tools/agent/scripts/**",
+    "tools/ci/**",
+    "tools/make/agent.mk",
+    "tools/make/linter.mk",
+    "tools/make/pre-commit.mk",
+    "tools/docker/Dockerfile.precommit",
+    ".pre-commit-config.yaml",
+    ".github/workflows/pre-commit.yml",
+)
 
 
 @dataclass(frozen=True)
@@ -105,6 +117,18 @@ def product_paths(paths: tuple[str, ...]) -> tuple[str, ...]:
     )
 
 
+def is_harness_only_change(changed: tuple[str, ...]) -> bool:
+    has_executable_change = any_matches(changed, *HARNESS_EXEC_PATTERNS)
+    return has_executable_change and all(
+        any_matches((path,), *HARNESS_EXEC_PATTERNS)
+        or path.startswith("website/")
+        or is_documentation_path(path)
+        or is_agent_text(path)
+        or is_repository_ownership_path(path)
+        for path in changed
+    )
+
+
 def is_agent_text(path: str) -> bool:
     return (
         path == "AGENTS.md"
@@ -146,6 +170,7 @@ def is_recipe_conformance_change(changed: tuple[str, ...]) -> bool:
 def detect_domains(changed: tuple[str, ...], *, full: bool) -> dict[str, bool]:
     product_changed = product_paths(changed)
     domains = _detect_direct_domains(changed, product_changed, full=full)
+    harness_only = is_harness_only_change(changed) and not full
     domains["router_core"] = any_matches(
         product_changed,
         "src/semantic-router/**",
@@ -172,16 +197,20 @@ def detect_domains(changed: tuple[str, ...], *, full: bool) -> dict[str, bool]:
         "e2e/go.sum",
     )
     domains["ci_infrastructure"] = (
-        domains["ci"] or domains["agent_exec"]
-    ) and not domains["docs_only"]
-    domains["core_test"] = (
-        full
-        or domains["core"]
-        or domains["helm"]
-        or domains["common_e2e"]
-        or domains["classifier_contract"]
-        or domains["api_docs_generated"]
-        or (domains["make"] and not domains["docs_only"])
+        (domains["ci"] or domains["agent_exec"])
+        and not domains["docs_only"]
+        and not harness_only
+    )
+    domains["core_test"] = full or (
+        not harness_only
+        and (
+            domains["core"]
+            or domains["helm"]
+            or domains["common_e2e"]
+            or domains["classifier_contract"]
+            or domains["api_docs_generated"]
+            or (domains["make"] and not domains["docs_only"])
+        )
     )
     domains["security"] = full or not domains["docs_only"]
     return domains
@@ -223,10 +252,7 @@ def _detect_direct_domains(
     }
     domains["agent_exec"] = any_matches(
         changed,
-        "tools/agent/*.yaml",
-        "tools/agent/scripts/**",
-        "tools/ci/**",
-        "tools/make/agent.mk",
+        *HARNESS_EXEC_PATTERNS,
         ".github/actions/**",
         ".github/workflows/**",
         ".mergify.yml",

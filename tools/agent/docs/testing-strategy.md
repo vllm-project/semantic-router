@@ -7,6 +7,8 @@ This document defines the harness-side validation ladder for repository changes.
 - `make agent-validate`
   - use for harness-only changes
   - validates manifests, docs inventory, rule layering, and link portability
+  - runs both CI infrastructure tests in `tools/ci/tests` and harness-script tests
+    in `tools/agent/scripts/tests`
 - `make agent-scorecard`
   - shows the current harness inventory and whether validation is passing
 - `make workflow-ci-validate`
@@ -23,9 +25,11 @@ This document defines the harness-side validation ladder for repository changes.
   - runs `make codespell-tracked` and `make agent-fast-gate` with the same agent bootstrap toolchain used by CI
 - `make precommit-branch-gate`
   - reproduces the local prelint gate that the repo installs as a `pre-push` hook
-  - runs `make agent-ci-lint` followed by `make precommit-check`
+  - runs the same changed-file path as `make agent-ci-lint`; use
+    `make precommit-check` separately for an explicit whole-repository audit
 - `make agent-ci-gate CHANGED_FILES="..."`
-  - runs `agent-report`, `agent-fast-gate`, and rule-driven fast tests
+  - bootstraps the shared toolchain once, then runs `agent-report` and
+    `agent-fast-gate`; only rule-selected fast tests run
 - `make agent-pr-gate`
   - reproduces the baseline PR requirements locally
   - runs the CI-style pre-commit path plus the local reproduction of `Test And Build`
@@ -40,13 +44,23 @@ This document defines the harness-side validation ladder for repository changes.
 paths. For long changed-file lists or paths that need exact shell preservation, write
 the paths one per line and pass `AGENT_CHANGED_FILES_PATH=<file>` instead.
 
+Composite agent gates reuse the toolchain prepared by their top-level target instead
+of reinstalling it in nested targets. Python requirements use a venv-local stamp.
+Node-based pre-commit tools reuse the host Node runtime when available or install a
+cached repo-local runtime when it is not; `markdownlint` and website dependencies
+use content/version stamps instead of reinstalling on every gate. Changed-file lint
+passes only changed Markdown and YAML files to their linters and leaves Go and Rust
+semantic lint to the harness's changed-file-aware runners, so the same whole-module
+checks are not repeated. The explicit `make precommit-check` target remains the
+whole-repository audit.
+
 ## Selection Rules
 
 - Harness-only prose or manifest changes start with `make agent-validate`.
 - Code changes start with `make agent-report` to resolve primary skill, impacted surfaces, and validation commands.
 - Use the smallest gate that matches the change.
 - Use `make agent-ci-lint CHANGED_FILES="..."` when you want the same changed-file lint path that the pre-commit workflow runs in CI.
-- Use `make precommit-branch-gate` when you want the same local prelint gate the installed `pre-push` hook runs before a push or PR update.
+- Use `make precommit-branch-gate` when you want the same changed-file prelint path the installed `pre-push` hook runs before a push or PR update.
 - Use `make agent-pr-gate` before opening or updating a PR when you want the repo-native local baseline for the same CI jobs contributors most often miss.
 - Use `ENV=amd` when platform behavior, AMD defaults, or ROCm image selection are affected.
 
@@ -113,9 +127,9 @@ See [environments.md](environments.md) for the concrete commands.
 - Native Candle, ML, NLP, and ONNX paths select the core/native receipt.
   `make test` builds Candle, ML, and NLP and runs Candle tests; mandatory ONNX
   runtime coverage remains the explicit TD046 gap.
-- The baseline full-CI matrix includes `remote-embedding`, which owns the deterministic OpenAI-compatible external embedding-provider contract: authenticated startup health plus text embedding-signal routing. Its exact path ownership lives in `tools/agent/test-domain-registry.yaml`; profile metadata and execution remain in `tools/agent/e2e-profile-map.yaml` and `.github/workflows/integration-test-k8s.yml`.
+- The baseline full-CI matrix includes `remote-embedding`, which owns the deterministic OpenAI-compatible external embedding-provider contract: authenticated startup health plus text embedding-signal routing. Its path ownership and profile metadata live in `tools/agent/test-domain-registry.yaml`; execution remains in `.github/workflows/integration-test-k8s.yml`.
 - Local E2E remains available, but it is an explicit manual path instead of part of the default `agent-feature-gate`.
-- Workflow-driven integration suites are part of the canonical validation story when their registry domain declares a `suite`; `e2e-profile-map.yaml` is a validated metadata projection.
+- Workflow-driven integration suites are part of the canonical validation story when their registry domain declares a `suite`.
 - The current workflow-driven suites are:
   - `recipe-conformance-live` via `make recipe-conformance-live-cpu-all`
   - `vllm-sr-cli-integration` via `make vllm-sr-test-integration`
@@ -184,7 +198,7 @@ Still manual, split into two targets so exit status stays meaningful:
 - Domain selection, commands, workflows, receipts, and cadence: [../../tools/agent/test-domain-registry.yaml](../../../tools/agent/test-domain-registry.yaml)
 - Loop mode and non-domain task rules: [../../tools/agent/task-matrix.yaml](../../../tools/agent/task-matrix.yaml)
 - Environment resolution: [../../tools/agent/repo-manifest.yaml](../../../tools/agent/repo-manifest.yaml)
-- E2E profile metadata: [../../tools/agent/e2e-profile-map.yaml](../../../tools/agent/e2e-profile-map.yaml)
+- E2E profile metadata: [../../tools/agent/test-domain-registry.yaml](../../../tools/agent/test-domain-registry.yaml)
 - Executable entrypoints: [../../tools/make/agent.mk](../../../tools/make/agent.mk)
 - Done criteria: [feature-complete-checklist.md](feature-complete-checklist.md)
 - Local testcase rules: [../../e2e/testcases/AGENTS.md](../../../e2e/testcases/AGENTS.md)

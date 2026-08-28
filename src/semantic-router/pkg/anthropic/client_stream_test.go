@@ -247,6 +247,24 @@ func TestTransformSSEChunkToOpenAI_CapturesInitialUsage(t *testing.T) {
 	assert.Equal(t, int64(5), state.InitialUsage.CacheCreationInputTokens)
 }
 
+// TestTransformSSEChunkToOpenAI_MergesInitialInputUsage asserts that the
+// terminal usage chunk carries the input count from message_start when
+// message_delta reports only output tokens, so downstream accounting and
+// the Response API completed-usage see the upstream's input tokens.
+func TestTransformSSEChunkToOpenAI_MergesInitialInputUsage(t *testing.T) {
+	state := NewStreamState()
+	events := buildAnthropicSSE(
+		`{"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","content":[],"model":"claude-sonnet-4-5","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":3,"output_tokens":0}}}`,
+		`{"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"output_tokens":1}}`,
+	)
+	out, _, err := TransformSSEChunkToOpenAI([]byte(events), state, "claude-sonnet-4-5", nil)
+	require.NoError(t, err)
+	body := string(out)
+	assert.Contains(t, body, `"prompt_tokens":3`)
+	assert.Contains(t, body, `"completion_tokens":1`)
+	assert.Contains(t, body, `"total_tokens":4`)
+}
+
 // TestTransformSSEChunkToOpenAI_AnthropicOnlyStopReason asserts that
 // pause_turn round-trips through IRExtensions because the OpenAI
 // finish_reason alphabet has no equivalent.

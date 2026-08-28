@@ -10,6 +10,7 @@ import Mistral from '@lobehub/icons/es/Mistral/components/Mono'
 import OpenAI from '@lobehub/icons/es/OpenAI/components/Mono'
 import Zhipu from '@lobehub/icons/es/Zhipu/components/Mono'
 import ScrollReveal from '@site/src/components/site/ScrollReveal'
+import { SectionLabel } from '@site/src/components/site/Chrome'
 import shared from './homepageShared.module.css'
 import styles from './IntegrationArchitecture.module.css'
 
@@ -697,10 +698,10 @@ export default function IntegrationArchitecture(): JSX.Element {
     <section className={shared.bandSection} aria-labelledby="integration-architecture-title">
       <div className={`site-shell-container ${shared.sectionInner}`}>
         <ScrollReveal>
-          <header className={shared.sectionHeader}>
-            <span className={shared.eyebrow}>
+          <header className={`site-section-intro ${shared.sectionHeader}`}>
+            <SectionLabel>
               <Translate id="homepage.integration.eyebrow">How it integrates</Translate>
-            </span>
+            </SectionLabel>
             <h2 id="integration-architecture-title" className={shared.sectionTitle}>
               <Translate id="homepage.integration.title">Route queries to the right model</Translate>
             </h2>

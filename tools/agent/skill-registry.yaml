@@ -22,11 +22,13 @@ surfaces:
     task_rules:
     - router-core
   routing_policy:
-    description: Router-side decision and candidate-model selection policy after signal extraction, including matched-decision logic and downstream model choice.
+    description: Router-side decision, candidate-model selection, and multi-model execution policy after signal extraction.
     paths:
     - src/semantic-router/pkg/decision/**
     - src/semantic-router/pkg/modelselection/**
     - src/semantic-router/pkg/selection/**
+    - src/semantic-router/pkg/looper/**
+    - src/semantic-router/pkg/projectiontrace/**
     - src/semantic-router/pkg/extproc/req_filter_looper*.go
     task_rules:
     - router-core
@@ -35,6 +37,7 @@ surfaces:
     paths:
     - src/semantic-router/pkg/modelselection/**
     - src/semantic-router/pkg/selection/**
+    - src/semantic-router/pkg/looper/**
     - src/semantic-router/pkg/extproc/req_filter_looper*.go
     task_rules:
     - router-core
@@ -47,27 +50,39 @@ surfaces:
     task_rules:
     - router-core
   router_service_platform:
-    description: Router-side service, API, storage, authz, memory, provider, and runtime support modules outside the config, decision, selection, and extproc plugin chains.
+    description: Router-side service, API, storage, authz, context, telemetry, provider, and runtime support modules outside the config, decision, selection, and extproc plugin chains.
     paths:
     - src/semantic-router/pkg/anthropic/**
     - src/semantic-router/pkg/apiserver/**
     - src/semantic-router/pkg/authz/**
     - src/semantic-router/pkg/cache/**
+    - src/semantic-router/pkg/contextcompression/**
+    - src/semantic-router/pkg/embedding/**
     - src/semantic-router/pkg/hnsw/**
     - src/semantic-router/pkg/imagegen/**
+    - src/semantic-router/pkg/inflight/**
+    - src/semantic-router/pkg/internalauth/**
+    - src/semantic-router/pkg/ir/**
     - src/semantic-router/pkg/latency/**
     - src/semantic-router/pkg/mcp/**
     - src/semantic-router/pkg/memory/**
+    - src/semantic-router/pkg/milvus/**
     - src/semantic-router/pkg/modeldownload/**
     - src/semantic-router/pkg/modelinventory/**
+    - src/semantic-router/pkg/modelpricing/**
+    - src/semantic-router/pkg/modelruntime/**
     - src/semantic-router/pkg/observability/**
     - src/semantic-router/pkg/openai/**
+    - src/semantic-router/pkg/postgres/**
     - src/semantic-router/pkg/promptcompression/**
+    - src/semantic-router/pkg/publicmodels/**
     - src/semantic-router/pkg/ratelimit/**
     - src/semantic-router/pkg/responseapi/**
     - src/semantic-router/pkg/responsestore/**
     - src/semantic-router/pkg/routerreplay/**
+    - src/semantic-router/pkg/routerruntime/**
     - src/semantic-router/pkg/services/**
+    - src/semantic-router/pkg/sessiontelemetry/**
     - src/semantic-router/pkg/startupstatus/**
     - src/semantic-router/pkg/tools/**
     - src/semantic-router/pkg/vectorstore/**
@@ -260,6 +275,9 @@ surfaces:
     - tools/agent/scripts/**
     - tools/ci/**
     - tools/make/agent.mk
+    - tools/make/linter.mk
+    - tools/make/pre-commit.mk
+    - .pre-commit-config.yaml
     - .mergify.yml
     task_rules:
     - agent_exec
@@ -303,7 +321,7 @@ surfaces:
   local_e2e:
     description: Affected local E2E profile selection and local profile execution.
     paths:
-    - tools/agent/e2e-profile-map.yaml
+    - tools/agent/test-domain-registry.yaml
     - e2e/profiles/**
     - e2e/config/**
     - deploy/kubernetes/**
@@ -327,7 +345,7 @@ surfaces:
     - e2e/testing/llm-katan/**
     - tools/agent/skill-registry.yaml
     - tools/agent/task-matrix.yaml
-    - tools/agent/e2e-profile-map.yaml
+    - tools/agent/test-domain-registry.yaml
     task_rules:
     - agent_exec
     - e2e-framework
@@ -360,6 +378,9 @@ skills:
     - tools/agent/scripts/**
     - tools/ci/**
     - tools/make/agent.mk
+    - tools/make/linter.mk
+    - tools/make/pre-commit.mk
+    - .pre-commit-config.yaml
     - .github/copilot-instructions.md
     - .github/PULL_REQUEST_TEMPLATE.md
     - .github/ISSUE_TEMPLATE/**
@@ -509,11 +530,15 @@ skills:
     - src/semantic-router/pkg/decision/**
     - src/semantic-router/pkg/modelselection/**
     - src/semantic-router/pkg/selection/**
+    - src/semantic-router/pkg/looper/**
+    - src/semantic-router/pkg/projectiontrace/**
     - src/semantic-router/pkg/extproc/req_filter_looper*.go
     anchor_paths:
     - src/semantic-router/pkg/decision/**
     - src/semantic-router/pkg/modelselection/**
     - src/semantic-router/pkg/selection/**
+    - src/semantic-router/pkg/looper/**
+    - src/semantic-router/pkg/projectiontrace/**
     required_surfaces:
     - routing_policy
     - local_e2e
@@ -558,168 +583,12 @@ skills:
     - The canonical serve path works with the default smoke config for the selected environment.
     - Startup-chain changes include local smoke and relevant CLI or integration coverage.
     audience: coding-agent
-  - name: dashboard-platform-change
-    path: tools/agent/skills/dashboard-platform-change/SKILL.md
-    description: Change dashboard frontend or backend surfaces that present, configure, or manage router behavior through the console UI.
-    priority: 94
-    selector_paths:
-    - dashboard/frontend/**
-    - dashboard/backend/**
-    - dashboard/README.md
-    anchor_paths:
-    - dashboard/frontend/**
-    - dashboard/backend/**
-    required_surfaces:
-    - dashboard_platform
-    conditional_surfaces:
-    - dashboard_config_ui
-    - dashboard_console_backend
-    - topology_visualization
-    - playground_reveal
-    - response_headers
-    - contributor_interface
-    - docs_examples
-    - local_smoke
-    - local_e2e
-    - ci_e2e
-    optional_surfaces: []
-    stop_conditions:
-    - The dashboard change depends on backend or router contract changes that are not specified.
-    - Console backend behavior depends on storage, auth, or session policy that is not yet defined.
-    acceptance_criteria:
-    - Dashboard frontend and backend surfaces remain aligned with router and CLI contracts.
-    - User-visible routing metadata stays consistent across config, topology, playground, and console callers.
-    audience: coding-agent
-  - name: router-service-platform-change
-    path: tools/agent/skills/router-service-platform-change/SKILL.md
-    description: Change router-side API, authz, memory, storage, provider, or runtime service modules that live outside config, decision, selection, and extproc plugin chains.
-    priority: 91
-    selector_paths:
-    - src/semantic-router/pkg/anthropic/**
-    - src/semantic-router/pkg/apiserver/**
-    - src/semantic-router/pkg/authz/**
-    - src/semantic-router/pkg/cache/**
-    - src/semantic-router/pkg/hnsw/**
-    - src/semantic-router/pkg/imagegen/**
-    - src/semantic-router/pkg/latency/**
-    - src/semantic-router/pkg/mcp/**
-    - src/semantic-router/pkg/memory/**
-    - src/semantic-router/pkg/modeldownload/**
-    - src/semantic-router/pkg/modelinventory/**
-    - src/semantic-router/pkg/observability/**
-    - src/semantic-router/pkg/openai/**
-    - src/semantic-router/pkg/promptcompression/**
-    - src/semantic-router/pkg/ratelimit/**
-    - src/semantic-router/pkg/responseapi/**
-    - src/semantic-router/pkg/responsestore/**
-    - src/semantic-router/pkg/routerreplay/**
-    - src/semantic-router/pkg/services/**
-    - src/semantic-router/pkg/startupstatus/**
-    - src/semantic-router/pkg/tools/**
-    - src/semantic-router/pkg/vectorstore/**
-    required_surfaces:
-    - router_service_platform
-    conditional_surfaces:
-    - response_headers
-    - docs_examples
-    - local_smoke
-    - local_e2e
-    - ci_e2e
-    optional_surfaces: []
-    stop_conditions:
-    - The service or API change depends on runtime policy that is not encoded in code, tests, or profile coverage.
-    acceptance_criteria:
-    - Router-side service modules, storage or API seams, and affected validation paths stay aligned.
-    - Changes that hit profile-owned behavior update the relevant local or CI E2E expectation.
-    audience: coding-agent
-  - name: fleet-sim-change
-    path: tools/agent/skills/fleet-sim-change/SKILL.md
-    description: Change the fleet simulator package, API service, release wiring, or simulator-owned docs and assets as one maintained subsystem.
-    priority: 90
-    selector_paths:
-    - src/fleet-sim/**
-    - website/docs/fleet-sim/**
-    - website/static/files/fleet-sim/**
-    - website/static/img/fleet-sim/**
-    - .github/workflows/pypi-publish-vllm-sr-sim.yml
-    required_surfaces:
-    - fleet_sim_runtime
-    conditional_surfaces:
-    - docs_examples
-    - local_smoke
-    - contributor_interface
-    optional_surfaces: []
-    stop_conditions:
-    - The simulator change would break the maintained CLI or API surface without a validated replacement path.
-    acceptance_criteria:
-    - Simulator package, API entrypoints, and subsystem-owned docs or assets stay aligned.
-    - Any simulator release or runtime contract change updates the maintained workflow and validation path.
-    audience: coding-agent
-  - name: k8s-platform-change
-    path: tools/agent/skills/k8s-platform-change/SKILL.md
-    description: Change Kubernetes-facing operator, CRD, deployment-profile, or DSL translation behavior for semantic-router platform integration.
-    priority: 90
-    selector_paths:
-    - deploy/operator/**
-    - deploy/kubernetes/**
-    - src/semantic-router/pkg/apis/**
-    - src/semantic-router/pkg/dsl/**
-    - src/semantic-router/pkg/k8s/**
-    anchor_paths:
-    - deploy/operator/**
-    - deploy/kubernetes/**
-    - src/semantic-router/pkg/apis/**
-    - src/semantic-router/pkg/dsl/**
-    - src/semantic-router/pkg/k8s/**
-    required_surfaces:
-    - k8s_platform
-    conditional_surfaces:
-    - router_config_contract
-    - dsl_crd
-    - k8s_operator
-    - deployment_profile_stack
-    - docs_examples
-    - local_smoke
-    - local_e2e
-    - ci_e2e
-    optional_surfaces: []
-    stop_conditions:
-    - The Kubernetes-facing change depends on cluster policy or runtime behavior that is not represented by the current manifests, controller logic, or profile coverage.
-    acceptance_criteria:
-    - Operator APIs, DSL translation, deployment manifests, and affected Kubernetes validation paths stay aligned.
-    - Control-plane behavior and stack-manifest behavior remain explicit even when they change in the same loop.
-    audience: coding-agent
-  - name: training-stack-change
-    path: tools/agent/skills/training-stack-change/SKILL.md
-    description: Change training-stack workflows, selector or embedding pipelines, evaluation artifacts, or runtime-facing outputs under src/training.
-    priority: 88
-    selector_paths:
-    - src/training/**
-    - tools/make/models.mk
-    - tools/models/train-mmbert32k-gpu.sh
-    - website/docs/training/**
-    required_surfaces:
-    - training_stack
-    conditional_surfaces:
-    - native_binding
-    - docs_examples
-    - ci_e2e
-    optional_surfaces:
-    - local_e2e
-    stop_conditions:
-    - The training change depends on datasets, artifacts, or infra that cannot be validated or described in the current repo state.
-    acceptance_criteria:
-    - Training workflow changes keep scripts, docs, and artifact expectations aligned.
-    - Runtime-facing artifact contract changes are either updated in code or recorded as tracked debt.
-    audience: coding-agent
-  - name: cross-stack-bugfix
-    path: tools/agent/skills/cross-stack-bugfix/SKILL.md
-    description: Fallback primary skill for multi-surface fixes that do not map cleanly to a narrower archetype.
+  - name: project-change
+    path: tools/agent/skills/project-change/SKILL.md
+    description: Lightweight fallback for repository work that does not need a specialized cross-surface workflow.
     priority: 0
     selector_paths: []
-    required_surfaces:
-    - local_e2e
-    - ci_e2e
+    required_surfaces: []
     conditional_surfaces:
     - router_config_contract
     - signal_runtime
@@ -745,9 +614,10 @@ skills:
     optional_surfaces:
     - harness_docs
     stop_conditions:
-    - The fix spans multiple contracts and the owning primary skill cannot be determined from changed files alone.
+    - The requested outcome depends on an unresolved product decision, external authority, or unavailable environment.
     acceptance_criteria:
-    - The fix documents impacted surfaces and explicitly records any conditional surfaces skipped.
+    - The requested behavior is complete and the smallest relevant checks selected by the report pass.
+    - Changed contracts, tests, docs, or durable debt records stay aligned where the implementation requires them.
     audience: coding-agent
   support:
   - name: maintainer-release-ops

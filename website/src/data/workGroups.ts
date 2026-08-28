@@ -27,6 +27,45 @@ export const workGroups: WorkGroup[] = [
       'Multi-model collaboration algorithms and strategies',
       'Model-pool optimization and cross-model efficiency',
     ],
+    leads: [
+      {
+        name: 'Xunzhuo Liu',
+        avatar: 'https://github.com/Xunzhuo.png',
+        profile: 'https://github.com/Xunzhuo',
+      },
+    ],
+    members: [
+      {
+        name: 'Haichen Zhang',
+        avatar: '/img/team/haichen.jpeg',
+        profile: 'https://github.com/haic0',
+      },
+      {
+        name: 'raghavchitkara',
+        avatar: 'https://github.com/raghavchitkara36.png',
+        profile: 'https://github.com/raghavchitkara36',
+      },
+      {
+        name: 'Cerdore',
+        avatar: 'https://github.com/Cerdore.png',
+        profile: 'https://github.com/Cerdore',
+      },
+      {
+        name: 'Ramakrishnan Sathyavageeswaran',
+        avatar: 'https://github.com/ramkrishs.png',
+        profile: 'https://github.com/ramkrishs',
+      },
+      {
+        name: 'Chlins Zhang',
+        avatar: 'https://github.com/chlins.png',
+        profile: 'https://github.com/chlins',
+      },
+      {
+        name: 'yaojiejia',
+        avatar: 'https://github.com/yaojiejia.png',
+        profile: 'https://github.com/yaojiejia',
+      },
+    ],
   },
   {
     id: 'router-models-inference-runtime',
@@ -38,6 +77,50 @@ export const workGroups: WorkGroup[] = [
       'Built-in model post-training and release',
       'Router-native model families beyond BERT',
       'Self-improvement, fine-tuning, and runtime contracts',
+    ],
+    leads: [
+      {
+        name: 'Kun-Tai Wu',
+        avatar: 'https://github.com/WUKUNTAI-0211.png',
+        profile: 'https://github.com/WUKUNTAI-0211',
+      },
+      {
+        name: 'Theo Hsiung',
+        avatar: 'https://github.com/theohsiung.png',
+        profile: 'https://github.com/theohsiung',
+      },
+      {
+        name: 'Ádám Kovács',
+        avatar: 'https://github.com/adaamko.png',
+        profile: 'https://github.com/adaamko',
+      },
+      {
+        name: 'Ramakrishnan Sathyavageeswaran',
+        avatar: 'https://github.com/ramkrishs.png',
+        profile: 'https://github.com/ramkrishs',
+      },
+    ],
+    members: [
+      {
+        name: 'raghavchitkara',
+        avatar: 'https://github.com/raghavchitkara36.png',
+        profile: 'https://github.com/raghavchitkara36',
+      },
+      {
+        name: 'Park Soobin',
+        avatar: 'https://github.com/subin9.png',
+        profile: 'https://github.com/subin9',
+      },
+      {
+        name: 'Chlins Zhang',
+        avatar: 'https://github.com/chlins.png',
+        profile: 'https://github.com/chlins',
+      },
+      {
+        name: 'yaojiejia',
+        avatar: 'https://github.com/yaojiejia.png',
+        profile: 'https://github.com/yaojiejia',
+      },
     ],
   },
   {
@@ -51,6 +134,20 @@ export const workGroups: WorkGroup[] = [
       'Envoy ExtProc, gateways, and networking integrations',
       'Performance optimization, streaming, dispatch, retries, and telemetry',
     ],
+    leads: [
+      {
+        name: 'Yang Wu',
+        avatar: 'https://github.com/drivebyer.png',
+        profile: 'https://github.com/drivebyer',
+      },
+    ],
+    members: [
+      {
+        name: 'raghavchitkara',
+        avatar: 'https://github.com/raghavchitkara36.png',
+        profile: 'https://github.com/raghavchitkara36',
+      },
+    ],
   },
   {
     id: 'enterprise-environment',
@@ -60,8 +157,37 @@ export const workGroups: WorkGroup[] = [
     goal: 'Deliver production-grade enterprise capabilities across supported environments and hardware.',
     scope: [
       'Multi-tenancy, identity, API keys, quotas, and audit',
-      'Stability, scalability, observability, and lifecycle operations',
+      'Stable, scalable APIs and reference stacks',
       'Multi-environment and multi-hardware support',
+    ],
+    leads: [
+      {
+        name: 'Aayush Saini',
+        avatar: 'https://github.com/AayushSaini101.png',
+        profile: 'https://github.com/AayushSaini101',
+      },
+      {
+        name: 'Akshay Viswanathan',
+        avatar: 'https://github.com/akshayv.png',
+        profile: 'https://github.com/akshayv',
+      },
+    ],
+    members: [
+      {
+        name: 'Abhinav Mahajan',
+        avatar: 'https://github.com/abhinav-m22.png',
+        profile: 'https://github.com/abhinav-m22',
+      },
+      {
+        name: 'Aakanksha Bhende',
+        avatar: 'https://github.com/aakankshabhende.png',
+        profile: 'https://github.com/aakankshabhende',
+      },
+      {
+        name: 'Pranav Thakur',
+        avatar: 'https://github.com/pranavthakur0-0.png',
+        profile: 'https://github.com/pranavthakur0-0',
+      },
     ],
   },
   {
@@ -75,6 +201,30 @@ export const workGroups: WorkGroup[] = [
       'Agent backend selection, handoff, and composition',
       'Bounded multi-agent collaboration and long-session model or workflow switching',
     ],
+    leads: [
+      {
+        name: 'Xunzhuo Liu',
+        avatar: 'https://github.com/Xunzhuo.png',
+        profile: 'https://github.com/Xunzhuo',
+      },
+      {
+        name: 'Aayush Saini',
+        avatar: 'https://github.com/AayushSaini101.png',
+        profile: 'https://github.com/AayushSaini101',
+      },
+    ],
+    members: [
+      {
+        name: 'Abhinav Mahajan',
+        avatar: 'https://github.com/abhinav-m22.png',
+        profile: 'https://github.com/abhinav-m22',
+      },
+      {
+        name: 'yaojiejia',
+        avatar: 'https://github.com/yaojiejia.png',
+        profile: 'https://github.com/yaojiejia',
+      },
+    ],
   },
   {
     id: 'developer-experience-ecosystem',
@@ -87,6 +237,40 @@ export const workGroups: WorkGroup[] = [
       'Agent skill and ecosystem integrations for deployment, tuning, and operations',
       'Documentation, blogs, video tutorials, and use-case sharing',
     ],
+    leads: [
+      {
+        name: 'Aayush Saini',
+        avatar: 'https://github.com/AayushSaini101.png',
+        profile: 'https://github.com/AayushSaini101',
+      },
+      {
+        name: 'Wilson Wu',
+        avatar: 'https://github.com/wilsonwu.png',
+        profile: 'https://github.com/wilsonwu',
+      },
+    ],
+    members: [
+      {
+        name: 'Abhinav Mahajan',
+        avatar: 'https://github.com/abhinav-m22.png',
+        profile: 'https://github.com/abhinav-m22',
+      },
+      {
+        name: 'Mahdi Ghodsi',
+        avatar: 'https://github.com/Mahdi-CV.png',
+        profile: 'https://github.com/Mahdi-CV',
+      },
+      {
+        name: 'Aakanksha Bhende',
+        avatar: 'https://github.com/aakankshabhende.png',
+        profile: 'https://github.com/aakankshabhende',
+      },
+      {
+        name: 'Eda Zhou',
+        avatar: 'https://github.com/edamamez.png',
+        profile: 'https://github.com/edamamez',
+      },
+    ],
   },
   {
     id: 'evaluation-quality',
@@ -98,6 +282,18 @@ export const workGroups: WorkGroup[] = [
       'MoM, Router Model, agent, context, and workflow evaluation',
       'Model cards, benchmarks, and reproducibility',
       'CI, E2E, compatibility, and regression gates',
+    ],
+    leads: [
+      {
+        name: 'Xunzhuo Liu',
+        avatar: 'https://github.com/Xunzhuo.png',
+        profile: 'https://github.com/Xunzhuo',
+      },
+      {
+        name: 'FAUST',
+        avatar: 'https://github.com/FAUST-BENCHOU.png',
+        profile: 'https://github.com/FAUST-BENCHOU',
+      },
     ],
   },
 ]
