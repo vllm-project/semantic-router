@@ -11,6 +11,7 @@
 
 .dialog {
   width: min(var(--product-dialog-content-width), 100%);
+  height: min(900px, calc(100dvh - 3rem));
   max-height: min(880px, calc(100dvh - 3rem));
   display: flex;
   flex-direction: column;
@@ -116,7 +117,7 @@
   min-height: 0;
   gap: 1rem;
   padding: 1.4rem 1.6rem 1.6rem;
-  overflow-y: auto;
+  overflow: hidden;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
 }
@@ -161,8 +162,10 @@
 }
 
 .decisionSection {
-  flex: 1 0 300px;
+  flex: 1 1 0;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 13px;
@@ -197,23 +200,33 @@
 }
 
 .assignmentWorkspace {
+  flex: 1 1 auto;
   display: grid;
   grid-template-columns: minmax(210px, 0.38fr) minmax(0, 1fr);
-  min-height: 300px;
-  height: min(420px, 44vh);
+  min-height: 0;
+  height: auto;
   overflow: hidden;
 }
 
 .decisionRail {
   min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
   padding: 0.55rem;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
+  overflow: hidden;
   border-right: 1px solid rgba(255, 255, 255, 0.075);
 }
 
-.decisionRail > button {
+.decisionList {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.decisionList > button {
   width: 100%;
   min-height: 58px;
   display: grid;
@@ -228,15 +241,15 @@
   border-radius: 9px;
 }
 
-.decisionRail > button + button {
+.decisionList > button + button {
   margin-top: 0.2rem;
 }
 
-.decisionRail > button:hover {
+.decisionList > button:hover {
   background: rgba(255, 255, 255, 0.035);
 }
 
-.decisionRail > .activeDecision {
+.decisionList > .activeDecision {
   background: rgba(255, 255, 255, 0.07);
   border-color: rgba(255, 255, 255, 0.12);
 }
@@ -281,6 +294,92 @@
   white-space: nowrap;
 }
 
+.assignmentSearch {
+  min-width: 0;
+  min-height: 36px;
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0 0.65rem;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.025);
+  color: rgba(255, 255, 255, 0.38);
+}
+
+.assignmentSearch:focus-within {
+  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.assignmentSearch svg {
+  width: 14px;
+  height: 14px;
+}
+
+.assignmentSearch input {
+  width: 100%;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.84);
+  font: inherit;
+  font-size: 0.7rem;
+}
+
+.assignmentSearch input::placeholder {
+  color: rgba(255, 255, 255, 0.32);
+}
+
+.modelPickerToolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  padding: 0.65rem 0.75rem 0;
+}
+
+.modelPickerToolbar > button {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0 0.65rem;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.52);
+  font-size: 0.68rem;
+  font-weight: 650;
+}
+
+.modelPickerToolbar > button:hover,
+.modelPickerToolbar > .activeFilter {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.055);
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.modelPickerToolbar > button svg {
+  width: 13px;
+  height: 13px;
+}
+
+.modelPickerToolbar > button span {
+  min-width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  padding: 0 0.25rem;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.08);
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+}
+
 .decisionIndex {
   display: grid;
   width: 25px;
@@ -302,6 +401,14 @@
 .decisionRail strong {
   color: rgba(255, 255, 255, 0.86);
   font-size: 0.78rem;
+}
+
+.noResults {
+  margin: 0;
+  padding: 1.15rem 0.5rem;
+  color: rgba(255, 255, 255, 0.38);
+  font-size: 0.68rem;
+  text-align: center;
 }
 
 .decisionRail small {
@@ -572,6 +679,7 @@
   }
 
   .dialog {
+    height: auto;
     max-height: calc(100dvh - 0.8rem);
     border-width: 1px;
   }
@@ -580,6 +688,10 @@
   .body,
   .footer {
     padding-inline: 1rem;
+  }
+
+  .body {
+    overflow-y: auto;
   }
 
   .identityGrid,
@@ -600,21 +712,25 @@
   }
 
   .decisionRail {
-    display: flex;
-    gap: 0.35rem;
     padding: 0.55rem;
-    overflow-x: auto;
-    overflow-y: hidden;
+    overflow: hidden;
     border-right: 0;
     border-bottom: 1px solid rgba(255, 255, 255, 0.075);
+  }
+
+  .decisionList {
+    display: flex;
+    gap: 0.35rem;
+    overflow-x: auto;
+    overflow-y: hidden;
     scrollbar-gutter: auto;
   }
 
-  .decisionRail > button {
+  .decisionList > button {
     min-width: min(220px, 74vw);
   }
 
-  .decisionRail > button + button {
+  .decisionList > button + button {
     margin-top: 0;
   }
 
@@ -623,7 +739,12 @@
   }
 
   .modelPicker {
-    overflow: visible;
+    max-height: 340px;
+    overflow-y: auto;
+  }
+
+  .modelPickerToolbar {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .sectionHeader {
@@ -642,5 +763,19 @@
 
   .aliasHeading p {
     text-align: left;
+  }
+}
+
+@media (max-height: 800px) and (min-width: 721px) {
+  .body {
+    overflow-y: auto;
+  }
+
+  .decisionSection {
+    flex: 0 0 auto;
+  }
+
+  .assignmentWorkspace {
+    height: 360px;
   }
 }

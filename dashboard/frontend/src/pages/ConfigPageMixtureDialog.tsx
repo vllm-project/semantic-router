@@ -52,6 +52,9 @@ export default function ConfigPageMixtureDialog({
   const [activeDecisionName, setActiveDecisionName] = useState(() =>
     firstDecisionName((initialRecipe?.routing.decisions ?? []).map((decision) => decision.name)),
   )
+  const [decisionSearch, setDecisionSearch] = useState('')
+  const [modelSearch, setModelSearch] = useState('')
+  const [showSelectedModels, setShowSelectedModels] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const dialogRef = useAccessibleDialog<HTMLDivElement>({
@@ -77,6 +80,9 @@ export default function ConfigPageMixtureDialog({
     setActiveDecisionName(
       firstDecisionName((nextRecipe?.routing.decisions ?? []).map((decision) => decision.name)),
     )
+    setDecisionSearch('')
+    setModelSearch('')
+    setShowSelectedModels(false)
     setError(null)
   }
 
@@ -141,6 +147,23 @@ export default function ConfigPageMixtureDialog({
   const activeDecision =
     decisions.find((decision) => decision.name === activeDecisionName) ?? decisions[0]
   const activeSelection = activeDecision ? (assignments[activeDecision.name] ?? []) : []
+  const normalizedDecisionSearch = decisionSearch.trim().toLocaleLowerCase()
+  const visibleDecisions = normalizedDecisionSearch
+    ? decisions.filter((decision) =>
+        `${decision.name} ${decision.description ?? ''}`
+          .toLocaleLowerCase()
+          .includes(normalizedDecisionSearch),
+      )
+    : decisions
+  const normalizedModelSearch = modelSearch.trim().toLocaleLowerCase()
+  const visibleModelOptions = modelOptions.filter(
+    (modelName) =>
+      (!showSelectedModels || activeSelection.includes(modelName)) &&
+      (!normalizedModelSearch || modelName.toLocaleLowerCase().includes(normalizedModelSearch)),
+  )
+  const completedDecisionCount = decisions.filter(
+    (decision) => (assignments[decision.name]?.length ?? 0) > 0,
+  ).length
 
   return (
     <div
@@ -254,40 +277,65 @@ export default function ConfigPageMixtureDialog({
             <div className={styles.sectionHeader}>
               <div>
                 <span>Model assignments</span>
-                <strong>{decisions.length} decisions</strong>
+                <strong>
+                  {completedDecisionCount} of {decisions.length} ready
+                </strong>
               </div>
               <p>{recipe?.description || 'Complete every decision before publishing.'}</p>
             </div>
             {decisions.length > 0 && activeDecision ? (
               <div className={styles.assignmentWorkspace}>
-                <div className={styles.decisionRail} role="tablist" aria-label="Recipe decisions">
-                  {decisions.map((decision, decisionIndex) => {
-                    const selected = assignments[decision.name] ?? []
-                    const isActive = decision.name === activeDecision.name
-                    return (
-                      <button
-                        key={decision.name}
-                        type="button"
-                        role="tab"
-                        aria-selected={isActive}
-                        className={isActive ? styles.activeDecision : ''}
-                        onClick={() => setActiveDecisionName(decision.name)}
-                      >
-                        <span className={styles.decisionIndex}>
-                          {String(decisionIndex + 1).padStart(2, '0')}
-                        </span>
-                        <span className={styles.decisionCopy}>
-                          <strong>{decision.name}</strong>
-                          <small>{decision.description || 'Model path'}</small>
-                        </span>
-                        <span
-                          className={selected.length ? styles.selectionCount : styles.missingCount}
+                <div className={styles.decisionRail}>
+                  <label className={styles.assignmentSearch}>
+                    <ProductIcon name="search" aria-hidden="true" />
+                    <input
+                      value={decisionSearch}
+                      onChange={(event) => setDecisionSearch(event.target.value)}
+                      placeholder="Find a decision"
+                      aria-label="Find a decision"
+                    />
+                  </label>
+                  <div className={styles.decisionList} role="tablist" aria-label="Recipe decisions">
+                    {visibleDecisions.map((decision) => {
+                      const decisionIndex = decisions.findIndex(
+                        (candidate) => candidate.name === decision.name,
+                      )
+                      const selected = assignments[decision.name] ?? []
+                      const isActive = decision.name === activeDecision.name
+                      return (
+                        <button
+                          key={decision.name}
+                          type="button"
+                          role="tab"
+                          aria-selected={isActive}
+                          className={isActive ? styles.activeDecision : ''}
+                          onClick={() => {
+                            setActiveDecisionName(decision.name)
+                            setModelSearch('')
+                            setShowSelectedModels(false)
+                          }}
                         >
-                          {selected.length || '—'}
-                        </span>
-                      </button>
-                    )
-                  })}
+                          <span className={styles.decisionIndex}>
+                            {String(decisionIndex + 1).padStart(2, '0')}
+                          </span>
+                          <span className={styles.decisionCopy}>
+                            <strong>{decision.name}</strong>
+                            <small>{decision.description || 'Model path'}</small>
+                          </span>
+                          <span
+                            className={
+                              selected.length ? styles.selectionCount : styles.missingCount
+                            }
+                          >
+                            {selected.length || '—'}
+                          </span>
+                        </button>
+                      )
+                    })}
+                    {visibleDecisions.length === 0 ? (
+                      <p className={styles.noResults}>No matching decisions.</p>
+                    ) : null}
+                  </div>
                 </div>
 
                 <div
@@ -308,8 +356,29 @@ export default function ConfigPageMixtureDialog({
                         : 'Choose at least one'}
                     </span>
                   </div>
+                  <div className={styles.modelPickerToolbar}>
+                    <label className={styles.assignmentSearch}>
+                      <ProductIcon name="search" aria-hidden="true" />
+                      <input
+                        value={modelSearch}
+                        onChange={(event) => setModelSearch(event.target.value)}
+                        placeholder="Find a model"
+                        aria-label={`Find a model for ${activeDecision.name}`}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className={showSelectedModels ? styles.activeFilter : ''}
+                      aria-pressed={showSelectedModels}
+                      onClick={() => setShowSelectedModels((current) => !current)}
+                    >
+                      <ProductIcon name="check" aria-hidden="true" />
+                      Selected
+                      <span>{activeSelection.length}</span>
+                    </button>
+                  </div>
                   <div className={styles.modelPicker}>
-                    {modelOptions.map((modelName) => (
+                    {visibleModelOptions.map((modelName) => (
                       <label
                         key={modelName}
                         className={activeSelection.includes(modelName) ? styles.selectedModel : ''}
@@ -325,8 +394,12 @@ export default function ConfigPageMixtureDialog({
                         <code>{modelName}</code>
                       </label>
                     ))}
-                    {modelOptions.length === 0 ? (
-                      <p>Connect a model before publishing this mixture.</p>
+                    {visibleModelOptions.length === 0 ? (
+                      <p>
+                        {modelOptions.length === 0
+                          ? 'Connect a model before publishing this mixture.'
+                          : 'No models match this view.'}
+                      </p>
                     ) : null}
                   </div>
                 </div>
