@@ -40,8 +40,6 @@ func TestReadLimitedBody_ExactlyAtCapIsAllowed(t *testing.T) {
 }
 
 func TestReadLimitedBody_DoesNotSilentlyTruncate(t *testing.T) {
-	// An over-cap body must surface as an explicit error, never a silently
-	// truncated (and thus mis-parsed) partial body.
 	body := strings.NewReader(strings.Repeat("x", 50))
 
 	data, err := ReadLimitedBody(body, 10)
@@ -52,8 +50,6 @@ func TestReadLimitedBody_DoesNotSilentlyTruncate(t *testing.T) {
 }
 
 func TestReadLimitedBody_OneByteOverCapReturnsError(t *testing.T) {
-	// The exact boundary the maxBytes+1 LimitReader trick hinges on: a body of
-	// exactly cap+1 bytes must be rejected.
 	body := strings.NewReader(strings.Repeat("a", 11))
 
 	if _, err := ReadLimitedBody(body, 10); err == nil {
@@ -62,8 +58,6 @@ func TestReadLimitedBody_OneByteOverCapReturnsError(t *testing.T) {
 }
 
 func TestReadLimitedBody_NonPositiveCapReturnsError(t *testing.T) {
-	// The helper enforces a positive ceiling; a non-positive cap is a caller
-	// bug and must fail explicitly rather than mis-report an empty body.
 	if _, err := ReadLimitedBody(strings.NewReader(""), 0); err == nil {
 		t.Fatal("expected an error for a zero cap, got nil")
 	}
@@ -99,8 +93,6 @@ func TestReadTruncatedBody_ExactlyAtCapIsNotTruncated(t *testing.T) {
 }
 
 func TestReadTruncatedBody_OverCapIsCappedNotFailed(t *testing.T) {
-	// A diagnostic body is never parsed, so an over-cap one must come back
-	// capped and flagged rather than dropped: the caller reports its size.
 	body := strings.NewReader(strings.Repeat("a", 11))
 
 	data, truncated := ReadTruncatedBody(body, 10)

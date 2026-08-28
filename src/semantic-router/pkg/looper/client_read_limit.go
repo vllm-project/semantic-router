@@ -31,8 +31,7 @@ const maxErrorBodyBytes int64 = 8 * 1024
 // readResponseBody reads and bounds the body of a model-call HTTP response.
 // A non-2xx response yields content-free size/truncation diagnostics; a
 // success body is read in full up to the configured ceiling and errors
-// (rather than silently truncating) when oversized. The ceiling matters here
-// because the parallel fan-out algorithms amplify one oversized body N-fold.
+// (rather than silently truncating) when oversized.
 func (c *Client) readResponseBody(resp *http.Response) ([]byte, error) {
 	if resp.StatusCode != http.StatusOK {
 		errBody, truncated := httputil.ReadTruncatedBody(resp.Body, maxErrorBodyBytes)
