@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { mockAuthenticatedSession } from './support/auth';
+import { mockAuthenticatedAppShell } from './support/auth';
 
 const configResponse = {
   version: 'v0.3',
@@ -207,51 +207,8 @@ const taxonomyClassifierResponse = {
 };
 
 async function mockConfigSurface(page: Page) {
-  await mockAuthenticatedSession(page);
-
-  await page.route('**/api/auth/bootstrap/can-register', async route => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ canRegister: false }),
-    });
-  });
-
-  await page.route('**/api/setup/state', async route => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        setupMode: false,
-        listenerPort: 8000,
-        models: 1,
-        decisions: 1,
-        hasModels: true,
-        hasDecisions: true,
-        canActivate: true,
-      }),
-    });
-  });
-
-  await page.route('**/api/settings', async route => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        readonlyMode: false,
-        setupMode: false,
-        platform: '',
-        envoyUrl: '',
-      }),
-    });
-  });
-
-  await page.route('**/api/mcp/tools', async route => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ tools: [] }) });
-  });
-
-  await page.route('**/api/mcp/servers', async route => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
+  await mockAuthenticatedAppShell(page, {
+    settings: { platform: '', readonlyMode: false },
   });
 
   await page.route('**/api/router/config/all', async route => {
@@ -270,7 +227,7 @@ async function mockConfigSurface(page: Page) {
     await route.fulfill({ status: 200, contentType: 'text/yaml', body: rawGlobalYaml });
   });
 
-  await page.route('**/api/router/config/classifiers', async route => {
+  await page.route('**/api/router/config/kbs', async route => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -347,9 +304,11 @@ test.describe('Config surface layout regressions', () => {
     ]);
     expect(modalBox).not.toBeNull();
     expect(viewport).not.toBeNull();
-    expect(modalBox!.x + modalBox!.width).toBeCloseTo(viewport!.width, 0);
-    expect(modalBox!.y).toBeCloseTo(0, 0);
-    expect(modalBox!.height).toBeCloseTo(viewport!.height, 0);
+    const rightGutter = viewport!.width - modalBox!.x - modalBox!.width;
+    const bottomGutter = viewport!.height - modalBox!.y - modalBox!.height;
+    expect(modalBox!.width).toBeLessThanOrEqual(980);
+    expect(modalBox!.x).toBeCloseTo(rightGutter, 0);
+    expect(modalBox!.y).toBeCloseTo(bottomGutter, 0);
 
     const closeButton = modal.getByRole('button', { name: 'Close editor' });
     await expect(closeButton).toBeFocused();
@@ -361,7 +320,7 @@ test.describe('Config surface layout regressions', () => {
     await expect(addDecisionButton).toBeFocused();
   });
 
-  test('expands the shared editor drawer to the mobile viewport', async ({ page }) => {
+  test('fits the shared editor inside the mobile viewport', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await mockConfigSurface(page);
@@ -371,13 +330,15 @@ test.describe('Config surface layout regressions', () => {
 
     const modal = page.getByRole('dialog', { name: 'Add Decision' });
     await expect(modal).toHaveCSS('animation-name', 'none');
-    await expect.poll(async () => Math.round((await modal.boundingBox())?.x ?? -1)).toBe(0);
     const modalBox = await modal.boundingBox();
     expect(modalBox).not.toBeNull();
-    expect(modalBox!.x).toBeCloseTo(0, 0);
-    expect(modalBox!.y).toBeCloseTo(0, 0);
-    expect(modalBox!.width).toBeCloseTo(390, 0);
-    expect(modalBox!.height).toBeCloseTo(844, 0);
+    const rightGutter = 390 - modalBox!.x - modalBox!.width;
+    expect(modalBox!.x).toBeGreaterThanOrEqual(0);
+    expect(rightGutter).toBeGreaterThanOrEqual(0);
+    expect(modalBox!.x).toBeLessThanOrEqual(8);
+    expect(rightGutter).toBeLessThanOrEqual(8);
+    expect(modalBox!.y).toBeGreaterThanOrEqual(0);
+    expect(modalBox!.y + modalBox!.height).toBeLessThanOrEqual(844);
   });
 
   test('stacks model catalog section path and actions cleanly inside global cards', async ({ page }) => {
@@ -385,7 +346,7 @@ test.describe('Config surface layout regressions', () => {
     await mockConfigSurface(page);
 
     await page.goto('/config/global-config');
-    await expect(page.getByRole('heading', { name: 'Global Config Overview' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Global Config', exact: true })).toBeVisible();
 
     const systemBindingsCard = page.locator('article').filter({
       has: page.getByRole('heading', { name: 'System Model Bindings' }),
@@ -400,9 +361,9 @@ test.describe('Config surface layout regressions', () => {
     await expect(embeddingsCard.getByText('models/mmbert-embed-32k-2d-matryoshka')).toBeVisible();
 
     const systemPath = systemBindingsCard.getByText('global.model_catalog.system');
-    const systemButton = systemBindingsCard.getByRole('button', { name: 'Edit Section' });
+    const systemButton = systemBindingsCard.getByRole('button', { name: 'Edit' });
     const embeddingPath = embeddingsCard.getByText('global.model_catalog.embeddings');
-    const embeddingButton = embeddingsCard.getByRole('button', { name: 'Edit Section' });
+    const embeddingButton = embeddingsCard.getByRole('button', { name: 'Edit' });
 
     for (const [card, path, button] of [
       [systemBindingsCard, systemPath, systemButton],
@@ -416,7 +377,13 @@ test.describe('Config surface layout regressions', () => {
       const [pathBox, buttonBox] = await Promise.all([path.boundingBox(), button.boundingBox()]);
       expect(pathBox).not.toBeNull();
       expect(buttonBox).not.toBeNull();
-      expect(buttonBox!.y).toBeGreaterThan(pathBox!.y + pathBox!.height - 1);
+      const horizontallySeparated =
+        buttonBox!.x + buttonBox!.width <= pathBox!.x ||
+        pathBox!.x + pathBox!.width <= buttonBox!.x;
+      const verticallySeparated =
+        buttonBox!.y + buttonBox!.height <= pathBox!.y ||
+        pathBox!.y + pathBox!.height <= buttonBox!.y;
+      expect(horizontallySeparated || verticallySeparated).toBe(true);
     }
 
     await expect(page.getByRole('heading', { name: 'Classifier Catalog' })).toHaveCount(0);

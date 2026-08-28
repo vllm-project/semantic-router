@@ -4,6 +4,7 @@ import { getPageWindow, paginateRows } from '../dataTableSupport'
 import type { EvaluationLevel, EvaluationStatus, EvaluationTask } from '../../types/evaluation'
 import { STATUS_INFO, LEVEL_INFO, formatDate, formatDuration } from '../../types/evaluation'
 import EvaluationPagination from './EvaluationPagination'
+import ProductLoadingState from '../ProductLoadingState'
 import {
   EVALUATION_TASK_PAGE_SIZE,
   filterAndSortEvaluationTasks,
@@ -80,12 +81,7 @@ export function TaskList({
   const canCancel = (task: EvaluationTask) => task.status === 'running'
 
   if (loading && tasks.length === 0) {
-    return (
-      <div className={styles.loading} role="status">
-        <div className={styles.spinner} />
-        <span>Loading evaluation tasks…</span>
-      </div>
-    )
+    return <ProductLoadingState label="Loading evaluation tasks" compact />
   }
 
   if (error && tasks.length === 0) {
@@ -93,7 +89,9 @@ export function TaskList({
       <div className={styles.errorState} role="alert">
         <h3>Evaluation tasks are unavailable</h3>
         <p>{error}</p>
-        <button type="button" onClick={onRefresh}>Retry</button>
+        <button type="button" onClick={onRefresh}>
+          Retry
+        </button>
       </div>
     )
   }
@@ -101,7 +99,6 @@ export function TaskList({
   if (tasks.length === 0) {
     return (
       <div className={styles.empty}>
-        <div className={styles.emptyIcon}>📋</div>
         <h3>No Evaluation Tasks</h3>
         <p>
           {canCreateTasks
@@ -121,7 +118,12 @@ export function TaskList({
             {formatEvaluationResultCount(filteredTasks.length, tasks.length, 'tasks')}
           </span>
         </div>
-        <button type="button" className={styles.refreshButton} onClick={onRefresh} disabled={loading}>
+        <button
+          type="button"
+          className={styles.refreshButton}
+          onClick={onRefresh}
+          disabled={loading}
+        >
           {loading ? 'Refreshing…' : 'Refresh'}
         </button>
       </div>
@@ -143,7 +145,9 @@ export function TaskList({
         >
           <option value="all">All statuses</option>
           {Object.entries(STATUS_INFO).map(([status, info]) => (
-            <option key={status} value={status}>{info.label}</option>
+            <option key={status} value={status}>
+              {info.label}
+            </option>
           ))}
         </select>
         <select
@@ -154,7 +158,9 @@ export function TaskList({
         >
           <option value="all">All levels</option>
           {Object.entries(LEVEL_INFO).map(([level, info]) => (
-            <option key={level} value={level}>{info.label}</option>
+            <option key={level} value={level}>
+              {info.label}
+            </option>
           ))}
         </select>
         <select
@@ -168,10 +174,16 @@ export function TaskList({
           <option value="name-asc">Name A–Z</option>
           <option value="progress-desc">Progress high–low</option>
         </select>
-        <span className={styles.clientPagingNote}>Client view · {EVALUATION_TASK_PAGE_SIZE} rows/page</span>
+        <span className={styles.clientPagingNote}>
+          Client view · {EVALUATION_TASK_PAGE_SIZE} rows/page
+        </span>
       </div>
 
-      {error ? <div className={styles.inlineError} role="alert">Refresh failed: {error}</div> : null}
+      {error ? (
+        <div className={styles.inlineError} role="alert">
+          Refresh failed: {error}
+        </div>
+      ) : null}
 
       {visibleTasks.length === 0 ? (
         <div className={styles.noMatches}>
@@ -199,11 +211,16 @@ export function TaskList({
                     <div className={styles.taskName}>
                       <span className={styles.name}>{task.name}</span>
                       <span className={styles.taskId}>{task.id}</span>
-                      {task.description ? <span className={styles.description}>{task.description}</span> : null}
+                      {task.description ? (
+                        <span className={styles.description}>{task.description}</span>
+                      ) : null}
                     </div>
                   </td>
                   <td>
-                    <span className={styles.levelBadge} style={{ color: LEVEL_INFO[task.config.level].color }}>
+                    <span
+                      className={styles.levelBadge}
+                      style={{ color: LEVEL_INFO[task.config.level].color }}
+                    >
                       {LEVEL_INFO[task.config.level].label}
                     </span>
                   </td>
@@ -216,13 +233,21 @@ export function TaskList({
                       />
                       <span className={styles.progressText}>{task.progress_percent}%</span>
                     </div>
-                    {task.current_step ? <span className={styles.currentStep}>{task.current_step}</span> : null}
+                    {task.current_step ? (
+                      <span className={styles.currentStep}>{task.current_step}</span>
+                    ) : null}
                   </td>
                   <td className={styles.date}>{formatDate(task.created_at)}</td>
-                  <td className={styles.duration}>{formatDuration(task.started_at, task.completed_at)}</td>
+                  <td className={styles.duration}>
+                    {formatDuration(task.started_at, task.completed_at)}
+                  </td>
                   <td>
                     <div className={styles.actions}>
-                      <button type="button" className={styles.actionButton} onClick={() => onView(task)}>
+                      <button
+                        type="button"
+                        className={styles.actionButton}
+                        onClick={() => onView(task)}
+                      >
                         View
                       </button>
                       {canRunTasks && canRun(task) ? (

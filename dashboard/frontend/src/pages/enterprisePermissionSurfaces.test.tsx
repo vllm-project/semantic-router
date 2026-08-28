@@ -3,7 +3,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 
-import { DashboardTab, StatusTab } from './OpenClawPageTabs'
+import { StatusTab } from './OpenClawPageTabs'
 import type { OpenClawStatus, TeamProfile } from './OpenClawPageSupport'
 import { TeamTab } from './OpenClawTeamTab'
 import { WorkerTab } from './OpenClawWorkerTab'
@@ -44,7 +44,7 @@ describe('enterprise permission surfaces', () => {
     expect(markup).not.toMatch(/>Delete</)
   })
 
-  it('keeps worker status navigation while hiding worker mutation controls', () => {
+  it('keeps worker runtime navigation while hiding worker mutation controls', () => {
     const markup = renderToStaticMarkup(
       createElement(WorkerTab, {
         containers: [worker],
@@ -57,25 +57,10 @@ describe('enterprise permission surfaces', () => {
     )
 
     expect(markup).toContain('Atlas')
-    expect(markup).toMatch(/>Status</)
+    expect(markup).toMatch(/>Runtime</)
     expect(markup).not.toMatch(/>New Worker</)
     expect(markup).not.toMatch(/>Edit</)
     expect(markup).not.toMatch(/>Delete</)
-  })
-
-  it('labels dashboard navigation as view-only instead of management', () => {
-    const markup = renderToStaticMarkup(
-      createElement(DashboardTab, {
-        containers: [worker],
-        teams: [team],
-        onSwitchToStatus: vi.fn(),
-        readOnly: true,
-      }),
-    )
-
-    expect(markup).toContain('View Claw Status')
-    expect(markup).toContain('View status')
-    expect(markup).not.toMatch(/>Manage</)
   })
 
   it('renders runtime status and refresh without lifecycle actions', () => {
@@ -97,10 +82,6 @@ describe('enterprise permission surfaces', () => {
   })
 
   it('keeps permission, structured-input, dialog, tab, and polling contracts explicit', () => {
-    const securitySource = readFileSync(
-      new URL('./SecurityPolicyPage.tsx', import.meta.url),
-      'utf8',
-    )
     const pageSource = readFileSync(new URL('./OpenClawPage.tsx', import.meta.url), 'utf8')
     const configSource = readFileSync(new URL('./ConfigPage.tsx', import.meta.url), 'utf8')
     const mutationSources = [
@@ -108,14 +89,6 @@ describe('enterprise permission surfaces', () => {
       readFileSync(new URL('./OpenClawTeamTab.tsx', import.meta.url), 'utf8'),
       readFileSync(new URL('./OpenClawWorkerTab.tsx', import.meta.url), 'utf8'),
     ]
-
-    expect(securitySource).toContain('canManageSecurity')
-    expect(securitySource).toContain('!serverReadonly &&')
-    expect(securitySource).toContain('runtimeConfigWritable &&')
-    expect(securitySource).toContain('<StringListEditor')
-    expect(securitySource).toContain('security.manage')
-    expect(securitySource).not.toContain('comma-separated')
-    expect(securitySource).not.toContain('modelInputs')
 
     expect(pageSource).toContain('canManageOpenClaw')
     expect(pageSource).toContain(
@@ -130,6 +103,8 @@ describe('enterprise permission surfaces', () => {
     expect(pageSource).toContain('role="tab"')
     expect(pageSource).toContain('role="tabpanel"')
     expect(pageSource).toContain('aria-selected=')
+    expect(pageSource).not.toContain('Claw Dashboard')
+    expect(pageSource).not.toContain('Overview')
 
     expect(configSource).toContain("const isMCPSection = activeSection === 'mcp'")
     expect(configSource).toContain('{isMCPSection && (')

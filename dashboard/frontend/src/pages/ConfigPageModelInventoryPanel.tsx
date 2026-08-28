@@ -5,12 +5,28 @@ import TableHeader from '../components/TableHeader'
 import configStyles from './ConfigPage.module.css'
 import styles from './ConfigPageModelsSection.module.css'
 import ConfigPageModelLiveVerification from './ConfigPageModelLiveVerification'
-import { TABLE_COLUMN_WIDTH, type NormalizedModel } from './configPageSupport'
+import ModelProviderLogo from './ModelProviderLogo'
+import type { NormalizedModel } from './configPageSupport'
 import type { ModelEndpointFilter, ModelRoleFilter } from './configPageModelInventory'
 import {
   modelLiveVerificationState,
   type ModelLiveVerificationState,
 } from './useModelLiveVerification'
+import { findModelProviderPreset } from './modelProviderCatalog'
+
+function ModelProviderMark({ model }: { model: NormalizedModel }) {
+  const backend = model.backend_refs?.[0]
+  const preset = findModelProviderPreset({
+    backendName: backend?.name,
+    baseUrl: backend?.base_url,
+    apiFormat: model.api_format ?? backend?.provider,
+  })
+  return (
+    <span className={styles.modelProviderMark} aria-hidden="true">
+      <ModelProviderLogo provider={preset} size="small" />
+    </span>
+  )
+}
 
 interface ConfigPageModelInventoryPanelProps {
   models: NormalizedModel[]
@@ -87,27 +103,33 @@ export default function ConfigPageModelInventoryPanel({
     {
       key: 'name',
       header: 'Model Name',
+      width: '300px',
+      minWidth: '260px',
       sortable: true,
       render: (row) => (
         <div className={styles.modelIdentity}>
-          <div className={styles.modelIdentityPrimary}>
-            <span className={styles.modelName} title={row.name}>
-              {row.name}
+          <ModelProviderMark model={row} />
+          <div className={styles.modelIdentityCopy}>
+            <div className={styles.modelIdentityPrimary}>
+              <span className={styles.modelName} title={row.name}>
+                {row.name}
+              </span>
+              {row.name === defaultModel ? (
+                <span className={styles.defaultBadge}>Default</span>
+              ) : null}
+            </div>
+            <span className={styles.modelPhysicalId} title={row.provider_model_id || row.name}>
+              {row.provider_model_id || row.name}
             </span>
-            {row.name === defaultModel ? (
-              <span className={styles.defaultBadge}>Default</span>
-            ) : null}
           </div>
-          <span className={styles.modelPhysicalId} title={row.provider_model_id || row.name}>
-            {row.provider_model_id || row.name}
-          </span>
         </div>
       ),
     },
     {
       key: 'references',
       header: 'Routing Use',
-      width: TABLE_COLUMN_WIDTH.compact,
+      width: '120px',
+      minWidth: '112px',
       align: 'center',
       render: (row) => {
         const references = modelReferenceCounts.get(row.name) ?? 0
@@ -123,7 +145,8 @@ export default function ConfigPageModelInventoryPanel({
     {
       key: 'reasoning_family',
       header: 'Reasoning Family',
-      width: TABLE_COLUMN_WIDTH.medium,
+      width: '150px',
+      minWidth: '136px',
       sortable: true,
       render: (row) =>
         row.reasoning_family ? (
@@ -135,7 +158,8 @@ export default function ConfigPageModelInventoryPanel({
     {
       key: 'endpoints',
       header: 'Endpoints',
-      width: TABLE_COLUMN_WIDTH.compact,
+      width: '112px',
+      minWidth: '104px',
       align: 'center',
       render: (row) => {
         const count = row.endpoints?.length || 0
@@ -148,8 +172,9 @@ export default function ConfigPageModelInventoryPanel({
     },
     {
       key: 'live_verification',
-      header: 'Live Verification',
-      width: '240px',
+      header: 'Live',
+      width: '164px',
+      minWidth: '156px',
       render: (row) => (
         <ConfigPageModelLiveVerification
           model={row.name}
@@ -163,19 +188,31 @@ export default function ConfigPageModelInventoryPanel({
     {
       key: 'pricing',
       header: 'Pricing',
-      width: TABLE_COLUMN_WIDTH.medium,
+      width: '132px',
+      minWidth: '124px',
       render: (row) => {
         if (!row.pricing) return <span style={{ color: 'var(--color-text-secondary)' }}>N/A</span>
         const currency = row.pricing.currency || 'USD'
         const prompt = row.pricing.prompt_per_1m?.toFixed(2) || '0.00'
         return (
-          <span style={{ fontSize: '0.875rem', fontFamily: 'var(--font-mono)' }}>
-            {prompt} {currency}/1M
+          <span
+            title={`${prompt} ${currency} per 1M input tokens`}
+            style={{
+              fontSize: '0.8125rem',
+              fontFamily: 'var(--font-mono)',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {currency === 'USD' ? '$' : `${currency} `}
+            {prompt} / 1M
           </span>
         )
       },
     },
   ]
+  const visibleColumns = canVerifyModels
+    ? columns
+    : columns.filter((column) => column.key !== 'live_verification')
 
   return (
     <>
@@ -275,7 +312,7 @@ export default function ConfigPageModelInventoryPanel({
       ) : null}
 
       <DataTable
-        columns={columns}
+        columns={visibleColumns}
         data={filteredModels}
         keyExtractor={(row) => row.name}
         onView={onViewModel}

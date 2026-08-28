@@ -105,7 +105,6 @@ surfaces:
     - src/semantic-router/pkg/extproc/processor_res_header.go
     - src/semantic-router/pkg/extproc/req_filter_looper*.go
     - dashboard/frontend/src/components/HeaderDisplay.tsx
-    - dashboard/frontend/src/components/HeaderReveal.tsx
     - dashboard/frontend/src/components/ChatComponent*.tsx
     task_rules:
     - router-core
@@ -167,7 +166,7 @@ surfaces:
     - dashboard/frontend/src/pages/PlaygroundPage.tsx
     - dashboard/frontend/src/components/ChatComponent*.tsx
     - dashboard/frontend/src/components/HeaderDisplay.tsx
-    - dashboard/frontend/src/components/HeaderReveal.tsx
+    - dashboard/frontend/src/components/ThinkingAnimation.tsx
     task_rules:
     - dashboard
   dsl_crd:

@@ -41,28 +41,19 @@ Single-profile recipes use the configured `vllm-sr/auto` entrypoint.
 Multi-profile recipes expose named virtual model IDs through top-level
 `entrypoints`.
 
-## Use a built-in model
+## Use a built-in Recipe
 
-Built-in models can be discovered and selected without locating their source
-files:
+Start `vllm-sr serve`, then open **Build → Mixture-of-Models → Recipes** in
+Dashboard. Choose a built-in Recipe, assign connected Models to its decisions,
+and publish the resulting Mixture-of-Model. The Recipe contains routing policy;
+it does not start physical model engines or embed their credentials.
 
-```bash
-vllm-sr model list
-vllm-sr model show vllm-sr/mom-v1-blend
-vllm-sr serve vllm-sr/mom-v1-blend
-```
+For a reviewed YAML deployment, copy the built-in source into a user-owned
+configuration, validate it, and serve that complete file with
+`vllm-sr serve --config mom-custom.yaml`.
 
-This starts the local routing stack, not the physical model engines. Use
-`model fork` when changing provider bindings or routing policy:
-
-```bash
-vllm-sr model fork vllm-sr/mom-v1-blend mom-custom.yaml
-vllm-sr model validate mom-custom.yaml
-vllm-sr serve --config mom-custom.yaml
-```
-
-See the [built-in catalog guide](built-in/README.md) for version selection,
-multiple virtual models, and customization.
+See the [built-in catalog guide](built-in/README.md) for the packaged inventory
+and contributor contract.
 
 ## Custom recipes and Dashboard
 

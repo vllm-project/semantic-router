@@ -390,6 +390,28 @@ func TestSignalReadinessRequiresInitializedFactCheckAndFeedbackModels(t *testing
 	}
 }
 
+func TestSignalReadinessAllowsContrastiveJailbreakWithoutPromptGuard(t *testing.T) {
+	rule := config.JailbreakRule{Name: "contrastive-guard", Method: "contrastive"}
+	classifier := &Classifier{
+		Config: &config.RouterConfig{
+			IntelligentRouting: config.IntelligentRouting{
+				Signals: config.Signals{JailbreakRules: []config.JailbreakRule{rule}},
+			},
+		},
+		contrastiveJailbreakClassifiers: map[string]*ContrastiveJailbreakClassifier{
+			rule.Name: &ContrastiveJailbreakClassifier{},
+		},
+	}
+
+	if !classifier.signalReadiness()[config.SignalTypeJailbreak] {
+		t.Fatal("initialized contrastive jailbreak rules must not require Prompt Guard")
+	}
+	delete(classifier.contrastiveJailbreakClassifiers, rule.Name)
+	if classifier.signalReadiness()[config.SignalTypeJailbreak] {
+		t.Fatal("contrastive jailbreak rules without an initialized classifier must not report ready")
+	}
+}
+
 func newHallucinationLifecycleConfig(backend string) *config.RouterConfig {
 	return &config.RouterConfig{
 		InlineModels: config.InlineModels{
