@@ -103,6 +103,19 @@ type DecisionResult struct {
 	Confidence      float64
 	MatchedRules    []string
 	MatchedKeywords []string // The actual keywords that matched (not rule names)
+
+	// ConfidenceScored reports whether every value that contributed to
+	// Confidence came from a reported signal score. Signals that never
+	// report a confidence (keyword, language, pii, ...), predicate gates,
+	// and NOT guards all contribute the structural constant 1.0 instead;
+	// that constant is not comparable with calibrated or similarity-based
+	// scores, so selection only ranks by confidence within pools where
+	// every competitor is scored.
+	ConfidenceScored bool
+	// CatchAll marks a decision with no conditions (omitted rules or an
+	// empty AND). Catch-alls rank after signal-backed decisions wherever
+	// confidence-based selection applies, regardless of scoring.
+	CatchAll bool
 }
 
 // EvaluateDecisions evaluates all decisions and returns the best match based on strategy
@@ -142,16 +155,18 @@ func (e *DecisionEngine) EvaluateDecisionsWithSignals(signals *SignalMatches) (*
 	// Evaluate each decision
 	for i := range e.decisions {
 		decision := &e.decisions[i]
-		matched, confidence, matchedRules := e.evaluateDecisionWithSignals(decision, signals)
+		matched, confidence, scored, matchedRules := e.evaluateDecisionWithSignals(decision, signals)
 
 		if matched {
 			// Record decision match with confidence
 			metrics.RecordDecisionMatch(config.RoutingDecisionKey(e.routingScope, decision.Name), confidence)
 
 			results = append(results, DecisionResult{
-				Decision:     decision,
-				Confidence:   confidence,
-				MatchedRules: matchedRules,
+				Decision:         decision,
+				Confidence:       confidence,
+				MatchedRules:     matchedRules,
+				ConfidenceScored: scored,
+				CatchAll:         isCatchAllRules(decision.Rules),
 			})
 		}
 	}
@@ -166,17 +181,28 @@ func (e *DecisionEngine) EvaluateDecisionsWithSignals(signals *SignalMatches) (*
 }
 
 // evaluateDecisionWithSignals evaluates a single decision's rule tree with all signals.
+// scored reports whether every contribution to confidence came from a reported
+// signal score rather than a structural constant; see DecisionResult.
 func (e *DecisionEngine) evaluateDecisionWithSignals(
 	decision *config.Decision,
 	signals *SignalMatches,
-) (matched bool, confidence float64, matchedRules []string) {
+) (matched bool, confidence float64, scored bool, matchedRules []string) {
 	// Omitting rules is the YAML equivalent of a DSL route without WHEN. Keep
 	// this root-only contract explicit instead of relying on the zero value to
 	// fall through to OR semantics.
 	if decision.Rules.IsEmpty() {
-		return true, 0, nil
+		return true, 0, true, nil
 	}
 	return e.evalNode(decision.Rules, signals)
+}
+
+// isCatchAllRules reports whether a decision claims no conditions at all:
+// omitted rules or the empty-AND authoring form.
+func isCatchAllRules(rules config.RuleCombination) bool {
+	if rules.IsEmpty() {
+		return true
+	}
+	return !rules.IsLeaf() && strings.ToUpper(rules.Operator) == "AND" && len(rules.Conditions) == 0
 }
 
 // evalNode recursively evaluates a RuleNode (boolean expression tree) against signal matches.
@@ -185,7 +211,7 @@ func (e *DecisionEngine) evaluateDecisionWithSignals(
 func (e *DecisionEngine) evalNode(
 	node config.RuleNode,
 	signals *SignalMatches,
-) (matched bool, confidence float64, matchedRules []string) {
+) (matched bool, confidence float64, scored bool, matchedRules []string) {
 	if node.IsLeaf() {
 		return e.evalLeaf(node, signals)
 	}
@@ -204,42 +230,44 @@ func (e *DecisionEngine) evalNode(
 func (e *DecisionEngine) evalLeaf(
 	node config.RuleNode,
 	signals *SignalMatches,
-) (matched bool, confidence float64, matchedRules []string) {
+) (matched bool, confidence float64, scored bool, matchedRules []string) {
 	normalizedType := strings.ToLower(strings.TrimSpace(node.Type))
 
 	matched, supported := e.matchesSignalType(normalizedType, node.Name, signals)
 	if !supported {
-		return false, 0, nil
+		return false, 0, false, nil
 	}
 	if node.Predicate != nil {
 		return evaluatePredicateLeaf(node, normalizedType, signals)
 	}
 	if !matched {
-		return false, 0, nil
+		return false, 0, false, nil
 	}
 
-	confidence = signalConfidence(signals.SignalConfidences, normalizedType, node.Name)
-	return true, confidence, []string{formatMatchedRule(node)}
+	confidence, scored = signalConfidence(signals.SignalConfidences, normalizedType, node.Name)
+	return true, confidence, scored, []string{formatMatchedRule(node)}
 }
 
 func evaluatePredicateLeaf(
 	node config.RuleNode,
 	normalizedType string,
 	signals *SignalMatches,
-) (bool, float64, []string) {
+) (bool, float64, bool, []string) {
+	// Predicates are boolean gates: they rank with the structural constant
+	// 1.0, which is not a reported score, so they never count as scored.
 	value, available := signalPredicateValue(signals, normalizedType, node.Name, node.Label)
 	if available {
 		if numericPredicateMatches(value, node.Predicate) {
-			return true, 1.0, []string{formatMatchedRule(node)}
+			return true, 1.0, false, []string{formatMatchedRule(node)}
 		}
-		return false, 0, nil
+		return false, 0, false, nil
 	}
 	errorKey := fmt.Sprintf("%s:%s", normalizedType, node.Name)
 	_, failed := signals.SignalErrors[errorKey]
 	if failed && strings.EqualFold(strings.TrimSpace(node.OnError), "match") {
-		return true, 1.0, []string{formatMatchedRule(node)}
+		return true, 1.0, false, []string{formatMatchedRule(node)}
 	}
-	return false, 0, nil
+	return false, 0, false, nil
 }
 
 func formatMatchedRule(node config.RuleNode) string {
@@ -383,16 +411,19 @@ func resolvePolicySignalRules(
 	}
 }
 
-func signalConfidence(confidences map[string]float64, signalType string, name string) float64 {
+// signalConfidence returns the reported score for a signal and whether one
+// was reported at all. Signals that report nothing rank with the structural
+// default 1.0, which selection must not compare against reported scores.
+func signalConfidence(confidences map[string]float64, signalType string, name string) (float64, bool) {
 	if confidences == nil {
-		return 1.0
+		return 1.0, false
 	}
 
 	signalKey := fmt.Sprintf("%s:%s", signalType, name)
 	if score, ok := confidences[signalKey]; ok {
-		return score
+		return score, true
 	}
-	return 1.0
+	return 1.0, false
 }
 
 // evalAND returns true only when every child matches.
@@ -402,41 +433,45 @@ func signalConfidence(confidences map[string]float64, signalType string, name st
 func (e *DecisionEngine) evalAND(
 	children []config.RuleNode,
 	signals *SignalMatches,
-) (matched bool, confidence float64, matchedRules []string) {
+) (matched bool, confidence float64, scored bool, matchedRules []string) {
 	if len(children) == 0 {
-		return true, 0, nil
+		return true, 0, true, nil
 	}
 	totalConf := 0.0
+	scored = true
 	for _, child := range children {
-		m, c, r := e.evalNode(child, signals)
+		m, c, s, r := e.evalNode(child, signals)
 		if !m {
-			return false, 0, nil
+			return false, 0, false, nil
 		}
 		totalConf += c
+		scored = scored && s
 		matchedRules = append(matchedRules, r...)
 	}
-	return true, totalConf / float64(len(children)), matchedRules
+	return true, totalConf / float64(len(children)), scored, matchedRules
 }
 
 // evalOR returns true when at least one child matches; returns the best-confidence match.
 func (e *DecisionEngine) evalOR(
 	children []config.RuleNode,
 	signals *SignalMatches,
-) (matched bool, confidence float64, matchedRules []string) {
+) (matched bool, confidence float64, scored bool, matchedRules []string) {
 	bestConf := 0.0
+	bestScored := false
 	var bestRules []string
 	for _, child := range children {
-		m, c, r := e.evalNode(child, signals)
+		m, c, s, r := e.evalNode(child, signals)
 		if m && (!matched || c > bestConf) {
 			matched = true
 			bestConf = c
+			bestScored = s
 			bestRules = r
 		}
 	}
 	if matched {
-		return true, bestConf, bestRules
+		return true, bestConf, bestScored, bestRules
 	}
-	return false, 0, nil
+	return false, 0, false, nil
 }
 
 // evalNOT is a strictly unary operator: it negates the result of its single child.
@@ -444,18 +479,20 @@ func (e *DecisionEngine) evalOR(
 func (e *DecisionEngine) evalNOT(
 	children []config.RuleNode,
 	signals *SignalMatches,
-) (matched bool, confidence float64, matchedRules []string) {
+) (matched bool, confidence float64, scored bool, matchedRules []string) {
 	if len(children) != 1 {
 		logging.Warnf("NOT operator requires exactly 1 child, got %d — treating as non-match", len(children))
-		return false, 0, nil
+		return false, 0, false, nil
 	}
-	m, c, r := e.evalNode(children[0], signals)
+	m, c, s, r := e.evalNode(children[0], signals)
 	if !m {
-		// Child did not match → NOT matches with full certainty.
-		return true, 1.0, r
+		// Child did not match → NOT matches. The 1.0 is a structural
+		// constant (absence of evidence, not strength of evidence), so a
+		// matching NOT guard is never scored.
+		return true, 1.0, false, r
 	}
 	// Child matched → NOT does not match.
-	return false, c, r
+	return false, c, s, r
 }
 
 // matchesDomainCondition checks if any of the detected domains match the given category name
@@ -493,11 +530,48 @@ func (e *DecisionEngine) selectBestDecision(results []DecisionResult) *DecisionR
 	}
 
 	useTieredSelection := e.useTieredSelection(results)
+	comparable := e.comparableConfidencePools(results, useTieredSelection)
 	sort.Slice(results, func(i, j int) bool {
-		return e.decisionResultLess(results[i], results[j], useTieredSelection)
+		return e.decisionResultLess(results[i], results[j], useTieredSelection, comparable)
 	})
 
 	return &results[0]
+}
+
+// comparableConfidencePools reports, per competing pool, whether confidence
+// ordering is meaningful there: every non-catch-all member's confidence must
+// be evidence-scored. Signals that report no confidence rank with the
+// structural constant 1.0, which would otherwise outrank any honestly
+// reported score, so a pool containing such a member falls back to the
+// documented priority ordering instead. Pools are tiers under tiered
+// selection and the whole result set otherwise.
+func (e *DecisionEngine) comparableConfidencePools(
+	results []DecisionResult,
+	useTieredSelection bool,
+) map[int]bool {
+	pools := make(map[int]bool)
+	for _, result := range results {
+		key := 0
+		if useTieredSelection {
+			key = result.Decision.Tier
+		}
+		comparable, seen := pools[key]
+		if !seen {
+			comparable = true
+		}
+		if !result.CatchAll && !result.ConfidenceScored {
+			comparable = false
+		}
+		pools[key] = comparable
+	}
+	return pools
+}
+
+func (e *DecisionEngine) confidencePool(result DecisionResult, useTieredSelection bool) int {
+	if useTieredSelection {
+		return result.Decision.Tier
+	}
+	return 0
 }
 
 func (e *DecisionEngine) useTieredSelection(results []DecisionResult) bool {
@@ -513,12 +587,16 @@ func (e *DecisionEngine) decisionResultLess(
 	left DecisionResult,
 	right DecisionResult,
 	useTieredSelection bool,
+	comparable map[int]bool,
 ) bool {
 	if useTieredSelection {
 		if left.Decision.Tier != right.Decision.Tier {
 			return left.Decision.Tier < right.Decision.Tier
 		}
-		if left.Confidence != right.Confidence {
+		if left.CatchAll != right.CatchAll {
+			return right.CatchAll
+		}
+		if comparable[e.confidencePool(left, true)] && left.Confidence != right.Confidence {
 			return left.Confidence > right.Confidence
 		}
 		if left.Decision.Priority != right.Decision.Priority {
@@ -528,7 +606,10 @@ func (e *DecisionEngine) decisionResultLess(
 	}
 
 	if e.strategy == config.RoutingStrategyConfidence {
-		if left.Confidence != right.Confidence {
+		if left.CatchAll != right.CatchAll {
+			return right.CatchAll
+		}
+		if comparable[0] && left.Confidence != right.Confidence {
 			return left.Confidence > right.Confidence
 		}
 		if left.Decision.Priority != right.Decision.Priority {
@@ -540,7 +621,7 @@ func (e *DecisionEngine) decisionResultLess(
 	if left.Decision.Priority != right.Decision.Priority {
 		return left.Decision.Priority > right.Decision.Priority
 	}
-	if left.Confidence != right.Confidence {
+	if comparable[0] && left.Confidence != right.Confidence {
 		return left.Confidence > right.Confidence
 	}
 	return left.Decision.Name < right.Decision.Name
