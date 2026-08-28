@@ -77,6 +77,10 @@ type pipelineLifecycleFixture struct {
 }
 
 func newPipelineLifecycleFixture(embedder Embedder) *pipelineLifecycleFixture {
+	return newPipelineLifecycleFixtureWithRegistry(embedder, NewMemoryMetadataRegistry())
+}
+
+func newPipelineLifecycleFixtureWithRegistry(embedder Embedder, registry StoreRegistry) *pipelineLifecycleFixture {
 	tempDir, err := os.MkdirTemp("", "pipeline-lifecycle-test-*")
 	Expect(err).NotTo(HaveOccurred())
 
@@ -84,7 +88,7 @@ func newPipelineLifecycleFixture(embedder Embedder) *pipelineLifecycleFixture {
 	store, err := NewFileStore(tempDir, NewMemoryMetadataRegistry())
 	Expect(err).NotTo(HaveOccurred())
 
-	mgr := NewManager(backend, NewMemoryMetadataRegistry(), 3, BackendTypeMemory)
+	mgr := NewManager(backend, registry, 3, BackendTypeMemory)
 	pipeline := NewIngestionPipeline(
 		backend,
 		store,
@@ -102,6 +106,45 @@ func newPipelineLifecycleFixture(embedder Embedder) *pipelineLifecycleFixture {
 		tempDir:  tempDir,
 		ctx:      context.Background(),
 	}
+}
+
+type stallingStoreRegistry struct {
+	StoreRegistry
+	mu      sync.RWMutex
+	stalled bool
+	started chan struct{}
+	once    sync.Once
+}
+
+func newStallingStoreRegistry() *stallingStoreRegistry {
+	return &stallingStoreRegistry{
+		StoreRegistry: NewMemoryMetadataRegistry(),
+		started:       make(chan struct{}),
+	}
+}
+
+func (r *stallingStoreRegistry) SaveStore(ctx context.Context, vs *VectorStore) error {
+	r.mu.RLock()
+	stalled := r.stalled
+	r.mu.RUnlock()
+	if stalled {
+		r.once.Do(func() { close(r.started) })
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	return r.StoreRegistry.SaveStore(ctx, vs)
+}
+
+func (r *stallingStoreRegistry) stall() {
+	r.mu.Lock()
+	r.stalled = true
+	r.mu.Unlock()
+}
+
+func (r *stallingStoreRegistry) resume() {
+	r.mu.Lock()
+	r.stalled = false
+	r.mu.Unlock()
 }
 
 func (f *pipelineLifecycleFixture) cleanup() {
@@ -309,6 +352,60 @@ var _ = Describe("IngestionPipeline bounded Stop", func() {
 			defer cancel3()
 			return f.pipeline.Stop(ctx3)
 		}, 5*time.Second, 50*time.Millisecond).Should(BeNil())
+	})
+})
+
+var _ = Describe("IngestionPipeline bounded queued cleanup", func() {
+	var (
+		embedder *blockingEmbedder
+		registry *stallingStoreRegistry
+		f        *pipelineLifecycleFixture
+	)
+
+	BeforeEach(func() {
+		embedder = newBlockingEmbedder(3)
+		registry = newStallingStoreRegistry()
+		f = newPipelineLifecycleFixtureWithRegistry(embedder, registry)
+	})
+
+	AfterEach(func() {
+		registry.resume()
+		embedder.releaseAll()
+		_ = f.pipeline.Stop(context.Background())
+		_ = os.RemoveAll(f.tempDir)
+	})
+
+	It("shares the Stop deadline across queued cleanup", func() {
+		vs, err := f.mgr.CreateStore(f.ctx, CreateStoreRequest{Name: "stalled-registry"})
+		Expect(err).NotTo(HaveOccurred())
+
+		first, err := f.store.Save("active.txt", []byte("active content"), "assistants")
+		Expect(err).NotTo(HaveOccurred())
+		_, err = f.pipeline.AttachFile(vs.ID, first.ID, nil)
+		Expect(err).NotTo(HaveOccurred())
+		Eventually(embedder.started, 5*time.Second).Should(BeClosed())
+
+		var queued []*VectorStoreFile
+		for i := 0; i < 3; i++ {
+			record, saveErr := f.store.Save("queued.txt", []byte("queued content"), "assistants")
+			Expect(saveErr).NotTo(HaveOccurred())
+			status, attachErr := f.pipeline.AttachFile(vs.ID, record.ID, nil)
+			Expect(attachErr).NotTo(HaveOccurred())
+			queued = append(queued, status)
+		}
+
+		registry.stall()
+		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+		defer cancel()
+		start := time.Now()
+		err = f.pipeline.Stop(ctx)
+
+		Expect(err).To(MatchError(context.DeadlineExceeded))
+		Expect(time.Since(start)).To(BeNumerically("<", 3*time.Second))
+		Expect(registry.started).To(BeClosed())
+		status, statusErr := f.pipeline.GetFileStatus(queued[0].ID)
+		Expect(statusErr).NotTo(HaveOccurred())
+		Expect(status.Status).To(Equal("failed"))
 	})
 })
 

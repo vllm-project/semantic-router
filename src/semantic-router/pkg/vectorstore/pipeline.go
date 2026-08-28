@@ -199,7 +199,15 @@ func (p *IngestionPipeline) Stop(ctx context.Context) error {
 drained:
 	p.lifecycleMu.Unlock()
 	for _, job := range queued {
-		p.failJob(context.Background(), job, "pipeline_stopped", "ingestion pipeline stopped before processing job")
+		if err := ctx.Err(); err != nil {
+			gen.rootCancel()
+			return err
+		}
+		p.failJobWithPersistContext(ctx, job, "pipeline_stopped", "ingestion pipeline stopped before processing job")
+	}
+	if err := ctx.Err(); err != nil {
+		gen.rootCancel()
+		return err
 	}
 
 	select {
@@ -503,16 +511,24 @@ func (p *IngestionPipeline) embedChunks(ctx context.Context, job IngestionJob, f
 
 // failJob marks a job as failed and updates file counts.
 func (p *IngestionPipeline) failJob(ctx context.Context, job IngestionJob, code, message string) {
-	p.setFileStatus(job.VectorStoreFileID, "failed", &FileError{
-		Code:    code,
-		Message: message,
-	})
 	// Count updates use a background context: even when the job context is
 	// cancelled, the in-memory counts and durable metadata must stay consistent
 	// with the file status we just wrote.
 	persistCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
-	_ = p.manager.UpdateFileCounts(persistCtx, job.VectorStoreID, func(fc *FileCounts) {
+	p.failJobWithPersistContext(persistCtx, job, code, message)
+}
+
+// failJobWithPersistContext marks a job as failed while keeping persistence
+// within the caller's budget. Stop uses this for queued jobs so the entire
+// cleanup shares its shutdown deadline instead of receiving a fresh timeout
+// for every job.
+func (p *IngestionPipeline) failJobWithPersistContext(ctx context.Context, job IngestionJob, code, message string) {
+	p.setFileStatus(job.VectorStoreFileID, "failed", &FileError{
+		Code:    code,
+		Message: message,
+	})
+	_ = p.manager.UpdateFileCounts(ctx, job.VectorStoreID, func(fc *FileCounts) {
 		fc.InProgress--
 		fc.Failed++
 	})
