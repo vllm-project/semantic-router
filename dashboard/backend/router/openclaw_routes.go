@@ -21,6 +21,7 @@ func newOpenClawHandler(cfg *config.Config, wf *workflowstore.Store) *handlers.O
 
 	openClawHandler := handlers.NewOpenClawHandler(cfg.OpenClawDataDir, cfg.ReadonlyMode, wf)
 	openClawHandler.SetRouterConfigPath(cfg.AbsConfigPath)
+	openClawHandler.SetAllowedOrigins(cfg.AllowedOrigins)
 	return openClawHandler
 }
 

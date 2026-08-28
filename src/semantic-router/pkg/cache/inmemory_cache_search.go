@@ -166,7 +166,7 @@ func (c *InMemoryCache) LookupSimilarWithThreshold(ctx context.Context, model st
 	)
 
 	return c.finishFindSimilarSearch(
-		start, model, threshold,
+		ctx, start, model, query, threshold,
 		bestIndex, bestEntry, bestSimilarity, entriesChecked, expiredCount,
 	)
 }
@@ -194,8 +194,10 @@ func (c *InMemoryCache) runFindSimilarEmbeddingSearch(queryEmbedding []float32, 
 }
 
 func (c *InMemoryCache) finishFindSimilarSearch(
+	ctx context.Context,
 	start time.Time,
 	model string,
+	query string,
 	threshold float32,
 	bestIndex int,
 	bestEntry CacheEntry,
@@ -221,6 +223,13 @@ func (c *InMemoryCache) finishFindSimilarSearch(
 	}
 
 	if bestSimilarity >= threshold {
+		// NLI polarity tier (#2751): verify the single winning candidate once,
+		// outside the cache lock, before it is served or its access info is
+		// touched.
+		if result, handled, err := c.applyPolarityNLI(ctx, start, model, query, bestEntry, bestSimilarity, threshold); handled {
+			return result, err
+		}
+
 		atomic.AddInt64(&c.hitCount, 1)
 
 		c.mu.Lock()

@@ -18,6 +18,9 @@ html[data-route-kind='blog'],
   /* One width for prose, code, images and tables. In rem, not ch: ch resolves
    * against the consumer's font-size, so prose and code would differ. */
   --blog-prose: 46rem;
+  /* Wider than the shared --rail: the listing rail carries post titles rather
+   * than short nav labels, so 18rem forced most of them onto three lines. */
+  --blog-rail: 23rem;
 }
 
 html[data-route-kind='blog'] body,
@@ -51,7 +54,7 @@ html[data-route-kind='blog'] body,
 .site-blog-index__columns {
   position: relative;
   display: grid;
-  grid-template-columns: var(--rail) minmax(0, 1fr);
+  grid-template-columns: var(--blog-rail) minmax(0, 1fr);
   gap: var(--rail-gap);
   align-items: start;
   padding-top: var(--space-6);
@@ -62,7 +65,7 @@ html[data-route-kind='blog'] body,
   position: absolute;
   top: var(--space-6);
   bottom: 0;
-  left: var(--rail);
+  left: var(--blog-rail);
   width: 1px;
   background: var(--site-border);
 }
@@ -319,13 +322,16 @@ html[data-route-kind='blog'] body,
   padding-right: var(--space-5);
 }
 
+/* The rail heading was --text-sm (0.875rem) above 0.98rem post titles, so the
+ * group label read as smaller than its own contents. Stepping it up to
+ * --text-lg gives the rail a clear head, and the titles below step down. */
 .site-blog-index__rail h2 {
   margin: 0;
-  padding: 0.15rem var(--space-2) var(--space-2);
+  padding: 0.15rem var(--space-2) var(--space-3);
   color: var(--site-text-strong);
-  font-size: var(--text-sm);
+  font-size: var(--text-lg);
   font-weight: var(--site-font-weight-semibold);
-  letter-spacing: -0.005em;
+  letter-spacing: -0.015em;
   text-transform: none;
 }
 
@@ -354,9 +360,9 @@ html[data-route-kind='blog'] body,
 
 .site-blog-recent a {
   color: var(--blog-ink-soft);
-  font-size: 0.98rem;
+  font-size: 0.92rem;
   font-weight: var(--site-font-weight-medium);
-  line-height: 1.35;
+  line-height: 1.4;
   text-decoration: none;
   transition: color var(--site-transition-fast);
 }
@@ -369,7 +375,7 @@ html[data-route-kind='blog'] body,
 
 .site-blog-recent time {
   color: var(--blog-muted);
-  font-size: 0.84rem;
+  font-size: 0.8rem;
 }
 
 .site-blog-tags ul {
@@ -379,7 +385,7 @@ html[data-route-kind='blog'] body,
 
 .site-blog-tags a {
   color: var(--blog-muted-strong);
-  font-size: 0.95rem;
+  font-size: 0.92rem;
   text-decoration: none;
   transition: color var(--site-transition-fast);
 }
