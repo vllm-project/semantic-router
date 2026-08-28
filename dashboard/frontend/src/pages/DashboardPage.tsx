@@ -431,10 +431,10 @@ const DashboardPage: React.FC = () => {
       <div className={styles.card}>
         <div className={styles.cardHeader}>
           <div>
-            <h2 className={styles.cardTitle}>Loaded Models</h2>
+            <h2 className={styles.cardTitle}>Router Intelligence</h2>
             {knownModels > 0 && (
               <span className={styles.cardSubtitle}>
-                {loadedModels}/{knownModels} ready
+                {loadedModels}/{knownModels} runtimes ready
               </span>
             )}
           </div>
@@ -446,7 +446,7 @@ const DashboardPage: React.FC = () => {
           mode="preview"
           previewLimit={previewModelLimit > 0 ? previewModelLimit : undefined}
           modelsInfo={status?.models}
-          emptyMessage="Router model inventory will appear here after the router reports its active models."
+          emptyMessage="Learned routing models will appear here when the router loads them."
           onSelectModel={() => navigate('/config/models')}
         />
       </div>
