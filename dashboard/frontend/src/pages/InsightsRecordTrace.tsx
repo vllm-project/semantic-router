@@ -40,50 +40,76 @@ export default function InsightsRecordTrace({
   )
 
   return (
-    <section className={styles.recordTrace} aria-labelledby="record-trace-title">
-      <header className={styles.recordTraceHeader}>
+    <details className={styles.recordTrace}>
+      <summary className={styles.recordTraceHeader}>
         <div>
           <span className={styles.recordTraceEyebrow}>Conversation</span>
           <h2 id="record-trace-title">Record trace</h2>
         </div>
-        <span className={styles.recordTraceSummary}>
-          {turns.length} {turns.length === 1 ? 'turn' : 'turns'}
-          {toolCount > 0 ? ` · ${toolCount} ${toolCount === 1 ? 'tool call' : 'tool calls'}` : ''}
-        </span>
-      </header>
-
-      {loading ? (
-        <div className={styles.recordTraceEmpty}>Loading the complete session…</div>
-      ) : null}
-      {!loading && error ? (
-        <div className={styles.recordTraceEmpty}>
-          The session trace could not be loaded. {error}
+        <div className={styles.recordTraceHeaderMeta}>
+          <span className={styles.recordTraceSummary}>
+            {turns.length} {turns.length === 1 ? 'turn' : 'turns'}
+            {toolCount > 0 ? ` · ${toolCount} ${toolCount === 1 ? 'tool call' : 'tool calls'}` : ''}
+          </span>
+          <ProductIcon
+            name="chevron-down"
+            width={15}
+            height={15}
+            className={styles.recordTraceHeaderChevron}
+          />
         </div>
-      ) : null}
-      {!loading && !error && turns.length === 0 ? (
-        <div className={styles.recordTraceEmpty}>No conversation steps were captured.</div>
-      ) : null}
+      </summary>
 
-      {!loading && !error && turns.length > 0 ? (
-        <div className={styles.recordTraceTurns}>
-          {turns.map((turn, turnPosition) => (
-            <article key={`${turn.index}-${turnPosition}`} className={styles.recordTraceTurn}>
-              <div className={styles.recordTraceTurnRail} aria-hidden="true">
-                <span>{turnPosition + 1}</span>
-              </div>
-              <div className={styles.recordTraceMessages}>
-                {turn.messages.map((message, messageIndex) => (
-                  <TraceMessage
-                    key={`${message.role}-${message.tool_call_id ?? ''}-${messageIndex}`}
-                    message={message}
-                  />
-                ))}
-              </div>
-            </article>
-          ))}
-        </div>
-      ) : null}
-    </section>
+      <div className={styles.recordTraceContent}>
+        {loading ? (
+          <div className={styles.recordTraceEmpty}>Loading the complete session…</div>
+        ) : null}
+        {!loading && error ? (
+          <div className={styles.recordTraceEmpty}>
+            The session trace could not be loaded. {error}
+          </div>
+        ) : null}
+        {!loading && !error && turns.length === 0 ? (
+          <div className={styles.recordTraceEmpty}>No conversation steps were captured.</div>
+        ) : null}
+
+        {!loading && !error && turns.length > 0 ? (
+          <div className={styles.recordTraceTurns}>
+            {turns.map((turn, turnPosition) => {
+              const turnToolCount = turn.messages.reduce(
+                (count, message) => count + (message.tool_calls?.length ?? 0),
+                0,
+              )
+              return (
+                <details key={`${turn.index}-${turnPosition}`} className={styles.recordTraceTurn}>
+                  <summary className={styles.recordTraceTurnSummary}>
+                    <span className={styles.recordTraceTurnIndex}>{turnPosition + 1}</span>
+                    <span className={styles.recordTraceTurnLabel}>
+                      <strong>Turn {turnPosition + 1}</strong>
+                      <span>{buildTurnPreview(turn)}</span>
+                    </span>
+                    <span className={styles.recordTraceTurnMeta}>
+                      {turnToolCount > 0
+                        ? `${turnToolCount} ${turnToolCount === 1 ? 'tool' : 'tools'}`
+                        : `${turn.messages.length} steps`}
+                    </span>
+                    <ProductIcon name="chevron-down" width={14} height={14} />
+                  </summary>
+                  <div className={styles.recordTraceMessages}>
+                    {turn.messages.map((message, messageIndex) => (
+                      <TraceMessage
+                        key={`${message.role}-${message.tool_call_id ?? ''}-${messageIndex}`}
+                        message={message}
+                      />
+                    ))}
+                  </div>
+                </details>
+              )
+            })}
+          </div>
+        ) : null}
+      </div>
+    </details>
   )
 }
 
@@ -121,7 +147,7 @@ function ToolCalls({
   redacted?: boolean
 }) {
   return (
-    <details className={styles.recordTraceTool} open>
+    <details className={styles.recordTraceTool}>
       <summary>
         <ProductIcon name="tool" width={15} height={15} />
         <span>
@@ -186,6 +212,15 @@ function groupTraceTurns(messages: InsightsTrajectoryMessage[]): TraceTurn[] {
     turns[existing].messages.push(message)
   }
   return turns
+}
+
+function buildTurnPreview(turn: TraceTurn) {
+  const userMessage = turn.messages.find((message) => message.role === 'user')
+  const fallback = turn.messages.find((message) => Boolean(message.content))
+  const content = (userMessage?.content || fallback?.content || 'Recorded conversation step')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return content.length > 96 ? `${content.slice(0, 93)}…` : content
 }
 
 function buildRecordTraceFallback(record: InsightsRecord): InsightsTrajectoryMessage[] {

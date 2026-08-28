@@ -56,5 +56,8 @@ describe('InsightsRecordTrace', () => {
     expect(markup).toContain('web_search')
     expect(markup).toContain('search result')
     expect(markup).toContain('Final answer.')
+    expect(markup).toContain('Turn 1')
+    expect(markup).toContain('Turn 2')
+    expect(markup).not.toContain(' open=""')
   })
 })

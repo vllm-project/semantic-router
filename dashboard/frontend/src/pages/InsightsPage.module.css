@@ -143,7 +143,7 @@
 }
 
 .recordTrace {
-  margin-top: 1rem;
+  grid-column: 1 / -1;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 16px;
@@ -155,7 +155,22 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+  min-height: 68px;
   padding: 1rem 1.15rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.recordTraceHeader::-webkit-details-marker,
+.recordTraceTurnSummary::-webkit-details-marker {
+  display: none;
+}
+
+.recordTraceHeader:hover {
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.recordTrace[open] > .recordTraceHeader {
   border-bottom: 1px solid rgba(255, 255, 255, 0.07);
 }
 
@@ -180,6 +195,25 @@
   font-variant-numeric: tabular-nums;
 }
 
+.recordTraceHeaderMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.recordTraceHeaderChevron {
+  color: rgba(255, 255, 255, 0.42);
+  transition: transform 160ms ease;
+}
+
+.recordTrace[open] > .recordTraceHeader .recordTraceHeaderChevron {
+  transform: rotate(180deg);
+}
+
+.recordTraceContent {
+  min-width: 0;
+}
+
 .recordTraceEmpty {
   padding: 1.4rem 1.15rem;
   color: rgba(255, 255, 255, 0.46);
@@ -187,29 +221,47 @@
 }
 
 .recordTraceTurns {
-  padding: 0.35rem 1.15rem 0.6rem;
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.75rem;
 }
 
 .recordTraceTurn {
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.012);
+}
+
+.recordTraceTurnSummary {
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr);
-  gap: 0.75rem;
-  padding: 1rem 0;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.7rem;
+  min-height: 52px;
+  padding: 0.55rem 0.75rem;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  list-style: none;
 }
 
-.recordTraceTurn + .recordTraceTurn {
-  border-top: 1px solid rgba(255, 255, 255, 0.065);
+.recordTraceTurnSummary:hover {
+  background: rgba(255, 255, 255, 0.022);
 }
 
-.recordTraceTurnRail {
-  display: flex;
-  justify-content: center;
+.recordTraceTurnSummary > svg {
+  color: rgba(255, 255, 255, 0.38);
+  transition: transform 160ms ease;
 }
 
-.recordTraceTurnRail span {
+.recordTraceTurn[open] > .recordTraceTurnSummary > svg {
+  transform: rotate(180deg);
+}
+
+.recordTraceTurnIndex {
   display: inline-flex;
-  width: 23px;
-  height: 23px;
+  width: 24px;
+  height: 24px;
   align-items: center;
   justify-content: center;
   border: 1px solid rgba(255, 255, 255, 0.13);
@@ -219,10 +271,37 @@
   font-weight: 700;
 }
 
+.recordTraceTurnLabel {
+  display: grid;
+  min-width: 0;
+  gap: 0.12rem;
+}
+
+.recordTraceTurnLabel strong {
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 0.72rem;
+}
+
+.recordTraceTurnLabel > span {
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 0.71rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recordTraceTurnMeta {
+  color: rgba(255, 255, 255, 0.34);
+  font-size: 0.66rem;
+  white-space: nowrap;
+}
+
 .recordTraceMessages {
   display: grid;
   gap: 0.7rem;
   min-width: 0;
+  padding: 0.8rem 0.85rem 0.9rem 3.05rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.055);
 }
 
 .recordTraceMessage {
@@ -497,12 +576,8 @@
     justify-content: flex-end;
   }
 
-  .recordTraceTurn {
-    grid-template-columns: 1fr;
-  }
-
-  .recordTraceTurnRail {
-    display: none;
+  .recordTraceMessages {
+    padding-left: 0.85rem;
   }
 }
 
@@ -522,6 +597,19 @@
   .recordTraceHeader {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .recordTraceHeaderMeta {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .recordTraceTurnSummary {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .recordTraceTurnMeta {
+    display: none;
   }
 
   .recordTraceTurns {
