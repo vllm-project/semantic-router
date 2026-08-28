@@ -93,61 +93,16 @@
   background: var(--site-surface-alt);
 }
 
+/* Section intro above the card; the card holds only the matrix. */
 .capabilityHeading {
-  display: grid;
   gap: 0.65rem;
-}
-
-.capabilityLabel {
-  color: var(--site-muted);
-}
-
-.capabilityLabel::after {
-  color: var(--site-accent);
+  margin-bottom: var(--site-section-gap);
 }
 
 .capabilityHeading h2 {
-  max-width: none;
-  margin: 0;
   color: var(--site-text-strong);
-  font-size: clamp(1.3rem, 2.1vw, 1.7rem);
-  font-weight: 400;
-  line-height: 1.2;
-  letter-spacing: -0.028em;
-  text-wrap: pretty;
-}
-
-.capabilitySummary {
-  display: grid;
-  grid-template-columns: minmax(0, 36rem) auto;
-  align-items: end;
-  justify-content: space-between;
-  gap: 1.25rem;
-}
-
-.capabilitySummary p {
-  max-width: 36rem;
-  margin: 0;
-  color: var(--site-muted-bright);
-  font-size: clamp(0.92rem, 1.05vw, 1rem);
-  line-height: 1.5;
-  letter-spacing: -0.01em;
-}
-
-.capabilitySummary .capabilityCta {
-  flex: 0 0 auto;
-  border-color: rgba(48, 162, 255, 0.38);
-  background: rgba(48, 162, 255, 0.08);
-  color: var(--site-accent-strong);
-  box-shadow: none;
-  backdrop-filter: none;
-}
-
-.capabilitySummary .capabilityCta:hover {
-  border-color: var(--site-accent);
-  background: var(--site-accent);
-  color: #ffffff;
-  box-shadow: none;
+  font-weight: var(--site-font-weight-semibold);
+  letter-spacing: -0.025em;
 }
 
 .architectureMatrix {
@@ -517,6 +472,23 @@
   background:
     linear-gradient(180deg, rgba(48, 162, 255, 0.14), rgba(48, 162, 255, 0.04)),
     rgba(4, 8, 15, 0.75);
+  animation: constraintGate 5.6s ease-in-out infinite;
+}
+
+@keyframes constraintGate {
+  0%,
+  10%,
+  40%,
+  100% {
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+
+  20% {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.04),
+      0 0 0 1px rgba(48, 162, 255, 0.4),
+      0 0 26px rgba(48, 162, 255, 0.22);
+  }
 }
 
 .constraintStageIndex {
@@ -544,6 +516,68 @@
 
 .constraintStageGate .constraintStageDetail {
   color: var(--site-accent-strong);
+}
+
+/* A request travelling the pipeline, on a loop. Same scan-bar language as the
+ * routing pipeline stages above, so the two diagrams animate alike. */
+.constraintStage::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #75c5ff, #30a2ff);
+  transform: scaleX(0);
+  transform-origin: left;
+  animation: constraintScan 5.6s ease-in-out var(--stage-delay) infinite;
+}
+
+.constraintStage:not(:last-child)::after {
+  animation: constraintArrow 5.6s ease-in-out var(--stage-delay) infinite;
+}
+
+@keyframes constraintScan {
+  0%,
+  4% {
+    opacity: 0;
+    transform: scaleX(0);
+  }
+
+  12% {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+
+  34% {
+    opacity: 0.5;
+    transform: scaleX(1);
+  }
+
+  100% {
+    opacity: 0.16;
+    transform: scaleX(1);
+  }
+}
+
+@keyframes constraintArrow {
+  0%,
+  8% {
+    opacity: 0.32;
+    transform: translateY(-50%) translateX(-0.12rem);
+  }
+
+  16% {
+    opacity: 1;
+    transform: translateY(-50%) translateX(0.1rem);
+  }
+
+  32%,
+  100% {
+    opacity: 0.32;
+    transform: translateY(-50%) translateX(0);
+  }
 }
 
 @keyframes constraintStageIn {
@@ -593,8 +627,16 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .constraintStage {
+  .constraintStage,
+  .constraintStage::before,
+  .constraintStage:not(:last-child)::after,
+  .constraintStageGate {
     animation: none;
+  }
+
+  .constraintStage::before {
+    opacity: 0.4;
+    transform: scaleX(1);
   }
 }
 
@@ -716,16 +758,6 @@
       line-height: 1.22;
   }
 
-  .capabilitySummary {
-      grid-template-columns: 1fr;
-      align-items: start;
-      gap: 1rem;
-  }
-
-  .capabilitySummary .capabilityCta {
-      justify-self: start;
-  }
-
   .matrixHeader {
       display: none;
   }
@@ -797,11 +829,4 @@
       line-height: 1.24;
   }
 
-  .capabilitySummary p {
-      font-size: 0.92rem;
-  }
-
-  .capabilitySummary .capabilityCta {
-      width: 100%;
-  }
 }
