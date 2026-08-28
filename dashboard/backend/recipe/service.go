@@ -265,7 +265,7 @@ func (s *Service) Validate(ctx context.Context, decisionID, variantID string, ex
 	raw, err := s.evaluator.Evaluate(evalContext, evalRequest)
 	result.LatencyMS = time.Since(started).Milliseconds()
 	if err != nil {
-		result.Provenance = s.finishValidationProvenance(ctx, snapshot, provenanceSession)
+		result.Provenance = s.finishValidationProvenance(ctx, provenanceSession)
 		result.Error = err.Error()
 		result.Failures = append(result.Failures, "router eval request failed")
 		return result, fmt.Errorf("%w: %w", ErrUpstream, err)
@@ -273,7 +273,7 @@ func (s *Service) Validate(ctx context.Context, decisionID, variantID string, ex
 
 	actual, checks, failures, err := compareEvalResponse(raw, probe, snapshot.probes)
 	if err != nil {
-		result.Provenance = s.finishValidationProvenance(ctx, snapshot, provenanceSession)
+		result.Provenance = s.finishValidationProvenance(ctx, provenanceSession)
 		result.Error = err.Error()
 		result.Failures = append(result.Failures, "router eval response was invalid")
 		return result, fmt.Errorf("%w: %w", ErrUpstream, err)
@@ -282,7 +282,7 @@ func (s *Service) Validate(ctx context.Context, decisionID, variantID string, ex
 	result.Checks = checks
 	result.Failures = failures
 	result.Passed = len(failures) == 0
-	result.Provenance = s.finishValidationProvenance(ctx, snapshot, provenanceSession)
+	result.Provenance = s.finishValidationProvenance(ctx, provenanceSession)
 	return result, nil
 }
 
