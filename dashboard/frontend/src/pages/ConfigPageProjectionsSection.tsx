@@ -68,13 +68,8 @@ export default function ConfigPageProjectionsSection({
     useState<ProjectionDeleteTarget | null>(null)
   const [projectionDeletePending, setProjectionDeletePending] = useState(false)
   const [projectionDeleteError, setProjectionDeleteError] = useState<string | null>(null)
-  const {
-    applyScopedConfig,
-    routingScopes,
-    scopedConfig,
-    selectedScopeId,
-    setSelectedScopeId,
-  } = useRoutingScopeManager(config)
+  const { applyScopedConfig, routingScopes, scopedConfig, selectedScopeId, setSelectedScopeId } =
+    useRoutingScopeManager(config)
   useEffect(() => {
     setProjectionPendingDelete(null)
     setProjectionDeleteError(null)
@@ -635,32 +630,6 @@ export default function ConfigPageProjectionsSection({
           value={selectedScopeId}
           onChange={setSelectedScopeId}
         />
-        <p
-          style={{
-            margin: 0,
-            padding: '0.75rem 1rem',
-            borderRadius: 8,
-            background: 'var(--color-surface-elevated, rgba(255, 255, 255, 0.04))',
-            border: '1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.08))',
-            fontSize: '0.875rem',
-            lineHeight: 1.5,
-            color: 'var(--color-text-secondary)',
-          }}
-        >
-          <strong style={{ color: 'var(--color-text)' }}>Debugging projections:</strong> when router
-          replay is on, each Insights record can include a structured{' '}
-          <code style={{ fontSize: '0.8em' }}>projection_trace</code> (partition contenders and
-          winners, score contributions, mapping confidence and boundary distance, per-output
-          threshold steps). See{' '}
-          <a
-            href="https://vllm-sr.ai/docs/tutorials/projection/traces"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Projection traces
-          </a>{' '}
-          in the docs.
-        </p>
         <TableHeader
           title="Projection Surfaces"
           count={filteredPartitions.length + filteredScores.length + filteredMappings.length}
