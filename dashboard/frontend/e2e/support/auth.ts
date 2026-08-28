@@ -45,7 +45,6 @@ const defaultUser: SessionUser = {
     'openclaw.manage',
     'openclaw.read',
     'replay.read',
-    'security.manage',
     'tools.use',
     'topology.read',
     'users.manage',
@@ -83,6 +82,18 @@ export async function mockAuthenticatedSession(
     { name: 'vsr_session', value: token, url: BASE_URL, httpOnly: true, sameSite: 'Lax' },
     { name: 'vsr_csrf', value: TEST_CSRF_TOKEN, url: BASE_URL, httpOnly: false, sameSite: 'Lax' },
   ])
+
+  // Keep browser tests hermetic. A missing mock should surface as a local 404,
+  // never fall through to a developer's running Dashboard and invalidate the
+  // synthetic session with an unrelated 401. More specific routes registered
+  // below (or by the calling spec) take precedence in Playwright.
+  await page.route('**/api/**', async (route) => {
+    await route.fulfill({
+      status: 404,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: { message: 'Unmocked browser-test API request' } }),
+    })
+  })
 
   await page.route('**/api/auth/me', async (route) => {
     await route.fulfill({
@@ -132,6 +143,52 @@ export async function mockAuthenticatedAppShell(
       status: 200,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ tools: [] }),
+    })
+  })
+
+  await page.route('**/api/auth/bootstrap/can-register', async (route) => {
+    await route.fulfill({
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ canRegister: false }),
+    })
+  })
+
+  await page.route('**/api/status', async (route) => {
+    await route.fulfill({
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        overall: 'healthy',
+        deployment_type: 'local',
+        services: [],
+      }),
+    })
+  })
+
+  await page.route('**/api/router/v1/models*', async (route) => {
+    await route.fulfill({
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        object: 'list',
+        data: [
+          {
+            id: 'vllm-sr/default',
+            object: 'model',
+            owned_by: 'vllm-sr',
+            metadata: { type: 'mixture-of-models', recipe: 'default' },
+          },
+        ],
+      }),
+    })
+  })
+
+  await page.route('**/api/admin/permissions', async (route) => {
+    await route.fulfill({
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rolePermissions: {}, allPermissions: [] }),
     })
   })
 

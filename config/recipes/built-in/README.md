@@ -16,48 +16,21 @@ engines. Start or bind the required provider services before serving a model.
 | --- | --- | --- |
 | MoM V1 | Five balanced, cost, speed, accuracy, and privacy profiles over a shared local model pool. | [MoM V1](latest/mom-v1/README.md) |
 
-## Discover a model
+## Build a Mixture-of-Model
 
-```bash
-vllm-sr model list
-vllm-sr model show vllm-sr/mom-v1-blend
-```
-
-`model list` shows compatible models from the installed `latest` catalog. Use
-`--all-versions` to inspect installed release catalogs, or `--all` to include
-models that are incompatible with the current CLI or Router feature set.
-
-## Serve a model
-
-After the physical backends described by its Model Card are reachable:
-
-```bash
-# One routing profile
-vllm-sr serve vllm-sr/mom-v1-blend
-
-# Several profiles sharing the same provider pool
-vllm-sr serve \
-  vllm-sr/mom-v1-lite \
-  vllm-sr/mom-v1-flash
-```
-
-Catalog IDs must be passed explicitly. Bare `vllm-sr serve` keeps the normal
-setup or config-file flow and does not select the catalog default implicitly.
-
-The local shorthand starts the routing stack only. Kubernetes users should
-fork or materialize a config and deploy it with the Helm chart or operator.
+Run `vllm-sr serve` and open **Build → Mixture-of-Models → Recipes** in
+Dashboard. Select a built-in Recipe, assign connected Models to each decision,
+and choose the public names that clients will send through the OpenAI-compatible
+API. Dashboard keeps connection credentials on Models and routing policy in the
+Recipe.
 
 ## Customize a model
 
-Fork a built-in model before changing provider bindings, replicas, routing
-rules, or enabled entrypoints:
+For a reviewed YAML workflow, copy a built-in bundle before changing provider
+bindings, replicas, routing rules, or entrypoints:
 
 ```bash
-vllm-sr model fork vllm-sr/mom-v1-blend mom-custom.yaml \
-  --enable vllm-sr/mom-v1-vault \
-  --default vllm-sr/mom-v1-blend
-
-vllm-sr model validate mom-custom.yaml
+vllm-sr validate --config mom-custom.yaml
 vllm-sr serve --config mom-custom.yaml
 ```
 
@@ -67,15 +40,14 @@ from the maintainer-reviewed catalog asset.
 
 ## Catalog versions
 
-- `latest` is the catalog bundled with the installed CLI build.
+- `latest` is the catalog bundled with the installed distribution.
 - `vX.Y` identifies an installed release snapshot for reproducible inspection,
   validation, and forking.
 - A future family major, such as `mom-v2-blend`, uses a new public model ID and may
   coexist with MoM V1.
 
 Compatibility is declared by catalog metadata rather than inferred from a
-model name. Use `--catalog-version vX.Y` when a specific installed release is
-required.
+model name. Release snapshots remain immutable for reproducible deployments.
 
 ## Limitations
 
@@ -84,7 +56,7 @@ required.
 - Virtual model selection does not provide an implicit physical fallback.
 - A Model Card describes the reference pool. Fork the config when deployment
   capabilities or data-handling requirements differ.
-- Catalog shorthand is a local Docker workflow; production topology remains an
+- Dashboard builds user-owned Mixture-of-Models; production topology remains an
   operator responsibility.
 
 ## For contributors

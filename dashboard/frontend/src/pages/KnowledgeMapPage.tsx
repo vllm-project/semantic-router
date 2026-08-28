@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import ProductLoadingState from '../components/ProductLoadingState'
 import styles from './KnowledgeMapPage.module.css'
 
 interface KnowledgeMapMetadata {
@@ -88,10 +89,10 @@ export default function KnowledgeMapPage() {
         </Link>
 
         {(loading || !iframeReady) && !error ? (
-          <div className={styles.loadingPanel} role="status" aria-live="polite">
-            <div className={styles.spinner} aria-hidden="true" />
-            <p>{loading ? 'Loading knowledge map metadata...' : 'Launching WizMap...'}</p>
-          </div>
+          <ProductLoadingState
+            label={loading ? 'Loading knowledge map' : 'Opening knowledge map'}
+            compact
+          />
         ) : null}
         {!error ? (
           <iframe

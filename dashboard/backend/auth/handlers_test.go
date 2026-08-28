@@ -94,7 +94,7 @@ func TestAuthenticateRequestUsesCurrentDatabaseState(t *testing.T) {
 		}))
 
 		recorder := httptest.NewRecorder()
-		handler.ServeHTTP(recorder, newAuthenticatedRequest(t, svc, user, http.MethodGet, "/api/status", ""))
+		handler.ServeHTTP(recorder, newAuthenticatedRequest(t, svc, user, http.MethodGet, "/api/router/config", ""))
 
 		if recorder.Code != http.StatusUnauthorized {
 			t.Fatalf("status = %d, want %d", recorder.Code, http.StatusUnauthorized)

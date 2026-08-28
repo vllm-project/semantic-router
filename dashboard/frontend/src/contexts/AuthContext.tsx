@@ -1,15 +1,18 @@
-import React, { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react'
+import React, {
+  createContext,
+  ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+} from 'react'
 import {
   installAuthenticatedFetch,
   normalizeAuthToken,
   notifyUnauthorized,
   UNAUTHORIZED_EVENT,
 } from '../utils/authFetch'
-import {
-  fetchCurrentAuthUser,
-  hasAuthenticatedSession,
-  type AuthUser,
-} from './authSession'
+import { fetchCurrentAuthUser, hasAuthenticatedSession, type AuthUser } from './authSession'
 
 interface AuthContextValue {
   token: string | null
@@ -76,6 +79,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, [clearSession])
 
+  // Unconditional: `token` is always null on mount now, so gating this on it would mean
+  // never asking the server and never seeing an existing cookie session.
   useEffect(() => {
     void refreshSession()
   }, [refreshSession])

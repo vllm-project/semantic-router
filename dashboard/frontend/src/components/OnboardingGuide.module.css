@@ -3,39 +3,31 @@
   inset: 0;
   z-index: 1250;
   display: flex;
-  align-items: stretch;
-  justify-content: flex-end;
-  background: rgba(0, 0, 0, 0.64);
-  backdrop-filter: blur(8px);
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: var(--product-dialog-overlay);
+  backdrop-filter: blur(18px);
 }
 
 .card {
   position: relative;
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr) auto;
-  width: min(500px, 100vw);
-  height: 100vh;
-  height: 100dvh;
+  width: min(540px, calc(100vw - 2rem));
+  height: min(720px, calc(100dvh - 2rem));
+  max-height: calc(100dvh - 2rem);
   padding: 1.4rem;
   overflow: hidden;
   overscroll-behavior: contain;
   color: #f5f5f7;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 11rem), #101012;
-  border-left: 1px solid rgba(255, 255, 255, 0.13);
-  border-radius: 14px 0 0 14px;
-  box-shadow: -28px 0 72px rgba(0, 0, 0, 0.54);
+  background: var(--product-dialog-surface);
+  border: 2px solid var(--product-dialog-border);
+  border-radius: 18px;
+  box-shadow: var(--product-dialog-shadow);
+  backdrop-filter: blur(28px) saturate(140%);
   animation: guideEnter 200ms cubic-bezier(0.22, 1, 0.36, 1);
   outline: none;
-}
-
-.card::before {
-  position: absolute;
-  top: 0;
-  left: 1.4rem;
-  width: 2.75rem;
-  height: 2px;
-  background: var(--brand-amd);
-  content: '';
 }
 
 .header {
@@ -45,6 +37,31 @@
   gap: 1rem;
   padding-bottom: 1.15rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.headerIdentity {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.headerIdentity > div:last-child {
+  min-width: 0;
+}
+
+.logo {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  display: grid;
+  place-items: center;
+}
+
+.logo img {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
 }
 
 .eyebrow {
@@ -84,6 +101,10 @@
 .closeButton:hover {
   color: #ffffff;
   background: rgba(255, 255, 255, 0.055);
+}
+.closeButton > svg {
+  width: 15px;
+  height: 15px;
 }
 
 .progressRow {
@@ -211,7 +232,7 @@
 .footerLeft,
 .footerRight {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 0.55rem;
 }
 
@@ -225,6 +246,7 @@
   padding: 0 0.85rem;
   font-size: 0.78rem;
   font-weight: 680;
+  white-space: nowrap;
   border-radius: 6px;
   transition:
     color var(--transition-fast),
@@ -271,10 +293,18 @@
   right: 1.25rem;
   bottom: 1.25rem;
   z-index: 1100;
-  min-height: 40px;
+  width: 42px;
+  height: 42px;
+  min-height: 42px;
+  padding: 0;
+  border-radius: 50%;
   background: rgba(16, 16, 18, 0.94);
   box-shadow: 0 16px 38px rgba(0, 0, 0, 0.34);
   backdrop-filter: blur(10px);
+}
+.replayButton span {
+  font-size: 0.9rem;
+  font-weight: 760;
 }
 
 .body::-webkit-scrollbar {
@@ -294,25 +324,26 @@
 
 @keyframes guideEnter {
   from {
-    opacity: 0.82;
-    transform: translateX(28px);
+    opacity: 0;
+    transform: translateY(12px) scale(0.985);
   }
   to {
     opacity: 1;
-    transform: translateX(0);
+    transform: translateY(0) scale(1);
   }
 }
 
 @media (max-width: 640px) {
-  .card {
-    width: 100vw;
-    padding: max(1rem, env(safe-area-inset-top)) 1rem max(1rem, env(safe-area-inset-bottom));
-    border: 0;
-    border-radius: 0;
+  .overlay {
+    padding: 0.375rem;
   }
 
-  .card::before {
-    left: 1rem;
+  .card {
+    width: 100%;
+    height: calc(100dvh - 0.75rem);
+    max-height: calc(100dvh - 0.75rem);
+    padding: max(1rem, env(safe-area-inset-top)) 1rem max(1rem, env(safe-area-inset-bottom));
+    border-radius: 14px;
   }
 
   .title {
@@ -327,6 +358,7 @@
   .footerLeft,
   .footerRight {
     width: 100%;
+    flex-wrap: wrap;
   }
 
   .footerRight button,

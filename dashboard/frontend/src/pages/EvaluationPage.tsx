@@ -9,6 +9,8 @@ import {
   HistoricalResults,
 } from '../components/evaluation'
 import ConfirmDialog from '../components/ConfirmDialog'
+import DashboardSurfaceHero from '../components/DashboardSurfaceHero'
+import ProductIcon, { type ProductIconName } from '../components/ProductIcon'
 import { useAuth } from '../contexts/AuthContext'
 import { useReadonly } from '../contexts/ReadonlyContext'
 import { canRunEvaluation, canWriteEvaluation } from '../utils/accessControl'
@@ -148,22 +150,19 @@ export function EvaluationPage() {
     setTabState({ active: 'report', selectedTaskId: task.id })
   }, [])
 
-  const tabs = [
-    { id: 'tasks' as const, label: 'Tasks', icon: '📋' },
-    ...(canWrite ? [{ id: 'create' as const, label: 'Create', icon: '➕' }] : []),
-    { id: 'history' as const, label: 'History', icon: '📊' },
+  const tabs: Array<{ id: 'tasks' | 'create' | 'history'; label: string; icon: ProductIconName }> = [
+    { id: 'tasks', label: 'Tasks', icon: 'list' },
+    ...(canWrite ? [{ id: 'create' as const, label: 'Create', icon: 'plus' as const }] : []),
+    { id: 'history', label: 'History', icon: 'chart' },
   ]
 
   return (
     <div className={styles.container}>
-      <div className={styles.header}>
-        <div className={styles.titleSection}>
-          <h1>Evaluation</h1>
-          <p>
-            Evaluate the Mixture-of-Models across multiple dimensions at Signal and System Level.
-          </p>
-        </div>
-      </div>
+      <DashboardSurfaceHero
+        eyebrow="Outcomes"
+        title="Evaluation"
+        description="Measure every Mixture-of-Models from signal quality to system outcomes."
+      />
 
       {mutationError && (
         <div className={styles.errorBanner}>
@@ -247,7 +246,7 @@ export function EvaluationPage() {
                 className={`${styles.tab} ${tabState.active === tab.id ? styles.activeTab : ''}`}
                 onClick={() => setTabState({ active: tab.id, selectedTaskId: null })}
               >
-                <span className={styles.tabIcon}>{tab.icon}</span>
+                <ProductIcon className={styles.tabIcon} name={tab.icon} />
                 <span className={styles.tabLabel}>{tab.label}</span>
               </button>
             ))}
