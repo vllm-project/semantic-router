@@ -342,32 +342,42 @@ func perToolScores(t *testing.T, emb *cachedToolEmbedder, query string, requestT
 	return scores
 }
 
+// runSemanticFilter runs the filter under the equivalence tests' fixed
+// threshold/preserve settings, failing the test on error.
+func runSemanticFilter(t *testing.T, label, query string, requestTools []openai.ChatCompletionToolParam, emb *cachedToolEmbedder) ([]openai.ChatCompletionToolParam, float32) {
+	t.Helper()
+	kept, score, err := filterRequestToolsAgainstQuerySemantic(context.Background(), query, requestTools, emb, 0.4, 3)
+	if err != nil {
+		t.Fatalf("%s filter failed: %v", label, err)
+	}
+	return kept, score
+}
+
+// assertSameRanking fails unless got ranks exactly like want (same max score,
+// same kept tools in the same order).
+func assertSameRanking(t *testing.T, label string, gotKept, wantKept []openai.ChatCompletionToolParam, gotScore, wantScore float32) {
+	t.Helper()
+	if gotScore != wantScore {
+		t.Fatalf("%s: max score changed: got=%v want=%v", label, gotScore, wantScore)
+	}
+	if len(gotKept) != len(wantKept) {
+		t.Fatalf("%s: kept tool count changed: got=%d want=%d", label, len(gotKept), len(wantKept))
+	}
+	for i := range wantKept {
+		if gotKept[i].Function.Name != wantKept[i].Function.Name {
+			t.Fatalf("%s: kept tool %d changed: got=%q want=%q", label, i, gotKept[i].Function.Name, wantKept[i].Function.Name)
+		}
+	}
+}
+
 func TestFilterRankingIsIdenticalColdAndWarm(t *testing.T) {
-	provider := &countingEmbeddingProvider{}
-	emb := newTestToolEmbedder(provider)
+	emb := newTestToolEmbedder(&countingEmbeddingProvider{})
 	requestTools := requestToolsFor(25)
 	const query = "which tool does job number 7"
 
-	coldKept, coldScore, err := filterRequestToolsAgainstQuerySemantic(context.Background(), query, requestTools, emb, 0.4, 3)
-	if err != nil {
-		t.Fatalf("cold filter failed: %v", err)
-	}
-	warmKept, warmScore, err := filterRequestToolsAgainstQuerySemantic(context.Background(), query, requestTools, emb, 0.4, 3)
-	if err != nil {
-		t.Fatalf("warm filter failed: %v", err)
-	}
-
-	if coldScore != warmScore {
-		t.Fatalf("max score changed across the cache boundary: cold=%v warm=%v", coldScore, warmScore)
-	}
-	if len(coldKept) != len(warmKept) {
-		t.Fatalf("kept tool count changed: cold=%d warm=%d", len(coldKept), len(warmKept))
-	}
-	for i := range coldKept {
-		if coldKept[i].Function.Name != warmKept[i].Function.Name {
-			t.Fatalf("kept tool %d changed: cold=%q warm=%q", i, coldKept[i].Function.Name, warmKept[i].Function.Name)
-		}
-	}
+	coldKept, coldScore := runSemanticFilter(t, "cold", query, requestTools, emb)
+	warmKept, warmScore := runSemanticFilter(t, "warm", query, requestTools, emb)
+	assertSameRanking(t, "warm vs cold", warmKept, coldKept, warmScore, coldScore)
 	if len(coldKept) == 0 {
 		t.Fatalf("filter kept no tools, so the equivalence check is vacuous")
 	}
@@ -382,19 +392,8 @@ func TestFilterRankingIsIdenticalColdAndWarm(t *testing.T) {
 
 	// A fresh embedder with an empty memo must rank the same way, proving the memo
 	// only removes work and never changes the outcome.
-	freshKept, freshScore, err := filterRequestToolsAgainstQuerySemantic(context.Background(), query, requestTools, newTestToolEmbedder(&countingEmbeddingProvider{}), 0.4, 3)
-	if err != nil {
-		t.Fatalf("fresh filter failed: %v", err)
-	}
-	if freshScore != coldScore || len(freshKept) != len(coldKept) {
-		t.Fatalf("fresh embedder ranked differently: score %v vs %v, kept %d vs %d",
-			freshScore, coldScore, len(freshKept), len(coldKept))
-	}
-	for i := range coldKept {
-		if freshKept[i].Function.Name != coldKept[i].Function.Name {
-			t.Fatalf("fresh embedder kept tool %d = %q, want %q", i, freshKept[i].Function.Name, coldKept[i].Function.Name)
-		}
-	}
+	freshKept, freshScore := runSemanticFilter(t, "fresh", query, requestTools, newTestToolEmbedder(&countingEmbeddingProvider{}))
+	assertSameRanking(t, "fresh vs cold", freshKept, coldKept, freshScore, coldScore)
 }
 
 func TestFilterRequiresInitializedEmbedderOnlyWhenEmbeddingIsNeeded(t *testing.T) {
