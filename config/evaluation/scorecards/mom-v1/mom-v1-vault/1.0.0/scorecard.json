@@ -1,0 +1,117 @@
+{
+  "baselines": [
+    {
+      "metrics": {
+        "gpqa_d": {
+          "value": 81.0
+        },
+        "mmlu_pro": {
+          "value": 70.0
+        }
+      },
+      "model": "local/gpt-oss-120b",
+      "role": "security_standalone"
+    }
+  ],
+  "contract_version": "1.0.0",
+  "entrypoint": "vllm-sr/mom-v1-vault",
+  "generated_at": "2026-08-28T06:56:17+00:00",
+  "metrics": [
+    {
+      "classification": "diagnostic",
+      "layer": "operational",
+      "metric": "avg_total_tokens",
+      "unit": "ratio",
+      "value": 980.0
+    },
+    {
+      "classification": "diagnostic",
+      "layer": "operational",
+      "metric": "failure_rate",
+      "unit": "ratio",
+      "value": 0.02
+    },
+    {
+      "classification": "blocking",
+      "layer": "general_quality",
+      "metric": "gpqa_d",
+      "unit": "ratio",
+      "value": 82.5
+    },
+    {
+      "classification": "blocking",
+      "layer": "instruction_following",
+      "metric": "ifeval",
+      "unit": "ratio",
+      "value": 68.0
+    },
+    {
+      "classification": "blocking",
+      "layer": "general_quality",
+      "metric": "mmlu_pro",
+      "unit": "ratio",
+      "value": 71.0
+    },
+    {
+      "classification": "diagnostic",
+      "layer": "operational",
+      "metric": "p50_latency_ms",
+      "unit": "ms",
+      "value": 420.0
+    },
+    {
+      "classification": "diagnostic",
+      "layer": "operational",
+      "metric": "p99_latency_ms",
+      "unit": "ms",
+      "value": 1800.0
+    },
+    {
+      "classification": "diagnostic",
+      "layer": "robustness",
+      "metric": "robustness_matrix",
+      "unit": "ratio",
+      "value": 88.0
+    },
+    {
+      "classification": "blocking",
+      "layer": "safety_baseline",
+      "metric": "safety_baseline",
+      "unit": "ratio",
+      "value": 92.0
+    },
+    {
+      "classification": "blocking",
+      "layer": null,
+      "metric": "security/v1:jailbreak_contain_rate",
+      "unit": "ratio",
+      "value": 0.94
+    },
+    {
+      "classification": "blocking",
+      "layer": null,
+      "metric": "security/v1:pii_redaction_rate",
+      "unit": "ratio",
+      "value": 0.96
+    },
+    {
+      "classification": "diagnostic",
+      "layer": null,
+      "metric": "security/v1:policy_consistency",
+      "unit": "ratio",
+      "value": 0.91
+    }
+  ],
+  "objective": "security-first",
+  "publication": {
+    "blocking_reasons": [
+      "smoke run is diagnostic only"
+    ],
+    "classification": "diagnostic",
+    "publishable": false
+  },
+  "recipe_id": "mom-v1",
+  "recipe_version": "1.0.0",
+  "run_mode": "smoke",
+  "schema_version": "vllm-sr/mom-scorecard/v1"
+}

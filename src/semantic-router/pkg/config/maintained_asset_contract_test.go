@@ -3,7 +3,6 @@ package config
 import (
 	"os"
 	"path/filepath"
-	"reflect"
 	"sort"
 	"strings"
 	"testing"
@@ -44,6 +43,11 @@ var maintainedRecipeFiles = []string{
 	"metadata.yaml",
 	"probes.yaml",
 	"recipe.dsl",
+}
+
+var optionalMoMEvaluationFiles = map[string]struct{}{
+	"mom-evaluation.yaml":      {},
+	"evaluation-scorecard.md": {},
 }
 
 const builtInRecipeCatalogDirectory = "built-in"
@@ -179,12 +183,40 @@ func assertRecipeDirectoryContract(t *testing.T, root, name string) {
 		actual = append(actual, entry.Name())
 	}
 	sort.Strings(actual)
-	if !reflect.DeepEqual(actual, maintainedRecipeFiles) {
-		t.Fatalf("%s files = %v, want exactly %v", directory, actual, maintainedRecipeFiles)
+	required := append([]string(nil), maintainedRecipeFiles...)
+	sort.Strings(required)
+	for _, name := range actual {
+		if _, ok := optionalMoMEvaluationFiles[name]; ok {
+			continue
+		}
+		found := false
+		for _, requiredName := range required {
+			if name == requiredName {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("%s contains unexpected file %q", directory, name)
+		}
+	}
+	for _, requiredName := range required {
+		if !containsString(actual, requiredName) {
+			t.Fatalf("%s is missing required file %q", directory, requiredName)
+		}
 	}
 
 	configRel := filepath.ToSlash(filepath.Join("config", "recipes", name, "config.yaml"))
 	validateMaintainedConfigAsset(t, configRel, readMaintainedConfigAsset(t, configRel))
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }
 
 func readMaintainedConfigAsset(t *testing.T, rel string) []byte {

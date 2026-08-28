@@ -1,0 +1,62 @@
+schema_version: vllm-sr/baseline-protocol/v1
+version: 1.0.0
+description: >-
+  Standalone-model comparison protocol for MoM evaluation. Every MoM run must
+  include at least one qualified standalone baseline under equivalent conditions.
+
+modes:
+  matched_compute:
+    description: >-
+      Baseline uses the same total token budget or primary pool member as the
+      routed system for diagnostic uplift measurement.
+  qualified_standalone:
+    description: >-
+      Best single-model baseline for the entrypoint objective under the same
+      dataset, generation config, concurrency, and timeout.
+
+equivalence_rules:
+  - same_dataset_revision
+  - same_generation_config
+  - same_concurrency
+  - same_timeout
+  - baseline_arms_recorded_in_result_bundle
+
+entrypoint_baselines:
+  vllm-sr/mom-v1-blend:
+    primary:
+      model: local/qwen3.6-35b
+      match: qualified_standalone
+      role: balanced_standalone
+    extension_packs: []
+
+  vllm-sr/mom-v1-lite:
+    primary:
+      model: local/qwen3.5-9b
+      match: qualified_standalone
+      role: economy_standalone
+    extension_packs:
+      - cost/v1
+
+  vllm-sr/mom-v1-flash:
+    primary:
+      model: local/step-3.7-flash
+      match: qualified_standalone
+      role: latency_standalone
+    extension_packs:
+      - latency/v1
+
+  vllm-sr/mom-v1-ultra:
+    primary:
+      model: local/glm-5.2
+      match: qualified_standalone
+      role: quality_standalone
+    extension_packs:
+      - orchestration/v1
+
+  vllm-sr/mom-v1-vault:
+    primary:
+      model: local/gpt-oss-120b
+      match: qualified_standalone
+      role: security_standalone
+    extension_packs:
+      - security/v1

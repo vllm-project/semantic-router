@@ -14,6 +14,36 @@ MODEL_BUNDLE_FILES = (
     "recipe.dsl",
 )
 
+OPTIONAL_MOM_BUNDLE_FILES = (
+    "mom-evaluation.yaml",
+    "evaluation-scorecard.md",
+)
+
+
+def model_bundle_optional_files(bundle: BundleResource) -> tuple[str, ...]:
+    """Return optional MoM evaluation files present in a bundle directory."""
+
+    return tuple(
+        name
+        for name in OPTIONAL_MOM_BUNDLE_FILES
+        if bundle.joinpath(name).is_file()
+    )
+
+
+def _validate_model_bundle_directory(bundle: BundleResource) -> None:
+    if not bundle.is_dir():
+        raise ValueError("built-in model bundle is not installed")
+    actual = sorted(item.name for item in bundle.iterdir() if item.is_file())
+    required = sorted(MODEL_BUNDLE_FILES)
+    allowed = set(required) | set(OPTIONAL_MOM_BUNDLE_FILES)
+    missing = sorted(set(required) - set(actual))
+    extra = sorted(set(actual) - allowed)
+    if missing or extra:
+        raise ValueError(
+            "built-in model bundle files differ from the five-file contract; "
+            f"missing={missing}, extra={extra}"
+        )
+
 
 class BundleResource(Protocol):
     """Small ``Traversable`` subset used by paths and package resources."""
@@ -32,18 +62,9 @@ class BundleResource(Protocol):
 
 
 def model_bundle_digest(bundle: BundleResource) -> str:
-    """Return a path-bound digest for one exact-five built-in Recipe bundle."""
+    """Return a path-bound digest for one built-in Recipe bundle."""
 
-    if not bundle.is_dir():
-        raise ValueError("built-in model bundle is not installed")
-    actual = sorted(item.name for item in bundle.iterdir())
-    expected = sorted(MODEL_BUNDLE_FILES)
-    if actual != expected:
-        raise ValueError(
-            "built-in model bundle files differ from the five-file contract; "
-            f"missing={sorted(set(expected) - set(actual))}, "
-            f"extra={sorted(set(actual) - set(expected))}"
-        )
+    _validate_model_bundle_directory(bundle)
 
     contents: dict[str, bytes] = {}
     for name in MODEL_BUNDLE_FILES:

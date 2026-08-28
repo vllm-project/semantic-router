@@ -33,6 +33,19 @@ runbook. Use these sections, in this order:
 9. `Limitations`
 10. `References`
 
+MoM-tagged recipes (`mixture-of-models` in `metadata.yaml` tags) must also
+ship:
+
+- `mom-evaluation.yaml` using schema `vllm-sr/mom-evaluation/v1`
+- `evaluation-scorecard.md` referenced from the Model Card Evaluation section
+- a published scorecard for the declared recipe version under
+  `config/evaluation/scorecards/`
+
+The Evaluation section must reference the evaluation contract version, link the
+scorecard fragment, and describe baseline comparison and known limitations.
+Decision-level probe receipts belong in generated conformance reports, not in
+the Model Card body.
+
 Describe stable, user-visible behavior in the present tense. A Model Card
 should answer what the recipe does, who should use it, what backends and routing
 assets it needs, how it handles data, and where it can fail or trade quality for

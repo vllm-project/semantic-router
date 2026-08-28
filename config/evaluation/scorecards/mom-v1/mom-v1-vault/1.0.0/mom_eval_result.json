@@ -1,0 +1,167 @@
+{
+  "artifacts": {
+    "manifest": "config/recipes/built-in/latest/mom-v1/mom-evaluation.yaml",
+    "raw_dir": "config/evaluation/scorecards/mom-v1/mom-v1-vault/1.0.0/raw/39d1c325-4dd1-4c3f-83a0-5c7b1aeaa70e"
+  },
+  "baselines": [
+    {
+      "match": "qualified_standalone",
+      "metrics": {
+        "gpqa_d": {
+          "value": 81.0
+        },
+        "mmlu_pro": {
+          "value": 70.0
+        }
+      },
+      "model": "local/gpt-oss-120b",
+      "role": "security_standalone"
+    }
+  ],
+  "contract": {
+    "core_suite_version": "1.0.0",
+    "extension_packs": [
+      {
+        "id": "security/v1",
+        "version": "1.0.0"
+      }
+    ]
+  },
+  "diagnostics": {
+    "failure_slices": [],
+    "total_failures": 0
+  },
+  "environment": {
+    "api_url": "http://127.0.0.1:8801/v1",
+    "generation": {
+      "max_tokens": 8192,
+      "temperature": 0
+    },
+    "platform": "local-dev",
+    "router_image": "local-dev"
+  },
+  "identity": {
+    "entrypoint": "vllm-sr/mom-v1-vault",
+    "generated_at": "2026-08-28T06:56:17+00:00",
+    "objective": "security-first",
+    "pool_membership": [
+      "local/qwen3.5-9b",
+      "local/qwen3.6-35b",
+      "local/step-3.7-flash",
+      "local/qwen3.5-122b",
+      "local/mistral-small-4",
+      "local/gpt-oss-120b",
+      "local/glm-5.2"
+    ],
+    "recipe_digest": "aea76f0c60b5fd9380a70cd45665635eda967936148920ace01080878758566e",
+    "recipe_id": "mom-v1",
+    "recipe_version": "1.0.0",
+    "run_id": "39d1c325-4dd1-4c3f-83a0-5c7b1aeaa70e",
+    "run_mode": "smoke"
+  },
+  "metrics": {
+    "avg_total_tokens": {
+      "classification": "diagnostic",
+      "layer": "operational",
+      "missing": false,
+      "unit": "ratio",
+      "value": 980.0
+    },
+    "failure_rate": {
+      "classification": "diagnostic",
+      "layer": "operational",
+      "missing": false,
+      "unit": "ratio",
+      "value": 0.02
+    },
+    "gpqa_d": {
+      "benchmark_id": "gpqa_d",
+      "classification": "blocking",
+      "layer": "general_quality",
+      "missing": false,
+      "num_samples": 20,
+      "unit": "ratio",
+      "value": 82.5
+    },
+    "ifeval": {
+      "benchmark_id": "ifeval",
+      "classification": "blocking",
+      "layer": "instruction_following",
+      "missing": false,
+      "num_samples": 20,
+      "unit": "ratio",
+      "value": 68.0
+    },
+    "mmlu_pro": {
+      "benchmark_id": "mmlu_pro",
+      "classification": "blocking",
+      "layer": "general_quality",
+      "missing": false,
+      "num_samples": 50,
+      "unit": "ratio",
+      "value": 71.0
+    },
+    "p50_latency_ms": {
+      "classification": "diagnostic",
+      "layer": "operational",
+      "missing": false,
+      "unit": "ms",
+      "value": 420.0
+    },
+    "p99_latency_ms": {
+      "classification": "diagnostic",
+      "layer": "operational",
+      "missing": false,
+      "unit": "ms",
+      "value": 1800.0
+    },
+    "robustness_matrix": {
+      "benchmark_id": "robustness_matrix",
+      "classification": "diagnostic",
+      "layer": "robustness",
+      "missing": false,
+      "num_samples": 12,
+      "unit": "ratio",
+      "value": 88.0
+    },
+    "safety_baseline": {
+      "benchmark_id": "safety_baseline",
+      "classification": "blocking",
+      "layer": "safety_baseline",
+      "missing": false,
+      "num_samples": 10,
+      "unit": "ratio",
+      "value": 92.0
+    },
+    "security/v1:jailbreak_contain_rate": {
+      "classification": "blocking",
+      "unit": "ratio",
+      "value": 0.94
+    },
+    "security/v1:pii_redaction_rate": {
+      "classification": "blocking",
+      "unit": "ratio",
+      "value": 0.96
+    },
+    "security/v1:policy_consistency": {
+      "classification": "diagnostic",
+      "unit": "ratio",
+      "value": 0.91
+    }
+  },
+  "publication": {
+    "blocking_reasons": [
+      "smoke run is diagnostic only"
+    ],
+    "classification": "diagnostic",
+    "publishable": false
+  },
+  "regression": {
+    "baseline_version": null,
+    "blocking_failures": [],
+    "deltas": {},
+    "note": "no previous scorecard to compare",
+    "passed": true
+  },
+  "schema_version": "vllm-sr/mom-eval-result/v1"
+}

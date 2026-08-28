@@ -1,0 +1,42 @@
+schema_version: vllm-sr/evaluation-pack/v1
+id: orchestration/v1
+version: 1.0.0
+objective: quality-orchestration
+description: Multi-call bounded orchestration quality and resource use.
+
+datasets:
+  - id: gpqa_orchestration
+    harness: bench/router_flow/real_eval/run_evalscope_suite.py
+    benchmark_id: gpqa_d
+    metric: mean_acc
+    smoke_limit: 20
+    formal_limit: 50
+
+metrics:
+  - id: orchestration_quality_delta
+    description: Quality uplift over standalone baseline on orchestration-heavy tasks.
+    unit: ratio
+    blocking: true
+    graduation_threshold: 0.0
+  - id: avg_provider_calls
+    description: Average provider calls per request during orchestration.
+    unit: count
+    blocking: false
+  - id: bounded_resource_adherence
+    description: Fraction of requests staying within configured call budget.
+    unit: ratio
+    blocking: true
+    graduation_threshold: 0.95
+
+baselines:
+  match: qualified_standalone
+  role: quality_standalone
+
+evaluator: bench.mom_eval.packs.orchestration
+
+graduation_criteria:
+  orchestration_quality_delta_min: 0.0
+  bounded_resource_adherence_min: 0.95
+
+blocking_rules:
+  cannot_override_core_suite: true

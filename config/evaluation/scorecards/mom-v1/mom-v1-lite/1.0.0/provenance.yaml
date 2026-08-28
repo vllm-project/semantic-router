@@ -1,0 +1,5 @@
+entrypoint: vllm-sr/mom-v1-lite
+recipe_version: 1.0.0
+run_mode: smoke
+generated_at: '2026-08-28T06:56:17+00:00'
+source_result: config/evaluation/scorecards/mom-v1/mom-v1-lite/1.0.0/mom_eval_result.json

@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vllm-sr.ai/schemas/mom-evaluation-manifest/v1",
+  "title": "MoM Evaluation Manifest",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "mom",
+    "core_suite_ref",
+    "entrypoints",
+    "runtime"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "vllm-sr/mom-evaluation/v1"
+    },
+    "mom": {
+      "type": "object",
+      "required": ["recipe_id", "recipe_version"],
+      "additionalProperties": false,
+      "properties": {
+        "recipe_id": { "type": "string", "minLength": 1 },
+        "recipe_version": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" }
+      }
+    },
+    "core_suite_ref": {
+      "type": "string",
+      "minLength": 1
+    },
+    "baseline_protocol_ref": {
+      "type": "string",
+      "minLength": 1
+    },
+    "entrypoints": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "required": ["objective", "baselines"],
+        "additionalProperties": false,
+        "properties": {
+          "objective": { "type": "string", "minLength": 1 },
+          "extension_packs": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "default": []
+          },
+          "baselines": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["model", "match", "role"],
+              "additionalProperties": false,
+              "properties": {
+                "model": { "type": "string", "minLength": 1 },
+                "match": {
+                  "type": "string",
+                  "enum": ["matched_compute", "qualified_standalone", "fixed_budget"]
+                },
+                "role": { "type": "string", "minLength": 1 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "required": ["api_url", "generation"],
+      "additionalProperties": false,
+      "properties": {
+        "api_url": { "type": "string", "minLength": 1 },
+        "generation": {
+          "type": "object",
+          "required": ["temperature", "max_tokens"],
+          "additionalProperties": true,
+          "properties": {
+            "temperature": { "type": "number" },
+            "max_tokens": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "concurrency": { "type": "integer", "minimum": 1 },
+        "timeout_seconds": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  }
+}

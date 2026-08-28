@@ -1,0 +1,23 @@
+schema_version: vllm-sr/scorecard-index/v1
+scorecards:
+  mom-v1:
+    vllm-sr/mom-v1-blend:
+      1.0.0:
+        result_path: config/evaluation/scorecards/mom-v1/mom-v1-blend/1.0.0/mom_eval_result.json
+        scorecard_path: config/evaluation/scorecards/mom-v1/mom-v1-blend/1.0.0/scorecard.json
+    vllm-sr/mom-v1-lite:
+      1.0.0:
+        result_path: config/evaluation/scorecards/mom-v1/mom-v1-lite/1.0.0/mom_eval_result.json
+        scorecard_path: config/evaluation/scorecards/mom-v1/mom-v1-lite/1.0.0/scorecard.json
+    vllm-sr/mom-v1-flash:
+      1.0.0:
+        result_path: config/evaluation/scorecards/mom-v1/mom-v1-flash/1.0.0/mom_eval_result.json
+        scorecard_path: config/evaluation/scorecards/mom-v1/mom-v1-flash/1.0.0/scorecard.json
+    vllm-sr/mom-v1-ultra:
+      1.0.0:
+        result_path: config/evaluation/scorecards/mom-v1/mom-v1-ultra/1.0.0/mom_eval_result.json
+        scorecard_path: config/evaluation/scorecards/mom-v1/mom-v1-ultra/1.0.0/scorecard.json
+    vllm-sr/mom-v1-vault:
+      1.0.0:
+        result_path: config/evaluation/scorecards/mom-v1/mom-v1-vault/1.0.0/mom_eval_result.json
+        scorecard_path: config/evaluation/scorecards/mom-v1/mom-v1-vault/1.0.0/scorecard.json

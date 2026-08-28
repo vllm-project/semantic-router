@@ -1,0 +1,40 @@
+schema_version: vllm-sr/evaluation-pack/v1
+id: latency/v1
+version: 1.0.0
+objective: latency-focused
+description: Time to first token, end-to-end latency, and tail behavior.
+
+datasets:
+  - id: latency_probe_set
+    harness: bench/mom_eval/harnesses/latency_probe.py
+    metric: p99_latency_ms
+    smoke_limit: 20
+    formal_limit: 100
+
+metrics:
+  - id: time_to_first_token_ms
+    description: Median time to first token across probe requests.
+    unit: milliseconds
+    blocking: true
+    graduation_threshold: 0.0
+  - id: p99_latency_ms
+    description: 99th percentile end-to-end latency.
+    unit: milliseconds
+    blocking: true
+    graduation_threshold: 0.0
+  - id: tail_latency_ratio
+    description: p99 / p50 latency ratio.
+    unit: ratio
+    blocking: false
+
+baselines:
+  match: qualified_standalone
+  role: latency_standalone
+
+evaluator: bench.mom_eval.packs.latency
+
+graduation_criteria:
+  p99_latency_max_delta_ms: 500.0
+
+blocking_rules:
+  cannot_override_core_suite: true

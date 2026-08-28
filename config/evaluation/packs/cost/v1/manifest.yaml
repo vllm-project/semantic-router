@@ -1,0 +1,37 @@
+schema_version: vllm-sr/evaluation-pack/v1
+id: cost/v1
+version: 1.0.0
+objective: cost-optimized
+description: Quality at fixed cost and budget adherence for economy MoMs.
+
+datasets:
+  - id: mmlu_pro_cost_slice
+    harness: src/training/model_eval/mmlu_pro_vllm_eval.py
+    metric: accuracy
+    smoke_limit: 30
+    formal_limit: 300
+
+metrics:
+  - id: quality_at_fixed_cost
+    description: Accuracy when total token cost is capped at the baseline arm.
+    unit: ratio
+    blocking: true
+    graduation_threshold: 0.0
+  - id: budget_adherence
+    description: Fraction of requests staying within configured cost ceiling.
+    unit: ratio
+    blocking: true
+    graduation_threshold: 0.95
+
+baselines:
+  match: qualified_standalone
+  role: economy_standalone
+
+evaluator: bench.mom_eval.packs.cost
+
+graduation_criteria:
+  quality_at_fixed_cost_min_delta: 0.0
+  budget_adherence_min: 0.95
+
+blocking_rules:
+  cannot_override_core_suite: true
