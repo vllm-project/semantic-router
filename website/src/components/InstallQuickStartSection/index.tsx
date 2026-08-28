@@ -64,7 +64,7 @@ export default function InstallQuickStartSection(): JSX.Element {
           </SectionLabel>
           <h2>
             <Translate id="homepage.install.title.human">
-              Install locally in one line.
+              Install locally in one line
             </Translate>
           </h2>
         </header>

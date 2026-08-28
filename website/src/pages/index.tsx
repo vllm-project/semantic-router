@@ -234,7 +234,7 @@ function CapabilitySection(): JSX.Element {
               </SectionLabel>
               <h2 id="mixture-architecture-title">
                 <Translate id="homepage.capabilities.heading">
-                  Unify heterogeneous inference.
+                  Unify heterogeneous inference
                 </Translate>
               </h2>
             </header>
@@ -328,7 +328,7 @@ function MixtureOfModelsProofSection(): JSX.Element {
             <div>
               <h2 id="mom-proof-title">
                 <Translate id="homepage.momProof.title">
-                  One model API can beat frontier models.
+                  One Model API can beat frontier models
                 </Translate>
               </h2>
               <p>
@@ -420,7 +420,7 @@ function DataSovereigntySection(): JSX.Element {
               </SectionLabel>
               <h2>
                 <Translate id="homepage.sovereignty.title">
-                  Keep regulated traffic on approved paths.
+                  Keep regulated traffic on approved paths
                 </Translate>
               </h2>
               <p>
@@ -438,7 +438,7 @@ function DataSovereigntySection(): JSX.Element {
                   className={clsx(styles.constraintStage, {
                     [styles.constraintStageGate]: stage.gate,
                   })}
-                  style={{ '--stage-delay': `${0.15 + index * 0.12}s` } as React.CSSProperties}
+                  style={{ '--stage-delay': `${index * 0.5}s` } as React.CSSProperties}
                 >
                   <span className={styles.constraintStageIndex}>
                     {String(index + 1).padStart(2, '0')}
@@ -478,7 +478,7 @@ function FinalCtaSection(): JSX.Element {
               </SectionLabel>
               <h2>
                 <Translate id="homepage.finalCta.title">
-                  Compose your Mixture-of-Models.
+                  Compose your Mixture-of-Models
                 </Translate>
               </h2>
               <p>

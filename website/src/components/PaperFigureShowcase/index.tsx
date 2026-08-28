@@ -935,7 +935,7 @@ const PaperFigureShowcase: React.FC = () => {
             <Translate id="homepage.paperFigures.label">Routing Blueprint</Translate>
           </span>
           <h2 className={styles.paperTitle}>
-            <Translate id="homepage.paperFigures.title">From signal to model path.</Translate>
+            <Translate id="homepage.paperFigures.title">From signal to model path</Translate>
           </h2>
           <p className={styles.paperDescription}>
             <Translate id="homepage.paperFigures.description">

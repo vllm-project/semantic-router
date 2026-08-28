@@ -1,9 +1,13 @@
-/* Docs landing hero: left-aligned lockup on same measure as prose. */
+/* Docs landing hero: left-aligned lockup on same measure as prose.
+ * The box hugs the logo and tagline rather than stretching to the full measure.
+ * Stretched, a short tagline left roughly a third of the card empty. */
 .docs-intro-brand {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: auto auto;
+  justify-content: start;
   align-items: center;
   gap: var(--space-4);
+  width: fit-content;
   max-width: var(--measure);
   margin: 0 0 var(--space-6);
   padding: var(--space-5);
@@ -36,6 +40,7 @@
   .docs-intro-brand {
     grid-template-columns: minmax(0, 1fr);
     gap: var(--space-3);
+    width: 100%;
     padding: var(--space-4);
   }
 
