@@ -1,6 +1,5 @@
 import styles from './ChatComponent.module.css'
 import ChatComponentMessages from './ChatComponentMessages'
-import ThinkingAnimation from './ThinkingAnimation'
 import type { Message } from './ChatComponentTypes'
 import { useChatTranscriptAutoScroll } from './useChatTranscriptAutoScroll'
 
@@ -30,8 +29,9 @@ export default function ChatComponentConversationViewport({
           expandedToolCards={expandedToolCards}
           messages={messages}
           onToggleToolCard={onToggleToolCard}
+          thinking={thinking}
+          thinkingProcess={thinkingProcess}
         />
-        {thinking ? <ThinkingAnimation thinkingProcess={thinkingProcess} /> : null}
       </div>
     </div>
   )

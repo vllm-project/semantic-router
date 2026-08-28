@@ -1714,6 +1714,35 @@ test.describe('Playground Chat Component', () => {
     await expect(page.getByRole('button', { name: /Reasoning/ })).toBeVisible({ timeout: 10000 })
   })
 
+  test('keeps the waiting animation inside the active conversation rail', async ({ page }) => {
+    await page.route('**/api/router/v1/chat/completions', async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 800))
+      await route.fulfill({
+        status: 200,
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+        },
+        body: chatStreamBody('Ready.'),
+      })
+    })
+
+    await page.getByPlaceholder('Ask me anything...').fill('Keep the indicator with this turn')
+    await page.getByRole('button', { name: 'Send message' }).click()
+
+    const rail = page.getByTestId('chat-message-rail')
+    const thinking = page.getByTestId('chat-thinking')
+    await expect(thinking).toBeVisible({ timeout: 5000 })
+    await expect(rail.locator('[data-testid="chat-thinking"]')).toHaveCount(1)
+
+    const [railBox, thinkingBox] = await Promise.all([rail.boundingBox(), thinking.boundingBox()])
+    expect(railBox).not.toBeNull()
+    expect(thinkingBox).not.toBeNull()
+    expect(thinkingBox!.x).toBeGreaterThanOrEqual(railBox!.x - 1)
+    expect(thinkingBox!.x + thinkingBox!.width).toBeLessThanOrEqual(railBox!.x + railBox!.width + 1)
+    await expect(page.getByText('Ready.')).toBeVisible({ timeout: 5000 })
+  })
+
   test('shows streaming reasoning in thinking overlay before completion', async ({ page }) => {
     await mockStreamingChatFetch(page, [
       chatStreamChunk({ role: 'assistant', content: '' }),

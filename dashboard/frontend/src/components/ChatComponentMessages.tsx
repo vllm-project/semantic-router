@@ -3,6 +3,7 @@ import { ThinkingOrb } from 'thinking-orbs'
 
 import styles from './ChatComponent.module.css'
 import HeaderDisplay from './HeaderDisplay'
+import ThinkingAnimation from './ThinkingAnimation'
 import ThinkingBlock from './ThinkingBlock'
 import ErrorBoundary from './ErrorBoundary'
 import ReMoMResponsesDisplay from './ReMoMResponsesDisplay'
@@ -19,6 +20,8 @@ interface ChatComponentMessagesProps {
   expandedToolCards: Set<string>
   messages: Message[]
   onToggleToolCard: (toolCallId: string) => void
+  thinking?: boolean
+  thinkingProcess?: string
 }
 
 interface ToolCallsProps {
@@ -306,10 +309,12 @@ export default function ChatComponentMessages({
   expandedToolCards,
   messages,
   onToggleToolCard,
+  thinking = false,
+  thinkingProcess,
 }: ChatComponentMessagesProps) {
   const { user } = useAuth()
 
-  if (messages.length === 0) {
+  if (messages.length === 0 && !thinking) {
     const firstName = user?.name?.trim().split(/\s+/)[0] || 'there'
 
     return (
@@ -324,7 +329,7 @@ export default function ChatComponentMessages({
 
   return (
     <div className={styles.messagesContainer}>
-      <div className={styles.messages}>
+      <div className={styles.messages} data-testid="chat-message-rail">
         {messages.map((message, index) => {
           const prevUserQuery =
             messages[index - 1]?.role === 'user' ? messages[index - 1].content : undefined
@@ -339,6 +344,7 @@ export default function ChatComponentMessages({
             />
           )
         })}
+        {thinking ? <ThinkingAnimation thinkingProcess={thinkingProcess} /> : null}
       </div>
     </div>
   )

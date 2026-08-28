@@ -1,11 +1,12 @@
 .row {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 0.42rem;
-  width: min(100%, 780px);
+  align-self: stretch;
+  width: 100%;
   min-height: 24px;
-  margin: 0.15rem auto 0.65rem;
-  padding: 0 1.25rem;
+  margin: -0.1rem 0 0.4rem;
+  padding: 0;
   color: rgba(255, 255, 255, 0.48);
   font-size: 0.72rem;
   letter-spacing: 0.005em;
