@@ -5,13 +5,10 @@ import playwrightConfig from '../../playwright.config'
 // Readable by design, unlike vsr_session — the app reads it to populate X-CSRF-Token.
 export const TEST_CSRF_TOKEN = 'test-csrf-token'
 
+// addCookies needs an absolute URL and derives domain and path from it. Always the app's
+// base URL, never page.url(): a page that has navigated deeper would scope the cookie to
+// that subpath, and about:blank is rejected outright.
 const BASE_URL = playwrightConfig.use?.baseURL ?? 'http://localhost:3001'
-
-// addCookies needs an absolute URL, and at helper time the page is usually about:blank.
-function cookieUrl(page: Page): string {
-  const current = page.url()
-  return current && current !== 'about:blank' ? current : BASE_URL
-}
 
 type SessionUser = {
   id: string
@@ -82,17 +79,9 @@ export async function mockAuthenticatedSession(
   // so tests seed a cookie rather than localStorage. httpOnly is what makes the suite
   // exercise the real constraint: a cookie page script could read is not the shipped
   // behaviour. Cookies go on the context so they apply before the first navigation. #2465
-  const url = cookieUrl(page)
   await page.context().addCookies([
-    { name: 'vsr_session', value: token, url, path: '/', httpOnly: true, sameSite: 'Lax' },
-    {
-      name: 'vsr_csrf',
-      value: TEST_CSRF_TOKEN,
-      url,
-      path: '/',
-      httpOnly: false,
-      sameSite: 'Lax',
-    },
+    { name: 'vsr_session', value: token, url: BASE_URL, httpOnly: true, sameSite: 'Lax' },
+    { name: 'vsr_csrf', value: TEST_CSRF_TOKEN, url: BASE_URL, httpOnly: false, sameSite: 'Lax' },
   ])
 
   await page.route('**/api/auth/me', async (route) => {
