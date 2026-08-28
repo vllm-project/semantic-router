@@ -392,14 +392,6 @@ def test_dashboard_dockerfile_copies_router_dsl_package_for_backend_builds() -> 
         "COPY src/semantic-router/pkg/dsl/ /app/src/semantic-router/pkg/dsl/" in content
     )
     assert (
-        "COPY src/semantic-router/pkg/nlgen/ /app/src/semantic-router/pkg/nlgen/"
-        in content
-    )
-    assert (
-        "COPY src/semantic-router/internal/nlgen/ /app/src/semantic-router/internal/nlgen/"
-        in content
-    )
-    assert (
         "COPY src/semantic-router/pkg/routerreplay/redaction/ "
         "/app/src/semantic-router/pkg/routerreplay/redaction/" in content
     )

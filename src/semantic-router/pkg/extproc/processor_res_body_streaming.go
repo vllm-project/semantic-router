@@ -21,12 +21,12 @@ func (r *OpenAIRouter) handleStreamingResponseBody(
 	ensureStreamingState(ctx)
 
 	responseAPIStream := isResponseAPIRequest(ctx)
-	parseBody := responseBody
-	if responseAPIStream {
-		frames, remainder := reassembleSSEFrames(ctx.PendingSSEBytes, responseBody)
-		ctx.PendingSSEBytes = remainder
-		parseBody = frames
-	}
+	// Envoy body chunks are transport fragments, not SSE frame boundaries.
+	// Reassemble every OpenAI-compatible stream before parsing it; otherwise a
+	// split `data:` line is forwarded correctly to the client but silently lost
+	// from replay, usage reconstruction, and response-side observability.
+	parseBody, remainder := reassembleSSEFrames(ctx.PendingSSEBytes, responseBody)
+	ctx.PendingSSEBytes = remainder
 
 	chunk := string(parseBody)
 	if len(parseBody) > 0 {
@@ -235,7 +235,7 @@ func extractStreamingChoiceDelta(state *StreamingChoiceState, delta map[string]i
 	if content, ok := delta["content"].(string); ok {
 		state.Content += content
 	}
-	if reasoning, ok := delta["reasoning_content"].(string); ok {
+	if reasoning, ok := streamingReasoningDelta(delta); ok {
 		state.Reasoning += reasoning
 	}
 	if refusal, ok := delta["refusal"].(string); ok {
@@ -243,14 +243,24 @@ func extractStreamingChoiceDelta(state *StreamingChoiceState, delta map[string]i
 	}
 }
 
+func streamingReasoningDelta(delta map[string]interface{}) (string, bool) {
+	if reasoning, ok := delta["reasoning_content"].(string); ok {
+		return reasoning, true
+	}
+	// Recent OpenAI-compatible reasoning servers use `reasoning` while older
+	// ones use `reasoning_content`. Both represent the same neutral streaming
+	// field and must produce one canonical accumulator value.
+	reasoning, ok := delta["reasoning"].(string)
+	return reasoning, ok
+}
+
 func extractStreamingDeltaContent(ctx *RequestContext, delta map[string]interface{}) {
 	if content, ok := delta["content"].(string); ok && content != "" {
 		ctx.StreamingContent += content
 	}
-	// Reasoning models stream their thinking under delta.reasoning_content.
-	// Accumulate it so the reconstructed (cached) response carries the same
-	// reasoning the live stream delivered, instead of silently dropping it.
-	if reasoning, ok := delta["reasoning_content"].(string); ok && reasoning != "" {
+	// Accumulate either neutral reasoning alias so replay and cache
+	// reconstruction preserve the same field the live stream delivered.
+	if reasoning, ok := streamingReasoningDelta(delta); ok && reasoning != "" {
 		ctx.StreamingReasoning += reasoning
 	}
 	if refusal, ok := delta["refusal"].(string); ok && refusal != "" {

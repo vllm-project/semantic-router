@@ -1,4 +1,11 @@
-import React, { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react'
+import React, {
+  createContext,
+  ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+} from 'react'
 import {
   clearStoredAuthToken,
   getStoredAuthToken,
@@ -8,11 +15,7 @@ import {
   storeAuthToken,
   UNAUTHORIZED_EVENT,
 } from '../utils/authFetch'
-import {
-  fetchCurrentAuthUser,
-  hasAuthenticatedSession,
-  type AuthUser,
-} from './authSession'
+import { fetchCurrentAuthUser, hasAuthenticatedSession, type AuthUser } from './authSession'
 
 interface AuthContextValue {
   token: string | null
@@ -86,8 +89,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [token])
 
   useEffect(() => {
+    if (!token) {
+      setIsLoading(false)
+      return
+    }
     void refreshSession()
-  }, [refreshSession])
+  }, [refreshSession, token])
 
   useEffect(() => {
     const handleUnauthorized = () => {

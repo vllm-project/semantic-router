@@ -54,24 +54,12 @@ Do not expose Router management, metrics, ExtProc, or backing-store ports as
 public inference endpoints. Terminate client authentication at a trusted
 boundary and allow only that component to supply identity headers.
 
-## Configure authorization and rate limits
-
-The Dashboard **Security Policy** page maps users or groups to Router roles and
-model access, and can define per-subject request and token limits. Saving a
-valid policy updates the canonical Router configuration and applies it to the
-active stack.
-
-Use preview before saving when a policy changes several mappings. Keep the
-management surface authenticated and grant write permissions only to operators
-who are allowed to change live routing policy.
-
 Relevant Dashboard permissions include:
 
 | Permission | Purpose | Default roles |
 | --- | --- | --- |
 | `feedback.submit` | Submit routing feedback. | admin, write |
 | `replay.read` | List replay records. | admin, write, read |
-| `security.manage` | Change security policy. | admin |
 | `logs.read` | Read bounded local-stack service logs. | admin, write |
 
 The Router management API distinguishes replay metadata from replay detail.

@@ -332,7 +332,6 @@ export default function FleetSimRunsPage() {
     <FleetSimSurfaceLayout
       title="Runs"
       description="Launch planning scenarios, compare saved fleet behavior, and keep a readable history of the decisions behind each run."
-      currentPath="/fleet-sim/runs"
       meta={[
         { label: 'Saved fleets', value: formatNumber(fleets.length) },
         { label: 'Run history', value: formatNumber(jobs.length) },
@@ -687,7 +686,12 @@ export default function FleetSimRunsPage() {
           data={filteredJobs}
           keyExtractor={(row) => row.id}
           onDelete={setJobPendingDelete}
-          pagination={{ pageSize: 25, pageSizeOptions: [25, 50, 100], itemLabel: 'runs', resetKey: search }}
+          pagination={{
+            pageSize: 25,
+            pageSizeOptions: [25, 50, 100],
+            itemLabel: 'runs',
+            resetKey: search,
+          }}
           expandable
           isRowExpanded={(row) => expandedJobIDs.has(row.id)}
           onToggleExpand={(row) => {
@@ -736,7 +740,11 @@ export default function FleetSimRunsPage() {
         isOpen={Boolean(jobPendingDelete)}
         title="Delete simulator run?"
         description="This permanently removes the run request and its recorded result from history."
-        details={jobPendingDelete ? `${formatJobType(jobPendingDelete.type)} · ${jobPendingDelete.id}` : undefined}
+        details={
+          jobPendingDelete
+            ? `${formatJobType(jobPendingDelete.type)} · ${jobPendingDelete.id}`
+            : undefined
+        }
         confirmLabel="Delete run"
         pending={deletePending}
         tone="danger"

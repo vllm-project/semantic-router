@@ -181,7 +181,7 @@ func TestManagedMarkerGuardsAllOrdinaryRuntimeWriters(t *testing.T) {
 	}
 }
 
-func TestManagedMarkerGuardsSetupActivationAndSecurityPolicy(t *testing.T) {
+func TestManagedMarkerGuardsSetupActivation(t *testing.T) {
 	root := t.TempDir()
 	storeDir := filepath.Join(root, "recipe-store")
 	if err := os.Mkdir(storeDir, 0o700); err != nil {
@@ -201,16 +201,6 @@ func TestManagedMarkerGuardsSetupActivationAndSecurityPolicy(t *testing.T) {
 	SetupActivateHandler(setupPath, false, root, setupmode.New(setupPath, false))(response, httptest.NewRequest(http.MethodPost, "/api/setup/activate", bytes.NewReader(setupBody)))
 	if response.Code != http.StatusConflict || !bytes.Contains(response.Body.Bytes(), []byte(`"error":"managed_recipe_active"`)) {
 		t.Fatalf("setup response=%d body=%s", response.Code, response.Body.String())
-	}
-
-	configPath := createValidTestConfig(t, root)
-	previousPath, previousDir := securityPolicyConfigPath, securityPolicyConfigDir
-	SetSecurityPolicyConfigPaths(configPath, root)
-	t.Cleanup(func() { SetSecurityPolicyConfigPaths(previousPath, previousDir) })
-	response = httptest.NewRecorder()
-	HandleUpdateSecurityPolicy(response, httptest.NewRequest(http.MethodPut, "/api/security/policy", bytes.NewBufferString(`{"role_mappings":[],"rate_tiers":[]}`)))
-	if response.Code != http.StatusConflict || !bytes.Contains(response.Body.Bytes(), []byte(`"error":"managed_recipe_active"`)) {
-		t.Fatalf("security response=%d body=%s", response.Code, response.Body.String())
 	}
 }
 

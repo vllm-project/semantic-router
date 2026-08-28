@@ -8,6 +8,8 @@ interface ChatComponentConversationViewportProps {
   expandedToolCards: Set<string>
   messages: Message[]
   onToggleToolCard: (toolCallId: string) => void
+  thinking?: boolean
+  thinkingProcess?: string
 }
 
 export default function ChatComponentConversationViewport({
@@ -15,6 +17,8 @@ export default function ChatComponentConversationViewport({
   expandedToolCards,
   messages,
   onToggleToolCard,
+  thinking = false,
+  thinkingProcess,
 }: ChatComponentConversationViewportProps) {
   const { containerRef, contentRef } = useChatTranscriptAutoScroll(messages, conversationId)
 
@@ -25,6 +29,8 @@ export default function ChatComponentConversationViewport({
           expandedToolCards={expandedToolCards}
           messages={messages}
           onToggleToolCard={onToggleToolCard}
+          thinking={thinking}
+          thinkingProcess={thinkingProcess}
         />
       </div>
     </div>

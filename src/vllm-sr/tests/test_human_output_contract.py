@@ -36,7 +36,7 @@ def _assert_no_log_decoration(value: str) -> None:
 
 
 def test_validate_result_uses_clean_stdout() -> None:
-    config_path = REPO_ROOT / "config/recipes/built-in/latest/mom-v1/config.yaml"
+    config_path = REPO_ROOT / "config/config.yaml"
 
     result = _run_cli("validate", "--config", str(config_path))
 
