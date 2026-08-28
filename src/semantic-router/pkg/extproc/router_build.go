@@ -34,6 +34,7 @@ type routerComponents struct {
 	classificationSvc    *services.ClassificationService
 	semanticCache        cache.CacheBackend
 	toolsDatabase        *tools.ToolsDatabase
+	toolEmbedder         *cachedToolEmbedder
 	responseAPIFilter    *ResponseAPIFilter
 	replayRecorder       *routerreplay.Recorder
 	replayStoreShared    bool
@@ -196,9 +197,25 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 		return nil, err
 	}
 
-	toolsDatabase, err := createToolsDatabase(cfg)
+	// One provider serves both the tools database and the tool embedder, so a
+	// remote endpoint gets a single HTTP client/connection pool. A construction
+	// error keeps the old contract: fatal when the tools database needs the
+	// provider (cfg.Tools.Enabled), otherwise tool_selection filter mode is left
+	// without an embedder and degrades per request into its configured fallback,
+	// as it did when the provider was built per request.
+	toolsProvider, toolsProviderErr := toolsEmbeddingProvider(cfg)
+	if toolsProviderErr != nil && cfg.Tools.Enabled {
+		return nil, toolsProviderErr
+	}
+	toolsDatabase, err := createToolsDatabase(cfg, toolsProvider)
 	if err != nil {
 		return nil, err
+	}
+	var toolEmbedder *cachedToolEmbedder
+	if toolsProviderErr == nil {
+		toolEmbedder = newToolEmbedderForConfig(cfg, toolsProvider)
+	} else {
+		logging.Warnf("tool_selection: embedding provider unavailable, filter mode will use its fallback: %v", toolsProviderErr)
 	}
 	recipeClassifiers, classifier, classificationSvc, err := createRouterClassifier(cfg, mappings)
 	if err != nil {
@@ -238,6 +255,7 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 		classificationSvc:    classificationSvc,
 		semanticCache:        semanticCache,
 		toolsDatabase:        toolsDatabase,
+		toolEmbedder:         toolEmbedder,
 		responseAPIFilter:    responseAPIFilter,
 		replayRecorder:       replayRecorder,
 		replayStoreShared:    replayStoreShared,
@@ -265,6 +283,7 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 		ClassificationService:   components.classificationSvc,
 		Cache:                   components.semanticCache,
 		ToolsDatabase:           components.toolsDatabase,
+		toolEmbedder:            components.toolEmbedder,
 		ResponseAPIFilter:       components.responseAPIFilter,
 		ReplayRecorder:          components.replayRecorder,
 		ReplayStoreShared:       components.replayStoreShared,
