@@ -40,6 +40,10 @@ func NewStore(path string) (*Store, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("migrate schema: %w", err)
 	}
+	if err := migrateInvitationSchema(context.Background(), db); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("migrate invitation schema: %w", err)
+	}
 
 	store := &Store{db: db}
 	if err := store.normalizeStoredRoles(); err != nil {
@@ -56,6 +60,46 @@ func NewStore(path string) (*Store, error) {
 	}
 
 	return store, nil
+}
+
+func migrateInvitationSchema(ctx context.Context, db *sql.DB) error {
+	rows, err := db.QueryContext(ctx, `PRAGMA table_info(dashboard_invitations)`)
+	if err != nil {
+		return err
+	}
+	columns := make(map[string]bool)
+	for rows.Next() {
+		var cid, notNull, primaryKey int
+		var name, columnType string
+		var defaultValue any
+		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &primaryKey); err != nil {
+			_ = rows.Close()
+			return err
+		}
+		columns[name] = true
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+
+	additions := []struct {
+		name string
+		sql  string
+	}{
+		{name: "kind", sql: `ALTER TABLE dashboard_invitations ADD COLUMN kind TEXT NOT NULL DEFAULT 'personal'`},
+		{name: "max_uses", sql: `ALTER TABLE dashboard_invitations ADD COLUMN max_uses INTEGER NOT NULL DEFAULT 1`},
+		{name: "used_count", sql: `ALTER TABLE dashboard_invitations ADD COLUMN used_count INTEGER NOT NULL DEFAULT 0`},
+	}
+	for _, addition := range additions {
+		if columns[addition.name] {
+			continue
+		}
+		if _, err := db.ExecContext(ctx, addition.sql); err != nil {
+			return err
+		}
+	}
+	_, err = db.ExecContext(ctx, `UPDATE dashboard_invitations SET used_count=1 WHERE status=? AND used_count=0`, InvitationAccepted)
+	return err
 }
 
 func (s *Store) Close() error {

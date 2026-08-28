@@ -5,12 +5,16 @@ import useAccessibleDialog from '../hooks/useAccessibleDialog'
 import styles from './DashboardInviteDialog.module.css'
 
 type DashboardRole = 'admin' | 'write' | 'read'
+type InvitationKind = 'personal' | 'shared'
 
 interface Invitation {
   id: string
   email: string
   name: string
   role: DashboardRole
+  kind: InvitationKind
+  maxUses: number
+  remainingUses: number
   expiresAt: number
 }
 
@@ -48,6 +52,8 @@ export default function DashboardInviteDialog({ isOpen, onClose }: Props) {
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
   const [role, setRole] = useState<DashboardRole>('read')
+  const [kind, setKind] = useState<InvitationKind>('personal')
+  const [capacity, setCapacity] = useState(10)
   const [pending, setPending] = useState(false)
   const [error, setError] = useState('')
   const [copied, setCopied] = useState(false)
@@ -59,6 +65,8 @@ export default function DashboardInviteDialog({ isOpen, onClose }: Props) {
     setEmail('')
     setName('')
     setRole('read')
+    setKind('personal')
+    setCapacity(10)
     setPending(false)
     setError('')
     setCopied(false)
@@ -89,7 +97,11 @@ export default function DashboardInviteDialog({ isOpen, onClose }: Props) {
       const response = await fetch('/api/admin/invitations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), name: name.trim(), role }),
+        body: JSON.stringify({
+          kind,
+          role,
+          ...(kind === 'personal' ? { email: email.trim(), name: name.trim() } : { capacity }),
+        }),
       })
       if (!response.ok) throw new Error(await responseError(response))
       const payload = (await response.json()) as { invitation: Invitation; token: string }
@@ -122,7 +134,11 @@ export default function DashboardInviteDialog({ isOpen, onClose }: Props) {
             <div>
               <span>{created ? 'Invitation ready' : 'Dashboard access'}</span>
               <h2 id="invite-dialog-title">
-                {created ? `Welcome ${created.invitation.name}` : 'Invite user'}
+                {created
+                  ? created.invitation.kind === 'shared'
+                    ? 'Shared invitation ready'
+                    : `Welcome ${created.invitation.name}`
+                  : 'Invite user'}
               </h2>
             </div>
           </div>
@@ -141,12 +157,24 @@ export default function DashboardInviteDialog({ isOpen, onClose }: Props) {
             <div className={styles.readyIntro}>
               <ProductIcon name="check" aria-hidden="true" />
               <div>
-                <strong>A place in this workspace is reserved.</strong>
-                <span>The link works once and expires {expiry}.</span>
+                <strong>
+                  {created.invitation.kind === 'shared'
+                    ? `${created.invitation.maxUses} places are ready.`
+                    : 'A place in this workspace is reserved.'}
+                </strong>
+                <span>
+                  {created.invitation.kind === 'shared'
+                    ? `Each person creates their own account. The link expires ${expiry}.`
+                    : `The link works once and expires ${expiry}.`}
+                </span>
               </div>
             </div>
             <div className={styles.linkBlock}>
-              <span>One-time invitation URL</span>
+              <span>
+                {created.invitation.kind === 'shared'
+                  ? 'Shared invitation link'
+                  : 'One-time invitation link'}
+              </span>
               <code>{created.url}</code>
               <button
                 type="button"
@@ -176,37 +204,95 @@ export default function DashboardInviteDialog({ isOpen, onClose }: Props) {
         ) : (
           <form className={styles.form} onSubmit={submit}>
             <div className={styles.intro}>
-              <strong>Make it personal.</strong>
-              <span>We’ll reserve their name and email. They only choose a password.</span>
+              <strong>{kind === 'personal' ? 'Make it personal.' : 'Invite a group.'}</strong>
+              <span>
+                {kind === 'personal'
+                  ? 'Reserve their identity. They only choose a password.'
+                  : 'One link, one role, and a clear number of places.'}
+              </span>
+            </div>
+            <div className={styles.kindSwitch} aria-label="Invitation type">
+              <button
+                type="button"
+                className={kind === 'personal' ? styles.kindSelected : ''}
+                onClick={() => setKind('personal')}
+              >
+                One person
+              </button>
+              <button
+                type="button"
+                className={kind === 'shared' ? styles.kindSelected : ''}
+                onClick={() => setKind('shared')}
+              >
+                Shared link
+              </button>
             </div>
             {error ? (
               <div className={styles.error} role="alert">
                 {error}
               </div>
             ) : null}
-            <div className={styles.grid}>
-              <label>
-                <span>Name</span>
-                <input
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  placeholder="Ada Lovelace"
-                  data-dialog-initial-focus
-                  autoFocus
-                  required
-                />
-              </label>
-              <label>
-                <span>Email</span>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  placeholder="ada@example.com"
-                  required
-                />
-              </label>
-            </div>
+            {kind === 'personal' ? (
+              <div className={styles.grid}>
+                <label>
+                  <span>Name</span>
+                  <input
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    placeholder="Ada Lovelace"
+                    data-dialog-initial-focus
+                    autoFocus
+                    required
+                  />
+                </label>
+                <label>
+                  <span>Email</span>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    placeholder="ada@example.com"
+                    required
+                  />
+                </label>
+              </div>
+            ) : (
+              <div className={styles.capacityField}>
+                <div>
+                  <span>Available places</span>
+                  <small>Each completed registration uses one place.</small>
+                </div>
+                <div className={styles.capacityControl}>
+                  <button
+                    type="button"
+                    aria-label="Remove one place"
+                    onClick={() => setCapacity((value) => Math.max(2, value - 1))}
+                    disabled={capacity <= 2}
+                  >
+                    −
+                  </button>
+                  <input
+                    type="number"
+                    min={2}
+                    max={100}
+                    value={capacity}
+                    onChange={(event) =>
+                      setCapacity(Math.min(100, Math.max(2, Number(event.target.value) || 2)))
+                    }
+                    aria-label="Invitation capacity"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    aria-label="Add one place"
+                    onClick={() => setCapacity((value) => Math.min(100, value + 1))}
+                    disabled={capacity >= 100}
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+            )}
             <fieldset className={styles.roles}>
               <legend>Dashboard role</legend>
               {roles.map((option) => (
@@ -240,7 +326,11 @@ export default function DashboardInviteDialog({ isOpen, onClose }: Props) {
               </button>
               <button type="submit" className={styles.primary} disabled={pending}>
                 <ProductIcon name="plus" aria-hidden="true" />
-                {pending ? 'Creating…' : 'Create invitation'}
+                {pending
+                  ? 'Creating…'
+                  : kind === 'shared'
+                    ? 'Create shared link'
+                    : 'Create invitation'}
               </button>
             </footer>
           </form>

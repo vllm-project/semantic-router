@@ -16,19 +16,28 @@ const (
 	InvitationExpired  = "expired"
 )
 
+const (
+	InvitationPersonal = "personal"
+	InvitationShared   = "shared"
+)
+
 var ErrInvitationUnavailable = errors.New("invitation is unavailable")
 
 type Invitation struct {
-	ID         string `json:"id"`
-	Email      string `json:"email"`
-	Name       string `json:"name"`
-	Role       string `json:"role"`
-	Status     string `json:"status"`
-	ExpiresAt  int64  `json:"expiresAt"`
-	AcceptedAt *int64 `json:"acceptedAt,omitempty"`
-	RevokedAt  *int64 `json:"revokedAt,omitempty"`
-	CreatedAt  int64  `json:"createdAt"`
-	CreatedBy  string `json:"createdBy,omitempty"`
+	ID            string `json:"id"`
+	Email         string `json:"email,omitempty"`
+	Name          string `json:"name,omitempty"`
+	Role          string `json:"role"`
+	Kind          string `json:"kind"`
+	MaxUses       int    `json:"maxUses"`
+	UsedCount     int    `json:"usedCount"`
+	RemainingUses int    `json:"remainingUses"`
+	Status        string `json:"status"`
+	ExpiresAt     int64  `json:"expiresAt"`
+	AcceptedAt    *int64 `json:"acceptedAt,omitempty"`
+	RevokedAt     *int64 `json:"revokedAt,omitempty"`
+	CreatedAt     int64  `json:"createdAt"`
+	CreatedBy     string `json:"createdBy,omitempty"`
 }
 
 func scanInvitation(scanner interface{ Scan(...any) error }) (*Invitation, string, error) {
@@ -36,12 +45,19 @@ func scanInvitation(scanner interface{ Scan(...any) error }) (*Invitation, strin
 	var acceptedAt, revokedAt sql.NullInt64
 	var digest string
 	if err := scanner.Scan(
-		&item.ID, &item.Email, &item.Name, &item.Role, &digest, &item.Status,
+		&item.ID, &item.Email, &item.Name, &item.Role, &item.Kind, &item.MaxUses, &item.UsedCount, &digest, &item.Status,
 		&item.ExpiresAt, &acceptedAt, &revokedAt, &item.CreatedAt, &item.CreatedBy,
 	); err != nil {
 		return nil, "", err
 	}
 	item.Role = canonicalRole(item.Role)
+	if item.MaxUses < 1 {
+		item.MaxUses = 1
+	}
+	item.RemainingUses = item.MaxUses - item.UsedCount
+	if item.RemainingUses < 0 {
+		item.RemainingUses = 0
+	}
 	if acceptedAt.Valid {
 		value := acceptedAt.Int64
 		item.AcceptedAt = &value
@@ -50,13 +66,17 @@ func scanInvitation(scanner interface{ Scan(...any) error }) (*Invitation, strin
 		value := revokedAt.Int64
 		item.RevokedAt = &value
 	}
-	if item.Status == InvitationPending && item.ExpiresAt <= nowUnix() {
-		item.Status = InvitationExpired
+	if item.Status == InvitationPending && (item.ExpiresAt <= nowUnix() || item.RemainingUses == 0) {
+		if item.RemainingUses == 0 {
+			item.Status = InvitationAccepted
+		} else {
+			item.Status = InvitationExpired
+		}
 	}
 	return item, digest, nil
 }
 
-const invitationColumns = `id,email,name,role,token_digest,status,expires_at,accepted_at,revoked_at,created_at,created_by`
+const invitationColumns = `id,email,name,role,kind,max_uses,used_count,token_digest,status,expires_at,accepted_at,revoked_at,created_at,created_by`
 
 func (s *Store) HasUserEmail(ctx context.Context, email string) (bool, error) {
 	var exists bool
@@ -66,7 +86,8 @@ func (s *Store) HasUserEmail(ctx context.Context, email string) (bool, error) {
 
 func (s *Store) CreateInvitation(
 	ctx context.Context,
-	email, name, role, digest, createdBy string,
+	kind, email, name, role, digest, createdBy string,
+	maxUses int,
 	expiresAt int64,
 ) (*Invitation, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -75,11 +96,13 @@ func (s *Store) CreateInvitation(
 	}
 	defer func() { _ = tx.Rollback() }()
 	now := nowUnix()
-	if _, updateErr := tx.ExecContext(ctx, `UPDATE dashboard_invitations SET status=?,revoked_at=? WHERE email=? AND status=?`, InvitationRevoked, now, email, InvitationPending); updateErr != nil {
-		return nil, updateErr
+	if kind == InvitationPersonal {
+		if _, updateErr := tx.ExecContext(ctx, `UPDATE dashboard_invitations SET status=?,revoked_at=? WHERE email=? AND kind=? AND status=?`, InvitationRevoked, now, email, InvitationPersonal, InvitationPending); updateErr != nil {
+			return nil, updateErr
+		}
 	}
 	id := uuid.NewString()
-	if _, insertErr := tx.ExecContext(ctx, `INSERT INTO dashboard_invitations(id,email,name,role,token_digest,status,expires_at,created_at,created_by) VALUES(?,?,?,?,?,?,?,?,?)`, id, email, name, role, digest, InvitationPending, expiresAt, now, createdBy); insertErr != nil {
+	if _, insertErr := tx.ExecContext(ctx, `INSERT INTO dashboard_invitations(id,email,name,role,kind,max_uses,used_count,token_digest,status,expires_at,created_at,created_by) VALUES(?,?,?,?,?,?,0,?,?,?,?,?)`, id, email, name, role, kind, maxUses, digest, InvitationPending, expiresAt, now, createdBy); insertErr != nil {
 		return nil, insertErr
 	}
 	if commitErr := tx.Commit(); commitErr != nil {
@@ -138,7 +161,7 @@ func (s *Store) RevokeInvitation(ctx context.Context, id string) error {
 	return nil
 }
 
-func (s *Store) AcceptInvitation(ctx context.Context, digest, passwordHash string) (*User, error) {
+func (s *Store) AcceptInvitation(ctx context.Context, digest, email, name, passwordHash string) (*User, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -148,15 +171,15 @@ func (s *Store) AcceptInvitation(ctx context.Context, digest, passwordHash strin
 	if invitationErr != nil {
 		return nil, invitationErr
 	}
-	if item.Status != InvitationPending || item.ExpiresAt <= nowUnix() {
+	if item.Status != InvitationPending || item.ExpiresAt <= nowUnix() || item.UsedCount >= item.MaxUses {
 		return nil, ErrInvitationUnavailable
 	}
 	now := nowUnix()
-	user := &User{ID: uuid.NewString(), Email: strings.ToLower(item.Email), Name: item.Name, Role: item.Role, Status: defaultUserStatusActive, CreatedAt: now, UpdatedAt: now}
+	user := &User{ID: uuid.NewString(), Email: strings.ToLower(email), Name: name, Role: item.Role, Status: defaultUserStatusActive, CreatedAt: now, UpdatedAt: now}
 	if _, insertErr := tx.ExecContext(ctx, `INSERT INTO users(id,email,name,password_hash,role,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)`, user.ID, user.Email, user.Name, passwordHash, user.Role, user.Status, now, now); insertErr != nil {
 		return nil, insertErr
 	}
-	result, err := tx.ExecContext(ctx, `UPDATE dashboard_invitations SET status=?,accepted_at=? WHERE id=? AND status=?`, InvitationAccepted, now, item.ID, InvitationPending)
+	result, err := tx.ExecContext(ctx, `UPDATE dashboard_invitations SET used_count=used_count+1,status=CASE WHEN used_count+1>=max_uses THEN ? ELSE status END,accepted_at=CASE WHEN used_count+1>=max_uses THEN ? ELSE accepted_at END WHERE id=? AND status=? AND used_count<max_uses`, InvitationAccepted, now, item.ID, InvitationPending)
 	if err != nil {
 		return nil, err
 	}

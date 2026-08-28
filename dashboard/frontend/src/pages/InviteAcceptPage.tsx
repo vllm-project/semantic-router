@@ -10,9 +10,12 @@ import authStyles from './AuthExperienceShell.module.css'
 import styles from './InviteAcceptPage.module.css'
 
 interface InvitationInfo {
-  email: string
-  name: string
+  email?: string
+  name?: string
   role: 'admin' | 'write' | 'read'
+  kind: 'personal' | 'shared'
+  maxUses: number
+  remainingUses: number
   expiresAt: number
 }
 
@@ -32,6 +35,8 @@ export default function InviteAcceptPage() {
   const { setSession } = useAuth()
   const [invitation, setInvitation] = useState<InvitationInfo | null>(null)
   const [password, setPassword] = useState('')
+  const [email, setEmail] = useState('')
+  const [name, setName] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -55,7 +60,8 @@ export default function InviteAcceptPage() {
       .finally(() => setLoading(false))
   }, [token])
 
-  const firstName = useMemo(() => invitation?.name.trim().split(/\s+/)[0] || 'there', [invitation])
+  const isShared = invitation?.kind === 'shared'
+  const firstName = useMemo(() => invitation?.name?.trim().split(/\s+/)[0] || '', [invitation])
   const passwordReady = password.length >= 9
 
   const accept = async (event: FormEvent) => {
@@ -71,7 +77,7 @@ export default function InviteAcceptPage() {
       const response = await fetch(`/api/auth/invitations/${encodeURIComponent(token)}/accept`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ password, email: email.trim(), name: name.trim() }),
       })
       if (!response.ok) throw new Error(await responseError(response))
       const payload = (await response.json()) as { token: string; user: AuthUser }
@@ -95,7 +101,7 @@ export default function InviteAcceptPage() {
       <div className={authStyles.storyCopy}>
         <p className={authStyles.storyEyebrow}>Your invitation is here</p>
         <h1 className={`${authStyles.storyTitle} ${styles.inviteStoryTitle}`}>
-          You’re in, {firstName}.
+          {isShared ? 'Your place is ready.' : `You’re in, ${firstName}.`}
         </h1>
         <p className={styles.storySlogan}>Build what one model can’t.</p>
         <p className={authStyles.storyDescription}>Your Mixture-of-Models workspace is ready.</p>
@@ -106,8 +112,8 @@ export default function InviteAcceptPage() {
           <strong>{invitationValidity(invitation.expiresAt)}</strong>
         </div>
         <div className={styles.ticketIdentity}>
-          <small>Reserved for</small>
-          <strong>{invitation.name}</strong>
+          <small>{isShared ? 'Available places' : 'Reserved for'}</small>
+          <strong>{isShared ? `${invitation.remainingUses} places` : invitation.name}</strong>
           <span>Dashboard · {invitation.role}</span>
         </div>
         <div className={styles.ticketExpiry}>
@@ -166,19 +172,58 @@ export default function InviteAcceptPage() {
         >
           <div className={authStyles.stageHeader}>
             <p className={authStyles.stageEyebrow}>Your account</p>
-            <h2 className={authStyles.stageTitle}>Choose your password</h2>
-            <p className={authStyles.stageDescription}>Your name and email are already reserved.</p>
+            <h2 className={authStyles.stageTitle}>
+              {isShared ? 'Create your account' : 'Choose your password'}
+            </h2>
+            <p className={authStyles.stageDescription}>
+              {isShared ? 'Tell us who is joining.' : 'Your name and email are already reserved.'}
+            </p>
           </div>
-          <div className={styles.prefilled}>
-            <label>
-              <span>Name</span>
-              <strong>{invitation.name}</strong>
-            </label>
-            <label>
-              <span>Email</span>
-              <strong>{invitation.email}</strong>
-            </label>
-          </div>
+          {isShared ? (
+            <div className={styles.identityInputs}>
+              <div className={authStyles.inputBlock}>
+                <label className={authStyles.label} htmlFor="invite-name">
+                  Name
+                </label>
+                <input
+                  id="invite-name"
+                  className={authStyles.input}
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  autoComplete="name"
+                  required
+                  autoFocus
+                  placeholder="Your name"
+                />
+              </div>
+              <div className={authStyles.inputBlock}>
+                <label className={authStyles.label} htmlFor="invite-email">
+                  Email
+                </label>
+                <input
+                  id="invite-email"
+                  className={authStyles.input}
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  autoComplete="email"
+                  required
+                  placeholder="you@example.com"
+                />
+              </div>
+            </div>
+          ) : (
+            <div className={styles.prefilled}>
+              <label>
+                <span>Name</span>
+                <strong>{invitation.name}</strong>
+              </label>
+              <label>
+                <span>Email</span>
+                <strong>{invitation.email}</strong>
+              </label>
+            </div>
+          )}
           {error ? (
             <div className={authStyles.error} role="alert">
               {error}
@@ -198,7 +243,7 @@ export default function InviteAcceptPage() {
                 minLength={9}
                 required
                 autoComplete="new-password"
-                autoFocus
+                autoFocus={!isShared}
                 placeholder="9 characters or more"
               />
               <button type="button" onClick={() => setShowPassword((value) => !value)}>

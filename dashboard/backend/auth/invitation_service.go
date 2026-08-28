@@ -18,7 +18,17 @@ var (
 	ErrInvalidInvitationEmail = errors.New("enter a valid email address")
 	ErrInvalidInvitationName  = errors.New("name is required")
 	ErrInvitationUserExists   = errors.New("a dashboard user with this email already exists")
+	ErrInvalidInvitationKind  = errors.New("invitation kind must be personal or shared")
+	ErrInvalidInvitationUses  = errors.New("shared invitation capacity must be between 2 and 100")
 )
+
+type InvitationSpec struct {
+	Kind    string
+	Email   string
+	Name    string
+	Role    string
+	MaxUses int
+}
 
 func newInvitationToken() (string, string, error) {
 	raw := make([]byte, 32)
@@ -47,30 +57,50 @@ func validateInvitationIdentity(email, name string) (string, string, error) {
 	return email, name, nil
 }
 
-func (s *Service) CreateInvitation(ctx context.Context, email, name, role, createdBy string) (*Invitation, string, error) {
-	email, name, err := validateInvitationIdentity(email, name)
+func (s *Service) CreateInvitation(ctx context.Context, spec InvitationSpec, createdBy string) (*Invitation, string, error) {
+	spec.Kind = strings.ToLower(strings.TrimSpace(spec.Kind))
+	if spec.Kind == "" {
+		spec.Kind = InvitationPersonal
+	}
+	if spec.Kind != InvitationPersonal && spec.Kind != InvitationShared {
+		return nil, "", ErrInvalidInvitationKind
+	}
+
+	var err error
+	spec.Role, err = normalizeRole(spec.Role)
 	if err != nil {
 		return nil, "", err
 	}
-	role, err = normalizeRole(role)
-	if err != nil {
-		return nil, "", err
+	if spec.Role == "" {
+		spec.Role = RoleRead
 	}
-	if role == "" {
-		role = RoleRead
+
+	if spec.Kind == InvitationPersonal {
+		spec.Email, spec.Name, err = validateInvitationIdentity(spec.Email, spec.Name)
+		if err != nil {
+			return nil, "", err
+		}
+		spec.MaxUses = 1
+		exists, lookupErr := s.store.HasUserEmail(ctx, spec.Email)
+		if lookupErr != nil {
+			return nil, "", lookupErr
+		}
+		if exists {
+			return nil, "", ErrInvitationUserExists
+		}
+	} else {
+		spec.Email = ""
+		spec.Name = ""
+		if spec.MaxUses < 2 || spec.MaxUses > 100 {
+			return nil, "", ErrInvalidInvitationUses
+		}
 	}
-	exists, err := s.store.HasUserEmail(ctx, email)
-	if err != nil {
-		return nil, "", err
-	}
-	if exists {
-		return nil, "", ErrInvitationUserExists
-	}
+
 	token, digest, err := newInvitationToken()
 	if err != nil {
 		return nil, "", err
 	}
-	item, err := s.store.CreateInvitation(ctx, email, name, role, digest, createdBy, time.Now().Add(invitationLifetime).Unix())
+	item, err := s.store.CreateInvitation(ctx, spec.Kind, spec.Email, spec.Name, spec.Role, digest, createdBy, spec.MaxUses, time.Now().Add(invitationLifetime).Unix())
 	return item, token, err
 }
 
@@ -91,15 +121,31 @@ func (s *Service) InvitationInfo(ctx context.Context, token string) (*Invitation
 	return item, nil
 }
 
-func (s *Service) AcceptInvitation(ctx context.Context, token, password string) (string, *User, error) {
-	if _, err := s.InvitationInfo(ctx, token); err != nil {
+func (s *Service) AcceptInvitation(ctx context.Context, token, email, name, password string) (string, *User, error) {
+	item, err := s.InvitationInfo(ctx, token)
+	if err != nil {
 		return "", nil, err
+	}
+	if item.Kind == InvitationPersonal {
+		email, name = item.Email, item.Name
+	} else {
+		email, name, err = validateInvitationIdentity(email, name)
+		if err != nil {
+			return "", nil, err
+		}
+		exists, lookupErr := s.store.HasUserEmail(ctx, email)
+		if lookupErr != nil {
+			return "", nil, lookupErr
+		}
+		if exists {
+			return "", nil, ErrInvitationUserExists
+		}
 	}
 	hash, err := s.HashPassword(password)
 	if err != nil {
 		return "", nil, err
 	}
-	user, err := s.store.AcceptInvitation(ctx, invitationTokenDigest(token), hash)
+	user, err := s.store.AcceptInvitation(ctx, invitationTokenDigest(token), email, name, hash)
 	if err != nil {
 		return "", nil, err
 	}

@@ -90,6 +90,32 @@
   color: var(--color-text-secondary);
   font-size: 0.82rem;
 }
+.kindSwitch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 9px;
+  background: rgba(0, 0, 0, 0.22);
+}
+.kindSwitch button {
+  min-height: 38px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 0.74rem;
+  font-weight: 650;
+}
+.kindSwitch button:hover {
+  color: var(--color-text);
+}
+.kindSwitch .kindSelected {
+  background: rgba(255, 255, 255, 0.09);
+  color: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
 .grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -118,6 +144,70 @@
 .grid input:focus {
   border-color: rgba(255, 255, 255, 0.4);
   box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.06);
+}
+.capacityField {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 76px;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--color-border);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.025);
+}
+.capacityField > div:first-child {
+  display: grid;
+  gap: 0.25rem;
+}
+.capacityField span {
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+.capacityField small {
+  color: var(--color-text-muted);
+  font-size: 0.67rem;
+}
+.capacityControl {
+  display: grid;
+  grid-template-columns: 34px 50px 34px;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: #0b0c0e;
+}
+.capacityControl button,
+.capacityControl input {
+  height: 38px;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  text-align: center;
+}
+.capacityControl button {
+  color: var(--color-text-secondary);
+  font-size: 1rem;
+}
+.capacityControl button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+}
+.capacityControl button:disabled {
+  opacity: 0.28;
+}
+.capacityControl input {
+  width: 50px;
+  border-right: 1px solid rgba(255, 255, 255, 0.09);
+  border-left: 1px solid rgba(255, 255, 255, 0.09);
+  outline: none;
+  font-size: 0.8rem;
+  font-weight: 700;
+  appearance: textfield;
+}
+.capacityControl input::-webkit-inner-spin-button,
+.capacityControl input::-webkit-outer-spin-button {
+  margin: 0;
+  appearance: none;
 }
 
 .roles {
@@ -294,5 +384,9 @@
   }
   .linkBlock {
     grid-template-columns: 1fr;
+  }
+  .capacityField {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }

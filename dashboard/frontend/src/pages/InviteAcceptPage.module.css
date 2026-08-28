@@ -104,6 +104,11 @@
   display: grid;
   gap: 0.55rem;
 }
+.identityInputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.7rem;
+}
 
 .prefilled label {
   display: grid;
@@ -186,6 +191,9 @@
 @media (max-width: 640px) {
   .inviteStoryTitle {
     font-size: 2.75rem;
+  }
+  .identityInputs {
+    grid-template-columns: 1fr;
   }
 }
 

@@ -13,10 +13,13 @@ type invitationMutationResponse struct {
 }
 
 type publicInvitationInfo struct {
-	Email     string `json:"email"`
-	Name      string `json:"name"`
-	Role      string `json:"role"`
-	ExpiresAt int64  `json:"expiresAt"`
+	Email         string `json:"email,omitempty"`
+	Name          string `json:"name,omitempty"`
+	Role          string `json:"role"`
+	Kind          string `json:"kind"`
+	MaxUses       int    `json:"maxUses"`
+	RemainingUses int    `json:"remainingUses"`
+	ExpiresAt     int64  `json:"expiresAt"`
 }
 
 func adminInvitationsHandler(svc *Service) http.HandlerFunc {
@@ -36,15 +39,19 @@ func adminInvitationsHandler(svc *Service) http.HandlerFunc {
 			respondJSON(w, map[string]any{"invitations": items})
 		case http.MethodPost:
 			var request struct {
-				Email string `json:"email"`
-				Name  string `json:"name"`
-				Role  string `json:"role"`
+				Kind     string `json:"kind"`
+				Email    string `json:"email"`
+				Name     string `json:"name"`
+				Role     string `json:"role"`
+				Capacity int    `json:"capacity"`
 			}
 			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 				http.Error(w, "invalid body", http.StatusBadRequest)
 				return
 			}
-			item, token, err := svc.CreateInvitation(r.Context(), request.Email, request.Name, request.Role, ac.UserID)
+			item, token, err := svc.CreateInvitation(r.Context(), InvitationSpec{
+				Kind: request.Kind, Email: request.Email, Name: request.Name, Role: request.Role, MaxUses: request.Capacity,
+			}, ac.UserID)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
@@ -112,17 +119,20 @@ func publicInvitationHandler(svc *Service) http.HandlerFunc {
 				return
 			}
 			respondJSON(w, publicInvitationInfo{
-				Email: item.Email, Name: item.Name, Role: item.Role, ExpiresAt: item.ExpiresAt,
+				Email: item.Email, Name: item.Name, Role: item.Role, Kind: item.Kind,
+				MaxUses: item.MaxUses, RemainingUses: item.RemainingUses, ExpiresAt: item.ExpiresAt,
 			})
 		case r.Method == http.MethodPost && len(parts) == 2 && parts[1] == "accept":
 			var request struct {
 				Password string `json:"password"`
+				Email    string `json:"email"`
+				Name     string `json:"name"`
 			}
 			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 				http.Error(w, "invalid body", http.StatusBadRequest)
 				return
 			}
-			signed, user, err := svc.AcceptInvitation(r.Context(), token, request.Password)
+			signed, user, err := svc.AcceptInvitation(r.Context(), token, request.Email, request.Name, request.Password)
 			if err != nil {
 				if errors.Is(err, ErrPasswordTooLong) || errors.Is(err, ErrPasswordTooShort) {
 					writePasswordHashError(w, err)
