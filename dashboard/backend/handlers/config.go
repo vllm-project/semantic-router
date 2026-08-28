@@ -81,7 +81,15 @@ func UpdateConfigHandler(configPath string, readonlyMode bool, configDir string)
 			return
 		}
 
-		configData, err := decodeYAMLTaggedBody[routerconfig.CanonicalConfig](r.Body)
+		rawBody, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+			return
+		}
+		if rejectDatabaseOwnedConfigMutation(w, rawBody) {
+			return
+		}
+		configData, err := decodeYAMLTaggedBytes[routerconfig.CanonicalConfig](rawBody)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
 			return
@@ -115,20 +123,14 @@ func UpdateConfigHandler(configPath string, readonlyMode bool, configDir string)
 			http.Error(w, fmt.Sprintf("Config validation failed: %v", err), http.StatusBadRequest)
 			return
 		}
-
-		// Explicitly validate vLLM endpoints (Parse doesn't validate endpoints by default)
-		if len(parsedConfig.VLLMEndpoints) > 0 {
-			for _, endpoint := range parsedConfig.VLLMEndpoints {
-				if endpoint.ProviderProfileName != "" && endpoint.Address == "" {
-					continue
-				}
-				if err := validateEndpointAddress(endpoint.Address); err != nil {
-					http.Error(w, fmt.Sprintf("Config validation failed: vLLM endpoint '%s' address validation failed: %v\n\nSupported formats:\n- IPv4: 192.168.1.1, 127.0.0.1\n- IPv6: ::1, 2001:db8::1\n- DNS names: localhost, example.com, api.example.com\n\nUnsupported formats:\n- Protocol prefixes: http://, https://\n- Paths: /api/v1, /health\n- Ports in address: use 'port' field instead", endpoint.Name, err), http.StatusBadRequest)
-					return
-				}
-			}
+		if err := validateVLLMEndpointAddresses(parsedConfig); err != nil {
+			http.Error(w, fmt.Sprintf("Config validation failed: %v", err), http.StatusBadRequest)
+			return
 		}
 
+		if rejectRevokedMutation(w, r) {
+			return
+		}
 		if err := writeConfigAtomically(configPath, yamlData); err != nil {
 			http.Error(w, fmt.Sprintf("Failed to write config: %v", err), http.StatusInternalServerError)
 			return
@@ -199,6 +201,9 @@ func UpdateRouterDefaultsHandler(configPath string, readonlyMode bool, configDir
 			http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
 			return
 		}
+		if rejectDatabaseOwnedConfigMutation(w, rawPatch) {
+			return
+		}
 		release, lockErr := beginOrdinaryRuntimeConfigMutation(configDir)
 		if lockErr != nil {
 			writeRuntimeConfigMutationError(w, lockErr)
@@ -223,6 +228,9 @@ func UpdateRouterDefaultsHandler(configPath string, readonlyMode bool, configDir
 			return
 		}
 
+		if rejectRevokedMutation(w, r) {
+			return
+		}
 		if err := writeConfigAtomically(configPath, yamlData); err != nil {
 			http.Error(w, fmt.Sprintf("Failed to write config: %v", err), http.StatusInternalServerError)
 			return

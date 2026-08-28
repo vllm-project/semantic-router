@@ -3,7 +3,6 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -36,15 +35,6 @@ type setupModeConfig struct {
 type setupConfigFile struct {
 	routerconfig.CanonicalConfig `yaml:",inline"`
 	Setup                        *setupModeConfig `yaml:"setup,omitempty"`
-}
-
-func decodeYAMLTaggedBody[T any](reader io.Reader) (T, error) {
-	var value T
-	data, err := io.ReadAll(reader)
-	if err != nil {
-		return value, err
-	}
-	return decodeYAMLTaggedBytes[T](data)
 }
 
 func decodeYAMLTaggedBytes[T any](data []byte) (T, error) {

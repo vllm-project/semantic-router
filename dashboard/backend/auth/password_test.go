@@ -63,9 +63,9 @@ func TestPasswordRotationRejectsOversizedPasswordWithBadRequest(t *testing.T) {
 	admin := newTestUser(t, svc, "admin@example.com", RoleAdmin, "active")
 	target := newTestUser(t, svc, "target@example.com", RoleRead, "active")
 
-	mux := http.NewServeMux()
+	mux := NewPolicyMux()
 	RegisterAdminRoutes(mux, svc)
-	handler := AuthenticateRequest(svc)(mux)
+	handler := AuthenticateRequest(svc, mux)(mux)
 
 	body, err := json.Marshal(map[string]string{
 		"userId":   target.ID,
@@ -98,9 +98,9 @@ func TestPasswordRotationAcceptsPasswordAtTheLimit(t *testing.T) {
 	admin := newTestUser(t, svc, "admin@example.com", RoleAdmin, "active")
 	target := newTestUser(t, svc, "target@example.com", RoleRead, "active")
 
-	mux := http.NewServeMux()
+	mux := NewPolicyMux()
 	RegisterAdminRoutes(mux, svc)
-	handler := AuthenticateRequest(svc)(mux)
+	handler := AuthenticateRequest(svc, mux)(mux)
 
 	password := strings.Repeat("a", MaxPasswordBytes)
 	body, err := json.Marshal(map[string]string{"userId": target.ID, "password": password})
@@ -130,9 +130,9 @@ func TestUserCreationRejectsOversizedPasswordWithBadRequest(t *testing.T) {
 	svc := newTestAuthService(t)
 	admin := newTestUser(t, svc, "admin@example.com", RoleAdmin, "active")
 
-	mux := http.NewServeMux()
+	mux := NewPolicyMux()
 	RegisterAdminRoutes(mux, svc)
-	handler := AuthenticateRequest(svc)(mux)
+	handler := AuthenticateRequest(svc, mux)(mux)
 
 	body, err := json.Marshal(map[string]string{
 		"email":    "new-user@example.com",

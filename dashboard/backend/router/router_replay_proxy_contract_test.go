@@ -45,7 +45,7 @@ func TestDashboardReplayPathUsesAuthenticatedManagementProxyNotEnvoy(t *testing.
 	}))
 	defer routerServer.Close()
 
-	mux := http.NewServeMux()
+	mux := auth.NewPolicyMux()
 	registerRouterAPIProxy(
 		mux,
 		&config.Config{RouterAPIURL: routerServer.URL},

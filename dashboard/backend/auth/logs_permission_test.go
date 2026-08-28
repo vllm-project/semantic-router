@@ -13,10 +13,10 @@ func TestRuntimeLogsAreDeniedToDefaultReadRole(t *testing.T) {
 	reader := newTestUser(t, service, "logs-reader@example.com", RoleRead, "active")
 	writer := newTestUser(t, service, "logs-writer@example.com", RoleWrite, "active")
 	var calls int
-	handler := AuthenticateRequest(service)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	handler := protectedTestHandler(service, ProtectedRoute("/api/logs", PermLogsRead, SensitivitySensitive, ResourceOwnerObservability, http.MethodGet), func(w http.ResponseWriter, _ *http.Request) {
 		calls++
 		w.WriteHeader(http.StatusNoContent)
-	}))
+	})
 
 	readerResponse := httptest.NewRecorder()
 	handler.ServeHTTP(

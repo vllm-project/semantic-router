@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 
+	auth "github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 	"github.com/vllm-project/semantic-router/dashboard/backend/handlers"
 	"github.com/vllm-project/semantic-router/dashboard/backend/mcp"
@@ -19,7 +20,7 @@ const internalOpenClawMCPPath = "/_internal/openclaw/mcp"
 
 // SetupMCP configures MCP related routes
 // Returns MCP Manager instance for lifecycle management
-func SetupMCP(mux *http.ServeMux, cfg *config.Config, wf *workflowstore.Store, openClawHandler *handlers.OpenClawHandler) *mcp.Manager {
+func SetupMCP(routes *auth.PolicyMux, cfg *config.Config, wf *workflowstore.Store, openClawHandler *handlers.OpenClawHandler) *mcp.Manager {
 	if !cfg.MCPEnabled {
 		log.Printf("MCP feature disabled")
 		return nil
@@ -32,12 +33,12 @@ func SetupMCP(mux *http.ServeMux, cfg *config.Config, wf *workflowstore.Store, o
 
 	// Register built-in OpenClaw MCP endpoint and server config.
 	if cfg.OpenClawEnabled && openClawHandler != nil {
-		registerBuiltInOpenClawMCP(mux, cfg.Port, mcpManager, openClawHandler)
+		registerBuiltInOpenClawMCP(routes, cfg.Port, mcpManager, openClawHandler)
 	}
 
 	// Create MCP handler
 	mcpHandler := handlers.NewMCPHandler(mcpManager, cfg.ReadonlyMode)
-	registerMCPAPIRoutes(mux, mcpHandler)
+	registerMCPAPIRoutes(routes, mcpHandler)
 
 	log.Printf("MCP API endpoints registered: /api/mcp/*")
 
@@ -48,14 +49,17 @@ func SetupMCP(mux *http.ServeMux, cfg *config.Config, wf *workflowstore.Store, o
 }
 
 func registerBuiltInOpenClawMCP(
-	mux *http.ServeMux,
+	routes *auth.PolicyMux,
 	port string,
 	mcpManager *mcp.Manager,
 	openClawHandler *handlers.OpenClawHandler,
 ) {
 	openClawMCPHandler := handlers.NewOpenClawMCPHandler(openClawHandler)
-	mux.Handle("/api/openclaw/mcp", openClawMCPHandler)
-	mux.Handle(internalOpenClawMCPPath, loopbackOnly(openClawMCPHandler))
+	routes.Handle(
+		auth.ProtectedMutationRoute("/api/openclaw/mcp", auth.PermMcpManage, "openclaw.mcp", auth.SensitivitySecret, auth.ResourceOwnerOpenClaw, 2<<20, http.MethodPost),
+		openClawMCPHandler,
+	)
+	routes.HandleFallback(internalOpenClawMCPPath, loopbackOnly(openClawMCPHandler))
 
 	serverURL := fmt.Sprintf("http://127.0.0.1:%s%s", port, internalOpenClawMCPPath)
 	if err := mcpManager.UpsertServer(&mcp.ServerConfig{
@@ -76,15 +80,19 @@ func registerBuiltInOpenClawMCP(
 	}
 
 	log.Printf(
-		"Built-in OpenClaw MCP endpoints registered: /api/openclaw/mcp (public), %s (loopback-only) (server id: %s)",
+		"Built-in OpenClaw MCP endpoints registered: /api/openclaw/mcp (authenticated), %s (loopback-only) (server id: %s)",
 		internalOpenClawMCPPath,
 		mcp.BuiltinOpenClawServerID,
 	)
 }
 
-func registerMCPAPIRoutes(mux *http.ServeMux, mcpHandler *handlers.MCPHandler) {
+func registerMCPAPIRoutes(routes *auth.PolicyMux, mcpHandler *handlers.MCPHandler) {
 	// Server configuration - GET list, POST create
-	mux.HandleFunc("/api/mcp/servers", func(w http.ResponseWriter, r *http.Request) {
+	routes.HandleFunc(auth.Route(
+		"/api/mcp/servers",
+		auth.ReadPolicy(http.MethodGet, auth.PermMcpRead, auth.SensitivitySensitive, auth.ResourceOwnerTools),
+		auth.MutationPolicy(http.MethodPost, auth.PermMcpManage, "mcp.server.create", auth.SensitivitySecret, auth.ResourceOwnerTools, 2<<20),
+	), func(w http.ResponseWriter, r *http.Request) {
 		if middleware.HandleCORSPreflight(w, r) {
 			return
 		}
@@ -98,13 +106,19 @@ func registerMCPAPIRoutes(mux *http.ServeMux, mcpHandler *handlers.MCPHandler) {
 		}
 	})
 
-	registerMCPServerOperationRoutes(mux, mcpHandler)
-	registerMCPToolRoutes(mux, mcpHandler)
+	registerMCPServerOperationRoutes(routes, mcpHandler)
+	registerMCPToolRoutes(routes, mcpHandler)
 }
 
-func registerMCPServerOperationRoutes(mux *http.ServeMux, mcpHandler *handlers.MCPHandler) {
+func registerMCPServerOperationRoutes(routes *auth.PolicyMux, mcpHandler *handlers.MCPHandler) {
 	// Server operations (update, delete, connect, disconnect, status, test)
-	mux.HandleFunc("/api/mcp/servers/", func(w http.ResponseWriter, r *http.Request) {
+	routes.HandleFunc(auth.Route(
+		"/api/mcp/servers/",
+		auth.ReadPolicy(http.MethodGet, auth.PermMcpRead, auth.SensitivitySecret, auth.ResourceOwnerTools),
+		auth.MutationPolicy(http.MethodPost, auth.PermMcpManage, "mcp.server.action", auth.SensitivitySecret, auth.ResourceOwnerTools, 2<<20),
+		auth.MutationPolicy(http.MethodPut, auth.PermMcpManage, "mcp.server.update", auth.SensitivitySecret, auth.ResourceOwnerTools, 2<<20),
+		auth.MutationPolicy(http.MethodDelete, auth.PermMcpManage, "mcp.server.delete", auth.SensitivitySecret, auth.ResourceOwnerTools, auth.NoBodyLimit),
+	), func(w http.ResponseWriter, r *http.Request) {
 		if middleware.HandleCORSPreflight(w, r) {
 			return
 		}
@@ -133,9 +147,9 @@ func registerMCPServerOperationRoutes(mux *http.ServeMux, mcpHandler *handlers.M
 	})
 }
 
-func registerMCPToolRoutes(mux *http.ServeMux, mcpHandler *handlers.MCPHandler) {
+func registerMCPToolRoutes(routes *auth.PolicyMux, mcpHandler *handlers.MCPHandler) {
 	// Tools - GET list
-	mux.HandleFunc("/api/mcp/tools", func(w http.ResponseWriter, r *http.Request) {
+	routes.HandleFunc(auth.ProtectedRoute("/api/mcp/tools", auth.PermMcpRead, auth.SensitivitySensitive, auth.ResourceOwnerTools, http.MethodGet), func(w http.ResponseWriter, r *http.Request) {
 		if middleware.HandleCORSPreflight(w, r) {
 			return
 		}
@@ -143,7 +157,7 @@ func registerMCPToolRoutes(mux *http.ServeMux, mcpHandler *handlers.MCPHandler) 
 	})
 
 	// Tool execution - POST execute
-	mux.HandleFunc("/api/mcp/tools/execute", func(w http.ResponseWriter, r *http.Request) {
+	routes.HandleFunc(auth.ProtectedMutationRoute("/api/mcp/tools/execute", auth.PermToolsUse, "mcp.tool.execute", auth.SensitivitySecret, auth.ResourceOwnerTools, 4<<20, http.MethodPost), func(w http.ResponseWriter, r *http.Request) {
 		if middleware.HandleCORSPreflight(w, r) {
 			return
 		}
@@ -151,7 +165,7 @@ func registerMCPToolRoutes(mux *http.ServeMux, mcpHandler *handlers.MCPHandler) 
 	})
 
 	// Tool streaming execution - POST execute/stream
-	mux.HandleFunc("/api/mcp/tools/execute/stream", func(w http.ResponseWriter, r *http.Request) {
+	routes.HandleFunc(auth.ProtectedMutationRoute("/api/mcp/tools/execute/stream", auth.PermToolsUse, "mcp.tool.execute_stream", auth.SensitivitySecret, auth.ResourceOwnerTools, 4<<20, http.MethodPost), func(w http.ResponseWriter, r *http.Request) {
 		if middleware.HandleCORSPreflight(w, r) {
 			return
 		}

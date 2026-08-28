@@ -1,7 +1,11 @@
 package auth
 
 import (
+	"bytes"
 	"context"
+	"errors"
+	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strings"
@@ -13,6 +17,8 @@ type contextKey string
 
 const (
 	authContextKey contextKey = "dashboardAuthContext"
+	routePolicyKey contextKey = "dashboardRoutePolicy"
+	revalidatorKey contextKey = "dashboardPermissionRevalidator"
 
 	authSessionCookieName = "vsr_session"
 	maxAccessTokenBytes   = 8192
@@ -26,13 +32,31 @@ type AuthContext struct {
 	Perms  map[string]bool
 }
 
-func AuthenticateRequest(service *Service) func(http.Handler) http.Handler {
+type permissionRevalidator func(context.Context) error
+
+var errPermissionDenied = errors.New("permission denied")
+
+func AuthenticateRequest(service *Service, resolver RoutePolicyResolver) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if !requiresAuthentication(r.URL.Path) {
+			policy, lookup := resolver.LookupRoutePolicy(r.Method, r.URL.Path)
+			switch lookup {
+			case RouteMethodNotAllowed:
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				return
+			case RouteNotFound:
+				if isProtectedNamespace(r.URL.Path) {
+					http.Error(w, "Forbidden", http.StatusForbidden)
+					return
+				}
 				next.ServeHTTP(w, r)
 				return
 			}
+			if policy.Public {
+				next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), routePolicyKey, policy)))
+				return
+			}
+
 			token := extractAccessToken(r)
 			if token == "" {
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
@@ -44,18 +68,42 @@ func AuthenticateRequest(service *Service) func(http.Handler) http.Handler {
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return
 			}
+			if policy.MaxAuthAge > 0 {
+				if claims.IssuedAt == nil {
+					http.Error(w, "Forbidden", http.StatusForbidden)
+					return
+				}
+				age := time.Since(claims.IssuedAt.Time)
+				if age < 0 || age > policy.MaxAuthAge {
+					http.Error(w, "Forbidden", http.StatusForbidden)
+					return
+				}
+			}
 
-			user, perms, err := service.ResolveSessionUser(r.Context(), claims)
+			user, perms, err := authorizeClaims(r.Context(), service, claims, policy.Permission)
 			if err != nil {
 				log.Printf("permission load failed for user %s: %v", claims.UserID, err)
-				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				if errors.Is(err, errPermissionDenied) {
+					http.Error(w, "Forbidden", http.StatusForbidden)
+				} else {
+					http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				}
 				return
 			}
 
-			required := RequiredPermission(r.Method, r.URL.Path)
-			if required != "" && !perms[required] {
-				http.Error(w, "Forbidden", http.StatusForbidden)
-				return
+			if policy.MaxBodyBytes > 0 && r.Body != nil {
+				body, readErr := readBoundedRequestBody(w, r, policy.MaxBodyBytes)
+				if readErr != nil {
+					return
+				}
+				r.Body = io.NopCloser(bytes.NewReader(body))
+			}
+			if policy.Revalidate && policy.MaxBodyBytes > 0 {
+				user, perms, err = authorizeClaims(r.Context(), service, claims, policy.Permission)
+				if err != nil {
+					http.Error(w, "Forbidden", http.StatusForbidden)
+					return
+				}
 			}
 
 			ctx := context.WithValue(r.Context(), authContextKey, AuthContext{
@@ -64,7 +112,18 @@ func AuthenticateRequest(service *Service) func(http.Handler) http.Handler {
 				Role:   user.Role,
 				Perms:  perms,
 			})
-			next.ServeHTTP(w, r.WithContext(ctx))
+			ctx = context.WithValue(ctx, routePolicyKey, policy)
+			ctx = context.WithValue(ctx, revalidatorKey, permissionRevalidator(func(checkCtx context.Context) error {
+				_, _, checkErr := authorizeClaims(checkCtx, service, claims, policy.Permission)
+				return checkErr
+			}))
+
+			request := r.WithContext(ctx)
+			if policy.AuditMode == AuditRequired {
+				serveWithRouteAudit(service, policy, w, request, next)
+				return
+			}
+			next.ServeHTTP(w, request)
 		})
 	}
 }
@@ -76,13 +135,21 @@ func AuthenticateRequest(service *Service) func(http.Handler) http.Handler {
 // assets, and the static frontend) through so the dashboard can render and
 // surface the "authentication service is not configured" state.
 //
-// This is the deny-by-default counterpart to AuthenticateRequest: it shares
-// the same requiresAuthentication policy so the set of protected routes cannot
-// drift between the two paths.
-func ServiceUnavailableGuard() func(http.Handler) http.Handler {
+// This is the deny-by-default counterpart to AuthenticateRequest and uses the
+// same route policy registry so healthy and degraded startup cannot drift.
+func ServiceUnavailableGuard(resolver RoutePolicyResolver) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if requiresAuthentication(r.URL.Path) {
+			policy, lookup := resolver.LookupRoutePolicy(r.Method, r.URL.Path)
+			if lookup == RouteMethodNotAllowed {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			if lookup == RouteFound && policy.Public {
+				next.ServeHTTP(w, r)
+				return
+			}
+			if lookup == RouteFound || isProtectedNamespace(r.URL.Path) {
 				http.Error(w, "Authentication service is not configured", http.StatusServiceUnavailable)
 				return
 			}
@@ -91,262 +158,88 @@ func ServiceUnavailableGuard() func(http.Handler) http.Handler {
 	}
 }
 
-func RequiredPermission(method, path string) string {
-	path = strings.TrimSpace(strings.ToLower(path))
-	for _, resolver := range []func(string, string) (string, bool){
-		adminPermission,
-		settingsPermission,
-		routerPermission,
-		knowledgePermission,
-		toolsPermission,
-		observabilityPermission,
-		recipePermission,
-		fleetSimPermission,
-		featurePermission,
-	} {
-		if permission, ok := resolver(method, path); ok {
-			return permission
-		}
+func authorizeClaims(
+	ctx context.Context,
+	service *Service,
+	claims *TokenClaims,
+	permission string,
+) (*User, map[string]bool, error) {
+	user, perms, err := service.ResolveSessionUser(ctx, claims)
+	if err != nil {
+		return nil, nil, err
 	}
-
-	if strings.HasPrefix(path, "/api/") {
-		return PermConfigRead
+	if !perms[permission] {
+		return nil, nil, fmt.Errorf("%w: permission %q is required", errPermissionDenied, permission)
 	}
-
-	return ""
+	return user, perms, nil
 }
 
-func recipePermission(_ string, path string) (string, bool) {
-	path = strings.TrimRight(path, "/")
-	if matchesRoute(path, "/api/recipe/import") {
-		return PermConfigWrite, true
+func readBoundedRequestBody(w http.ResponseWriter, r *http.Request, maxBytes int64) ([]byte, error) {
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBytes))
+	if err == nil {
+		return body, nil
 	}
-	if matchesAnyRoute(path, "/api/recipe/activate", "/api/recipe/deactivate") {
-		return PermConfigDeploy, true
+	var maxErr *http.MaxBytesError
+	if errors.As(err, &maxErr) {
+		http.Error(w, "Request body too large", http.StatusRequestEntityTooLarge)
+		return nil, err
 	}
-	if matchesRoute(path, "/api/recipe/packages") {
-		return PermConfigRead, true
-	}
-	if path == "/api/recipe" || matchesRoute(path, "/api/recipe/probes") {
-		if strings.HasSuffix(path, "/validate") {
-			return PermTopologyRead, true
-		}
-		return PermConfigRead, true
-	}
-	return "", false
+	http.Error(w, "Invalid request body", http.StatusBadRequest)
+	return nil, err
 }
 
-func matchesAnyRoute(path string, bases ...string) bool {
-	for _, base := range bases {
-		if matchesRoute(path, base) {
-			return true
-		}
+func serveWithRouteAudit(
+	service *Service,
+	policy RoutePolicy,
+	w http.ResponseWriter,
+	r *http.Request,
+	next http.Handler,
+) {
+	rw := &auditResponseWriter{ResponseWriter: w}
+	next.ServeHTTP(rw, r)
+	ac, _ := AuthFromContext(r)
+	_ = service.AddAuditLog(context.WithoutCancel(r.Context()), AuditLog{
+		UserID:     ac.UserID,
+		Action:     policy.AuditAction,
+		Resource:   string(policy.ResourceOwner),
+		Method:     r.Method,
+		Path:       r.URL.Path,
+		IP:         r.RemoteAddr,
+		UserAgent:  r.UserAgent(),
+		StatusCode: rw.statusCodeOr200(),
+		CreatedAt:  time.Now().Unix(),
+	})
+}
+
+func RoutePolicyFromContext(r *http.Request) (RoutePolicy, bool) {
+	policy, ok := r.Context().Value(routePolicyKey).(RoutePolicy)
+	return policy, ok
+}
+
+func RevalidateRequest(r *http.Request) error {
+	revalidate, ok := r.Context().Value(revalidatorKey).(permissionRevalidator)
+	if !ok {
+		return errors.New("live permission revalidation is unavailable")
+	}
+	return revalidate(r.Context())
+}
+
+func WithPermissionRevalidator(ctx context.Context, check func(context.Context) error) context.Context {
+	return context.WithValue(ctx, revalidatorKey, permissionRevalidator(check))
+}
+
+func RejectRevokedMutation(w http.ResponseWriter, r *http.Request) bool {
+	if r == nil {
+		return false
+	}
+	if _, ok := r.Context().Value(revalidatorKey).(permissionRevalidator); !ok {
+		return false
+	}
+	if err := RevalidateRequest(r); err != nil {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return true
 	}
 	return false
-}
-
-func matchesRoute(path, base string) bool {
-	return path == base || strings.HasPrefix(path, base+"/")
-}
-
-func adminPermission(method, path string) (string, bool) {
-	switch {
-	case strings.HasPrefix(path, "/api/admin/users/password"):
-		return PermUsersManage, true
-	case strings.HasPrefix(path, "/api/admin/audit-logs"), strings.HasPrefix(path, "/api/admin/permissions"):
-		return PermUsersManage, true
-	case path == "/api/admin/users" || strings.HasPrefix(path, "/api/admin/users/"):
-		if method == http.MethodGet {
-			return PermUsersView, true
-		}
-		return PermUsersManage, true
-	case strings.HasPrefix(path, "/api/admin/"):
-		return PermUsersManage, true
-	default:
-		return "", false
-	}
-}
-
-func settingsPermission(method, path string) (string, bool) {
-	switch {
-	case strings.HasPrefix(path, "/api/settings"):
-		if method == http.MethodPut || method == http.MethodPost {
-			return PermConfigWrite, true
-		}
-		return PermConfigRead, true
-	case strings.HasPrefix(path, "/api/setup/validate"),
-		strings.HasPrefix(path, "/api/setup/activate"),
-		strings.HasPrefix(path, "/api/setup/import-remote"):
-		return PermConfigWrite, true
-	default:
-		return "", false
-	}
-}
-
-func routerPermission(method, path string) (string, bool) {
-	switch {
-	case path == "/api/models/catalog":
-		return PermConfigRead, true
-	case path == "/api/models/verify":
-		return PermEvalRun, true
-	case path == "/api/router/v1/router/outcomes" && method == http.MethodPost:
-		return PermFeedbackSubmit, true
-	case strings.HasPrefix(path, "/api/router/v1/router_replay"):
-		return PermReplayRead, true
-	case strings.HasPrefix(path, "/api/router/api/v1/response-cache/"):
-		return readOrManagePermission(method, PermConfigRead, PermConfigWrite), true
-	case path == "/api/router/api/v1/context-compression/preview":
-		return PermConfigRead, true
-	case strings.HasPrefix(path, "/api/router/api/v1/context-compression/"):
-		return readOrManagePermission(method, PermConfigRead, PermConfigWrite), true
-	case path == "/api/router/config/deploy",
-		path == "/api/router/config/deploy/preview",
-		path == "/api/router/config/rollback":
-		return PermConfigDeploy, true
-	case strings.HasPrefix(path, "/api/router/config/"):
-		if method == http.MethodGet {
-			return PermConfigRead, true
-		}
-		return PermConfigWrite, true
-	case strings.HasPrefix(path, "/api/router/"):
-		return PermConfigRead, true
-	default:
-		return "", false
-	}
-}
-
-func knowledgePermission(_ string, path string) (string, bool) {
-	switch {
-	case strings.HasPrefix(path, "/embedded/wizmap/"), path == "/embedded/wizmap":
-		return PermConfigRead, true
-	default:
-		return "", false
-	}
-}
-
-func toolsPermission(method string, path string) (string, bool) {
-	switch {
-	case strings.HasPrefix(path, "/api/mcp/tools/execute"):
-		return PermToolsUse, true
-	case path == "/api/mcp/tools":
-		return readOrManagePermission(method, PermMcpRead, PermMcpManage), true
-	case path == "/api/mcp/servers":
-		return readOrManagePermission(method, PermMcpRead, PermMcpManage), true
-	case strings.HasPrefix(path, "/api/mcp/servers/") && strings.HasSuffix(path, "/status"):
-		return readOrManagePermission(method, PermMcpRead, PermMcpManage), true
-	case strings.HasPrefix(path, "/api/tools"):
-		return PermToolsUse, true
-	case strings.HasPrefix(path, "/api/mcp/"):
-		return PermMcpManage, true
-	default:
-		return "", false
-	}
-}
-
-func readOrManagePermission(method, readPermission, managePermission string) string {
-	if method == http.MethodGet || method == http.MethodHead || method == http.MethodOptions {
-		return readPermission
-	}
-	return managePermission
-}
-
-func observabilityPermission(_ string, path string) (string, bool) {
-	switch {
-	case strings.HasPrefix(path, "/api/status"):
-		return PermTopologyRead, true
-	case strings.HasPrefix(path, "/api/logs"):
-		return PermLogsRead, true
-	case strings.HasPrefix(path, "/embedded/grafana/"), strings.HasPrefix(path, "/embedded/jaeger"):
-		return PermLogsRead, true
-	case strings.HasPrefix(path, "/api/topology"):
-		return PermTopologyRead, true
-	default:
-		return "", false
-	}
-}
-
-func fleetSimPermission(method, path string) (string, bool) {
-	if !strings.HasPrefix(path, "/api/fleet-sim/") && path != "/api/fleet-sim" {
-		return "", false
-	}
-	return readOrManagePermission(method, PermConfigRead, PermConfigWrite), true
-}
-
-func featurePermission(method, path string) (string, bool) {
-	switch {
-	case strings.HasPrefix(path, "/api/evaluation"):
-		if path == "/api/evaluation/run" || strings.HasPrefix(path, "/api/evaluation/cancel/") {
-			return PermEvalRun, true
-		}
-		if method == http.MethodPost || method == http.MethodDelete {
-			return PermEvalWrite, true
-		}
-		return PermEvalRead, true
-	case strings.HasPrefix(path, "/api/openclaw/"), strings.HasPrefix(path, "/embedded/openclaw/"):
-		return openclawPermission(method, path)
-	case strings.HasPrefix(path, "/api/ml-pipeline/"):
-		return PermMlPipeline, true
-	case strings.HasPrefix(path, "/api/security/"):
-		return securityPermission(method), true
-	default:
-		return "", false
-	}
-}
-
-func securityPermission(method string) string {
-	if method == http.MethodGet {
-		return PermConfigRead
-	}
-	return PermSecurityManage
-}
-
-func openclawPermission(method, path string) (string, bool) {
-	switch {
-	case strings.HasPrefix(path, "/embedded/openclaw/"):
-		return PermOpenClawRead, true
-	case strings.HasPrefix(path, "/api/openclaw/mcp"):
-		return PermMcpManage, true
-	case hasAnyPrefix(path,
-		"/api/openclaw/provision",
-		"/api/openclaw/start",
-		"/api/openclaw/stop",
-		"/api/openclaw/containers/",
-		"/api/openclaw/next-port",
-	):
-		return PermOpenClaw, true
-	case strings.HasPrefix(path, "/api/openclaw/rooms/") && (strings.HasSuffix(path, "/messages") || strings.HasSuffix(path, "/stream") || strings.HasSuffix(path, "/ws")):
-		return PermOpenClawRead, true
-	case hasAnyPrefix(path,
-		"/api/openclaw/status",
-		"/api/openclaw/skills",
-		"/api/openclaw/token",
-	):
-		return PermOpenClawRead, true
-	case hasAnyPrefix(path,
-		"/api/openclaw/teams",
-		"/api/openclaw/workers",
-		"/api/openclaw/rooms",
-	):
-		return openclawMethodPermission(method), true
-	default:
-		return openclawMethodPermission(method), true
-	}
-}
-
-func hasAnyPrefix(path string, prefixes ...string) bool {
-	for _, prefix := range prefixes {
-		if strings.HasPrefix(path, prefix) {
-			return true
-		}
-	}
-	return false
-}
-
-func openclawMethodPermission(method string) string {
-	if method == http.MethodGet {
-		return PermOpenClawRead
-	}
-	return PermOpenClaw
 }
 
 func AuthFromContext(r *http.Request) (AuthContext, bool) {
@@ -438,39 +331,35 @@ func normalizeAccessToken(raw string) string {
 	return token
 }
 
-func requiresAuthentication(path string) bool {
-	path = strings.TrimSpace(strings.ToLower(path))
-
-	switch {
-	case strings.HasPrefix(path, "/api/auth/login"):
-		return false
-	case strings.HasPrefix(path, "/api/auth/logout"):
-		return false
-	case strings.HasPrefix(path, "/api/auth/bootstrap/"):
-		return false
-	case strings.HasPrefix(path, "/api/auth/me"):
-		return true
-	case strings.HasPrefix(path, "/api/setup/state"):
-		return false
-	case strings.HasPrefix(path, "/embedded/wizmap/assets/"):
-		return false
-	case strings.HasPrefix(path, "/api/"):
-		return true
-	case strings.HasPrefix(path, "/embedded/"):
-		return true
-	default:
-		return false
-	}
-}
-
 type auditResponseWriter struct {
 	http.ResponseWriter
 	status int
 }
 
 func (w *auditResponseWriter) WriteHeader(status int) {
+	if w.status != 0 {
+		return
+	}
 	w.status = status
 	w.ResponseWriter.WriteHeader(status)
+}
+
+func (w *auditResponseWriter) Write(payload []byte) (int, error) {
+	if w.status == 0 {
+		w.status = http.StatusOK
+	}
+	return w.ResponseWriter.Write(payload)
+}
+
+func (w *auditResponseWriter) Flush() {
+	if w.status == 0 {
+		w.status = http.StatusOK
+	}
+	_ = http.NewResponseController(w.ResponseWriter).Flush()
+}
+
+func (w *auditResponseWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
 }
 
 func (w *auditResponseWriter) statusCodeOr200() int {

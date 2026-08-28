@@ -67,6 +67,9 @@ func formatRuntimeApplyError(prefix string, err error) string {
 }
 
 func writeConfigAtomically(configPath string, yamlData []byte) error {
+	if err := validateConfigMutationOwnership(yamlData); err != nil {
+		return err
+	}
 	tmpConfigFile := configPath + ".tmp"
 	if err := os.WriteFile(tmpConfigFile, yamlData, 0o644); err != nil {
 		return err

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	auth "github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 	"github.com/vllm-project/semantic-router/dashboard/backend/setupmode"
 )
@@ -20,7 +21,7 @@ func TestRegisterRecipeRoutesExposesUnmanagedDescriptor(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte("version: v0.3\n"), 0o644); err != nil {
 		t.Fatalf("WriteFile(config): %v", err)
 	}
-	mux := http.NewServeMux()
+	mux := auth.NewPolicyMux()
 	registerRecipeRoutes(mux, &config.Config{ConfigDir: dir, RouterAPIURL: "http://router.invalid"})
 	recorder := httptest.NewRecorder()
 	mux.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/recipe", nil))
@@ -46,7 +47,7 @@ func TestRegisterRecipePackageRoutesEnforceCanonicalPathsAndMethods(t *testing.T
 	}
 	t.Setenv("VLLM_SR_ACTIVE_RECIPE_DIR", "")
 	t.Setenv("VLLM_SR_RECIPE_STORE_DIR", filepath.Join(dir, "recipe-store"))
-	mux := http.NewServeMux()
+	mux := auth.NewPolicyMux()
 	registerRecipeRoutes(mux, &config.Config{
 		ConfigDir:             dir,
 		AbsConfigPath:         configPath,
@@ -85,7 +86,7 @@ func TestRegisterRecipePackageRoutesEnforceCanonicalPathsAndMethods(t *testing.T
 func TestRegisterCoreRoutesExposesReadOnlyModelCatalogEndpoint(t *testing.T) {
 	t.Parallel()
 
-	mux := http.NewServeMux()
+	mux := auth.NewPolicyMux()
 	cfg := &config.Config{ConfigDir: t.TempDir(), PythonPath: "python3"}
 	registerCoreRoutes(mux, cfg, setupmode.New(cfg.AbsConfigPath, cfg.SetupMode))
 
@@ -99,7 +100,7 @@ func TestRegisterCoreRoutesExposesReadOnlyModelCatalogEndpoint(t *testing.T) {
 func TestRegisterConfigRoutesKeepsInferenceVerificationAvailableInReadonlyMode(t *testing.T) {
 	t.Parallel()
 
-	mux := http.NewServeMux()
+	mux := auth.NewPolicyMux()
 	registerConfigRoutes(mux, &config.Config{
 		AbsConfigPath:         "active-config.yaml",
 		ReadonlyMode:          true,
@@ -168,7 +169,7 @@ func TestRegisterRecipeRoutesKeepsImportAvailableWhenRuntimeConfigReadonly(t *te
 	t.Setenv("VLLM_SR_ACTIVE_RECIPE_DIR", "")
 	t.Setenv("VLLM_SR_RECIPE_STORE_DIR", filepath.Join(dir, "recipe-store"))
 
-	mux := http.NewServeMux()
+	mux := auth.NewPolicyMux()
 	registerRecipeRoutes(mux, &config.Config{
 		ConfigDir:             dir,
 		AbsConfigPath:         configPath,
@@ -222,7 +223,7 @@ func TestRuntimeConfigCapabilityGuardsLocalWriteRoutesButNotKBS(t *testing.T) {
 		RuntimeConfigWritable: false,
 		RecipeStoreWritable:   true,
 	}
-	mux := http.NewServeMux()
+	mux := auth.NewPolicyMux()
 	registerHealthAndSetupRoutes(mux, cfg, setupmode.New(cfg.AbsConfigPath, cfg.SetupMode))
 	registerConfigRoutes(mux, cfg)
 	registerSecurityPolicyRoutes(mux, cfg)

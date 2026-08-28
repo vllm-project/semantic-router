@@ -22,6 +22,7 @@ const (
 const (
 	PermUsersManage    = "users.manage"
 	PermUsersView      = "users.view"
+	PermSessionRead    = "session.read"
 	PermConfigRead     = "config.read"
 	PermConfigWrite    = "config.write"
 	PermConfigDeploy   = "config.deploy"
@@ -38,13 +39,19 @@ const (
 	PermMlPipeline     = "mlpipeline.manage"
 	PermFeedbackSubmit = "feedback.submit"
 	PermReplayRead     = "replay.read"
+	PermInferenceRun   = "inference.run"
 	PermSecurityManage = "security.manage"
+	PermGrantPublish   = "tenant_grants.publish"
+	PermQuotaPublish   = "tenant_quotas.publish"
+	PermVirtualKeys    = "virtual_keys.manage"
+	PermAuditPolicy    = "audit_policy.manage"
+	PermBreakGlass     = "breakglass.manage"
 )
 
 var DefaultRolePermissions = map[string][]string{
-	RoleAdmin: {PermUsersManage, PermUsersView, PermConfigRead, PermConfigWrite, PermConfigDeploy, PermEvalRead, PermEvalWrite, PermEvalRun, PermTopologyRead, PermLogsRead, PermOpenClawRead, PermOpenClaw, PermMcpRead, PermMcpManage, PermToolsUse, PermMlPipeline, PermFeedbackSubmit, PermReplayRead, PermSecurityManage},
-	RoleWrite: {PermConfigRead, PermConfigWrite, PermConfigDeploy, PermEvalRead, PermEvalWrite, PermEvalRun, PermTopologyRead, PermLogsRead, PermOpenClawRead, PermOpenClaw, PermMcpRead, PermMcpManage, PermToolsUse, PermMlPipeline, PermFeedbackSubmit, PermReplayRead},
-	RoleRead:  {PermConfigRead, PermEvalRead, PermTopologyRead, PermOpenClawRead, PermMcpRead, PermToolsUse, PermReplayRead},
+	RoleAdmin: {PermUsersManage, PermUsersView, PermSessionRead, PermConfigRead, PermConfigWrite, PermConfigDeploy, PermEvalRead, PermEvalWrite, PermEvalRun, PermTopologyRead, PermLogsRead, PermOpenClawRead, PermOpenClaw, PermMcpRead, PermMcpManage, PermToolsUse, PermMlPipeline, PermFeedbackSubmit, PermReplayRead, PermInferenceRun, PermSecurityManage, PermGrantPublish, PermQuotaPublish, PermVirtualKeys, PermAuditPolicy, PermBreakGlass},
+	RoleWrite: {PermSessionRead, PermConfigRead, PermConfigWrite, PermConfigDeploy, PermEvalRead, PermEvalWrite, PermEvalRun, PermTopologyRead, PermLogsRead, PermOpenClawRead, PermOpenClaw, PermMcpRead, PermMcpManage, PermToolsUse, PermMlPipeline, PermFeedbackSubmit, PermReplayRead, PermInferenceRun},
+	RoleRead:  {PermSessionRead, PermConfigRead, PermEvalRead, PermTopologyRead, PermOpenClawRead, PermMcpRead, PermToolsUse, PermReplayRead, PermInferenceRun},
 }
 
 var SupportedRoles = []string{RoleAdmin, RoleWrite, RoleRead}
@@ -57,10 +64,11 @@ var legacyRoleAliases = map[string]string{
 }
 
 var AllPermissions = []string{
-	PermUsersManage, PermUsersView, PermConfigRead, PermConfigWrite, PermConfigDeploy,
+	PermUsersManage, PermUsersView, PermSessionRead, PermConfigRead, PermConfigWrite, PermConfigDeploy,
 	PermEvalRead, PermEvalWrite, PermEvalRun, PermTopologyRead, PermLogsRead, PermOpenClawRead,
 	PermOpenClaw, PermMcpRead, PermMcpManage, PermToolsUse, PermMlPipeline,
-	PermFeedbackSubmit, PermReplayRead, PermSecurityManage,
+	PermFeedbackSubmit, PermReplayRead, PermInferenceRun, PermSecurityManage,
+	PermGrantPublish, PermQuotaPublish, PermVirtualKeys, PermAuditPolicy, PermBreakGlass,
 }
 
 func normalizeRole(raw string) (string, error) {

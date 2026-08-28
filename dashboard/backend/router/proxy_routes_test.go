@@ -6,13 +6,14 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	auth "github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 )
 
 func TestRegisterFleetSimRoutesReturnsBadGatewayWhenDisabled(t *testing.T) {
 	t.Parallel()
 
-	mux := http.NewServeMux()
+	mux := auth.NewPolicyMux()
 	registerFleetSimRoutes(mux, &config.Config{})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/fleet-sim/api/workloads", nil)
@@ -37,7 +38,7 @@ func TestRegisterFleetSimRoutesProxiesSimulatorPaths(t *testing.T) {
 	}))
 	defer server.Close()
 
-	mux := http.NewServeMux()
+	mux := auth.NewPolicyMux()
 	registerFleetSimRoutes(mux, &config.Config{FleetSimURL: server.URL})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/fleet-sim/api/workloads", nil)
@@ -71,7 +72,7 @@ func TestRouterAPIProxyReplacesBrowserAuthorization(t *testing.T) {
 	}))
 	defer server.Close()
 
-	mux := http.NewServeMux()
+	mux := auth.NewPolicyMux()
 	registerRouterAPIProxy(
 		mux,
 		&config.Config{RouterAPIURL: server.URL},
@@ -106,7 +107,7 @@ func TestRouterOutcomeProxyUsesServiceCredential(t *testing.T) {
 	}))
 	defer server.Close()
 
-	mux := http.NewServeMux()
+	mux := auth.NewPolicyMux()
 	registerRouterAPIProxy(
 		mux,
 		&config.Config{RouterAPIURL: server.URL},
@@ -139,7 +140,7 @@ func TestRouterAPIProxyRejectsUnknownManagementMutation(t *testing.T) {
 	}))
 	defer server.Close()
 
-	mux := http.NewServeMux()
+	mux := auth.NewPolicyMux()
 	registerRouterAPIProxy(
 		mux,
 		&config.Config{RouterAPIURL: server.URL},
@@ -152,8 +153,8 @@ func TestRouterAPIProxyRejectsUnknownManagementMutation(t *testing.T) {
 
 	mux.ServeHTTP(recorder, req)
 
-	if recorder.Code != http.StatusForbidden {
-		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusForbidden)
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusNotFound)
 	}
 	if calls != 0 {
 		t.Fatalf("upstream calls = %d, want 0", calls)
@@ -161,6 +162,8 @@ func TestRouterAPIProxyRejectsUnknownManagementMutation(t *testing.T) {
 }
 
 func TestRouterManagementProxyAllowlistMatchesDashboardSurfaces(t *testing.T) {
+	routes := auth.NewPolicyMux()
+	routes.HandleGroup(routerProxyContracts(), http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 	tests := []struct {
 		method string
 		path   string
@@ -180,8 +183,10 @@ func TestRouterManagementProxyAllowlistMatchesDashboardSurfaces(t *testing.T) {
 		{method: http.MethodPost, path: "/api/router/unknown", want: false},
 	}
 	for _, test := range tests {
-		if got := routerManagementProxyRouteAllowed(test.method, test.path); got != test.want {
-			t.Fatalf("routerManagementProxyRouteAllowed(%q, %q) = %v, want %v", test.method, test.path, got, test.want)
+		policy, lookup := routes.LookupRoutePolicy(test.method, test.path)
+		got := lookup == auth.RouteFound && policy.ProxyUpstream
+		if got != test.want {
+			t.Fatalf("proxy policy lookup (%q, %q) = %v, want %v", test.method, test.path, got, test.want)
 		}
 	}
 }
