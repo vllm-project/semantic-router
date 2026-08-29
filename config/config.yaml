@@ -2192,7 +2192,6 @@ global:
         access_key: external-guardrail-key
         max_tokens: 2048
         temperature: 0.2
-        max_response_bytes: 1048576
       - name: external-classifier
         llm_provider: openai
         model_role: classification
@@ -2209,7 +2208,6 @@ global:
         access_key: external-classifier-key
         max_tokens: 128
         temperature: 0
-        max_response_bytes: 1048576
       - name: external-sequence-classifier
         llm_provider: openai
         model_role: classification

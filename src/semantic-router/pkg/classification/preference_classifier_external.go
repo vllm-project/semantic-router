@@ -45,7 +45,7 @@ func newExternalPreferenceClassifier(
 		return nil, fmt.Errorf("external model name is required for preference")
 	}
 
-	client := NewVLLMClient(externalCfg)
+	client := newVLLMClientFromConfig(externalCfg)
 
 	timeout := 30 * time.Second
 	if externalCfg.TimeoutSeconds > 0 {

@@ -26,8 +26,20 @@ type VLLMClient struct {
 }
 
 // NewVLLMClient creates a new vLLM REST API client for classifiers
-func NewVLLMClient(cfg *config.ExternalModelConfig) *VLLMClient {
-	endpoint := &cfg.ModelEndpoint
+func NewVLLMClient(endpoint *config.ClassifierVLLMEndpoint) *VLLMClient {
+	return newVLLMClient(endpoint, "", config.DefaultClassifyMaxResponseBytes)
+}
+
+// NewVLLMClientWithAuth creates a new vLLM REST API client with access key
+func NewVLLMClientWithAuth(endpoint *config.ClassifierVLLMEndpoint, accessKey string) *VLLMClient {
+	return newVLLMClient(endpoint, accessKey, config.DefaultClassifyMaxResponseBytes)
+}
+
+func newVLLMClientFromConfig(cfg *config.ExternalModelConfig) *VLLMClient {
+	return newVLLMClient(&cfg.ModelEndpoint, cfg.AccessKey, cfg.GetMaxResponseBytes())
+}
+
+func newVLLMClient(endpoint *config.ClassifierVLLMEndpoint, accessKey string, maxResponseBytes int64) *VLLMClient {
 	scheme := endpoint.Protocol
 	if scheme == "" {
 		scheme = "http"
@@ -40,8 +52,8 @@ func NewVLLMClient(cfg *config.ExternalModelConfig) *VLLMClient {
 		},
 		endpoint:         endpoint,
 		baseURL:          baseURL,
-		accessKey:        cfg.AccessKey,
-		maxResponseBytes: cfg.GetMaxResponseBytes(),
+		accessKey:        accessKey,
+		maxResponseBytes: maxResponseBytes,
 	}
 }
 

@@ -11,7 +11,7 @@ import (
 )
 
 func newLimitedVLLMClient(server *httptest.Server, maxResponseBytes int64) *VLLMClient {
-	client := NewVLLMClient(&config.ExternalModelConfig{
+	client := newVLLMClientFromConfig(&config.ExternalModelConfig{
 		ModelEndpoint:    config.ClassifierVLLMEndpoint{Address: "placeholder", Port: 1},
 		MaxResponseBytes: maxResponseBytes,
 	})
