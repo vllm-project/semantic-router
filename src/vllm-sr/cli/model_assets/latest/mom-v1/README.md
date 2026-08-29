@@ -12,14 +12,17 @@ Entrypoint that uses it.
 
 | Recipe | Best for | Decisions |
 | --- | --- | --- |
-| `balance` | General traffic across quality, latency, and workload complexity | `simple`, `medium`, `complex`, `agentic`, `omni` |
+| `balance` | General traffic across quality, latency, and workload complexity | `simple`, `medium`, `complex`, `agentic`, `extended`, `omni` |
 | `speed` | Interactive applications, tools, and visual requests | `instant`, `heavy`, `omni`, `tooling`, `extended` |
 | `cost` | High-volume traffic with bounded escalation | `economy`, `reasoning`, `omni`, `extended` |
 | `accuracy` | Verification, expert synthesis, and bounded orchestration | `direct`, `verify`, `experts`, `orchestrate`, `extended`, `resume`, `omni` |
 | `vault` | Sensitive workloads with local and tool-isolation policy | `private`, `restricted_tools`, `containment`, `sensitive`, `omni` |
 
 These decision names form each Recipe's assignment contract. A published
-Entrypoint must bind every reachable decision to one or more configured Models.
+Entrypoint must bind every reachable decision to its declared
+`algorithm.minimum_candidates` count. Accuracy therefore preserves
+three-worker orchestration and expert panels plus a two-model confidence
+cascade; Vault preserves a two-model private pool.
 
 ## Intended use
 
@@ -33,7 +36,11 @@ name on its own.
 
 ## Routing behavior
 
-Balance separates simple, medium, complex, agentic, and image-bearing work.
+Balance separates simple, medium, complex, agentic, terminal-context, and
+image-bearing work. The `extended` lane isolates text beyond 240K tokens from
+semantic complexity, while image and active or required tool traffic retain
+their capability-preserving higher-priority lanes. The medium lane is strictly
+conversational; image traffic is owned only by `omni`.
 Balance and Speed treat a declared tool schema as available capability, not as
 proof that the current turn wants to execute a tool. Their tool lanes require
 explicit execution intent, a protocol-level required or named tool choice, or
@@ -74,6 +81,12 @@ window cannot hold the request. Models without context metadata remain eligible
 for compatibility. If every assigned candidate has a known insufficient
 window, the request is rejected instead of being sent to a backend that cannot
 serve it.
+
+If context filtering would reduce a decision below its declared minimum pool,
+the request is rejected rather than silently changing a panel, cascade, or
+selection policy. Looper-generated prompts are checked again before each
+planner, worker, verifier, judge, and synthesis dispatch because intermediate
+responses can grow beyond the original request size.
 
 When Router learning is enabled, ordinary single-model Accuracy decisions keep
 adaptation inside the matched decision. Multi-model decisions and Vault bypass
@@ -116,7 +129,8 @@ See the [conformance guide](../../../CONFORMANCE.md) for the validation contract
 
 ## Limitations
 
-- A Recipe cannot prove that an assigned Model is reachable or capable.
+- A Recipe enforces pool cardinality but cannot yet prove every assigned
+  Model's provider-neutral capability traits.
 - Multi-model algorithms can add latency and compute cost.
 - Classifier and knowledge-base errors can affect selection.
 - Tool execution remains the client's responsibility.

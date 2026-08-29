@@ -4,6 +4,7 @@ import {
   applyRecipeAssignments,
   assignmentState,
   assignDecisionModels,
+  minimumCandidatesForDecision,
 } from './configPageMixtureSupport'
 import type { ConfigData, DecisionConfig } from './configPageSupport'
 
@@ -30,6 +31,16 @@ describe('Mixture model assignments', () => {
       Simple: ['local/fast'],
       Complex: ['remote/frontier'],
     })
+  })
+
+  it('uses the decision candidate contract and defaults legacy recipes to one', () => {
+    expect(minimumCandidatesForDecision(decisions[0])).toBe(1)
+    expect(
+      minimumCandidatesForDecision({
+        ...decisions[1],
+        algorithm: { type: 'fusion', minimum_candidates: 3 },
+      }),
+    ).toBe(3)
   })
 
   it('preserves existing model-ref policy and initializes only new references', () => {

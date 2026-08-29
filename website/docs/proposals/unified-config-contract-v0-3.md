@@ -62,6 +62,11 @@ Routing owns:
 - decisions, candidate `modelRefs`, algorithms, and plugins;
 - route-local output and adaptation policy.
 
+Algorithms may declare `minimum_candidates` as a portable Recipe contract.
+Model-free assets can carry the declaration with empty `modelRefs`; a concrete
+Entrypoint binding must satisfy it, and request-time eligibility filters must
+preserve it before selection or multi-model execution begins.
+
 Structured request controls remain facts at the signal boundary. For example,
 conversation signals expose whether the protocol requires or forbids tool
 execution, projections reconcile those facts with text-derived observations,

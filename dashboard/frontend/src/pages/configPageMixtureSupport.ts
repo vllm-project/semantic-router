@@ -4,6 +4,11 @@ import type { ConfigData, DecisionConfig } from './configPageSupport'
 
 export type ModelAssignments = Record<string, string[]>
 
+export function minimumCandidatesForDecision(decision: DecisionConfig): number {
+  const value = decision.algorithm?.minimum_candidates
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : 1
+}
+
 export function assignmentState(decisions: DecisionConfig[]): ModelAssignments {
   return Object.fromEntries(
     decisions.map((decision) => [

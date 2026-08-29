@@ -58,11 +58,20 @@ defaults.
   record private AMD validation evidence.
 - [x] `TASK-05` Reconcile remaining architecture gaps into durable debt or
   explicitly reject them as unnecessary complexity.
+- [x] `TASK-06` Re-audit built-in candidate-pool cardinality, Looper quorum,
+  generated-stage context growth, and Blend terminal-context ownership.
+- [x] `TASK-07` Enforce minimum candidate pools, fail impossible quorums,
+  re-check Looper stage context, and add the Blend terminal-context lane.
+- [x] `TASK-08` Synchronize packaged assets and pass all repository-selected
+  validation, dashboard, CLI, Router, and conformance gates.
+- [ ] `TASK-09` Revalidate the final commit on both requested AMD nodes, push
+  the PR update, and wait for every required GitHub check.
 
 ## Next Action
 
-Submit the validated commit and monitor the required PR checks to completion;
-no implementation work remains in this plan.
+Create the signed commit from the validated snapshot, synchronize its final
+source receipt on both requested AMD nodes, push the PR update, and wait for
+every required GitHub check before completing `TASK-09`.
 
 ## Operating Rules
 

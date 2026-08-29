@@ -316,9 +316,9 @@ decisions:
       projection:
       - balance_deliberate_workload
       - balance_no_recovery_needed
-- id: balance_complex
+- id: balance_extended
   expected_recipe: balance
-  expected_decision: complex
+  expected_decision: extended
   expected_algorithm: static
   variants:
   - id: balance_over_240k_text_guard__text_at_first_over_240k_band
@@ -367,6 +367,11 @@ decisions:
     expected_signals:
       context:
       - balance_exceeds_240k_context
+- id: balance_complex
+  expected_recipe: balance
+  expected_decision: complex
+  expected_algorithm: static
+  variants:
   - id: balance_text_from_120k_to_240k__text_in_120k_240k_band
     display_prompt: Summarize the key decisions in this long neutral record while preserving its factual constraints.
     playground:

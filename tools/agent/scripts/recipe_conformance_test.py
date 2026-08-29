@@ -36,7 +36,7 @@ class RecipeConformanceTest(unittest.TestCase):
         # model assignments are composed by the Dashboard when a Mixture is
         # created, so the package itself stays model- and deployment-neutral.
         self.assertEqual(len(mom.entrypoints), 0)
-        self.assertEqual(len(mom.decisions), 26)
+        self.assertEqual(len(mom.decisions), 27)
         self.assertEqual(mom.variants, 235)
         self.assertTrue(mom.coverage["passed"])
 

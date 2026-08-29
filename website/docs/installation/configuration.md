@@ -204,6 +204,12 @@ Validation catches schema errors, unresolved references, incompatible recipe
 boundaries, invalid provider bindings, and unsupported plugin or algorithm
 settings before the Router starts.
 
+For portable model-free Recipes, set
+`routing.decisions[].algorithm.minimum_candidates` to the smallest pool that
+preserves the decision's intended behavior. Empty built-in assets remain
+valid, while a published Entrypoint is rejected if its concrete assignments do
+not meet the declared cardinality.
+
 ## Environment references and secrets
 
 Keep credentials outside the YAML file:

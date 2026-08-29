@@ -32,6 +32,13 @@ func (r *OpenAIRouter) SelectModelForEval(
 		eligibleDecision.ModelRefs = eligibleModelRefs
 		decision = &eligibleDecision
 	}
+	if err := validateMinimumEligibleDecisionModels(
+		decision,
+		eligibleModelRefs,
+		input.ContextTokenCount,
+	); err != nil {
+		return evalSelectionUnavailable(err.Error())
+	}
 	algorithmType := evalAlgorithmType(decision)
 	if selectionResult, resolved := r.evalSelectionBeforeDryRun(decision, algorithmType); resolved {
 		return selectionResult

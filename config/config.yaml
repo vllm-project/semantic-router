@@ -777,6 +777,7 @@ routing:
           weight: 0.6
       algorithm:
         type: confidence
+        minimum_candidates: 2
         on_error: fallback
         confidence:
           confidence_method: hybrid

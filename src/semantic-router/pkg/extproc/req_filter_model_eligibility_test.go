@@ -91,6 +91,67 @@ func TestSelectDecisionRuntimeModelFiltersKnownInsufficientWindowBeforeSelection
 	assertModelRefs(t, ctx.VSREligibleModelRefs, []string{"large"})
 }
 
+func TestSelectDecisionRuntimeModelPreservesMinimumCandidateContract(t *testing.T) {
+	decisionConfig := &config.Decision{
+		Name:      "quorum-context-models",
+		ModelRefs: []config.ModelRef{{Model: "small"}, {Model: "large"}},
+		Algorithm: &config.AlgorithmConfig{
+			Type:              config.DecisionAlgorithmFusion,
+			MinimumCandidates: 2,
+			Fusion:            &config.FusionAlgorithmConfig{},
+		},
+	}
+	router := &OpenAIRouter{Config: &config.RouterConfig{
+		BackendModels: config.BackendModels{ModelConfig: map[string]config.ModelParams{
+			"small": {ContextWindowSize: 4_096},
+			"large": {ContextWindowSize: 32_768},
+		}},
+	}}
+	ctx := &RequestContext{VSRContextTokenCount: 12_000}
+
+	_, _, err := router.selectDecisionRuntimeModel(
+		&decision.DecisionResult{Decision: decisionConfig},
+		decisionConfig.Name,
+		"long request",
+		"",
+		1,
+		ctx,
+	)
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, errNoContextEligibleDecisionModel)
+	assert.Contains(t, err.Error(), "requires at least 2 eligible candidates")
+	assertModelRefs(t, ctx.VSREligibleModelRefs, []string{"large"})
+}
+
+func TestSelectDecisionRuntimeModelRejectsUnmaterializedMinimumCandidateContract(t *testing.T) {
+	decisionConfig := &config.Decision{
+		Name: "unmaterialized-panel",
+		Algorithm: &config.AlgorithmConfig{
+			Type:              config.DecisionAlgorithmFusion,
+			MinimumCandidates: 2,
+			Fusion:            &config.FusionAlgorithmConfig{},
+		},
+	}
+	router := &OpenAIRouter{Config: &config.RouterConfig{
+		BackendModels: config.BackendModels{DefaultModel: "fallback"},
+	}}
+	ctx := &RequestContext{VSRContextTokenCount: 128}
+
+	_, _, err := router.selectDecisionRuntimeModel(
+		&decision.DecisionResult{Decision: decisionConfig},
+		decisionConfig.Name,
+		"request",
+		"",
+		1,
+		ctx,
+	)
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, errNoContextEligibleDecisionModel)
+	assert.Contains(t, err.Error(), "requires at least 2 eligible candidates")
+}
+
 func TestBuildLooperRequestUsesContextEligibleDecisionModels(t *testing.T) {
 	router := &OpenAIRouter{Config: &config.RouterConfig{}}
 	decisionConfig := &config.Decision{
@@ -99,6 +160,7 @@ func TestBuildLooperRequestUsesContextEligibleDecisionModels(t *testing.T) {
 		Algorithm: &config.AlgorithmConfig{Type: config.DecisionAlgorithmReMoM},
 	}
 	ctx := &RequestContext{
+		VSRContextTokenCount: 12_000,
 		VSREligibleModelRefs: []config.ModelRef{{Model: "large"}},
 	}
 
@@ -111,6 +173,7 @@ func TestBuildLooperRequestUsesContextEligibleDecisionModels(t *testing.T) {
 	require.Nil(t, response)
 	require.NotNil(t, request)
 	assertModelRefs(t, request.ModelRefs, []string{"large"})
+	assert.Equal(t, 12_000, request.BaseContextTokens)
 }
 
 func TestSelectDecisionRuntimeModelRejectsIneligibleExplicitLooperModel(t *testing.T) {
@@ -165,6 +228,31 @@ func TestSelectModelForEvalFiltersContextIneligibleCandidate(t *testing.T) {
 
 	assert.Equal(t, services.EvalSelectionSelected, selection.Status)
 	assert.Equal(t, "large", selection.SelectedModel)
+}
+
+func TestSelectModelForEvalPreservesMinimumCandidateContract(t *testing.T) {
+	decisionConfig := &config.Decision{
+		Name:      "eval-quorum-context-models",
+		ModelRefs: []config.ModelRef{{Model: "small"}, {Model: "large"}},
+		Algorithm: &config.AlgorithmConfig{
+			Type:              config.DecisionAlgorithmStatic,
+			MinimumCandidates: 2,
+		},
+	}
+	router := &OpenAIRouter{Config: &config.RouterConfig{
+		BackendModels: config.BackendModels{ModelConfig: map[string]config.ModelParams{
+			"small": {ContextWindowSize: 4_096},
+			"large": {ContextWindowSize: 32_768},
+		}},
+	}}
+
+	selection := router.SelectModelForEval(services.EvalModelSelectionInput{
+		Decision:          decisionConfig,
+		ContextTokenCount: 12_000,
+	})
+
+	assert.Equal(t, services.EvalSelectionUnavailable, selection.Status)
+	assert.Contains(t, selection.Reason, "requires at least 2 eligible candidates")
 }
 
 func TestRouterLearningExpansionFiltersKnownInsufficientWindows(t *testing.T) {

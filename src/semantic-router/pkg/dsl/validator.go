@@ -398,6 +398,7 @@ var constraintRules = []constraintRule{
 	{field: "port", min: &floatMinPort, max: &floatMaxPort},
 	{field: "fuzzy_threshold", min: &floatZero},
 	{field: "ngram_arity", min: &floatOne},
+	{field: "minimum_candidates", min: &floatOne},
 }
 
 func (v *Validator) checkConstraints() {

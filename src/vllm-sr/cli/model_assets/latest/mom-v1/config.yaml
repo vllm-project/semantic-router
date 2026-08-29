@@ -419,6 +419,7 @@ recipes:
         name: balance_answer_recovery_score
     decisions:
     - algorithm:
+        minimum_candidates: 1
         type: static
       description: Keep image understanding on the dedicated local visual-language model.
       name: omni
@@ -429,6 +430,34 @@ recipes:
           type: conversation
         operator: OR
     - algorithm:
+        minimum_candidates: 1
+        type: static
+      description: Preserve terminal-scale text context on a dedicated long-context model.
+      name: extended
+      priority: 450
+      rules:
+        conditions:
+        - name: balance_exceeds_240k_context
+          type: context
+        - conditions:
+          - name: balance_has_images
+            type: conversation
+          operator: NOT
+        - conditions:
+          - name: balance_active_tool_loop
+            type: conversation
+          operator: NOT
+        - conditions:
+          - conditions:
+            - name: balance_has_tools
+              type: conversation
+            - name: balance_tool_execution_required
+              type: projection
+            operator: AND
+          operator: NOT
+        operator: AND
+    - algorithm:
+        minimum_candidates: 1
         type: static
       description: Keep explicit tool execution and active tool turns on the dedicated coding model.
       name: agentic
@@ -451,8 +480,9 @@ recipes:
           operator: NOT
         operator: AND
     - algorithm:
+        minimum_candidates: 2
         type: static
-      description: Send difficult, corrective, or long text synthesis to the frontier analysis pool.
+      description: Send difficult, corrective, or bounded long-text synthesis to the frontier analysis pool.
       name: complex
       priority: 300
       rules:
@@ -468,8 +498,6 @@ recipes:
             type: context
           - name: balance_context_from_120k_to_240k
             type: context
-          - name: balance_exceeds_240k_context
-            type: context
           operator: OR
         - conditions:
           - name: balance_has_images
@@ -477,6 +505,7 @@ recipes:
           operator: NOT
         operator: AND
     - algorithm:
+        minimum_candidates: 2
         multi_factor:
           on_no_candidates: first
           weights:
@@ -485,17 +514,16 @@ recipes:
             load: 0.15
             quality: 0.45
         type: multi_factor
-      description: Balance multimodal and conversational work across fast, diverse, and frontier local models.
+      description: Balance multi-turn conversational work across fast, diverse, and frontier local models.
       name: medium
       priority: 200
       rules:
         conditions:
-        - name: balance_has_images
-          type: conversation
         - name: balance_multi_turn
           type: conversation
         operator: OR
     - algorithm:
+        minimum_candidates: 1
         multi_factor:
           on_no_candidates: first
           weights:
@@ -765,6 +793,7 @@ recipes:
         name: speed_workload_score
     decisions:
     - algorithm:
+        minimum_candidates: 1
         type: static
       description: Preserve very long text context on the remote frontier lane.
       name: extended
@@ -782,6 +811,7 @@ recipes:
         latency_aware:
           description: Minimize observed first-token latency for interactive tool traffic.
           ttft_percentile: 90
+        minimum_candidates: 1
         type: latency_aware
       description: Keep tool-driven work fast on the coding and flash specialists.
       name: tooling
@@ -808,6 +838,7 @@ recipes:
           operator: NOT
         operator: AND
     - algorithm:
+        minimum_candidates: 1
         type: static
       description: Keep visual work on the dedicated local visual-language model.
       name: omni
@@ -821,6 +852,7 @@ recipes:
         latency_aware:
           description: Minimize observed generation latency for demanding text requests.
           tpot_percentile: 90
+        minimum_candidates: 1
         type: latency_aware
       description: Use live latency telemetry for demanding text work that must still feel responsive.
       name: heavy
@@ -843,6 +875,7 @@ recipes:
           operator: NOT
         operator: AND
     - algorithm:
+        minimum_candidates: 1
         multi_factor:
           latency_percentile: 90
           on_no_candidates: first
@@ -1075,6 +1108,7 @@ recipes:
         name: cost_bounded_reasoning_need_score
     decisions:
     - algorithm:
+        minimum_candidates: 1
         type: static
       description: Preserve very long text context on the remote frontier lane.
       name: extended
@@ -1089,6 +1123,7 @@ recipes:
           operator: NOT
         operator: AND
     - algorithm:
+        minimum_candidates: 1
         type: static
       description: Keep visual work on the dedicated local visual-language model.
       name: omni
@@ -1099,6 +1134,7 @@ recipes:
           type: conversation
         operator: AND
     - algorithm:
+        minimum_candidates: 1
         multi_factor:
           on_no_candidates: first
           weights:
@@ -1120,6 +1156,7 @@ recipes:
           operator: NOT
         operator: AND
     - algorithm:
+        minimum_candidates: 1
         multi_factor:
           on_no_candidates: first
           weights:
@@ -1574,6 +1611,7 @@ recipes:
         name: accuracy_multi_round_exploration_score
     decisions:
     - algorithm:
+        minimum_candidates: 1
         type: static
       description: Route image understanding directly to the dedicated local visual-language model.
       name: omni
@@ -1587,6 +1625,7 @@ recipes:
           type: conversation
         operator: OR
     - algorithm:
+        minimum_candidates: 1
         type: static
       description: Continue the current tool turn on a stable model lane until the model produces a final answer.
       name: resume
@@ -1613,6 +1652,7 @@ recipes:
           operator: NOT
         operator: AND
     - algorithm:
+        minimum_candidates: 1
         type: static
       description: Preserve very long text context on the remote frontier lane.
       name: extended
@@ -1630,6 +1670,7 @@ recipes:
           operator: NOT
         operator: AND
     - algorithm:
+        minimum_candidates: 3
         type: workflows
         workflows:
           final: {}
@@ -1683,6 +1724,7 @@ recipes:
           min_successful_responses: 2
           on_error: skip
           round_timeout_seconds: 240
+        minimum_candidates: 3
         type: fusion
       description: Combine architecture-diverse expert views for explicit exploration and fusion requests.
       name: experts
@@ -1712,6 +1754,7 @@ recipes:
           escalation_order: declared
           on_error: skip
           threshold: 0.72
+        minimum_candidates: 2
         type: confidence
       description: Start fast and escalate across independent model families when confidence is insufficient.
       name: verify
@@ -1732,6 +1775,7 @@ recipes:
           operator: NOT
         operator: AND
     - algorithm:
+        minimum_candidates: 1
         type: static
       description: Use the strongest local multimodal model when fan-out has no explicit benefit.
       name: direct
@@ -1953,6 +1997,7 @@ recipes:
         name: vault_risk_score
     decisions:
     - algorithm:
+        minimum_candidates: 1
         type: static
       description: Keep private image understanding on the dedicated local visual-language model.
       name: omni
@@ -1984,6 +2029,7 @@ recipes:
           type: conversation
         operator: OR
     - algorithm:
+        minimum_candidates: 1
         type: static
       description: Keep private, multimodal, and long-context work on the strongest local boundary.
       name: sensitive
@@ -2031,6 +2077,7 @@ recipes:
           operator: NOT
         operator: AND
     - algorithm:
+        minimum_candidates: 1
         type: static
       description: Isolate suspicious requests on a strong local model with external actions disabled.
       name: containment
@@ -2064,6 +2111,7 @@ recipes:
           type: jailbreak
         operator: OR
     - algorithm:
+        minimum_candidates: 1
         type: static
       description: Keep tool-bearing requests local while removing every external action surface.
       name: restricted_tools
@@ -2099,6 +2147,7 @@ recipes:
           operator: NOT
         operator: AND
     - algorithm:
+        minimum_candidates: 2
         multi_factor:
           on_no_candidates: first
           weights:

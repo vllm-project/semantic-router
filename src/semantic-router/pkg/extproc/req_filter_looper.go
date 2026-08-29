@@ -172,6 +172,7 @@ func (r *OpenAIRouter) buildLooperRequest(
 			if err == nil {
 				looperReq := &looper.Request{
 					OriginalRequest:    openAIRequest,
+					BaseContextTokens:  reqCtx.VSRContextTokenCount,
 					ModelRefs:          modelRefs,
 					ModelParams:        r.getModelParams(),
 					Algorithm:          decision.Algorithm,

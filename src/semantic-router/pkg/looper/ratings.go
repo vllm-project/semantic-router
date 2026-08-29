@@ -110,8 +110,9 @@ func (l *RatingsLooper) Execute(ctx context.Context, req *Request) (*Response, e
 
 			// Use idx+1 as iteration number for concurrent requests.
 			// RatingsLooper doesn't need logprobs (no confidence-based routing).
-			resp, err := l.client.CallModel(
+			resp, err := l.callModelWithContextGate(
 				ctx,
+				req,
 				toolFreeLooperRequest(req.OriginalRequest),
 				modelName,
 				req.IsStreaming,

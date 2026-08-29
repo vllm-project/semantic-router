@@ -33,6 +33,7 @@ describe('DSL structured field schemas', () => {
 
   it('describes workflow and multi-factor structures with typed nested schemas', () => {
     const workflows = getAlgorithmFieldSchema('workflows')
+    expect(requireField(workflows, 'minimum_candidates')).toMatchObject({ type: 'number', min: 1 })
     const planner = requireField(workflows, 'planner')
     const roles = requireField(workflows, 'roles')
     const final = requireField(workflows, 'final')

@@ -1,7 +1,7 @@
 schema_version: vllm-sr/recipe-metadata/v1
 id: mom-v1
 name: vLLM-SR MoM V1
-version: 1.5.0
+version: 1.6.0
 description: >-
   Five reusable, model-free routing profiles for balanced, cost, speed,
   accuracy, privacy, and image-understanding workloads.

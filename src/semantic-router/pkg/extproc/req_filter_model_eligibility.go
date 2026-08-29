@@ -64,6 +64,36 @@ func (r *OpenAIRouter) modelRefExceedsContextWindow(ref config.ModelRef, context
 	return r.modelNameExceedsContextWindow(ref.Model, contextTokens)
 }
 
+func validateMinimumEligibleDecisionModels(
+	decision *config.Decision,
+	eligible []config.ModelRef,
+	contextTokens int,
+) error {
+	if decision == nil || decision.Algorithm == nil ||
+		decision.Algorithm.MinimumCandidates <= 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(eligible))
+	for _, ref := range eligible {
+		model := strings.TrimSpace(ref.Model)
+		if model == "" {
+			continue
+		}
+		seen[model+"\x00"+strings.TrimSpace(ref.LoRAName)] = struct{}{}
+	}
+	if len(seen) >= decision.Algorithm.MinimumCandidates {
+		return nil
+	}
+	return fmt.Errorf(
+		"%w: decision %q requires at least %d eligible candidates for %d request tokens, got %d",
+		errNoContextEligibleDecisionModel,
+		decision.Name,
+		decision.Algorithm.MinimumCandidates,
+		contextTokens,
+		len(seen),
+	)
+}
+
 func (r *OpenAIRouter) modelNameExceedsContextWindow(model string, contextTokens int) bool {
 	if r == nil || r.Config == nil || contextTokens <= 0 {
 		return false

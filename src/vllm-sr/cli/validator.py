@@ -497,6 +497,112 @@ def _maybe_hybrid_weight_error(
     return None
 
 
+def _decision_candidate_names(decision) -> set[str]:
+    return {
+        (model_ref.lora_name or model_ref.model).strip()
+        for model_ref in decision.modelRefs
+        if (model_ref.lora_name or model_ref.model).strip()
+    }
+
+
+def _algorithm_quorum_errors(
+    decision, algo, field_prefix: str = "decisions"
+) -> List[ValidationError]:
+    errors: List[ValidationError] = []
+    candidates = _decision_candidate_names(decision)
+
+    fusion_cfg = getattr(algo, "fusion", None)
+    if algo.type == "fusion" and fusion_cfg is not None:
+        minimum = fusion_cfg.min_successful_responses
+        if fusion_cfg.analysis_models:
+            panel = {
+                name.strip() for name in fusion_cfg.analysis_models if name.strip()
+            }
+        else:
+            panel = candidates
+        if minimum and panel and minimum > len(panel):
+            errors.append(
+                ValidationError(
+                    f"Decision '{decision.name}' fusion min_successful_responses={minimum} "
+                    f"exceeds panel size {len(panel)}",
+                    field=f"{field_prefix}.{decision.name}.algorithm.fusion.min_successful_responses",
+                )
+            )
+
+    workflows_cfg = getattr(algo, "workflows", None)
+    if algo.type != "workflows" or workflows_cfg is None:
+        return errors
+    minimum = workflows_cfg.min_successful_responses
+    if not minimum:
+        return errors
+    max_parallel = workflows_cfg.max_parallel or 2
+    if minimum > max_parallel:
+        errors.append(
+            ValidationError(
+                f"Decision '{decision.name}' workflows min_successful_responses={minimum} "
+                f"exceeds max_parallel={max_parallel}",
+                field=f"{field_prefix}.{decision.name}.algorithm.workflows.min_successful_responses",
+            )
+        )
+    mode = workflows_cfg.mode or "static"
+    if mode == "dynamic" and candidates and minimum > len(candidates):
+        errors.append(
+            ValidationError(
+                f"Decision '{decision.name}' workflows min_successful_responses={minimum} "
+                f"exceeds worker pool size {len(candidates)}",
+                field=f"{field_prefix}.{decision.name}.algorithm.workflows.min_successful_responses",
+            )
+        )
+    if mode == "static":
+        for role_index, role in enumerate(workflows_cfg.roles or []):
+            models = {name.strip() for name in role.models if name.strip()}
+            if minimum > len(models):
+                errors.append(
+                    ValidationError(
+                        f"Decision '{decision.name}' workflows min_successful_responses={minimum} "
+                        f"exceeds role '{role.name}' model count {len(models)}",
+                        field=(
+                            f"{field_prefix}.{decision.name}.algorithm.workflows."
+                            f"roles.{role_index}.models"
+                        ),
+                    )
+                )
+    return errors
+
+
+def _workflow_configuration_errors(
+    decision, algo, field_prefix: str = "decisions"
+) -> List[ValidationError]:
+    workflows_cfg = getattr(algo, "workflows", None)
+    if algo.type != "workflows" or workflows_cfg is None:
+        return []
+
+    errors: List[ValidationError] = []
+    mode = workflows_cfg.mode or "static"
+    planner = workflows_cfg.planner
+    planner_model = getattr(planner, "model", None) if planner is not None else None
+    if mode == "dynamic" and not planner_model:
+        errors.append(
+            ValidationError(
+                f"Decision '{decision.name}' uses workflows mode=dynamic but does not set planner.model",
+                field=f"{field_prefix}.{decision.name}.algorithm.workflows.planner.model",
+            )
+        )
+    if mode == "dynamic" and workflows_cfg.roles:
+        errors.append(
+            ValidationError(
+                f"Decision '{decision.name}' uses workflows mode=dynamic but also sets static roles",
+                field=f"{field_prefix}.{decision.name}.algorithm.workflows.roles",
+            )
+        )
+    errors.extend(validate_workflow_final_model(decision, workflows_cfg, field_prefix))
+    if mode == "static":
+        errors.extend(
+            validate_static_workflow_roles(decision, workflows_cfg, field_prefix)
+        )
+    return errors
+
+
 def validate_algorithm_configurations(config: UserConfig) -> List[ValidationError]:
     """
     Validate algorithm configurations in decisions.
@@ -533,6 +639,8 @@ def validate_algorithm_configurations(config: UserConfig) -> List[ValidationErro
             continue
 
         errors.extend(_router_dc_missing_description_errors(decision, algo, config))
+        errors.extend(_algorithm_quorum_errors(decision, algo, field_prefix))
+        errors.extend(_workflow_configuration_errors(decision, algo, field_prefix))
 
         hybrid_err = _maybe_hybrid_weight_error(
             decision.name,
@@ -542,43 +650,6 @@ def validate_algorithm_configurations(config: UserConfig) -> List[ValidationErro
         )
         if hybrid_err is not None:
             errors.append(hybrid_err)
-
-        workflows_cfg = getattr(algo, "workflows", None)
-        if algo_type == "workflows" and workflows_cfg is not None:
-            mode = workflows_cfg.mode or "static"
-            planner = workflows_cfg.planner
-            planner_model = (
-                getattr(planner, "model", None) if planner is not None else None
-            )
-            if mode == "dynamic" and not planner_model:
-                errors.append(
-                    ValidationError(
-                        f"Decision '{decision.name}' uses workflows mode=dynamic but does not set planner.model",
-                        field=f"{field_prefix}.{decision.name}.algorithm.workflows.planner.model",
-                    )
-                )
-            if mode == "dynamic" and workflows_cfg.roles:
-                errors.append(
-                    ValidationError(
-                        f"Decision '{decision.name}' uses workflows mode=dynamic but also sets static roles",
-                        field=f"{field_prefix}.{decision.name}.algorithm.workflows.roles",
-                    )
-                )
-            errors.extend(
-                validate_workflow_final_model(
-                    decision,
-                    workflows_cfg,
-                    field_prefix,
-                )
-            )
-            if mode == "static":
-                errors.extend(
-                    validate_static_workflow_roles(
-                        decision,
-                        workflows_cfg,
-                        field_prefix,
-                    )
-                )
 
         remom_cfg = getattr(algo, "remom", None)
         if (

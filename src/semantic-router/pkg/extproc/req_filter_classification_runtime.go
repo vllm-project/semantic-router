@@ -300,23 +300,7 @@ func (r *OpenAIRouter) selectDecisionRuntimeModel(
 		)
 	}
 	if len(result.Decision.ModelRefs) == 0 {
-		selectedModel := r.Config.DefaultModel
-		if r.modelNameExceedsContextWindow(selectedModel, ctx.VSRContextTokenCount) {
-			return "", entropy.ReasoningDecision{}, fmt.Errorf(
-				"%w: decision %q requires %d request tokens but the configured default model has a smaller context window",
-				errNoContextEligibleDecisionModel,
-				decisionName,
-				ctx.VSRContextTokenCount,
-			)
-		}
-		ctx.VSRSelectedModel = selectedModel
-		ctx.VSRSelectionMethod = "default"
-		logging.ComponentDebugEvent("extproc", "decision_model_defaulted", map[string]interface{}{
-			"request_id":     ctx.RequestID,
-			"decision":       decisionName,
-			"selected_model": selectedModel,
-		})
-		return selectedModel, entropy.ReasoningDecision{}, nil
+		return r.selectDecisionDefaultRuntimeModel(result.Decision, decisionName, ctx)
 	}
 
 	eligibleModelRefs, err := r.contextEligibleDecisionModelRefs(
@@ -327,6 +311,13 @@ func (r *OpenAIRouter) selectDecisionRuntimeModel(
 	)
 	if err != nil {
 		return "", entropy.ReasoningDecision{}, err
+	}
+	if minimumErr := validateMinimumEligibleDecisionModels(
+		result.Decision,
+		eligibleModelRefs,
+		ctx.VSRContextTokenCount,
+	); minimumErr != nil {
+		return "", entropy.ReasoningDecision{}, minimumErr
 	}
 
 	selCtx := r.buildSelectionContext(
