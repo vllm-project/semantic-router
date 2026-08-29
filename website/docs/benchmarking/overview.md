@@ -13,6 +13,7 @@ implementations. Their results are not directly comparable.
 
 | Question | Suite | Starting point |
 |----------|-------|----------------|
+| Is a routing recipe, model pool, or combined candidate better than a frozen baseline? | Evaluation Plane | [Evaluation Plane](evaluation-plane) |
 | Did a code change increase allocations or component latency? | Go microbenchmarks in `perf/` | `make perf-check` |
 | Does routing preserve answer quality on reasoning datasets? | Reasoning evaluation in `bench/` | `vllm-semantic-router-bench compare --dataset arc-challenge` |
 | Does a session-aware route remain stable across turns or faults? | Live agentic routing | `bench/agentic_routing_live_benchmark.py` |
@@ -60,6 +61,11 @@ See the repository's
 for baseline and profiling details.
 
 ## End-to-end evaluation
+
+Use the [Evaluation Plane](evaluation-plane) when the claim spans routing,
+model-pool composition, live generation, agentic or multimodal behavior,
+preference, safety, or capacity. It creates one versioned evidence bundle and
+keeps component, system, and production evidence levels separate.
 
 Install the benchmark package from the repository:
 

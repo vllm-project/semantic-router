@@ -35,6 +35,8 @@ var BaselineRouterContract = []string{
 	"looper-latency-token-headers",
 	// Entrypoint virtual names select routing recipes (issue #2331)
 	"entrypoint-recipe-routing",
+	// json_schema response_format survives auto-routing model rewrite (issue #3024)
+	"chat-completions-structured-output",
 	// Session observability
 	"session-telemetry-metrics",
 	"session-pricing-chat-completions",
@@ -51,8 +53,8 @@ var DashboardContract = []string{
 	"dashboard-deploy-preview",
 	"dashboard-config-versions",
 	"dashboard-deploy-invalid-yaml",
-	// Evaluation endpoints (tasks/CRUD require CGO — only datasets works without it)
-	"dashboard-eval-datasets",
+	// Evaluation Plane lifecycle, evidence, report, comparison, and cancellation.
+	"dashboard-evaluation-plane",
 	// Workflow persistence survives dashboard pod restart (requires dashboard PVC)
 	"dashboard-restart-recovery",
 }
