@@ -94,7 +94,7 @@ func decompileRuleNode(node *config.RuleCombination) string {
 		return decompileRuleLeaf(node)
 	}
 
-	switch node.Operator {
+	switch normalizedRuleOperator(node.Operator) {
 	case "AND":
 		// Flatten nested ANDs into a flat list: a AND b AND c
 		parts := flattenRuleNode(node, "AND")
@@ -147,7 +147,7 @@ func decompileRuleFallback(node *config.RuleCombination) string {
 }
 
 func flattenRuleNode(node *config.RuleCombination, op string) []string {
-	if node.Operator == op {
+	if normalizedRuleOperator(node.Operator) == op {
 		var parts []string
 		for i := range node.Conditions {
 			parts = append(parts, flattenRuleNode(&node.Conditions[i], op)...)
@@ -188,7 +188,7 @@ func decompileComposerObj(node *config.RuleCombination) string {
 	for i := range node.Conditions {
 		parts = append(parts, decompileComposerObj(&node.Conditions[i]))
 	}
-	return fmt.Sprintf("{ operator: %q, conditions: [%s] }", node.Operator, strings.Join(parts, ", "))
+	return fmt.Sprintf("{ operator: %q, conditions: [%s] }", normalizedRuleOperator(node.Operator), strings.Join(parts, ", "))
 }
 
 func (d *decompiler) decompileDecisions() {
