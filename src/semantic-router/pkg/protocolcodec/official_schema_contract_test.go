@@ -1319,13 +1319,13 @@ func anthropicMediaRequest(blockType string, source map[string]any) ([]byte, err
 	})
 }
 
-func TestOfficialAdditionalToolsCacheBreakpointIsExplicitlyUnsupported(t *testing.T) {
+func TestRemovedResponsesItemCacheBreakpointFailsClosed(t *testing.T) {
 	engine := NewBuiltinEngine()
-	body := []byte(`{"model":"m","input":[{"type":"additional_tools","id":"item_1","role":"assistant","tools":[],"prompt_cache_breakpoint":{"mode":"explicit"}}]}`)
+	body := []byte(`{"model":"m","input":[{"type":"function_call","id":"item_1","call_id":"call_1","name":"lookup","arguments":"{}","prompt_cache_breakpoint":{"mode":"explicit"}}]}`)
 	_, _, _, err := engine.DecodeRequest(llmprotocol.OpenAIResponsesV1, body)
 	var protocolError *llmprotocol.ProtocolError
-	if !errors.As(err, &protocolError) || protocolError.Category != llmprotocol.ErrorUnsupportedFeature {
-		t.Fatalf("additional_tools cache breakpoint returned %T %v, want typed unsupported_feature", err, err)
+	if !errors.As(err, &protocolError) || protocolError.Category != llmprotocol.ErrorInvalidRequest {
+		t.Fatalf("removed Responses item cache breakpoint returned %T %v, want typed invalid_request", err, err)
 	}
 }
 

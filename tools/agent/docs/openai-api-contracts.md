@@ -309,7 +309,7 @@ the same change. Closing an issue does not permit deleting its regression.
 
 Authoritative upstream contracts used by the current inventory:
 
-- OpenAI OpenAPI at `6c8481caaefded47a5348a031f8e16c7b89de045`:
+- OpenAI OpenAPI at `690521b1753dce0c6d6b275f583d22537679cff9`:
   <https://github.com/openai/openai-openapi>
 - Anthropic Go SDK generated API types at
   `d19dea9ed85bbb5fdb2d6f20fb6f903920ed23fa`:

@@ -70,6 +70,11 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 		addRouterReplayHeaderToImmediateResponse(resp, ctx.RouterReplayID)
 		return requestDecisionState{}, resp
 	}
+	if resp := r.applyRateLimit(ctx, selectedModel); resp != nil {
+		inflight.End(selectedModel, ctx.InflightToken)
+		ctx.InflightToken = 0
+		return requestDecisionState{}, resp
+	}
 	if resp := r.applyCacheChecks(ctx, selectedModel, decisionName); resp != nil {
 		inflight.End(selectedModel, ctx.InflightToken)
 		ctx.InflightToken = 0

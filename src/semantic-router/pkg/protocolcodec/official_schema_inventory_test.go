@@ -7,7 +7,7 @@ import (
 )
 
 // These inventories are the top-level request fields published by the
-// OpenAI OpenAPI contract at 6c8481caaefded47a5348a031f8e16c7b89de045 and the
+// OpenAI OpenAPI contract at 690521b1753dce0c6d6b275f583d22537679cff9 and the
 // generated Anthropic Messages API types at
 // d19dea9ed85bbb5fdb2d6f20fb6f903920ed23fa.
 // Every field is either represented semantically or decoded into an explicit

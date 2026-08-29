@@ -245,10 +245,7 @@
             "name": "lookup",
             "namespace": "weather",
             "caller": "model",
-            "arguments": "{\"q\":\"weather\"}",
-            "prompt_cache_breakpoint": {
-              "mode": "explicit"
-            }
+            "arguments": "{\"q\":\"weather\"}"
           },
           {
             "type": "function_call_output",

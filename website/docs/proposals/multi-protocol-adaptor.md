@@ -93,7 +93,7 @@ that is intentionally omitted from the client representation.
 The schema contract is pinned to published upstream revisions. Tests close every
 top-level field, nested object field, and published union discriminator against an
 explicit semantic, transport-only, extension, or unsupported disposition. The
-current pins are OpenAI OpenAPI `6c8481caaefded47a5348a031f8e16c7b89de045`
+current pins are OpenAI OpenAPI `690521b1753dce0c6d6b275f583d22537679cff9`
 and Anthropic SDK `d19dea9ed85bbb5fdb2d6f20fb6f903920ed23fa`.
 
 Human-readable fixtures use a stable input/output convention:

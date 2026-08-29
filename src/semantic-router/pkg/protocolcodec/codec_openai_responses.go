@@ -99,21 +99,20 @@ type responsesToolWire struct {
 }
 
 type responsesItemWire struct {
-	Type                  string          `json:"type"`
-	ID                    string          `json:"id,omitempty"`
-	Role                  string          `json:"role,omitempty"`
-	Status                string          `json:"status,omitempty"`
-	Content               json.RawMessage `json:"content,omitempty"`
-	Name                  string          `json:"name,omitempty"`
-	CallID                string          `json:"call_id,omitempty"`
-	Caller                json.RawMessage `json:"caller,omitempty"`
-	Namespace             string          `json:"namespace,omitempty"`
-	Arguments             string          `json:"arguments,omitempty"`
-	Output                json.RawMessage `json:"output,omitempty"`
-	Summary               json.RawMessage `json:"summary,omitempty"`
-	Phase                 json.RawMessage `json:"phase,omitempty"`
-	EncryptedContent      json.RawMessage `json:"encrypted_content,omitempty"`
-	PromptCacheBreakpoint json.RawMessage `json:"prompt_cache_breakpoint,omitempty"`
+	Type             string          `json:"type"`
+	ID               string          `json:"id,omitempty"`
+	Role             string          `json:"role,omitempty"`
+	Status           string          `json:"status,omitempty"`
+	Content          json.RawMessage `json:"content,omitempty"`
+	Name             string          `json:"name,omitempty"`
+	CallID           string          `json:"call_id,omitempty"`
+	Caller           json.RawMessage `json:"caller,omitempty"`
+	Namespace        string          `json:"namespace,omitempty"`
+	Arguments        string          `json:"arguments,omitempty"`
+	Output           json.RawMessage `json:"output,omitempty"`
+	Summary          json.RawMessage `json:"summary,omitempty"`
+	Phase            json.RawMessage `json:"phase,omitempty"`
+	EncryptedContent json.RawMessage `json:"encrypted_content,omitempty"`
 }
 
 func (wire responsesItemWire) MarshalJSON() ([]byte, error) {
@@ -398,7 +397,7 @@ func decodeResponsesInput(raw json.RawMessage, request *llmprotocol.Request, pol
 
 var responsesItemUnionFields = []string{
 	"arguments", "call_id", "caller", "content", "encrypted_content", "id", "name", "namespace",
-	"output", "phase", "prompt_cache_breakpoint", "role", "status", "summary", "type",
+	"output", "phase", "role", "status", "summary", "type",
 }
 
 func decodeResponsesItemWire(body json.RawMessage, policy llmprotocol.Policy, providerOutput bool) (responsesItemWire, error) {
@@ -511,10 +510,9 @@ func decodeResponsesInputItem(
 	policy llmprotocol.Policy,
 ) error {
 	if err := rejectUnsupportedRequestFields(map[string]json.RawMessage{
-		"input.caller":                  item.Caller,
-		"input.encrypted_content":       item.EncryptedContent,
-		"input.phase":                   item.Phase,
-		"input.prompt_cache_breakpoint": item.PromptCacheBreakpoint,
+		"input.caller":            item.Caller,
+		"input.encrypted_content": item.EncryptedContent,
+		"input.phase":             item.Phase,
 	}); err != nil {
 		return err
 	}

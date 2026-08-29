@@ -244,8 +244,8 @@ func collectGoldenDiscriminatorEvidence(t *testing.T) map[string]struct{} {
 // deliberate public-contract decision.
 func TestOfficialNestedJSONInventoriesAreClosed(t *testing.T) {
 	expectedRevisions := map[string]string{
-		"openai_chat_completions": "6c8481caaefded47a5348a031f8e16c7b89de045",
-		"openai_responses":        "6c8481caaefded47a5348a031f8e16c7b89de045",
+		"openai_chat_completions": "690521b1753dce0c6d6b275f583d22537679cff9",
+		"openai_responses":        "690521b1753dce0c6d6b275f583d22537679cff9",
 		"anthropic_messages":      "d19dea9ed85bbb5fdb2d6f20fb6f903920ed23fa",
 	}
 	wires := map[string]reflect.Type{
