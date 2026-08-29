@@ -14,7 +14,7 @@ endpoints may also expose tools, memory, domain knowledge, state, permissions, a
 a task contract. Treating both as the same opaque backend loses information needed
 for safe selection, handoff, and collaboration.
 
-The [Agent Routing recipe](../../../config/recipes/agent/README.md) routes agentic
+The [Agent Routing recipe](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/agent/README.md) routes agentic
 **workloads to model lanes**. [Router Flow](./router-flow-workflows) orchestrates
 bounded multi-**model** workflows. Neither provides a typed **agent backend**
 contract, agent-aware selection, or router-native agent composition.
@@ -219,5 +219,5 @@ composition. It does **not**:
 - [Router Flow Workflows](./router-flow-workflows)
 - [Model Execution Fallback](./model-execution-fallback)
 - [Unified Config Contract v0.3](./unified-config-contract-v0-3)
-- [Agent Routing recipe](../../../config/recipes/agent/README.md)
+- [Agent Routing recipe](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/agent/README.md)
 - [Trusted gateway context envelope #2546](https://github.com/vllm-project/semantic-router/issues/2546)
