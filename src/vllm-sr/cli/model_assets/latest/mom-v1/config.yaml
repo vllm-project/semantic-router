@@ -53,6 +53,12 @@ recipes:
         name: balance_has_tools
         predicate:
           gte: 1
+      - description: Request is actively continuing a client-owned tool loop.
+        feature:
+          source:
+            type: active_tool_loop
+          type: exists
+        name: balance_active_tool_loop
       - description: Multi-turn conversations benefit from a small synthesis allowance.
         feature:
           source:
@@ -63,6 +69,24 @@ recipes:
         predicate:
           gte: 2
       keywords:
+      - case_sensitive: false
+        keywords:
+        - \b(use|using|call|invoke|run)\b.{0,48}\b(tool|function)\b
+        - \b(use|using|call|invoke|run)\b.{0,48}\b(calculator|browser|search|lookup|retriever|api|database)\b
+        - \b(search|look up|fetch|query)\b.{0,48}\b(tool|function|integration)\b
+        - (使用|调用|运行).{0,24}(工具|函数)
+        - (usar|llamar|invocar).{0,48}(herramienta|función)
+        - (utiliser|appeler|invoquer).{0,48}(outil|fonction)
+        - (ツール|関数).{0,24}(使用|呼び出)
+        - (werkzeug|funktion).{0,48}(verwenden|aufrufen)
+        - (usar|chamar|invocar).{0,48}(ferramenta|função)
+        - (도구|함수).{0,24}(사용|호출)
+        - (استخدم|استدع).{0,32}(الأداة|الدالة)
+        - (टूल|फ़ंक्शन).{0,32}(उपयोग|कॉल)
+        - (используй|вызови).{0,48}(инструмент|функци)
+        method: regex
+        name: balance_tool_execution_phrases
+        operator: OR
       - case_sensitive: false
         keywords:
         - quick answer
@@ -373,29 +397,19 @@ recipes:
         operator: OR
     - algorithm:
         type: static
-      description: Keep tool-driven and constrained coding work on the dedicated coding model.
+      description: Keep explicit tool execution and active tool turns on the dedicated coding model.
       name: agentic
       priority: 400
       rules:
         conditions:
         - conditions:
-          - name: balance_has_tools
+          - name: balance_active_tool_loop
             type: conversation
           - conditions:
-            - name: balance_constraint_dense
-              type: structure
-            - conditions:
-              - conditions:
-                - name: balance_context_from_30k_to_60k
-                  type: context
-                - name: balance_context_from_60k_to_120k
-                  type: context
-                - name: balance_context_from_120k_to_240k
-                  type: context
-                - name: balance_exceeds_240k_context
-                  type: context
-                operator: OR
-              operator: NOT
+            - name: balance_has_tools
+              type: conversation
+            - name: balance_tool_execution_phrases
+              type: keyword
             operator: AND
           operator: OR
         - conditions:
@@ -426,10 +440,6 @@ recipes:
           operator: OR
         - conditions:
           - name: balance_has_images
-            type: conversation
-          operator: NOT
-        - conditions:
-          - name: balance_has_tools
             type: conversation
           operator: NOT
         operator: AND
@@ -516,6 +526,12 @@ recipes:
         name: speed_has_tools
         predicate:
           gte: 1
+      - description: Request is actively continuing a client-owned tool loop.
+        feature:
+          source:
+            type: active_tool_loop
+          type: exists
+        name: speed_active_tool_loop
       embeddings:
       - aggregation_method: max
         candidates:
@@ -533,6 +549,24 @@ recipes:
         name: speed_heavy_intent
         threshold: 0.77
       keywords:
+      - case_sensitive: false
+        keywords:
+        - \b(use|using|call|invoke|run)\b.{0,48}\b(tool|function)\b
+        - \b(use|using|call|invoke|run)\b.{0,48}\b(calculator|browser|search|lookup|retriever|api|database)\b
+        - \b(search|look up|fetch|query)\b.{0,48}\b(tool|function|integration)\b
+        - (使用|调用|运行).{0,24}(工具|函数)
+        - (usar|llamar|invocar).{0,48}(herramienta|función)
+        - (utiliser|appeler|invoquer).{0,48}(outil|fonction)
+        - (ツール|関数).{0,24}(使用|呼び出)
+        - (werkzeug|funktion).{0,48}(verwenden|aufrufen)
+        - (usar|chamar|invocar).{0,48}(ferramenta|função)
+        - (도구|함수).{0,24}(사용|호출)
+        - (استخدم|استدع).{0,32}(الأداة|الدالة)
+        - (टूल|फ़ंक्शन).{0,32}(उपयोग|कॉल)
+        - (используй|вызови).{0,48}(инструмент|функци)
+        method: regex
+        name: speed_tool_execution_phrases
+        operator: OR
       - case_sensitive: false
         keywords:
         - deep analysis
@@ -680,8 +714,7 @@ recipes:
         operator: AND
     - algorithm:
         latency_aware:
-          description: Minimize observed first-token and generation latency for tool traffic.
-          tpot_percentile: 90
+          description: Minimize observed first-token latency for interactive tool traffic.
           ttft_percentile: 90
         type: latency_aware
       description: Keep tool-driven work fast on the coding and flash specialists.
@@ -689,8 +722,16 @@ recipes:
       priority: 400
       rules:
         conditions:
-        - name: speed_has_tools
-          type: conversation
+        - conditions:
+          - name: speed_active_tool_loop
+            type: conversation
+          - conditions:
+            - name: speed_has_tools
+              type: conversation
+            - name: speed_tool_execution_phrases
+              type: keyword
+            operator: AND
+          operator: OR
         - conditions:
           - name: speed_has_images
             type: conversation
@@ -712,9 +753,8 @@ recipes:
         operator: OR
     - algorithm:
         latency_aware:
-          description: Minimize observed first-token and generation latency for demanding text requests.
+          description: Minimize observed generation latency for demanding text requests.
           tpot_percentile: 90
-          ttft_percentile: 90
         type: latency_aware
       description: Use live latency telemetry for demanding text work that must still feel responsive.
       name: heavy
@@ -733,10 +773,6 @@ recipes:
           operator: OR
         - conditions:
           - name: speed_has_images
-            type: conversation
-          operator: NOT
-        - conditions:
-          - name: speed_has_tools
             type: conversation
           operator: NOT
         operator: AND
@@ -1010,16 +1046,8 @@ recipes:
       priority: 200
       rules:
         conditions:
-        - conditions:
-          - name: cost_requires_bounded_reasoning
-            type: projection
-          - name: cost_context_from_30k_to_60k
-            type: context
-          - name: cost_context_from_60k_to_120k
-            type: context
-          - name: cost_context_from_120k_to_240k
-            type: context
-          operator: OR
+        - name: cost_requires_bounded_reasoning
+          type: projection
         - conditions:
           - name: cost_reasoning_opt_out_phrases
             type: keyword
@@ -1092,6 +1120,12 @@ recipes:
             type: active_tool_loop
           type: exists
         name: accuracy_active_tool_loop
+      - description: Detect a trailing Router Flow tool result carrying resumable workflow state.
+        feature:
+          source:
+            type: flow_tool_state
+          type: exists
+        name: accuracy_flow_tool_state
       - description: Detect at least one completed client tool result that can be synthesized.
         feature:
           source:
@@ -1463,46 +1497,13 @@ recipes:
           weight: 0.1
         - name: accuracy_complexity:hard
           type: complexity
-          weight: 0.35
+          weight: 0.2
         - name: accuracy_complexity:easy
           type: complexity
           weight: -0.1
         - name: accuracy_direct_reference
           type: structure
           weight: -1.2
-        - name: en
-          type: language
-          weight: 0.02
-        - name: zh
-          type: language
-          weight: 0.02
-        - name: es
-          type: language
-          weight: 0.02
-        - name: fr
-          type: language
-          weight: 0.02
-        - name: ja
-          type: language
-          weight: 0.02
-        - name: de
-          type: language
-          weight: 0.02
-        - name: pt
-          type: language
-          weight: 0.02
-        - name: ko
-          type: language
-          weight: 0.02
-        - name: ar
-          type: language
-          weight: 0.02
-        - name: hi
-          type: language
-          weight: 0.02
-        - name: ru
-          type: language
-          weight: 0.02
         method: weighted_sum
         name: accuracy_multi_round_exploration_score
     decisions:
@@ -1510,6 +1511,9 @@ recipes:
         type: static
       description: Route image understanding directly to the dedicated local visual-language model.
       name: omni
+      adaptations:
+        adaptation:
+          candidate_set: decision
       priority: 590
       rules:
         conditions:
@@ -1520,24 +1524,36 @@ recipes:
         type: static
       description: Continue the current tool turn on a stable model lane until the model produces a final answer.
       name: resume
+      adaptations:
+        adaptation:
+          mode: bypass
+        protection:
+          mode: apply
       plugins:
       - configuration:
           enabled: true
           mode: passthrough
         type: tools
-      priority: 600
+      priority: 800
       rules:
         conditions:
         - name: accuracy_active_tool_loop
           type: conversation
         - name: accuracy_has_tool_result
           type: conversation
+        - conditions:
+          - name: accuracy_flow_tool_state
+            type: conversation
+          operator: NOT
         operator: AND
     - algorithm:
         type: static
       description: Preserve very long text context on the remote frontier lane.
       name: extended
-      priority: 550
+      adaptations:
+        adaptation:
+          candidate_set: decision
+      priority: 700
       rules:
         conditions:
         - name: accuracy_exceeds_240k_context
@@ -1562,26 +1578,34 @@ recipes:
             max_completion_tokens: 2048
           round_timeout_seconds: 180
           template: micro_agent
-      description: Plan and execute explicit multi-stage work across coding, analysis, and synthesis specialists.
+      description: Resume Flow-managed work or plan an explicitly requested multi-stage workflow across specialists.
       name: orchestrate
-      priority: 500
+      adaptations:
+        mode: bypass
+      priority: 650
       rules:
         conditions:
-        - name: accuracy_requires_dynamic_workflow
-          type: projection
         - conditions:
-          - name: accuracy_active_tool_loop
+          - name: accuracy_flow_tool_state
             type: conversation
-          operator: NOT
-        - conditions:
-          - name: accuracy_has_images
-            type: conversation
-          operator: NOT
-        - conditions:
-          - name: accuracy_workflow_request_phrases
-            type: keyword
-          - name: accuracy_ordered_workflow
-            type: structure
+          - conditions:
+            - name: accuracy_requires_dynamic_workflow
+              type: projection
+            - conditions:
+              - name: accuracy_active_tool_loop
+                type: conversation
+              operator: NOT
+            - conditions:
+              - name: accuracy_has_images
+                type: conversation
+              operator: NOT
+            - conditions:
+              - name: accuracy_workflow_request_phrases
+                type: keyword
+              - name: accuracy_ordered_workflow
+                type: structure
+              operator: OR
+            operator: AND
           operator: OR
         operator: AND
     - algorithm:
@@ -1596,6 +1620,8 @@ recipes:
         type: fusion
       description: Combine architecture-diverse expert views for explicit exploration and fusion requests.
       name: experts
+      adaptations:
+        mode: bypass
       priority: 450
       rules:
         conditions:
@@ -1623,17 +1649,13 @@ recipes:
         type: confidence
       description: Start fast and escalate across independent model families when confidence is insufficient.
       name: verify
+      adaptations:
+        mode: bypass
       priority: 300
       rules:
         conditions:
-        - conditions:
-          - name: accuracy_requires_confidence_escalation
-            type: projection
-          - name: accuracy_at_least_16k_context
-            type: context
-          - name: accuracy_direct_reference
-            type: structure
-          operator: OR
+        - name: accuracy_requires_confidence_escalation
+          type: projection
         - conditions:
           - name: accuracy_active_tool_loop
             type: conversation
@@ -1647,6 +1669,9 @@ recipes:
         type: static
       description: Use the strongest local multimodal model when fan-out has no explicit benefit.
       name: direct
+      adaptations:
+        adaptation:
+          candidate_set: decision
       priority: 10
     strategy: priority
 - name: vault
@@ -1702,6 +1727,11 @@ recipes:
         method: contrastive
         name: vault_detects_jailbreak
         threshold: 0.1
+      pii:
+      - description: Detect personally identifiable information across the active conversation and keep it inside the private boundary.
+        include_history: true
+        name: vault_detects_pii
+        threshold: 0.7
       kb:
       - kb: privacy_kb
         match: threshold
@@ -1839,10 +1869,9 @@ recipes:
           type: keyword
           value_source: confidence
           weight: 0.75
-        - name: vault_public_information_phrases
-          type: keyword
-          value_source: confidence
-          weight: -0.5
+        - name: vault_detects_pii
+          type: pii
+          weight: 0.9
         - name: vault_detects_jailbreak
           type: jailbreak
           weight: 0.9
@@ -1861,6 +1890,8 @@ recipes:
         type: static
       description: Keep private image understanding on the dedicated local visual-language model.
       name: omni
+      adaptations:
+        mode: bypass
       plugins:
       - configuration:
           enabled: true
@@ -1869,7 +1900,17 @@ recipes:
         type: tools
       - configuration:
           enabled: false
+        type: memory
+      - configuration:
+          enabled: false
+        type: response_cache
+      - configuration:
+          enabled: false
         type: router_replay
+      emits:
+      - kind: retention
+        retention:
+          drop: true
       priority: 550
       rules:
         conditions:
@@ -1880,6 +1921,8 @@ recipes:
         type: static
       description: Keep private, multimodal, and long-context work on the strongest local boundary.
       name: sensitive
+      adaptations:
+        mode: bypass
       plugins:
       - configuration:
           enabled: true
@@ -1888,7 +1931,17 @@ recipes:
         type: tools
       - configuration:
           enabled: false
+        type: memory
+      - configuration:
+          enabled: false
+        type: response_cache
+      - configuration:
+          enabled: false
         type: router_replay
+      emits:
+      - kind: retention
+        retention:
+          drop: true
       priority: 500
       rules:
         conditions:
@@ -1915,6 +1968,8 @@ recipes:
         type: static
       description: Isolate suspicious requests on a strong local model with external actions disabled.
       name: containment
+      adaptations:
+        mode: bypass
       plugins:
       - configuration:
           enabled: true
@@ -1923,7 +1978,17 @@ recipes:
         type: tools
       - configuration:
           enabled: false
+        type: memory
+      - configuration:
+          enabled: false
+        type: response_cache
+      - configuration:
+          enabled: false
         type: router_replay
+      emits:
+      - kind: retention
+        retention:
+          drop: true
       priority: 700
       rules:
         conditions:
@@ -1936,6 +2001,8 @@ recipes:
         type: static
       description: Keep tool-bearing requests local while removing every external action surface.
       name: restricted_tools
+      adaptations:
+        mode: bypass
       plugins:
       - configuration:
           enabled: true
@@ -1944,7 +2011,17 @@ recipes:
         type: tools
       - configuration:
           enabled: false
+        type: memory
+      - configuration:
+          enabled: false
+        type: response_cache
+      - configuration:
+          enabled: false
         type: router_replay
+      emits:
+      - kind: retention
+        retention:
+          drop: true
       priority: 600
       rules:
         conditions:
@@ -1966,6 +2043,8 @@ recipes:
         type: multi_factor
       description: Fail closed to a local multimodal pool with external actions disabled.
       name: private
+      adaptations:
+        mode: bypass
       plugins:
       - configuration:
           enabled: true
@@ -1974,6 +2053,16 @@ recipes:
         type: tools
       - configuration:
           enabled: false
+        type: memory
+      - configuration:
+          enabled: false
+        type: response_cache
+      - configuration:
+          enabled: false
         type: router_replay
+      emits:
+      - kind: retention
+        retention:
+          drop: true
       priority: 10
     strategy: priority

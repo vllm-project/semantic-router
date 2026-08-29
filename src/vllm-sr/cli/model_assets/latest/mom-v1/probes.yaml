@@ -199,6 +199,8 @@ decisions:
     - positive
     - demo
     expected_signals:
+      keywords:
+      - balance_tool_execution_phrases
       conversation:
       - balance_has_tools
   - id: balance_tools__lookup_status_zh
@@ -235,13 +237,54 @@ decisions:
       - balance_deliberate_request_phrases
       conversation:
       - balance_has_tools
+  - id: balance_tools__active_tool_loop_without_redeclared_tools
+    messages:
+    - role: user
+      content: Check the current service status.
+    - role: assistant
+      content: ''
+      tool_calls:
+      - id: call-balance-status
+        type: function
+        function:
+          name: lookup_status
+          arguments: '{"service":"api-gateway"}'
+    - role: tool
+      tool_call_id: call-balance-status
+      content: '{"status":"ready"}'
+    notes: A trailing tool result continues the active loop even when the client does not redeclare its tool schema.
+    tags:
+    - language:en
+    - multi_turn
+    - tools
+    - shape:messages
+    - positive
+    expected_signals:
+      conversation:
+      - balance_active_tool_loop
+- id: balance_complex_declared_tools_without_intent
+  expected_recipe: balance
+  expected_decision: complex
+  expected_algorithm: static
+  variants:
   - id: balance_deliberate__dense_constraints
     query: The answer must contain exactly three options, at least one risk, and no more than 120 words.
+    tools:
+    - type: function
+      function:
+        name: lookup_status
+        description: Look up a service status when explicitly requested.
+    notes: Declaring an available tool does not imply that this constraint-heavy request wants the tool executed.
     tags:
     - language:en
     - structured-output
-    - positive
+    - shape:tools
+    - tools
+    - negative
+    - collision
     expected_signals:
+      conversation:
+      - balance_has_tools
       structure:
       - balance_constraint_dense
       projection:
@@ -1305,6 +1348,8 @@ decisions:
     - positive
     - demo
     expected_signals:
+      keywords:
+      - speed_tool_execution_phrases
       conversation:
       - speed_has_tools
   - id: speed_tools__calculator_paraphrase_messages
@@ -1480,6 +1525,31 @@ decisions:
       - speed_has_tools
       projection:
       - speed_heavy_workload_required
+  - id: speed_tools__active_tool_loop_without_redeclared_tools
+    messages:
+    - role: user
+      content: Fetch the current weather.
+    - role: assistant
+      content: ''
+      tool_calls:
+      - id: call-speed-weather
+        type: function
+        function:
+          name: get_weather
+          arguments: '{"city":"Austin"}'
+    - role: tool
+      tool_call_id: call-speed-weather
+      content: '{"temperature_f":82}'
+    notes: A trailing tool result remains on the low-TTFT tooling lane without requiring a repeated tool declaration.
+    tags:
+    - language:en
+    - multi_turn
+    - tools
+    - shape:messages
+    - positive
+    expected_signals:
+      conversation:
+      - speed_active_tool_loop
 - id: speed_omni
   expected_recipe: speed
   expected_decision: omni
@@ -2153,6 +2223,25 @@ decisions:
     complexity:
     - speed_complexity
   variants:
+  - id: speed_interactive__declared_tool_without_execution_intent
+    query: What does HTTP stand for?
+    tools:
+    - type: function
+      function:
+        name: lookup_protocol
+        description: Look up protocol metadata when explicitly requested.
+    notes: Tool availability alone does not turn an ordinary factual request into tool execution intent.
+    tags:
+    - language:en
+    - tools
+    - shape:tools
+    - negative
+    - collision
+    expected_signals:
+      conversation:
+      - speed_has_tools
+      projection:
+      - speed_interactive
   - id: speed_interactive__latency_request
     query: What does HTTP stand for?
     tags:
@@ -2809,6 +2898,11 @@ decisions:
       - cost_complexity:hard
       projection:
       - cost_requires_bounded_reasoning
+- id: cost_context_economy
+  expected_recipe: cost
+  expected_decision: economy
+  expected_algorithm: multi_factor
+  variants:
   - id: cost_direct_economy__text_in_30k_60k_band
     display_prompt: Summarize the key decisions in this long neutral record while preserving its factual constraints.
     playground:
@@ -3518,6 +3612,35 @@ decisions:
       - accuracy_workflow_request_phrases
       context:
       - accuracy_at_least_16k_context
+  - id: accuracy_dynamic_workflow__flow_state_resume
+    messages:
+    - role: user
+      content: Investigate the deployment failure as a managed workflow.
+    - role: assistant
+      content: ''
+      tool_calls:
+      - id: flowtool_5db9d59b__call_1
+        type: function
+        function:
+          name: flow_execute
+          arguments: '{"workflow":"deployment-investigation"}'
+    - role: tool
+      tool_call_id: flowtool_5db9d59b__call_1
+      content: '{"status":"step_complete","next":"synthesize"}'
+    notes: Only a trailing Flow-owned tool result resumes the managed workflow; ordinary client tool results stay on resume.
+    tags:
+    - language:en
+    - multi_turn
+    - tools
+    - shape:messages
+    - workflow
+    - collision
+    - priority
+    expected_signals:
+      conversation:
+      - accuracy_flow_tool_state
+      - accuracy_active_tool_loop
+      - accuracy_has_tool_result
 - id: accuracy_experts
   expected_recipe: accuracy
   expected_decision: experts
@@ -3630,19 +3753,17 @@ decisions:
       - ar
       projection:
       - accuracy_requires_multi_round_exploration
-- id: accuracy_experts_forbidden_1
+- id: accuracy_direct_hard_without_multipath
   expected_recipe: accuracy
-  expected_decision: experts
-  expected_algorithm: fusion
+  expected_decision: direct
+  expected_algorithm: static
   forbidden_signals:
-    complexity:
-    - accuracy_complexity
     conversation:
     - accuracy_has_tool_result
   variants:
   - id: accuracy_direct__hard_without_multipath_intent
     query: Diagnose a complex distributed-system failure with incomplete evidence and provide one direct recommendation.
-    notes: A hard projection alone is insufficient for ReMoM without explicit multi-path keyword or embedding evidence.
+    notes: Hard semantic complexity alone is insufficient for fan-out without explicit multi-path keyword or embedding evidence.
     tags:
     - language:en
     - direct
@@ -3653,11 +3774,11 @@ decisions:
       complexity:
       - accuracy_complexity:hard
       projection:
-      - accuracy_requires_multi_round_exploration
-- id: accuracy_verify
+      - accuracy_direct_single_pass
+- id: accuracy_direct_long_context_and_references
   expected_recipe: accuracy
-  expected_decision: verify
-  expected_algorithm: confidence
+  expected_decision: direct
+  expected_algorithm: static
   variants:
   - id: accuracy_long_context_or_direct_reference__long_context_direct
     display_prompt: Summarize the key decisions in this long neutral record while preserving its factual constraints.
@@ -3853,6 +3974,11 @@ decisions:
     expected_signals:
       context:
       - accuracy_at_least_16k_context
+- id: accuracy_verify
+  expected_recipe: accuracy
+  expected_decision: verify
+  expected_algorithm: confidence
+  variants:
   - id: accuracy_confidence_escalation__factual_escalation
     query: Fact-check the claim that the first Moon landing occurred in 1972, and escalate if uncertain before stating the
       corrected factual answer.
@@ -4333,6 +4459,8 @@ decisions:
   expected_algorithm: static
   expected_plugins:
   - tools
+  - memory
+  - response_cache
   - router_replay
   variants:
   - id: vault_over_240k_image_guard__image_at_first_over_240k_token
@@ -4500,6 +4628,8 @@ decisions:
   expected_algorithm: static
   expected_plugins:
   - tools
+  - memory
+  - response_cache
   - router_replay
   variants:
   - id: vault_over_240k_text_guard__text_at_first_over_240k_band
@@ -4621,7 +4751,7 @@ decisions:
       projection:
       - vault_sensitive_risk
   - id: vault_sensitive__explicit_identifier
-    query: My SSN is 123-45-6789; keep the analysis within the protected boundary.
+    query: My SSN is 123-45-6789.
     tags:
     - language:en
     - privacy
@@ -4630,6 +4760,31 @@ decisions:
     expected_signals:
       keywords:
       - vault_sensitive_request_phrases
+      pii:
+      - vault_detects_pii
+      projection:
+      - vault_sensitive_risk
+  - id: vault_sensitive__pii_in_prior_user_turn
+    messages:
+    - role: user
+      content: My SSN is 123-45-6789.
+    - role: assistant
+      content: I will keep that information inside the protected boundary.
+    - role: user
+      content: Summarize the handling requirements without repeating the values.
+    notes: Historical PII remains protected even when the latest turn contains no identifier or privacy keyword.
+    tags:
+    - language:en
+    - privacy
+    - sensitive
+    - pii
+    - multi_turn
+    - shape:messages
+    - collision
+    - positive
+    expected_signals:
+      pii:
+      - vault_detects_pii
       projection:
       - vault_sensitive_risk
 - id: vault_containment
@@ -4638,6 +4793,8 @@ decisions:
   expected_algorithm: static
   expected_plugins:
   - tools
+  - memory
+  - response_cache
   - router_replay
   variants:
   - id: vault_request_from_120k_to_240k__attack_context_priority_collision
@@ -4752,6 +4909,8 @@ decisions:
   expected_algorithm: static
   expected_plugins:
   - tools
+  - memory
+  - response_cache
   - router_replay
   variants:
   - id: vault_tools_blocked__benign_client_tool
@@ -4918,6 +5077,8 @@ decisions:
   expected_algorithm: multi_factor
   expected_plugins:
   - tools
+  - memory
+  - response_cache
   - router_replay
   variants:
   - id: vault_private_default__neutral_local_default

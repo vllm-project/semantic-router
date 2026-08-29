@@ -21,14 +21,42 @@ export function assignDecisionModels(
     const existing = new Map(
       (decision.modelRefs ?? []).map((reference) => [reference.model, reference]),
     )
+    const modelRefs = (assignments[decision.name] ?? []).map((model) => ({
+      ...(existing.get(model) ?? { model, use_reasoning: false }),
+      model,
+    }))
     return {
       ...decision,
-      modelRefs: (assignments[decision.name] ?? []).map((model) => ({
-        ...(existing.get(model) ?? { model, use_reasoning: false }),
-        model,
-      })),
+      modelRefs,
+      algorithm: materializeDynamicWorkflowPlanner(decision.algorithm, modelRefs),
     }
   })
+}
+
+function materializeDynamicWorkflowPlanner(
+  algorithm: Record<string, unknown> | undefined,
+  modelRefs: DecisionConfig['modelRefs'],
+): Record<string, unknown> | undefined {
+  if (algorithm?.type !== 'workflows') return algorithm
+  const workflows = asRecord(algorithm.workflows)
+  if (workflows?.mode !== 'dynamic') return algorithm
+  const planner = asRecord(workflows.planner) ?? {}
+  if (typeof planner.model === 'string' && planner.model.trim()) return algorithm
+  const model = modelRefs.find((reference) => reference.model.trim())?.model
+  if (!model) return algorithm
+  return {
+    ...algorithm,
+    workflows: {
+      ...workflows,
+      planner: { ...planner, model },
+    },
+  }
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined
 }
 
 export function applyRecipeAssignments(

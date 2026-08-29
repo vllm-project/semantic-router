@@ -343,7 +343,7 @@ func conversationFactsIndicateActiveToolLoop(facts classification.ConversationFa
 	return facts.LastMessageToolResult ||
 		facts.LastMessageRole == "tool" ||
 		facts.LastUserAfterToolResult ||
-		facts.AssistantToolCallCount > facts.ToolResultCount
+		facts.LastAssistantToolCall
 }
 
 func (r *OpenAIRouter) agenticCacheWarmth(

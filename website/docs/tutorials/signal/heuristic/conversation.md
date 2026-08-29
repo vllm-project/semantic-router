@@ -77,7 +77,8 @@ routing:
 | `tool_definition` | — | Counts entries in the request-level `tools[]` array. |
 | `assistant_tool_call` | — | Counts `tool_calls` across all assistant messages. |
 | `assistant_tool_cycle` | — | Counts `tool` role messages (completed tool results). |
-| `active_tool_loop` | — | Returns 1 when the latest request is actively continuing a tool loop: the last message is a tool result, the latest user turn directly follows a tool result, or assistant tool calls exceed returned tool results. Historical completed tool calls alone do not match. |
+| `active_tool_loop` | — | Returns 1 when the request tail is actively continuing a tool loop: the last assistant message requests a tool, the last message is a tool result, or the latest user turn directly follows a tool result. Older unmatched or completed calls do not keep later turns in the tool loop. |
+| `flow_tool_state` | — | Returns 1 only when the request ends with a Router Flow tool result carrying resumable workflow state. Historical Flow tool results do not match. |
 | `image_content` | — | Counts image content parts independently of whether the image can be decoded by a local embedding model. |
 
 ## Decision Usage

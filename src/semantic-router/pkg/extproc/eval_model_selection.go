@@ -20,6 +20,18 @@ func (r *OpenAIRouter) SelectModelForEval(
 	if r == nil || r.Config == nil || decision == nil {
 		return evalSelectionUnavailable("router selection runtime is unavailable")
 	}
+	if r.contextIneligibleAlgorithmModelCount(decision, input.ContextTokenCount) > 0 {
+		return evalSelectionUnavailable("an explicitly configured algorithm model cannot satisfy the request context")
+	}
+	eligibleModelRefs, excluded := r.contextEligibleModelRefs(decision.ModelRefs, input.ContextTokenCount)
+	if len(eligibleModelRefs) == 0 && excluded > 0 {
+		return evalSelectionUnavailable("no decision model can satisfy the request context")
+	}
+	if excluded > 0 {
+		eligibleDecision := *decision
+		eligibleDecision.ModelRefs = eligibleModelRefs
+		decision = &eligibleDecision
+	}
 	algorithmType := evalAlgorithmType(decision)
 	if selectionResult, resolved := r.evalSelectionBeforeDryRun(decision, algorithmType); resolved {
 		return selectionResult

@@ -30,6 +30,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 )
 
 // isLooperRequest checks if the incoming request is from looper (internal request)
@@ -141,6 +142,10 @@ func (r *OpenAIRouter) buildLooperRequest(
 	decision *config.Decision,
 	reqCtx *RequestContext,
 ) (*looper.Request, *ext_proc.ProcessingResponse) {
+	modelRefs := decision.ModelRefs
+	if len(reqCtx.VSREligibleModelRefs) > 0 {
+		modelRefs = reqCtx.VSREligibleModelRefs
+	}
 	// Build looper request.
 	// Looper currently aggregates a buffered semantic result for non-Chat
 	// clients. The common immediate-response codec encodes that result into the
@@ -153,7 +158,7 @@ func (r *OpenAIRouter) buildLooperRequest(
 		"request_id":       reqCtx.RequestID,
 		"decision":         decision.Name,
 		"algorithm":        decision.Algorithm.Type,
-		"candidate_models": len(decision.ModelRefs),
+		"candidate_models": len(modelRefs),
 		"streaming":        streaming,
 		"response_api":     isResponseAPIRequest(reqCtx),
 	})
@@ -167,7 +172,7 @@ func (r *OpenAIRouter) buildLooperRequest(
 			if err == nil {
 				looperReq := &looper.Request{
 					OriginalRequest:    openAIRequest,
-					ModelRefs:          decision.ModelRefs,
+					ModelRefs:          modelRefs,
 					ModelParams:        r.getModelParams(),
 					Algorithm:          decision.Algorithm,
 					IsStreaming:        streaming,
@@ -269,6 +274,15 @@ func (r *OpenAIRouter) recordSuccessfulLooperExecution(
 	// ModelsUsed is the execution trace; resp.Model is the final response model.
 	r.startRouterReplay(reqCtx, originalModel, resp.Model, decision.Name)
 	r.updateLooperReplayUsage(reqCtx, resp.Usage)
+	if resp.Usage.PromptTokens > 0 || resp.Usage.CompletionTokens > 0 {
+		// Looper usage is an aggregate across potentially differently priced
+		// calls. Preserve continuity and token totals without charging the whole
+		// cascade at the final response model's price.
+		recordSessionTurn(reqCtx, responseUsageMetrics{
+			promptTokens:     int(resp.Usage.PromptTokens),
+			completionTokens: int(resp.Usage.CompletionTokens),
+		}, sessiontelemetry.TurnPricing{})
+	}
 
 	// Update router replay with success status (looper returns immediate response with 200)
 	r.updateRouterReplayStatus(reqCtx, 200, false)

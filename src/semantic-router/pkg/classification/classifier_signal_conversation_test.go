@@ -205,7 +205,7 @@ func TestConversation_ActiveToolLoopCount(t *testing.T) {
 		{LastMessageToolResult: true},
 		{LastMessageRole: "tool"},
 		{LastUserAfterToolResult: true},
-		{AssistantToolCallCount: 2, ToolResultCount: 1},
+		{LastAssistantToolCall: true},
 	}
 	for i, facts := range activeCases {
 		val := resolveConversationValue(rule.Feature, facts)
@@ -230,5 +230,34 @@ func TestConversation_ActiveToolLoopCount(t *testing.T) {
 	}
 	if conversationPredicateMatches(rule, val) {
 		t.Fatal("completed prior run should not match active_tool_loop")
+	}
+
+	historicalUnmatchedCall := ConversationFacts{
+		LastMessageRole:        "user",
+		AssistantToolCallCount: 2,
+		ToolResultCount:        1,
+	}
+	val = resolveConversationValue(rule.Feature, historicalUnmatchedCall)
+	if val != 0.0 || conversationPredicateMatches(rule, val) {
+		t.Fatal("historical unmatched call must not make a later user turn active")
+	}
+}
+
+func TestConversation_FlowToolState(t *testing.T) {
+	rule := config.ConversationRule{
+		Name: "flow_tool_state",
+		Feature: config.ConversationFeature{
+			Type:   "exists",
+			Source: config.ConversationSource{Type: "flow_tool_state"},
+		},
+	}
+
+	matched := resolveConversationValue(rule.Feature, ConversationFacts{LastMessageFlowToolResult: true})
+	if matched != 1 || !conversationPredicateMatches(rule, matched) {
+		t.Fatal("trailing Flow tool result should match flow_tool_state")
+	}
+	notMatched := resolveConversationValue(rule.Feature, ConversationFacts{})
+	if notMatched != 0 || conversationPredicateMatches(rule, notMatched) {
+		t.Fatal("ordinary history should not match flow_tool_state")
 	}
 }

@@ -562,16 +562,20 @@ decisions:
                     comparison,
                 )
 
-    def test_eval_selection_contract_accepts_static_single_and_planned_final(
+    def test_eval_selection_contract_accepts_single_candidate_and_planned_final(
         self,
     ) -> None:
-        selected = router_calibration_support.compare_eval_selection(
-            algorithm="static",
-            selected_model="candidate-a",
-            status="selected",
-            method="single",
-            recommended_models=("candidate-a",),
-        )
+        for algorithm in ("static", "multi_factor", "latency_aware"):
+            with self.subTest(algorithm=algorithm):
+                selected = router_calibration_support.compare_eval_selection(
+                    algorithm=algorithm,
+                    selected_model="candidate-a",
+                    status="selected",
+                    method="single",
+                    recommended_models=("candidate-a",),
+                )
+                self.assertTrue(selected["matched"], selected)
+
         planned = router_calibration_support.compare_eval_selection(
             algorithm="workflows",
             selected_model="final-model",
@@ -580,7 +584,6 @@ decisions:
             recommended_models=("worker-a",),
         )
 
-        self.assertTrue(selected["matched"], selected)
         self.assertTrue(planned["matched"], planned)
 
     def test_eval_selection_contract_accepts_honest_execution_deferral(self) -> None:

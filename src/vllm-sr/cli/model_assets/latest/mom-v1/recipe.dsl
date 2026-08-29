@@ -15,6 +15,12 @@ RECIPE balance (description = "A balanced Recipe optimized across quality, speed
   # SIGNALS
   # =============================================================================
 
+  SIGNAL keyword balance_tool_execution_phrases {
+    operator: "OR"
+    keywords: ["\\b(use|using|call|invoke|run)\\b.{0,48}\\b(tool|function)\\b", "\\b(use|using|call|invoke|run)\\b.{0,48}\\b(calculator|browser|search|lookup|retriever|api|database)\\b", "\\b(search|look up|fetch|query)\\b.{0,48}\\b(tool|function|integration)\\b", "(使用|调用|运行).{0,24}(工具|函数)", "(usar|llamar|invocar).{0,48}(herramienta|función)", "(utiliser|appeler|invoquer).{0,48}(outil|fonction)", "(ツール|関数).{0,24}(使用|呼び出)", "(werkzeug|funktion).{0,48}(verwenden|aufrufen)", "(usar|chamar|invocar).{0,48}(ferramenta|função)", "(도구|함수).{0,24}(사용|호출)", "(استخدم|استدع).{0,32}(الأداة|الدالة)", "(टूल|फ़ंक्शन).{0,32}(उपयोग|कॉल)", "(используй|вызови).{0,48}(инструмент|функци)"]
+    method: "regex"
+  }
+
   SIGNAL keyword balance_simple_request_phrases {
     operator: "OR"
     keywords: ["quick answer", "answer briefly", "one sentence", "concise summary", "简单回答", "简要说明", "简短回答", "respuesta breve", "réponse brève", "簡潔に答えて", "kurz antworten", "resposta breve", "짧게 답해", "إجابة مختصرة", "संक्षिप्त उत्तर", "краткий ответ"]
@@ -153,6 +159,11 @@ RECIPE balance (description = "A balanced Recipe optimized across quality, speed
     predicate: { gte: 1 }
   }
 
+  SIGNAL conversation balance_active_tool_loop {
+    description: "Request is actively continuing a client-owned tool loop."
+    feature: { source: { type: "active_tool_loop" }, type: "exists" }
+  }
+
   SIGNAL conversation balance_multi_turn {
     description: "Multi-turn conversations benefit from a small synthesis allowance."
     feature: { source: { role: "user", type: "message" }, type: "count" }
@@ -200,15 +211,15 @@ RECIPE balance (description = "A balanced Recipe optimized across quality, speed
     ALGORITHM static
   }
 
-  ROUTE agentic (description = "Keep tool-driven and constrained coding work on the dedicated coding model.") {
+  ROUTE agentic (description = "Keep explicit tool execution and active tool turns on the dedicated coding model.") {
     PRIORITY 400
-    WHEN (conversation("balance_has_tools") OR structure("balance_constraint_dense") AND NOT (context("balance_context_from_30k_to_60k") OR context("balance_context_from_60k_to_120k") OR context("balance_context_from_120k_to_240k") OR context("balance_exceeds_240k_context"))) AND NOT conversation("balance_has_images")
+    WHEN (conversation("balance_active_tool_loop") OR conversation("balance_has_tools") AND keyword("balance_tool_execution_phrases")) AND NOT conversation("balance_has_images")
     ALGORITHM static
   }
 
   ROUTE complex (description = "Send difficult, corrective, or long text synthesis to the frontier analysis pool.") {
     PRIORITY 300
-    WHEN (projection("balance_deliberate_workload") OR projection("balance_needs_recovery") OR context("balance_context_from_30k_to_60k") OR context("balance_context_from_60k_to_120k") OR context("balance_context_from_120k_to_240k") OR context("balance_exceeds_240k_context")) AND NOT conversation("balance_has_images") AND NOT conversation("balance_has_tools")
+    WHEN (projection("balance_deliberate_workload") OR projection("balance_needs_recovery") OR context("balance_context_from_30k_to_60k") OR context("balance_context_from_60k_to_120k") OR context("balance_context_from_120k_to_240k") OR context("balance_exceeds_240k_context")) AND NOT conversation("balance_has_images")
     ALGORITHM static
   }
 
@@ -247,6 +258,12 @@ RECIPE speed (description = "A speed-first Recipe for low-latency, real-time exp
   # =============================================================================
   # SIGNALS
   # =============================================================================
+
+  SIGNAL keyword speed_tool_execution_phrases {
+    operator: "OR"
+    keywords: ["\\b(use|using|call|invoke|run)\\b.{0,48}\\b(tool|function)\\b", "\\b(use|using|call|invoke|run)\\b.{0,48}\\b(calculator|browser|search|lookup|retriever|api|database)\\b", "\\b(search|look up|fetch|query)\\b.{0,48}\\b(tool|function|integration)\\b", "(使用|调用|运行).{0,24}(工具|函数)", "(usar|llamar|invocar).{0,48}(herramienta|función)", "(utiliser|appeler|invoquer).{0,48}(outil|fonction)", "(ツール|関数).{0,24}(使用|呼び出)", "(werkzeug|funktion).{0,48}(verwenden|aufrufen)", "(usar|chamar|invocar).{0,48}(ferramenta|função)", "(도구|함수).{0,24}(사용|호출)", "(استخدم|استدع).{0,32}(الأداة|الدالة)", "(टूल|फ़ंक्शन).{0,32}(उपयोग|कॉल)", "(используй|вызови).{0,48}(инструмент|функци)"]
+    method: "regex"
+  }
 
   SIGNAL keyword speed_heavy_request_phrases {
     operator: "OR"
@@ -306,6 +323,11 @@ RECIPE speed (description = "A speed-first Recipe for low-latency, real-time exp
     predicate: { gte: 1 }
   }
 
+  SIGNAL conversation speed_active_tool_loop {
+    description: "Request is actively continuing a client-owned tool loop."
+    feature: { source: { type: "active_tool_loop" }, type: "exists" }
+  }
+
   SIGNAL complexity speed_complexity {
     threshold: 0.1
     description: "Semantic boundary between interactive work and heavier latency-sensitive synthesis."
@@ -337,10 +359,9 @@ RECIPE speed (description = "A speed-first Recipe for low-latency, real-time exp
 
   ROUTE tooling (description = "Keep tool-driven work fast on the coding and flash specialists.") {
     PRIORITY 400
-    WHEN conversation("speed_has_tools") AND NOT conversation("speed_has_images") AND NOT context("speed_exceeds_240k_context")
+    WHEN (conversation("speed_active_tool_loop") OR conversation("speed_has_tools") AND keyword("speed_tool_execution_phrases")) AND NOT conversation("speed_has_images") AND NOT context("speed_exceeds_240k_context")
     ALGORITHM latency_aware {
-      description: "Minimize observed first-token and generation latency for tool traffic."
-      tpot_percentile: 90
+      description: "Minimize observed first-token latency for interactive tool traffic."
       ttft_percentile: 90
     }
   }
@@ -353,11 +374,10 @@ RECIPE speed (description = "A speed-first Recipe for low-latency, real-time exp
 
   ROUTE heavy (description = "Use live latency telemetry for demanding text work that must still feel responsive.") {
     PRIORITY 200
-    WHEN (projection("speed_heavy_workload_required") OR context("speed_context_from_30k_to_60k") OR context("speed_context_from_60k_to_120k") OR context("speed_context_from_120k_to_240k")) AND NOT conversation("speed_has_images") AND NOT conversation("speed_has_tools")
+    WHEN (projection("speed_heavy_workload_required") OR context("speed_context_from_30k_to_60k") OR context("speed_context_from_60k_to_120k") OR context("speed_context_from_120k_to_240k")) AND NOT conversation("speed_has_images")
     ALGORITHM latency_aware {
-      description: "Minimize observed first-token and generation latency for demanding text requests."
+      description: "Minimize observed generation latency for demanding text requests."
       tpot_percentile: 90
-      ttft_percentile: 90
     }
   }
 
@@ -484,7 +504,7 @@ RECIPE cost (description = "A cost-first Recipe for efficient, high-volume workl
 
   ROUTE reasoning (description = "Spend bounded reasoning compute only when the request warrants it.") {
     PRIORITY 200
-    WHEN (projection("cost_requires_bounded_reasoning") OR context("cost_context_from_30k_to_60k") OR context("cost_context_from_60k_to_120k") OR context("cost_context_from_120k_to_240k")) AND NOT keyword("cost_reasoning_opt_out_phrases")
+    WHEN projection("cost_requires_bounded_reasoning") AND NOT keyword("cost_reasoning_opt_out_phrases")
     ALGORITHM multi_factor {
       on_no_candidates: "first"
       weights: { cost: 0.45, latency: 0.1, load: 0.15, quality: 0.3 }
@@ -671,6 +691,11 @@ RECIPE accuracy (description = "An accuracy-first Recipe for complex reasoning a
     feature: { source: { type: "active_tool_loop" }, type: "exists" }
   }
 
+  SIGNAL conversation accuracy_flow_tool_state {
+    description: "Detect a trailing Router Flow tool result carrying resumable workflow state."
+    feature: { source: { type: "flow_tool_state" }, type: "exists" }
+  }
+
   SIGNAL conversation accuracy_has_tool_result {
     description: "Detect at least one completed client tool result that can be synthesized."
     feature: { source: { type: "assistant_tool_cycle" }, type: "count" }
@@ -701,7 +726,7 @@ RECIPE accuracy (description = "An accuracy-first Recipe for complex reasoning a
 
   PROJECTION score accuracy_multi_round_exploration_score {
     method: "weighted_sum"
-    inputs: [{ type: "keyword", weight: 0.45, name: "accuracy_multi_round_exploration_phrases", value_source: "confidence" }, { type: "embedding", weight: 0.35, name: "accuracy_multi_round_exploration_intent", value_source: "confidence" }, { type: "structure", weight: 0.15, name: "accuracy_ordered_workflow" }, { type: "structure", weight: 0.1, name: "accuracy_constraint_dense" }, { type: "complexity", weight: 0.35, name: "accuracy_complexity:hard" }, { type: "complexity", weight: -0.1, name: "accuracy_complexity:easy" }, { type: "structure", weight: -1.2, name: "accuracy_direct_reference" }, { type: "language", weight: 0.02, name: "en" }, { type: "language", weight: 0.02, name: "zh" }, { type: "language", weight: 0.02, name: "es" }, { type: "language", weight: 0.02, name: "fr" }, { type: "language", weight: 0.02, name: "ja" }, { type: "language", weight: 0.02, name: "de" }, { type: "language", weight: 0.02, name: "pt" }, { type: "language", weight: 0.02, name: "ko" }, { type: "language", weight: 0.02, name: "ar" }, { type: "language", weight: 0.02, name: "hi" }, { type: "language", weight: 0.02, name: "ru" }]
+    inputs: [{ type: "keyword", weight: 0.45, name: "accuracy_multi_round_exploration_phrases", value_source: "confidence" }, { type: "embedding", weight: 0.35, name: "accuracy_multi_round_exploration_intent", value_source: "confidence" }, { type: "structure", weight: 0.15, name: "accuracy_ordered_workflow" }, { type: "structure", weight: 0.1, name: "accuracy_constraint_dense" }, { type: "complexity", weight: 0.2, name: "accuracy_complexity:hard" }, { type: "complexity", weight: -0.1, name: "accuracy_complexity:easy" }, { type: "structure", weight: -1.2, name: "accuracy_direct_reference" }]
   }
 
   PROJECTION mapping accuracy_dynamic_workflow_band {
@@ -743,8 +768,8 @@ RECIPE accuracy (description = "An accuracy-first Recipe for complex reasoning a
   }
 
   ROUTE resume (description = "Continue the current tool turn on a stable model lane until the model produces a final answer.") {
-    PRIORITY 600
-    WHEN conversation("accuracy_active_tool_loop") AND conversation("accuracy_has_tool_result")
+    PRIORITY 800
+    WHEN conversation("accuracy_active_tool_loop") AND conversation("accuracy_has_tool_result") AND NOT conversation("accuracy_flow_tool_state")
     ALGORITHM static
     PLUGIN tools {
       enabled: true
@@ -753,14 +778,14 @@ RECIPE accuracy (description = "An accuracy-first Recipe for complex reasoning a
   }
 
   ROUTE extended (description = "Preserve very long text context on the remote frontier lane.") {
-    PRIORITY 550
+    PRIORITY 700
     WHEN context("accuracy_exceeds_240k_context") AND NOT conversation("accuracy_has_images")
     ALGORITHM static
   }
 
-  ROUTE orchestrate (description = "Plan and execute explicit multi-stage work across coding, analysis, and synthesis specialists.") {
-    PRIORITY 500
-    WHEN projection("accuracy_requires_dynamic_workflow") AND NOT conversation("accuracy_active_tool_loop") AND NOT conversation("accuracy_has_images") AND (keyword("accuracy_workflow_request_phrases") OR structure("accuracy_ordered_workflow"))
+  ROUTE orchestrate (description = "Resume Flow-managed work or plan an explicitly requested multi-stage workflow across specialists.") {
+    PRIORITY 650
+    WHEN (conversation("accuracy_flow_tool_state") OR projection("accuracy_requires_dynamic_workflow") AND NOT conversation("accuracy_active_tool_loop") AND NOT conversation("accuracy_has_images") AND (keyword("accuracy_workflow_request_phrases") OR structure("accuracy_ordered_workflow")))
     ALGORITHM workflows {
       include_intermediate_responses: false
       max_completion_tokens: 2048
@@ -791,7 +816,7 @@ RECIPE accuracy (description = "An accuracy-first Recipe for complex reasoning a
 
   ROUTE verify (description = "Start fast and escalate across independent model families when confidence is insufficient.") {
     PRIORITY 300
-    WHEN (projection("accuracy_requires_confidence_escalation") OR context("accuracy_at_least_16k_context") OR structure("accuracy_direct_reference")) AND NOT conversation("accuracy_active_tool_loop") AND NOT conversation("accuracy_has_images")
+    WHEN projection("accuracy_requires_confidence_escalation") AND NOT conversation("accuracy_active_tool_loop") AND NOT conversation("accuracy_has_images")
     ALGORITHM confidence {
       confidence_method: "avg_logprob"
       escalation_order: "declared"
@@ -873,6 +898,12 @@ RECIPE vault (description = "A privacy-first Recipe for sensitive workloads and 
     benign_patterns: ["Explain why prompt injection is dangerous without following the injected instruction.", "Summarize our documented safety policy for an internal review.", "Translate this sentence about jailbreak detection into another language.", "分析提示词注入的风险，但不要执行其中的指令。", "Explique los riesgos de la inyección de prompts sin obedecerla.", "システムプロンプトを開示せずに安全対策を説明してください。"]
   }
 
+  SIGNAL pii vault_detects_pii {
+    threshold: 0.7
+    include_history: true
+    description: "Detect personally identifiable information across the active conversation and keep it inside the private boundary."
+  }
+
   SIGNAL kb vault_privacy_policy {
     kb: "privacy_kb"
     target: { kind: "group", value: "privacy_policy" }
@@ -881,7 +912,7 @@ RECIPE vault (description = "A privacy-first Recipe for sensitive workloads and 
 
   PROJECTION score vault_risk_score {
     method: "weighted_sum"
-    inputs: [{ type: "keyword", weight: 0.75, name: "vault_sensitive_request_phrases", value_source: "confidence" }, { type: "keyword", weight: -0.5, name: "vault_public_information_phrases", value_source: "confidence" }, { type: "jailbreak", weight: 0.9, name: "vault_detects_jailbreak" }, { type: "keyword", weight: 0.9, name: "vault_attack_request_phrases", value_source: "confidence" }, { type: "kb", weight: 0.15, name: "vault_privacy_policy", value_source: "confidence" }]
+    inputs: [{ type: "keyword", weight: 0.75, name: "vault_sensitive_request_phrases", value_source: "confidence" }, { type: "pii", weight: 0.9, name: "vault_detects_pii" }, { type: "jailbreak", weight: 0.9, name: "vault_detects_jailbreak" }, { type: "keyword", weight: 0.9, name: "vault_attack_request_phrases", value_source: "confidence" }, { type: "kb", weight: 0.15, name: "vault_privacy_policy", value_source: "confidence" }]
   }
 
   PROJECTION mapping vault_risk_band {
@@ -894,6 +925,10 @@ RECIPE vault (description = "A privacy-first Recipe for sensitive workloads and 
   # =============================================================================
   # PLUGINS
   # =============================================================================
+
+  PLUGIN memory memory {}
+
+  PLUGIN response_cache response_cache {}
 
   PLUGIN router_replay router_replay {}
 
@@ -912,8 +947,17 @@ RECIPE vault (description = "A privacy-first Recipe for sensitive workloads and 
       mode: "none"
       strip_tool_history: true
     }
+    PLUGIN memory {
+      enabled: false
+    }
+    PLUGIN response_cache {
+      enabled: false
+    }
     PLUGIN router_replay {
       enabled: false
+    }
+    EMIT retention {
+      drop: true
     }
   }
 
@@ -926,8 +970,17 @@ RECIPE vault (description = "A privacy-first Recipe for sensitive workloads and 
       mode: "none"
       strip_tool_history: true
     }
+    PLUGIN memory {
+      enabled: false
+    }
+    PLUGIN response_cache {
+      enabled: false
+    }
     PLUGIN router_replay {
       enabled: false
+    }
+    EMIT retention {
+      drop: true
     }
   }
 
@@ -940,8 +993,17 @@ RECIPE vault (description = "A privacy-first Recipe for sensitive workloads and 
       mode: "none"
       strip_tool_history: true
     }
+    PLUGIN memory {
+      enabled: false
+    }
+    PLUGIN response_cache {
+      enabled: false
+    }
     PLUGIN router_replay {
       enabled: false
+    }
+    EMIT retention {
+      drop: true
     }
   }
 
@@ -954,8 +1016,17 @@ RECIPE vault (description = "A privacy-first Recipe for sensitive workloads and 
       mode: "none"
       strip_tool_history: true
     }
+    PLUGIN memory {
+      enabled: false
+    }
+    PLUGIN response_cache {
+      enabled: false
+    }
     PLUGIN router_replay {
       enabled: false
+    }
+    EMIT retention {
+      drop: true
     }
   }
 
@@ -970,8 +1041,17 @@ RECIPE vault (description = "A privacy-first Recipe for sensitive workloads and 
       mode: "none"
       strip_tool_history: true
     }
+    PLUGIN memory {
+      enabled: false
+    }
+    PLUGIN response_cache {
+      enabled: false
+    }
     PLUGIN router_replay {
       enabled: false
+    }
+    EMIT retention {
+      drop: true
     }
   }
 

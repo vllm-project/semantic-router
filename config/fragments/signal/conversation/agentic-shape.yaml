@@ -47,3 +47,9 @@ routing:
           type: exists
           source:
             type: active_tool_loop
+      - name: resumable_flow_state
+        description: The request ends with a Router Flow tool result that carries continuation state.
+        feature:
+          type: exists
+          source:
+            type: flow_tool_state

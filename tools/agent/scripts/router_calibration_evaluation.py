@@ -375,7 +375,7 @@ def compare_eval_selection(
     if not method:
         errors.append("selection_method is missing")
     elif method != normalized_algorithm and not (
-        normalized_algorithm == "static" and method == "single"
+        method == "single" and status == "selected"
     ):
         errors.append(f"selection_method={method!r}, want {normalized_algorithm!r}")
     if status in {"selected", "planned_final"} and not selected_model:

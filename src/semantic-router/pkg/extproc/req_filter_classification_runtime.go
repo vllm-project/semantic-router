@@ -287,8 +287,28 @@ func (r *OpenAIRouter) selectDecisionRuntimeModel(
 	evaluationConfidence float64,
 	ctx *RequestContext,
 ) (string, entropy.ReasoningDecision, error) {
+	if result.Decision.GetFastResponseConfig() != nil {
+		return r.selectFastResponseRuntimeModel(result.Decision, ctx), entropy.ReasoningDecision{}, nil
+	}
+	if ineligible := r.contextIneligibleAlgorithmModelCount(result.Decision, ctx.VSRContextTokenCount); ineligible > 0 {
+		return "", entropy.ReasoningDecision{}, fmt.Errorf(
+			"%w: decision %q requires %d request tokens but %d explicitly configured algorithm model(s) have smaller context windows",
+			errNoContextEligibleDecisionModel,
+			decisionName,
+			ctx.VSRContextTokenCount,
+			ineligible,
+		)
+	}
 	if len(result.Decision.ModelRefs) == 0 {
 		selectedModel := r.Config.DefaultModel
+		if r.modelNameExceedsContextWindow(selectedModel, ctx.VSRContextTokenCount) {
+			return "", entropy.ReasoningDecision{}, fmt.Errorf(
+				"%w: decision %q requires %d request tokens but the configured default model has a smaller context window",
+				errNoContextEligibleDecisionModel,
+				decisionName,
+				ctx.VSRContextTokenCount,
+			)
+		}
 		ctx.VSRSelectedModel = selectedModel
 		ctx.VSRSelectionMethod = "default"
 		logging.ComponentDebugEvent("extproc", "decision_model_defaulted", map[string]interface{}{
@@ -298,18 +318,19 @@ func (r *OpenAIRouter) selectDecisionRuntimeModel(
 		})
 		return selectedModel, entropy.ReasoningDecision{}, nil
 	}
-	if result.Decision.GetFastResponseConfig() != nil {
-		selectedModel := firstDecisionModelName(result.Decision.ModelRefs)
-		if selectedModel == "" {
-			selectedModel = r.Config.DefaultModel
-		}
-		ctx.VSRSelectedModel = selectedModel
-		ctx.VSRSelectionMethod = "fast_response"
-		return selectedModel, entropy.ReasoningDecision{}, nil
+
+	eligibleModelRefs, err := r.contextEligibleDecisionModelRefs(
+		result.Decision.ModelRefs,
+		decisionName,
+		ctx.VSRContextTokenCount,
+		ctx,
+	)
+	if err != nil {
+		return "", entropy.ReasoningDecision{}, err
 	}
 
 	selCtx := r.buildSelectionContext(
-		result.Decision.ModelRefs,
+		eligibleModelRefs,
 		decisionName,
 		userContent,
 		result.Decision.Algorithm,
@@ -354,6 +375,19 @@ func (r *OpenAIRouter) selectDecisionRuntimeModel(
 		evaluationConfidence,
 		ctx,
 	), nil
+}
+
+func (r *OpenAIRouter) selectFastResponseRuntimeModel(
+	decisionConfig *config.Decision,
+	ctx *RequestContext,
+) string {
+	selectedModel := firstDecisionModelName(decisionConfig.ModelRefs)
+	if selectedModel == "" {
+		selectedModel = r.Config.DefaultModel
+	}
+	ctx.VSRSelectedModel = selectedModel
+	ctx.VSRSelectionMethod = "fast_response"
+	return selectedModel
 }
 
 func firstDecisionModelName(modelRefs []config.ModelRef) string {

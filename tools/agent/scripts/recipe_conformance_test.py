@@ -37,7 +37,7 @@ class RecipeConformanceTest(unittest.TestCase):
         # created, so the package itself stays model- and deployment-neutral.
         self.assertEqual(len(mom.entrypoints), 0)
         self.assertEqual(len(mom.decisions), 26)
-        self.assertEqual(mom.variants, 226)
+        self.assertEqual(mom.variants, 231)
         self.assertTrue(mom.coverage["passed"])
 
     def test_default_discovery_skips_the_nested_built_in_catalog(self) -> None:

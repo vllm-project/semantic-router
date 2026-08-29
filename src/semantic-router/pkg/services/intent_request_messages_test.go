@@ -140,7 +140,50 @@ func TestIntentRequestResolveSignalInput_PendingAssistantToolCallIsNotToolResult
 	assert.Zero(t, facts.ToolResultCount)
 	assert.Equal(t, "assistant", facts.LastMessageRole)
 	assert.False(t, facts.LastMessageToolResult)
+	assert.True(t, facts.LastAssistantToolCall)
 	assert.False(t, facts.LastUserAfterToolResult)
+}
+
+func TestIntentRequestResolveSignalInput_HistoricalUnmatchedToolCallDoesNotStayActive(t *testing.T) {
+	req := IntentRequest{
+		Messages: []IntentMessage{
+			{
+				Role:      "assistant",
+				Content:   mustMessageContent(t, nil),
+				ToolCalls: []json.RawMessage{json.RawMessage(`{"id":"old-call"}`)},
+			},
+			{Role: "user", Content: mustMessageContent(t, "start a separate task")},
+			{Role: "assistant", Content: mustMessageContent(t, "done")},
+			{Role: "user", Content: mustMessageContent(t, "ordinary follow-up")},
+		},
+	}
+
+	input, err := req.resolveSignalInput()
+	require.NoError(t, err)
+
+	facts := input.conversationFacts
+	assert.Equal(t, 1, facts.AssistantToolCallCount)
+	assert.Zero(t, facts.ToolResultCount)
+	assert.False(t, facts.LastAssistantToolCall)
+	assert.False(t, facts.LastMessageToolResult)
+	assert.False(t, facts.LastUserAfterToolResult)
+}
+
+func TestIntentRequestResolveSignalInput_FlowToolStateRequiresTrailingResult(t *testing.T) {
+	req := IntentRequest{Messages: []IntentMessage{
+		{Role: "tool", ToolCallID: "flowtool_deadbeef__call_1", Content: mustMessageContent(t, "done")},
+	}}
+	input, err := req.resolveSignalInput()
+	require.NoError(t, err)
+	assert.True(t, input.conversationFacts.LastMessageFlowToolResult)
+
+	req.Messages = append(req.Messages,
+		IntentMessage{Role: "assistant", Content: mustMessageContent(t, "workflow complete")},
+		IntentMessage{Role: "user", Content: mustMessageContent(t, "new request")},
+	)
+	input, err = req.resolveSignalInput()
+	require.NoError(t, err)
+	assert.False(t, input.conversationFacts.LastMessageFlowToolResult)
 }
 
 func TestIntentRequestResolveSignalInput_RequestContextEstimateMatchesDataPlaneContract(t *testing.T) {

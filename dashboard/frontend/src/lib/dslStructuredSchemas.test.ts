@@ -87,6 +87,12 @@ describe('DSL structured field schemas', () => {
     ])
     expect(requireField(getSignalFieldSchema('classifier'), 'labels').type).toBe('string[]')
 
+    const conversationFeature = requireField(getSignalFieldSchema('conversation'), 'feature')
+    const conversationSource = requireField(conversationFeature.fields || [], 'source')
+    expect(requireField(conversationSource.fields || [], 'type').options).toContain(
+      'flow_tool_state',
+    )
+
     const headerMutation = getPluginFieldSchema('header_mutation')
     expect(requireField(headerMutation, 'add').type).toBe('object[]')
     expect(requireField(headerMutation, 'update').type).toBe('object[]')

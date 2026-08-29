@@ -47,6 +47,62 @@ describe('Mixture model assignments', () => {
     ])
   })
 
+  it('materializes a missing dynamic workflow planner from the first assignment', () => {
+    const workflow: DecisionConfig = {
+      name: 'Orchestrate',
+      description: 'Dynamic workflow',
+      priority: 30,
+      rules: { operator: 'AND', conditions: [] },
+      modelRefs: [],
+      algorithm: {
+        type: 'workflows',
+        workflows: {
+          mode: 'dynamic',
+          planner: { max_completion_tokens: 1024 },
+        },
+      },
+    }
+
+    const [updated] = assignDecisionModels([workflow], {
+      Orchestrate: ['local/coordinator', 'local/worker'],
+    })
+
+    expect(updated.algorithm).toEqual({
+      type: 'workflows',
+      workflows: {
+        mode: 'dynamic',
+        planner: {
+          model: 'local/coordinator',
+          max_completion_tokens: 1024,
+        },
+      },
+    })
+    expect(workflow.algorithm).not.toHaveProperty('workflows.planner.model')
+  })
+
+  it('preserves an explicitly configured dynamic workflow planner', () => {
+    const workflow: DecisionConfig = {
+      name: 'Orchestrate',
+      description: 'Dynamic workflow',
+      priority: 30,
+      rules: { operator: 'AND', conditions: [] },
+      modelRefs: [],
+      algorithm: {
+        type: 'workflows',
+        workflows: {
+          mode: 'dynamic',
+          planner: { model: 'external/coordinator' },
+        },
+      },
+    }
+
+    const [updated] = assignDecisionModels([workflow], {
+      Orchestrate: ['local/worker'],
+    })
+
+    expect(updated.algorithm).toHaveProperty('workflows.planner.model', 'external/coordinator')
+  })
+
   it('updates only the selected named recipe', () => {
     const config: ConfigData = {
       recipes: [

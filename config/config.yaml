@@ -481,6 +481,12 @@ routing:
           type: exists
           source:
             type: active_tool_loop
+      - name: resumable_flow_state
+        description: Request ends with a Router Flow tool result carrying continuation state.
+        feature:
+          type: exists
+          source:
+            type: flow_tool_state
       - name: has_developer_msg
         description: Request contains a developer message.
         feature:

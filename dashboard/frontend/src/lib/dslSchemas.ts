@@ -395,6 +395,7 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
                     'assistant_tool_cycle',
                     'active_tool_loop',
                     'image_content', // validator_conversation.go:16 -- #3001
+                    'flow_tool_state',
                   ],
                   required: true,
                 },
