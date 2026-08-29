@@ -2,7 +2,6 @@ import { useMemo } from 'react'
 
 import EmbeddedServicePage from '../components/EmbeddedServicePage'
 import type { ServiceConfig } from '../components/ServiceNotConfigured'
-import { withAuthQuery } from '../utils/authFetch'
 
 const JAEGER_SERVICE: ServiceConfig = {
   name: 'Jaeger',
@@ -13,10 +12,7 @@ const JAEGER_SERVICE: ServiceConfig = {
 }
 
 export default function TracingPage() {
-  const src = useMemo(
-    () => withAuthQuery('/embedded/jaeger/search?lookback=1h&limit=20&service=vllm-sr'),
-    [],
-  )
+  const src = useMemo(() => '/embedded/jaeger/search?lookback=1h&limit=20&service=vllm-sr', [])
 
   return (
     <EmbeddedServicePage

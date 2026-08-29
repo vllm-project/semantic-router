@@ -120,19 +120,14 @@ func detectSemanticCacheEmbeddingModel(cfg *config.RouterConfig) string {
 	}
 }
 
-func createToolsDatabase(cfg *config.RouterConfig) (*tools.ToolsDatabase, error) {
+func createToolsDatabase(cfg *config.RouterConfig, provider embedding.Provider) (*tools.ToolsDatabase, error) {
 	embeddingModels := cfg.EmbeddingModels
 	toolsThreshold := embeddingModels.MinSimilarityThreshold()
 	if cfg.Tools.SimilarityThreshold != nil {
 		toolsThreshold = *cfg.Tools.SimilarityThreshold
 	}
-	var provider embedding.Provider
-	if cfg.Tools.Enabled {
-		var err error
-		provider, err = toolsEmbeddingProvider(cfg)
-		if err != nil {
-			return nil, err
-		}
+	if !cfg.Tools.Enabled {
+		provider = nil
 	}
 
 	toolsDatabase := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{

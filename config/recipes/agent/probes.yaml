@@ -121,6 +121,11 @@ decisions:
       - id: clinical_risk
         query: Explain the clinical risk factors for pulmonary embolism and when urgent care is needed.
         tags: [domain:health, specialist]
+      - id: legal_over_code_marker
+        query: Analyze the indemnity and limitation-of-liability clauses in this contract before we implement the changes it requires.
+        expected_signals:
+          keywords: [code_request_markers]
+        tags: [domain:law, collision, priority]
 
   - id: domain_code_complex
     expected_decision: domain_code_complex
