@@ -135,32 +135,16 @@ func (accumulator *responseAccumulator) applyEvent(event llmprotocol.Event) erro
 		)
 	}
 	accumulator.applyEventMetadata(event)
+	if responseAccumulatorItemEvent(event.Type) {
+		return accumulator.applyItemEvent(event)
+	}
 	switch event.Type {
 	case llmprotocol.EventResponseStarted, llmprotocol.EventUsageUpdated:
 		return nil
-	case llmprotocol.EventOutputItemStarted:
-		return accumulator.startItem(event)
-	case llmprotocol.EventOutputTextDelta:
-		return accumulator.appendOutputText(event)
-	case llmprotocol.EventReasoningDelta:
-		return accumulator.appendReasoning(event)
-	case llmprotocol.EventToolCallDelta:
-		return accumulator.appendToolCall(event.ItemIndex, event.ToolCall)
-	case llmprotocol.EventImageGenerationProgress:
-		return nil
-	case llmprotocol.EventOutputItemCompleted:
-		return accumulator.completeItem(event)
 	case llmprotocol.EventResponseCompleted:
-		accumulator.result.StopReason = event.StopReason
-		accumulator.result.MatchedStopSequence = event.MatchedStopSequence
-		accumulator.terminal = true
-		return nil
+		return accumulator.completeResponse(event)
 	case llmprotocol.EventResponseFailed:
-		accumulator.result.Output = nil
-		accumulator.result.StopReason = llmprotocol.StopError
-		accumulator.result.Error = event.Error
-		accumulator.terminal = true
-		return nil
+		return accumulator.failResponse(event)
 	case llmprotocol.EventProviderOpaque:
 		return llmprotocol.NewError(
 			llmprotocol.ErrorUnsupportedFeature,
@@ -176,6 +160,51 @@ func (accumulator *responseAccumulator) applyEvent(event llmprotocol.Event) erro
 			nil,
 		)
 	}
+}
+
+func responseAccumulatorItemEvent(eventType llmprotocol.EventType) bool {
+	switch eventType {
+	case llmprotocol.EventOutputItemStarted, llmprotocol.EventOutputTextDelta,
+		llmprotocol.EventReasoningDelta, llmprotocol.EventToolCallDelta,
+		llmprotocol.EventImageGenerationProgress, llmprotocol.EventOutputItemCompleted:
+		return true
+	default:
+		return false
+	}
+}
+
+func (accumulator *responseAccumulator) applyItemEvent(event llmprotocol.Event) error {
+	switch event.Type {
+	case llmprotocol.EventOutputItemStarted:
+		return accumulator.startItem(event)
+	case llmprotocol.EventOutputTextDelta:
+		return accumulator.appendOutputText(event)
+	case llmprotocol.EventReasoningDelta:
+		return accumulator.appendReasoning(event)
+	case llmprotocol.EventToolCallDelta:
+		return accumulator.appendToolCall(event.ItemIndex, event.ToolCall)
+	case llmprotocol.EventImageGenerationProgress:
+		return nil
+	case llmprotocol.EventOutputItemCompleted:
+		return accumulator.completeItem(event)
+	default:
+		return llmprotocol.NewError(llmprotocol.ErrorInternal, "invalid_accumulator_event", "response accumulator event is invalid", nil)
+	}
+}
+
+func (accumulator *responseAccumulator) completeResponse(event llmprotocol.Event) error {
+	accumulator.result.StopReason = event.StopReason
+	accumulator.result.MatchedStopSequence = event.MatchedStopSequence
+	accumulator.terminal = true
+	return nil
+}
+
+func (accumulator *responseAccumulator) failResponse(event llmprotocol.Event) error {
+	accumulator.result.Output = nil
+	accumulator.result.StopReason = llmprotocol.StopError
+	accumulator.result.Error = event.Error
+	accumulator.terminal = true
+	return nil
 }
 
 func (accumulator *responseAccumulator) applyEventMetadata(event llmprotocol.Event) {

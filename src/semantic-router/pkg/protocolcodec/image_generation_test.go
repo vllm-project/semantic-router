@@ -69,33 +69,54 @@ func TestResponsesGeneratedImagePreservesNullAndEmptyResults(t *testing.T) {
 		{name: "base64", resultJSON: `"ZmluYWw="`, want: "ZmluYWw="},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			body := []byte(`{"id":"resp_image","object":"response","model":"image-model","status":"completed","output":[` +
-				`{"type":"image_generation_call","id":"ig_1","status":"completed","result":` + test.resultJSON + `}]}`)
-			response, _, _, err := engine.DecodeResponse(llmprotocol.OpenAIResponsesV1, body)
-			if err != nil {
-				t.Fatal(err)
-			}
-			image := response.Output[0].Content[0].GeneratedImage
-			if image == nil || (image.Result == nil) != test.wantNil {
-				t.Fatalf("decoded image = %+v, want nil result=%v", image, test.wantNil)
-			}
-			if image.Result != nil && *image.Result != test.want {
-				t.Fatalf("decoded result = %q, want %q", *image.Result, test.want)
-			}
-			encoded, err := engine.EncodeResponse(llmprotocol.OpenAIResponsesV1, response, llmprotocol.Envelope{})
-			if err != nil {
-				t.Fatal(err)
-			}
-			var wire struct {
-				Output []map[string]json.RawMessage `json:"output"`
-			}
-			if err := json.Unmarshal(encoded.Body, &wire); err != nil {
-				t.Fatal(err)
-			}
-			if len(wire.Output) != 1 || string(wire.Output[0]["result"]) != test.resultJSON {
-				t.Fatalf("encoded result = %s, want %s\n%s", wire.Output[0]["result"], test.resultJSON, encoded.Body)
-			}
+			assertGeneratedImageResultRoundTrip(t, engine, test.resultJSON, test.wantNil, test.want)
 		})
+	}
+}
+
+func assertGeneratedImageResultRoundTrip(
+	t *testing.T,
+	engine *Engine,
+	resultJSON string,
+	wantNil bool,
+	want string,
+) {
+	t.Helper()
+	body := []byte(`{"id":"resp_image","object":"response","model":"image-model","status":"completed","output":[` +
+		`{"type":"image_generation_call","id":"ig_1","status":"completed","result":` + resultJSON + `}]}`)
+	response, _, _, err := engine.DecodeResponse(llmprotocol.OpenAIResponsesV1, body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertDecodedGeneratedImageResult(t, response, wantNil, want)
+	assertEncodedGeneratedImageResult(t, engine, response, resultJSON)
+}
+
+func assertDecodedGeneratedImageResult(t *testing.T, response llmprotocol.Response, wantNil bool, want string) {
+	t.Helper()
+	image := response.Output[0].Content[0].GeneratedImage
+	if image == nil || (image.Result == nil) != wantNil {
+		t.Fatalf("decoded image = %+v, want nil result=%v", image, wantNil)
+	}
+	if image.Result != nil && *image.Result != want {
+		t.Fatalf("decoded result = %q, want %q", *image.Result, want)
+	}
+}
+
+func assertEncodedGeneratedImageResult(t *testing.T, engine *Engine, response llmprotocol.Response, want string) {
+	t.Helper()
+	encoded, err := engine.EncodeResponse(llmprotocol.OpenAIResponsesV1, response, llmprotocol.Envelope{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wire struct {
+		Output []map[string]json.RawMessage `json:"output"`
+	}
+	if err := json.Unmarshal(encoded.Body, &wire); err != nil {
+		t.Fatal(err)
+	}
+	if len(wire.Output) != 1 || string(wire.Output[0]["result"]) != want {
+		t.Fatalf("encoded result = %s, want %s\n%s", wire.Output[0]["result"], want, encoded.Body)
 	}
 }
 
@@ -199,6 +220,12 @@ func TestImageGenerationStreamLifecycleAcceptsCompleteOrderedSequence(t *testing
 }
 
 func TestDecodeResponsesImageGenerationStreamAccumulatesTerminalImage(t *testing.T) {
+	response := decodeImageGenerationStreamFixture(t)
+	assertCompletedGeneratedImageResponse(t, response)
+}
+
+func decodeImageGenerationStreamFixture(t *testing.T) llmprotocol.Response {
+	t.Helper()
 	path := filepath.Join("testdata", "golden", "capability", "049-responses-image-generation-stream-in.json")
 	body, err := os.ReadFile(path)
 	if err != nil {
@@ -222,6 +249,11 @@ func TestDecodeResponsesImageGenerationStreamAccumulatesTerminalImage(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
+	return response
+}
+
+func assertCompletedGeneratedImageResponse(t *testing.T, response llmprotocol.Response) {
+	t.Helper()
 	if len(response.Output) != 1 || len(response.Output[0].Content) != 1 {
 		t.Fatalf("accumulated output = %+v", response.Output)
 	}
