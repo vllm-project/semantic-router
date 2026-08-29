@@ -220,6 +220,35 @@ async def test_messages_joins_tool_result_array_before_forwarding(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("stream", [False, True])
+async def test_protocol_matrix_probe_is_native_anthropic_and_deterministic(
+    client_with_upstream: tuple[httpx.AsyncClient, _UpstreamRecorder], stream: bool
+) -> None:
+    client, upstream = client_with_upstream
+    response = await client.post(
+        "/v1/messages",
+        json={
+            "model": "qwen-test",
+            "max_tokens": 16,
+            "stream": stream,
+            "messages": [{"role": "user", "content": "__mock_protocol_matrix__"}],
+        },
+    )
+
+    if stream:
+        assert response.headers["content-type"].startswith("text/event-stream")
+        assert '"type":"text_delta","text":"protocol matrix accepted"' in response.text
+        assert '"stop_reason":"end_turn"' in response.text
+        assert "event: message_stop" in response.text
+    else:
+        assert response.json()["content"] == [
+            {"type": "text", "text": "protocol matrix accepted"}
+        ]
+        assert response.json()["stop_reason"] == "end_turn"
+    assert upstream.requests == []
+
+
+@pytest.mark.asyncio
 async def test_mock_tool_lifecycle_is_native_anthropic_and_deterministic(
     client_with_upstream: tuple[httpx.AsyncClient, _UpstreamRecorder],
 ) -> None:

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -18,7 +19,84 @@ import (
 const (
 	chatBackendModel            = "openai/gpt-oss-20b"
 	nativeResponsesBackendModel = "mock/native-responses"
+	protocolCodecMockVLLMMarker = `"mock":"mock-vllm"`
+	protocolCodecAnthropicProbe = "__mock_protocol_matrix__"
+	protocolCodecAnthropicReply = "protocol matrix accepted"
 )
+
+type protocolCodecE2EClient struct {
+	name string
+	path string
+}
+
+var protocolCodecE2EClients = []protocolCodecE2EClient{
+	{name: "chat_completions", path: "/v1/chat/completions"},
+	{name: "openai_responses", path: "/v1/responses"},
+	{name: "anthropic_messages", path: "/v1/messages"},
+}
+
+func (client protocolCodecE2EClient) request(model, prompt string, stream bool) map[string]any {
+	switch client.path {
+	case "/v1/chat/completions":
+		return map[string]any{
+			"model": model, "stream": stream,
+			"messages": []map[string]string{{"role": "user", "content": prompt}},
+		}
+	case "/v1/responses":
+		return map[string]any{
+			"model": model, "input": prompt, "store": false, "stream": stream,
+		}
+	case "/v1/messages":
+		return map[string]any{
+			"model": model, "max_tokens": 64, "stream": stream,
+			"messages": []map[string]string{{"role": "user", "content": prompt}},
+		}
+	default:
+		panic("unregistered protocol codec E2E client path: " + client.path)
+	}
+}
+
+func (client protocolCodecE2EClient) validateBuffered(body []byte, expectedText string) error {
+	switch client.path {
+	case "/v1/chat/completions":
+		return assertChatCompletionBody(body, expectedText)
+	case "/v1/responses":
+		return assertResponsesBody(body, expectedText)
+	case "/v1/messages":
+		return assertAnthropicBody(body, expectedText)
+	default:
+		return fmt.Errorf("unregistered protocol codec E2E client path %q", client.path)
+	}
+}
+
+func (client protocolCodecE2EClient) validateStream(body []byte, expectedText string) error {
+	switch client.path {
+	case "/v1/chat/completions":
+		if bytes.Contains(body, []byte("event: response.")) || bytes.Contains(body, []byte("event: message_start")) {
+			return fmt.Errorf("Chat stream leaked a backend protocol: %s", truncateString(string(body), 800))
+		}
+		return assertChatTextStream(body, expectedText)
+	case "/v1/responses":
+		if err := validateResponseAPIStreamingSSEBody(string(body)); err != nil {
+			return err
+		}
+		text, err := extractProtocolStructuredOutputStreamText(client.path, body)
+		if err != nil {
+			return err
+		}
+		if !strings.Contains(text, expectedText) {
+			return fmt.Errorf("Responses stream lost backend output: %s", truncateString(string(body), 800))
+		}
+		return nil
+	case "/v1/messages":
+		if bytes.Contains(body, []byte("chat.completion.chunk")) || bytes.Contains(body, []byte("event: response.")) || bytes.Contains(body, []byte("data: [DONE]")) {
+			return fmt.Errorf("Messages stream leaked a backend protocol: %s", truncateString(string(body), 800))
+		}
+		return assertAnthropicTextStream(body, expectedText)
+	default:
+		return fmt.Errorf("unregistered protocol codec E2E client path %q", client.path)
+	}
+}
 
 func init() {
 	pkgtestcases.Register("protocol-codec-chat-backend-buffered-matrix", pkgtestcases.TestCase{
@@ -118,7 +196,9 @@ func testProtocolCodecChatBackendBufferedMatrix(
 	client *kubernetes.Clientset,
 	opts pkgtestcases.TestCaseOptions,
 ) error {
-	return runProtocolCodecBackendBufferedMatrix(ctx, client, opts, chatBackendModel, "openai.chat.v1")
+	return runProtocolCodecBackendBufferedMatrix(
+		ctx, client, opts, chatBackendModel, "openai.chat.v1", "buffered protocol matrix", protocolCodecMockVLLMMarker,
+	)
 }
 
 func testProtocolCodecResponsesBackendBufferedMatrix(
@@ -126,7 +206,9 @@ func testProtocolCodecResponsesBackendBufferedMatrix(
 	client *kubernetes.Clientset,
 	opts pkgtestcases.TestCaseOptions,
 ) error {
-	return runProtocolCodecBackendBufferedMatrix(ctx, client, opts, nativeResponsesBackendModel, "openai.responses.v1")
+	return runProtocolCodecBackendBufferedMatrix(
+		ctx, client, opts, nativeResponsesBackendModel, "openai.responses.v1", "buffered protocol matrix", protocolCodecMockVLLMMarker,
+	)
 }
 
 func testProtocolCodecAnthropicBackendBufferedMatrix(
@@ -134,7 +216,9 @@ func testProtocolCodecAnthropicBackendBufferedMatrix(
 	client *kubernetes.Clientset,
 	opts pkgtestcases.TestCaseOptions,
 ) error {
-	return runProtocolCodecBackendBufferedMatrix(ctx, client, opts, "MoM", "anthropic.messages.v1")
+	return runProtocolCodecBackendBufferedMatrix(
+		ctx, client, opts, "MoM", "anthropic.messages.v1", protocolCodecAnthropicProbe, protocolCodecAnthropicReply,
+	)
 }
 
 func runProtocolCodecBackendBufferedMatrix(
@@ -143,6 +227,8 @@ func runProtocolCodecBackendBufferedMatrix(
 	opts pkgtestcases.TestCaseOptions,
 	model string,
 	backendFormat string,
+	prompt string,
+	expectedText string,
 ) error {
 	session, err := fixtures.OpenServiceSession(ctx, client, opts)
 	if err != nil {
@@ -150,53 +236,38 @@ func runProtocolCodecBackendBufferedMatrix(
 	}
 	defer session.Close()
 
-	checks := []struct {
-		name string
-		path string
-		body any
-		want func([]byte) error
-	}{
-		{
-			name: "chat_completions",
-			path: "/v1/chat/completions",
-			body: map[string]any{
-				"model":    model,
-				"messages": []map[string]string{{"role": "user", "content": "hello from chat"}},
-			},
-			want: assertChatCompletionBody,
-		},
-		{
-			name: "anthropic_messages",
-			path: "/v1/messages",
-			body: map[string]any{
-				"model": model, "max_tokens": 64,
-				"messages": []map[string]string{{"role": "user", "content": "hello from messages"}},
-			},
-			want: assertAnthropicBody,
-		},
-		{
-			name: "openai_responses",
-			path: "/v1/responses",
-			body: map[string]any{
-				"model": model, "input": "hello from responses", "store": false,
-			},
-			want: assertResponsesBody,
-		},
-	}
-	for _, check := range checks {
-		body, requestErr := sendProtocolMatrixRequest(ctx, session, check.path, check.body, false)
+	var failures []error
+	results := make(map[string]string, len(protocolCodecE2EClients))
+	for _, clientContract := range protocolCodecE2EClients {
+		body, requestErr := sendProtocolMatrixRequest(
+			ctx,
+			session,
+			clientContract.path,
+			clientContract.request(model, prompt, false),
+			false,
+		)
 		if requestErr != nil {
-			return fmt.Errorf("%s: %w", check.name, requestErr)
+			results[clientContract.name] = "failed"
+			failures = append(failures, fmt.Errorf("%s: %w", clientContract.name, requestErr))
+			continue
 		}
-		if shapeErr := check.want(body); shapeErr != nil {
-			return fmt.Errorf("%s: %w", check.name, shapeErr)
+		if shapeErr := clientContract.validateBuffered(body, expectedText); shapeErr != nil {
+			results[clientContract.name] = "failed"
+			failures = append(failures, fmt.Errorf("%s: %w", clientContract.name, shapeErr))
+			continue
 		}
+		results[clientContract.name] = "passed"
 	}
 
 	if opts.SetDetails != nil {
-		opts.SetDetails(map[string]interface{}{"backend_format": backendFormat, "client_formats": len(checks)})
+		opts.SetDetails(map[string]interface{}{
+			"backend_format": backendFormat,
+			"client_formats": len(protocolCodecE2EClients),
+			"mode":           "buffered",
+			"matrix_cells":   results,
+		})
 	}
-	return nil
+	return errors.Join(failures...)
 }
 
 func testProtocolCodecChatBackendStreamingMatrix(
@@ -204,7 +275,9 @@ func testProtocolCodecChatBackendStreamingMatrix(
 	client *kubernetes.Clientset,
 	opts pkgtestcases.TestCaseOptions,
 ) error {
-	return runProtocolCodecBackendStreamingMatrix(ctx, client, opts, chatBackendModel, "openai.chat.v1")
+	return runProtocolCodecBackendStreamingMatrix(
+		ctx, client, opts, chatBackendModel, "openai.chat.v1", "streaming protocol matrix", protocolCodecMockVLLMMarker,
+	)
 }
 
 func testProtocolCodecResponsesBackendStreamingMatrix(
@@ -212,7 +285,9 @@ func testProtocolCodecResponsesBackendStreamingMatrix(
 	client *kubernetes.Clientset,
 	opts pkgtestcases.TestCaseOptions,
 ) error {
-	return runProtocolCodecBackendStreamingMatrix(ctx, client, opts, nativeResponsesBackendModel, "openai.responses.v1")
+	return runProtocolCodecBackendStreamingMatrix(
+		ctx, client, opts, nativeResponsesBackendModel, "openai.responses.v1", "streaming protocol matrix", protocolCodecMockVLLMMarker,
+	)
 }
 
 func testProtocolCodecAnthropicBackendStreamingMatrix(
@@ -220,7 +295,9 @@ func testProtocolCodecAnthropicBackendStreamingMatrix(
 	client *kubernetes.Clientset,
 	opts pkgtestcases.TestCaseOptions,
 ) error {
-	return runProtocolCodecBackendStreamingMatrix(ctx, client, opts, "MoM", "anthropic.messages.v1")
+	return runProtocolCodecBackendStreamingMatrix(
+		ctx, client, opts, "MoM", "anthropic.messages.v1", protocolCodecAnthropicProbe, protocolCodecAnthropicReply,
+	)
 }
 
 func runProtocolCodecBackendStreamingMatrix(
@@ -229,6 +306,8 @@ func runProtocolCodecBackendStreamingMatrix(
 	opts pkgtestcases.TestCaseOptions,
 	model string,
 	backendFormat string,
+	prompt string,
+	expectedText string,
 ) error {
 	session, err := fixtures.OpenServiceSession(ctx, client, opts)
 	if err != nil {
@@ -236,44 +315,38 @@ func runProtocolCodecBackendStreamingMatrix(
 	}
 	defer session.Close()
 
-	chat, err := sendProtocolMatrixRequest(ctx, session, "/v1/chat/completions", map[string]any{
-		"model":    model,
-		"messages": []map[string]string{{"role": "user", "content": "stream chat"}},
-		"stream":   true,
-	}, true)
-	if err != nil {
-		return fmt.Errorf("chat stream: %w", err)
-	}
-	if !bytes.Contains(chat, []byte("chat.completion.chunk")) || !bytes.Contains(chat, []byte("data: [DONE]")) || bytes.Contains(chat, []byte("response.output_text.delta")) {
-		return fmt.Errorf("chat stream leaked the backend protocol: %s", truncateString(string(chat), 500))
-	}
-
-	messages, err := sendProtocolMatrixRequest(ctx, session, "/v1/messages", map[string]any{
-		"model": model, "max_tokens": 64,
-		"messages": []map[string]string{{"role": "user", "content": "stream messages"}},
-		"stream":   true,
-	}, true)
-	if err != nil {
-		return fmt.Errorf("messages stream: %w", err)
-	}
-	if !bytes.Contains(messages, []byte("event: message_start")) || !bytes.Contains(messages, []byte("event: message_stop")) || bytes.Contains(messages, []byte("response.output_text.delta")) {
-		return fmt.Errorf("Messages stream leaked the backend protocol: %s", truncateString(string(messages), 500))
-	}
-
-	responses, err := sendProtocolMatrixRequest(ctx, session, "/v1/responses", map[string]any{
-		"model": model, "input": "stream responses", "stream": true, "store": false,
-	}, true)
-	if err != nil {
-		return fmt.Errorf("Responses stream: %w", err)
-	}
-	if err := validateResponseAPIStreamingSSEBody(string(responses)); err != nil {
-		return fmt.Errorf("Responses stream: %w", err)
+	var failures []error
+	results := make(map[string]string, len(protocolCodecE2EClients))
+	for _, clientContract := range protocolCodecE2EClients {
+		body, requestErr := sendProtocolMatrixRequest(
+			ctx,
+			session,
+			clientContract.path,
+			clientContract.request(model, prompt, true),
+			true,
+		)
+		if requestErr != nil {
+			results[clientContract.name] = "failed"
+			failures = append(failures, fmt.Errorf("%s: %w", clientContract.name, requestErr))
+			continue
+		}
+		if shapeErr := clientContract.validateStream(body, expectedText); shapeErr != nil {
+			results[clientContract.name] = "failed"
+			failures = append(failures, fmt.Errorf("%s: %w", clientContract.name, shapeErr))
+			continue
+		}
+		results[clientContract.name] = "passed"
 	}
 
 	if opts.SetDetails != nil {
-		opts.SetDetails(map[string]interface{}{"backend_format": backendFormat, "streaming_client_formats": 3})
+		opts.SetDetails(map[string]interface{}{
+			"backend_format":           backendFormat,
+			"streaming_client_formats": len(protocolCodecE2EClients),
+			"mode":                     "streaming",
+			"matrix_cells":             results,
+		})
 	}
-	return nil
+	return errors.Join(failures...)
 }
 
 func testProtocolCodecIncompleteStreamTerminal(
@@ -678,7 +751,7 @@ func sendProtocolMatrixRaw(
 	return protocolMatrixHTTPResult{StatusCode: resp.StatusCode, Body: responseBody}, nil
 }
 
-func assertChatCompletionBody(body []byte) error {
+func assertChatCompletionBody(body []byte, expectedText string) error {
 	var response struct {
 		Object  string `json:"object"`
 		Choices []struct {
@@ -690,26 +763,37 @@ func assertChatCompletionBody(body []byte) error {
 	if err := json.Unmarshal(body, &response); err != nil {
 		return err
 	}
-	if response.Object != "chat.completion" || len(response.Choices) != 1 || !strings.Contains(response.Choices[0].Message.Content, `"mock":"mock-vllm"`) {
+	if response.Object != "chat.completion" || len(response.Choices) != 1 || !strings.Contains(response.Choices[0].Message.Content, expectedText) {
 		return fmt.Errorf("invalid Chat Completions response: %s", truncateString(string(body), 500))
 	}
 	return nil
 }
 
-func assertAnthropicBody(body []byte) error {
+func assertAnthropicBody(body []byte, expectedText string) error {
 	var response anthropicMessageResponse
 	if err := json.Unmarshal(body, &response); err != nil {
 		return err
 	}
-	return assertAnthropicMessageShape(response)
+	if err := assertAnthropicMessageShape(response); err != nil {
+		return err
+	}
+	var content struct {
+		Type string `json:"type"`
+		Text string `json:"text"`
+	}
+	if len(response.Content) != 1 || json.Unmarshal(response.Content[0], &content) != nil ||
+		content.Type != "text" || !strings.Contains(content.Text, expectedText) {
+		return fmt.Errorf("invalid Anthropic Messages response: %s", truncateString(string(body), 500))
+	}
+	return nil
 }
 
-func assertResponsesBody(body []byte) error {
+func assertResponsesBody(body []byte, expectedText string) error {
 	var response fixtures.ResponseAPIResponse
 	if err := json.Unmarshal(body, &response); err != nil {
 		return err
 	}
-	if response.Object != "response" || response.Status != "completed" || !strings.Contains(response.OutputText, `"mock":"mock-vllm"`) {
+	if response.Object != "response" || response.Status != "completed" || !strings.Contains(response.OutputText, expectedText) {
 		return fmt.Errorf("invalid Responses response: %s", truncateString(string(body), 500))
 	}
 	return nil

@@ -17,6 +17,7 @@ import os
 from collections import OrderedDict
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
+from http import HTTPStatus
 from typing import Any
 
 import httpx
@@ -116,6 +117,21 @@ def _mock_anthropic_tool_response(body: dict[str, Any]) -> dict[str, Any] | None
             "usage": {"input_tokens": 4, "output_tokens": 3},
         }
     return None
+
+
+def _mock_anthropic_text_response(body: dict[str, Any]) -> dict[str, Any] | None:
+    if not _contains_text(body.get("messages"), "__mock_protocol_matrix__"):
+        return None
+    return {
+        "id": "msg_mock_protocol_matrix_123",
+        "type": "message",
+        "role": "assistant",
+        "model": body.get("model", ""),
+        "content": [{"type": "text", "text": "protocol matrix accepted"}],
+        "stop_reason": "end_turn",
+        "stop_sequence": None,
+        "usage": {"input_tokens": 4, "output_tokens": 3},
+    }
 
 
 def _mock_anthropic_tool_stream(body: dict[str, Any]) -> Iterator[bytes]:
@@ -438,27 +454,10 @@ def create_app(
     return app
 
 
-async def _handle_messages(request: Request, app: FastAPI) -> Response:
-    raw_body = await request.body()
-    try:
-        body: dict[str, Any] = (
-            httpx.Response(200, content=raw_body).json() if raw_body else {}
-        )
-    except ValueError:
-        return JSONResponse(
-            status_code=400,
-            content={"error": "invalid_json", "detail": "body is not JSON"},
-        )
-
-    request_had_cache_control = has_cache_control(body)
-    prefix_hash = cache_prefix_hash(body) if request_had_cache_control else ""
-
-    body = join_system_array(body)
-    body = join_tool_result_content(body)
-
+def _mock_messages_response(body: dict[str, Any]) -> Response | None:
     if _contains_text(body.get("messages"), "__mock_provider_error__"):
         return JSONResponse(
-            status_code=429,
+            status_code=HTTPStatus.TOO_MANY_REQUESTS,
             content={
                 "type": "error",
                 "error": {
@@ -485,6 +484,15 @@ async def _handle_messages(request: Request, app: FastAPI) -> Response:
             media_type="text/event-stream",
         )
 
+    mock_text_response = _mock_anthropic_text_response(body)
+    if mock_text_response is not None:
+        if body.get("stream"):
+            return StreamingResponse(
+                _mock_anthropic_text_stream(body, "protocol matrix accepted"),
+                media_type="text/event-stream",
+            )
+        return JSONResponse(content=mock_text_response)
+
     mock_tool_response = _mock_anthropic_tool_response(body)
     if mock_tool_response is not None:
         if body.get("stream"):
@@ -495,6 +503,30 @@ async def _handle_messages(request: Request, app: FastAPI) -> Response:
             return StreamingResponse(iterator, media_type="text/event-stream")
         if not body.get("stream"):
             return JSONResponse(content=mock_tool_response)
+    return None
+
+
+async def _handle_messages(request: Request, app: FastAPI) -> Response:
+    raw_body = await request.body()
+    try:
+        body: dict[str, Any] = (
+            httpx.Response(HTTPStatus.OK, content=raw_body).json() if raw_body else {}
+        )
+    except ValueError:
+        return JSONResponse(
+            status_code=HTTPStatus.BAD_REQUEST,
+            content={"error": "invalid_json", "detail": "body is not JSON"},
+        )
+
+    request_had_cache_control = has_cache_control(body)
+    prefix_hash = cache_prefix_hash(body) if request_had_cache_control else ""
+
+    body = join_system_array(body)
+    body = join_tool_result_content(body)
+
+    mock_response = _mock_messages_response(body)
+    if mock_response is not None:
+        return mock_response
 
     session_id = request.headers.get(app.state.session_header) or "__global__"
     headers = _filtered_headers(dict(request.headers))
@@ -580,7 +612,7 @@ async def _proxy_stream(
 
     async def iterate() -> AsyncIterator[bytes]:
         try:
-            if not translate_openai or upstream.status_code >= 400:
+            if not translate_openai or upstream.status_code >= HTTPStatus.BAD_REQUEST:
                 async for chunk in upstream.aiter_raw():
                     yield chunk
                 return

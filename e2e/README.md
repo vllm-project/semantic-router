@@ -157,9 +157,12 @@ profile passed in another environment.
 The `response-api` and `anthropic-shim` affected-change profiles jointly own the
 three native protocol backends used by the pairwise codec matrix. Their default
 contracts exercise Chat Completions, Responses, and Messages clients against each
-backend in buffered and streaming modes, including tool-call lifecycles,
-structured JSON Schema output, provider transport errors, incomplete streams, and
-midstream failures.
+backend in buffered and streaming modes: 3 client protocols x 3 backend protocols
+x 2 response modes, for 18 required end-to-end cells. Each cell validates the
+client-native response envelope or SSE sequence, the terminal event, translated
+backend output, and the absence of leaked backend wire shapes. The same profiles
+also cover tool-call lifecycles, structured JSON Schema output, provider transport
+errors, incomplete streams, and midstream failures.
 
 ## Add or change a profile
 
