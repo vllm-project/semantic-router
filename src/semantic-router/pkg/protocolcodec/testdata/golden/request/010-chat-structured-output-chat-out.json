@@ -10,7 +10,6 @@
   "reasoning_effort": "high",
   "response_format": {
     "json_schema": {
-      "description": "",
       "name": "structured_output",
       "schema": {
         "additionalProperties": false,

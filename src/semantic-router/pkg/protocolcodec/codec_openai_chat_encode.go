@@ -301,7 +301,14 @@ func encodeChatOutputFormat(format llmprotocol.OutputFormat) (*chatOutputWire, e
 	case llmprotocol.OutputJSONObject:
 		return &chatOutputWire{Type: "json_object"}, nil
 	case llmprotocol.OutputJSONSchema:
-		body, err := json.Marshal(map[string]any{"name": format.Name, "description": format.Description, "strict": format.Strict, "schema": format.Schema})
+		schema := map[string]any{"name": format.Name, "schema": format.Schema}
+		if format.Description != "" {
+			schema["description"] = format.Description
+		}
+		if format.Strict != nil {
+			schema["strict"] = format.Strict
+		}
+		body, err := json.Marshal(schema)
 		return &chatOutputWire{Type: "json_schema", JSONObject: body}, err
 	default:
 		return nil, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_output_format", "output format cannot be encoded as chat", nil)
