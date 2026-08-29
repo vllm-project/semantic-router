@@ -12,8 +12,8 @@ from community_lifecycle_github import (
     GitHubClient,
     accept_issue_event,
     sync_issue_event,
-    sync_open_pull_requests,
     sync_pull_request_event,
+    sync_pull_request_queue,
     validate_pull_request_event,
     validate_title_event,
 )
@@ -83,7 +83,7 @@ def main() -> int:
     elif args.command == "sync-pr":
         sync_pull_request_event(client, event)
     else:
-        sync_open_pull_requests(client, event)
+        sync_pull_request_queue(client, event)
     return 0
 
 

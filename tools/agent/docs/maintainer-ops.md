@@ -198,14 +198,17 @@ inheritance. Review submissions and check-suite completion refresh that state,
 so `pr/needs-review`, `pr/needs-author`, `pr/needs-rebase`, `pr/blocked`, and
 `pr/merge-ready` remain mutually exclusive. The workflow never executes
 pull-request code with a write token. An hourly reconciliation covers status
-changes that do not emit a trusted write-capable event.
+changes that do not emit a trusted write-capable event, including the merge or
+close that ends a pull request's review lifecycle.
 
 `pr/blocked` means the PR currently fails admission, has an errored or failed
 check rollup, or is approved while required check or merge signals remain
 pending or unknown. An explicitly behind or dirty branch resolves to
 `pr/needs-rebase` instead. The next reconciliation removes `pr/blocked` when
 the PR resolves to needs-author, needs-rebase, needs-review, close-candidate,
-or merge-ready.
+or merge-ready. A merged or closed pull request holds no `pr/*` state label,
+because no review action remains for it; ownership and milestone inheritance
+are retained.
 
 ### Relationship to `stale.yml`
 
