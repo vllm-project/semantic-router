@@ -23,9 +23,10 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 	if err != nil {
 		metrics.RecordRequestError(ctx.RequestModel, "parse_error")
 		logging.ComponentErrorEvent("extproc", "neutral_response_decode_failed", map[string]interface{}{
-			"request_id": ctx.RequestID,
-			"format":     ctx.SourceFormat,
-			"error":      err.Error(),
+			"request_id":     ctx.RequestID,
+			"backend_format": ctx.TargetFormat,
+			"client_format":  ctx.SourceFormat,
+			"error":          err.Error(),
 		})
 		return r.createErrorResponse(502, "The selected model returned an invalid response")
 	}
