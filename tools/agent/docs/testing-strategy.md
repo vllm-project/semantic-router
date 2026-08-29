@@ -121,9 +121,11 @@ See [environments.md](environments.md) for the concrete commands.
   `extproc`; CLI supplies `extproc`, `vllm-sr`, `dashboard`, and `vllm-sr-sim`;
   Memory adds `llm-katan`; Operator supplies `extproc`, `operator`, and
   `operator-bundle`; Recipe Conformance supplies `vllm-sr`.
-- Performance runs only for `perf/**` (plus its explicit manual/nightly
-  lifecycle). `ci/full` expands E2E and affected Operator coverage but does not
-  enable Performance.
+- Performance runs for non-documentation changes under `perf/**`, the
+  performance Make contract, and the covered classification, ExtProc, decision,
+  selection, and Looper hot paths. Documentation-only changes stay lightweight. `ci/full`
+  expands E2E and affected Operator coverage but does not independently enable
+  Performance.
 - Native Candle, ML, NLP, and ONNX paths select the core/native receipt.
   `make test` builds Candle, ML, and NLP and runs Candle tests; mandatory ONNX
   runtime coverage remains the explicit TD046 gap.

@@ -33,3 +33,45 @@ func TestMissingBenchmarks(t *testing.T) {
 		t.Errorf("MissingBenchmarks = %v, want %v", got, want)
 	}
 }
+
+func TestBuildComparisonFailsClosedForSuiteInventory(t *testing.T) {
+	baseline := &Baseline{
+		Metadata: RunMetadata{Environment: "cpu"},
+		Benchmarks: map[string]BenchmarkMetric{
+			"A":          {Suite: "core"},
+			"Missing":    {Suite: "core"},
+			"OtherSuite": {Suite: "other"},
+		},
+	}
+	current := &Baseline{
+		Metadata: RunMetadata{
+			Environment: "cpu",
+			Suites:      []SuiteRunMetadata{{Name: "core"}},
+		},
+		Benchmarks: map[string]BenchmarkMetric{
+			"A":   {Suite: "core"},
+			"New": {Suite: "core"},
+		},
+	}
+	comparison, err := BuildComparison(current, baseline, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if comparison.CoverageComplete {
+		t.Fatal("comparison with new and missing measurements must be incomplete")
+	}
+	if !reflect.DeepEqual(comparison.Ungated, []string{"New"}) {
+		t.Fatalf("ungated = %v", comparison.Ungated)
+	}
+	if !reflect.DeepEqual(comparison.Missing, []string{"Missing"}) {
+		t.Fatalf("missing = %v", comparison.Missing)
+	}
+}
+
+func TestBuildComparisonRejectsEnvironmentMismatch(t *testing.T) {
+	current := &Baseline{Metadata: RunMetadata{Environment: "cpu"}, Benchmarks: map[string]BenchmarkMetric{}}
+	baseline := &Baseline{Metadata: RunMetadata{Environment: "amd-gpu"}, Benchmarks: map[string]BenchmarkMetric{}}
+	if _, err := BuildComparison(current, baseline, nil); err == nil {
+		t.Fatal("expected environment mismatch to fail")
+	}
+}

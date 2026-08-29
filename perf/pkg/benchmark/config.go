@@ -1,176 +1,379 @@
 package benchmark
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"regexp"
+	"sort"
+	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
 
-// Config holds performance testing configuration
-type Config struct {
-	BenchmarkConfig BenchmarkConfigSection `yaml:"benchmark_config"`
-	Profiling       ProfilingConfig        `yaml:"profiling"`
-	Reporting       ReportingConfig        `yaml:"reporting"`
+const ManifestSchemaVersion = 1
+
+var manifestName = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*$`)
+
+// Manifest is the versioned execution contract shared by local runs and CI.
+// Environments describe runner capabilities, profiles choose a bounded set of
+// suites, and suites own the command needed to produce measurements.
+type Manifest struct {
+	SchemaVersion int                          `yaml:"schema_version"`
+	Environments  map[string]EnvironmentConfig `yaml:"environments"`
+	Profiles      map[string]ProfileConfig     `yaml:"profiles"`
+	Suites        map[string]SuiteConfig       `yaml:"suites"`
+	Trends        map[string]TrendConfig       `yaml:"trends,omitempty"`
 }
 
-// BenchmarkConfigSection defines benchmark parameters
-type BenchmarkConfigSection struct {
-	Classification ClassificationConfig `yaml:"classification"`
-	Cache          CacheConfig          `yaml:"cache"`
-	E2E            E2EConfig            `yaml:"e2e"`
+type EnvironmentConfig struct {
+	Kind         string            `yaml:"kind"`
+	Accelerator  string            `yaml:"accelerator,omitempty"`
+	Description  string            `yaml:"description,omitempty"`
+	Capabilities []string          `yaml:"capabilities"`
+	Env          map[string]string `yaml:"env,omitempty"`
 }
 
-// ClassificationConfig defines classification benchmark parameters
-type ClassificationConfig struct {
-	BatchSizes       []int `yaml:"batch_sizes"`
-	Iterations       int   `yaml:"iterations"`
-	WarmupIterations int   `yaml:"warmup_iterations"`
+type ProfileConfig struct {
+	Description string   `yaml:"description,omitempty"`
+	Suites      []string `yaml:"suites"`
+	Count       int      `yaml:"count,omitempty"`
+	BenchTime   string   `yaml:"benchtime,omitempty"`
+	Timeout     string   `yaml:"timeout,omitempty"`
 }
 
-// CacheConfig defines cache benchmark parameters
-type CacheConfig struct {
-	CacheSizes        []int   `yaml:"cache_sizes"`
-	ConcurrencyLevels []int   `yaml:"concurrency_levels"`
-	HitRatio          float64 `yaml:"hit_ratio"`
+// SuiteConfig describes either a native Go benchmark suite or an external
+// producer. External producers receive VSR_PERF_RESULT_FILE and must write the
+// same Baseline JSON schema used by the built-in runner.
+type SuiteConfig struct {
+	Description  string              `yaml:"description,omitempty"`
+	Runner       string              `yaml:"runner"`
+	Module       string              `yaml:"module"`
+	Packages     []string            `yaml:"packages,omitempty"`
+	Benchmark    string              `yaml:"benchmark,omitempty"`
+	Command      []string            `yaml:"command,omitempty"`
+	Environments []string            `yaml:"environments"`
+	Requires     []string            `yaml:"requires,omitempty"`
+	Dimensions   map[string][]string `yaml:"dimensions,omitempty"`
+	SourcePaths  []string            `yaml:"source_paths,omitempty"`
 }
 
-// E2EConfig defines E2E benchmark parameters
-type E2EConfig struct {
-	LoadPatterns []LoadPattern `yaml:"load_patterns"`
+// TrendConfig describes one controlled scaling view over benchmark dimensions.
+// It is intentionally separate from suites: suites own execution, while trends
+// choose comparable points and presentation without expanding the run matrix.
+type TrendConfig struct {
+	Title           string `yaml:"title"`
+	Description     string `yaml:"description,omitempty"`
+	Suite           string `yaml:"suite"`
+	Benchmark       string `yaml:"benchmark"`
+	XDimension      string `yaml:"x_dimension"`
+	SeriesDimension string `yaml:"series_dimension,omitempty"`
+	Metric          string `yaml:"metric"`
+	XScale          string `yaml:"x_scale,omitempty"`
 }
 
-// LoadPattern defines a load testing pattern
-type LoadPattern struct {
-	Name     string `yaml:"name"`
-	QPS      int    `yaml:"qps,omitempty"`
-	StartQPS int    `yaml:"start_qps,omitempty"`
-	EndQPS   int    `yaml:"end_qps,omitempty"`
-	Duration string `yaml:"duration"`
+type ResolvedRun struct {
+	EnvironmentName string
+	Environment     EnvironmentConfig
+	ProfileName     string
+	Profile         ProfileConfig
+	Suites          []ResolvedSuite
+	Trends          []ResolvedTrend
 }
 
-// ProfilingConfig defines profiling settings
-type ProfilingConfig struct {
-	EnableCPU       bool   `yaml:"enable_cpu"`
-	EnableMemory    bool   `yaml:"enable_memory"`
-	EnableGoroutine bool   `yaml:"enable_goroutine"`
-	OutputDir       string `yaml:"output_dir"`
+type ResolvedSuite struct {
+	Name   string
+	Config SuiteConfig
 }
 
-// ReportingConfig defines reporting settings
-type ReportingConfig struct {
-	Formats     []string `yaml:"formats"`
-	BaselineDir string   `yaml:"baseline_dir"`
+type ResolvedTrend struct {
+	Name   string
+	Config TrendConfig
 }
 
-// LoadConfig loads configuration from a YAML file
-func LoadConfig(path string) (*Config, error) {
+func LoadManifest(path string) (*Manifest, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read config file: %w", err)
+		return nil, fmt.Errorf("read performance manifest: %w", err)
 	}
-
-	var config Config
-	if err := yaml.Unmarshal(data, &config); err != nil {
-		return nil, fmt.Errorf("failed to parse config: %w", err)
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	decoder.KnownFields(true)
+	var manifest Manifest
+	if err := decoder.Decode(&manifest); err != nil {
+		return nil, fmt.Errorf("parse performance manifest: %w", err)
 	}
-
-	// Set defaults
-	if config.Profiling.OutputDir == "" {
-		config.Profiling.OutputDir = "reports"
+	if err := manifest.Validate(); err != nil {
+		return nil, err
 	}
+	return &manifest, nil
+}
 
-	if config.Reporting.BaselineDir == "" {
-		config.Reporting.BaselineDir = "testdata/baselines"
+func (m *Manifest) Validate() error {
+	if m.SchemaVersion != ManifestSchemaVersion {
+		return fmt.Errorf("unsupported performance manifest schema_version %d (want %d)", m.SchemaVersion, ManifestSchemaVersion)
 	}
-
-	return &config, nil
-}
-
-// ThresholdsConfig holds performance threshold configuration
-type ThresholdsConfig struct {
-	ComponentBenchmarks ComponentBenchmarksThresholds `yaml:"component_benchmarks"`
-	E2ETests            E2ETestsThresholds            `yaml:"e2e_tests"`
-	ResourceLimits      ResourceLimitsThresholds      `yaml:"resource_limits"`
-}
-
-// ComponentBenchmarksThresholds defines regression thresholds for component
-// benchmarks. Each entry matches a benchmark by name; Default applies to any
-// benchmark no entry matches.
-type ComponentBenchmarksThresholds struct {
-	Default    RegressionThreshold            `yaml:"default"`
-	Benchmarks []BenchmarkRegressionThreshold `yaml:"benchmarks"`
-}
-
-// RegressionThreshold holds the per-metric regression bounds for a benchmark.
-//
-// The gate blocks on allocs/op and B/op because they are hardware-independent
-// (determined by the code path, not the CPU), so they compare cleanly across
-// machines. ns/op is ADVISORY: MaxNsRegressionPercent is reported but never
-// fails the gate, because absolute time depends on the runner's hardware.
-type RegressionThreshold struct {
-	MaxAllocsRegressionPercent float64 `yaml:"max_allocs_regression_percent"`
-	MaxBytesRegressionPercent  float64 `yaml:"max_bytes_regression_percent"`
-	MaxNsRegressionPercent     float64 `yaml:"max_ns_regression_percent,omitempty"`
-}
-
-// BenchmarkRegressionThreshold maps a benchmark-name regexp to its thresholds.
-// Name is a human label for readability only.
-type BenchmarkRegressionThreshold struct {
-	Name                string `yaml:"name"`
-	Pattern             string `yaml:"pattern"`
-	RegressionThreshold `yaml:",inline"`
-}
-
-// E2ETestsThresholds defines thresholds for E2E tests
-type E2ETestsThresholds struct {
-	Throughput ThroughputThreshold `yaml:"throughput"`
-	Latency    LatencyThreshold    `yaml:"latency"`
-}
-
-// ResourceLimitsThresholds defines resource limit thresholds
-type ResourceLimitsThresholds struct {
-	MaxMemoryMB   int     `yaml:"max_memory_mb"`
-	MaxGoroutines int     `yaml:"max_goroutines"`
-	MaxCPUPercent float64 `yaml:"max_cpu_percent"`
-}
-
-// ThroughputThreshold defines throughput thresholds
-type ThroughputThreshold struct {
-	MinSustainedQPS float64 `yaml:"min_sustained_qps"`
-	MinSuccessRate  float64 `yaml:"min_success_rate"`
-}
-
-// LatencyThreshold defines latency thresholds
-type LatencyThreshold struct {
-	MaxP95Ms float64 `yaml:"max_p95_ms"`
-	MaxP99Ms float64 `yaml:"max_p99_ms"`
-}
-
-// LoadThresholds loads threshold configuration from a YAML file
-func LoadThresholds(path string) (*ThresholdsConfig, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read thresholds file: %w", err)
+	if len(m.Environments) == 0 || len(m.Profiles) == 0 || len(m.Suites) == 0 {
+		return fmt.Errorf("performance manifest requires environments, profiles, and suites")
 	}
-
-	var thresholds ThresholdsConfig
-	if err := yaml.Unmarshal(data, &thresholds); err != nil {
-		return nil, fmt.Errorf("failed to parse thresholds: %w", err)
+	if err := m.validateEnvironments(); err != nil {
+		return err
 	}
+	if err := m.validateSuites(); err != nil {
+		return err
+	}
+	if err := m.validateTrends(); err != nil {
+		return err
+	}
+	return m.validateProfiles()
+}
 
-	// Reject invalid benchmark patterns up front. Otherwise a typo'd regexp is
-	// skipped at match time and the benchmark silently falls back to the (looser)
-	// default, quietly relaxing the gate with no signal.
-	for _, b := range thresholds.ComponentBenchmarks.Benchmarks {
-		if b.Pattern == "" {
-			continue
+func (m *Manifest) validateTrends() error {
+	for name, trend := range m.Trends {
+		if !manifestName.MatchString(name) {
+			return fmt.Errorf("invalid trend name %q", name)
 		}
-		if _, err := regexp.Compile(b.Pattern); err != nil {
-			return nil, fmt.Errorf("invalid regexp for benchmark %q: %w", b.Name, err)
+		if strings.TrimSpace(trend.Title) == "" || strings.TrimSpace(trend.XDimension) == "" {
+			return fmt.Errorf("trend %q requires title and x_dimension", name)
+		}
+		if _, ok := m.Suites[trend.Suite]; !ok {
+			return fmt.Errorf("trend %q references unknown suite %q", name, trend.Suite)
+		}
+		if _, err := regexp.Compile(trend.Benchmark); err != nil {
+			return fmt.Errorf("trend %q has invalid benchmark regexp: %w", name, err)
+		}
+		if trend.SeriesDimension == trend.XDimension {
+			return fmt.Errorf("trend %q cannot use %q for both x and series dimensions", name, trend.XDimension)
+		}
+		if !validTrendMetric(trend.Metric) {
+			return fmt.Errorf("trend %q has unsupported metric %q", name, trend.Metric)
+		}
+		if trend.XScale != "" && trend.XScale != "linear" && trend.XScale != "log2" {
+			return fmt.Errorf("trend %q has unsupported x_scale %q", name, trend.XScale)
 		}
 	}
+	return nil
+}
 
-	return &thresholds, nil
+func validTrendMetric(metric string) bool {
+	switch metric {
+	case "latency_us_per_op", "latency_ms_per_op", "allocs_per_op", "bytes_per_op",
+		"p50_latency_ms", "p95_latency_ms", "p99_latency_ms", "throughput_qps":
+		return true
+	default:
+		return strings.HasPrefix(metric, "custom:") && strings.TrimSpace(strings.TrimPrefix(metric, "custom:")) != ""
+	}
+}
+
+func (m *Manifest) validateEnvironments() error {
+	for name, environment := range m.Environments {
+		if !manifestName.MatchString(name) || strings.TrimSpace(environment.Kind) == "" {
+			return fmt.Errorf("environment names and kinds must be non-empty")
+		}
+		if environment.Kind != "cpu" && environment.Kind != "gpu" {
+			return fmt.Errorf("environment %q has unsupported kind %q", name, environment.Kind)
+		}
+		if environment.Kind == "gpu" && environment.Accelerator == "" {
+			return fmt.Errorf("GPU environment %q must name an accelerator", name)
+		}
+		if duplicate := firstDuplicate(environment.Capabilities); duplicate != "" {
+			return fmt.Errorf("environment %q repeats capability %q", name, duplicate)
+		}
+	}
+	return nil
+}
+
+func (m *Manifest) validateSuites() error {
+	for name, suite := range m.Suites {
+		if err := m.validateSuite(name, suite); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (m *Manifest) validateProfiles() error {
+	for name, profile := range m.Profiles {
+		if err := m.validateProfile(name, profile); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (m *Manifest) validateProfile(name string, profile ProfileConfig) error {
+	if !manifestName.MatchString(name) {
+		return fmt.Errorf("invalid profile name %q", name)
+	}
+	if len(profile.Suites) == 0 {
+		return fmt.Errorf("profile %q has no suites", name)
+	}
+	if profile.Count < 0 {
+		return fmt.Errorf("profile %q count must be non-negative", name)
+	}
+	if err := validateProfileDuration(name, "benchtime", profile.BenchTime); err != nil {
+		return err
+	}
+	if err := validateProfileDuration(name, "timeout", profile.Timeout); err != nil {
+		return err
+	}
+	if duplicate := firstDuplicate(profile.Suites); duplicate != "" {
+		return fmt.Errorf("profile %q repeats suite %q", name, duplicate)
+	}
+	for _, suite := range profile.Suites {
+		if _, ok := m.Suites[suite]; !ok {
+			return fmt.Errorf("profile %q references unknown suite %q", name, suite)
+		}
+	}
+	return nil
+}
+
+func validateProfileDuration(profileName, field, value string) error {
+	if value == "" {
+		return nil
+	}
+	if _, err := time.ParseDuration(value); err != nil {
+		return fmt.Errorf("profile %q has invalid %s: %w", profileName, field, err)
+	}
+	return nil
+}
+
+func (m *Manifest) validateSuite(name string, suite SuiteConfig) error {
+	if !manifestName.MatchString(name) {
+		return fmt.Errorf("invalid suite name %q", name)
+	}
+	if suite.Module == "" {
+		return fmt.Errorf("suite %q must set module", name)
+	}
+	if len(suite.Environments) == 0 {
+		return fmt.Errorf("suite %q must name at least one environment", name)
+	}
+	for _, environment := range suite.Environments {
+		if _, ok := m.Environments[environment]; !ok {
+			return fmt.Errorf("suite %q references unknown environment %q", name, environment)
+		}
+	}
+	if duplicate := firstDuplicate(suite.Environments); duplicate != "" {
+		return fmt.Errorf("suite %q repeats environment %q", name, duplicate)
+	}
+	return validateSuiteRunner(name, suite)
+}
+
+func validateSuiteRunner(name string, suite SuiteConfig) error {
+	switch suite.Runner {
+	case "go_benchmark":
+		return validateGoBenchmarkSuite(name, suite)
+	case "external":
+		return validateExternalSuite(name, suite)
+	default:
+		return fmt.Errorf("suite %q has unsupported runner %q", name, suite.Runner)
+	}
+}
+
+func validateGoBenchmarkSuite(name string, suite SuiteConfig) error {
+	if len(suite.Packages) == 0 || suite.Benchmark == "" {
+		return fmt.Errorf("go_benchmark suite %q requires packages and benchmark", name)
+	}
+	if _, err := regexp.Compile(suite.Benchmark); err != nil {
+		return fmt.Errorf("suite %q has invalid benchmark regexp: %w", name, err)
+	}
+	if len(suite.Command) > 0 {
+		return fmt.Errorf("go_benchmark suite %q cannot set command", name)
+	}
+	return nil
+}
+
+func validateExternalSuite(name string, suite SuiteConfig) error {
+	if len(suite.Command) == 0 || strings.TrimSpace(suite.Command[0]) == "" {
+		return fmt.Errorf("external suite %q requires command", name)
+	}
+	if len(suite.Packages) > 0 || suite.Benchmark != "" {
+		return fmt.Errorf("external suite %q cannot set packages or benchmark", name)
+	}
+	return nil
+}
+
+func (m *Manifest) Resolve(environmentName, profileName string) (*ResolvedRun, error) {
+	environment, ok := m.Environments[environmentName]
+	if !ok {
+		return nil, fmt.Errorf("unknown performance environment %q (available: %s)", environmentName, strings.Join(sortedMapKeys(m.Environments), ", "))
+	}
+	profile, ok := m.Profiles[profileName]
+	if !ok {
+		return nil, fmt.Errorf("unknown performance profile %q (available: %s)", profileName, strings.Join(sortedMapKeys(m.Profiles), ", "))
+	}
+	if profile.Count == 0 {
+		profile.Count = 1
+	}
+	if profile.BenchTime == "" {
+		profile.BenchTime = "1s"
+	}
+	if profile.Timeout == "" {
+		profile.Timeout = "15m"
+	}
+
+	capabilities := make(map[string]struct{}, len(environment.Capabilities))
+	for _, capability := range environment.Capabilities {
+		capabilities[capability] = struct{}{}
+	}
+	resolved := &ResolvedRun{
+		EnvironmentName: environmentName,
+		Environment:     environment,
+		ProfileName:     profileName,
+		Profile:         profile,
+	}
+	for _, suiteName := range profile.Suites {
+		suite := m.Suites[suiteName]
+		if !contains(suite.Environments, environmentName) {
+			return nil, fmt.Errorf("profile %q selects suite %q, which does not support environment %q", profileName, suiteName, environmentName)
+		}
+		for _, requirement := range suite.Requires {
+			if _, ok := capabilities[requirement]; !ok {
+				return nil, fmt.Errorf("suite %q requires capability %q, unavailable in environment %q", suiteName, requirement, environmentName)
+			}
+		}
+		resolved.Suites = append(resolved.Suites, ResolvedSuite{Name: suiteName, Config: suite})
+	}
+	resolved.Trends = m.resolveTrends(profile)
+	return resolved, nil
+}
+
+func (m *Manifest) resolveTrends(profile ProfileConfig) []ResolvedTrend {
+	var trends []ResolvedTrend
+	for _, trendName := range sortedMapKeys(m.Trends) {
+		trend := m.Trends[trendName]
+		if contains(profile.Suites, trend.Suite) {
+			trends = append(trends, ResolvedTrend{Name: trendName, Config: trend})
+		}
+	}
+	return trends
+}
+
+func contains(values []string, wanted string) bool {
+	for _, value := range values {
+		if value == wanted {
+			return true
+		}
+	}
+	return false
+}
+
+func firstDuplicate(values []string) string {
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		if _, ok := seen[value]; ok {
+			return value
+		}
+		seen[value] = struct{}{}
+	}
+	return ""
+}
+
+func sortedMapKeys[T any](values map[string]T) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }

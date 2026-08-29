@@ -1,0 +1,1763 @@
+{
+  "schema_version": 2,
+  "metadata": {
+    "generated_at": "2026-08-19T08:50:53.702919623Z",
+    "git_commit": "2a3861126f1e1aadcd1b6e624a18ee4eaec52c35",
+    "git_branch": "xunzhuo/perf-framework-v1",
+    "environment": "cpu",
+    "environment_kind": "cpu",
+    "profile": "ci",
+    "go_version": "go1.25.12",
+    "goos": "linux",
+    "goarch": "amd64",
+    "cpu_model": "AMD Ryzen AI 7 PRO 350 w/ Radeon 860M",
+    "cpu_count": 12,
+    "suites": [
+      {
+        "name": "request-shape",
+        "runner": "go_benchmark",
+        "duration_seconds": 32.472727487,
+        "benchmark_count": 13,
+        "dimensions": {
+          "context_tokens": [
+            "128",
+            "512",
+            "2048",
+            "4096",
+            "8192",
+            "16384",
+            "32768",
+            "65536"
+          ],
+          "messages": [
+            "1",
+            "8",
+            "64"
+          ],
+          "request_concurrency": [
+            "1",
+            "parallel"
+          ],
+          "tools": [
+            "0",
+            "8",
+            "64"
+          ]
+        }
+      },
+      {
+        "name": "signal-topology",
+        "runner": "go_benchmark",
+        "duration_seconds": 72.963506128,
+        "benchmark_count": 36,
+        "dimensions": {
+          "context_tokens": [
+            "128",
+            "512",
+            "2048",
+            "8192",
+            "32768"
+          ],
+          "learned_signal_set": [
+            "generic-classifier"
+          ],
+          "learned_signals": [
+            "0",
+            "1",
+            "4",
+            "8"
+          ],
+          "request_batch": [
+            "1",
+            "4",
+            "16",
+            "32"
+          ],
+          "signal_backend": [
+            "deterministic_stub"
+          ]
+        }
+      },
+      {
+        "name": "decision-topology",
+        "runner": "go_benchmark",
+        "duration_seconds": 53.391003153,
+        "benchmark_count": 24,
+        "dimensions": {
+          "decisions": [
+            "1",
+            "16",
+            "128",
+            "512"
+          ],
+          "match_position": [
+            "first",
+            "last",
+            "no-match"
+          ],
+          "request_concurrency": [
+            "1",
+            "parallel"
+          ]
+        }
+      },
+      {
+        "name": "selection",
+        "runner": "go_benchmark",
+        "duration_seconds": 17.410113215,
+        "benchmark_count": 8,
+        "dimensions": {
+          "candidate_models": [
+            "1",
+            "3",
+            "16"
+          ],
+          "context_utilization": [
+            "low",
+            "medium",
+            "boundary"
+          ]
+        }
+      },
+      {
+        "name": "looper-core",
+        "runner": "go_benchmark",
+        "duration_seconds": 36.982379334,
+        "benchmark_count": 18,
+        "dimensions": {
+          "algorithm": [
+            "base",
+            "fusion",
+            "remom",
+            "workflows"
+          ],
+          "candidate_models": [
+            "1",
+            "4",
+            "16"
+          ]
+        }
+      },
+      {
+        "name": "looper-orchestration",
+        "runner": "go_benchmark",
+        "duration_seconds": 26.472160528,
+        "benchmark_count": 12,
+        "dimensions": {
+          "algorithm": [
+            "base",
+            "fusion",
+            "remom",
+            "workflows"
+          ],
+          "fanout": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "8"
+          ],
+          "rounds": [
+            "1",
+            "2"
+          ]
+        }
+      }
+    ],
+    "trends": [
+      {
+        "name": "learned-signal-context-latency",
+        "title": "Model-isolated generic-classifier path by context and enabled count",
+        "description": "CPU-safe view of generic learned classifier signals. The curve includes Router scheduling, score aggregation, synchronization, allocations, and deterministic full-input stub work; it does not claim neural inference latency or represent other learned-signal families.",
+        "suite": "signal-topology",
+        "benchmark": "^BenchmarkGenericClassifierSignalTopology/Context/",
+        "x_dimension": "context_tokens",
+        "series_dimension": "learned_signals",
+        "metric": "latency_us_per_op",
+        "x_scale": "log2"
+      },
+      {
+        "name": "learned-signal-request-batch-latency",
+        "title": "Router batch latency by enabled generic-classifier count",
+        "description": "Model-isolated concurrent request batches at a fixed 2K-token context using generic learned classifier signals. Use the throughput chart beside it to distinguish latency growth from useful parallelism.",
+        "suite": "signal-topology",
+        "benchmark": "^BenchmarkGenericClassifierSignalTopology/RequestBatch/",
+        "x_dimension": "request_batch",
+        "series_dimension": "learned_signals",
+        "metric": "latency_us_per_op",
+        "x_scale": "log2"
+      },
+      {
+        "name": "learned-signal-request-batch-throughput",
+        "title": "Router throughput by request batch and generic-classifier count",
+        "description": "Model-isolated requests per second from the same controlled generic learned classifier sweep; absolute values are advisory on shared CI hosts.",
+        "suite": "signal-topology",
+        "benchmark": "^BenchmarkGenericClassifierSignalTopology/RequestBatch/",
+        "x_dimension": "request_batch",
+        "series_dimension": "learned_signals",
+        "metric": "custom:requests/s",
+        "x_scale": "log2"
+      },
+      {
+        "name": "request-context-latency",
+        "title": "Request extraction latency by context length",
+        "description": "Real ExtProc parsing with one message and no tools; the production-like pairwise request shapes remain separate regression points.",
+        "suite": "request-shape",
+        "benchmark": "^BenchmarkExtractContentFast_ContextTrend/",
+        "x_dimension": "context_tokens",
+        "metric": "latency_us_per_op",
+        "x_scale": "log2"
+      }
+    ]
+  },
+  "benchmarks": {
+    "BenchmarkBase_Execute/models_1": {
+      "suite": "looper-orchestration",
+      "iterations": 997,
+      "samples": 3,
+      "ns_per_op": 662164,
+      "ns_stddev_percent": 16.940829877722745,
+      "allocs_per_op": 485,
+      "bytes_per_op": 40398
+    },
+    "BenchmarkBase_Execute/models_3": {
+      "suite": "looper-orchestration",
+      "iterations": 264,
+      "samples": 3,
+      "ns_per_op": 2256990,
+      "ns_stddev_percent": 19.383001356779854,
+      "allocs_per_op": 1229,
+      "bytes_per_op": 106847
+    },
+    "BenchmarkBase_Execute/models_5": {
+      "suite": "looper-orchestration",
+      "iterations": 211,
+      "samples": 3,
+      "ns_per_op": 2669272,
+      "ns_stddev_percent": 5.316668928197225,
+      "allocs_per_op": 1969,
+      "bytes_per_op": 173320
+    },
+    "BenchmarkBase_ParseTaggedToolCall": {
+      "suite": "looper-core",
+      "iterations": 331831,
+      "samples": 3,
+      "ns_per_op": 2024,
+      "ns_stddev_percent": 19.2907049804651,
+      "allocs_per_op": 11,
+      "bytes_per_op": 449
+    },
+    "BenchmarkBase_RewriteTaggedToolCallResponse": {
+      "suite": "looper-core",
+      "iterations": 43381,
+      "samples": 3,
+      "ns_per_op": 15819,
+      "ns_stddev_percent": 15.969587734794704,
+      "allocs_per_op": 88,
+      "bytes_per_op": 4439
+    },
+    "BenchmarkBase_SplitIntoChunks": {
+      "suite": "looper-core",
+      "iterations": 63097,
+      "samples": 3,
+      "ns_per_op": 9389,
+      "ns_stddev_percent": 3.2543047041069686,
+      "allocs_per_op": 34,
+      "bytes_per_op": 8880
+    },
+    "BenchmarkComputeCacheAffinityAdjustments_Active": {
+      "suite": "selection",
+      "iterations": 1692290,
+      "samples": 3,
+      "ns_per_op": 350.5,
+      "ns_stddev_percent": 1.4242228929619791,
+      "allocs_per_op": 9,
+      "bytes_per_op": 320
+    },
+    "BenchmarkComputeCacheAffinityAdjustments_NoOp": {
+      "suite": "selection",
+      "iterations": 236947852,
+      "samples": 3,
+      "ns_per_op": 2.656,
+      "ns_stddev_percent": 4.081311790623792,
+      "allocs_per_op": 0,
+      "bytes_per_op": 0
+    },
+    "BenchmarkComputeCacheAffinityAdjustments_StrongWinner": {
+      "suite": "selection",
+      "iterations": 9577516,
+      "samples": 3,
+      "ns_per_op": 69.05,
+      "ns_stddev_percent": 18.766597779309482,
+      "allocs_per_op": 0,
+      "bytes_per_op": 0
+    },
+    "BenchmarkComputeFitM": {
+      "suite": "selection",
+      "iterations": 310474221,
+      "samples": 3,
+      "ns_per_op": 2.069,
+      "ns_stddev_percent": 12.04301297945633,
+      "allocs_per_op": 0,
+      "bytes_per_op": 0
+    },
+    "BenchmarkComputeGap12": {
+      "suite": "selection",
+      "iterations": 16819162,
+      "samples": 3,
+      "ns_per_op": 34.1,
+      "ns_stddev_percent": 6.173711253582728,
+      "allocs_per_op": 0,
+      "bytes_per_op": 0
+    },
+    "BenchmarkDecisionTopology/decisions=1/position=first/parallel": {
+      "suite": "decision-topology",
+      "dimensions": {
+        "decisions": "1",
+        "position": "first"
+      },
+      "iterations": 2267113,
+      "samples": 3,
+      "ns_per_op": 252.7,
+      "ns_stddev_percent": 6.548777504349075,
+      "allocs_per_op": 5,
+      "bytes_per_op": 128
+    },
+    "BenchmarkDecisionTopology/decisions=1/position=first/serial": {
+      "suite": "decision-topology",
+      "dimensions": {
+        "decisions": "1",
+        "position": "first"
+      },
+      "iterations": 1234848,
+      "samples": 3,
+      "ns_per_op": 493.3,
+      "ns_stddev_percent": 18.40371260834154,
+      "allocs_per_op": 5,
+      "bytes_per_op": 128
+    },
+    "BenchmarkDecisionTopology/decisions=1/position=last/parallel": {
+      "suite": "decision-topology",
+      "dimensions": {
+        "decisions": "1",
+        "position": "last"
+      },
+      "iterations": 2083663,
+      "samples": 3,
+      "ns_per_op": 400,
+      "ns_stddev_percent": 20.77853975402895,
+      "allocs_per_op": 5,
+      "bytes_per_op": 128
+    },
+    "BenchmarkDecisionTopology/decisions=1/position=last/serial": {
+      "suite": "decision-topology",
+      "dimensions": {
+        "decisions": "1",
+        "position": "last"
+      },
+      "iterations": 1512518,
+      "samples": 3,
+      "ns_per_op": 399.4,
+      "ns_stddev_percent": 10.141132851036852,
+      "allocs_per_op": 5,
+      "bytes_per_op": 128
+    },
+    "BenchmarkDecisionTopology/decisions=1/position=no-match/parallel": {
+      "suite": "decision-topology",
+      "dimensions": {
+        "decisions": "1",
+        "position": "no-match"
+      },
+      "iterations": 6136296,
+      "samples": 3,
+      "ns_per_op": 97.78,
+      "ns_stddev_percent": 0.777977787231534,
+      "allocs_per_op": 0,
+      "bytes_per_op": 0
+    },
+    "BenchmarkDecisionTopology/decisions=1/position=no-match/serial": {
+      "suite": "decision-topology",
+      "dimensions": {
+        "decisions": "1",
+        "position": "no-match"
+      },
+      "iterations": 3670034,
+      "samples": 3,
+      "ns_per_op": 163.6,
+      "ns_stddev_percent": 1.2170272530015522,
+      "allocs_per_op": 0,
+      "bytes_per_op": 0
+    },
+    "BenchmarkDecisionTopology/decisions=128/position=first/parallel": {
+      "suite": "decision-topology",
+      "dimensions": {
+        "decisions": "128",
+        "position": "first"
+      },
+      "iterations": 758127,
+      "samples": 3,
+      "ns_per_op": 1134,
+      "ns_stddev_percent": 5.227116121495155,
+      "allocs_per_op": 5,
+      "bytes_per_op": 128
+    },
+    "BenchmarkDecisionTopology/decisions=128/position=first/serial": {
+      "suite": "decision-topology",
+      "dimensions": {
+        "decisions": "128",
+        "position": "first"
+      },
+      "iterations": 142342,
+      "samples": 3,
+      "ns_per_op": 4359,
+      "ns_stddev_percent": 26.057200176066946,
+      "allocs_per_op": 5,
+      "bytes_per_op": 128
+    },
+    "BenchmarkDecisionTopology/decisions=128/position=last/parallel": {
+      "suite": "decision-topology",
+      "dimensions": {
+        "decisions": "128",
+        "position": "last"
+      },
+      "iterations": 876796,
+      "samples": 3,
+      "ns_per_op": 845.7,
+      "ns_stddev_percent": 12.201563377963707,
+      "allocs_per_op": 5,
+      "bytes_per_op": 136
+    },
+    "BenchmarkDecisionTopology/decisions=128/position=last/serial": {
+      "suite": "decision-topology",
+      "dimensions": {
+        "decisions": "128",
+        "position": "last"
+      },
+      "iterations": 170318,
+      "samples": 3,
+      "ns_per_op": 3164,
+      "ns_stddev_percent": 15.075021131989011,
+      "allocs_per_op": 5,
+      "bytes_per_op": 136
+    },
+    "BenchmarkDecisionTopology/decisions=128/position=no-match/parallel": {
+      "suite": "decision-topology",
+      "dimensions": {
+        "decisions": "128",
+        "position": "no-match"
+      },
+      "iterations": 1000000,
+      "samples": 3,
+      "ns_per_op": 629.5,
+      "ns_stddev_percent": 5.413792240485975,
+      "allocs_per_op": 0,
+      "bytes_per_op": 0
+    },
+    "BenchmarkDecisionTopology/decisions=128/position=no-match/serial": {
+      "suite": "decision-topology",
+      "dimensions": {
+        "decisions": "128",
+        "position": "no-match"
+      },
+      "iterations": 269118,
+      "samples": 3,
+      "ns_per_op": 2319,
+      "ns_stddev_percent": 8.889308101661156,
+      "allocs_per_op": 0,
+      "bytes_per_op": 0
+    },
+    "BenchmarkDecisionTopology/decisions=16/position=first/parallel": {
+      "suite": "decision-topology",
+      "dimensions": {
+        "decisions": "16",
+        "position": "first"
+      },
+      "iterations": 1480641,
+      "samples": 3,
+      "ns_per_op": 361.6,
+      "ns_stddev_percent": 22.562528481806275,
+      "allocs_per_op": 5,
+      "bytes_per_op": 128
+    },
+    "BenchmarkDecisionTopology/decisions=16/position=first/serial": {
+      "suite": "decision-topology",
+      "dimensions": {
+        "decisions": "16",
+        "position": "first"
+      },
+      "iterations": 799587,
+      "samples": 3,
+      "ns_per_op": 862.4,
+      "ns_stddev_percent": 7.474670187165219,
+      "allocs_per_op": 5,
+      "bytes_per_op": 128
+    },
+    "BenchmarkDecisionTopology/decisions=16/position=last/parallel": {
+      "suite": "decision-topology",
+      "dimensions": {
+        "decisions": "16",
+        "position": "last"
+      },
+      "iterations": 1585875,
+      "samples": 3,
+      "ns_per_op": 404.6,
+      "ns_stddev_percent": 18.914483110067007,
+      "allocs_per_op": 5,
+      "bytes_per_op": 128
+    },
+    "BenchmarkDecisionTopology/decisions=16/position=last/serial": {
+      "suite": "decision-topology",
+      "dimensions": {
+        "decisions": "16",
+        "position": "last"
+      },
+      "iterations": 744528,
+      "samples": 3,
+      "ns_per_op": 863.8,
+      "ns_stddev_percent": 9.800957782759607,
+      "allocs_per_op": 5,
+      "bytes_per_op": 128
+    },
+    "BenchmarkDecisionTopology/decisions=16/position=no-match/parallel": {
+      "suite": "decision-topology",
+      "dimensions": {
+        "decisions": "16",
+        "position": "no-match"
+      },
+      "iterations": 4152286,
+      "samples": 3,
+      "ns_per_op": 140.9,
+      "ns_stddev_percent": 11.693746346799545,
+      "allocs_per_op": 0,
+      "bytes_per_op": 0
+    },
+    "BenchmarkDecisionTopology/decisions=16/position=no-match/serial": {
+      "suite": "decision-topology",
+      "dimensions": {
+        "decisions": "16",
+        "position": "no-match"
+      },
+      "iterations": 1000000,
+      "samples": 3,
+      "ns_per_op": 597,
+      "ns_stddev_percent": 1.6783338731151465,
+      "allocs_per_op": 0,
+      "bytes_per_op": 0
+    },
+    "BenchmarkDecisionTopology/decisions=512/position=first/parallel": {
+      "suite": "decision-topology",
+      "dimensions": {
+        "decisions": "512",
+        "position": "first"
+      },
+      "iterations": 294717,
+      "samples": 3,
+      "ns_per_op": 2498,
+      "ns_stddev_percent": 9.020881013892257,
+      "allocs_per_op": 5,
+      "bytes_per_op": 128
+    },
+    "BenchmarkDecisionTopology/decisions=512/position=first/serial": {
+      "suite": "decision-topology",
+      "dimensions": {
+        "decisions": "512",
+        "position": "first"
+      },
+      "iterations": 57776,
+      "samples": 3,
+      "ns_per_op": 10215,
+      "ns_stddev_percent": 4.983101097018721,
+      "allocs_per_op": 5,
+      "bytes_per_op": 128
+    },
+    "BenchmarkDecisionTopology/decisions=512/position=last/parallel": {
+      "suite": "decision-topology",
+      "dimensions": {
+        "decisions": "512",
+        "position": "last"
+      },
+      "iterations": 228184,
+      "samples": 3,
+      "ns_per_op": 2905,
+      "ns_stddev_percent": 2.4890135280508363,
+      "allocs_per_op": 5,
+      "bytes_per_op": 136
+    },
+    "BenchmarkDecisionTopology/decisions=512/position=last/serial": {
+      "suite": "decision-topology",
+      "dimensions": {
+        "decisions": "512",
+        "position": "last"
+      },
+      "iterations": 49416,
+      "samples": 3,
+      "ns_per_op": 11283,
+      "ns_stddev_percent": 10.010731927181581,
+      "allocs_per_op": 5,
+      "bytes_per_op": 136
+    },
+    "BenchmarkDecisionTopology/decisions=512/position=no-match/parallel": {
+      "suite": "decision-topology",
+      "dimensions": {
+        "decisions": "512",
+        "position": "no-match"
+      },
+      "iterations": 226051,
+      "samples": 3,
+      "ns_per_op": 2667,
+      "ns_stddev_percent": 7.386782519337899,
+      "allocs_per_op": 0,
+      "bytes_per_op": 0
+    },
+    "BenchmarkDecisionTopology/decisions=512/position=no-match/serial": {
+      "suite": "decision-topology",
+      "dimensions": {
+        "decisions": "512",
+        "position": "no-match"
+      },
+      "iterations": 61582,
+      "samples": 3,
+      "ns_per_op": 9720,
+      "ns_stddev_percent": 6.334570595017921,
+      "allocs_per_op": 0,
+      "bytes_per_op": 0
+    },
+    "BenchmarkExtractContentFast_ContextShape/tokens=128/messages=1/tools=0": {
+      "suite": "request-shape",
+      "dimensions": {
+        "messages": "1",
+        "tokens": "128",
+        "tools": "0"
+      },
+      "iterations": 51288,
+      "samples": 3,
+      "ns_per_op": 11073,
+      "ns_stddev_percent": 1.9762254201804184,
+      "allocs_per_op": 7,
+      "bytes_per_op": 2096,
+      "custom": {
+        "input_bytes": 851
+      }
+    },
+    "BenchmarkExtractContentFast_ContextShape/tokens=16384/messages=64/tools=8": {
+      "suite": "request-shape",
+      "dimensions": {
+        "messages": "64",
+        "tokens": "16384",
+        "tools": "8"
+      },
+      "iterations": 549,
+      "samples": 3,
+      "ns_per_op": 1100428,
+      "ns_stddev_percent": 16.041478771255036,
+      "allocs_per_op": 19,
+      "bytes_per_op": 218129,
+      "custom": {
+        "input_bytes": 101701
+      }
+    },
+    "BenchmarkExtractContentFast_ContextShape/tokens=4096/messages=8/tools=8": {
+      "suite": "request-shape",
+      "dimensions": {
+        "messages": "8",
+        "tokens": "4096",
+        "tools": "8"
+      },
+      "iterations": 2208,
+      "samples": 3,
+      "ns_per_op": 275237,
+      "ns_stddev_percent": 5.601245418491808,
+      "allocs_per_op": 13,
+      "bytes_per_op": 57872,
+      "custom": {
+        "input_bytes": 26209
+      }
+    },
+    "BenchmarkExtractContentFast_ContextShape/tokens=65536/messages=8/tools=64": {
+      "suite": "request-shape",
+      "dimensions": {
+        "messages": "8",
+        "tokens": "65536",
+        "tools": "64"
+      },
+      "iterations": 136,
+      "samples": 3,
+      "ns_per_op": 4478507,
+      "ns_stddev_percent": 2.1264468423593246,
+      "allocs_per_op": 13,
+      "bytes_per_op": 825107,
+      "custom": {
+        "input_bytes": 404199
+      }
+    },
+    "BenchmarkExtractContentFast_ContextTrend/context_tokens=128/messages=1/tools=0": {
+      "suite": "request-shape",
+      "dimensions": {
+        "context_tokens": "128",
+        "messages": "1",
+        "tools": "0"
+      },
+      "iterations": 55038,
+      "samples": 3,
+      "ns_per_op": 12395,
+      "ns_stddev_percent": 10.496322009250402,
+      "allocs_per_op": 7,
+      "bytes_per_op": 2096,
+      "custom": {
+        "input_bytes": 851
+      }
+    },
+    "BenchmarkExtractContentFast_ContextTrend/context_tokens=2048/messages=1/tools=0": {
+      "suite": "request-shape",
+      "dimensions": {
+        "context_tokens": "2048",
+        "messages": "1",
+        "tools": "0"
+      },
+      "iterations": 5774,
+      "samples": 3,
+      "ns_per_op": 105994,
+      "ns_stddev_percent": 8.444407933283188,
+      "allocs_per_op": 7,
+      "bytes_per_op": 27440,
+      "custom": {
+        "input_bytes": 12371
+      }
+    },
+    "BenchmarkExtractContentFast_ContextTrend/context_tokens=32768/messages=1/tools=0": {
+      "suite": "request-shape",
+      "dimensions": {
+        "context_tokens": "32768",
+        "messages": "1",
+        "tools": "0"
+      },
+      "iterations": 354,
+      "samples": 3,
+      "ns_per_op": 1732987,
+      "ns_stddev_percent": 20.088874370057656,
+      "allocs_per_op": 7,
+      "bytes_per_op": 409907,
+      "custom": {
+        "input_bytes": 196691
+      }
+    },
+    "BenchmarkExtractContentFast_ContextTrend/context_tokens=512/messages=1/tools=0": {
+      "suite": "request-shape",
+      "dimensions": {
+        "context_tokens": "512",
+        "messages": "1",
+        "tools": "0"
+      },
+      "iterations": 14623,
+      "samples": 3,
+      "ns_per_op": 37313,
+      "ns_stddev_percent": 13.474296429458676,
+      "allocs_per_op": 7,
+      "bytes_per_op": 6704,
+      "custom": {
+        "input_bytes": 3155
+      }
+    },
+    "BenchmarkExtractContentFast_ContextTrend/context_tokens=65536/messages=1/tools=0": {
+      "suite": "request-shape",
+      "dimensions": {
+        "context_tokens": "65536",
+        "messages": "1",
+        "tools": "0"
+      },
+      "iterations": 158,
+      "samples": 3,
+      "ns_per_op": 3899888,
+      "ns_stddev_percent": 4.458040503979524,
+      "allocs_per_op": 7,
+      "bytes_per_op": 803125,
+      "custom": {
+        "input_bytes": 393299
+      }
+    },
+    "BenchmarkExtractContentFast_ContextTrend/context_tokens=8192/messages=1/tools=0": {
+      "suite": "request-shape",
+      "dimensions": {
+        "context_tokens": "8192",
+        "messages": "1",
+        "tools": "0"
+      },
+      "iterations": 1494,
+      "samples": 3,
+      "ns_per_op": 421109,
+      "ns_stddev_percent": 1.2815425526581177,
+      "allocs_per_op": 7,
+      "bytes_per_op": 114993,
+      "custom": {
+        "input_bytes": 49235
+      }
+    },
+    "BenchmarkExtractContentFast_Parallel": {
+      "suite": "request-shape",
+      "iterations": 6391,
+      "samples": 3,
+      "ns_per_op": 92862,
+      "ns_stddev_percent": 2.43318041569191,
+      "allocs_per_op": 13,
+      "bytes_per_op": 57895,
+      "custom": {
+        "input_bytes": 26209
+      }
+    },
+    "BenchmarkFlow_BuildFinalPrompt": {
+      "suite": "looper-core",
+      "iterations": 200097,
+      "samples": 3,
+      "ns_per_op": 3767,
+      "ns_stddev_percent": 25.82838529260185,
+      "allocs_per_op": 34,
+      "bytes_per_op": 2845
+    },
+    "BenchmarkFlow_BuildStaticPlan": {
+      "suite": "looper-core",
+      "iterations": 435835,
+      "samples": 3,
+      "ns_per_op": 1345,
+      "ns_stddev_percent": 10.35693237800409,
+      "allocs_per_op": 15,
+      "bytes_per_op": 1552
+    },
+    "BenchmarkFlow_Execute/workers_1": {
+      "suite": "looper-orchestration",
+      "iterations": 591,
+      "samples": 3,
+      "ns_per_op": 1023794,
+      "ns_stddev_percent": 2.1085042641595755,
+      "allocs_per_op": 1501,
+      "bytes_per_op": 170102
+    },
+    "BenchmarkFlow_Execute/workers_2": {
+      "suite": "looper-orchestration",
+      "iterations": 486,
+      "samples": 3,
+      "ns_per_op": 1260789,
+      "ns_stddev_percent": 4.617809779509945,
+      "allocs_per_op": 1914,
+      "bytes_per_op": 214636
+    },
+    "BenchmarkFlow_Execute/workers_3": {
+      "suite": "looper-orchestration",
+      "iterations": 386,
+      "samples": 3,
+      "ns_per_op": 1533562,
+      "ns_stddev_percent": 2.8975756869529508,
+      "allocs_per_op": 2397,
+      "bytes_per_op": 291841
+    },
+    "BenchmarkFlow_FormatStepResults": {
+      "suite": "looper-core",
+      "iterations": 392080,
+      "samples": 3,
+      "ns_per_op": 1424,
+      "ns_stddev_percent": 12.668623130866024,
+      "allocs_per_op": 30,
+      "bytes_per_op": 1257
+    },
+    "BenchmarkFlow_ResolveExecutionConfig": {
+      "suite": "looper-core",
+      "iterations": 3883182,
+      "samples": 3,
+      "ns_per_op": 154.6,
+      "ns_stddev_percent": 5.582329699367025,
+      "allocs_per_op": 1,
+      "bytes_per_op": 240
+    },
+    "BenchmarkFusion_BuildAnalysisPrompt": {
+      "suite": "looper-core",
+      "iterations": 238270,
+      "samples": 3,
+      "ns_per_op": 2990,
+      "ns_stddev_percent": 13.025108041680406,
+      "allocs_per_op": 15,
+      "bytes_per_op": 1281
+    },
+    "BenchmarkFusion_BuildFinalPrompt": {
+      "suite": "looper-core",
+      "iterations": 137613,
+      "samples": 3,
+      "ns_per_op": 4334,
+      "ns_stddev_percent": 10.608986324326027,
+      "allocs_per_op": 19,
+      "bytes_per_op": 2007
+    },
+    "BenchmarkFusion_Execute/panel_2": {
+      "suite": "looper-orchestration",
+      "iterations": 294,
+      "samples": 3,
+      "ns_per_op": 1942681,
+      "ns_stddev_percent": 7.343719431876409,
+      "allocs_per_op": 2131,
+      "bytes_per_op": 215800
+    },
+    "BenchmarkFusion_Execute/panel_3": {
+      "suite": "looper-orchestration",
+      "iterations": 262,
+      "samples": 3,
+      "ns_per_op": 2289909,
+      "ns_stddev_percent": 1.041765412432062,
+      "allocs_per_op": 2578,
+      "bytes_per_op": 280864
+    },
+    "BenchmarkFusion_Execute/panel_5": {
+      "suite": "looper-orchestration",
+      "iterations": 208,
+      "samples": 3,
+      "ns_per_op": 2890167,
+      "ns_stddev_percent": 1.750261679234296,
+      "allocs_per_op": 3496,
+      "bytes_per_op": 469938
+    },
+    "BenchmarkFusion_FormatPanelResponses": {
+      "suite": "looper-core",
+      "iterations": 510987,
+      "samples": 3,
+      "ns_per_op": 1630,
+      "ns_stddev_percent": 10.610268779345843,
+      "allocs_per_op": 12,
+      "bytes_per_op": 608
+    },
+    "BenchmarkFusion_ParseAnalysis": {
+      "suite": "looper-core",
+      "iterations": 127521,
+      "samples": 3,
+      "ns_per_op": 5714,
+      "ns_stddev_percent": 16.46656613748346,
+      "allocs_per_op": 19,
+      "bytes_per_op": 1280
+    },
+    "BenchmarkFusion_ResolveExecutionConfig": {
+      "suite": "looper-core",
+      "iterations": 3043976,
+      "samples": 3,
+      "ns_per_op": 199.8,
+      "ns_stddev_percent": 2.331081621208858,
+      "allocs_per_op": 2,
+      "bytes_per_op": 96
+    },
+    "BenchmarkGenericClassifierSignalTopology/Context/context_tokens=128/learned_signals=0/learned_signal_set=generic-classifier/signal_backend=deterministic_stub": {
+      "suite": "signal-topology",
+      "dimensions": {
+        "context_tokens": "128",
+        "learned_signal_set": "generic-classifier",
+        "learned_signals": "0",
+        "signal_backend": "deterministic_stub"
+      },
+      "iterations": 769384,
+      "samples": 3,
+      "ns_per_op": 785.9,
+      "ns_stddev_percent": 1.0940639872318016,
+      "allocs_per_op": 8,
+      "bytes_per_op": 1208,
+      "custom": {
+        "learned_signals/op": 0
+      }
+    },
+    "BenchmarkGenericClassifierSignalTopology/Context/context_tokens=128/learned_signals=1/learned_signal_set=generic-classifier/signal_backend=deterministic_stub": {
+      "suite": "signal-topology",
+      "dimensions": {
+        "context_tokens": "128",
+        "learned_signal_set": "generic-classifier",
+        "learned_signals": "1",
+        "signal_backend": "deterministic_stub"
+      },
+      "iterations": 74624,
+      "samples": 3,
+      "ns_per_op": 8159,
+      "ns_stddev_percent": 1.9242554234587574,
+      "allocs_per_op": 18,
+      "bytes_per_op": 2208,
+      "custom": {
+        "learned_signals/op": 1
+      }
+    },
+    "BenchmarkGenericClassifierSignalTopology/Context/context_tokens=128/learned_signals=4/learned_signal_set=generic-classifier/signal_backend=deterministic_stub": {
+      "suite": "signal-topology",
+      "dimensions": {
+        "context_tokens": "128",
+        "learned_signal_set": "generic-classifier",
+        "learned_signals": "4",
+        "signal_backend": "deterministic_stub"
+      },
+      "iterations": 15738,
+      "samples": 3,
+      "ns_per_op": 38153,
+      "ns_stddev_percent": 7.9629412976770135,
+      "allocs_per_op": 41,
+      "bytes_per_op": 4008,
+      "custom": {
+        "learned_signals/op": 4
+      }
+    },
+    "BenchmarkGenericClassifierSignalTopology/Context/context_tokens=128/learned_signals=8/learned_signal_set=generic-classifier/signal_backend=deterministic_stub": {
+      "suite": "signal-topology",
+      "dimensions": {
+        "context_tokens": "128",
+        "learned_signal_set": "generic-classifier",
+        "learned_signals": "8",
+        "signal_backend": "deterministic_stub"
+      },
+      "iterations": 7694,
+      "samples": 3,
+      "ns_per_op": 77976,
+      "ns_stddev_percent": 2.4995836858143314,
+      "allocs_per_op": 80,
+      "bytes_per_op": 9176,
+      "custom": {
+        "learned_signals/op": 8
+      }
+    },
+    "BenchmarkGenericClassifierSignalTopology/Context/context_tokens=2048/learned_signals=0/learned_signal_set=generic-classifier/signal_backend=deterministic_stub": {
+      "suite": "signal-topology",
+      "dimensions": {
+        "context_tokens": "2048",
+        "learned_signal_set": "generic-classifier",
+        "learned_signals": "0",
+        "signal_backend": "deterministic_stub"
+      },
+      "iterations": 889831,
+      "samples": 3,
+      "ns_per_op": 683.3,
+      "ns_stddev_percent": 2.333650637438438,
+      "allocs_per_op": 8,
+      "bytes_per_op": 1208,
+      "custom": {
+        "learned_signals/op": 0
+      }
+    },
+    "BenchmarkGenericClassifierSignalTopology/Context/context_tokens=2048/learned_signals=1/learned_signal_set=generic-classifier/signal_backend=deterministic_stub": {
+      "suite": "signal-topology",
+      "dimensions": {
+        "context_tokens": "2048",
+        "learned_signal_set": "generic-classifier",
+        "learned_signals": "1",
+        "signal_backend": "deterministic_stub"
+      },
+      "iterations": 13094,
+      "samples": 3,
+      "ns_per_op": 45754,
+      "ns_stddev_percent": 10.75958762791229,
+      "allocs_per_op": 18,
+      "bytes_per_op": 2208,
+      "custom": {
+        "learned_signals/op": 1
+      }
+    },
+    "BenchmarkGenericClassifierSignalTopology/Context/context_tokens=2048/learned_signals=4/learned_signal_set=generic-classifier/signal_backend=deterministic_stub": {
+      "suite": "signal-topology",
+      "dimensions": {
+        "context_tokens": "2048",
+        "learned_signal_set": "generic-classifier",
+        "learned_signals": "4",
+        "signal_backend": "deterministic_stub"
+      },
+      "iterations": 5708,
+      "samples": 3,
+      "ns_per_op": 106254,
+      "ns_stddev_percent": 1.0301804005830373,
+      "allocs_per_op": 41,
+      "bytes_per_op": 4008,
+      "custom": {
+        "learned_signals/op": 4
+      }
+    },
+    "BenchmarkGenericClassifierSignalTopology/Context/context_tokens=2048/learned_signals=8/learned_signal_set=generic-classifier/signal_backend=deterministic_stub": {
+      "suite": "signal-topology",
+      "dimensions": {
+        "context_tokens": "2048",
+        "learned_signal_set": "generic-classifier",
+        "learned_signals": "8",
+        "signal_backend": "deterministic_stub"
+      },
+      "iterations": 3668,
+      "samples": 3,
+      "ns_per_op": 169223,
+      "ns_stddev_percent": 1.082619642042705,
+      "allocs_per_op": 80,
+      "bytes_per_op": 9176,
+      "custom": {
+        "learned_signals/op": 8
+      }
+    },
+    "BenchmarkGenericClassifierSignalTopology/Context/context_tokens=32768/learned_signals=0/learned_signal_set=generic-classifier/signal_backend=deterministic_stub": {
+      "suite": "signal-topology",
+      "dimensions": {
+        "context_tokens": "32768",
+        "learned_signal_set": "generic-classifier",
+        "learned_signals": "0",
+        "signal_backend": "deterministic_stub"
+      },
+      "iterations": 763059,
+      "samples": 3,
+      "ns_per_op": 777.3,
+      "ns_stddev_percent": 3.1691492465618047,
+      "allocs_per_op": 8,
+      "bytes_per_op": 1208,
+      "custom": {
+        "learned_signals/op": 0
+      }
+    },
+    "BenchmarkGenericClassifierSignalTopology/Context/context_tokens=32768/learned_signals=1/learned_signal_set=generic-classifier/signal_backend=deterministic_stub": {
+      "suite": "signal-topology",
+      "dimensions": {
+        "context_tokens": "32768",
+        "learned_signal_set": "generic-classifier",
+        "learned_signals": "1",
+        "signal_backend": "deterministic_stub"
+      },
+      "iterations": 2266,
+      "samples": 3,
+      "ns_per_op": 275293,
+      "ns_stddev_percent": 3.580914112980555,
+      "allocs_per_op": 18,
+      "bytes_per_op": 2208,
+      "custom": {
+        "learned_signals/op": 1
+      }
+    },
+    "BenchmarkGenericClassifierSignalTopology/Context/context_tokens=32768/learned_signals=4/learned_signal_set=generic-classifier/signal_backend=deterministic_stub": {
+      "suite": "signal-topology",
+      "dimensions": {
+        "context_tokens": "32768",
+        "learned_signal_set": "generic-classifier",
+        "learned_signals": "4",
+        "signal_backend": "deterministic_stub"
+      },
+      "iterations": 1170,
+      "samples": 3,
+      "ns_per_op": 529508,
+      "ns_stddev_percent": 1.0851206895425605,
+      "allocs_per_op": 41,
+      "bytes_per_op": 4008,
+      "custom": {
+        "learned_signals/op": 4
+      }
+    },
+    "BenchmarkGenericClassifierSignalTopology/Context/context_tokens=32768/learned_signals=8/learned_signal_set=generic-classifier/signal_backend=deterministic_stub": {
+      "suite": "signal-topology",
+      "dimensions": {
+        "context_tokens": "32768",
+        "learned_signal_set": "generic-classifier",
+        "learned_signals": "8",
+        "signal_backend": "deterministic_stub"
+      },
+      "iterations": 620,
+      "samples": 3,
+      "ns_per_op": 962648,
+      "ns_stddev_percent": 3.5077185314527513,
+      "allocs_per_op": 80,
+      "bytes_per_op": 9176,
+      "custom": {
+        "learned_signals/op": 8
+      }
+    },
+    "BenchmarkGenericClassifierSignalTopology/Context/context_tokens=512/learned_signals=0/learned_signal_set=generic-classifier/signal_backend=deterministic_stub": {
+      "suite": "signal-topology",
+      "dimensions": {
+        "context_tokens": "512",
+        "learned_signal_set": "generic-classifier",
+        "learned_signals": "0",
+        "signal_backend": "deterministic_stub"
+      },
+      "iterations": 759138,
+      "samples": 3,
+      "ns_per_op": 836.5,
+      "ns_stddev_percent": 10.256144748855366,
+      "allocs_per_op": 8,
+      "bytes_per_op": 1208,
+      "custom": {
+        "learned_signals/op": 0
+      }
+    },
+    "BenchmarkGenericClassifierSignalTopology/Context/context_tokens=512/learned_signals=1/learned_signal_set=generic-classifier/signal_backend=deterministic_stub": {
+      "suite": "signal-topology",
+      "dimensions": {
+        "context_tokens": "512",
+        "learned_signal_set": "generic-classifier",
+        "learned_signals": "1",
+        "signal_backend": "deterministic_stub"
+      },
+      "iterations": 36100,
+      "samples": 3,
+      "ns_per_op": 16735,
+      "ns_stddev_percent": 2.940994130691282,
+      "allocs_per_op": 18,
+      "bytes_per_op": 2208,
+      "custom": {
+        "learned_signals/op": 1
+      }
+    },
+    "BenchmarkGenericClassifierSignalTopology/Context/context_tokens=512/learned_signals=4/learned_signal_set=generic-classifier/signal_backend=deterministic_stub": {
+      "suite": "signal-topology",
+      "dimensions": {
+        "context_tokens": "512",
+        "learned_signal_set": "generic-classifier",
+        "learned_signals": "4",
+        "signal_backend": "deterministic_stub"
+      },
+      "iterations": 10000,
+      "samples": 3,
+      "ns_per_op": 57407,
+      "ns_stddev_percent": 1.5749034748790736,
+      "allocs_per_op": 41,
+      "bytes_per_op": 4008,
+      "custom": {
+        "learned_signals/op": 4
+      }
+    },
+    "BenchmarkGenericClassifierSignalTopology/Context/context_tokens=512/learned_signals=8/learned_signal_set=generic-classifier/signal_backend=deterministic_stub": {
+      "suite": "signal-topology",
+      "dimensions": {
+        "context_tokens": "512",
+        "learned_signal_set": "generic-classifier",
+        "learned_signals": "8",
+        "signal_backend": "deterministic_stub"
+      },
+      "iterations": 5931,
+      "samples": 3,
+      "ns_per_op": 98225,
+      "ns_stddev_percent": 6.727829785010865,
+      "allocs_per_op": 80,
+      "bytes_per_op": 9176,
+      "custom": {
+        "learned_signals/op": 8
+      }
+    },
+    "BenchmarkGenericClassifierSignalTopology/Context/context_tokens=8192/learned_signals=0/learned_signal_set=generic-classifier/signal_backend=deterministic_stub": {
+      "suite": "signal-topology",
+      "dimensions": {
+        "context_tokens": "8192",
+        "learned_signal_set": "generic-classifier",
+        "learned_signals": "0",
+        "signal_backend": "deterministic_stub"
+      },
+      "iterations": 840674,
+      "samples": 3,
+      "ns_per_op": 688.3,
+      "ns_stddev_percent": 7.275484578046887,
+      "allocs_per_op": 8,
+      "bytes_per_op": 1208,
+      "custom": {
+        "learned_signals/op": 0
+      }
+    },
+    "BenchmarkGenericClassifierSignalTopology/Context/context_tokens=8192/learned_signals=1/learned_signal_set=generic-classifier/signal_backend=deterministic_stub": {
+      "suite": "signal-topology",
+      "dimensions": {
+        "context_tokens": "8192",
+        "learned_signal_set": "generic-classifier",
+        "learned_signals": "1",
+        "signal_backend": "deterministic_stub"
+      },
+      "iterations": 6195,
+      "samples": 3,
+      "ns_per_op": 91418,
+      "ns_stddev_percent": 2.9813227351828644,
+      "allocs_per_op": 18,
+      "bytes_per_op": 2208,
+      "custom": {
+        "learned_signals/op": 1
+      }
+    },
+    "BenchmarkGenericClassifierSignalTopology/Context/context_tokens=8192/learned_signals=4/learned_signal_set=generic-classifier/signal_backend=deterministic_stub": {
+      "suite": "signal-topology",
+      "dimensions": {
+        "context_tokens": "8192",
+        "learned_signal_set": "generic-classifier",
+        "learned_signals": "4",
+        "signal_backend": "deterministic_stub"
+      },
+      "iterations": 2743,
+      "samples": 3,
+      "ns_per_op": 214483,
+      "ns_stddev_percent": 4.546349927120532,
+      "allocs_per_op": 41,
+      "bytes_per_op": 4008,
+      "custom": {
+        "learned_signals/op": 4
+      }
+    },
+    "BenchmarkGenericClassifierSignalTopology/Context/context_tokens=8192/learned_signals=8/learned_signal_set=generic-classifier/signal_backend=deterministic_stub": {
+      "suite": "signal-topology",
+      "dimensions": {
+        "context_tokens": "8192",
+        "learned_signal_set": "generic-classifier",
+        "learned_signals": "8",
+        "signal_backend": "deterministic_stub"
+      },
+      "iterations": 1873,
+      "samples": 3,
+      "ns_per_op": 326260,
+      "ns_stddev_percent": 10.28790022104139,
+      "allocs_per_op": 80,
+      "bytes_per_op": 9176,
+      "custom": {
+        "learned_signals/op": 8
+      }
+    },
+    "BenchmarkGenericClassifierSignalTopology/RequestBatch/request_batch=1/context_tokens=2048/learned_signals=0/learned_signal_set=generic-classifier/signal_backend=deterministic_stub": {
+      "suite": "signal-topology",
+      "dimensions": {
+        "context_tokens": "2048",
+        "learned_signal_set": "generic-classifier",
+        "learned_signals": "0",
+        "request_batch": "1",
+        "signal_backend": "deterministic_stub"
+      },
+      "iterations": 345690,
+      "samples": 3,
+      "ns_per_op": 1711,
+      "ns_stddev_percent": 15.592187679124702,
+      "allocs_per_op": 10,
+      "bytes_per_op": 1288,
+      "custom": {
+        "learned_signals/op": 0,
+        "requests/s": 584405
+      }
+    },
+    "BenchmarkGenericClassifierSignalTopology/RequestBatch/request_batch=1/context_tokens=2048/learned_signals=1/learned_signal_set=generic-classifier/signal_backend=deterministic_stub": {
+      "suite": "signal-topology",
+      "dimensions": {
+        "context_tokens": "2048",
+        "learned_signal_set": "generic-classifier",
+        "learned_signals": "1",
+        "request_batch": "1",
+        "signal_backend": "deterministic_stub"
+      },
+      "iterations": 10000,
+      "samples": 3,
+      "ns_per_op": 66477,
+      "ns_stddev_percent": 16.678351817887318,
+      "allocs_per_op": 20,
+      "bytes_per_op": 2288,
+      "custom": {
+        "learned_signals/op": 1,
+        "requests/s": 15043
+      }
+    },
+    "BenchmarkGenericClassifierSignalTopology/RequestBatch/request_batch=1/context_tokens=2048/learned_signals=4/learned_signal_set=generic-classifier/signal_backend=deterministic_stub": {
+      "suite": "signal-topology",
+      "dimensions": {
+        "context_tokens": "2048",
+        "learned_signal_set": "generic-classifier",
+        "learned_signals": "4",
+        "request_batch": "1",
+        "signal_backend": "deterministic_stub"
+      },
+      "iterations": 5852,
+      "samples": 3,
+      "ns_per_op": 105041,
+      "ns_stddev_percent": 5.5097140095213915,
+      "allocs_per_op": 43,
+      "bytes_per_op": 4088,
+      "custom": {
+        "learned_signals/op": 4,
+        "requests/s": 9520
+      }
+    },
+    "BenchmarkGenericClassifierSignalTopology/RequestBatch/request_batch=1/context_tokens=2048/learned_signals=8/learned_signal_set=generic-classifier/signal_backend=deterministic_stub": {
+      "suite": "signal-topology",
+      "dimensions": {
+        "context_tokens": "2048",
+        "learned_signal_set": "generic-classifier",
+        "learned_signals": "8",
+        "request_batch": "1",
+        "signal_backend": "deterministic_stub"
+      },
+      "iterations": 3028,
+      "samples": 3,
+      "ns_per_op": 202491,
+      "ns_stddev_percent": 3.2216700956686974,
+      "allocs_per_op": 82,
+      "bytes_per_op": 9256,
+      "custom": {
+        "learned_signals/op": 8,
+        "requests/s": 4939
+      }
+    },
+    "BenchmarkGenericClassifierSignalTopology/RequestBatch/request_batch=16/context_tokens=2048/learned_signals=0/learned_signal_set=generic-classifier/signal_backend=deterministic_stub": {
+      "suite": "signal-topology",
+      "dimensions": {
+        "context_tokens": "2048",
+        "learned_signal_set": "generic-classifier",
+        "learned_signals": "0",
+        "request_batch": "16",
+        "signal_backend": "deterministic_stub"
+      },
+      "iterations": 18123,
+      "samples": 3,
+      "ns_per_op": 34818,
+      "ns_stddev_percent": 10.574718306729732,
+      "allocs_per_op": 145,
+      "bytes_per_op": 20370,
+      "custom": {
+        "learned_signals/op": 0,
+        "requests/s": 459528
+      }
+    },
+    "BenchmarkGenericClassifierSignalTopology/RequestBatch/request_batch=16/context_tokens=2048/learned_signals=1/learned_signal_set=generic-classifier/signal_backend=deterministic_stub": {
+      "suite": "signal-topology",
+      "dimensions": {
+        "context_tokens": "2048",
+        "learned_signal_set": "generic-classifier",
+        "learned_signals": "1",
+        "request_batch": "16",
+        "signal_backend": "deterministic_stub"
+      },
+      "iterations": 1948,
+      "samples": 3,
+      "ns_per_op": 304815,
+      "ns_stddev_percent": 0.33287750077851297,
+      "allocs_per_op": 305,
+      "bytes_per_op": 36369,
+      "custom": {
+        "learned_signals/op": 16,
+        "requests/s": 52491
+      }
+    },
+    "BenchmarkGenericClassifierSignalTopology/RequestBatch/request_batch=16/context_tokens=2048/learned_signals=4/learned_signal_set=generic-classifier/signal_backend=deterministic_stub": {
+      "suite": "signal-topology",
+      "dimensions": {
+        "context_tokens": "2048",
+        "learned_signal_set": "generic-classifier",
+        "learned_signals": "4",
+        "request_batch": "16",
+        "signal_backend": "deterministic_stub"
+      },
+      "iterations": 1294,
+      "samples": 3,
+      "ns_per_op": 476807,
+      "ns_stddev_percent": 6.155067833480523,
+      "allocs_per_op": 673,
+      "bytes_per_op": 65185,
+      "custom": {
+        "learned_signals/op": 64,
+        "requests/s": 33557
+      }
+    },
+    "BenchmarkGenericClassifierSignalTopology/RequestBatch/request_batch=16/context_tokens=2048/learned_signals=8/learned_signal_set=generic-classifier/signal_backend=deterministic_stub": {
+      "suite": "signal-topology",
+      "dimensions": {
+        "context_tokens": "2048",
+        "learned_signal_set": "generic-classifier",
+        "learned_signals": "8",
+        "request_batch": "16",
+        "signal_backend": "deterministic_stub"
+      },
+      "iterations": 704,
+      "samples": 3,
+      "ns_per_op": 858652,
+      "ns_stddev_percent": 12.171975103084762,
+      "allocs_per_op": 1297,
+      "bytes_per_op": 147879,
+      "custom": {
+        "learned_signals/op": 128,
+        "requests/s": 18634
+      }
+    },
+    "BenchmarkGenericClassifierSignalTopology/RequestBatch/request_batch=32/context_tokens=2048/learned_signals=0/learned_signal_set=generic-classifier/signal_backend=deterministic_stub": {
+      "suite": "signal-topology",
+      "dimensions": {
+        "context_tokens": "2048",
+        "learned_signal_set": "generic-classifier",
+        "learned_signals": "0",
+        "request_batch": "32",
+        "signal_backend": "deterministic_stub"
+      },
+      "iterations": 9949,
+      "samples": 3,
+      "ns_per_op": 57306,
+      "ns_stddev_percent": 5.378231293340873,
+      "allocs_per_op": 289,
+      "bytes_per_op": 40722,
+      "custom": {
+        "learned_signals/op": 0,
+        "requests/s": 558409
+      }
+    },
+    "BenchmarkGenericClassifierSignalTopology/RequestBatch/request_batch=32/context_tokens=2048/learned_signals=1/learned_signal_set=generic-classifier/signal_backend=deterministic_stub": {
+      "suite": "signal-topology",
+      "dimensions": {
+        "context_tokens": "2048",
+        "learned_signal_set": "generic-classifier",
+        "learned_signals": "1",
+        "request_batch": "32",
+        "signal_backend": "deterministic_stub"
+      },
+      "iterations": 1336,
+      "samples": 3,
+      "ns_per_op": 455694,
+      "ns_stddev_percent": 2.023947026175184,
+      "allocs_per_op": 609,
+      "bytes_per_op": 72723,
+      "custom": {
+        "learned_signals/op": 32,
+        "requests/s": 70223
+      }
+    },
+    "BenchmarkGenericClassifierSignalTopology/RequestBatch/request_batch=32/context_tokens=2048/learned_signals=4/learned_signal_set=generic-classifier/signal_backend=deterministic_stub": {
+      "suite": "signal-topology",
+      "dimensions": {
+        "context_tokens": "2048",
+        "learned_signal_set": "generic-classifier",
+        "learned_signals": "4",
+        "request_batch": "32",
+        "signal_backend": "deterministic_stub"
+      },
+      "iterations": 745,
+      "samples": 3,
+      "ns_per_op": 838521,
+      "ns_stddev_percent": 4.567344411527702,
+      "allocs_per_op": 1345,
+      "bytes_per_op": 130368,
+      "custom": {
+        "learned_signals/op": 128,
+        "requests/s": 38162
+      }
+    },
+    "BenchmarkGenericClassifierSignalTopology/RequestBatch/request_batch=32/context_tokens=2048/learned_signals=8/learned_signal_set=generic-classifier/signal_backend=deterministic_stub": {
+      "suite": "signal-topology",
+      "dimensions": {
+        "context_tokens": "2048",
+        "learned_signal_set": "generic-classifier",
+        "learned_signals": "8",
+        "request_batch": "32",
+        "signal_backend": "deterministic_stub"
+      },
+      "iterations": 544,
+      "samples": 3,
+      "ns_per_op": 1129315,
+      "ns_stddev_percent": 1.2730877385244788,
+      "allocs_per_op": 2594,
+      "bytes_per_op": 295834,
+      "custom": {
+        "learned_signals/op": 256,
+        "requests/s": 28336
+      }
+    },
+    "BenchmarkGenericClassifierSignalTopology/RequestBatch/request_batch=4/context_tokens=2048/learned_signals=0/learned_signal_set=generic-classifier/signal_backend=deterministic_stub": {
+      "suite": "signal-topology",
+      "dimensions": {
+        "context_tokens": "2048",
+        "learned_signal_set": "generic-classifier",
+        "learned_signals": "0",
+        "request_batch": "4",
+        "signal_backend": "deterministic_stub"
+      },
+      "iterations": 74170,
+      "samples": 3,
+      "ns_per_op": 8264,
+      "ns_stddev_percent": 5.825557309392856,
+      "allocs_per_op": 37,
+      "bytes_per_op": 5104,
+      "custom": {
+        "learned_signals/op": 0,
+        "requests/s": 484009
+      }
+    },
+    "BenchmarkGenericClassifierSignalTopology/RequestBatch/request_batch=4/context_tokens=2048/learned_signals=1/learned_signal_set=generic-classifier/signal_backend=deterministic_stub": {
+      "suite": "signal-topology",
+      "dimensions": {
+        "context_tokens": "2048",
+        "learned_signal_set": "generic-classifier",
+        "learned_signals": "1",
+        "request_batch": "4",
+        "signal_backend": "deterministic_stub"
+      },
+      "iterations": 4627,
+      "samples": 3,
+      "ns_per_op": 136894,
+      "ns_stddev_percent": 4.028403345963882,
+      "allocs_per_op": 77,
+      "bytes_per_op": 9104,
+      "custom": {
+        "learned_signals/op": 4,
+        "requests/s": 29220
+      }
+    },
+    "BenchmarkGenericClassifierSignalTopology/RequestBatch/request_batch=4/context_tokens=2048/learned_signals=4/learned_signal_set=generic-classifier/signal_backend=deterministic_stub": {
+      "suite": "signal-topology",
+      "dimensions": {
+        "context_tokens": "2048",
+        "learned_signal_set": "generic-classifier",
+        "learned_signals": "4",
+        "request_batch": "4",
+        "signal_backend": "deterministic_stub"
+      },
+      "iterations": 2562,
+      "samples": 3,
+      "ns_per_op": 244668,
+      "ns_stddev_percent": 2.4872355152959713,
+      "allocs_per_op": 169,
+      "bytes_per_op": 16307,
+      "custom": {
+        "learned_signals/op": 16,
+        "requests/s": 16349
+      }
+    },
+    "BenchmarkGenericClassifierSignalTopology/RequestBatch/request_batch=4/context_tokens=2048/learned_signals=8/learned_signal_set=generic-classifier/signal_backend=deterministic_stub": {
+      "suite": "signal-topology",
+      "dimensions": {
+        "context_tokens": "2048",
+        "learned_signal_set": "generic-classifier",
+        "learned_signals": "8",
+        "request_batch": "4",
+        "signal_backend": "deterministic_stub"
+      },
+      "iterations": 1418,
+      "samples": 3,
+      "ns_per_op": 429979,
+      "ns_stddev_percent": 1.4503365732928384,
+      "allocs_per_op": 325,
+      "bytes_per_op": 36979,
+      "custom": {
+        "learned_signals/op": 32,
+        "requests/s": 9303
+      }
+    },
+    "BenchmarkHandler_ChunkProcessing_16K": {
+      "suite": "request-shape",
+      "iterations": 123183,
+      "samples": 3,
+      "ns_per_op": 4523,
+      "ns_stddev_percent": 13.457433250961326,
+      "allocs_per_op": 6,
+      "bytes_per_op": 3354
+    },
+    "BenchmarkReMoM_DistributeByWeight": {
+      "suite": "looper-core",
+      "iterations": 529399,
+      "samples": 3,
+      "ns_per_op": 1144,
+      "ns_stddev_percent": 11.513996473313657,
+      "allocs_per_op": 9,
+      "bytes_per_op": 1184
+    },
+    "BenchmarkReMoM_DistributeCallsToModels": {
+      "suite": "looper-core",
+      "iterations": 643344,
+      "samples": 3,
+      "ns_per_op": 897.6,
+      "ns_stddev_percent": 5.609415816636298,
+      "allocs_per_op": 9,
+      "bytes_per_op": 1184
+    },
+    "BenchmarkReMoM_DistributeEqually": {
+      "suite": "looper-core",
+      "iterations": 1366083,
+      "samples": 3,
+      "ns_per_op": 423,
+      "ns_stddev_percent": 19.8944134400505,
+      "allocs_per_op": 2,
+      "bytes_per_op": 400
+    },
+    "BenchmarkReMoM_DistributeFirstOnly": {
+      "suite": "looper-core",
+      "iterations": 2621766,
+      "samples": 3,
+      "ns_per_op": 217,
+      "ns_stddev_percent": 7.590415682671694,
+      "allocs_per_op": 1,
+      "bytes_per_op": 384
+    },
+    "BenchmarkReMoM_DistributeRoundRobin": {
+      "suite": "looper-core",
+      "iterations": 2565535,
+      "samples": 3,
+      "ns_per_op": 233.2,
+      "ns_stddev_percent": 12.96822217468829,
+      "allocs_per_op": 1,
+      "bytes_per_op": 384
+    },
+    "BenchmarkReMoM_Execute/1x4": {
+      "suite": "looper-orchestration",
+      "iterations": 316,
+      "samples": 3,
+      "ns_per_op": 1728887,
+      "ns_stddev_percent": 7.465247181699031,
+      "allocs_per_op": 2511,
+      "bytes_per_op": 293215
+    },
+    "BenchmarkReMoM_Execute/1x8": {
+      "suite": "looper-orchestration",
+      "iterations": 232,
+      "samples": 3,
+      "ns_per_op": 2516885,
+      "ns_stddev_percent": 3.1656492591575844,
+      "allocs_per_op": 4353,
+      "bytes_per_op": 605159
+    },
+    "BenchmarkReMoM_Execute/2x4": {
+      "suite": "looper-orchestration",
+      "iterations": 214,
+      "samples": 3,
+      "ns_per_op": 2838725,
+      "ns_stddev_percent": 7.754436162500622,
+      "allocs_per_op": 4493,
+      "bytes_per_op": 565513
+    },
+    "BenchmarkReMoM_ShuffleModelCalls": {
+      "suite": "looper-core",
+      "iterations": 7180400,
+      "samples": 3,
+      "ns_per_op": 84.68,
+      "ns_stddev_percent": 2.4265181817146795,
+      "allocs_per_op": 1,
+      "bytes_per_op": 16
+    },
+    "BenchmarkRewriteModel_Fast_16K": {
+      "suite": "request-shape",
+      "iterations": 8775,
+      "samples": 3,
+      "ns_per_op": 81009,
+      "ns_stddev_percent": 30.665432210466825,
+      "allocs_per_op": 3,
+      "bytes_per_op": 131152
+    },
+    "BenchmarkSelectionTopology/candidates=1/utilization=low": {
+      "suite": "selection",
+      "dimensions": {
+        "candidates": "1",
+        "utilization": "low"
+      },
+      "iterations": 168335161,
+      "samples": 3,
+      "ns_per_op": 3.484,
+      "ns_stddev_percent": 1.5433849832615807,
+      "allocs_per_op": 0,
+      "bytes_per_op": 0
+    },
+    "BenchmarkSelectionTopology/candidates=16/utilization=boundary": {
+      "suite": "selection",
+      "dimensions": {
+        "candidates": "16",
+        "utilization": "boundary"
+      },
+      "iterations": 458168,
+      "samples": 3,
+      "ns_per_op": 1313,
+      "ns_stddev_percent": 1.9082675508133313,
+      "allocs_per_op": 11,
+      "bytes_per_op": 1048
+    },
+    "BenchmarkSelectionTopology/candidates=3/utilization=medium": {
+      "suite": "selection",
+      "dimensions": {
+        "candidates": "3",
+        "utilization": "medium"
+      },
+      "iterations": 8153859,
+      "samples": 3,
+      "ns_per_op": 63.95,
+      "ns_stddev_percent": 28.89562915699628,
+      "allocs_per_op": 0,
+      "bytes_per_op": 0
+    }
+  },
+  "timestamp": "0001-01-01T00:00:00Z"
+}

@@ -65,6 +65,11 @@ jobs:
     if: needs.changes.outputs.openvino == 'true'
     uses: ./.github/workflows/openvino-binding-ci.yml
 
+  performance:
+    needs: changes
+    if: needs.changes.outputs.performance == 'true'
+    uses: ./.github/workflows/performance-test.yml
+
   gate:
     name: Main validation gate
     if: always()
@@ -78,6 +83,7 @@ jobs:
       - cli
       - recipe-conformance
       - openvino
+      - performance
     runs-on: ubuntu-latest
     steps:
       - name: Verify affected domains

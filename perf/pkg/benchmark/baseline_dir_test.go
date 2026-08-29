@@ -13,10 +13,8 @@ func writeBaselineFile(t *testing.T, path, content string) {
 	}
 }
 
-// TestLoadBaselineDir_MergesSuiteFiles guards #2455 root cause #1: the producer
-// (update-baseline.sh) writes one file per suite — decision.json, looper.json,
-// classification.json, … — and never a combined baseline.json. The comparison
-// side must therefore union every *.json in the directory.
+// TestLoadBaselineDir_MergesSuiteFiles preserves support for teams that keep a
+// reviewed result set per environment or suite.
 func TestLoadBaselineDir_MergesSuiteFiles(t *testing.T) {
 	dir := t.TempDir()
 	writeBaselineFile(t, filepath.Join(dir, "decision.json"),

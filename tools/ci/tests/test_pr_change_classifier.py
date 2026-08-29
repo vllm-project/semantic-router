@@ -45,7 +45,7 @@ REPRESENTATIVE_FIXTURES = {
     ),
     "core router": (
         ["src/semantic-router/pkg/extproc/processor.go"],
-        ("quality", "security", "core-tests", "e2e", "images"),
+        ("quality", "security", "core-tests", "e2e", "images", "performance"),
         ("envoy-ai-gateway",),
         ("vllm-sr",),
     ),
@@ -162,6 +162,16 @@ class PRChangeClassifierTests(unittest.TestCase):
             result.profiles,
             ("envoy-ai-gateway", "dashboard", "remote-embedding"),
         )
+
+    def test_router_hot_paths_select_performance(self) -> None:
+        for path in (
+            "src/semantic-router/pkg/extproc/utils_fast.go",
+            "src/semantic-router/pkg/decision/engine.go",
+            "src/semantic-router/pkg/selection/multi_factor.go",
+            "src/semantic-router/pkg/looper/remom.go",
+        ):
+            with self.subTest(path=path):
+                self.assertIn("performance", classify([path]).selected_jobs)
 
     def test_generated_api_docs_select_core_tests(self) -> None:
         """Hand-edited API docs must still reach the api-docs-check drift gate.
