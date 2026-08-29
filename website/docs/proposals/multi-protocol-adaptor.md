@@ -88,6 +88,42 @@ field cannot pass through an untyped JSON bucket: it must map to the neutral con
 fail as an explicit unsupported feature, or be recorded as bounded provider metadata
 that is intentionally omitted from the client representation.
 
+## Verification contract
+
+The schema contract is pinned to published upstream revisions. Tests close every
+top-level field, nested object field, and published union discriminator against an
+explicit semantic, transport-only, extension, or unsupported disposition. The
+current pins are OpenAI OpenAPI `6c8481caaefded47a5348a031f8e16c7b89de045`
+and Anthropic SDK `d19dea9ed85bbb5fdb2d6f20fb6f903920ed23fa`.
+
+Human-readable fixtures use a stable input/output convention:
+
+```text
+NNN-{client-protocol}-{case}-in.json
+NNN-{client-protocol}-{case}-{backend-protocol}-out.json
+```
+
+Every request, response, transport error, stream, capability boundary, and typed
+rejection input has exactly one expected output for each built-in target protocol.
+Stream fixtures preserve the exact SSE transcript and are replayed again one byte at
+a time to prove that transport chunk boundaries do not change semantics. The corpus
+includes malformed and truncated JSON, duplicate fields, invalid unions and enums,
+ordered multimodal content, tools and tool results, structured output, reasoning,
+usage, cancellation, timeouts, incomplete streams, midstream failures, identity
+changes, sequence violations, and resource limits.
+
+Deployment-level coverage is a required 18-cell matrix:
+
+```text
+3 client protocols x 3 native backend protocols x 2 modes = 18 E2E cells
+```
+
+Each cell traverses Envoy and ExtProc, validates the client-native buffered envelope
+or SSE lifecycle, requires a deterministic backend marker in the translated output,
+and rejects leaked backend wire shapes. Additional E2E contracts cover structured
+output, buffered provider errors, tool-call continuation, incomplete streams, and
+errors after partial output for every backend protocol.
+
 ## Translation rules
 
 Translation is semantic, not field-by-field copying:
