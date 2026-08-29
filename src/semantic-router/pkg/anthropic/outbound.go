@@ -246,10 +246,7 @@ func buildAnthropicContent(choice openai.ChatCompletionChoice, ext *ir.IRExtensi
 
 	// Tool calls.
 	for _, tc := range choice.Message.ToolCalls {
-		input := json.RawMessage(tc.Function.Arguments)
-		if len(input) == 0 {
-			input = json.RawMessage("{}")
-		}
+		input := toolUseArguments(tc.Function.Arguments, ext)
 		blocks = append(blocks, anthropicContentBlock{
 			Type:  "tool_use",
 			ID:    tc.ID,
@@ -259,6 +256,38 @@ func buildAnthropicContent(choice openai.ChatCompletionChoice, ext *ir.IRExtensi
 	}
 
 	return blocks
+}
+
+// toolUseArguments encodes a raw tool-call argument fragment into the
+// Anthropic tool_use.input field. OpenAI-format backends may emit
+// arguments that are not valid JSON (truncated responses, partial
+// streaming, non-json-mode models). Inserting those raw bytes as
+// json.RawMessage would fail the whole response marshal and turn a
+// successful turn into an api_error.
+//
+// Anthropic's tool-use contract requires input to be a JSON object
+// conforming to input_schema, so invalid bytes cannot be emitted as a
+// bare string. They are instead wrapped into an object under a
+// reserved raw_arguments key — the wire stays a valid object, the raw
+// text survives for debugging — and a lossy warning is recorded for
+// observability.
+func toolUseArguments(raw string, ext *ir.IRExtensions) json.RawMessage {
+	if raw == "" {
+		return json.RawMessage("{}")
+	}
+	if json.Valid([]byte(raw)) {
+		return json.RawMessage(raw)
+	}
+	// Marshal an object wrapping the raw fragment. The string can never
+	// fail to marshal, so the error is unreachable.
+	wrapped, _ := json.Marshal(map[string]string{"raw_arguments": raw})
+	ext.AppendWarning(ir.Warning{
+		Field:    "tool_use.input",
+		Reason:   ir.ReasonCoercedString,
+		Severity: ir.WarningSeverityLossy,
+		Detail:   fmt.Sprintf("tool arguments are not valid JSON (%d bytes); exported under raw_arguments so the response stays a valid object", len(raw)),
+	})
+	return json.RawMessage(wrapped)
 }
 
 // orderedThinkingBlockIDs returns thinking block IDs from ext in a

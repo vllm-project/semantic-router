@@ -151,6 +151,42 @@ func TestEmitAnthropicResponse_EmptyToolCallArguments(t *testing.T) {
 	assert.JSONEq(t, `{}`, string(msg.Content[0].Input))
 }
 
+func TestEmitAnthropicResponse_InvalidToolArgumentsStayValid(t *testing.T) {
+	// Regression: an OpenAI-format backend can emit tool arguments that are
+	// not valid JSON (truncated response, partial stream, non-json-mode
+	// model). The emitter must not fail the whole response marshal and turn
+	// a successful turn into an api_error.
+	ext := &ir.IRExtensions{}
+	out, err := EmitAnthropicResponse(buildOpenAIBody(t,
+		openai.ChatCompletionChoice{
+			FinishReason: "tool_calls",
+			Message: openai.ChatCompletionMessage{
+				Role: "assistant",
+				ToolCalls: []openai.ChatCompletionMessageToolCall{{
+					ID: "call_bad",
+					Function: openai.ChatCompletionMessageToolCallFunction{
+						Name:      "get_weather",
+						Arguments: `{"location": "SF", "unit": `, // truncated -> not valid JSON
+					},
+				}},
+			},
+		},
+		openai.CompletionUsage{},
+		"msg_bad_args",
+	), ext, "claude-opus-4-7")
+	require.NoError(t, err, "invalid tool arguments must not fail the emit")
+	// Output stays a valid Anthropic message with a tool_use block whose
+	// input is a JSON object (Anthropic wire contract), not a bare string.
+	msg := parseAnthropicResponse(t, out)
+	require.Len(t, msg.Content, 1)
+	assert.Equal(t, "tool_use", msg.Content[0].Type)
+	// The original fragment survives inside the object for debugging.
+	assert.Contains(t, string(msg.Content[0].Input), "SF")
+	// Lossy warning recorded for observability.
+	require.Len(t, ext.Warnings, 1)
+	assert.Equal(t, ir.ReasonCoercedString, ext.Warnings[0].Reason)
+}
+
 func TestEmitAnthropicResponse_ThinkingSignaturePrecedesText(t *testing.T) {
 	body := buildOpenAIBody(t,
 		openai.ChatCompletionChoice{
