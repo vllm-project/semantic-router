@@ -58,6 +58,14 @@ def test_dashboard_dockerfile_retries_runtime_apk_installs() -> None:
     assert "install -d -o nonroot -g root -m 0770 /app/data" in content
 
 
+def test_dashboard_dockerfile_exposes_an_immutable_source_revision_build_arg() -> None:
+    content = DASHBOARD_DOCKERFILE.read_text(encoding="utf-8")
+
+    assert "ARG VLLM_SR_SOURCE_REVISION=unavailable" in content
+    assert "ARG VLLM_SR_SOURCE_REVISION\n" in content
+    assert "ENV VLLM_SR_SOURCE_REVISION=${VLLM_SR_SOURCE_REVISION}" in content
+
+
 def test_dashboard_entrypoint_maps_runtime_socket_group_before_dropping_root() -> None:
     content = DASHBOARD_ENTRYPOINT.read_text(encoding="utf-8")
 
@@ -89,6 +97,10 @@ def test_dashboard_entrypoint_maps_runtime_socket_group_before_dropping_root() -
     assert "DATA_GID=65532" in content
     assert 'python3 "$PERMISSION_HELPER" prepare-tree' in content
     assert "--credential-relative-path credentials/router-management.token" in content
+    assert "EVALUATION_DATA_DIR=${EVALUATION_DATA_DIR:-/app/data/evaluation}" in content
+    assert '--exclude-path "$EVALUATION_DATA_DIR"' in content
+    assert 'python3 "$PERMISSION_HELPER" prepare-private-tree' in content
+    assert "Evaluation Plane is disabled" in content
     assert 'python3 "$PERMISSION_HELPER" prepare-file "$CONFIG_FILE_PATH"' in content
     assert (
         'python3 "$PERMISSION_HELPER" probe-config "$STATE_DIR" "$CONFIG_FILE_PATH"'
@@ -385,6 +397,101 @@ def test_dashboard_permission_helper_rejects_fifo_without_blocking(
     assert "unsafe file" in result.stderr
 
 
+def test_dashboard_permission_helper_excludes_private_evaluation_store(
+    tmp_path: Path,
+) -> None:
+    shared = tmp_path / "data"
+    evaluation = shared / "evaluation"
+    ordinary = shared / "ordinary"
+    evaluation.mkdir(parents=True)
+    ordinary.mkdir()
+    evidence = evaluation / "report.json"
+    evidence.write_text("{}", encoding="utf-8")
+    shared_file = ordinary / "state.json"
+    shared_file.write_text("{}", encoding="utf-8")
+    evaluation.chmod(0o700)
+    evidence.chmod(0o600)
+    ordinary.chmod(0o700)
+    shared_file.chmod(0o600)
+
+    subprocess.run(
+        [
+            sys.executable,
+            str(DASHBOARD_PERMISSION_HELPER),
+            "prepare-tree",
+            str(shared),
+            str(os.getgid()),
+            "--exclude-path",
+            str(evaluation),
+        ],
+        check=True,
+    )
+
+    assert stat.S_IMODE(evaluation.stat().st_mode) == 0o700
+    assert stat.S_IMODE(evidence.stat().st_mode) == 0o600
+    assert stat.S_IMODE(ordinary.stat().st_mode) & 0o070 == 0o070
+    assert stat.S_IMODE(shared_file.stat().st_mode) & 0o060 == 0o060
+
+
+def test_dashboard_permission_helper_keeps_evaluation_store_private_on_restart(
+    tmp_path: Path,
+) -> None:
+    shared = tmp_path / "data"
+    evaluation = shared / "evaluation"
+    run = evaluation / "runs" / "run-1"
+    run.mkdir(parents=True)
+    evidence = run / "report.json"
+    evidence.write_text("{}", encoding="utf-8")
+    evaluation.chmod(0o770)
+    run.chmod(0o770)
+    evidence.chmod(0o660)
+
+    command = [
+        sys.executable,
+        str(DASHBOARD_PERMISSION_HELPER),
+        "prepare-private-tree",
+        str(evaluation),
+        str(os.getuid()),
+        str(os.getgid()),
+    ]
+    subprocess.run(command, check=True)
+    subprocess.run(command, check=True)
+
+    for directory in (evaluation, evaluation / "runs", run):
+        assert stat.S_IMODE(directory.stat().st_mode) == 0o700
+    assert stat.S_IMODE(evidence.stat().st_mode) == 0o600
+
+
+def test_dashboard_permission_helper_rejects_symlink_in_private_store(
+    tmp_path: Path,
+) -> None:
+    evaluation = tmp_path / "evaluation"
+    evaluation.mkdir()
+    outside = tmp_path / "outside"
+    outside.write_text("sentinel", encoding="utf-8")
+    outside.chmod(0o600)
+    (evaluation / "trap").symlink_to(outside)
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(DASHBOARD_PERMISSION_HELPER),
+            "prepare-private-tree",
+            str(evaluation),
+            str(os.getuid()),
+            str(os.getgid()),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "contains symlink" in result.stderr
+    assert outside.read_text(encoding="utf-8") == "sentinel"
+    assert stat.S_IMODE(outside.stat().st_mode) == 0o600
+
+
 def test_dashboard_dockerfile_copies_router_dsl_package_for_backend_builds() -> None:
     content = DASHBOARD_DOCKERFILE.read_text(encoding="utf-8")
 
@@ -397,23 +504,19 @@ def test_dashboard_dockerfile_copies_router_dsl_package_for_backend_builds() -> 
     )
 
 
-def test_dashboard_dockerfile_copies_model_eval_scripts_and_requirements() -> None:
+def test_dashboard_dockerfile_ships_evaluation_worker_without_legacy_model_eval() -> (
+    None
+):
     content = DASHBOARD_DOCKERFILE.read_text(encoding="utf-8")
 
-    assert "COPY src/training/model_eval/ /app/src/training/model_eval/" in content
-    assert "ARG TORCH_CPU_INDEX_URL=https://download.pytorch.org/whl/cpu" in content
-    assert "ARG TORCH_CPU_VERSION=" in content
+    assert "COPY src/vllm-sr/cli/ /app/cli/" in content
     assert (
-        '"${VIRTUAL_ENV}/bin/pip" install --no-cache-dir --index-url "${TORCH_CPU_INDEX_URL}" "torch==${TORCH_CPU_VERSION}"'
+        '"${VIRTUAL_ENV}/bin/pip" install --no-cache-dir -r /app/requirements.txt'
         in content
     )
-    assert content.index('"torch==${TORCH_CPU_VERSION}"') < content.index(
-        "-r /app/src/training/model_eval/requirements.txt"
-    )
-    assert (
-        '"${VIRTUAL_ENV}/bin/pip" install --no-cache-dir -r /app/src/training/model_eval/requirements.txt'
-        in content
-    )
+    assert "COPY src/training/model_eval/" not in content
+    assert "TORCH_CPU" not in content
+    assert '"torch==' not in content
 
 
 def test_vllm_sr_dockerfile_stays_router_only() -> None:

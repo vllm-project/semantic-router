@@ -1,0 +1,328 @@
+{
+  "change_profiles": [
+    {
+      "description": "Strict schema and adapter parity changes.",
+      "id": "schema_adapter",
+      "name": "Schema / adapter"
+    },
+    {
+      "description": "Recipe signal, decision, algorithm, and policy changes.",
+      "id": "recipe",
+      "name": "Routing recipe"
+    },
+    {
+      "description": "Selector, projection, classifier, and binding changes.",
+      "id": "selector",
+      "name": "Selector / binding"
+    },
+    {
+      "description": "Logical arm composition, capability, quality, and price changes.",
+      "id": "model_pool",
+      "name": "Model pool"
+    },
+    {
+      "description": "Serving runtime, placement, capacity, and transport changes.",
+      "id": "runtime_capacity",
+      "name": "Runtime / capacity"
+    },
+    {
+      "description": "Agent trajectory, tool, state, and multimodal changes.",
+      "id": "agent_multimodal",
+      "name": "Agent / multimodal"
+    },
+    {
+      "description": "Online assignment, preference, feedback, and adaptive policy changes.",
+      "id": "online_adaptation",
+      "name": "Online adaptation"
+    }
+  ],
+  "gate_contract_version": "evaluation-release-gates.v1",
+  "schema_version": "evaluation.v1",
+  "suites": [
+    {
+      "case_count": 4,
+      "description": "Deterministic all-track vertical slice.",
+      "evidence_level": "E0",
+      "id": "evaluation-smoke",
+      "modes": [
+        "replay"
+      ],
+      "name": "Evaluation smoke",
+      "revision": "builtin-v1",
+      "tags": [
+        "smoke",
+        "deterministic"
+      ],
+      "track_ids": [
+        "routing",
+        "model_pool",
+        "joint",
+        "agentic",
+        "multimodal",
+        "preference",
+        "safety",
+        "capacity"
+      ]
+    },
+    {
+      "description": "Diagnostic routing smoke using bounded live probes; no promotion-grade policy claim.",
+      "evidence_level": "E0",
+      "id": "live-routing-core",
+      "modes": [
+        "live"
+      ],
+      "name": "Live routing core",
+      "revision": "executor-v1",
+      "tags": [],
+      "track_ids": [
+        "routing"
+      ]
+    },
+    {
+      "description": "Requires an attested server-owned direct-arm matrix target; unavailable on the generic runtime target.",
+      "evidence_level": "E0",
+      "id": "live-model-pool",
+      "modes": [
+        "live"
+      ],
+      "name": "Live model pool",
+      "revision": "executor-v1",
+      "tags": [],
+      "track_ids": [
+        "model_pool"
+      ]
+    },
+    {
+      "description": "Requires attested route correlation and direct-arm execution; unavailable on the generic runtime target.",
+      "evidence_level": "E0",
+      "id": "live-joint",
+      "modes": [
+        "live"
+      ],
+      "name": "Live routing + pool",
+      "revision": "executor-v1",
+      "tags": [],
+      "track_ids": [
+        "routing",
+        "model_pool",
+        "joint"
+      ]
+    },
+    {
+      "description": "Diagnostic single-probe multimodal smoke; no grounding, privacy, or robustness claim.",
+      "evidence_level": "E0",
+      "id": "live-multimodal",
+      "modes": [
+        "live"
+      ],
+      "name": "Live multimodal",
+      "revision": "executor-v1",
+      "tags": [],
+      "track_ids": [
+        "multimodal"
+      ]
+    },
+    {
+      "description": "Diagnostic bounded concurrency smoke without warmup, repeats, duration, or a declared SLO.",
+      "evidence_level": "E0",
+      "id": "live-capacity",
+      "modes": [
+        "live"
+      ],
+      "name": "Live capacity",
+      "revision": "executor-v1",
+      "tags": [],
+      "track_ids": [
+        "capacity"
+      ]
+    }
+  ],
+  "targets": [
+    {
+      "description": "Deterministic evidence for validating the complete evaluation plane.",
+      "evidence_level": "E0",
+      "healthy": true,
+      "id": "fixture",
+      "kind": "builtin-fixture",
+      "labels": {
+        "execution": "local",
+        "network": "none"
+      },
+      "modes": [
+        "replay"
+      ],
+      "name": "Built-in replay fixture",
+      "track_ids": [
+        "routing",
+        "model_pool",
+        "joint",
+        "agentic",
+        "multimodal",
+        "preference",
+        "safety",
+        "capacity"
+      ]
+    },
+    {
+      "description": "Capabilities derived from server-owned endpoints; model-pool and joint evaluation require an attested direct-arm target seam.",
+      "healthy": false,
+      "id": "runtime",
+      "kind": "runtime",
+      "labels": {
+        "capabilities": "manifest-dependent",
+        "credentials": "environment-only",
+        "direct_arms": "unavailable",
+        "model_arms": "server-owned"
+      },
+      "modes": [
+        "live"
+      ],
+      "name": "Active vLLM-SR runtime",
+      "track_ids": []
+    }
+  ],
+  "tracks": [
+    {
+      "description": "Recipe decisions, coverage, abstention, fallback, and oracle regret.",
+      "evidence_levels": [
+        "E0",
+        "E3"
+      ],
+      "id": "routing",
+      "metrics": [
+        "routing.coverage",
+        "routing.accuracy",
+        "routing.abstention_rate",
+        "routing.fallback_rate",
+        "routing.latency_p95_ms"
+      ],
+      "modes": [
+        "replay",
+        "live"
+      ],
+      "name": "Routing"
+    },
+    {
+      "description": "Arm quality, complementarity, unique wins, and pool oracle quality.",
+      "evidence_levels": [
+        "E0",
+        "E4"
+      ],
+      "id": "model_pool",
+      "metrics": [
+        "model_pool.best_single_quality",
+        "model_pool.oracle_quality",
+        "model_pool.oracle_gain",
+        "model_pool.unique_win_rate",
+        "model_pool.selection_entropy_bits",
+        "model_pool.selection_arm_coverage"
+      ],
+      "modes": [
+        "replay",
+        "live"
+      ],
+      "name": "Model pool"
+    },
+    {
+      "description": "Realized system utility, oracle regret, latency, reliability, and cost.",
+      "evidence_levels": [
+        "E0",
+        "E5"
+      ],
+      "id": "joint",
+      "metrics": [
+        "joint.realized_quality",
+        "joint.oracle_regret",
+        "joint.normalized_regret",
+        "joint.reliability"
+      ],
+      "modes": [
+        "replay",
+        "live"
+      ],
+      "name": "Routing + pool"
+    },
+    {
+      "description": "Trajectory success, tool validity, state continuity, and recovery.",
+      "evidence_levels": [
+        "E0"
+      ],
+      "id": "agentic",
+      "metrics": [
+        "agentic.success_rate",
+        "agentic.invalid_tool_rate"
+      ],
+      "modes": [
+        "replay"
+      ],
+      "name": "Agentic"
+    },
+    {
+      "description": "Capability-aware routing, grounding quality, and privacy signals.",
+      "evidence_levels": [
+        "E0",
+        "E5"
+      ],
+      "id": "multimodal",
+      "metrics": [
+        "multimodal.support_rate",
+        "multimodal.quality"
+      ],
+      "modes": [
+        "replay",
+        "live"
+      ],
+      "name": "Multimodal"
+    },
+    {
+      "description": "Offline preference agreement and propensity-qualified online evidence.",
+      "evidence_levels": [
+        "E0"
+      ],
+      "id": "preference",
+      "metrics": [
+        "preference.agreement",
+        "preference.propensity_coverage"
+      ],
+      "modes": [
+        "replay"
+      ],
+      "name": "Preference"
+    },
+    {
+      "description": "Policy adherence, blocking correctness, privacy, and unsafe regressions.",
+      "evidence_levels": [
+        "E0"
+      ],
+      "id": "safety",
+      "metrics": [
+        "safety.violation_rate",
+        "safety.violation_upper_95",
+        "safety.block_accuracy"
+      ],
+      "modes": [
+        "replay"
+      ],
+      "name": "Safety"
+    },
+    {
+      "description": "Throughput, tail latency, success envelope, GPU efficiency, and TCO.",
+      "evidence_levels": [
+        "E0",
+        "E5"
+      ],
+      "id": "capacity",
+      "metrics": [
+        "capacity.throughput_rps",
+        "capacity.latency_p95_ms",
+        "capacity.success_rate",
+        "capacity.cost_per_successful_request"
+      ],
+      "modes": [
+        "replay",
+        "live"
+      ],
+      "name": "Capacity"
+    }
+  ]
+}

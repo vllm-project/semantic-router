@@ -1,0 +1,396 @@
+.form {
+  display: grid;
+  gap: 1rem;
+}
+.intro,
+.formSection,
+.permissionState {
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 14px;
+  background: #101012;
+}
+.intro {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.35rem;
+}
+.intro h2,
+.permissionState h2 {
+  margin: 0.3rem 0 0.4rem;
+  color: #f7f7f8;
+  letter-spacing: -0.03em;
+}
+.intro p,
+.permissionState p {
+  max-width: 720px;
+  margin: 0;
+  color: rgba(255, 255, 255, 0.55);
+  line-height: 1.55;
+}
+.eyebrow {
+  color: rgba(255, 255, 255, 0.42);
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 720;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.evidence {
+  padding: 0.35rem 0.65rem;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.75);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+}
+.introBadges {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.4rem;
+}
+.permissionState {
+  display: grid;
+  min-height: 260px;
+  place-items: center;
+  align-content: center;
+  padding: 2rem;
+  text-align: center;
+}
+.permissionState > span {
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+}
+.error {
+  padding: 0.75rem;
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  border-radius: 9px;
+  background: rgba(239, 68, 68, 0.08);
+  color: #fca5a5;
+}
+.formSection {
+  padding: 1.25rem;
+}
+.sectionHeading {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  gap: 0.7rem;
+  margin-bottom: 1rem;
+}
+.sectionHeading > span {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 7px;
+  color: rgba(255, 255, 255, 0.55);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+}
+.sectionHeading h3 {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 1rem;
+}
+.sectionHeading p {
+  margin: 0.25rem 0 0;
+  color: rgba(255, 255, 255, 0.46);
+  font-size: 0.76rem;
+}
+.fieldGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+.fieldGrid label,
+.numericGrid label {
+  display: grid;
+  gap: 0.4rem;
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 0.74rem;
+}
+.fieldWide,
+.choiceGroup {
+  grid-column: 1 / -1;
+}
+.fieldGrid input,
+.fieldGrid textarea,
+.fieldGrid select,
+.numericGrid input {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: #080809;
+  color: rgba(255, 255, 255, 0.85);
+}
+.fieldGrid textarea {
+  min-height: 88px;
+  resize: vertical;
+}
+.fieldGrid select option {
+  background: #080809;
+  color: rgba(255, 255, 255, 0.85);
+}
+.fieldGrid small {
+  color: rgba(255, 255, 255, 0.36);
+  line-height: 1.4;
+}
+.profileHeader {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 0.85rem;
+  margin-bottom: 0.85rem;
+}
+.profileHeader > label {
+  display: grid;
+  gap: 0.4rem;
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 0.74rem;
+}
+.profileHeader select {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: #080809;
+  color: rgba(255, 255, 255, 0.85);
+}
+.profileHeader small {
+  color: rgba(255, 255, 255, 0.4);
+  line-height: 1.4;
+}
+.profileHeader > div {
+  display: grid;
+  gap: 0.3rem;
+  min-width: 230px;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
+}
+.profileHeader > div span {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.66rem;
+  text-transform: uppercase;
+}
+.profileHeader > div code {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.7rem;
+}
+.gateMatrix {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+.gateMatrix article {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.35rem 0.7rem;
+  padding: 0.7rem;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.018);
+}
+.gateMatrix article > div {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+}
+.gateMatrix article code {
+  color: rgba(255, 255, 255, 0.38);
+  font-size: 0.63rem;
+}
+.gateMatrix article strong {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 0.74rem;
+}
+.gateMatrix article > span {
+  align-self: start;
+  padding: 0.18rem 0.4rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.6rem;
+  text-transform: capitalize;
+}
+.gateMatrix article[data-disposition='required'] > span {
+  border-color: rgba(74, 222, 128, 0.28);
+  background: rgba(34, 197, 94, 0.09);
+  color: #86efac;
+}
+.gateMatrix article[data-disposition='advisory'] > span {
+  border-color: rgba(251, 191, 36, 0.28);
+  background: rgba(245, 158, 11, 0.08);
+  color: #fcd34d;
+}
+.gateMatrix article > small {
+  grid-column: 1 / -1;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.67rem;
+  line-height: 1.4;
+}
+.contractWarning {
+  padding: 0.8rem;
+  border: 1px solid rgba(251, 191, 36, 0.28);
+  border-radius: 8px;
+  background: rgba(245, 158, 11, 0.08);
+  color: #fcd34d;
+  font-size: 0.72rem;
+}
+.choiceGroup {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.choiceGroup legend {
+  margin-bottom: 0.4rem;
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 0.74rem;
+}
+.choiceCard,
+.catalogCard,
+.trackCard,
+.autoStart {
+  display: flex;
+  gap: 0.65rem;
+  padding: 0.8rem;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.02);
+  cursor: pointer;
+}
+.choiceCard:has(input:checked),
+.selected {
+  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.055);
+}
+.choiceCard input,
+.catalogCard input,
+.trackCard input,
+.autoStart input {
+  flex: 0 0 auto;
+  margin-top: 0.15rem;
+  accent-color: #f4f4f5;
+}
+.choiceCard span,
+.catalogCard span,
+.trackCard span,
+.autoStart span {
+  display: grid;
+  gap: 0.25rem;
+}
+.choiceCard strong,
+.catalogCard strong,
+.trackCard strong,
+.autoStart strong {
+  color: rgba(255, 255, 255, 0.84);
+  font-size: 0.78rem;
+}
+.choiceCard small,
+.catalogCard small,
+.trackCard small,
+.autoStart small {
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 0.7rem;
+  line-height: 1.45;
+}
+.catalogCard em,
+.trackCard em {
+  color: rgba(255, 255, 255, 0.32);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-style: normal;
+}
+.catalogGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+.trackGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+.trackCard {
+  min-width: 0;
+}
+.disabled {
+  cursor: not-allowed;
+  opacity: 0.38;
+}
+.numericGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+.autoStart {
+  width: fit-content;
+  margin-top: 0.8rem;
+}
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.2rem;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 12px;
+  background: #101012;
+}
+.actions span {
+  color: rgba(255, 255, 255, 0.43);
+  font-size: 0.72rem;
+}
+.actions button {
+  min-height: 42px;
+  padding: 0.6rem 1rem;
+  border: 1px solid #f4f4f5;
+  border-radius: 8px;
+  background: #f4f4f5;
+  color: #101012;
+  font-size: 0.82rem;
+  font-weight: 720;
+  cursor: pointer;
+}
+.actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+@media (max-width: 900px) {
+  .trackGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 650px) {
+  .intro,
+  .actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .fieldGrid,
+  .choiceGroup,
+  .catalogGrid,
+  .trackGrid,
+  .numericGrid,
+  .profileHeader,
+  .gateMatrix {
+    grid-template-columns: 1fr;
+  }
+  .fieldWide,
+  .choiceGroup {
+    grid-column: auto;
+  }
+  .actions button {
+    width: 100%;
+  }
+}

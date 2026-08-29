@@ -118,6 +118,9 @@ Feature controls:
 | `DASHBOARD_RECIPE_STORE_WRITABLE` | Allow Recipe package import. |
 | `DASHBOARD_SETUP_MODE` | Enable the trusted first-run setup flow. |
 | `EVALUATION_ENABLED` | Enable evaluation jobs. |
+| `EVALUATION_DATA_DIR` | Durable Evaluation Plane artifact store; default `./data/evaluation`. |
+| `EVALUATION_ENVOY_API_KEY_ENV` | Optional server-owned environment variable name containing the Envoy evaluation credential; the browser never supplies or receives it. |
+| `VLLM_SR_SOURCE_REVISION` | Immutable source identity required to create an evaluation run: a full 40-character Git commit or `sha256:` source-tree digest. Dashboard images set this from their build argument. |
 | `ML_PIPELINE_ENABLED` | Enable benchmark, training, and config-generation jobs. |
 | `ML_TRAINING_DIR` | Training script directory for subprocess mode. |
 | `ML_SERVICE_URL` | Use an external ML service instead of local subprocesses. |
@@ -125,9 +128,22 @@ Feature controls:
 | `OPENCLAW_ENABLED` | Enable OpenClaw provisioning and room workflows. |
 
 Persistent SQLite paths include `DASHBOARD_AUTH_DB_PATH`,
-`EVALUATION_DB_PATH`, `DASHBOARD_WORKFLOW_DB_PATH`, and
-`DASHBOARD_CONFIG_PROJECTION_DB_PATH`. Mount writable persistent storage for
-any state that must survive a container restart.
+`DASHBOARD_WORKFLOW_DB_PATH`, and `DASHBOARD_CONFIG_PROJECTION_DB_PATH`.
+Evaluation evidence is not stored in SQLite: mount `EVALUATION_DATA_DIR` as
+writable persistent storage so complete run bundles survive container restarts.
+The Evaluation Plane fails closed unless its store and run directories are
+private to the Dashboard process (`0700` directories and `0600` bundle files).
+The Dashboard container defaults this store to `/app/data/evaluation`; its
+entrypoint excludes that subtree from shared-data permission widening and
+reapplies the private modes before every restart.
+
+Dashboard image builds accept `VLLM_SR_SOURCE_REVISION` as a build argument and
+embed it in the runtime image. The Dockerfile default is `unavailable`, which
+keeps the Dashboard usable but makes Evaluation Plane run creation fail closed;
+release and CI builds must pass an immutable full commit or source-tree digest.
+Repository Make targets derive the full commit only from a clean checkout; a
+dirty checkout resolves to `unavailable` unless the caller explicitly supplies
+a canonical `sha256:` source-tree digest.
 
 ## Authentication and write safety
 
@@ -147,6 +163,11 @@ The same list governs the ClawRoom WebSocket handshake. CORS does not apply to
 handshakes, so the origin check is the only cross-origin control there; a
 split-origin frontend that is not listed can authenticate and write but cannot
 open the room socket.
+
+Evaluation Plane evidence APIs are intentionally stricter: they accept browser
+requests only when `Origin` exactly matches the request scheme and `Host`.
+TLS-terminating proxies must overwrite `X-Forwarded-Proto` with the external
+scheme; arbitrary sibling origins never receive credentialed CORS headers.
 
 Read-only mode and the two writable-surface flags are independent. A read-only
 ConfigMap, GitOps-owned config, or read-only Recipe store should be reflected in
