@@ -286,8 +286,10 @@ type providerRequiredFieldCase struct {
 }
 
 func providerRequiredFieldCases() []providerRequiredFieldCase {
-	responses, anthropic := llmprotocol.OpenAIResponsesV1, llmprotocol.AnthropicMessagesV1
+	chat, responses, anthropic := llmprotocol.OpenAIChatV1, llmprotocol.OpenAIResponsesV1, llmprotocol.AnthropicMessagesV1
 	return []providerRequiredFieldCase{
+		{"chat error type", chat, "data: {\"error\":{\"message\":\"failed\"}}\n\n", "upstream_error_type_required"},
+		{"chat error message", chat, "data: {\"error\":{\"type\":\"server_error\"}}\n\n", "upstream_error_message_required"},
 		{"responses lifecycle resource", responses, "event: response.created\ndata: {\"type\":\"response.created\",\"sequence_number\":0}\n\n", "stream_response_required"},
 		{"responses output item", responses, "event: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"sequence_number\":0,\"output_index\":0}\n\n", "stream_item_required"},
 		{"responses delta target", responses, "event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"sequence_number\":0,\"output_index\":0,\"delta\":\"orphan\"}\n\n", "stream_delta_target_required"},
@@ -309,10 +311,14 @@ func providerRequiredFieldCases() []providerRequiredFieldCase {
 
 func newProviderStreamDecoder(format llmprotocol.WireFormat) llmprotocol.StreamDecoder {
 	streamContext := llmprotocol.StreamContext{Context: context.Background()}
-	if format == llmprotocol.AnthropicMessagesV1 {
+	switch format {
+	case llmprotocol.OpenAIChatV1:
+		return OpenAIChatCodec{}.NewDecoder(streamContext, llmprotocol.DefaultPolicy())
+	case llmprotocol.AnthropicMessagesV1:
 		return AnthropicMessagesCodec{}.NewDecoder(streamContext, llmprotocol.DefaultPolicy())
+	default:
+		return OpenAIResponsesCodec{}.NewDecoder(streamContext, llmprotocol.DefaultPolicy())
 	}
-	return OpenAIResponsesCodec{}.NewDecoder(streamContext, llmprotocol.DefaultPolicy())
 }
 
 func TestResponsesStreamSequenceNumbersAreRequiredAndContiguous(t *testing.T) {

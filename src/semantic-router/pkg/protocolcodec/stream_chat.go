@@ -188,10 +188,7 @@ func (decoder *chatStreamDecoder) appendProviderChunkDiagnostics(
 }
 
 func validateChatStreamChunk(chunk chatChunkWire) error {
-	if chunk.Object != "" && chunk.Object != "chat.completion.chunk" {
-		return invalidProviderResponse("invalid_chat_stream_object", "Chat stream object must be chat.completion.chunk")
-	}
-	if err := validateChatExecutionMetadata(chunk.SystemFingerprint); err != nil {
+	if err := validateChatStreamEnvelope(chunk); err != nil {
 		return err
 	}
 	if len(chunk.Choices) > 1 {
@@ -221,6 +218,16 @@ func validateChatStreamChunk(chunk chatChunkWire) error {
 		}
 	}
 	return nil
+}
+
+func validateChatStreamEnvelope(chunk chatChunkWire) error {
+	if chunk.Object != "" && chunk.Object != "chat.completion.chunk" {
+		return invalidProviderResponse("invalid_chat_stream_object", "Chat stream object must be chat.completion.chunk")
+	}
+	if chunk.Error != nil {
+		return validateTransportErrorDetails(chunk.Error.Type, chunk.Error.Message)
+	}
+	return validateChatExecutionMetadata(chunk.SystemFingerprint)
 }
 
 func chatStreamFailureEvent(wire *chatErrorWire) llmprotocol.Event {
