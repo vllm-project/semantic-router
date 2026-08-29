@@ -362,6 +362,15 @@ type RequestContext struct {
 	EmittedRetention *config.RetentionDirective
 }
 
+// embeddingContext returns the request-scoped context for outbound embedding
+// calls, so a client disconnect cancels in-flight remote embedding RPCs.
+func (ctx *RequestContext) embeddingContext() context.Context {
+	if ctx == nil || ctx.TraceContext == nil {
+		return context.Background()
+	}
+	return ctx.TraceContext
+}
+
 func (ctx *RequestContext) setWorkingRequestBody(body []byte) {
 	if ctx == nil {
 		return

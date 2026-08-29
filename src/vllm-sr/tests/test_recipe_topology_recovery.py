@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 from cli import recipe_topology_reconcile as topology
+from cli import recipe_topology_reconcile_io as topology_io
 from recipe_topology_test_support import (
     _POSTGRES_ANONYMOUS_MOUNT,
     _REDIS_NAMED_MOUNT,
@@ -77,7 +78,7 @@ def test_run_raw_inherits_environment_memfd_into_runtime_child(
     monkeypatch: pytest.MonkeyPatch,
 ):
     descriptor = topology._open_environment_memfd(["MEMFD_SENTINEL=value"])
-    monkeypatch.setattr(topology, "get_container_runtime", lambda: sys.executable)
+    monkeypatch.setattr(topology_io, "get_container_runtime", lambda: sys.executable)
     try:
         result = topology._run_raw(
             [

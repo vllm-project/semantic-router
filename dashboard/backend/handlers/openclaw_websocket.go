@@ -267,7 +267,7 @@ func (c *WSClient) handleSurfaceEvent(msg WSInboundMessage) {
 		case "leader", "worker":
 			participantID = sanitizeContainerName(msg.SenderName)
 		case "system":
-			participantID = "clawos-system"
+			participantID = "openclaw-system"
 		}
 	}
 

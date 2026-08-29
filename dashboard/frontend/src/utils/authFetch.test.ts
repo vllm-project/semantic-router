@@ -1,48 +1,14 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   CSRF_HEADER_NAME,
-  getStoredAuthToken,
   installAuthenticatedFetch,
   normalizeAuthToken,
-  storeAuthToken,
-  STORAGE_KEY,
+  UNAUTHORIZED_EVENT,
 } from './authFetch'
 
-class MemoryStorage {
-  private readonly values = new Map<string, string>()
+const ORIGIN = 'https://dashboard.example.test'
 
-  getItem(key: string): string | null {
-    return this.values.get(key) ?? null
-  }
-
-  setItem(key: string, value: string): void {
-    this.values.set(key, value)
-  }
-
-  removeItem(key: string): void {
-    this.values.delete(key)
-  }
-}
-
-describe('auth token storage', () => {
-  let storage: MemoryStorage
-
-  beforeEach(() => {
-    storage = new MemoryStorage()
-    vi.stubGlobal('window', {
-      location: {
-        origin: 'https://dashboard.example.test',
-        protocol: 'https:',
-      },
-      localStorage: storage,
-    })
-    vi.stubGlobal('document', { cookie: '' })
-  })
-
-  afterEach(() => {
-    vi.unstubAllGlobals()
-  })
-
+describe('auth token normalization', () => {
   it('normalizes bounded cookie-safe tokens', () => {
     expect(normalizeAuthToken(' header.payload.signature ')).toBe('header.payload.signature')
     expect(normalizeAuthToken('')).toBeNull()
@@ -51,51 +17,26 @@ describe('auth token storage', () => {
     expect(normalizeAuthToken(`header\npayload`)).toBeNull()
     expect(normalizeAuthToken('x'.repeat(8193))).toBeNull()
   })
-
-  it('stores trimmed tokens in localStorage and session cookie', () => {
-    const token = storeAuthToken(' header.payload.signature ')
-
-    expect(token).toBe('header.payload.signature')
-    expect(storage.getItem(STORAGE_KEY)).toBe('header.payload.signature')
-    expect(document.cookie).toBe(
-      'vsr_session=header.payload.signature; Path=/; SameSite=Lax; Secure',
-    )
-  })
-
-  it('clears malformed stored tokens before reuse', () => {
-    storage.setItem(STORAGE_KEY, 'bad token')
-
-    expect(getStoredAuthToken()).toBeNull()
-    expect(storage.getItem(STORAGE_KEY)).toBeNull()
-    expect(document.cookie).toBe('vsr_session=; Path=/; SameSite=Lax; Max-Age=0; Secure')
-  })
 })
-
-const ORIGIN = 'https://dashboard.example.test'
 
 describe('csrf header', () => {
   let originalFetch: ReturnType<typeof vi.fn>
+  let dispatchEvent: ReturnType<typeof vi.fn>
 
-  function install(cookie: string, storedToken: string | null = 'header.payload.signature') {
-    const storage = new MemoryStorage()
-    if (storedToken) {
-      storage.setItem(STORAGE_KEY, storedToken)
-    }
-    originalFetch = vi.fn().mockResolvedValue({ status: 200 })
+  function install(cookie: string, status = 200) {
+    originalFetch = vi.fn().mockResolvedValue({ status })
+    dispatchEvent = vi.fn()
     vi.stubGlobal('window', {
       location: { origin: ORIGIN, protocol: 'https:' },
-      localStorage: storage,
       fetch: originalFetch,
       open: () => null,
+      dispatchEvent,
     })
     vi.stubGlobal('document', { cookie })
     installAuthenticatedFetch()
   }
 
-  async function sentHeaders(
-    input: RequestInfo | URL,
-    init?: RequestInit,
-  ): Promise<Headers> {
+  async function sentHeaders(input: RequestInfo | URL, init?: RequestInit): Promise<Headers> {
     await window.fetch(input, init)
     return originalFetch.mock.calls[0][1].headers as Headers
   }
@@ -206,12 +147,56 @@ describe('csrf header', () => {
     expect(headers.get(CSRF_HEADER_NAME)).toBe('caller-value')
   })
 
-  // The token is independent of localStorage, which PR 2 removes entirely.
-  it('attaches the token with no stored auth token', async () => {
-    install('vsr_csrf=csrf-token-value', null)
+  // The wrapper's second job. Since #2465 there is no stored token to gate this on: a 401
+  // from a protected path is itself the signal that the session cookie is gone.
+  it('reports a 401 on a protected path', async () => {
+    install('vsr_csrf=csrf-token-value', 401)
 
-    const headers = await sentHeaders('/api/x', { method: 'POST' })
+    await window.fetch('/api/x')
 
-    expect(headers.get(CSRF_HEADER_NAME)).toBe('csrf-token-value')
+    expect(dispatchEvent).toHaveBeenCalledTimes(1)
+    expect(dispatchEvent.mock.calls[0][0]).toMatchObject({ type: UNAUTHORIZED_EVENT })
+  })
+
+  it('ignores a 401 from an unprotected path', async () => {
+    install('vsr_csrf=csrf-token-value', 401)
+
+    await window.fetch('/login')
+
+    expect(dispatchEvent).not.toHaveBeenCalled()
+  })
+})
+
+// #2465 removed the four global URL patches. These assert they stay removed: each global
+// must be the exact object it was before installAuthenticatedFetch() ran.
+describe('browser transports are left alone', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('leaves window.open, WebSocket, EventSource and the iframe prototype untouched', () => {
+    const open = () => null
+    const WebSocketCtor = function () {} as unknown as typeof window.WebSocket
+    const EventSourceCtor = function () {} as unknown as typeof window.EventSource
+    const iframePrototype = { setAttribute() {} }
+    const originalSetAttribute = iframePrototype.setAttribute
+
+    vi.stubGlobal('window', {
+      location: { origin: ORIGIN, protocol: 'https:' },
+      fetch: vi.fn().mockResolvedValue({ status: 200 }),
+      open,
+      WebSocket: WebSocketCtor,
+      EventSource: EventSourceCtor,
+      HTMLIFrameElement: { prototype: iframePrototype },
+    })
+    vi.stubGlobal('document', { cookie: '' })
+
+    installAuthenticatedFetch()
+
+    expect(window.open).toBe(open)
+    expect(window.WebSocket).toBe(WebSocketCtor)
+    expect(window.EventSource).toBe(EventSourceCtor)
+    expect(iframePrototype.setAttribute).toBe(originalSetAttribute)
+    expect(Object.getOwnPropertyDescriptor(iframePrototype, 'src')).toBeUndefined()
   })
 })

@@ -119,23 +119,20 @@ func (r *OpenAIRouter) runToolSelectionPluginFilter(
 	ctx *RequestContext,
 	ts *config.ToolSelectionPluginConfig,
 ) error {
-	em := r.Config.EmbeddingModels
 	thresh := float32(0.25)
 	if ts.RelevanceThreshold != nil {
 		thresh = *ts.RelevanceThreshold
 	}
 
 	start := time.Now()
-	provider, providerErr := toolsEmbeddingProvider(r.Config)
-	if providerErr != nil {
-		return r.handleToolSelectionError(openAIRequest, response, ctx, providerErr, r.effectiveToolSelectionFallback(ts))
-	}
+	// The embedder (and its remote provider) is built once per router, not per
+	// request; a nil embedder (provider construction failed at startup) errors
+	// inside the filter and lands in the configured fallback below.
 	filtered, confidence, ferr := filterRequestToolsAgainstQuerySemantic(
+		ctx.embeddingContext(),
 		classificationText,
 		openAIRequest.Tools,
-		em.EmbeddingConfig.ModelType,
-		em.EmbeddingConfig.TargetDimension,
-		provider,
+		r.toolEmbedder,
 		thresh,
 		ts.PreserveCount,
 	)

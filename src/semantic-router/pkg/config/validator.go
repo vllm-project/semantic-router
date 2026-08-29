@@ -36,6 +36,7 @@ var (
 	}
 
 	routingProfileContractValidators = []configContractValidator{
+		validateRuleOperatorContracts,
 		validateRoutingLocalNames,
 		validateLanguageContracts,
 		validateRoutingStrategy,

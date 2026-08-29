@@ -8,6 +8,7 @@ import {
 import { buildPlaygroundUserContent, type PlaygroundAttachment } from './playgroundFileAttachments'
 import type { PlaygroundInvocation } from '../types/playgroundInvocation'
 import type { RecipeProbeMessage } from '../types/recipe'
+import type { RouterModelOption } from '../utils/routerModelSelection'
 import type { ToolCall, ToolResult } from '../tools'
 
 export interface PreparedPlaygroundInvocation {
@@ -15,6 +16,7 @@ export interface PreparedPlaygroundInvocation {
   prompt: string
   promptDisplayText: string
   model?: string
+  recipe: string
   history: RecipeProbeMessage[]
   messages: RecipeProbeMessage[]
   promptImages: Message['images']
@@ -49,6 +51,7 @@ export const preparePlaygroundInvocation = (
     prompt: editableText ?? terminalPresentation.text,
     promptDisplayText: terminalPresentation.text,
     ...(invocation.model ? { model: invocation.model } : {}),
+    recipe: invocation.recipe,
     history: terminalIsUser ? messages.slice(0, messageIndex) : messages,
     messages,
     promptImages: terminalPresentation.images,
@@ -58,6 +61,13 @@ export const preparePlaygroundInvocation = (
     exactRequest: request,
   }
 }
+
+export const resolveProbeRequestModel = (
+  prepared: PreparedPlaygroundInvocation,
+  routingModels: RouterModelOption[],
+): string | undefined =>
+  routingModels.find((candidate) => candidate.id === prepared.model)?.id ??
+  routingModels.find((candidate) => candidate.recipe === prepared.recipe)?.id
 
 export const materializeEditedProbeRequest = (
   prepared: PreparedPlaygroundInvocation,
