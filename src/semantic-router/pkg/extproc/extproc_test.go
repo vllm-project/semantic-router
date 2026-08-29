@@ -2603,7 +2603,10 @@ var _ = Describe("Metrics recording", func() {
 		// Simulate header phase: SSE content-type indicates streaming
 		respHeaders := &ext_proc.ProcessingRequest_ResponseHeaders{
 			ResponseHeaders: &ext_proc.HttpHeaders{
-				Headers: &core.HeaderMap{Headers: []*core.HeaderValue{{Key: "content-type", Value: "text/event-stream"}}},
+				Headers: &core.HeaderMap{Headers: []*core.HeaderValue{
+					{Key: ":status", Value: "200"},
+					{Key: "content-type", Value: "text/event-stream"},
+				}},
 			},
 		}
 

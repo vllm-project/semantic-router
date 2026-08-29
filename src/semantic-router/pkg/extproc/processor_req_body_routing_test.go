@@ -273,11 +273,11 @@ func assertDispatchedRequest(t *testing.T, response *ext_proc.ProcessingResponse
 func protocolRequestFixture(format llmprotocol.WireFormat) []byte {
 	switch format {
 	case llmprotocol.OpenAIChatV1:
-		return []byte(`{"model":"virtual","messages":[{"role":"user","content":"hello"}],"max_tokens":8}`)
+		return []byte(`{"model":"virtual","messages":[{"role":"user","content":"hello"}],"max_tokens":64}`)
 	case llmprotocol.OpenAIResponsesV1:
-		return []byte(`{"model":"virtual","input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"hello"}]}],"max_output_tokens":8}`)
+		return []byte(`{"model":"virtual","input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"hello"}]}],"max_output_tokens":64}`)
 	case llmprotocol.AnthropicMessagesV1:
-		return []byte(`{"model":"virtual","max_tokens":8,"messages":[{"role":"user","content":[{"type":"text","text":"hello"}]}]}`)
+		return []byte(`{"model":"virtual","max_tokens":64,"messages":[{"role":"user","content":[{"type":"text","text":"hello"}]}]}`)
 	default:
 		panic(fmt.Sprintf("unsupported fixture format %q", format))
 	}

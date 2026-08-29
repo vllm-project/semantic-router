@@ -233,6 +233,35 @@ func (r *OpenAIRouter) decodeClientResponse(
 	return ctx.SemanticResponse, nil
 }
 
+// decodeCachedClientResponse decodes the cache's public response contract.
+// Cache partitions include the ingress protocol and cache writes persist the
+// client-facing buffered body, so the selected backend format must not affect
+// replay decoding.
+func (r *OpenAIRouter) decodeCachedClientResponse(
+	body []byte,
+	ctx *RequestContext,
+) (*llmprotocol.Response, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("request context is unavailable")
+	}
+	engine, err := r.protocolEngine()
+	if err != nil {
+		return nil, err
+	}
+	format := ctx.SourceFormat
+	if format == "" {
+		format = llmprotocol.OpenAIChatV1
+	}
+	decoded, err := engine.TranslateResponse(format, format, body, nil)
+	if err != nil {
+		return nil, err
+	}
+	ctx.SemanticResponse = &decoded.Response
+	ctx.ResponseEnvelope = decoded.Envelope
+	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, decoded.Diagnostics...)
+	return ctx.SemanticResponse, nil
+}
+
 func (r *OpenAIRouter) encodeClientResponse(
 	response llmprotocol.Response,
 	ctx *RequestContext,

@@ -333,7 +333,7 @@ func (r *OpenAIRouter) createCacheHitResponse(
 	matchedKeywords []string,
 	similarity float32,
 ) *ext_proc.ProcessingResponse {
-	semanticResponse, err := r.decodeClientResponse(cachedResponse, ctx)
+	semanticResponse, err := r.decodeCachedClientResponse(cachedResponse, ctx)
 	if err != nil {
 		logging.ComponentErrorEvent("extproc", "cache_response_decode_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,

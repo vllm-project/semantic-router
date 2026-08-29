@@ -102,7 +102,7 @@ func TestCacheHitUsesClientProtocolAcrossEveryBackendAndMode(t *testing.T) {
 						},
 					}
 					response := router.createCacheHitResponse(
-						ctx, extProcResponseFixture(backendFormat), "", "", nil, 0,
+						ctx, extProcResponseFixture(clientFormat), "", "", nil, 0,
 					)
 					if response == nil || response.GetImmediateResponse() == nil {
 						t.Fatal("cache hit did not return an immediate response")
