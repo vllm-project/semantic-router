@@ -7,6 +7,8 @@ import "encoding/json"
 // Chat Completions can only express URL images, so translation drops
 // input_image parts referenced by file_id or inline file_data; counting
 // before translation keeps those images visible to request-shape facts.
+// Only user items count, matching the translator (which drops non-user
+// images) and every other image counter on the request path.
 func CountNativeImageInputs(input json.RawMessage, history []*StoredResponse) int {
 	count := countRawInputImageParts(input)
 	for _, resp := range history {
@@ -36,7 +38,7 @@ func countRawInputImageParts(input json.RawMessage) int {
 }
 
 func countInputItemImageParts(item InputItem) int {
-	if len(item.Content) == 0 {
+	if !isUserInputItem(item) || len(item.Content) == 0 {
 		return 0
 	}
 	var parts []ContentPart
@@ -51,4 +53,10 @@ func countInputItemImageParts(item InputItem) int {
 		}
 	}
 	return count
+}
+
+// isUserInputItem reports whether an input item carries user content. An empty
+// role defaults to user, mirroring inputItemToMessage in the translator.
+func isUserInputItem(item InputItem) bool {
+	return item.Role == "" || item.Role == RoleUser
 }

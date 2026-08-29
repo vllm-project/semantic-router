@@ -105,6 +105,17 @@ func TestCountNativeImageInputs_History(t *testing.T) {
 	}
 }
 
+func TestCountNativeImageInputs_NonUserItemsDoNotCount(t *testing.T) {
+	input := json.RawMessage(`[
+		{"type": "message", "role": "assistant", "content": [{"type": "input_image", "image_url": "https://example.com/a.png"}]},
+		{"type": "message", "role": "system", "content": [{"type": "input_image", "file_id": "file-sys"}]},
+		{"type": "message", "content": [{"type": "input_image", "file_id": "file-default-role"}]}
+	]`)
+	if got := CountNativeImageInputs(input, nil); got != 1 {
+		t.Errorf("expected 1 (empty role defaults to user; assistant/system excluded), got %d", got)
+	}
+}
+
 func TestCountNativeImageInputs_MalformedContent(t *testing.T) {
 	input := json.RawMessage(`[{"type": "message", "role": "user", "content": {"not": "parts"}}]`)
 	if got := CountNativeImageInputs(input, nil); got != 0 {
