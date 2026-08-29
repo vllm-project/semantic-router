@@ -109,6 +109,8 @@ func (c *ValkeyCache) AddExact(
 	if effectiveTTL > 0 {
 		expiresAt = now.Add(time.Duration(effectiveTTL) * time.Second).Unix()
 	}
+	delCmd := []string{"DEL", key}
+	_, _ = c.client.CustomCommand(ctx, delCmd)
 	command := []string{
 		"HSET",
 		key,

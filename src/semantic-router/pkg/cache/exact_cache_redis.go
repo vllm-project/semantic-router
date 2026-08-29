@@ -68,11 +68,12 @@ func (c *RedisCache) AddExact(
 		"expires_at":    expiresAt.Unix(),
 		"ttl_seconds":   effectiveTTL,
 	}
-	if err := c.client.HSet(ctx, key, hashFields).Err(); err != nil {
-		return err
-	}
+	pipe := c.client.Pipeline()
+	pipe.Del(ctx, key)
+	pipe.HSet(ctx, key, hashFields)
 	if effectiveTTL > 0 {
-		return c.client.Expire(ctx, key, time.Duration(effectiveTTL)*time.Second).Err()
+		pipe.Expire(ctx, key, time.Duration(effectiveTTL)*time.Second)
 	}
-	return nil
+	_, err := pipe.Exec(ctx)
+	return err
 }
