@@ -80,6 +80,16 @@ bind server-owned model arms, use an evaluation-only direct-arm capability, and
 correlate the logical route with the executed immutable model/runtime revision
 before it can report model-pool or joint realized-value evidence.
 
+For a generic live target, the worker discovers selectable virtual
+Entrypoints from the runtime `/v1/models` contract, prefers the declared
+default route, and freezes that identity into policy lineage before issuing
+requests. Physical model rows are not treated as Entrypoints. A route-only
+target that cannot expose model discovery uses the canonical `vllm-sr/auto`
+Entrypoint. The chosen logical Entrypoint and the Router-selected model remain
+separate evidence fields; successful correlation is still E0 until the serving
+target supplies the direct-arm and executed-revision attestation described
+above.
+
 ## Evidence model
 
 Every run freezes the following inputs before execution:

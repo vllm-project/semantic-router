@@ -60,20 +60,22 @@ reproducible evidence and actionable reports.
 - [x] `TASK-05` Replace the dashboard evaluation page and remove legacy frontend code.
 - [x] `TASK-06` Add deterministic fixtures, unit tests, integration tests, and E2E gates.
 - [x] `TASK-07` Run local repository gates and repair all affected failures.
-- [ ] `TASK-08` Complete AMD live validation and record ignored evidence artifacts.
-  The dedicated AMD-hosted Docker/Kind control-plane campaign now exercises
-  all eight tracks with the deterministic E0 fixture, report/artifact policy,
-  comparison guards, cancellation, and restart recovery. Model-backed E1-E5
-  execution remains pending explicit approval of the pinned serving plan; E0
-  evidence is never treated as promotion evidence.
+- [x] `TASK-08` Complete AMD live validation and record ignored evidence artifacts.
+  A standard isolated `vllm-sr serve` stack on the designated AMD target ran
+  all eight replay tracks and model-backed E0 routing, multimodal, and capacity
+  diagnostics against a pinned three-arm pool. The campaign verified report
+  anchoring, public and private checksums, fail-closed comparison, model
+  selection through the runtime Entrypoint, and Dashboard restart recovery.
+  E0 evidence remains diagnostic and is never treated as promotion evidence.
 - [x] `TASK-09` Reconcile architecture findings, docs, and any durable debt before handoff.
 
 ## Next Action
 
-After explicit approval of the pinned model, GPU, port, and image plan, run the
-model-backed AMD campaign for `TASK-08`. Then close the qualified direct-arm
-and native-adapter gaps in TD-049 and TD-050 before claiming E1-E5 parity with
-upstream benchmark leaderboards.
+Use the ignored AMD campaign receipt as the operational regression baseline.
+Close the qualified direct-arm and native-adapter gaps in TD-049 and TD-050,
+then add online assignment, paired promotion statistics, and lifecycle policy
+from TD-048, TD-052, and TD-053 before claiming E1-E5 promotion evidence or
+parity with upstream benchmark leaderboards.
 
 ## Operating Rules
 
