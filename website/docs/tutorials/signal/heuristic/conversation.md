@@ -2,9 +2,9 @@
 
 ## Overview
 
-`conversation` routes on the structure of a chat, such as message count,
-developer instructions, available tools, or an active tool loop. Define these
-rules under `routing.signals.conversation`.
+`conversation` routes on chat structure and protocol facts, such as message
+count, developer instructions, available tools, explicit tool-use constraints,
+or an active tool loop. Define these rules under `routing.signals.conversation`.
 
 This family is heuristic: it inspects the request's `messages[]` and `tools[]` arrays without any model inference.
 
