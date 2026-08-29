@@ -6,57 +6,27 @@ from collections.abc import Iterator
 from typing import Any
 
 import uvicorn
+from chat_request import ChatRequest, build_chat_content
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel
+from provider_boundary import (
+    SESSION_HEADER,
+    RequestStore,
+    invalid_request_response,
+    parse_provider_request,
+    router,
+)
+from pydantic import ValidationError
 
 app = FastAPI()
-
-
-class ChatMessage(BaseModel):
-    role: str
-    content: Any = ""
-    tool_calls: list[dict[str, Any]] | None = None
-    tool_call_id: str | None = None
-
-
-class ChatRequest(BaseModel):
-    model: str
-    messages: list[ChatMessage]
-    temperature: float | None = 0.2
-    stream: bool | None = False
-    response_format: dict | None = None
-    tools: list[dict[str, Any]] | None = None
-    tool_choice: Any = None
-    logprobs: bool | None = False
-    top_logprobs: int | None = None
+app.state.request_store = RequestStore()
+app.include_router(router)
 
 
 def estimate_tokens(text: str) -> int:
     if not text:
         return 0
     return max(1, math.ceil(len(text) / 4))
-
-
-def build_chat_content(req: ChatRequest) -> str:
-    roles = [m.role for m in req.messages]
-    developer_messages = [str(m.content) for m in req.messages if m.role == "developer"]
-    system_messages = [str(m.content) for m in req.messages if m.role == "system"]
-    user_messages = [str(m.content) for m in req.messages if m.role == "user"]
-
-    echo = {
-        "mock": "mock-vllm",
-        "protocol": "chat_completions",
-        "model": req.model,
-        "roles": roles,
-        "developer": developer_messages,
-        "system": system_messages,
-        "user": user_messages,
-        "total_messages": len(req.messages),
-    }
-    if req.response_format is not None:
-        echo["structured_output"] = req.response_format
-    return json.dumps(echo, separators=(",", ":"), sort_keys=True)
 
 
 def is_hallucination_detection_request(req: ChatRequest) -> bool:
@@ -226,17 +196,21 @@ def generate_chat_midstream_error(
         {"content": "partial"},
         None,
     )
-    yield "data: " + json.dumps(
-        {
-            "error": {
-                "message": "mock provider stream failed",
-                "type": "server_error",
-                "param": None,
-                "code": "provider_overloaded",
-            }
-        },
-        separators=(",", ":"),
-    ) + "\n\n"
+    yield (
+        "data: "
+        + json.dumps(
+            {
+                "error": {
+                    "message": "mock provider stream failed",
+                    "type": "server_error",
+                    "param": None,
+                    "code": "provider_overloaded",
+                }
+            },
+            separators=(",", ":"),
+        )
+        + "\n\n"
+    )
 
 
 def response_input_messages(body: dict[str, Any]) -> list[dict[str, Any]]:
@@ -300,6 +274,7 @@ def build_responses_echo(body: dict[str, Any]) -> str:
             for text in response_texts(item)
         ],
         "total_messages": len(messages),
+        "request_fields": sorted(body),
     }
     if structured_output is not None:
         echo["structured_output"] = structured_output
@@ -677,50 +652,28 @@ def generate_responses_tool_stream(body: dict[str, Any]) -> Iterator[str]:
         yield responses_sse(event, {"sequence_number": sequence, **payload})
 
 
-@app.get("/health")
-async def health():
-    return {"status": "ok"}
-
-
-@app.get("/v1/models")
-async def models():
-    return {"data": [{"id": "openai/gpt-oss-20b", "object": "model"}]}
-
-
 @app.post("/v1/chat/completions")
-async def chat_completions(req: ChatRequest):
+async def chat_completions(request: Request):
+    body, error_response = await parse_provider_request(
+        request, "openai_chat_completions"
+    )
+    if error_response is not None:
+        return error_response
+    assert body is not None
+    session_id = request.headers.get(SESSION_HEADER) or "__global__"
+    app.state.request_store.record(session_id, body)
+    try:
+        req = ChatRequest.model_validate(body)
+    except ValidationError as error:
+        detail = error.errors(include_url=False)[0]
+        field = ".".join(str(part) for part in detail.get("loc", ())) or None
+        return invalid_request_response(detail["msg"], field)
+
     created_ts = int(time.time())
-    if chat_contains(req, "__mock_provider_error__"):
-        return JSONResponse(
-            status_code=429,
-            content={
-                "error": {
-                    "message": "mock provider rate limit",
-                    "type": "rate_limit_error",
-                    "param": None,
-                    "code": "rate_limit_exceeded",
-                }
-            },
-        )
-    if chat_has_tool_result(req):
-        content = "tool result accepted"
-        usage = build_chat_usage(req, content)
-        response = build_chat_response(req, content, usage, created_ts)
-        if req.stream:
-            return StreamingResponse(
-                generate_chat_stream(req, response, content, usage, created_ts),
-                media_type="text/event-stream",
-                headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
-            )
-        return response
-    if chat_requests_mock_tool(req):
-        if req.stream:
-            return StreamingResponse(
-                generate_chat_tool_stream(req, created_ts),
-                media_type="text/event-stream",
-                headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
-            )
-        return mock_chat_tool_response(req, created_ts)
+    control_response = mock_chat_control_response(req, created_ts)
+    if control_response is not None:
+        return control_response
+
     if is_hallucination_detection_request(req):
         content = build_hallucination_detection_content(req)
     else:
@@ -754,27 +707,49 @@ async def chat_completions(req: ChatRequest):
     )
 
 
-@app.post("/v1/responses")
-async def responses(request: Request):
-    try:
-        body = await request.json()
-    except ValueError:
+def mock_chat_control_response(req: ChatRequest, created_ts: int) -> Any | None:
+    if chat_contains(req, "__mock_provider_error__"):
         return JSONResponse(
-            status_code=400,
-            content={
-                "error": {"message": "invalid JSON", "type": "invalid_request_error"}
-            },
-        )
-    if not isinstance(body, dict) or "input" not in body:
-        return JSONResponse(
-            status_code=400,
+            status_code=429,
             content={
                 "error": {
-                    "message": "input is required",
-                    "type": "invalid_request_error",
+                    "message": "mock provider rate limit",
+                    "type": "rate_limit_error",
+                    "param": None,
+                    "code": "rate_limit_exceeded",
                 }
             },
         )
+    if chat_has_tool_result(req):
+        content = "tool result accepted"
+        usage = build_chat_usage(req, content)
+        response = build_chat_response(req, content, usage, created_ts)
+        if req.stream:
+            return StreamingResponse(
+                generate_chat_stream(req, response, content, usage, created_ts),
+                media_type="text/event-stream",
+                headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+            )
+        return response
+    if chat_requests_mock_tool(req):
+        if req.stream:
+            return StreamingResponse(
+                generate_chat_tool_stream(req, created_ts),
+                media_type="text/event-stream",
+                headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+            )
+        return mock_chat_tool_response(req, created_ts)
+    return None
+
+
+@app.post("/v1/responses")
+async def responses(request: Request):
+    body, error_response = await parse_provider_request(request, "openai_responses")
+    if error_response is not None:
+        return error_response
+    assert body is not None
+    session_id = request.headers.get(SESSION_HEADER) or "__global__"
+    app.state.request_store.record(session_id, body)
     if response_input_contains(body, "__mock_provider_error__"):
         return JSONResponse(
             status_code=429,

@@ -252,16 +252,23 @@ func runProtocolCodecBackendBufferedMatrix(
 		return err
 	}
 	defer session.Close()
+	providerSession, err := openProtocolCodecProviderSession(ctx, client, opts, backendFormat)
+	if err != nil {
+		return err
+	}
+	defer providerSession.Close()
 
 	var failures []error
 	results := make(map[string]string, len(protocolCodecE2EClients))
 	for _, clientContract := range protocolCodecE2EClients {
-		body, requestErr := sendProtocolMatrixRequest(
+		sessionID := protocolMatrixSessionID(backendFormat, clientContract.name, "buffered")
+		body, requestErr := sendProtocolMatrixRequestWithHeaders(
 			ctx,
 			session,
 			clientContract.path,
 			clientContract.request(model, prompt, false),
 			false,
+			map[string]string{"x-vsr-test-session-id": sessionID},
 		)
 		if requestErr != nil {
 			results[clientContract.name] = "failed"
@@ -271,6 +278,13 @@ func runProtocolCodecBackendBufferedMatrix(
 		if shapeErr := clientContract.validateBuffered(body, expectedText); shapeErr != nil {
 			results[clientContract.name] = "failed"
 			failures = append(failures, fmt.Errorf("%s: %w", clientContract.name, shapeErr))
+			continue
+		}
+		if contractErr := verifyProviderSimulatorRequest(
+			ctx, providerSession, sessionID, backendFormat, prompt,
+		); contractErr != nil {
+			results[clientContract.name] = "failed"
+			failures = append(failures, fmt.Errorf("%s provider contract: %w", clientContract.name, contractErr))
 			continue
 		}
 		results[clientContract.name] = "passed"
@@ -331,16 +345,23 @@ func runProtocolCodecBackendStreamingMatrix(
 		return err
 	}
 	defer session.Close()
+	providerSession, err := openProtocolCodecProviderSession(ctx, client, opts, backendFormat)
+	if err != nil {
+		return err
+	}
+	defer providerSession.Close()
 
 	var failures []error
 	results := make(map[string]string, len(protocolCodecE2EClients))
 	for _, clientContract := range protocolCodecE2EClients {
-		body, requestErr := sendProtocolMatrixRequest(
+		sessionID := protocolMatrixSessionID(backendFormat, clientContract.name, "streaming")
+		body, requestErr := sendProtocolMatrixRequestWithHeaders(
 			ctx,
 			session,
 			clientContract.path,
 			clientContract.request(model, prompt, true),
 			true,
+			map[string]string{"x-vsr-test-session-id": sessionID},
 		)
 		if requestErr != nil {
 			results[clientContract.name] = "failed"
@@ -350,6 +371,13 @@ func runProtocolCodecBackendStreamingMatrix(
 		if shapeErr := clientContract.validateStream(body, expectedText); shapeErr != nil {
 			results[clientContract.name] = "failed"
 			failures = append(failures, fmt.Errorf("%s: %w", clientContract.name, shapeErr))
+			continue
+		}
+		if contractErr := verifyProviderSimulatorRequest(
+			ctx, providerSession, sessionID, backendFormat, prompt,
+		); contractErr != nil {
+			results[clientContract.name] = "failed"
+			failures = append(failures, fmt.Errorf("%s provider contract: %w", clientContract.name, contractErr))
 			continue
 		}
 		results[clientContract.name] = "passed"

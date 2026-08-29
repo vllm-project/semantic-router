@@ -17,6 +17,7 @@ import os
 from collections import OrderedDict
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
+from copy import deepcopy
 from http import HTTPStatus
 from typing import Any
 
@@ -24,6 +25,7 @@ import httpx
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 
+from .provider_contract import ContractViolationError, validate_provider_request
 from .translate import (
     OpenAIStreamToAnthropic,
     anthropic_to_openai,
@@ -353,15 +355,10 @@ class SessionCacheTracker:
 
 
 class RequestStore:
-    """Per-session ring buffer (size 1) of the most recent request the shim
-    was about to forward.
+    """Per-session ring buffer (size 1) of the most recent provider request.
 
-    Stores the translated request body alongside the headers the shim received,
-    so tests can inspect what would have reached upstream without scraping logs.
-    Note: ``record()`` is called *before* the upstream POST, so an upstream
-    failure leaves a stale entry for that session. This is acceptable for a
-    test-only shim — callers should treat the stored body as "last attempted
-    forward", not "last successful forward".
+    The native Messages body is recorded before the llama-server adapter mutates
+    it, so E2E assertions observe the same provider contract that ExtProc sent.
 
     Bounded to ``_MAX_REQUEST_STORE_SESSIONS`` sessions with LRU eviction so
     long-running multi-session test suites do not leak memory.
@@ -383,7 +380,7 @@ class RequestStore:
         body: dict[str, Any],
         headers: dict[str, str],
     ) -> None:
-        """Store the most recent forwarded body + headers for ``session_id``."""
+        """Store the most recent provider body + headers for ``session_id``."""
         if session_id in self._store:
             self._store.move_to_end(session_id)
         elif len(self._store) >= _MAX_REQUEST_STORE_SESSIONS:
@@ -549,23 +546,53 @@ def _mock_anthropic_success_response(body: dict[str, Any]) -> Response | None:
             else:
                 iterator = _mock_anthropic_text_stream(body, "tool result accepted")
             return StreamingResponse(iterator, media_type="text/event-stream")
-        if not body.get("stream"):
-            return JSONResponse(content=mock_tool_response)
+        return JSONResponse(content=mock_tool_response)
     return None
 
 
-async def _handle_messages(request: Request, app: FastAPI) -> Response:
+def _invalid_messages_request(message: str) -> JSONResponse:
+    return JSONResponse(
+        status_code=HTTPStatus.BAD_REQUEST,
+        content={
+            "type": "error",
+            "error": {
+                "type": "invalid_request_error",
+                "message": message,
+            },
+            "request_id": "req_mock_invalid",
+        },
+    )
+
+
+async def _parse_messages_body(
+    request: Request,
+) -> tuple[dict[str, Any] | None, JSONResponse | None]:
     raw_body = await request.body()
     try:
         body: dict[str, Any] = (
             httpx.Response(HTTPStatus.OK, content=raw_body).json() if raw_body else {}
         )
     except ValueError:
-        return JSONResponse(
-            status_code=HTTPStatus.BAD_REQUEST,
-            content={"error": "invalid_json", "detail": "body is not JSON"},
-        )
+        return None, _invalid_messages_request("request body is not valid JSON")
 
+    try:
+        return validate_provider_request(body), None
+    except ContractViolationError as error:
+        return None, _invalid_messages_request(str(error))
+
+
+async def _handle_messages(request: Request, app: FastAPI) -> Response:
+    body, error_response = await _parse_messages_body(request)
+    if error_response is not None:
+        return error_response
+    assert body is not None
+
+    session_id = request.headers.get(app.state.session_header) or "__global__"
+    app.state.request_store.record(
+        session_id,
+        deepcopy(body),
+        dict(request.headers),
+    )
     request_had_cache_control = has_cache_control(body)
     prefix_hash = cache_prefix_hash(body) if request_had_cache_control else ""
 
@@ -576,13 +603,11 @@ async def _handle_messages(request: Request, app: FastAPI) -> Response:
     if mock_response is not None:
         return mock_response
 
-    session_id = request.headers.get(app.state.session_header) or "__global__"
     headers = _filtered_headers(dict(request.headers))
     headers.pop("content-length", None)
 
     is_streaming = bool(body.get("stream"))
     if is_streaming:
-        app.state.request_store.record(session_id, body, dict(request.headers))
         upstream_path = (
             "/v1/chat/completions" if app.state.openai_upstream else "/v1/messages"
         )
@@ -595,10 +620,6 @@ async def _handle_messages(request: Request, app: FastAPI) -> Response:
             request_body=body,
             translate_openai=app.state.openai_upstream,
         )
-
-    # Record what the shim is about to forward so /debug/last-request can
-    # return the translated body + inbound headers for test assertions.
-    app.state.request_store.record(session_id, body, dict(request.headers))
 
     upstream_path = (
         "/v1/chat/completions" if app.state.openai_upstream else "/v1/messages"

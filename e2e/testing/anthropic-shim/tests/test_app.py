@@ -599,7 +599,7 @@ async def test_debug_last_request_returns_404_before_any_request(
 
 
 @pytest.mark.asyncio
-async def test_debug_last_request_returns_translated_body_after_messages_post(
+async def test_debug_last_request_returns_native_provider_body_after_messages_post(
     client_with_upstream: tuple[httpx.AsyncClient, _UpstreamRecorder],
 ) -> None:
     client, _ = client_with_upstream
@@ -623,8 +623,7 @@ async def test_debug_last_request_returns_translated_body_after_messages_post(
     )
     assert response.status_code == 200
     data = response.json()
-    # The shim joins the system array before forwarding.
-    assert data["body"]["system"] == "You are helpful.\nBe concise."
+    assert data["body"]["system"] == payload["system"]
     assert data["session_id"] == session
     assert "headers" in data
 
@@ -752,3 +751,25 @@ async def test_request_store_lru_evicts_oldest_session(
             resp.status_code == 200
         ), f"expected session {sid!r} to be present, got {resp.status_code}"
         assert resp.json()["body"]["messages"][0]["content"] == sid
+
+
+@pytest.mark.asyncio
+async def test_simulator_rejects_unknown_provider_field(
+    client_with_upstream: tuple[httpx.AsyncClient, _UpstreamRecorder],
+) -> None:
+    client, upstream = client_with_upstream
+    response = await client.post(
+        "/v1/messages",
+        json={
+            "model": "provider-model",
+            "max_tokens": 64,
+            "messages": [{"role": "user", "content": "hello"}],
+            "silently_swallowed": True,
+        },
+    )
+    assert response.status_code == 400
+    assert response.json()["error"] == {
+        "type": "invalid_request_error",
+        "message": "unknown request field: silently_swallowed",
+    }
+    assert upstream.requests == []

@@ -21,41 +21,54 @@ func TestResponsesToolStreamInfersToolCallTerminalReason(t *testing.T) {
 
 	for _, target := range targets {
 		t.Run(target.name, func(t *testing.T) {
-			stream, err := engine.NewStream(
-				llmprotocol.OpenAIResponsesV1,
-				target.format,
-				llmprotocol.StreamContext{Context: context.Background(), PublicModel: "public-model"},
-			)
-			if err != nil {
-				t.Fatal(err)
-			}
-			frames, events, _, err := stream.Push(toolStreamFixture(llmprotocol.OpenAIResponsesV1))
-			if err != nil {
-				t.Fatal(err)
-			}
-			finalFrames, finalEvents, _, err := stream.Finalize(nil)
-			if err != nil {
-				t.Fatal(err)
-			}
-			frames = append(frames, finalFrames...)
-			events = append(events, finalEvents...)
-			if !bytes.Contains(bytes.Join(frames, nil), target.expected) {
-				t.Fatalf("translated terminal did not preserve tool-call semantics: %s", bytes.Join(frames, nil))
-			}
-			foundTerminal := false
-			for _, event := range events {
-				if event.Type == llmprotocol.EventResponseCompleted {
-					foundTerminal = true
-					if event.StopReason != llmprotocol.StopToolCall {
-						t.Fatalf("terminal stop reason = %q, want %q", event.StopReason, llmprotocol.StopToolCall)
-					}
-				}
-			}
-			if !foundTerminal {
-				t.Fatal("translated stream did not emit a terminal event")
-			}
+			assertResponsesToolStreamTerminal(t, engine, target.format, target.expected)
 		})
 	}
+}
+
+func assertResponsesToolStreamTerminal(
+	t *testing.T,
+	engine *Engine,
+	target llmprotocol.WireFormat,
+	expected []byte,
+) {
+	t.Helper()
+	stream, err := engine.NewStream(
+		llmprotocol.OpenAIResponsesV1,
+		target,
+		llmprotocol.StreamContext{Context: context.Background(), PublicModel: "public-model"},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	frames, events, _, err := stream.Push(toolStreamFixture(llmprotocol.OpenAIResponsesV1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	finalFrames, finalEvents, _, err := stream.Finalize(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	frames = append(frames, finalFrames...)
+	events = append(events, finalEvents...)
+	if output := bytes.Join(frames, nil); !bytes.Contains(output, expected) {
+		t.Fatalf("translated terminal did not preserve tool-call semantics: %s", output)
+	}
+	assertToolCallTerminalEvent(t, events)
+}
+
+func assertToolCallTerminalEvent(t *testing.T, events []llmprotocol.Event) {
+	t.Helper()
+	for _, event := range events {
+		if event.Type != llmprotocol.EventResponseCompleted {
+			continue
+		}
+		if event.StopReason != llmprotocol.StopToolCall {
+			t.Fatalf("terminal stop reason = %q, want %q", event.StopReason, llmprotocol.StopToolCall)
+		}
+		return
+	}
+	t.Fatal("translated stream did not emit a terminal event")
 }
 
 func TestResponsesToolResponseInfersToolCallStopReason(t *testing.T) {

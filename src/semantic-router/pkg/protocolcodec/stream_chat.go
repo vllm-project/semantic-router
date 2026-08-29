@@ -157,6 +157,14 @@ func (decoder *chatStreamDecoder) pushFrame(frame []byte) ([]llmprotocol.Event, 
 		return []llmprotocol.Event{event}, nil, err
 	}
 	events, diagnostics, err := decoder.decodeChunkEvents(chunk)
+	diagnostics = decoder.appendProviderChunkDiagnostics(chunk, diagnostics)
+	return events, diagnostics, err
+}
+
+func (decoder *chatStreamDecoder) appendProviderChunkDiagnostics(
+	chunk chatChunkWire,
+	diagnostics llmprotocol.Diagnostics,
+) llmprotocol.Diagnostics {
 	if chunk.hasTokenizedToolArguments() {
 		appendProviderFieldOmission(
 			&diagnostics, decoder.policy, llmprotocol.OpenAIChatV1,
@@ -176,7 +184,7 @@ func (decoder *chatStreamDecoder) pushFrame(frame []byte) ([]llmprotocol.Event, 
 			"stream.moderation", "moderation metadata has no protocol-neutral representation",
 		)
 	}
-	return events, diagnostics, err
+	return diagnostics
 }
 
 func validateChatStreamChunk(chunk chatChunkWire) error {

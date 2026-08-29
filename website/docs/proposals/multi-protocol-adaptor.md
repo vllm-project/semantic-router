@@ -97,6 +97,15 @@ explicit semantic, transport-only, extension, or unsupported disposition. The
 current pins are OpenAI OpenAPI `690521b1753dce0c6d6b275f583d22537679cff9`
 and Anthropic SDK `d19dea9ed85bbb5fdb2d6f20fb6f903920ed23fa`.
 
+The E2E provider simulators are part of the same contract. Their native Chat,
+Responses, and Messages boundaries use revision-pinned closed inventories, reject
+unknown top-level fields with provider-native errors, and retain nested wire objects
+without an untyped normalization step. A Go conformance test compares those
+simulator manifests directly with the codec request, response, and usage wire
+inventories. Simulator tests replay every published top-level request field, while
+the codec goldens close nested fields and union discriminators. This prevents a
+permissive mock from hiding a field that ExtProc dropped or invented.
+
 Human-readable fixtures use a stable input/output convention:
 
 ```text

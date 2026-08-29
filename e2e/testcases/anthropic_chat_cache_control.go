@@ -116,7 +116,7 @@ func validateStreamedAnthropicChatCache(
 		return fmt.Errorf("cache-marked Chat stream is invalid: %s", truncateString(string(stream), 600))
 	}
 
-	forwarded, err := lastAnthropicShimRequest(ctx, backendSession, sessionID)
+	forwarded, err := lastProviderSimulatorRequest(ctx, backendSession, sessionID)
 	if err != nil {
 		return err
 	}
@@ -182,7 +182,7 @@ func chatCachedInputTokens(body []byte) (int64, error) {
 	return response.Usage.PromptTokensDetails.CachedTokens, nil
 }
 
-func lastAnthropicShimRequest(
+func lastProviderSimulatorRequest(
 	ctx context.Context,
 	session *fixtures.ServiceSession,
 	sessionID string,
