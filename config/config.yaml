@@ -2192,6 +2192,7 @@ global:
         access_key: external-guardrail-key
         max_tokens: 2048
         temperature: 0.2
+        max_response_bytes: 1048576
       - name: external-classifier
         llm_provider: openai
         model_role: classification
@@ -2208,7 +2209,7 @@ global:
         access_key: external-classifier-key
         max_tokens: 128
         temperature: 0
-      # Reached over the http_classify contract; the byte ceilings apply only there.
+        max_response_bytes: 1048576
       - name: external-sequence-classifier
         llm_provider: openai
         model_role: classification
@@ -2365,6 +2366,7 @@ global:
           tool_name: classify
           threshold: 0.6
           timeout_seconds: 15
+          max_response_bytes: 16777216
         pii:
           # Omit to keep the historical behaviour of running whenever a model is
           # configured; false disables the classifier outright.
