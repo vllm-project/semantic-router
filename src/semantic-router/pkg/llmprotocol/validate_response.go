@@ -82,7 +82,7 @@ func validateResponseStopReason(response Response) error {
 	if !validStopReason(response.StopReason) {
 		return NewError(ErrorUpstreamUnavailable, "invalid_stop_reason", "upstream stop reason is invalid", nil)
 	}
-	if response.StopReason == StopSequence && strings.TrimSpace(response.MatchedStopSequence) == "" {
+	if response.StopReason == StopSequence && response.MatchedStopSequence == "" {
 		return NewError(ErrorUpstreamUnavailable, "matched_stop_sequence_required", "upstream stop_sequence reason requires the matched sequence", nil)
 	}
 	if response.StopReason != StopSequence && response.MatchedStopSequence != "" {

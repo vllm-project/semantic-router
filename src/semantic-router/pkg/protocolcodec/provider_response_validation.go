@@ -243,7 +243,7 @@ func validateAnthropicResponseStop(wire anthropicResponseWire) error {
 		return invalidProviderResponse("invalid_anthropic_stop_reason", "Anthropic stop reason is not recognized")
 	}
 	if wire.StopReason != nil && *wire.StopReason == "stop_sequence" &&
-		(wire.StopSequence == nil || strings.TrimSpace(*wire.StopSequence) == "") {
+		(wire.StopSequence == nil || *wire.StopSequence == "") {
 		return invalidProviderResponse("anthropic_stop_sequence_required", "Anthropic stop_sequence reason requires the matched sequence")
 	}
 	if wire.StopSequence != nil && (wire.StopReason == nil || *wire.StopReason != "stop_sequence") {

@@ -131,7 +131,7 @@ func observeProtocolStream(
 
 func (buffers *semanticStreamBuffers) processingResponse(ctx *RequestContext) *ext_proc.ProcessingResponse {
 	if ctx.ProtocolResponseStream != nil &&
-		(ctx.TargetFormat != "" && ctx.TargetFormat != ctx.SourceFormat || ctx.StreamingAborted) {
+		(requiresClientResponseRewrite(ctx) || ctx.StreamingAborted) {
 		return buildResponseBodyContinueResponse(&ext_proc.BodyMutation{
 			Mutation: &ext_proc.BodyMutation_Body{Body: buffers.translated},
 		}, nil)

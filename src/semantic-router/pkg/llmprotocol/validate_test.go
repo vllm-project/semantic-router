@@ -550,6 +550,10 @@ func TestValidateResponseRequiresConsistentMatchedStopSequence(t *testing.T) {
 	if err := ValidateResponse(response, DefaultPolicy().Limits); err != nil {
 		t.Fatalf("valid matched stop sequence rejected: %v", err)
 	}
+	response.MatchedStopSequence = " "
+	if err := ValidateResponse(response, DefaultPolicy().Limits); err != nil {
+		t.Fatalf("whitespace matched stop sequence rejected: %v", err)
+	}
 	response.MatchedStopSequence = ""
 	if err := ValidateResponse(response, DefaultPolicy().Limits); err == nil {
 		t.Fatal("stop_sequence response without the matched value was accepted")

@@ -171,10 +171,24 @@ func decodeResponsesResponseResource(
 	}
 	if response.Error == nil {
 		response.StopReason = llmprotocol.StopEndTurn
+		if wire.Status == "completed" && responsesOutputHasToolCall(output) {
+			response.StopReason = llmprotocol.StopToolCall
+		}
 	}
 	response.SourceStopReason = wire.Status
 	response.StopReason = decodeResponsesStopReason(wire, response.StopReason)
 	return response, nil
+}
+
+func responsesOutputHasToolCall(output []llmprotocol.OutputItem) bool {
+	for _, item := range output {
+		for _, content := range item.Content {
+			if content.Kind == llmprotocol.ContentToolCall && content.ToolCall != nil {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func decodeResponsesStopReason(wire responsesResponseWire, fallback llmprotocol.StopReason) llmprotocol.StopReason {

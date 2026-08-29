@@ -18,7 +18,7 @@ func (decoder *responsesStreamDecoder) decodeResponsesLifecycleEvent(
 		}
 		applyResponsesStart(&event, wire)
 	case "response.completed", "response.incomplete":
-		applyResponsesCompletion(&event, wire)
+		decoder.applyResponsesCompletion(&event, wire)
 	case "response.failed":
 		applyResponseFailure(&event, wire)
 	case "error":
@@ -128,9 +128,12 @@ func (decoder *responsesStreamDecoder) applyResponsesToolDelta(event *llmprotoco
 	return nil
 }
 
-func applyResponsesCompletion(event *llmprotocol.Event, wire responsesEventWire) {
+func (decoder *responsesStreamDecoder) applyResponsesCompletion(event *llmprotocol.Event, wire responsesEventWire) {
 	event.Type = llmprotocol.EventResponseCompleted
 	event.StopReason = llmprotocol.StopEndTurn
+	if wire.Type == "response.completed" && decoder.hasCompletedToolCall() {
+		event.StopReason = llmprotocol.StopToolCall
+	}
 	if wire.Type == "response.incomplete" {
 		event.StopReason = llmprotocol.StopUnknown
 		if wire.Response != nil && wire.Response.IncompleteDetails != nil {
@@ -146,6 +149,15 @@ func applyResponsesCompletion(event *llmprotocol.Event, wire responsesEventWire)
 		usage := decodeResponsesUsage(*wire.Response.Usage)
 		event.Usage = &usage
 	}
+}
+
+func (decoder *responsesStreamDecoder) hasCompletedToolCall() bool {
+	for index, itemType := range decoder.itemTypes {
+		if itemType == "function_call" && decoder.completedItems[index] {
+			return true
+		}
+	}
+	return false
 }
 
 func (decoder *responsesStreamDecoder) applyUnknownResponsesEvent(event *llmprotocol.Event, frame []byte) error {

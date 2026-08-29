@@ -13,7 +13,11 @@
           {
             "id": "call_weather_1",
             "type": "function",
-            "function": {"name": "lookup_weather", "arguments": "{\"city\":\"Paris\"}"}
+            "function": {
+              "name": "lookup_weather",
+              "arguments": "{\"city\":\"Paris\"}",
+              "TokenizedArguments": ["{", "\"city\"", ":", "\"Paris\"", "}"]
+            }
           }
         ]
       },

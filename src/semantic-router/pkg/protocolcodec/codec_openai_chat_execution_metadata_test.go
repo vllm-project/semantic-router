@@ -25,6 +25,14 @@ const vLLMChatResponseExtensionsFixture = `{
       "reasoning_tokens":0,"rejected_prediction_tokens":0}}
 }`
 
+const legacyVLLMChatResponseExtensionsFixture = `{
+  "id":"chatcmpl-legacy","object":"chat.completion","created":7,"model":"provider-model",
+  "do_remote_decode":false,"do_remote_prefill":false,"remote_block_ids":null,
+  "remote_engine_id":"","remote_host":"","remote_port":0,
+  "choices":[{"index":0,"finish_reason":"stop","message":{"role":"assistant","content":"OK"}}],
+  "usage":{"prompt_tokens":2,"completion_tokens":1,"total_tokens":3}
+}`
+
 func TestOpenAIChatResponseAcceptsClosedVLLMExecutionMetadata(t *testing.T) {
 	engine := NewBuiltinEngine()
 	translated, translateErr := engine.TranslateResponse(
@@ -42,6 +50,62 @@ func TestOpenAIChatResponseAcceptsClosedVLLMExecutionMetadata(t *testing.T) {
 	if translated.Response.Model != "public-model" || translated.Response.Usage.Total.Value == nil ||
 		*translated.Response.Usage.Total.Value != 3 {
 		t.Fatalf("translated response = %+v", translated.Response)
+	}
+}
+
+func TestOpenAIChatResponseAcceptsLegacyVLLMKVTransferMetadata(t *testing.T) {
+	engine := NewBuiltinEngine()
+	translated, translateErr := engine.TranslateResponse(
+		llmprotocol.OpenAIChatV1,
+		llmprotocol.AnthropicMessagesV1,
+		[]byte(legacyVLLMChatResponseExtensionsFixture),
+		nil,
+	)
+	if translateErr != nil {
+		t.Fatalf("TranslateResponse() error = %v", translateErr)
+	}
+	if translated.Response.Model != "provider-model" || len(translated.Response.Output) != 1 {
+		t.Fatalf("translated response = %+v", translated.Response)
+	}
+	assertDiagnosticFields(t, translated.Diagnostics, "kv_transfer")
+}
+
+func TestOpenAIChatResponseAcceptsProviderTokenizedToolArguments(t *testing.T) {
+	raw := []byte(`{
+		"id":"chatcmpl-tool","object":"chat.completion","created":7,"model":"provider-model",
+		"choices":[{"index":0,"finish_reason":"tool_calls","message":{"role":"assistant","content":null,
+			"tool_calls":[{"id":"call-1","type":"function","function":{"name":"lookup","arguments":"{}","TokenizedArguments":["{","}"]}}]}}],
+		"usage":{"prompt_tokens":2,"completion_tokens":1,"total_tokens":3}
+	}`)
+	translated, err := NewBuiltinEngine().TranslateResponse(
+		llmprotocol.OpenAIChatV1,
+		llmprotocol.AnthropicMessagesV1,
+		raw,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("TranslateResponse() error = %v", err)
+	}
+	if translated.Response.StopReason != llmprotocol.StopToolCall || len(translated.Response.Output) != 1 {
+		t.Fatalf("translated response = %+v", translated.Response)
+	}
+	assertDiagnosticFields(t, translated.Diagnostics, "choices.message.tool_calls.function.TokenizedArguments")
+}
+
+func TestOpenAIChatRequestRejectsProviderTokenizedToolArguments(t *testing.T) {
+	raw := []byte(`{
+		"model":"client-model","messages":[{"role":"user","content":"lookup"},{"role":"assistant","tool_calls":[{
+			"id":"call-1","type":"function","function":{"name":"lookup","arguments":"{}","TokenizedArguments":["{","}"]}
+		}]}]
+	}`)
+	_, err := NewBuiltinEngine().TranslateRequest(
+		llmprotocol.OpenAIChatV1,
+		llmprotocol.OpenAIChatV1,
+		raw,
+		nil,
+	)
+	if err == nil || !strings.Contains(err.Error(), "unsupported_messages_tool_calls_function_tokenized_arguments") {
+		t.Fatalf("TranslateRequest() error = %v", err)
 	}
 }
 
@@ -173,6 +237,27 @@ func TestOpenAIChatStreamAcceptsClosedVLLMExecutionMetadataAndRejectsFutureField
 	assertChatStreamRejected(t, engine, context, nestedFuture, "invalid_upstream_json")
 	withLogprobs := bytes.Replace(frame, []byte(`"logprobs":null`), []byte(`"logprobs":{"content":[]}`), 1)
 	assertChatStreamRejected(t, engine, context, withLogprobs, "unsupported_upstream_stream_logprobs")
+}
+
+func TestOpenAIChatStreamAcceptsProviderTokenizedToolArguments(t *testing.T) {
+	engine := NewBuiltinEngine()
+	context := llmprotocol.StreamContext{PublicModel: "public-model", ProviderModel: "provider-model"}
+	stream, err := engine.NewStream(llmprotocol.OpenAIChatV1, llmprotocol.AnthropicMessagesV1, context)
+	if err != nil {
+		t.Fatal(err)
+	}
+	frame := []byte("data: {\"id\":\"chatcmpl-tool\",\"object\":\"chat.completion.chunk\",\"created\":7," +
+		"\"model\":\"provider-model\",\"choices\":[{\"index\":0,\"finish_reason\":null,\"delta\":{" +
+		"\"role\":\"assistant\",\"tool_calls\":[{\"index\":0,\"id\":\"call-1\",\"type\":\"function\"," +
+		"\"function\":{\"name\":\"lookup\",\"arguments\":\"{}\",\"TokenizedArguments\":[\"{\",\"}\"]}}]}}]}\n\n")
+	_, events, diagnostics, pushErr := stream.Push(frame)
+	if pushErr != nil {
+		t.Fatalf("Push() error = %v", pushErr)
+	}
+	if len(events) == 0 {
+		t.Fatal("Push() emitted no neutral events")
+	}
+	assertDiagnosticFields(t, diagnostics, "choices.delta.tool_calls.function.TokenizedArguments")
 }
 
 func assertChatStreamRejected(

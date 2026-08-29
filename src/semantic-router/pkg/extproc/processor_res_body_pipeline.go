@@ -30,8 +30,8 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 		return r.createErrorResponse(502, "The selected model returned an invalid response")
 	}
 	clientBody := responseBody
-	translated := ctx.TargetFormat != "" && ctx.TargetFormat != ctx.SourceFormat
-	if translated {
+	rewriteClientBody := requiresClientResponseRewrite(ctx)
+	if rewriteClientBody {
 		clientBody, err = r.encodeClientResponse(*semanticResponse, ctx)
 		if err != nil {
 			return r.createErrorResponse(502, "The selected model returned an incompatible response")
@@ -54,7 +54,7 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 	r.markUnverifiedFactualResponse(ctx)
 
 	response, finalBody := r.applySemanticResponseWarnings(ctx, semanticResponse, clientBody)
-	if translated && response.GetResponseBody().GetResponse().GetBodyMutation() == nil {
+	if rewriteClientBody && response.GetResponseBody().GetResponse().GetBodyMutation() == nil {
 		setResponseBodyMutation(response, clientBody)
 	}
 	r.persistResponseObject(ctx)

@@ -143,8 +143,9 @@ func TestOfficialResponseFieldInventoriesAreClosed(t *testing.T) {
 				"choices", "created", "id", "metadata", "model", "moderation", "object", "service_tier", "system_fingerprint", "usage",
 			),
 			extensions: fields(
-				"ec_transfer_params", "error", "kv_transfer_params", "metrics", "prompt_logprobs",
-				"prompt_text", "prompt_token_ids",
+				"do_remote_decode", "do_remote_prefill", "ec_transfer_params", "error", "kv_transfer_params", "metrics",
+				"prompt_logprobs", "prompt_text", "prompt_token_ids", "remote_block_ids", "remote_engine_id",
+				"remote_host", "remote_port",
 			),
 		},
 		{

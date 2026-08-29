@@ -26,6 +26,21 @@ type chatResponseWire struct {
 	KVTransferParams  *chatKVTransferParamsWire `json:"kv_transfer_params,omitempty"`
 	ECTransferParams  *chatNullOnlyWire         `json:"ec_transfer_params,omitempty"`
 	Metrics           *chatNullOnlyWire         `json:"metrics,omitempty"`
+	DoRemoteDecode    *bool                     `json:"do_remote_decode,omitempty"`
+	DoRemotePrefill   *bool                     `json:"do_remote_prefill,omitempty"`
+	RemoteBlockIDs    []int64                   `json:"remote_block_ids,omitempty"`
+	RemoteEngineID    *string                   `json:"remote_engine_id,omitempty"`
+	RemoteHost        *string                   `json:"remote_host,omitempty"`
+	RemotePort        *int64                    `json:"remote_port,omitempty"`
+}
+
+// hasLegacyKVTransferMetadata recognizes the flat KV-transfer response
+// metadata emitted by older vLLM-compatible servers. Newer servers place the
+// handshake under kv_transfer_params, but both shapes remain in deployed
+// provider fleets. The fields stay typed so strict decoding remains intact.
+func (wire chatResponseWire) hasLegacyKVTransferMetadata() bool {
+	return wire.DoRemoteDecode != nil || wire.DoRemotePrefill != nil || wire.RemoteBlockIDs != nil ||
+		wire.RemoteEngineID != nil || wire.RemoteHost != nil || wire.RemotePort != nil
 }
 
 type chatChoiceWire struct {

@@ -184,6 +184,10 @@
         },
         "diagnostics": [
           {
+            "field": "stream.kv_transfer",
+            "action": "dropped"
+          },
+          {
             "field": "stream.moderation",
             "action": "dropped"
           }

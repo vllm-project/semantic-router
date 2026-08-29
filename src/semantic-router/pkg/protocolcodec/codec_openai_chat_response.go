@@ -21,7 +21,10 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 	response := decodeChatResponseEnvelope(wire)
 	var diagnostics llmprotocol.Diagnostics
 	appendProviderFieldOmissions(&diagnostics, policy, llmprotocol.OpenAIChatV1, map[string]bool{
-		"metadata": len(wire.Metadata) > 0, "moderation": len(wire.Moderation) > 0,
+		"choices.message.tool_calls.function.TokenizedArguments": chatChoicesHaveTokenizedArguments(wire.Choices),
+		"kv_transfer": wire.hasLegacyKVTransferMetadata(),
+		"metadata":    len(wire.Metadata) > 0,
+		"moderation":  len(wire.Moderation) > 0,
 	}, "response request metadata is not model output")
 	if err := decodeChatChoices(wire, &response, policy); err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, diagnostics, err
@@ -29,6 +32,17 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 	decodeChatResponseUsage(wire.Usage, &response, &diagnostics, policy)
 	envelope := responseEnvelope(llmprotocol.OpenAIChatV1, body, response.Generation, response.SourceStopReason, policy)
 	return response, envelope, diagnostics, nil
+}
+
+func chatChoicesHaveTokenizedArguments(choices []chatChoiceWire) bool {
+	for _, choice := range choices {
+		for _, call := range choice.Message.ToolCalls {
+			if call.Function.TokenizedArguments != nil {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func decodeChatResponseUsage(

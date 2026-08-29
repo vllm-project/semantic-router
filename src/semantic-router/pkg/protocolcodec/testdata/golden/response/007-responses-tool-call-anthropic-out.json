@@ -14,7 +14,7 @@
   "model": "routed-model",
   "role": "assistant",
   "stop_details": null,
-  "stop_reason": "end_turn",
+  "stop_reason": "tool_use",
   "stop_sequence": null,
   "type": "message",
   "usage": {

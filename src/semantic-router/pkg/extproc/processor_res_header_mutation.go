@@ -234,10 +234,16 @@ func recordProtocolDiagnostic(ctx *RequestContext, inbound, outbound string, dia
 // and metrics, defaulting empty to "openai".
 func normalizeProtocol(value string) string {
 	v := strings.TrimSpace(value)
-	if v == "" {
+	switch llmprotocol.WireFormat(v) {
+	case llmprotocol.AnthropicMessagesV1:
+		return "anthropic"
+	case llmprotocol.OpenAIResponsesV1:
+		return "responses"
+	case llmprotocol.OpenAIChatV1, "":
 		return protocolDefault
+	default:
+		return v
 	}
-	return v
 }
 
 func (builder *responseHeaderMutationBuilder) mutation() *ext_proc.HeaderMutation {

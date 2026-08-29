@@ -149,8 +149,9 @@ type chatToolCallWire struct {
 }
 
 type chatFunctionCallWire struct {
-	Name      string `json:"name"`
-	Arguments string `json:"arguments,omitempty"`
+	Name               string    `json:"name"`
+	Arguments          string    `json:"arguments,omitempty"`
+	TokenizedArguments *[]string `json:"TokenizedArguments,omitempty"`
 }
 
 type chatFunctionDefinitionWire struct {
@@ -319,6 +320,16 @@ func decodeChatRequestOptions(wire chatRequestWire, request *llmprotocol.Request
 }
 
 func decodeChatRequestMessage(wire chatMessageWire, index int, policy llmprotocol.Policy) (llmprotocol.Message, error) {
+	for _, call := range wire.ToolCalls {
+		if call.Function.TokenizedArguments != nil {
+			return llmprotocol.Message{}, llmprotocol.NewError(
+				llmprotocol.ErrorUnsupportedFeature,
+				"unsupported_messages_tool_calls_function_tokenized_arguments",
+				"messages.tool_calls.function.TokenizedArguments is provider execution metadata and is not accepted from clients",
+				nil,
+			)
+		}
+	}
 	role, err := validateChatMessageEnvelope(wire)
 	if err != nil {
 		return llmprotocol.Message{}, err

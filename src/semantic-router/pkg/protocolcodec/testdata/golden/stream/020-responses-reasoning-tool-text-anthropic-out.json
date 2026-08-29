@@ -129,7 +129,7 @@
       "event": "message_delta",
       "data": {
         "delta": {
-          "stop_reason": "end_turn",
+          "stop_reason": "tool_use",
           "stop_sequence": null
         },
         "type": "message_delta",

@@ -18,6 +18,14 @@ func responseObjectPublicID(ctx *RequestContext) string {
 	return strings.TrimSpace(ctx.ResponseObjectState.GeneratedResponseID)
 }
 
+func requiresClientResponseRewrite(ctx *RequestContext) bool {
+	if ctx == nil {
+		return false
+	}
+	return ctx.TargetFormat != "" && ctx.TargetFormat != ctx.SourceFormat ||
+		responseObjectPublicID(ctx) != ""
+}
+
 func responseObjectPreviousID(ctx *RequestContext) string {
 	if ctx == nil || ctx.SourceFormat != llmprotocol.OpenAIResponsesV1 || ctx.ResponseObjectState == nil {
 		return ""

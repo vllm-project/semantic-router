@@ -26,6 +26,17 @@ func TestOfficialAnthropicTerminalReasonInventoryIsClosed(t *testing.T) {
 	}
 }
 
+func TestOfficialAnthropicWhitespaceStopSequenceIsPreserved(t *testing.T) {
+	body := []byte(`{"id":"msg_1","type":"message","role":"assistant","model":"m","content":[{"type":"text","text":"done"}],"stop_reason":"stop_sequence","stop_sequence":" ","usage":{"input_tokens":1,"output_tokens":1}}`)
+	response, _, _, err := NewBuiltinEngine().DecodeResponse(llmprotocol.AnthropicMessagesV1, body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StopReason != llmprotocol.StopSequence || response.MatchedStopSequence != " " {
+		t.Fatalf("decoded terminal = %q matched=%q", response.StopReason, response.MatchedStopSequence)
+	}
+}
+
 type anthropicTerminalReasonCase struct {
 	reason       string
 	neutral      llmprotocol.StopReason

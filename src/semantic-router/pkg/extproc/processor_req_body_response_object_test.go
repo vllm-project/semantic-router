@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"testing"
@@ -10,6 +11,51 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 )
+
+func TestSameFormatResponsesBodyPublishesRouterOwnedID(t *testing.T) {
+	router := &OpenAIRouter{}
+	ctx := &RequestContext{
+		SourceFormat: llmprotocol.OpenAIResponsesV1,
+		TargetFormat: llmprotocol.OpenAIResponsesV1,
+		TraceContext: t.Context(),
+		ResponseObjectState: &ResponseObjectState{
+			GeneratedResponseID: "resp_router_owned",
+		},
+	}
+	response := router.handleNonStreamingResponseBody(
+		extProcResponseFixture(llmprotocol.OpenAIResponsesV1), ctx, 0,
+	)
+	mutation := response.GetResponseBody().GetResponse().GetBodyMutation()
+	if mutation == nil || !bytes.Contains(mutation.GetBody(), []byte(`"id":"resp_router_owned"`)) {
+		t.Fatalf("same-format response did not publish Router-owned ID: %+v", mutation)
+	}
+}
+
+func TestSameFormatResponsesStreamPublishesRouterOwnedID(t *testing.T) {
+	router := &OpenAIRouter{}
+	ctx := &RequestContext{
+		SourceFormat: llmprotocol.OpenAIResponsesV1,
+		TargetFormat: llmprotocol.OpenAIResponsesV1,
+		RequestModel: "public-model",
+		TraceContext: t.Context(),
+		ResponseObjectState: &ResponseObjectState{
+			GeneratedResponseID: "resp_router_owned",
+		},
+	}
+	response := router.handleSemanticStreamingResponseBody(
+		extProcStreamFixture(llmprotocol.OpenAIResponsesV1), true, ctx,
+	)
+	mutation := response.GetResponseBody().GetResponse().GetBodyMutation()
+	if mutation == nil || !bytes.Contains(mutation.GetBody(), []byte(`"id":"resp_router_owned"`)) {
+		t.Fatalf("same-format stream did not publish Router-owned ID: %+v", mutation)
+	}
+	if ctx.SemanticResponse == nil {
+		t.Fatal("same-format stream did not produce a semantic response")
+	}
+	if ctx.SemanticResponse.ID != "resp_router_owned" {
+		t.Fatalf("stored semantic response ID = %q, want Router-owned ID", ctx.SemanticResponse.ID)
+	}
+}
 
 func TestMaterializeResponseObjectContextRemovesRouterControls(t *testing.T) {
 	store := false

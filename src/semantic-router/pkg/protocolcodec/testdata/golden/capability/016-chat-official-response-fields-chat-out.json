@@ -55,6 +55,72 @@
       }
     },
     {
+      "name": "do_remote_decode",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "done",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 100,
+          "id": "chatcmpl_1",
+          "model": "routed-model",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 1,
+            "prompt_tokens": 2,
+            "total_tokens": 3
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "kv_transfer",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
+      "name": "do_remote_prefill",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "done",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 100,
+          "id": "chatcmpl_1",
+          "model": "routed-model",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 1,
+            "prompt_tokens": 2,
+            "total_tokens": 3
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "kv_transfer",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
       "name": "ec_transfer_params",
       "outcome": {
         "status": "ok",
@@ -371,6 +437,138 @@
             "total_tokens": 3
           }
         }
+      }
+    },
+    {
+      "name": "remote_block_ids",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "done",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 100,
+          "id": "chatcmpl_1",
+          "model": "routed-model",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 1,
+            "prompt_tokens": 2,
+            "total_tokens": 3
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "kv_transfer",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
+      "name": "remote_engine_id",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "done",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 100,
+          "id": "chatcmpl_1",
+          "model": "routed-model",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 1,
+            "prompt_tokens": 2,
+            "total_tokens": 3
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "kv_transfer",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
+      "name": "remote_host",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "done",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 100,
+          "id": "chatcmpl_1",
+          "model": "routed-model",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 1,
+            "prompt_tokens": 2,
+            "total_tokens": 3
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "kv_transfer",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
+      "name": "remote_port",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "done",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 100,
+          "id": "chatcmpl_1",
+          "model": "routed-model",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 1,
+            "prompt_tokens": 2,
+            "total_tokens": 3
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "kv_transfer",
+            "action": "dropped"
+          }
+        ]
       }
     },
     {

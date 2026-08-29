@@ -56,6 +56,28 @@ type chatChunkWire struct {
 	KVTransferParams  *chatKVTransferParamsWire `json:"kv_transfer_params,omitempty"`
 	ECTransferParams  *chatNullOnlyWire         `json:"ec_transfer_params,omitempty"`
 	Metrics           *chatNullOnlyWire         `json:"metrics,omitempty"`
+	DoRemoteDecode    *bool                     `json:"do_remote_decode,omitempty"`
+	DoRemotePrefill   *bool                     `json:"do_remote_prefill,omitempty"`
+	RemoteBlockIDs    []int64                   `json:"remote_block_ids,omitempty"`
+	RemoteEngineID    *string                   `json:"remote_engine_id,omitempty"`
+	RemoteHost        *string                   `json:"remote_host,omitempty"`
+	RemotePort        *int64                    `json:"remote_port,omitempty"`
+}
+
+func (wire chatChunkWire) hasLegacyKVTransferMetadata() bool {
+	return wire.DoRemoteDecode != nil || wire.DoRemotePrefill != nil || wire.RemoteBlockIDs != nil ||
+		wire.RemoteEngineID != nil || wire.RemoteHost != nil || wire.RemotePort != nil
+}
+
+func (wire chatChunkWire) hasTokenizedToolArguments() bool {
+	for _, choice := range wire.Choices {
+		for _, call := range choice.Delta.ToolCalls {
+			if call.Function.TokenizedArguments != nil {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 type chatChunkChoiceWire struct {
@@ -135,6 +157,19 @@ func (decoder *chatStreamDecoder) pushFrame(frame []byte) ([]llmprotocol.Event, 
 		return []llmprotocol.Event{event}, nil, err
 	}
 	events, diagnostics, err := decoder.decodeChunkEvents(chunk)
+	if chunk.hasTokenizedToolArguments() {
+		appendProviderFieldOmission(
+			&diagnostics, decoder.policy, llmprotocol.OpenAIChatV1,
+			"choices.delta.tool_calls.function.TokenizedArguments",
+			"provider tokenization metadata is not model output",
+		)
+	}
+	if chunk.hasLegacyKVTransferMetadata() {
+		appendProviderFieldOmission(
+			&diagnostics, decoder.policy, llmprotocol.OpenAIChatV1,
+			"stream.kv_transfer", "provider KV-transfer metadata is not model output",
+		)
+	}
 	if len(chunk.Moderation) > 0 && !bytes.Equal(bytes.TrimSpace(chunk.Moderation), []byte("null")) {
 		appendProviderFieldOmission(
 			&diagnostics, decoder.policy, llmprotocol.OpenAIChatV1,
