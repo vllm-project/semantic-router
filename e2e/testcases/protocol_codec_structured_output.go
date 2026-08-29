@@ -106,7 +106,7 @@ func protocolStructuredOutputClients(model string, streaming bool) []protocolStr
 			name: "chat_completions", path: "/v1/chat/completions",
 			body: map[string]any{
 				"model": model, "stream": streaming,
-				"messages": []map[string]string{{"role": "user", "content": "Return an answer object."}},
+				"messages": []map[string]string{{"role": "user", "content": "__mock_structured_output__ Return an answer object."}},
 				"response_format": map[string]any{
 					"type": "json_schema",
 					"json_schema": map[string]any{
@@ -118,7 +118,7 @@ func protocolStructuredOutputClients(model string, streaming bool) []protocolStr
 		{
 			name: "openai_responses", path: "/v1/responses",
 			body: map[string]any{
-				"model": model, "input": "Return an answer object.", "stream": streaming, "store": false,
+				"model": model, "input": "__mock_structured_output__ Return an answer object.", "stream": streaming, "store": false,
 				"text": map[string]any{"format": map[string]any{
 					"type": "json_schema", "name": "structured_output", "strict": true, "schema": schema,
 				}},
@@ -128,7 +128,7 @@ func protocolStructuredOutputClients(model string, streaming bool) []protocolStr
 			name: "anthropic_messages", path: "/v1/messages",
 			body: map[string]any{
 				"model": model, "max_tokens": 64, "stream": streaming,
-				"messages": []map[string]string{{"role": "user", "content": "Return an answer object."}},
+				"messages": []map[string]string{{"role": "user", "content": "__mock_structured_output__ Return an answer object."}},
 				"output_config": map[string]any{"format": map[string]any{
 					"type": "json_schema", "schema": schema,
 				}},

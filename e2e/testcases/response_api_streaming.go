@@ -69,9 +69,9 @@ func requestResponseAPIStreamingSSE(ctx context.Context, client *kubernetes.Clie
 		"input":  input,
 		"stream": true,
 		"store":  false,
-		"metadata": map[string]string{
-			"test": testName,
-		},
+	}
+	if testName != "" {
+		body["metadata"] = map[string]string{"test": testName}
 	}
 	rawBody, err := json.Marshal(body)
 	if err != nil {

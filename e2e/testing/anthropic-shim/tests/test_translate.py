@@ -50,6 +50,7 @@ def test_openai_stream_adapter_emits_messages_event_sequence() -> None:
     ]
     assert '"text":"hello"' in output
     assert '"stop_reason":"stop_sequence"' in output
+    assert '"stop_sequence":"STOP"' in output
     assert '"output_tokens":2' in output
 
 

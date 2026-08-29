@@ -13,8 +13,9 @@ import (
 const valuesFile = "e2e/profiles/ai-gateway/values.yaml"
 
 var resourceManifests = []string{
-	"deploy/kubernetes/ai-gateway/aigw-resources/base-model.yaml",
+	"e2e/profiles/ai-gateway/gateway-resources/backend.yaml",
 	"deploy/kubernetes/ai-gateway/aigw-resources/gwapi-resources.yaml",
+	"e2e/profiles/ai-gateway/gateway-resources/responses-route.yaml",
 }
 
 // Profile implements the Envoy AI Gateway baseline test profile.

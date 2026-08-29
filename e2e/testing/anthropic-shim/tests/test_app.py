@@ -62,6 +62,65 @@ def client_with_upstream() -> tuple[httpx.AsyncClient, _UpstreamRecorder]:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("stream", [False, True])
+async def test_structured_output_mock_requires_and_echoes_schema(
+    client_with_upstream: tuple[httpx.AsyncClient, _UpstreamRecorder],
+    stream: bool,
+) -> None:
+    client, upstream = client_with_upstream
+    schema = {
+        "type": "object",
+        "properties": {"answer": {"type": "string"}},
+        "required": ["answer"],
+    }
+    response = await client.post(
+        "/v1/messages",
+        json={
+            "model": "qwen-test",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "__mock_structured_output__ Return an answer object.",
+                }
+            ],
+            "max_tokens": 16,
+            "stream": stream,
+            "output_config": {"format": {"type": "json_schema", "schema": schema}},
+        },
+    )
+
+    assert response.status_code == 200
+    assert not upstream.requests
+    if stream:
+        assert "event: message_stop" in response.text
+        assert "structured_output" in response.text
+    else:
+        text = response.json()["content"][0]["text"]
+        assert json.loads(text) == {
+            "mock": "mock-vllm",
+            "structured_output": {"type": "json_schema", "schema": schema},
+        }
+
+
+@pytest.mark.asyncio
+async def test_structured_output_marker_without_schema_reaches_upstream(
+    client_with_upstream: tuple[httpx.AsyncClient, _UpstreamRecorder],
+) -> None:
+    client, upstream = client_with_upstream
+    response = await client.post(
+        "/v1/messages",
+        json={
+            "model": "qwen-test",
+            "messages": [{"role": "user", "content": "__mock_structured_output__"}],
+            "max_tokens": 16,
+        },
+    )
+
+    assert response.status_code == 200
+    assert len(upstream.requests) == 1
+
+
+@pytest.mark.asyncio
 async def test_messages_joins_system_array_before_forwarding(
     client_with_upstream: tuple[httpx.AsyncClient, _UpstreamRecorder],
 ) -> None:

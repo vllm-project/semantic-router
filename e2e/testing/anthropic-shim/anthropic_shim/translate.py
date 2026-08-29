@@ -191,6 +191,10 @@ class OpenAIStreamToAnthropic:
             self._finish_reason,
             self._request_body.get("stop_sequences") or [],
         )
+        stop_sequences = self._request_body.get("stop_sequences") or []
+        matched_stop_sequence = (
+            stop_sequences[0] if stop_reason == "stop_sequence" else None
+        )
         events.extend(
             [
                 _anthropic_sse(
@@ -201,7 +205,10 @@ class OpenAIStreamToAnthropic:
                     "message_delta",
                     {
                         "type": "message_delta",
-                        "delta": {"stop_reason": stop_reason, "stop_sequence": None},
+                        "delta": {
+                            "stop_reason": stop_reason,
+                            "stop_sequence": matched_stop_sequence,
+                        },
                         "usage": {"output_tokens": self._output_tokens},
                     },
                 ),

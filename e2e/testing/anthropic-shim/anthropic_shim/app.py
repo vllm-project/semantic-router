@@ -134,6 +134,37 @@ def _mock_anthropic_text_response(body: dict[str, Any]) -> dict[str, Any] | None
     }
 
 
+def _mock_anthropic_structured_response(
+    body: dict[str, Any],
+) -> tuple[dict[str, Any], str] | None:
+    if not _contains_text(body.get("messages"), "__mock_structured_output__"):
+        return None
+    output_config = body.get("output_config")
+    output_format = (
+        output_config.get("format") if isinstance(output_config, dict) else None
+    )
+    if (
+        not isinstance(output_format, dict)
+        or output_format.get("type") != "json_schema"
+    ):
+        return None
+    text = json.dumps(
+        {"mock": "mock-vllm", "structured_output": output_format},
+        separators=(",", ":"),
+    )
+    response = {
+        "id": "msg_mock_structured_123",
+        "type": "message",
+        "role": "assistant",
+        "model": body.get("model", ""),
+        "content": [{"type": "text", "text": text}],
+        "stop_reason": "end_turn",
+        "stop_sequence": None,
+        "usage": {"input_tokens": 4, "output_tokens": 3},
+    }
+    return response, text
+
+
 def _mock_anthropic_tool_stream(body: dict[str, Any]) -> Iterator[bytes]:
     events = [
         (
@@ -455,7 +486,15 @@ def create_app(
 
 
 def _mock_messages_response(body: dict[str, Any]) -> Response | None:
-    if _contains_text(body.get("messages"), "__mock_provider_error__"):
+    failure = _mock_anthropic_failure_response(body)
+    if failure is not None:
+        return failure
+    return _mock_anthropic_success_response(body)
+
+
+def _mock_anthropic_failure_response(body: dict[str, Any]) -> Response | None:
+    messages = body.get("messages")
+    if _contains_text(messages, "__mock_provider_error__"):
         return JSONResponse(
             status_code=HTTPStatus.TOO_MANY_REQUESTS,
             content={
@@ -468,21 +507,30 @@ def _mock_messages_response(body: dict[str, Any]) -> Response | None:
             },
         )
 
-    if body.get("stream") and _contains_text(
-        body.get("messages"), "__mock_midstream_error__"
-    ):
+    if body.get("stream") and _contains_text(messages, "__mock_midstream_error__"):
         return StreamingResponse(
             _mock_midstream_anthropic_error(body),
             media_type="text/event-stream",
         )
 
-    if body.get("stream") and _contains_text(
-        body.get("messages"), "__mock_incomplete_stream__"
-    ):
+    if body.get("stream") and _contains_text(messages, "__mock_incomplete_stream__"):
         return StreamingResponse(
             _mock_incomplete_anthropic_stream(body),
             media_type="text/event-stream",
         )
+    return None
+
+
+def _mock_anthropic_success_response(body: dict[str, Any]) -> Response | None:
+    mock_structured = _mock_anthropic_structured_response(body)
+    if mock_structured is not None:
+        response, text = mock_structured
+        if body.get("stream"):
+            return StreamingResponse(
+                _mock_anthropic_text_stream(body, text),
+                media_type="text/event-stream",
+            )
+        return JSONResponse(content=response)
 
     mock_text_response = _mock_anthropic_text_response(body)
     if mock_text_response is not None:

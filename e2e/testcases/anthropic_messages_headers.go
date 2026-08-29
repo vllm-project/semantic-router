@@ -46,7 +46,10 @@ func testAnthropicMessagesProtocolHeaders(ctx context.Context, client *kubernete
 		MaxTokens: 32,
 		System:    "You are a helpful assistant.",
 		Messages: []anthropicMessage{
-			{Role: "user", Content: "Hello."},
+			// Keep this probe distinct from the basic Messages request. A
+			// semantic-cache hit intentionally omits routing headers because no
+			// upstream protocol translation occurs on that response path.
+			{Role: "user", Content: "Protocol marker probe __VSR_PROTOCOL_HEADER_7F9C__."},
 		},
 	}, localPort)
 	if err != nil {

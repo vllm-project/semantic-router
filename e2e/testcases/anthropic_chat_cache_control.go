@@ -32,6 +32,17 @@ func testAnthropicChatCacheControl(
 		return err
 	}
 	defer session.Close()
+	backendOpts := opts
+	backendOpts.ServiceConfig = pkgtestcases.ServiceConfig{
+		Namespace:   "anthropic-backend-system",
+		Name:        "anthropic-backend-qwen",
+		ServicePort: "8080",
+	}
+	backendSession, err := fixtures.OpenServiceSession(ctx, client, backendOpts)
+	if err != nil {
+		return err
+	}
+	defer backendSession.Close()
 
 	sessionID := fmt.Sprintf("chat-cache-%d", time.Now().UnixNano())
 	request := map[string]any{
@@ -47,7 +58,7 @@ func testAnthropicChatCacheControl(
 	if err := validateBufferedAnthropicChatCache(ctx, session, request, sessionID); err != nil {
 		return err
 	}
-	if err := validateStreamedAnthropicChatCache(ctx, session, request, sessionID); err != nil {
+	if err := validateStreamedAnthropicChatCache(ctx, session, backendSession, request, sessionID); err != nil {
 		return err
 	}
 	if opts.SetDetails != nil {
@@ -84,6 +95,7 @@ func validateBufferedAnthropicChatCache(
 func validateStreamedAnthropicChatCache(
 	ctx context.Context,
 	session *fixtures.ServiceSession,
+	backendSession *fixtures.ServiceSession,
 	request map[string]any,
 	sessionID string,
 ) error {
@@ -104,7 +116,7 @@ func validateStreamedAnthropicChatCache(
 		return fmt.Errorf("cache-marked Chat stream is invalid: %s", truncateString(string(stream), 600))
 	}
 
-	forwarded, err := lastAnthropicShimRequest(ctx, session, sessionID)
+	forwarded, err := lastAnthropicShimRequest(ctx, backendSession, sessionID)
 	if err != nil {
 		return err
 	}

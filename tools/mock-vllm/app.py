@@ -28,6 +28,8 @@ class ChatRequest(BaseModel):
     response_format: dict | None = None
     tools: list[dict[str, Any]] | None = None
     tool_choice: Any = None
+    logprobs: bool | None = False
+    top_logprobs: int | None = None
 
 
 def estimate_tokens(text: str) -> int:
@@ -121,10 +123,42 @@ def build_chat_response(
                 "index": 0,
                 "message": {"role": "assistant", "content": content},
                 "finish_reason": "stop",
-                "logprobs": None,
+                "logprobs": build_chat_logprobs(req, content),
             }
         ],
         "usage": usage,
+    }
+
+
+def build_chat_logprobs(req: ChatRequest, content: str) -> dict[str, Any] | None:
+    if not req.logprobs:
+        return None
+    token = content[:8] or "mock"
+    requested = max(1, min(req.top_logprobs or 1, 5))
+    alternatives = [
+        {"token": token, "logprob": -1.5, "bytes": list(token.encode())},
+        {"token": "other", "logprob": -1.6, "bytes": list(b"other")},
+    ]
+    while len(alternatives) < requested:
+        index = len(alternatives)
+        alternative = f"alt-{index}"
+        alternatives.append(
+            {
+                "token": alternative,
+                "logprob": -1.6 - index,
+                "bytes": list(alternative.encode()),
+            }
+        )
+    return {
+        "content": [
+            {
+                "token": token,
+                "logprob": -1.5,
+                "bytes": list(token.encode()),
+                "top_logprobs": alternatives[:requested],
+            }
+        ],
+        "refusal": [],
     }
 
 
