@@ -127,7 +127,7 @@ def _mock_anthropic_text_response(body: dict[str, Any]) -> dict[str, Any] | None
         "type": "message",
         "role": "assistant",
         "model": body.get("model", ""),
-        "content": [{"type": "text", "text": "protocol matrix accepted"}],
+        "content": [{"type": "text", "text": '{"protocol":"anthropic_messages"}'}],
         "stop_reason": "end_turn",
         "stop_sequence": None,
         "usage": {"input_tokens": 4, "output_tokens": 3},
@@ -488,7 +488,7 @@ def _mock_messages_response(body: dict[str, Any]) -> Response | None:
     if mock_text_response is not None:
         if body.get("stream"):
             return StreamingResponse(
-                _mock_anthropic_text_stream(body, "protocol matrix accepted"),
+                _mock_anthropic_text_stream(body, '{"protocol":"anthropic_messages"}'),
                 media_type="text/event-stream",
             )
         return JSONResponse(content=mock_text_response)

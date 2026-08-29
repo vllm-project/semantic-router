@@ -237,12 +237,15 @@ async def test_protocol_matrix_probe_is_native_anthropic_and_deterministic(
 
     if stream:
         assert response.headers["content-type"].startswith("text/event-stream")
-        assert '"type":"text_delta","text":"protocol matrix accepted"' in response.text
+        assert (
+            '"type":"text_delta","text":"{\\"protocol\\":\\"anthropic_messages\\"}"'
+            in response.text
+        )
         assert '"stop_reason":"end_turn"' in response.text
         assert "event: message_stop" in response.text
     else:
         assert response.json()["content"] == [
-            {"type": "text", "text": "protocol matrix accepted"}
+            {"type": "text", "text": '{"protocol":"anthropic_messages"}'}
         ]
         assert response.json()["stop_reason"] == "end_turn"
     assert upstream.requests == []

@@ -19,9 +19,10 @@ import (
 const (
 	chatBackendModel            = "openai/gpt-oss-20b"
 	nativeResponsesBackendModel = "mock/native-responses"
-	protocolCodecMockVLLMMarker = `"mock":"mock-vllm"`
+	protocolCodecChatReply      = `"protocol":"chat_completions"`
+	protocolCodecResponsesReply = `"protocol":"responses"`
 	protocolCodecAnthropicProbe = "__mock_protocol_matrix__"
-	protocolCodecAnthropicReply = "protocol matrix accepted"
+	protocolCodecAnthropicReply = `"protocol":"anthropic_messages"`
 )
 
 type protocolCodecE2EClient struct {
@@ -197,7 +198,7 @@ func testProtocolCodecChatBackendBufferedMatrix(
 	opts pkgtestcases.TestCaseOptions,
 ) error {
 	return runProtocolCodecBackendBufferedMatrix(
-		ctx, client, opts, chatBackendModel, "openai.chat.v1", "buffered protocol matrix", protocolCodecMockVLLMMarker,
+		ctx, client, opts, chatBackendModel, "openai.chat.v1", "buffered protocol matrix", protocolCodecChatReply,
 	)
 }
 
@@ -207,7 +208,7 @@ func testProtocolCodecResponsesBackendBufferedMatrix(
 	opts pkgtestcases.TestCaseOptions,
 ) error {
 	return runProtocolCodecBackendBufferedMatrix(
-		ctx, client, opts, nativeResponsesBackendModel, "openai.responses.v1", "buffered protocol matrix", protocolCodecMockVLLMMarker,
+		ctx, client, opts, nativeResponsesBackendModel, "openai.responses.v1", "buffered protocol matrix", protocolCodecResponsesReply,
 	)
 }
 
@@ -276,7 +277,7 @@ func testProtocolCodecChatBackendStreamingMatrix(
 	opts pkgtestcases.TestCaseOptions,
 ) error {
 	return runProtocolCodecBackendStreamingMatrix(
-		ctx, client, opts, chatBackendModel, "openai.chat.v1", "streaming protocol matrix", protocolCodecMockVLLMMarker,
+		ctx, client, opts, chatBackendModel, "openai.chat.v1", "streaming protocol matrix", protocolCodecChatReply,
 	)
 }
 
@@ -286,7 +287,7 @@ func testProtocolCodecResponsesBackendStreamingMatrix(
 	opts pkgtestcases.TestCaseOptions,
 ) error {
 	return runProtocolCodecBackendStreamingMatrix(
-		ctx, client, opts, nativeResponsesBackendModel, "openai.responses.v1", "streaming protocol matrix", protocolCodecMockVLLMMarker,
+		ctx, client, opts, nativeResponsesBackendModel, "openai.responses.v1", "streaming protocol matrix", protocolCodecResponsesReply,
 	)
 }
 

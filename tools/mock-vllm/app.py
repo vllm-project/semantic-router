@@ -7,8 +7,7 @@ from typing import Any
 
 import uvicorn
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 app = FastAPI()
@@ -45,6 +44,7 @@ def build_chat_content(req: ChatRequest) -> str:
 
     echo = {
         "mock": "mock-vllm",
+        "protocol": "chat_completions",
         "model": req.model,
         "roles": roles,
         "developer": developer_messages,
@@ -244,6 +244,7 @@ def build_responses_echo(body: dict[str, Any]) -> str:
     )
     echo = {
         "mock": "mock-vllm",
+        "protocol": "responses",
         "model": body.get("model", ""),
         "roles": roles,
         "developer": [
