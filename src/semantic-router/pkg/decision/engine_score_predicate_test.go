@@ -34,8 +34,9 @@ func TestScorePredicateUsesRawSignalValueWithoutBooleanMatch(t *testing.T) {
 }
 
 func TestSignalConfidencePreservesZero(t *testing.T) {
-	if got := signalConfidence(map[string]float64{"embedding:risk": 0}, "embedding", "risk"); got != 0 {
-		t.Fatalf("signalConfidence() = %v, want 0", got)
+	got, reported := signalConfidence(map[string]float64{"embedding:risk": 0}, "embedding", "risk")
+	if got != 0 || !reported {
+		t.Fatalf("signalConfidence() = (%v, %v), want (0, true)", got, reported)
 	}
 }
 

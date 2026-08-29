@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { mockAuthenticatedAppShell, mockAuthenticatedSession } from './support/auth'
+import { mockAuthenticatedAppShell, mockAuthenticatedSession, TEST_CSRF_TOKEN } from './support/auth'
 import { openComposerAddMenu } from './support/playground'
 
 const baseSetupState = {
@@ -1081,10 +1081,8 @@ test.describe('Dashboard auth flow', () => {
     await expect(page.getByText('User updated and password rotated.')).toBeVisible()
   })
 
-  test('protected browser transports append auth query tokens', async ({ page }) => {
-    const { token } = await mockAuthenticatedAppShell(page, {
-      token: 'transport-auth-token',
-    })
+  test('protected browser transports carry no reusable credential', async ({ page }) => {
+    await mockAuthenticatedAppShell(page, { token: 'transport-auth-token' })
 
     await page.route(/\/api\/admin\/users(?:\?.*)?$/, async (route) => {
       await route.fulfill({
@@ -1114,15 +1112,53 @@ test.describe('Dashboard auth flow', () => {
 
       return {
         cookie: document.cookie,
+        storageKeys: Object.keys(window.localStorage),
         iframeUrl: iframe.src,
         sourceUrl,
         socketUrl,
       }
     })
 
-    expect(urls.cookie).toContain(`vsr_session=${token}`)
-    expect(urls.iframeUrl).toContain(`authToken=${token}`)
-    expect(urls.sourceUrl).toContain(`authToken=${token}`)
-    expect(urls.socketUrl).toContain(`authToken=${token}`)
+    // Proves cookies really were seeded, so the vsr_session assertion below means
+    // "HttpOnly hides it" rather than "no cookies exist".
+    expect(urls.cookie).toContain('vsr_csrf')
+    expect(urls.cookie).not.toContain('vsr_session')
+
+    expect(urls.storageKeys).not.toContain('vsr_auth_token')
+
+    // Issue #2465's first acceptance criterion, asserted directly.
+    expect(urls.iframeUrl).not.toContain('authToken')
+    expect(urls.sourceUrl).not.toContain('authToken')
+    expect(urls.socketUrl).not.toContain('authToken')
+  })
+
+  test('state-changing requests carry a CSRF token', async ({ page }) => {
+    await mockAuthenticatedAppShell(page)
+
+    let seenHeader: string | undefined
+    await page.route(/\/api\/admin\/users(?:\?.*)?$/, async (route) => {
+      if (route.request().method() === 'POST') {
+        seenHeader = route.request().headers()['x-csrf-token']
+      }
+      await route.fulfill({
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ users: [] }),
+      })
+    })
+
+    await page.goto('/users')
+    await expect(page).toHaveURL(/\/users$/)
+
+    // Through window.fetch, which is the wrapper the app installs at startup.
+    await page.evaluate(async () => {
+      await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: 'new@example.com' }),
+      })
+    })
+
+    expect(seenHeader).toBe(TEST_CSRF_TOKEN)
   })
 })
