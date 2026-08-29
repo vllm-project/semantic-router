@@ -24,7 +24,32 @@ func runProtocolCodecToolLifecycle(
 	}
 	defer session.Close()
 
-	tool := map[string]any{
+	tool := protocolLookupTool()
+	call, err := runResponsesToolCallRoundtrip(ctx, session, model, tool)
+	if err != nil {
+		return err
+	}
+	if err := runResponsesToolResultRoundtrip(ctx, session, model, tool, call); err != nil {
+		return err
+	}
+	if err := runCrossProtocolToolLifecycles(ctx, session, model); err != nil {
+		return err
+	}
+	if opts.SetDetails != nil {
+		opts.SetDetails(map[string]interface{}{
+			"backend_format":            backendFormat,
+			"client_formats":            3,
+			"tool":                      call.Name,
+			"inline_turns":              6,
+			"stored_continuation_turns": 4,
+			"streaming_turns":           8,
+		})
+	}
+	return nil
+}
+
+func protocolLookupTool() map[string]any {
+	return map[string]any{
 		"type": "function", "name": "lookup", "description": "Look up a value",
 		"parameters": map[string]any{
 			"type":       "object",
@@ -32,6 +57,14 @@ func runProtocolCodecToolLifecycle(
 			"required":   []string{"query"},
 		},
 	}
+}
+
+func runResponsesToolCallRoundtrip(
+	ctx context.Context,
+	session *fixtures.ServiceSession,
+	model string,
+	tool map[string]any,
+) (responsesFunctionCall, error) {
 	firstBody := map[string]any{
 		"model": model, "input": "__mock_tool_call__", "store": false,
 		"tools":       []any{tool},
@@ -40,25 +73,34 @@ func runProtocolCodecToolLifecycle(
 	firstBody["stream"] = true
 	streamedFirst, err := sendProtocolMatrixRequest(ctx, session, "/v1/responses", firstBody, true)
 	if err != nil {
-		return fmt.Errorf("streaming tool-call turn: %w", err)
+		return responsesFunctionCall{}, fmt.Errorf("streaming tool-call turn: %w", err)
 	}
 	streamCall, err := decodeResponsesFunctionCallStream(streamedFirst)
 	if err != nil {
-		return fmt.Errorf("streaming tool-call turn: %w", err)
+		return responsesFunctionCall{}, fmt.Errorf("streaming tool-call turn: %w", err)
 	}
 	delete(firstBody, "stream")
 	first, err := sendProtocolMatrixRequest(ctx, session, "/v1/responses", firstBody, false)
 	if err != nil {
-		return fmt.Errorf("tool-call turn: %w", err)
+		return responsesFunctionCall{}, fmt.Errorf("tool-call turn: %w", err)
 	}
 	call, err := decodeResponsesFunctionCall(first)
 	if err != nil {
-		return err
+		return responsesFunctionCall{}, err
 	}
 	if call != streamCall {
-		return fmt.Errorf("buffered and streamed calls differ: buffered=%+v streamed=%+v", call, streamCall)
+		return responsesFunctionCall{}, fmt.Errorf("buffered and streamed calls differ: buffered=%+v streamed=%+v", call, streamCall)
 	}
+	return call, nil
+}
 
+func runResponsesToolResultRoundtrip(
+	ctx context.Context,
+	session *fixtures.ServiceSession,
+	model string,
+	tool map[string]any,
+	call responsesFunctionCall,
+) error {
 	secondBody := map[string]any{
 		"model": model, "store": false, "tools": []any{tool},
 		"input": []any{
@@ -89,6 +131,14 @@ func runProtocolCodecToolLifecycle(
 	if err := assertResponsesText(second, "tool result accepted"); err != nil {
 		return fmt.Errorf("tool-result turn: %w", err)
 	}
+	return nil
+}
+
+func runCrossProtocolToolLifecycles(
+	ctx context.Context,
+	session *fixtures.ServiceSession,
+	model string,
+) error {
 	if err := runChatClientToolLifecycle(ctx, session, model); err != nil {
 		return fmt.Errorf("Chat Completions client: %w", err)
 	}
@@ -99,16 +149,6 @@ func runProtocolCodecToolLifecycle(
 		if err := runStoredResponsesToolContinuation(ctx, session, model, stream); err != nil {
 			return fmt.Errorf("Responses stored tool continuation (stream=%t): %w", stream, err)
 		}
-	}
-	if opts.SetDetails != nil {
-		opts.SetDetails(map[string]interface{}{
-			"backend_format":            backendFormat,
-			"client_formats":            3,
-			"tool":                      call.Name,
-			"inline_turns":              6,
-			"stored_continuation_turns": 4,
-			"streaming_turns":           8,
-		})
 	}
 	return nil
 }
@@ -226,96 +266,110 @@ type responsesFunctionCall struct {
 	Arguments string
 }
 
+type responsesToolStreamEvent struct {
+	Type      string `json:"type"`
+	ItemID    string `json:"item_id"`
+	Delta     string `json:"delta"`
+	Name      string `json:"name"`
+	Arguments string `json:"arguments"`
+	Item      struct {
+		Type      string `json:"type"`
+		CallID    string `json:"call_id"`
+		Name      string `json:"name"`
+		Arguments string `json:"arguments"`
+	} `json:"item"`
+}
+
+type responsesToolStreamState struct {
+	call       responsesFunctionCall
+	deltas     strings.Builder
+	deltaCount int
+	doneCount  int
+}
+
 func decodeResponsesFunctionCallStream(body []byte) (responsesFunctionCall, error) {
 	stream := string(body)
-	requiredEvents := []string{
-		"response.created",
-		"response.in_progress",
-		"response.output_item.added",
-		"response.function_call_arguments.delta",
-		"response.function_call_arguments.done",
-		"response.output_item.done",
-		"response.completed",
+	requiredMarkers := []string{
+		"event: response.created",
+		"event: response.in_progress",
+		"event: response.output_item.added",
+		"event: response.function_call_arguments.delta",
+		"event: response.function_call_arguments.done",
+		"event: response.output_item.done",
+		"event: response.completed",
 	}
-	previousIndex := -1
-	for _, event := range requiredEvents {
-		index := strings.Index(stream, "event: "+event)
-		if index < 0 {
-			return responsesFunctionCall{}, fmt.Errorf("missing Responses tool event %q: %s", event, truncateString(stream, 1200))
-		}
-		if index < previousIndex {
-			return responsesFunctionCall{}, fmt.Errorf("Responses tool event %q is out of order: %s", event, truncateString(stream, 1200))
-		}
-		previousIndex = index
+	if err := validateOrderedStreamMarkers(stream, requiredMarkers); err != nil {
+		return responsesFunctionCall{}, err
 	}
-	for _, leaked := range []string{"chat.completion.chunk", "data: [DONE]", "event: message_start", `"type":"message_start"`} {
-		if strings.Contains(stream, leaked) {
-			return responsesFunctionCall{}, fmt.Errorf("backend stream format leaked %q: %s", leaked, truncateString(stream, 1200))
-		}
+	leaked := []string{"chat.completion.chunk", "data: [DONE]", "event: message_start", `"type":"message_start"`}
+	if err := rejectStreamFragments(stream, "Responses", leaked); err != nil {
+		return responsesFunctionCall{}, err
 	}
 	if err := validateResponsesStreamEventShapes(stream); err != nil {
 		return responsesFunctionCall{}, err
 	}
 
-	var call responsesFunctionCall
-	var deltas strings.Builder
-	deltaCount := 0
-	doneCount := 0
-	for _, frame := range strings.Split(stream, "\n\n") {
-		var data string
-		for _, line := range strings.Split(frame, "\n") {
-			if strings.HasPrefix(line, "data: ") {
-				data = strings.TrimPrefix(line, "data: ")
-				break
-			}
-		}
-		if data == "" {
-			continue
-		}
-		var event struct {
-			Type      string `json:"type"`
-			ItemID    string `json:"item_id"`
-			Delta     string `json:"delta"`
-			Name      string `json:"name"`
-			Arguments string `json:"arguments"`
-			Item      struct {
-				Type      string `json:"type"`
-				CallID    string `json:"call_id"`
-				Name      string `json:"name"`
-				Arguments string `json:"arguments"`
-			} `json:"item"`
-		}
-		if err := json.Unmarshal([]byte(data), &event); err != nil {
-			return responsesFunctionCall{}, fmt.Errorf("decode Responses tool stream event: %w", err)
-		}
-		switch event.Type {
-		case "response.output_item.added":
-			if event.Item.Type != "function_call" || event.Item.CallID == "" || event.Item.Name == "" {
-				return responsesFunctionCall{}, fmt.Errorf("malformed Responses function_call item: %s", data)
-			}
-			call.CallID = event.Item.CallID
-			call.Name = event.Item.Name
-		case "response.function_call_arguments.delta":
-			deltaCount++
-			deltas.WriteString(event.Delta)
-		case "response.function_call_arguments.done":
-			doneCount++
-			if event.Name != call.Name || event.ItemID == "" {
-				return responsesFunctionCall{}, fmt.Errorf("Responses function arguments completion lost identity: %s", data)
-			}
-			call.Arguments = event.Arguments
-		case "response.output_item.done":
-			if event.Item.CallID != call.CallID || event.Item.Name != call.Name || event.Item.Arguments != call.Arguments {
-				return responsesFunctionCall{}, fmt.Errorf("Responses completed function item changed identity or arguments: %s", data)
-			}
+	state := responsesToolStreamState{}
+	for _, data := range protocolSSEDataFrames(body) {
+		if err := state.consume(data); err != nil {
+			return responsesFunctionCall{}, err
 		}
 	}
+	return state.result(stream)
+}
+
+func (state *responsesToolStreamState) consume(data string) error {
+	var event responsesToolStreamEvent
+	if err := json.Unmarshal([]byte(data), &event); err != nil {
+		return fmt.Errorf("decode Responses tool stream event: %w", err)
+	}
+	switch event.Type {
+	case "response.output_item.added":
+		return state.addCall(event, data)
+	case "response.function_call_arguments.delta":
+		state.deltaCount++
+		state.deltas.WriteString(event.Delta)
+	case "response.function_call_arguments.done":
+		return state.finishArguments(event, data)
+	case "response.output_item.done":
+		return state.validateCompletedCall(event, data)
+	}
+	return nil
+}
+
+func (state *responsesToolStreamState) addCall(event responsesToolStreamEvent, data string) error {
+	if event.Item.Type != "function_call" || event.Item.CallID == "" || event.Item.Name == "" {
+		return fmt.Errorf("malformed Responses function_call item: %s", data)
+	}
+	state.call.CallID = event.Item.CallID
+	state.call.Name = event.Item.Name
+	return nil
+}
+
+func (state *responsesToolStreamState) finishArguments(event responsesToolStreamEvent, data string) error {
+	state.doneCount++
+	if event.Name != state.call.Name || event.ItemID == "" {
+		return fmt.Errorf("Responses function arguments completion lost identity: %s", data)
+	}
+	state.call.Arguments = event.Arguments
+	return nil
+}
+
+func (state *responsesToolStreamState) validateCompletedCall(event responsesToolStreamEvent, data string) error {
+	if event.Item.CallID != state.call.CallID || event.Item.Name != state.call.Name || event.Item.Arguments != state.call.Arguments {
+		return fmt.Errorf("Responses completed function item changed identity or arguments: %s", data)
+	}
+	return nil
+}
+
+func (state *responsesToolStreamState) result(stream string) (responsesFunctionCall, error) {
+	call := state.call
 	if call.CallID != "call_mock_lookup" || call.Name != "lookup" ||
-		call.Arguments != `{"query":"weather"}` || deltaCount < 2 || doneCount != 1 {
+		call.Arguments != `{"query":"weather"}` || state.deltaCount < 2 || state.doneCount != 1 {
 		return responsesFunctionCall{}, fmt.Errorf("Responses tool stream lifecycle is incomplete: %s", truncateString(stream, 1200))
 	}
-	if deltas.String() != call.Arguments || !json.Valid([]byte(call.Arguments)) {
-		return responsesFunctionCall{}, fmt.Errorf("Responses tool argument deltas do not reconstruct valid JSON: deltas=%q done=%q", deltas.String(), call.Arguments)
+	if state.deltas.String() != call.Arguments || !json.Valid([]byte(call.Arguments)) {
+		return responsesFunctionCall{}, fmt.Errorf("Responses tool argument deltas do not reconstruct valid JSON: deltas=%q done=%q", state.deltas.String(), call.Arguments)
 	}
 	return call, nil
 }

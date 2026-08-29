@@ -44,23 +44,49 @@ func testAnthropicChatCacheControl(
 			}},
 		}},
 	}
+	if err := validateBufferedAnthropicChatCache(ctx, session, request, sessionID); err != nil {
+		return err
+	}
+	if err := validateStreamedAnthropicChatCache(ctx, session, request, sessionID); err != nil {
+		return err
+	}
+	if opts.SetDetails != nil {
+		opts.SetDetails(map[string]interface{}{"buffered_cache_hit": true, "streaming_marker_preserved": true})
+	}
+	return nil
+}
 
+func validateBufferedAnthropicChatCache(
+	ctx context.Context,
+	session *fixtures.ServiceSession,
+	request map[string]any,
+	sessionID string,
+) error {
 	for attempt := 0; attempt < 2; attempt++ {
-		body, requestErr := sendChatCacheRequest(ctx, session, request, sessionID)
-		if requestErr != nil {
-			return requestErr
+		body, err := sendChatCacheRequest(ctx, session, request, sessionID)
+		if err != nil {
+			return err
 		}
-		if attempt == 1 {
-			cached, usageErr := chatCachedInputTokens(body)
-			if usageErr != nil {
-				return usageErr
-			}
-			if cached <= 0 {
-				return fmt.Errorf("repeat request reported no cached input tokens: %s", truncateString(string(body), 600))
-			}
+		if attempt == 0 {
+			continue
+		}
+		cached, err := chatCachedInputTokens(body)
+		if err != nil {
+			return err
+		}
+		if cached <= 0 {
+			return fmt.Errorf("repeat request reported no cached input tokens: %s", truncateString(string(body), 600))
 		}
 	}
+	return nil
+}
 
+func validateStreamedAnthropicChatCache(
+	ctx context.Context,
+	session *fixtures.ServiceSession,
+	request map[string]any,
+	sessionID string,
+) error {
 	streamRequest := cloneMap(request)
 	streamRequest["stream"] = true
 	stream, err := sendProtocolMatrixRequestWithHeaders(
@@ -84,10 +110,6 @@ func testAnthropicChatCacheControl(
 	}
 	if !hasForwardedCacheMarker(forwarded, "ephemeral", "5m") {
 		return fmt.Errorf("streaming dispatch lost cache_control before the Anthropic backend: %s", truncateString(string(forwarded), 800))
-	}
-
-	if opts.SetDetails != nil {
-		opts.SetDetails(map[string]interface{}{"buffered_cache_hit": true, "streaming_marker_preserved": true})
 	}
 	return nil
 }

@@ -179,39 +179,50 @@ type responsesStreamEventShape struct {
 
 func validateResponsesStreamEventShapes(stream string) error {
 	var previousSequence *uint64
-	for _, frame := range strings.Split(stream, "\n\n") {
-		data := ""
-		for _, line := range strings.Split(frame, "\n") {
-			if strings.HasPrefix(line, "data: ") {
-				data = strings.TrimPrefix(line, "data: ")
-				break
-			}
+	for _, data := range protocolSSEDataFrames([]byte(stream)) {
+		event, err := decodeResponsesStreamEventShape(data)
+		if err != nil {
+			return err
 		}
-		if data == "" {
-			continue
-		}
-		var event responsesStreamEventShape
-		if err := json.Unmarshal([]byte(data), &event); err != nil {
-			return fmt.Errorf("decode Responses API SSE event: %w", err)
-		}
-		if event.Sequence == nil {
-			return fmt.Errorf("Responses API SSE event %q is missing sequence_number", event.Type)
-		}
-		if previousSequence != nil && *event.Sequence != *previousSequence+1 {
-			return fmt.Errorf("Responses API SSE sequence is not contiguous: got %d after %d", *event.Sequence, *previousSequence)
+		if err := validateResponsesEventSequence(event, previousSequence); err != nil {
+			return err
 		}
 		sequence := *event.Sequence
 		previousSequence = &sequence
+		if err := validateResponsesEventIndexes(event); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
-		if responsesEventRequiresOutputIndex(event.Type) && event.OutputIndex == nil {
-			return fmt.Errorf("Responses API SSE event %q is missing output_index", event.Type)
-		}
-		if responsesEventRequiresItemID(event.Type) && event.ItemID == "" {
-			return fmt.Errorf("Responses API SSE event %q is missing item_id", event.Type)
-		}
-		if responsesEventRequiresContentIndex(event.Type) && event.ContentIndex == nil {
-			return fmt.Errorf("Responses API SSE event %q is missing content_index", event.Type)
-		}
+func decodeResponsesStreamEventShape(data string) (responsesStreamEventShape, error) {
+	var event responsesStreamEventShape
+	if err := json.Unmarshal([]byte(data), &event); err != nil {
+		return event, fmt.Errorf("decode Responses API SSE event: %w", err)
+	}
+	return event, nil
+}
+
+func validateResponsesEventSequence(event responsesStreamEventShape, previous *uint64) error {
+	if event.Sequence == nil {
+		return fmt.Errorf("Responses API SSE event %q is missing sequence_number", event.Type)
+	}
+	if previous != nil && *event.Sequence != *previous+1 {
+		return fmt.Errorf("Responses API SSE sequence is not contiguous: got %d after %d", *event.Sequence, *previous)
+	}
+	return nil
+}
+
+func validateResponsesEventIndexes(event responsesStreamEventShape) error {
+	if responsesEventRequiresOutputIndex(event.Type) && event.OutputIndex == nil {
+		return fmt.Errorf("Responses API SSE event %q is missing output_index", event.Type)
+	}
+	if responsesEventRequiresItemID(event.Type) && event.ItemID == "" {
+		return fmt.Errorf("Responses API SSE event %q is missing item_id", event.Type)
+	}
+	if responsesEventRequiresContentIndex(event.Type) && event.ContentIndex == nil {
+		return fmt.Errorf("Responses API SSE event %q is missing content_index", event.Type)
 	}
 	return nil
 }

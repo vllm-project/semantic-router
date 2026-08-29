@@ -171,114 +171,157 @@ func extractProtocolStructuredOutputText(path string, body []byte, streaming boo
 	}
 	switch path {
 	case "/v1/chat/completions":
-		var response struct {
-			Choices []struct {
-				Message struct {
-					Content string `json:"content"`
-				} `json:"message"`
-			} `json:"choices"`
-		}
-		if err := json.Unmarshal(body, &response); err != nil {
-			return "", err
-		}
-		if len(response.Choices) != 1 {
-			return "", fmt.Errorf("Chat response has %d choices: %s", len(response.Choices), truncateString(string(body), 500))
-		}
-		return response.Choices[0].Message.Content, nil
+		return decodeStructuredChatText(body)
 	case "/v1/responses":
-		var response fixtures.ResponseAPIResponse
-		if err := json.Unmarshal(body, &response); err != nil {
-			return "", err
-		}
-		return response.OutputText, nil
+		return decodeStructuredResponsesText(body)
 	case "/v1/messages":
-		var response anthropicMessageResponse
-		if err := json.Unmarshal(body, &response); err != nil {
-			return "", err
-		}
-		var text strings.Builder
-		for _, rawContent := range response.Content {
-			var content struct {
-				Type string `json:"type"`
-				Text string `json:"text"`
-			}
-			if err := json.Unmarshal(rawContent, &content); err != nil {
-				return "", fmt.Errorf("decode Messages content block: %w", err)
-			}
-			if content.Type == "text" {
-				text.WriteString(content.Text)
-			}
-		}
-		if text.Len() == 0 {
-			return "", fmt.Errorf("Messages response has no text content: %s", truncateString(string(body), 500))
-		}
-		return text.String(), nil
+		return decodeStructuredMessagesText(body)
 	default:
 		return "", fmt.Errorf("unsupported client path %q", path)
 	}
 }
 
-func extractProtocolStructuredOutputStreamText(path string, body []byte) (string, error) {
+func decodeStructuredChatText(body []byte) (string, error) {
+	var response struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+	if err := json.Unmarshal(body, &response); err != nil {
+		return "", err
+	}
+	if len(response.Choices) != 1 {
+		return "", fmt.Errorf("Chat response has %d choices: %s", len(response.Choices), truncateString(string(body), 500))
+	}
+	return response.Choices[0].Message.Content, nil
+}
+
+func decodeStructuredResponsesText(body []byte) (string, error) {
+	var response fixtures.ResponseAPIResponse
+	if err := json.Unmarshal(body, &response); err != nil {
+		return "", err
+	}
+	return response.OutputText, nil
+}
+
+func decodeStructuredMessagesText(body []byte) (string, error) {
+	var response anthropicMessageResponse
+	if err := json.Unmarshal(body, &response); err != nil {
+		return "", err
+	}
 	var text strings.Builder
-	for _, frame := range strings.Split(string(body), "\n\n") {
-		data := ""
-		for _, line := range strings.Split(frame, "\n") {
-			if strings.HasPrefix(line, "data:") {
-				data = strings.TrimSpace(strings.TrimPrefix(line, "data:"))
-				break
-			}
+	for _, rawContent := range response.Content {
+		blockText, decodeErr := decodeStructuredMessagesContent(rawContent)
+		if decodeErr != nil {
+			return "", decodeErr
 		}
-		if data == "" || data == "[DONE]" {
+		text.WriteString(blockText)
+	}
+	if text.Len() == 0 {
+		return "", fmt.Errorf("Messages response has no text content: %s", truncateString(string(body), 500))
+	}
+	return text.String(), nil
+}
+
+func decodeStructuredMessagesContent(rawContent json.RawMessage) (string, error) {
+	var content struct {
+		Type string `json:"type"`
+		Text string `json:"text"`
+	}
+	if err := json.Unmarshal(rawContent, &content); err != nil {
+		return "", fmt.Errorf("decode Messages content block: %w", err)
+	}
+	if content.Type == "text" {
+		return content.Text, nil
+	}
+	return "", nil
+}
+
+func extractProtocolStructuredOutputStreamText(path string, body []byte) (string, error) {
+	decoder, err := selectProtocolStructuredStreamDecoder(path)
+	if err != nil {
+		return "", err
+	}
+	var text strings.Builder
+	for _, data := range protocolSSEDataFrames(body) {
+		if data == "[DONE]" {
 			continue
 		}
-		switch path {
-		case "/v1/chat/completions":
-			var event struct {
-				Choices []struct {
-					Delta struct {
-						Content string `json:"content"`
-					} `json:"delta"`
-				} `json:"choices"`
-			}
-			if err := json.Unmarshal([]byte(data), &event); err != nil {
-				return "", fmt.Errorf("decode Chat SSE event: %w", err)
-			}
-			if len(event.Choices) > 0 {
-				text.WriteString(event.Choices[0].Delta.Content)
-			}
-		case "/v1/responses":
-			var event struct {
-				Type  string `json:"type"`
-				Delta string `json:"delta"`
-			}
-			if err := json.Unmarshal([]byte(data), &event); err != nil {
-				return "", fmt.Errorf("decode Responses SSE event: %w", err)
-			}
-			if event.Type == "response.output_text.delta" {
-				text.WriteString(event.Delta)
-			}
-		case "/v1/messages":
-			var event struct {
-				Type  string `json:"type"`
-				Delta struct {
-					Type string `json:"type"`
-					Text string `json:"text"`
-				} `json:"delta"`
-			}
-			if err := json.Unmarshal([]byte(data), &event); err != nil {
-				return "", fmt.Errorf("decode Messages SSE event: %w", err)
-			}
-			if event.Type == "content_block_delta" && event.Delta.Type == "text_delta" {
-				text.WriteString(event.Delta.Text)
-			}
-		default:
-			return "", fmt.Errorf("unsupported client path %q", path)
+		fragment, decodeErr := decoder([]byte(data))
+		if decodeErr != nil {
+			return "", decodeErr
 		}
+		text.WriteString(fragment)
 	}
 	if text.Len() == 0 {
 		return "", fmt.Errorf("client stream has no output text: %s", truncateString(string(body), 800))
 	}
 	return text.String(), nil
+}
+
+type protocolStructuredStreamDecoder func([]byte) (string, error)
+
+func selectProtocolStructuredStreamDecoder(path string) (protocolStructuredStreamDecoder, error) {
+	decoders := map[string]protocolStructuredStreamDecoder{
+		"/v1/chat/completions": decodeStructuredChatStreamText,
+		"/v1/responses":        decodeStructuredResponsesStreamText,
+		"/v1/messages":         decodeStructuredMessagesStreamText,
+	}
+	decoder, ok := decoders[path]
+	if !ok {
+		return nil, fmt.Errorf("unsupported client path %q", path)
+	}
+	return decoder, nil
+}
+
+func decodeStructuredChatStreamText(data []byte) (string, error) {
+	var event struct {
+		Choices []struct {
+			Delta struct {
+				Content string `json:"content"`
+			} `json:"delta"`
+		} `json:"choices"`
+	}
+	if err := json.Unmarshal(data, &event); err != nil {
+		return "", fmt.Errorf("decode Chat SSE event: %w", err)
+	}
+	if len(event.Choices) == 0 {
+		return "", nil
+	}
+	return event.Choices[0].Delta.Content, nil
+}
+
+func decodeStructuredResponsesStreamText(data []byte) (string, error) {
+	var event struct {
+		Type  string `json:"type"`
+		Delta string `json:"delta"`
+	}
+	if err := json.Unmarshal(data, &event); err != nil {
+		return "", fmt.Errorf("decode Responses SSE event: %w", err)
+	}
+	if event.Type == "response.output_text.delta" {
+		return event.Delta, nil
+	}
+	return "", nil
+}
+
+func decodeStructuredMessagesStreamText(data []byte) (string, error) {
+	var event struct {
+		Type  string `json:"type"`
+		Delta struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		} `json:"delta"`
+	}
+	if err := json.Unmarshal(data, &event); err != nil {
+		return "", fmt.Errorf("decode Messages SSE event: %w", err)
+	}
+	if event.Type == "content_block_delta" && event.Delta.Type == "text_delta" {
+		return event.Delta.Text, nil
+	}
+	return "", nil
 }
 
 func verifyProtocolStructuredOutputEcho(text string) error {

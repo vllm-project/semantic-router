@@ -183,6 +183,9 @@ class TransformersBackend(ModelBackend):
             },
         }
 
+        # Add token_usage as alias for better SDK compatibility
+        response_data["token_usage"] = response_data["usage"]
+
         if stream:
             # For streaming, yield chunks
             words = generated_text.split()
@@ -358,6 +361,9 @@ class VLLMBackend(ModelBackend):
                 "completion_tokens_details": {"reasoning_tokens": 0},
             },
         }
+
+        # Add token_usage as alias for better SDK compatibility
+        response_data["token_usage"] = response_data["usage"]
 
         if stream:
             # For streaming, yield chunks (simplified for now)
@@ -822,6 +828,9 @@ class EchoBackend(ModelBackend):
                 "completion_tokens_details": {"reasoning_tokens": 0},
             },
         }
+
+        # Add token_usage as alias for better SDK compatibility
+        response_data["token_usage"] = response_data["usage"]
 
         if stream:
             # For streaming, yield the content in chunks

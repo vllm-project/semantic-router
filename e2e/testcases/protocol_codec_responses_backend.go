@@ -30,6 +30,14 @@ type protocolCodecE2EClient struct {
 	path string
 }
 
+type protocolMidstreamCheck struct {
+	name           string
+	path           string
+	body           any
+	failureMarkers []string
+	successMarker  string
+}
+
 var protocolCodecE2EClients = []protocolCodecE2EClient{
 	{name: "chat_completions", path: "/v1/chat/completions"},
 	{name: "openai_responses", path: "/v1/responses"},
@@ -73,30 +81,43 @@ func (client protocolCodecE2EClient) validateBuffered(body []byte, expectedText 
 func (client protocolCodecE2EClient) validateStream(body []byte, expectedText string) error {
 	switch client.path {
 	case "/v1/chat/completions":
-		if bytes.Contains(body, []byte("event: response.")) || bytes.Contains(body, []byte("event: message_start")) {
-			return fmt.Errorf("Chat stream leaked a backend protocol: %s", truncateString(string(body), 800))
-		}
-		return assertChatTextStream(body, expectedText)
+		return validateChatProtocolStream(body, expectedText)
 	case "/v1/responses":
-		if err := validateResponseAPIStreamingSSEBody(string(body)); err != nil {
-			return err
-		}
-		text, err := extractProtocolStructuredOutputStreamText(client.path, body)
-		if err != nil {
-			return err
-		}
-		if !strings.Contains(text, expectedText) {
-			return fmt.Errorf("Responses stream lost backend output: %s", truncateString(string(body), 800))
-		}
-		return nil
+		return validateResponsesProtocolStream(body, expectedText)
 	case "/v1/messages":
-		if bytes.Contains(body, []byte("chat.completion.chunk")) || bytes.Contains(body, []byte("event: response.")) || bytes.Contains(body, []byte("data: [DONE]")) {
-			return fmt.Errorf("Messages stream leaked a backend protocol: %s", truncateString(string(body), 800))
-		}
-		return assertAnthropicTextStream(body, expectedText)
+		return validateAnthropicProtocolStream(body, expectedText)
 	default:
 		return fmt.Errorf("unregistered protocol codec E2E client path %q", client.path)
 	}
+}
+
+func validateChatProtocolStream(body []byte, expectedText string) error {
+	if err := rejectStreamFragments(string(body), "Chat", []string{"event: response.", "event: message_start"}); err != nil {
+		return err
+	}
+	return assertChatTextStream(body, expectedText)
+}
+
+func validateResponsesProtocolStream(body []byte, expectedText string) error {
+	if err := validateResponseAPIStreamingSSEBody(string(body)); err != nil {
+		return err
+	}
+	text, err := extractProtocolStructuredOutputStreamText("/v1/responses", body)
+	if err != nil {
+		return err
+	}
+	if !strings.Contains(text, expectedText) {
+		return fmt.Errorf("Responses stream lost backend output: %s", truncateString(string(body), 800))
+	}
+	return nil
+}
+
+func validateAnthropicProtocolStream(body []byte, expectedText string) error {
+	fragments := []string{"chat.completion.chunk", "event: response.", "data: [DONE]"}
+	if err := rejectStreamFragments(string(body), "Messages", fragments); err != nil {
+		return err
+	}
+	return assertAnthropicTextStream(body, expectedText)
 }
 
 func init() {
@@ -475,13 +496,7 @@ func runProtocolCodecMidstreamErrorMatrix(
 	}
 	defer session.Close()
 
-	checks := []struct {
-		name           string
-		path           string
-		body           any
-		failureMarkers []string
-		successMarker  string
-	}{
+	checks := []protocolMidstreamCheck{
 		{
 			name: "chat_completions", path: "/v1/chat/completions",
 			body: map[string]any{
@@ -514,27 +529,8 @@ func runProtocolCodecMidstreamErrorMatrix(
 		if requestErr != nil {
 			return fmt.Errorf("%s: %w", check.name, requestErr)
 		}
-		stream := string(body)
-		for _, marker := range check.failureMarkers {
-			if !strings.Contains(stream, marker) {
-				return fmt.Errorf("%s: midstream failure marker %q is missing: %s", check.name, marker, truncateString(stream, 1000))
-			}
-		}
-		if count := strings.Count(stream, "mock provider stream failed"); count != 1 {
-			return fmt.Errorf("%s: provider failure was emitted %d times, want exactly one: %s", check.name, count, truncateString(stream, 1000))
-		}
-		if check.name == "openai_responses" &&
-			!strings.Contains(stream, "event: error") &&
-			!strings.Contains(stream, "event: response.failed") {
-			return fmt.Errorf("%s: no Responses failure terminal: %s", check.name, truncateString(stream, 1000))
-		}
-		if strings.Contains(stream, check.successMarker) {
-			return fmt.Errorf("%s: midstream failure was followed by success: %s", check.name, truncateString(stream, 1000))
-		}
-		partialIndex := strings.Index(stream, "partial")
-		failureIndex := strings.Index(stream, "mock provider stream failed")
-		if partialIndex < 0 || failureIndex < 0 || partialIndex >= failureIndex {
-			return fmt.Errorf("%s: partial output and failure are out of order: %s", check.name, truncateString(stream, 1000))
+		if validationErr := validateProtocolMidstreamFailure(check, string(body)); validationErr != nil {
+			return validationErr
 		}
 	}
 	if opts.SetDetails != nil {
@@ -542,6 +538,42 @@ func runProtocolCodecMidstreamErrorMatrix(
 			"backend_format":                   backendFormat,
 			"midstream_failure_client_formats": len(checks),
 		})
+	}
+	return nil
+}
+
+func validateProtocolMidstreamFailure(check protocolMidstreamCheck, stream string) error {
+	for _, marker := range check.failureMarkers {
+		if !strings.Contains(stream, marker) {
+			return fmt.Errorf("%s: midstream failure marker %q is missing: %s", check.name, marker, truncateString(stream, 1000))
+		}
+	}
+	if count := strings.Count(stream, "mock provider stream failed"); count != 1 {
+		return fmt.Errorf("%s: provider failure was emitted %d times, want exactly one: %s", check.name, count, truncateString(stream, 1000))
+	}
+	if err := validateProtocolFailureTerminal(check, stream); err != nil {
+		return err
+	}
+	return validatePartialBeforeFailure(check.name, stream)
+}
+
+func validateProtocolFailureTerminal(check protocolMidstreamCheck, stream string) error {
+	if check.name == "openai_responses" &&
+		!strings.Contains(stream, "event: error") &&
+		!strings.Contains(stream, "event: response.failed") {
+		return fmt.Errorf("%s: no Responses failure terminal: %s", check.name, truncateString(stream, 1000))
+	}
+	if strings.Contains(stream, check.successMarker) {
+		return fmt.Errorf("%s: midstream failure was followed by success: %s", check.name, truncateString(stream, 1000))
+	}
+	return nil
+}
+
+func validatePartialBeforeFailure(name, stream string) error {
+	partialIndex := strings.Index(stream, "partial")
+	failureIndex := strings.Index(stream, "mock provider stream failed")
+	if partialIndex < 0 || failureIndex < 0 || partialIndex >= failureIndex {
+		return fmt.Errorf("%s: partial output and failure are out of order: %s", name, truncateString(stream, 1000))
 	}
 	return nil
 }

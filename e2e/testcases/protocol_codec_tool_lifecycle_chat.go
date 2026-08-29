@@ -120,79 +120,92 @@ func decodeChatFunctionCall(body []byte) (responsesFunctionCall, error) {
 	return call, nil
 }
 
+type chatToolStreamChunk struct {
+	Object  string `json:"object"`
+	Choices []struct {
+		FinishReason *string `json:"finish_reason"`
+		Delta        struct {
+			ToolCalls []struct {
+				Index    int    `json:"index"`
+				ID       string `json:"id"`
+				Type     string `json:"type"`
+				Function struct {
+					Name      string `json:"name"`
+					Arguments string `json:"arguments"`
+				} `json:"function"`
+			} `json:"tool_calls"`
+		} `json:"delta"`
+	} `json:"choices"`
+}
+
+type chatToolStreamState struct {
+	call         responsesFunctionCall
+	finishReason string
+	doneCount    int
+}
+
 func decodeChatFunctionCallStream(body []byte) (responsesFunctionCall, error) {
 	stream := string(body)
-	for _, leaked := range []string{"event: response.", "event: message_start", `"type":"message_start"`} {
-		if strings.Contains(stream, leaked) {
-			return responsesFunctionCall{}, fmt.Errorf("backend stream format leaked %q: %s", leaked, truncateString(stream, 1200))
-		}
+	if err := rejectStreamFragments(stream, "Chat", []string{"event: response.", "event: message_start", `"type":"message_start"`}); err != nil {
+		return responsesFunctionCall{}, err
 	}
-	var call responsesFunctionCall
-	finishReason := ""
-	doneCount := 0
-	for _, frame := range strings.Split(stream, "\n\n") {
-		var data string
-		for _, line := range strings.Split(frame, "\n") {
-			if strings.HasPrefix(line, "data: ") {
-				data = strings.TrimPrefix(line, "data: ")
-				break
-			}
-		}
-		if data == "" {
-			continue
-		}
+	state := chatToolStreamState{}
+	for _, data := range protocolSSEDataFrames(body) {
 		if data == "[DONE]" {
-			doneCount++
+			state.doneCount++
 			continue
 		}
-		var chunk struct {
-			Object  string `json:"object"`
-			Choices []struct {
-				FinishReason *string `json:"finish_reason"`
-				Delta        struct {
-					ToolCalls []struct {
-						Index    int    `json:"index"`
-						ID       string `json:"id"`
-						Type     string `json:"type"`
-						Function struct {
-							Name      string `json:"name"`
-							Arguments string `json:"arguments"`
-						} `json:"function"`
-					} `json:"tool_calls"`
-				} `json:"delta"`
-			} `json:"choices"`
-		}
+		var chunk chatToolStreamChunk
 		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
 			return responsesFunctionCall{}, fmt.Errorf("decode Chat tool stream chunk: %w", err)
 		}
-		if chunk.Object != "chat.completion.chunk" {
-			return responsesFunctionCall{}, fmt.Errorf("invalid Chat stream object %q: %s", chunk.Object, data)
+		if err := state.consume(chunk, data); err != nil {
+			return responsesFunctionCall{}, err
 		}
-		for _, choice := range chunk.Choices {
-			if choice.FinishReason != nil {
-				finishReason = *choice.FinishReason
-			}
-			for _, tool := range choice.Delta.ToolCalls {
-				if tool.Index != 0 {
-					return responsesFunctionCall{}, fmt.Errorf("unexpected Chat tool index %d: %s", tool.Index, data)
-				}
-				if tool.ID != "" {
-					if call.CallID != "" && call.CallID != tool.ID {
-						return responsesFunctionCall{}, fmt.Errorf("Chat stream changed tool ID: %s", data)
-					}
-					call.CallID = tool.ID
-				}
-				if tool.Function.Name != "" {
-					if call.Name != "" && call.Name != tool.Function.Name {
-						return responsesFunctionCall{}, fmt.Errorf("Chat stream changed tool name: %s", data)
-					}
-					call.Name = tool.Function.Name
-				}
-				call.Arguments += tool.Function.Arguments
+	}
+	return state.result(stream)
+}
+
+func (state *chatToolStreamState) consume(chunk chatToolStreamChunk, data string) error {
+	if chunk.Object != "chat.completion.chunk" {
+		return fmt.Errorf("invalid Chat stream object %q: %s", chunk.Object, data)
+	}
+	for _, choice := range chunk.Choices {
+		if choice.FinishReason != nil {
+			state.finishReason = *choice.FinishReason
+		}
+		for _, tool := range choice.Delta.ToolCalls {
+			if err := state.consumeTool(tool.Index, tool.ID, tool.Function.Name, tool.Function.Arguments, data); err != nil {
+				return err
 			}
 		}
 	}
-	if doneCount != 1 || finishReason != "tool_calls" || call.CallID != "call_mock_lookup" ||
+	return nil
+}
+
+func (state *chatToolStreamState) consumeTool(index int, id, name, arguments, data string) error {
+	if index != 0 {
+		return fmt.Errorf("unexpected Chat tool index %d: %s", index, data)
+	}
+	if id != "" && state.call.CallID != "" && state.call.CallID != id {
+		return fmt.Errorf("Chat stream changed tool ID: %s", data)
+	}
+	if name != "" && state.call.Name != "" && state.call.Name != name {
+		return fmt.Errorf("Chat stream changed tool name: %s", data)
+	}
+	if id != "" {
+		state.call.CallID = id
+	}
+	if name != "" {
+		state.call.Name = name
+	}
+	state.call.Arguments += arguments
+	return nil
+}
+
+func (state *chatToolStreamState) result(stream string) (responsesFunctionCall, error) {
+	call := state.call
+	if state.doneCount != 1 || state.finishReason != "tool_calls" || call.CallID != "call_mock_lookup" ||
 		call.Name != "lookup" || call.Arguments != `{"query":"weather"}` || !json.Valid([]byte(call.Arguments)) {
 		return responsesFunctionCall{}, fmt.Errorf("Chat tool stream lifecycle is incomplete: %s", truncateString(stream, 1200))
 	}
@@ -220,48 +233,51 @@ func assertChatText(body []byte, contains string) error {
 
 func assertChatTextStream(body []byte, contains string) error {
 	stream := string(body)
-	var text strings.Builder
-	finishReason := ""
-	doneCount := 0
-	for _, frame := range strings.Split(stream, "\n\n") {
-		var data string
-		for _, line := range strings.Split(frame, "\n") {
-			if strings.HasPrefix(line, "data: ") {
-				data = strings.TrimPrefix(line, "data: ")
-				break
-			}
-		}
+	state := chatTextStreamState{}
+	for _, data := range protocolSSEDataFrames(body) {
 		if data == "[DONE]" {
-			doneCount++
+			state.doneCount++
 			continue
 		}
-		if data == "" {
-			continue
-		}
-		var chunk struct {
-			Object  string `json:"object"`
-			Choices []struct {
-				FinishReason *string `json:"finish_reason"`
-				Delta        struct {
-					Content string `json:"content"`
-				} `json:"delta"`
-			} `json:"choices"`
-		}
+		var chunk chatTextStreamChunk
 		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
 			return err
 		}
-		if chunk.Object != "chat.completion.chunk" {
-			return fmt.Errorf("invalid Chat stream object %q: %s", chunk.Object, data)
-		}
-		for _, choice := range chunk.Choices {
-			text.WriteString(choice.Delta.Content)
-			if choice.FinishReason != nil {
-				finishReason = *choice.FinishReason
-			}
+		if err := state.consume(chunk, data); err != nil {
+			return err
 		}
 	}
-	if doneCount != 1 || finishReason != "stop" || !strings.Contains(text.String(), contains) {
+	if state.doneCount != 1 || state.finishReason != "stop" || !strings.Contains(state.text.String(), contains) {
 		return fmt.Errorf("Chat text stream is incomplete: %s", truncateString(stream, 1200))
+	}
+	return nil
+}
+
+type chatTextStreamChunk struct {
+	Object  string `json:"object"`
+	Choices []struct {
+		FinishReason *string `json:"finish_reason"`
+		Delta        struct {
+			Content string `json:"content"`
+		} `json:"delta"`
+	} `json:"choices"`
+}
+
+type chatTextStreamState struct {
+	text         strings.Builder
+	finishReason string
+	doneCount    int
+}
+
+func (state *chatTextStreamState) consume(chunk chatTextStreamChunk, data string) error {
+	if chunk.Object != "chat.completion.chunk" {
+		return fmt.Errorf("invalid Chat stream object %q: %s", chunk.Object, data)
+	}
+	for _, choice := range chunk.Choices {
+		state.text.WriteString(choice.Delta.Content)
+		if choice.FinishReason != nil {
+			state.finishReason = *choice.FinishReason
+		}
 	}
 	return nil
 }

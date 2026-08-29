@@ -116,67 +116,73 @@ func decodeAnthropicToolUse(body []byte) (responsesFunctionCall, error) {
 	return call, nil
 }
 
+type anthropicToolStreamEvent struct {
+	Type         string `json:"type"`
+	Index        int    `json:"index"`
+	ContentBlock struct {
+		Type string `json:"type"`
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	} `json:"content_block"`
+	Delta struct {
+		Type        string  `json:"type"`
+		PartialJSON string  `json:"partial_json"`
+		StopReason  *string `json:"stop_reason"`
+	} `json:"delta"`
+}
+
+type anthropicToolStreamState struct {
+	call           responsesFunctionCall
+	stopReason     string
+	blockStopped   bool
+	messageStopped bool
+}
+
 func decodeAnthropicToolUseStream(body []byte) (responsesFunctionCall, error) {
 	stream := string(body)
-	for _, leaked := range []string{"chat.completion.chunk", "data: [DONE]", "event: response."} {
-		if strings.Contains(stream, leaked) {
-			return responsesFunctionCall{}, fmt.Errorf("backend stream format leaked %q: %s", leaked, truncateString(stream, 1200))
-		}
+	if err := rejectStreamFragments(stream, "Anthropic", []string{"chat.completion.chunk", "data: [DONE]", "event: response."}); err != nil {
+		return responsesFunctionCall{}, err
 	}
-	var call responsesFunctionCall
-	stopReason := ""
-	blockStopped := false
-	messageStopped := false
-	for _, frame := range strings.Split(stream, "\n\n") {
-		var data string
-		for _, line := range strings.Split(frame, "\n") {
-			if strings.HasPrefix(line, "data: ") {
-				data = strings.TrimPrefix(line, "data: ")
-				break
-			}
-		}
-		if data == "" {
-			continue
-		}
-		var event struct {
-			Type         string `json:"type"`
-			Index        int    `json:"index"`
-			ContentBlock struct {
-				Type string `json:"type"`
-				ID   string `json:"id"`
-				Name string `json:"name"`
-			} `json:"content_block"`
-			Delta struct {
-				Type        string  `json:"type"`
-				PartialJSON string  `json:"partial_json"`
-				StopReason  *string `json:"stop_reason"`
-			} `json:"delta"`
-		}
+	state := anthropicToolStreamState{}
+	for _, data := range protocolSSEDataFrames(body) {
+		var event anthropicToolStreamEvent
 		if err := json.Unmarshal([]byte(data), &event); err != nil {
 			return responsesFunctionCall{}, err
 		}
-		switch event.Type {
-		case "content_block_start":
-			if event.Index != 0 || event.ContentBlock.Type != "tool_use" {
-				return responsesFunctionCall{}, fmt.Errorf("invalid Anthropic tool block start: %s", data)
-			}
-			call.CallID, call.Name = event.ContentBlock.ID, event.ContentBlock.Name
-		case "content_block_delta":
-			if event.Index != 0 || event.Delta.Type != "input_json_delta" {
-				return responsesFunctionCall{}, fmt.Errorf("invalid Anthropic tool block delta: %s", data)
-			}
-			call.Arguments += event.Delta.PartialJSON
-		case "content_block_stop":
-			blockStopped = event.Index == 0
-		case "message_delta":
-			if event.Delta.StopReason != nil {
-				stopReason = *event.Delta.StopReason
-			}
-		case "message_stop":
-			messageStopped = true
+		if err := state.consume(event, data); err != nil {
+			return responsesFunctionCall{}, err
 		}
 	}
-	if !blockStopped || !messageStopped || stopReason != "tool_use" || call.CallID != "call_mock_lookup" ||
+	return state.result(stream)
+}
+
+func (state *anthropicToolStreamState) consume(event anthropicToolStreamEvent, data string) error {
+	switch event.Type {
+	case "content_block_start":
+		if event.Index != 0 || event.ContentBlock.Type != "tool_use" {
+			return fmt.Errorf("invalid Anthropic tool block start: %s", data)
+		}
+		state.call.CallID, state.call.Name = event.ContentBlock.ID, event.ContentBlock.Name
+	case "content_block_delta":
+		if event.Index != 0 || event.Delta.Type != "input_json_delta" {
+			return fmt.Errorf("invalid Anthropic tool block delta: %s", data)
+		}
+		state.call.Arguments += event.Delta.PartialJSON
+	case "content_block_stop":
+		state.blockStopped = event.Index == 0
+	case "message_delta":
+		if event.Delta.StopReason != nil {
+			state.stopReason = *event.Delta.StopReason
+		}
+	case "message_stop":
+		state.messageStopped = true
+	}
+	return nil
+}
+
+func (state *anthropicToolStreamState) result(stream string) (responsesFunctionCall, error) {
+	call := state.call
+	if !state.blockStopped || !state.messageStopped || state.stopReason != "tool_use" || call.CallID != "call_mock_lookup" ||
 		call.Name != "lookup" || call.Arguments != `{"query":"weather"}` || !json.Valid([]byte(call.Arguments)) {
 		return responsesFunctionCall{}, fmt.Errorf("Anthropic tool stream lifecycle is incomplete: %s", truncateString(stream, 1200))
 	}
@@ -203,43 +209,43 @@ func assertAnthropicText(body []byte, contains string) error {
 
 func assertAnthropicTextStream(body []byte, contains string) error {
 	stream := string(body)
-	var text strings.Builder
-	stopReason := ""
-	messageStopped := false
-	for _, frame := range strings.Split(stream, "\n\n") {
-		var data string
-		for _, line := range strings.Split(frame, "\n") {
-			if strings.HasPrefix(line, "data: ") {
-				data = strings.TrimPrefix(line, "data: ")
-				break
-			}
-		}
-		if data == "" {
-			continue
-		}
-		var event struct {
-			Type  string `json:"type"`
-			Delta struct {
-				Type       string  `json:"type"`
-				Text       string  `json:"text"`
-				StopReason *string `json:"stop_reason"`
-			} `json:"delta"`
-		}
+	state := anthropicTextStreamState{}
+	for _, data := range protocolSSEDataFrames(body) {
+		var event anthropicTextStreamEvent
 		if err := json.Unmarshal([]byte(data), &event); err != nil {
 			return err
 		}
-		if event.Type == "content_block_delta" && event.Delta.Type == "text_delta" {
-			text.WriteString(event.Delta.Text)
-		}
-		if event.Type == "message_delta" && event.Delta.StopReason != nil {
-			stopReason = *event.Delta.StopReason
-		}
-		if event.Type == "message_stop" {
-			messageStopped = true
-		}
+		state.consume(event)
 	}
-	if !messageStopped || stopReason != "end_turn" || !strings.Contains(text.String(), contains) {
+	if !state.messageStopped || state.stopReason != "end_turn" || !strings.Contains(state.text.String(), contains) {
 		return fmt.Errorf("Anthropic text stream is incomplete: %s", truncateString(stream, 1200))
 	}
 	return nil
+}
+
+type anthropicTextStreamEvent struct {
+	Type  string `json:"type"`
+	Delta struct {
+		Type       string  `json:"type"`
+		Text       string  `json:"text"`
+		StopReason *string `json:"stop_reason"`
+	} `json:"delta"`
+}
+
+type anthropicTextStreamState struct {
+	text           strings.Builder
+	stopReason     string
+	messageStopped bool
+}
+
+func (state *anthropicTextStreamState) consume(event anthropicTextStreamEvent) {
+	if event.Type == "content_block_delta" && event.Delta.Type == "text_delta" {
+		state.text.WriteString(event.Delta.Text)
+	}
+	if event.Type == "message_delta" && event.Delta.StopReason != nil {
+		state.stopReason = *event.Delta.StopReason
+	}
+	if event.Type == "message_stop" {
+		state.messageStopped = true
+	}
 }

@@ -34,23 +34,28 @@ func TestProtocolCodecE2EClientMatrixIsClosed(t *testing.T) {
 
 func assertProtocolCodecE2ERequestShape(t *testing.T, path string, request map[string]any) {
 	t.Helper()
+	type requestShape struct {
+		messages  bool
+		input     bool
+		maxTokens bool
+		store     any
+	}
+	wantByPath := map[string]requestShape{
+		"/v1/chat/completions": {messages: true},
+		"/v1/responses":        {input: true, store: false},
+		"/v1/messages":         {messages: true, maxTokens: true},
+	}
+	want, ok := wantByPath[path]
+	if !ok {
+		t.Fatalf("unregistered client path %q", path)
+	}
 	_, hasMessages := request["messages"]
 	_, hasInput := request["input"]
 	_, hasMaxTokens := request["max_tokens"]
-	switch path {
-	case "/v1/chat/completions":
-		if !hasMessages || hasInput || hasMaxTokens {
-			t.Fatalf("Chat request uses the wrong protocol shape: %#v", request)
-		}
-	case "/v1/responses":
-		if hasMessages || !hasInput || hasMaxTokens || request["store"] != false {
-			t.Fatalf("Responses request uses the wrong protocol shape: %#v", request)
-		}
-	case "/v1/messages":
-		if !hasMessages || hasInput || !hasMaxTokens {
-			t.Fatalf("Messages request uses the wrong protocol shape: %#v", request)
-		}
-	default:
-		t.Fatalf("unregistered client path %q", path)
+	got := requestShape{
+		messages: hasMessages, input: hasInput, maxTokens: hasMaxTokens, store: request["store"],
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("request for %s uses the wrong protocol shape: got=%#v want=%#v request=%#v", path, got, want, request)
 	}
 }
