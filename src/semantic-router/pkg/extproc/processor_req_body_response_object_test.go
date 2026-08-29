@@ -243,25 +243,35 @@ func TestMaterializeResponseObjectContextPreservesRetainedToolAndReasoningLifecy
 	if len(request.Messages) != 6 {
 		t.Fatalf("materialized messages = %d, want 6: %+v", len(request.Messages), request.Messages)
 	}
-	call := request.Messages[1].Content[0].ToolCall
+	assertRetainedToolLifecycle(t, request.Messages)
+	assertRetainedReasoningLifecycle(t, request.Messages)
+}
+
+func assertRetainedToolLifecycle(t *testing.T, messages []llmprotocol.Message) {
+	t.Helper()
+	call := messages[1].Content[0].ToolCall
 	if call == nil || call.ID != "call_weather" || call.Name != "lookup_weather" || call.Arguments != `{"city":"Paris"}` {
 		t.Fatalf("retained tool call = %+v", call)
 	}
-	result := request.Messages[2].Content[0].ToolResult
+	result := messages[2].Content[0].ToolResult
 	if result == nil || result.CallID != "call_weather" || result.DeferredLink ||
 		len(result.Content) != 1 || result.Content[0].Text != "sunny" {
 		t.Fatalf("retained tool result = %+v", result)
 	}
-	reasoning := request.Messages[3].Content[0]
+}
+
+func assertRetainedReasoningLifecycle(t *testing.T, messages []llmprotocol.Message) {
+	t.Helper()
+	reasoning := messages[3].Content[0]
 	if reasoning.Kind != llmprotocol.ContentReasoning ||
 		reasoning.Reasoning != llmprotocol.ReasoningScopeSummary ||
 		reasoning.Text != "Use the observation." {
 		t.Fatalf("retained reasoning = %+v", reasoning)
 	}
-	if got := request.Messages[4].Content[0].Text; got != "Paris is sunny." {
+	if got := messages[4].Content[0].Text; got != "Paris is sunny." {
 		t.Fatalf("retained answer = %q", got)
 	}
-	if got := request.Messages[5].Content[0].Text; got != "summarize it" {
+	if got := messages[5].Content[0].Text; got != "summarize it" {
 		t.Fatalf("current message = %q", got)
 	}
 }

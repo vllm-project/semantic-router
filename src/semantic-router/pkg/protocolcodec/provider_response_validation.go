@@ -15,28 +15,12 @@ func validateResponsesOutputItemResource(body json.RawMessage, item responsesIte
 	if err := json.Unmarshal(body, &fields); err != nil {
 		return invalidProviderResponse("invalid_response_item", "Responses output item is invalid")
 	}
-	required := []string{"type"}
-	switch item.Type {
-	case "message":
-		required = append(required, "id", "role", "content", "status")
-		if item.Role != "assistant" {
-			return invalidProviderResponse("invalid_response_role", "Responses output messages must use the assistant role")
-		}
-	case "function_call":
-		required = append(required, "call_id", "name", "arguments")
-	case "reasoning":
-		required = append(required, "id", "summary")
-	default:
-		return invalidProviderResponse("invalid_response_item", "Responses output item type is unsupported")
+	required, err := responsesOutputItemRequiredFields(item)
+	if err != nil {
+		return err
 	}
-	for _, field := range required {
-		value, present := fields[field]
-		if !present || bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
-			return invalidProviderResponse(
-				"invalid_response_item",
-				"Responses output item is missing required field "+field,
-			)
-		}
+	if err := requireNonNullResponseFields(fields, required); err != nil {
+		return err
 	}
 	for _, value := range []struct {
 		name  string
@@ -54,6 +38,37 @@ func validateResponsesOutputItemResource(body json.RawMessage, item responsesIte
 		}
 	}
 	return validateResponsesOutputItemStatus(item)
+}
+
+func responsesOutputItemRequiredFields(item responsesItemWire) ([]string, error) {
+	required := []string{"type"}
+	switch item.Type {
+	case "message":
+		required = append(required, "id", "role", "content", "status")
+		if item.Role != "assistant" {
+			return nil, invalidProviderResponse("invalid_response_role", "Responses output messages must use the assistant role")
+		}
+	case "function_call":
+		required = append(required, "call_id", "name", "arguments")
+	case "reasoning":
+		required = append(required, "id", "summary")
+	default:
+		return nil, invalidProviderResponse("invalid_response_item", "Responses output item type is unsupported")
+	}
+	return required, nil
+}
+
+func requireNonNullResponseFields(fields map[string]json.RawMessage, required []string) error {
+	for _, field := range required {
+		value, present := fields[field]
+		if !present || bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+			return invalidProviderResponse(
+				"invalid_response_item",
+				"Responses output item is missing required field "+field,
+			)
+		}
+	}
+	return nil
 }
 
 // Provider response validation closes value-level protocol contracts before a
@@ -100,6 +115,16 @@ func validChatFinishReason(reason string) bool {
 }
 
 func validateResponsesResponseResource(wire responsesResponseWire, allowNonterminal bool) error {
+	if err := validateResponsesResourceStatus(wire, allowNonterminal); err != nil {
+		return err
+	}
+	if err := validateResponsesIncompleteDetails(wire); err != nil {
+		return err
+	}
+	return validateResponsesResourceError(wire)
+}
+
+func validateResponsesResourceStatus(wire responsesResponseWire, allowNonterminal bool) error {
 	if wire.Object != "" && wire.Object != "response" {
 		return invalidProviderResponse("invalid_responses_object", "Responses object must be response")
 	}
@@ -109,6 +134,10 @@ func validateResponsesResponseResource(wire responsesResponseWire, allowNontermi
 	if !allowNonterminal && (wire.Status == "queued" || wire.Status == "in_progress") {
 		return invalidProviderResponse("nonterminal_responses_resource", "Buffered inference returned a nonterminal Responses resource")
 	}
+	return nil
+}
+
+func validateResponsesIncompleteDetails(wire responsesResponseWire) error {
 	if wire.IncompleteDetails != nil && wire.IncompleteDetails.Reason != "max_output_tokens" &&
 		wire.IncompleteDetails.Reason != "content_filter" {
 		return invalidProviderResponse("invalid_responses_incomplete_reason", "Responses incomplete reason is not recognized")
@@ -119,6 +148,10 @@ func validateResponsesResponseResource(wire responsesResponseWire, allowNontermi
 	if wire.Status != "" && wire.Status != "incomplete" && wire.IncompleteDetails != nil {
 		return invalidProviderResponse("responses_incomplete_status", "Responses incomplete details require incomplete status")
 	}
+	return nil
+}
+
+func validateResponsesResourceError(wire responsesResponseWire) error {
 	if wire.Status == "failed" && wire.Error == nil {
 		return invalidProviderResponse("responses_error_required", "A failed Responses resource requires an error")
 	}
@@ -153,6 +186,13 @@ func validateResponsesOutputItemStatus(item responsesItemWire) error {
 }
 
 func validateAnthropicResponseResource(wire anthropicResponseWire) error {
+	if err := validateAnthropicResponseIdentity(wire); err != nil {
+		return err
+	}
+	return validateAnthropicResponseStop(wire)
+}
+
+func validateAnthropicResponseIdentity(wire anthropicResponseWire) error {
 	if wire.Error != nil {
 		return invalidProviderResponse(
 			"anthropic_transport_error_on_response_path",
@@ -165,6 +205,10 @@ func validateAnthropicResponseResource(wire anthropicResponseWire) error {
 	if wire.Role != "" && wire.Role != "assistant" {
 		return invalidProviderResponse("invalid_anthropic_response_role", "Anthropic response role must be assistant")
 	}
+	return nil
+}
+
+func validateAnthropicResponseStop(wire anthropicResponseWire) error {
 	if wire.StopReason != nil && !validAnthropicStopReason(*wire.StopReason) {
 		return invalidProviderResponse("invalid_anthropic_stop_reason", "Anthropic stop reason is not recognized")
 	}

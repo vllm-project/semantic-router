@@ -106,47 +106,56 @@ func TestToolSelectionMutatesNeutralRequestBeforeEveryProviderEncoding(t *testin
 	}
 	for _, target := range formats {
 		t.Run(string(target), func(t *testing.T) {
-			router, logicalModel := routingTestRouterForFormat(target)
-			request := testNeutralRequest("entrypoint", "What is the weather?")
-			request.Tools = []llmprotocol.Tool{
-				{Name: "lookup_weather", InputSchema: json.RawMessage(`{"type":"object"}`)},
-				{Name: "unrelated_tool", InputSchema: json.RawMessage(`{"type":"object"}`)},
-			}
-			request.ToolChoice = llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceAuto}
-			ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
-			ctx.VSRSelectedDecision = decision
-
-			response, routeErr := router.handleEntrypointModelRouting(
-				request, "entrypoint", decision.Name, entropy.ReasoningDecision{}, logicalModel, ctx,
-			)
-			if routeErr != nil {
-				t.Fatal(routeErr)
-			}
-			if len(request.Tools) != 1 || request.Tools[0].Name != "lookup_weather" || ctx.SemanticRequest != request {
-				t.Fatalf("tool selection did not commit exactly one neutral request: %+v", request.Tools)
-			}
-			body := response.GetRequestBody().GetResponse().GetBodyMutation().GetBody()
-			var wire map[string]any
-			if err := json.Unmarshal(body, &wire); err != nil {
-				t.Fatal(err)
-			}
-			tools, ok := wire["tools"].([]any)
-			if !ok || len(tools) != 1 {
-				t.Fatalf("provider body has unexpected tools: %s", body)
-			}
-			tool, ok := tools[0].(map[string]any)
-			if !ok {
-				t.Fatalf("provider tool is malformed: %s", body)
-			}
-			name, _ := tool["name"].(string)
-			if target == llmprotocol.OpenAIChatV1 {
-				function, _ := tool["function"].(map[string]any)
-				name, _ = function["name"].(string)
-			}
-			if name != "lookup_weather" {
-				t.Fatalf("provider body encoded stale tools: %s", body)
-			}
+			assertToolSelectionForProvider(t, target, decision)
 		})
+	}
+}
+
+func assertToolSelectionForProvider(t *testing.T, target llmprotocol.WireFormat, decision *config.Decision) {
+	t.Helper()
+	router, logicalModel := routingTestRouterForFormat(target)
+	request := testNeutralRequest("entrypoint", "What is the weather?")
+	request.Tools = []llmprotocol.Tool{
+		{Name: "lookup_weather", InputSchema: json.RawMessage(`{"type":"object"}`)},
+		{Name: "unrelated_tool", InputSchema: json.RawMessage(`{"type":"object"}`)},
+	}
+	request.ToolChoice = llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceAuto}
+	ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
+	ctx.VSRSelectedDecision = decision
+	response, routeErr := router.handleEntrypointModelRouting(
+		request, "entrypoint", decision.Name, entropy.ReasoningDecision{}, logicalModel, ctx,
+	)
+	if routeErr != nil {
+		t.Fatal(routeErr)
+	}
+	if len(request.Tools) != 1 || request.Tools[0].Name != "lookup_weather" || ctx.SemanticRequest != request {
+		t.Fatalf("tool selection did not commit exactly one neutral request: %+v", request.Tools)
+	}
+	body := response.GetRequestBody().GetResponse().GetBodyMutation().GetBody()
+	assertProviderToolName(t, target, body, "lookup_weather")
+}
+
+func assertProviderToolName(t *testing.T, target llmprotocol.WireFormat, body []byte, want string) {
+	t.Helper()
+	var wire map[string]any
+	if err := json.Unmarshal(body, &wire); err != nil {
+		t.Fatal(err)
+	}
+	tools, ok := wire["tools"].([]any)
+	if !ok || len(tools) != 1 {
+		t.Fatalf("provider body has unexpected tools: %s", body)
+	}
+	tool, ok := tools[0].(map[string]any)
+	if !ok {
+		t.Fatalf("provider tool is malformed: %s", body)
+	}
+	name, _ := tool["name"].(string)
+	if target == llmprotocol.OpenAIChatV1 {
+		function, _ := tool["function"].(map[string]any)
+		name, _ = function["name"].(string)
+	}
+	if name != want {
+		t.Fatalf("provider body encoded stale tools: %s", body)
 	}
 }
 

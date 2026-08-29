@@ -130,44 +130,60 @@ func RequiredCapabilities(request Request) CapabilitySet {
 }
 
 func requestOptionCapabilities(request Request) CapabilitySet {
-	required := CapabilitySet{}
+	return CapabilitySet{bits: requestTransportCapabilities(request) |
+		requestSamplingCapabilities(request) |
+		requestStateCapabilities(request) |
+		outputOptionCapabilities(request)}
+}
+
+func requestTransportCapabilities(request Request) Capability {
+	var required Capability
 	if request.Stream {
-		required.bits |= CapabilityStreaming
+		required |= CapabilityStreaming
 	}
 	if len(request.Tools) > 0 || request.ToolChoice.Mode != "" && request.ToolChoice.Mode != ToolChoiceNone {
-		required.bits |= CapabilityTools
+		required |= CapabilityTools
 	}
 	if request.ParallelToolCalls != nil && *request.ParallelToolCalls {
-		required.bits |= CapabilityParallelTools
+		required |= CapabilityParallelTools
 	}
 	if request.CandidateCount != nil && *request.CandidateCount > 1 {
-		required.bits |= CapabilityMultipleCandidates
+		required |= CapabilityMultipleCandidates
 	}
+	return required
+}
+
+func requestSamplingCapabilities(request Request) Capability {
+	var required Capability
 	if request.Sampling.TopK != nil {
-		required.bits |= CapabilitySamplingTopK
+		required |= CapabilitySamplingTopK
 	}
 	if request.Sampling.Seed != nil {
-		required.bits |= CapabilitySamplingSeed
+		required |= CapabilitySamplingSeed
 	}
 	if request.Sampling.FrequencyPenalty != nil || request.Sampling.PresencePenalty != nil {
-		required.bits |= CapabilitySamplingPenalties
+		required |= CapabilitySamplingPenalties
 	}
 	if len(request.Sampling.Stop) > 0 {
-		required.bits |= CapabilityStopSequences
+		required |= CapabilityStopSequences
 	}
+	return required
+}
+
+func requestStateCapabilities(request Request) Capability {
+	var required Capability
 	if len(request.Metadata) > 0 {
-		required.bits |= CapabilityRequestMetadata
+		required |= CapabilityRequestMetadata
 	}
 	if request.Store != nil {
-		required.bits |= CapabilityRequestStorage
+		required |= CapabilityRequestStorage
 	}
 	if request.AutoStore != nil {
-		required.bits |= CapabilityAutomaticStorage
+		required |= CapabilityAutomaticStorage
 	}
 	if request.PreviousResponseID != "" || request.ConversationID != "" || request.Truncation != "" {
-		required.bits |= CapabilityConversationState
+		required |= CapabilityConversationState
 	}
-	required.bits |= outputOptionCapabilities(request)
 	return required
 }
 
@@ -266,69 +282,81 @@ func capabilityForRequestContent(content Content) Capability {
 	if content.Cache != nil {
 		cache = CapabilityCacheDirectives
 	}
+	if capability, found := requestContentCapability[content.Kind]; found {
+		return capability | cache
+	}
 	switch content.Kind {
-	case ContentText, ContentRefusal:
-		return CapabilityText | cache
-	case ContentImage:
-		return CapabilityImageInput | cache
-	case ContentAudio:
-		return CapabilityAudioInput | cache
-	case ContentVideo:
-		return CapabilityVideoInput | cache
-	case ContentFile:
-		return CapabilityFileInput | cache
-	case ContentToolCall:
-		return CapabilityTools | cache
 	case ContentToolResult:
-		capabilities := CapabilityTools | cache
-		if content.ToolResult != nil {
-			for _, nested := range content.ToolResult.Content {
-				capabilities |= capabilityForRequestContent(nested)
-			}
-		}
-		return capabilities
+		return requestToolResultCapabilities(content.ToolResult) | cache
 	case ContentReasoning:
-		capabilities := CapabilityText | CapabilityReasoning | cache
-		if content.Signature != "" {
-			capabilities |= CapabilityReasoningSignature
-		}
-		return capabilities
+		return reasoningContentCapabilities(content.Signature) | cache
 	default:
 		return 0
 	}
 }
 
 func capabilityForResponseContent(content Content) Capability {
+	if capability, found := responseContentCapability[content.Kind]; found {
+		return capability
+	}
 	switch content.Kind {
-	case ContentText, ContentRefusal:
-		return CapabilityText
-	case ContentImage:
-		return CapabilityImageOutput
-	case ContentAudio:
-		return CapabilityAudioOutput
-	case ContentVideo:
-		return CapabilityVideoOutput
-	case ContentFile:
-		return CapabilityFileOutput
-	case ContentToolCall:
-		return CapabilityTools
 	case ContentToolResult:
-		capabilities := CapabilityTools
-		if content.ToolResult != nil {
-			for _, nested := range content.ToolResult.Content {
-				capabilities |= capabilityForResponseContent(nested)
-			}
-		}
-		return capabilities
+		return responseToolResultCapabilities(content.ToolResult)
 	case ContentReasoning:
-		capabilities := CapabilityText | CapabilityReasoning
-		if content.Signature != "" {
-			capabilities |= CapabilityReasoningSignature
-		}
-		return capabilities
+		return reasoningContentCapabilities(content.Signature)
 	default:
 		return 0
 	}
+}
+
+var requestContentCapability = map[ContentKind]Capability{
+	ContentText:     CapabilityText,
+	ContentRefusal:  CapabilityText,
+	ContentImage:    CapabilityImageInput,
+	ContentAudio:    CapabilityAudioInput,
+	ContentVideo:    CapabilityVideoInput,
+	ContentFile:     CapabilityFileInput,
+	ContentToolCall: CapabilityTools,
+}
+
+var responseContentCapability = map[ContentKind]Capability{
+	ContentText:     CapabilityText,
+	ContentRefusal:  CapabilityText,
+	ContentImage:    CapabilityImageOutput,
+	ContentAudio:    CapabilityAudioOutput,
+	ContentVideo:    CapabilityVideoOutput,
+	ContentFile:     CapabilityFileOutput,
+	ContentToolCall: CapabilityTools,
+}
+
+func requestToolResultCapabilities(result *ToolResult) Capability {
+	capabilities := CapabilityTools
+	if result == nil {
+		return capabilities
+	}
+	for _, nested := range result.Content {
+		capabilities |= capabilityForRequestContent(nested)
+	}
+	return capabilities
+}
+
+func responseToolResultCapabilities(result *ToolResult) Capability {
+	capabilities := CapabilityTools
+	if result == nil {
+		return capabilities
+	}
+	for _, nested := range result.Content {
+		capabilities |= capabilityForResponseContent(nested)
+	}
+	return capabilities
+}
+
+func reasoningContentCapabilities(signature string) Capability {
+	capabilities := CapabilityText | CapabilityReasoning
+	if signature != "" {
+		capabilities |= CapabilityReasoningSignature
+	}
+	return capabilities
 }
 
 func ParseCapabilities(names []string) (CapabilitySet, error) {

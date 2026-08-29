@@ -124,35 +124,40 @@ func FuzzBuiltinStreamMatrixArbitraryChunkingNeverPanics(f *testing.F) {
 		stride := int(strideSeed) + 1
 		for _, source := range builtinFormats {
 			for _, target := range builtinFormats {
-				stream, err := engine.NewStream(source, target, llmprotocol.StreamContext{
-					Context: context.Background(), PublicModel: "public-model",
-				})
-				if err != nil {
-					continue
-				}
-				var frames [][]byte
-				pushFailed := false
-				for offset := 0; offset < len(body); {
-					end := offset + stride
-					if end > len(body) {
-						end = len(body)
-					}
-					output, _, _, err := stream.Push(body[offset:end])
-					frames = append(frames, output...)
-					if err != nil {
-						pushFailed = true
-						break
-					}
-					offset = end
-				}
-				finalFrames, _, _, finalErr := stream.Finalize(nil)
-				frames = append(frames, finalFrames...)
-				if !pushFailed && finalErr == nil {
-					assertFuzzTargetStreamDecodes(t, engine, target, frames)
-				}
+				fuzzArbitraryStreamChunks(t, engine, source, target, body, stride)
 			}
 		}
 	})
+}
+
+func fuzzArbitraryStreamChunks(
+	t *testing.T,
+	engine *Engine,
+	source, target llmprotocol.WireFormat,
+	body []byte,
+	stride int,
+) {
+	stream, err := engine.NewStream(source, target, llmprotocol.StreamContext{Context: context.Background(), PublicModel: "public-model"})
+	if err != nil {
+		return
+	}
+	var frames [][]byte
+	pushFailed := false
+	for offset := 0; offset < len(body); {
+		end := min(offset+stride, len(body))
+		output, _, _, err := stream.Push(body[offset:end])
+		frames = append(frames, output...)
+		if err != nil {
+			pushFailed = true
+			break
+		}
+		offset = end
+	}
+	finalFrames, _, _, finalErr := stream.Finalize(nil)
+	frames = append(frames, finalFrames...)
+	if !pushFailed && finalErr == nil {
+		assertFuzzTargetStreamDecodes(t, engine, target, frames)
+	}
 }
 
 func assertFuzzTargetStreamDecodes(
@@ -235,27 +240,32 @@ func addGoldenCapabilityBodiesAsFuzzSeeds(f *testing.F, operation string) {
 		if input.Operation != operation {
 			continue
 		}
-		if operation == "stream" && input.Stream != nil {
-			f.Add([]byte(strings.Join(input.Stream.Chunks, "")))
+		addCapabilityInputSeeds(f, operation, path, input)
+	}
+}
+
+func addCapabilityInputSeeds(f *testing.F, operation, path string, input goldenCapabilityInput) {
+	f.Helper()
+	if operation == "stream" && input.Stream != nil {
+		f.Add([]byte(strings.Join(input.Stream.Chunks, "")))
+		return
+	}
+	if len(input.Cases) == 0 {
+		if len(input.Body) > 0 {
+			f.Add([]byte(input.Body))
+		}
+		return
+	}
+	for _, testCase := range input.Cases {
+		if operation == "stream" && testCase.Stream != nil {
+			f.Add([]byte(strings.Join(testCase.Stream.Chunks, "")))
 			continue
 		}
-		if len(input.Cases) == 0 {
-			if len(input.Body) > 0 {
-				f.Add([]byte(input.Body))
-			}
-			continue
+		body := testCase.Body
+		if len(body) == 0 {
+			body = capabilityFuzzSeedPatch(f, path, input.Base, testCase.Patch)
 		}
-		for _, testCase := range input.Cases {
-			if operation == "stream" && testCase.Stream != nil {
-				f.Add([]byte(strings.Join(testCase.Stream.Chunks, "")))
-				continue
-			}
-			body := testCase.Body
-			if len(body) == 0 {
-				body = capabilityFuzzSeedPatch(f, path, input.Base, testCase.Patch)
-			}
-			f.Add([]byte(body))
-		}
+		f.Add([]byte(body))
 	}
 }
 

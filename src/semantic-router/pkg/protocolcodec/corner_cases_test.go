@@ -174,114 +174,104 @@ func TestBufferedBodyLimitIsInclusiveAcrossEveryProtocol(t *testing.T) {
 }
 
 func TestStreamingBodyLimitIsCumulativeAndInclusiveAcrossEveryProtocol(t *testing.T) {
-	for _, source := range builtinFormats {
-		payload := streamFixture(source)
-		for _, target := range builtinFormats {
-			t.Run(string(source)+"_to_"+string(target), func(t *testing.T) {
-				policy := llmprotocol.DefaultPolicy()
-				policy.Limits.BodyBytes = len(payload)
-				engine, err := NewEngine(NewBuiltinRegistry(), policy)
-				if err != nil {
-					t.Fatal(err)
-				}
-				stream, err := engine.NewStream(source, target, llmprotocol.StreamContext{
-					Context: context.Background(), PublicModel: "public-model", ProviderModel: "provider-model",
-				})
-				if err != nil {
-					t.Fatal(err)
-				}
-				for _, chunk := range splitBytesAt(payload, len(payload)/2) {
-					if _, _, _, err := stream.Push(chunk); err != nil {
-						t.Fatalf("stream exactly at cumulative body limit was rejected: %v", err)
-					}
-				}
+	forEachBuiltinFormatPair(t, assertStreamingBodyLimit)
+}
 
-				policy.Limits.BodyBytes = len(payload) - 1
-				engine, err = NewEngine(NewBuiltinRegistry(), policy)
-				if err != nil {
-					t.Fatal(err)
-				}
-				stream, err = engine.NewStream(source, target, llmprotocol.StreamContext{
-					Context: context.Background(), PublicModel: "public-model", ProviderModel: "provider-model",
-				})
-				if err != nil {
-					t.Fatal(err)
-				}
-				_, _, _, err = stream.Push(payload)
-				assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, "upstream_body_limit")
-			})
+func assertStreamingBodyLimit(t *testing.T, source, target llmprotocol.WireFormat) {
+	t.Helper()
+	payload := streamFixture(source)
+	policy := llmprotocol.DefaultPolicy()
+	policy.Limits.BodyBytes = len(payload)
+	stream := newTestStream(t, policy, source, target)
+	for _, chunk := range splitBytesAt(payload, len(payload)/2) {
+		if _, _, _, err := stream.Push(chunk); err != nil {
+			t.Fatalf("stream exactly at cumulative body limit was rejected: %v", err)
 		}
 	}
+	policy.Limits.BodyBytes--
+	stream = newTestStream(t, policy, source, target)
+	_, _, _, err := stream.Push(payload)
+	assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, "upstream_body_limit")
+}
+
+func newTestStream(t *testing.T, policy llmprotocol.Policy, source, target llmprotocol.WireFormat) *StreamEngine {
+	t.Helper()
+	engine, err := NewEngine(NewBuiltinRegistry(), policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stream, err := engine.NewStream(source, target, llmprotocol.StreamContext{
+		Context: context.Background(), PublicModel: "public-model", ProviderModel: "provider-model",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return stream
 }
 
 func TestJSONDepthLimitIsInclusiveAcrossEveryProtocolSurface(t *testing.T) {
 	for _, format := range builtinFormats {
-		t.Run(string(format)+"/request", func(t *testing.T) {
-			body := requestFixture(format)
-			depth := maximumJSONDepth(t, body)
-			engine := engineWithJSONDepth(t, depth)
-			if _, _, _, err := engine.DecodeRequest(format, body); err != nil {
-				t.Fatalf("request exactly at JSON depth limit was rejected: %v", err)
-			}
-			engine = engineWithJSONDepth(t, depth-1)
-			_, _, _, err := engine.DecodeRequest(format, body)
-			assertProtocolError(t, err, llmprotocol.ErrorInvalidRequest, "invalid_json")
-		})
-
-		t.Run(string(format)+"/response", func(t *testing.T) {
-			body := responseFixture(format)
-			depth := maximumJSONDepth(t, body)
-			engine := engineWithJSONDepth(t, depth)
-			if _, _, _, err := engine.DecodeResponse(format, body); err != nil {
-				t.Fatalf("response exactly at JSON depth limit was rejected: %v", err)
-			}
-			engine = engineWithJSONDepth(t, depth-1)
-			_, _, _, err := engine.DecodeResponse(format, body)
-			assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_json")
-		})
-
-		t.Run(string(format)+"/transport-error", func(t *testing.T) {
-			body := transportErrorFixture(format)
-			depth := maximumJSONDepth(t, body)
-			engine := engineWithJSONDepth(t, depth)
-			if _, err := engine.TranslateTransportError(format, format, body, nil); err != nil {
-				t.Fatalf("transport error exactly at JSON depth limit was rejected: %v", err)
-			}
-			engine = engineWithJSONDepth(t, depth-1)
-			_, err := engine.TranslateTransportError(format, format, body, nil)
-			assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_json")
-		})
-
-		payload := streamFixture(format)
-		depth := maximumSSEJSONDepth(t, payload)
-		for _, target := range builtinFormats {
-			t.Run(string(format)+"/stream-to-"+string(target), func(t *testing.T) {
-				engine := engineWithJSONDepth(t, depth)
-				stream, err := engine.NewStream(format, target, llmprotocol.StreamContext{
-					Context: context.Background(), PublicModel: "public-model", ProviderModel: "provider-model",
-				})
-				if err != nil {
-					t.Fatal(err)
-				}
-				if _, _, _, err := stream.Push(payload); err != nil {
-					t.Fatalf("stream exactly at JSON depth limit was rejected: %v", err)
-				}
-				if _, _, _, err := stream.Finalize(nil); err != nil {
-					t.Fatalf("stream exactly at JSON depth limit could not finalize: %v", err)
-				}
-
-				engine = engineWithJSONDepth(t, depth-1)
-				stream, err = engine.NewStream(format, target, llmprotocol.StreamContext{
-					Context: context.Background(), PublicModel: "public-model", ProviderModel: "provider-model",
-				})
-				if err != nil {
-					t.Fatal(err)
-				}
-				_, _, _, err = stream.Push(payload)
-				assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_json")
-			})
-		}
+		assertBufferedJSONDepthSurfaces(t, format)
 	}
+	forEachBuiltinFormatPair(t, assertStreamJSONDepth)
+}
+
+func assertBufferedJSONDepthSurfaces(t *testing.T, format llmprotocol.WireFormat) {
+	t.Helper()
+	t.Run(string(format)+"/request", func(t *testing.T) { assertRequestJSONDepth(t, format) })
+	t.Run(string(format)+"/response", func(t *testing.T) { assertResponseJSONDepth(t, format) })
+	t.Run(string(format)+"/transport-error", func(t *testing.T) { assertTransportErrorJSONDepth(t, format) })
+}
+
+func assertRequestJSONDepth(t *testing.T, format llmprotocol.WireFormat) {
+	body := requestFixture(format)
+	depth := maximumJSONDepth(t, body)
+	if _, _, _, err := engineWithJSONDepth(t, depth).DecodeRequest(format, body); err != nil {
+		t.Fatalf("request exactly at JSON depth limit was rejected: %v", err)
+	}
+	_, _, _, err := engineWithJSONDepth(t, depth-1).DecodeRequest(format, body)
+	assertProtocolError(t, err, llmprotocol.ErrorInvalidRequest, "invalid_json")
+}
+
+func assertResponseJSONDepth(t *testing.T, format llmprotocol.WireFormat) {
+	body := responseFixture(format)
+	depth := maximumJSONDepth(t, body)
+	if _, _, _, err := engineWithJSONDepth(t, depth).DecodeResponse(format, body); err != nil {
+		t.Fatalf("response exactly at JSON depth limit was rejected: %v", err)
+	}
+	_, _, _, err := engineWithJSONDepth(t, depth-1).DecodeResponse(format, body)
+	assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_json")
+}
+
+func assertTransportErrorJSONDepth(t *testing.T, format llmprotocol.WireFormat) {
+	body := transportErrorFixture(format)
+	depth := maximumJSONDepth(t, body)
+	if _, err := engineWithJSONDepth(t, depth).TranslateTransportError(format, format, body, nil); err != nil {
+		t.Fatalf("transport error exactly at JSON depth limit was rejected: %v", err)
+	}
+	_, err := engineWithJSONDepth(t, depth-1).TranslateTransportError(format, format, body, nil)
+	assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_json")
+}
+
+func assertStreamJSONDepth(t *testing.T, source, target llmprotocol.WireFormat) {
+	payload := streamFixture(source)
+	depth := maximumSSEJSONDepth(t, payload)
+	stream := newTestStream(t, policyWithJSONDepth(depth), source, target)
+	if _, _, _, err := stream.Push(payload); err != nil {
+		t.Fatalf("stream exactly at JSON depth limit was rejected: %v", err)
+	}
+	if _, _, _, err := stream.Finalize(nil); err != nil {
+		t.Fatalf("stream exactly at JSON depth limit could not finalize: %v", err)
+	}
+	stream = newTestStream(t, policyWithJSONDepth(depth-1), source, target)
+	_, _, _, err := stream.Push(payload)
+	assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_json")
+}
+
+func policyWithJSONDepth(depth int) llmprotocol.Policy {
+	policy := llmprotocol.DefaultPolicy()
+	policy.Limits.JSONDepth = depth
+	return policy
 }
 
 func engineWithJSONDepth(t *testing.T, depth int) *Engine {
@@ -364,143 +354,160 @@ func TestValidFramesBeforeMalformedFrameAreNotDroppedAcrossEveryProtocolPair(t *
 		),
 	}
 	engine := NewBuiltinEngine()
-	for _, source := range builtinFormats {
-		for _, target := range builtinFormats {
-			t.Run(string(source)+"/"+string(target), func(t *testing.T) {
-				stream, err := engine.NewStream(source, target, llmprotocol.StreamContext{
-					Context: context.Background(), PublicModel: "public-model",
-				})
-				if err != nil {
-					t.Fatal(err)
-				}
-				payload := append(append([]byte(nil), partial[source]...), []byte("data: {\n\n")...)
-				frames, events, _, err := stream.Push(payload)
-				if err == nil {
-					t.Fatal("malformed trailing frame was accepted")
-				}
-				if len(frames) == 0 || !bytes.Contains(bytes.Join(frames, nil), []byte("partial")) {
-					t.Fatalf("valid public prefix was dropped: %q", bytes.Join(frames, nil))
-				}
-				foundDelta := false
-				for _, event := range events {
-					if event.Type == llmprotocol.EventOutputTextDelta && event.Delta == "partial" {
-						foundDelta = true
-					}
-				}
-				if !foundDelta {
-					t.Fatalf("valid semantic prefix was dropped: %+v", events)
-				}
-				var first *llmprotocol.ProtocolError
-				if !errors.As(err, &first) {
-					t.Fatalf("first failure = %T %v", err, err)
-				}
-				_, _, _, repeatedErr := stream.Push([]byte("data: {}\n\n"))
-				var repeated *llmprotocol.ProtocolError
-				if !errors.As(repeatedErr, &repeated) || repeated.Code != first.Code || repeated.Category != first.Category {
-					t.Fatalf("poisoned stream failure changed: first=%+v repeated=%T %v", first, repeatedErr, repeatedErr)
-				}
-			})
+	forEachBuiltinFormatPair(t, func(t *testing.T, source, target llmprotocol.WireFormat) {
+		assertValidPrefixBeforeMalformedFrame(t, engine, source, target, partial[source])
+	})
+}
+
+func assertValidPrefixBeforeMalformedFrame(t *testing.T, engine *Engine, source, target llmprotocol.WireFormat, prefix []byte) {
+	t.Helper()
+	stream, err := engine.NewStream(source, target, llmprotocol.StreamContext{Context: context.Background(), PublicModel: "public-model"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := append(append([]byte(nil), prefix...), []byte("data: {\n\n")...)
+	frames, events, _, pushErr := stream.Push(payload)
+	if pushErr == nil {
+		t.Fatal("malformed trailing frame was accepted")
+	}
+	if len(frames) == 0 || !bytes.Contains(bytes.Join(frames, nil), []byte("partial")) {
+		t.Fatalf("valid public prefix was dropped: %q", bytes.Join(frames, nil))
+	}
+	if !containsTextDelta(events, "partial") {
+		t.Fatalf("valid semantic prefix was dropped: %+v", events)
+	}
+	assertPoisonedStreamErrorStable(t, stream, pushErr)
+}
+
+func containsTextDelta(events []llmprotocol.Event, want string) bool {
+	for _, event := range events {
+		if event.Type == llmprotocol.EventOutputTextDelta && event.Delta == want {
+			return true
 		}
+	}
+	return false
+}
+
+func assertPoisonedStreamErrorStable(t *testing.T, stream *StreamEngine, firstErr error) {
+	t.Helper()
+	var first *llmprotocol.ProtocolError
+	if !errors.As(firstErr, &first) {
+		t.Fatalf("first failure = %T %v", firstErr, firstErr)
+	}
+	_, _, _, repeatedErr := stream.Push([]byte("data: {}\n\n"))
+	var repeated *llmprotocol.ProtocolError
+	if !errors.As(repeatedErr, &repeated) || repeated.Code != first.Code || repeated.Category != first.Category {
+		t.Fatalf("poisoned stream failure changed: first=%+v repeated=%T %v", first, repeatedErr, repeatedErr)
 	}
 }
 
 func TestMalformedDataAfterSuccessTerminalCannotPublishSuccess(t *testing.T) {
 	engine := NewBuiltinEngine()
-	for _, source := range builtinFormats {
-		for _, target := range builtinFormats {
-			t.Run(string(source)+"/"+string(target), func(t *testing.T) {
-				stream, err := engine.NewStream(source, target, llmprotocol.StreamContext{
-					Context: context.Background(), PublicModel: "public-model",
-				})
-				if err != nil {
-					t.Fatal(err)
-				}
-				payload := append(append([]byte(nil), streamFixture(source)...), []byte("data: {\n\n")...)
-				frames, events, _, pushErr := stream.Push(payload)
-				if pushErr == nil {
-					t.Fatal("data after terminal was accepted")
-				}
-				for _, event := range events {
-					if event.Type == llmprotocol.EventResponseCompleted {
-						t.Fatalf("invalid source published a successful semantic terminal: %+v", events)
-					}
-				}
-				wire := bytes.Join(frames, nil)
-				assertNoSuccessfulStreamTerminal(t, target, wire)
-				terminalFrames, terminalEvents, _, finalizeErr := stream.Finalize(pushErr)
-				if finalizeErr != nil {
-					t.Fatal(finalizeErr)
-				}
-				wire = append(wire, bytes.Join(terminalFrames, nil)...)
-				assertNoSuccessfulStreamTerminal(t, target, wire)
-				for _, event := range terminalEvents {
-					if event.Type == llmprotocol.EventResponseCompleted {
-						t.Fatalf("invalid source finalized as success: %+v", terminalEvents)
-					}
-				}
-				if !bytes.Contains(wire, []byte("stream")) {
-					t.Fatalf("public failure terminal is missing: %s", wire)
-				}
-			})
+	forEachBuiltinFormatPair(t, func(t *testing.T, source, target llmprotocol.WireFormat) {
+		assertMalformedDataAfterTerminal(t, engine, source, target)
+	})
+}
+
+func assertMalformedDataAfterTerminal(t *testing.T, engine *Engine, source, target llmprotocol.WireFormat) {
+	t.Helper()
+	stream, err := engine.NewStream(source, target, llmprotocol.StreamContext{Context: context.Background(), PublicModel: "public-model"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := append(append([]byte(nil), streamFixture(source)...), []byte("data: {\n\n")...)
+	frames, events, _, pushErr := stream.Push(payload)
+	if pushErr == nil {
+		t.Fatal("data after terminal was accepted")
+	}
+	assertNoCompletedEvent(t, events, "invalid source published a successful semantic terminal")
+	wire := bytes.Join(frames, nil)
+	assertNoSuccessfulStreamTerminal(t, target, wire)
+	terminalFrames, terminalEvents, _, finalizeErr := stream.Finalize(pushErr)
+	if finalizeErr != nil {
+		t.Fatal(finalizeErr)
+	}
+	wire = append(wire, bytes.Join(terminalFrames, nil)...)
+	assertNoSuccessfulStreamTerminal(t, target, wire)
+	assertNoCompletedEvent(t, terminalEvents, "invalid source finalized as success")
+	if !bytes.Contains(wire, []byte("stream")) {
+		t.Fatalf("public failure terminal is missing: %s", wire)
+	}
+}
+
+func assertNoCompletedEvent(t *testing.T, events []llmprotocol.Event, message string) {
+	t.Helper()
+	for _, event := range events {
+		if event.Type == llmprotocol.EventResponseCompleted {
+			t.Fatalf("%s: %+v", message, events)
 		}
 	}
 }
 
 func TestTransportFailureAfterProviderSuccessSuppressesDeferredTerminal(t *testing.T) {
-	reasons := []struct {
-		name    string
-		reason  error
-		message string
-	}{
+	reasons := []streamFinalizationCase{
 		{name: "canceled", reason: context.Canceled, message: "stream was canceled"},
 		{name: "deadline", reason: context.DeadlineExceeded, message: "stream deadline was exceeded"},
 	}
 	engine := NewBuiltinEngine()
-	for _, source := range builtinFormats {
-		for _, target := range builtinFormats {
-			for _, testCase := range reasons {
-				t.Run(string(source)+"/"+string(target)+"/"+testCase.name, func(t *testing.T) {
-					stream, err := engine.NewStream(source, target, llmprotocol.StreamContext{
-						Context: context.Background(), PublicModel: "public-model", ProviderModel: "provider-model",
-					})
-					if err != nil {
-						t.Fatal(err)
-					}
-					frames, events, _, err := stream.Push(streamFixture(source))
-					if err != nil {
-						t.Fatal(err)
-					}
-					for _, event := range events {
-						if event.Type == llmprotocol.EventResponseCompleted {
-							t.Fatalf("provider success was not held until HTTP EOS: %+v", events)
-						}
-					}
-					assertNoSuccessfulStreamTerminal(t, target, bytes.Join(frames, nil))
-
-					finalFrames, finalEvents, _, finalizeErr := stream.Finalize(testCase.reason)
-					if finalizeErr != nil {
-						t.Fatal(finalizeErr)
-					}
-					failed := false
-					for _, event := range finalEvents {
-						if event.Type == llmprotocol.EventResponseCompleted {
-							t.Fatalf("transport failure released provider success: %+v", finalEvents)
-						}
-						if event.Type == llmprotocol.EventResponseFailed && event.Error != nil {
-							failed = event.Error.Message == testCase.message && event.Failure == llmprotocol.FailureTransport
-						}
-					}
-					if !failed {
-						t.Fatalf("transport failure has no matching neutral terminal: %+v", finalEvents)
-					}
-					wire := append(bytes.Join(frames, nil), bytes.Join(finalFrames, nil)...)
-					assertNoSuccessfulStreamTerminal(t, target, wire)
-					if !bytes.Contains(wire, []byte(testCase.message)) {
-						t.Fatalf("public %s failure terminal is missing: %s", testCase.name, wire)
-					}
-				})
-			}
+	forEachBuiltinFormatPair(t, func(t *testing.T, source, target llmprotocol.WireFormat) {
+		for _, testCase := range reasons {
+			t.Run(testCase.name, func(t *testing.T) {
+				assertTransportFailureAfterSuccess(t, engine, source, target, testCase)
+			})
 		}
+	})
+}
+
+type streamFinalizationCase struct {
+	name    string
+	reason  error
+	message string
+}
+
+func assertTransportFailureAfterSuccess(
+	t *testing.T,
+	engine *Engine,
+	source, target llmprotocol.WireFormat,
+	testCase streamFinalizationCase,
+) {
+	t.Helper()
+	stream, err := engine.NewStream(source, target, llmprotocol.StreamContext{
+		Context: context.Background(), PublicModel: "public-model", ProviderModel: "provider-model",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	frames, events, _, err := stream.Push(streamFixture(source))
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertNoCompletedEvent(t, events, "provider success was not held until HTTP EOS")
+	assertNoSuccessfulStreamTerminal(t, target, bytes.Join(frames, nil))
+	finalFrames, finalEvents, _, finalizeErr := stream.Finalize(testCase.reason)
+	if finalizeErr != nil {
+		t.Fatal(finalizeErr)
+	}
+	assertTransportFailureEvent(t, finalEvents, testCase.message)
+	wire := append(bytes.Join(frames, nil), bytes.Join(finalFrames, nil)...)
+	assertNoSuccessfulStreamTerminal(t, target, wire)
+	if !bytes.Contains(wire, []byte(testCase.message)) {
+		t.Fatalf("public %s failure terminal is missing: %s", testCase.name, wire)
+	}
+}
+
+func assertTransportFailureEvent(t *testing.T, events []llmprotocol.Event, message string) {
+	t.Helper()
+	failed := false
+	for _, event := range events {
+		if event.Type == llmprotocol.EventResponseCompleted {
+			t.Fatalf("transport failure released provider success: %+v", events)
+		}
+		if event.Type == llmprotocol.EventResponseFailed && event.Error != nil {
+			failed = event.Error.Message == message && event.Failure == llmprotocol.FailureTransport
+		}
+	}
+	if !failed {
+		t.Fatalf("transport failure has no matching neutral terminal: %+v", events)
 	}
 }
 
@@ -601,48 +608,46 @@ func TestEventStreamEncoderIsPoisonedByItsFirstInvalidEvent(t *testing.T) {
 func TestDeferredTerminalMutationFailurePublishesNoSuccessAcrossProtocolMatrix(t *testing.T) {
 	mutationFailure := errors.New("terminal mutation rejected")
 	engine := NewBuiltinEngine()
-	for _, source := range builtinFormats {
-		for _, target := range builtinFormats {
-			t.Run(string(source)+"/"+string(target), func(t *testing.T) {
-				stream, err := engine.NewStreamWithMutation(
-					source,
-					target,
-					llmprotocol.StreamContext{Context: context.Background(), PublicModel: "public-model"},
-					func(event *llmprotocol.Event) error {
-						if event.Type == llmprotocol.EventResponseCompleted {
-							return mutationFailure
-						}
-						return nil
-					},
-				)
-				if err != nil {
-					t.Fatal(err)
-				}
-				frames, events, _, err := stream.Push(streamFixture(source))
-				if err != nil {
-					t.Fatal(err)
-				}
-				for _, event := range events {
-					if event.Type == llmprotocol.EventResponseCompleted {
-						t.Fatalf("completion was not deferred: %+v", events)
-					}
-				}
-				finalFrames, finalEvents, _, finalizeErr := stream.Finalize(nil)
-				if !errors.Is(finalizeErr, mutationFailure) {
-					t.Fatalf("terminal mutation failure = %T %v", finalizeErr, finalizeErr)
-				}
-				for _, event := range finalEvents {
-					if event.Type == llmprotocol.EventResponseCompleted {
-						t.Fatalf("failed terminal mutation returned success: %+v", finalEvents)
-					}
-				}
-				wire := append(bytes.Join(frames, nil), bytes.Join(finalFrames, nil)...)
-				assertNoSuccessfulStreamTerminal(t, target, wire)
-				if !bytes.Contains(wire, []byte("stream")) {
-					t.Fatalf("terminal mutation failure has no public error: %s", wire)
-				}
-			})
-		}
+	forEachBuiltinFormatPair(t, func(t *testing.T, source, target llmprotocol.WireFormat) {
+		assertDeferredTerminalMutationFailure(t, engine, source, target, mutationFailure)
+	})
+}
+
+func assertDeferredTerminalMutationFailure(
+	t *testing.T,
+	engine *Engine,
+	source, target llmprotocol.WireFormat,
+	mutationFailure error,
+) {
+	t.Helper()
+	stream, err := engine.NewStreamWithMutation(
+		source,
+		target,
+		llmprotocol.StreamContext{Context: context.Background(), PublicModel: "public-model"},
+		func(event *llmprotocol.Event) error {
+			if event.Type == llmprotocol.EventResponseCompleted {
+				return mutationFailure
+			}
+			return nil
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	frames, events, _, err := stream.Push(streamFixture(source))
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertNoCompletedEvent(t, events, "completion was not deferred")
+	finalFrames, finalEvents, _, finalizeErr := stream.Finalize(nil)
+	if !errors.Is(finalizeErr, mutationFailure) {
+		t.Fatalf("terminal mutation failure = %T %v", finalizeErr, finalizeErr)
+	}
+	assertNoCompletedEvent(t, finalEvents, "failed terminal mutation returned success")
+	wire := append(bytes.Join(frames, nil), bytes.Join(finalFrames, nil)...)
+	assertNoSuccessfulStreamTerminal(t, target, wire)
+	if !bytes.Contains(wire, []byte("stream")) {
+		t.Fatalf("terminal mutation failure has no public error: %s", wire)
 	}
 }
 
@@ -865,35 +870,40 @@ func TestChatToolOnlyStreamDoesNotCreateEmptyTextItem(t *testing.T) {
 	engine := NewBuiltinEngine()
 	for _, target := range []llmprotocol.WireFormat{llmprotocol.OpenAIResponsesV1, llmprotocol.AnthropicMessagesV1} {
 		t.Run(string(target), func(t *testing.T) {
-			stream, err := engine.NewStream(
-				llmprotocol.OpenAIChatV1,
-				target,
-				llmprotocol.StreamContext{Context: context.Background(), PublicModel: "public-model", ProviderModel: "provider-model"},
-			)
-			if err != nil {
-				t.Fatal(err)
-			}
-			frames, events, _, err := stream.Push(payload)
-			if err != nil {
-				t.Fatal(err)
-			}
-			started := 0
-			for _, event := range events {
-				if event.Type == llmprotocol.EventOutputItemStarted {
-					started++
-					if event.ToolCall == nil {
-						t.Fatalf("tool-only stream created a non-tool output: %+v", event)
-					}
-				}
-			}
-			if started != 1 {
-				t.Fatalf("started items = %d, want 1", started)
-			}
-			output := bytes.Join(frames, nil)
-			if !bytes.Contains(output, []byte(`"index":0`)) && !bytes.Contains(output, []byte(`"output_index":0`)) {
-				t.Fatalf("target stream did not start at wire index zero: %s", output)
-			}
+			assertChatToolOnlyStream(t, engine, target, payload)
 		})
+	}
+}
+
+func assertChatToolOnlyStream(t *testing.T, engine *Engine, target llmprotocol.WireFormat, payload []byte) {
+	t.Helper()
+	stream, err := engine.NewStream(
+		llmprotocol.OpenAIChatV1,
+		target,
+		llmprotocol.StreamContext{Context: context.Background(), PublicModel: "public-model", ProviderModel: "provider-model"},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	frames, events, _, err := stream.Push(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	started := 0
+	for _, event := range events {
+		if event.Type == llmprotocol.EventOutputItemStarted {
+			started++
+			if event.ToolCall == nil {
+				t.Fatalf("tool-only stream created a non-tool output: %+v", event)
+			}
+		}
+	}
+	if started != 1 {
+		t.Fatalf("started items = %d, want 1", started)
+	}
+	output := bytes.Join(frames, nil)
+	if !bytes.Contains(output, []byte(`"index":0`)) && !bytes.Contains(output, []byte(`"output_index":0`)) {
+		t.Fatalf("target stream did not start at wire index zero: %s", output)
 	}
 }
 
@@ -1205,41 +1215,47 @@ func TestResponsesTerminalResourceContainsItsCompletedOutput(t *testing.T) {
 		"tool_call": toolStreamFixture(llmprotocol.OpenAIChatV1),
 	} {
 		t.Run(name, func(t *testing.T) {
-			stream, err := engine.NewStream(
-				llmprotocol.OpenAIChatV1,
-				llmprotocol.OpenAIResponsesV1,
-				llmprotocol.StreamContext{
-					Context: context.Background(), PublicModel: "public-model",
-					ProviderModel: "source-model",
-				},
-			)
-			if err != nil {
-				t.Fatal(err)
-			}
-			frames, _, _, err := stream.Push(source)
-			if err != nil {
-				t.Fatal(err)
-			}
-			finalFrames, _, _, err := stream.Finalize(nil)
-			if err != nil {
-				t.Fatal(err)
-			}
-			frames = append(frames, finalFrames...)
-			output := responsesCompletedOutputFromFrames(t, frames)
-			if len(output) != 1 {
-				t.Fatalf("terminal response output items = %d, want 1", len(output))
-			}
-			item, err := decodeResponsesItemWire(output[0], llmprotocol.DefaultPolicy(), true)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if name == "tool_call" && (item.Type != "function_call" || item.CallID != "call_1" || item.Name != "lookup") {
-				t.Fatalf("terminal tool item = %+v", item)
-			}
-			if name == "text" && (item.Type != "message" || item.Role != "assistant") {
-				t.Fatalf("terminal message item = %+v", item)
-			}
+			assertResponsesTerminalOutput(t, engine, name, source)
 		})
+	}
+}
+
+func assertResponsesTerminalOutput(t *testing.T, engine *Engine, name string, source []byte) {
+	t.Helper()
+	stream, err := engine.NewStream(
+		llmprotocol.OpenAIChatV1,
+		llmprotocol.OpenAIResponsesV1,
+		llmprotocol.StreamContext{Context: context.Background(), PublicModel: "public-model", ProviderModel: "source-model"},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	frames, _, _, err := stream.Push(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	finalFrames, _, _, err := stream.Finalize(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	output := responsesCompletedOutputFromFrames(t, append(frames, finalFrames...))
+	if len(output) != 1 {
+		t.Fatalf("terminal response output items = %d, want 1", len(output))
+	}
+	item, err := decodeResponsesItemWire(output[0], llmprotocol.DefaultPolicy(), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertResponsesTerminalItem(t, name, item)
+}
+
+func assertResponsesTerminalItem(t *testing.T, name string, item responsesItemWire) {
+	t.Helper()
+	if name == "tool_call" && (item.Type != "function_call" || item.CallID != "call_1" || item.Name != "lookup") {
+		t.Fatalf("terminal tool item = %+v", item)
+	}
+	if name == "text" && (item.Type != "message" || item.Role != "assistant") {
+		t.Fatalf("terminal message item = %+v", item)
 	}
 }
 

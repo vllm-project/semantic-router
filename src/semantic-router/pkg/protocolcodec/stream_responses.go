@@ -221,35 +221,57 @@ func (decoder *responsesStreamDecoder) pushFrame(frame []byte) ([]llmprotocol.Ev
 	if decoder.terminal {
 		return nil, nil, invalidProviderResponse("stream_event_after_terminal", "Responses stream emitted data after its terminal event")
 	}
-	eventType, err := decodeProviderEventType(parsed.Data, parsed.Event, decoder.policy)
+	eventType, err := decoder.validateResponsesFrameEnvelope(parsed.Data, parsed.Event)
 	if err != nil {
-		return nil, nil, err
-	}
-	sequence, err := decodeResponsesStreamSequence(parsed.Data)
-	if err != nil {
-		return nil, nil, err
-	}
-	if err := decoder.validateWireSequence(sequence); err != nil {
 		return nil, nil, err
 	}
 	if !isSupportedResponsesEvent(eventType) {
-		event := llmprotocol.Event{
-			ResponseID: decoder.context.ResponseID,
-			Model:      decoder.context.PublicModel,
-		}
-		if err := decoder.applyUnknownResponsesEvent(&event, frame); err != nil {
-			return nil, nil, err
-		}
-		return decoder.emitResponsesEvent(event)
+		return decoder.decodeUnknownResponsesFrame(frame)
 	}
+	return decoder.decodeResponsesWireFrame(parsed.Data, eventType, frame)
+}
+
+func (decoder *responsesStreamDecoder) validateResponsesFrameEnvelope(data []byte, eventName string) (string, error) {
+	eventType, err := decodeProviderEventType(data, eventName, decoder.policy)
+	if err != nil {
+		return "", err
+	}
+	sequence, err := decodeResponsesStreamSequence(data)
+	if err != nil {
+		return "", err
+	}
+	if err := decoder.validateWireSequence(sequence); err != nil {
+		return "", err
+	}
+	return eventType, nil
+}
+
+func (decoder *responsesStreamDecoder) decodeUnknownResponsesFrame(
+	frame []byte,
+) ([]llmprotocol.Event, llmprotocol.Diagnostics, error) {
+	event := llmprotocol.Event{
+		ResponseID: decoder.context.ResponseID,
+		Model:      decoder.context.PublicModel,
+	}
+	if err := decoder.applyUnknownResponsesEvent(&event, frame); err != nil {
+		return nil, nil, err
+	}
+	return decoder.emitResponsesEvent(event)
+}
+
+func (decoder *responsesStreamDecoder) decodeResponsesWireFrame(
+	data []byte,
+	eventType string,
+	frame []byte,
+) ([]llmprotocol.Event, llmprotocol.Diagnostics, error) {
 	var wire responsesEventWire
-	if err := decodeProviderWire(parsed.Data, &wire, decoder.policy); err != nil {
+	if err := decodeProviderWire(data, &wire, decoder.policy); err != nil {
 		return nil, nil, err
 	}
 	if wire.Type == "" {
 		wire.Type = eventType
 	}
-	if err := decoder.validateResponsesEventResource(wire, parsed.Data); err != nil {
+	if err := decoder.validateResponsesEventResource(wire, data); err != nil {
 		return nil, nil, err
 	}
 	return decoder.decodeResponsesEvent(wire, frame)
@@ -268,18 +290,30 @@ func (decoder *responsesStreamDecoder) validateResponsesEventResource(wire respo
 	if err := decoder.validateResponsesContentLifecycle(wire); err != nil {
 		return err
 	}
-	if wire.Type == "response.output_item.added" && wire.OutputIndex != nil && *wire.OutputIndex != len(decoder.items) {
-		return invalidProviderResponse("stream_output_index_order", "Responses output indexes must be contiguous from zero")
-	}
-	if isResponsesLifecycleEvent(wire.Type) {
-		if decoder.seenLifecycleEvents[wire.Type] {
-			return invalidProviderResponse("duplicate_stream_lifecycle", "Responses lifecycle event was emitted more than once")
-		}
-		decoder.seenLifecycleEvents[wire.Type] = true
+	if err := decoder.recordResponsesLifecycleEvent(wire); err != nil {
+		return err
 	}
 	if wire.Response == nil {
 		return nil
 	}
+	return decoder.validateResponsesLifecycleResource(wire)
+}
+
+func (decoder *responsesStreamDecoder) recordResponsesLifecycleEvent(wire responsesEventWire) error {
+	if wire.Type == "response.output_item.added" && wire.OutputIndex != nil && *wire.OutputIndex != len(decoder.items) {
+		return invalidProviderResponse("stream_output_index_order", "Responses output indexes must be contiguous from zero")
+	}
+	if !isResponsesLifecycleEvent(wire.Type) {
+		return nil
+	}
+	if decoder.seenLifecycleEvents[wire.Type] {
+		return invalidProviderResponse("duplicate_stream_lifecycle", "Responses lifecycle event was emitted more than once")
+	}
+	decoder.seenLifecycleEvents[wire.Type] = true
+	return nil
+}
+
+func (decoder *responsesStreamDecoder) validateResponsesLifecycleResource(wire responsesEventWire) error {
 	if err := validateResponsesResponseResource(*wire.Response, true); err != nil {
 		return err
 	}
@@ -298,9 +332,7 @@ func (decoder *responsesStreamDecoder) validateResponsesEventResource(wire respo
 		return invalidProviderResponse("stream_response_status_mismatch", "Responses event type does not match response status")
 	}
 	if wire.Type == "response.completed" || wire.Type == "response.incomplete" {
-		if err := decoder.validateResponsesTerminalOutput(wire.Response.Output); err != nil {
-			return err
-		}
+		return decoder.validateResponsesTerminalOutput(wire.Response.Output)
 	}
 	return nil
 }
@@ -475,52 +507,86 @@ func (decoder *responsesStreamDecoder) decodeResponsesContentEvent(
 	event *llmprotocol.Event,
 	wire responsesEventWire,
 ) (bool, []llmprotocol.Event, llmprotocol.Diagnostics, error) {
-	switch wire.Type {
-	case "response.output_item.added":
-		if err := decoder.applyResponsesItemStart(event, wire); err != nil {
-			return true, nil, nil, err
-		}
-	case "response.content_part.added":
-		if err := applyResponsesContentPart(event, wire.Part); err != nil {
-			return true, nil, nil, err
-		}
-	case "response.reasoning_summary_part.added":
-		if err := applyResponsesReasoningPart(event, wire.Part); err != nil {
-			return true, nil, nil, err
-		}
-	case "response.output_text.delta":
-		event.Type = llmprotocol.EventOutputTextDelta
-		event.Content = &llmprotocol.Content{Kind: llmprotocol.ContentText, Text: wire.Delta}
-	case "response.output_text.annotation.added":
-		if err := decoder.applyResponseAnnotation(event, wire); err != nil {
-			return true, nil, nil, err
-		}
-	case "response.refusal.delta":
-		event.Type = llmprotocol.EventOutputTextDelta
-		event.Content = &llmprotocol.Content{Kind: llmprotocol.ContentRefusal, Text: wire.Delta}
-	case "response.reasoning_text.delta":
-		event.Type = llmprotocol.EventReasoningDelta
-		event.Content = &llmprotocol.Content{
-			Kind: llmprotocol.ContentReasoning, Text: wire.Delta, Reasoning: llmprotocol.ReasoningScopeText,
-		}
-	case "response.reasoning_summary_text.delta":
-		event.Type = llmprotocol.EventReasoningDelta
-		event.Content = &llmprotocol.Content{
-			Kind: llmprotocol.ContentReasoning, Text: wire.Delta, Reasoning: llmprotocol.ReasoningScopeSummary,
-		}
-	case "response.function_call_arguments.delta":
-		if err := decoder.applyResponsesToolDelta(event, wire); err != nil {
-			return true, nil, nil, err
-		}
-	case "response.output_item.done":
-		if err := decoder.applyCompletedResponseItem(event, wire); err != nil {
-			return true, nil, nil, err
-		}
-	default:
+	handled, err := decoder.applyResponsesContentEvent(event, wire)
+	if !handled {
 		return false, nil, nil, nil
+	}
+	if err != nil {
+		return true, nil, nil, err
 	}
 	events, diagnostics, err := decoder.emitResponsesEvent(*event)
 	return true, events, diagnostics, err
+}
+
+func (decoder *responsesStreamDecoder) applyResponsesContentEvent(
+	event *llmprotocol.Event,
+	wire responsesEventWire,
+) (bool, error) {
+	if handled, err := decoder.applyResponsesItemEvent(event, wire); handled {
+		return true, err
+	}
+	if handled, err := applyResponsesPartEvent(event, wire); handled {
+		return true, err
+	}
+	return decoder.applyResponsesDeltaEvent(event, wire)
+}
+
+func (decoder *responsesStreamDecoder) applyResponsesItemEvent(
+	event *llmprotocol.Event,
+	wire responsesEventWire,
+) (bool, error) {
+	switch wire.Type {
+	case "response.output_item.added":
+		return true, decoder.applyResponsesItemStart(event, wire)
+	case "response.output_item.done":
+		return true, decoder.applyCompletedResponseItem(event, wire)
+	default:
+		return false, nil
+	}
+}
+
+func applyResponsesPartEvent(event *llmprotocol.Event, wire responsesEventWire) (bool, error) {
+	switch wire.Type {
+	case "response.content_part.added":
+		return true, applyResponsesContentPart(event, wire.Part)
+	case "response.reasoning_summary_part.added":
+		return true, applyResponsesReasoningPart(event, wire.Part)
+	default:
+		return false, nil
+	}
+}
+
+func (decoder *responsesStreamDecoder) applyResponsesDeltaEvent(
+	event *llmprotocol.Event,
+	wire responsesEventWire,
+) (bool, error) {
+	switch wire.Type {
+	case "response.output_text.delta":
+		setResponsesTextDelta(event, wire.Delta, llmprotocol.ContentText)
+	case "response.refusal.delta":
+		setResponsesTextDelta(event, wire.Delta, llmprotocol.ContentRefusal)
+	case "response.reasoning_text.delta":
+		setResponsesReasoningDelta(event, wire.Delta, llmprotocol.ReasoningScopeText)
+	case "response.reasoning_summary_text.delta":
+		setResponsesReasoningDelta(event, wire.Delta, llmprotocol.ReasoningScopeSummary)
+	case "response.output_text.annotation.added":
+		return true, decoder.applyResponseAnnotation(event, wire)
+	case "response.function_call_arguments.delta":
+		return true, decoder.applyResponsesToolDelta(event, wire)
+	default:
+		return false, nil
+	}
+	return true, nil
+}
+
+func setResponsesTextDelta(event *llmprotocol.Event, delta string, kind llmprotocol.ContentKind) {
+	event.Type = llmprotocol.EventOutputTextDelta
+	event.Content = &llmprotocol.Content{Kind: kind, Text: delta}
+}
+
+func setResponsesReasoningDelta(event *llmprotocol.Event, delta string, scope llmprotocol.ReasoningScope) {
+	event.Type = llmprotocol.EventReasoningDelta
+	event.Content = &llmprotocol.Content{Kind: llmprotocol.ContentReasoning, Text: delta, Reasoning: scope}
 }
 
 func applyResponsesContentPart(event *llmprotocol.Event, part *responsesContentWire) error {
@@ -595,69 +661,121 @@ func (decoder *responsesStreamDecoder) neutralContentIndex(key responsesWireCont
 
 func (decoder *responsesStreamDecoder) validateResponsesContentLifecycle(wire responsesEventWire) error {
 	key, hasContent := responsesEventWireContentKey(wire)
+	if handled, err := decoder.validateResponsesContentStart(wire, key); handled {
+		return err
+	}
+	if handled, err := decoder.validateResponsesContentDelta(wire, key); handled {
+		return err
+	}
+	if handled, err := decoder.validateResponsesContentDone(wire, key); handled {
+		return err
+	}
+	if wire.Type == "response.output_item.done" {
+		return decoder.validateCompletedResponsesItemLifecycle(wire)
+	}
+	if hasContent {
+		return invalidProviderResponse("unsupported_stream_content_event", "Responses content event is unsupported")
+	}
+	return nil
+}
+
+func (decoder *responsesStreamDecoder) validateResponsesContentStart(
+	wire responsesEventWire,
+	key responsesWireContentKey,
+) (bool, error) {
 	switch wire.Type {
 	case "response.content_part.added":
 		kind, text, err := responsesMessagePartEvidence(wire.Part)
 		if err != nil {
-			return err
+			return true, err
 		}
-		return decoder.startResponsesContent(key, kind, text)
+		return true, decoder.startResponsesContent(key, kind, text)
 	case "response.reasoning_summary_part.added":
-		if wire.Part == nil || wire.Part.Type != "summary_text" {
-			return invalidProviderResponse(
-				"stream_reasoning_part_kind",
-				"Responses reasoning summary part must use summary_text",
-			)
-		}
-		return decoder.startResponsesContent(key, "summary_text", wire.Part.Text)
+		return true, decoder.startResponsesReasoningSummary(key, wire.Part)
+	default:
+		return false, nil
+	}
+}
+
+func (decoder *responsesStreamDecoder) validateResponsesContentDelta(
+	wire responsesEventWire,
+	key responsesWireContentKey,
+) (bool, error) {
+	switch wire.Type {
 	case "response.output_text.delta":
-		return decoder.appendResponsesContent(key, "output_text", wire.Delta, false)
+		return true, decoder.appendResponsesContent(key, "output_text", wire.Delta, false)
 	case "response.refusal.delta":
-		return decoder.appendResponsesContent(key, "refusal", wire.Delta, false)
+		return true, decoder.appendResponsesContent(key, "refusal", wire.Delta, false)
 	case "response.reasoning_summary_text.delta":
-		return decoder.appendResponsesContent(key, "summary_text", wire.Delta, false)
+		return true, decoder.appendResponsesContent(key, "summary_text", wire.Delta, false)
 	case "response.reasoning_text.delta":
-		return decoder.appendResponsesContent(key, "reasoning_text", wire.Delta, true)
+		return true, decoder.appendResponsesContent(key, "reasoning_text", wire.Delta, true)
 	case "response.output_text.annotation.added":
-		state, err := decoder.requireResponsesContent(key, "output_text")
-		if err != nil {
-			return err
-		}
-		if state.textDone || state.partDone {
-			return invalidProviderResponse("stream_content_after_done", "Responses annotation was emitted after content completion")
-		}
-		state.annotations = append(state.annotations, *wire.Annotation)
-		return nil
+		return true, decoder.appendResponsesAnnotation(key, wire.Annotation)
+	default:
+		return false, nil
+	}
+}
+
+func (decoder *responsesStreamDecoder) validateResponsesContentDone(
+	wire responsesEventWire,
+	key responsesWireContentKey,
+) (bool, error) {
+	switch wire.Type {
 	case "response.output_text.done":
-		return decoder.finishResponsesContentText(key, "output_text", wire.Text, false)
+		return true, decoder.finishResponsesContentText(key, "output_text", wire.Text, false)
 	case "response.refusal.done":
-		return decoder.finishResponsesContentText(key, "refusal", wire.Refusal, false)
+		return true, decoder.finishResponsesContentText(key, "refusal", wire.Refusal, false)
 	case "response.reasoning_summary_text.done":
-		return decoder.finishResponsesContentText(key, "summary_text", wire.Text, false)
+		return true, decoder.finishResponsesContentText(key, "summary_text", wire.Text, false)
 	case "response.reasoning_text.done":
-		return decoder.finishResponsesContentText(key, "reasoning_text", wire.Text, true)
+		return true, decoder.finishResponsesContentText(key, "reasoning_text", wire.Text, true)
 	case "response.content_part.done":
 		kind, text, err := responsesMessagePartEvidence(wire.Part)
 		if err != nil {
-			return err
+			return true, err
 		}
-		return decoder.finishResponsesContentPart(key, kind, text, wire.Part)
+		return true, decoder.finishResponsesContentPart(key, kind, text, wire.Part)
 	case "response.reasoning_summary_part.done":
-		if wire.Part == nil || wire.Part.Type != "summary_text" {
-			return invalidProviderResponse(
-				"stream_reasoning_part_kind",
-				"Responses reasoning summary part must use summary_text",
-			)
-		}
-		return decoder.finishResponsesContentPart(key, "summary_text", wire.Part.Text, wire.Part)
-	case "response.output_item.done":
-		return decoder.validateCompletedResponsesItemLifecycle(wire)
+		return true, decoder.finishResponsesReasoningSummary(key, wire.Part)
 	default:
-		if hasContent {
-			return invalidProviderResponse("unsupported_stream_content_event", "Responses content event is unsupported")
-		}
-		return nil
+		return false, nil
 	}
+}
+
+func (decoder *responsesStreamDecoder) startResponsesReasoningSummary(
+	key responsesWireContentKey,
+	part *responsesContentWire,
+) error {
+	if part == nil || part.Type != "summary_text" {
+		return invalidProviderResponse("stream_reasoning_part_kind", "Responses reasoning summary part must use summary_text")
+	}
+	return decoder.startResponsesContent(key, "summary_text", part.Text)
+}
+
+func (decoder *responsesStreamDecoder) appendResponsesAnnotation(
+	key responsesWireContentKey,
+	annotation *responsesAnnotationWire,
+) error {
+	state, err := decoder.requireResponsesContent(key, "output_text")
+	if err != nil {
+		return err
+	}
+	if state.textDone || state.partDone {
+		return invalidProviderResponse("stream_content_after_done", "Responses annotation was emitted after content completion")
+	}
+	state.annotations = append(state.annotations, *annotation)
+	return nil
+}
+
+func (decoder *responsesStreamDecoder) finishResponsesReasoningSummary(
+	key responsesWireContentKey,
+	part *responsesContentWire,
+) error {
+	if part == nil || part.Type != "summary_text" {
+		return invalidProviderResponse("stream_reasoning_part_kind", "Responses reasoning summary part must use summary_text")
+	}
+	return decoder.finishResponsesContentPart(key, "summary_text", part.Text, part)
 }
 
 func responsesMessagePartEvidence(part *responsesContentWire) (string, string, error) {
@@ -836,26 +954,43 @@ func (decoder *responsesStreamDecoder) validateResponsesFinalContent(
 		return invalidProviderResponse("stream_item_content_mismatch", "Responses completed item content does not match streamed content blocks")
 	}
 	for index, part := range parts {
-		state := decoder.contentLifecycle[responsesWireContentKey{item: itemIndex, scope: scope, index: index}]
-		if state == nil || !state.textDone || (requirePartDone && !state.partDone) {
-			return invalidProviderResponse("stream_item_content_incomplete", "Responses output item completed with unfinished content")
-		}
-		kind, text, err := responsesFinalPartEvidence(scope, part)
-		if err != nil {
+		if err := decoder.validateResponsesFinalPart(itemIndex, scope, index, part, requirePartDone); err != nil {
 			return err
-		}
-		if state.kind != kind || state.text.String() != text {
-			return invalidProviderResponse("stream_item_content_mismatch", "Responses completed item content does not match streamed content")
-		}
-		var annotations []responsesAnnotationWire
-		if part.Annotations != nil {
-			annotations = *part.Annotations
-		}
-		if !reflect.DeepEqual(state.annotations, annotations) && !(len(state.annotations) == 0 && len(annotations) == 0) {
-			return invalidProviderResponse("stream_item_annotations_mismatch", "Responses completed item annotations do not match streamed annotations")
 		}
 	}
 	return nil
+}
+
+func (decoder *responsesStreamDecoder) validateResponsesFinalPart(
+	itemIndex int,
+	scope responsesContentScope,
+	index int,
+	part responsesContentWire,
+	requirePartDone bool,
+) error {
+	state := decoder.contentLifecycle[responsesWireContentKey{item: itemIndex, scope: scope, index: index}]
+	if state == nil || !state.textDone || requirePartDone && !state.partDone {
+		return invalidProviderResponse("stream_item_content_incomplete", "Responses output item completed with unfinished content")
+	}
+	kind, text, err := responsesFinalPartEvidence(scope, part)
+	if err != nil {
+		return err
+	}
+	if state.kind != kind || state.text.String() != text {
+		return invalidProviderResponse("stream_item_content_mismatch", "Responses completed item content does not match streamed content")
+	}
+	annotations := responsesPartAnnotations(part)
+	if !reflect.DeepEqual(state.annotations, annotations) && !(len(state.annotations) == 0 && len(annotations) == 0) {
+		return invalidProviderResponse("stream_item_annotations_mismatch", "Responses completed item annotations do not match streamed annotations")
+	}
+	return nil
+}
+
+func responsesPartAnnotations(part responsesContentWire) []responsesAnnotationWire {
+	if part.Annotations == nil {
+		return nil
+	}
+	return *part.Annotations
 }
 
 func responsesFinalPartEvidence(scope responsesContentScope, part responsesContentWire) (string, string, error) {
@@ -1092,26 +1227,44 @@ func (decoder *responsesStreamDecoder) applyCompletedResponseItem(
 	if len(wire.Item) == 0 {
 		return nil
 	}
-	item, err := decodeResponsesItemWire(wire.Item, decoder.policy, true)
+	item, err := decoder.validateCompletedResponseItem(wire)
 	if err != nil {
 		return err
 	}
-	if err := validateResponsesOutputItemResource(wire.Item, item); err != nil {
+	event.ItemID = item.ID
+	if err := decoder.applyCompletedResponseItemKind(event, wire, item); err != nil {
 		return err
 	}
+	decoder.completedOutput[responsesWireOutputIndex(wire)] = append(json.RawMessage(nil), wire.Item...)
+	return nil
+}
+
+func (decoder *responsesStreamDecoder) validateCompletedResponseItem(wire responsesEventWire) (responsesItemWire, error) {
+	item, err := decodeResponsesItemWire(wire.Item, decoder.policy, true)
+	if err != nil {
+		return responsesItemWire{}, err
+	}
+	if err := validateResponsesOutputItemResource(wire.Item, item); err != nil {
+		return responsesItemWire{}, err
+	}
 	if item.Status != "" && item.Status != "completed" && item.Status != "incomplete" {
-		return invalidProviderResponse(
-			"stream_item_status_mismatch",
-			"Responses output item done event requires completed or incomplete status",
+		return responsesItemWire{}, invalidProviderResponse(
+			"stream_item_status_mismatch", "Responses output item done event requires completed or incomplete status",
 		)
 	}
 	if expected := decoder.itemTypes[responsesWireOutputIndex(wire)]; expected == "" || item.Type != expected {
-		return invalidProviderResponse(
-			"stream_item_kind_mismatch",
-			"Responses output item completion changed its item type",
+		return responsesItemWire{}, invalidProviderResponse(
+			"stream_item_kind_mismatch", "Responses output item completion changed its item type",
 		)
 	}
-	event.ItemID = item.ID
+	return item, nil
+}
+
+func (decoder *responsesStreamDecoder) applyCompletedResponseItemKind(
+	event *llmprotocol.Event,
+	wire responsesEventWire,
+	item responsesItemWire,
+) error {
 	switch item.Type {
 	case "function_call":
 		event.ToolCall = &llmprotocol.ToolCall{ID: item.CallID, Name: item.Name, Arguments: item.Arguments}
@@ -1124,7 +1277,6 @@ func (decoder *responsesStreamDecoder) applyCompletedResponseItem(
 	default:
 		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_output_item", "Responses completed an unsupported output item", nil)
 	}
-	decoder.completedOutput[responsesWireOutputIndex(wire)] = append(json.RawMessage(nil), wire.Item...)
 	return nil
 }
 
@@ -1363,7 +1515,10 @@ func (encoder *responsesStreamEncoder) encodeResponsesToolDelta(event llmprotoco
 		Delta:       event.ToolCall.Arguments,
 	}
 	frame, err := encoder.encodeResponsesStreamFrame(wire)
-	return append(frames, frame), nil, err
+	if err != nil {
+		return frames, nil, err
+	}
+	return append(frames, frame), nil, nil
 }
 
 func (encoder *responsesStreamEncoder) responsesCompletionWire(
@@ -1485,7 +1640,10 @@ func (encoder *responsesStreamEncoder) encodeResponsesReasoningDelta(
 	}
 	setResponsesReasoningIndex(&wire, reasoningScope, contentIndex)
 	frame, err := encoder.encodeResponsesStreamFrame(wire)
-	return append(frames, frame), diagnostics, err
+	if err != nil {
+		return frames, diagnostics, err
+	}
+	return append(frames, frame), diagnostics, nil
 }
 
 func (encoder *responsesStreamEncoder) encodeResponsesOpaque(event llmprotocol.Event) ([][]byte, error) {
@@ -1498,13 +1656,49 @@ func (encoder *responsesStreamEncoder) encodeResponsesOpaque(event llmprotocol.E
 func (encoder *responsesStreamEncoder) encodeResponsesTextDelta(
 	event llmprotocol.Event,
 ) ([][]byte, llmprotocol.Diagnostics, error) {
+	content, err := encoder.recordResponsesTextDelta(event)
+	if err != nil {
+		return nil, nil, err
+	}
+	frames, outputKey, err := encoder.ensureResponsesOutputStarted(event, responsesOutputMessage)
+	if err != nil {
+		return nil, nil, err
+	}
+	contentIndex := encoder.responsesContentWireIndex(event, outputKey, responsesContentMessage)
+	started, err := encoder.startResponsesContent(event, outputKey, content.kind)
+	if err != nil {
+		return nil, nil, err
+	}
+	frames = append(frames, started...)
+	frames, err = encoder.appendResponsesTextFrame(frames, outputKey, contentIndex, content.kind, event.Delta)
+	if err != nil {
+		return nil, nil, err
+	}
+	frames, err = encoder.appendResponsesAnnotations(frames, outputKey, contentIndex, content)
+	if err != nil {
+		return nil, nil, err
+	}
+	return frames, nil, nil
+}
+
+type responsesRecordedTextDelta struct {
+	kind           llmprotocol.ContentKind
+	newCitations   []llmprotocol.Citation
+	annotationBase int
+}
+
+func (encoder *responsesStreamEncoder) recordResponsesTextDelta(
+	event llmprotocol.Event,
+) (responsesRecordedTextDelta, error) {
 	kind := llmprotocol.ContentText
 	if event.Content != nil && event.Content.Kind == llmprotocol.ContentRefusal {
 		kind = llmprotocol.ContentRefusal
 	}
 	key := contentKey(event)
 	if existing := encoder.encodedKinds[key]; existing != "" && existing != kind {
-		return nil, nil, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "stream_content_kind_mismatch", "upstream stream changed a content block kind", nil)
+		return responsesRecordedTextDelta{}, llmprotocol.NewError(
+			llmprotocol.ErrorUpstreamUnavailable, "stream_content_kind_mismatch", "upstream stream changed a content block kind", nil,
+		)
 	}
 	encoder.encodedKinds[key] = kind
 	builder := encoder.contentText[key]
@@ -1513,36 +1707,44 @@ func (encoder *responsesStreamEncoder) encodeResponsesTextDelta(
 		encoder.contentText[key] = builder
 	}
 	builder.WriteString(event.Delta)
-	var newCitations []llmprotocol.Citation
-	annotationBase := len(encoder.contentCitations[key])
+	recorded := responsesRecordedTextDelta{kind: kind, annotationBase: len(encoder.contentCitations[key])}
 	if event.Content != nil && len(event.Content.Citations) > 0 {
-		newCitations = event.Content.Citations
-		encoder.contentCitations[key] = append(encoder.contentCitations[key], newCitations...)
+		recorded.newCitations = event.Content.Citations
+		encoder.contentCitations[key] = append(encoder.contentCitations[key], recorded.newCitations...)
 	}
-	frames, outputKey, err := encoder.ensureResponsesOutputStarted(event, responsesOutputMessage)
+	return recorded, nil
+}
+
+func (encoder *responsesStreamEncoder) appendResponsesTextFrame(
+	frames [][]byte,
+	outputKey responsesOutputKey,
+	contentIndex int,
+	kind llmprotocol.ContentKind,
+	delta string,
+) ([][]byte, error) {
+	if delta == "" {
+		return frames, nil
+	}
+	wire := responsesEventWire{
+		Type: responsesTextDeltaType(kind), Sequence: encoder.nextWireSequence(),
+		ItemID: encoder.outputIDs[outputKey], OutputIndex: responsesOutputIndex(encoder.outputIndexes[outputKey]),
+		ContentIndex: responsesContentIndex(contentIndex), Delta: delta,
+	}
+	frame, err := encoder.encodeResponsesStreamFrame(wire)
 	if err != nil {
-		return nil, nil, err
+		return frames, err
 	}
-	contentIndex := encoder.responsesContentWireIndex(event, outputKey, responsesContentMessage)
-	started, err := encoder.startResponsesContent(event, outputKey, kind)
-	if err != nil {
-		return nil, nil, err
-	}
-	frames = append(frames, started...)
-	if event.Delta != "" {
-		wire := responsesEventWire{
-			Type: responsesTextDeltaType(kind), Sequence: encoder.nextWireSequence(),
-			ItemID: encoder.outputIDs[outputKey], OutputIndex: responsesOutputIndex(encoder.outputIndexes[outputKey]),
-			ContentIndex: responsesContentIndex(contentIndex), Delta: event.Delta,
-		}
-		frame, err := encoder.encodeResponsesStreamFrame(wire)
-		if err != nil {
-			return nil, nil, err
-		}
-		frames = append(frames, frame)
-	}
-	for offset, annotation := range encodeResponsesAnnotations(newCitations) {
-		index := annotationBase + offset
+	return append(frames, frame), nil
+}
+
+func (encoder *responsesStreamEncoder) appendResponsesAnnotations(
+	frames [][]byte,
+	outputKey responsesOutputKey,
+	contentIndex int,
+	content responsesRecordedTextDelta,
+) ([][]byte, error) {
+	for offset, annotation := range encodeResponsesAnnotations(content.newCitations) {
+		index := content.annotationBase + offset
 		wire := responsesEventWire{
 			Type: "response.output_text.annotation.added", Sequence: encoder.nextWireSequence(),
 			ItemID: encoder.outputIDs[outputKey], OutputIndex: responsesOutputIndex(encoder.outputIndexes[outputKey]), ContentIndex: responsesContentIndex(contentIndex),
@@ -1550,11 +1752,11 @@ func (encoder *responsesStreamEncoder) encodeResponsesTextDelta(
 		}
 		frame, err := encoder.encodeResponsesStreamFrame(wire)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		frames = append(frames, frame)
 	}
-	return frames, nil, nil
+	return frames, nil
 }
 
 func (encoder *responsesStreamEncoder) responsesContentWireIndex(
@@ -1644,60 +1846,14 @@ func (encoder *responsesStreamEncoder) encodeCompletedResponsesContent(
 	event llmprotocol.Event,
 	outputKey responsesOutputKey,
 ) ([][]byte, llmprotocol.Diagnostics, error) {
-	keys := encoder.responsesContentKeys(event, outputKey)
-	messageParts := make([]responsesContentWire, 0, len(keys))
-	reasoningSummary := make([]responsesContentWire, 0, len(keys))
-	reasoningText := make([]responsesContentWire, 0, len(keys))
-	var frames [][]byte
-	for _, key := range keys {
-		kind := encoder.encodedKinds[key]
-		if kind == "" {
-			kind = llmprotocol.ContentText
-		}
-		contentEvent := event
-		contentEvent.ContentIndex = key.content
-		completed, err := encoder.completeResponsesContent(contentEvent, outputKey, kind)
-		if err != nil {
-			return nil, nil, err
-		}
-		frames = append(frames, completed...)
-		text := ""
-		if builder := encoder.contentText[key]; builder != nil {
-			text = builder.String()
-		}
-		part := responsesContentPart(kind, encoder.reasoningScopes[key], text, encoder.contentCitations[key])
-		switch {
-		case kind != llmprotocol.ContentReasoning:
-			messageParts = append(messageParts, part)
-		case normalizedReasoningScope(encoder.reasoningScopes[key]) == llmprotocol.ReasoningScopeSummary:
-			reasoningSummary = append(reasoningSummary, part)
-		default:
-			reasoningText = append(reasoningText, part)
-		}
+	parts, frames, err := encoder.collectCompletedResponsesContent(event, outputKey)
+	if err != nil {
+		return nil, nil, err
 	}
 	index, id := encoder.outputIndexes[outputKey], encoder.outputIDs[outputKey]
-	item := responsesItemWire{Type: "message", ID: id, Role: "assistant", Status: "completed"}
-	if outputKey.kind == responsesOutputReasoning {
-		item.Type, item.Role = "reasoning", ""
-		var err error
-		if len(reasoningSummary) > 0 {
-			item.Summary, err = json.Marshal(reasoningSummary)
-			if err != nil {
-				return nil, nil, err
-			}
-		}
-		if len(reasoningText) > 0 {
-			item.Content, err = json.Marshal(reasoningText)
-			if err != nil {
-				return nil, nil, err
-			}
-		}
-	} else {
-		content, err := json.Marshal(messageParts)
-		if err != nil {
-			return nil, nil, err
-		}
-		item.Content = content
+	item, err := marshalCompletedResponsesItem(outputKey, id, parts)
+	if err != nil {
+		return nil, nil, err
 	}
 	wire := responsesEventWire{
 		Type: "response.output_item.done", Sequence: encoder.nextWireSequence(),
@@ -1706,6 +1862,85 @@ func (encoder *responsesStreamEncoder) encodeCompletedResponsesContent(
 	encoder.recordResponsesCompletedOutput(index, wire.Item)
 	done, err := encoder.encodeResponsesStreamFrame(wire)
 	return append(frames, done), nil, err
+}
+
+type completedResponsesContent struct {
+	message          []responsesContentWire
+	reasoningSummary []responsesContentWire
+	reasoningText    []responsesContentWire
+}
+
+func (encoder *responsesStreamEncoder) collectCompletedResponsesContent(
+	event llmprotocol.Event,
+	outputKey responsesOutputKey,
+) (completedResponsesContent, [][]byte, error) {
+	parts := completedResponsesContent{}
+	var frames [][]byte
+	for _, key := range encoder.responsesContentKeys(event, outputKey) {
+		kind := encoder.encodedKinds[key]
+		if kind == "" {
+			kind = llmprotocol.ContentText
+		}
+		contentEvent := event
+		contentEvent.ContentIndex = key.content
+		completed, err := encoder.completeResponsesContent(contentEvent, outputKey, kind)
+		if err != nil {
+			return completedResponsesContent{}, nil, err
+		}
+		frames = append(frames, completed...)
+		parts.append(kind, encoder.reasoningScopes[key], responsesContentPart(
+			kind, encoder.reasoningScopes[key], encoder.responsesContentText(key), encoder.contentCitations[key],
+		))
+	}
+	return parts, frames, nil
+}
+
+func (encoder *responsesStreamEncoder) responsesContentText(key streamContentKey) string {
+	if builder := encoder.contentText[key]; builder != nil {
+		return builder.String()
+	}
+	return ""
+}
+
+func (parts *completedResponsesContent) append(
+	kind llmprotocol.ContentKind,
+	reasoningScope llmprotocol.ReasoningScope,
+	part responsesContentWire,
+) {
+	if kind != llmprotocol.ContentReasoning {
+		parts.message = append(parts.message, part)
+		return
+	}
+	if normalizedReasoningScope(reasoningScope) == llmprotocol.ReasoningScopeSummary {
+		parts.reasoningSummary = append(parts.reasoningSummary, part)
+		return
+	}
+	parts.reasoningText = append(parts.reasoningText, part)
+}
+
+func marshalCompletedResponsesItem(
+	outputKey responsesOutputKey,
+	id string,
+	parts completedResponsesContent,
+) (responsesItemWire, error) {
+	item := responsesItemWire{Type: "message", ID: id, Role: "assistant", Status: "completed"}
+	if outputKey.kind != responsesOutputReasoning {
+		content, err := json.Marshal(parts.message)
+		item.Content = content
+		return item, err
+	}
+	item.Type, item.Role = "reasoning", ""
+	var err error
+	if len(parts.reasoningSummary) > 0 {
+		item.Summary, err = json.Marshal(parts.reasoningSummary)
+		if err != nil {
+			return responsesItemWire{}, err
+		}
+	}
+	if len(parts.reasoningText) > 0 {
+		item.Content, err = json.Marshal(parts.reasoningText)
+	}
+	return item, err
 }
 
 func (encoder *responsesStreamEncoder) responsesContentKeys(

@@ -33,6 +33,26 @@ func decodeWireValue(body []byte, target any, policy llmprotocol.Policy) error {
 }
 
 func decodeWireJSON(body []byte, target any, policy llmprotocol.Policy, requireObject bool) error {
+	if err := validateClientJSONDocument(body, policy, requireObject); err != nil {
+		return err
+	}
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	if rejectUnknownFields(body, policy) {
+		if err := validateExactJSONFieldNames(body, reflect.TypeOf(target)); err != nil {
+			return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_json", "request JSON contains a non-canonical field", err)
+		}
+		decoder.DisallowUnknownFields()
+	}
+	if err := decoder.Decode(target); err != nil {
+		return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_json", "request JSON is invalid", err)
+	}
+	if err := requireEOF(decoder); err != nil {
+		return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "trailing_json", "request body contains trailing JSON", err)
+	}
+	return nil
+}
+
+func validateClientJSONDocument(body []byte, policy llmprotocol.Policy, requireObject bool) error {
 	if len(body) == 0 || len(body) > policy.Limits.BodyBytes {
 		return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "body_limit", "request body is empty or exceeds the configured limit", nil)
 	}
@@ -54,19 +74,6 @@ func decodeWireJSON(body []byte, target any, policy llmprotocol.Policy, requireO
 		}
 		return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_json", "request JSON is invalid", err)
 	}
-	decoder := json.NewDecoder(bytes.NewReader(body))
-	if rejectUnknownFields(body, policy) {
-		if err := validateExactJSONFieldNames(body, reflect.TypeOf(target)); err != nil {
-			return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_json", "request JSON contains a non-canonical field", err)
-		}
-		decoder.DisallowUnknownFields()
-	}
-	if err := decoder.Decode(target); err != nil {
-		return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_json", "request JSON is invalid", err)
-	}
-	if err := requireEOF(decoder); err != nil {
-		return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "trailing_json", "request body contains trailing JSON", err)
-	}
 	return nil
 }
 
@@ -82,6 +89,26 @@ func decodeProviderValue(body []byte, target any, policy llmprotocol.Policy) err
 }
 
 func decodeProviderJSON(body []byte, target any, policy llmprotocol.Policy, requireObject bool) error {
+	if err := validateProviderJSONDocument(body, policy, requireObject); err != nil {
+		return err
+	}
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	if rejectUnknownFields(body, policy) {
+		if err := validateExactJSONFieldNames(body, reflect.TypeOf(target)); err != nil {
+			return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_json", "upstream response JSON contains a non-canonical field", err)
+		}
+		decoder.DisallowUnknownFields()
+	}
+	if err := decoder.Decode(target); err != nil {
+		return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_json", "upstream response JSON is invalid", err)
+	}
+	if err := requireEOF(decoder); err != nil {
+		return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "upstream_trailing_json", "upstream response contains trailing JSON", err)
+	}
+	return nil
+}
+
+func validateProviderJSONDocument(body []byte, policy llmprotocol.Policy, requireObject bool) error {
 	if len(body) == 0 || len(body) > policy.Limits.BodyBytes {
 		return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "upstream_body_limit", "upstream response is empty or too large", nil)
 	}
@@ -102,19 +129,6 @@ func decodeProviderJSON(body []byte, target any, policy llmprotocol.Policy, requ
 			return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "upstream_trailing_json", "upstream response contains trailing JSON", err)
 		}
 		return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_json", "upstream response JSON is invalid", err)
-	}
-	decoder := json.NewDecoder(bytes.NewReader(body))
-	if rejectUnknownFields(body, policy) {
-		if err := validateExactJSONFieldNames(body, reflect.TypeOf(target)); err != nil {
-			return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_json", "upstream response JSON contains a non-canonical field", err)
-		}
-		decoder.DisallowUnknownFields()
-	}
-	if err := decoder.Decode(target); err != nil {
-		return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_json", "upstream response JSON is invalid", err)
-	}
-	if err := requireEOF(decoder); err != nil {
-		return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "upstream_trailing_json", "upstream response contains trailing JSON", err)
 	}
 	return nil
 }
@@ -143,35 +157,45 @@ func validateExactJSONValue(body []byte, targetType reflect.Type) error {
 	}
 	switch targetType.Kind() {
 	case reflect.Struct:
-		var object map[string]json.RawMessage
-		if err := json.Unmarshal(body, &object); err != nil {
-			return err
-		}
-		fields := exactJSONStructFields(targetType)
-		for name, value := range object {
-			fieldType, found := fields[name]
-			if !found {
-				return fmt.Errorf("unknown field %q", name)
-			}
-			if err := validateExactJSONValue(value, dereferenceJSONType(fieldType)); err != nil {
-				return fmt.Errorf("field %q: %w", name, err)
-			}
-		}
+		return validateExactJSONObject(body, targetType)
 	case reflect.Slice, reflect.Array:
-		if targetType.Elem() == reflect.TypeOf(json.RawMessage{}) {
-			return nil
-		}
-		var elements []json.RawMessage
-		if err := json.Unmarshal(body, &elements); err != nil {
-			return err
-		}
-		for index, element := range elements {
-			if err := validateExactJSONValue(element, dereferenceJSONType(targetType.Elem())); err != nil {
-				return fmt.Errorf("element %d: %w", index, err)
-			}
-		}
+		return validateExactJSONArray(body, targetType)
 	case reflect.Map, reflect.Interface:
 		return nil
+	}
+	return nil
+}
+
+func validateExactJSONObject(body []byte, targetType reflect.Type) error {
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal(body, &object); err != nil {
+		return err
+	}
+	fields := exactJSONStructFields(targetType)
+	for name, value := range object {
+		fieldType, found := fields[name]
+		if !found {
+			return fmt.Errorf("unknown field %q", name)
+		}
+		if err := validateExactJSONValue(value, dereferenceJSONType(fieldType)); err != nil {
+			return fmt.Errorf("field %q: %w", name, err)
+		}
+	}
+	return nil
+}
+
+func validateExactJSONArray(body []byte, targetType reflect.Type) error {
+	if targetType.Elem() == reflect.TypeOf(json.RawMessage{}) {
+		return nil
+	}
+	var elements []json.RawMessage
+	if err := json.Unmarshal(body, &elements); err != nil {
+		return err
+	}
+	for index, element := range elements {
+		if err := validateExactJSONValue(element, dereferenceJSONType(targetType.Elem())); err != nil {
+			return fmt.Errorf("element %d: %w", index, err)
+		}
 	}
 	return nil
 }
@@ -218,39 +242,51 @@ func dereferenceJSONType(targetType reflect.Type) reflect.Type {
 func validateJSONUnicodeEscapes(body []byte) error {
 	insideString := false
 	for index := 0; index < len(body); index++ {
-		switch body[index] {
-		case '"':
+		if body[index] == '"' {
 			insideString = !insideString
-		case '\\':
-			if !insideString || index+1 >= len(body) {
-				continue
-			}
-			if body[index+1] != 'u' {
-				index++
-				continue
-			}
-			value, ok := decodeHexQuad(body, index+2)
-			if !ok {
-				continue
-			}
-			if value >= 0xdc00 && value <= 0xdfff {
-				return fmt.Errorf("%w: lone low surrogate", errInvalidJSONUnicode)
-			}
-			if value < 0xd800 || value > 0xdbff {
-				index += 5
-				continue
-			}
-			if index+11 >= len(body) || body[index+6] != '\\' || body[index+7] != 'u' {
-				return fmt.Errorf("%w: high surrogate is not followed by a low surrogate", errInvalidJSONUnicode)
-			}
-			low, validLow := decodeHexQuad(body, index+8)
-			if !validLow || low < 0xdc00 || low > 0xdfff {
-				return fmt.Errorf("%w: high surrogate is not followed by a low surrogate", errInvalidJSONUnicode)
-			}
-			index += 11
+			continue
 		}
+		if body[index] != '\\' || !insideString {
+			continue
+		}
+		next, err := advanceJSONUnicodeEscape(body, index)
+		if err != nil {
+			return err
+		}
+		index = next
 	}
 	return nil
+}
+
+func advanceJSONUnicodeEscape(body []byte, index int) (int, error) {
+	if index+1 >= len(body) {
+		return index, nil
+	}
+	if body[index+1] != 'u' {
+		return index + 1, nil
+	}
+	value, ok := decodeHexQuad(body, index+2)
+	if !ok {
+		return index, nil
+	}
+	if value >= 0xdc00 && value <= 0xdfff {
+		return index, fmt.Errorf("%w: lone low surrogate", errInvalidJSONUnicode)
+	}
+	if value < 0xd800 || value > 0xdbff {
+		return index + 5, nil
+	}
+	if !hasLowSurrogateEscape(body, index) {
+		return index, fmt.Errorf("%w: high surrogate is not followed by a low surrogate", errInvalidJSONUnicode)
+	}
+	return index + 11, nil
+}
+
+func hasLowSurrogateEscape(body []byte, index int) bool {
+	if index+11 >= len(body) || body[index+6] != '\\' || body[index+7] != 'u' {
+		return false
+	}
+	low, validLow := decodeHexQuad(body, index+8)
+	return validLow && low >= 0xdc00 && low <= 0xdfff
 }
 
 func decodeHexQuad(body []byte, start int) (uint16, bool) {

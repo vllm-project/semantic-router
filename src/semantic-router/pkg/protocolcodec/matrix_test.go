@@ -49,25 +49,32 @@ func TestToolChoiceModesSurviveEveryProtocolPair(t *testing.T) {
 		{Mode: llmprotocol.ToolChoiceRequired},
 		{Mode: llmprotocol.ToolChoiceNamed, Name: "lookup"},
 	}
-	for _, source := range builtinFormats {
-		for _, target := range builtinFormats {
-			for _, want := range modes {
-				name := fmt.Sprintf("%s_to_%s_%s", source, target, want.Mode)
-				t.Run(name, func(t *testing.T) {
-					translated, err := engine.TranslateRequest(source, target, toolChoiceFixture(source, want.Mode), nil)
-					if err != nil {
-						t.Fatal(err)
-					}
-					request, _, _, err := engine.DecodeRequest(target, translated.Body)
-					if err != nil {
-						t.Fatalf("decode translated request: %v\n%s", err, translated.Body)
-					}
-					if request.ToolChoice != want {
-						t.Fatalf("tool choice = %+v, want %+v\n%s", request.ToolChoice, want, translated.Body)
-					}
-				})
-			}
+	forEachBuiltinFormatPair(t, func(t *testing.T, source, target llmprotocol.WireFormat) {
+		for _, want := range modes {
+			t.Run(string(want.Mode), func(t *testing.T) {
+				assertToolChoiceTranslation(t, engine, source, target, want)
+			})
 		}
+	})
+}
+
+func assertToolChoiceTranslation(
+	t *testing.T,
+	engine *Engine,
+	source, target llmprotocol.WireFormat,
+	want llmprotocol.ToolChoice,
+) {
+	t.Helper()
+	translated, err := engine.TranslateRequest(source, target, toolChoiceFixture(source, want.Mode), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request, _, _, err := engine.DecodeRequest(target, translated.Body)
+	if err != nil {
+		t.Fatalf("decode translated request: %v\n%s", err, translated.Body)
+	}
+	if request.ToolChoice != want {
+		t.Fatalf("tool choice = %+v, want %+v\n%s", request.ToolChoice, want, translated.Body)
 	}
 }
 
@@ -319,20 +326,24 @@ func assertReasoningAndCacheReadEvidence(t *testing.T, engine *Engine, target ll
 		t.Fatal(err)
 	}
 	usage := translated.Response.Usage
-	if usage.InputCacheRead.Value == nil || *usage.InputCacheRead.Value != 4 ||
-		usage.InputCacheRead.Provenance != llmprotocol.UsageAuthoritative ||
-		usage.OutputReasoning.Value == nil || *usage.OutputReasoning.Value != 2 ||
-		usage.OutputReasoning.Provenance != llmprotocol.UsageAuthoritative {
+	if !hasAuthoritativeTokenCount(usage.InputCacheRead, 4) || !hasAuthoritativeTokenCount(usage.OutputReasoning, 2) {
 		t.Fatalf("settlement evidence changed: %+v", usage)
 	}
 	decoded, _, _, err := engine.DecodeResponse(target, translated.Body)
 	if err != nil {
 		t.Fatalf("decode translated usage: %v\n%s", err, translated.Body)
 	}
-	if decoded.Usage.InputCacheRead.Value == nil || *decoded.Usage.InputCacheRead.Value != 4 ||
-		decoded.Usage.OutputReasoning.Value == nil || *decoded.Usage.OutputReasoning.Value != 2 {
+	if !hasTokenCount(decoded.Usage.InputCacheRead, 4) || !hasTokenCount(decoded.Usage.OutputReasoning, 2) {
 		t.Fatalf("target accounting evidence changed: %+v", decoded.Usage)
 	}
+}
+
+func hasTokenCount(count llmprotocol.TokenCount, want int64) bool {
+	return count.Value != nil && *count.Value == want
+}
+
+func hasAuthoritativeTokenCount(count llmprotocol.TokenCount, want int64) bool {
+	return hasTokenCount(count, want) && count.Provenance == llmprotocol.UsageAuthoritative
 }
 
 func assertCacheWriteEvidence(t *testing.T, engine *Engine, target llmprotocol.WireFormat, body []byte) {
@@ -797,38 +808,47 @@ func requestFixture(format llmprotocol.WireFormat) []byte {
 }
 
 func toolChoiceFixture(format llmprotocol.WireFormat, mode llmprotocol.ToolChoiceMode) []byte {
-	choice := ""
 	switch format {
 	case llmprotocol.OpenAIChatV1:
-		switch mode {
-		case llmprotocol.ToolChoiceAuto, llmprotocol.ToolChoiceNone, llmprotocol.ToolChoiceRequired:
-			choice = fmt.Sprintf(`,"tool_choice":%q`, mode)
-		case llmprotocol.ToolChoiceNamed:
-			choice = `,"tool_choice":{"type":"function","function":{"name":"lookup"}}`
-		}
+		choice := openAIChatToolChoice(mode)
 		return []byte(`{"model":"source-model","messages":[{"role":"user","content":"hello"}],"tools":[{"type":"function","function":{"name":"lookup","parameters":{"type":"object"}}}]` + choice + `}`)
 	case llmprotocol.OpenAIResponsesV1:
-		switch mode {
-		case llmprotocol.ToolChoiceAuto, llmprotocol.ToolChoiceNone, llmprotocol.ToolChoiceRequired:
-			choice = fmt.Sprintf(`,"tool_choice":%q`, mode)
-		case llmprotocol.ToolChoiceNamed:
-			choice = `,"tool_choice":{"type":"function","name":"lookup"}`
-		}
+		choice := openAIResponsesToolChoice(mode)
 		return []byte(`{"model":"source-model","input":"hello","tools":[{"type":"function","name":"lookup","parameters":{"type":"object"}}]` + choice + `}`)
 	case llmprotocol.AnthropicMessagesV1:
-		switch mode {
-		case llmprotocol.ToolChoiceAuto:
-			choice = `,"tool_choice":{"type":"auto"}`
-		case llmprotocol.ToolChoiceNone:
-			choice = `,"tool_choice":{"type":"none"}`
-		case llmprotocol.ToolChoiceRequired:
-			choice = `,"tool_choice":{"type":"any"}`
-		case llmprotocol.ToolChoiceNamed:
-			choice = `,"tool_choice":{"type":"tool","name":"lookup"}`
-		}
+		choice := anthropicToolChoice(mode)
 		return []byte(`{"model":"source-model","max_tokens":32,"messages":[{"role":"user","content":"hello"}],"tools":[{"name":"lookup","input_schema":{"type":"object"}}]` + choice + `}`)
 	default:
 		panic("unknown fixture format")
+	}
+}
+
+func openAIChatToolChoice(mode llmprotocol.ToolChoiceMode) string {
+	if mode == llmprotocol.ToolChoiceNamed {
+		return `,"tool_choice":{"type":"function","function":{"name":"lookup"}}`
+	}
+	return fmt.Sprintf(`,"tool_choice":%q`, mode)
+}
+
+func openAIResponsesToolChoice(mode llmprotocol.ToolChoiceMode) string {
+	if mode == llmprotocol.ToolChoiceNamed {
+		return `,"tool_choice":{"type":"function","name":"lookup"}`
+	}
+	return fmt.Sprintf(`,"tool_choice":%q`, mode)
+}
+
+func anthropicToolChoice(mode llmprotocol.ToolChoiceMode) string {
+	switch mode {
+	case llmprotocol.ToolChoiceAuto:
+		return `,"tool_choice":{"type":"auto"}`
+	case llmprotocol.ToolChoiceNone:
+		return `,"tool_choice":{"type":"none"}`
+	case llmprotocol.ToolChoiceRequired:
+		return `,"tool_choice":{"type":"any"}`
+	case llmprotocol.ToolChoiceNamed:
+		return `,"tool_choice":{"type":"tool","name":"lookup"}`
+	default:
+		return ""
 	}
 }
 

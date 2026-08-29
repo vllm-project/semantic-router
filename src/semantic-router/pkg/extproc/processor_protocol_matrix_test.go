@@ -136,37 +136,40 @@ func TestExtProcResponsesClientOwnsBufferedResponseID(t *testing.T) {
 func TestExtProcStructuredOutputRequestProtocolMatrix(t *testing.T) {
 	router := &OpenAIRouter{}
 	for _, streaming := range []bool{false, true} {
-		for _, clientFormat := range extProcMatrixFormats {
-			for _, backendFormat := range extProcMatrixFormats {
-				name := fmt.Sprintf("stream=%t/%s_client_%s_backend", streaming, clientFormat, backendFormat)
-				t.Run(name, func(t *testing.T) {
-					ctx := &RequestContext{
-						SourceFormat: clientFormat,
-						TargetFormat: backendFormat,
-						RequestID:    "request_structured_output",
-						TraceContext: t.Context(),
-					}
-					request, immediate := router.prepareProtocolRequest(
-						extProcStructuredOutputRequestFixture(clientFormat, streaming), ctx,
-					)
-					if immediate != nil || request == nil {
-						t.Fatalf("structured request was rejected: request=%+v immediate=%+v", request, immediate)
-					}
-					request.Model = "routed-model"
-					request.Generation++
-					dispatch, err := router.encodeDispatchRequest(ctx)
-					if err != nil {
-						t.Fatal(err)
-					}
-					decoded, _, _, err := protocolcodec.NewBuiltinEngine().DecodeRequest(backendFormat, dispatch)
-					if err != nil {
-						t.Fatalf("backend request does not satisfy %s: %v\n%s", backendFormat, err, dispatch)
-					}
-					assertExtProcStructuredOutputRequest(t, decoded, streaming)
-				})
-			}
-		}
+		forEachExtProcMatrixPair(t, func(t *testing.T, clientFormat, backendFormat llmprotocol.WireFormat) {
+			assertExtProcStructuredOutputPair(t, router, clientFormat, backendFormat, streaming)
+		})
 	}
+}
+
+func assertExtProcStructuredOutputPair(
+	t *testing.T,
+	router *OpenAIRouter,
+	clientFormat, backendFormat llmprotocol.WireFormat,
+	streaming bool,
+) {
+	t.Helper()
+	ctx := &RequestContext{
+		SourceFormat: clientFormat,
+		TargetFormat: backendFormat,
+		RequestID:    "request_structured_output",
+		TraceContext: t.Context(),
+	}
+	request, immediate := router.prepareProtocolRequest(extProcStructuredOutputRequestFixture(clientFormat, streaming), ctx)
+	if immediate != nil || request == nil {
+		t.Fatalf("structured request was rejected: request=%+v immediate=%+v", request, immediate)
+	}
+	request.Model = "routed-model"
+	request.Generation++
+	dispatch, err := router.encodeDispatchRequest(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, _, _, err := protocolcodec.NewBuiltinEngine().DecodeRequest(backendFormat, dispatch)
+	if err != nil {
+		t.Fatalf("backend request does not satisfy %s: %v\n%s", backendFormat, err, dispatch)
+	}
+	assertExtProcStructuredOutputRequest(t, decoded, streaming)
 }
 
 // Streaming translation is stateful, so it needs an independent 3x3 matrix at
@@ -499,14 +502,23 @@ func extProcStructuredOutputRequestFixture(format llmprotocol.WireFormat, stream
 
 func assertExtProcStructuredOutputRequest(t *testing.T, request llmprotocol.Request, streaming bool) {
 	t.Helper()
-	if request.Model != "routed-model" || request.Stream != streaming || request.ReasoningEffort != "high" ||
-		request.OutputFormat.Kind != llmprotocol.OutputJSONSchema || request.OutputFormat.Name != "structured_output" ||
-		request.OutputFormat.Strict == nil || !*request.OutputFormat.Strict {
+	if !extProcStructuredRequestMetadataMatches(request, streaming) {
 		t.Fatalf("structured request semantics changed: %+v", request)
 	}
+	assertExtProcStructuredSchema(t, request.OutputFormat.Schema)
+}
+
+func extProcStructuredRequestMetadataMatches(request llmprotocol.Request, streaming bool) bool {
+	return request.Model == "routed-model" && request.Stream == streaming && request.ReasoningEffort == "high" &&
+		request.OutputFormat.Kind == llmprotocol.OutputJSONSchema && request.OutputFormat.Name == "structured_output" &&
+		request.OutputFormat.Strict != nil && *request.OutputFormat.Strict
+}
+
+func assertExtProcStructuredSchema(t *testing.T, schema json.RawMessage) {
+	t.Helper()
 	want := []byte(`{"type":"object","properties":{"answer":{"type":"string"}},"required":["answer"],"additionalProperties":false}`)
 	var gotValue, wantValue any
-	if err := json.Unmarshal(request.OutputFormat.Schema, &gotValue); err != nil {
+	if err := json.Unmarshal(schema, &gotValue); err != nil {
 		t.Fatalf("decoded schema is invalid: %v", err)
 	}
 	if err := json.Unmarshal(want, &wantValue); err != nil {

@@ -177,41 +177,8 @@ func (OpenAIChatCodec) DecodeRequest(body []byte, policy llmprotocol.Policy) (ll
 	if err := decodeWire(body, &wire, policy); err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
-	if err := rejectUnsupportedRequestFields(map[string]json.RawMessage{
-		"prompt_cache_key": wire.PromptCacheKey, "prompt_cache_retention": wire.PromptCacheRetention,
-		"prompt_cache_options": wire.PromptCacheOptions, "safety_identifier": wire.SafetyIdentifier,
-		"audio": wire.Audio, "function_call": wire.FunctionCall, "functions": wire.Functions,
-		"logit_bias": wire.LogitBias, "logprobs": wire.Logprobs, "modalities": wire.Modalities,
-		"moderation": wire.Moderation, "prediction": wire.Prediction, "service_tier": wire.ServiceTier,
-		"top_logprobs": wire.TopLogprobs, "verbosity": wire.Verbosity,
-		"web_search_options": wire.WebSearchOptions,
-	}); err != nil {
+	if err := validateChatRequestWire(wire); err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
-	}
-	if len(wire.Messages) == 0 {
-		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, llmprotocol.NewError(
-			llmprotocol.ErrorInvalidRequest,
-			"messages_required",
-			"messages must contain at least one item",
-			nil,
-		)
-	}
-	if wire.MaxTokens != nil && *wire.MaxTokens < 0 ||
-		wire.MaxCompletionTokens != nil && *wire.MaxCompletionTokens < 0 {
-		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, llmprotocol.NewError(
-			llmprotocol.ErrorInvalidRequest,
-			"invalid_chat_max_output_tokens",
-			"Chat Completions output token limit cannot be negative",
-			nil,
-		)
-	}
-	if wire.MaxTokens != nil && wire.MaxCompletionTokens != nil && *wire.MaxTokens != *wire.MaxCompletionTokens {
-		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, llmprotocol.NewError(
-			llmprotocol.ErrorInvalidRequest,
-			"conflicting_max_output_tokens",
-			"max_tokens and max_completion_tokens cannot specify different limits",
-			nil,
-		)
 	}
 	request := decodeChatBaseRequest(wire)
 	if err := decodeChatMessages(wire.Messages, &request, policy); err != nil {
@@ -224,6 +191,46 @@ func (OpenAIChatCodec) DecodeRequest(body []byte, policy llmprotocol.Policy) (ll
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
 	return request, requestEnvelope(llmprotocol.OpenAIChatV1, body, request.Generation, policy), nil, nil
+}
+
+func validateChatRequestWire(wire chatRequestWire) error {
+	if err := rejectUnsupportedRequestFields(map[string]json.RawMessage{
+		"prompt_cache_key": wire.PromptCacheKey, "prompt_cache_retention": wire.PromptCacheRetention,
+		"prompt_cache_options": wire.PromptCacheOptions, "safety_identifier": wire.SafetyIdentifier,
+		"audio": wire.Audio, "function_call": wire.FunctionCall, "functions": wire.Functions,
+		"logit_bias": wire.LogitBias, "logprobs": wire.Logprobs, "modalities": wire.Modalities,
+		"moderation": wire.Moderation, "prediction": wire.Prediction, "service_tier": wire.ServiceTier,
+		"top_logprobs": wire.TopLogprobs, "verbosity": wire.Verbosity,
+		"web_search_options": wire.WebSearchOptions,
+	}); err != nil {
+		return err
+	}
+	if len(wire.Messages) == 0 {
+		return llmprotocol.NewError(
+			llmprotocol.ErrorInvalidRequest,
+			"messages_required",
+			"messages must contain at least one item",
+			nil,
+		)
+	}
+	if wire.MaxTokens != nil && *wire.MaxTokens < 0 ||
+		wire.MaxCompletionTokens != nil && *wire.MaxCompletionTokens < 0 {
+		return llmprotocol.NewError(
+			llmprotocol.ErrorInvalidRequest,
+			"invalid_chat_max_output_tokens",
+			"Chat Completions output token limit cannot be negative",
+			nil,
+		)
+	}
+	if wire.MaxTokens != nil && wire.MaxCompletionTokens != nil && *wire.MaxTokens != *wire.MaxCompletionTokens {
+		return llmprotocol.NewError(
+			llmprotocol.ErrorInvalidRequest,
+			"conflicting_max_output_tokens",
+			"max_tokens and max_completion_tokens cannot specify different limits",
+			nil,
+		)
+	}
+	return nil
 }
 
 func decodeChatBaseRequest(wire chatRequestWire) llmprotocol.Request {
@@ -667,16 +674,8 @@ func decodeChatToolChoice(raw json.RawMessage, policy llmprotocol.Policy) (llmpr
 	if len(raw) == 0 || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		return llmprotocol.ToolChoice{}, nil
 	}
-	var mode string
-	if json.Unmarshal(raw, &mode) == nil {
-		switch mode {
-		case "auto":
-			return llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceAuto}, nil
-		case "none":
-			return llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceNone}, nil
-		case "required":
-			return llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceRequired}, nil
-		}
+	if choice, found := decodeChatToolChoiceMode(raw); found {
+		return choice, nil
 	}
 	var discriminator struct {
 		Type string `json:"type"`
@@ -699,6 +698,23 @@ func decodeChatToolChoice(raw json.RawMessage, policy llmprotocol.Policy) (llmpr
 		return llmprotocol.ToolChoice{}, llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_tool_choice", "tool choice is invalid", nil)
 	}
 	return llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceNamed, Name: named.Function.Name}, nil
+}
+
+func decodeChatToolChoiceMode(raw json.RawMessage) (llmprotocol.ToolChoice, bool) {
+	var mode string
+	if json.Unmarshal(raw, &mode) != nil {
+		return llmprotocol.ToolChoice{}, false
+	}
+	switch mode {
+	case "auto":
+		return llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceAuto}, true
+	case "none":
+		return llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceNone}, true
+	case "required":
+		return llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceRequired}, true
+	default:
+		return llmprotocol.ToolChoice{}, false
+	}
 }
 
 func decodeChatOutputFormat(wire chatOutputWire) (llmprotocol.OutputFormat, error) {
@@ -881,21 +897,9 @@ func (state *chatMessageEncodingState) appendContent(content llmprotocol.Content
 	case llmprotocol.ContentText:
 		state.appendText(content)
 	case llmprotocol.ContentRefusal:
-		if content.Cache != nil {
-			return unsupportedChatCacheDirective(string(content.Kind))
-		}
-		if state.wire.Refusal == nil {
-			state.wire.Refusal = new(string)
-		}
-		*state.wire.Refusal += content.Text
+		return appendChatTextField(&state.wire.Refusal, content)
 	case llmprotocol.ContentReasoning:
-		if content.Cache != nil {
-			return unsupportedChatCacheDirective(string(content.Kind))
-		}
-		if state.wire.Reasoning == nil {
-			state.wire.Reasoning = new(string)
-		}
-		*state.wire.Reasoning += content.Text
+		return appendChatTextField(&state.wire.Reasoning, content)
 	case llmprotocol.ContentImage:
 		return state.appendImage(content)
 	case llmprotocol.ContentAudio:
@@ -903,19 +907,38 @@ func (state *chatMessageEncodingState) appendContent(content llmprotocol.Content
 	case llmprotocol.ContentFile:
 		return state.appendFile(content)
 	case llmprotocol.ContentToolCall:
-		if content.Cache != nil {
-			return unsupportedChatCacheDirective(string(content.Kind))
-		}
-		return state.appendToolCall(content.ToolCall)
+		return state.appendCachelessToolCall(content)
 	case llmprotocol.ContentToolResult:
-		if content.Cache != nil {
-			return unsupportedChatCacheDirective(string(content.Kind))
-		}
-		return state.appendToolResult(content.ToolResult)
+		return state.appendCachelessToolResult(content)
 	default:
 		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_content", "content cannot be encoded as chat", nil)
 	}
 	return nil
+}
+
+func appendChatTextField(target **string, content llmprotocol.Content) error {
+	if content.Cache != nil {
+		return unsupportedChatCacheDirective(string(content.Kind))
+	}
+	if *target == nil {
+		*target = new(string)
+	}
+	**target += content.Text
+	return nil
+}
+
+func (state *chatMessageEncodingState) appendCachelessToolCall(content llmprotocol.Content) error {
+	if content.Cache != nil {
+		return unsupportedChatCacheDirective(string(content.Kind))
+	}
+	return state.appendToolCall(content.ToolCall)
+}
+
+func (state *chatMessageEncodingState) appendCachelessToolResult(content llmprotocol.Content) error {
+	if content.Cache != nil {
+		return unsupportedChatCacheDirective(string(content.Kind))
+	}
+	return state.appendToolResult(content.ToolResult)
 }
 
 func (state *chatMessageEncodingState) appendText(content llmprotocol.Content) {
@@ -1036,21 +1059,31 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 	if err := decodeChatChoices(wire, &response, policy); err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, diagnostics, err
 	}
-	if wire.Usage != nil {
-		response.Usage = decodeChatUsage(*wire.Usage)
-		appendProviderFieldOmissions(&diagnostics, policy, llmprotocol.OpenAIChatV1, map[string]bool{
-			"usage.compute_units":                                        len(wire.Usage.ComputeUnits) > 0,
-			"usage.prompt_tokens_details.audio_tokens":                   wire.Usage.PromptTokensDetails != nil && wire.Usage.PromptTokensDetails.AudioTokens != 0,
-			"usage.prompt_tokens_details.image_tokens":                   wire.Usage.PromptTokensDetails != nil && wire.Usage.PromptTokensDetails.ImageTokens != 0,
-			"usage.prompt_tokens_details.text_tokens":                    wire.Usage.PromptTokensDetails != nil && wire.Usage.PromptTokensDetails.TextTokens != 0,
-			"usage.completion_tokens_details.accepted_prediction_tokens": wire.Usage.CompletionTokensDetails != nil && wire.Usage.CompletionTokensDetails.AcceptedPredictionTokens != 0,
-			"usage.completion_tokens_details.audio_tokens":               wire.Usage.CompletionTokensDetails != nil && wire.Usage.CompletionTokensDetails.AudioTokens != 0,
-			"usage.completion_tokens_details.rejected_prediction_tokens": wire.Usage.CompletionTokensDetails != nil && wire.Usage.CompletionTokensDetails.RejectedPredictionTokens != 0,
-			"usage.completion_tokens_details.text_tokens":                wire.Usage.CompletionTokensDetails != nil && wire.Usage.CompletionTokensDetails.TextTokens != 0,
-		}, "provider accounting detail has no separate protocol-neutral bucket")
-	}
+	decodeChatResponseUsage(wire.Usage, &response, &diagnostics, policy)
 	envelope := responseEnvelope(llmprotocol.OpenAIChatV1, body, response.Generation, response.SourceStopReason, policy)
 	return response, envelope, diagnostics, nil
+}
+
+func decodeChatResponseUsage(
+	wire *chatUsageWire,
+	response *llmprotocol.Response,
+	diagnostics *llmprotocol.Diagnostics,
+	policy llmprotocol.Policy,
+) {
+	if wire == nil {
+		return
+	}
+	response.Usage = decodeChatUsage(*wire)
+	appendProviderFieldOmissions(diagnostics, policy, llmprotocol.OpenAIChatV1, map[string]bool{
+		"usage.compute_units":                                        len(wire.ComputeUnits) > 0,
+		"usage.prompt_tokens_details.audio_tokens":                   wire.PromptTokensDetails != nil && wire.PromptTokensDetails.AudioTokens != 0,
+		"usage.prompt_tokens_details.image_tokens":                   wire.PromptTokensDetails != nil && wire.PromptTokensDetails.ImageTokens != 0,
+		"usage.prompt_tokens_details.text_tokens":                    wire.PromptTokensDetails != nil && wire.PromptTokensDetails.TextTokens != 0,
+		"usage.completion_tokens_details.accepted_prediction_tokens": wire.CompletionTokensDetails != nil && wire.CompletionTokensDetails.AcceptedPredictionTokens != 0,
+		"usage.completion_tokens_details.audio_tokens":               wire.CompletionTokensDetails != nil && wire.CompletionTokensDetails.AudioTokens != 0,
+		"usage.completion_tokens_details.rejected_prediction_tokens": wire.CompletionTokensDetails != nil && wire.CompletionTokensDetails.RejectedPredictionTokens != 0,
+		"usage.completion_tokens_details.text_tokens":                wire.CompletionTokensDetails != nil && wire.CompletionTokensDetails.TextTokens != 0,
+	}, "provider accounting detail has no separate protocol-neutral bucket")
 }
 
 func decodeChatResponseEnvelope(wire chatResponseWire) llmprotocol.Response {
@@ -1177,30 +1210,54 @@ func (OpenAIChatCodec) EncodeResponse(response llmprotocol.Response, envelope ll
 		return append([]byte(nil), envelope.Response...), nil, nil
 	}
 	var diagnostics llmprotocol.Diagnostics
-	if response.StopReason == llmprotocol.StopPaused || response.StopReason == llmprotocol.StopContextWindow || response.StopReason == llmprotocol.StopCanceled || response.StopReason == llmprotocol.StopUnknown {
-		if err := appendLossy(&diagnostics, policy, envelope.Format, llmprotocol.OpenAIChatV1, "response.stop_reason", "Chat Completions cannot represent the source terminal reason"); err != nil {
-			return nil, diagnostics, err
-		}
+	if err := appendChatStopReasonDiagnostic(&diagnostics, response.StopReason, envelope.Format, policy); err != nil {
+		return nil, diagnostics, err
 	}
 	wire := chatResponseWire{ID: response.ID, Object: "chat.completion", Model: response.Model}
 	if !response.CreatedAt.IsZero() {
 		wire.Created = response.CreatedAt.Unix()
 	}
-	primary, encodeResponseErr := encodeChatOutput(response.Output, 0, response.StopReason)
-	if encodeResponseErr != nil {
-		return nil, diagnostics, encodeResponseErr
+	choices, err := encodeChatChoices(response)
+	if err != nil {
+		return nil, diagnostics, err
 	}
-	wire.Choices = append(wire.Choices, primary)
+	wire.Choices = choices
+	wire.Usage = encodeChatUsage(response.Usage)
+	body, err := marshalWire(wire)
+	return body, diagnostics, err
+}
+
+func appendChatStopReasonDiagnostic(
+	diagnostics *llmprotocol.Diagnostics,
+	stopReason llmprotocol.StopReason,
+	source llmprotocol.WireFormat,
+	policy llmprotocol.Policy,
+) error {
+	switch stopReason {
+	case llmprotocol.StopPaused, llmprotocol.StopContextWindow, llmprotocol.StopCanceled, llmprotocol.StopUnknown:
+		return appendLossy(
+			diagnostics, policy, source, llmprotocol.OpenAIChatV1,
+			"response.stop_reason", "Chat Completions cannot represent the source terminal reason",
+		)
+	default:
+		return nil
+	}
+}
+
+func encodeChatChoices(response llmprotocol.Response) ([]chatChoiceWire, error) {
+	primary, err := encodeChatOutput(response.Output, 0, response.StopReason)
+	if err != nil {
+		return nil, err
+	}
+	choices := []chatChoiceWire{primary}
 	for index, alternative := range response.Alternatives {
 		choice, err := encodeChatOutput(alternative, index+1, response.StopReason)
 		if err != nil {
-			return nil, diagnostics, err
+			return nil, err
 		}
-		wire.Choices = append(wire.Choices, choice)
+		choices = append(choices, choice)
 	}
-	wire.Usage = encodeChatUsage(response.Usage)
-	body, encodeResponseErr := marshalWire(wire)
-	return body, diagnostics, encodeResponseErr
+	return choices, nil
 }
 
 func encodeChatOutput(items []llmprotocol.OutputItem, index int, stop llmprotocol.StopReason) (chatChoiceWire, error) {

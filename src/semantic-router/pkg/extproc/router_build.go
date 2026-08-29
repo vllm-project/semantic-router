@@ -199,25 +199,9 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 		return nil, err
 	}
 
-	// One provider serves both the tools database and the tool embedder, so a
-	// remote endpoint gets a single HTTP client/connection pool. A construction
-	// error keeps the old contract: fatal when the tools database needs the
-	// provider (cfg.Tools.Enabled), otherwise tool_selection filter mode is left
-	// without an embedder and degrades per request into its configured fallback,
-	// as it did when the provider was built per request.
-	toolsProvider, toolsProviderErr := toolsEmbeddingProvider(cfg)
-	if toolsProviderErr != nil && cfg.Tools.Enabled {
-		return nil, toolsProviderErr
-	}
-	toolsDatabase, err := createToolsDatabase(cfg, toolsProvider)
+	toolsDatabase, toolEmbedder, err := buildToolsRuntime(cfg)
 	if err != nil {
 		return nil, err
-	}
-	var toolEmbedder *cachedToolEmbedder
-	if toolsProviderErr == nil {
-		toolEmbedder = newToolEmbedderForConfig(cfg, toolsProvider)
-	} else {
-		logging.Warnf("tool_selection: embedding provider unavailable, filter mode will use its fallback: %v", toolsProviderErr)
 	}
 	recipeClassifiers, classifier, classificationSvc, err := createRouterClassifier(cfg, mappings)
 	if err != nil {
@@ -275,6 +259,24 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 	}
 	keepRouterSessionStore = true
 	return components, nil
+}
+
+func buildToolsRuntime(cfg *config.RouterConfig) (*tools.ToolsDatabase, *cachedToolEmbedder, error) {
+	// One provider serves both the tools database and the tool embedder, so a
+	// remote endpoint gets a single HTTP client/connection pool.
+	provider, providerErr := toolsEmbeddingProvider(cfg)
+	if providerErr != nil && cfg.Tools.Enabled {
+		return nil, nil, providerErr
+	}
+	database, err := createToolsDatabase(cfg, provider)
+	if err != nil {
+		return nil, nil, err
+	}
+	if providerErr != nil {
+		logging.Warnf("tool_selection: embedding provider unavailable, filter mode will use its fallback: %v", providerErr)
+		return database, nil, nil
+	}
+	return database, newToolEmbedderForConfig(cfg, provider), nil
 }
 
 func (components *routerComponents) buildRouter() *OpenAIRouter {

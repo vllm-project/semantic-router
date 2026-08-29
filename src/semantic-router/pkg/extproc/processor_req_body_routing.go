@@ -41,8 +41,6 @@ type providerDispatch struct {
 // prepareProviderDispatch is the only point where a neutral request becomes a
 // provider-bound request. Routing and plugins mutate semantic state first;
 // the selected backend codec owns the final wire representation.
-//
-//nolint:cyclop // Dispatch validates each required routing boundary before Envoy forwarding.
 func (r *OpenAIRouter) prepareProviderDispatch(
 	request *llmprotocol.Request,
 	logicalModel string,
@@ -53,6 +51,33 @@ func (r *OpenAIRouter) prepareProviderDispatch(
 	if request == nil || ctx == nil || r == nil || r.Config == nil {
 		return nil, status.Error(codes.Internal, "neutral inference request is unavailable")
 	}
+	dispatch, err := r.resolveProviderDispatch(logicalModel, decisionName, useReasoning)
+	if err != nil {
+		return nil, err
+	}
+	changed, err := r.prepareProviderRequest(request, dispatch, ctx)
+	if err != nil {
+		return nil, err
+	}
+	if changed {
+		request.Generation++
+	}
+	ctx.TargetFormat = dispatch.targetFormat
+	ctx.SemanticRequest = request
+	logging.ComponentDebugEvent("extproc", "provider_dispatch_prepared", map[string]interface{}{
+		"request_id":  ctx.RequestID,
+		"model":       logicalModel,
+		"backend":     dispatch.backendName,
+		"wire_format": dispatch.targetFormat,
+	})
+	return dispatch, nil
+}
+
+func (r *OpenAIRouter) resolveProviderDispatch(
+	logicalModel string,
+	decisionName string,
+	useReasoning bool,
+) (*providerDispatch, error) {
 	backendAddress, backendName, found, err := r.Config.ResolvePrimaryBackendForModel(logicalModel)
 	if err != nil {
 		return nil, fmt.Errorf("resolve backend for model %q: %w", logicalModel, err)
@@ -68,52 +93,65 @@ func (r *OpenAIRouter) prepareProviderDispatch(
 	if err != nil {
 		return nil, fmt.Errorf("model %q: %w", logicalModel, err)
 	}
-	changed, err := r.materializeResponseObjectContext(request, ctx)
-	if err != nil {
-		return nil, err
-	}
-	upstreamModel := r.Config.ResolveExternalModelID(logicalModel, backendName)
-	changed = request.Model != upstreamModel || request.Stream != ctx.ExpectStreamingResponse || changed
-	request.Model = upstreamModel
-	request.Stream = ctx.ExpectStreamingResponse
-	if decisionName != "" {
-		if targetFormat != llmprotocol.OpenAIChatV1 {
-			changed = r.applySemanticReasoningMode(request, logicalModel, targetFormat, useReasoning, ctx.VSRSelectedDecision) || changed
-		}
-		injected, injectErr := r.addSemanticSystemPromptIfConfigured(
-			request, decisionName, logicalModel, ctx,
-		)
-		if injectErr != nil {
-			return nil, injectErr
-		}
-		changed = injected || changed
-	}
-	if ctx.VSRSelectedDecision != nil && ctx.VSRSelectedDecision.GetRequestParamsConfig() != nil {
-		paramsChanged, paramsErr := r.applySemanticRequestParams(
-			ctx.VSRSelectedDecision, request, ctx.Routing.RecipeName(),
-		)
-		if paramsErr != nil {
-			return nil, paramsErr
-		}
-		changed = paramsChanged || changed
-	}
-	if changed {
-		request.Generation++
-	}
-	ctx.TargetFormat = targetFormat
-	ctx.SemanticRequest = request
-	logging.ComponentDebugEvent("extproc", "provider_dispatch_prepared", map[string]interface{}{
-		"request_id":  ctx.RequestID,
-		"model":       logicalModel,
-		"backend":     backendName,
-		"wire_format": targetFormat,
-	})
 	return &providerDispatch{
-		logicalModel: logicalModel, upstreamModel: upstreamModel,
+		logicalModel: logicalModel, upstreamModel: r.Config.ResolveExternalModelID(logicalModel, backendName),
 		backendAddress: backendAddress, backendName: backendName,
 		profile: profile, targetFormat: targetFormat,
 		decisionName: decisionName, useReasoning: useReasoning,
 	}, nil
+}
+
+func (r *OpenAIRouter) prepareProviderRequest(
+	request *llmprotocol.Request,
+	dispatch *providerDispatch,
+	ctx *RequestContext,
+) (bool, error) {
+	changed, err := r.materializeResponseObjectContext(request, ctx)
+	if err != nil {
+		return false, err
+	}
+	changed = request.Model != dispatch.upstreamModel || request.Stream != ctx.ExpectStreamingResponse || changed
+	request.Model = dispatch.upstreamModel
+	request.Stream = ctx.ExpectStreamingResponse
+	decisionChanged, err := r.applyDispatchDecision(request, dispatch, ctx)
+	if err != nil {
+		return false, err
+	}
+	changed = decisionChanged || changed
+	paramsChanged, err := r.applyDispatchRequestParams(request, ctx)
+	return paramsChanged || changed, err
+}
+
+func (r *OpenAIRouter) applyDispatchDecision(
+	request *llmprotocol.Request,
+	dispatch *providerDispatch,
+	ctx *RequestContext,
+) (bool, error) {
+	if dispatch.decisionName == "" {
+		return false, nil
+	}
+	changed := false
+	if dispatch.targetFormat != llmprotocol.OpenAIChatV1 {
+		changed = r.applySemanticReasoningMode(
+			request, dispatch.logicalModel, dispatch.targetFormat, dispatch.useReasoning, ctx.VSRSelectedDecision,
+		)
+	}
+	injected, err := r.addSemanticSystemPromptIfConfigured(
+		request, dispatch.decisionName, dispatch.logicalModel, ctx,
+	)
+	return changed || injected, err
+}
+
+func (r *OpenAIRouter) applyDispatchRequestParams(
+	request *llmprotocol.Request,
+	ctx *RequestContext,
+) (bool, error) {
+	if ctx.VSRSelectedDecision != nil && ctx.VSRSelectedDecision.GetRequestParamsConfig() != nil {
+		return r.applySemanticRequestParams(
+			ctx.VSRSelectedDecision, request, ctx.Routing.RecipeName(),
+		)
+	}
+	return false, nil
 }
 
 func wireFormatForModel(apiFormat string) (llmprotocol.WireFormat, error) {

@@ -163,23 +163,36 @@ func parseSSEFrame(frame []byte, limit int) (sseFrame, error) {
 }
 
 func parseSSEFrameAtPosition(frame []byte, limit int, first bool) (sseFrame, error) {
-	if len(frame) == 0 || len(frame) > limit {
-		return sseFrame{}, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "sse_frame_limit", "SSE frame is empty or too large", nil)
+	if err := validateSSEFrameBytes(frame, limit); err != nil {
+		return sseFrame{}, err
 	}
-	if !utf8.Valid(frame) {
-		return sseFrame{}, llmprotocol.NewError(
-			llmprotocol.ErrorUpstreamUnavailable,
-			"invalid_upstream_utf8",
-			"upstream SSE frame is not valid UTF-8",
-			nil,
-		)
+	normalized, err := normalizeSSEFrame(frame, first)
+	if err != nil {
+		return sseFrame{}, err
 	}
 	var result sseFrame
-	// The EventSource wire grammar permits one UTF-8 BOM only at the start of
-	// the stream, not at the start of every event.
+	for _, line := range bytes.Split(normalized, []byte("\n")) {
+		parseSSELine(&result, line)
+	}
+	return result, nil
+}
+
+func validateSSEFrameBytes(frame []byte, limit int) error {
+	if len(frame) == 0 || len(frame) > limit {
+		return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "sse_frame_limit", "SSE frame is empty or too large", nil)
+	}
+	if !utf8.Valid(frame) {
+		return llmprotocol.NewError(
+			llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_utf8", "upstream SSE frame is not valid UTF-8", nil,
+		)
+	}
+	return nil
+}
+
+func normalizeSSEFrame(frame []byte, first bool) ([]byte, error) {
 	bom := []byte{0xef, 0xbb, 0xbf}
 	if !first && bytes.HasPrefix(frame, bom) {
-		return sseFrame{}, llmprotocol.NewError(
+		return nil, llmprotocol.NewError(
 			llmprotocol.ErrorUpstreamUnavailable,
 			"unexpected_stream_bom",
 			"SSE stream contains a UTF-8 BOM after its first event",
@@ -192,27 +205,28 @@ func parseSSEFrameAtPosition(frame []byte, limit int, first bool) (sseFrame, err
 	}
 	normalized = bytes.ReplaceAll(normalized, []byte("\r\n"), []byte("\n"))
 	normalized = bytes.ReplaceAll(normalized, []byte("\r"), []byte("\n"))
-	for _, line := range bytes.Split(normalized, []byte("\n")) {
-		if len(line) == 0 || line[0] == ':' {
-			continue
-		}
-		name, value, found := bytes.Cut(line, []byte{':'})
-		if !found {
-			name, value = line, nil
-		}
-		value = bytes.TrimPrefix(value, []byte{' '})
-		switch string(name) {
-		case "event":
-			result.Event = string(value)
-		case "data":
-			result.HasData = true
-			if len(result.Data) > 0 {
-				result.Data = append(result.Data, '\n')
-			}
-			result.Data = append(result.Data, value...)
-		}
+	return normalized, nil
+}
+
+func parseSSELine(result *sseFrame, line []byte) {
+	if len(line) == 0 || line[0] == ':' {
+		return
 	}
-	return result, nil
+	name, value, found := bytes.Cut(line, []byte{':'})
+	if !found {
+		name, value = line, nil
+	}
+	value = bytes.TrimPrefix(value, []byte{' '})
+	switch string(name) {
+	case "event":
+		result.Event = string(value)
+	case "data":
+		result.HasData = true
+		if len(result.Data) > 0 {
+			result.Data = append(result.Data, '\n')
+		}
+		result.Data = append(result.Data, value...)
+	}
 }
 
 func encodeSSE(event string, data any) ([]byte, error) {
@@ -441,6 +455,29 @@ func (state *streamState) applyItemEvent(event llmprotocol.Event) (llmprotocol.E
 }
 
 func (state *streamState) startItem(event llmprotocol.Event) (llmprotocol.Event, error) {
+	prepared, err := state.prepareItemStart(event)
+	if err != nil {
+		return llmprotocol.Event{}, err
+	}
+	event = prepared
+	if err := state.prepareItemTool(event); err != nil {
+		return llmprotocol.Event{}, err
+	}
+	state.recordItemStart(event)
+	if event.ToolCall != nil {
+		state.recordStartedTool(event)
+		return event, nil
+	}
+	if event.Content != nil {
+		if err := state.claimContentBlock(event); err != nil {
+			return llmprotocol.Event{}, err
+		}
+		state.itemKinds[event.ItemIndex] = event.Content.Kind
+	}
+	return event, nil
+}
+
+func (state *streamState) prepareItemStart(event llmprotocol.Event) (llmprotocol.Event, error) {
 	if event.ItemIndex < 0 {
 		return llmprotocol.Event{}, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_item_index", "upstream output item index is invalid", nil)
 	}
@@ -462,34 +499,35 @@ func (state *streamState) startItem(event llmprotocol.Event) (llmprotocol.Event,
 	if index, duplicate := state.itemIDIndexes[event.ItemID]; duplicate && index != event.ItemIndex {
 		return llmprotocol.Event{}, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "duplicate_stream_item_id", "upstream stream reused an output item ID", nil)
 	}
-	if event.ToolCall != nil {
-		if err := state.claimContentBlock(event); err != nil {
-			return llmprotocol.Event{}, err
-		}
-		if err := state.validateStreamToolIdentity(*event.ToolCall, true); err != nil {
-			return llmprotocol.Event{}, err
-		}
-		if err := state.validateStreamToolArgumentAppend(nil, event.ToolCall.Arguments); err != nil {
-			return llmprotocol.Event{}, err
-		}
-		if err := state.claimStreamToolCallID(event.ItemIndex, event.ToolCall.ID); err != nil {
-			return llmprotocol.Event{}, err
-		}
+	return event, nil
+}
+
+func (state *streamState) prepareItemTool(event llmprotocol.Event) error {
+	if event.ToolCall == nil {
+		return nil
 	}
+	if err := state.claimContentBlock(event); err != nil {
+		return err
+	}
+	if err := state.validateStreamToolIdentity(*event.ToolCall, true); err != nil {
+		return err
+	}
+	if err := state.validateStreamToolArgumentAppend(nil, event.ToolCall.Arguments); err != nil {
+		return err
+	}
+	return state.claimStreamToolCallID(event.ItemIndex, event.ToolCall.ID)
+}
+
+func (state *streamState) recordItemStart(event llmprotocol.Event) {
 	state.items[event.ItemIndex] = true
 	state.itemIDs[event.ItemIndex] = event.ItemID
 	state.itemIDIndexes[event.ItemID] = event.ItemIndex
-	if event.ToolCall != nil {
-		state.itemKinds[event.ItemIndex] = llmprotocol.ContentToolCall
-		state.toolCalls[event.ItemIndex] = *event.ToolCall
-		state.toolArguments[event.ItemIndex] = append([]byte(nil), event.ToolCall.Arguments...)
-	} else if event.Content != nil {
-		if err := state.claimContentBlock(event); err != nil {
-			return llmprotocol.Event{}, err
-		}
-		state.itemKinds[event.ItemIndex] = event.Content.Kind
-	}
-	return event, nil
+}
+
+func (state *streamState) recordStartedTool(event llmprotocol.Event) {
+	state.itemKinds[event.ItemIndex] = llmprotocol.ContentToolCall
+	state.toolCalls[event.ItemIndex] = *event.ToolCall
+	state.toolArguments[event.ItemIndex] = append([]byte(nil), event.ToolCall.Arguments...)
 }
 
 func (state *streamState) applyDelta(event llmprotocol.Event) (llmprotocol.Event, error) {
@@ -867,23 +905,45 @@ func (state *streamState) applyTerminalEvent(event llmprotocol.Event) (llmprotoc
 }
 
 func (state *streamState) validateCompletedEvent(event llmprotocol.Event) (llmprotocol.Event, error) {
+	if err := state.validateCompletedLifecycle(event); err != nil {
+		return llmprotocol.Event{}, err
+	}
+	event, err := validateCompletedStopReason(event)
+	if err != nil {
+		return llmprotocol.Event{}, err
+	}
+	if event.Usage == nil {
+		usage := state.usage
+		event.Usage = &usage
+	}
+	if err := llmprotocol.ValidateUsage(*event.Usage); err != nil {
+		return llmprotocol.Event{}, err
+	}
+	return event, nil
+}
+
+func (state *streamState) validateCompletedLifecycle(event llmprotocol.Event) error {
 	if !state.started {
-		return llmprotocol.Event{}, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "stream_start_missing", "upstream stream completed before response start", nil)
+		return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "stream_start_missing", "upstream stream completed before response start", nil)
 	}
 	if len(state.items) == 0 && event.StopReason != llmprotocol.StopContentFilter {
-		return llmprotocol.Event{}, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "stream_output_missing", "upstream stream completed without output", nil)
+		return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "stream_output_missing", "upstream stream completed without output", nil)
 	}
 	for itemIndex := range state.items {
 		if !state.completedItems[itemIndex] {
-			return llmprotocol.Event{}, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "stream_item_incomplete", "upstream stream completed with an active output item", nil)
+			return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "stream_item_incomplete", "upstream stream completed with an active output item", nil)
 		}
 	}
 	if len(state.toolArguments) != 0 {
-		return llmprotocol.Event{}, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "stream_tool_arguments_incomplete", "upstream stream completed with unfinished tool arguments", nil)
+		return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "stream_tool_arguments_incomplete", "upstream stream completed with unfinished tool arguments", nil)
 	}
 	if event.Error != nil {
-		return llmprotocol.Event{}, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "stream_terminal_shape", "completed stream cannot contain an error", nil)
+		return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "stream_terminal_shape", "completed stream cannot contain an error", nil)
 	}
+	return nil
+}
+
+func validateCompletedStopReason(event llmprotocol.Event) (llmprotocol.Event, error) {
 	if event.StopReason == "" {
 		event.StopReason = llmprotocol.StopUnknown
 	}
@@ -902,13 +962,6 @@ func (state *streamState) validateCompletedEvent(event llmprotocol.Event) (llmpr
 			"upstream matched stop sequence requires stop_sequence reason",
 			nil,
 		)
-	}
-	if event.Usage == nil {
-		usage := state.usage
-		event.Usage = &usage
-	}
-	if err := llmprotocol.ValidateUsage(*event.Usage); err != nil {
-		return llmprotocol.Event{}, err
 	}
 	return event, nil
 }

@@ -31,87 +31,91 @@ func TestStreamFinalizeClassifiesDeadline(t *testing.T) {
 }
 
 func TestStreamFinalizationReasonsTranslateAcrossEveryProtocolPair(t *testing.T) {
-	reasons := []struct {
-		name string
-		err  error
-		code string
-	}{
+	reasons := []streamReasonCase{
 		{name: "canceled", err: context.Canceled, code: "stream_canceled"},
 		{name: "deadline", err: context.DeadlineExceeded, code: "stream_timeout"},
 		{name: "eof", err: nil, code: "stream_incomplete"},
 	}
 	engine := NewBuiltinEngine()
-	for _, source := range builtinFormats {
-		for _, target := range builtinFormats {
-			for _, reason := range reasons {
-				t.Run(string(source)+"/"+string(target)+"/"+reason.name, func(t *testing.T) {
-					stream, err := engine.NewStream(source, target, llmprotocol.StreamContext{
-						Context: context.Background(), PublicModel: "public-model", ProviderModel: "provider-model",
-					})
-					if err != nil {
-						t.Fatal(err)
-					}
-					frames, events, _, err := stream.Finalize(reason.err)
-					if err != nil {
-						t.Fatal(err)
-					}
-					if len(events) != 1 || events[0].Type != llmprotocol.EventResponseFailed ||
-						events[0].Error == nil || events[0].Error.Code != reason.code {
-						t.Fatalf("terminal events = %+v, want one %s failure", events, reason.code)
-					}
-					wire := bytes.Join(frames, nil)
-					if bytes.Count(wire, []byte(events[0].Error.Message)) != 1 {
-						t.Fatalf("terminal wire did not contain exactly one failure message for %s: %s", reason.code, wire)
-					}
-					if bytes.Contains(wire, []byte("response.completed")) ||
-						bytes.Contains(wire, []byte("message_stop")) || bytes.Contains(wire, []byte("[DONE]")) {
-						t.Fatalf("failure stream also emitted a success terminal: %s", wire)
-					}
-					if finalFrames, finalEvents, _, finalErr := stream.Finalize(nil); finalErr != nil || len(finalFrames) != 0 || len(finalEvents) != 0 {
-						t.Fatalf("second finalize was not idempotent: frames=%q events=%+v err=%v", finalFrames, finalEvents, finalErr)
-					}
-				})
-			}
+	forEachBuiltinFormatPair(t, func(t *testing.T, source, target llmprotocol.WireFormat) {
+		for _, reason := range reasons {
+			t.Run(reason.name, func(t *testing.T) { assertStreamFinalizationReason(t, engine, source, target, reason) })
 		}
+	})
+}
+
+type streamReasonCase struct {
+	name string
+	err  error
+	code string
+}
+
+func assertStreamFinalizationReason(t *testing.T, engine *Engine, source, target llmprotocol.WireFormat, reason streamReasonCase) {
+	t.Helper()
+	stream, err := engine.NewStream(source, target, llmprotocol.StreamContext{
+		Context: context.Background(), PublicModel: "public-model", ProviderModel: "provider-model",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	frames, events, _, err := stream.Finalize(reason.err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 1 || events[0].Type != llmprotocol.EventResponseFailed || events[0].Error == nil || events[0].Error.Code != reason.code {
+		t.Fatalf("terminal events = %+v, want one %s failure", events, reason.code)
+	}
+	wire := bytes.Join(frames, nil)
+	if bytes.Count(wire, []byte(events[0].Error.Message)) != 1 {
+		t.Fatalf("terminal wire did not contain exactly one failure message for %s: %s", reason.code, wire)
+	}
+	assertStreamHasNoSuccessTerminal(t, wire)
+	if finalFrames, finalEvents, _, finalErr := stream.Finalize(nil); finalErr != nil || len(finalFrames) != 0 || len(finalEvents) != 0 {
+		t.Fatalf("second finalize was not idempotent: frames=%q events=%+v err=%v", finalFrames, finalEvents, finalErr)
+	}
+}
+
+func assertStreamHasNoSuccessTerminal(t *testing.T, wire []byte) {
+	t.Helper()
+	if bytes.Contains(wire, []byte("response.completed")) || bytes.Contains(wire, []byte("message_stop")) || bytes.Contains(wire, []byte("[DONE]")) {
+		t.Fatalf("failure stream also emitted a success terminal: %s", wire)
 	}
 }
 
 func TestMalformedTrailingFrameReturnsParseErrorAndPublicFailure(t *testing.T) {
 	engine := NewBuiltinEngine()
-	for _, source := range builtinFormats {
-		for _, target := range builtinFormats {
-			t.Run(string(source)+"/"+string(target), func(t *testing.T) {
-				stream, err := engine.NewStream(source, target, llmprotocol.StreamContext{
-					Context: context.Background(), PublicModel: "public-model", ProviderModel: "provider-model",
-				})
-				if err != nil {
-					t.Fatal(err)
-				}
-				if frames, events, _, pushErr := stream.Push([]byte("data: {\"type\":")); pushErr != nil || len(frames) != 0 || len(events) != 0 {
-					t.Fatalf("partial frame was handled before EOF: frames=%q events=%+v err=%v", frames, events, pushErr)
-				}
-				frames, events, _, finalizeErr := stream.Finalize(context.DeadlineExceeded)
-				if finalizeErr == nil {
-					t.Fatal("malformed trailing frame did not return its parse error")
-				}
-				var protocolError *llmprotocol.ProtocolError
-				if !errors.As(finalizeErr, &protocolError) || protocolError.Code != "invalid_upstream_json" {
-					t.Fatalf("malformed trailing frame error = %T %v", finalizeErr, finalizeErr)
-				}
-				if len(events) != 0 {
-					t.Fatalf("malformed frame produced semantic events: %+v", events)
-				}
-				wire := bytes.Join(frames, nil)
-				if bytes.Count(wire, []byte(protocolError.Message)) != 1 {
-					t.Fatalf("public parse-failure terminal is missing or duplicated: %s", wire)
-				}
-				if bytes.Contains(wire, []byte("response.completed")) ||
-					bytes.Contains(wire, []byte("message_stop")) || bytes.Contains(wire, []byte("[DONE]")) {
-					t.Fatalf("malformed stream also emitted a success terminal: %s", wire)
-				}
-			})
-		}
+	forEachBuiltinFormatPair(t, func(t *testing.T, source, target llmprotocol.WireFormat) {
+		assertMalformedTrailingFrame(t, engine, source, target)
+	})
+}
+
+func assertMalformedTrailingFrame(t *testing.T, engine *Engine, source, target llmprotocol.WireFormat) {
+	t.Helper()
+	stream, err := engine.NewStream(source, target, llmprotocol.StreamContext{
+		Context: context.Background(), PublicModel: "public-model", ProviderModel: "provider-model",
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
+	if frames, events, _, pushErr := stream.Push([]byte("data: {\"type\":")); pushErr != nil || len(frames) != 0 || len(events) != 0 {
+		t.Fatalf("partial frame was handled before EOF: frames=%q events=%+v err=%v", frames, events, pushErr)
+	}
+	frames, events, _, finalizeErr := stream.Finalize(context.DeadlineExceeded)
+	if finalizeErr == nil {
+		t.Fatal("malformed trailing frame did not return its parse error")
+	}
+	var protocolError *llmprotocol.ProtocolError
+	if !errors.As(finalizeErr, &protocolError) || protocolError.Code != "invalid_upstream_json" {
+		t.Fatalf("malformed trailing frame error = %T %v", finalizeErr, finalizeErr)
+	}
+	if len(events) != 0 {
+		t.Fatalf("malformed frame produced semantic events: %+v", events)
+	}
+	wire := bytes.Join(frames, nil)
+	if bytes.Count(wire, []byte(protocolError.Message)) != 1 {
+		t.Fatalf("public parse-failure terminal is missing or duplicated: %s", wire)
+	}
+	assertStreamHasNoSuccessTerminal(t, wire)
 }
 
 func TestSSEFramerBoundsIncompleteAndMultipleFrames(t *testing.T) {
@@ -180,41 +184,40 @@ func TestSSEParserHandlesCommentsMetadataAndMultilineData(t *testing.T) {
 
 func TestStreamsAcceptAnEOFDelimitedFinalSSEEventAcrossProtocolMatrix(t *testing.T) {
 	engine := NewBuiltinEngine()
-	for _, source := range builtinFormats {
-		payload := bytes.TrimSuffix(streamFixture(source), []byte("\n\n"))
-		for _, target := range builtinFormats {
-			t.Run(string(source)+"_to_"+string(target), func(t *testing.T) {
-				stream, err := engine.NewStream(source, target, llmprotocol.StreamContext{
-					Context: context.Background(), PublicModel: "public-model", ProviderModel: "provider-model",
-				})
-				if err != nil {
-					t.Fatal(err)
-				}
-				frames, _, _, err := stream.Push(payload)
-				if err != nil {
-					t.Fatal(err)
-				}
-				finalFrames, _, _, err := stream.Finalize(nil)
-				if err != nil {
-					t.Fatalf("EOF-delimited final event was rejected: %v", err)
-				}
-				wire := append(bytes.Join(frames, nil), bytes.Join(finalFrames, nil)...)
-				switch target {
-				case llmprotocol.OpenAIChatV1:
-					if !bytes.Contains(wire, []byte("data: [DONE]")) {
-						t.Fatalf("Chat success terminal is missing: %s", wire)
-					}
-				case llmprotocol.OpenAIResponsesV1:
-					if !bytes.Contains(wire, []byte("event: response.completed")) {
-						t.Fatalf("Responses success terminal is missing: %s", wire)
-					}
-				case llmprotocol.AnthropicMessagesV1:
-					if !bytes.Contains(wire, []byte("event: message_stop")) {
-						t.Fatalf("Messages success terminal is missing: %s", wire)
-					}
-				}
-			})
-		}
+	forEachBuiltinFormatPair(t, func(t *testing.T, source, target llmprotocol.WireFormat) {
+		assertEOFDelimitedFinalEvent(t, engine, source, target)
+	})
+}
+
+func assertEOFDelimitedFinalEvent(t *testing.T, engine *Engine, source, target llmprotocol.WireFormat) {
+	t.Helper()
+	payload := bytes.TrimSuffix(streamFixture(source), []byte("\n\n"))
+	stream, err := engine.NewStream(source, target, llmprotocol.StreamContext{
+		Context: context.Background(), PublicModel: "public-model", ProviderModel: "provider-model",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	frames, _, _, err := stream.Push(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	finalFrames, _, _, err := stream.Finalize(nil)
+	if err != nil {
+		t.Fatalf("EOF-delimited final event was rejected: %v", err)
+	}
+	assertSuccessTerminalForFormat(t, target, append(bytes.Join(frames, nil), bytes.Join(finalFrames, nil)...))
+}
+
+func assertSuccessTerminalForFormat(t *testing.T, target llmprotocol.WireFormat, wire []byte) {
+	t.Helper()
+	terminal := map[llmprotocol.WireFormat][]byte{
+		llmprotocol.OpenAIChatV1:        []byte("data: [DONE]"),
+		llmprotocol.OpenAIResponsesV1:   []byte("event: response.completed"),
+		llmprotocol.AnthropicMessagesV1: []byte("event: message_stop"),
+	}[target]
+	if !bytes.Contains(wire, terminal) {
+		t.Fatalf("%s success terminal is missing: %s", target, wire)
 	}
 }
 
@@ -252,71 +255,73 @@ func TestStreamMatrixAcceptsUnicodeSplitAtEveryByte(t *testing.T) {
 	engine := NewBuiltinEngine()
 	for _, target := range builtinFormats {
 		t.Run(string(target), func(t *testing.T) {
-			stream, err := engine.NewStream(llmprotocol.OpenAIChatV1, target, llmprotocol.StreamContext{
-				Context: context.Background(), PublicModel: "public-model",
-				Options: llmprotocol.StreamOptions{IncludeUsage: boolPointer(true)},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
-			var output bytes.Buffer
-			for _, value := range payload {
-				frames, _, _, err := stream.Push([]byte{value})
-				if err != nil {
-					t.Fatal(err)
-				}
-				for _, frame := range frames {
-					output.Write(frame)
-				}
-			}
-			frames, _, _, err := stream.Finalize(nil)
-			if err != nil {
-				t.Fatal(err)
-			}
-			for _, frame := range frames {
-				output.Write(frame)
-			}
-			if !bytes.Contains(output.Bytes(), []byte("你好🌍")) {
-				t.Fatalf("Unicode text changed after byte-split translation: %s", output.Bytes())
-			}
+			assertUnicodeByteSplitStream(t, engine, target, payload)
 		})
+	}
+}
+
+func assertUnicodeByteSplitStream(t *testing.T, engine *Engine, target llmprotocol.WireFormat, payload []byte) {
+	t.Helper()
+	stream, err := engine.NewStream(llmprotocol.OpenAIChatV1, target, llmprotocol.StreamContext{
+		Context: context.Background(), PublicModel: "public-model",
+		Options: llmprotocol.StreamOptions{IncludeUsage: boolPointer(true)},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	for _, value := range payload {
+		frames, _, _, err := stream.Push([]byte{value})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, frame := range frames {
+			output.Write(frame)
+		}
+	}
+	frames, _, _, err := stream.Finalize(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, frame := range frames {
+		output.Write(frame)
+	}
+	if !bytes.Contains(output.Bytes(), []byte("你好🌍")) {
+		t.Fatalf("Unicode text changed after byte-split translation: %s", output.Bytes())
 	}
 }
 
 func TestStreamFinalizeValidatesTrailingBytesAfterSemanticTerminal(t *testing.T) {
 	engine := NewBuiltinEngine()
-	for _, source := range builtinFormats {
-		for _, target := range builtinFormats {
-			t.Run(string(source)+"_to_"+string(target), func(t *testing.T) {
-				stream, err := engine.NewStream(source, target, llmprotocol.StreamContext{Context: context.Background(), PublicModel: "model"})
-				if err != nil {
-					t.Fatal(err)
-				}
-				payload := append(append([]byte(nil), streamFixture(source)...), []byte("data: {\"trailing\":")...)
-				frames, events, _, pushErr := stream.Push(payload)
-				if pushErr != nil {
-					t.Fatalf("terminal push failed before trailing fragment was finalized: %v", pushErr)
-				}
-				for _, event := range events {
-					if event.Type == llmprotocol.EventResponseCompleted {
-						t.Fatalf("success escaped before trailing bytes were validated: %+v", events)
-					}
-				}
-				assertNoSuccessfulStreamTerminal(t, target, bytes.Join(frames, nil))
-				finalFrames, _, _, finalizeErr := stream.Finalize(nil)
-				if finalizeErr == nil {
-					t.Fatal("trailing partial frame was silently ignored")
-				}
-				wire := append(bytes.Join(frames, nil), bytes.Join(finalFrames, nil)...)
-				assertNoSuccessfulStreamTerminal(t, target, wire)
-				if !bytes.Contains(wire, []byte("stream")) {
-					t.Fatalf("trailing partial frame did not publish a failure terminal: %s", wire)
-				}
-				if frames, events, diagnostics, finalizeErr := stream.Finalize(nil); finalizeErr != nil || len(frames) != 0 || len(events) != 0 || len(diagnostics) != 0 {
-					t.Fatalf("second finalize was not idempotent: frames=%q events=%+v diagnostics=%+v err=%v", frames, events, diagnostics, finalizeErr)
-				}
-			})
-		}
+	forEachBuiltinFormatPair(t, func(t *testing.T, source, target llmprotocol.WireFormat) {
+		assertTrailingBytesAfterTerminal(t, engine, source, target)
+	})
+}
+
+func assertTrailingBytesAfterTerminal(t *testing.T, engine *Engine, source, target llmprotocol.WireFormat) {
+	t.Helper()
+	stream, err := engine.NewStream(source, target, llmprotocol.StreamContext{Context: context.Background(), PublicModel: "model"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := append(append([]byte(nil), streamFixture(source)...), []byte("data: {\"trailing\":")...)
+	frames, events, _, pushErr := stream.Push(payload)
+	if pushErr != nil {
+		t.Fatalf("terminal push failed before trailing fragment was finalized: %v", pushErr)
+	}
+	assertNoCompletedEvent(t, events, "success escaped before trailing bytes were validated")
+	assertNoSuccessfulStreamTerminal(t, target, bytes.Join(frames, nil))
+	finalFrames, _, _, finalizeErr := stream.Finalize(nil)
+	if finalizeErr == nil {
+		t.Fatal("trailing partial frame was silently ignored")
+	}
+	wire := append(bytes.Join(frames, nil), bytes.Join(finalFrames, nil)...)
+	assertNoSuccessfulStreamTerminal(t, target, wire)
+	if !bytes.Contains(wire, []byte("stream")) {
+		t.Fatalf("trailing partial frame did not publish a failure terminal: %s", wire)
+	}
+	if frames, events, diagnostics, finalizeErr := stream.Finalize(nil); finalizeErr != nil || len(frames) != 0 || len(events) != 0 || len(diagnostics) != 0 {
+		t.Fatalf("second finalize was not idempotent: frames=%q events=%+v diagnostics=%+v err=%v", frames, events, diagnostics, finalizeErr)
 	}
 }
 
@@ -324,38 +329,38 @@ func TestStreamRejectsPushAfterTerminalAndFinalizesOnce(t *testing.T) {
 	engine := NewBuiltinEngine()
 	for _, format := range builtinFormats {
 		t.Run(string(format), func(t *testing.T) {
-			stream, err := engine.NewStream(format, format, llmprotocol.StreamContext{Context: context.Background(), PublicModel: "model"})
-			if err != nil {
-				t.Fatal(err)
-			}
-			frames, events, _, pushErr := stream.Push(streamFixture(format))
-			if pushErr != nil {
-				t.Fatal(pushErr)
-			}
-			for _, event := range events {
-				if event.Type == llmprotocol.EventResponseCompleted {
-					t.Fatalf("success was visible before transport finalization: %+v", events)
-				}
-			}
-			assertNoSuccessfulStreamTerminal(t, format, bytes.Join(frames, nil))
-			finalFrames, finalEvents, _, finalizeErr := stream.Finalize(nil)
-			if finalizeErr != nil {
-				t.Fatalf("clean terminal finalize failed: %v", finalizeErr)
-			}
-			if len(finalEvents) != 1 || finalEvents[0].Type != llmprotocol.EventResponseCompleted {
-				t.Fatalf("finalized terminal events = %+v", finalEvents)
-			}
-			wire := append(bytes.Join(frames, nil), bytes.Join(finalFrames, nil)...)
-			if len(wire) == 0 {
-				t.Fatal("clean terminal stream is empty")
-			}
-			if _, _, _, pushErr := stream.Push([]byte("\n")); pushErr == nil {
-				t.Fatal("push after finalized terminal was accepted")
-			}
-			if _, _, _, finalizeErr := stream.Finalize(context.Canceled); finalizeErr != nil {
-				t.Fatalf("idempotent finalize synthesized a second terminal: %v", finalizeErr)
-			}
+			assertPushAfterTerminalRejected(t, engine, format)
 		})
+	}
+}
+
+func assertPushAfterTerminalRejected(t *testing.T, engine *Engine, format llmprotocol.WireFormat) {
+	t.Helper()
+	stream, err := engine.NewStream(format, format, llmprotocol.StreamContext{Context: context.Background(), PublicModel: "model"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	frames, events, _, pushErr := stream.Push(streamFixture(format))
+	if pushErr != nil {
+		t.Fatal(pushErr)
+	}
+	assertNoCompletedEvent(t, events, "success was visible before transport finalization")
+	assertNoSuccessfulStreamTerminal(t, format, bytes.Join(frames, nil))
+	finalFrames, finalEvents, _, finalizeErr := stream.Finalize(nil)
+	if finalizeErr != nil {
+		t.Fatalf("clean terminal finalize failed: %v", finalizeErr)
+	}
+	if len(finalEvents) != 1 || finalEvents[0].Type != llmprotocol.EventResponseCompleted {
+		t.Fatalf("finalized terminal events = %+v", finalEvents)
+	}
+	if len(append(bytes.Join(frames, nil), bytes.Join(finalFrames, nil)...)) == 0 {
+		t.Fatal("clean terminal stream is empty")
+	}
+	if _, _, _, pushErr := stream.Push([]byte("\n")); pushErr == nil {
+		t.Fatal("push after finalized terminal was accepted")
+	}
+	if _, _, _, finalizeErr := stream.Finalize(context.Canceled); finalizeErr != nil {
+		t.Fatalf("idempotent finalize synthesized a second terminal: %v", finalizeErr)
 	}
 }
 
@@ -880,147 +885,49 @@ func TestResponsesStreamItemIdentityIsStable(t *testing.T) {
 }
 
 func TestProviderStreamRequiredUnionFieldsAreClosed(t *testing.T) {
-	tests := []struct {
-		name    string
-		decoder llmprotocol.StreamDecoder
-		frame   string
-		code    string
-	}{
-		{
-			name: "responses lifecycle resource",
-			decoder: OpenAIResponsesCodec{}.NewDecoder(
-				llmprotocol.StreamContext{Context: context.Background()}, llmprotocol.DefaultPolicy(),
-			),
-			frame: "event: response.created\ndata: {\"type\":\"response.created\",\"sequence_number\":0}\n\n",
-			code:  "stream_response_required",
-		},
-		{
-			name: "responses output item",
-			decoder: OpenAIResponsesCodec{}.NewDecoder(
-				llmprotocol.StreamContext{Context: context.Background()}, llmprotocol.DefaultPolicy(),
-			),
-			frame: "event: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"sequence_number\":0,\"output_index\":0}\n\n",
-			code:  "stream_item_required",
-		},
-		{
-			name: "responses delta target",
-			decoder: OpenAIResponsesCodec{}.NewDecoder(
-				llmprotocol.StreamContext{Context: context.Background()}, llmprotocol.DefaultPolicy(),
-			),
-			frame: "event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"sequence_number\":0,\"output_index\":0,\"delta\":\"orphan\"}\n\n",
-			code:  "stream_delta_target_required",
-		},
-		{
-			name: "responses negative output index",
-			decoder: OpenAIResponsesCodec{}.NewDecoder(
-				llmprotocol.StreamContext{Context: context.Background()}, llmprotocol.DefaultPolicy(),
-			),
-			frame: "event: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"sequence_number\":0,\"output_index\":-1,\"item\":{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"status\":\"in_progress\",\"content\":[]}}\n\n",
-			code:  "invalid_stream_item_index",
-		},
-		{
-			name: "responses missing content index",
-			decoder: OpenAIResponsesCodec{}.NewDecoder(
-				llmprotocol.StreamContext{Context: context.Background()}, llmprotocol.DefaultPolicy(),
-			),
-			frame: "event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"sequence_number\":0,\"output_index\":0,\"item_id\":\"msg_1\",\"delta\":\"x\"}\n\n",
-			code:  "stream_delta_target_required",
-		},
-		{
-			name: "responses missing required delta member",
-			decoder: OpenAIResponsesCodec{}.NewDecoder(
-				llmprotocol.StreamContext{Context: context.Background()}, llmprotocol.DefaultPolicy(),
-			),
-			frame: "event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"sequence_number\":0,\"output_index\":0,\"content_index\":0,\"item_id\":\"msg_1\"}\n\n",
-			code:  "stream_required_field",
-		},
-		{
-			name: "anthropic start message",
-			decoder: AnthropicMessagesCodec{}.NewDecoder(
-				llmprotocol.StreamContext{Context: context.Background()}, llmprotocol.DefaultPolicy(),
-			),
-			frame: "event: message_start\ndata: {\"type\":\"message_start\"}\n\n",
-			code:  "stream_message_required",
-		},
-		{
-			name: "anthropic content block",
-			decoder: AnthropicMessagesCodec{}.NewDecoder(
-				llmprotocol.StreamContext{Context: context.Background()}, llmprotocol.DefaultPolicy(),
-			),
-			frame: "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0}\n\n",
-			code:  "stream_content_block_required",
-		},
-		{
-			name: "anthropic missing content index",
-			decoder: AnthropicMessagesCodec{}.NewDecoder(
-				llmprotocol.StreamContext{Context: context.Background()}, llmprotocol.DefaultPolicy(),
-			),
-			frame: "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n",
-			code:  "invalid_stream_item_index",
-		},
-		{
-			name: "anthropic negative content index",
-			decoder: AnthropicMessagesCodec{}.NewDecoder(
-				llmprotocol.StreamContext{Context: context.Background()}, llmprotocol.DefaultPolicy(),
-			),
-			frame: "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":-1,\"delta\":{\"type\":\"text_delta\",\"text\":\"x\"}}\n\n",
-			code:  "invalid_stream_item_index",
-		},
-		{
-			name: "anthropic message delta",
-			decoder: AnthropicMessagesCodec{}.NewDecoder(
-				llmprotocol.StreamContext{Context: context.Background()}, llmprotocol.DefaultPolicy(),
-			),
-			frame: "event: message_delta\ndata: {\"type\":\"message_delta\"}\n\n",
-			code:  "stream_message_delta_required",
-		},
-		{
-			name: "anthropic message delta usage",
-			decoder: AnthropicMessagesCodec{}.NewDecoder(
-				llmprotocol.StreamContext{Context: context.Background()}, llmprotocol.DefaultPolicy(),
-			),
-			frame: "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null}}\n\n",
-			code:  "stream_message_usage_required",
-		},
-		{
-			name: "anthropic content delta member",
-			decoder: AnthropicMessagesCodec{}.NewDecoder(
-				llmprotocol.StreamContext{Context: context.Background()}, llmprotocol.DefaultPolicy(),
-			),
-			frame: "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\"}}\n\n",
-			code:  "stream_required_field",
-		},
-		{
-			name: "anthropic error payload",
-			decoder: AnthropicMessagesCodec{}.NewDecoder(
-				llmprotocol.StreamContext{Context: context.Background()}, llmprotocol.DefaultPolicy(),
-			),
-			frame: "event: error\ndata: {\"type\":\"error\",\"error\":{\"type\":\"\",\"message\":\"failed\"}}\n\n",
-			code:  "invalid_anthropic_stream_error",
-		},
-		{
-			name: "anthropic stop sequence with wrong reason",
-			decoder: AnthropicMessagesCodec{}.NewDecoder(
-				llmprotocol.StreamContext{Context: context.Background()}, llmprotocol.DefaultPolicy(),
-			),
-			frame: "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":\"END\"},\"usage\":{\"output_tokens\":1}}\n\n",
-			code:  "anthropic_stop_sequence_reason",
-		},
-		{
-			name: "anthropic empty stop sequence with no reason",
-			decoder: AnthropicMessagesCodec{}.NewDecoder(
-				llmprotocol.StreamContext{Context: context.Background()}, llmprotocol.DefaultPolicy(),
-			),
-			frame: "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":null,\"stop_sequence\":\"\"},\"usage\":{\"output_tokens\":1}}\n\n",
-			code:  "anthropic_stop_sequence_reason",
-		},
-	}
-	for _, test := range tests {
+	for _, test := range providerRequiredFieldCases() {
 		t.Run(test.name, func(t *testing.T) {
-			_, _, err := test.decoder.Push([]byte(test.frame))
+			_, _, err := newProviderStreamDecoder(test.format).Push([]byte(test.frame))
 			assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, test.code)
 		})
 	}
+}
+
+type providerRequiredFieldCase struct {
+	name   string
+	format llmprotocol.WireFormat
+	frame  string
+	code   string
+}
+
+func providerRequiredFieldCases() []providerRequiredFieldCase {
+	responses, anthropic := llmprotocol.OpenAIResponsesV1, llmprotocol.AnthropicMessagesV1
+	return []providerRequiredFieldCase{
+		{"responses lifecycle resource", responses, "event: response.created\ndata: {\"type\":\"response.created\",\"sequence_number\":0}\n\n", "stream_response_required"},
+		{"responses output item", responses, "event: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"sequence_number\":0,\"output_index\":0}\n\n", "stream_item_required"},
+		{"responses delta target", responses, "event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"sequence_number\":0,\"output_index\":0,\"delta\":\"orphan\"}\n\n", "stream_delta_target_required"},
+		{"responses negative output index", responses, "event: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"sequence_number\":0,\"output_index\":-1,\"item\":{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"status\":\"in_progress\",\"content\":[]}}\n\n", "invalid_stream_item_index"},
+		{"responses missing content index", responses, "event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"sequence_number\":0,\"output_index\":0,\"item_id\":\"msg_1\",\"delta\":\"x\"}\n\n", "stream_delta_target_required"},
+		{"responses missing required delta member", responses, "event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"sequence_number\":0,\"output_index\":0,\"content_index\":0,\"item_id\":\"msg_1\"}\n\n", "stream_required_field"},
+		{"anthropic start message", anthropic, "event: message_start\ndata: {\"type\":\"message_start\"}\n\n", "stream_message_required"},
+		{"anthropic content block", anthropic, "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0}\n\n", "stream_content_block_required"},
+		{"anthropic missing content index", anthropic, "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n", "invalid_stream_item_index"},
+		{"anthropic negative content index", anthropic, "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":-1,\"delta\":{\"type\":\"text_delta\",\"text\":\"x\"}}\n\n", "invalid_stream_item_index"},
+		{"anthropic message delta", anthropic, "event: message_delta\ndata: {\"type\":\"message_delta\"}\n\n", "stream_message_delta_required"},
+		{"anthropic message delta usage", anthropic, "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null}}\n\n", "stream_message_usage_required"},
+		{"anthropic content delta member", anthropic, "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\"}}\n\n", "stream_required_field"},
+		{"anthropic error payload", anthropic, "event: error\ndata: {\"type\":\"error\",\"error\":{\"type\":\"\",\"message\":\"failed\"}}\n\n", "invalid_anthropic_stream_error"},
+		{"anthropic stop sequence with wrong reason", anthropic, "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":\"END\"},\"usage\":{\"output_tokens\":1}}\n\n", "anthropic_stop_sequence_reason"},
+		{"anthropic empty stop sequence with no reason", anthropic, "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":null,\"stop_sequence\":\"\"},\"usage\":{\"output_tokens\":1}}\n\n", "anthropic_stop_sequence_reason"},
+	}
+}
+
+func newProviderStreamDecoder(format llmprotocol.WireFormat) llmprotocol.StreamDecoder {
+	streamContext := llmprotocol.StreamContext{Context: context.Background()}
+	if format == llmprotocol.AnthropicMessagesV1 {
+		return AnthropicMessagesCodec{}.NewDecoder(streamContext, llmprotocol.DefaultPolicy())
+	}
+	return OpenAIResponsesCodec{}.NewDecoder(streamContext, llmprotocol.DefaultPolicy())
 }
 
 func TestResponsesStreamSequenceNumbersAreRequiredAndContiguous(t *testing.T) {
@@ -1158,79 +1065,7 @@ func TestOfficialResponsesStreamMetadataAndStructuralEventsAreAccepted(t *testin
 			t.Fatalf("setup event %q was rejected: %v", eventType, err)
 		}
 	}
-	markers := []map[string]any{
-		{
-			"type": "response.content_part.added", "sequence_number": 4,
-			"item_id": "item_1", "output_index": 0, "content_index": 0,
-			"part": map[string]any{"type": "output_text", "text": "", "annotations": []any{}},
-		},
-		{
-			"type": "response.output_text.delta", "sequence_number": 5,
-			"item_id": "item_1", "output_index": 0, "content_index": 0, "delta": "done",
-		},
-		{
-			"type": "response.output_text.done", "sequence_number": 6,
-			"item_id": "item_1", "output_index": 0, "content_index": 0,
-			"text": "done", "logprobs": []any{}, "obfuscation": "padding",
-		},
-		{
-			"type": "response.content_part.done", "sequence_number": 7,
-			"item_id": "item_1", "output_index": 0, "content_index": 0,
-			"part": map[string]any{"type": "output_text", "text": "done", "annotations": []any{}},
-		},
-		{
-			"type": "response.content_part.added", "sequence_number": 8,
-			"item_id": "item_1", "output_index": 0, "content_index": 1,
-			"part": map[string]any{"type": "refusal", "refusal": ""},
-		},
-		{
-			"type": "response.refusal.delta", "sequence_number": 9,
-			"item_id": "item_1", "output_index": 0, "content_index": 1, "delta": "cannot comply",
-		},
-		{
-			"type": "response.refusal.done", "sequence_number": 10,
-			"item_id": "item_1", "output_index": 0, "content_index": 1, "refusal": "cannot comply",
-		},
-		{
-			"type": "response.content_part.done", "sequence_number": 11,
-			"item_id": "item_1", "output_index": 0, "content_index": 1,
-			"part": map[string]any{"type": "refusal", "refusal": "cannot comply"},
-		},
-		{
-			"type": "response.function_call_arguments.delta", "sequence_number": 12,
-			"item_id": "item_2", "output_index": 1, "delta": `{"q":"weather"}`,
-		},
-		{
-			"type": "response.function_call_arguments.done", "sequence_number": 13,
-			"item_id": "item_2", "output_index": 1, "name": "lookup", "arguments": `{"q":"weather"}`,
-		},
-		{
-			"type": "response.reasoning_summary_part.added", "sequence_number": 14,
-			"item_id": "item_3", "output_index": 2, "summary_index": 0,
-			"part": map[string]any{"type": "summary_text", "text": ""},
-		},
-		{
-			"type": "response.reasoning_summary_text.delta", "sequence_number": 15,
-			"item_id": "item_3", "output_index": 2, "summary_index": 0, "delta": "summary",
-		},
-		{
-			"type": "response.reasoning_summary_text.done", "sequence_number": 16,
-			"item_id": "item_3", "output_index": 2, "summary_index": 0, "text": "summary",
-		},
-		{
-			"type": "response.reasoning_summary_part.done", "sequence_number": 17,
-			"item_id": "item_3", "output_index": 2, "summary_index": 0,
-			"part": map[string]any{"type": "summary_text", "text": "summary"},
-		},
-		{
-			"type": "response.reasoning_text.delta", "sequence_number": 18,
-			"item_id": "item_3", "output_index": 2, "content_index": 0, "delta": "reasoning",
-		},
-		{
-			"type": "response.reasoning_text.done", "sequence_number": 19,
-			"item_id": "item_3", "output_index": 2, "content_index": 0, "text": "reasoning",
-		},
-	}
+	markers := officialResponsesStreamMarkers
 	var diagnostics llmprotocol.Diagnostics
 	for _, marker := range markers {
 		eventType, _ := marker["type"].(string)
@@ -1253,6 +1088,80 @@ func TestOfficialResponsesStreamMetadataAndStructuralEventsAreAccepted(t *testin
 	if !foundLogprobs {
 		t.Fatalf("stream logprobs omission was not explicit: %+v", diagnostics)
 	}
+}
+
+var officialResponsesStreamMarkers = []map[string]any{
+	{
+		"type": "response.content_part.added", "sequence_number": 4,
+		"item_id": "item_1", "output_index": 0, "content_index": 0,
+		"part": map[string]any{"type": "output_text", "text": "", "annotations": []any{}},
+	},
+	{
+		"type": "response.output_text.delta", "sequence_number": 5,
+		"item_id": "item_1", "output_index": 0, "content_index": 0, "delta": "done",
+	},
+	{
+		"type": "response.output_text.done", "sequence_number": 6,
+		"item_id": "item_1", "output_index": 0, "content_index": 0,
+		"text": "done", "logprobs": []any{}, "obfuscation": "padding",
+	},
+	{
+		"type": "response.content_part.done", "sequence_number": 7,
+		"item_id": "item_1", "output_index": 0, "content_index": 0,
+		"part": map[string]any{"type": "output_text", "text": "done", "annotations": []any{}},
+	},
+	{
+		"type": "response.content_part.added", "sequence_number": 8,
+		"item_id": "item_1", "output_index": 0, "content_index": 1,
+		"part": map[string]any{"type": "refusal", "refusal": ""},
+	},
+	{
+		"type": "response.refusal.delta", "sequence_number": 9,
+		"item_id": "item_1", "output_index": 0, "content_index": 1, "delta": "cannot comply",
+	},
+	{
+		"type": "response.refusal.done", "sequence_number": 10,
+		"item_id": "item_1", "output_index": 0, "content_index": 1, "refusal": "cannot comply",
+	},
+	{
+		"type": "response.content_part.done", "sequence_number": 11,
+		"item_id": "item_1", "output_index": 0, "content_index": 1,
+		"part": map[string]any{"type": "refusal", "refusal": "cannot comply"},
+	},
+	{
+		"type": "response.function_call_arguments.delta", "sequence_number": 12,
+		"item_id": "item_2", "output_index": 1, "delta": `{"q":"weather"}`,
+	},
+	{
+		"type": "response.function_call_arguments.done", "sequence_number": 13,
+		"item_id": "item_2", "output_index": 1, "name": "lookup", "arguments": `{"q":"weather"}`,
+	},
+	{
+		"type": "response.reasoning_summary_part.added", "sequence_number": 14,
+		"item_id": "item_3", "output_index": 2, "summary_index": 0,
+		"part": map[string]any{"type": "summary_text", "text": ""},
+	},
+	{
+		"type": "response.reasoning_summary_text.delta", "sequence_number": 15,
+		"item_id": "item_3", "output_index": 2, "summary_index": 0, "delta": "summary",
+	},
+	{
+		"type": "response.reasoning_summary_text.done", "sequence_number": 16,
+		"item_id": "item_3", "output_index": 2, "summary_index": 0, "text": "summary",
+	},
+	{
+		"type": "response.reasoning_summary_part.done", "sequence_number": 17,
+		"item_id": "item_3", "output_index": 2, "summary_index": 0,
+		"part": map[string]any{"type": "summary_text", "text": "summary"},
+	},
+	{
+		"type": "response.reasoning_text.delta", "sequence_number": 18,
+		"item_id": "item_3", "output_index": 2, "content_index": 0, "delta": "reasoning",
+	},
+	{
+		"type": "response.reasoning_text.done", "sequence_number": 19,
+		"item_id": "item_3", "output_index": 2, "content_index": 0, "text": "reasoning",
+	},
 }
 
 var officialAnthropicStreamEvents = fields(
@@ -1286,6 +1195,14 @@ func TestOfficialAnthropicStreamUnionFieldsAreExplicit(t *testing.T) {
 		officialSupportedAnthropicStreamDeltas,
 		officialUnsupportedAnthropicStreamDeltas,
 	)
+	assertOfficialAnthropicStreamMetadata(t)
+	for _, test := range officialUnsupportedAnthropicStreamCases() {
+		t.Run(test.name, func(t *testing.T) { assertUnsupportedAnthropicStreamCase(t, test) })
+	}
+}
+
+func assertOfficialAnthropicStreamMetadata(t *testing.T) {
+	t.Helper()
 	decoder := AnthropicMessagesCodec{}.NewDecoder(
 		llmprotocol.StreamContext{Context: context.Background(), PublicModel: "public-model"},
 		llmprotocol.DefaultPolicy(),
@@ -1329,12 +1246,16 @@ func TestOfficialAnthropicStreamUnionFieldsAreExplicit(t *testing.T) {
 	if !fields["stream.delta.container"] || !fields["stream.delta.stop_details"] {
 		t.Fatalf("Anthropic stream metadata omissions were not explicit: %+v", diagnostics)
 	}
+}
 
-	unsupported := []struct {
-		name  string
-		event map[string]any
-		code  string
-	}{
+type unsupportedAnthropicStreamCase struct {
+	name  string
+	event map[string]any
+	code  string
+}
+
+func officialUnsupportedAnthropicStreamCases() []unsupportedAnthropicStreamCase {
+	return []unsupportedAnthropicStreamCase{
 		{
 			name: "citation delta",
 			event: map[string]any{
@@ -1416,22 +1337,23 @@ func TestOfficialAnthropicStreamUnionFieldsAreExplicit(t *testing.T) {
 			code: "unsupported_content",
 		},
 	}
-	for _, test := range unsupported {
-		t.Run(test.name, func(t *testing.T) {
-			eventType, _ := test.event["type"].(string)
-			frame, err := encodeSSE(eventType, test.event)
-			if err != nil {
-				t.Fatal(err)
-			}
-			fresh := AnthropicMessagesCodec{}.NewDecoder(
-				llmprotocol.StreamContext{Context: context.Background()}, llmprotocol.DefaultPolicy(),
-			)
-			_, _, err = fresh.Push(frame)
-			var protocolError *llmprotocol.ProtocolError
-			if !errors.As(err, &protocolError) || protocolError.Category != llmprotocol.ErrorUnsupportedFeature || protocolError.Code != test.code {
-				t.Fatalf("returned %T %v, want unsupported_feature/%s", err, err, test.code)
-			}
-		})
+}
+
+func assertUnsupportedAnthropicStreamCase(t *testing.T, test unsupportedAnthropicStreamCase) {
+	t.Helper()
+	eventType, _ := test.event["type"].(string)
+	frame, err := encodeSSE(eventType, test.event)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoder := AnthropicMessagesCodec{}.NewDecoder(
+		llmprotocol.StreamContext{Context: context.Background()}, llmprotocol.DefaultPolicy(),
+	)
+	_, _, err = decoder.Push(frame)
+	var protocolError *llmprotocol.ProtocolError
+	if !errors.As(err, &protocolError) ||
+		protocolError.Category != llmprotocol.ErrorUnsupportedFeature || protocolError.Code != test.code {
+		t.Fatalf("returned %T %v, want unsupported_feature/%s", err, err, test.code)
 	}
 }
 

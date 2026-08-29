@@ -18,10 +18,12 @@ import (
 
 const updateProtocolGoldensEnv = "UPDATE_PROTOCOL_GOLDENS"
 
-var goldenFormats = []struct {
+type goldenFormat struct {
 	name   string
 	format llmprotocol.WireFormat
-}{
+}
+
+var goldenFormats = []goldenFormat{
 	{name: "chat", format: llmprotocol.OpenAIChatV1},
 	{name: "responses", format: llmprotocol.OpenAIResponsesV1},
 	{name: "anthropic", format: llmprotocol.AnthropicMessagesV1},
@@ -122,44 +124,48 @@ func TestGoldenStreamTranslationMatrix(t *testing.T) {
 	}
 	engine := NewBuiltinEngine()
 	for _, inputPath := range inputs {
-		inputPath := inputPath
-		prefix := strings.TrimSuffix(filepath.Base(inputPath), "-in.json")
-		source, err := goldenSourceFormat(prefix)
-		if err != nil {
-			t.Fatal(err)
-		}
-		body, err := os.ReadFile(inputPath)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var input goldenStreamInput
-		if err := json.Unmarshal(body, &input); err != nil {
-			t.Fatalf("invalid stream golden input %s: %v", inputPath, err)
-		}
-		if input.PublicModel == "" || input.ProviderModel == "" || len(input.Chunks) == 0 {
-			t.Fatalf("stream golden input %s requires public_model, provider_model, and chunks", inputPath)
-		}
-		for _, target := range goldenFormats {
-			t.Run(prefix+"_to_"+target.name, func(t *testing.T) {
-				outputFrames := translateGoldenStream(t, engine, source, target.format, input, input.Chunks)
-				verifyGoldenTargetStream(t, engine, target.format, input, outputFrames)
-				actual := marshalGoldenStreamTranscript(t, outputFrames)
-				expectedPath := filepath.Join(directory, prefix+"-"+target.name+"-out.json")
-				if os.Getenv(updateProtocolGoldensEnv) == "1" {
-					if err := os.WriteFile(expectedPath, actual, 0o644); err != nil {
-						t.Fatal(err)
-					}
-				}
-				expected, err := os.ReadFile(expectedPath)
-				if err != nil {
-					t.Fatalf("missing golden output %s: %v", expectedPath, err)
-				}
-				if !jsonEquivalent(expected, actual) {
-					t.Fatalf("stream protocol translation drifted\nexpected (%s):\n%s\nactual:\n%s", expectedPath, prettyJSON(t, expected), actual)
-				}
-			})
-		}
+		runGoldenStreamInput(t, engine, directory, inputPath)
 	}
+}
+
+func runGoldenStreamInput(t *testing.T, engine *Engine, directory, inputPath string) {
+	t.Helper()
+	prefix := strings.TrimSuffix(filepath.Base(inputPath), "-in.json")
+	source, err := goldenSourceFormat(prefix)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(inputPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var input goldenStreamInput
+	if err := json.Unmarshal(body, &input); err != nil {
+		t.Fatalf("invalid stream golden input %s: %v", inputPath, err)
+	}
+	if input.PublicModel == "" || input.ProviderModel == "" || len(input.Chunks) == 0 {
+		t.Fatalf("stream golden input %s requires public_model, provider_model, and chunks", inputPath)
+	}
+	for _, target := range goldenFormats {
+		t.Run(prefix+"_to_"+target.name, func(t *testing.T) {
+			assertGoldenStreamTarget(t, engine, directory, prefix, source, target, input)
+		})
+	}
+}
+
+func assertGoldenStreamTarget(
+	t *testing.T,
+	engine *Engine,
+	directory, prefix string,
+	source llmprotocol.WireFormat,
+	target goldenFormat,
+	input goldenStreamInput,
+) {
+	t.Helper()
+	outputFrames := translateGoldenStream(t, engine, source, target.format, input, input.Chunks)
+	verifyGoldenTargetStream(t, engine, target.format, input, outputFrames)
+	actual := marshalGoldenStreamTranscript(t, outputFrames)
+	assertGoldenOutput(t, filepath.Join(directory, prefix+"-"+target.name+"-out.json"), actual, "stream protocol translation")
 }
 
 func TestGoldenStreamTranslationIsChunkBoundaryIndependent(t *testing.T) {
@@ -482,51 +488,55 @@ func TestGoldenCapabilityMatrix(t *testing.T) {
 	}
 	engine := NewBuiltinEngine()
 	for _, inputPath := range inputs {
-		inputPath := inputPath
-		prefix := strings.TrimSuffix(filepath.Base(inputPath), "-in.json")
-		source, err := goldenSourceFormat(prefix)
-		if err != nil {
-			t.Fatal(err)
-		}
-		descriptor, err := os.ReadFile(inputPath)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var input goldenCapabilityInput
-		if err := json.Unmarshal(descriptor, &input); err != nil {
-			t.Fatalf("invalid capability golden input %s: %v", inputPath, err)
-		}
-		validateGoldenCapabilityInput(t, inputPath, input)
-		for _, target := range goldenFormats {
-			t.Run(prefix+"_to_"+target.name, func(t *testing.T) {
-				actualValue := runCapabilityCases(t, engine, source, target.format, input)
-				if fragmented, hasStream := fragmentGoldenCapabilityInput(input); hasStream {
-					fragmentedValue := runCapabilityCases(t, engine, source, target.format, fragmented)
-					if !reflect.DeepEqual(actualValue, fragmentedValue) {
-						t.Fatalf("stream capability outcome changed with one-byte transport chunks\nbaseline: %#v\nfragmented: %#v", actualValue, fragmentedValue)
-					}
-				}
-				actual, err := json.MarshalIndent(actualValue, "", "  ")
-				if err != nil {
-					t.Fatal(err)
-				}
-				actual = append(actual, '\n')
-				expectedPath := filepath.Join(directory, prefix+"-"+target.name+"-out.json")
-				if os.Getenv(updateProtocolGoldensEnv) == "1" {
-					if err := os.WriteFile(expectedPath, actual, 0o644); err != nil {
-						t.Fatal(err)
-					}
-				}
-				expected, err := os.ReadFile(expectedPath)
-				if err != nil {
-					t.Fatalf("missing golden output %s: %v", expectedPath, err)
-				}
-				if !jsonEquivalent(expected, actual) {
-					t.Fatalf("capability outcome drifted\nexpected (%s):\n%s\nactual:\n%s", expectedPath, expected, actual)
-				}
-			})
+		runGoldenCapabilityInput(t, engine, directory, inputPath)
+	}
+}
+
+func runGoldenCapabilityInput(t *testing.T, engine *Engine, directory, inputPath string) {
+	t.Helper()
+	prefix := strings.TrimSuffix(filepath.Base(inputPath), "-in.json")
+	source, err := goldenSourceFormat(prefix)
+	if err != nil {
+		t.Fatal(err)
+	}
+	descriptor, err := os.ReadFile(inputPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var input goldenCapabilityInput
+	if err := json.Unmarshal(descriptor, &input); err != nil {
+		t.Fatalf("invalid capability golden input %s: %v", inputPath, err)
+	}
+	validateGoldenCapabilityInput(t, inputPath, input)
+	for _, target := range goldenFormats {
+		t.Run(prefix+"_to_"+target.name, func(t *testing.T) {
+			assertGoldenCapabilityTarget(t, engine, directory, prefix, source, target, input)
+		})
+	}
+}
+
+func assertGoldenCapabilityTarget(
+	t *testing.T,
+	engine *Engine,
+	directory, prefix string,
+	source llmprotocol.WireFormat,
+	target goldenFormat,
+	input goldenCapabilityInput,
+) {
+	t.Helper()
+	actualValue := runCapabilityCases(t, engine, source, target.format, input)
+	if fragmented, hasStream := fragmentGoldenCapabilityInput(input); hasStream {
+		fragmentedValue := runCapabilityCases(t, engine, source, target.format, fragmented)
+		if !reflect.DeepEqual(actualValue, fragmentedValue) {
+			t.Fatalf("stream capability outcome changed with one-byte transport chunks\nbaseline: %#v\nfragmented: %#v", actualValue, fragmentedValue)
 		}
 	}
+	actual, err := json.MarshalIndent(actualValue, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	actual = append(actual, '\n')
+	assertGoldenOutput(t, filepath.Join(directory, prefix+"-"+target.name+"-out.json"), actual, "capability outcome")
 }
 
 func validateGoldenCapabilityInput(t *testing.T, path string, input goldenCapabilityInput) {
@@ -547,24 +557,34 @@ func validateGoldenCapabilityInput(t *testing.T, path string, input goldenCapabi
 		t.Fatalf("capability fixture %s cannot combine top-level body/stream with named cases", path)
 	}
 	for _, testCase := range input.Cases {
-		hasBody := len(testCase.Body) != 0
-		hasPatch := len(testCase.Patch) != 0
-		hasStream := testCase.Stream != nil
-		if hasBody && hasPatch {
-			t.Fatalf("capability fixture %s case %q cannot combine body and patch", path, testCase.Name)
+		validateGoldenCapabilityCase(t, path, input.Operation, input.Base, testCase)
+	}
+}
+
+func validateGoldenCapabilityCase(
+	t *testing.T,
+	path, operation string,
+	base json.RawMessage,
+	testCase goldenCapabilityCase,
+) {
+	t.Helper()
+	hasBody := len(testCase.Body) != 0
+	hasPatch := len(testCase.Patch) != 0
+	hasStream := testCase.Stream != nil
+	if hasBody && hasPatch {
+		t.Fatalf("capability fixture %s case %q cannot combine body and patch", path, testCase.Name)
+	}
+	if operation == "stream" {
+		if !hasStream || hasBody || hasPatch {
+			t.Fatalf("stream capability fixture %s case %q must contain exactly one stream", path, testCase.Name)
 		}
-		if input.Operation == "stream" {
-			if !hasStream || hasBody || hasPatch {
-				t.Fatalf("stream capability fixture %s case %q must contain exactly one stream", path, testCase.Name)
-			}
-			continue
-		}
-		if hasStream || (!hasBody && !hasPatch) {
-			t.Fatalf("%s capability fixture %s case %q must contain exactly one body or patch", input.Operation, path, testCase.Name)
-		}
-		if hasPatch && len(input.Base) == 0 {
-			t.Fatalf("capability fixture %s case %q uses a patch without a base", path, testCase.Name)
-		}
+		return
+	}
+	if hasStream || (!hasBody && !hasPatch) {
+		t.Fatalf("%s capability fixture %s case %q must contain exactly one body or patch", operation, path, testCase.Name)
+	}
+	if hasPatch && len(base) == 0 {
+		t.Fatalf("capability fixture %s case %q uses a patch without a base", path, testCase.Name)
 	}
 }
 
@@ -693,49 +713,65 @@ func runCapabilityTranslation(
 ) ([]byte, llmprotocol.Diagnostics, error) {
 	switch input.Operation {
 	case "request":
-		result, err := engine.TranslateRequest(source, target, input.Body, func(request *llmprotocol.Request) error {
-			request.Model = "routed-model"
-			return nil
-		})
-		if err == nil {
-			if _, _, _, decodeErr := engine.DecodeRequest(target, result.Body); decodeErr != nil {
-				return nil, result.Diagnostics, fmt.Errorf(
-					"target request does not satisfy its own codec contract: %w\nencoded body: %s",
-					decodeErr,
-					result.Body,
-				)
-			}
-		}
-		return result.Body, result.Diagnostics, err
+		return runCapabilityRequestTranslation(engine, source, target, input.Body)
 	case "response":
-		result, err := engine.TranslateResponse(source, target, input.Body, func(response *llmprotocol.Response) error {
-			response.Model = "routed-model"
-			return nil
-		})
-		if err == nil {
-			decodeErr := validateGoldenEncodedResponse(engine, target, result)
-			if decodeErr != nil {
-				return nil, result.Diagnostics, fmt.Errorf(
-					"target response does not satisfy its own codec contract: %w\nencoded body: %s",
-					decodeErr,
-					result.Body,
-				)
-			}
-		}
-		return result.Body, result.Diagnostics, err
+		return runCapabilityResponseTranslation(engine, source, target, input.Body)
 	case "stream":
-		if input.Stream == nil || input.Stream.PublicModel == "" || input.Stream.ProviderModel == "" || len(input.Stream.Chunks) == 0 {
-			return nil, nil, fmt.Errorf("stream capability case requires public_model, provider_model, and chunks")
-		}
-		frames, diagnostics, err := translateGoldenCapabilityStream(engine, source, target, *input.Stream)
-		if err != nil {
-			return nil, diagnostics, err
-		}
-		verifyGoldenTargetStream(t, engine, target, *input.Stream, frames)
-		return marshalGoldenStreamTranscript(t, frames), diagnostics, nil
+		return runCapabilityStreamTranslation(t, engine, source, target, input.Stream)
 	default:
 		return nil, nil, fmt.Errorf("unsupported capability operation %q", input.Operation)
 	}
+}
+
+func runCapabilityRequestTranslation(
+	engine *Engine,
+	source, target llmprotocol.WireFormat,
+	body []byte,
+) ([]byte, llmprotocol.Diagnostics, error) {
+	result, err := engine.TranslateRequest(source, target, body, func(request *llmprotocol.Request) error {
+		request.Model = "routed-model"
+		return nil
+	})
+	if err == nil {
+		if _, _, _, decodeErr := engine.DecodeRequest(target, result.Body); decodeErr != nil {
+			return nil, result.Diagnostics, fmt.Errorf("target request does not satisfy its own codec contract: %w\nencoded body: %s", decodeErr, result.Body)
+		}
+	}
+	return result.Body, result.Diagnostics, err
+}
+
+func runCapabilityResponseTranslation(
+	engine *Engine,
+	source, target llmprotocol.WireFormat,
+	body []byte,
+) ([]byte, llmprotocol.Diagnostics, error) {
+	result, err := engine.TranslateResponse(source, target, body, func(response *llmprotocol.Response) error {
+		response.Model = "routed-model"
+		return nil
+	})
+	if err == nil {
+		if decodeErr := validateGoldenEncodedResponse(engine, target, result); decodeErr != nil {
+			return nil, result.Diagnostics, fmt.Errorf("target response does not satisfy its own codec contract: %w\nencoded body: %s", decodeErr, result.Body)
+		}
+	}
+	return result.Body, result.Diagnostics, err
+}
+
+func runCapabilityStreamTranslation(
+	t *testing.T,
+	engine *Engine,
+	source, target llmprotocol.WireFormat,
+	input *goldenStreamInput,
+) ([]byte, llmprotocol.Diagnostics, error) {
+	if input == nil || input.PublicModel == "" || input.ProviderModel == "" || len(input.Chunks) == 0 {
+		return nil, nil, fmt.Errorf("stream capability case requires public_model, provider_model, and chunks")
+	}
+	frames, diagnostics, err := translateGoldenCapabilityStream(engine, source, target, *input)
+	if err != nil {
+		return nil, diagnostics, err
+	}
+	verifyGoldenTargetStream(t, engine, target, *input, frames)
+	return marshalGoldenStreamTranscript(t, frames), diagnostics, nil
 }
 
 func validateGoldenEncodedResponse(
@@ -797,51 +833,46 @@ func TestGoldenRejectionMatrix(t *testing.T) {
 	}
 	engine := NewBuiltinEngine()
 	for _, inputPath := range inputs {
-		inputPath := inputPath
-		prefix := strings.TrimSuffix(filepath.Base(inputPath), "-in.json")
-		source, err := goldenSourceFormat(prefix)
-		if err != nil {
-			t.Fatal(err)
-		}
-		descriptor, err := os.ReadFile(inputPath)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var input goldenRejectionInput
-		if err := json.Unmarshal(descriptor, &input); err != nil {
-			t.Fatalf("invalid rejection golden input %s: %v", inputPath, err)
-		}
-		for _, target := range goldenFormats {
-			t.Run(prefix+"_to_"+target.name, func(t *testing.T) {
-				translateErr := runRejectedTranslation(engine, source, target.format, input)
-				if translateErr == nil {
-					t.Fatalf("rejection case %s unexpectedly succeeded", inputPath)
-				}
-				var protocolError *llmprotocol.ProtocolError
-				if !errors.As(translateErr, &protocolError) {
-					t.Fatalf("rejection case returned %T, want *llmprotocol.ProtocolError: %v", translateErr, translateErr)
-				}
-				actual, err := json.MarshalIndent(goldenProtocolError{Category: protocolError.Category, Code: protocolError.Code}, "", "  ")
-				if err != nil {
-					t.Fatal(err)
-				}
-				actual = append(actual, '\n')
-				expectedPath := filepath.Join(directory, prefix+"-"+target.name+"-out.json")
-				if os.Getenv(updateProtocolGoldensEnv) == "1" {
-					if err := os.WriteFile(expectedPath, actual, 0o644); err != nil {
-						t.Fatal(err)
-					}
-				}
-				expected, err := os.ReadFile(expectedPath)
-				if err != nil {
-					t.Fatalf("missing golden output %s: %v", expectedPath, err)
-				}
-				if !jsonEquivalent(expected, actual) {
-					t.Fatalf("rejection contract drifted\nexpected (%s):\n%s\nactual:\n%s", expectedPath, expected, actual)
-				}
-			})
-		}
+		runGoldenRejectionInput(t, engine, directory, inputPath)
 	}
+}
+
+func runGoldenRejectionInput(t *testing.T, engine *Engine, directory, inputPath string) {
+	t.Helper()
+	prefix := strings.TrimSuffix(filepath.Base(inputPath), "-in.json")
+	source, input := loadGoldenRejectionInput(t, inputPath, prefix)
+	for _, target := range goldenFormats {
+		t.Run(prefix+"_to_"+target.name, func(t *testing.T) {
+			translateErr := runRejectedTranslation(engine, source, target.format, input)
+			if translateErr == nil {
+				t.Fatalf("rejection case %s unexpectedly succeeded", inputPath)
+			}
+			protocolError := goldenProtocolErrorFrom(t, translateErr)
+			actual, err := json.MarshalIndent(protocolError, "", "  ")
+			if err != nil {
+				t.Fatal(err)
+			}
+			actual = append(actual, '\n')
+			assertGoldenOutput(t, filepath.Join(directory, prefix+"-"+target.name+"-out.json"), actual, "rejection contract")
+		})
+	}
+}
+
+func loadGoldenRejectionInput(t *testing.T, inputPath, prefix string) (llmprotocol.WireFormat, goldenRejectionInput) {
+	t.Helper()
+	source, err := goldenSourceFormat(prefix)
+	if err != nil {
+		t.Fatal(err)
+	}
+	descriptor, err := os.ReadFile(inputPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var input goldenRejectionInput
+	if err := json.Unmarshal(descriptor, &input); err != nil {
+		t.Fatalf("invalid rejection golden input %s: %v", inputPath, err)
+	}
+	return source, input
 }
 
 func TestGoldenStreamRejectionsAreChunkBoundaryIndependent(t *testing.T) {
@@ -853,18 +884,7 @@ func TestGoldenStreamRejectionsAreChunkBoundaryIndependent(t *testing.T) {
 	engine := NewBuiltinEngine()
 	for _, inputPath := range inputs {
 		prefix := strings.TrimSuffix(filepath.Base(inputPath), "-in.json")
-		source, err := goldenSourceFormat(prefix)
-		if err != nil {
-			t.Fatal(err)
-		}
-		descriptor, err := os.ReadFile(inputPath)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var input goldenRejectionInput
-		if err := json.Unmarshal(descriptor, &input); err != nil {
-			t.Fatal(err)
-		}
+		source, input := loadGoldenRejectionInput(t, inputPath, prefix)
 		if input.Operation != "stream" {
 			continue
 		}
@@ -891,18 +911,7 @@ func TestGoldenStreamRejectionsPoisonAndFailClosedAcrossProtocolMatrix(t *testin
 	engine := NewBuiltinEngine()
 	for _, inputPath := range inputs {
 		prefix := strings.TrimSuffix(filepath.Base(inputPath), "-in.json")
-		source, err := goldenSourceFormat(prefix)
-		if err != nil {
-			t.Fatal(err)
-		}
-		descriptor, err := os.ReadFile(inputPath)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var input goldenRejectionInput
-		if err := json.Unmarshal(descriptor, &input); err != nil {
-			t.Fatal(err)
-		}
+		source, input := loadGoldenRejectionInput(t, inputPath, prefix)
 		if input.Operation != "stream" {
 			continue
 		}
@@ -912,47 +921,70 @@ func TestGoldenStreamRejectionsPoisonAndFailClosedAcrossProtocolMatrix(t *testin
 		}
 		for _, target := range goldenFormats {
 			t.Run(prefix+"_to_"+target.name, func(t *testing.T) {
-				stream, err := inputEngine.NewStream(source, target.format, llmprotocol.StreamContext{
-					Context: context.Background(), PublicModel: input.PublicModel,
-					ProviderModel: input.ProviderModel,
-				})
-				if err != nil {
-					t.Fatal(err)
-				}
-				var wire []byte
-				var firstErr error
-				for _, chunk := range input.Chunks {
-					frames, _, _, pushErr := stream.Push([]byte(chunk))
-					wire = appendGoldenWireFrames(wire, frames)
-					if pushErr != nil {
-						firstErr = pushErr
-						break
-					}
-				}
-				if firstErr != nil {
-					_, _, _, repeatedErr := stream.Push([]byte("data: {}\n\n"))
-					if goldenProtocolErrorFrom(t, firstErr) != goldenProtocolErrorFrom(t, repeatedErr) {
-						t.Fatalf("poisoned stream changed its first failure: first=%v repeated=%v", firstErr, repeatedErr)
-					}
-				}
-				finalFrames, _, _, finalErr := stream.Finalize(firstErr)
-				wire = appendGoldenWireFrames(wire, finalFrames)
-				if firstErr == nil {
-					firstErr = finalErr
-				} else if finalErr != nil && goldenProtocolErrorFrom(t, firstErr) != goldenProtocolErrorFrom(t, finalErr) {
-					t.Fatalf("stream finalization changed its first failure: first=%v final=%v", firstErr, finalErr)
-				}
-				if firstErr == nil {
-					t.Fatal("rejection stream unexpectedly finalized without an error")
-				}
-				goldenProtocolErrorFrom(t, firstErr)
-				assertNoSuccessfulStreamTerminal(t, target.format, wire)
-				if !bytes.Contains(wire, []byte("error")) {
-					t.Fatalf("rejected stream has no public failure terminal: %s", wire)
-				}
+				assertGoldenRejectedStreamFailsClosed(t, inputEngine, source, target.format, input)
 			})
 		}
 	}
+}
+
+func assertGoldenRejectedStreamFailsClosed(
+	t *testing.T,
+	engine *Engine,
+	source, target llmprotocol.WireFormat,
+	input goldenRejectionInput,
+) {
+	t.Helper()
+	stream, err := engine.NewStream(source, target, llmprotocol.StreamContext{
+		Context: context.Background(), PublicModel: input.PublicModel, ProviderModel: input.ProviderModel,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wire, firstErr := pushGoldenRejectedChunks(stream, input.Chunks)
+	if firstErr != nil {
+		assertGoldenPoisonedError(t, stream, firstErr)
+	}
+	finalFrames, _, _, finalErr := stream.Finalize(firstErr)
+	wire = appendGoldenWireFrames(wire, finalFrames)
+	firstErr = assertGoldenFinalErrorStable(t, firstErr, finalErr)
+	goldenProtocolErrorFrom(t, firstErr)
+	assertNoSuccessfulStreamTerminal(t, target, wire)
+	if !bytes.Contains(wire, []byte("error")) {
+		t.Fatalf("rejected stream has no public failure terminal: %s", wire)
+	}
+}
+
+func pushGoldenRejectedChunks(stream *StreamEngine, chunks []string) ([]byte, error) {
+	var wire []byte
+	for _, chunk := range chunks {
+		frames, _, _, err := stream.Push([]byte(chunk))
+		wire = appendGoldenWireFrames(wire, frames)
+		if err != nil {
+			return wire, err
+		}
+	}
+	return wire, nil
+}
+
+func assertGoldenPoisonedError(t *testing.T, stream *StreamEngine, firstErr error) {
+	t.Helper()
+	_, _, _, repeatedErr := stream.Push([]byte("data: {}\n\n"))
+	if goldenProtocolErrorFrom(t, firstErr) != goldenProtocolErrorFrom(t, repeatedErr) {
+		t.Fatalf("poisoned stream changed its first failure: first=%v repeated=%v", firstErr, repeatedErr)
+	}
+}
+
+func assertGoldenFinalErrorStable(t *testing.T, firstErr, finalErr error) error {
+	t.Helper()
+	if firstErr == nil {
+		firstErr = finalErr
+	} else if finalErr != nil && goldenProtocolErrorFrom(t, firstErr) != goldenProtocolErrorFrom(t, finalErr) {
+		t.Fatalf("stream finalization changed its first failure: first=%v final=%v", firstErr, finalErr)
+	}
+	if firstErr == nil {
+		t.Fatal("rejection stream unexpectedly finalized without an error")
+	}
+	return firstErr
 }
 
 func appendGoldenWireFrames(destination []byte, frames [][]byte) []byte {
@@ -1052,24 +1084,7 @@ func marshalGoldenStreamTranscript(t *testing.T, wireFrames [][]byte) []byte {
 			t.Fatal(err)
 		}
 		for _, frame := range frames {
-			parsed, err := parseSSEFrame(frame, 8<<20)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !parsed.HasData {
-				continue
-			}
-			var data any
-			if bytes.Equal(parsed.Data, []byte("[DONE]")) {
-				data = "[DONE]"
-			} else {
-				decoder := json.NewDecoder(bytes.NewReader(parsed.Data))
-				decoder.UseNumber()
-				if err := decoder.Decode(&data); err != nil {
-					t.Fatalf("stream output contains invalid JSON: %v\n%s", err, parsed.Data)
-				}
-			}
-			transcript.Frames = append(transcript.Frames, goldenStreamFrame{Event: parsed.Event, Data: normalizeGoldenVolatileFields(data)})
+			appendGoldenTranscriptFrame(t, &transcript, frame)
 		}
 	}
 	leftover, err := framer.Finalize()
@@ -1084,6 +1099,28 @@ func marshalGoldenStreamTranscript(t *testing.T, wireFrames [][]byte) []byte {
 		t.Fatal(err)
 	}
 	return append(body, '\n')
+}
+
+func appendGoldenTranscriptFrame(t *testing.T, transcript *goldenStreamTranscript, frame []byte) {
+	t.Helper()
+	parsed, err := parseSSEFrame(frame, 8<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !parsed.HasData {
+		return
+	}
+	var data any
+	if bytes.Equal(parsed.Data, []byte("[DONE]")) {
+		data = "[DONE]"
+	} else {
+		decoder := json.NewDecoder(bytes.NewReader(parsed.Data))
+		decoder.UseNumber()
+		if err := decoder.Decode(&data); err != nil {
+			t.Fatalf("stream output contains invalid JSON: %v\n%s", err, parsed.Data)
+		}
+	}
+	transcript.Frames = append(transcript.Frames, goldenStreamFrame{Event: parsed.Event, Data: normalizeGoldenVolatileFields(data)})
 }
 
 func normalizeGoldenVolatileFields(value any) any {
@@ -1123,37 +1160,35 @@ func runGoldenTranslationMatrix(t *testing.T, kind string, translate goldenTrans
 	}
 	engine := NewBuiltinEngine()
 	for _, inputPath := range inputs {
-		inputPath := inputPath
-		prefix := strings.TrimSuffix(filepath.Base(inputPath), "-in.json")
-		source, err := goldenSourceFormat(prefix)
-		if err != nil {
-			t.Fatal(err)
-		}
-		body, err := os.ReadFile(inputPath)
-		if err != nil {
-			t.Fatal(err)
-		}
-		for _, target := range goldenFormats {
-			t.Run(prefix+"_to_"+target.name, func(t *testing.T) {
-				actual, err := translate(engine, source, target.format, body)
-				if err != nil {
-					t.Fatal(err)
-				}
-				expectedPath := filepath.Join(directory, prefix+"-"+target.name+"-out.json")
-				if os.Getenv(updateProtocolGoldensEnv) == "1" {
-					if err := os.WriteFile(expectedPath, prettyJSON(t, actual), 0o644); err != nil {
-						t.Fatal(err)
-					}
-				}
-				expected, err := os.ReadFile(expectedPath)
-				if err != nil {
-					t.Fatalf("missing golden output %s: %v", expectedPath, err)
-				}
-				if !jsonEquivalent(expected, actual) {
-					t.Fatalf("protocol translation drifted\nexpected (%s):\n%s\nactual:\n%s", expectedPath, prettyJSON(t, expected), prettyJSON(t, actual))
-				}
-			})
-		}
+		runGoldenTranslationInput(t, engine, directory, inputPath, translate)
+	}
+}
+
+func runGoldenTranslationInput(
+	t *testing.T,
+	engine *Engine,
+	directory, inputPath string,
+	translate goldenTranslator,
+) {
+	t.Helper()
+	prefix := strings.TrimSuffix(filepath.Base(inputPath), "-in.json")
+	source, err := goldenSourceFormat(prefix)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(inputPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, target := range goldenFormats {
+		t.Run(prefix+"_to_"+target.name, func(t *testing.T) {
+			actual, err := translate(engine, source, target.format, body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			actual = prettyJSON(t, actual)
+			assertGoldenOutput(t, filepath.Join(directory, prefix+"-"+target.name+"-out.json"), actual, "protocol translation")
+		})
 	}
 }
 
@@ -1178,6 +1213,22 @@ func jsonEquivalent(expected, actual []byte) bool {
 	actualDecoder.UseNumber()
 	return expectedDecoder.Decode(&expectedValue) == nil && actualDecoder.Decode(&actualValue) == nil &&
 		reflect.DeepEqual(expectedValue, actualValue)
+}
+
+func assertGoldenOutput(t *testing.T, expectedPath string, actual []byte, label string) {
+	t.Helper()
+	if os.Getenv(updateProtocolGoldensEnv) == "1" {
+		if err := os.WriteFile(expectedPath, actual, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	expected, err := os.ReadFile(expectedPath)
+	if err != nil {
+		t.Fatalf("missing golden output %s: %v", expectedPath, err)
+	}
+	if !jsonEquivalent(expected, actual) {
+		t.Fatalf("%s drifted\nexpected (%s):\n%s\nactual:\n%s", label, expectedPath, prettyJSON(t, expected), prettyJSON(t, actual))
+	}
 }
 
 func prettyJSON(t *testing.T, body []byte) []byte {

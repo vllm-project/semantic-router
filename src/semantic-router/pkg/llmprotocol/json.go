@@ -108,39 +108,51 @@ func consumeJSONArray(decoder *json.Decoder, depth, maximumDepth int) error {
 func validateJSONUnicodeEscapes(body []byte) error {
 	insideString := false
 	for index := 0; index < len(body); index++ {
-		switch body[index] {
-		case '"':
+		if body[index] == '"' {
 			insideString = !insideString
-		case '\\':
-			if !insideString || index+1 >= len(body) {
-				continue
-			}
-			if body[index+1] != 'u' {
-				index++
-				continue
-			}
-			value, ok := decodeHexQuad(body, index+2)
-			if !ok {
-				continue
-			}
-			if value >= 0xdc00 && value <= 0xdfff {
-				return fmt.Errorf("JSON contains a lone low surrogate")
-			}
-			if value < 0xd800 || value > 0xdbff {
-				index += 5
-				continue
-			}
-			if index+11 >= len(body) || body[index+6] != '\\' || body[index+7] != 'u' {
-				return fmt.Errorf("JSON high surrogate is not followed by a low surrogate")
-			}
-			low, validLow := decodeHexQuad(body, index+8)
-			if !validLow || low < 0xdc00 || low > 0xdfff {
-				return fmt.Errorf("JSON high surrogate is not followed by a low surrogate")
-			}
-			index += 11
+			continue
 		}
+		if body[index] != '\\' || !insideString {
+			continue
+		}
+		next, err := advanceJSONUnicodeEscape(body, index)
+		if err != nil {
+			return err
+		}
+		index = next
 	}
 	return nil
+}
+
+func advanceJSONUnicodeEscape(body []byte, index int) (int, error) {
+	if index+1 >= len(body) {
+		return index, nil
+	}
+	if body[index+1] != 'u' {
+		return index + 1, nil
+	}
+	value, ok := decodeHexQuad(body, index+2)
+	if !ok {
+		return index, nil
+	}
+	if value >= 0xdc00 && value <= 0xdfff {
+		return index, fmt.Errorf("JSON contains a lone low surrogate")
+	}
+	if value < 0xd800 || value > 0xdbff {
+		return index + 5, nil
+	}
+	if !hasLowSurrogateEscape(body, index) {
+		return index, fmt.Errorf("JSON high surrogate is not followed by a low surrogate")
+	}
+	return index + 11, nil
+}
+
+func hasLowSurrogateEscape(body []byte, index int) bool {
+	if index+11 >= len(body) || body[index+6] != '\\' || body[index+7] != 'u' {
+		return false
+	}
+	low, validLow := decodeHexQuad(body, index+8)
+	return validLow && low >= 0xdc00 && low <= 0xdfff
 }
 
 func decodeHexQuad(body []byte, start int) (uint16, bool) {

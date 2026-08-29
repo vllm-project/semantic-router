@@ -41,13 +41,23 @@ type semanticStreamItem struct {
 	completed    bool
 }
 
-//nolint:cyclop // The stream boundary handles all ExtProc body phases and terminal outcomes explicitly.
 func (r *OpenAIRouter) handleSemanticStreamingResponseBody(
 	responseBody []byte,
 	endOfStream bool,
 	ctx *RequestContext,
 ) *ext_proc.ProcessingResponse {
 	recordStreamingTTFT(ctx)
+	r.initializeSemanticResponseStream(ctx)
+	buffers := semanticStreamBuffers{}
+	buffers.push(responseBody, ctx)
+	if endOfStream {
+		buffers.finalize(ctx)
+		r.finalizeSemanticStreamingResponse(ctx, buffers.streamErr)
+	}
+	return buffers.processingResponse(ctx)
+}
+
+func (r *OpenAIRouter) initializeSemanticResponseStream(ctx *RequestContext) {
 	if err := r.ensureSemanticResponseStream(ctx); err != nil {
 		ctx.StreamingAborted = true
 		logging.ComponentErrorEvent("extproc", "neutral_stream_init_failed", map[string]interface{}{
@@ -56,61 +66,79 @@ func (r *OpenAIRouter) handleSemanticStreamingResponseBody(
 			"error":      err.Error(),
 		})
 	}
-	var streamErr error
-	var translatedBody []byte
-	var publicBody []byte
-	if ctx.PublicChatUsageFilter != nil && len(responseBody) > 0 {
+}
+
+type semanticStreamBuffers struct {
+	translated []byte
+	public     []byte
+	streamErr  error
+}
+
+func (buffers *semanticStreamBuffers) push(responseBody []byte, ctx *RequestContext) {
+	if len(responseBody) == 0 {
+		return
+	}
+	if ctx.PublicChatUsageFilter != nil {
 		filtered, err := ctx.PublicChatUsageFilter.Push(responseBody)
-		publicBody = append(publicBody, filtered...)
-		if err != nil {
-			streamErr = err
-			ctx.StreamingAborted = true
-		}
+		buffers.public = append(buffers.public, filtered...)
+		buffers.recordError(ctx, err, true)
 	}
-	if ctx.ProtocolResponseStream != nil && len(responseBody) > 0 {
-		translated, events, diagnostics, err := ctx.ProtocolResponseStream.Push(responseBody)
-		for _, frame := range translated {
-			translatedBody = append(translatedBody, frame...)
-		}
-		ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, diagnostics...)
-		ctx.SemanticStreamState.observe(events)
-		if err != nil {
-			streamErr = err
-			ctx.StreamingAborted = true
-		}
+	if ctx.ProtocolResponseStream != nil {
+		frames, events, diagnostics, err := ctx.ProtocolResponseStream.Push(responseBody)
+		buffers.translated = appendProtocolFrames(buffers.translated, frames)
+		observeProtocolStream(ctx, events, diagnostics)
+		buffers.recordError(ctx, err, true)
 	}
-	if endOfStream && ctx.ProtocolResponseStream != nil {
-		translated, events, diagnostics, err := ctx.ProtocolResponseStream.Finalize(streamErr)
-		for _, frame := range translated {
-			translatedBody = append(translatedBody, frame...)
-		}
-		ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, diagnostics...)
-		ctx.SemanticStreamState.observe(events)
-		if err != nil {
-			streamErr = err
-			ctx.StreamingAborted = true
-		}
+}
+
+func (buffers *semanticStreamBuffers) finalize(ctx *RequestContext) {
+	if ctx.ProtocolResponseStream != nil {
+		frames, events, diagnostics, err := ctx.ProtocolResponseStream.Finalize(buffers.streamErr)
+		buffers.translated = appendProtocolFrames(buffers.translated, frames)
+		observeProtocolStream(ctx, events, diagnostics)
+		buffers.recordError(ctx, err, true)
 	}
-	if endOfStream && ctx.PublicChatUsageFilter != nil {
+	if ctx.PublicChatUsageFilter != nil {
 		filtered, err := ctx.PublicChatUsageFilter.Finalize()
-		publicBody = append(publicBody, filtered...)
-		if err != nil && streamErr == nil {
-			streamErr = err
-			ctx.StreamingAborted = true
-		}
+		buffers.public = append(buffers.public, filtered...)
+		buffers.recordError(ctx, err, false)
 	}
-	if endOfStream {
-		r.finalizeSemanticStreamingResponse(ctx, streamErr)
+}
+
+func (buffers *semanticStreamBuffers) recordError(ctx *RequestContext, err error, overwrite bool) {
+	if err == nil || !overwrite && buffers.streamErr != nil {
+		return
 	}
+	buffers.streamErr = err
+	ctx.StreamingAborted = true
+}
+
+func appendProtocolFrames(body []byte, frames [][]byte) []byte {
+	for _, frame := range frames {
+		body = append(body, frame...)
+	}
+	return body
+}
+
+func observeProtocolStream(
+	ctx *RequestContext,
+	events []llmprotocol.Event,
+	diagnostics []llmprotocol.Diagnostic,
+) {
+	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, diagnostics...)
+	ctx.SemanticStreamState.observe(events)
+}
+
+func (buffers *semanticStreamBuffers) processingResponse(ctx *RequestContext) *ext_proc.ProcessingResponse {
 	if ctx.ProtocolResponseStream != nil &&
 		(ctx.TargetFormat != "" && ctx.TargetFormat != ctx.SourceFormat || ctx.StreamingAborted) {
 		return buildResponseBodyContinueResponse(&ext_proc.BodyMutation{
-			Mutation: &ext_proc.BodyMutation_Body{Body: translatedBody},
+			Mutation: &ext_proc.BodyMutation_Body{Body: buffers.translated},
 		}, nil)
 	}
 	if ctx.PublicChatUsageFilter != nil {
 		return buildResponseBodyContinueResponse(&ext_proc.BodyMutation{
-			Mutation: &ext_proc.BodyMutation_Body{Body: publicBody},
+			Mutation: &ext_proc.BodyMutation_Body{Body: buffers.public},
 		}, nil)
 	}
 	return buildResponseBodyContinueResponse(nil, nil)

@@ -634,34 +634,52 @@ func decodeResponsesContent(
 	}
 	var text string
 	if json.Unmarshal(raw, &text) == nil {
-		if context == responsesProviderOutputContent || context == responsesProviderReasoningContent {
-			return nil, llmprotocol.NewError(
-				llmprotocol.ErrorUpstreamUnavailable,
-				"invalid_response_content",
-				"Responses provider output content must be an array",
-				nil,
-			)
-		}
-		if context == responsesRequestReasoningContent {
-			return nil, llmprotocol.NewError(
-				llmprotocol.ErrorInvalidRequest,
-				"invalid_reasoning_content",
-				"Responses reasoning content must be an array",
-				nil,
-			)
-		}
-		return []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: text}}, nil
+		return decodeResponsesStringContent(text, context)
 	}
-	var partBodies []json.RawMessage
-	var err error
-	if context == responsesProviderOutputContent || context == responsesProviderReasoningContent {
-		err = decodeProviderValue(raw, &partBodies, policy)
-	} else {
-		err = decodeWireValue(raw, &partBodies, policy)
-	}
+	partBodies, err := decodeResponsesContentBodies(raw, policy, context)
 	if err != nil {
 		return nil, err
 	}
+	return decodeResponsesContentParts(partBodies, policy, context)
+}
+
+func decodeResponsesStringContent(text string, context responsesContentContext) ([]llmprotocol.Content, error) {
+	if isResponsesProviderContent(context) {
+		return nil, llmprotocol.NewError(
+			llmprotocol.ErrorUpstreamUnavailable,
+			"invalid_response_content",
+			"Responses provider output content must be an array",
+			nil,
+		)
+	}
+	if context == responsesRequestReasoningContent {
+		return nil, llmprotocol.NewError(
+			llmprotocol.ErrorInvalidRequest,
+			"invalid_reasoning_content",
+			"Responses reasoning content must be an array",
+			nil,
+		)
+	}
+	return []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: text}}, nil
+}
+
+func decodeResponsesContentBodies(
+	raw json.RawMessage,
+	policy llmprotocol.Policy,
+	context responsesContentContext,
+) ([]json.RawMessage, error) {
+	var partBodies []json.RawMessage
+	if isResponsesProviderContent(context) {
+		return partBodies, decodeProviderValue(raw, &partBodies, policy)
+	}
+	return partBodies, decodeWireValue(raw, &partBodies, policy)
+}
+
+func decodeResponsesContentParts(
+	partBodies []json.RawMessage,
+	policy llmprotocol.Policy,
+	context responsesContentContext,
+) ([]llmprotocol.Content, error) {
 	result := make([]llmprotocol.Content, 0, len(partBodies))
 	var assistantFamily string
 	for _, partBody := range partBodies {
@@ -669,21 +687,35 @@ func decodeResponsesContent(
 		if err != nil {
 			return nil, err
 		}
-		if context == responsesAssistantHistoryContent {
-			if assistantFamily == "" {
-				assistantFamily = family
-			} else if assistantFamily != family {
-				return nil, llmprotocol.NewError(
-					llmprotocol.ErrorInvalidRequest,
-					"mixed_assistant_content",
-					"Responses assistant history must use one official content union",
-					nil,
-				)
-			}
+		if err := trackResponsesAssistantFamily(context, family, &assistantFamily); err != nil {
+			return nil, err
 		}
 		result = append(result, content)
 	}
 	return result, nil
+}
+
+func trackResponsesAssistantFamily(context responsesContentContext, family string, current *string) error {
+	if context != responsesAssistantHistoryContent {
+		return nil
+	}
+	if *current == "" {
+		*current = family
+		return nil
+	}
+	if *current == family {
+		return nil
+	}
+	return llmprotocol.NewError(
+		llmprotocol.ErrorInvalidRequest,
+		"mixed_assistant_content",
+		"Responses assistant history must use one official content union",
+		nil,
+	)
+}
+
+func isResponsesProviderContent(context responsesContentContext) bool {
+	return context == responsesProviderOutputContent || context == responsesProviderReasoningContent
 }
 
 func decodeResponsesContentPart(
@@ -692,13 +724,7 @@ func decodeResponsesContentPart(
 	policy llmprotocol.Policy,
 ) (string, llmprotocol.Content, error) {
 	var part responsesContentWire
-	var err error
-	if context == responsesProviderOutputContent || context == responsesProviderReasoningContent {
-		err = decodeProviderValue(body, &part, policy)
-	} else {
-		err = decodeWireValue(body, &part, policy)
-	}
-	if err != nil {
+	if err := decodeResponsesContentWire(body, &part, policy, context); err != nil {
 		return "", llmprotocol.Content{}, err
 	}
 	if err := validateResponsesContentVariant(body, part.Type, context); err != nil {
@@ -713,44 +739,73 @@ func decodeResponsesContentPart(
 	if err := rejectUnsupportedRequestFields(unsupported); err != nil {
 		return "", llmprotocol.Content{}, err
 	}
+	return decodeResponsesTypedContent(part, context)
+}
+
+func decodeResponsesContentWire(
+	body json.RawMessage,
+	part *responsesContentWire,
+	policy llmprotocol.Policy,
+	context responsesContentContext,
+) error {
+	if isResponsesProviderContent(context) {
+		return decodeProviderValue(body, part, policy)
+	}
+	return decodeWireValue(body, part, policy)
+}
+
+func decodeResponsesTypedContent(part responsesContentWire, context responsesContentContext) (string, llmprotocol.Content, error) {
 	switch part.Type {
-	case "input_text":
-		if context != responsesInputMessageContent && context != responsesAssistantHistoryContent && context != responsesFunctionOutputContent {
-			return "", llmprotocol.Content{}, unsupportedResponsesContent(part.Type, context)
-		}
-		return "input", llmprotocol.Content{Kind: llmprotocol.ContentText, Text: part.Text}, nil
-	case "output_text":
-		if context != responsesAssistantHistoryContent && context != responsesProviderOutputContent {
-			return "", llmprotocol.Content{}, unsupportedResponsesContent(part.Type, context)
-		}
-		citations, err := decodeResponsesAnnotations(responsesAnnotationsValue(part.Annotations))
-		return "output", llmprotocol.Content{Kind: llmprotocol.ContentText, Text: part.Text, Citations: citations}, err
-	case "refusal":
-		if context != responsesAssistantHistoryContent && context != responsesProviderOutputContent {
-			return "", llmprotocol.Content{}, unsupportedResponsesContent(part.Type, context)
-		}
-		return "output", llmprotocol.Content{Kind: llmprotocol.ContentRefusal, Text: part.Refusal}, nil
+	case "input_text", "input_image", "input_file":
+		return decodeResponsesInputContent(part, context)
+	case "output_text", "refusal":
+		return decodeResponsesOutputContent(part, context)
 	case "reasoning_text":
-		if context != responsesRequestReasoningContent && context != responsesProviderReasoningContent {
-			return "", llmprotocol.Content{}, unsupportedResponsesContent(part.Type, context)
-		}
-		return "reasoning", llmprotocol.Content{
-			Kind: llmprotocol.ContentReasoning, Text: part.Text, Reasoning: llmprotocol.ReasoningScopeText,
-		}, nil
-	case "input_image":
-		if context != responsesInputMessageContent && context != responsesAssistantHistoryContent && context != responsesFunctionOutputContent {
-			return "", llmprotocol.Content{}, unsupportedResponsesContent(part.Type, context)
-		}
-		content, err := decodeResponsesImage(part)
-		return "input", content, err
-	case "input_file":
-		if context != responsesInputMessageContent && context != responsesAssistantHistoryContent && context != responsesFunctionOutputContent {
-			return "", llmprotocol.Content{}, unsupportedResponsesContent(part.Type, context)
-		}
-		return "input", decodeResponsesFile(part), nil
+		return decodeResponsesReasoningContent(part, context)
 	default:
 		return "", llmprotocol.Content{}, unsupportedResponsesContent(part.Type, context)
 	}
+}
+
+func decodeResponsesInputContent(part responsesContentWire, context responsesContentContext) (string, llmprotocol.Content, error) {
+	if !responsesInputContentAllowed(context) {
+		return "", llmprotocol.Content{}, unsupportedResponsesContent(part.Type, context)
+	}
+	switch part.Type {
+	case "input_text":
+		return "input", llmprotocol.Content{Kind: llmprotocol.ContentText, Text: part.Text}, nil
+	case "input_image":
+		content, err := decodeResponsesImage(part)
+		return "input", content, err
+	default:
+		return "input", decodeResponsesFile(part), nil
+	}
+}
+
+func decodeResponsesOutputContent(part responsesContentWire, context responsesContentContext) (string, llmprotocol.Content, error) {
+	if context != responsesAssistantHistoryContent && context != responsesProviderOutputContent {
+		return "", llmprotocol.Content{}, unsupportedResponsesContent(part.Type, context)
+	}
+	if part.Type == "refusal" {
+		return "output", llmprotocol.Content{Kind: llmprotocol.ContentRefusal, Text: part.Refusal}, nil
+	}
+	citations, err := decodeResponsesAnnotations(responsesAnnotationsValue(part.Annotations))
+	return "output", llmprotocol.Content{Kind: llmprotocol.ContentText, Text: part.Text, Citations: citations}, err
+}
+
+func decodeResponsesReasoningContent(part responsesContentWire, context responsesContentContext) (string, llmprotocol.Content, error) {
+	if context != responsesRequestReasoningContent && context != responsesProviderReasoningContent {
+		return "", llmprotocol.Content{}, unsupportedResponsesContent(part.Type, context)
+	}
+	return "reasoning", llmprotocol.Content{
+		Kind: llmprotocol.ContentReasoning, Text: part.Text, Reasoning: llmprotocol.ReasoningScopeText,
+	}, nil
+}
+
+func responsesInputContentAllowed(context responsesContentContext) bool {
+	return context == responsesInputMessageContent ||
+		context == responsesAssistantHistoryContent ||
+		context == responsesFunctionOutputContent
 }
 
 func validateResponsesContentVariant(
@@ -758,10 +813,6 @@ func validateResponsesContentVariant(
 	typeName string,
 	context responsesContentContext,
 ) error {
-	known := []string{
-		"annotations", "detail", "file_data", "file_id", "file_url", "filename", "image_url",
-		"logprobs", "prompt_cache_breakpoint", "refusal", "text", "type",
-	}
 	allowedByType := map[string][]string{
 		"input_text":     {"prompt_cache_breakpoint", "text", "type"},
 		"input_image":    {"detail", "file_id", "image_url", "prompt_cache_breakpoint", "type"},
@@ -778,6 +829,17 @@ func validateResponsesContentVariant(
 	if err := json.Unmarshal(body, &object); err != nil {
 		return err
 	}
+	if err := requireResponsesContentFields(object, typeName, context); err != nil {
+		return err
+	}
+	return rejectResponsesContentVariantFields(object, allowed, context)
+}
+
+func requireResponsesContentFields(
+	object map[string]json.RawMessage,
+	typeName string,
+	context responsesContentContext,
+) error {
 	requiredByType := map[string][]string{
 		"input_text":     {"text"},
 		"output_text":    {"text"},
@@ -791,12 +853,24 @@ func validateResponsesContentVariant(
 		category := llmprotocol.ErrorInvalidRequest
 		code := "invalid_content_variant"
 		message := "Responses content is missing the required field: " + name
-		if context == responsesProviderOutputContent || context == responsesProviderReasoningContent {
+		if isResponsesProviderContent(context) {
 			category = llmprotocol.ErrorUpstreamUnavailable
 			code = "invalid_response_content"
 			message = "Responses provider output is missing the required field: " + name
 		}
 		return llmprotocol.NewError(category, code, message, nil)
+	}
+	return nil
+}
+
+func rejectResponsesContentVariantFields(
+	object map[string]json.RawMessage,
+	allowed []string,
+	context responsesContentContext,
+) error {
+	known := []string{
+		"annotations", "detail", "file_data", "file_id", "file_url", "filename", "image_url",
+		"logprobs", "prompt_cache_breakpoint", "refusal", "text", "type",
 	}
 	allowedSet := make(map[string]struct{}, len(allowed))
 	for _, name := range allowed {
@@ -812,7 +886,7 @@ func validateResponsesContentVariant(
 		category := llmprotocol.ErrorInvalidRequest
 		code := "invalid_content_variant"
 		message := "Responses content includes a field from a different union variant"
-		if context == responsesProviderOutputContent || context == responsesProviderReasoningContent {
+		if isResponsesProviderContent(context) {
 			category = llmprotocol.ErrorUpstreamUnavailable
 			code = "invalid_response_content"
 			message = "Responses provider output mixes content union variants"
@@ -942,8 +1016,20 @@ func (OpenAIResponsesCodec) EncodeRequest(request llmprotocol.Request, envelope 
 	if envelope.CanReplay(llmprotocol.OpenAIResponsesV1, request.Generation, policy, false) {
 		return append([]byte(nil), envelope.Request...), nil, nil
 	}
+	if err := validateResponsesEncodableRequest(request); err != nil {
+		return nil, nil, err
+	}
+	wire, err := encodeResponsesRequestWire(request)
+	if err != nil {
+		return nil, nil, err
+	}
+	body, err := marshalWire(wire)
+	return body, nil, err
+}
+
+func validateResponsesEncodableRequest(request llmprotocol.Request) error {
 	if request.ReasoningDisplay != "" {
-		return nil, nil, llmprotocol.NewError(
+		return llmprotocol.NewError(
 			llmprotocol.ErrorUnsupportedFeature,
 			"unsupported_reasoning_display",
 			"Responses cannot represent reasoning display controls",
@@ -951,13 +1037,17 @@ func (OpenAIResponsesCodec) EncodeRequest(request llmprotocol.Request, envelope 
 		)
 	}
 	if request.Sampling.MaxOutputTokens != nil && *request.Sampling.MaxOutputTokens < 16 {
-		return nil, nil, llmprotocol.NewError(
+		return llmprotocol.NewError(
 			llmprotocol.ErrorUnsupportedFeature,
 			"unsupported_responses_max_output_tokens",
 			"Responses requires an output token limit of at least 16",
 			nil,
 		)
 	}
+	return nil
+}
+
+func encodeResponsesRequestWire(request llmprotocol.Request) (responsesRequestWire, error) {
 	wire := responsesRequestWire{
 		Model: request.Model, Stream: request.Stream, Metadata: request.Metadata,
 		Store: request.Store, AutoStore: request.AutoStore, PreviousResponseID: request.PreviousResponseID,
@@ -974,38 +1064,56 @@ func (OpenAIResponsesCodec) EncodeRequest(request llmprotocol.Request, envelope 
 	if request.ReasoningEffort != "" {
 		wire.Reasoning = &responsesReasoningWire{Effort: request.ReasoningEffort}
 	}
+	items, err := encodeResponsesRequestItems(request)
+	if err != nil {
+		return responsesRequestWire{}, err
+	}
+	wire.Input, _ = json.Marshal(items)
+	wire.Tools = encodeResponsesTools(request.Tools)
+	wire.ToolChoice = encodeResponsesToolChoice(request.ToolChoice)
+	wire.Text = encodeResponsesOutputFormat(request.OutputFormat)
+	return wire, nil
+}
+
+func encodeResponsesRequestItems(request llmprotocol.Request) ([]responsesItemWire, error) {
 	items := make([]responsesItemWire, 0, len(request.Messages))
 	for _, instruction := range request.Instructions {
 		encoded, err := encodeResponsesMessage(llmprotocol.Message{Role: instruction.Role, Content: instruction.Content}, "input")
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		items = append(items, encoded...)
 	}
 	for _, message := range request.Messages {
 		encoded, err := encodeResponsesMessage(message, "input")
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		items = append(items, encoded...)
 	}
-	wire.Input, _ = json.Marshal(items)
-	tools := make([]responsesToolWire, 0, len(request.Tools))
-	for _, tool := range request.Tools {
+	return items, nil
+}
+
+func encodeResponsesTools(input []llmprotocol.Tool) json.RawMessage {
+	if len(input) == 0 {
+		return nil
+	}
+	tools := make([]responsesToolWire, 0, len(input))
+	for _, tool := range input {
 		tools = append(tools, responsesToolWire{Type: "function", Name: tool.Name, Description: tool.Description, Parameters: tool.InputSchema, Strict: tool.Strict})
 	}
-	if len(tools) > 0 {
-		wire.Tools, _ = json.Marshal(tools)
+	encoded, _ := json.Marshal(tools)
+	return encoded
+}
+
+func encodeResponsesOutputFormat(output llmprotocol.OutputFormat) *responsesTextWire {
+	if output.Kind == "" || output.Kind == llmprotocol.OutputText {
+		return nil
 	}
-	wire.ToolChoice = encodeResponsesToolChoice(request.ToolChoice)
-	if request.OutputFormat.Kind != "" && request.OutputFormat.Kind != llmprotocol.OutputText {
-		wire.Text = &responsesTextWire{Format: responsesFormatWire{
-			Type: string(request.OutputFormat.Kind), Name: request.OutputFormat.Name,
-			Description: request.OutputFormat.Description, Strict: request.OutputFormat.Strict, Schema: request.OutputFormat.Schema,
-		}}
-	}
-	body, err := marshalWire(wire)
-	return body, nil, err
+	return &responsesTextWire{Format: responsesFormatWire{
+		Type: string(output.Kind), Name: output.Name,
+		Description: output.Description, Strict: output.Strict, Schema: output.Schema,
+	}}
 }
 
 func encodeResponsesMessage(message llmprotocol.Message, textDirection string) ([]responsesItemWire, error) {
@@ -1335,6 +1443,15 @@ func (OpenAIResponsesCodec) DecodeResponse(body []byte, policy llmprotocol.Polic
 	if err := validateResponsesResponseResource(wire, false); err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
 	}
+	diagnostics := responsesResponseMetadataDiagnostics(wire, policy)
+	response, err := decodeResponsesResponseResource(wire, policy, &diagnostics)
+	if err != nil {
+		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
+	}
+	return response, responseEnvelope(llmprotocol.OpenAIResponsesV1, body, response.Generation, wire.Status, policy), diagnostics, nil
+}
+
+func responsesResponseMetadataDiagnostics(wire responsesResponseWire, policy llmprotocol.Policy) llmprotocol.Diagnostics {
 	var diagnostics llmprotocol.Diagnostics
 	appendProviderFieldOmissions(&diagnostics, policy, llmprotocol.OpenAIResponsesV1, map[string]bool{
 		"background": len(wire.Background) > 0, "completed_at": len(wire.CompletedAt) > 0,
@@ -1355,6 +1472,14 @@ func (OpenAIResponsesCodec) DecodeResponse(body []byte, policy llmprotocol.Polic
 		"top_p":      len(wire.TopP) > 0,
 		"truncation": len(wire.Truncation) > 0, "user": len(wire.User) > 0,
 	}, "response request-echo metadata is not model output")
+	return diagnostics
+}
+
+func decodeResponsesResponseResource(
+	wire responsesResponseWire,
+	policy llmprotocol.Policy,
+	diagnostics *llmprotocol.Diagnostics,
+) (llmprotocol.Response, error) {
 	response := llmprotocol.Response{Generation: 1, ID: wire.ID, Model: wire.Model, Usage: llmprotocol.Usage{State: llmprotocol.UsageUnavailable}}
 	if wire.CreatedAt > 0 {
 		response.CreatedAt = time.Unix(wire.CreatedAt, 0).UTC()
@@ -1363,14 +1488,14 @@ func (OpenAIResponsesCodec) DecodeResponse(body []byte, policy llmprotocol.Polic
 		response.Error = &llmprotocol.ProtocolError{Category: decodeProviderErrorCategory(wire.Error.Code), Code: wire.Error.Code, Message: wire.Error.Message}
 		response.StopReason = llmprotocol.StopError
 	}
-	output, err := decodeResponsesOutput(wire.Output, policy, &diagnostics)
+	output, err := decodeResponsesOutput(wire.Output, policy, diagnostics)
 	if err != nil {
-		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
+		return llmprotocol.Response{}, err
 	}
 	response.Output = output
 	if wire.Usage != nil {
 		response.Usage = decodeResponsesUsage(*wire.Usage)
-		appendProviderFieldOmissions(&diagnostics, policy, llmprotocol.OpenAIResponsesV1, map[string]bool{
+		appendProviderFieldOmissions(diagnostics, policy, llmprotocol.OpenAIResponsesV1, map[string]bool{
 			"usage.compute_units": len(wire.Usage.ComputeUnits) > 0,
 		}, "compute-unit accounting has no protocol-neutral token representation")
 	}
@@ -1378,23 +1503,29 @@ func (OpenAIResponsesCodec) DecodeResponse(body []byte, policy llmprotocol.Polic
 		response.StopReason = llmprotocol.StopEndTurn
 	}
 	response.SourceStopReason = wire.Status
+	response.StopReason = decodeResponsesStopReason(wire, response.StopReason)
+	return response, nil
+}
+
+func decodeResponsesStopReason(wire responsesResponseWire, fallback llmprotocol.StopReason) llmprotocol.StopReason {
 	if wire.Status == "incomplete" && wire.IncompleteDetails != nil {
 		switch wire.IncompleteDetails.Reason {
 		case "max_output_tokens":
-			response.StopReason = llmprotocol.StopMaxTokens
+			return llmprotocol.StopMaxTokens
 		case "content_filter":
-			response.StopReason = llmprotocol.StopContentFilter
+			return llmprotocol.StopContentFilter
 		default:
-			response.StopReason = llmprotocol.StopUnknown
+			return llmprotocol.StopUnknown
 		}
 	}
-	if wire.Status == "failed" {
-		response.StopReason = llmprotocol.StopError
+	switch wire.Status {
+	case "failed":
+		return llmprotocol.StopError
+	case "cancelled":
+		return llmprotocol.StopCanceled
+	default:
+		return fallback
 	}
-	if wire.Status == "cancelled" {
-		response.StopReason = llmprotocol.StopCanceled
-	}
-	return response, responseEnvelope(llmprotocol.OpenAIResponsesV1, body, response.Generation, wire.Status, policy), diagnostics, nil
 }
 
 func decodeResponsesOutput(
@@ -1445,45 +1576,60 @@ func decodeResponsesOutputItem(item responsesItemWire, index int, policy llmprot
 	output := llmprotocol.OutputItem{ID: id, Role: llmprotocol.RoleAssistant}
 	switch item.Type {
 	case "message":
-		role, err := canonicalRole(item.Role)
-		if err != nil {
-			return llmprotocol.OutputItem{}, invalidProviderResponse(
-				"invalid_response_role",
-				"Responses output messages must use the assistant role",
-			)
-		}
-		if role != llmprotocol.RoleAssistant {
-			return llmprotocol.OutputItem{}, llmprotocol.NewError(
-				llmprotocol.ErrorUpstreamUnavailable,
-				"invalid_response_role",
-				"Responses output messages must use the assistant role",
-				nil,
-			)
-		}
-		content, err := decodeResponsesContent(item.Content, policy, responsesProviderOutputContent)
-		if err != nil {
-			return llmprotocol.OutputItem{}, err
-		}
-		if responsesContentFieldPresent(item.Content, "logprobs") {
-			appendProviderFieldOmission(diagnostics, policy, llmprotocol.OpenAIResponsesV1, "output.content.logprobs", "token log probabilities have no protocol-neutral representation")
-		}
-		output.Role, output.Content = role, content
+		return decodeResponsesMessageOutput(output, item, policy, diagnostics)
 	case "function_call":
 		output.Content = []llmprotocol.Content{{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{ID: item.CallID, Name: item.Name, Arguments: item.Arguments}}}
 	case "reasoning":
-		content, err := decodeResponsesReasoning(item.Summary, policy, true)
-		if err != nil {
-			return llmprotocol.OutputItem{}, err
-		}
-		reasoning, err := decodeResponsesContent(item.Content, policy, responsesProviderReasoningContent)
-		if err != nil {
-			return llmprotocol.OutputItem{}, err
-		}
-		content = append(content, reasoning...)
-		output.Content = content
+		return decodeResponsesReasoningOutput(output, item, policy)
 	default:
 		return llmprotocol.OutputItem{}, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_output_item", "Responses output item is unsupported", nil)
 	}
+	return output, nil
+}
+
+func decodeResponsesMessageOutput(
+	output llmprotocol.OutputItem,
+	item responsesItemWire,
+	policy llmprotocol.Policy,
+	diagnostics *llmprotocol.Diagnostics,
+) (llmprotocol.OutputItem, error) {
+	role, err := canonicalRole(item.Role)
+	if err != nil {
+		return llmprotocol.OutputItem{}, invalidProviderResponse("invalid_response_role", "Responses output messages must use the assistant role")
+	}
+	if role != llmprotocol.RoleAssistant {
+		return llmprotocol.OutputItem{}, llmprotocol.NewError(
+			llmprotocol.ErrorUpstreamUnavailable,
+			"invalid_response_role",
+			"Responses output messages must use the assistant role",
+			nil,
+		)
+	}
+	content, err := decodeResponsesContent(item.Content, policy, responsesProviderOutputContent)
+	if err != nil {
+		return llmprotocol.OutputItem{}, err
+	}
+	if responsesContentFieldPresent(item.Content, "logprobs") {
+		appendProviderFieldOmission(diagnostics, policy, llmprotocol.OpenAIResponsesV1, "output.content.logprobs", "token log probabilities have no protocol-neutral representation")
+	}
+	output.Role, output.Content = role, content
+	return output, nil
+}
+
+func decodeResponsesReasoningOutput(
+	output llmprotocol.OutputItem,
+	item responsesItemWire,
+	policy llmprotocol.Policy,
+) (llmprotocol.OutputItem, error) {
+	content, err := decodeResponsesReasoning(item.Summary, policy, true)
+	if err != nil {
+		return llmprotocol.OutputItem{}, err
+	}
+	reasoning, err := decodeResponsesContent(item.Content, policy, responsesProviderReasoningContent)
+	if err != nil {
+		return llmprotocol.OutputItem{}, err
+	}
+	output.Content = append(content, reasoning...)
 	return output, nil
 }
 
@@ -1531,18 +1677,8 @@ func (OpenAIResponsesCodec) EncodeResponse(response llmprotocol.Response, envelo
 		return append([]byte(nil), envelope.Response...), nil, nil
 	}
 	if response.Error != nil {
-		var diagnostics llmprotocol.Diagnostics
-		createdAt := int64(0)
-		if !response.CreatedAt.IsZero() {
-			createdAt = response.CreatedAt.Unix()
-		}
-		wire := newResponsesResponseWire(response.ID, response.Model, "failed", createdAt, envelope.ResponseRender.PreviousResponseID)
-		wire.Error = &responsesErrorWire{Code: responsesErrorCode(response.Error), Message: response.Error.Message}
-		if response.Usage.State == llmprotocol.UsageAvailable {
-			wire.Usage = encodeResponsesUsage(response.Usage)
-		}
-		body, err := marshalWire(wire)
-		return body, diagnostics, err
+		body, err := encodeResponsesErrorResource(response, envelope)
+		return body, nil, err
 	}
 	var diagnostics llmprotocol.Diagnostics
 	if len(response.Alternatives) > 0 {
@@ -1550,45 +1686,88 @@ func (OpenAIResponsesCodec) EncodeResponse(response llmprotocol.Response, envelo
 			return nil, diagnostics, err
 		}
 	}
-	createdAt := int64(0)
-	if !response.CreatedAt.IsZero() {
-		createdAt = response.CreatedAt.Unix()
+	wire, err := encodeResponsesSuccessResource(response, envelope)
+	if err != nil {
+		return nil, diagnostics, err
 	}
-	wire := newResponsesResponseWire(response.ID, response.Model, "completed", createdAt, envelope.ResponseRender.PreviousResponseID)
+	wire.OutputText = encodeResponsesOutputText(response.Output)
+	wire.Usage = encodeResponsesUsage(response.Usage)
+	if err := applyResponsesStopReason(&wire, response.StopReason, envelope.Format, policy, &diagnostics); err != nil {
+		return nil, diagnostics, err
+	}
+	body, err := marshalWire(wire)
+	return body, diagnostics, err
+}
+
+func encodeResponsesErrorResource(response llmprotocol.Response, envelope llmprotocol.Envelope) ([]byte, error) {
+	wire := newResponsesResponseWire(
+		response.ID,
+		response.Model,
+		"failed",
+		responsesCreatedAt(response.CreatedAt),
+		envelope.ResponseRender.PreviousResponseID,
+	)
+	wire.Error = &responsesErrorWire{Code: responsesErrorCode(response.Error), Message: response.Error.Message}
+	if response.Usage.State == llmprotocol.UsageAvailable {
+		wire.Usage = encodeResponsesUsage(response.Usage)
+	}
+	return marshalWire(wire)
+}
+
+func encodeResponsesSuccessResource(response llmprotocol.Response, envelope llmprotocol.Envelope) (responsesResponseWire, error) {
+	wire := newResponsesResponseWire(
+		response.ID,
+		response.Model,
+		"completed",
+		responsesCreatedAt(response.CreatedAt),
+		envelope.ResponseRender.PreviousResponseID,
+	)
 	items := make([]responsesItemWire, 0, len(response.Output))
 	for _, item := range response.Output {
 		encoded, err := encodeResponsesOutputItem(item)
 		if err != nil {
-			return nil, diagnostics, err
+			return responsesResponseWire{}, err
 		}
 		items = append(items, encoded...)
 	}
-	if len(items) > 0 {
-		encoded, err := json.Marshal(items)
-		if err != nil {
-			return nil, diagnostics, err
-		}
-		wire.Output = encoded
+	if len(items) == 0 {
+		return wire, nil
 	}
-	wire.OutputText = encodeResponsesOutputText(response.Output)
-	wire.Usage = encodeResponsesUsage(response.Usage)
-	switch response.StopReason {
+	encoded, err := json.Marshal(items)
+	wire.Output = encoded
+	return wire, err
+}
+
+func responsesCreatedAt(createdAt time.Time) int64 {
+	if createdAt.IsZero() {
+		return 0
+	}
+	return createdAt.Unix()
+}
+
+func applyResponsesStopReason(
+	wire *responsesResponseWire,
+	stopReason llmprotocol.StopReason,
+	source llmprotocol.WireFormat,
+	policy llmprotocol.Policy,
+	diagnostics *llmprotocol.Diagnostics,
+) error {
+	switch stopReason {
 	case llmprotocol.StopMaxTokens, llmprotocol.StopContentFilter:
 		wire.Status = "incomplete"
 		reason := "max_output_tokens"
-		if response.StopReason == llmprotocol.StopContentFilter {
+		if stopReason == llmprotocol.StopContentFilter {
 			reason = "content_filter"
 		}
 		wire.IncompleteDetails = &struct {
 			Reason string `json:"reason"`
 		}{Reason: reason}
+		return nil
 	case llmprotocol.StopPaused, llmprotocol.StopContextWindow, llmprotocol.StopCanceled, llmprotocol.StopUnknown:
-		if err := appendLossy(&diagnostics, policy, envelope.Format, llmprotocol.OpenAIResponsesV1, "response.stop_reason", "Responses cannot represent the source terminal reason"); err != nil {
-			return nil, diagnostics, err
-		}
+		return appendLossy(diagnostics, policy, source, llmprotocol.OpenAIResponsesV1, "response.stop_reason", "Responses cannot represent the source terminal reason")
+	default:
+		return nil
 	}
-	body, err := marshalWire(wire)
-	return body, diagnostics, err
 }
 
 func encodeResponsesOutputText(items []llmprotocol.OutputItem) json.RawMessage {

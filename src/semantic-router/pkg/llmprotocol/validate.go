@@ -383,6 +383,16 @@ func validateStopSequences(stops []string, limits Limits) error {
 }
 
 func validateReasoning(request Request, limits Limits) error {
+	if err := validateReasoningEffort(request, limits); err != nil {
+		return err
+	}
+	if err := validateReasoningDisplay(request); err != nil {
+		return err
+	}
+	return validateReasoningMode(request)
+}
+
+func validateReasoningEffort(request Request, limits Limits) error {
 	if exceeds(request.ReasoningEffort, limits.ReasoningEffortBytes) {
 		return NewError(ErrorInvalidRequest, "reasoning_effort_limit", "reasoning effort exceeds the configured limit", nil)
 	}
@@ -394,6 +404,10 @@ func validateReasoning(request Request, limits Limits) error {
 	if request.ReasoningBudgetTokens != nil && *request.ReasoningBudgetTokens <= 0 {
 		return NewError(ErrorInvalidRequest, "invalid_reasoning_budget", "reasoning budget must be positive", nil)
 	}
+	return nil
+}
+
+func validateReasoningDisplay(request Request) error {
 	switch request.ReasoningDisplay {
 	case "", "summarized", "omitted":
 	default:
@@ -404,6 +418,10 @@ func validateReasoning(request Request, limits Limits) error {
 		request.ReasoningMode != ReasoningModeAdaptive {
 		return NewError(ErrorInvalidRequest, "conflicting_reasoning_display", "reasoning display requires enabled or adaptive reasoning", nil)
 	}
+	return nil
+}
+
+func validateReasoningMode(request Request) error {
 	switch request.ReasoningMode {
 	case "", ReasoningModeEnabled:
 	case ReasoningModeDisabled, ReasoningModeAdaptive:
@@ -824,6 +842,13 @@ func validateSuccessfulResponseEnvelope(response Response, limits Limits) error 
 	if strings.TrimSpace(response.ID) == "" {
 		return NewError(ErrorUpstreamUnavailable, "response_id_required", "upstream response ID is required", nil)
 	}
+	if err := validateResponseStopReason(response); err != nil {
+		return err
+	}
+	return validateResponseOutputCardinality(response, limits)
+}
+
+func validateResponseStopReason(response Response) error {
 	if !validStopReason(response.StopReason) {
 		return NewError(ErrorUpstreamUnavailable, "invalid_stop_reason", "upstream stop reason is invalid", nil)
 	}
@@ -833,6 +858,10 @@ func validateSuccessfulResponseEnvelope(response Response, limits Limits) error 
 	if response.StopReason != StopSequence && response.MatchedStopSequence != "" {
 		return NewError(ErrorUpstreamUnavailable, "matched_stop_sequence_reason", "upstream matched stop sequence requires stop_sequence reason", nil)
 	}
+	return nil
+}
+
+func validateResponseOutputCardinality(response Response, limits Limits) error {
 	if len(response.Output) == 0 && response.StopReason != StopContentFilter {
 		return NewError(ErrorUpstreamUnavailable, "empty_response_output", "successful upstream response has no primary output", nil)
 	}

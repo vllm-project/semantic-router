@@ -539,14 +539,8 @@ type StreamEngine struct {
 }
 
 func (engine *StreamEngine) Push(frame []byte) ([][]byte, []llmprotocol.Event, llmprotocol.Diagnostics, error) {
-	if engine == nil || engine.decoder == nil || engine.encoder == nil {
-		return nil, nil, nil, fmt.Errorf("stream codec engine is unavailable")
-	}
-	if engine.terminal {
-		if engine.failure != nil {
-			return nil, nil, nil, engine.failure
-		}
-		return nil, nil, nil, llmprotocol.NewError(llmprotocol.ErrorConflict, "stream_terminal", "stream is already terminal", nil)
+	if err := engine.validatePushState(); err != nil {
+		return nil, nil, nil, err
 	}
 	events, diagnostics, decodeErr := engine.decoder.Push(frame)
 	if decodeErr != nil {
@@ -555,35 +549,10 @@ func (engine *StreamEngine) Push(frame []byte) ([][]byte, []llmprotocol.Event, l
 	} else {
 		events = engine.deferSuccessfulTerminal(events)
 	}
-	frames := make([][]byte, 0, len(events))
-	acceptedEvents := make([]llmprotocol.Event, 0, len(events))
-	for index := range events {
-		if engine.mutation != nil {
-			if mutationErr := engine.mutation(&events[index]); mutationErr != nil {
-				engine.poison(mutationErr)
-				return frames, acceptedEvents, diagnostics, mutationErr
-			}
-		}
-		event := events[index]
-		if capabilityErr := llmprotocol.RequireCapabilities(
-			engine.targetFormat,
-			engine.targetCapabilities,
-			llmprotocol.RequiredEventCapabilities(event),
-		); capabilityErr != nil {
-			engine.poison(capabilityErr)
-			return frames, acceptedEvents, diagnostics, capabilityErr
-		}
-		encoded, eventDiagnostics, encodeErr := engine.encoder.Push(event)
-		diagnostics = appendDiagnostics(diagnostics, eventDiagnostics, engine.maxDiagnostics)
-		frames = append(frames, encoded...)
-		if encodeErr != nil {
-			engine.poison(encodeErr)
-			return frames, acceptedEvents, diagnostics, encodeErr
-		}
-		acceptedEvents = append(acceptedEvents, event)
-		if event.Type == llmprotocol.EventResponseCompleted || event.Type == llmprotocol.EventResponseFailed {
-			engine.terminal = true
-		}
+	frames, acceptedEvents, diagnostics, encodeErr := engine.encodeEvents(events, diagnostics)
+	if encodeErr != nil {
+		engine.poison(encodeErr)
+		return frames, acceptedEvents, diagnostics, encodeErr
 	}
 	// A transport read may contain several complete SSE frames followed by a
 	// malformed one. The decoder deliberately returns the valid semantic prefix
@@ -594,6 +563,60 @@ func (engine *StreamEngine) Push(frame []byte) ([][]byte, []llmprotocol.Event, l
 		return frames, acceptedEvents, diagnostics, decodeErr
 	}
 	return frames, acceptedEvents, diagnostics, nil
+}
+
+func (engine *StreamEngine) validatePushState() error {
+	if engine == nil || engine.decoder == nil || engine.encoder == nil {
+		return fmt.Errorf("stream codec engine is unavailable")
+	}
+	if !engine.terminal {
+		return nil
+	}
+	if engine.failure != nil {
+		return engine.failure
+	}
+	return llmprotocol.NewError(llmprotocol.ErrorConflict, "stream_terminal", "stream is already terminal", nil)
+}
+
+func (engine *StreamEngine) encodeEvents(
+	events []llmprotocol.Event,
+	diagnostics llmprotocol.Diagnostics,
+) ([][]byte, []llmprotocol.Event, llmprotocol.Diagnostics, error) {
+	frames := make([][]byte, 0, len(events))
+	accepted := make([]llmprotocol.Event, 0, len(events))
+	for index := range events {
+		if err := engine.prepareEvent(&events[index]); err != nil {
+			return frames, accepted, diagnostics, err
+		}
+		encoded, eventDiagnostics, err := engine.encoder.Push(events[index])
+		diagnostics = appendDiagnostics(diagnostics, eventDiagnostics, engine.maxDiagnostics)
+		if err != nil {
+			return frames, accepted, diagnostics, err
+		}
+		frames = append(frames, encoded...)
+		accepted = append(accepted, events[index])
+		engine.recordTerminalEvent(events[index])
+	}
+	return frames, accepted, diagnostics, nil
+}
+
+func (engine *StreamEngine) prepareEvent(event *llmprotocol.Event) error {
+	if engine.mutation != nil {
+		if err := engine.mutation(event); err != nil {
+			return err
+		}
+	}
+	return llmprotocol.RequireCapabilities(
+		engine.targetFormat,
+		engine.targetCapabilities,
+		llmprotocol.RequiredEventCapabilities(*event),
+	)
+}
+
+func (engine *StreamEngine) recordTerminalEvent(event llmprotocol.Event) {
+	if event.Type == llmprotocol.EventResponseCompleted || event.Type == llmprotocol.EventResponseFailed {
+		engine.terminal = true
+	}
 }
 
 func suppressSuccessfulTerminal(events []llmprotocol.Event) []llmprotocol.Event {
@@ -642,76 +665,83 @@ func (engine *StreamEngine) Finalize(reason error) ([][]byte, []llmprotocol.Even
 		return nil, nil, nil, nil
 	}
 	engine.finalized = true
+	finalization := engine.prepareFinalization(reason)
+	frames, acceptedEvents, diagnostics, eventErr := engine.encodeEvents(
+		finalization.events,
+		finalization.diagnostics,
+	)
+	if eventErr != nil {
+		return engine.finalizeFailure(frames, acceptedEvents, diagnostics, eventErr)
+	}
+	encoded, encodeDiagnostics, encodeErr := engine.encoder.Finalize(finalization.terminalReason)
+	diagnostics = appendDiagnostics(diagnostics, encodeDiagnostics, engine.maxDiagnostics)
+	engine.terminal = true
+	if encodeErr == nil {
+		frames = append(frames, encoded...)
+	}
+	if finalization.decodeErr != nil {
+		return frames, acceptedEvents, diagnostics, finalization.resultError()
+	}
+	return frames, acceptedEvents, diagnostics, encodeErr
+}
+
+type streamFinalization struct {
+	events         []llmprotocol.Event
+	diagnostics    llmprotocol.Diagnostics
+	terminalReason error
+	decodeErr      error
+	firstFailure   error
+}
+
+func (engine *StreamEngine) prepareFinalization(reason error) streamFinalization {
 	firstFailure := engine.failure
 	if firstFailure != nil {
 		reason = firstFailure
 	}
 	events, diagnostics, decodeErr := engine.decoder.Finalize(reason)
-	terminalReason := reason
-	if decodeErr != nil {
-		events = suppressSuccessfulTerminal(events)
+	result := streamFinalization{
+		events: events, diagnostics: diagnostics, terminalReason: reason,
+		decodeErr: decodeErr, firstFailure: firstFailure,
+	}
+	switch {
+	case decodeErr != nil:
+		result.events = suppressSuccessfulTerminal(events)
 		engine.pendingCompletion = nil
-		terminalReason = decodeErr
+		result.terminalReason = decodeErr
 		if firstFailure != nil {
-			// Finalizing a poisoned decoder may surface a secondary state or
-			// resource-limit error while it tries to synthesize its terminal
-			// event. The first failure is the stream contract: use it for both
-			// the public terminal frame and the caller-visible error.
-			terminalReason = firstFailure
+			result.terminalReason = firstFailure
 		}
-	} else if terminalReason != nil {
-		// A provider success observed before HTTP EOS is provisional. Transport
-		// cancellation or deadline expiry wins even when the source decoder has
-		// already seen its semantic success event.
-		events = suppressSuccessfulTerminal(events)
-		engine.pendingCompletion = nil
-		if !containsFailedTerminal(events) {
-			events = append(events, llmprotocol.Event{
-				Type:       llmprotocol.EventResponseFailed,
-				StopReason: llmprotocol.StopError,
-				Error:      streamFinalizationError(terminalReason, "stream ended before completion"),
-				Failure:    llmprotocol.FailureTransport,
-			})
-		}
-	} else if engine.pendingCompletion != nil {
-		events = append(events, *engine.pendingCompletion)
+	case reason != nil:
+		result.events = engine.transportFailureEvents(events, reason)
+	case engine.pendingCompletion != nil:
+		result.events = append(events, *engine.pendingCompletion)
 		engine.pendingCompletion = nil
 	}
-	frames := make([][]byte, 0, len(events)+1)
-	acceptedEvents := make([]llmprotocol.Event, 0, len(events))
-	for index := range events {
-		if engine.mutation != nil {
-			if mutationErr := engine.mutation(&events[index]); mutationErr != nil {
-				return engine.finalizeFailure(frames, acceptedEvents, diagnostics, mutationErr)
-			}
-		}
-		event := events[index]
-		if capabilityErr := llmprotocol.RequireCapabilities(
-			engine.targetFormat,
-			engine.targetCapabilities,
-			llmprotocol.RequiredEventCapabilities(event),
-		); capabilityErr != nil {
-			return engine.finalizeFailure(frames, acceptedEvents, diagnostics, capabilityErr)
-		}
-		encoded, eventDiagnostics, encodeErr := engine.encoder.Push(event)
-		diagnostics = appendDiagnostics(diagnostics, eventDiagnostics, engine.maxDiagnostics)
-		frames = append(frames, encoded...)
-		if encodeErr != nil {
-			return engine.finalizeFailure(frames, acceptedEvents, diagnostics, encodeErr)
-		}
-		acceptedEvents = append(acceptedEvents, event)
+	return result
+}
+
+func (engine *StreamEngine) transportFailureEvents(
+	events []llmprotocol.Event,
+	reason error,
+) []llmprotocol.Event {
+	events = suppressSuccessfulTerminal(events)
+	engine.pendingCompletion = nil
+	if containsFailedTerminal(events) {
+		return events
 	}
-	encoded, encodeDiagnostics, encodeErr := engine.encoder.Finalize(terminalReason)
-	diagnostics = appendDiagnostics(diagnostics, encodeDiagnostics, engine.maxDiagnostics)
-	frames = append(frames, encoded...)
-	engine.terminal = true
-	if decodeErr != nil {
-		if firstFailure != nil {
-			return frames, acceptedEvents, diagnostics, firstFailure
-		}
-		return frames, acceptedEvents, diagnostics, decodeErr
+	return append(events, llmprotocol.Event{
+		Type:       llmprotocol.EventResponseFailed,
+		StopReason: llmprotocol.StopError,
+		Error:      streamFinalizationError(reason, "stream ended before completion"),
+		Failure:    llmprotocol.FailureTransport,
+	})
+}
+
+func (finalization streamFinalization) resultError() error {
+	if finalization.firstFailure != nil {
+		return finalization.firstFailure
 	}
-	return frames, acceptedEvents, diagnostics, encodeErr
+	return finalization.decodeErr
 }
 
 func containsFailedTerminal(events []llmprotocol.Event) bool {
@@ -732,9 +762,9 @@ func (engine *StreamEngine) finalizeFailure(
 	engine.poison(cause)
 	encoded, finalDiagnostics, finalizeErr := engine.encoder.Finalize(cause)
 	diagnostics = appendDiagnostics(diagnostics, finalDiagnostics, engine.maxDiagnostics)
-	frames = append(frames, encoded...)
 	if finalizeErr != nil {
 		return frames, events, diagnostics, finalizeErr
 	}
+	frames = append(frames, encoded...)
 	return frames, events, diagnostics, cause
 }

@@ -90,6 +90,11 @@ func assertMidstreamFailureWire(t *testing.T, target llmprotocol.WireFormat, wir
 	if partialIndex < 0 || failureIndex <= partialIndex {
 		t.Fatalf("public stream lost midstream ordering: %s", wire)
 	}
+	assertMidstreamProtocolTerminal(t, target, wire)
+}
+
+func assertMidstreamProtocolTerminal(t *testing.T, target llmprotocol.WireFormat, wire []byte) {
+	t.Helper()
 	switch target {
 	case llmprotocol.OpenAIChatV1:
 		if !bytes.Contains(wire, []byte(`"error":`)) || bytes.Contains(wire, []byte("data: [DONE]")) {

@@ -102,27 +102,32 @@ func TestTransportErrorTranslationRejectsInvalidProviderEnvelopes(t *testing.T) 
 			llmprotocol.AnthropicMessagesV1,
 		} {
 			t.Run(test.name+"/to/"+string(target), func(t *testing.T) {
-				translated, err := NewBuiltinEngine().TranslateTransportError(
-					test.source,
-					target,
-					[]byte(test.body),
-					nil,
-				)
-				if err == nil {
-					t.Fatal("invalid provider transport error was accepted")
-				}
-				var protocolError *llmprotocol.ProtocolError
-				if !errors.As(err, &protocolError) {
-					t.Fatalf("provider error = %T %v, want *llmprotocol.ProtocolError", err, err)
-				}
-				if protocolError.Category != llmprotocol.ErrorUpstreamUnavailable || protocolError.Code != test.code {
-					t.Fatalf("provider error = %+v, want category=%q code=%q", protocolError, llmprotocol.ErrorUpstreamUnavailable, test.code)
-				}
-				if translated.Body != nil || translated.TransportError.Error != nil {
-					t.Fatalf("invalid provider error produced public output: %+v", translated)
-				}
+				assertInvalidProviderEnvelope(t, test.source, target, []byte(test.body), test.code)
 			})
 		}
+	}
+}
+
+func assertInvalidProviderEnvelope(
+	t *testing.T,
+	source, target llmprotocol.WireFormat,
+	body []byte,
+	wantCode string,
+) {
+	t.Helper()
+	translated, err := NewBuiltinEngine().TranslateTransportError(source, target, body, nil)
+	if err == nil {
+		t.Fatal("invalid provider transport error was accepted")
+	}
+	var protocolError *llmprotocol.ProtocolError
+	if !errors.As(err, &protocolError) {
+		t.Fatalf("provider error = %T %v, want *llmprotocol.ProtocolError", err, err)
+	}
+	if protocolError.Category != llmprotocol.ErrorUpstreamUnavailable || protocolError.Code != wantCode {
+		t.Fatalf("provider error = %+v, want category=%q code=%q", protocolError, llmprotocol.ErrorUpstreamUnavailable, wantCode)
+	}
+	if translated.Body != nil || translated.TransportError.Error != nil {
+		t.Fatalf("invalid provider error produced public output: %+v", translated)
 	}
 }
 
@@ -347,42 +352,49 @@ func TestModelFailureEncodingKeepsResponsesResourceSemantics(t *testing.T) {
 			Code:     "authentication_error", Message: "API key is invalid.",
 		},
 	}
-	chat, _, err := (OpenAIChatCodec{}).EncodeResponse(
-		response, llmprotocol.Envelope{}, llmprotocol.DefaultPolicy(),
-	)
+	assertChatModelFailure(t, response)
+	assertResponsesModelFailure(t, response)
+	assertAnthropicModelFailure(t, response)
+}
+
+func assertChatModelFailure(t *testing.T, response llmprotocol.Response) {
+	t.Helper()
+	body, _, err := (OpenAIChatCodec{}).EncodeResponse(response, llmprotocol.Envelope{}, llmprotocol.DefaultPolicy())
 	if err != nil {
 		t.Fatalf("encode Chat model failure: %v", err)
 	}
-	chatGolden := `{"error":{"type":"authentication_error","code":"authentication_error","message":"API key is invalid.","param":null}}`
-	if string(chat) != chatGolden {
-		t.Fatalf("Chat model failure = %s, want %s", chat, chatGolden)
+	want := `{"error":{"type":"authentication_error","code":"authentication_error","message":"API key is invalid.","param":null}}`
+	if string(body) != want {
+		t.Fatalf("Chat model failure = %s, want %s", body, want)
 	}
+}
 
-	responses, _, err := (OpenAIResponsesCodec{}).EncodeResponse(
-		response, llmprotocol.Envelope{}, llmprotocol.DefaultPolicy(),
-	)
+func assertResponsesModelFailure(t *testing.T, response llmprotocol.Response) {
+	t.Helper()
+	body, _, err := (OpenAIResponsesCodec{}).EncodeResponse(response, llmprotocol.Envelope{}, llmprotocol.DefaultPolicy())
 	if err != nil {
 		t.Fatalf("encode Responses model failure: %v", err)
 	}
-	decoded, _, _, err := NewBuiltinEngine().DecodeResponse(llmprotocol.OpenAIResponsesV1, responses)
+	decoded, _, _, err := NewBuiltinEngine().DecodeResponse(llmprotocol.OpenAIResponsesV1, body)
 	if err != nil {
-		t.Fatalf("encoded Responses model failure violates its own wire contract: %v\n%s", err, responses)
+		t.Fatalf("encoded Responses model failure violates its own wire contract: %v\n%s", err, body)
 	}
 	if decoded.ID != response.ID || decoded.Model != response.Model || decoded.StopReason != llmprotocol.StopError ||
 		decoded.Error == nil || decoded.Error.Category != llmprotocol.ErrorAuthentication ||
 		decoded.Error.Code != response.Error.Code || decoded.Error.Message != response.Error.Message {
-		t.Fatalf("Responses model failure changed semantics: %+v\n%s", decoded, responses)
+		t.Fatalf("Responses model failure changed semantics: %+v\n%s", decoded, body)
 	}
+}
 
-	anthropic, _, err := (AnthropicMessagesCodec{}).EncodeResponse(
-		response, llmprotocol.Envelope{}, llmprotocol.DefaultPolicy(),
-	)
+func assertAnthropicModelFailure(t *testing.T, response llmprotocol.Response) {
+	t.Helper()
+	body, _, err := (AnthropicMessagesCodec{}).EncodeResponse(response, llmprotocol.Envelope{}, llmprotocol.DefaultPolicy())
 	if err != nil {
 		t.Fatalf("encode Anthropic model failure: %v", err)
 	}
-	anthropicGolden := `{"type":"error","error":{"type":"authentication_error","message":"API key is invalid."}}`
-	if string(anthropic) != anthropicGolden {
-		t.Fatalf("Anthropic model failure = %s, want %s", anthropic, anthropicGolden)
+	want := `{"type":"error","error":{"type":"authentication_error","message":"API key is invalid."}}`
+	if string(body) != want {
+		t.Fatalf("Anthropic model failure = %s, want %s", body, want)
 	}
 }
 

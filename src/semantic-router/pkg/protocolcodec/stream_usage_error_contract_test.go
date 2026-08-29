@@ -136,45 +136,51 @@ func TestAnthropicStreamCacheAccountingSurvivesEveryTargetFormat(t *testing.T) {
 	)
 	engine := NewBuiltinEngine()
 	for _, target := range builtinFormats {
-		t.Run(string(target), func(t *testing.T) {
-			stream, err := engine.NewStream(
-				llmprotocol.AnthropicMessagesV1,
-				target,
-				llmprotocol.StreamContext{
-					Context: context.Background(), PublicModel: "public-model",
-					Options: llmprotocol.StreamOptions{IncludeUsage: boolPointer(true)},
-				},
-			)
-			if err != nil {
-				t.Fatal(err)
-			}
-			frames, events, _, err := stream.Push(payload)
-			if err != nil {
-				t.Fatal(err)
-			}
-			finalFrames, finalEvents, _, err := stream.Finalize(nil)
-			if err != nil {
-				t.Fatal(err)
-			}
-			frames = append(frames, finalFrames...)
-			events = append(events, finalEvents...)
-			assertAnthropicCacheAccounting(t, events)
-
-			var encoded bytes.Buffer
-			writeFrames(&encoded, frames)
-			verify := mustNewMatrixStream(t, engine, target, target)
-			_, targetEvents, _, err := verify.Push(encoded.Bytes())
-			if err != nil {
-				t.Fatalf("target stream decode failed: %v\n%s", err, encoded.Bytes())
-			}
-			_, targetFinalEvents, _, err := verify.Finalize(nil)
-			if err != nil {
-				t.Fatalf("target stream finalize failed: %v\n%s", err, encoded.Bytes())
-			}
-			targetEvents = append(targetEvents, targetFinalEvents...)
-			assertAnthropicCacheAccounting(t, targetEvents)
-		})
+		t.Run(string(target), func(t *testing.T) { assertAnthropicCacheTranslation(t, engine, target, payload) })
 	}
+}
+
+func assertAnthropicCacheTranslation(t *testing.T, engine *Engine, target llmprotocol.WireFormat, payload []byte) {
+	t.Helper()
+	stream, err := engine.NewStream(
+		llmprotocol.AnthropicMessagesV1,
+		target,
+		llmprotocol.StreamContext{
+			Context: context.Background(), PublicModel: "public-model",
+			Options: llmprotocol.StreamOptions{IncludeUsage: boolPointer(true)},
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	frames, events, _, err := stream.Push(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	finalFrames, finalEvents, _, err := stream.Finalize(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	frames = append(frames, finalFrames...)
+	events = append(events, finalEvents...)
+	assertAnthropicCacheAccounting(t, events)
+	assertEncodedAnthropicCacheAccounting(t, engine, target, frames)
+}
+
+func assertEncodedAnthropicCacheAccounting(t *testing.T, engine *Engine, target llmprotocol.WireFormat, frames [][]byte) {
+	t.Helper()
+	var encoded bytes.Buffer
+	writeFrames(&encoded, frames)
+	verify := mustNewMatrixStream(t, engine, target, target)
+	_, events, _, err := verify.Push(encoded.Bytes())
+	if err != nil {
+		t.Fatalf("target stream decode failed: %v\n%s", err, encoded.Bytes())
+	}
+	_, finalEvents, _, err := verify.Finalize(nil)
+	if err != nil {
+		t.Fatalf("target stream finalize failed: %v\n%s", err, encoded.Bytes())
+	}
+	assertAnthropicCacheAccounting(t, append(events, finalEvents...))
 }
 
 func TestAnthropicMessageDeltaEncodingUsesOfficialVariantShape(t *testing.T) {
@@ -539,39 +545,45 @@ func TestIncompleteUpstreamStreamTerminatesEveryTargetWithFailure(t *testing.T) 
 		),
 	}
 	engine := NewBuiltinEngine()
-	for _, source := range builtinFormats {
-		for _, target := range builtinFormats {
-			t.Run(string(source)+"/"+string(target), func(t *testing.T) {
-				stream, err := engine.NewStream(source, target, llmprotocol.StreamContext{
-					Context: context.Background(), PublicModel: "public-model",
-				})
-				if err != nil {
-					t.Fatal(err)
-				}
-				if _, events, _, err := stream.Push(partial[source]); err != nil {
-					t.Fatalf("partial stream rejected before transport ended: %v", err)
-				} else if len(events) == 0 || events[len(events)-1].Type == llmprotocol.EventResponseFailed {
-					t.Fatalf("partial stream terminal state = %+v", events)
-				}
-				frames, events, _, err := stream.Finalize(nil)
-				if err != nil {
-					t.Fatal(err)
-				}
-				if len(events) != 1 || events[0].Type != llmprotocol.EventResponseFailed ||
-					events[0].Error == nil || events[0].Error.Code != "stream_incomplete" {
-					t.Fatalf("incomplete stream terminal = %+v", events)
-				}
-				wireCode := "stream_incomplete"
-				if target == llmprotocol.AnthropicMessagesV1 {
-					wireCode = "api_error"
-				}
-				assertPublicStreamErrorWire(
-					t, target, frames, llmprotocol.FailureTransport,
-					wireCode, "upstream stream ended before completion", "",
-				)
-			})
-		}
+	forEachBuiltinFormatPair(t, func(t *testing.T, source, target llmprotocol.WireFormat) {
+		assertIncompleteStreamFailure(t, engine, source, target, partial[source])
+	})
+}
+
+func assertIncompleteStreamFailure(
+	t *testing.T,
+	engine *Engine,
+	source, target llmprotocol.WireFormat,
+	payload []byte,
+) {
+	t.Helper()
+	stream, err := engine.NewStream(source, target, llmprotocol.StreamContext{
+		Context: context.Background(), PublicModel: "public-model",
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
+	if _, events, _, pushErr := stream.Push(payload); pushErr != nil {
+		t.Fatalf("partial stream rejected before transport ended: %v", pushErr)
+	} else if len(events) == 0 || events[len(events)-1].Type == llmprotocol.EventResponseFailed {
+		t.Fatalf("partial stream terminal state = %+v", events)
+	}
+	frames, events, _, err := stream.Finalize(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 1 || events[0].Type != llmprotocol.EventResponseFailed ||
+		events[0].Error == nil || events[0].Error.Code != "stream_incomplete" {
+		t.Fatalf("incomplete stream terminal = %+v", events)
+	}
+	wireCode := "stream_incomplete"
+	if target == llmprotocol.AnthropicMessagesV1 {
+		wireCode = "api_error"
+	}
+	assertPublicStreamErrorWire(
+		t, target, frames, llmprotocol.FailureTransport,
+		wireCode, "upstream stream ended before completion", "",
+	)
 }
 
 func TestChatUsageOnEveryChunkNeverTerminatesTranslationEarly(t *testing.T) {
@@ -583,40 +595,47 @@ func TestChatUsageOnEveryChunkNeverTerminatesTranslationEarly(t *testing.T) {
 	)
 	engine := NewBuiltinEngine()
 	for _, target := range builtinFormats {
-		t.Run(string(target), func(t *testing.T) {
-			stream, err := engine.NewStream(
-				llmprotocol.OpenAIChatV1,
-				target,
-				llmprotocol.StreamContext{Context: context.Background(), PublicModel: "public-model"},
-			)
-			if err != nil {
-				t.Fatal(err)
-			}
-			_, events, _, err := stream.Push(payload)
-			if err != nil {
-				t.Fatal(err)
-			}
-			_, finalEvents, _, err := stream.Finalize(nil)
-			if err != nil {
-				t.Fatal(err)
-			}
-			events = append(events, finalEvents...)
-			text, terminal := "", 0
-			var finalUsage *llmprotocol.Usage
-			for _, event := range events {
-				if event.Type == llmprotocol.EventOutputTextDelta {
-					text += event.Delta
-				}
-				if event.Type == llmprotocol.EventResponseCompleted {
-					terminal++
-					finalUsage = event.Usage
-				}
-			}
-			if text != "first second" || terminal != 1 || finalUsage == nil ||
-				finalUsage.Total.Value == nil || *finalUsage.Total.Value != 5 {
-				t.Fatalf("translated stream text=%q terminals=%d usage=%+v events=%+v", text, terminal, finalUsage, events)
-			}
-		})
+		t.Run(string(target), func(t *testing.T) { assertChatUsageStreamTranslation(t, engine, target, payload) })
+	}
+}
+
+func assertChatUsageStreamTranslation(t *testing.T, engine *Engine, target llmprotocol.WireFormat, payload []byte) {
+	t.Helper()
+	stream, err := engine.NewStream(
+		llmprotocol.OpenAIChatV1,
+		target,
+		llmprotocol.StreamContext{Context: context.Background(), PublicModel: "public-model"},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, events, _, err := stream.Push(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, finalEvents, _, err := stream.Finalize(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertChatUsageEvents(t, append(events, finalEvents...))
+}
+
+func assertChatUsageEvents(t *testing.T, events []llmprotocol.Event) {
+	t.Helper()
+	text, terminal := "", 0
+	var usage *llmprotocol.Usage
+	for _, event := range events {
+		switch event.Type {
+		case llmprotocol.EventOutputTextDelta:
+			text += event.Delta
+		case llmprotocol.EventResponseCompleted:
+			terminal++
+			usage = event.Usage
+		}
+	}
+	if text != "first second" || terminal != 1 || usage == nil ||
+		usage.Total.Value == nil || *usage.Total.Value != 5 {
+		t.Fatalf("translated stream text=%q terminals=%d usage=%+v events=%+v", text, terminal, usage, events)
 	}
 }
 

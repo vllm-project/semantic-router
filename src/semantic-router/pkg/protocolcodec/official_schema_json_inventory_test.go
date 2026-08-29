@@ -165,18 +165,7 @@ func TestOfficialResponsesStreamEventsHaveHumanReadableJSONEvidence(t *testing.T
 		t.Fatalf("unsupported Responses stream event fixtures are incomplete\n got: %v\nwant: %v", unsupported, officialUnsupportedResponsesStreamEvents)
 	}
 
-	evidence := make(map[string]struct{})
-	for _, directory := range []string{"stream", "capability", "rejection"} {
-		paths, err := filepath.Glob(filepath.Join("testdata", "golden", directory, "*-in.json"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		for _, path := range paths {
-			for discriminator := range fixtureJSONDiscriminators(t, path) {
-				evidence[discriminator] = struct{}{}
-			}
-		}
-	}
+	evidence := collectGoldenDiscriminatorEvidence(t)
 	for _, eventType := range append(
 		append([]string(nil), officialSupportedResponsesStreamEvents...),
 		officialUnsupportedResponsesStreamEvents...,
@@ -219,6 +208,21 @@ func TestOfficialAnthropicStreamUnionsHaveHumanReadableJSONEvidence(t *testing.T
 		t.Fatalf("unsupported Anthropic stream union fixtures are incomplete\n got: %v\nwant: %v", unsupported, wantUnsupported)
 	}
 
+	evidence := collectGoldenDiscriminatorEvidence(t)
+	wantEvidence := append([]string(nil), officialAnthropicStreamEvents...)
+	wantEvidence = append(wantEvidence, officialSupportedAnthropicStreamContentBlocks...)
+	wantEvidence = append(wantEvidence, officialUnsupportedAnthropicStreamContentBlocks...)
+	wantEvidence = append(wantEvidence, officialSupportedAnthropicStreamDeltas...)
+	wantEvidence = append(wantEvidence, officialUnsupportedAnthropicStreamDeltas...)
+	for _, discriminator := range wantEvidence {
+		if _, found := evidence[discriminator]; !found {
+			t.Errorf("official Anthropic stream discriminator %q has no human-readable JSON fixture", discriminator)
+		}
+	}
+}
+
+func collectGoldenDiscriminatorEvidence(t *testing.T) map[string]struct{} {
+	t.Helper()
 	evidence := make(map[string]struct{})
 	for _, directory := range []string{"stream", "capability", "rejection"} {
 		paths, err := filepath.Glob(filepath.Join("testdata", "golden", directory, "*-in.json"))
@@ -231,16 +235,7 @@ func TestOfficialAnthropicStreamUnionsHaveHumanReadableJSONEvidence(t *testing.T
 			}
 		}
 	}
-	wantEvidence := append([]string(nil), officialAnthropicStreamEvents...)
-	wantEvidence = append(wantEvidence, officialSupportedAnthropicStreamContentBlocks...)
-	wantEvidence = append(wantEvidence, officialUnsupportedAnthropicStreamContentBlocks...)
-	wantEvidence = append(wantEvidence, officialSupportedAnthropicStreamDeltas...)
-	wantEvidence = append(wantEvidence, officialUnsupportedAnthropicStreamDeltas...)
-	for _, discriminator := range wantEvidence {
-		if _, found := evidence[discriminator]; !found {
-			t.Errorf("official Anthropic stream discriminator %q has no human-readable JSON fixture", discriminator)
-		}
-	}
+	return evidence
 }
 
 // TestOfficialNestedJSONInventoriesAreClosed keeps nested schema coverage in
@@ -315,97 +310,157 @@ func TestOfficialNestedJSONInventoriesAreClosed(t *testing.T) {
 		"anthropic_message_delta_usage":  reflect.TypeOf(anthropicMessageDeltaUsageWire{}),
 	}
 
+	validateNestedInventories(t, expectedRevisions, wires)
+}
+
+func validateNestedInventories(
+	t *testing.T,
+	expectedRevisions map[string]string,
+	wires map[string]reflect.Type,
+) {
+	t.Helper()
 	paths, err := filepath.Glob(filepath.Join("testdata", "contracts", "*-nested-fields.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(paths) != 3 {
+	if len(paths) != len(expectedRevisions) {
 		t.Fatalf("nested inventory files = %d, want one for each public protocol", len(paths))
 	}
 	seen := make(map[string]string, len(wires))
 	seenProtocols := make(map[string]string, len(expectedRevisions))
 	for _, path := range paths {
-		body, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var inventory officialNestedInventory
-		if err := json.Unmarshal(body, &inventory); err != nil {
-			t.Fatalf("invalid nested inventory %s: %v", path, err)
-		}
-		expectedRevision, knownProtocol := expectedRevisions[inventory.Protocol]
-		if !knownProtocol || inventory.SchemaRevision != expectedRevision {
+		validateNestedInventory(t, path, expectedRevisions, wires, seen, seenProtocols)
+	}
+	assertNestedInventoryCoverage(t, wires, expectedRevisions, seen, seenProtocols)
+}
+
+func validateNestedInventory(
+	t *testing.T,
+	path string,
+	expectedRevisions map[string]string,
+	wires map[string]reflect.Type,
+	seen, seenProtocols map[string]string,
+) {
+	t.Helper()
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var inventory officialNestedInventory
+	if err := json.Unmarshal(body, &inventory); err != nil {
+		t.Fatalf("invalid nested inventory %s: %v", path, err)
+	}
+	expectedRevision, knownProtocol := expectedRevisions[inventory.Protocol]
+	if !knownProtocol || inventory.SchemaRevision != expectedRevision {
+		t.Fatalf(
+			"nested inventory %s has protocol/revision %q/%q, want a pinned published contract",
+			path, inventory.Protocol, inventory.SchemaRevision,
+		)
+	}
+	if previous, duplicate := seenProtocols[inventory.Protocol]; duplicate {
+		t.Fatalf("protocol %q appears in both %s and %s", inventory.Protocol, previous, path)
+	}
+	seenProtocols[inventory.Protocol] = path
+	for _, object := range inventory.Objects {
+		validateNestedInventoryObject(t, path, inventory.Protocol, object, wires, seen)
+	}
+}
+
+func validateNestedInventoryObject(
+	t *testing.T,
+	path, protocol string,
+	object officialNestedInventoryObject,
+	wires map[string]reflect.Type,
+	seen map[string]string,
+) {
+	t.Helper()
+	wire, ok := wires[object.Wire]
+	if !ok {
+		t.Fatalf("nested inventory %s references unknown wire %q", path, object.Wire)
+	}
+	if previous, duplicate := seen[object.Wire]; duplicate {
+		t.Fatalf("nested wire %q appears in both %s and %s", object.Wire, previous, path)
+	}
+	seen[object.Wire] = path
+	want := append(append([]string(nil), object.Official...), object.Extensions...)
+	sort.Strings(want)
+	if got := jsonFieldNames(wire); !reflect.DeepEqual(got, want) {
+		t.Fatalf("nested inventory %s/%s drifted\n got: %v\nwant: %v", protocol, object.Wire, got, want)
+	}
+	visible := nestedFixtureFields(t, protocol, object, want)
+	for _, field := range want {
+		if _, found := visible[field]; !found {
 			t.Fatalf(
-				"nested inventory %s has protocol/revision %q/%q, want a pinned published contract",
-				path, inventory.Protocol, inventory.SchemaRevision,
+				"nested inventory %s/%s field %q has no human-readable JSON evidence in %v",
+				protocol, object.Wire, field, object.Fixtures,
 			)
 		}
-		if previous, duplicate := seenProtocols[inventory.Protocol]; duplicate {
-			t.Fatalf("protocol %q appears in both %s and %s", inventory.Protocol, previous, path)
-		}
-		seenProtocols[inventory.Protocol] = path
-		for _, object := range inventory.Objects {
-			wire, ok := wires[object.Wire]
-			if !ok {
-				t.Fatalf("nested inventory %s references unknown wire %q", path, object.Wire)
-			}
-			if previous, duplicate := seen[object.Wire]; duplicate {
-				t.Fatalf("nested wire %q appears in both %s and %s", object.Wire, previous, path)
-			}
-			seen[object.Wire] = path
-			want := append(append([]string(nil), object.Official...), object.Extensions...)
-			sort.Strings(want)
-			if got := jsonFieldNames(wire); !reflect.DeepEqual(got, want) {
-				t.Fatalf("nested inventory %s/%s drifted\n got: %v\nwant: %v", inventory.Protocol, object.Wire, got, want)
-			}
-			if len(object.Fixtures) == 0 {
-				t.Fatalf("nested inventory %s/%s has no reviewable translation fixture", inventory.Protocol, object.Wire)
-			}
-			allowedFields := make(map[string]struct{}, len(want))
-			for _, field := range want {
-				allowedFields[field] = struct{}{}
-			}
-			visibleFields := make(map[string]struct{})
-			for _, fixture := range object.Fixtures {
-				clean := filepath.Clean(fixture)
-				if filepath.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) ||
-					!strings.HasSuffix(clean, "-in.json") {
-					t.Fatalf("nested inventory %s/%s has invalid fixture path %q", inventory.Protocol, object.Wire, fixture)
-				}
-				fixturePath := filepath.Join("testdata", "golden", clean)
-				if _, err := os.Stat(fixturePath); err != nil {
-					t.Fatalf("nested inventory %s/%s fixture %q: %v", inventory.Protocol, object.Wire, fixture, err)
-				}
-				for _, fields := range fixtureJSONObjects(t, fixturePath) {
-					if !fixtureObjectMatchesWire(fields, allowedFields) {
-						continue
-					}
-					for field := range fields {
-						visibleFields[field] = struct{}{}
-					}
-				}
-			}
-			for _, field := range want {
-				if _, ok := visibleFields[field]; !ok {
-					t.Fatalf(
-						"nested inventory %s/%s field %q has no human-readable JSON evidence in %v",
-						inventory.Protocol, object.Wire, field, object.Fixtures,
-					)
-				}
+	}
+}
+
+func nestedFixtureFields(
+	t *testing.T,
+	protocol string,
+	object officialNestedInventoryObject,
+	want []string,
+) map[string]struct{} {
+	t.Helper()
+	if len(object.Fixtures) == 0 {
+		t.Fatalf("nested inventory %s/%s has no reviewable translation fixture", protocol, object.Wire)
+	}
+	allowed := make(map[string]struct{}, len(want))
+	for _, field := range want {
+		allowed[field] = struct{}{}
+	}
+	visible := make(map[string]struct{})
+	for _, fixture := range object.Fixtures {
+		collectNestedFixtureFields(t, protocol, object.Wire, fixture, allowed, visible)
+	}
+	return visible
+}
+
+func collectNestedFixtureFields(
+	t *testing.T,
+	protocol, wire, fixture string,
+	allowed, visible map[string]struct{},
+) {
+	t.Helper()
+	clean := filepath.Clean(fixture)
+	if filepath.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) ||
+		!strings.HasSuffix(clean, "-in.json") {
+		t.Fatalf("nested inventory %s/%s has invalid fixture path %q", protocol, wire, fixture)
+	}
+	fixturePath := filepath.Join("testdata", "golden", clean)
+	if _, err := os.Stat(fixturePath); err != nil {
+		t.Fatalf("nested inventory %s/%s fixture %q: %v", protocol, wire, fixture, err)
+	}
+	for _, fields := range fixtureJSONObjects(t, fixturePath) {
+		if fixtureObjectMatchesWire(fields, allowed) {
+			for field := range fields {
+				visible[field] = struct{}{}
 			}
 		}
 	}
+}
+
+func assertNestedInventoryCoverage(
+	t *testing.T,
+	wires map[string]reflect.Type,
+	expectedRevisions, seen, seenProtocols map[string]string,
+) {
+	t.Helper()
 	if len(seenProtocols) != len(expectedRevisions) {
 		t.Fatalf("nested JSON inventories cover %d protocols, want %d", len(seenProtocols), len(expectedRevisions))
 	}
-	if len(seen) != len(wires) {
-		missing := make([]string, 0, len(wires)-len(seen))
-		for wire := range wires {
-			if _, ok := seen[wire]; !ok {
-				missing = append(missing, wire)
-			}
-		}
-		sort.Strings(missing)
-		t.Fatalf("nested JSON inventories are incomplete: %v", missing)
+	if len(seen) == len(wires) {
+		return
 	}
+	missing := make([]string, 0, len(wires)-len(seen))
+	for wire := range wires {
+		if _, found := seen[wire]; !found {
+			missing = append(missing, wire)
+		}
+	}
+	sort.Strings(missing)
+	t.Fatalf("nested JSON inventories are incomplete: %v", missing)
 }

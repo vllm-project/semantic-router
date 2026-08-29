@@ -48,10 +48,7 @@ func TestAnthropicCacheDirectivesSurviveSemanticMutation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if request.Instructions[0].Content[0].Cache == nil || request.Instructions[0].Content[0].Cache.TTL != "1h" ||
-		request.Tools[0].Cache == nil || request.Tools[0].Cache.Type != "ephemeral" {
-		t.Fatalf("cache directives were not decoded semantically: %+v", request)
-	}
+	assertAnthropicCacheRequest(t, request)
 	request.Model = "routed-model"
 	request.Generation++
 	encoded, err := engine.EncodeRequest(llmprotocol.AnthropicMessagesV1, request, envelope)
@@ -67,9 +64,34 @@ func TestAnthropicCacheDirectivesSurviveSemanticMutation(t *testing.T) {
 	if err := json.Unmarshal(encoded.Body, &roundTrip); err != nil {
 		t.Fatal(err)
 	}
-	if len(roundTrip.System) != 1 || roundTrip.System[0].CacheControl == nil || roundTrip.System[0].CacheControl.TTL != "1h" ||
-		len(roundTrip.Tools) != 1 || roundTrip.Tools[0].CacheControl == nil {
-		t.Fatalf("cache directives were not re-encoded after routing mutation: %s", encoded.Body)
+	assertAnthropicCacheRoundTrip(t, roundTrip.System, roundTrip.Tools, encoded.Body)
+}
+
+func assertAnthropicCacheRequest(t *testing.T, request llmprotocol.Request) {
+	t.Helper()
+	if len(request.Instructions) != 1 || len(request.Instructions[0].Content) != 1 || len(request.Tools) != 1 {
+		t.Fatalf("cache directive request shape = %+v", request)
+	}
+	cache, toolCache := request.Instructions[0].Content[0].Cache, request.Tools[0].Cache
+	if cache == nil || cache.TTL != "1h" || toolCache == nil || toolCache.Type != "ephemeral" {
+		t.Fatalf("cache directives were not decoded semantically: %+v", request)
+	}
+}
+
+func assertAnthropicCacheRoundTrip(
+	t *testing.T,
+	system []struct {
+		CacheControl *anthropicCacheControlWire `json:"cache_control"`
+	},
+	tools []anthropicToolWire,
+	body []byte,
+) {
+	t.Helper()
+	if len(system) != 1 || len(tools) != 1 {
+		t.Fatalf("cache directive round-trip shape changed: %s", body)
+	}
+	if system[0].CacheControl == nil || system[0].CacheControl.TTL != "1h" || tools[0].CacheControl == nil {
+		t.Fatalf("cache directives were not re-encoded after routing mutation: %s", body)
 	}
 }
 
@@ -92,11 +114,7 @@ func TestCacheDirectivesSurviveChatAndAnthropicTranslation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if request.Instructions[0].Content[1].Cache == nil || request.Instructions[0].Content[1].Cache.TTL != "1h" ||
-		request.Messages[0].Content[0].Cache == nil || request.Tools[0].Cache == nil ||
-		request.Messages[2].Content[0].ToolResult.Content[0].Cache == nil {
-		t.Fatalf("Chat cache directives were not decoded semantically: %+v", request)
-	}
+	assertDecodedChatCacheDirectives(t, request)
 
 	request.Model = "routed-model"
 	request.Generation++
@@ -104,27 +122,7 @@ func TestCacheDirectivesSurviveChatAndAnthropicTranslation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var chatWire chatRequestWire
-	if err := json.Unmarshal(chatRoundTrip.Body, &chatWire); err != nil {
-		t.Fatal(err)
-	}
-	var systemParts, userParts, resultParts []chatContentWire
-	if err := json.Unmarshal(chatWire.Messages[0].Content, &systemParts); err != nil {
-		t.Fatal(err)
-	}
-	if err := json.Unmarshal(chatWire.Messages[1].Content, &userParts); err != nil {
-		t.Fatal(err)
-	}
-	if err := json.Unmarshal(chatWire.Messages[3].Content, &resultParts); err != nil {
-		t.Fatal(err)
-	}
-	if len(systemParts) != 2 || systemParts[0].Text != "stable preface" || systemParts[0].CacheControl != nil ||
-		systemParts[1].CacheControl == nil || systemParts[1].CacheControl.TTL != "1h" ||
-		len(userParts) != 1 || userParts[0].CacheControl == nil ||
-		len(resultParts) != 1 || resultParts[0].CacheControl == nil ||
-		len(chatWire.Tools) != 1 || chatWire.Tools[0].CacheControl == nil {
-		t.Fatalf("Chat cache directives changed after semantic routing mutation: %s", chatRoundTrip.Body)
-	}
+	assertChatCacheRoundTrip(t, chatRoundTrip.Body)
 
 	translated, err := engine.TranslateRequest(llmprotocol.OpenAIChatV1, llmprotocol.AnthropicMessagesV1, body, func(request *llmprotocol.Request) error {
 		request.Model = "anthropic-model"
@@ -133,37 +131,113 @@ func TestCacheDirectivesSurviveChatAndAnthropicTranslation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var anthropicWire anthropicRequestWire
-	if err := json.Unmarshal(translated.Body, &anthropicWire); err != nil {
+	assertTranslatedAnthropicCacheDirectives(t, translated.Body)
+}
+
+func assertDecodedChatCacheDirectives(t *testing.T, request llmprotocol.Request) {
+	t.Helper()
+	if len(request.Instructions) != 1 || len(request.Instructions[0].Content) != 2 ||
+		len(request.Messages) != 3 || len(request.Tools) != 1 {
+		t.Fatalf("Chat cache request shape = %+v", request)
+	}
+	if request.Instructions[0].Content[1].Cache == nil || request.Instructions[0].Content[1].Cache.TTL != "1h" ||
+		request.Messages[0].Content[0].Cache == nil || request.Tools[0].Cache == nil ||
+		request.Messages[2].Content[0].ToolResult.Content[0].Cache == nil {
+		t.Fatalf("Chat cache directives were not decoded semantically: %+v", request)
+	}
+}
+
+func assertChatCacheRoundTrip(t *testing.T, body []byte) {
+	t.Helper()
+	var wire chatRequestWire
+	if err := json.Unmarshal(body, &wire); err != nil {
 		t.Fatal(err)
 	}
-	var system []anthropicContentWire
-	if err := json.Unmarshal(anthropicWire.System, &system); err != nil {
-		t.Fatal(err)
+	if len(wire.Messages) != 4 || len(wire.Tools) != 1 {
+		t.Fatalf("Chat cache round-trip shape changed: %s", body)
 	}
-	var userContent, resultContent []anthropicContentWire
-	if err := json.Unmarshal(anthropicWire.Messages[0].Content, &userContent); err != nil {
-		t.Fatal(err)
+	system, user, result := decodeChatContentFixture(t, wire.Messages[0].Content),
+		decodeChatContentFixture(t, wire.Messages[1].Content), decodeChatContentFixture(t, wire.Messages[3].Content)
+	if len(system) != 2 || len(user) != 1 || len(result) != 1 {
+		t.Fatalf("Chat cache content shape changed: %s", body)
 	}
-	if err := json.Unmarshal(anthropicWire.Messages[2].Content, &resultContent); err != nil {
-		t.Fatal(err)
-	}
-	var nestedResult []anthropicContentWire
-	if err := json.Unmarshal(resultContent[0].Content, &nestedResult); err != nil {
-		t.Fatal(err)
-	}
-	var tools []anthropicToolWire
-	if err := json.Unmarshal(anthropicWire.Tools, &tools); err != nil {
-		t.Fatal(err)
-	}
-	if len(system) != 2 || system[0].Text != "stable preface" || system[0].CacheControl != nil ||
+	assertChatCacheWireValues(t, system, user, result, wire.Tools, body)
+}
+
+func assertChatCacheWireValues(
+	t *testing.T,
+	system, user, result []chatContentWire,
+	tools []chatToolWire,
+	body []byte,
+) {
+	t.Helper()
+	if system[0].Text != "stable preface" || system[0].CacheControl != nil ||
 		system[1].CacheControl == nil || system[1].CacheControl.TTL != "1h" ||
-		len(userContent) != 1 || userContent[0].CacheControl == nil ||
-		len(resultContent) != 1 || resultContent[0].Type != "tool_result" ||
-		len(nestedResult) != 1 || nestedResult[0].CacheControl == nil ||
-		len(tools) != 1 || tools[0].CacheControl == nil {
-		t.Fatalf("cache directives did not retain order and ownership after Chat to Anthropic translation: %s", translated.Body)
+		user[0].CacheControl == nil || result[0].CacheControl == nil || tools[0].CacheControl == nil {
+		t.Fatalf("Chat cache directives changed after semantic routing mutation: %s", body)
 	}
+}
+
+func decodeChatContentFixture(t *testing.T, body json.RawMessage) []chatContentWire {
+	t.Helper()
+	var content []chatContentWire
+	if err := json.Unmarshal(body, &content); err != nil {
+		t.Fatal(err)
+	}
+	return content
+}
+
+func assertTranslatedAnthropicCacheDirectives(t *testing.T, body []byte) {
+	t.Helper()
+	var wire anthropicRequestWire
+	if err := json.Unmarshal(body, &wire); err != nil {
+		t.Fatal(err)
+	}
+	if len(wire.Messages) != 3 {
+		t.Fatalf("Anthropic cache translation shape changed: %s", body)
+	}
+	system := decodeAnthropicContentFixture(t, wire.System)
+	user := decodeAnthropicContentFixture(t, wire.Messages[0].Content)
+	result := decodeAnthropicContentFixture(t, wire.Messages[2].Content)
+	tools := decodeAnthropicToolsFixture(t, wire.Tools)
+	if len(system) != 2 || len(user) != 1 || len(result) != 1 || len(tools) != 1 {
+		t.Fatalf("Anthropic cache translation content shape changed: %s", body)
+	}
+	nested := decodeAnthropicContentFixture(t, result[0].Content)
+	assertAnthropicCacheWireValues(t, system, user, result, nested, tools, body)
+}
+
+func assertAnthropicCacheWireValues(
+	t *testing.T,
+	system, user, result, nested []anthropicContentWire,
+	tools []anthropicToolWire,
+	body []byte,
+) {
+	t.Helper()
+	if system[0].Text != "stable preface" || system[0].CacheControl != nil ||
+		system[1].CacheControl == nil || system[1].CacheControl.TTL != "1h" ||
+		user[0].CacheControl == nil || result[0].Type != "tool_result" ||
+		len(nested) != 1 || nested[0].CacheControl == nil || tools[0].CacheControl == nil {
+		t.Fatalf("cache directives did not retain order and ownership after Chat to Anthropic translation: %s", body)
+	}
+}
+
+func decodeAnthropicContentFixture(t *testing.T, body json.RawMessage) []anthropicContentWire {
+	t.Helper()
+	var content []anthropicContentWire
+	if err := json.Unmarshal(body, &content); err != nil {
+		t.Fatal(err)
+	}
+	return content
+}
+
+func decodeAnthropicToolsFixture(t *testing.T, body json.RawMessage) []anthropicToolWire {
+	t.Helper()
+	var tools []anthropicToolWire
+	if err := json.Unmarshal(body, &tools); err != nil {
+		t.Fatal(err)
+	}
+	return tools
 }
 
 func TestCacheDirectiveOnUnsupportedChatBlockFailsExplicitly(t *testing.T) {
@@ -193,9 +267,7 @@ func TestAnthropicThinkingDisableAndParallelToolPolicySurviveSemanticMutation(t 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if request.ReasoningMode != llmprotocol.ReasoningModeDisabled || request.ParallelToolCalls == nil || *request.ParallelToolCalls {
-		t.Fatalf("Anthropic request policy was not decoded semantically: %+v", request)
-	}
+	assertDisabledAnthropicThinkingPolicy(t, request)
 	request.Model = "routed-model"
 	request.Generation++
 	encoded, err := engine.EncodeRequest(llmprotocol.AnthropicMessagesV1, request, envelope)
@@ -206,15 +278,29 @@ func TestAnthropicThinkingDisableAndParallelToolPolicySurviveSemanticMutation(t 
 	if err := json.Unmarshal(encoded.Body, &roundTrip); err != nil {
 		t.Fatal(err)
 	}
-	if roundTrip.Thinking == nil || roundTrip.Thinking.Type != "disabled" ||
-		roundTrip.ToolChoice == nil || roundTrip.ToolChoice.DisableParallelToolUse == nil ||
-		!*roundTrip.ToolChoice.DisableParallelToolUse {
-		t.Fatalf("Anthropic request policy changed after routing mutation: %s", encoded.Body)
-	}
+	assertDisabledAnthropicThinkingWire(t, &roundTrip, encoded.Body)
 	_, err = engine.TranslateRequest(llmprotocol.AnthropicMessagesV1, llmprotocol.OpenAIResponsesV1, body, nil)
 	var protocolError *llmprotocol.ProtocolError
 	if !errors.As(err, &protocolError) || protocolError.Category != llmprotocol.ErrorUnsupportedFeature {
 		t.Fatalf("reasoning disable cross-protocol translation returned %T %v, want typed unsupported_feature", err, err)
+	}
+}
+
+func assertDisabledAnthropicThinkingPolicy(t *testing.T, request llmprotocol.Request) {
+	t.Helper()
+	if request.ReasoningMode != llmprotocol.ReasoningModeDisabled ||
+		request.ParallelToolCalls == nil || *request.ParallelToolCalls {
+		t.Fatalf("Anthropic request policy was not decoded semantically: %+v", request)
+	}
+}
+
+func assertDisabledAnthropicThinkingWire(t *testing.T, wire *anthropicRequestWire, body []byte) {
+	t.Helper()
+	if wire.Thinking == nil || wire.Thinking.Type != "disabled" || wire.ToolChoice == nil {
+		t.Fatalf("Anthropic request policy changed after routing mutation: %s", body)
+	}
+	if wire.ToolChoice.DisableParallelToolUse == nil || !*wire.ToolChoice.DisableParallelToolUse {
+		t.Fatalf("Anthropic parallel-tool policy changed after routing mutation: %s", body)
 	}
 }
 
@@ -262,11 +348,7 @@ func TestAnthropicThinkingSignatureSurvivesResponseMutationOrFailsExplicitly(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(response.Output) != 1 || len(response.Output[0].Content) != 2 ||
-		response.Output[0].Content[0].Kind != llmprotocol.ContentReasoning ||
-		response.Output[0].Content[0].Signature != "signed-block" {
-		t.Fatalf("Anthropic thinking signature was not decoded: %+v", response.Output)
-	}
+	assertDecodedAnthropicThinkingSignature(t, response)
 	response.Model = "public-model"
 	response.Generation++
 	encoded, err := engine.EncodeResponse(llmprotocol.AnthropicMessagesV1, response, envelope)
@@ -281,14 +363,34 @@ func TestAnthropicThinkingSignatureSurvivesResponseMutationOrFailsExplicitly(t *
 	if err := json.Unmarshal(wire.Content, &content); err != nil {
 		t.Fatal(err)
 	}
-	if len(content) != 2 || content[0].Type != "thinking" || content[0].Thinking != "private reasoning" || content[0].Signature != "signed-block" {
-		t.Fatalf("Anthropic thinking signature changed after response mutation: %s", encoded.Body)
-	}
+	assertEncodedAnthropicThinkingSignature(t, content, encoded.Body)
 
 	_, err = engine.TranslateResponse(llmprotocol.AnthropicMessagesV1, llmprotocol.OpenAIChatV1, body, nil)
 	var protocolError *llmprotocol.ProtocolError
 	if !errors.As(err, &protocolError) || protocolError.Category != llmprotocol.ErrorUnsupportedFeature {
 		t.Fatalf("cross-protocol thinking signature returned %T %v, want typed unsupported_feature", err, err)
+	}
+}
+
+func assertDecodedAnthropicThinkingSignature(t *testing.T, response llmprotocol.Response) {
+	t.Helper()
+	if len(response.Output) != 1 || len(response.Output[0].Content) != 2 {
+		t.Fatalf("Anthropic thinking response shape = %+v", response.Output)
+	}
+	thinking := response.Output[0].Content[0]
+	if thinking.Kind != llmprotocol.ContentReasoning || thinking.Signature != "signed-block" {
+		t.Fatalf("Anthropic thinking signature was not decoded: %+v", response.Output)
+	}
+}
+
+func assertEncodedAnthropicThinkingSignature(t *testing.T, content []anthropicContentWire, body []byte) {
+	t.Helper()
+	if len(content) != 2 {
+		t.Fatalf("Anthropic thinking content shape changed: %s", body)
+	}
+	if content[0].Type != "thinking" || content[0].Thinking != "private reasoning" ||
+		content[0].Signature != "signed-block" {
+		t.Fatalf("Anthropic thinking signature changed after response mutation: %s", body)
 	}
 }
 
@@ -322,13 +424,45 @@ func TestAnthropicBufferedResponsePreservesOrderedThinkingTextAndToolBlocks(t *t
 	if err := json.Unmarshal(wire.Content, &content); err != nil {
 		t.Fatal(err)
 	}
-	if len(content) != 4 ||
-		content[0].Type != "thinking" || content[0].Thinking != "first thought" || content[0].Signature != "signature-1" ||
-		content[1].Type != "text" || content[1].Text != "checking" ||
-		content[2].Type != "thinking" || content[2].Thinking != "second thought" || content[2].Signature != "signature-2" ||
-		content[3].Type != "tool_use" || content[3].ID != "call-1" || content[3].Name != "lookup" ||
-		!jsonSemanticallyEqual(content[3].Input, []byte(`{"q":"weather"}`)) {
-		t.Fatalf("ordered Anthropic content changed after semantic mutation: %s", encoded.Body)
+	assertOrderedAnthropicContent(t, content, encoded.Body)
+}
+
+func assertOrderedAnthropicContent(t *testing.T, content []anthropicContentWire, body []byte) {
+	t.Helper()
+	if len(content) != 4 {
+		t.Fatalf("ordered Anthropic content shape changed: %s", body)
+	}
+	first, text, second, tool := content[0], content[1], content[2], content[3]
+	assertAnthropicThinkingBlock(t, first, "first thought", "signature-1", body)
+	assertAnthropicTextBlock(t, text, body)
+	assertAnthropicThinkingBlock(t, second, "second thought", "signature-2", body)
+	assertAnthropicToolBlock(t, tool, body)
+}
+
+func assertAnthropicThinkingBlock(
+	t *testing.T,
+	content anthropicContentWire,
+	thinking, signature string,
+	body []byte,
+) {
+	t.Helper()
+	if content.Type != "thinking" || content.Thinking != thinking || content.Signature != signature {
+		t.Fatalf("thinking block changed: %s", body)
+	}
+}
+
+func assertAnthropicTextBlock(t *testing.T, content anthropicContentWire, body []byte) {
+	t.Helper()
+	if content.Type != "text" || content.Text != "checking" {
+		t.Fatalf("text block changed: %s", body)
+	}
+}
+
+func assertAnthropicToolBlock(t *testing.T, content anthropicContentWire, body []byte) {
+	t.Helper()
+	if content.Type != "tool_use" || content.ID != "call-1" || content.Name != "lookup" ||
+		!jsonSemanticallyEqual(content.Input, []byte(`{"q":"weather"}`)) {
+		t.Fatalf("tool block changed: %s", body)
 	}
 }
 
@@ -637,15 +771,7 @@ func TestOfficialResponsesReasoningContentIsPreserved(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(response.Output) != 1 || len(response.Output[0].Content) != 2 ||
-		response.Output[0].Content[0].Kind != llmprotocol.ContentReasoning ||
-		response.Output[0].Content[0].Text != "short summary" ||
-		response.Output[0].Content[0].Reasoning != llmprotocol.ReasoningScopeSummary ||
-		response.Output[0].Content[1].Kind != llmprotocol.ContentReasoning ||
-		response.Output[0].Content[1].Text != "full reasoning" ||
-		response.Output[0].Content[1].Reasoning != llmprotocol.ReasoningScopeText {
-		t.Fatalf("reasoning summary/content were not preserved in order: %+v", response.Output)
-	}
+	assertResponsesReasoningContent(t, response)
 	response.Generation++
 	encoded, err := engine.EncodeResponse(llmprotocol.OpenAIResponsesV1, response, envelope)
 	if err != nil {
@@ -661,6 +787,22 @@ func TestOfficialResponsesReasoningContentIsPreserved(t *testing.T) {
 	}
 	if len(items) != 1 || len(items[0].Summary) == 0 || len(items[0].Content) == 0 {
 		t.Fatalf("reasoning summary/content scopes changed on encode: %s", encoded.Body)
+	}
+}
+
+func assertResponsesReasoningContent(t *testing.T, response llmprotocol.Response) {
+	t.Helper()
+	if len(response.Output) != 1 || len(response.Output[0].Content) != 2 {
+		t.Fatalf("reasoning response shape = %+v", response.Output)
+	}
+	summary, content := response.Output[0].Content[0], response.Output[0].Content[1]
+	if summary.Kind != llmprotocol.ContentReasoning || summary.Text != "short summary" ||
+		summary.Reasoning != llmprotocol.ReasoningScopeSummary {
+		t.Fatalf("reasoning summary was not preserved: %+v", response.Output)
+	}
+	if content.Kind != llmprotocol.ContentReasoning || content.Text != "full reasoning" ||
+		content.Reasoning != llmprotocol.ReasoningScopeText {
+		t.Fatalf("reasoning content was not preserved: %+v", response.Output)
 	}
 }
 
@@ -1086,27 +1228,7 @@ func TestOfficialAnthropicMediaSourceUnionIsClosed(t *testing.T) {
 	}
 	for _, test := range supported {
 		t.Run("supported/"+test.name, func(t *testing.T) {
-			source := map[string]any{"type": test.sourceType}
-			for key, value := range test.source {
-				source[key] = value
-			}
-			body, err := json.Marshal(map[string]any{
-				"model": "m", "max_tokens": 16,
-				"messages": []map[string]any{{
-					"role":    "user",
-					"content": []map[string]any{{"type": test.blockType, "source": source}},
-				}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
-			request, _, _, err := engine.DecodeRequest(llmprotocol.AnthropicMessagesV1, body)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if len(request.Messages) != 1 || len(request.Messages[0].Content) != 1 {
-				t.Fatalf("decoded media shape = %+v", request.Messages)
-			}
+			assertSupportedAnthropicMediaSource(t, engine, test.blockType, test.sourceType, test.source)
 		})
 	}
 
@@ -1119,12 +1241,10 @@ func TestOfficialAnthropicMediaSourceUnionIsClosed(t *testing.T) {
 	}
 	for _, test := range unsupported {
 		t.Run("unsupported/"+test.name, func(t *testing.T) {
-			body, err := anthropicMediaRequest("document", test.source)
-			if err != nil {
-				t.Fatal(err)
-			}
-			_, _, _, err = engine.DecodeRequest(llmprotocol.AnthropicMessagesV1, body)
-			assertProtocolError(t, err, llmprotocol.ErrorUnsupportedFeature, "unsupported_document_source")
+			assertAnthropicMediaSourceError(
+				t, engine, "document", test.source,
+				llmprotocol.ErrorUnsupportedFeature, "unsupported_document_source",
+			)
 		})
 	}
 
@@ -1140,14 +1260,53 @@ func TestOfficialAnthropicMediaSourceUnionIsClosed(t *testing.T) {
 	}
 	for _, test := range invalid {
 		t.Run("invalid/"+test.name, func(t *testing.T) {
-			body, err := anthropicMediaRequest(test.blockType, test.source)
-			if err != nil {
-				t.Fatal(err)
-			}
-			_, _, _, err = engine.DecodeRequest(llmprotocol.AnthropicMessagesV1, body)
-			assertProtocolError(t, err, llmprotocol.ErrorInvalidRequest, "invalid_media_source")
+			assertAnthropicMediaSourceError(
+				t, engine, test.blockType, test.source,
+				llmprotocol.ErrorInvalidRequest, "invalid_media_source",
+			)
 		})
 	}
+}
+
+func assertSupportedAnthropicMediaSource(
+	t *testing.T,
+	engine *Engine,
+	blockType, sourceType string,
+	fields map[string]any,
+) {
+	t.Helper()
+	source := map[string]any{"type": sourceType}
+	for key, value := range fields {
+		source[key] = value
+	}
+	body, err := anthropicMediaRequest(blockType, source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request, _, _, err := engine.DecodeRequest(llmprotocol.AnthropicMessagesV1, body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(request.Messages) != 1 || len(request.Messages[0].Content) != 1 {
+		t.Fatalf("decoded media shape = %+v", request.Messages)
+	}
+}
+
+func assertAnthropicMediaSourceError(
+	t *testing.T,
+	engine *Engine,
+	blockType string,
+	source map[string]any,
+	category llmprotocol.ErrorCategory,
+	code string,
+) {
+	t.Helper()
+	body, err := anthropicMediaRequest(blockType, source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, _, err = engine.DecodeRequest(llmprotocol.AnthropicMessagesV1, body)
+	assertProtocolError(t, err, category, code)
 }
 
 func anthropicMediaRequest(blockType string, source map[string]any) ([]byte, error) {
@@ -1514,11 +1673,7 @@ func TestOfficialAnthropicOutputConfigPreservesSchemaAndEffort(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if request.ReasoningEffort != "high" || request.OutputFormat.Kind != llmprotocol.OutputJSONSchema ||
-		request.OutputFormat.Name != "structured_output" || request.OutputFormat.Strict == nil || !*request.OutputFormat.Strict ||
-		!jsonSemanticallyEqual(request.OutputFormat.Schema, schema) {
-		t.Fatalf("Anthropic output_config semantics = %+v", request)
-	}
+	assertAnthropicOutputConfigRequest(t, request, schema)
 
 	request.Generation++
 	roundTrip, err := engine.EncodeRequest(llmprotocol.AnthropicMessagesV1, request, envelope)
@@ -1529,29 +1684,67 @@ func TestOfficialAnthropicOutputConfigPreservesSchemaAndEffort(t *testing.T) {
 	if err := json.Unmarshal(roundTrip.Body, &wire); err != nil {
 		t.Fatal(err)
 	}
-	if wire.OutputConfig == nil || wire.OutputConfig.Effort != "high" || wire.OutputConfig.Format == nil ||
-		wire.OutputConfig.Format.Type != "json_schema" || !jsonSemanticallyEqual(wire.OutputConfig.Format.Schema, schema) {
-		t.Fatalf("Anthropic output_config round trip = %s", roundTrip.Body)
-	}
+	assertAnthropicOutputConfigWire(t, &wire, schema, roundTrip.Body)
 
 	for _, target := range []llmprotocol.WireFormat{llmprotocol.OpenAIChatV1, llmprotocol.OpenAIResponsesV1} {
 		t.Run(string(target), func(t *testing.T) {
-			translated, err := engine.TranslateRequest(llmprotocol.AnthropicMessagesV1, target, body, func(request *llmprotocol.Request) error {
-				request.Model = "routed-model"
-				return nil
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
-			decoded, _, _, err := engine.DecodeRequest(target, translated.Body)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if decoded.ReasoningEffort != "high" || decoded.OutputFormat.Kind != llmprotocol.OutputJSONSchema ||
-				!jsonSemanticallyEqual(decoded.OutputFormat.Schema, schema) {
-				t.Fatalf("Anthropic output_config changed through %s: %+v body=%s", target, decoded, translated.Body)
-			}
+			assertTranslatedAnthropicOutputConfig(t, engine, target, body, schema)
 		})
+	}
+}
+
+func assertAnthropicOutputConfigRequest(t *testing.T, request llmprotocol.Request, schema json.RawMessage) {
+	t.Helper()
+	format := request.OutputFormat
+	if request.ReasoningEffort != "high" || format.Kind != llmprotocol.OutputJSONSchema ||
+		format.Name != "structured_output" || format.Strict == nil || !*format.Strict {
+		t.Fatalf("Anthropic output_config semantics = %+v", request)
+	}
+	if !jsonSemanticallyEqual(format.Schema, schema) {
+		t.Fatalf("Anthropic output_config schema = %s", format.Schema)
+	}
+}
+
+func assertAnthropicOutputConfigWire(
+	t *testing.T,
+	wire *anthropicRequestWire,
+	schema json.RawMessage,
+	body []byte,
+) {
+	t.Helper()
+	if wire.OutputConfig == nil || wire.OutputConfig.Effort != "high" || wire.OutputConfig.Format == nil {
+		t.Fatalf("Anthropic output_config round trip = %s", body)
+	}
+	if wire.OutputConfig.Format.Type != "json_schema" ||
+		!jsonSemanticallyEqual(wire.OutputConfig.Format.Schema, schema) {
+		t.Fatalf("Anthropic output_config format round trip = %s", body)
+	}
+}
+
+func assertTranslatedAnthropicOutputConfig(
+	t *testing.T,
+	engine *Engine,
+	target llmprotocol.WireFormat,
+	body []byte,
+	schema json.RawMessage,
+) {
+	t.Helper()
+	translated, err := engine.TranslateRequest(
+		llmprotocol.AnthropicMessagesV1,
+		target,
+		body,
+		func(request *llmprotocol.Request) error { request.Model = "routed-model"; return nil },
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, _, _, err := engine.DecodeRequest(target, translated.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decoded.ReasoningEffort != "high" || decoded.OutputFormat.Kind != llmprotocol.OutputJSONSchema ||
+		!jsonSemanticallyEqual(decoded.OutputFormat.Schema, schema) {
+		t.Fatalf("Anthropic output_config changed through %s: %+v body=%s", target, decoded, translated.Body)
 	}
 }
 
@@ -1573,11 +1766,7 @@ func TestAnthropicRejectsOpenAIOnlyReasoningEfforts(t *testing.T) {
 
 func TestOfficialAnthropicTerminalReasonInventoryIsClosed(t *testing.T) {
 	engine := NewBuiltinEngine()
-	tests := []struct {
-		reason       string
-		neutral      llmprotocol.StopReason
-		openAIClosed bool
-	}{
+	tests := []anthropicTerminalReasonCase{
 		{reason: "end_turn", neutral: llmprotocol.StopEndTurn},
 		{reason: "max_tokens", neutral: llmprotocol.StopMaxTokens},
 		{reason: "stop_sequence", neutral: llmprotocol.StopSequence, openAIClosed: true},
@@ -1587,52 +1776,68 @@ func TestOfficialAnthropicTerminalReasonInventoryIsClosed(t *testing.T) {
 		{reason: "model_context_window_exceeded", neutral: llmprotocol.StopContextWindow, openAIClosed: true},
 	}
 	for _, test := range tests {
-		t.Run(test.reason, func(t *testing.T) {
-			reason := test.reason
-			stopSequence := "null"
-			if reason == "stop_sequence" {
-				stopSequence = `"END"`
-			}
-			body := []byte(`{"id":"msg_1","type":"message","role":"assistant","model":"m","content":[{"type":"text","text":"done"}],"stop_reason":"` + reason + `","stop_sequence":` + stopSequence + `,"usage":{"input_tokens":1,"output_tokens":1}}`)
-			decoded, _, _, err := engine.DecodeResponse(llmprotocol.AnthropicMessagesV1, body)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if decoded.StopReason != test.neutral {
-				t.Fatalf("decoded stop reason = %q, want %q", decoded.StopReason, test.neutral)
-			}
-			if reason == "stop_sequence" && decoded.MatchedStopSequence != "END" {
-				t.Fatalf("matched stop sequence = %q, want END", decoded.MatchedStopSequence)
-			}
+		t.Run(test.reason, func(t *testing.T) { assertAnthropicTerminalReason(t, engine, test) })
+	}
+}
 
-			roundTrip, err := engine.TranslateResponse(
-				llmprotocol.AnthropicMessagesV1,
-				llmprotocol.AnthropicMessagesV1,
-				body,
-				func(*llmprotocol.Response) error { return nil },
-			)
-			if err != nil {
-				t.Fatal(err)
-			}
-			var wire anthropicResponseWire
-			if err := json.Unmarshal(roundTrip.Body, &wire); err != nil {
-				t.Fatal(err)
-			}
-			if wire.StopReason == nil || *wire.StopReason != reason {
-				t.Fatalf("round-trip stop reason = %v, body=%s", wire.StopReason, roundTrip.Body)
-			}
-			if reason == "stop_sequence" && (wire.StopSequence == nil || *wire.StopSequence != "END") {
-				t.Fatalf("round-trip matched stop sequence = %v, body=%s", wire.StopSequence, roundTrip.Body)
-			}
+type anthropicTerminalReasonCase struct {
+	reason       string
+	neutral      llmprotocol.StopReason
+	openAIClosed bool
+}
 
-			if test.openAIClosed {
-				for _, target := range []llmprotocol.WireFormat{llmprotocol.OpenAIChatV1, llmprotocol.OpenAIResponsesV1} {
-					if _, err := engine.TranslateResponse(llmprotocol.AnthropicMessagesV1, target, body, nil); err == nil {
-						t.Fatalf("%s silently accepted unrepresentable stop reason %q", target, reason)
-					}
-				}
-			}
-		})
+func assertAnthropicTerminalReason(t *testing.T, engine *Engine, test anthropicTerminalReasonCase) {
+	t.Helper()
+	stopSequence := "null"
+	if test.reason == "stop_sequence" {
+		stopSequence = `"END"`
+	}
+	body := []byte(`{"id":"msg_1","type":"message","role":"assistant","model":"m","content":[{"type":"text","text":"done"}],"stop_reason":"` + test.reason + `","stop_sequence":` + stopSequence + `,"usage":{"input_tokens":1,"output_tokens":1}}`)
+	decoded, _, _, err := engine.DecodeResponse(llmprotocol.AnthropicMessagesV1, body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decoded.StopReason != test.neutral {
+		t.Fatalf("decoded stop reason = %q, want %q", decoded.StopReason, test.neutral)
+	}
+	if test.reason == "stop_sequence" && decoded.MatchedStopSequence != "END" {
+		t.Fatalf("matched stop sequence = %q, want END", decoded.MatchedStopSequence)
+	}
+	assertAnthropicTerminalRoundTrip(t, engine, test.reason, body)
+	if test.openAIClosed {
+		assertAnthropicTerminalClosedForOpenAI(t, engine, test.reason, body)
+	}
+}
+
+func assertAnthropicTerminalRoundTrip(t *testing.T, engine *Engine, reason string, body []byte) {
+	t.Helper()
+	roundTrip, err := engine.TranslateResponse(
+		llmprotocol.AnthropicMessagesV1,
+		llmprotocol.AnthropicMessagesV1,
+		body,
+		func(*llmprotocol.Response) error { return nil },
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wire anthropicResponseWire
+	if err := json.Unmarshal(roundTrip.Body, &wire); err != nil {
+		t.Fatal(err)
+	}
+	if wire.StopReason == nil || *wire.StopReason != reason {
+		t.Fatalf("round-trip stop reason = %v, body=%s", wire.StopReason, roundTrip.Body)
+	}
+	if reason == "stop_sequence" && (wire.StopSequence == nil || *wire.StopSequence != "END") {
+		t.Fatalf("round-trip matched stop sequence = %v, body=%s", wire.StopSequence, roundTrip.Body)
+	}
+}
+
+func assertAnthropicTerminalClosedForOpenAI(t *testing.T, engine *Engine, reason string, body []byte) {
+	t.Helper()
+	for _, target := range []llmprotocol.WireFormat{llmprotocol.OpenAIChatV1, llmprotocol.OpenAIResponsesV1} {
+		if _, err := engine.TranslateResponse(llmprotocol.AnthropicMessagesV1, target, body, nil); err == nil {
+			t.Fatalf("%s silently accepted unrepresentable stop reason %q", target, reason)
+		}
 	}
 }
 
@@ -1663,6 +1868,13 @@ func TestOfficialResponsesContentFilterIncompleteRoundTrip(t *testing.T) {
 func TestOfficialEncodedResponseResourcesContainRequiredFields(t *testing.T) {
 	engine := NewBuiltinEngine()
 	chat := []byte(`{"id":"response_1","object":"chat.completion","created":100,"model":"m","choices":[{"index":0,"message":{"role":"assistant","content":"hello"},"finish_reason":"stop"}],"usage":{"prompt_tokens":2,"completion_tokens":1,"total_tokens":3}}`)
+	assertEncodedResponsesResource(t, engine, chat)
+	assertEncodedChatResource(t, engine)
+	assertEncodedAnthropicResource(t, engine, chat)
+}
+
+func assertEncodedResponsesResource(t *testing.T, engine *Engine, chat []byte) {
+	t.Helper()
 	responses, err := engine.TranslateResponse(
 		llmprotocol.OpenAIChatV1,
 		llmprotocol.OpenAIResponsesV1,
@@ -1676,28 +1888,28 @@ func TestOfficialEncodedResponseResourcesContainRequiredFields(t *testing.T) {
 	if err := json.Unmarshal(responses.Body, &response); err != nil {
 		t.Fatal(err)
 	}
-	for _, field := range []string{
+	assertJSONFields(t, response, []string{
 		"created_at", "error", "id", "incomplete_details", "instructions", "metadata", "model",
 		"object", "output", "parallel_tool_calls", "temperature", "tool_choice", "tools", "top_p",
-	} {
-		if _, found := response[field]; !found {
-			t.Errorf("official Responses resource omitted required field %q: %s", field, responses.Body)
-		}
-	}
+	}, "official Responses resource", responses.Body)
 	var output []map[string]json.RawMessage
 	if err := json.Unmarshal(response["output"], &output); err != nil || len(output) != 1 {
 		t.Fatalf("official Responses output is invalid: %v body=%s", err, responses.Body)
 	}
-	for _, field := range []string{"content", "id", "role", "status", "type"} {
-		if _, found := output[0][field]; !found {
-			t.Errorf("official Responses output message omitted required field %q: %s", field, responses.Body)
-		}
-	}
+	assertJSONFields(
+		t, output[0], []string{"content", "id", "role", "status", "type"},
+		"official Responses output message", responses.Body,
+	)
+	assertResponsesUsageFields(t, response["usage"])
+}
+
+func assertResponsesUsageFields(t *testing.T, body json.RawMessage) {
+	t.Helper()
 	var usage struct {
 		InputDetails  map[string]json.RawMessage `json:"input_tokens_details"`
 		OutputDetails map[string]json.RawMessage `json:"output_tokens_details"`
 	}
-	if err := json.Unmarshal(response["usage"], &usage); err != nil {
+	if err := json.Unmarshal(body, &usage); err != nil {
 		t.Fatal(err)
 	}
 	for _, field := range []string{"cached_tokens", "cache_write_tokens"} {
@@ -1708,7 +1920,25 @@ func TestOfficialEncodedResponseResourcesContainRequiredFields(t *testing.T) {
 	if _, found := usage.OutputDetails["reasoning_tokens"]; !found {
 		t.Error("Responses output usage omitted required reasoning_tokens")
 	}
+}
 
+func assertJSONFields(
+	t *testing.T,
+	object map[string]json.RawMessage,
+	fields []string,
+	label string,
+	body []byte,
+) {
+	t.Helper()
+	for _, field := range fields {
+		if _, found := object[field]; !found {
+			t.Errorf("%s omitted required field %q: %s", label, field, body)
+		}
+	}
+}
+
+func assertEncodedChatResource(t *testing.T, engine *Engine) {
+	t.Helper()
 	translatedChat, err := engine.TranslateResponse(
 		llmprotocol.AnthropicMessagesV1,
 		llmprotocol.OpenAIChatV1,
@@ -1725,7 +1955,10 @@ func TestOfficialEncodedResponseResourcesContainRequiredFields(t *testing.T) {
 	if _, found := chatResource["created"]; !found {
 		t.Fatalf("official Chat resource omitted required created field: %s", translatedChat.Body)
 	}
+}
 
+func assertEncodedAnthropicResource(t *testing.T, engine *Engine, chat []byte) {
+	t.Helper()
 	translatedAnthropic, err := engine.TranslateResponse(
 		llmprotocol.OpenAIChatV1,
 		llmprotocol.AnthropicMessagesV1,
@@ -1823,6 +2056,12 @@ func assertOfficialAnthropicIdentityState(t *testing.T, engine *Engine) {
 
 func TestOfficialProviderResponseShapesDecodeWithoutSilentLoss(t *testing.T) {
 	engine := NewBuiltinEngine()
+	assertOfficialResponsesProviderShape(t, engine)
+	assertOfficialAnthropicProviderShape(t, engine)
+}
+
+func assertOfficialResponsesProviderShape(t *testing.T, engine *Engine) {
+	t.Helper()
 	responsesBody := []byte(`{
 		"id":"resp_1","object":"response","created_at":1,"completed_at":2,"status":"completed",
 		"error":null,"incomplete_details":null,"instructions":"answer","max_output_tokens":64,
@@ -1839,7 +2078,10 @@ func TestOfficialProviderResponseShapesDecodeWithoutSilentLoss(t *testing.T) {
 	if len(response.Output) != 1 || response.Output[0].Content[0].Text != "done" || len(diagnostics) == 0 {
 		t.Fatalf("Responses output or explicit omission diagnostics missing: response=%+v diagnostics=%+v", response, diagnostics)
 	}
+}
 
+func assertOfficialAnthropicProviderShape(t *testing.T, engine *Engine) {
+	t.Helper()
 	anthropicBody := []byte(`{
 		"id":"msg_1","type":"message","role":"assistant","model":"claude-test","container":{},
 		"content":[{"type":"text","text":"done"}],"stop_details":null,"stop_reason":"end_turn","stop_sequence":null,
@@ -1848,7 +2090,7 @@ func TestOfficialProviderResponseShapesDecodeWithoutSilentLoss(t *testing.T) {
 		"output_tokens":6,"output_tokens_details":{"thinking_tokens":2},"server_tool_use":{"web_search_requests":1},
 		"service_tier":"standard"}
 	}`)
-	response, _, diagnostics, err = engine.DecodeResponse(llmprotocol.AnthropicMessagesV1, anthropicBody)
+	response, _, diagnostics, err := engine.DecodeResponse(llmprotocol.AnthropicMessagesV1, anthropicBody)
 	if err != nil {
 		t.Fatal(err)
 	}
