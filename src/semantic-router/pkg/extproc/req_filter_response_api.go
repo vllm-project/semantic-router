@@ -76,6 +76,13 @@ type ResponseAPIContext struct {
 	// definition (model, quality, size, output_format, background, action).
 	// Non-nil only when HasImageGenerationTool is true.
 	ImageGenToolParams *responseapi.ImageGenerationToolParams
+
+	// NativeImageContentCount is the number of image content parts in the
+	// request input and stored conversation history, counted before
+	// translation. Chat Completions has no file_id/file_data image form, so
+	// those images do not survive into TranslatedBody and fact extraction
+	// from the translated body alone undercounts image content.
+	NativeImageContentCount int
 }
 
 // detectImageGenTool scans the request tools for an image_generation entry and
@@ -127,6 +134,7 @@ func (f *ResponseAPIFilter) TranslateRequest(ctx context.Context, body []byte) (
 	}
 
 	respCtx.ConversationID = f.determineConversationID(&req, respCtx.ConversationHistory)
+	respCtx.NativeImageContentCount = responseapi.CountNativeImageInputs(req.Input, respCtx.ConversationHistory)
 
 	completionReq, err := f.translator.TranslateToCompletionRequest(&req, respCtx.ConversationHistory)
 	if err != nil {

@@ -63,7 +63,20 @@ func (r *OpenAIRouter) extractFastRequestState(
 		})
 		ctx.ExpectStreamingResponse = true
 	}
+	mergeResponseAPINativeFacts(fast, ctx)
 	return fast, nil
+}
+
+// mergeResponseAPINativeFacts folds facts counted from the native Response API
+// payload into the fast-extract result. Extraction runs on the translated Chat
+// Completions body, which cannot represent file_id/file_data images, so the
+// translated body alone undercounts image content. URL images survive
+// translation and are counted on both sides, hence max rather than sum.
+func mergeResponseAPINativeFacts(fast *FastExtractResult, ctx *RequestContext) {
+	if fast == nil || ctx == nil || ctx.ResponseAPICtx == nil || !ctx.ResponseAPICtx.IsResponseAPIRequest {
+		return
+	}
+	fast.ImageContentCount = max(fast.ImageContentCount, ctx.ResponseAPICtx.NativeImageContentCount)
 }
 
 // extractRequestSignalsForProtocol dispatches the gjson-based fast-extract
