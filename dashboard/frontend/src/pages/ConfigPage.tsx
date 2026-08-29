@@ -317,6 +317,11 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
           (s) => s.name !== targetName,
         )
         break
+      case 'Conversation':
+        cfg.signals.conversation = (cfg.signals.conversation || []).filter(
+          (s) => s.name !== targetName,
+        )
+        break
       default:
         break
     }
