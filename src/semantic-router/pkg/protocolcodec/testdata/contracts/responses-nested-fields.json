@@ -1,6 +1,6 @@
 {
   "protocol": "openai_responses",
-  "schema_revision": "2929dd85eb799bd308460bfe4a439cabd0eb74c8",
+  "schema_revision": "6c8481caaefded47a5348a031f8e16c7b89de045",
   "objects": [
     {"wire": "responses_reasoning", "official": ["context", "effort", "generate_summary", "mode", "summary"], "fixtures": ["capability/014-responses-official-request-fields-in.json", "capability/040-responses-nested-request-fields-in.json"]},
     {"wire": "responses_stream_options", "official": ["include_obfuscation"], "fixtures": ["request/015-responses-stream-options-in.json"]},

@@ -1,6 +1,6 @@
 {
   "protocol": "openai_chat_completions",
-  "schema_revision": "2929dd85eb799bd308460bfe4a439cabd0eb74c8",
+  "schema_revision": "6c8481caaefded47a5348a031f8e16c7b89de045",
   "objects": [
     {"wire": "chat_message", "official": ["audio", "content", "function_call", "name", "refusal", "role", "tool_call_id", "tool_calls"], "extensions": ["annotations", "id", "reasoning", "reasoning_content"], "fixtures": ["request/004-chat-tool-lifecycle-in.json", "capability/010-chat-refusal-response-in.json", "capability/037-chat-nested-request-fields-in.json", "capability/038-chat-nested-response-fields-in.json"]},
     {"wire": "chat_content", "official": ["file", "image_url", "input_audio", "prompt_cache_breakpoint", "text", "type"], "extensions": ["cache_control", "refusal"], "fixtures": ["request/007-chat-ordered-multimodal-in.json", "capability/001-chat-audio-input-in.json", "capability/008-anthropic-cache-directive-in.json", "capability/010-chat-refusal-response-in.json", "capability/037-chat-nested-request-fields-in.json"]},

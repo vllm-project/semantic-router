@@ -249,8 +249,8 @@ func TestOfficialAnthropicStreamUnionsHaveHumanReadableJSONEvidence(t *testing.T
 // deliberate public-contract decision.
 func TestOfficialNestedJSONInventoriesAreClosed(t *testing.T) {
 	expectedRevisions := map[string]string{
-		"openai_chat_completions": "2929dd85eb799bd308460bfe4a439cabd0eb74c8",
-		"openai_responses":        "2929dd85eb799bd308460bfe4a439cabd0eb74c8",
+		"openai_chat_completions": "6c8481caaefded47a5348a031f8e16c7b89de045",
+		"openai_responses":        "6c8481caaefded47a5348a031f8e16c7b89de045",
 		"anthropic_messages":      "d19dea9ed85bbb5fdb2d6f20fb6f903920ed23fa",
 	}
 	wires := map[string]reflect.Type{
