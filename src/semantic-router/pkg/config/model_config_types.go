@@ -203,17 +203,19 @@ func (c ComplexityModelConfig) WithDefaults() ComplexityModelConfig {
 }
 
 type ExternalModelConfig struct {
-	Name           string                 `yaml:"name,omitempty"`
-	Provider       string                 `yaml:"llm_provider"`
-	ModelRole      string                 `yaml:"model_role"`
-	ModelEndpoint  ClassifierVLLMEndpoint `yaml:"llm_endpoint,omitempty"`
-	ModelName      string                 `yaml:"llm_model_name,omitempty"`
-	TimeoutSeconds int                    `yaml:"llm_timeout_seconds,omitempty"`
-	ParserType     string                 `yaml:"parser_type,omitempty"`
-	Threshold      float32                `yaml:"threshold,omitempty"`
-	AccessKey      string                 `yaml:"access_key,omitempty" json:"-"`
-	MaxTokens      int                    `yaml:"max_tokens,omitempty"`
-	Temperature    float64                `yaml:"temperature,omitempty"`
+	Name             string                 `yaml:"name,omitempty"`
+	Provider         string                 `yaml:"llm_provider"`
+	ModelRole        string                 `yaml:"model_role"`
+	ModelEndpoint    ClassifierVLLMEndpoint `yaml:"llm_endpoint,omitempty"`
+	ModelName        string                 `yaml:"llm_model_name,omitempty"`
+	TimeoutSeconds   int                    `yaml:"llm_timeout_seconds,omitempty"`
+	ParserType       string                 `yaml:"parser_type,omitempty"`
+	Threshold        float32                `yaml:"threshold,omitempty"`
+	AccessKey        string                 `yaml:"access_key,omitempty" json:"-"`
+	MaxTokens        int                    `yaml:"max_tokens,omitempty"`
+	Temperature      float64                `yaml:"temperature,omitempty"`
+	MaxRequestBytes  int64                  `yaml:"max_request_bytes,omitempty"`
+	MaxResponseBytes int64                  `yaml:"max_response_bytes,omitempty"`
 }
 
 type ToolFilteringWeights struct {
