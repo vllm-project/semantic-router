@@ -51,7 +51,8 @@ func (indexes *streamWireIndexes) translate(event llmprotocol.Event) int {
 		indexes.items[event.ItemIndex] = wireIndex
 		return wireIndex
 	case llmprotocol.EventOutputTextDelta, llmprotocol.EventReasoningDelta,
-		llmprotocol.EventToolCallDelta, llmprotocol.EventOutputItemCompleted:
+		llmprotocol.EventToolCallDelta, llmprotocol.EventImageGenerationProgress,
+		llmprotocol.EventOutputItemCompleted:
 		if wireIndex, found := indexes.items[event.ItemIndex]; found {
 			return wireIndex
 		}
@@ -247,32 +248,35 @@ func encodeSSE(event string, data any) ([]byte, error) {
 }
 
 type streamState struct {
-	context         llmprotocol.StreamContext
-	policy          llmprotocol.Policy
-	providerID      string
-	providerModel   string
-	sequence        uint64
-	events          int
-	wireFrames      int
-	wireBytes       int
-	terminal        bool
-	started         bool
-	usage           llmprotocol.Usage
-	stop            llmprotocol.StopReason
-	items           map[int]bool
-	completedItems  map[int]bool
-	itemKinds       map[int]llmprotocol.ContentKind
-	itemIDs         map[int]string
-	itemIDIndexes   map[string]int
-	contentBlocks   map[streamContentKey]bool
-	contentKinds    map[streamContentKey]llmprotocol.ContentKind
-	reasoningScopes map[streamContentKey]llmprotocol.ReasoningScope
-	itemTextBytes   map[streamContentKey]int
-	itemTextRunes   map[streamContentKey]int64
-	itemCitations   map[streamContentKey]int
-	toolCalls       map[int]llmprotocol.ToolCall
-	toolCallIndexes map[string]int
-	toolArguments   map[int][]byte
+	context               llmprotocol.StreamContext
+	policy                llmprotocol.Policy
+	providerID            string
+	providerModel         string
+	sequence              uint64
+	events                int
+	wireFrames            int
+	wireBytes             int
+	terminal              bool
+	started               bool
+	usage                 llmprotocol.Usage
+	stop                  llmprotocol.StopReason
+	items                 map[int]bool
+	completedItems        map[int]bool
+	itemKinds             map[int]llmprotocol.ContentKind
+	itemIDs               map[int]string
+	itemIDIndexes         map[string]int
+	contentBlocks         map[streamContentKey]bool
+	contentKinds          map[streamContentKey]llmprotocol.ContentKind
+	reasoningScopes       map[streamContentKey]llmprotocol.ReasoningScope
+	itemTextBytes         map[streamContentKey]int
+	itemTextRunes         map[streamContentKey]int64
+	itemCitations         map[streamContentKey]int
+	toolCalls             map[int]llmprotocol.ToolCall
+	toolCallIndexes       map[string]int
+	toolArguments         map[int][]byte
+	imageProgressRank     map[int]int
+	imageProgressSeen     map[int]map[llmprotocol.ImageGenerationStatus]bool
+	nextPartialImageIndex map[int]int64
 }
 
 func (state *streamState) observeProviderStreamBytes(chunk []byte) error {
@@ -380,7 +384,8 @@ func validStreamEventType(eventType llmprotocol.EventType) bool {
 	switch eventType {
 	case llmprotocol.EventResponseStarted, llmprotocol.EventOutputItemStarted,
 		llmprotocol.EventOutputTextDelta, llmprotocol.EventReasoningDelta,
-		llmprotocol.EventToolCallDelta, llmprotocol.EventOutputItemCompleted,
+		llmprotocol.EventToolCallDelta, llmprotocol.EventImageGenerationProgress,
+		llmprotocol.EventOutputItemCompleted,
 		llmprotocol.EventUsageUpdated, llmprotocol.EventResponseCompleted,
 		llmprotocol.EventResponseFailed, llmprotocol.EventProviderOpaque:
 		return true
@@ -405,6 +410,9 @@ func (state *streamState) ensureCollections() {
 		state.toolCalls = make(map[int]llmprotocol.ToolCall)
 		state.toolCallIndexes = make(map[string]int)
 		state.toolArguments = make(map[int][]byte)
+		state.imageProgressRank = make(map[int]int)
+		state.imageProgressSeen = make(map[int]map[llmprotocol.ImageGenerationStatus]bool)
+		state.nextPartialImageIndex = make(map[int]int64)
 		if state.usage.State == "" {
 			state.usage.State = llmprotocol.UsageUnavailable
 		}
@@ -448,6 +456,8 @@ func (state *streamState) applyItemEvent(event llmprotocol.Event) (llmprotocol.E
 		return state.startItem(event)
 	case llmprotocol.EventOutputTextDelta, llmprotocol.EventReasoningDelta, llmprotocol.EventToolCallDelta:
 		return state.applyDelta(event)
+	case llmprotocol.EventImageGenerationProgress:
+		return state.applyImageGenerationProgress(event)
 	case llmprotocol.EventOutputItemCompleted:
 		return state.completeItem(event)
 	}
@@ -469,6 +479,14 @@ func (state *streamState) startItem(event llmprotocol.Event) (llmprotocol.Event,
 		return event, nil
 	}
 	if event.Content != nil {
+		if event.Content.Kind == llmprotocol.ContentGeneratedImage {
+			if err := llmprotocol.ValidateGeneratedImage(event.Content.GeneratedImage, state.policy.Limits); err != nil {
+				return llmprotocol.Event{}, upstreamSemanticValidationError(err)
+			}
+			if err := validateStartedGeneratedImage(event.Content.GeneratedImage); err != nil {
+				return llmprotocol.Event{}, err
+			}
+		}
 		if err := state.claimContentBlock(event); err != nil {
 			return llmprotocol.Event{}, err
 		}
@@ -717,6 +735,14 @@ func (state *streamState) completeItem(event llmprotocol.Event) (llmprotocol.Eve
 		event = completed
 	} else if event.Content == nil && state.itemKinds[event.ItemIndex] != "" {
 		event.Content = &llmprotocol.Content{Kind: state.itemKinds[event.ItemIndex]}
+	}
+	if event.Content != nil && event.Content.Kind == llmprotocol.ContentGeneratedImage {
+		if err := llmprotocol.ValidateGeneratedImage(event.Content.GeneratedImage, state.policy.Limits); err != nil {
+			return llmprotocol.Event{}, upstreamSemanticValidationError(err)
+		}
+		if err := state.validateCompletedGeneratedImage(event.ItemIndex, event.Content.GeneratedImage); err != nil {
+			return llmprotocol.Event{}, err
+		}
 	}
 	state.markItemComplete(event.ItemIndex)
 	return event, nil

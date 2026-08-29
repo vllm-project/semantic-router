@@ -142,46 +142,6 @@
       }
     },
     {
-      "name": "response.image_generation_call.completed",
-      "stream": {
-        "public_model": "public-model",
-        "provider_model": "provider-model",
-        "chunks": [
-          "event: response.image_generation_call.completed\ndata: {\"type\":\"response.image_generation_call.completed\",\"sequence_number\":0}\n\n"
-        ]
-      }
-    },
-    {
-      "name": "response.image_generation_call.generating",
-      "stream": {
-        "public_model": "public-model",
-        "provider_model": "provider-model",
-        "chunks": [
-          "event: response.image_generation_call.generating\ndata: {\"type\":\"response.image_generation_call.generating\",\"sequence_number\":0}\n\n"
-        ]
-      }
-    },
-    {
-      "name": "response.image_generation_call.in_progress",
-      "stream": {
-        "public_model": "public-model",
-        "provider_model": "provider-model",
-        "chunks": [
-          "event: response.image_generation_call.in_progress\ndata: {\"type\":\"response.image_generation_call.in_progress\",\"sequence_number\":0}\n\n"
-        ]
-      }
-    },
-    {
-      "name": "response.image_generation_call.partial_image",
-      "stream": {
-        "public_model": "public-model",
-        "provider_model": "provider-model",
-        "chunks": [
-          "event: response.image_generation_call.partial_image\ndata: {\"type\":\"response.image_generation_call.partial_image\",\"sequence_number\":0}\n\n"
-        ]
-      }
-    },
-    {
       "name": "response.mcp_call_arguments.delta",
       "stream": {
         "public_model": "public-model",

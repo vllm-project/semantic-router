@@ -37,6 +37,27 @@ func validateResponsesEventPayload(wire responsesEventWire) error {
 		return validateResponsesAnnotationEvent(wire)
 	case "response.reasoning_summary_part.added", "response.reasoning_summary_part.done":
 		return validateResponsesSummaryPartEvent(wire)
+	case "response.image_generation_call.in_progress", "response.image_generation_call.generating",
+		"response.image_generation_call.completed":
+		return validateResponsesImageGenerationEvent(wire, false)
+	case "response.image_generation_call.partial_image":
+		return validateResponsesImageGenerationEvent(wire, true)
+	}
+	return nil
+}
+
+func validateResponsesImageGenerationEvent(wire responsesEventWire, partial bool) error {
+	if wire.OutputIndex == nil || strings.TrimSpace(wire.ItemID) == "" {
+		return invalidProviderResponse(
+			"stream_image_generation_target_required",
+			"Responses image generation event requires output_index and item_id",
+		)
+	}
+	if partial && wire.PartialImageIndex == nil {
+		return invalidProviderResponse(
+			"stream_partial_image_required",
+			"Responses partial image event requires partial_image_index and partial_image_b64",
+		)
 	}
 	return nil
 }
@@ -198,16 +219,22 @@ func validateResponsesEventFieldPresence(eventType string, body []byte) error {
 		return requireProviderNonNullFields(fields, "message")
 	}
 	required := map[string][]string{
-		"response.output_text.delta":             {"delta"},
-		"response.output_text.done":              {"text"},
-		"response.refusal.delta":                 {"delta"},
-		"response.refusal.done":                  {"refusal"},
-		"response.reasoning_text.delta":          {"delta"},
-		"response.reasoning_text.done":           {"text"},
-		"response.reasoning_summary_text.delta":  {"delta"},
-		"response.reasoning_summary_text.done":   {"text"},
-		"response.function_call_arguments.delta": {"delta"},
-		"response.function_call_arguments.done":  {"name", "arguments"},
+		"response.output_text.delta":                 {"delta"},
+		"response.output_text.done":                  {"text"},
+		"response.refusal.delta":                     {"delta"},
+		"response.refusal.done":                      {"refusal"},
+		"response.reasoning_text.delta":              {"delta"},
+		"response.reasoning_text.done":               {"text"},
+		"response.reasoning_summary_text.delta":      {"delta"},
+		"response.reasoning_summary_text.done":       {"text"},
+		"response.function_call_arguments.delta":     {"delta"},
+		"response.function_call_arguments.done":      {"name", "arguments"},
+		"response.image_generation_call.in_progress": {"output_index", "item_id"},
+		"response.image_generation_call.generating":  {"output_index", "item_id"},
+		"response.image_generation_call.completed":   {"output_index", "item_id"},
+		"response.image_generation_call.partial_image": {
+			"output_index", "item_id", "partial_image_index", "partial_image_b64",
+		},
 	}[eventType]
 	if len(required) == 0 {
 		return nil
@@ -304,6 +331,9 @@ func validateResponsesEventIndexes(wire responsesEventWire) error {
 		if field.value != nil && *field.value < 0 {
 			return invalidProviderResponse("invalid_stream_item_index", "Responses "+field.name+" must be non-negative")
 		}
+	}
+	if wire.PartialImageIndex != nil && *wire.PartialImageIndex < 0 {
+		return invalidProviderResponse("invalid_stream_item_index", "Responses partial_image_index must be non-negative")
 	}
 	return nil
 }

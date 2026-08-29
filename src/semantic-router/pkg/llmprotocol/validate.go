@@ -33,7 +33,10 @@ func ValidateRequest(request Request, limits Limits) error {
 	if err != nil {
 		return err
 	}
-	if err := validateToolChoice(request.ToolChoice, namedTools, len(request.Tools)); err != nil {
+	if err := validateToolChoice(request.ToolChoice, namedTools, len(request.Tools), request.ImageGeneration != nil); err != nil {
+		return err
+	}
+	if err := validateImageGenerationOptions(request.ImageGeneration, limits); err != nil {
 		return err
 	}
 	if err := validateOutputFormat(request.OutputFormat, schemaBytes, limits); err != nil {
@@ -251,9 +254,9 @@ func validateRequestTool(tool Tool, limits Limits) error {
 	return validateSchemaObject(tool.InputSchema, "tool schema", limits)
 }
 
-func validateToolChoice(choice ToolChoice, namedTools map[string]struct{}, toolCount int) error {
+func validateToolChoice(choice ToolChoice, namedTools map[string]struct{}, toolCount int, hasImageGeneration bool) error {
 	switch choice.Mode {
-	case "", ToolChoiceAuto, ToolChoiceNone, ToolChoiceRequired, ToolChoiceNamed:
+	case "", ToolChoiceAuto, ToolChoiceNone, ToolChoiceRequired, ToolChoiceNamed, ToolChoiceImageGeneration:
 	default:
 		return NewError(ErrorInvalidRequest, "invalid_tool_choice", "tool choice is invalid", nil)
 	}
@@ -266,7 +269,12 @@ func validateToolChoice(choice ToolChoice, namedTools map[string]struct{}, toolC
 		}
 	}
 	if (choice.Mode == ToolChoiceRequired || choice.Mode == ToolChoiceNamed) && toolCount == 0 {
-		return NewError(ErrorInvalidRequest, "tools_required", "tool choice requires at least one declared tool", nil)
+		if !(choice.Mode == ToolChoiceRequired && hasImageGeneration) {
+			return NewError(ErrorInvalidRequest, "tools_required", "tool choice requires at least one declared tool", nil)
+		}
+	}
+	if choice.Mode == ToolChoiceImageGeneration && !hasImageGeneration {
+		return NewError(ErrorInvalidRequest, "image_generation_tool_required", "image-generation tool choice requires a declared image-generation tool", nil)
 	}
 	if choice.Mode != ToolChoiceNamed && choice.Name != "" {
 		return NewError(ErrorInvalidRequest, "invalid_tool_choice", "only named tool choice may contain a name", nil)
@@ -396,7 +404,7 @@ func validateReasoningEffort(request Request, limits Limits) error {
 	if exceeds(request.ReasoningEffort, limits.ReasoningEffortBytes) {
 		return NewError(ErrorInvalidRequest, "reasoning_effort_limit", "reasoning effort exceeds the configured limit", nil)
 	}
-	switch strings.ToLower(strings.TrimSpace(request.ReasoningEffort)) {
+	switch request.ReasoningEffort {
 	case "", "none", "minimal", "low", "medium", "high", "xhigh", "max":
 	default:
 		return NewError(ErrorInvalidRequest, "invalid_reasoning_effort", "reasoning effort is invalid", nil)
@@ -507,7 +515,7 @@ func MarkDeferredToolLinks(request *Request) {
 func validateRoleContent(role Role, content Content) error {
 	switch role {
 	case RoleSystem, RoleDeveloper:
-		if content.Kind == ContentToolCall || content.Kind == ContentToolResult {
+		if content.Kind == ContentToolCall || content.Kind == ContentToolResult || content.Kind == ContentGeneratedImage {
 			return NewError(ErrorInvalidRequest, "invalid_role_content", "system and developer messages cannot contain tool control blocks", nil)
 		}
 	case RoleAssistant:
@@ -519,7 +527,7 @@ func validateRoleContent(role Role, content Content) error {
 			return NewError(ErrorInvalidRequest, "invalid_role_content", "tool messages may contain only tool results", nil)
 		}
 	case RoleUser:
-		if content.Kind == ContentToolCall || content.Kind == ContentToolResult || content.Kind == ContentRefusal {
+		if content.Kind == ContentToolCall || content.Kind == ContentToolResult || content.Kind == ContentRefusal || content.Kind == ContentGeneratedImage {
 			return NewError(ErrorInvalidRequest, "invalid_role_content", "user messages contain assistant-only content", nil)
 		}
 	}
@@ -542,6 +550,8 @@ func validateContent(content Content, blocks *int, limits Limits, depth int) err
 		return validateToolCallContent(content, limits)
 	case ContentToolResult:
 		return validateToolResultContent(content, blocks, limits, depth)
+	case ContentGeneratedImage:
+		return validateGeneratedImageContent(content, limits)
 	default:
 		return NewError(ErrorInvalidRequest, "unknown_content_kind", "content kind is unsupported", nil)
 	}
@@ -583,7 +593,7 @@ func validateTextContent(content Content, limits Limits) error {
 }
 
 func hasNonTextFields(content Content) bool {
-	return content.ToolCall != nil || content.ToolResult != nil || content.URL != "" || content.Data != "" ||
+	return content.ToolCall != nil || content.ToolResult != nil || content.GeneratedImage != nil || content.URL != "" || content.Data != "" ||
 		content.FileID != "" || content.Filename != "" || content.MediaType != "" || content.Detail != "" ||
 		(content.Kind != ContentReasoning && (content.Signature != "" || content.Reasoning != ""))
 }
@@ -592,7 +602,7 @@ func validateMediaContent(content Content, limits Limits) error {
 	if err := validateMediaBounds(content, limits); err != nil {
 		return err
 	}
-	if content.ToolCall != nil || content.ToolResult != nil || content.Text != "" ||
+	if content.ToolCall != nil || content.ToolResult != nil || content.GeneratedImage != nil || content.Text != "" ||
 		content.Signature != "" || len(content.Citations) != 0 {
 		return NewError(ErrorInvalidRequest, "invalid_content", "media content contains fields from another content kind", nil)
 	}
@@ -692,7 +702,7 @@ func validateToolResultContent(content Content, blocks *int, limits Limits, dept
 func hasToolControlForeignFields(content Content) bool {
 	return content.Text != "" || content.URL != "" || content.Data != "" || len(content.Citations) != 0 ||
 		content.FileID != "" || content.MediaType != "" || content.Filename != "" ||
-		content.Detail != "" || content.Signature != ""
+		content.Detail != "" || content.Signature != "" || content.GeneratedImage != nil
 }
 
 func validateNestedToolResult(contents []Content, blocks *int, limits Limits, depth int) error {
@@ -932,7 +942,19 @@ func validateOutputContent(role Role, content Content, blocks *int, limits Limit
 		return NewError(ErrorUpstreamUnavailable, "invalid_output_role_content", "upstream output role and content do not match", nil)
 	}
 	(*blocks)++
-	return validateContent(content, blocks, limits, 0)
+	if err := validateContent(content, blocks, limits, 0); err != nil {
+		return err
+	}
+	if content.Kind == ContentGeneratedImage && content.GeneratedImage.Status != ImageGenerationCompleted &&
+		content.GeneratedImage.Status != ImageGenerationFailed {
+		return NewError(
+			ErrorUpstreamUnavailable,
+			"nonterminal_image_generation_output",
+			"upstream buffered image generation output is not terminal",
+			nil,
+		)
+	}
+	return nil
 }
 
 // ValidateTransportError enforces the bounded neutral contract before and

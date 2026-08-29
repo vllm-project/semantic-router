@@ -26,7 +26,31 @@
     {"name": "computer_use_preview", "patch": {"tools": [{"type": "computer_use_preview"}]}},
     {"name": "custom", "patch": {"tools": [{"type": "custom"}]}},
     {"name": "file_search", "patch": {"tools": [{"type": "file_search"}]}},
-    {"name": "image_generation", "patch": {"tools": [{"type": "image_generation"}]}},
+    {
+      "name": "image_generation",
+      "patch": {
+        "tools": [
+          {
+            "type": "image_generation",
+            "action": "edit",
+            "background": "transparent",
+            "input_fidelity": "high",
+            "input_image_mask": {
+              "file_id": "file_mask_1",
+              "image_url": "data:image/png;base64,bWFzaw=="
+            },
+            "model": "gpt-image-1",
+            "moderation": "low",
+            "output_compression": 80,
+            "output_format": "webp",
+            "partial_images": 3,
+            "quality": "high",
+            "size": "1024x1536"
+          }
+        ],
+        "tool_choice": {"type": "image_generation"}
+      }
+    },
     {"name": "local_shell", "patch": {"tools": [{"type": "local_shell"}]}},
     {"name": "mcp", "patch": {"tools": [{"type": "mcp"}]}},
     {"name": "namespace", "patch": {"tools": [{"type": "namespace"}]}},

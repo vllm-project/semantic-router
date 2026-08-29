@@ -104,7 +104,7 @@ func (engine *Engine) decodeRequest(
 // in one place prevents routing plugins from behaving differently based on
 // whether a client serialized the default explicitly.
 func applyRequestSemanticDefaults(request *llmprotocol.Request) {
-	if request != nil && len(request.Tools) > 0 && request.ToolChoice.Mode == "" {
+	if request != nil && (len(request.Tools) > 0 || request.ImageGeneration != nil) && request.ToolChoice.Mode == "" {
 		request.ToolChoice.Mode = llmprotocol.ToolChoiceAuto
 	}
 }

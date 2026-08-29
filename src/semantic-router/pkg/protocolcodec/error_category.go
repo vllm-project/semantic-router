@@ -1,10 +1,29 @@
 package protocolcodec
 
 import (
+	"errors"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
+
+func upstreamSemanticValidationError(err error) error {
+	var protocolError *llmprotocol.ProtocolError
+	if errors.As(err, &protocolError) {
+		return llmprotocol.NewError(
+			llmprotocol.ErrorUpstreamUnavailable,
+			protocolError.Code,
+			protocolError.Message,
+			err,
+		)
+	}
+	return llmprotocol.NewError(
+		llmprotocol.ErrorUpstreamUnavailable,
+		"invalid_upstream_semantics",
+		"upstream response contains an invalid semantic value",
+		err,
+	)
+}
 
 func decodeProviderErrorCategory(values ...string) llmprotocol.ErrorCategory {
 	for _, value := range values {

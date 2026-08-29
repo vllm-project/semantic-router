@@ -47,6 +47,10 @@ const (
 	// request-side ability to send stop sequences. Only a wire contract that
 	// exposes the exact sequence which ended generation can preserve it.
 	CapabilityMatchedStopSequence
+	// CapabilityImageGeneration covers the hosted image-generation operation,
+	// including its request options, output item, and progress events. It is not
+	// interchangeable with generic image input or output support.
+	CapabilityImageGeneration
 )
 
 // CapabilitySet is an immutable value bitset.
@@ -111,6 +115,7 @@ func (set CapabilitySet) Names() []string {
 		{CapabilityReasoningSignature, "reasoning_signature"},
 		{CapabilityReasoningDisplay, "reasoning_display"},
 		{CapabilityMatchedStopSequence, "matched_stop_sequence"},
+		{CapabilityImageGeneration, "image_generation"},
 	}
 	names := make([]string, 0, len(known))
 	for _, item := range known {
@@ -123,6 +128,9 @@ func (set CapabilitySet) Names() []string {
 
 func RequiredCapabilities(request Request) CapabilitySet {
 	required := requestOptionCapabilities(request)
+	if request.ImageGeneration != nil || request.ToolChoice.Mode == ToolChoiceImageGeneration {
+		required.bits |= CapabilityImageGeneration
+	}
 	required.bits |= toolCapabilities(request.Tools)
 	required.bits |= instructionCapabilities(request.Instructions)
 	required.bits |= messageCapabilities(request.Messages)
@@ -274,6 +282,10 @@ func RequiredEventCapabilities(event Event) CapabilitySet {
 	if event.MatchedStopSequence != "" {
 		required.bits |= CapabilityMatchedStopSequence
 	}
+	if event.GeneratedImage != nil || event.Type == EventImageGenerationProgress ||
+		event.Content != nil && event.Content.Kind == ContentGeneratedImage {
+		required.bits |= CapabilityImageGeneration
+	}
 	return required
 }
 
@@ -290,6 +302,8 @@ func capabilityForRequestContent(content Content) Capability {
 		return requestToolResultCapabilities(content.ToolResult) | cache
 	case ContentReasoning:
 		return reasoningContentCapabilities(content.Signature) | cache
+	case ContentGeneratedImage:
+		return CapabilityImageGeneration | cache
 	default:
 		return 0
 	}
@@ -304,6 +318,8 @@ func capabilityForResponseContent(content Content) Capability {
 		return responseToolResultCapabilities(content.ToolResult)
 	case ContentReasoning:
 		return reasoningContentCapabilities(content.Signature)
+	case ContentGeneratedImage:
+		return CapabilityImageGeneration
 	default:
 		return 0
 	}
@@ -389,6 +405,7 @@ func ParseCapabilities(names []string) (CapabilitySet, error) {
 		"reasoning_signature":   CapabilityReasoningSignature,
 		"reasoning_display":     CapabilityReasoningDisplay,
 		"matched_stop_sequence": CapabilityMatchedStopSequence,
+		"image_generation":      CapabilityImageGeneration,
 	}
 	var set CapabilitySet
 	for _, name := range names {

@@ -15,16 +15,17 @@ const (
 )
 
 const (
-	EventResponseStarted     EventType = "response.started"
-	EventOutputItemStarted   EventType = "output.item.started"
-	EventOutputTextDelta     EventType = "output.text.delta"
-	EventReasoningDelta      EventType = "output.reasoning.delta"
-	EventToolCallDelta       EventType = "tool.call.delta"
-	EventOutputItemCompleted EventType = "output.item.completed"
-	EventUsageUpdated        EventType = "usage.updated"
-	EventResponseCompleted   EventType = "response.completed"
-	EventResponseFailed      EventType = "response.failed"
-	EventProviderOpaque      EventType = "provider.opaque"
+	EventResponseStarted         EventType = "response.started"
+	EventOutputItemStarted       EventType = "output.item.started"
+	EventOutputTextDelta         EventType = "output.text.delta"
+	EventReasoningDelta          EventType = "output.reasoning.delta"
+	EventToolCallDelta           EventType = "tool.call.delta"
+	EventImageGenerationProgress EventType = "image_generation.progress"
+	EventOutputItemCompleted     EventType = "output.item.completed"
+	EventUsageUpdated            EventType = "usage.updated"
+	EventResponseCompleted       EventType = "response.completed"
+	EventResponseFailed          EventType = "response.failed"
+	EventProviderOpaque          EventType = "provider.opaque"
 )
 
 type Event struct {
@@ -43,6 +44,7 @@ type Event struct {
 	Delta               string
 	ToolCall            *ToolCall
 	Content             *Content
+	GeneratedImage      *GeneratedImage
 	StopReason          StopReason
 	MatchedStopSequence string
 	Usage               *Usage

@@ -33,6 +33,7 @@ const (
 	responsesOutputMessage   responsesOutputKind = "message"
 	responsesOutputReasoning responsesOutputKind = "reasoning"
 	responsesOutputTool      responsesOutputKind = "tool"
+	responsesOutputImage     responsesOutputKind = "image_generation"
 )
 
 type responsesOutputKey struct {
@@ -74,22 +75,23 @@ type responsesDecodedContentLifecycle struct {
 
 type responsesStreamEncoder struct {
 	streamState
-	outputIndexes    map[responsesOutputKey]int
-	outputIDs        map[responsesOutputKey]string
-	outputStarted    map[responsesOutputKey]bool
-	itemOutputKeys   map[int][]responsesOutputKey
-	neutralItemIDs   map[int]string
-	nextOutputIndex  int
-	contentIndexes   map[streamContentKey]int
-	nextContentIndex map[responsesOutputContentKey]int
-	contentStarted   map[streamContentKey]bool
-	encodedKinds     map[streamContentKey]llmprotocol.ContentKind
-	reasoningScopes  map[streamContentKey]llmprotocol.ReasoningScope
-	contentText      map[streamContentKey]*strings.Builder
-	contentCitations map[streamContentKey][]llmprotocol.Citation
-	completedOutput  map[int]json.RawMessage
-	responseStarted  bool
-	wireSequence     uint64
+	outputIndexes          map[responsesOutputKey]int
+	outputIDs              map[responsesOutputKey]string
+	outputStarted          map[responsesOutputKey]bool
+	itemOutputKeys         map[int][]responsesOutputKey
+	neutralItemIDs         map[int]string
+	nextOutputIndex        int
+	contentIndexes         map[streamContentKey]int
+	nextContentIndex       map[responsesOutputContentKey]int
+	contentStarted         map[streamContentKey]bool
+	encodedKinds           map[streamContentKey]llmprotocol.ContentKind
+	reasoningScopes        map[streamContentKey]llmprotocol.ReasoningScope
+	contentText            map[streamContentKey]*strings.Builder
+	contentCitations       map[streamContentKey][]llmprotocol.Citation
+	completedOutput        map[int]json.RawMessage
+	imageProgressCompleted map[responsesOutputKey]bool
+	responseStarted        bool
+	wireSequence           uint64
 }
 
 func (OpenAIResponsesCodec) NewDecoder(context llmprotocol.StreamContext, policy llmprotocol.Policy) llmprotocol.StreamDecoder {
@@ -110,46 +112,53 @@ func (OpenAIResponsesCodec) NewDecoder(context llmprotocol.StreamContext, policy
 
 func (OpenAIResponsesCodec) NewEncoder(context llmprotocol.StreamContext, policy llmprotocol.Policy) llmprotocol.StreamEncoder {
 	return &responsesStreamEncoder{
-		streamState:      streamState{context: context, policy: policy},
-		outputIndexes:    make(map[responsesOutputKey]int),
-		outputIDs:        make(map[responsesOutputKey]string),
-		outputStarted:    make(map[responsesOutputKey]bool),
-		itemOutputKeys:   make(map[int][]responsesOutputKey),
-		neutralItemIDs:   make(map[int]string),
-		contentIndexes:   make(map[streamContentKey]int),
-		nextContentIndex: make(map[responsesOutputContentKey]int),
-		contentStarted:   make(map[streamContentKey]bool),
-		encodedKinds:     make(map[streamContentKey]llmprotocol.ContentKind),
-		reasoningScopes:  make(map[streamContentKey]llmprotocol.ReasoningScope),
-		contentText:      make(map[streamContentKey]*strings.Builder),
-		contentCitations: make(map[streamContentKey][]llmprotocol.Citation),
-		completedOutput:  make(map[int]json.RawMessage),
+		streamState:            streamState{context: context, policy: policy},
+		outputIndexes:          make(map[responsesOutputKey]int),
+		outputIDs:              make(map[responsesOutputKey]string),
+		outputStarted:          make(map[responsesOutputKey]bool),
+		itemOutputKeys:         make(map[int][]responsesOutputKey),
+		neutralItemIDs:         make(map[int]string),
+		contentIndexes:         make(map[streamContentKey]int),
+		nextContentIndex:       make(map[responsesOutputContentKey]int),
+		contentStarted:         make(map[streamContentKey]bool),
+		encodedKinds:           make(map[streamContentKey]llmprotocol.ContentKind),
+		reasoningScopes:        make(map[streamContentKey]llmprotocol.ReasoningScope),
+		contentText:            make(map[streamContentKey]*strings.Builder),
+		contentCitations:       make(map[streamContentKey][]llmprotocol.Citation),
+		completedOutput:        make(map[int]json.RawMessage),
+		imageProgressCompleted: make(map[responsesOutputKey]bool),
 	}
 }
 
 type responsesEventWire struct {
-	Type            string                   `json:"type"`
-	Sequence        uint64                   `json:"sequence_number"`
-	Response        *responsesResponseWire   `json:"response,omitempty"`
-	Item            json.RawMessage          `json:"item,omitempty"`
-	ItemID          string                   `json:"item_id,omitempty"`
-	OutputIndex     *int                     `json:"output_index,omitempty"`
-	ContentIndex    *int                     `json:"content_index,omitempty"`
-	AnnotationIndex *int                     `json:"annotation_index,omitempty"`
-	Delta           string                   `json:"delta,omitempty"`
-	Text            string                   `json:"text,omitempty"`
-	Part            *responsesContentWire    `json:"part,omitempty"`
-	Annotation      *responsesAnnotationWire `json:"annotation,omitempty"`
-	Name            string                   `json:"name,omitempty"`
-	Arguments       string                   `json:"arguments,omitempty"`
-	Refusal         string                   `json:"refusal,omitempty"`
-	Status          string                   `json:"status,omitempty"`
-	SummaryIndex    *int                     `json:"summary_index,omitempty"`
-	Logprobs        json.RawMessage          `json:"logprobs,omitempty"`
-	Obfuscation     string                   `json:"obfuscation,omitempty"`
-	Code            *string                  `json:"code,omitempty"`
-	Message         string                   `json:"message,omitempty"`
-	Param           *string                  `json:"param,omitempty"`
+	Type              string                   `json:"type"`
+	Sequence          uint64                   `json:"sequence_number"`
+	Response          *responsesResponseWire   `json:"response,omitempty"`
+	Item              json.RawMessage          `json:"item,omitempty"`
+	ItemID            string                   `json:"item_id,omitempty"`
+	OutputIndex       *int                     `json:"output_index,omitempty"`
+	ContentIndex      *int                     `json:"content_index,omitempty"`
+	AnnotationIndex   *int                     `json:"annotation_index,omitempty"`
+	Delta             string                   `json:"delta,omitempty"`
+	Text              string                   `json:"text,omitempty"`
+	Part              *responsesContentWire    `json:"part,omitempty"`
+	Annotation        *responsesAnnotationWire `json:"annotation,omitempty"`
+	Name              string                   `json:"name,omitempty"`
+	Arguments         string                   `json:"arguments,omitempty"`
+	Refusal           string                   `json:"refusal,omitempty"`
+	Status            string                   `json:"status,omitempty"`
+	SummaryIndex      *int                     `json:"summary_index,omitempty"`
+	Logprobs          json.RawMessage          `json:"logprobs,omitempty"`
+	Obfuscation       string                   `json:"obfuscation,omitempty"`
+	Code              *string                  `json:"code,omitempty"`
+	Message           string                   `json:"message,omitempty"`
+	Param             *string                  `json:"param,omitempty"`
+	PartialImageIndex *int64                   `json:"partial_image_index,omitempty"`
+	PartialImageB64   string                   `json:"partial_image_b64,omitempty"`
+	Size              string                   `json:"size,omitempty"`
+	Quality           string                   `json:"quality,omitempty"`
+	Background        string                   `json:"background,omitempty"`
+	OutputFormat      string                   `json:"output_format,omitempty"`
 }
 
 func (wire responsesEventWire) MarshalJSON() ([]byte, error) {
@@ -174,6 +183,8 @@ func (wire responsesEventWire) MarshalJSON() ([]byte, error) {
 	case "response.function_call_arguments.done":
 		object["name"], _ = json.Marshal(wire.Name)
 		object["arguments"], _ = json.Marshal(wire.Arguments)
+	case "response.image_generation_call.partial_image":
+		object["partial_image_b64"], _ = json.Marshal(wire.PartialImageB64)
 	}
 	return json.Marshal(object)
 }
@@ -353,6 +364,9 @@ func (decoder *responsesStreamDecoder) validateResponsesEventItemType(wire respo
 		expected = "reasoning"
 	case "response.function_call_arguments.delta", "response.function_call_arguments.done":
 		expected = "function_call"
+	case "response.image_generation_call.in_progress", "response.image_generation_call.generating",
+		"response.image_generation_call.partial_image", "response.image_generation_call.completed":
+		expected = "image_generation_call"
 	}
 	if expected != "" && decoder.itemTypes[*wire.OutputIndex] != expected {
 		return invalidProviderResponse(
@@ -464,7 +478,9 @@ func isSupportedResponsesEvent(eventType string) bool {
 		"response.reasoning_summary_part.added", "response.reasoning_summary_part.done",
 		"response.reasoning_summary_text.delta", "response.reasoning_summary_text.done",
 		"response.reasoning_text.delta", "response.reasoning_text.done",
-		"response.function_call_arguments.delta", "response.function_call_arguments.done":
+		"response.function_call_arguments.delta", "response.function_call_arguments.done",
+		"response.image_generation_call.in_progress", "response.image_generation_call.generating",
+		"response.image_generation_call.partial_image", "response.image_generation_call.completed":
 		return true
 	default:
 		return false
@@ -573,6 +589,9 @@ func (decoder *responsesStreamDecoder) applyResponsesDeltaEvent(
 		return true, decoder.applyResponseAnnotation(event, wire)
 	case "response.function_call_arguments.delta":
 		return true, decoder.applyResponsesToolDelta(event, wire)
+	case "response.image_generation_call.in_progress", "response.image_generation_call.generating",
+		"response.image_generation_call.partial_image", "response.image_generation_call.completed":
+		return true, decoder.applyResponsesImageGenerationProgress(event, wire)
 	default:
 		return false, nil
 	}
@@ -1116,7 +1135,7 @@ func (decoder *responsesStreamDecoder) applyResponsesItemStart(event *llmprotoco
 	if err != nil {
 		return err
 	}
-	if err := validateResponsesOutputItemResource(wire.Item, item); err != nil {
+	if err := validateResponsesOutputItemResource(wire.Item, item, decoder.policy.Limits); err != nil {
 		return err
 	}
 	if item.Status != "" && item.Status != "in_progress" {
@@ -1132,6 +1151,11 @@ func (decoder *responsesStreamDecoder) applyResponsesItemStart(event *llmprotoco
 		event.ToolCall = &llmprotocol.ToolCall{ID: item.CallID, Name: item.Name, Arguments: item.Arguments}
 	} else if item.Type == "reasoning" {
 		event.Content = &llmprotocol.Content{Kind: llmprotocol.ContentReasoning}
+	} else if item.Type == "image_generation_call" {
+		event.Content = &llmprotocol.Content{
+			Kind:           llmprotocol.ContentGeneratedImage,
+			GeneratedImage: decodeResponsesGeneratedImage(item),
+		}
 	}
 	return nil
 }
@@ -1188,7 +1212,10 @@ func (decoder *responsesStreamDecoder) emitResponsesEvent(
 	event llmprotocol.Event,
 ) ([]llmprotocol.Event, llmprotocol.Diagnostics, error) {
 	normalized, err := decoder.next(event)
-	return []llmprotocol.Event{normalized}, nil, err
+	if err != nil {
+		return nil, nil, err
+	}
+	return []llmprotocol.Event{normalized}, nil, nil
 }
 
 func (decoder *responsesStreamDecoder) applyResponseAnnotation(
@@ -1244,10 +1271,15 @@ func (decoder *responsesStreamDecoder) validateCompletedResponseItem(wire respon
 	if err != nil {
 		return responsesItemWire{}, err
 	}
-	if err := validateResponsesOutputItemResource(wire.Item, item); err != nil {
+	if err := validateResponsesOutputItemResource(wire.Item, item, decoder.policy.Limits); err != nil {
 		return responsesItemWire{}, err
 	}
-	if item.Status != "" && item.Status != "completed" && item.Status != "incomplete" {
+	if item.Type == "image_generation_call" && item.Status != "completed" && item.Status != "failed" {
+		return responsesItemWire{}, invalidProviderResponse(
+			"stream_item_status_mismatch", "Responses image generation item done event requires completed or failed status",
+		)
+	}
+	if item.Type != "image_generation_call" && item.Status != "" && item.Status != "completed" && item.Status != "incomplete" {
 		return responsesItemWire{}, invalidProviderResponse(
 			"stream_item_status_mismatch", "Responses output item done event requires completed or incomplete status",
 		)
@@ -1274,6 +1306,11 @@ func (decoder *responsesStreamDecoder) applyCompletedResponseItemKind(
 		}
 	case "reasoning":
 		event.Content = &llmprotocol.Content{Kind: llmprotocol.ContentReasoning}
+	case "image_generation_call":
+		event.Content = &llmprotocol.Content{
+			Kind:           llmprotocol.ContentGeneratedImage,
+			GeneratedImage: decodeResponsesGeneratedImage(item),
+		}
 	default:
 		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_output_item", "Responses completed an unsupported output item", nil)
 	}
@@ -1369,6 +1406,9 @@ func (encoder *responsesStreamEncoder) encodeDirectResponsesEvent(
 	case llmprotocol.EventToolCallDelta:
 		frames, diagnostics, err := encoder.encodeResponsesToolDelta(event)
 		return frames, diagnostics, true, err
+	case llmprotocol.EventImageGenerationProgress:
+		frames, err := encoder.encodeResponsesImageGenerationProgress(event)
+		return frames, nil, true, err
 	case llmprotocol.EventOutputItemCompleted:
 		frames, diagnostics, err := encoder.encodeCompletedResponsesItem(event)
 		return frames, diagnostics, true, err
@@ -1405,6 +1445,10 @@ func (encoder *responsesStreamEncoder) encodeResponsesItemStart(event llmprotoco
 	encoder.neutralItemIDs[event.ItemIndex] = event.ItemID
 	if event.ToolCall != nil {
 		frames, _, err := encoder.ensureResponsesOutputStarted(event, responsesOutputTool)
+		return frames, err
+	}
+	if event.Content != nil && event.Content.Kind == llmprotocol.ContentGeneratedImage {
+		frames, _, err := encoder.ensureResponsesOutputStarted(event, responsesOutputImage)
 		return frames, err
 	}
 	if event.Content != nil && event.Content.Kind == llmprotocol.ContentReasoning {
@@ -1451,6 +1495,8 @@ func (encoder *responsesStreamEncoder) ensureResponsesOutputStarted(
 		if event.ToolCall != nil {
 			item.CallID, item.Name, item.Arguments = event.ToolCall.ID, event.ToolCall.Name, event.ToolCall.Arguments
 		}
+	case responsesOutputImage:
+		item.Type = "image_generation_call"
 	}
 	wire := responsesEventWire{
 		Type:        "response.output_item.added",
@@ -1786,6 +1832,8 @@ func (encoder *responsesStreamEncoder) encodeCompletedResponsesItem(
 			kind = responsesOutputTool
 		} else if event.Content != nil && event.Content.Kind == llmprotocol.ContentReasoning {
 			kind = responsesOutputReasoning
+		} else if event.Content != nil && event.Content.Kind == llmprotocol.ContentGeneratedImage {
+			kind = responsesOutputImage
 		}
 		started, key, err := encoder.ensureResponsesOutputStarted(event, kind)
 		if err != nil {
@@ -1810,6 +1858,9 @@ func (encoder *responsesStreamEncoder) encodeCompletedResponsesOutput(
 ) ([][]byte, llmprotocol.Diagnostics, error) {
 	if key.kind == responsesOutputMessage || key.kind == responsesOutputReasoning {
 		return encoder.encodeCompletedResponsesContent(event, key)
+	}
+	if key.kind == responsesOutputImage {
+		return encoder.encodeCompletedResponsesImage(event, key)
 	}
 	if event.ToolCall == nil {
 		return nil, nil, llmprotocol.NewError(llmprotocol.ErrorInternal, "tool_event_invalid", "tool event is invalid", nil)
@@ -1971,6 +2022,9 @@ func (encoder *responsesStreamEncoder) responsesContentKeys(
 func responsesOutputKindForContent(kind llmprotocol.ContentKind) responsesOutputKind {
 	if kind == llmprotocol.ContentReasoning {
 		return responsesOutputReasoning
+	}
+	if kind == llmprotocol.ContentGeneratedImage {
+		return responsesOutputImage
 	}
 	return responsesOutputMessage
 }

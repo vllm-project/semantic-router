@@ -17,6 +17,7 @@ func (OpenAIResponsesCodec) Stateless() bool                { return true }
 func (OpenAIResponsesCodec) Capabilities() llmprotocol.CapabilitySet {
 	return llmprotocol.Capabilities(
 		llmprotocol.CapabilityText, llmprotocol.CapabilityImageInput, llmprotocol.CapabilityFileInput,
+		llmprotocol.CapabilityImageGeneration,
 		llmprotocol.CapabilityTools, llmprotocol.CapabilityParallelTools, llmprotocol.CapabilityReasoning,
 		llmprotocol.CapabilityStructuredJSON, llmprotocol.CapabilityStrictJSONSchema, llmprotocol.CapabilityStrictToolSchema,
 		llmprotocol.CapabilityStreaming, llmprotocol.CapabilityCacheAccounting,
@@ -88,14 +89,30 @@ type responsesFormatWire struct {
 }
 
 type responsesToolWire struct {
-	Type           string          `json:"type"`
-	Name           string          `json:"name,omitempty"`
-	Description    string          `json:"description,omitempty"`
-	Parameters     json.RawMessage `json:"parameters,omitempty"`
-	Strict         *bool           `json:"strict,omitempty"`
-	AllowedCallers json.RawMessage `json:"allowed_callers,omitempty"`
-	DeferLoading   json.RawMessage `json:"defer_loading,omitempty"`
-	OutputSchema   json.RawMessage `json:"output_schema,omitempty"`
+	Type              string                     `json:"type"`
+	Name              string                     `json:"name,omitempty"`
+	Description       string                     `json:"description,omitempty"`
+	Parameters        json.RawMessage            `json:"parameters,omitempty"`
+	Strict            *bool                      `json:"strict,omitempty"`
+	AllowedCallers    json.RawMessage            `json:"allowed_callers,omitempty"`
+	DeferLoading      json.RawMessage            `json:"defer_loading,omitempty"`
+	OutputSchema      json.RawMessage            `json:"output_schema,omitempty"`
+	Model             string                     `json:"model,omitempty"`
+	Quality           string                     `json:"quality,omitempty"`
+	Size              string                     `json:"size,omitempty"`
+	OutputFormat      string                     `json:"output_format,omitempty"`
+	OutputCompression *int64                     `json:"output_compression,omitempty"`
+	Moderation        string                     `json:"moderation,omitempty"`
+	Background        string                     `json:"background,omitempty"`
+	InputFidelity     string                     `json:"input_fidelity,omitempty"`
+	InputImageMask    *responsesImageGenMaskWire `json:"input_image_mask,omitempty"`
+	PartialImages     *int64                     `json:"partial_images,omitempty"`
+	Action            string                     `json:"action,omitempty"`
+}
+
+type responsesImageGenMaskWire struct {
+	ImageURL string `json:"image_url,omitempty"`
+	FileID   string `json:"file_id,omitempty"`
 }
 
 type responsesItemWire struct {
@@ -113,6 +130,7 @@ type responsesItemWire struct {
 	Summary          json.RawMessage `json:"summary,omitempty"`
 	Phase            json.RawMessage `json:"phase,omitempty"`
 	EncryptedContent json.RawMessage `json:"encrypted_content,omitempty"`
+	Result           *string         `json:"result,omitempty"`
 }
 
 func (wire responsesItemWire) MarshalJSON() ([]byte, error) {
@@ -139,6 +157,10 @@ func (wire responsesItemWire) MarshalJSON() ([]byte, error) {
 	case "reasoning":
 		if len(wire.Summary) == 0 {
 			object["summary"] = json.RawMessage(`[]`)
+		}
+	case "image_generation_call":
+		if wire.Result == nil {
+			object["result"] = json.RawMessage(`null`)
 		}
 	}
 	return json.Marshal(object)
@@ -302,6 +324,20 @@ func decodeResponsesTools(raw json.RawMessage, request *llmprotocol.Request, pol
 		if err := json.Unmarshal(toolBody, &discriminator); err != nil || discriminator.Type == "" {
 			return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_tool", "Responses tool type is required", err)
 		}
+		if err := validateResponsesToolVariant(toolBody, discriminator.Type); err != nil {
+			return err
+		}
+		if discriminator.Type == "image_generation" {
+			if request.ImageGeneration != nil {
+				return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "duplicate_image_generation_tool", "Responses request declares image generation more than once", nil)
+			}
+			var tool responsesToolWire
+			if err := decodeWireValue(toolBody, &tool, policy); err != nil {
+				return err
+			}
+			request.ImageGeneration = decodeResponsesImageGenerationOptions(tool)
+			continue
+		}
 		if discriminator.Type != "function" {
 			return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_tool", "only function tools enter the model protocol", nil)
 		}
@@ -323,6 +359,65 @@ func decodeResponsesTools(raw json.RawMessage, request *llmprotocol.Request, pol
 		request.Tools = append(request.Tools, llmprotocol.Tool{Name: name, Description: description, InputSchema: schema, Strict: strict})
 	}
 	return nil
+}
+
+func validateResponsesToolVariant(body json.RawMessage, toolType string) error {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(body, &fields); err != nil {
+		return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_tool", "Responses tool is invalid", err)
+	}
+	allowed := map[string]struct{}{"type": {}}
+	var names []string
+	switch toolType {
+	case "function":
+		names = []string{"name", "description", "parameters", "strict", "allowed_callers", "defer_loading", "output_schema"}
+	case "image_generation":
+		names = []string{
+			"model", "quality", "size", "output_format", "output_compression", "moderation",
+			"background", "input_fidelity", "input_image_mask", "partial_images", "action",
+		}
+	default:
+		return nil
+	}
+	for _, name := range names {
+		allowed[name] = struct{}{}
+	}
+	known := []string{
+		"name", "description", "parameters", "strict", "allowed_callers", "defer_loading", "output_schema",
+		"model", "quality", "size", "output_format", "output_compression", "moderation",
+		"background", "input_fidelity", "input_image_mask", "partial_images", "action",
+	}
+	for _, name := range known {
+		if _, present := fields[name]; !present {
+			continue
+		}
+		if _, ok := allowed[name]; !ok {
+			return llmprotocol.NewError(
+				llmprotocol.ErrorInvalidRequest,
+				"invalid_tool_variant",
+				"Responses tool includes a field from another union variant: "+name,
+				nil,
+			)
+		}
+	}
+	return nil
+}
+
+func decodeResponsesImageGenerationOptions(tool responsesToolWire) *llmprotocol.ImageGenerationOptions {
+	options := &llmprotocol.ImageGenerationOptions{
+		Model: tool.Model, Quality: tool.Quality, Size: tool.Size,
+		OutputFormat: tool.OutputFormat, OutputCompression: tool.OutputCompression,
+		Moderation: tool.Moderation, Background: tool.Background,
+		InputFidelity: tool.InputFidelity, PartialImages: tool.PartialImages,
+		Action: tool.Action,
+	}
+	if tool.InputImageMask != nil {
+		options.InputImageMask = &llmprotocol.ImageGenerationMask{
+			EncodedImage: tool.InputImageMask.ImageURL,
+			FileID:       tool.InputImageMask.FileID,
+		}
+	}
+	return options
 }
 
 func decodeResponsesRequestOptions(wire responsesRequestWire, request *llmprotocol.Request, policy llmprotocol.Policy) error {
@@ -397,7 +492,7 @@ func decodeResponsesInput(raw json.RawMessage, request *llmprotocol.Request, pol
 
 var responsesItemUnionFields = []string{
 	"arguments", "call_id", "caller", "content", "encrypted_content", "id", "name", "namespace",
-	"output", "phase", "role", "status", "summary", "type",
+	"output", "phase", "result", "role", "status", "summary", "type",
 }
 
 func decodeResponsesItemWire(body json.RawMessage, policy llmprotocol.Policy, providerOutput bool) (responsesItemWire, error) {
@@ -438,10 +533,10 @@ func decodeResponsesItemWire(body json.RawMessage, policy llmprotocol.Policy, pr
 
 func isSupportedResponsesItemType(itemType string, providerOutput bool) bool {
 	if providerOutput {
-		return itemType == "message" || itemType == "function_call" || itemType == "reasoning"
+		return itemType == "message" || itemType == "function_call" || itemType == "reasoning" || itemType == "image_generation_call"
 	}
 	switch itemType {
-	case "message", "function_call", "function_call_output", "reasoning", "item_reference":
+	case "message", "function_call", "function_call_output", "reasoning", "item_reference", "image_generation_call":
 		return true
 	default:
 		return false
@@ -466,6 +561,18 @@ func validateResponsesItemVariant(body json.RawMessage, itemType string, provide
 		}
 		return responsesItemDecodeError(providerOutput, "item includes a field from another union variant: "+field, nil)
 	}
+	if itemType == "image_generation_call" {
+		for _, field := range []string{"id", "status", "result"} {
+			if _, present := object[field]; !present {
+				return responsesItemDecodeError(providerOutput, "image generation item is missing required field: "+field, nil)
+			}
+		}
+		for _, field := range []string{"id", "status"} {
+			if bytes.Equal(bytes.TrimSpace(object[field]), []byte("null")) {
+				return responsesItemDecodeError(providerOutput, "image generation item field cannot be null: "+field, nil)
+			}
+		}
+	}
 	return nil
 }
 
@@ -481,6 +588,8 @@ func responsesItemAllowedFields(itemType string) []string {
 		return []string{"content", "encrypted_content", "id", "status", "summary", "type"}
 	case "item_reference":
 		return []string{"id", "type"}
+	case "image_generation_call":
+		return []string{"id", "result", "status", "type"}
 	default:
 		return nil
 	}
@@ -519,7 +628,7 @@ func decodeResponsesInputItem(
 	if item.Namespace != "" {
 		return rejectUnsupportedRequestField("input.namespace", json.RawMessage(`true`))
 	}
-	if item.Status != "" {
+	if item.Status != "" && item.Type != "image_generation_call" {
 		return rejectUnsupportedRequestField("input.status", json.RawMessage(`true`))
 	}
 	switch item.Type {
@@ -535,6 +644,15 @@ func decodeResponsesInputItem(
 		return decodeResponsesFunctionResult(item, request, policy)
 	case "reasoning":
 		return decodeResponsesReasoningItem(item, request, policy)
+	case "image_generation_call":
+		request.Messages = append(request.Messages, llmprotocol.Message{
+			ID: item.ID, Role: llmprotocol.RoleAssistant,
+			Content: []llmprotocol.Content{{
+				Kind:           llmprotocol.ContentGeneratedImage,
+				GeneratedImage: decodeResponsesGeneratedImage(item),
+			}},
+		})
+		return nil
 	case "item_reference":
 		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unresolved_item_reference", "item references must be resolved before model dispatch", nil)
 	default:
@@ -989,6 +1107,15 @@ func decodeResponsesToolChoice(raw json.RawMessage, policy llmprotocol.Policy) (
 			nil,
 		)
 	}
+	if discriminator.Type == "image_generation" {
+		var imageChoice struct {
+			Type string `json:"type"`
+		}
+		if err := decodeWireValue(raw, &imageChoice, policy); err != nil {
+			return llmprotocol.ToolChoice{}, err
+		}
+		return llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceImageGeneration}, nil
+	}
 	var named struct {
 		Type string `json:"type"`
 		Name string `json:"name"`
@@ -1002,7 +1129,7 @@ func decodeResponsesToolChoice(raw json.RawMessage, policy llmprotocol.Policy) (
 func unsupportedResponsesToolChoice(typeName string) bool {
 	switch typeName {
 	case "allowed_tools", "apply_patch", "code_interpreter", "computer", "computer_use",
-		"computer_use_preview", "custom", "file_search", "image_generation", "mcp",
+		"computer_use_preview", "custom", "file_search", "mcp",
 		"programmatic_tool_calling", "shell", "web_search_preview", "web_search_preview_2025_03_11":
 		return true
 	default:
@@ -1067,7 +1194,7 @@ func encodeResponsesRequestWire(request llmprotocol.Request) (responsesRequestWi
 		return responsesRequestWire{}, err
 	}
 	wire.Input, _ = json.Marshal(items)
-	wire.Tools = encodeResponsesTools(request.Tools)
+	wire.Tools = encodeResponsesTools(request.Tools, request.ImageGeneration)
 	wire.ToolChoice = encodeResponsesToolChoice(request.ToolChoice)
 	wire.Text = encodeResponsesOutputFormat(request.OutputFormat)
 	return wire, nil
@@ -1092,13 +1219,31 @@ func encodeResponsesRequestItems(request llmprotocol.Request) ([]responsesItemWi
 	return items, nil
 }
 
-func encodeResponsesTools(input []llmprotocol.Tool) json.RawMessage {
-	if len(input) == 0 {
+func encodeResponsesTools(input []llmprotocol.Tool, imageGeneration *llmprotocol.ImageGenerationOptions) json.RawMessage {
+	if len(input) == 0 && imageGeneration == nil {
 		return nil
 	}
-	tools := make([]responsesToolWire, 0, len(input))
+	tools := make([]responsesToolWire, 0, len(input)+1)
 	for _, tool := range input {
 		tools = append(tools, responsesToolWire{Type: "function", Name: tool.Name, Description: tool.Description, Parameters: tool.InputSchema, Strict: tool.Strict})
+	}
+	if imageGeneration != nil {
+		tool := responsesToolWire{
+			Type: "image_generation", Model: imageGeneration.Model,
+			Quality: imageGeneration.Quality, Size: imageGeneration.Size,
+			OutputFormat:      imageGeneration.OutputFormat,
+			OutputCompression: imageGeneration.OutputCompression,
+			Moderation:        imageGeneration.Moderation, Background: imageGeneration.Background,
+			InputFidelity: imageGeneration.InputFidelity, PartialImages: imageGeneration.PartialImages,
+			Action: imageGeneration.Action,
+		}
+		if imageGeneration.InputImageMask != nil {
+			tool.InputImageMask = &responsesImageGenMaskWire{
+				ImageURL: imageGeneration.InputImageMask.EncodedImage,
+				FileID:   imageGeneration.InputImageMask.FileID,
+			}
+		}
+		tools = append(tools, tool)
 	}
 	encoded, _ := json.Marshal(tools)
 	return encoded
@@ -1166,12 +1311,37 @@ func (state *responsesMessageEncodingState) appendContent(content llmprotocol.Co
 			return err
 		}
 		state.reasoning = append(state.reasoning, content)
+	case llmprotocol.ContentGeneratedImage:
+		if err := state.flushOrdinary(); err != nil {
+			return err
+		}
+		if err := state.flushReasoning(); err != nil {
+			return err
+		}
+		return state.appendGeneratedImage(content.GeneratedImage)
 	default:
 		if err := state.flushReasoning(); err != nil {
 			return err
 		}
 		state.ordinary = append(state.ordinary, content)
 	}
+	return nil
+}
+
+func (state *responsesMessageEncodingState) appendGeneratedImage(image *llmprotocol.GeneratedImage) error {
+	if image == nil {
+		return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_generated_image", "generated image is invalid", nil)
+	}
+	item := responsesItemWire{
+		Type:   "image_generation_call",
+		ID:     responsesItemID(state.messageID, len(state.items), "image_generation_call"),
+		Status: string(image.Status),
+	}
+	if image.Result != nil {
+		result := *image.Result
+		item.Result = &result
+	}
+	state.items = append(state.items, item)
 	return nil
 }
 
@@ -1332,6 +1502,9 @@ func encodeResponsesToolChoice(choice llmprotocol.ToolChoice) json.RawMessage {
 		return body
 	case llmprotocol.ToolChoiceNamed:
 		body, _ := json.Marshal(map[string]string{"type": "function", "name": choice.Name})
+		return body
+	case llmprotocol.ToolChoiceImageGeneration:
+		body, _ := json.Marshal(map[string]string{"type": "image_generation"})
 		return body
 	default:
 		return nil
@@ -1544,7 +1717,7 @@ func decodeResponsesOutput(
 		if err != nil {
 			return nil, err
 		}
-		if err := validateResponsesOutputItemResource(itemBody, item); err != nil {
+		if err := validateResponsesOutputItemResource(itemBody, item, policy.Limits); err != nil {
 			return nil, err
 		}
 		decoded, err := decodeResponsesOutputItem(item, index, policy, diagnostics)
@@ -1565,7 +1738,7 @@ func decodeResponsesOutputItem(item responsesItemWire, index int, policy llmprot
 		"output.encrypted_content": len(item.EncryptedContent) > 0,
 		"output.namespace":         item.Namespace != "",
 		"output.phase":             len(item.Phase) > 0,
-		"output.status":            item.Status != "",
+		"output.status":            item.Status != "" && item.Type != "image_generation_call",
 	}, "response item metadata has no protocol-neutral representation")
 	id := item.ID
 	if id == "" && policy.MissingStableIDs == llmprotocol.MissingIDGenerateStable {
@@ -1579,10 +1752,24 @@ func decodeResponsesOutputItem(item responsesItemWire, index int, policy llmprot
 		output.Content = []llmprotocol.Content{{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{ID: item.CallID, Name: item.Name, Arguments: item.Arguments}}}
 	case "reasoning":
 		return decodeResponsesReasoningOutput(output, item, policy)
+	case "image_generation_call":
+		output.Content = []llmprotocol.Content{{
+			Kind:           llmprotocol.ContentGeneratedImage,
+			GeneratedImage: decodeResponsesGeneratedImage(item),
+		}}
 	default:
 		return llmprotocol.OutputItem{}, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_output_item", "Responses output item is unsupported", nil)
 	}
 	return output, nil
+}
+
+func decodeResponsesGeneratedImage(item responsesItemWire) *llmprotocol.GeneratedImage {
+	image := &llmprotocol.GeneratedImage{Status: llmprotocol.ImageGenerationStatus(item.Status)}
+	if item.Result != nil {
+		result := *item.Result
+		image.Result = &result
+	}
+	return image
 }
 
 func decodeResponsesMessageOutput(

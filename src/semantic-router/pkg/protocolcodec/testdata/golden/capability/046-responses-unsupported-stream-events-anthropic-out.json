@@ -141,46 +141,6 @@
       }
     },
     {
-      "name": "response.image_generation_call.completed",
-      "outcome": {
-        "status": "error",
-        "error": {
-          "category": "unsupported_feature",
-          "code": "unknown_stream_event"
-        }
-      }
-    },
-    {
-      "name": "response.image_generation_call.generating",
-      "outcome": {
-        "status": "error",
-        "error": {
-          "category": "unsupported_feature",
-          "code": "unknown_stream_event"
-        }
-      }
-    },
-    {
-      "name": "response.image_generation_call.in_progress",
-      "outcome": {
-        "status": "error",
-        "error": {
-          "category": "unsupported_feature",
-          "code": "unknown_stream_event"
-        }
-      }
-    },
-    {
-      "name": "response.image_generation_call.partial_image",
-      "outcome": {
-        "status": "error",
-        "error": {
-          "category": "unsupported_feature",
-          "code": "unknown_stream_event"
-        }
-      }
-    },
-    {
       "name": "response.mcp_call_arguments.delta",
       "outcome": {
         "status": "error",

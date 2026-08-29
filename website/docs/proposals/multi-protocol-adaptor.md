@@ -37,7 +37,8 @@ flowchart LR
 It represents:
 
 - ordered instructions, messages, and multimodal content blocks;
-- tool definitions, tool calls, tool results, and tool choice;
+- tool definitions, tool calls, tool results, hosted image-generation controls,
+  and tool choice;
 - sampling and structured-output constraints;
 - reasoning controls and reasoning content;
 - response alternatives and stop reasons;
@@ -74,7 +75,7 @@ policy does not gain protocol branches when a codec is added.
 | Wire format | Buffered request | Buffered response | Streaming | Tools | Images | Structured output | Usage |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | OpenAI Chat Completions | Decode and encode | Decode and encode | SSE decode and encode | Yes | Input | JSON object and schema | Authoritative when present |
-| OpenAI Responses | Decode and encode | Decode and encode | Event decode and encode | Yes | Input and supported output blocks | JSON schema | Authoritative when present |
+| OpenAI Responses | Decode and encode | Decode and encode | Event decode and encode | Yes | Input plus hosted image-generation lifecycle | JSON schema | Authoritative when present |
 | Anthropic Messages | Decode and encode | Decode and encode | Event decode and encode | Yes | Input | Supported schema subset | Authoritative when present |
 
 The complete pairwise request, response, transport-error, and streaming matrix is
@@ -110,7 +111,10 @@ a time to prove that transport chunk boundaries do not change semantics. The cor
 includes malformed and truncated JSON, duplicate fields, invalid unions and enums,
 ordered multimodal content, tools and tool results, structured output, reasoning,
 usage, cancellation, timeouts, incomplete streams, midstream failures, identity
-changes, sequence violations, and resource limits.
+changes, sequence violations, hosted image generation, and resource limits. Image
+generation fixtures preserve every published option, distinguish a `null` result
+from an empty payload, and cover ordered progress, contiguous partial-image indexes,
+terminal success or failure, malformed base64, and target capability rejection.
 
 Deployment-level coverage is a required 18-cell matrix:
 
@@ -148,6 +152,12 @@ Every provider event is decoded into a neutral event before policy or client
 encoding. The stream engine enforces ordering, terminal-state uniqueness, bounded
 diagnostics, and final usage settlement. Split network frames are buffered by the
 wire decoder; Router policy never parses partial JSON or SSE records.
+
+Hosted image generation follows the same stream engine. An output item starts in
+`in_progress`, progress may advance through `generating` and ordered partial images,
+and the item finishes exactly once as `completed` or `failed`. Backward transitions,
+sparse partial indexes, conflicting terminal state, and result data on a progress
+event fail before a client success terminal can be published.
 
 Router-produced responses use a neutral event encoder directly. They do not create
 an intermediate provider-shaped stream. Cancellation and backpressure stay with

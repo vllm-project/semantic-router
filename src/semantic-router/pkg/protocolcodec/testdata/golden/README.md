@@ -135,4 +135,7 @@ are represented as named cases: supported function/custom tools translate, and
 server-side or freeform tool kinds without a neutral contract fail explicitly
 instead of being coerced into a different tool kind.
 Stream capability cases are replayed with the same one-byte fragmentation
-check as ordinary successful streams.
+check as ordinary successful streams. Hosted image-generation fixtures also
+pin the complete Responses progress lifecycle, missing required event fields,
+duplicate state transitions, sparse partial-image indexes, and invalid base64
+payloads as readable protocol contracts.

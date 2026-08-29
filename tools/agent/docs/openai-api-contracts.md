@@ -34,6 +34,11 @@ Each codec declares capabilities. Unsupported tools, multimodal content, reasoni
 structured output, multiple candidates, or streaming behavior must fail explicitly;
 translation must not silently discard semantic fields.
 
+OpenAI Responses hosted image generation is an explicit neutral capability. Its
+request options, image tool choice, buffered output item, and four progress-event
+variants are typed; Chat Completions and Anthropic targets reject that capability
+instead of coercing it into ordinary image content.
+
 Provider value domains remain provider-specific. Chat Completions permits a zero
 output-token limit, Responses requires `max_output_tokens >= 16`, and Anthropic
 permits `max_tokens: 0` for prompt-cache prewarming. A value that is valid at the
@@ -118,6 +123,9 @@ cover:
 - split streaming frames, tool events, terminal events, and final usage;
 - parallel tool calls with interleaved argument fragments and independently
   ordered item completion;
+- hosted image-generation options, null-versus-empty results, strict base64 and
+  size limits, monotonic progress, contiguous partial indexes, and matching item
+  completion;
 - arbitrary SSE byte boundaries, CR/LF variants, incomplete UTF-8 fragments,
   duplicate terminals, decreasing usage, cumulative stream-body limits, valid
   frames coalesced with a malformed trailing frame, and errors after partial
@@ -265,6 +273,7 @@ during transport refactors:
 | Stream indexes | Source-private neutral indexes are compacted by target encoders, while provider output indexes must be non-negative, contiguous, and bound to one active item identity |
 | Tool streams | Tool IDs and names are present before publication, immutable for the item lifetime, bounded, and paired with one final JSON-object argument value |
 | Parallel tool streams | Each call retains an independent identity, argument buffer, lifecycle, and compact target index even when deltas interleave or items finish out of order |
+| Hosted image generation | Every published Responses option, tool choice, output item, and progress event is typed; result presence, progress order, partial indexes, item identity, and terminal state are validated, while unsupported targets fail explicitly |
 | Retained Responses tools | `previous_response_id` materializes the complete stored call/result/reasoning sequence through the neutral codec before provider encoding; missing history and orphaned stored results fail closed |
 | Responses stream ordering | Every event carries a contiguous `sequence_number`; an official response terminal is final and `[DONE]` is rejected as a Chat-only sentinel |
 | Custom tools | Unsupported custom or freeform tool discriminators fail before inference and are never coerced into function calls |

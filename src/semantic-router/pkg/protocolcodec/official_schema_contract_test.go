@@ -467,12 +467,12 @@ func assertAnthropicToolBlock(t *testing.T, content anthropicContentWire, body [
 }
 
 func TestOfficialUnsupportedResponsesItemDiscriminatorsAreTyped(t *testing.T) {
-	supported := fields("function_call", "function_call_output", "item_reference", "message", "reasoning")
+	supported := fields("function_call", "function_call_output", "image_generation_call", "item_reference", "message", "reasoning")
 	unsupported := fields(
 		"additional_tools", "apply_patch_call", "apply_patch_call_output", "code_interpreter_call",
 		"compaction", "compaction_trigger", "computer_call", "computer_call_output", "custom_tool_call",
 		"custom_tool_call_output", "file_search_call", "function_shell_call",
-		"function_shell_call_output", "image_generation_call", "local_shell_call", "local_shell_call_output",
+		"function_shell_call_output", "local_shell_call", "local_shell_call_output",
 		"mcp_approval_request", "mcp_approval_response", "mcp_call", "mcp_list_tools", "program",
 		"program_output", "tool_search_call", "tool_search_output", "web_search_call",
 	)
@@ -503,7 +503,7 @@ func TestOfficialUnsupportedResponsesOutputItemDiscriminatorsAreTyped(t *testing
 		"additional_tools", "apply_patch_call", "apply_patch_call_output", "code_interpreter_call",
 		"compaction", "computer_call", "computer_call_output", "custom_tool_call",
 		"custom_tool_call_output", "file_search_call", "function_call_output", "function_shell_call",
-		"function_shell_call_output", "image_generation_call", "local_shell_call", "local_shell_call_output",
+		"function_shell_call_output", "local_shell_call", "local_shell_call_output",
 		"mcp_approval_request", "mcp_approval_response", "mcp_call", "mcp_list_tools", "program",
 		"program_output", "tool_search_call", "tool_search_output", "web_search_call",
 	)
@@ -511,7 +511,7 @@ func TestOfficialUnsupportedResponsesOutputItemDiscriminatorsAreTyped(t *testing
 		t,
 		"OpenAI Responses output item",
 		28,
-		fields("function_call", "message", "reasoning"),
+		fields("function_call", "image_generation_call", "message", "reasoning"),
 		unsupported,
 	)
 	engine := NewBuiltinEngine()
@@ -562,10 +562,10 @@ func TestOfficialResponsesItemVariantsRejectCrossVariantFields(t *testing.T) {
 func TestOfficialUnsupportedResponsesToolDiscriminatorsAreTyped(t *testing.T) {
 	unsupported := fields(
 		"apply_patch", "code_interpreter", "computer", "computer_use_preview", "custom",
-		"file_search", "image_generation", "local_shell", "mcp", "namespace",
+		"file_search", "local_shell", "mcp", "namespace",
 		"programmatic_tool_calling", "shell", "tool_search", "web_search", "web_search_preview",
 	)
-	assertClosedDiscriminatorInventory(t, "OpenAI Responses tool", 16, fields("function"), unsupported)
+	assertClosedDiscriminatorInventory(t, "OpenAI Responses tool", 16, fields("function", "image_generation"), unsupported)
 	engine := NewBuiltinEngine()
 	for _, toolType := range unsupported {
 		t.Run(toolType, func(t *testing.T) {
@@ -1000,14 +1000,14 @@ func TestOfficialUnsupportedToolChoiceDiscriminatorsAreTyped(t *testing.T) {
 
 	responsesUnsupported := fields(
 		"allowed_tools", "apply_patch", "code_interpreter", "computer", "computer_use",
-		"computer_use_preview", "custom", "file_search", "image_generation", "mcp",
+		"computer_use_preview", "custom", "file_search", "mcp",
 		"programmatic_tool_calling", "shell", "web_search_preview", "web_search_preview_2025_03_11",
 	)
 	assertClosedDiscriminatorInventory(
 		t,
 		"OpenAI Responses object tool choice",
 		15,
-		fields("function"),
+		fields("function", "image_generation"),
 		responsesUnsupported,
 	)
 	for _, choiceType := range responsesUnsupported {
@@ -1023,6 +1023,18 @@ func TestOfficialUnsupportedToolChoiceDiscriminatorsAreTyped(t *testing.T) {
 			assertProtocolError(t, err, llmprotocol.ErrorUnsupportedFeature, "unsupported_tool_choice")
 		})
 	}
+	t.Run("responses/image_generation", func(t *testing.T) {
+		body := []byte(`{"model":"m","input":"hello","tools":[{"type":"image_generation"}],"tool_choice":{"type":"image_generation"}}`)
+		request, _, _, err := engine.DecodeRequest(llmprotocol.OpenAIResponsesV1, body)
+		if err != nil || request.ImageGeneration == nil || request.ToolChoice.Mode != llmprotocol.ToolChoiceImageGeneration {
+			t.Fatalf("image-generation tool choice = %+v, %v", request.ToolChoice, err)
+		}
+	})
+	t.Run("responses/image_generation rejects function payload", func(t *testing.T) {
+		body := []byte(`{"model":"m","input":"hello","tools":[{"type":"image_generation"}],"tool_choice":{"type":"image_generation","name":"lookup"}}`)
+		_, _, _, err := engine.DecodeRequest(llmprotocol.OpenAIResponsesV1, body)
+		assertProtocolError(t, err, llmprotocol.ErrorInvalidRequest, "invalid_json")
+	})
 	t.Run("responses/function rejects MCP payload", func(t *testing.T) {
 		body := []byte(`{"model":"m","input":"hello","tool_choice":{"type":"function","name":"lookup","server_label":"wrong"}}`)
 		_, _, _, err := engine.DecodeRequest(llmprotocol.OpenAIResponsesV1, body)

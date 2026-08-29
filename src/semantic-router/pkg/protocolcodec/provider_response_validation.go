@@ -10,7 +10,11 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
-func validateResponsesOutputItemResource(body json.RawMessage, item responsesItemWire) error {
+func validateResponsesOutputItemResource(
+	body json.RawMessage,
+	item responsesItemWire,
+	limits llmprotocol.Limits,
+) error {
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(body, &fields); err != nil {
 		return invalidProviderResponse("invalid_response_item", "Responses output item is invalid")
@@ -21,6 +25,14 @@ func validateResponsesOutputItemResource(body json.RawMessage, item responsesIte
 	}
 	if err := requireNonNullResponseFields(fields, required); err != nil {
 		return err
+	}
+	if item.Type == "image_generation_call" {
+		if _, present := fields["result"]; !present {
+			return invalidProviderResponse(
+				"invalid_response_item",
+				"Responses output item is missing required field result",
+			)
+		}
 	}
 	for _, value := range []struct {
 		name  string
@@ -37,7 +49,15 @@ func validateResponsesOutputItemResource(body json.RawMessage, item responsesIte
 			)
 		}
 	}
-	return validateResponsesOutputItemStatus(item)
+	if err := validateResponsesOutputItemStatus(item); err != nil {
+		return err
+	}
+	if item.Type == "image_generation_call" {
+		if err := llmprotocol.ValidateGeneratedImage(decodeResponsesGeneratedImage(item), limits); err != nil {
+			return upstreamSemanticValidationError(err)
+		}
+	}
+	return nil
 }
 
 func responsesOutputItemRequiredFields(item responsesItemWire) ([]string, error) {
@@ -52,6 +72,8 @@ func responsesOutputItemRequiredFields(item responsesItemWire) ([]string, error)
 		required = append(required, "call_id", "name", "arguments")
 	case "reasoning":
 		required = append(required, "id", "summary")
+	case "image_generation_call":
+		required = append(required, "id", "status")
 	default:
 		return nil, invalidProviderResponse("invalid_response_item", "Responses output item type is unsupported")
 	}
@@ -176,6 +198,14 @@ func validResponsesStatus(status string) bool {
 func validateResponsesOutputItemStatus(item responsesItemWire) error {
 	if item.Status == "" {
 		return nil
+	}
+	if item.Type == "image_generation_call" {
+		switch item.Status {
+		case "completed", "in_progress", "generating", "failed":
+			return nil
+		default:
+			return invalidProviderResponse("invalid_responses_item_status", "Responses image generation status is not recognized")
+		}
 	}
 	switch item.Status {
 	case "completed", "in_progress", "incomplete":

@@ -146,6 +146,8 @@ func (accumulator *responseAccumulator) applyEvent(event llmprotocol.Event) erro
 		return accumulator.appendReasoning(event)
 	case llmprotocol.EventToolCallDelta:
 		return accumulator.appendToolCall(event.ItemIndex, event.ToolCall)
+	case llmprotocol.EventImageGenerationProgress:
+		return nil
 	case llmprotocol.EventOutputItemCompleted:
 		return accumulator.completeItem(event)
 	case llmprotocol.EventResponseCompleted:
@@ -320,7 +322,8 @@ func (accumulator *responseAccumulator) completeItem(event llmprotocol.Event) er
 		call := *event.ToolCall
 		item.call = &call
 	}
-	if event.Content != nil && event.Content.Kind != "" && event.Content.Text != "" {
+	if event.Content != nil && event.Content.Kind != "" &&
+		(event.Content.Text != "" || event.Content.Kind == llmprotocol.ContentGeneratedImage) {
 		content := *event.Content
 		item.contents[event.ContentIndex] = &content
 	}

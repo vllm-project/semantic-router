@@ -1,4 +1,4 @@
 {
   "category": "upstream_unavailable",
-  "code": "unknown_stream_event"
+  "code": "duplicate_stream_tool_call_id"
 }

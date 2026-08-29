@@ -2,11 +2,20 @@ package llmprotocol
 
 import (
 	"encoding/json"
+	"errors"
 	"math"
 	"reflect"
 	"strings"
 	"testing"
 )
+
+func requireLLMProtocolErrorCode(t *testing.T, err error, code string) {
+	t.Helper()
+	var protocolError *ProtocolError
+	if !errors.As(err, &protocolError) || protocolError.Code != code {
+		t.Fatalf("returned %T %v, want protocol error %q", err, err, code)
+	}
+}
 
 func TestParseCapabilitiesRejectsUnknownNames(t *testing.T) {
 	if _, err := ParseCapabilities([]string{"text", "future_product_feature"}); err == nil {
@@ -30,6 +39,7 @@ func TestCapabilityNamesAndParserStayClosed(t *testing.T) {
 		CapabilityRequestMetadata, CapabilityRequestStorage, CapabilityAutomaticStorage, CapabilityConversationState,
 		CapabilityReasoningAdaptive, CapabilityReasoningSignature, CapabilityReasoningDisplay,
 		CapabilityMatchedStopSequence,
+		CapabilityImageGeneration,
 	)
 	names := all.Names()
 	seen := make(map[string]struct{}, len(names))
@@ -243,6 +253,16 @@ func TestValidateRequestAcceptsPublishedReasoningEfforts(t *testing.T) {
 			if err := ValidateRequest(request, DefaultPolicy().Limits); err != nil {
 				t.Fatalf("published reasoning effort %q was rejected: %v", effort, err)
 			}
+		})
+	}
+}
+
+func TestValidateRequestRejectsNoncanonicalReasoningEfforts(t *testing.T) {
+	for _, effort := range []string{"HIGH", "hiGh", " high", "high "} {
+		t.Run(effort, func(t *testing.T) {
+			request := validSemanticRequest()
+			request.ReasoningEffort = effort
+			requireLLMProtocolErrorCode(t, ValidateRequest(request, DefaultPolicy().Limits), "invalid_reasoning_effort")
 		})
 	}
 }

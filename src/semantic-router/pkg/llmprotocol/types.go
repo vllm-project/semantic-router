@@ -45,6 +45,11 @@ const (
 	ContentToolCall   ContentKind = "tool_call"
 	ContentToolResult ContentKind = "tool_result"
 	ContentReasoning  ContentKind = "reasoning"
+	// ContentGeneratedImage represents one image-generation operation and its
+	// result. It is intentionally distinct from ContentImage: the latter is an
+	// image supplied as model input, while this kind preserves the lifecycle of
+	// a model-hosted image generation tool.
+	ContentGeneratedImage ContentKind = "generated_image"
 )
 
 const (
@@ -55,20 +60,21 @@ const (
 // Content is one ordered semantic block. Fields are closed by Kind. Data and
 // references are never fetched by a codec.
 type Content struct {
-	Kind       ContentKind
-	Text       string
-	Citations  []Citation
-	Cache      *CacheDirective
-	MediaType  string
-	URL        string
-	Data       string
-	FileID     string
-	Filename   string
-	Detail     string
-	ToolCall   *ToolCall
-	ToolResult *ToolResult
-	Signature  string
-	Reasoning  ReasoningScope
+	Kind           ContentKind
+	Text           string
+	Citations      []Citation
+	Cache          *CacheDirective
+	MediaType      string
+	URL            string
+	Data           string
+	FileID         string
+	Filename       string
+	Detail         string
+	ToolCall       *ToolCall
+	ToolResult     *ToolResult
+	GeneratedImage *GeneratedImage
+	Signature      string
+	Reasoning      ReasoningScope
 }
 
 // CacheDirective marks a request block or tool definition as an explicit
@@ -128,10 +134,11 @@ type Tool struct {
 type ToolChoiceMode string
 
 const (
-	ToolChoiceAuto     ToolChoiceMode = "auto"
-	ToolChoiceNone     ToolChoiceMode = "none"
-	ToolChoiceRequired ToolChoiceMode = "required"
-	ToolChoiceNamed    ToolChoiceMode = "named"
+	ToolChoiceAuto            ToolChoiceMode = "auto"
+	ToolChoiceNone            ToolChoiceMode = "none"
+	ToolChoiceRequired        ToolChoiceMode = "required"
+	ToolChoiceNamed           ToolChoiceMode = "named"
+	ToolChoiceImageGeneration ToolChoiceMode = "image_generation"
 )
 
 type ToolChoice struct {
@@ -203,6 +210,7 @@ type Request struct {
 	Instructions          []InstructionBlock
 	Messages              []Message
 	Tools                 []Tool
+	ImageGeneration       *ImageGenerationOptions
 	ToolChoice            ToolChoice
 	ParallelToolCalls     *bool
 	CandidateCount        *int64
