@@ -21,7 +21,7 @@ export default function ResearchPaperCarousel(): JSX.Element {
             <Translate id="homepage.researchCarousel.label">Research</Translate>
           </SectionLabel>
           <h2 className={styles.title}>
-            <Translate id="homepage.researchCarousel.title">Papers behind the router.</Translate>
+            <Translate id="homepage.researchCarousel.title">Papers behind the router</Translate>
           </h2>
           <p className={styles.subtitle}>
             <Translate id="homepage.researchCarousel.subtitle">

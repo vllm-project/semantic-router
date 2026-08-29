@@ -82,7 +82,7 @@ const TeamCarousel: React.FC = () => {
             <Translate id="teamCarousel.label">Community</Translate>
           </SectionLabel>
           <h2 className={styles.title} id="team-carousel-title">
-            <Translate id="teamCarousel.title">Built in the open.</Translate>
+            <Translate id="teamCarousel.title">Built in the open</Translate>
           </h2>
           <p className={styles.subtitle}>
             <Translate id="teamCarousel.subtitle">

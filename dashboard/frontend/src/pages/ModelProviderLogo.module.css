@@ -1,0 +1,42 @@
+.logo {
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  overflow: visible;
+  color: rgba(255, 255, 255, 0.82);
+  font-weight: 780;
+  letter-spacing: -0.03em;
+}
+
+.logo img {
+  width: 78%;
+  height: 78%;
+  object-fit: contain;
+}
+
+.logo img[data-monochrome='true'] {
+  filter: brightness(0) invert(1);
+  opacity: 0.92;
+}
+
+.logo > span {
+  font-size: 0.68em;
+}
+
+.small {
+  width: 30px;
+  height: 30px;
+  font-size: 0.68rem;
+}
+
+.medium {
+  width: 38px;
+  height: 38px;
+  font-size: 0.74rem;
+}
+
+.large {
+  width: 44px;
+  height: 44px;
+  font-size: 0.8rem;
+}

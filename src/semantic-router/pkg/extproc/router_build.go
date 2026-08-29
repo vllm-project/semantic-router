@@ -34,6 +34,7 @@ type routerComponents struct {
 	classificationSvc    *services.ClassificationService
 	semanticCache        cache.CacheBackend
 	toolsDatabase        *tools.ToolsDatabase
+	toolEmbedder         *cachedToolEmbedder
 	responseAPIFilter    *ResponseAPIFilter
 	replayRecorder       *routerreplay.Recorder
 	replayStoreShared    bool
@@ -245,9 +246,20 @@ func (components *routerComponents) buildEarlyResources(mappings *classifierMapp
 		components.resources.add(components.semanticCache.Close)
 	}
 
-	components.toolsDatabase, err = createToolsDatabase(components.cfg)
+	// One provider serves both the tools database and the tool embedder, so a
+	// remote endpoint gets a single HTTP client and connection pool.
+	toolsProvider, toolsProviderErr := toolsEmbeddingProvider(components.cfg)
+	if toolsProviderErr != nil && components.cfg.Tools.Enabled {
+		return rollbackResources(components.resources, toolsProviderErr)
+	}
+	components.toolsDatabase, err = createToolsDatabase(components.cfg, toolsProvider)
 	if err != nil {
 		return rollbackResources(components.resources, err)
+	}
+	if toolsProviderErr == nil {
+		components.toolEmbedder = newToolEmbedderForConfig(components.cfg, toolsProvider)
+	} else {
+		logging.Warnf("tool_selection: embedding provider unavailable, filter mode will use its fallback: %v", toolsProviderErr)
 	}
 
 	components.recipeClassifiers, components.classifier, components.classificationSvc, err = createRouterClassifier(components.cfg, mappings)
@@ -306,6 +318,7 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 		ClassificationService:   components.classificationSvc,
 		Cache:                   components.semanticCache,
 		ToolsDatabase:           components.toolsDatabase,
+		toolEmbedder:            components.toolEmbedder,
 		ResponseAPIFilter:       components.responseAPIFilter,
 		ReplayRecorder:          components.replayRecorder,
 		ReplayStoreShared:       components.replayStoreShared,

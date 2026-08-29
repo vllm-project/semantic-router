@@ -12,6 +12,7 @@ var balanceAMDLocalAliases = []string{
 	"anthropic/claude-opus-4.6",
 	"google/gemini-2.5-flash-lite",
 	"google/gemini-3.1-pro",
+	"local/omni",
 	"openai/gpt5.4",
 	"qwen/qwen3.5-rocm",
 }
@@ -34,7 +35,9 @@ func TestBalanceRecipePreservesAMDLocalAliasContract(t *testing.T) {
 
 func assertBalanceProviderContract(t *testing.T, recipe CanonicalConfig) {
 	t.Helper()
-	const localVLLMEndpoint = "http://vllm:8000/v1"
+	expectedEndpoints := map[string]string{
+		"local/omni": "http://vllm-omni:8000/v1",
+	}
 
 	providerNames := make([]string, 0, len(recipe.Providers.Models))
 	for _, model := range recipe.Providers.Models {
@@ -46,8 +49,12 @@ func assertBalanceProviderContract(t *testing.T, recipe CanonicalConfig) {
 			t.Fatalf("provider alias %q must have exactly one local vLLM backend, got %d", model.Name, len(model.BackendRefs))
 		}
 		backend := model.BackendRefs[0]
-		if got := fmt.Sprintf("%s://%s/v1", backend.Protocol, backend.Endpoint); got != localVLLMEndpoint {
-			t.Fatalf("provider alias %q must resolve to %s, got %s", model.Name, localVLLMEndpoint, got)
+		wantEndpoint := expectedEndpoints[model.Name]
+		if wantEndpoint == "" {
+			wantEndpoint = "http://vllm:8000/v1"
+		}
+		if got := fmt.Sprintf("%s://%s/v1", backend.Protocol, backend.Endpoint); got != wantEndpoint {
+			t.Fatalf("provider alias %q must resolve to %s, got %s", model.Name, wantEndpoint, got)
 		}
 	}
 	if len(providerNames) != len(balanceAMDLocalAliases) {
@@ -70,15 +77,21 @@ func assertBalanceModelCardContract(t *testing.T, recipe CanonicalConfig) {
 
 func assertBalanceDecisionContract(t *testing.T, recipe CanonicalConfig) {
 	t.Helper()
-	if len(recipe.Routing.Decisions) != 14 {
-		t.Fatalf("expected 14 balance decisions (13 calibrated lanes plus one terminal fallback), got %d", len(recipe.Routing.Decisions))
+	if len(recipe.Routing.Decisions) != 15 {
+		t.Fatalf("expected 15 balance decisions (one visual lane, 13 calibrated lanes, and one terminal fallback), got %d", len(recipe.Routing.Decisions))
 	}
 
 	decisionModelNames := make([]string, 0, len(recipe.Routing.Decisions))
-	calibratedLanes := recipe.Routing.Decisions[:13]
+	omni := recipe.Routing.Decisions[0]
+	if omni.Name != "omni" || omni.Tier != 1 || len(omni.ModelRefs) != 1 || omni.ModelRefs[0].Model != "local/omni" {
+		t.Fatalf("expected tier-1 omni lane to use the dedicated visual model, got %+v", omni)
+	}
+	decisionModelNames = append(decisionModelNames, omni.ModelRefs[0].Model)
+
+	calibratedLanes := recipe.Routing.Decisions[1:14]
 	for index, decision := range calibratedLanes {
-		if decision.Tier != index+1 {
-			t.Fatalf("expected calibrated lane %q to have tier %d, got %d", decision.Name, index+1, decision.Tier)
+		if decision.Tier != index+2 {
+			t.Fatalf("expected calibrated lane %q to have tier %d, got %d", decision.Name, index+2, decision.Tier)
 		}
 		if len(decision.Rules.Conditions) == 0 {
 			t.Fatalf("expected calibrated lane %q to have explicit matching conditions", decision.Name)
@@ -94,7 +107,7 @@ func assertBalanceDecisionContract(t *testing.T, recipe CanonicalConfig) {
 		}
 	}
 
-	terminal := recipe.Routing.Decisions[13]
+	terminal := recipe.Routing.Decisions[14]
 	assertBalanceTerminalDecision(t, terminal)
 	for _, modelRef := range terminal.ModelRefs {
 		decisionModelNames = append(decisionModelNames, modelRef.Model)
@@ -104,8 +117,8 @@ func assertBalanceDecisionContract(t *testing.T, recipe CanonicalConfig) {
 
 func assertBalanceTerminalDecision(t *testing.T, terminal Decision) {
 	t.Helper()
-	if terminal.Name != "casual_chat" || terminal.Tier != 14 || terminal.Priority != 10 {
-		t.Fatalf("expected tier-14 casual_chat terminal fallback at priority 10, got name=%q tier=%d priority=%d", terminal.Name, terminal.Tier, terminal.Priority)
+	if terminal.Name != "casual_chat" || terminal.Tier != 15 || terminal.Priority != 10 {
+		t.Fatalf("expected tier-15 casual_chat terminal fallback at priority 10, got name=%q tier=%d priority=%d", terminal.Name, terminal.Tier, terminal.Priority)
 	}
 	if terminal.Rules.Operator != "AND" || terminal.Rules.Type != "" || terminal.Rules.Name != "" || len(terminal.Rules.Conditions) != 0 {
 		t.Fatalf("expected casual_chat to remain an unconditional terminal fallback, got %+v", terminal.Rules)

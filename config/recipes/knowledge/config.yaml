@@ -17,6 +17,15 @@ providers:
     default_model: local/small-7b
     default_reasoning_effort: medium
   models:
+  - name: local/omni
+    api_format: openai
+    provider_model_id: local/omni
+    backend_refs:
+    - name: local-omni
+      endpoint: vllm-omni:8000
+      protocol: http
+      type: vllm
+      weight: 1
   - name: local/small-7b
     api_format: openai
     provider_model_id: qwen/qwen3.5-rocm
@@ -44,6 +53,18 @@ providers:
       currency: USD
 routing:
   decisions:
+  - name: omni
+    description: Understand image-bearing knowledge requests with the dedicated visual-language model.
+    priority: 300
+    modelRefs:
+    - model: local/omni
+    rules:
+      operator: OR
+      conditions:
+      - type: conversation
+        name: knowledge_has_images
+    algorithm:
+      type: static
   - name: escalate_72b
     description: Escalate high-uplift MMLU domains to the frontier 72B lane.
     priority: 200
@@ -97,6 +118,9 @@ routing:
         - type: keyword
           name: local_domain_override
   modelCards:
+  - name: local/omni
+    capabilities: [chat, image_understanding, multimodal, omni, text, vision]
+    modality: omni
   - name: local/small-7b
     context_window_size: 131072
   - name: cloud/frontier-72b
@@ -121,6 +145,13 @@ routing:
       - name: escalation_signal
         gte: 2.0
   signals:
+    conversation:
+    - name: knowledge_has_images
+      description: Request contains at least one image content part.
+      feature:
+        type: exists
+        source:
+          type: image_content
     keywords:
     - name: escalation_domain_override
       operator: OR

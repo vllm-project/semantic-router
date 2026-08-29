@@ -50,9 +50,15 @@ type OpenAIRouter struct {
 	ToolsRegistry         *tools.Registry // retriever strategy registry
 	toolSelectionDBMu     sync.Mutex
 	toolSelectionDBByPath map[string]*tools.ToolsDatabase
-	ResponseAPIFilter     *ResponseAPIFilter
-	ReplayRecorder        *routerreplay.Recorder
-	ReplayStoreShared     bool
+	// toolEmbedder embeds request-supplied tool definitions for tool_selection
+	// filter mode, memoizing them across requests. Set once at router
+	// construction and read-only afterwards; nil (remote provider construction
+	// failed, or a directly assembled test router) makes filter mode error into
+	// its configured fallback instead of embedding.
+	toolEmbedder      *cachedToolEmbedder
+	ResponseAPIFilter *ResponseAPIFilter
+	ReplayRecorder    *routerreplay.Recorder
+	ReplayStoreShared bool
 	// ModelSelector is the registry of advanced model selection algorithms
 	// initialized from config.IntelligentRouting.ModelSelection.
 	ModelSelector *selection.Registry

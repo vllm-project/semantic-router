@@ -51,11 +51,10 @@ func TestFilterRequestToolsAgainstQuerySemanticUsesRemoteProvider(t *testing.T) 
 	}
 
 	filtered, confidence, err := filterRequestToolsAgainstQuerySemantic(
+		context.Background(),
 		"weather today",
 		requestTools,
-		config.EmbeddingModelTypeRemote,
-		3,
-		provider,
+		newCachedToolEmbedder(provider, config.EmbeddingModelTypeRemote, 3, ""),
 		0.5,
 		0,
 	)

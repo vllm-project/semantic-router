@@ -27,6 +27,15 @@ providers:
   # Insights makes privacy-preserving savings obvious. These are not vendor
   # billing quotes.
   models:
+    - name: local/omni
+      provider_model_id: local/omni
+      api_format: openai
+      backend_refs:
+        - name: local-omni
+          endpoint: vllm-omni:8000
+          protocol: http
+          type: vllm
+          weight: 1
     - name: local/private-qwen
       reasoning_family: qwen3
       provider_model_id: qwen/qwen3.5-rocm
@@ -56,6 +65,9 @@ providers:
 
 routing:
   modelCards:
+    - name: local/omni
+      capabilities: [chat, image_understanding, multimodal, omni, text, vision]
+      modality: omni
     - name: local/private-qwen
       context_window_size: 131072
       description: Low-cost self-hosted lane for privacy-sensitive, suspicious, and standard local traffic.
@@ -89,6 +101,13 @@ routing:
         - cost:high
 
   signals:
+    conversation:
+      - name: privacy_has_images
+        description: Request contains at least one image content part.
+        feature:
+          type: exists
+          source:
+            type: image_content
     keywords:
       - name: local_only_markers
         operator: OR
@@ -611,6 +630,31 @@ routing:
           configuration:
             enabled: true
             mode: none
+        - type: router_replay
+          configuration:
+            enabled: true
+            max_records: 50000
+            max_body_bytes: 2048
+
+    - name: omni
+      description: Understand private image-bearing requests on the local visual-language model.
+      priority: 275
+      tier: 2
+      rules:
+        operator: OR
+        conditions:
+          - type: conversation
+            name: privacy_has_images
+      modelRefs:
+        - model: local/omni
+      algorithm:
+        type: static
+      plugins:
+        - type: tools
+          configuration:
+            enabled: true
+            mode: filtered
+            allow_tools: [local_search, local_read]
         - type: router_replay
           configuration:
             enabled: true

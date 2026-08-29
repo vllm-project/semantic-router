@@ -46,6 +46,15 @@ export const ReadonlyProvider: React.FC<ReadonlyProviderProps> = ({ children }) 
   const [fleetSimEnabled, setFleetSimEnabled] = useState(false)
 
   useEffect(() => {
+    if (!token) {
+      setIsReadonly(true)
+      setServerReadonly(true)
+      setRuntimeConfigWritable(false)
+      setRecipeStoreWritable(false)
+      setIsLoading(false)
+      return undefined
+    }
+
     const controller = new AbortController()
     const fetchSettings = async () => {
       setIsLoading(true)

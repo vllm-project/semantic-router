@@ -9,9 +9,15 @@ import (
 	"time"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
+
+// defaultEmbeddingMemoSize bounds the embedding memo. Each entry costs roughly
+// embedding_dim * 4 bytes (e.g. ~1KB at 256 dims), so 512 entries is well under
+// a few MB even for 1024-dim models.
+const defaultEmbeddingMemoSize = 512
 
 // InMemoryCache provides a high-performance semantic cache using BERT embeddings in memory
 type InMemoryCache struct {
@@ -45,7 +51,11 @@ type InMemoryCache struct {
 	// embMemo deduplicates query-embedding inference: a cache-miss request
 	// otherwise embeds the same query twice (lookup + pending write), so the
 	// memo turns the second compute into a memory hit.
-	embMemo *embeddingMemo
+	//
+	// An embedding is a deterministic pure function of (query text, configured
+	// model), so memoizing it is always correct: the worst case under a race is
+	// a redundant recompute, never a wrong vector.
+	embMemo *embedding.Memo
 
 	// Background cleanup
 	cleanupTicker *time.Ticker
@@ -165,7 +175,7 @@ func NewInMemoryCache(options InMemoryCacheOptions) *InMemoryCache {
 		hnswEfSearch:        efSearch,
 		embeddingModel:      embeddingModel,
 		polarityGuard:       options.PolarityGuard,
-		embMemo:             newEmbeddingMemo(defaultEmbeddingMemoSize),
+		embMemo:             embedding.NewMemo(defaultEmbeddingMemoSize),
 	}
 
 	logging.ComponentEvent("cache", "inmemory_cache_initialized", map[string]interface{}{
@@ -207,7 +217,9 @@ func (c *InMemoryCache) generateEmbedding(ctx context.Context, text string) ([]f
 		return nil, err
 	}
 	if c.embMemo != nil {
-		return c.embMemo.getOrCompute(text, c.computeEmbedding)
+		return c.embMemo.GetOrCompute(text, func() ([]float32, error) {
+			return c.computeEmbedding(text)
+		})
 	}
 	return c.computeEmbedding(text)
 }

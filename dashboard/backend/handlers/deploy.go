@@ -420,16 +420,6 @@ func ensureMappingNode(parent *yaml.Node, key string) (*yaml.Node, error) {
 	return value, nil
 }
 
-func mergeFragmentGlobal(base *routerconfig.CanonicalConfig, frag *globalFragment) {
-	if frag == nil || frag.Services == nil || frag.Services.RateLimit == nil {
-		return
-	}
-	if base.Global == nil {
-		base.Global = &routerconfig.CanonicalGlobal{}
-	}
-	base.Global.Services.RateLimit = *frag.Services.RateLimit
-}
-
 func resolveDeployBaseYAML(currentData []byte, providedBase string) ([]byte, error) {
 	if strings.TrimSpace(providedBase) == "" {
 		return currentData, nil
