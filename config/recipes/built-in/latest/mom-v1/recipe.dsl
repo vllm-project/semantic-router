@@ -159,6 +159,16 @@ RECIPE balance (description = "A balanced Recipe optimized across quality, speed
     predicate: { gte: 1 }
   }
 
+  SIGNAL conversation balance_tool_choice_required {
+    description: "Request protocol requires at least one tool call."
+    feature: { source: { type: "tool_choice_required" }, type: "exists" }
+  }
+
+  SIGNAL conversation balance_tool_choice_none {
+    description: "Request protocol explicitly forbids tool calls."
+    feature: { source: { type: "tool_choice_none" }, type: "exists" }
+  }
+
   SIGNAL conversation balance_active_tool_loop {
     description: "Request is actively continuing a client-owned tool loop."
     feature: { source: { type: "active_tool_loop" }, type: "exists" }
@@ -187,6 +197,17 @@ RECIPE balance (description = "A balanced Recipe optimized across quality, speed
     inputs: [{ type: "keyword", weight: 0.5, name: "balance_correction_request_phrases", value_source: "confidence" }, { type: "reask", weight: 0.4, name: "balance_repeated_question", value_source: "confidence" }]
   }
 
+  PROJECTION score balance_tool_execution_score {
+    method: "weighted_sum"
+    inputs: [{ type: "conversation", weight: 1, name: "balance_tool_choice_required", value_source: "confidence" }, { type: "keyword", weight: 0.75, name: "balance_tool_execution_phrases", value_source: "confidence" }, { type: "conversation", weight: -2, name: "balance_tool_choice_none", value_source: "confidence" }]
+  }
+
+  PROJECTION mapping balance_tool_execution_band {
+    source: "balance_tool_execution_score"
+    method: "threshold_bands"
+    outputs: [{ name: "balance_tool_execution_required", gte: 0.5 }]
+  }
+
   PROJECTION mapping balance_reasoning_effort_band {
     source: "balance_reasoning_effort_score"
     method: "threshold_bands"
@@ -213,7 +234,7 @@ RECIPE balance (description = "A balanced Recipe optimized across quality, speed
 
   ROUTE agentic (description = "Keep explicit tool execution and active tool turns on the dedicated coding model.") {
     PRIORITY 400
-    WHEN (conversation("balance_active_tool_loop") OR conversation("balance_has_tools") AND keyword("balance_tool_execution_phrases")) AND NOT conversation("balance_has_images")
+    WHEN (conversation("balance_active_tool_loop") OR conversation("balance_has_tools") AND projection("balance_tool_execution_required")) AND NOT conversation("balance_has_images")
     ALGORITHM static
   }
 
@@ -323,6 +344,16 @@ RECIPE speed (description = "A speed-first Recipe for low-latency, real-time exp
     predicate: { gte: 1 }
   }
 
+  SIGNAL conversation speed_tool_choice_required {
+    description: "Request protocol requires at least one tool call."
+    feature: { source: { type: "tool_choice_required" }, type: "exists" }
+  }
+
+  SIGNAL conversation speed_tool_choice_none {
+    description: "Request protocol explicitly forbids tool calls."
+    feature: { source: { type: "tool_choice_none" }, type: "exists" }
+  }
+
   SIGNAL conversation speed_active_tool_loop {
     description: "Request is actively continuing a client-owned tool loop."
     feature: { source: { type: "active_tool_loop" }, type: "exists" }
@@ -338,6 +369,17 @@ RECIPE speed (description = "A speed-first Recipe for low-latency, real-time exp
   PROJECTION score speed_workload_score {
     method: "weighted_sum"
     inputs: [{ type: "keyword", weight: 0.6, name: "speed_heavy_request_phrases", value_source: "confidence" }, { type: "embedding", weight: 0.55, name: "speed_heavy_intent", value_source: "confidence" }, { type: "context", weight: 0.15, name: "speed_context_from_30k_to_60k" }, { type: "context", weight: 0.15, name: "speed_context_from_60k_to_120k" }, { type: "context", weight: 0.15, name: "speed_context_from_120k_to_240k" }, { type: "structure", weight: 0.3, name: "speed_ordered_workflow" }, { type: "structure", weight: 0.5, name: "speed_constraint_dense" }, { type: "complexity", weight: 0.35, name: "speed_complexity:hard" }, { type: "complexity", weight: -0.1, name: "speed_complexity:easy" }]
+  }
+
+  PROJECTION score speed_tool_execution_score {
+    method: "weighted_sum"
+    inputs: [{ type: "conversation", weight: 1, name: "speed_tool_choice_required", value_source: "confidence" }, { type: "keyword", weight: 0.75, name: "speed_tool_execution_phrases", value_source: "confidence" }, { type: "conversation", weight: -2, name: "speed_tool_choice_none", value_source: "confidence" }]
+  }
+
+  PROJECTION mapping speed_tool_execution_band {
+    source: "speed_tool_execution_score"
+    method: "threshold_bands"
+    outputs: [{ name: "speed_tool_execution_required", gte: 0.5 }]
   }
 
   PROJECTION mapping speed_workload_band {
@@ -359,7 +401,7 @@ RECIPE speed (description = "A speed-first Recipe for low-latency, real-time exp
 
   ROUTE tooling (description = "Keep tool-driven work fast on the coding and flash specialists.") {
     PRIORITY 400
-    WHEN (conversation("speed_active_tool_loop") OR conversation("speed_has_tools") AND keyword("speed_tool_execution_phrases")) AND NOT conversation("speed_has_images") AND NOT context("speed_exceeds_240k_context")
+    WHEN (conversation("speed_active_tool_loop") OR conversation("speed_has_tools") AND projection("speed_tool_execution_required")) AND NOT conversation("speed_has_images") AND NOT context("speed_exceeds_240k_context")
     ALGORITHM latency_aware {
       description: "Minimize observed first-token latency for interactive tool traffic."
       ttft_percentile: 90

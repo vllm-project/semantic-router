@@ -192,6 +192,36 @@ func TestConversation_AssistantToolCallCount(t *testing.T) {
 	}
 }
 
+func TestConversation_ToolChoiceFacts(t *testing.T) {
+	requiredRule := config.ConversationRule{
+		Name: "required",
+		Feature: config.ConversationFeature{
+			Type:   "exists",
+			Source: config.ConversationSource{Type: "tool_choice_required"},
+		},
+	}
+	noneRule := config.ConversationRule{
+		Name: "none",
+		Feature: config.ConversationFeature{
+			Type:   "exists",
+			Source: config.ConversationSource{Type: "tool_choice_none"},
+		},
+	}
+
+	if got := resolveConversationValue(requiredRule.Feature, ConversationFacts{ToolChoiceRequired: true}); got != 1 {
+		t.Fatalf("required fact value = %v, want 1", got)
+	}
+	if got := resolveConversationValue(requiredRule.Feature, ConversationFacts{ToolChoiceNone: true}); got != 0 {
+		t.Fatalf("none fact must not satisfy required source, got %v", got)
+	}
+	if got := resolveConversationValue(noneRule.Feature, ConversationFacts{ToolChoiceNone: true}); got != 1 {
+		t.Fatalf("none fact value = %v, want 1", got)
+	}
+	if got := resolveConversationValue(noneRule.Feature, ConversationFacts{ToolChoiceRequired: true}); got != 0 {
+		t.Fatalf("required fact must not satisfy none source, got %v", got)
+	}
+}
+
 func TestConversation_ActiveToolLoopCount(t *testing.T) {
 	rule := config.ConversationRule{
 		Name: "active_tool_loop",

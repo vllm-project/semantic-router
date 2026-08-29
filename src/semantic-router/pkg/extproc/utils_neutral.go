@@ -70,6 +70,12 @@ func prependSemanticOutputText(output []llmprotocol.OutputItem, prefix string) b
 // accepted at ingress. Wire-specific JSON walkers are confined to codecs.
 func extractSemanticRequestSignals(request *llmprotocol.Request) *requestSignalSnapshot {
 	result := &requestSignalSnapshot{Model: request.Model, Stream: request.Stream}
+	switch request.ToolChoice.Mode {
+	case llmprotocol.ToolChoiceRequired, llmprotocol.ToolChoiceNamed:
+		result.ToolChoiceRequired = true
+	case llmprotocol.ToolChoiceNone:
+		result.ToolChoiceNone = true
+	}
 	if len(request.Metadata) > 0 {
 		result.Metadata = make(map[string]string, len(request.Metadata))
 		for key, value := range request.Metadata {

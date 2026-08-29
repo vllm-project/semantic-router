@@ -17,6 +17,8 @@ type ConversationFacts struct {
 	SystemMessageCount        int
 	ToolMessageCount          int
 	ToolDefinitionCount       int
+	ToolChoiceRequired        bool
+	ToolChoiceNone            bool
 	AssistantToolCallCount    int
 	ToolResultCount           int
 	ImageContentCount         int
@@ -100,6 +102,10 @@ func resolveConversationRawCount(feature config.ConversationFeature, facts Conve
 		return countMessagesByRole(feature.Source.Role, facts)
 	case "tool_definition":
 		return facts.ToolDefinitionCount
+	case "tool_choice_required":
+		return conversationBoolCount(facts.ToolChoiceRequired)
+	case "tool_choice_none":
+		return conversationBoolCount(facts.ToolChoiceNone)
 	case "assistant_tool_call":
 		return facts.AssistantToolCallCount
 	case "assistant_tool_cycle":
@@ -107,15 +113,19 @@ func resolveConversationRawCount(feature config.ConversationFeature, facts Conve
 	case "active_tool_loop":
 		return activeToolLoopCount(facts)
 	case "flow_tool_state":
-		if facts.LastMessageFlowToolResult {
-			return 1
-		}
-		return 0
+		return conversationBoolCount(facts.LastMessageFlowToolResult)
 	case "image_content":
 		return facts.ImageContentCount
 	default:
 		return 0
 	}
+}
+
+func conversationBoolCount(value bool) int {
+	if value {
+		return 1
+	}
+	return 0
 }
 
 func activeToolLoopCount(facts ConversationFacts) int {

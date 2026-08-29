@@ -280,6 +280,35 @@ func TestIntentRequestResolveSignalInput_DoesNotDoubleCountTopLevelTextWithCurre
 	assert.Equal(t, want.TextBytes, input.requestFacts.ContextTextBytes)
 }
 
+func TestIntentRequestResolveSignalInput_ToolChoiceFacts(t *testing.T) {
+	tests := []struct {
+		name         string
+		toolChoice   json.RawMessage
+		functionCall json.RawMessage
+		wantRequired bool
+		wantNone     bool
+	}{
+		{name: "required", toolChoice: json.RawMessage(`"required"`), wantRequired: true},
+		{name: "named", toolChoice: json.RawMessage(`{"type":"function","function":{"name":"lookup"}}`), wantRequired: true},
+		{name: "none", toolChoice: json.RawMessage(`"none"`), wantNone: true},
+		{name: "legacy none", functionCall: json.RawMessage(`"none"`), wantNone: true},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			req := IntentRequest{
+				Text:         "hello",
+				ToolChoice:   test.toolChoice,
+				FunctionCall: test.functionCall,
+			}
+			input, err := req.resolveSignalInput()
+			require.NoError(t, err)
+			assert.Equal(t, test.wantRequired, input.conversationFacts.ToolChoiceRequired)
+			assert.Equal(t, test.wantNone, input.conversationFacts.ToolChoiceNone)
+		})
+	}
+}
+
 func TestIntentRequestResolveSignalInput_FallsBackToText(t *testing.T) {
 	req := IntentRequest{Text: "Fallback single-turn request"}
 

@@ -36,10 +36,12 @@ name on its own.
 Balance separates simple, medium, complex, agentic, and image-bearing work.
 Balance and Speed treat a declared tool schema as available capability, not as
 proof that the current turn wants to execute a tool. Their tool lanes require
-explicit execution intent or an active tool loop. Speed optimizes the tooling
-lane for first-token latency and the heavy lane for generation latency. Cost
-uses an economy lane by default; context size contributes bounded evidence but
-does not trigger reasoning escalation by itself.
+explicit execution intent, a protocol-level required or named tool choice, or
+an active tool loop. An explicit `tool_choice: none` suppresses fresh textual
+tool intent while an already active loop retains continuity. Speed optimizes
+the tooling lane for first-token latency and the heavy lane for generation
+latency. Cost uses an economy lane by default; context size contributes bounded
+evidence but does not trigger reasoning escalation by itself.
 
 Accuracy activates bounded verification, expert fusion, or workflow
 orchestration only when explicit matching evidence is present. Long context,

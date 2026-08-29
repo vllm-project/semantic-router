@@ -21,7 +21,7 @@ defaults:
 assets:
   - id: mom-v1
     bundle: mom-v1
-    sha256: sha256:88f70deeaf9cd03e6bb2a1aa9332d310766b41d9b5bd268f35b5fe530ceb9d70
+    sha256: sha256:25c3ee40b22667e8d099570cc8f57344eab66e1d0b1d9cdc2555dd2df2ae60bf
 models:
   - id: vllm-sr/mom-v1-blend
     display_name: MoM V1 Blend
@@ -29,7 +29,7 @@ models:
     kind: virtual
     family: mom
     generation: 1
-    policy_version: 1.1.0
+    policy_version: 1.2.0
     asset: mom-v1
     entrypoint: vllm-sr/mom-v1-blend
     recipe: balance
@@ -58,7 +58,7 @@ models:
         recommended_pool: [local/glm-5.2]
     verification:
       authority: vllm-sr-maintainers
-      asset_sha256: sha256:88f70deeaf9cd03e6bb2a1aa9332d310766b41d9b5bd268f35b5fe530ceb9d70
+      asset_sha256: sha256:25c3ee40b22667e8d099570cc8f57344eab66e1d0b1d9cdc2555dd2df2ae60bf
   - id: vllm-sr/mom-v1-lite
     display_name: MoM V1 Lite
     description: Economy-first direct answers with bounded opt-in reasoning.
@@ -89,14 +89,14 @@ models:
         recommended_pool: [local/glm-5.2]
     verification:
       authority: vllm-sr-maintainers
-      asset_sha256: sha256:88f70deeaf9cd03e6bb2a1aa9332d310766b41d9b5bd268f35b5fe530ceb9d70
+      asset_sha256: sha256:25c3ee40b22667e8d099570cc8f57344eab66e1d0b1d9cdc2555dd2df2ae60bf
   - id: vllm-sr/mom-v1-flash
     display_name: MoM V1 Flash
     description: Latency-first interactive, tool, vision, and heavy-workload routing.
     kind: virtual
     family: mom
     generation: 1
-    policy_version: 1.1.0
+    policy_version: 1.2.0
     asset: mom-v1
     entrypoint: vllm-sr/mom-v1-flash
     recipe: speed
@@ -120,7 +120,7 @@ models:
         recommended_pool: [local/glm-5.2]
     verification:
       authority: vllm-sr-maintainers
-      asset_sha256: sha256:88f70deeaf9cd03e6bb2a1aa9332d310766b41d9b5bd268f35b5fe530ceb9d70
+      asset_sha256: sha256:25c3ee40b22667e8d099570cc8f57344eab66e1d0b1d9cdc2555dd2df2ae60bf
   - id: vllm-sr/mom-v1-ultra
     display_name: MoM V1 Ultra
     description: Accuracy-first direct and bounded multi-model orchestration.
@@ -161,7 +161,7 @@ models:
         recommended_pool: [local/glm-5.2]
     verification:
       authority: vllm-sr-maintainers
-      asset_sha256: sha256:88f70deeaf9cd03e6bb2a1aa9332d310766b41d9b5bd268f35b5fe530ceb9d70
+      asset_sha256: sha256:25c3ee40b22667e8d099570cc8f57344eab66e1d0b1d9cdc2555dd2df2ae60bf
   - id: vllm-sr/mom-v1-vault
     display_name: MoM V1 Vault
     description: Local-only privacy, containment, and tool-history minimization.
@@ -192,4 +192,4 @@ models:
         recommended_pool: [local/glm-5.2]
     verification:
       authority: vllm-sr-maintainers
-      asset_sha256: sha256:88f70deeaf9cd03e6bb2a1aa9332d310766b41d9b5bd268f35b5fe530ceb9d70
+      asset_sha256: sha256:25c3ee40b22667e8d099570cc8f57344eab66e1d0b1d9cdc2555dd2df2ae60bf

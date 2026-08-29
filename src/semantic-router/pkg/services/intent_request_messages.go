@@ -86,7 +86,10 @@ func (req IntentRequest) resolveSignalInput() (intentSignalInput, error) {
 	text := strings.TrimSpace(rawText)
 
 	toolDefinitionCount := len(req.Tools) + len(req.Functions)
+	toolChoiceFacts := classification.ResolveOpenAIToolChoiceFacts(req.ToolChoice, req.FunctionCall)
 	if input, ok := resolveIntentSignalInputFromMessages(req.Messages, toolDefinitionCount); ok {
+		input.conversationFacts.ToolChoiceRequired = toolChoiceFacts.Required
+		input.conversationFacts.ToolChoiceNone = toolChoiceFacts.None
 		useTopLevelTextFallback := rawText != "" && strings.TrimSpace(input.evaluationText) == ""
 		input = applyTopLevelTextFallback(input, rawText)
 		contextEstimate, err := estimateIntentRequestContext(
@@ -122,6 +125,8 @@ func (req IntentRequest) resolveSignalInput() (intentSignalInput, error) {
 		conversationFacts: classification.ConversationFacts{
 			UserMessageCount:    1,
 			ToolDefinitionCount: toolDefinitionCount,
+			ToolChoiceRequired:  toolChoiceFacts.Required,
+			ToolChoiceNone:      toolChoiceFacts.None,
 			LastMessageRole:     "user",
 		},
 		requestFacts: requestFactsForIntent(req.Metadata, contextEstimate),
@@ -265,6 +270,8 @@ func hasIntentConversationFacts(facts classification.ConversationFacts) bool {
 		facts.ToolMessageCount > 0 ||
 		facts.ImageContentCount > 0 ||
 		facts.ToolDefinitionCount > 0 ||
+		facts.ToolChoiceRequired ||
+		facts.ToolChoiceNone ||
 		facts.AssistantToolCallCount > 0 ||
 		facts.ToolResultCount > 0 ||
 		facts.HasDeveloperMessage

@@ -182,6 +182,7 @@ decisions:
           - type: function
             function:
               name: search
+        tool_choice: required
 """.lstrip(),
                 encoding="utf-8",
             )
@@ -198,6 +199,7 @@ decisions:
         )
         self.assertEqual(probes[0].repeat, 3)
         self.assertEqual(probes[0].tools[0]["function"]["name"], "search")
+        self.assertEqual(probes[0].tool_choice, "required")
 
     def test_manifest_padding_places_one_trigger_in_long_input(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
@@ -392,6 +394,7 @@ decisions:
             expected_plugins=("semantic-cache",),
             expected_signals=(("projection", "balanced_score"),),
             query="Summarize this plan.",
+            tool_choice={"type": "function", "function": {"name": "search"}},
             display_prompt=(
                 "Summarize this deployment plan and call out its two largest risks."
             ),
@@ -447,7 +450,11 @@ decisions:
         http_json.assert_called_once_with(
             "POST",
             "http://router.example:8080/api/v1/eval?trace=true",
-            {"text": probe.query, "model": probe.model},
+            {
+                "text": probe.query,
+                "model": probe.model,
+                "tool_choice": probe.tool_choice,
+            },
             timeout_seconds=60.0,
         )
 

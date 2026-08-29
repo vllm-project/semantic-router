@@ -75,6 +75,8 @@ routing:
 |---|---|---|
 | `message` | `user`, `assistant`, `system`, `developer`, `tool`, `non_user`, or empty (all) | Counts messages, optionally filtered by role. |
 | `tool_definition` | — | Counts entries in the request-level `tools[]` array. |
+| `tool_choice_required` | — | Returns 1 when the request protocol requires a tool call, including a named tool choice. |
+| `tool_choice_none` | — | Returns 1 when the request protocol explicitly forbids tool calls. |
 | `assistant_tool_call` | — | Counts `tool_calls` across all assistant messages. |
 | `assistant_tool_cycle` | — | Counts `tool` role messages (completed tool results). |
 | `active_tool_loop` | — | Returns 1 when the request tail is actively continuing a tool loop: the last assistant message requests a tool, the last message is a tool result, or the latest user turn directly follows a tool result. Older unmatched or completed calls do not keep later turns in the tool loop. |
@@ -102,7 +104,11 @@ routing:
 
 ## Dependencies and Limitations
 
-The signal inspects the incoming `messages` and `tools` structure but does not
-persist it. It describes request shape, not tool safety or user intent. Apply
-authorization at the tool boundary. See a complete example:
+The signal inspects the incoming `messages`, `tools`, and tool-choice controls
+but does not persist them. `tool_choice` is an execution constraint rather than
+tool availability: `required`, a named tool, or Anthropic `any` matches
+`tool_choice_required`, while `none` matches `tool_choice_none`. When modern
+`tool_choice` and legacy `function_call` are both present, `tool_choice` is
+authoritative. These facts describe request shape, not tool safety or user
+intent. Apply authorization at the tool boundary. See a complete example:
 [`config/fragments/signal/conversation/agentic-shape.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/conversation/agentic-shape.yaml).

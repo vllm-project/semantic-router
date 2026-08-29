@@ -53,6 +53,8 @@ def _build_request_payload(
         payload["model"] = probe.model
     if probe.tools:
         payload["tools"] = list(probe.tools)
+    if probe.tool_choice is not None:
+        payload["tool_choice"] = copy.deepcopy(probe.tool_choice)
     request_value = payload["messages"] if probe.messages else payload["text"]
     value_limit = _request_value_byte_limit(
         probe.probe_id,

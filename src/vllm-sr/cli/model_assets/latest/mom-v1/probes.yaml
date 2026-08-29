@@ -203,6 +203,32 @@ decisions:
       - balance_tool_execution_phrases
       conversation:
       - balance_has_tools
+      projection:
+      - balance_tool_execution_required
+  - id: balance_tools__named_choice_without_text_intent
+    query: Return the current service state.
+    tools:
+    - type: function
+      function:
+        name: lookup_status
+        description: Look up a service status.
+    tool_choice:
+      type: function
+      function:
+        name: lookup_status
+    notes: A named protocol choice is authoritative even when the user text does not mention tool execution.
+    tags:
+    - language:en
+    - shape:tools
+    - tools
+    - positive
+    - protocol-contract
+    expected_signals:
+      conversation:
+      - balance_has_tools
+      - balance_tool_choice_required
+      projection:
+      - balance_tool_execution_required
   - id: balance_tools__lookup_status_zh
     query: 请使用状态查询函数返回所选服务的状态。
     tools:
@@ -1174,6 +1200,31 @@ decisions:
     complexity:
     - balance_difficulty
   variants:
+  - id: balance_standard__tool_choice_none_overrides_text_intent
+    query: Use the status lookup function and return the current state.
+    tools:
+    - type: function
+      function:
+        name: lookup_status
+        description: Look up a service status when enabled.
+    tool_choice: none
+    notes: An explicit protocol prohibition wins over text that would otherwise request tool execution.
+    tags:
+    - language:en
+    - shape:tools
+    - tools
+    - negative
+    - collision
+    - protocol-contract
+    expected_signals:
+      keywords:
+      - balance_tool_execution_phrases
+      conversation:
+      - balance_has_tools
+      - balance_tool_choice_none
+      projection:
+      - balance_direct_workload
+      - balance_no_recovery_needed
   - id: balance_standard__brief_benign_negative
     query: Answer briefly with a short definition of a readiness probe.
     tags:
@@ -1352,6 +1403,29 @@ decisions:
       - speed_tool_execution_phrases
       conversation:
       - speed_has_tools
+      projection:
+      - speed_tool_execution_required
+  - id: speed_tools__required_choice_without_text_intent
+    query: Return the current weather for Austin, Texas.
+    tools:
+    - type: function
+      function:
+        name: get_weather
+        description: Get current weather for a city.
+    tool_choice: required
+    notes: A required protocol choice routes to tooling even without an execution verb in the user text.
+    tags:
+    - language:en
+    - tools
+    - shape:tools
+    - positive
+    - protocol-contract
+    expected_signals:
+      conversation:
+      - speed_has_tools
+      - speed_tool_choice_required
+      projection:
+      - speed_tool_execution_required
   - id: speed_tools__calculator_paraphrase_messages
     messages:
     - role: user
@@ -2223,6 +2297,30 @@ decisions:
     complexity:
     - speed_complexity
   variants:
+  - id: speed_interactive__tool_choice_none_overrides_text_intent
+    query: Call the weather function for Austin, Texas.
+    tools:
+    - type: function
+      function:
+        name: get_weather
+        description: Get current weather for a city when enabled.
+    tool_choice: none
+    notes: An explicit protocol prohibition keeps the request out of the tooling lane.
+    tags:
+    - language:en
+    - tools
+    - shape:tools
+    - negative
+    - collision
+    - protocol-contract
+    expected_signals:
+      keywords:
+      - speed_tool_execution_phrases
+      conversation:
+      - speed_has_tools
+      - speed_tool_choice_none
+      projection:
+      - speed_interactive
   - id: speed_interactive__declared_tool_without_execution_intent
     query: What does HTTP stand for?
     tools:

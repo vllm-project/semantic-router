@@ -175,11 +175,14 @@ def _mom_materialization_receipt(probes: list[Any]) -> dict[str, Any]:
         messages = router_calibration_support.materialize_probe_messages(probe)
         payload, image_urls, image_parts = _message_payload_receipt(messages)
         _update_probe_digest(text_digest, probe.probe_id, payload)
+        semantic_envelope = {
+            "messages": _normalize_adjacent_message_text_parts(messages),
+            "tools": list(probe.tools),
+        }
+        if probe.tool_choice is not None:
+            semantic_envelope["tool_choice"] = probe.tool_choice
         semantic_request = json.dumps(
-            {
-                "messages": _normalize_adjacent_message_text_parts(messages),
-                "tools": list(probe.tools),
-            },
+            semantic_envelope,
             ensure_ascii=False,
             sort_keys=True,
             separators=(",", ":"),
@@ -608,7 +611,7 @@ fixtures:
 
         _, probes = router_calibration_manifest.load_probe_manifest(manifest_path)
         receipt = _mom_materialization_receipt(probes)
-        self.assertEqual(len(probes), 231)
+        self.assertEqual(len(probes), 235)
         self.assertEqual(receipt["message_probes"], 89)
         self.assertEqual(receipt["generated_probes"], 50)
         self.assertEqual(receipt["image_parts"], 57)

@@ -53,6 +53,18 @@ recipes:
         name: balance_has_tools
         predicate:
           gte: 1
+      - description: Request protocol requires at least one tool call.
+        feature:
+          source:
+            type: tool_choice_required
+          type: exists
+        name: balance_tool_choice_required
+      - description: Request protocol explicitly forbids tool calls.
+        feature:
+          source:
+            type: tool_choice_none
+          type: exists
+        name: balance_tool_choice_none
       - description: Request is actively continuing a client-owned tool loop.
         feature:
           source:
@@ -282,6 +294,12 @@ recipes:
           gt: 0.08
     projections:
       mappings:
+      - method: threshold_bands
+        name: balance_tool_execution_band
+        outputs:
+        - gte: 0.5
+          name: balance_tool_execution_required
+        source: balance_tool_execution_score
       - calibration:
           method: sigmoid_distance
           slope: 10
@@ -305,6 +323,21 @@ recipes:
           name: balance_needs_recovery
         source: balance_answer_recovery_score
       scores:
+      - inputs:
+        - name: balance_tool_choice_required
+          type: conversation
+          value_source: confidence
+          weight: 1
+        - name: balance_tool_execution_phrases
+          type: keyword
+          value_source: confidence
+          weight: 0.75
+        - name: balance_tool_choice_none
+          type: conversation
+          value_source: confidence
+          weight: -2
+        method: weighted_sum
+        name: balance_tool_execution_score
       - inputs:
         - name: balance_simple_request_phrases
           type: keyword
@@ -408,8 +441,8 @@ recipes:
           - conditions:
             - name: balance_has_tools
               type: conversation
-            - name: balance_tool_execution_phrases
-              type: keyword
+            - name: balance_tool_execution_required
+              type: projection
             operator: AND
           operator: OR
         - conditions:
@@ -526,6 +559,18 @@ recipes:
         name: speed_has_tools
         predicate:
           gte: 1
+      - description: Request protocol requires at least one tool call.
+        feature:
+          source:
+            type: tool_choice_required
+          type: exists
+        name: speed_tool_choice_required
+      - description: Request protocol explicitly forbids tool calls.
+        feature:
+          source:
+            type: tool_choice_none
+          type: exists
+        name: speed_tool_choice_none
       - description: Request is actively continuing a client-owned tool loop.
         feature:
           source:
@@ -653,6 +698,12 @@ recipes:
           gt: 0.08
     projections:
       mappings:
+      - method: threshold_bands
+        name: speed_tool_execution_band
+        outputs:
+        - gte: 0.5
+          name: speed_tool_execution_required
+        source: speed_tool_execution_score
       - calibration:
           method: sigmoid_distance
           slope: 10
@@ -665,6 +716,21 @@ recipes:
           name: speed_heavy_workload_required
         source: speed_workload_score
       scores:
+      - inputs:
+        - name: speed_tool_choice_required
+          type: conversation
+          value_source: confidence
+          weight: 1
+        - name: speed_tool_execution_phrases
+          type: keyword
+          value_source: confidence
+          weight: 0.75
+        - name: speed_tool_choice_none
+          type: conversation
+          value_source: confidence
+          weight: -2
+        method: weighted_sum
+        name: speed_tool_execution_score
       - inputs:
         - name: speed_heavy_request_phrases
           type: keyword
@@ -728,8 +794,8 @@ recipes:
           - conditions:
             - name: speed_has_tools
               type: conversation
-            - name: speed_tool_execution_phrases
-              type: keyword
+            - name: speed_tool_execution_required
+              type: projection
             operator: AND
           operator: OR
         - conditions:

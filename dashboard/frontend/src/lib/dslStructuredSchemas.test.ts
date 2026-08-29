@@ -89,8 +89,13 @@ describe('DSL structured field schemas', () => {
 
     const conversationFeature = requireField(getSignalFieldSchema('conversation'), 'feature')
     const conversationSource = requireField(conversationFeature.fields || [], 'source')
-    expect(requireField(conversationSource.fields || [], 'type').options).toContain(
-      'flow_tool_state',
+    expect(requireField(conversationSource.fields || [], 'type').options).toEqual(
+      expect.arrayContaining([
+        'tool_choice_required',
+        'tool_choice_none',
+        'flow_tool_state',
+        'image_content',
+      ]),
     )
 
     const headerMutation = getPluginFieldSchema('header_mutation')

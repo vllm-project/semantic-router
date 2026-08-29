@@ -46,6 +46,25 @@ func TestExtractSignalConversationHistoryFlowToolStateRequiresTrailingResult(t *
 	assert.False(t, history.lastMessageFlowToolResult)
 }
 
+func TestExtractSignalConversationHistoryToolChoiceFacts(t *testing.T) {
+	req := &llmprotocol.Request{ToolChoice: llmprotocol.ToolChoice{
+		Mode: llmprotocol.ToolChoiceRequired,
+	}}
+	history := extractSignalConversationHistory(req)
+	assert.True(t, history.toolChoiceRequired)
+	assert.False(t, history.toolChoiceNone)
+
+	req.ToolChoice = llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceNamed, Name: "lookup"}
+	history = extractSignalConversationHistory(req)
+	assert.True(t, history.toolChoiceRequired)
+	assert.False(t, history.toolChoiceNone)
+
+	req.ToolChoice = llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceNone}
+	history = extractSignalConversationHistory(req)
+	assert.False(t, history.toolChoiceRequired)
+	assert.True(t, history.toolChoiceNone)
+}
+
 func TestExtractToolTransitionContextFromNeutralHistory(t *testing.T) {
 	req := &llmprotocol.Request{Model: "entrypoint"}
 	req.Messages = append(req.Messages,

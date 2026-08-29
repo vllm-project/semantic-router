@@ -25,6 +25,8 @@ type requestSignalSnapshot struct {
 	SystemMessageCount        int
 	ToolMessageCount          int
 	ToolDefinitionCount       int
+	ToolChoiceRequired        bool
+	ToolChoiceNone            bool
 	AssistantToolCallCount    int
 	ToolResultCount           int
 	AssistantToolNames        []string

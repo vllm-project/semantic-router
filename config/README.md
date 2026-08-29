@@ -97,6 +97,9 @@ runtime dependency; they do not define routing behavior by themselves.
   values.
 - `routing.modelCards` describes semantic capabilities; concrete URLs,
   credentials, and pricing belong in `providers.models`.
+- Protocol controls such as `tool_choice` enter routing as conversation facts;
+  projections combine those facts with text-derived intent before decisions
+  apply policy.
 - `routing.projections` derives named routing outputs from signals. Decisions
   consume those outputs instead of embedding free-form computation.
 - Candidate iteration is bounded policy metadata, not a general scripting
