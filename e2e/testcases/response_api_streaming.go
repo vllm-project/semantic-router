@@ -140,6 +140,9 @@ func validateResponseAPIStreamingSSEBody(stream string) error {
 			return fmt.Errorf("missing Responses API SSE event %q in stream: %s", event, truncateString(stream, 800))
 		}
 	}
+	if err := validateResponsesStreamEventShapes(stream); err != nil {
+		return err
+	}
 
 	forbiddenFragments := []struct {
 		value string
@@ -153,10 +156,6 @@ func validateResponseAPIStreamingSSEBody(stream string) error {
 			value: "data: [DONE]",
 			error: "stream leaked raw upstream [DONE] sentinel instead of response.completed",
 		},
-		{
-			value: "sequence_number",
-			error: "stream included non-Responses API sequence_number field",
-		},
 	}
 	for _, fragment := range forbiddenFragments {
 		if strings.Contains(stream, fragment.value) {
@@ -168,4 +167,78 @@ func validateResponseAPIStreamingSSEBody(stream string) error {
 	}
 
 	return nil
+}
+
+type responsesStreamEventShape struct {
+	Type         string  `json:"type"`
+	Sequence     *uint64 `json:"sequence_number"`
+	ItemID       string  `json:"item_id"`
+	OutputIndex  *int    `json:"output_index"`
+	ContentIndex *int    `json:"content_index"`
+}
+
+func validateResponsesStreamEventShapes(stream string) error {
+	var previousSequence *uint64
+	for _, frame := range strings.Split(stream, "\n\n") {
+		data := ""
+		for _, line := range strings.Split(frame, "\n") {
+			if strings.HasPrefix(line, "data: ") {
+				data = strings.TrimPrefix(line, "data: ")
+				break
+			}
+		}
+		if data == "" {
+			continue
+		}
+		var event responsesStreamEventShape
+		if err := json.Unmarshal([]byte(data), &event); err != nil {
+			return fmt.Errorf("decode Responses API SSE event: %w", err)
+		}
+		if event.Sequence == nil {
+			return fmt.Errorf("Responses API SSE event %q is missing sequence_number", event.Type)
+		}
+		if previousSequence != nil && *event.Sequence != *previousSequence+1 {
+			return fmt.Errorf("Responses API SSE sequence is not contiguous: got %d after %d", *event.Sequence, *previousSequence)
+		}
+		sequence := *event.Sequence
+		previousSequence = &sequence
+
+		if responsesEventRequiresOutputIndex(event.Type) && event.OutputIndex == nil {
+			return fmt.Errorf("Responses API SSE event %q is missing output_index", event.Type)
+		}
+		if responsesEventRequiresItemID(event.Type) && event.ItemID == "" {
+			return fmt.Errorf("Responses API SSE event %q is missing item_id", event.Type)
+		}
+		if responsesEventRequiresContentIndex(event.Type) && event.ContentIndex == nil {
+			return fmt.Errorf("Responses API SSE event %q is missing content_index", event.Type)
+		}
+	}
+	return nil
+}
+
+func responsesEventRequiresOutputIndex(eventType string) bool {
+	return strings.HasPrefix(eventType, "response.output_item.") ||
+		strings.HasPrefix(eventType, "response.content_part.") ||
+		strings.HasPrefix(eventType, "response.output_text.") ||
+		strings.HasPrefix(eventType, "response.refusal.") ||
+		strings.HasPrefix(eventType, "response.reasoning_text.") ||
+		strings.HasPrefix(eventType, "response.reasoning_summary_text.") ||
+		strings.HasPrefix(eventType, "response.function_call_arguments.")
+}
+
+func responsesEventRequiresItemID(eventType string) bool {
+	return strings.HasPrefix(eventType, "response.content_part.") ||
+		strings.HasPrefix(eventType, "response.output_text.") ||
+		strings.HasPrefix(eventType, "response.refusal.") ||
+		strings.HasPrefix(eventType, "response.reasoning_text.") ||
+		strings.HasPrefix(eventType, "response.reasoning_summary_text.") ||
+		strings.HasPrefix(eventType, "response.function_call_arguments.")
+}
+
+func responsesEventRequiresContentIndex(eventType string) bool {
+	return strings.HasPrefix(eventType, "response.content_part.") ||
+		strings.HasPrefix(eventType, "response.output_text.") ||
+		strings.HasPrefix(eventType, "response.refusal.") ||
+		strings.HasPrefix(eventType, "response.reasoning_text.") ||
+		strings.HasPrefix(eventType, "response.reasoning_summary_text.")
 }

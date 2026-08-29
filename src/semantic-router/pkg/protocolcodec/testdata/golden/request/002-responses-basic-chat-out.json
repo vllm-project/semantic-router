@@ -1,0 +1,11 @@
+{
+  "model": "routed-model",
+  "messages": [
+    {
+      "id": "msg_1",
+      "role": "user",
+      "content": "hello"
+    }
+  ],
+  "max_completion_tokens": 32
+}

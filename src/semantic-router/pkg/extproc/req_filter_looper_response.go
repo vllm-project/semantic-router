@@ -50,7 +50,7 @@ func (r *OpenAIRouter) prepareLooperResponse(
 			llmprotocol.OpenAIChatV1,
 			target,
 			llmprotocol.StreamContext{
-				Context: reqCtx.TraceContext, PublicModel: resp.Model,
+				Context: reqCtx.TraceContext, Options: clientStreamOptions(reqCtx), PublicModel: resp.Model,
 			},
 		)
 		if streamErr != nil {

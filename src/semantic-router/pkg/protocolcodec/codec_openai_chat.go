@@ -22,7 +22,11 @@ func (OpenAIChatCodec) Capabilities() llmprotocol.CapabilitySet {
 		llmprotocol.CapabilityStructuredJSON, llmprotocol.CapabilityStrictJSONSchema, llmprotocol.CapabilityStrictToolSchema,
 		llmprotocol.CapabilityStreaming, llmprotocol.CapabilityCacheAccounting,
 		llmprotocol.CapabilityReasoningAccounting, llmprotocol.CapabilityAuthoritativeUsage,
-		llmprotocol.CapabilityMultipleCandidates,
+		llmprotocol.CapabilityMultipleCandidates, llmprotocol.CapabilityCacheDirectives,
+		llmprotocol.CapabilityReasoningEffort,
+		llmprotocol.CapabilityReasoningBudget, llmprotocol.CapabilitySamplingSeed,
+		llmprotocol.CapabilitySamplingPenalties, llmprotocol.CapabilityStopSequences,
+		llmprotocol.CapabilityRequestMetadata, llmprotocol.CapabilityRequestStorage,
 	)
 }
 
@@ -68,7 +72,8 @@ type chatRequestWire struct {
 }
 
 type chatStreamOptionsWire struct {
-	IncludeUsage bool `json:"include_usage,omitempty"`
+	IncludeUsage       *bool `json:"include_usage,omitempty"`
+	IncludeObfuscation *bool `json:"include_obfuscation,omitempty"`
 }
 
 type chatMessageWire struct {
@@ -111,13 +116,14 @@ type chatURLCitationAnnotationWire struct {
 }
 
 type chatContentWire struct {
-	Type                  string              `json:"type"`
-	Text                  string              `json:"text,omitempty"`
-	Refusal               string              `json:"refusal,omitempty"`
-	ImageURL              *chatImageURLWire   `json:"image_url,omitempty"`
-	InputAudio            *chatInputAudioWire `json:"input_audio,omitempty"`
-	File                  *chatFileWire       `json:"file,omitempty"`
-	PromptCacheBreakpoint json.RawMessage     `json:"prompt_cache_breakpoint,omitempty"`
+	Type                  string                     `json:"type"`
+	Text                  string                     `json:"text,omitempty"`
+	Refusal               string                     `json:"refusal,omitempty"`
+	ImageURL              *chatImageURLWire          `json:"image_url,omitempty"`
+	InputAudio            *chatInputAudioWire        `json:"input_audio,omitempty"`
+	File                  *chatFileWire              `json:"file,omitempty"`
+	CacheControl          *anthropicCacheControlWire `json:"cache_control,omitempty"`
+	PromptCacheBreakpoint json.RawMessage            `json:"prompt_cache_breakpoint,omitempty"`
 }
 
 type chatFileWire struct {
@@ -140,6 +146,7 @@ type chatToolCallWire struct {
 	ID       string               `json:"id"`
 	Type     string               `json:"type"`
 	Function chatFunctionCallWire `json:"function"`
+	Custom   json.RawMessage      `json:"custom,omitempty"`
 }
 
 type chatFunctionCallWire struct {
@@ -155,8 +162,9 @@ type chatFunctionDefinitionWire struct {
 }
 
 type chatToolWire struct {
-	Type     string                     `json:"type"`
-	Function chatFunctionDefinitionWire `json:"function"`
+	Type         string                     `json:"type"`
+	Function     chatFunctionDefinitionWire `json:"function"`
+	CacheControl *anthropicCacheControlWire `json:"cache_control,omitempty"`
 }
 
 type chatOutputWire struct {
@@ -188,6 +196,23 @@ func (OpenAIChatCodec) DecodeRequest(body []byte, policy llmprotocol.Policy) (ll
 			nil,
 		)
 	}
+	if wire.MaxTokens != nil && *wire.MaxTokens < 0 ||
+		wire.MaxCompletionTokens != nil && *wire.MaxCompletionTokens < 0 {
+		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, llmprotocol.NewError(
+			llmprotocol.ErrorInvalidRequest,
+			"invalid_chat_max_output_tokens",
+			"Chat Completions output token limit cannot be negative",
+			nil,
+		)
+	}
+	if wire.MaxTokens != nil && wire.MaxCompletionTokens != nil && *wire.MaxTokens != *wire.MaxCompletionTokens {
+		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, llmprotocol.NewError(
+			llmprotocol.ErrorInvalidRequest,
+			"conflicting_max_output_tokens",
+			"max_tokens and max_completion_tokens cannot specify different limits",
+			nil,
+		)
+	}
 	request := decodeChatBaseRequest(wire)
 	if err := decodeChatMessages(wire.Messages, &request, policy); err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
@@ -195,7 +220,7 @@ func (OpenAIChatCodec) DecodeRequest(body []byte, policy llmprotocol.Policy) (ll
 	if err := decodeChatTools(wire.Tools, &request); err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
-	if err := decodeChatRequestOptions(wire, &request); err != nil {
+	if err := decodeChatRequestOptions(wire, &request, policy); err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
 	return request, requestEnvelope(llmprotocol.OpenAIChatV1, body, request.Generation, policy), nil, nil
@@ -213,6 +238,12 @@ func decodeChatBaseRequest(wire chatRequestWire) llmprotocol.Request {
 		},
 		Trusted: llmprotocol.TrustedMetadata{SourceFormat: llmprotocol.OpenAIChatV1},
 	}
+	if wire.StreamOptions != nil {
+		request.StreamOptions = llmprotocol.StreamOptions{
+			IncludeUsage:       wire.StreamOptions.IncludeUsage,
+			IncludeObfuscation: wire.StreamOptions.IncludeObfuscation,
+		}
+	}
 	if wire.MaxCompletionTokens != nil {
 		request.Sampling.MaxOutputTokens = wire.MaxCompletionTokens
 	} else {
@@ -223,7 +254,7 @@ func decodeChatBaseRequest(wire chatRequestWire) llmprotocol.Request {
 
 func decodeChatMessages(messages []chatMessageWire, request *llmprotocol.Request, policy llmprotocol.Policy) error {
 	for index, messageWire := range messages {
-		message, err := decodeChatMessage(messageWire, index, policy)
+		message, err := decodeChatRequestMessage(messageWire, index, policy)
 		if err != nil {
 			return err
 		}
@@ -248,18 +279,27 @@ func decodeChatTools(tools []chatToolWire, request *llmprotocol.Request) error {
 		request.Tools = append(request.Tools, llmprotocol.Tool{
 			Name: toolWire.Function.Name, Description: toolWire.Function.Description,
 			Strict: toolWire.Function.Strict, InputSchema: append(json.RawMessage(nil), schema...),
+			Cache: decodeAnthropicCacheControl(toolWire.CacheControl),
 		})
 	}
 	return nil
 }
 
-func decodeChatRequestOptions(wire chatRequestWire, request *llmprotocol.Request) error {
+func decodeChatRequestOptions(wire chatRequestWire, request *llmprotocol.Request, policy llmprotocol.Policy) error {
 	stop, err := decodeStop(wire.Stop)
 	if err != nil {
 		return err
 	}
+	if len(stop) > 4 {
+		return llmprotocol.NewError(
+			llmprotocol.ErrorInvalidRequest,
+			"chat_stop_sequence_limit",
+			"Chat Completions accepts at most four stop sequences",
+			nil,
+		)
+	}
 	request.Sampling.Stop = stop
-	request.ToolChoice, err = decodeChatToolChoice(wire.ToolChoice)
+	request.ToolChoice, err = decodeChatToolChoice(wire.ToolChoice, policy)
 	if err != nil {
 		return err
 	}
@@ -272,15 +312,43 @@ func decodeChatRequestOptions(wire chatRequestWire, request *llmprotocol.Request
 	return nil
 }
 
-func decodeChatMessage(wire chatMessageWire, index int, policy llmprotocol.Policy) (llmprotocol.Message, error) {
+func decodeChatRequestMessage(wire chatMessageWire, index int, policy llmprotocol.Policy) (llmprotocol.Message, error) {
 	role, err := validateChatMessageEnvelope(wire)
 	if err != nil {
 		return llmprotocol.Message{}, err
 	}
-	contents, err := decodeChatMessageContent(wire.Content, policy)
+	contents, err := decodeChatRequestMessageContent(wire.Content, role, policy)
 	if err != nil {
 		return llmprotocol.Message{}, err
 	}
+	return assembleChatMessage(wire, index, role, contents, policy)
+}
+
+func decodeChatResponseMessage(wire chatMessageWire, index int, policy llmprotocol.Policy) (llmprotocol.Message, error) {
+	role, roleErr := canonicalRole(wire.Role)
+	if roleErr != nil || role != llmprotocol.RoleAssistant {
+		return llmprotocol.Message{}, invalidProviderResponse(
+			"invalid_response_role",
+			"Chat Completions response message role must be assistant",
+		)
+	}
+	if _, err := validateChatMessageEnvelope(wire); err != nil {
+		return llmprotocol.Message{}, err
+	}
+	contents, err := decodeChatResponseMessageContent(wire.Content)
+	if err != nil {
+		return llmprotocol.Message{}, err
+	}
+	return assembleChatMessage(wire, index, role, contents, policy)
+}
+
+func assembleChatMessage(
+	wire chatMessageWire,
+	index int,
+	role llmprotocol.Role,
+	contents []llmprotocol.Content,
+	policy llmprotocol.Policy,
+) (llmprotocol.Message, error) {
 	message := llmprotocol.Message{ID: wire.ID, Role: role, Content: contents}
 	if wire.Refusal != "" {
 		message.Content = append(message.Content, llmprotocol.Content{Kind: llmprotocol.ContentRefusal, Text: wire.Refusal})
@@ -290,7 +358,9 @@ func decodeChatMessage(wire chatMessageWire, index int, policy llmprotocol.Polic
 		reasoning = wire.AlternateReasoning
 	}
 	if reasoning != "" {
-		message.Content = append(message.Content, llmprotocol.Content{Kind: llmprotocol.ContentReasoning, Text: reasoning})
+		message.Content = append(message.Content, llmprotocol.Content{
+			Kind: llmprotocol.ContentReasoning, Text: reasoning, Reasoning: llmprotocol.ReasoningScopeText,
+		})
 	}
 	toolCalls, err := decodeChatToolCalls(wire.ToolCalls, index, policy)
 	if err != nil {
@@ -326,7 +396,11 @@ func validateChatMessageEnvelope(wire chatMessageWire) (llmprotocol.Role, error)
 	return canonicalRole(wire.Role)
 }
 
-func decodeChatMessageContent(raw json.RawMessage, policy llmprotocol.Policy) ([]llmprotocol.Content, error) {
+func decodeChatRequestMessageContent(
+	raw json.RawMessage,
+	role llmprotocol.Role,
+	policy llmprotocol.Policy,
+) ([]llmprotocol.Content, error) {
 	if len(raw) == 0 || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		return nil, nil
 	}
@@ -334,13 +408,25 @@ func decodeChatMessageContent(raw json.RawMessage, policy llmprotocol.Policy) ([
 	if json.Unmarshal(raw, &text) == nil {
 		return []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: text}}, nil
 	}
-	var parts []chatContentWire
-	if err := decodeWire(raw, &parts, policy); err != nil {
+	var partBodies []json.RawMessage
+	if err := decodeWire(raw, &partBodies, policy); err != nil {
 		return nil, err
 	}
-	contents := make([]llmprotocol.Content, 0, len(parts))
-	for _, part := range parts {
-		content, err := decodeChatContent(part)
+	contents := make([]llmprotocol.Content, 0, len(partBodies))
+	for _, partBody := range partBodies {
+		var part chatContentWire
+		if err := decodeWire(partBody, &part, policy); err != nil {
+			return nil, err
+		}
+		if !chatRequestContentAllowed(role, part.Type) {
+			return nil, llmprotocol.NewError(
+				llmprotocol.ErrorUnsupportedFeature,
+				"unsupported_content",
+				fmt.Sprintf("Chat Completions %s message does not support %s content", role, part.Type),
+				nil,
+			)
+		}
+		content, err := decodeChatContent(partBody, part)
 		if err != nil {
 			return nil, err
 		}
@@ -349,9 +435,46 @@ func decodeChatMessageContent(raw json.RawMessage, policy llmprotocol.Policy) ([
 	return contents, nil
 }
 
+func decodeChatResponseMessageContent(raw json.RawMessage) ([]llmprotocol.Content, error) {
+	if len(raw) == 0 || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		return nil, nil
+	}
+	var text string
+	if json.Unmarshal(raw, &text) == nil {
+		return []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: text}}, nil
+	}
+	return nil, llmprotocol.NewError(
+		llmprotocol.ErrorUpstreamUnavailable,
+		"invalid_response_content",
+		"Chat Completions response content must be a string or null",
+		nil,
+	)
+}
+
+func chatRequestContentAllowed(role llmprotocol.Role, contentType string) bool {
+	switch role {
+	case llmprotocol.RoleUser:
+		return contentType == "text" || contentType == "image_url" || contentType == "input_audio" || contentType == "file"
+	case llmprotocol.RoleAssistant:
+		return contentType == "text" || contentType == "refusal"
+	case llmprotocol.RoleSystem, llmprotocol.RoleDeveloper, llmprotocol.RoleTool:
+		return contentType == "text"
+	default:
+		return false
+	}
+}
+
 func decodeChatToolCalls(calls []chatToolCallWire, messageIndex int, policy llmprotocol.Policy) ([]llmprotocol.Content, error) {
 	contents := make([]llmprotocol.Content, 0, len(calls))
 	for toolIndex, call := range calls {
+		if (call.Type != "" && call.Type != "function") || len(call.Custom) > 0 {
+			return nil, llmprotocol.NewError(
+				llmprotocol.ErrorUnsupportedFeature,
+				"unsupported_tool_call",
+				"only function tool calls enter the model protocol",
+				nil,
+			)
+		}
 		id := call.ID
 		if id == "" && policy.MissingStableIDs == llmprotocol.MissingIDGenerateStable {
 			id = llmprotocol.StableID("chat", fmt.Sprint(messageIndex), fmt.Sprint(toolIndex), call.Function.Name, call.Function.Arguments)
@@ -405,31 +528,90 @@ func encodeChatAnnotations(citations []llmprotocol.Citation) []chatAnnotationWir
 	return annotations
 }
 
-func decodeChatContent(part chatContentWire) (llmprotocol.Content, error) {
+func decodeChatContent(body json.RawMessage, part chatContentWire) (llmprotocol.Content, error) {
+	if err := validateChatContentVariant(body, part.Type); err != nil {
+		return llmprotocol.Content{}, err
+	}
 	if err := rejectUnsupportedRequestField("messages.content.prompt_cache_breakpoint", part.PromptCacheBreakpoint); err != nil {
 		return llmprotocol.Content{}, err
 	}
 	switch part.Type {
-	case "text", "input_text", "output_text":
-		return llmprotocol.Content{Kind: llmprotocol.ContentText, Text: part.Text}, nil
+	case "text":
+		return llmprotocol.Content{Kind: llmprotocol.ContentText, Text: part.Text, Cache: decodeAnthropicCacheControl(part.CacheControl)}, nil
 	case "refusal":
+		if part.CacheControl != nil {
+			return llmprotocol.Content{}, unsupportedChatCacheDirective(part.Type)
+		}
 		text := part.Refusal
 		if text == "" {
 			text = part.Text
 		}
 		return llmprotocol.Content{Kind: llmprotocol.ContentRefusal, Text: text}, nil
 	case "image_url":
-		return decodeChatImageContent(part.ImageURL)
+		content, err := decodeChatImageContent(part.ImageURL)
+		content.Cache = decodeAnthropicCacheControl(part.CacheControl)
+		return content, err
 	case "input_audio":
 		if part.InputAudio == nil {
 			return llmprotocol.Content{}, llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "audio_required", "input audio is required", nil)
 		}
-		return llmprotocol.Content{Kind: llmprotocol.ContentAudio, Data: part.InputAudio.Data, MediaType: part.InputAudio.Format}, nil
+		return llmprotocol.Content{Kind: llmprotocol.ContentAudio, Data: part.InputAudio.Data, MediaType: part.InputAudio.Format, Cache: decodeAnthropicCacheControl(part.CacheControl)}, nil
 	case "file":
-		return decodeChatFileContent(part.File)
+		content, err := decodeChatFileContent(part.File)
+		content.Cache = decodeAnthropicCacheControl(part.CacheControl)
+		return content, err
 	default:
 		return llmprotocol.Content{}, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_content", "chat content type is unsupported", nil)
 	}
+}
+
+func validateChatContentVariant(body json.RawMessage, typeName string) error {
+	known := []string{
+		"cache_control", "file", "image_url", "input_audio", "prompt_cache_breakpoint", "refusal", "text", "type",
+	}
+	allowedByType := map[string][]string{
+		"text":        {"cache_control", "prompt_cache_breakpoint", "text", "type"},
+		"refusal":     {"refusal", "type"},
+		"image_url":   {"cache_control", "image_url", "prompt_cache_breakpoint", "type"},
+		"input_audio": {"cache_control", "input_audio", "prompt_cache_breakpoint", "type"},
+		"file":        {"cache_control", "file", "prompt_cache_breakpoint", "type"},
+	}
+	allowed, recognized := allowedByType[typeName]
+	if !recognized {
+		return nil
+	}
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal(body, &object); err != nil {
+		return err
+	}
+	allowedSet := make(map[string]struct{}, len(allowed))
+	for _, name := range allowed {
+		allowedSet[name] = struct{}{}
+	}
+	for _, name := range known {
+		if _, present := object[name]; !present {
+			continue
+		}
+		if _, valid := allowedSet[name]; valid {
+			continue
+		}
+		return llmprotocol.NewError(
+			llmprotocol.ErrorInvalidRequest,
+			"invalid_content_variant",
+			"Chat Completions content includes a field from a different union variant: "+name,
+			nil,
+		)
+	}
+	return nil
+}
+
+func unsupportedChatCacheDirective(kind string) error {
+	return llmprotocol.NewError(
+		llmprotocol.ErrorUnsupportedFeature,
+		"unsupported_cache_directive",
+		fmt.Sprintf("Chat Completions cannot attach cache_control to %s content", kind),
+		nil,
+	)
 }
 
 func decodeChatImageContent(image *chatImageURLWire) (llmprotocol.Content, error) {
@@ -481,7 +663,7 @@ func decodeStop(raw json.RawMessage) ([]string, error) {
 	return many, nil
 }
 
-func decodeChatToolChoice(raw json.RawMessage) (llmprotocol.ToolChoice, error) {
+func decodeChatToolChoice(raw json.RawMessage, policy llmprotocol.Policy) (llmprotocol.ToolChoice, error) {
 	if len(raw) == 0 || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		return llmprotocol.ToolChoice{}, nil
 	}
@@ -496,13 +678,24 @@ func decodeChatToolChoice(raw json.RawMessage) (llmprotocol.ToolChoice, error) {
 			return llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceRequired}, nil
 		}
 	}
+	var discriminator struct {
+		Type string `json:"type"`
+	}
+	if json.Unmarshal(raw, &discriminator) == nil && (discriminator.Type == "allowed_tools" || discriminator.Type == "custom") {
+		return llmprotocol.ToolChoice{}, llmprotocol.NewError(
+			llmprotocol.ErrorUnsupportedFeature,
+			"unsupported_tool_choice",
+			"Chat Completions tool choice cannot be represented by the neutral protocol",
+			nil,
+		)
+	}
 	var named struct {
 		Type     string `json:"type"`
 		Function struct {
 			Name string `json:"name"`
 		} `json:"function"`
 	}
-	if json.Unmarshal(raw, &named) != nil || named.Type != "function" || named.Function.Name == "" {
+	if decodeWire(raw, &named, policy) != nil || named.Type != "function" || named.Function.Name == "" {
 		return llmprotocol.ToolChoice{}, llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_tool_choice", "tool choice is invalid", nil)
 	}
 	return llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceNamed, Name: named.Function.Name}, nil
@@ -533,6 +726,30 @@ func decodeChatOutputFormat(wire chatOutputWire) (llmprotocol.OutputFormat, erro
 func (OpenAIChatCodec) EncodeRequest(request llmprotocol.Request, envelope llmprotocol.Envelope, policy llmprotocol.Policy) ([]byte, llmprotocol.Diagnostics, error) {
 	if envelope.CanReplay(llmprotocol.OpenAIChatV1, request.Generation, policy, false) {
 		return append([]byte(nil), envelope.Request...), nil, nil
+	}
+	if request.ReasoningDisplay != "" {
+		return nil, nil, llmprotocol.NewError(
+			llmprotocol.ErrorUnsupportedFeature,
+			"unsupported_reasoning_display",
+			"Chat Completions cannot represent reasoning display controls",
+			nil,
+		)
+	}
+	if request.Sampling.MaxOutputTokens != nil && *request.Sampling.MaxOutputTokens < 0 {
+		return nil, nil, llmprotocol.NewError(
+			llmprotocol.ErrorUnsupportedFeature,
+			"unsupported_chat_max_output_tokens",
+			"Chat Completions cannot represent a negative output token limit",
+			nil,
+		)
+	}
+	if len(request.Sampling.Stop) > 4 {
+		return nil, nil, llmprotocol.NewError(
+			llmprotocol.ErrorUnsupportedFeature,
+			"unsupported_chat_stop_sequence_limit",
+			"Chat Completions cannot represent more than four stop sequences",
+			nil,
+		)
 	}
 	diagnostics, validationErr := chatRequestDiagnostics(request, policy)
 	if validationErr != nil {
@@ -572,8 +789,11 @@ func encodeChatBaseRequest(request llmprotocol.Request) chatRequestWire {
 		FrequencyPenalty: request.Sampling.FrequencyPenalty, PresencePenalty: request.Sampling.PresencePenalty,
 		ReasoningEffort: request.ReasoningEffort, ReasoningBudget: request.ReasoningBudgetTokens,
 	}
-	if request.Stream {
-		wire.StreamOptions = &chatStreamOptionsWire{IncludeUsage: true}
+	if request.Stream && (request.StreamOptions.IncludeUsage != nil || request.StreamOptions.IncludeObfuscation != nil) {
+		wire.StreamOptions = &chatStreamOptionsWire{
+			IncludeUsage:       request.StreamOptions.IncludeUsage,
+			IncludeObfuscation: request.StreamOptions.IncludeObfuscation,
+		}
 	}
 	return wire
 }
@@ -600,7 +820,7 @@ func appendChatTools(wire *chatRequestWire, tools []llmprotocol.Tool) {
 	for _, tool := range tools {
 		wire.Tools = append(wire.Tools, chatToolWire{Type: "function", Function: chatFunctionDefinitionWire{
 			Name: tool.Name, Description: tool.Description, Parameters: tool.InputSchema, Strict: tool.Strict,
-		}})
+		}, CacheControl: encodeAnthropicCacheControl(tool.Cache)})
 	}
 }
 
@@ -634,7 +854,7 @@ func encodeChatMessage(message llmprotocol.Message) (chatMessageWire, error) {
 	if state.citationTextBlocks > 1 {
 		return chatMessageWire{}, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "citation_text_ambiguous", "Chat Completions citations require one text block", nil)
 	}
-	if len(state.parts) == 1 && state.parts[0].Type == "text" {
+	if len(state.parts) == 1 && state.parts[0].Type == "text" && state.parts[0].CacheControl == nil {
 		wire.Content, _ = json.Marshal(state.parts[0].Text)
 	} else if len(state.parts) > 0 {
 		wire.Content, _ = json.Marshal(state.parts)
@@ -653,18 +873,30 @@ func (state *chatMessageEncodingState) appendContent(content llmprotocol.Content
 	case llmprotocol.ContentText:
 		state.appendText(content)
 	case llmprotocol.ContentRefusal:
-		state.wire.Refusal = content.Text
+		if content.Cache != nil {
+			return unsupportedChatCacheDirective(string(content.Kind))
+		}
+		state.wire.Refusal += content.Text
 	case llmprotocol.ContentReasoning:
-		state.wire.Reasoning = content.Text
+		if content.Cache != nil {
+			return unsupportedChatCacheDirective(string(content.Kind))
+		}
+		state.wire.Reasoning += content.Text
 	case llmprotocol.ContentImage:
 		return state.appendImage(content)
 	case llmprotocol.ContentAudio:
-		state.parts = append(state.parts, chatContentWire{Type: "input_audio", InputAudio: &chatInputAudioWire{Data: content.Data, Format: content.MediaType}})
+		state.parts = append(state.parts, chatContentWire{Type: "input_audio", InputAudio: &chatInputAudioWire{Data: content.Data, Format: content.MediaType}, CacheControl: encodeAnthropicCacheControl(content.Cache)})
 	case llmprotocol.ContentFile:
 		return state.appendFile(content)
 	case llmprotocol.ContentToolCall:
+		if content.Cache != nil {
+			return unsupportedChatCacheDirective(string(content.Kind))
+		}
 		return state.appendToolCall(content.ToolCall)
 	case llmprotocol.ContentToolResult:
+		if content.Cache != nil {
+			return unsupportedChatCacheDirective(string(content.Kind))
+		}
 		return state.appendToolResult(content.ToolResult)
 	default:
 		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_content", "content cannot be encoded as chat", nil)
@@ -673,7 +905,7 @@ func (state *chatMessageEncodingState) appendContent(content llmprotocol.Content
 }
 
 func (state *chatMessageEncodingState) appendText(content llmprotocol.Content) {
-	state.parts = append(state.parts, chatContentWire{Type: "text", Text: content.Text})
+	state.parts = append(state.parts, chatContentWire{Type: "text", Text: content.Text, CacheControl: encodeAnthropicCacheControl(content.Cache)})
 	if len(content.Citations) > 0 {
 		state.citationTextBlocks++
 		state.wire.Annotations = append(state.wire.Annotations, encodeChatAnnotations(content.Citations)...)
@@ -694,7 +926,7 @@ func (state *chatMessageEncodingState) appendImage(content llmprotocol.Content) 
 	if imageURL == "" {
 		return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "image_source", "Chat images require a URL or inline data", nil)
 	}
-	state.parts = append(state.parts, chatContentWire{Type: "image_url", ImageURL: &chatImageURLWire{URL: imageURL, Detail: content.Detail}})
+	state.parts = append(state.parts, chatContentWire{Type: "image_url", ImageURL: &chatImageURLWire{URL: imageURL, Detail: content.Detail}, CacheControl: encodeAnthropicCacheControl(content.Cache)})
 	return nil
 }
 
@@ -709,7 +941,7 @@ func (state *chatMessageEncodingState) appendFile(content llmprotocol.Content) e
 		}
 		file.FileData = "data:" + content.MediaType + ";base64," + content.Data
 	}
-	state.parts = append(state.parts, chatContentWire{Type: "file", File: file})
+	state.parts = append(state.parts, chatContentWire{Type: "file", File: file, CacheControl: encodeAnthropicCacheControl(content.Cache)})
 	return nil
 }
 
@@ -770,6 +1002,9 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 	if err := decodeProviderWire(body, &wire, policy); err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
 	}
+	if err := validateChatResponseResource(wire); err != nil {
+		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
+	}
 	if err := validateChatExecutionMetadata(wire.SystemFingerprint); err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
 	}
@@ -784,8 +1019,15 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 	if wire.Usage != nil {
 		response.Usage = decodeChatUsage(*wire.Usage)
 		appendProviderFieldOmissions(&diagnostics, policy, llmprotocol.OpenAIChatV1, map[string]bool{
-			"usage.compute_units": len(wire.Usage.ComputeUnits) > 0,
-		}, "compute-unit accounting has no protocol-neutral token representation")
+			"usage.compute_units":                                        len(wire.Usage.ComputeUnits) > 0,
+			"usage.prompt_tokens_details.audio_tokens":                   wire.Usage.PromptTokensDetails != nil && wire.Usage.PromptTokensDetails.AudioTokens != 0,
+			"usage.prompt_tokens_details.image_tokens":                   wire.Usage.PromptTokensDetails != nil && wire.Usage.PromptTokensDetails.ImageTokens != 0,
+			"usage.prompt_tokens_details.text_tokens":                    wire.Usage.PromptTokensDetails != nil && wire.Usage.PromptTokensDetails.TextTokens != 0,
+			"usage.completion_tokens_details.accepted_prediction_tokens": wire.Usage.CompletionTokensDetails != nil && wire.Usage.CompletionTokensDetails.AcceptedPredictionTokens != 0,
+			"usage.completion_tokens_details.audio_tokens":               wire.Usage.CompletionTokensDetails != nil && wire.Usage.CompletionTokensDetails.AudioTokens != 0,
+			"usage.completion_tokens_details.rejected_prediction_tokens": wire.Usage.CompletionTokensDetails != nil && wire.Usage.CompletionTokensDetails.RejectedPredictionTokens != 0,
+			"usage.completion_tokens_details.text_tokens":                wire.Usage.CompletionTokensDetails != nil && wire.Usage.CompletionTokensDetails.TextTokens != 0,
+		}, "provider accounting detail has no separate protocol-neutral bucket")
 	}
 	envelope := responseEnvelope(llmprotocol.OpenAIChatV1, body, response.Generation, response.SourceStopReason, policy)
 	return response, envelope, diagnostics, nil
@@ -810,7 +1052,11 @@ func decodeChatResponseEnvelope(wire chatResponseWire) llmprotocol.Response {
 }
 
 func decodeChatChoices(wire chatResponseWire, response *llmprotocol.Response, policy llmprotocol.Policy) error {
-	for choiceIndex, choice := range wire.Choices {
+	choices, err := normalizedChatChoices(wire.Choices)
+	if err != nil {
+		return err
+	}
+	for choiceIndex, choice := range choices {
 		item, err := decodeChatChoiceItem(choice, wire.ID, policy)
 		if err != nil {
 			return err
@@ -833,7 +1079,7 @@ func decodeChatChoiceItem(choice chatChoiceWire, responseID string, policy llmpr
 	if err := validateChatChoiceExtensions(choice); err != nil {
 		return llmprotocol.OutputItem{}, err
 	}
-	message, err := decodeChatMessage(choice.Message, choice.Index, policy)
+	message, err := decodeChatResponseMessage(choice.Message, choice.Index, policy)
 	if err != nil {
 		return llmprotocol.OutputItem{}, err
 	}
@@ -874,12 +1120,13 @@ func decodeChatUsage(wire chatUsageWire) llmprotocol.Usage {
 		Total:           authoritative(wire.TotalTokens),
 	}
 	if wire.PromptTokensDetails != nil {
-		cached := wire.PromptTokensDetails.CachedTokens
-		uncached := wire.PromptTokens - cached
-		if cached < 0 || wire.PromptTokens < cached {
-			uncached = -1
+		cached, cacheWrite := wire.PromptTokensDetails.CachedTokens, wire.PromptTokensDetails.CacheWriteTokens
+		uncached := int64(-1)
+		if cached >= 0 && cacheWrite >= 0 && wire.PromptTokens >= cached && cacheWrite <= wire.PromptTokens-cached {
+			uncached = wire.PromptTokens - cached - cacheWrite
 		}
 		usage.InputCacheRead = authoritative(cached)
+		usage.InputCacheWrite = authoritative(cacheWrite)
 		usage.InputUncached = llmprotocol.TokenCount{
 			Value: llmprotocol.Int64(uncached), Provenance: llmprotocol.UsageDerived,
 		}
@@ -903,11 +1150,17 @@ func (OpenAIChatCodec) EncodeResponse(response llmprotocol.Response, envelope ll
 		return append([]byte(nil), envelope.Response...), nil, nil
 	}
 	if response.Error != nil {
-		return OpenAIChatCodec{}.EncodeTransportError(llmprotocol.TransportError{Error: response.Error}), nil, nil
+		var diagnostics llmprotocol.Diagnostics
+		if response.Usage.State == llmprotocol.UsageAvailable {
+			appendAccountingOmission(&diagnostics, policy, envelope.Format, llmprotocol.OpenAIChatV1, "usage", "Chat Completions error envelopes cannot carry token usage")
+		}
+		return OpenAIChatCodec{}.EncodeTransportError(llmprotocol.TransportError{Error: response.Error}), diagnostics, nil
 	}
 	var diagnostics llmprotocol.Diagnostics
-	if response.Usage.InputCacheWrite.Value != nil {
-		appendAccountingOmission(&diagnostics, policy, envelope.Format, llmprotocol.OpenAIChatV1, "usage.input_cache_write", "Chat Completions has no cache-write usage field")
+	if response.StopReason == llmprotocol.StopPaused || response.StopReason == llmprotocol.StopContextWindow || response.StopReason == llmprotocol.StopCanceled || response.StopReason == llmprotocol.StopUnknown {
+		if err := appendLossy(&diagnostics, policy, envelope.Format, llmprotocol.OpenAIChatV1, "response.stop_reason", "Chat Completions cannot represent the source terminal reason"); err != nil {
+			return nil, diagnostics, err
+		}
 	}
 	wire := chatResponseWire{ID: response.ID, Object: "chat.completion", Model: response.Model}
 	if !response.CreatedAt.IsZero() {
@@ -957,8 +1210,10 @@ func encodeChatUsage(usage llmprotocol.Usage) *chatUsageWire {
 		total = prompt + completion
 	}
 	wire := &chatUsageWire{PromptTokens: prompt, CompletionTokens: completion, TotalTokens: total}
-	if usage.InputCacheRead.Value != nil {
-		wire.PromptTokensDetails = &chatPromptTokensDetailsWire{CachedTokens: tokenValue(usage.InputCacheRead)}
+	if usage.InputCacheRead.Value != nil || usage.InputCacheWrite.Value != nil {
+		wire.PromptTokensDetails = &chatPromptTokensDetailsWire{
+			CachedTokens: tokenValue(usage.InputCacheRead), CacheWriteTokens: tokenValue(usage.InputCacheWrite),
+		}
 	}
 	if usage.OutputReasoning.Value != nil {
 		wire.CompletionTokensDetails = &chatCompletionTokensDetailsWire{ReasoningTokens: tokenValue(usage.OutputReasoning)}

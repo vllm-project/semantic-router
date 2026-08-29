@@ -16,18 +16,33 @@ import (
 
 func (r *OpenAIRouter) applySemanticReasoningMode(
 	request *llmprotocol.Request,
+	model string,
+	targetFormat llmprotocol.WireFormat,
 	enabled bool,
 	decision *config.Decision,
 ) bool {
-	if request == nil || !enabled || r.getModelReasoningFamily(request.Model) == nil {
+	if request == nil || !enabled || r.getModelReasoningFamily(model) == nil {
 		return false
 	}
-	effort := r.getReasoningEffort(decision, request.Model)
-	if request.ReasoningEffort == effort {
+	effort := ""
+	if targetFormat == llmprotocol.OpenAIChatV1 || targetFormat == llmprotocol.OpenAIResponsesV1 {
+		effort = r.getReasoningEffort(decision, model)
+	}
+	mode := request.ReasoningMode
+	budget := request.ReasoningBudgetTokens
+	if targetFormat != llmprotocol.AnthropicMessagesV1 {
+		mode = ""
+		budget = nil
+	} else if mode == llmprotocol.ReasoningModeDisabled {
+		mode = ""
+	}
+	if request.ReasoningEffort == effort && request.ReasoningMode == mode && request.ReasoningBudgetTokens == budget {
 		return false
 	}
+	request.ReasoningMode = mode
 	request.ReasoningEffort = effort
-	logging.Infof("Applied reasoning effort %q to model %q", effort, request.Model)
+	request.ReasoningBudgetTokens = budget
+	logging.Infof("Applied reasoning controls to model %q", model)
 	return true
 }
 

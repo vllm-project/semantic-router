@@ -2,6 +2,7 @@ package protocolcodec
 
 import (
 	"bytes"
+	"encoding/json"
 	"sort"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -9,7 +10,14 @@ import (
 
 type chatStreamDecoder struct {
 	streamState
-	framer sseFramer
+	framer             sseFramer
+	contentIndexes     map[chatContentKey]int
+	nextContentIndexes map[int]int
+}
+
+type chatContentKey struct {
+	item int
+	kind llmprotocol.ContentKind
 }
 type chatStreamEncoder struct {
 	streamState
@@ -18,7 +26,12 @@ type chatStreamEncoder struct {
 }
 
 func (OpenAIChatCodec) NewDecoder(context llmprotocol.StreamContext, policy llmprotocol.Policy) llmprotocol.StreamDecoder {
-	return &chatStreamDecoder{streamState: streamState{context: context, policy: policy}, framer: newSSEFramer(policy.Limits.SSEFrameBytes)}
+	return &chatStreamDecoder{
+		streamState:        streamState{context: context, policy: policy},
+		framer:             newSSEFramer(policy.Limits.SSEFrameBytes),
+		contentIndexes:     make(map[chatContentKey]int),
+		nextContentIndexes: make(map[int]int),
+	}
 }
 
 func (OpenAIChatCodec) NewEncoder(context llmprotocol.StreamContext, policy llmprotocol.Policy) llmprotocol.StreamEncoder {
@@ -32,6 +45,8 @@ type chatChunkWire struct {
 	Model             string                    `json:"model,omitempty"`
 	Choices           []chatChunkChoiceWire     `json:"choices,omitempty"`
 	Usage             *chatUsageWire            `json:"usage,omitempty"`
+	Moderation        json.RawMessage           `json:"moderation,omitempty"`
+	Obfuscation       string                    `json:"obfuscation,omitempty"`
 	Error             *chatErrorWire            `json:"error,omitempty"`
 	ServiceTier       *chatServiceTierWire      `json:"service_tier,omitempty"`
 	SystemFingerprint *string                   `json:"system_fingerprint,omitempty"`
@@ -73,6 +88,9 @@ type chatChunkToolCallWire struct {
 }
 
 func (decoder *chatStreamDecoder) Push(chunk []byte) ([]llmprotocol.Event, llmprotocol.Diagnostics, error) {
+	if err := decoder.observeProviderStreamBytes(chunk); err != nil {
+		return nil, nil, err
+	}
 	frames, err := decoder.framer.Push(chunk)
 	if err != nil {
 		return nil, nil, err
@@ -91,9 +109,12 @@ func (decoder *chatStreamDecoder) Push(chunk []byte) ([]llmprotocol.Event, llmpr
 }
 
 func (decoder *chatStreamDecoder) pushFrame(frame []byte) ([]llmprotocol.Event, llmprotocol.Diagnostics, error) {
-	parsed, err := parseSSEFrame(frame, decoder.policy.Limits.SSEFrameBytes)
-	if err != nil || len(parsed.Data) == 0 {
+	parsed, err := decoder.parseProviderSSEFrame(frame)
+	if err != nil || !parsed.HasData {
 		return nil, nil, err
+	}
+	if decoder.terminal {
+		return nil, nil, invalidProviderResponse("stream_event_after_terminal", "Chat stream emitted data after its terminal sentinel")
 	}
 	if bytes.Equal(bytes.TrimSpace(parsed.Data), []byte("[DONE]")) {
 		event, err := decoder.next(llmprotocol.Event{Type: llmprotocol.EventResponseCompleted, StopReason: decoder.stop, Usage: &decoder.usage})
@@ -106,20 +127,54 @@ func (decoder *chatStreamDecoder) pushFrame(frame []byte) ([]llmprotocol.Event, 
 	if err := validateChatStreamChunk(chunk); err != nil {
 		return nil, nil, err
 	}
+	if err := decoder.observeProviderIdentity(chunk.ID, chunk.Model); err != nil {
+		return nil, nil, err
+	}
 	if chunk.Error != nil {
 		event, err := decoder.next(chatStreamFailureEvent(chunk.Error))
 		return []llmprotocol.Event{event}, nil, err
 	}
-	return decoder.decodeChunkEvents(chunk)
+	events, diagnostics, err := decoder.decodeChunkEvents(chunk)
+	if len(chunk.Moderation) > 0 && !bytes.Equal(bytes.TrimSpace(chunk.Moderation), []byte("null")) {
+		appendProviderFieldOmission(
+			&diagnostics, decoder.policy, llmprotocol.OpenAIChatV1,
+			"stream.moderation", "moderation metadata has no protocol-neutral representation",
+		)
+	}
+	return events, diagnostics, err
 }
 
 func validateChatStreamChunk(chunk chatChunkWire) error {
+	if chunk.Object != "" && chunk.Object != "chat.completion.chunk" {
+		return invalidProviderResponse("invalid_chat_stream_object", "Chat stream object must be chat.completion.chunk")
+	}
 	if err := validateChatExecutionMetadata(chunk.SystemFingerprint); err != nil {
 		return err
 	}
+	if len(chunk.Choices) > 1 {
+		return llmprotocol.NewError(
+			llmprotocol.ErrorUnsupportedFeature,
+			"stream_multiple_choices",
+			"streaming multiple choices is unsupported",
+			nil,
+		)
+	}
 	for _, choice := range chunk.Choices {
+		if choice.FinishReason != nil && !validChatFinishReason(*choice.FinishReason) {
+			return invalidProviderResponse("invalid_chat_finish_reason", "Chat finish reason is not recognized")
+		}
 		if err := validateChatChunkChoiceExtensions(choice); err != nil {
 			return err
+		}
+		seenToolIndexes := make(map[int]struct{}, len(choice.Delta.ToolCalls))
+		for _, call := range choice.Delta.ToolCalls {
+			if call.Index < 0 {
+				return invalidProviderResponse("invalid_stream_tool_index", "Chat stream tool index must be non-negative")
+			}
+			if _, duplicate := seenToolIndexes[call.Index]; duplicate {
+				return invalidProviderResponse("duplicate_stream_tool_index", "Chat stream tool indexes must be unique within a chunk")
+			}
+			seenToolIndexes[call.Index] = struct{}{}
 		}
 	}
 	return nil
@@ -203,7 +258,7 @@ func (decoder *chatStreamDecoder) decodeChoiceTextEvents(choice chatChunkChoiceW
 }
 
 func chatChoiceNeedsItem(choice chatChunkChoiceWire) bool {
-	return choice.Delta.Role != "" || choice.Delta.Content != nil || len(choice.Delta.Annotations) > 0 ||
+	return choice.Delta.Content != nil || len(choice.Delta.Annotations) > 0 ||
 		choice.Delta.Reasoning != nil || choice.Delta.AlternateReasoning != nil || choice.Delta.Refusal != nil
 }
 
@@ -222,7 +277,12 @@ func (decoder *chatStreamDecoder) decodeContentDelta(choice chatChunkChoiceWire)
 	if choice.Delta.Content == nil {
 		return nil, nil
 	}
-	event, err := decoder.next(llmprotocol.Event{Type: llmprotocol.EventOutputTextDelta, ItemIndex: choice.Index, Delta: *choice.Delta.Content})
+	content := llmprotocol.Content{Kind: llmprotocol.ContentText, Text: *choice.Delta.Content}
+	event, err := decoder.next(llmprotocol.Event{
+		Type: llmprotocol.EventOutputTextDelta, ItemIndex: choice.Index,
+		ContentIndex: decoder.chatContentIndex(choice.Index, llmprotocol.ContentText),
+		Delta:        *choice.Delta.Content, Content: &content,
+	})
 	return []llmprotocol.Event{event}, err
 }
 
@@ -234,7 +294,14 @@ func (decoder *chatStreamDecoder) decodeReasoningDelta(choice chatChunkChoiceWir
 	if reasoning == nil {
 		return nil, nil
 	}
-	event, err := decoder.next(llmprotocol.Event{Type: llmprotocol.EventReasoningDelta, ItemIndex: choice.Index, Delta: *reasoning})
+	content := llmprotocol.Content{
+		Kind: llmprotocol.ContentReasoning, Text: *reasoning, Reasoning: llmprotocol.ReasoningScopeText,
+	}
+	event, err := decoder.next(llmprotocol.Event{
+		Type: llmprotocol.EventReasoningDelta, ItemIndex: choice.Index,
+		ContentIndex: decoder.chatContentIndex(choice.Index, llmprotocol.ContentReasoning),
+		Delta:        *reasoning, Content: &content,
+	})
 	return []llmprotocol.Event{event}, err
 }
 
@@ -245,7 +312,8 @@ func (decoder *chatStreamDecoder) decodeRefusalDelta(choice chatChunkChoiceWire)
 	content := llmprotocol.Content{Kind: llmprotocol.ContentRefusal, Text: *choice.Delta.Refusal}
 	event, err := decoder.next(llmprotocol.Event{
 		Type: llmprotocol.EventOutputTextDelta, ItemIndex: choice.Index,
-		Delta: *choice.Delta.Refusal, Content: &content,
+		ContentIndex: decoder.chatContentIndex(choice.Index, llmprotocol.ContentRefusal),
+		Delta:        *choice.Delta.Refusal, Content: &content,
 	})
 	return []llmprotocol.Event{event}, err
 }
@@ -259,13 +327,35 @@ func (decoder *chatStreamDecoder) decodeAnnotations(choice chatChunkChoiceWire) 
 		return nil, err
 	}
 	content := llmprotocol.Content{Kind: llmprotocol.ContentText, Citations: citations}
-	event, err := decoder.next(llmprotocol.Event{Type: llmprotocol.EventOutputTextDelta, ItemIndex: choice.Index, Content: &content})
+	event, err := decoder.next(llmprotocol.Event{
+		Type: llmprotocol.EventOutputTextDelta, ItemIndex: choice.Index,
+		ContentIndex: decoder.chatContentIndex(choice.Index, llmprotocol.ContentText), Content: &content,
+	})
 	return []llmprotocol.Event{event}, err
+}
+
+func (decoder *chatStreamDecoder) chatContentIndex(itemIndex int, kind llmprotocol.ContentKind) int {
+	lookup := chatContentKey{item: itemIndex, kind: kind}
+	if index, found := decoder.contentIndexes[lookup]; found {
+		return index
+	}
+	index := decoder.nextContentIndexes[itemIndex]
+	decoder.nextContentIndexes[itemIndex] = index + 1
+	decoder.contentIndexes[lookup] = index
+	return index
 }
 
 func (decoder *chatStreamDecoder) decodeToolCalls(calls []chatChunkToolCallWire) ([]llmprotocol.Event, error) {
 	events := make([]llmprotocol.Event, 0, len(calls)*2)
 	for _, call := range calls {
+		if call.Type != "" && call.Type != "function" {
+			return nil, llmprotocol.NewError(
+				llmprotocol.ErrorUnsupportedFeature,
+				"unsupported_tool_call",
+				"only function tool calls enter the model protocol",
+				nil,
+			)
+		}
 		itemIndex := call.Index + 1
 		if !decoder.items[itemIndex] {
 			started, err := decoder.next(llmprotocol.Event{Type: llmprotocol.EventOutputItemStarted, ItemIndex: itemIndex, Role: llmprotocol.RoleAssistant, ToolCall: &llmprotocol.ToolCall{ID: call.ID, Name: call.Function.Name}})
@@ -288,6 +378,23 @@ func (decoder *chatStreamDecoder) completeChoice(reason *string) ([]llmprotocol.
 		return nil, nil
 	}
 	decoder.stop = decodeChatStop(*reason)
+	if len(decoder.items) == 0 {
+		if decoder.stop == llmprotocol.StopToolCall {
+			return nil, invalidProviderResponse("stream_tool_output_missing", "Chat stream ended with tool_calls but emitted no tool call")
+		}
+		started, err := decoder.next(llmprotocol.Event{
+			Type: llmprotocol.EventOutputItemStarted, ItemIndex: 0,
+			Role: llmprotocol.RoleAssistant, Content: &llmprotocol.Content{Kind: llmprotocol.ContentText},
+		})
+		if err != nil {
+			return nil, err
+		}
+		completed, err := decoder.next(llmprotocol.Event{
+			Type: llmprotocol.EventOutputItemCompleted, ItemIndex: 0, StopReason: decoder.stop,
+			Content: &llmprotocol.Content{Kind: llmprotocol.ContentText},
+		})
+		return []llmprotocol.Event{started, completed}, err
+	}
 	active := make([]int, 0, len(decoder.items))
 	for itemIndex := range decoder.items {
 		if !decoder.completedItems[itemIndex] {
@@ -340,7 +447,7 @@ func (encoder *chatStreamEncoder) Push(event llmprotocol.Event) ([][]byte, llmpr
 	if event.Type != llmprotocol.EventUsageUpdated {
 		chunk.Choices = []chatChunkChoiceWire{choice}
 	}
-	frame, err := encodeSSE("", chunk)
+	frame, err := encodeChatStreamFrame(encoder.context, chunk)
 	return [][]byte{frame}, diagnostics, err
 }
 
@@ -368,7 +475,12 @@ func (encoder *chatStreamEncoder) applyChunkEvent(
 			return nil, false, err
 		}
 	case llmprotocol.EventUsageUpdated:
-		return applyChatUsage(event, chunk)
+		if event.Usage == nil {
+			return nil, false, llmprotocol.NewError(llmprotocol.ErrorInternal, "usage_event_invalid", "usage event is invalid", nil)
+		}
+		// Usage evidence is accumulated by streamState and rendered exactly once
+		// from the terminal event when the public client requested it.
+		return nil, false, nil
 	default:
 		return nil, false, nil
 	}
@@ -405,14 +517,6 @@ func (encoder *chatStreamEncoder) applyChatReasoningDelta(
 	}
 	choice.Delta.Reasoning = &event.Delta
 	return diagnostics, true, nil
-}
-
-func applyChatUsage(event llmprotocol.Event, chunk *chatChunkWire) (llmprotocol.Diagnostics, bool, error) {
-	if event.Usage == nil {
-		return nil, false, llmprotocol.NewError(llmprotocol.ErrorInternal, "usage_event_invalid", "usage event is invalid", nil)
-	}
-	chunk.Usage = encodeChatUsage(*event.Usage)
-	return nil, true, nil
 }
 
 func (encoder *chatStreamEncoder) reasoningDiagnostics(event llmprotocol.Event) (llmprotocol.Diagnostics, error) {
@@ -452,8 +556,12 @@ func (encoder *chatStreamEncoder) encodeDirectEvent(event llmprotocol.Event) ([]
 		if event.Error == nil {
 			return nil, nil, llmprotocol.NewError(llmprotocol.ErrorInternal, "error_event_invalid", "error event is invalid", nil)
 		}
+		var diagnostics llmprotocol.Diagnostics
+		if event.Usage != nil && event.Usage.State == llmprotocol.UsageAvailable {
+			appendAccountingOmission(&diagnostics, encoder.policy, encoder.context.Source, encoder.context.Target, "usage", "Chat Completions error events cannot carry token usage")
+		}
 		frame, err := encodeSSE("", openAITransportErrorEnvelope(event.Error))
-		return [][]byte{frame}, nil, err
+		return [][]byte{frame}, diagnostics, err
 	case llmprotocol.EventProviderOpaque:
 		if encoder.policy.UnknownFields != llmprotocol.UnknownPreserveSameFormat || encoder.context.Source != encoder.context.Target {
 			return nil, nil, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "opaque_event", "opaque provider event cannot cross formats", nil)
@@ -468,26 +576,41 @@ func (encoder *chatStreamEncoder) encodeCompletion(
 	event llmprotocol.Event,
 ) ([][]byte, llmprotocol.Diagnostics, error) {
 	encoder.terminal = true
+	var diagnostics llmprotocol.Diagnostics
+	if event.StopReason == llmprotocol.StopPaused || event.StopReason == llmprotocol.StopContextWindow || event.StopReason == llmprotocol.StopCanceled || event.StopReason == llmprotocol.StopUnknown {
+		if err := appendLossy(&diagnostics, encoder.policy, encoder.context.Source, encoder.context.Target, "response.stop_reason", "Chat Completions cannot represent the source terminal reason"); err != nil {
+			return nil, diagnostics, err
+		}
+	}
 	reason := encodeChatStop(event.StopReason)
-	finishFrame, err := encodeSSE("", chatChunkWire{
+	finishFrame, err := encodeChatStreamFrame(encoder.context, chatChunkWire{
 		ID: event.ResponseID, Object: "chat.completion.chunk", Model: event.Model,
 		Choices: []chatChunkChoiceWire{{Index: 0, Delta: chatChunkDeltaWire{}, FinishReason: &reason}},
 	})
 	if err != nil {
 		return nil, nil, err
 	}
-	if event.Usage != nil && event.Usage.State == llmprotocol.UsageAvailable {
+	if streamUsageRequested(encoder.context) && event.Usage != nil && event.Usage.State == llmprotocol.UsageAvailable {
 		usageChunk := chatChunkWire{
 			ID: event.ResponseID, Object: "chat.completion.chunk", Model: event.Model,
 			Usage: encodeChatUsage(*event.Usage),
 		}
-		usageFrame, err := encodeSSE("", usageChunk)
+		usageFrame, err := encodeChatStreamFrame(encoder.context, usageChunk)
 		if err != nil {
 			return nil, nil, err
 		}
-		return [][]byte{finishFrame, usageFrame, []byte("data: [DONE]\n\n")}, nil, nil
+		return [][]byte{finishFrame, usageFrame, []byte("data: [DONE]\n\n")}, diagnostics, nil
 	}
-	return [][]byte{finishFrame, []byte("data: [DONE]\n\n")}, nil, nil
+	return [][]byte{finishFrame, []byte("data: [DONE]\n\n")}, diagnostics, nil
+}
+
+func encodeChatStreamFrame(context llmprotocol.StreamContext, chunk chatChunkWire) ([]byte, error) {
+	obfuscation, err := newStreamObfuscation(context)
+	if err != nil {
+		return nil, err
+	}
+	chunk.Obfuscation = obfuscation
+	return encodeSSE("", chunk)
 }
 
 func (encoder *chatStreamEncoder) Finalize(reason error) ([][]byte, llmprotocol.Diagnostics, error) {
@@ -496,12 +619,9 @@ func (encoder *chatStreamEncoder) Finalize(reason error) ([][]byte, llmprotocol.
 	}
 	encoder.terminal = true
 	if reason != nil {
-		body := OpenAIChatCodec{}.EncodeTransportError(llmprotocol.TransportError{Error: llmprotocol.NewError(
-			llmprotocol.ErrorUpstreamUnavailable,
-			"stream_incomplete",
-			"stream ended before completion",
-			reason,
-		)})
+		body := OpenAIChatCodec{}.EncodeTransportError(llmprotocol.TransportError{
+			Error: streamFinalizationError(reason, "stream ended before completion"),
+		})
 		return [][]byte{append([]byte("data: "), append(body, []byte("\n\n")...)...)}, nil, nil
 	}
 	return [][]byte{[]byte("data: [DONE]\n\n")}, nil, nil

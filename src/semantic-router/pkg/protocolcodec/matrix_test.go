@@ -3,7 +3,10 @@ package protocolcodec
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -36,6 +39,108 @@ func TestBufferedRequestMatrix(t *testing.T) {
 			})
 		}
 	}
+}
+
+func TestToolChoiceModesSurviveEveryProtocolPair(t *testing.T) {
+	engine := NewBuiltinEngine()
+	modes := []llmprotocol.ToolChoice{
+		{Mode: llmprotocol.ToolChoiceAuto},
+		{Mode: llmprotocol.ToolChoiceNone},
+		{Mode: llmprotocol.ToolChoiceRequired},
+		{Mode: llmprotocol.ToolChoiceNamed, Name: "lookup"},
+	}
+	for _, source := range builtinFormats {
+		for _, target := range builtinFormats {
+			for _, want := range modes {
+				name := fmt.Sprintf("%s_to_%s_%s", source, target, want.Mode)
+				t.Run(name, func(t *testing.T) {
+					translated, err := engine.TranslateRequest(source, target, toolChoiceFixture(source, want.Mode), nil)
+					if err != nil {
+						t.Fatal(err)
+					}
+					request, _, _, err := engine.DecodeRequest(target, translated.Body)
+					if err != nil {
+						t.Fatalf("decode translated request: %v\n%s", err, translated.Body)
+					}
+					if request.ToolChoice != want {
+						t.Fatalf("tool choice = %+v, want %+v\n%s", request.ToolChoice, want, translated.Body)
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestOpenAIRequestsWithoutOutputLimitRemainValidForAnthropic(t *testing.T) {
+	engine := NewBuiltinEngine()
+	tests := []struct {
+		name   string
+		format llmprotocol.WireFormat
+		body   []byte
+	}{
+		{
+			name:   "Chat Completions",
+			format: llmprotocol.OpenAIChatV1,
+			body:   []byte(`{"model":"source-model","messages":[{"role":"user","content":"hello"}]}`),
+		},
+		{
+			name:   "Responses",
+			format: llmprotocol.OpenAIResponsesV1,
+			body:   []byte(`{"model":"source-model","input":"hello"}`),
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			translated, err := engine.TranslateRequest(test.format, llmprotocol.AnthropicMessagesV1, test.body, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var wire anthropicRequestWire
+			if err := json.Unmarshal(translated.Body, &wire); err != nil {
+				t.Fatal(err)
+			}
+			if wire.MaxTokens == nil || *wire.MaxTokens != defaultAnthropicMaxOutputTokens {
+				t.Fatalf("max_tokens = %v, want generated default %d", wire.MaxTokens, defaultAnthropicMaxOutputTokens)
+			}
+			if len(translated.Diagnostics) != 1 || translated.Diagnostics[0].Action != llmprotocol.DiagnosticGenerated {
+				t.Fatalf("diagnostics = %+v, want one generated max_tokens diagnostic", translated.Diagnostics)
+			}
+		})
+	}
+}
+
+func TestAnthropicTemperatureRangeCannotBeCrossedSilently(t *testing.T) {
+	engine := NewBuiltinEngine()
+	_, _, _, err := engine.DecodeRequest(
+		llmprotocol.AnthropicMessagesV1,
+		[]byte(`{"model":"source-model","max_tokens":64,"temperature":1.5,"messages":[{"role":"user","content":"hello"}]}`),
+	)
+	assertProtocolError(t, err, llmprotocol.ErrorInvalidRequest, "invalid_anthropic_temperature")
+
+	_, err = engine.TranslateRequest(
+		llmprotocol.OpenAIChatV1,
+		llmprotocol.AnthropicMessagesV1,
+		[]byte(`{"model":"source-model","temperature":1.5,"messages":[{"role":"user","content":"hello"}]}`),
+		nil,
+	)
+	assertProtocolError(t, err, llmprotocol.ErrorUnsupportedFeature, "unsupported_anthropic_temperature")
+}
+
+func TestChatStopSequenceCountCannotBeCrossedSilently(t *testing.T) {
+	engine := NewBuiltinEngine()
+	_, _, _, err := engine.DecodeRequest(
+		llmprotocol.OpenAIChatV1,
+		[]byte(`{"model":"source-model","messages":[{"role":"user","content":"hello"}],"stop":["1","2","3","4","5"]}`),
+	)
+	assertProtocolError(t, err, llmprotocol.ErrorInvalidRequest, "chat_stop_sequence_limit")
+
+	_, err = engine.TranslateRequest(
+		llmprotocol.AnthropicMessagesV1,
+		llmprotocol.OpenAIChatV1,
+		[]byte(`{"model":"source-model","max_tokens":64,"messages":[{"role":"user","content":"hello"}],"stop_sequences":["1","2","3","4","5"]}`),
+		nil,
+	)
+	assertProtocolError(t, err, llmprotocol.ErrorUnsupportedFeature, "unsupported_chat_stop_sequence_limit")
 }
 
 func TestBufferedToolLifecycleMatrix(t *testing.T) {
@@ -116,6 +221,46 @@ func TestBufferedResponseMatrix(t *testing.T) {
 	forEachBuiltinFormatPair(t, func(t *testing.T, source, target llmprotocol.WireFormat) {
 		assertBufferedResponsePair(t, engine, source, target)
 	})
+}
+
+func TestResponsesEncoderSynthesizesOutputText(t *testing.T) {
+	response := llmprotocol.Response{
+		Generation: 1,
+		ID:         "resp_1",
+		Model:      "public-model",
+		Output: []llmprotocol.OutputItem{
+			{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{
+				{Kind: llmprotocol.ContentText, Text: "first"},
+				{Kind: llmprotocol.ContentReasoning, Text: "hidden"},
+			}},
+			{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{
+				{Kind: llmprotocol.ContentText, Text: " second"},
+			}},
+		},
+	}
+	envelope := llmprotocol.Envelope{
+		Format: llmprotocol.OpenAIResponsesV1, Generation: 1,
+		Response:       []byte(`{"id":"stale-replay"}`),
+		ResponseRender: llmprotocol.ResponseRenderContext{PreviousResponseID: "resp_previous"},
+	}
+	body, _, err := (OpenAIResponsesCodec{}).EncodeResponse(response, envelope, llmprotocol.DefaultPolicy())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wire responsesResponseWire
+	if err := json.Unmarshal(body, &wire); err != nil {
+		t.Fatal(err)
+	}
+	var outputText string
+	if err := json.Unmarshal(wire.OutputText, &outputText); err != nil {
+		t.Fatalf("output_text is not a JSON string: %v", err)
+	}
+	if wire.PreviousResponseID != "resp_previous" {
+		t.Fatalf("previous_response_id = %q, want request lineage", wire.PreviousResponseID)
+	}
+	if outputText != "first second" {
+		t.Fatalf("output_text = %q, want %q", outputText, "first second")
+	}
 }
 
 func assertBufferedResponsePair(t *testing.T, engine *Engine, source, target llmprotocol.WireFormat) {
@@ -376,6 +521,47 @@ func TestUnknownPreservationIsOnlyExactUnchangedSameFormat(t *testing.T) {
 	}
 }
 
+func TestPolicyEnumsAndEveryLimitAreClosed(t *testing.T) {
+	for name, mutate := range map[string]func(*llmprotocol.Policy){
+		"unknown fields": func(policy *llmprotocol.Policy) {
+			policy.UnknownFields = llmprotocol.UnknownFieldPolicy("future")
+		},
+		"lossy features": func(policy *llmprotocol.Policy) {
+			policy.LossyFeatures = llmprotocol.LossyPolicy("future")
+		},
+		"missing IDs": func(policy *llmprotocol.Policy) {
+			policy.MissingStableIDs = llmprotocol.MissingIDPolicy("future")
+		},
+		"source preservation": func(policy *llmprotocol.Policy) {
+			policy.SourcePreservation = llmprotocol.SourcePreservationPolicy("future")
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			policy := llmprotocol.DefaultPolicy()
+			mutate(&policy)
+			if _, err := NewEngine(NewBuiltinRegistry(), policy); err == nil {
+				t.Fatal("unknown policy value was accepted")
+			}
+		})
+	}
+
+	limitType := reflect.TypeOf(llmprotocol.Limits{})
+	for index := 0; index < limitType.NumField(); index++ {
+		field := limitType.Field(index)
+		t.Run("zero "+field.Name, func(t *testing.T) {
+			policy := llmprotocol.DefaultPolicy()
+			limitValue := reflect.ValueOf(&policy.Limits).Elem().FieldByName(field.Name)
+			if limitValue.Kind() != reflect.Int {
+				t.Fatalf("limit %s has unsupported kind %s", field.Name, limitValue.Kind())
+			}
+			limitValue.SetInt(0)
+			if _, err := NewEngine(NewBuiltinRegistry(), policy); err == nil {
+				t.Fatalf("zero %s limit was accepted", field.Name)
+			}
+		})
+	}
+}
+
 func TestCrossFormatFidelityAndCapabilityFailuresAreExplicit(t *testing.T) {
 	engine := NewBuiltinEngine()
 	developer := []byte(`{"model":"source-model","messages":[{"role":"developer","content":"preserve authority"},{"role":"user","content":"hello"}],"max_tokens":8}`)
@@ -383,12 +569,142 @@ func TestCrossFormatFidelityAndCapabilityFailuresAreExplicit(t *testing.T) {
 		t.Fatal("developer authority was silently collapsed")
 	}
 	strictTool := []byte(`{"model":"source-model","messages":[{"role":"user","content":"hello"}],"max_tokens":8,"tools":[{"type":"function","function":{"name":"lookup","parameters":{"type":"object"},"strict":true}}]}`)
-	if _, err := engine.TranslateRequest(llmprotocol.OpenAIChatV1, llmprotocol.AnthropicMessagesV1, strictTool, nil); err == nil {
-		t.Fatal("strict tool schema was silently weakened")
+	translatedTool, err := engine.TranslateRequest(llmprotocol.OpenAIChatV1, llmprotocol.AnthropicMessagesV1, strictTool, nil)
+	if err != nil {
+		t.Fatalf("official Anthropic strict tool schema was rejected: %v", err)
+	}
+	decodedTool, _, _, err := engine.DecodeRequest(llmprotocol.AnthropicMessagesV1, translatedTool.Body)
+	if err != nil || len(decodedTool.Tools) != 1 || decodedTool.Tools[0].Strict == nil || !*decodedTool.Tools[0].Strict {
+		t.Fatalf("strict tool schema changed: %+v, %v", decodedTool.Tools, err)
 	}
 	refusal := []byte(`{"id":"response_1","model":"source-model","choices":[{"index":0,"message":{"role":"assistant","refusal":"no"},"finish_reason":"content_filter"}],"usage":{"prompt_tokens":2,"completion_tokens":1,"total_tokens":3}}`)
 	if _, err := engine.TranslateResponse(llmprotocol.OpenAIChatV1, llmprotocol.AnthropicMessagesV1, refusal, nil); err == nil {
 		t.Fatal("refusal semantics were silently converted to text")
+	}
+}
+
+func TestRequestOptionMatrixNeverSilentlyDropsSemantics(t *testing.T) {
+	tests := []struct {
+		name   string
+		source llmprotocol.WireFormat
+		target llmprotocol.WireFormat
+		body   string
+	}{
+		{
+			name:   "reasoning budget cannot become Responses effort",
+			source: llmprotocol.OpenAIChatV1, target: llmprotocol.OpenAIResponsesV1,
+			body: `{"model":"m","messages":[{"role":"user","content":"hello"}],"reasoning_budget_tokens":512}`,
+		},
+		{
+			name:   "Anthropic top k cannot disappear in Chat",
+			source: llmprotocol.AnthropicMessagesV1, target: llmprotocol.OpenAIChatV1,
+			body: `{"model":"m","max_tokens":16,"messages":[{"role":"user","content":"hello"}],"top_k":8}`,
+		},
+		{
+			name:   "Chat seed cannot disappear in Responses",
+			source: llmprotocol.OpenAIChatV1, target: llmprotocol.OpenAIResponsesV1,
+			body: `{"model":"m","messages":[{"role":"user","content":"hello"}],"seed":7}`,
+		},
+		{
+			name:   "Chat penalties cannot disappear in Anthropic",
+			source: llmprotocol.OpenAIChatV1, target: llmprotocol.AnthropicMessagesV1,
+			body: `{"model":"m","messages":[{"role":"user","content":"hello"}],"frequency_penalty":0.25}`,
+		},
+		{
+			name:   "stop sequences cannot disappear in Responses",
+			source: llmprotocol.OpenAIChatV1, target: llmprotocol.OpenAIResponsesV1,
+			body: `{"model":"m","messages":[{"role":"user","content":"hello"}],"stop":["END"]}`,
+		},
+		{
+			name:   "arbitrary metadata cannot collapse into Anthropic user id",
+			source: llmprotocol.OpenAIChatV1, target: llmprotocol.AnthropicMessagesV1,
+			body: `{"model":"m","messages":[{"role":"user","content":"hello"}],"metadata":{"trace":"keep"}}`,
+		},
+		{
+			name:   "automatic storage is Responses only",
+			source: llmprotocol.OpenAIResponsesV1, target: llmprotocol.OpenAIChatV1,
+			body: `{"model":"m","input":"hello","auto_store":true}`,
+		},
+		{
+			name:   "conversation state cannot disappear in Chat",
+			source: llmprotocol.OpenAIResponsesV1, target: llmprotocol.OpenAIChatV1,
+			body: `{"model":"m","input":"hello","previous_response_id":"resp_previous"}`,
+		},
+	}
+	engine := NewBuiltinEngine()
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := engine.TranslateRequest(test.source, test.target, []byte(test.body), nil)
+			var protocolError *llmprotocol.ProtocolError
+			if !errors.As(err, &protocolError) || protocolError.Category != llmprotocol.ErrorUnsupportedFeature {
+				t.Fatalf("TranslateRequest() error = %T %v, want typed unsupported_feature", err, err)
+			}
+		})
+	}
+}
+
+func TestRequestOptionMatrixPreservesSharedSemantics(t *testing.T) {
+	engine := NewBuiltinEngine()
+	tests := []struct {
+		name   string
+		source llmprotocol.WireFormat
+		target llmprotocol.WireFormat
+		body   string
+		assert func(*testing.T, llmprotocol.Request)
+	}{
+		{
+			name:   "reasoning budget Chat to Anthropic",
+			source: llmprotocol.OpenAIChatV1, target: llmprotocol.AnthropicMessagesV1,
+			body: `{"model":"m","messages":[{"role":"user","content":"hello"}],"reasoning_budget_tokens":1024}`,
+			assert: func(t *testing.T, request llmprotocol.Request) {
+				if request.ReasoningBudgetTokens == nil || *request.ReasoningBudgetTokens != 1024 {
+					t.Fatalf("reasoning budget = %v", request.ReasoningBudgetTokens)
+				}
+			},
+		},
+		{
+			name:   "stop sequences Chat to Anthropic",
+			source: llmprotocol.OpenAIChatV1, target: llmprotocol.AnthropicMessagesV1,
+			body: `{"model":"m","messages":[{"role":"user","content":"hello"}],"stop":["END","DONE"]}`,
+			assert: func(t *testing.T, request llmprotocol.Request) {
+				if !reflect.DeepEqual(request.Sampling.Stop, []string{"END", "DONE"}) {
+					t.Fatalf("stop sequences = %v", request.Sampling.Stop)
+				}
+			},
+		},
+		{
+			name:   "request metadata Chat to Responses",
+			source: llmprotocol.OpenAIChatV1, target: llmprotocol.OpenAIResponsesV1,
+			body: `{"model":"m","messages":[{"role":"user","content":"hello"}],"metadata":{"trace":"keep"}}`,
+			assert: func(t *testing.T, request llmprotocol.Request) {
+				if request.Metadata["trace"] != "keep" {
+					t.Fatalf("metadata = %v", request.Metadata)
+				}
+			},
+		},
+		{
+			name:   "reasoning effort Chat to Anthropic output config",
+			source: llmprotocol.OpenAIChatV1, target: llmprotocol.AnthropicMessagesV1,
+			body: `{"model":"m","messages":[{"role":"user","content":"hello"}],"reasoning_effort":"high"}`,
+			assert: func(t *testing.T, request llmprotocol.Request) {
+				if request.ReasoningEffort != "high" || request.ReasoningBudgetTokens != nil {
+					t.Fatalf("reasoning controls = effort %q budget %v", request.ReasoningEffort, request.ReasoningBudgetTokens)
+				}
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			translated, err := engine.TranslateRequest(test.source, test.target, []byte(test.body), nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			decoded, _, _, err := engine.DecodeRequest(test.target, translated.Body)
+			if err != nil {
+				t.Fatalf("DecodeRequest() error = %v, body=%s", err, translated.Body)
+			}
+			test.assert(t, decoded)
+		})
 	}
 }
 
@@ -463,6 +779,42 @@ func requestFixture(format llmprotocol.WireFormat) []byte {
 		return []byte(`{"model":"source-model","input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"hello"}]}],"max_output_tokens":8,"tools":[{"type":"function","name":"lookup","description":"Lookup","parameters":{"type":"object"}}],"tool_choice":"auto"}`)
 	case llmprotocol.AnthropicMessagesV1:
 		return []byte(`{"model":"source-model","max_tokens":8,"messages":[{"role":"user","content":[{"type":"text","text":"hello"}]}],"tools":[{"name":"lookup","description":"Lookup","input_schema":{"type":"object"}}],"tool_choice":{"type":"auto"}}`)
+	default:
+		panic("unknown fixture format")
+	}
+}
+
+func toolChoiceFixture(format llmprotocol.WireFormat, mode llmprotocol.ToolChoiceMode) []byte {
+	choice := ""
+	switch format {
+	case llmprotocol.OpenAIChatV1:
+		switch mode {
+		case llmprotocol.ToolChoiceAuto, llmprotocol.ToolChoiceNone, llmprotocol.ToolChoiceRequired:
+			choice = fmt.Sprintf(`,"tool_choice":%q`, mode)
+		case llmprotocol.ToolChoiceNamed:
+			choice = `,"tool_choice":{"type":"function","function":{"name":"lookup"}}`
+		}
+		return []byte(`{"model":"source-model","messages":[{"role":"user","content":"hello"}],"tools":[{"type":"function","function":{"name":"lookup","parameters":{"type":"object"}}}]` + choice + `}`)
+	case llmprotocol.OpenAIResponsesV1:
+		switch mode {
+		case llmprotocol.ToolChoiceAuto, llmprotocol.ToolChoiceNone, llmprotocol.ToolChoiceRequired:
+			choice = fmt.Sprintf(`,"tool_choice":%q`, mode)
+		case llmprotocol.ToolChoiceNamed:
+			choice = `,"tool_choice":{"type":"function","name":"lookup"}`
+		}
+		return []byte(`{"model":"source-model","input":"hello","tools":[{"type":"function","name":"lookup","parameters":{"type":"object"}}]` + choice + `}`)
+	case llmprotocol.AnthropicMessagesV1:
+		switch mode {
+		case llmprotocol.ToolChoiceAuto:
+			choice = `,"tool_choice":{"type":"auto"}`
+		case llmprotocol.ToolChoiceNone:
+			choice = `,"tool_choice":{"type":"none"}`
+		case llmprotocol.ToolChoiceRequired:
+			choice = `,"tool_choice":{"type":"any"}`
+		case llmprotocol.ToolChoiceNamed:
+			choice = `,"tool_choice":{"type":"tool","name":"lookup"}`
+		}
+		return []byte(`{"model":"source-model","max_tokens":8,"messages":[{"role":"user","content":"hello"}],"tools":[{"name":"lookup","input_schema":{"type":"object"}}]` + choice + `}`)
 	default:
 		panic("unknown fixture format")
 	}
@@ -582,11 +934,14 @@ func streamFixture(format llmprotocol.WireFormat) []byte {
 		)
 	case llmprotocol.OpenAIResponsesV1:
 		return join(
-			"event: response.created\ndata: {\"type\":\"response.created\",\"response\":{\"id\":\"response_1\",\"model\":\"source-model\",\"status\":\"in_progress\"}}\n\n",
-			"event: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"output_1\",\"role\":\"assistant\"}}\n\n",
-			"event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"output_index\":0,\"item_id\":\"output_1\",\"delta\":\"hello\"}\n\n",
-			"event: response.output_item.done\ndata: {\"type\":\"response.output_item.done\",\"output_index\":0,\"item_id\":\"output_1\"}\n\n",
-			"event: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"id\":\"response_1\",\"model\":\"source-model\",\"status\":\"completed\",\"usage\":{\"input_tokens\":2,\"output_tokens\":1,\"total_tokens\":3}}}\n\n",
+			"event: response.created\ndata: {\"type\":\"response.created\",\"sequence_number\":0,\"response\":{\"id\":\"response_1\",\"object\":\"response\",\"created_at\":100,\"model\":\"source-model\",\"status\":\"in_progress\",\"output\":[]}}\n\n",
+			"event: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"sequence_number\":1,\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"output_1\",\"role\":\"assistant\",\"status\":\"in_progress\",\"content\":[]}}\n\n",
+			"event: response.content_part.added\ndata: {\"type\":\"response.content_part.added\",\"sequence_number\":2,\"output_index\":0,\"content_index\":0,\"item_id\":\"output_1\",\"part\":{\"type\":\"output_text\",\"text\":\"\",\"annotations\":[]}}\n\n",
+			"event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"sequence_number\":3,\"output_index\":0,\"content_index\":0,\"item_id\":\"output_1\",\"delta\":\"hello\"}\n\n",
+			"event: response.output_text.done\ndata: {\"type\":\"response.output_text.done\",\"sequence_number\":4,\"output_index\":0,\"content_index\":0,\"item_id\":\"output_1\",\"text\":\"hello\"}\n\n",
+			"event: response.content_part.done\ndata: {\"type\":\"response.content_part.done\",\"sequence_number\":5,\"output_index\":0,\"content_index\":0,\"item_id\":\"output_1\",\"part\":{\"type\":\"output_text\",\"text\":\"hello\",\"annotations\":[]}}\n\n",
+			"event: response.output_item.done\ndata: {\"type\":\"response.output_item.done\",\"sequence_number\":6,\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"output_1\",\"role\":\"assistant\",\"status\":\"completed\",\"content\":[{\"type\":\"output_text\",\"text\":\"hello\",\"annotations\":[]}]}}\n\n",
+			"event: response.completed\ndata: {\"type\":\"response.completed\",\"sequence_number\":7,\"response\":{\"id\":\"response_1\",\"object\":\"response\",\"created_at\":100,\"model\":\"source-model\",\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"id\":\"output_1\",\"role\":\"assistant\",\"status\":\"completed\",\"content\":[{\"type\":\"output_text\",\"text\":\"hello\",\"annotations\":[]}]}],\"usage\":{\"input_tokens\":2,\"input_tokens_details\":{\"cached_tokens\":0,\"cache_write_tokens\":0},\"output_tokens\":1,\"output_tokens_details\":{\"reasoning_tokens\":0},\"total_tokens\":3}}}\n\n",
 		)
 	case llmprotocol.AnthropicMessagesV1:
 		return join(
@@ -616,12 +971,13 @@ func toolStreamFixture(format llmprotocol.WireFormat) []byte {
 		)
 	case llmprotocol.OpenAIResponsesV1:
 		return join(
-			"event: response.created\ndata: {\"type\":\"response.created\",\"response\":{\"id\":\"response_1\",\"model\":\"source-model\",\"status\":\"in_progress\"}}\n\n",
-			"event: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"output_index\":0,\"item\":{\"type\":\"function_call\",\"id\":\"item_1\",\"call_id\":\"call_1\",\"name\":\"lookup\",\"arguments\":\"\"}}\n\n",
-			"event: response.function_call_arguments.delta\ndata: {\"type\":\"response.function_call_arguments.delta\",\"output_index\":0,\"item_id\":\"item_1\",\"delta\":"+fmt.Sprintf("%q", first)+"}\n\n",
-			"event: response.function_call_arguments.delta\ndata: {\"type\":\"response.function_call_arguments.delta\",\"output_index\":0,\"item_id\":\"item_1\",\"delta\":"+fmt.Sprintf("%q", second)+"}\n\n",
-			"event: response.output_item.done\ndata: {\"type\":\"response.output_item.done\",\"output_index\":0,\"item\":{\"type\":\"function_call\",\"id\":\"item_1\",\"call_id\":\"call_1\",\"name\":\"lookup\",\"arguments\":"+fmt.Sprintf("%q", arguments)+"}}\n\n",
-			"event: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"id\":\"response_1\",\"model\":\"source-model\",\"status\":\"completed\",\"usage\":{\"input_tokens\":2,\"output_tokens\":1,\"total_tokens\":3}}}\n\n",
+			"event: response.created\ndata: {\"type\":\"response.created\",\"sequence_number\":0,\"response\":{\"id\":\"response_1\",\"object\":\"response\",\"created_at\":100,\"model\":\"source-model\",\"status\":\"in_progress\",\"output\":[]}}\n\n",
+			"event: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"sequence_number\":1,\"output_index\":0,\"item\":{\"type\":\"function_call\",\"id\":\"item_1\",\"call_id\":\"call_1\",\"name\":\"lookup\",\"arguments\":\"\",\"status\":\"in_progress\"}}\n\n",
+			"event: response.function_call_arguments.delta\ndata: {\"type\":\"response.function_call_arguments.delta\",\"sequence_number\":2,\"output_index\":0,\"item_id\":\"item_1\",\"delta\":"+fmt.Sprintf("%q", first)+"}\n\n",
+			"event: response.function_call_arguments.delta\ndata: {\"type\":\"response.function_call_arguments.delta\",\"sequence_number\":3,\"output_index\":0,\"item_id\":\"item_1\",\"delta\":"+fmt.Sprintf("%q", second)+"}\n\n",
+			"event: response.function_call_arguments.done\ndata: {\"type\":\"response.function_call_arguments.done\",\"sequence_number\":4,\"output_index\":0,\"item_id\":\"item_1\",\"name\":\"lookup\",\"arguments\":"+fmt.Sprintf("%q", arguments)+"}\n\n",
+			"event: response.output_item.done\ndata: {\"type\":\"response.output_item.done\",\"sequence_number\":5,\"output_index\":0,\"item\":{\"type\":\"function_call\",\"id\":\"item_1\",\"call_id\":\"call_1\",\"name\":\"lookup\",\"arguments\":"+fmt.Sprintf("%q", arguments)+",\"status\":\"completed\"}}\n\n",
+			"event: response.completed\ndata: {\"type\":\"response.completed\",\"sequence_number\":6,\"response\":{\"id\":\"response_1\",\"object\":\"response\",\"created_at\":100,\"model\":\"source-model\",\"status\":\"completed\",\"output\":[{\"type\":\"function_call\",\"id\":\"item_1\",\"call_id\":\"call_1\",\"name\":\"lookup\",\"arguments\":"+fmt.Sprintf("%q", arguments)+",\"status\":\"completed\"}],\"usage\":{\"input_tokens\":2,\"input_tokens_details\":{\"cached_tokens\":0,\"cache_write_tokens\":0},\"output_tokens\":1,\"output_tokens_details\":{\"reasoning_tokens\":0},\"total_tokens\":3}}}\n\n",
 		)
 	case llmprotocol.AnthropicMessagesV1:
 		return join(

@@ -29,6 +29,12 @@ const (
 
 type ContentKind string
 
+// ReasoningScope preserves whether a provider exposed full reasoning text or
+// a user-facing summary. An empty scope means the source format did not make
+// that distinction; codecs must not guess that unspecified reasoning is a
+// summary.
+type ReasoningScope string
+
 const (
 	ContentText       ContentKind = "text"
 	ContentRefusal    ContentKind = "refusal"
@@ -41,12 +47,18 @@ const (
 	ContentReasoning  ContentKind = "reasoning"
 )
 
+const (
+	ReasoningScopeText    ReasoningScope = "text"
+	ReasoningScopeSummary ReasoningScope = "summary"
+)
+
 // Content is one ordered semantic block. Fields are closed by Kind. Data and
 // references are never fetched by a codec.
 type Content struct {
 	Kind       ContentKind
 	Text       string
 	Citations  []Citation
+	Cache      *CacheDirective
 	MediaType  string
 	URL        string
 	Data       string
@@ -56,6 +68,16 @@ type Content struct {
 	ToolCall   *ToolCall
 	ToolResult *ToolResult
 	Signature  string
+	Reasoning  ReasoningScope
+}
+
+// CacheDirective marks a request block or tool definition as an explicit
+// prompt-cache boundary. It is semantic request state rather than an opaque
+// provider extension, so same-format routing mutations cannot silently erase
+// it. A target format without cache directives must reject the translation.
+type CacheDirective struct {
+	Type string
+	TTL  string
 }
 
 // Citation is bounded, protocol-neutral attribution attached to a text block.
@@ -100,6 +122,7 @@ type Tool struct {
 	Description string
 	Strict      *bool
 	InputSchema json.RawMessage
+	Cache       *CacheDirective
 }
 
 type ToolChoiceMode string
@@ -132,6 +155,14 @@ type OutputFormat struct {
 	Schema      json.RawMessage
 }
 
+type ReasoningMode string
+
+const (
+	ReasoningModeEnabled  ReasoningMode = "enabled"
+	ReasoningModeDisabled ReasoningMode = "disabled"
+	ReasoningModeAdaptive ReasoningMode = "adaptive"
+)
+
 type Sampling struct {
 	Temperature      *float64
 	TopP             *float64
@@ -141,6 +172,15 @@ type Sampling struct {
 	FrequencyPenalty *float64
 	PresencePenalty  *float64
 	Stop             []string
+}
+
+// StreamOptions contains public response-stream preferences. These options
+// belong to the client contract rather than model semantics: Router dispatch
+// may request additional accounting data from a backend without changing what
+// the public stream exposes.
+type StreamOptions struct {
+	IncludeUsage       *bool
+	IncludeObfuscation *bool
 }
 
 // TrustedMetadata is populated by the Router after transport authentication.
@@ -168,17 +208,23 @@ type Request struct {
 	CandidateCount        *int64
 	Sampling              Sampling
 	OutputFormat          OutputFormat
+	ReasoningMode         ReasoningMode
 	ReasoningEffort       string
 	ReasoningBudgetTokens *int64
-	Stream                bool
-	Metadata              map[string]string
-	EndUserID             string
-	PreviousResponseID    string
-	ConversationID        string
-	Truncation            string
-	Store                 *bool
-	AutoStore             *bool
-	Trusted               TrustedMetadata
+	// ReasoningDisplay controls whether a provider returns summarized reasoning
+	// content or only its signed continuation token. It is distinct from whether
+	// reasoning itself is enabled.
+	ReasoningDisplay   string
+	Stream             bool
+	StreamOptions      StreamOptions
+	Metadata           map[string]string
+	EndUserID          string
+	PreviousResponseID string
+	ConversationID     string
+	Truncation         string
+	Store              *bool
+	AutoStore          *bool
+	Trusted            TrustedMetadata
 }
 
 type StopReason string
@@ -189,6 +235,8 @@ const (
 	StopSequence      StopReason = "stop_sequence"
 	StopToolCall      StopReason = "tool_call"
 	StopContentFilter StopReason = "content_filter"
+	StopPaused        StopReason = "paused"
+	StopContextWindow StopReason = "context_window_exceeded"
 	StopCanceled      StopReason = "canceled"
 	StopError         StopReason = "error"
 	StopUnknown       StopReason = "unknown"
@@ -238,11 +286,12 @@ type Response struct {
 	// Alternatives preserves additional, ordered model choices when a source
 	// format supports them. A target that cannot represent alternatives must
 	// apply the configured lossy policy; it may never silently pick one.
-	Alternatives      [][]OutputItem
-	StopReason        StopReason
-	SourceStopReason  string
-	Usage             Usage
-	ProviderRequestID string
+	Alternatives        [][]OutputItem
+	StopReason          StopReason
+	SourceStopReason    string
+	MatchedStopSequence string
+	Usage               Usage
+	ProviderRequestID   string
 	// Evidence is bounded, protocol-neutral model evidence for Router
 	// algorithms. It is never usage evidence and codecs do not publish it unless
 	// the target protocol explicitly represents the same semantic field.

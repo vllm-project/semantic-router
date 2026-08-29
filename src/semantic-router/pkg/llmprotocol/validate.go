@@ -55,6 +55,9 @@ func validateRequestEnvelope(request Request, limits Limits) (int, error) {
 	if err := validateCandidateCount(request.CandidateCount, limits.Candidates); err != nil {
 		return 0, err
 	}
+	if !request.Stream && (request.StreamOptions.IncludeUsage != nil || request.StreamOptions.IncludeObfuscation != nil) {
+		return 0, NewError(ErrorInvalidRequest, "stream_options_without_stream", "stream options require streaming", nil)
+	}
 	blocks := 0
 	for _, instruction := range request.Instructions {
 		blocks += len(instruction.Content)
@@ -77,6 +80,14 @@ func validateRequestIdentity(request Request, limits Limits) error {
 	}
 	if exceeds(request.EndUserID, limits.IdentifierBytes) {
 		return NewError(ErrorInvalidRequest, "end_user_id_limit", "end-user ID exceeds the configured limit", nil)
+	}
+	if request.PreviousResponseID != "" && request.ConversationID != "" {
+		return NewError(
+			ErrorInvalidRequest,
+			"conflicting_conversation_state",
+			"previous response and conversation references cannot be used together",
+			nil,
+		)
 	}
 	if request.Truncation != "" && request.Truncation != "disabled" && request.Truncation != "auto" {
 		return NewError(ErrorInvalidRequest, "invalid_truncation", "truncation mode is invalid", nil)
@@ -234,7 +245,10 @@ func validateRequestTool(tool Tool, limits Limits) error {
 	if limits.SchemaBytes > 0 && len(tool.InputSchema) > limits.SchemaBytes {
 		return NewError(ErrorInvalidRequest, "schema_limit", "tool schema limit exceeded", nil)
 	}
-	return validateSchemaObject(tool.InputSchema, "tool schema")
+	if err := validateCacheDirective(tool.Cache); err != nil {
+		return err
+	}
+	return validateSchemaObject(tool.InputSchema, "tool schema", limits)
 }
 
 func validateToolChoice(choice ToolChoice, namedTools map[string]struct{}, toolCount int) error {
@@ -289,7 +303,7 @@ func validateJSONSchemaOutputFormat(format OutputFormat, schemaBytes int, limits
 	if limits.SchemaBytes > 0 && schemaBytes+len(format.Schema) > limits.SchemaBytes {
 		return NewError(ErrorInvalidRequest, "schema_limit", "total schema limit exceeded", nil)
 	}
-	if err := validateSchemaObject(format.Schema, "output schema"); err != nil {
+	if err := validateSchemaObject(format.Schema, "output schema", limits); err != nil {
 		return err
 	}
 	if strings.TrimSpace(format.Name) == "" {
@@ -298,9 +312,8 @@ func validateJSONSchemaOutputFormat(format OutputFormat, schemaBytes int, limits
 	return nil
 }
 
-func validateSchemaObject(schema json.RawMessage, label string) error {
-	var object map[string]json.RawMessage
-	if err := json.Unmarshal(schema, &object); err != nil || object == nil {
+func validateSchemaObject(schema json.RawMessage, label string, limits Limits) error {
+	if err := ValidateJSONObject(schema, limits.JSONDepth); err != nil {
 		return NewError(ErrorInvalidRequest, "invalid_schema", label+" must be a JSON object", err)
 	}
 	return nil
@@ -321,7 +334,7 @@ func validateSamplingScalars(sampling Sampling) error {
 		return err
 	}
 	for _, penalty := range []*float64{sampling.FrequencyPenalty, sampling.PresencePenalty} {
-		if penalty != nil && (*penalty < -2 || *penalty > 2) {
+		if penalty != nil && (!finiteFloat(*penalty) || *penalty < -2 || *penalty > 2) {
 			return NewError(ErrorInvalidRequest, "invalid_penalty", "sampling penalty must be between -2 and 2", nil)
 		}
 	}
@@ -329,21 +342,25 @@ func validateSamplingScalars(sampling Sampling) error {
 }
 
 func validateSamplingProbability(sampling Sampling) error {
-	if sampling.Temperature != nil && (*sampling.Temperature < 0 || *sampling.Temperature > 2) {
+	if sampling.Temperature != nil && (!finiteFloat(*sampling.Temperature) || *sampling.Temperature < 0 || *sampling.Temperature > 2) {
 		return NewError(ErrorInvalidRequest, "invalid_temperature", "temperature must be between 0 and 2", nil)
 	}
-	if sampling.TopP != nil && (*sampling.TopP < 0 || *sampling.TopP > 1) {
+	if sampling.TopP != nil && (!finiteFloat(*sampling.TopP) || *sampling.TopP < 0 || *sampling.TopP > 1) {
 		return NewError(ErrorInvalidRequest, "invalid_top_p", "top_p must be between 0 and 1", nil)
 	}
 	return nil
+}
+
+func finiteFloat(value float64) bool {
+	return !math.IsNaN(value) && !math.IsInf(value, 0)
 }
 
 func validateSamplingCounts(sampling Sampling) error {
 	if sampling.TopK != nil && *sampling.TopK < 0 {
 		return NewError(ErrorInvalidRequest, "invalid_top_k", "top_k cannot be negative", nil)
 	}
-	if sampling.MaxOutputTokens != nil && *sampling.MaxOutputTokens <= 0 {
-		return NewError(ErrorInvalidRequest, "invalid_max_output_tokens", "max output tokens must be positive", nil)
+	if sampling.MaxOutputTokens != nil && *sampling.MaxOutputTokens < 0 {
+		return NewError(ErrorInvalidRequest, "invalid_max_output_tokens", "max output tokens cannot be negative", nil)
 	}
 	return nil
 }
@@ -370,12 +387,34 @@ func validateReasoning(request Request, limits Limits) error {
 		return NewError(ErrorInvalidRequest, "reasoning_effort_limit", "reasoning effort exceeds the configured limit", nil)
 	}
 	switch strings.ToLower(strings.TrimSpace(request.ReasoningEffort)) {
-	case "", "none", "minimal", "low", "medium", "high", "xhigh":
+	case "", "none", "minimal", "low", "medium", "high", "xhigh", "max":
 	default:
 		return NewError(ErrorInvalidRequest, "invalid_reasoning_effort", "reasoning effort is invalid", nil)
 	}
 	if request.ReasoningBudgetTokens != nil && *request.ReasoningBudgetTokens <= 0 {
 		return NewError(ErrorInvalidRequest, "invalid_reasoning_budget", "reasoning budget must be positive", nil)
+	}
+	switch request.ReasoningDisplay {
+	case "", "summarized", "omitted":
+	default:
+		return NewError(ErrorInvalidRequest, "invalid_reasoning_display", "reasoning display mode is invalid", nil)
+	}
+	if request.ReasoningDisplay != "" &&
+		request.ReasoningMode != ReasoningModeEnabled &&
+		request.ReasoningMode != ReasoningModeAdaptive {
+		return NewError(ErrorInvalidRequest, "conflicting_reasoning_display", "reasoning display requires enabled or adaptive reasoning", nil)
+	}
+	switch request.ReasoningMode {
+	case "", ReasoningModeEnabled:
+	case ReasoningModeDisabled, ReasoningModeAdaptive:
+		if request.ReasoningBudgetTokens != nil || strings.TrimSpace(request.ReasoningEffort) != "" {
+			return NewError(ErrorInvalidRequest, "conflicting_reasoning_control", string(request.ReasoningMode)+" reasoning cannot include an effort or token budget", nil)
+		}
+	default:
+		return NewError(ErrorInvalidRequest, "invalid_reasoning_mode", "reasoning mode is invalid", nil)
+	}
+	if request.ReasoningMode == ReasoningModeEnabled && request.ReasoningBudgetTokens == nil {
+		return NewError(ErrorInvalidRequest, "reasoning_budget_required", "enabled reasoning requires a token budget", nil)
 	}
 	return nil
 }
@@ -422,11 +461,12 @@ func recordToolResult(
 	return nil
 }
 
-// MarkDeferredToolLinks annotates tool results whose calls live in retained
-// response history. Codecs call this after decoding a continuation request;
-// callers constructing neutral IR directly must set the marker themselves.
+// MarkDeferredToolLinks reconciles tool-result links against the messages
+// currently materialized in the request. A missing call is deferred only while
+// previous_response_id still identifies retained history; after that history is
+// expanded locally, ordinary lifecycle validation applies to every result.
 func MarkDeferredToolLinks(request *Request) {
-	if request == nil || request.PreviousResponseID == "" {
+	if request == nil {
 		return
 	}
 	calls := make(map[string]struct{})
@@ -441,7 +481,7 @@ func MarkDeferredToolLinks(request *Request) {
 				continue
 			}
 			_, local := calls[content.ToolResult.CallID]
-			content.ToolResult.DeferredLink = !local
+			content.ToolResult.DeferredLink = request.PreviousResponseID != "" && !local
 		}
 	}
 }
@@ -472,6 +512,9 @@ func validateContent(content Content, blocks *int, limits Limits, depth int) err
 	if limits.ToolResultDepth <= 0 || depth > limits.ToolResultDepth {
 		return NewError(ErrorInvalidRequest, "tool_result_depth", "nested tool result depth exceeded", nil)
 	}
+	if err := validateCacheDirective(content.Cache); err != nil {
+		return err
+	}
 	switch content.Kind {
 	case ContentText, ContentRefusal, ContentReasoning:
 		return validateTextContent(content, limits)
@@ -486,9 +529,34 @@ func validateContent(content Content, blocks *int, limits Limits, depth int) err
 	}
 }
 
+func validateCacheDirective(cache *CacheDirective) error {
+	if cache == nil {
+		return nil
+	}
+	if cache.Type != "ephemeral" {
+		return NewError(ErrorInvalidRequest, "invalid_cache_directive", "cache directive type must be ephemeral", nil)
+	}
+	switch cache.TTL {
+	case "", "5m", "1h":
+		return nil
+	default:
+		return NewError(ErrorInvalidRequest, "invalid_cache_directive", "cache directive TTL must be 5m or 1h", nil)
+	}
+}
+
 func validateTextContent(content Content, limits Limits) error {
 	if hasNonTextFields(content) {
 		return NewError(ErrorInvalidRequest, "invalid_content", "text content contains fields from another content kind", nil)
+	}
+	if content.Kind == ContentReasoning {
+		switch content.Reasoning {
+		case "", ReasoningScopeText, ReasoningScopeSummary:
+		default:
+			return NewError(ErrorInvalidRequest, "invalid_reasoning_scope", "reasoning content scope is unsupported", nil)
+		}
+		if content.Reasoning == ReasoningScopeSummary && content.Signature != "" {
+			return NewError(ErrorInvalidRequest, "invalid_reasoning_signature", "reasoning summaries cannot carry a private reasoning signature", nil)
+		}
 	}
 	if content.Kind != ContentText && len(content.Citations) != 0 {
 		return NewError(ErrorInvalidRequest, "invalid_content", "only text content may contain citations", nil)
@@ -499,7 +567,7 @@ func validateTextContent(content Content, limits Limits) error {
 func hasNonTextFields(content Content) bool {
 	return content.ToolCall != nil || content.ToolResult != nil || content.URL != "" || content.Data != "" ||
 		content.FileID != "" || content.Filename != "" || content.MediaType != "" || content.Detail != "" ||
-		(content.Kind != ContentReasoning && content.Signature != "")
+		(content.Kind != ContentReasoning && (content.Signature != "" || content.Reasoning != ""))
 }
 
 func validateMediaContent(content Content, limits Limits) error {
@@ -571,8 +639,11 @@ func validateMediaSource(content Content) error {
 func validateToolCallContent(content Content, limits Limits) error {
 	call := content.ToolCall
 	if call == nil || strings.TrimSpace(call.ID) == "" ||
-		strings.TrimSpace(call.Name) == "" || !jsonObject([]byte(call.Arguments)) {
+		strings.TrimSpace(call.Name) == "" {
 		return NewError(ErrorInvalidRequest, "invalid_tool_call", "tool call requires an ID, name, and JSON arguments", nil)
+	}
+	if err := ValidateJSONObject([]byte(call.Arguments), limits.JSONDepth); err != nil {
+		return NewError(ErrorInvalidRequest, "invalid_tool_call", "tool call arguments must be one strict JSON object", err)
 	}
 	if exceeds(call.ID, limits.IdentifierBytes) || exceeds(call.Name, limits.ToolNameBytes) {
 		return NewError(ErrorInvalidRequest, "tool_call_limit", "tool call ID or name exceeds the configured limit", nil)
@@ -690,11 +761,6 @@ func validateMediaURL(raw string) error {
 	return nil
 }
 
-func jsonObject(payload []byte) bool {
-	var object map[string]json.RawMessage
-	return json.Unmarshal(payload, &object) == nil && object != nil
-}
-
 func ValidateResponse(response Response, limits Limits) error {
 	if err := validateResponseEnvelope(response, limits); err != nil {
 		return err
@@ -727,21 +793,31 @@ func validateResponseEnvelope(response Response, limits Limits) error {
 		return NewError(ErrorInternal, "generation_required", "semantic generation is required", nil)
 	}
 	if exceeds(response.ID, limits.IdentifierBytes) || exceeds(response.ProviderRequestID, limits.IdentifierBytes) ||
-		exceeds(response.Model, limits.ModelBytes) || exceeds(response.SourceStopReason, limits.IdentifierBytes) {
+		exceeds(response.Model, limits.ModelBytes) || exceeds(response.SourceStopReason, limits.IdentifierBytes) ||
+		exceeds(response.MatchedStopSequence, limits.StopBytes) {
 		return NewError(ErrorUpstreamUnavailable, "response_field_limit", "upstream response identity or model exceeds the configured limit", nil)
 	}
 	return nil
 }
 
 func validateErrorResponse(response Response, limits Limits) error {
-	if len(response.Output) > 0 || len(response.Alternatives) > 0 || response.StopReason != StopError {
+	if len(response.Output) > 0 || len(response.Alternatives) > 0 || response.StopReason != StopError || response.MatchedStopSequence != "" {
 		return NewError(ErrorUpstreamUnavailable, "invalid_error_response", "an error response cannot contain output", nil)
+	}
+	if err := validateProtocolError(response.Error); err != nil {
+		return err
 	}
 	if exceeds(response.Error.Code, limits.IdentifierBytes) || exceeds(response.Error.Parameter, limits.IdentifierBytes) ||
 		exceeds(response.Error.Message, limits.TextBytes) {
 		return NewError(ErrorUpstreamUnavailable, "response_error_limit", "upstream response error exceeds the configured limit", nil)
 	}
-	return nil
+	// Failed requests commonly have no token evidence at all. Keep the zero
+	// value distinct from an explicit "unknown" usage report, while still
+	// validating every provider-supplied count when usage is present.
+	if response.Usage.State == "" {
+		return nil
+	}
+	return ValidateUsage(response.Usage)
 }
 
 func validateSuccessfulResponseEnvelope(response Response, limits Limits) error {
@@ -750,6 +826,12 @@ func validateSuccessfulResponseEnvelope(response Response, limits Limits) error 
 	}
 	if !validStopReason(response.StopReason) {
 		return NewError(ErrorUpstreamUnavailable, "invalid_stop_reason", "upstream stop reason is invalid", nil)
+	}
+	if response.StopReason == StopSequence && strings.TrimSpace(response.MatchedStopSequence) == "" {
+		return NewError(ErrorUpstreamUnavailable, "matched_stop_sequence_required", "upstream stop_sequence reason requires the matched sequence", nil)
+	}
+	if response.StopReason != StopSequence && response.MatchedStopSequence != "" {
+		return NewError(ErrorUpstreamUnavailable, "matched_stop_sequence_reason", "upstream matched stop sequence requires stop_sequence reason", nil)
 	}
 	if len(response.Output) == 0 {
 		return NewError(ErrorUpstreamUnavailable, "empty_response_output", "successful upstream response has no primary output", nil)
@@ -831,6 +913,9 @@ func ValidateTransportError(transportError TransportError, limits Limits) error 
 	if transportError.Error == nil {
 		return NewError(ErrorUpstreamUnavailable, "transport_error_required", "upstream transport error is missing", nil)
 	}
+	if err := validateProtocolError(transportError.Error); err != nil {
+		return err
+	}
 	if exceeds(transportError.ProviderRequestID, limits.IdentifierBytes) ||
 		exceeds(transportError.Error.Code, limits.IdentifierBytes) ||
 		exceeds(transportError.Error.Parameter, limits.IdentifierBytes) ||
@@ -838,6 +923,30 @@ func ValidateTransportError(transportError TransportError, limits Limits) error 
 		return NewError(ErrorUpstreamUnavailable, "transport_error_limit", "upstream transport error exceeds the configured limit", nil)
 	}
 	return nil
+}
+
+func validateProtocolError(protocolError *ProtocolError) error {
+	if protocolError == nil {
+		return NewError(ErrorUpstreamUnavailable, "protocol_error_required", "protocol error is missing", nil)
+	}
+	if !validErrorCategory(protocolError.Category) {
+		return NewError(ErrorUpstreamUnavailable, "invalid_error_category", "protocol error category is invalid", nil)
+	}
+	if strings.TrimSpace(protocolError.Message) == "" {
+		return NewError(ErrorUpstreamUnavailable, "error_message_required", "protocol error message is required", nil)
+	}
+	return nil
+}
+
+func validErrorCategory(category ErrorCategory) bool {
+	switch category {
+	case ErrorInvalidRequest, ErrorAuthentication, ErrorPermission, ErrorNotFound,
+		ErrorConflict, ErrorUnsupportedFeature, ErrorRateLimited,
+		ErrorUpstreamUnavailable, ErrorUpstreamTimeout, ErrorInternal:
+		return true
+	default:
+		return false
+	}
 }
 
 func ValidateUsage(usage Usage) error {
@@ -908,9 +1017,6 @@ func usageSumStatus(total TokenCount, parts ...TokenCount) [2]bool {
 }
 
 func countEqualsSum(total TokenCount, parts ...TokenCount) (bool, bool) {
-	if total.Value == nil {
-		return true, false
-	}
 	var sum int64
 	found := false
 	for _, part := range parts {
@@ -923,6 +1029,9 @@ func countEqualsSum(total TokenCount, parts ...TokenCount) (bool, bool) {
 		}
 		sum += *part.Value
 	}
+	if total.Value == nil {
+		return true, false
+	}
 	return !found || *total.Value == sum, false
 }
 
@@ -931,7 +1040,7 @@ func exceeds(value string, limit int) bool { return limit > 0 && len(value) > li
 func validStopReason(reason StopReason) bool {
 	switch reason {
 	case "", StopEndTurn, StopMaxTokens, StopSequence, StopToolCall, StopContentFilter,
-		StopCanceled, StopError, StopUnknown:
+		StopPaused, StopContextWindow, StopCanceled, StopError, StopUnknown:
 		return true
 	default:
 		return false

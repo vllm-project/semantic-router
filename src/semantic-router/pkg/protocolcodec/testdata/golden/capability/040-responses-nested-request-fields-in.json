@@ -1,0 +1,262 @@
+{
+  "operation": "request",
+  "cases": [
+    {
+      "name": "reasoning_context",
+      "body": {
+        "model": "client-model",
+        "input": "hello",
+        "reasoning": {
+          "effort": "high",
+          "context": "all_turns"
+        }
+      }
+    },
+    {
+      "name": "reasoning_generate_summary",
+      "body": {
+        "model": "client-model",
+        "input": "hello",
+        "reasoning": {
+          "generate_summary": "auto"
+        }
+      }
+    },
+    {
+      "name": "reasoning_summary",
+      "body": {
+        "model": "client-model",
+        "input": "hello",
+        "reasoning": {
+          "summary": "concise"
+        }
+      }
+    },
+    {
+      "name": "text_verbosity_and_format_description",
+      "body": {
+        "model": "client-model",
+        "input": "hello",
+        "text": {
+          "verbosity": "high",
+          "format": {
+            "type": "json_schema",
+            "name": "answer",
+            "description": "A concise answer",
+            "strict": true,
+            "schema": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "function_tool_allowed_callers",
+      "body": {
+        "model": "client-model",
+        "input": "hello",
+        "tools": [
+          {
+            "type": "function",
+            "name": "lookup",
+            "parameters": {
+              "type": "object"
+            },
+            "allowed_callers": ["model"]
+          }
+        ]
+      }
+    },
+    {
+      "name": "function_tool_defer_loading",
+      "body": {
+        "model": "client-model",
+        "input": "hello",
+        "tools": [
+          {
+            "type": "function",
+            "name": "lookup",
+            "parameters": {
+              "type": "object"
+            },
+            "defer_loading": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "function_tool_output_schema",
+      "body": {
+        "model": "client-model",
+        "input": "hello",
+        "tools": [
+          {
+            "type": "function",
+            "name": "lookup",
+            "parameters": {
+              "type": "object"
+            },
+            "output_schema": {
+              "type": "object"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "input_file_data",
+      "body": {
+        "model": "client-model",
+        "input": [
+          {
+            "type": "message",
+            "role": "user",
+            "content": [
+              {
+                "type": "input_file",
+                "file_data": "data:text/plain;base64,aGVsbG8=",
+                "filename": "brief.txt"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "input_file_id",
+      "body": {
+        "model": "client-model",
+        "input": [
+          {
+            "type": "message",
+            "role": "user",
+            "content": [
+              {
+                "type": "input_file",
+                "file_id": "file_1"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "input_file_url",
+      "body": {
+        "model": "client-model",
+        "input": [
+          {
+            "type": "message",
+            "role": "user",
+            "content": [
+              {
+                "type": "input_file",
+                "file_url": "https://example.com/brief.pdf",
+                "filename": "brief.pdf"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "input_image_detail",
+      "body": {
+        "model": "client-model",
+        "input": [
+          {
+            "type": "message",
+            "role": "user",
+            "content": [
+              {
+                "type": "input_image",
+                "image_url": "https://example.com/image.png",
+                "detail": "high"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "input_prompt_cache_breakpoint",
+      "body": {
+        "model": "client-model",
+        "input": [
+          {
+            "type": "message",
+            "role": "user",
+            "content": [
+              {
+                "type": "input_text",
+                "text": "cache me",
+                "prompt_cache_breakpoint": {
+                  "mode": "explicit"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "input_message_phase",
+      "body": {
+        "model": "client-model",
+        "input": [
+          {
+            "type": "message",
+            "role": "user",
+            "phase": "commentary",
+            "content": [
+              {
+                "type": "input_text",
+                "text": "hello"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "encrypted_reasoning_item",
+      "body": {
+        "model": "client-model",
+        "input": [
+          {
+            "type": "reasoning",
+            "id": "reasoning_1",
+            "summary": [],
+            "encrypted_content": "encrypted"
+          }
+        ]
+      }
+    },
+    {
+      "name": "namespaced_function_call",
+      "body": {
+        "model": "client-model",
+        "input": [
+          {
+            "type": "function_call",
+            "id": "fc_1",
+            "call_id": "call_1",
+            "name": "lookup",
+            "namespace": "weather",
+            "caller": "model",
+            "arguments": "{\"q\":\"weather\"}",
+            "prompt_cache_breakpoint": {
+              "mode": "explicit"
+            }
+          },
+          {
+            "type": "function_call_output",
+            "call_id": "call_1",
+            "output": "sunny"
+          }
+        ]
+      }
+    }
+  ]
+}

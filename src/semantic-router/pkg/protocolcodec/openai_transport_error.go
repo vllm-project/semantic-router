@@ -32,6 +32,9 @@ func decodeOpenAITransportError(
 			nil,
 		)
 	}
+	if err := validateTransportErrorDetails(wire.Error.Type, wire.Error.Message); err != nil {
+		return llmprotocol.TransportError{}, nil, err
+	}
 	code, parameter := "", ""
 	if wire.Error.Code != nil {
 		code = *wire.Error.Code

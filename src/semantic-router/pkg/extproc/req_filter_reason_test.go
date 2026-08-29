@@ -321,7 +321,7 @@ func TestGetReasoningEffortUsesNamedRecipeDecision(t *testing.T) {
 	}
 }
 
-// TestBuildReasoningRequestFields tests the buildReasoningRequestFieldsForProvider method.
+// TestBuildReasoningRequestFields tests reasoning fields at the provider boundary.
 func TestBuildReasoningRequestFields(t *testing.T) {
 	router := newBuildReasoningRequestFieldsRouter()
 	tests := []struct {
@@ -392,7 +392,7 @@ func TestBuildReasoningRequestFields(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			decision := router.Config.GetDecisionByName(tt.categoryName)
-			fields, effort := router.buildReasoningRequestFieldsForProvider(
+			fields, effort := router.buildReasoningFieldsForTest(
 				tt.model,
 				tt.useReasoning,
 				decision,
@@ -590,6 +590,48 @@ func newBuildReasoningRequestFieldsRouter() *OpenAIRouter {
 			"phi4": {},
 		},
 	)
+}
+
+// buildReasoningFieldsForTest keeps field-oriented assertions test-only.
+// Production dispatch always exercises the complete
+// neutral-request -> codec -> provider-adapter path.
+func (r *OpenAIRouter) buildReasoningFieldsForTest(
+	model string,
+	useReasoning bool,
+	decision *config.Decision,
+	profile *config.ProviderProfile,
+) (map[string]interface{}, string) {
+	if !useReasoning || r.getModelReasoningFamily(model) == nil {
+		return nil, ""
+	}
+	body, err := json.Marshal(map[string]interface{}{
+		"model": model,
+		"messages": []map[string]string{{
+			"role": "user", "content": "test message",
+		}},
+	})
+	if err != nil {
+		return nil, ""
+	}
+	encoded, err := r.setReasoningModeToRequestBodyForModelAndProvider(
+		body, model, true, decision, profile,
+	)
+	if err != nil {
+		return nil, ""
+	}
+	var fields map[string]interface{}
+	if json.Unmarshal(encoded, &fields) != nil {
+		return nil, ""
+	}
+	delete(fields, "model")
+	delete(fields, "messages")
+	effort, _ := fields["reasoning_effort"].(string)
+	if kwargs, ok := fields["chat_template_kwargs"].(map[string]interface{}); ok {
+		if nested, ok := kwargs["reasoning_effort"].(string); ok {
+			effort = nested
+		}
+	}
+	return fields, effort
 }
 
 func newDeepSeekReasoningRouter() *OpenAIRouter {

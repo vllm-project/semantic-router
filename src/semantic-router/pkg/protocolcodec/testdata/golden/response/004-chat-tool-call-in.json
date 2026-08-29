@@ -1,0 +1,24 @@
+{
+  "id": "response_tool_1",
+  "object": "chat.completion",
+  "created": 100,
+  "model": "provider-model",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "id": "item_tool_1",
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "id": "call_weather_1",
+            "type": "function",
+            "function": {"name": "lookup_weather", "arguments": "{\"city\":\"Paris\"}"}
+          }
+        ]
+      },
+      "finish_reason": "tool_calls"
+    }
+  ],
+  "usage": {"prompt_tokens": 5, "completion_tokens": 3, "total_tokens": 8}
+}

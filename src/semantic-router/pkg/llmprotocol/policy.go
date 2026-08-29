@@ -118,14 +118,22 @@ type Diagnostic struct {
 
 type Diagnostics []Diagnostic
 
-// Envelope is bounded, ephemeral source fidelity state. It must never be
-// serialized into logs, snapshots, YAML, or usage records.
+// ResponseRenderContext is bounded request context that a response wire
+// contract may echo. It is not model output and must never be retained as
+// provider state.
+type ResponseRenderContext struct {
+	PreviousResponseID string
+}
+
+// Envelope is bounded, ephemeral wire fidelity and rendering state. It must
+// never be serialized into logs, snapshots, YAML, or usage records.
 type Envelope struct {
-	Format     WireFormat
-	Generation uint64
-	Request    []byte
-	Response   []byte
-	SourceStop string
+	Format         WireFormat
+	Generation     uint64
+	Request        []byte
+	Response       []byte
+	SourceStop     string
+	ResponseRender ResponseRenderContext
 }
 
 func (envelope Envelope) CanReplay(format WireFormat, generation uint64, policy Policy, response bool) bool {
@@ -134,6 +142,9 @@ func (envelope Envelope) CanReplay(format WireFormat, generation uint64, policy 
 		return false
 	}
 	if response {
+		if envelope.ResponseRender.PreviousResponseID != "" {
+			return false
+		}
 		return len(envelope.Response) > 0
 	}
 	return len(envelope.Request) > 0

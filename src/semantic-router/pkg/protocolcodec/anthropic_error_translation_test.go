@@ -73,6 +73,88 @@ func TestAnthropicTransportErrorTranslationRejectsMalformedProviderJSON(t *testi
 	}
 }
 
+func TestTransportErrorTranslationRejectsInvalidProviderEnvelopes(t *testing.T) {
+	tests := []struct {
+		name   string
+		source llmprotocol.WireFormat
+		body   string
+		code   string
+	}{
+		{name: "Chat missing error", source: llmprotocol.OpenAIChatV1, body: `{}`, code: "upstream_error_required"},
+		{name: "Responses null error", source: llmprotocol.OpenAIResponsesV1, body: `{"error":null}`, code: "upstream_error_required"},
+		{name: "Chat missing type", source: llmprotocol.OpenAIChatV1, body: `{"error":{"message":"failed"}}`, code: "upstream_error_type_required"},
+		{name: "Responses whitespace type", source: llmprotocol.OpenAIResponsesV1, body: `{"error":{"type":"  ","message":"failed"}}`, code: "upstream_error_type_required"},
+		{name: "Chat missing message", source: llmprotocol.OpenAIChatV1, body: `{"error":{"type":"server_error"}}`, code: "upstream_error_message_required"},
+		{name: "Responses whitespace message", source: llmprotocol.OpenAIResponsesV1, body: `{"error":{"type":"server_error","message":"\t"}}`, code: "upstream_error_message_required"},
+		{name: "Anthropic missing envelope type", source: llmprotocol.AnthropicMessagesV1, body: `{"error":{"type":"api_error","message":"failed"}}`, code: "invalid_upstream_error_envelope"},
+		{name: "Anthropic wrong envelope type", source: llmprotocol.AnthropicMessagesV1, body: `{"type":"message","error":{"type":"api_error","message":"failed"}}`, code: "invalid_upstream_error_envelope"},
+		{name: "Anthropic missing error", source: llmprotocol.AnthropicMessagesV1, body: `{"type":"error"}`, code: "upstream_error_required"},
+		{name: "Anthropic null error", source: llmprotocol.AnthropicMessagesV1, body: `{"type":"error","error":null}`, code: "upstream_error_required"},
+		{name: "Anthropic missing error type", source: llmprotocol.AnthropicMessagesV1, body: `{"type":"error","error":{"message":"failed"}}`, code: "upstream_error_type_required"},
+		{name: "Anthropic whitespace error type", source: llmprotocol.AnthropicMessagesV1, body: `{"type":"error","error":{"type":" ","message":"failed"}}`, code: "upstream_error_type_required"},
+		{name: "Anthropic missing message", source: llmprotocol.AnthropicMessagesV1, body: `{"type":"error","error":{"type":"api_error"}}`, code: "upstream_error_message_required"},
+		{name: "Anthropic whitespace message", source: llmprotocol.AnthropicMessagesV1, body: `{"type":"error","error":{"type":"api_error","message":"\n"}}`, code: "upstream_error_message_required"},
+	}
+	for _, test := range tests {
+		for _, target := range []llmprotocol.WireFormat{
+			llmprotocol.OpenAIChatV1,
+			llmprotocol.OpenAIResponsesV1,
+			llmprotocol.AnthropicMessagesV1,
+		} {
+			t.Run(test.name+"/to/"+string(target), func(t *testing.T) {
+				translated, err := NewBuiltinEngine().TranslateTransportError(
+					test.source,
+					target,
+					[]byte(test.body),
+					nil,
+				)
+				if err == nil {
+					t.Fatal("invalid provider transport error was accepted")
+				}
+				var protocolError *llmprotocol.ProtocolError
+				if !errors.As(err, &protocolError) {
+					t.Fatalf("provider error = %T %v, want *llmprotocol.ProtocolError", err, err)
+				}
+				if protocolError.Category != llmprotocol.ErrorUpstreamUnavailable || protocolError.Code != test.code {
+					t.Fatalf("provider error = %+v, want category=%q code=%q", protocolError, llmprotocol.ErrorUpstreamUnavailable, test.code)
+				}
+				if translated.Body != nil || translated.TransportError.Error != nil {
+					t.Fatalf("invalid provider error produced public output: %+v", translated)
+				}
+			})
+		}
+	}
+}
+
+func TestTransportErrorBodyLimitIsExactForEverySourceFormat(t *testing.T) {
+	fixtures := map[llmprotocol.WireFormat][]byte{
+		llmprotocol.OpenAIChatV1:        []byte(`{"error":{"type":"server_error","message":"failed"}}`),
+		llmprotocol.OpenAIResponsesV1:   []byte(`{"error":{"type":"server_error","message":"failed"}}`),
+		llmprotocol.AnthropicMessagesV1: []byte(`{"type":"error","error":{"type":"api_error","message":"failed"}}`),
+	}
+	for source, body := range fixtures {
+		t.Run(string(source), func(t *testing.T) {
+			policy := llmprotocol.DefaultPolicy()
+			policy.Limits.BodyBytes = len(body)
+			engine, err := NewEngine(NewBuiltinRegistry(), policy)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := engine.TranslateTransportError(source, llmprotocol.OpenAIChatV1, body, nil); err != nil {
+				t.Fatalf("body at the exact limit was rejected: %v", err)
+			}
+
+			policy.Limits.BodyBytes = len(body) - 1
+			engine, err = NewEngine(NewBuiltinRegistry(), policy)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = engine.TranslateTransportError(source, llmprotocol.OpenAIChatV1, body, nil)
+			assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, "upstream_body_limit")
+		})
+	}
+}
+
 func TestOpenAIProviderCodeDoesNotBecomeAnthropicErrorType(t *testing.T) {
 	tests := []struct {
 		name, errorType, code, anthropicType string

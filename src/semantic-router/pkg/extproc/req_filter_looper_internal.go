@@ -74,7 +74,11 @@ func (r *OpenAIRouter) modifyRequestBodyForLooper(
 	request.Stream = ctx.ExpectStreamingResponse
 
 	if decisionName != "" {
-		changed = r.applySemanticReasoningMode(request, useReasoning, ctx.VSRSelectedDecision) || changed
+		targetFormat, err := wireFormatForModel(r.Config.GetModelAPIFormat(modelName))
+		if err != nil {
+			return fmt.Errorf("resolve looper target format: %w", err)
+		}
+		changed = r.applySemanticReasoningMode(request, modelName, targetFormat, useReasoning, ctx.VSRSelectedDecision) || changed
 		injected, err := r.addSemanticSystemPromptIfConfigured(request, decisionName, modelName, ctx)
 		if err != nil {
 			return fmt.Errorf("apply looper system instruction: %w", err)

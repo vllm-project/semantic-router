@@ -1,0 +1,18 @@
+{
+  "operation": "request",
+  "base": {
+    "model": "client-model",
+    "max_tokens": 2048,
+    "messages": [{"role": "user", "content": "Think carefully."}]
+  },
+  "cases": [
+    {
+      "name": "enabled summarized",
+      "patch": {"thinking": {"type": "enabled", "budget_tokens": 1024, "display": "summarized"}}
+    },
+    {
+      "name": "adaptive omitted",
+      "patch": {"thinking": {"type": "adaptive", "display": "omitted"}}
+    }
+  ]
+}

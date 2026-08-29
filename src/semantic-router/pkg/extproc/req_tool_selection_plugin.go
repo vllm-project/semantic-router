@@ -109,7 +109,7 @@ func (r *OpenAIRouter) runToolSelectionPluginAdd(
 	if err := r.applySelectedTools(request, selectedTools, strategyOut, confidence, latency, classificationText, ts.FallbackToEmpty); err != nil {
 		return err
 	}
-	return r.updateRequestWithTools(request, response, ctx)
+	return commitToolSelection(request, ctx)
 }
 
 func (r *OpenAIRouter) runToolSelectionPluginFilter(
@@ -149,5 +149,5 @@ func (r *OpenAIRouter) runToolSelectionPluginFilter(
 	if err := r.applySelectedTools(request, filtered, strategyLabel, confidence, latency, classificationText, ts.FallbackToEmpty); err != nil {
 		return err
 	}
-	return r.updateRequestWithTools(request, response, ctx)
+	return commitToolSelection(request, ctx)
 }

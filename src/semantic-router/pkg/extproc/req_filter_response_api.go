@@ -38,6 +38,11 @@ func (f *ResponseAPIFilter) IsEnabled() bool {
 // ResponseObjectState is request-scoped state for optional Responses object
 // persistence. It is not part of generation or protocol translation.
 type ResponseObjectState struct {
+	// GeneratedResponseID is the Router-owned public identity for this turn.
+	// Provider response IDs remain transport metadata and never become object
+	// store keys.
+	GeneratedResponseID string
+
 	// PreviousResponseID from the request (for conversation chaining)
 	PreviousResponseID string
 
@@ -62,31 +67,60 @@ type ResponseObjectState struct {
 	// PersistenceAttempted prevents multiple terminal response paths from
 	// retaining the same object twice.
 	PersistenceAttempted bool
+
+	// ProviderContextApplied makes conversation materialization idempotent
+	// across retries and multi-step execution. Object identifiers and store
+	// controls belong to this Router edge, not to the selected model protocol.
+	ProviderContextApplied bool
 }
 
-// PrepareGeneration derives optional object-history state from an already
-// validated neutral request. A missing object store never disables POST
-// generation; it only makes a requested history lookup unavailable.
+// PrepareObjectState derives object identity and optional retained history from
+// an already validated neutral request. Stateless POST generation remains
+// available without a store; an explicit previous_response_id fails closed if
+// its history cannot be retrieved.
 func (f *ResponseAPIFilter) PrepareObjectState(
 	ctx context.Context,
 	request llmprotocol.Request,
 	sourceBody []byte,
-) *ResponseObjectState {
+) (*ResponseObjectState, error) {
 	state := &ResponseObjectState{
-		PreviousResponseID: request.PreviousResponseID,
-		Metadata:           cloneResponseMetadata(request.Metadata),
-		ShouldStore:        request.Store == nil || *request.Store,
+		GeneratedResponseID: responseapi.GenerateResponseID(),
+		PreviousResponseID:  request.PreviousResponseID,
+		Metadata:            cloneResponseMetadata(request.Metadata),
+		ShouldStore:         request.Store == nil || *request.Store,
 	}
 	state.Input, state.Instructions = snapshotResponseObjectRequest(sourceBody, request)
-	if request.PreviousResponseID != "" && f != nil && f.enabled {
+	if request.PreviousResponseID != "" {
+		if f == nil || !f.enabled {
+			return nil, llmprotocol.NewError(
+				llmprotocol.ErrorUpstreamUnavailable,
+				"response_history_unavailable",
+				"retained response history is unavailable",
+				nil,
+			)
+		}
 		history, err := f.store.GetConversationChain(ctx, request.PreviousResponseID)
-		if err != nil && !errors.Is(err, responsestore.ErrNotFound) {
-			logging.Warnf("Failed to fetch response history: %v", err)
+		if errors.Is(err, responsestore.ErrNotFound) || (err == nil && len(history) == 0) {
+			return nil, llmprotocol.NewError(
+				llmprotocol.ErrorNotFound,
+				"previous_response_not_found",
+				"previous response was not found",
+				err,
+			)
+		}
+		if err != nil {
+			logging.Warnf("Failed to fetch response history (error_class=%T)", err)
+			return nil, llmprotocol.NewError(
+				llmprotocol.ErrorUpstreamUnavailable,
+				"response_history_unavailable",
+				"retained response history is unavailable",
+				err,
+			)
 		}
 		state.ConversationHistory = history
 	}
 	state.ConversationID = determineConversationID(request.ConversationID, state.ConversationHistory)
-	return state
+	return state, nil
 }
 
 // HandleGetResponse handles GET /v1/responses/{id} requests.

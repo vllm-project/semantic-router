@@ -34,6 +34,8 @@ type providerDispatch struct {
 	backendName    string
 	profile        *config.ProviderProfile
 	targetFormat   llmprotocol.WireFormat
+	decisionName   string
+	useReasoning   bool
 }
 
 // prepareProviderDispatch is the only point where a neutral request becomes a
@@ -66,12 +68,18 @@ func (r *OpenAIRouter) prepareProviderDispatch(
 	if err != nil {
 		return nil, fmt.Errorf("model %q: %w", logicalModel, err)
 	}
+	changed, err := r.materializeResponseObjectContext(request, ctx)
+	if err != nil {
+		return nil, err
+	}
 	upstreamModel := r.Config.ResolveExternalModelID(logicalModel, backendName)
-	changed := request.Model != upstreamModel || request.Stream != ctx.ExpectStreamingResponse
+	changed = request.Model != upstreamModel || request.Stream != ctx.ExpectStreamingResponse || changed
 	request.Model = upstreamModel
 	request.Stream = ctx.ExpectStreamingResponse
 	if decisionName != "" {
-		changed = r.applySemanticReasoningMode(request, useReasoning, ctx.VSRSelectedDecision) || changed
+		if targetFormat != llmprotocol.OpenAIChatV1 {
+			changed = r.applySemanticReasoningMode(request, logicalModel, targetFormat, useReasoning, ctx.VSRSelectedDecision) || changed
+		}
 		injected, injectErr := r.addSemanticSystemPromptIfConfigured(
 			request, decisionName, logicalModel, ctx,
 		)
@@ -104,6 +112,7 @@ func (r *OpenAIRouter) prepareProviderDispatch(
 		logicalModel: logicalModel, upstreamModel: upstreamModel,
 		backendAddress: backendAddress, backendName: backendName,
 		profile: profile, targetFormat: targetFormat,
+		decisionName: decisionName, useReasoning: useReasoning,
 	}, nil
 }
 
@@ -113,7 +122,7 @@ func wireFormatForModel(apiFormat string) (llmprotocol.WireFormat, error) {
 		return llmprotocol.OpenAIChatV1, nil
 	case config.APIFormatAnthropic, "anthropic.messages", string(llmprotocol.AnthropicMessagesV1):
 		return llmprotocol.AnthropicMessagesV1, nil
-	case "responses", "openai.responses", string(llmprotocol.OpenAIResponsesV1):
+	case config.APIFormatResponses, "openai.responses", string(llmprotocol.OpenAIResponsesV1):
 		return llmprotocol.OpenAIResponsesV1, nil
 	default:
 		return "", fmt.Errorf("unsupported API format %q", apiFormat)
@@ -161,6 +170,11 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 	if err != nil {
 		metrics.RecordRequestError(dispatch.logicalModel, "serialization_error")
 		return nil, status.Errorf(codes.Internal, "encode provider request: %v", err)
+	}
+	body, err = r.adaptProviderRequest(body, dispatch, ctx)
+	if err != nil {
+		metrics.RecordRequestError(dispatch.logicalModel, "provider_adapter_error")
+		return nil, status.Errorf(codes.Internal, "adapt provider request: %v", err)
 	}
 	common := response.GetRequestBody().GetResponse()
 	if common == nil {

@@ -11,10 +11,11 @@ arbitrary debug routes) straight through.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 from collections import OrderedDict
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -23,6 +24,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from .translate import (
+    OpenAIStreamToAnthropic,
     anthropic_to_openai,
     apply_cache_usage,
     cache_prefix_hash,
@@ -51,6 +53,232 @@ _HOP_BY_HOP = {
 
 # Maximum number of sessions the request store will track before LRU eviction.
 _MAX_REQUEST_STORE_SESSIONS = 32
+
+
+def _contains_text(value: Any, marker: str) -> bool:
+    if isinstance(value, str):
+        return marker in value
+    if isinstance(value, list):
+        return any(_contains_text(item, marker) for item in value)
+    if isinstance(value, dict):
+        return any(_contains_text(item, marker) for item in value.values())
+    return False
+
+
+def _has_mock_tool_result(body: dict[str, Any]) -> bool:
+    calls: set[str] = set()
+    for message in body.get("messages", []):
+        if not isinstance(message, dict) or not isinstance(
+            message.get("content"), list
+        ):
+            continue
+        for block in message["content"]:
+            if not isinstance(block, dict):
+                continue
+            block_type = block.get("type")
+            if block_type == "tool_use":
+                call_id = block.get("id")
+                if isinstance(call_id, str) and call_id:
+                    calls.add(call_id)
+            elif block_type == "tool_result" and block.get("tool_use_id") in calls:
+                return True
+    return False
+
+
+def _mock_anthropic_tool_response(body: dict[str, Any]) -> dict[str, Any] | None:
+    if _has_mock_tool_result(body):
+        return {
+            "id": "msg_mock_tool_result_123",
+            "type": "message",
+            "role": "assistant",
+            "model": body.get("model", ""),
+            "content": [{"type": "text", "text": "tool result accepted"}],
+            "stop_reason": "end_turn",
+            "stop_sequence": None,
+            "usage": {"input_tokens": 6, "output_tokens": 3},
+        }
+    if _contains_text(body.get("messages"), "__mock_tool_call__") and body.get("tools"):
+        return {
+            "id": "msg_mock_tool_123",
+            "type": "message",
+            "role": "assistant",
+            "model": body.get("model", ""),
+            "content": [
+                {
+                    "type": "tool_use",
+                    "id": "call_mock_lookup",
+                    "name": "lookup",
+                    "input": {"query": "weather"},
+                }
+            ],
+            "stop_reason": "tool_use",
+            "stop_sequence": None,
+            "usage": {"input_tokens": 4, "output_tokens": 3},
+        }
+    return None
+
+
+def _mock_anthropic_tool_stream(body: dict[str, Any]) -> Iterator[bytes]:
+    events = [
+        (
+            "message_start",
+            {
+                "type": "message_start",
+                "message": {
+                    "id": "msg_mock_tool_123",
+                    "type": "message",
+                    "role": "assistant",
+                    "model": body.get("model", ""),
+                    "content": [],
+                    "stop_reason": None,
+                    "stop_sequence": None,
+                    "usage": {"input_tokens": 4, "output_tokens": 0},
+                },
+            },
+        ),
+        (
+            "content_block_start",
+            {
+                "type": "content_block_start",
+                "index": 0,
+                "content_block": {
+                    "type": "tool_use",
+                    "id": "call_mock_lookup",
+                    "name": "lookup",
+                    "input": {},
+                },
+            },
+        ),
+        (
+            "content_block_delta",
+            {
+                "type": "content_block_delta",
+                "index": 0,
+                "delta": {"type": "input_json_delta", "partial_json": '{"query":'},
+            },
+        ),
+        (
+            "content_block_delta",
+            {
+                "type": "content_block_delta",
+                "index": 0,
+                "delta": {"type": "input_json_delta", "partial_json": '"weather"}'},
+            },
+        ),
+        ("content_block_stop", {"type": "content_block_stop", "index": 0}),
+        (
+            "message_delta",
+            {
+                "type": "message_delta",
+                "delta": {"stop_reason": "tool_use", "stop_sequence": None},
+                "usage": {"output_tokens": 3},
+            },
+        ),
+        ("message_stop", {"type": "message_stop"}),
+    ]
+    for event, payload in events:
+        yield f"event: {event}\ndata: {json.dumps(payload, separators=(',', ':'))}\n\n".encode()
+
+
+def _mock_anthropic_text_stream(body: dict[str, Any], text: str) -> Iterator[bytes]:
+    events = [
+        (
+            "message_start",
+            {
+                "type": "message_start",
+                "message": {
+                    "id": "msg_mock_tool_result_123",
+                    "type": "message",
+                    "role": "assistant",
+                    "model": body.get("model", ""),
+                    "content": [],
+                    "stop_reason": None,
+                    "stop_sequence": None,
+                    "usage": {"input_tokens": 6, "output_tokens": 0},
+                },
+            },
+        ),
+        (
+            "content_block_start",
+            {
+                "type": "content_block_start",
+                "index": 0,
+                "content_block": {"type": "text", "text": "", "citations": None},
+            },
+        ),
+        (
+            "content_block_delta",
+            {
+                "type": "content_block_delta",
+                "index": 0,
+                "delta": {"type": "text_delta", "text": text},
+            },
+        ),
+        ("content_block_stop", {"type": "content_block_stop", "index": 0}),
+        (
+            "message_delta",
+            {
+                "type": "message_delta",
+                "delta": {"stop_reason": "end_turn", "stop_sequence": None},
+                "usage": {"output_tokens": 3},
+            },
+        ),
+        ("message_stop", {"type": "message_stop"}),
+    ]
+    for event, payload in events:
+        yield f"event: {event}\ndata: {json.dumps(payload, separators=(',', ':'))}\n\n".encode()
+
+
+def _mock_incomplete_anthropic_stream(body: dict[str, Any]) -> Iterator[bytes]:
+    model = str(body.get("model", ""))
+    events = [
+        (
+            "message_start",
+            {
+                "type": "message_start",
+                "message": {
+                    "id": "msg_mock_incomplete",
+                    "type": "message",
+                    "role": "assistant",
+                    "model": model,
+                    "content": [],
+                    "stop_reason": None,
+                    "stop_sequence": None,
+                    "usage": {"input_tokens": 2, "output_tokens": 0},
+                },
+            },
+        ),
+        (
+            "content_block_start",
+            {
+                "type": "content_block_start",
+                "index": 0,
+                "content_block": {"type": "text", "text": ""},
+            },
+        ),
+        (
+            "content_block_delta",
+            {
+                "type": "content_block_delta",
+                "index": 0,
+                "delta": {"type": "text_delta", "text": "partial"},
+            },
+        ),
+    ]
+    for event, payload in events:
+        yield f"event: {event}\ndata: {json.dumps(payload, separators=(',', ':'))}\n\n".encode()
+
+
+def _mock_midstream_anthropic_error(body: dict[str, Any]) -> Iterator[bytes]:
+    yield from _mock_incomplete_anthropic_stream(body)
+    payload = {
+        "type": "error",
+        "error": {
+            "type": "overloaded_error",
+            "message": "mock provider stream failed",
+        },
+    }
+    yield f"event: error\ndata: {json.dumps(payload, separators=(',', ':'))}\n\n".encode()
 
 
 def _filtered_headers(headers: dict[str, str]) -> dict[str, str]:
@@ -228,13 +456,65 @@ async def _handle_messages(request: Request, app: FastAPI) -> Response:
     body = join_system_array(body)
     body = join_tool_result_content(body)
 
+    if _contains_text(body.get("messages"), "__mock_provider_error__"):
+        return JSONResponse(
+            status_code=429,
+            content={
+                "type": "error",
+                "error": {
+                    "type": "rate_limit_error",
+                    "message": "mock provider rate limit",
+                },
+                "request_id": "req_mock_rate_limit",
+            },
+        )
+
+    if body.get("stream") and _contains_text(
+        body.get("messages"), "__mock_midstream_error__"
+    ):
+        return StreamingResponse(
+            _mock_midstream_anthropic_error(body),
+            media_type="text/event-stream",
+        )
+
+    if body.get("stream") and _contains_text(
+        body.get("messages"), "__mock_incomplete_stream__"
+    ):
+        return StreamingResponse(
+            _mock_incomplete_anthropic_stream(body),
+            media_type="text/event-stream",
+        )
+
+    mock_tool_response = _mock_anthropic_tool_response(body)
+    if mock_tool_response is not None:
+        if body.get("stream"):
+            if mock_tool_response.get("stop_reason") == "tool_use":
+                iterator = _mock_anthropic_tool_stream(body)
+            else:
+                iterator = _mock_anthropic_text_stream(body, "tool result accepted")
+            return StreamingResponse(iterator, media_type="text/event-stream")
+        if not body.get("stream"):
+            return JSONResponse(content=mock_tool_response)
+
     session_id = request.headers.get(app.state.session_header) or "__global__"
     headers = _filtered_headers(dict(request.headers))
     headers.pop("content-length", None)
 
     is_streaming = bool(body.get("stream"))
     if is_streaming:
-        return await _proxy_stream(app, "/v1/messages", body, headers)
+        app.state.request_store.record(session_id, body, dict(request.headers))
+        upstream_path = (
+            "/v1/chat/completions" if app.state.openai_upstream else "/v1/messages"
+        )
+        upstream_body = anthropic_to_openai(body) if app.state.openai_upstream else body
+        return await _proxy_stream(
+            app,
+            upstream_path,
+            upstream_body,
+            headers,
+            request_body=body,
+            translate_openai=app.state.openai_upstream,
+        )
 
     # Record what the shim is about to forward so /debug/last-request can
     # return the translated body + inbound headers for test assertions.
@@ -283,22 +563,44 @@ async def _proxy_stream(
     path: str,
     body: dict[str, Any],
     headers: dict[str, str],
+    *,
+    request_body: dict[str, Any],
+    translate_openai: bool,
 ) -> StreamingResponse:
-    """Stream upstream SSE bytes verbatim.
+    """Stream a native Messages response or adapt OpenAI SSE to Messages.
 
     Cache usage post-processing is not applied to streamed responses
-    because the bytes-on-the-wire format would need to be parsed and
-    re-emitted; the e2e cache-cycle tests use non-streaming requests.
+    because the e2e cache-cycle tests use non-streaming requests.
     """
 
-    async def iterate() -> AsyncIterator[bytes]:
-        async with app.state.client.stream(
-            "POST", path, json=body, headers=headers
-        ) as upstream:
-            async for chunk in upstream.aiter_raw():
-                yield chunk
+    upstream_request = app.state.client.build_request(
+        "POST", path, json=body, headers=headers
+    )
+    upstream = await app.state.client.send(upstream_request, stream=True)
 
-    return StreamingResponse(iterate(), media_type="text/event-stream")
+    async def iterate() -> AsyncIterator[bytes]:
+        try:
+            if not translate_openai or upstream.status_code >= 400:
+                async for chunk in upstream.aiter_raw():
+                    yield chunk
+                return
+            adapter = OpenAIStreamToAnthropic(request_body)
+            async for line in upstream.aiter_lines():
+                if not line.startswith("data:"):
+                    continue
+                for event in adapter.feed(line.removeprefix("data:").strip()):
+                    yield event
+            for event in adapter.finish():
+                yield event
+        finally:
+            await upstream.aclose()
+
+    return StreamingResponse(
+        iterate(),
+        status_code=upstream.status_code,
+        headers=_filtered_headers(dict(upstream.headers)),
+        media_type="text/event-stream",
+    )
 
 
 async def _proxy_raw(request: Request, path: str, app: FastAPI) -> Response:

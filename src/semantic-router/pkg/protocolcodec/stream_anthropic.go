@@ -1,6 +1,7 @@
 package protocolcodec
 
 import (
+	"bytes"
 	"encoding/json"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -8,11 +9,19 @@ import (
 
 type anthropicStreamDecoder struct {
 	streamState
-	framer sseFramer
+	framer       sseFramer
+	stopSequence string
 }
 type anthropicStreamEncoder struct {
 	streamState
-	blocks map[int]llmprotocol.ContentKind
+	blocks         map[streamContentKey]llmprotocol.ContentKind
+	blockIndexes   map[streamContentKey]int
+	blockStarted   map[streamContentKey]bool
+	blockStopped   map[streamContentKey]bool
+	itemBlockKeys  map[int][]streamContentKey
+	activeBlock    streamContentKey
+	hasActiveBlock bool
+	nextBlockIndex int
 }
 
 func (AnthropicMessagesCodec) NewDecoder(context llmprotocol.StreamContext, policy llmprotocol.Policy) llmprotocol.StreamDecoder {
@@ -20,30 +29,68 @@ func (AnthropicMessagesCodec) NewDecoder(context llmprotocol.StreamContext, poli
 }
 
 func (AnthropicMessagesCodec) NewEncoder(context llmprotocol.StreamContext, policy llmprotocol.Policy) llmprotocol.StreamEncoder {
-	return &anthropicStreamEncoder{streamState: streamState{context: context, policy: policy}, blocks: make(map[int]llmprotocol.ContentKind)}
+	return &anthropicStreamEncoder{
+		streamState:   streamState{context: context, policy: policy},
+		blocks:        make(map[streamContentKey]llmprotocol.ContentKind),
+		blockIndexes:  make(map[streamContentKey]int),
+		blockStarted:  make(map[streamContentKey]bool),
+		blockStopped:  make(map[streamContentKey]bool),
+		itemBlockKeys: make(map[int][]streamContentKey),
+	}
 }
 
 type anthropicEventWire struct {
-	Type         string                 `json:"type"`
-	Message      *anthropicResponseWire `json:"message,omitempty"`
-	Index        int                    `json:"index,omitempty"`
-	ContentBlock *anthropicContentWire  `json:"content_block,omitempty"`
-	Delta        *anthropicDeltaWire    `json:"delta,omitempty"`
-	Usage        *anthropicUsageWire    `json:"usage,omitempty"`
-	Error        *anthropicErrorWire    `json:"error,omitempty"`
+	Type         string                          `json:"type"`
+	Message      *anthropicResponseWire          `json:"message,omitempty"`
+	Index        *int                            `json:"index,omitempty"`
+	ContentBlock *anthropicContentWire           `json:"content_block,omitempty"`
+	Delta        *anthropicDeltaWire             `json:"delta,omitempty"`
+	Usage        *anthropicMessageDeltaUsageWire `json:"usage,omitempty"`
+	Error        *anthropicErrorWire             `json:"error,omitempty"`
+}
+
+type anthropicMessageDeltaUsageWire struct {
+	CacheCreationInputTokens int64                           `json:"cache_creation_input_tokens"`
+	CacheReadInputTokens     int64                           `json:"cache_read_input_tokens"`
+	InputTokens              int64                           `json:"input_tokens"`
+	OutputTokens             int64                           `json:"output_tokens"`
+	OutputTokensDetails      anthropicOutputUsageDetailsWire `json:"output_tokens_details"`
+	ServerToolUse            anthropicServerToolUsageWire    `json:"server_tool_use"`
 }
 
 type anthropicDeltaWire struct {
-	Type         string  `json:"type"`
-	Text         string  `json:"text,omitempty"`
-	Thinking     string  `json:"thinking,omitempty"`
-	PartialJSON  string  `json:"partial_json,omitempty"`
-	Signature    string  `json:"signature,omitempty"`
-	StopReason   *string `json:"stop_reason,omitempty"`
-	StopSequence *string `json:"stop_sequence,omitempty"`
+	Type         string          `json:"type"`
+	Text         string          `json:"text,omitempty"`
+	Thinking     string          `json:"thinking,omitempty"`
+	PartialJSON  string          `json:"partial_json,omitempty"`
+	Signature    string          `json:"signature,omitempty"`
+	StopReason   *string         `json:"stop_reason,omitempty"`
+	StopSequence *string         `json:"stop_sequence,omitempty"`
+	Container    json.RawMessage `json:"container,omitempty"`
+	StopDetails  json.RawMessage `json:"stop_details,omitempty"`
+	Citation     json.RawMessage `json:"citation,omitempty"`
+}
+
+func (wire anthropicDeltaWire) MarshalJSON() ([]byte, error) {
+	if wire.Type == "message_delta" {
+		return json.Marshal(struct {
+			Container    json.RawMessage `json:"container,omitempty"`
+			StopDetails  json.RawMessage `json:"stop_details,omitempty"`
+			StopReason   *string         `json:"stop_reason"`
+			StopSequence *string         `json:"stop_sequence"`
+		}{
+			Container: wire.Container, StopDetails: wire.StopDetails,
+			StopReason: wire.StopReason, StopSequence: wire.StopSequence,
+		})
+	}
+	type deltaAlias anthropicDeltaWire
+	return json.Marshal(deltaAlias(wire))
 }
 
 func (decoder *anthropicStreamDecoder) Push(chunk []byte) ([]llmprotocol.Event, llmprotocol.Diagnostics, error) {
+	if err := decoder.observeProviderStreamBytes(chunk); err != nil {
+		return nil, nil, err
+	}
 	frames, err := decoder.framer.Push(chunk)
 	if err != nil {
 		return nil, nil, err
@@ -62,18 +109,50 @@ func (decoder *anthropicStreamDecoder) Push(chunk []byte) ([]llmprotocol.Event, 
 }
 
 func (decoder *anthropicStreamDecoder) pushFrame(frame []byte) ([]llmprotocol.Event, llmprotocol.Diagnostics, error) {
-	parsed, err := parseSSEFrame(frame, decoder.policy.Limits.SSEFrameBytes)
-	if err != nil || len(parsed.Data) == 0 {
+	parsed, err := decoder.parseProviderSSEFrame(frame)
+	if err != nil || !parsed.HasData {
 		return nil, nil, err
+	}
+	if decoder.terminal {
+		return nil, nil, invalidProviderResponse("stream_event_after_terminal", "Anthropic stream emitted data after message_stop")
+	}
+	eventType, err := decodeProviderEventType(parsed.Data, parsed.Event, decoder.policy)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !isSupportedAnthropicEvent(eventType) {
+		return decoder.decodeUnknownAnthropicEvent(frame)
 	}
 	var wire anthropicEventWire
 	if err := decodeProviderWire(parsed.Data, &wire, decoder.policy); err != nil {
 		return nil, nil, err
 	}
 	if wire.Type == "" {
-		wire.Type = parsed.Event
+		wire.Type = eventType
+	}
+	if err := validateAnthropicStreamEvent(wire, parsed.Data); err != nil {
+		return nil, nil, err
+	}
+	if wire.Type == "content_block_start" && anthropicEventIndex(wire) != len(decoder.items) {
+		return nil, nil, invalidProviderResponse("stream_output_index_order", "Anthropic content block indexes must be contiguous from zero")
+	}
+	if wire.Message != nil {
+		if err := decoder.observeProviderIdentity(wire.Message.ID, wire.Message.Model); err != nil {
+			return nil, nil, err
+		}
 	}
 	return decoder.decodeEvent(wire, frame)
+}
+
+func isSupportedAnthropicEvent(eventType string) bool {
+	switch eventType {
+	case "message_start", "message_delta", "message_stop",
+		"content_block_start", "content_block_delta", "content_block_stop",
+		"error", "ping":
+		return true
+	default:
+		return false
+	}
 }
 
 func (decoder *anthropicStreamDecoder) decodeEvent(
@@ -96,11 +175,17 @@ func (decoder *anthropicStreamDecoder) decodeEvent(
 		}
 		return decoder.emitAnthropicEvent(event)
 	case "content_block_stop":
-		return decoder.emitAnthropicEvent(llmprotocol.Event{Type: llmprotocol.EventOutputItemCompleted, ItemIndex: wire.Index})
+		return decoder.emitAnthropicEvent(llmprotocol.Event{Type: llmprotocol.EventOutputItemCompleted, ItemIndex: anthropicEventIndex(wire)})
 	case "message_delta":
 		return decoder.decodeAnthropicMessageDelta(wire)
 	case "message_stop":
-		return decoder.emitAnthropicEvent(llmprotocol.Event{Type: llmprotocol.EventResponseCompleted, StopReason: decoder.stop, Usage: &decoder.usage})
+		if decoder.stop == "" {
+			return nil, nil, invalidProviderResponse("stream_stop_reason_missing", "Anthropic message_stop requires a preceding terminal message_delta")
+		}
+		return decoder.emitAnthropicEvent(llmprotocol.Event{
+			Type: llmprotocol.EventResponseCompleted, StopReason: decoder.stop,
+			MatchedStopSequence: decoder.stopSequence, Usage: &decoder.usage,
+		})
 	case "error":
 		return decoder.emitAnthropicEvent(decodeAnthropicStreamError(wire))
 	case "ping":
@@ -126,14 +211,40 @@ func decodeAnthropicMessageStart(wire anthropicEventWire) llmprotocol.Event {
 func (decoder *anthropicStreamDecoder) decodeAnthropicMessageDelta(
 	wire anthropicEventWire,
 ) ([]llmprotocol.Event, llmprotocol.Diagnostics, error) {
+	var diagnostics llmprotocol.Diagnostics
 	if wire.Delta != nil && wire.Delta.StopReason != nil {
-		decoder.stop = decodeAnthropicStop(*wire.Delta.StopReason)
+		stop := decodeAnthropicStop(*wire.Delta.StopReason)
+		if decoder.stop != "" && decoder.stop != stop {
+			return nil, nil, invalidProviderResponse("stream_stop_reason_mismatch", "Anthropic stream changed its terminal reason")
+		}
+		decoder.stop = stop
+		if stop == llmprotocol.StopSequence && wire.Delta.StopSequence != nil {
+			if decoder.stopSequence != "" && decoder.stopSequence != *wire.Delta.StopSequence {
+				return nil, nil, invalidProviderResponse("stream_stop_sequence_mismatch", "Anthropic stream changed its matched stop sequence")
+			}
+			decoder.stopSequence = *wire.Delta.StopSequence
+		}
+	}
+	if wire.Delta != nil {
+		if len(wire.Delta.Container) > 0 && !bytes.Equal(bytes.TrimSpace(wire.Delta.Container), []byte("null")) {
+			appendProviderFieldOmission(
+				&diagnostics, decoder.policy, llmprotocol.AnthropicMessagesV1,
+				"stream.delta.container", "container metadata has no protocol-neutral representation",
+			)
+		}
+		if len(wire.Delta.StopDetails) > 0 && !bytes.Equal(bytes.TrimSpace(wire.Delta.StopDetails), []byte("null")) {
+			appendProviderFieldOmission(
+				&diagnostics, decoder.policy, llmprotocol.AnthropicMessagesV1,
+				"stream.delta.stop_details", "refusal details have no protocol-neutral representation",
+			)
+		}
 	}
 	if wire.Usage == nil {
-		return nil, nil, nil
+		return nil, diagnostics, nil
 	}
-	usage := decodeAnthropicStreamUsage(*wire.Usage, false)
-	return decoder.emitAnthropicEvent(llmprotocol.Event{Type: llmprotocol.EventUsageUpdated, Usage: &usage})
+	usage := decodeAnthropicMessageDeltaUsage(*wire.Usage)
+	events, eventDiagnostics, err := decoder.emitAnthropicEvent(llmprotocol.Event{Type: llmprotocol.EventUsageUpdated, Usage: &usage})
+	return events, appendDiagnostics(diagnostics, eventDiagnostics, decoder.policy.Limits.Diagnostics), err
 }
 
 func decodeAnthropicStreamError(wire anthropicEventWire) llmprotocol.Event {
@@ -168,7 +279,7 @@ func (decoder *anthropicStreamDecoder) emitAnthropicEvent(
 }
 
 func decodeAnthropicContentStart(wire anthropicEventWire) (llmprotocol.Event, error) {
-	event := llmprotocol.Event{Type: llmprotocol.EventOutputItemStarted, ItemIndex: wire.Index, Role: llmprotocol.RoleAssistant}
+	event := llmprotocol.Event{Type: llmprotocol.EventOutputItemStarted, ItemIndex: anthropicEventIndex(wire), Role: llmprotocol.RoleAssistant}
 	if wire.ContentBlock == nil {
 		return event, nil
 	}
@@ -177,7 +288,10 @@ func decodeAnthropicContentStart(wire anthropicEventWire) (llmprotocol.Event, er
 	case "tool_use":
 		event.ToolCall = &llmprotocol.ToolCall{ID: wire.ContentBlock.ID, Name: wire.ContentBlock.Name, Arguments: string(wire.ContentBlock.Input)}
 	case "thinking":
-		event.Content = &llmprotocol.Content{Kind: llmprotocol.ContentReasoning, Signature: wire.ContentBlock.Signature}
+		event.Content = &llmprotocol.Content{
+			Kind: llmprotocol.ContentReasoning, Signature: wire.ContentBlock.Signature,
+			Reasoning: llmprotocol.ReasoningScopeText,
+		}
 	case "text":
 		event.Content = &llmprotocol.Content{Kind: llmprotocol.ContentText}
 	default:
@@ -190,16 +304,22 @@ func decodeAnthropicContentDelta(wire anthropicEventWire) (llmprotocol.Event, er
 	if wire.Delta == nil {
 		return llmprotocol.Event{}, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_stream_delta", "Anthropic stream delta is missing", nil)
 	}
-	event := llmprotocol.Event{ItemIndex: wire.Index}
+	event := llmprotocol.Event{ItemIndex: anthropicEventIndex(wire)}
 	switch wire.Delta.Type {
 	case "text_delta":
 		event.Type, event.Delta, event.Content = llmprotocol.EventOutputTextDelta, wire.Delta.Text, &llmprotocol.Content{Kind: llmprotocol.ContentText, Text: wire.Delta.Text}
 	case "thinking_delta":
-		event.Type, event.Delta, event.Content = llmprotocol.EventReasoningDelta, wire.Delta.Thinking, &llmprotocol.Content{Kind: llmprotocol.ContentReasoning, Text: wire.Delta.Thinking}
+		event.Type, event.Delta, event.Content = llmprotocol.EventReasoningDelta, wire.Delta.Thinking, &llmprotocol.Content{
+			Kind: llmprotocol.ContentReasoning, Text: wire.Delta.Thinking,
+			Reasoning: llmprotocol.ReasoningScopeText,
+		}
 	case "input_json_delta":
 		event.Type, event.ToolCall = llmprotocol.EventToolCallDelta, &llmprotocol.ToolCall{Arguments: wire.Delta.PartialJSON}
 	case "signature_delta":
-		event.Type, event.Content = llmprotocol.EventReasoningDelta, &llmprotocol.Content{Kind: llmprotocol.ContentReasoning, Signature: wire.Delta.Signature}
+		event.Type, event.Content = llmprotocol.EventReasoningDelta, &llmprotocol.Content{
+			Kind: llmprotocol.ContentReasoning, Signature: wire.Delta.Signature,
+			Reasoning: llmprotocol.ReasoningScopeText,
+		}
 	default:
 		return llmprotocol.Event{}, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unknown_stream_delta", "Anthropic stream delta is unsupported", nil)
 	}
@@ -209,20 +329,13 @@ func decodeAnthropicContentDelta(wire anthropicEventWire) (llmprotocol.Event, er
 func decodeAnthropicStreamUsage(wire anthropicUsageWire, initial bool) llmprotocol.Usage {
 	usage := llmprotocol.Usage{State: llmprotocol.UsageAvailable}
 	if initial || wire.InputTokens > 0 || wire.CacheReadInputTokens > 0 || wire.CacheCreationInputTokens > 0 {
-		uncached := wire.InputTokens - wire.CacheReadInputTokens - wire.CacheCreationInputTokens
-		if uncached < 0 {
-			uncached = 0
-		}
-		usage.InputUncached = authoritative(uncached)
+		usage.InputUncached = authoritative(wire.InputTokens)
 		usage.InputCacheRead = authoritative(wire.CacheReadInputTokens)
 		usage.InputCacheWrite = authoritative(wire.CacheCreationInputTokens)
-		usage.InputTotal = authoritative(wire.InputTokens)
+		usage.InputTotal = authoritative(wire.InputTokens + wire.CacheReadInputTokens + wire.CacheCreationInputTokens)
 	}
 	if wire.OutputTokens > 0 || !initial {
-		reasoning := int64(0)
-		if wire.OutputTokensDetails != nil {
-			reasoning = wire.OutputTokensDetails.ThinkingTokens
-		}
+		reasoning := wire.OutputTokensDetails.ThinkingTokens
 		other := wire.OutputTokens - reasoning
 		if other < 0 {
 			other = 0
@@ -232,6 +345,28 @@ func decodeAnthropicStreamUsage(wire anthropicUsageWire, initial bool) llmprotoc
 		usage.OutputTotal = authoritative(wire.OutputTokens)
 	}
 	return usage
+}
+
+func decodeAnthropicMessageDeltaUsage(wire anthropicMessageDeltaUsageWire) llmprotocol.Usage {
+	return decodeAnthropicStreamUsage(anthropicUsageWire{
+		InputTokens: wire.InputTokens, OutputTokens: wire.OutputTokens,
+		CacheCreationInputTokens: wire.CacheCreationInputTokens,
+		CacheReadInputTokens:     wire.CacheReadInputTokens,
+		OutputTokensDetails:      wire.OutputTokensDetails,
+		ServerToolUse:            wire.ServerToolUse,
+	}, false)
+}
+
+func encodeAnthropicMessageDeltaUsage(usage llmprotocol.Usage) *anthropicMessageDeltaUsageWire {
+	full := encodeAnthropicUsage(usage)
+	return &anthropicMessageDeltaUsageWire{
+		CacheCreationInputTokens: full.CacheCreationInputTokens,
+		CacheReadInputTokens:     full.CacheReadInputTokens,
+		InputTokens:              full.InputTokens,
+		OutputTokens:             full.OutputTokens,
+		OutputTokensDetails:      full.OutputTokensDetails,
+		ServerToolUse:            full.ServerToolUse,
+	}
 }
 
 func (decoder *anthropicStreamDecoder) Finalize(reason error) ([]llmprotocol.Event, llmprotocol.Diagnostics, error) {
@@ -269,56 +404,84 @@ func isAnthropicContentEvent(eventType llmprotocol.EventType) bool {
 	return eventType == llmprotocol.EventOutputItemStarted ||
 		eventType == llmprotocol.EventOutputTextDelta ||
 		eventType == llmprotocol.EventReasoningDelta ||
-		eventType == llmprotocol.EventToolCallDelta
+		eventType == llmprotocol.EventToolCallDelta ||
+		eventType == llmprotocol.EventOutputItemCompleted
 }
 
 func (encoder *anthropicStreamEncoder) encodeAnthropicContentEvent(
 	event llmprotocol.Event,
 ) ([][]byte, llmprotocol.Diagnostics, error) {
-	if event.Type == llmprotocol.EventOutputTextDelta {
-		return encoder.encodeAnthropicTextDelta(event)
-	}
-	wire := anthropicEventWire{}
 	switch event.Type {
 	case llmprotocol.EventOutputItemStarted:
-		wire = encoder.encodeAnthropicItemStart(event)
+		if event.ToolCall == nil && event.Content == nil {
+			return nil, nil, nil
+		}
+		if event.ToolCall != nil {
+			// Anthropic content blocks cannot interleave. Tool arguments from
+			// parallel source calls are buffered by streamState and emitted as
+			// one contiguous block when the neutral item completes.
+			return nil, nil, nil
+		}
+		kind := llmprotocol.ContentText
+		if event.ToolCall != nil {
+			kind = llmprotocol.ContentToolCall
+		} else if event.Content != nil && event.Content.Kind != "" {
+			kind = event.Content.Kind
+		}
+		frames, _, err := encoder.ensureAnthropicBlockStarted(event, kind)
+		return frames, nil, err
+	case llmprotocol.EventOutputTextDelta:
+		return encoder.encodeAnthropicTextDelta(event)
 	case llmprotocol.EventReasoningDelta:
-		wire = encodeAnthropicReasoningDelta(event)
+		frames, key, err := encoder.ensureAnthropicBlockStarted(event, llmprotocol.ContentReasoning)
+		if err != nil {
+			return nil, nil, err
+		}
+		wire := encodeAnthropicReasoningDelta(event, encoder.blockIndexes[key])
+		delta, diagnostics, err := encodeAnthropicWireFrame(wire)
+		return append(frames, delta...), diagnostics, err
 	case llmprotocol.EventToolCallDelta:
 		if event.ToolCall == nil {
 			return nil, nil, llmprotocol.NewError(llmprotocol.ErrorInternal, "tool_event_invalid", "tool event is invalid", nil)
 		}
-		wire.Type, wire.Index, wire.Delta = "content_block_delta", event.ItemIndex, &anthropicDeltaWire{Type: "input_json_delta", PartialJSON: event.ToolCall.Arguments}
+		return nil, nil, nil
+	case llmprotocol.EventOutputItemCompleted:
+		return encoder.completeAnthropicItem(event)
 	default:
 		return nil, nil, nil
 	}
-	return encodeAnthropicWireFrame(wire)
 }
 
 func (encoder *anthropicStreamEncoder) encodeAnthropicLifecycleEvent(
 	event llmprotocol.Event,
 ) ([][]byte, llmprotocol.Diagnostics, error) {
 	var wire anthropicEventWire
+	var diagnostics llmprotocol.Diagnostics
 	switch event.Type {
 	case llmprotocol.EventResponseStarted:
 		wire = encodeAnthropicMessageStart(event)
-	case llmprotocol.EventOutputItemCompleted:
-		wire.Type, wire.Index = "content_block_stop", event.ItemIndex
 	case llmprotocol.EventUsageUpdated:
 		if event.Usage == nil {
 			return nil, nil, llmprotocol.NewError(llmprotocol.ErrorInternal, "usage_event_invalid", "usage event is invalid", nil)
 		}
-		wire.Type, wire.Usage = "message_delta", encodeAnthropicUsage(*event.Usage)
+		// streamState carries the merged usage into the terminal message_delta.
+		// Emitting here would duplicate usage for source streams that publish a
+		// usage update immediately before their terminal event.
+		return nil, nil, nil
 	case llmprotocol.EventResponseFailed:
 		failed, err := encoder.encodeAnthropicFailure(event)
 		if err != nil {
 			return nil, nil, err
 		}
+		if event.Usage != nil && event.Usage.State == llmprotocol.UsageAvailable {
+			appendAccountingOmission(&diagnostics, encoder.policy, encoder.context.Source, encoder.context.Target, "usage", "Messages error events cannot carry token usage")
+		}
 		wire = failed
 	default:
 		return nil, nil, nil
 	}
-	return encodeAnthropicWireFrame(wire)
+	frames, _, err := encodeAnthropicWireFrame(wire)
+	return frames, diagnostics, err
 }
 
 func encodeAnthropicWireFrame(wire anthropicEventWire) ([][]byte, llmprotocol.Diagnostics, error) {
@@ -327,7 +490,7 @@ func encodeAnthropicWireFrame(wire anthropicEventWire) ([][]byte, llmprotocol.Di
 }
 
 func encodeAnthropicMessageStart(event llmprotocol.Event) anthropicEventWire {
-	usage := &anthropicUsageWire{}
+	usage := newAnthropicUsageWire()
 	if event.Usage != nil && event.Usage.State == llmprotocol.UsageAvailable {
 		usage = encodeAnthropicUsage(*event.Usage)
 	}
@@ -340,26 +503,139 @@ func encodeAnthropicMessageStart(event llmprotocol.Event) anthropicEventWire {
 	}
 }
 
-func (encoder *anthropicStreamEncoder) encodeAnthropicItemStart(event llmprotocol.Event) anthropicEventWire {
-	block := &anthropicContentWire{Type: "text", Text: ""}
-	kind := llmprotocol.ContentText
-	if event.ToolCall != nil {
-		block.Type, block.ID, block.Name, block.Input = "tool_use", event.ToolCall.ID, event.ToolCall.Name, json.RawMessage(`{}`)
-		kind = llmprotocol.ContentToolCall
-	} else if event.Content != nil && event.Content.Kind == llmprotocol.ContentReasoning {
-		block.Type, block.Text, block.Thinking, block.Signature = "thinking", "", "", event.Content.Signature
-		kind = llmprotocol.ContentReasoning
+func (encoder *anthropicStreamEncoder) ensureAnthropicBlockStarted(
+	event llmprotocol.Event,
+	kind llmprotocol.ContentKind,
+) ([][]byte, streamContentKey, error) {
+	key := contentKey(event)
+	if encoder.blockStarted[key] {
+		if encoder.blockStopped[key] {
+			return nil, key, llmprotocol.NewError(
+				llmprotocol.ErrorUnsupportedFeature,
+				"anthropic_content_interleaving",
+				"Messages cannot resume a content block after another block starts",
+				nil,
+			)
+		}
+		if encoder.blocks[key] != kind {
+			return nil, key, llmprotocol.NewError(
+				llmprotocol.ErrorUpstreamUnavailable,
+				"stream_content_kind_mismatch",
+				"upstream stream changed a content block kind",
+				nil,
+			)
+		}
+		return nil, key, nil
 	}
-	encoder.blocks[event.ItemIndex] = kind
-	return anthropicEventWire{Type: "content_block_start", Index: event.ItemIndex, ContentBlock: block}
+	var frames [][]byte
+	if encoder.hasActiveBlock && encoder.activeBlock != key {
+		stopped, err := encoder.stopAnthropicBlock(encoder.activeBlock)
+		if err != nil {
+			return nil, key, err
+		}
+		frames = append(frames, stopped...)
+	}
+	encoder.blockStarted[key] = true
+	encoder.blocks[key] = kind
+	encoder.blockIndexes[key] = encoder.nextBlockIndex
+	encoder.nextBlockIndex++
+	encoder.itemBlockKeys[event.ItemIndex] = append(encoder.itemBlockKeys[event.ItemIndex], key)
+	wire := encoder.encodeAnthropicItemStart(event, key, kind)
+	frame, err := encodeSSE(wire.Type, wire)
+	if err != nil {
+		return nil, key, err
+	}
+	encoder.activeBlock = key
+	encoder.hasActiveBlock = true
+	return append(frames, frame), key, nil
 }
 
-func encodeAnthropicReasoningDelta(event llmprotocol.Event) anthropicEventWire {
+func (encoder *anthropicStreamEncoder) encodeAnthropicItemStart(
+	event llmprotocol.Event,
+	key streamContentKey,
+	kind llmprotocol.ContentKind,
+) anthropicEventWire {
+	block := &anthropicContentWire{Type: "text", Text: ""}
+	if kind == llmprotocol.ContentToolCall {
+		block.Type, block.ID, block.Name, block.Input = "tool_use", event.ToolCall.ID, event.ToolCall.Name, json.RawMessage(`{}`)
+	} else if kind == llmprotocol.ContentReasoning {
+		signature := ""
+		if event.Content != nil {
+			signature = event.Content.Signature
+		}
+		block.Type, block.Text, block.Thinking, block.Signature = "thinking", "", "", signature
+	}
+	return anthropicEventWire{Type: "content_block_start", Index: anthropicIndex(encoder.blockIndexes[key]), ContentBlock: block}
+}
+
+func encodeAnthropicReasoningDelta(event llmprotocol.Event, blockIndex int) anthropicEventWire {
 	delta := &anthropicDeltaWire{Type: "thinking_delta", Thinking: event.Delta}
 	if event.Content != nil && event.Content.Signature != "" {
 		delta = &anthropicDeltaWire{Type: "signature_delta", Signature: event.Content.Signature}
 	}
-	return anthropicEventWire{Type: "content_block_delta", Index: event.ItemIndex, Delta: delta}
+	return anthropicEventWire{Type: "content_block_delta", Index: anthropicIndex(blockIndex), Delta: delta}
+}
+
+func (encoder *anthropicStreamEncoder) completeAnthropicItem(
+	event llmprotocol.Event,
+) ([][]byte, llmprotocol.Diagnostics, error) {
+	keys := append([]streamContentKey(nil), encoder.itemBlockKeys[event.ItemIndex]...)
+	var frames [][]byte
+	if event.ToolCall != nil && len(keys) == 0 {
+		started, key, err := encoder.ensureAnthropicBlockStarted(event, llmprotocol.ContentToolCall)
+		if err != nil {
+			return nil, nil, err
+		}
+		frames = append(frames, started...)
+		delta := anthropicEventWire{
+			Type: "content_block_delta", Index: anthropicIndex(encoder.blockIndexes[key]),
+			Delta: &anthropicDeltaWire{Type: "input_json_delta", PartialJSON: event.ToolCall.Arguments},
+		}
+		deltaFrames, _, err := encodeAnthropicWireFrame(delta)
+		if err != nil {
+			return nil, nil, err
+		}
+		frames = append(frames, deltaFrames...)
+		keys = append(keys, key)
+	}
+	if len(keys) == 0 {
+		kind := llmprotocol.ContentText
+		if event.ToolCall != nil {
+			kind = llmprotocol.ContentToolCall
+		} else if event.Content != nil && event.Content.Kind != "" {
+			kind = event.Content.Kind
+		}
+		started, key, err := encoder.ensureAnthropicBlockStarted(event, kind)
+		if err != nil {
+			return nil, nil, err
+		}
+		frames = append(frames, started...)
+		keys = append(keys, key)
+	}
+	for _, key := range keys {
+		stopped, err := encoder.stopAnthropicBlock(key)
+		if err != nil {
+			return nil, nil, err
+		}
+		frames = append(frames, stopped...)
+	}
+	return frames, nil, nil
+}
+
+func (encoder *anthropicStreamEncoder) stopAnthropicBlock(key streamContentKey) ([][]byte, error) {
+	if !encoder.blockStarted[key] || encoder.blockStopped[key] {
+		return nil, nil
+	}
+	wire := anthropicEventWire{Type: "content_block_stop", Index: anthropicIndex(encoder.blockIndexes[key])}
+	frame, err := encodeSSE(wire.Type, wire)
+	if err != nil {
+		return nil, err
+	}
+	encoder.blockStopped[key] = true
+	if encoder.hasActiveBlock && encoder.activeBlock == key {
+		encoder.hasActiveBlock = false
+	}
+	return [][]byte{frame}, nil
 }
 
 func (encoder *anthropicStreamEncoder) encodeAnthropicCompletion(
@@ -369,7 +645,11 @@ func (encoder *anthropicStreamEncoder) encodeAnthropicCompletion(
 		return nil, nil, llmprotocol.NewError(llmprotocol.ErrorInternal, "usage_event_invalid", "terminal usage is invalid", nil)
 	}
 	stop := encodeAnthropicStop(event.StopReason)
-	delta := anthropicEventWire{Type: "message_delta", Delta: &anthropicDeltaWire{Type: "message_delta", StopReason: &stop}, Usage: encodeAnthropicUsage(*event.Usage)}
+	deltaWire := &anthropicDeltaWire{Type: "message_delta", StopReason: &stop}
+	if event.StopReason == llmprotocol.StopSequence {
+		deltaWire.StopSequence = &event.MatchedStopSequence
+	}
+	delta := anthropicEventWire{Type: "message_delta", Delta: deltaWire, Usage: encodeAnthropicMessageDeltaUsage(*event.Usage)}
 	first, err := encodeSSE(delta.Type, delta)
 	if err != nil {
 		return nil, nil, err
@@ -420,12 +700,16 @@ func (encoder *anthropicStreamEncoder) encodeAnthropicTextDelta(
 			return nil, diagnostics, err
 		}
 	}
+	frames, key, err := encoder.ensureAnthropicBlockStarted(event, llmprotocol.ContentText)
+	if err != nil {
+		return nil, diagnostics, err
+	}
 	wire := anthropicEventWire{
-		Type: "content_block_delta", Index: event.ItemIndex,
+		Type: "content_block_delta", Index: anthropicIndex(encoder.blockIndexes[key]),
 		Delta: &anthropicDeltaWire{Type: "text_delta", Text: event.Delta},
 	}
 	frame, err := encodeSSE(wire.Type, wire)
-	return [][]byte{frame}, diagnostics, err
+	return append(frames, frame), diagnostics, err
 }
 
 func (encoder *anthropicStreamEncoder) Finalize(reason error) ([][]byte, llmprotocol.Diagnostics, error) {
@@ -433,12 +717,7 @@ func (encoder *anthropicStreamEncoder) Finalize(reason error) ([][]byte, llmprot
 		return nil, nil, nil
 	}
 	encoder.terminal = true
-	protocolError := llmprotocol.NewError(
-		llmprotocol.ErrorUpstreamUnavailable,
-		"stream_incomplete",
-		"stream ended before completion",
-		reason,
-	)
+	protocolError := streamFinalizationError(reason, "stream ended before completion")
 	wire := anthropicEventWire{Type: "error", Error: &anthropicErrorWire{
 		Type: canonicalAnthropicErrorType(protocolError), Message: protocolError.Message,
 	}}

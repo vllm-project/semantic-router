@@ -78,6 +78,12 @@ it must be an uppercase three-letter code. All per-million-token rates must be f
 and non-negative. `cached_input_per_1m` and `cache_write_per_1m` are optional, and an
 explicit zero represents a free rate.
 
+`api_format` declares the upstream wire contract: `openai` for Chat
+Completions, `responses` for the OpenAI Responses API, or `anthropic` for
+Anthropic Messages. The client may use any supported inference path; the Router
+translates once at the provider boundary and returns the client's original wire
+format.
+
 ### Responses API
 
 ```bash

@@ -50,8 +50,8 @@ func evaluateResponseHeaderOutcome(
 	outcome.statusCode = getStatusFromHeaders(v.ResponseHeaders.Headers)
 	outcome.isSuccessful = outcome.statusCode >= 200 && outcome.statusCode < 300
 	if ctx != nil {
-		ctx.IsStreamingResponse = isStreamingContentType(v.ResponseHeaders.Headers) ||
-			(outcome.isSuccessful && isResponseAPIStreamRequest(ctx))
+		ctx.IsStreamingResponse = outcome.isSuccessful &&
+			(isStreamingContentType(v.ResponseHeaders.Headers) || isResponseAPIStreamRequest(ctx))
 	}
 	recordResponseHeaderErrorMetrics(ctx, outcome.statusCode)
 	return outcome

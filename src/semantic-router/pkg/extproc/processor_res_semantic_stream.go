@@ -12,6 +12,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
 )
 
@@ -57,6 +58,15 @@ func (r *OpenAIRouter) handleSemanticStreamingResponseBody(
 	}
 	var streamErr error
 	var translatedBody []byte
+	var publicBody []byte
+	if ctx.PublicChatUsageFilter != nil && len(responseBody) > 0 {
+		filtered, err := ctx.PublicChatUsageFilter.Push(responseBody)
+		publicBody = append(publicBody, filtered...)
+		if err != nil {
+			streamErr = err
+			ctx.StreamingAborted = true
+		}
+	}
 	if ctx.ProtocolResponseStream != nil && len(responseBody) > 0 {
 		translated, events, diagnostics, err := ctx.ProtocolResponseStream.Push(responseBody)
 		for _, frame := range translated {
@@ -81,12 +91,26 @@ func (r *OpenAIRouter) handleSemanticStreamingResponseBody(
 			ctx.StreamingAborted = true
 		}
 	}
+	if endOfStream && ctx.PublicChatUsageFilter != nil {
+		filtered, err := ctx.PublicChatUsageFilter.Finalize()
+		publicBody = append(publicBody, filtered...)
+		if err != nil && streamErr == nil {
+			streamErr = err
+			ctx.StreamingAborted = true
+		}
+	}
 	if endOfStream {
 		r.finalizeSemanticStreamingResponse(ctx, streamErr)
 	}
-	if ctx.ProtocolResponseStream != nil && ctx.TargetFormat != "" && ctx.TargetFormat != ctx.SourceFormat {
+	if ctx.ProtocolResponseStream != nil &&
+		(ctx.TargetFormat != "" && ctx.TargetFormat != ctx.SourceFormat || ctx.StreamingAborted) {
 		return buildResponseBodyContinueResponse(&ext_proc.BodyMutation{
 			Mutation: &ext_proc.BodyMutation_Body{Body: translatedBody},
+		}, nil)
+	}
+	if ctx.PublicChatUsageFilter != nil {
+		return buildResponseBodyContinueResponse(&ext_proc.BodyMutation{
+			Mutation: &ext_proc.BodyMutation_Body{Body: publicBody},
 		}, nil)
 	}
 	return buildResponseBodyContinueResponse(nil, nil)
@@ -125,30 +149,38 @@ func (r *OpenAIRouter) ensureSemanticResponseStream(ctx *RequestContext) error {
 	if err != nil {
 		return err
 	}
-	source := ctx.TargetFormat
-	if source == "" {
-		source = ctx.SourceFormat
-	}
-	if source == "" {
-		source = llmprotocol.OpenAIChatV1
-	}
-	target := ctx.SourceFormat
-	if target == "" {
-		target = llmprotocol.OpenAIChatV1
-	}
-	stream, err := engine.NewStream(source, target, llmprotocol.StreamContext{
+	source, target := responseWireFormats(ctx)
+	streamContext := llmprotocol.StreamContext{
 		Context: ctx.TraceContext, Source: source, Target: target,
-		PublicModel: ctx.RequestModel,
-	})
+		Options:     clientStreamOptions(ctx),
+		PublicModel: ctx.RequestModel, PreviousResponseID: responseObjectPreviousID(ctx),
+	}
+	var mutation protocolcodec.StreamEventMutation
+	if responseID := responseObjectPublicID(ctx); responseID != "" {
+		streamContext.ResponseID = responseID
+		mutation = func(event *llmprotocol.Event) error {
+			event.ResponseID = responseID
+			return nil
+		}
+	}
+	stream, err := engine.NewStreamWithMutation(source, target, streamContext, mutation)
 	if err != nil {
 		return err
 	}
 	ctx.ProtocolResponseStream = stream
+	if source == llmprotocol.OpenAIChatV1 && target == llmprotocol.OpenAIChatV1 && !streamUsageRequestedByClient(ctx) {
+		ctx.PublicChatUsageFilter = protocolcodec.NewChatUsageStreamFilter(llmprotocol.DefaultPolicy().Limits.SSEFrameBytes)
+	}
 	ctx.SemanticStreamState = &semanticResponseStreamState{
 		usage: llmprotocol.Usage{State: llmprotocol.UsageUnavailable},
 		items: make(map[int]*semanticStreamItem),
 	}
 	return nil
+}
+
+func streamUsageRequestedByClient(ctx *RequestContext) bool {
+	options := clientStreamOptions(ctx)
+	return options.IncludeUsage != nil && *options.IncludeUsage
 }
 
 //nolint:gocognit,cyclop,funlen // Observation is an exhaustive reducer over the closed neutral event contract.
@@ -294,6 +326,8 @@ func (r *OpenAIRouter) finalizeSemanticStreamingResponse(ctx *RequestContext, st
 	semanticResponse, responseErr := ctx.SemanticStreamState.response()
 	if responseErr == nil {
 		ctx.SemanticResponse = semanticResponse
+	} else {
+		ctx.StreamingAborted = true
 	}
 	completionLatency := time.Duration(0)
 	if !ctx.StartTime.IsZero() {

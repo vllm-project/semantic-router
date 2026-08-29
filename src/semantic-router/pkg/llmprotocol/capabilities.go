@@ -28,6 +28,25 @@ const (
 	CapabilityReasoningAccounting
 	CapabilityAuthoritativeUsage
 	CapabilityMultipleCandidates
+	CapabilityCacheDirectives
+	CapabilityReasoningDisable
+	CapabilityReasoningEffort
+	CapabilityReasoningBudget
+	CapabilitySamplingTopK
+	CapabilitySamplingSeed
+	CapabilitySamplingPenalties
+	CapabilityStopSequences
+	CapabilityRequestMetadata
+	CapabilityRequestStorage
+	CapabilityAutomaticStorage
+	CapabilityConversationState
+	CapabilityReasoningAdaptive
+	CapabilityReasoningSignature
+	CapabilityReasoningDisplay
+	// CapabilityMatchedStopSequence is response fidelity, distinct from the
+	// request-side ability to send stop sequences. Only a wire contract that
+	// exposes the exact sequence which ended generation can preserve it.
+	CapabilityMatchedStopSequence
 )
 
 // CapabilitySet is an immutable value bitset.
@@ -76,6 +95,22 @@ func (set CapabilitySet) Names() []string {
 		{CapabilityReasoningAccounting, "reasoning_accounting"},
 		{CapabilityAuthoritativeUsage, "authoritative_usage"},
 		{CapabilityMultipleCandidates, "multiple_candidates"},
+		{CapabilityCacheDirectives, "cache_directives"},
+		{CapabilityReasoningDisable, "reasoning_disable"},
+		{CapabilityReasoningEffort, "reasoning_effort"},
+		{CapabilityReasoningBudget, "reasoning_budget"},
+		{CapabilitySamplingTopK, "sampling_top_k"},
+		{CapabilitySamplingSeed, "sampling_seed"},
+		{CapabilitySamplingPenalties, "sampling_penalties"},
+		{CapabilityStopSequences, "stop_sequences"},
+		{CapabilityRequestMetadata, "request_metadata"},
+		{CapabilityRequestStorage, "request_storage"},
+		{CapabilityAutomaticStorage, "automatic_storage"},
+		{CapabilityConversationState, "conversation_state"},
+		{CapabilityReasoningAdaptive, "reasoning_adaptive"},
+		{CapabilityReasoningSignature, "reasoning_signature"},
+		{CapabilityReasoningDisplay, "reasoning_display"},
+		{CapabilityMatchedStopSequence, "matched_stop_sequence"},
 	}
 	names := make([]string, 0, len(known))
 	for _, item := range known {
@@ -108,6 +143,30 @@ func requestOptionCapabilities(request Request) CapabilitySet {
 	if request.CandidateCount != nil && *request.CandidateCount > 1 {
 		required.bits |= CapabilityMultipleCandidates
 	}
+	if request.Sampling.TopK != nil {
+		required.bits |= CapabilitySamplingTopK
+	}
+	if request.Sampling.Seed != nil {
+		required.bits |= CapabilitySamplingSeed
+	}
+	if request.Sampling.FrequencyPenalty != nil || request.Sampling.PresencePenalty != nil {
+		required.bits |= CapabilitySamplingPenalties
+	}
+	if len(request.Sampling.Stop) > 0 {
+		required.bits |= CapabilityStopSequences
+	}
+	if len(request.Metadata) > 0 {
+		required.bits |= CapabilityRequestMetadata
+	}
+	if request.Store != nil {
+		required.bits |= CapabilityRequestStorage
+	}
+	if request.AutoStore != nil {
+		required.bits |= CapabilityAutomaticStorage
+	}
+	if request.PreviousResponseID != "" || request.ConversationID != "" || request.Truncation != "" {
+		required.bits |= CapabilityConversationState
+	}
 	required.bits |= outputOptionCapabilities(request)
 	return required
 }
@@ -120,8 +179,20 @@ func outputOptionCapabilities(request Request) Capability {
 	if request.OutputFormat.Kind == OutputJSONSchema {
 		required |= CapabilityStrictJSONSchema
 	}
-	if request.ReasoningEffort != "" || request.ReasoningBudgetTokens != nil {
-		required |= CapabilityReasoning
+	if request.ReasoningEffort != "" {
+		required |= CapabilityReasoning | CapabilityReasoningEffort
+	}
+	if request.ReasoningBudgetTokens != nil {
+		required |= CapabilityReasoning | CapabilityReasoningBudget
+	}
+	if request.ReasoningDisplay != "" {
+		required |= CapabilityReasoning | CapabilityReasoningDisplay
+	}
+	if request.ReasoningMode == ReasoningModeDisabled {
+		required |= CapabilityReasoningDisable
+	}
+	if request.ReasoningMode == ReasoningModeAdaptive {
+		required |= CapabilityReasoning | CapabilityReasoningAdaptive
 	}
 	return required
 }
@@ -131,6 +202,9 @@ func toolCapabilities(tools []Tool) Capability {
 	for _, tool := range tools {
 		if tool.Strict != nil && *tool.Strict {
 			required |= CapabilityStrictToolSchema
+		}
+		if tool.Cache != nil {
+			required |= CapabilityCacheDirectives
 		}
 	}
 	return required
@@ -158,6 +232,12 @@ func messageCapabilities(messages []Message) Capability {
 
 func RequiredResponseCapabilities(response Response) CapabilitySet {
 	var required CapabilitySet
+	if len(response.Alternatives) > 0 {
+		required.bits |= CapabilityMultipleCandidates
+	}
+	if response.MatchedStopSequence != "" {
+		required.bits |= CapabilityMatchedStopSequence
+	}
 	sequences := append([][]OutputItem{response.Output}, response.Alternatives...)
 	for _, sequence := range sequences {
 		for _, item := range sequence {
@@ -169,22 +249,38 @@ func RequiredResponseCapabilities(response Response) CapabilitySet {
 	return required
 }
 
+// RequiredEventCapabilities describes fidelity that must survive at the
+// streaming boundary. Most event semantics are already closed by the stream
+// encoder contract. This method records response-only fields whose presence
+// has no approximation in another public wire format.
+func RequiredEventCapabilities(event Event) CapabilitySet {
+	var required CapabilitySet
+	if event.MatchedStopSequence != "" {
+		required.bits |= CapabilityMatchedStopSequence
+	}
+	return required
+}
+
 func capabilityForRequestContent(content Content) Capability {
+	var cache Capability
+	if content.Cache != nil {
+		cache = CapabilityCacheDirectives
+	}
 	switch content.Kind {
 	case ContentText, ContentRefusal:
-		return CapabilityText
+		return CapabilityText | cache
 	case ContentImage:
-		return CapabilityImageInput
+		return CapabilityImageInput | cache
 	case ContentAudio:
-		return CapabilityAudioInput
+		return CapabilityAudioInput | cache
 	case ContentVideo:
-		return CapabilityVideoInput
+		return CapabilityVideoInput | cache
 	case ContentFile:
-		return CapabilityFileInput
+		return CapabilityFileInput | cache
 	case ContentToolCall:
-		return CapabilityTools
+		return CapabilityTools | cache
 	case ContentToolResult:
-		capabilities := CapabilityTools
+		capabilities := CapabilityTools | cache
 		if content.ToolResult != nil {
 			for _, nested := range content.ToolResult.Content {
 				capabilities |= capabilityForRequestContent(nested)
@@ -192,7 +288,11 @@ func capabilityForRequestContent(content Content) Capability {
 		}
 		return capabilities
 	case ContentReasoning:
-		return CapabilityText | CapabilityReasoning
+		capabilities := CapabilityText | CapabilityReasoning | cache
+		if content.Signature != "" {
+			capabilities |= CapabilityReasoningSignature
+		}
+		return capabilities
 	default:
 		return 0
 	}
@@ -221,7 +321,11 @@ func capabilityForResponseContent(content Content) Capability {
 		}
 		return capabilities
 	case ContentReasoning:
-		return CapabilityText | CapabilityReasoning
+		capabilities := CapabilityText | CapabilityReasoning
+		if content.Signature != "" {
+			capabilities |= CapabilityReasoningSignature
+		}
+		return capabilities
 	default:
 		return 0
 	}
@@ -238,9 +342,25 @@ func ParseCapabilities(names []string) (CapabilitySet, error) {
 		"structured_json": CapabilityStructuredJSON, "strict_json_schema": CapabilityStrictJSONSchema,
 		"strict_tool_schema": CapabilityStrictToolSchema,
 		"streaming":          CapabilityStreaming, "cache_accounting": CapabilityCacheAccounting,
-		"reasoning_accounting": CapabilityReasoningAccounting,
-		"authoritative_usage":  CapabilityAuthoritativeUsage,
-		"multiple_candidates":  CapabilityMultipleCandidates,
+		"reasoning_accounting":  CapabilityReasoningAccounting,
+		"authoritative_usage":   CapabilityAuthoritativeUsage,
+		"multiple_candidates":   CapabilityMultipleCandidates,
+		"cache_directives":      CapabilityCacheDirectives,
+		"reasoning_disable":     CapabilityReasoningDisable,
+		"reasoning_effort":      CapabilityReasoningEffort,
+		"reasoning_budget":      CapabilityReasoningBudget,
+		"sampling_top_k":        CapabilitySamplingTopK,
+		"sampling_seed":         CapabilitySamplingSeed,
+		"sampling_penalties":    CapabilitySamplingPenalties,
+		"stop_sequences":        CapabilityStopSequences,
+		"request_metadata":      CapabilityRequestMetadata,
+		"request_storage":       CapabilityRequestStorage,
+		"automatic_storage":     CapabilityAutomaticStorage,
+		"conversation_state":    CapabilityConversationState,
+		"reasoning_adaptive":    CapabilityReasoningAdaptive,
+		"reasoning_signature":   CapabilityReasoningSignature,
+		"reasoning_display":     CapabilityReasoningDisplay,
+		"matched_stop_sequence": CapabilityMatchedStopSequence,
 	}
 	var set CapabilitySet
 	for _, name := range names {

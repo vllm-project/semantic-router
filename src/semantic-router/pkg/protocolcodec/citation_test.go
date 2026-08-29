@@ -218,7 +218,7 @@ func TestResponsesCitationStreamRejectsInvalidAnnotationCoordinates(t *testing.T
 			pushResponsesCitationPrefix(t, stream)
 			wire := responsesEventWire{
 				Type: "response.output_text.annotation.added", Sequence: 4,
-				ItemID: "item_1", OutputIndex: 0, ContentIndex: &zero, AnnotationIndex: &zero,
+				ItemID: "item_1", OutputIndex: responsesOutputIndex(0), ContentIndex: &zero, AnnotationIndex: &zero,
 				Annotation: &responsesAnnotationWire{
 					Type: "url_citation", URL: "https://example.com/source",
 					StartIndex: 0, EndIndex: 6,
@@ -261,7 +261,7 @@ func TestCitationStreamsFailClosedWhenMessagesCannotRepresentThem(t *testing.T) 
 				annotationIndex := 0
 				_, _, _, err = stream.Push(citationSSEFrame(t, responsesEventWire{
 					Type: "response.output_text.annotation.added", Sequence: 4,
-					ItemID: "item_1", OutputIndex: 0, ContentIndex: &annotationIndex,
+					ItemID: "item_1", OutputIndex: responsesOutputIndex(0), ContentIndex: &annotationIndex,
 					AnnotationIndex: &annotationIndex,
 					Annotation: &responsesAnnotationWire{
 						Type: "url_citation", URL: "https://example.com/source",
@@ -297,12 +297,12 @@ func pushResponsesCitationPrefix(t *testing.T, stream *StreamEngine) {
 			Response: &responsesResponseWire{ID: "response_1", Model: "source-model", Status: "in_progress"},
 		},
 		{
-			Type: "response.output_item.added", Sequence: 2, OutputIndex: 0,
-			Item: &responsesItemWire{Type: "message", ID: "item_1", Role: "assistant"},
+			Type: "response.output_item.added", Sequence: 2, OutputIndex: responsesOutputIndex(0),
+			Item: marshalResponsesEventItem(responsesItemWire{Type: "message", ID: "item_1", Role: "assistant"}),
 		},
 		{
 			Type: "response.output_text.delta", Sequence: 3,
-			ItemID: "item_1", OutputIndex: 0, ContentIndex: responsesContentIndex(), Delta: "source",
+			ItemID: "item_1", OutputIndex: responsesOutputIndex(0), ContentIndex: responsesContentIndex(), Delta: "source",
 		},
 	} {
 		pushCitationWire(t, stream, wire)

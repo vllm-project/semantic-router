@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"testing"
 
+	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -30,6 +31,172 @@ func TestProviderDispatchEncodesEveryClientBackendProtocolPair(t *testing.T) {
 	}
 }
 
+func TestProviderDispatchAppliesReasoningBeforeExternalModelIDRewrite(t *testing.T) {
+	router, logicalModel := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
+	params := router.Config.ModelConfig[logicalModel]
+	params.ReasoningFamily = "openai"
+	router.Config.ModelConfig[logicalModel] = params
+	router.Config.ReasoningFamilies = map[string]config.ReasoningFamilyConfig{
+		"openai": {
+			Type:      config.ReasoningFamilyTypeTopLevelReasoningEffort,
+			Parameter: "reasoning_effort",
+		},
+	}
+	decision := config.Decision{
+		Name: "Complex",
+		ModelRefs: []config.ModelRef{{
+			Model: logicalModel,
+			ModelReasoningControl: config.ModelReasoningControl{
+				ReasoningEffort: "high",
+			},
+		}},
+	}
+	request := testNeutralRequest("virtual", "solve this")
+	ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
+	ctx.VSRSelectedDecision = &decision
+
+	response, err := router.handleEntrypointModelRouting(
+		request,
+		"virtual",
+		decision.Name,
+		entropy.ReasoningDecision{UseReasoning: true},
+		logicalModel,
+		ctx,
+	)
+	if err != nil {
+		t.Fatalf("handleEntrypointModelRouting: %v", err)
+	}
+	body := response.GetRequestBody().GetResponse().GetBodyMutation().GetBody()
+	var wire struct {
+		Model           string `json:"model"`
+		ReasoningEffort string `json:"reasoning_effort"`
+	}
+	if err := json.Unmarshal(body, &wire); err != nil {
+		t.Fatalf("decode provider request: %v", err)
+	}
+	if wire.Model != "provider-model" {
+		t.Fatalf("provider model = %q, want provider-model", wire.Model)
+	}
+	if wire.ReasoningEffort != "high" {
+		t.Fatalf("reasoning effort = %q, want high", wire.ReasoningEffort)
+	}
+}
+
+func TestToolSelectionMutatesNeutralRequestBeforeEveryProviderEncoding(t *testing.T) {
+	semanticSelection := false
+	payload, err := config.NewStructuredPayload(config.ToolsPluginConfig{
+		Enabled:           true,
+		Mode:              config.ToolsPluginModeFiltered,
+		AllowTools:        []string{"lookup_weather"},
+		SemanticSelection: &semanticSelection,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	decision := &config.Decision{
+		Name: "tool-selection",
+		Plugins: []config.DecisionPlugin{{
+			Type: config.DecisionPluginTools, Configuration: payload,
+		}},
+	}
+	formats := []llmprotocol.WireFormat{
+		llmprotocol.OpenAIChatV1,
+		llmprotocol.OpenAIResponsesV1,
+		llmprotocol.AnthropicMessagesV1,
+	}
+	for _, target := range formats {
+		t.Run(string(target), func(t *testing.T) {
+			router, logicalModel := routingTestRouterForFormat(target)
+			request := testNeutralRequest("entrypoint", "What is the weather?")
+			request.Tools = []llmprotocol.Tool{
+				{Name: "lookup_weather", InputSchema: json.RawMessage(`{"type":"object"}`)},
+				{Name: "unrelated_tool", InputSchema: json.RawMessage(`{"type":"object"}`)},
+			}
+			request.ToolChoice = llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceAuto}
+			ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
+			ctx.VSRSelectedDecision = decision
+
+			response, routeErr := router.handleEntrypointModelRouting(
+				request, "entrypoint", decision.Name, entropy.ReasoningDecision{}, logicalModel, ctx,
+			)
+			if routeErr != nil {
+				t.Fatal(routeErr)
+			}
+			if len(request.Tools) != 1 || request.Tools[0].Name != "lookup_weather" || ctx.SemanticRequest != request {
+				t.Fatalf("tool selection did not commit exactly one neutral request: %+v", request.Tools)
+			}
+			body := response.GetRequestBody().GetResponse().GetBodyMutation().GetBody()
+			var wire map[string]any
+			if err := json.Unmarshal(body, &wire); err != nil {
+				t.Fatal(err)
+			}
+			tools, ok := wire["tools"].([]any)
+			if !ok || len(tools) != 1 {
+				t.Fatalf("provider body has unexpected tools: %s", body)
+			}
+			tool, ok := tools[0].(map[string]any)
+			if !ok {
+				t.Fatalf("provider tool is malformed: %s", body)
+			}
+			name, _ := tool["name"].(string)
+			if target == llmprotocol.OpenAIChatV1 {
+				function, _ := tool["function"].(map[string]any)
+				name, _ = function["name"].(string)
+			}
+			if name != "lookup_weather" {
+				t.Fatalf("provider body encoded stale tools: %s", body)
+			}
+		})
+	}
+}
+
+func TestProviderDispatchKeepsModelServerReasoningExtensionsAtProviderBoundary(t *testing.T) {
+	router, logicalModel := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
+	params := router.Config.ModelConfig[logicalModel]
+	params.ReasoningFamily = "qwen"
+	router.Config.ModelConfig[logicalModel] = params
+	router.Config.ReasoningFamilies = map[string]config.ReasoningFamilyConfig{
+		"qwen": {
+			Type:      config.ReasoningFamilyTypeChatTemplateKwargs,
+			Parameter: "enable_thinking",
+		},
+	}
+	decision := config.Decision{Name: "Agentic"}
+	request := testNeutralRequest("virtual", "plan this")
+	ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
+	ctx.VSRSelectedDecision = &decision
+
+	response, err := router.handleEntrypointModelRouting(
+		request,
+		"virtual",
+		decision.Name,
+		entropy.ReasoningDecision{UseReasoning: true},
+		logicalModel,
+		ctx,
+	)
+	if err != nil {
+		t.Fatalf("handleEntrypointModelRouting: %v", err)
+	}
+	body := response.GetRequestBody().GetResponse().GetBodyMutation().GetBody()
+	var wire struct {
+		Model              string          `json:"model"`
+		ChatTemplateKwargs json.RawMessage `json:"chat_template_kwargs"`
+	}
+	if err := json.Unmarshal(body, &wire); err != nil {
+		t.Fatalf("decode provider request: %v", err)
+	}
+	if wire.Model != "provider-model" {
+		t.Fatalf("provider model = %q, want provider-model", wire.Model)
+	}
+	var kwargs map[string]bool
+	if err := json.Unmarshal(wire.ChatTemplateKwargs, &kwargs); err != nil {
+		t.Fatalf("decode chat_template_kwargs: %v", err)
+	}
+	if !kwargs["enable_thinking"] {
+		t.Fatalf("reasoning extension = %s, want enable_thinking=true", wire.ChatTemplateKwargs)
+	}
+}
+
 func assertProviderDispatchPair(t *testing.T, source, target llmprotocol.WireFormat) {
 	t.Helper()
 	router, logicalModel := routingTestRouterForFormat(target)
@@ -46,6 +213,42 @@ func assertProviderDispatchPair(t *testing.T, source, target llmprotocol.WireFor
 		t.Fatalf("handleSpecifiedModelRouting(%s -> %s): %v", source, target, err)
 	}
 	assertDispatchedRequest(t, response, target)
+}
+
+func TestChatDispatchForcesBackendUsageWithoutChangingClientPreference(t *testing.T) {
+	router, logicalModel := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
+	ctx := &RequestContext{
+		Headers: map[string]string{}, SourceFormat: llmprotocol.OpenAIChatV1,
+		RequestID: "stream-usage-contract", TraceContext: context.Background(),
+	}
+	request, immediate := router.prepareProtocolRequest([]byte(
+		`{"model":"virtual","messages":[{"role":"user","content":"hello"}],"stream":true,"stream_options":{"include_usage":false}}`,
+	), ctx)
+	if immediate != nil {
+		t.Fatal("prepareProtocolRequest returned an immediate response")
+	}
+	if ctx.SemanticRequest.StreamOptions.IncludeUsage == nil || *ctx.SemanticRequest.StreamOptions.IncludeUsage {
+		t.Fatalf("client usage preference = %+v, want explicit false", ctx.SemanticRequest.StreamOptions)
+	}
+	response, err := router.handleSpecifiedModelRouting(request, logicalModel, "", ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := response.GetRequestBody().GetResponse().GetBodyMutation().GetBody()
+	var wire struct {
+		StreamOptions struct {
+			IncludeUsage *bool `json:"include_usage"`
+		} `json:"stream_options"`
+	}
+	if err := json.Unmarshal(body, &wire); err != nil {
+		t.Fatal(err)
+	}
+	if wire.StreamOptions.IncludeUsage == nil || !*wire.StreamOptions.IncludeUsage {
+		t.Fatalf("backend dispatch did not request authoritative usage: %s", body)
+	}
+	if ctx.SemanticRequest.StreamOptions.IncludeUsage == nil || *ctx.SemanticRequest.StreamOptions.IncludeUsage {
+		t.Fatalf("backend accounting override mutated client preference: %+v", ctx.SemanticRequest.StreamOptions)
+	}
 }
 
 func assertDispatchedRequest(t *testing.T, response *ext_proc.ProcessingResponse, target llmprotocol.WireFormat) {
@@ -101,6 +304,67 @@ func TestProviderProtocolPath(t *testing.T) {
 	}
 }
 
+func TestSetProviderRequestPathCoversProtocolAndBaseURLMatrix(t *testing.T) {
+	tests := []struct {
+		name    string
+		profile config.ProviderProfile
+		format  llmprotocol.WireFormat
+		want    string
+	}{
+		{
+			name:    "Chat OpenAI version root",
+			profile: config.ProviderProfile{Type: "openai", BaseURL: "https://api.example.com/v1"},
+			format:  llmprotocol.OpenAIChatV1,
+			want:    "/v1/chat/completions",
+		},
+		{
+			name:    "Chat OpenAI nested version root",
+			profile: config.ProviderProfile{Type: "openai", BaseURL: "https://api.example.com/compatible/v1"},
+			format:  llmprotocol.OpenAIChatV1,
+			want:    "/compatible/v1/chat/completions",
+		},
+		{
+			name:    "Chat explicit override",
+			profile: config.ProviderProfile{Type: "openai", BaseURL: "https://api.example.com/v1", ChatPath: "/custom/chat"},
+			format:  llmprotocol.OpenAIChatV1,
+			want:    "/custom/chat",
+		},
+		{
+			name:    "Responses version root",
+			profile: config.ProviderProfile{Type: "openai", BaseURL: "https://api.example.com/v1"},
+			format:  llmprotocol.OpenAIResponsesV1,
+			want:    "/v1/responses",
+		},
+		{
+			name:    "Responses nested version root ignores chat override",
+			profile: config.ProviderProfile{Type: "openai", BaseURL: "https://api.example.com/compatible/v1", ChatPath: "/custom/chat"},
+			format:  llmprotocol.OpenAIResponsesV1,
+			want:    "/compatible/v1/responses",
+		},
+		{
+			name:    "Anthropic version root",
+			profile: config.ProviderProfile{Type: "anthropic", BaseURL: "https://api.example.com/v1"},
+			format:  llmprotocol.AnthropicMessagesV1,
+			want:    "/v1/messages",
+		},
+		{
+			name:    "Anthropic nested version root ignores chat override",
+			profile: config.ProviderProfile{Type: "anthropic", BaseURL: "https://api.example.com/compatible/v1", ChatPath: "/custom/chat"},
+			format:  llmprotocol.AnthropicMessagesV1,
+			want:    "/compatible/v1/messages",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var mutations []*core.HeaderValueOption
+			setProviderRequestPath(&mutations, &test.profile, test.format)
+			if got := headerValuesByName(mutations)[":path"]; got != test.want {
+				t.Fatalf("provider path = %q, want %q", got, test.want)
+			}
+		})
+	}
+}
+
 func routingTestRouterForFormat(format llmprotocol.WireFormat) (*OpenAIRouter, string) {
 	logicalModel := "target-" + string(format)
 	apiFormat := config.APIFormatOpenAI
@@ -108,7 +372,7 @@ func routingTestRouterForFormat(format llmprotocol.WireFormat) (*OpenAIRouter, s
 	baseURL := "http://127.0.0.1:8000/v1"
 	switch format {
 	case llmprotocol.OpenAIResponsesV1:
-		apiFormat = "responses"
+		apiFormat = config.APIFormatResponses
 	case llmprotocol.AnthropicMessagesV1:
 		apiFormat = config.APIFormatAnthropic
 		providerType = "anthropic"

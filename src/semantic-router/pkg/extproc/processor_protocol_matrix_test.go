@@ -3,9 +3,13 @@ package extproc
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
+
+	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
@@ -46,6 +50,125 @@ func TestExtProcBufferedResponseProtocolMatrix(t *testing.T) {
 	}
 }
 
+// HTTP failures have a separate wire contract from failed model-generation
+// resources. This matrix locks the response-header/body seam so every backend
+// error envelope is rendered for every client without becoming a 2xx response.
+func TestExtProcBufferedTransportErrorProtocolMatrix(t *testing.T) {
+	router := &OpenAIRouter{}
+	engine := protocolcodec.NewBuiltinEngine()
+	forEachExtProcMatrixPair(t, func(t *testing.T, clientFormat, backendFormat llmprotocol.WireFormat) {
+		ctx := &RequestContext{
+			SourceFormat: clientFormat, TargetFormat: backendFormat,
+			RequestID: "request_1", RequestModel: "public-model",
+		}
+		headerResponse, err := router.handleResponseHeaders(&ext_proc.ProcessingRequest_ResponseHeaders{
+			ResponseHeaders: &ext_proc.HttpHeaders{Headers: &core.HeaderMap{Headers: []*core.HeaderValue{
+				{Key: ":status", Value: "429"},
+				{Key: "content-type", Value: "application/json"},
+			}}},
+		}, ctx)
+		if err != nil {
+			t.Fatalf("handleResponseHeaders(): %v", err)
+		}
+		if headerResponse.ModeOverride != nil || ctx.IsStreamingResponse {
+			t.Fatal("HTTP error was incorrectly promoted to a semantic stream")
+		}
+		bodyResponse, err := router.handleResponseBody(&ext_proc.ProcessingRequest_ResponseBody{
+			ResponseBody: &ext_proc.HttpBody{Body: extProcTransportErrorFixture(backendFormat), EndOfStream: true},
+		}, ctx)
+		if err != nil {
+			t.Fatalf("handleResponseBody(): %v", err)
+		}
+		common := bodyResponse.GetResponseBody().GetResponse()
+		if common.GetBodyMutation() == nil {
+			t.Fatal("translated transport error did not replace the upstream body")
+		}
+		clientBody := common.GetBodyMutation().GetBody()
+		translated, err := engine.TranslateTransportError(clientFormat, clientFormat, clientBody, nil)
+		if err != nil {
+			t.Fatalf("client transport error is not valid %s: %v\n%s", clientFormat, err, clientBody)
+		}
+		if translated.TransportError.Error == nil ||
+			translated.TransportError.Error.Category != llmprotocol.ErrorRateLimited ||
+			translated.TransportError.Error.Message != "slow down" {
+			t.Fatalf("transport error semantics changed: %+v", translated.TransportError)
+		}
+		if got := headerValueForTest(common.GetHeaderMutation(), "content-type"); got != "application/json" {
+			t.Fatalf("content-type mutation = %q, want application/json", got)
+		}
+		if !containsStringForTest(common.GetHeaderMutation().GetRemoveHeaders(), "content-length") {
+			t.Fatalf("content-length was not removed: %#v", common.GetHeaderMutation())
+		}
+	})
+}
+
+func TestExtProcResponsesClientOwnsBufferedResponseID(t *testing.T) {
+	router := &OpenAIRouter{}
+	ctx := &RequestContext{
+		SourceFormat: llmprotocol.OpenAIResponsesV1,
+		TargetFormat: llmprotocol.OpenAIChatV1,
+		ResponseObjectState: &ResponseObjectState{
+			GeneratedResponseID: "resp_router_owned",
+			PreviousResponseID:  "resp_previous",
+		},
+	}
+
+	response, err := router.decodeClientResponse(extProcResponseFixture(llmprotocol.OpenAIChatV1), ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.ID != "resp_router_owned" {
+		t.Fatalf("response ID = %q, want Router-owned ID", response.ID)
+	}
+	body, err := router.encodeClientResponse(*response, ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(body, []byte(`"previous_response_id":"resp_previous"`)) {
+		t.Fatalf("client response did not preserve request lineage: %s", body)
+	}
+}
+
+// Structured-output requests are especially sensitive to request-body
+// rewrites: dropping one schema keyword still leaves valid JSON but changes
+// the contract observed by the backend. Exercise both request modes at the
+// exact neutral decode/mutate/dispatch seam used by ExtProc.
+func TestExtProcStructuredOutputRequestProtocolMatrix(t *testing.T) {
+	router := &OpenAIRouter{}
+	for _, streaming := range []bool{false, true} {
+		for _, clientFormat := range extProcMatrixFormats {
+			for _, backendFormat := range extProcMatrixFormats {
+				name := fmt.Sprintf("stream=%t/%s_client_%s_backend", streaming, clientFormat, backendFormat)
+				t.Run(name, func(t *testing.T) {
+					ctx := &RequestContext{
+						SourceFormat: clientFormat,
+						TargetFormat: backendFormat,
+						RequestID:    "request_structured_output",
+						TraceContext: t.Context(),
+					}
+					request, immediate := router.prepareProtocolRequest(
+						extProcStructuredOutputRequestFixture(clientFormat, streaming), ctx,
+					)
+					if immediate != nil || request == nil {
+						t.Fatalf("structured request was rejected: request=%+v immediate=%+v", request, immediate)
+					}
+					request.Model = "routed-model"
+					request.Generation++
+					dispatch, err := router.encodeDispatchRequest(ctx)
+					if err != nil {
+						t.Fatal(err)
+					}
+					decoded, _, _, err := protocolcodec.NewBuiltinEngine().DecodeRequest(backendFormat, dispatch)
+					if err != nil {
+						t.Fatalf("backend request does not satisfy %s: %v\n%s", backendFormat, err, dispatch)
+					}
+					assertExtProcStructuredOutputRequest(t, decoded, streaming)
+				})
+			}
+		}
+	}
+}
+
 // Streaming translation is stateful, so it needs an independent 3x3 matrix at
 // the ExtProc seam rather than relying on buffered coverage or codec-only tests.
 func TestExtProcStreamingResponseProtocolMatrix(t *testing.T) {
@@ -54,6 +177,146 @@ func TestExtProcStreamingResponseProtocolMatrix(t *testing.T) {
 	forEachExtProcMatrixPair(t, func(t *testing.T, clientFormat, backendFormat llmprotocol.WireFormat) {
 		assertExtProcStreamingPair(t, router, engine, clientFormat, backendFormat)
 	})
+}
+
+func TestExtProcResponsesClientOwnsStreamingResponseID(t *testing.T) {
+	router := &OpenAIRouter{}
+	ctx := &RequestContext{
+		SourceFormat: llmprotocol.OpenAIResponsesV1,
+		TargetFormat: llmprotocol.OpenAIChatV1,
+		RequestModel: "public-model",
+		TraceContext: t.Context(),
+		ResponseObjectState: &ResponseObjectState{
+			GeneratedResponseID: "resp_router_owned",
+			PreviousResponseID:  "resp_previous",
+		},
+	}
+	if err := router.ensureSemanticResponseStream(ctx); err != nil {
+		t.Fatal(err)
+	}
+	clientWire := pushExtProcStreamFixture(t, ctx, extProcStreamFixture(llmprotocol.OpenAIChatV1))
+	semantic, err := ctx.SemanticStreamState.response()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if semantic.ID != "resp_router_owned" {
+		t.Fatalf("semantic response ID = %q, want Router-owned ID", semantic.ID)
+	}
+	responseID := decodeExtProcClientStreamResponseID(t, llmprotocol.OpenAIResponsesV1, clientWire.Bytes())
+	if responseID != "resp_router_owned" {
+		t.Fatalf("client response ID = %q, want Router-owned ID", responseID)
+	}
+	if !bytes.Contains(clientWire.Bytes(), []byte(`"previous_response_id":"resp_previous"`)) {
+		t.Fatalf("client stream did not preserve request lineage: %s", clientWire.Bytes())
+	}
+}
+
+func TestSameFormatChatAccountsBackendUsageWithoutPublishingIt(t *testing.T) {
+	includeUsage := false
+	router := &OpenAIRouter{}
+	ctx := &RequestContext{
+		SourceFormat: llmprotocol.OpenAIChatV1,
+		TargetFormat: llmprotocol.OpenAIChatV1,
+		RequestModel: "public-model",
+		TraceContext: t.Context(),
+		SemanticRequest: &llmprotocol.Request{
+			Generation:    1,
+			Model:         "public-model",
+			Stream:        true,
+			StreamOptions: llmprotocol.StreamOptions{IncludeUsage: &includeUsage},
+		},
+	}
+	response := router.handleSemanticStreamingResponseBody(
+		extProcStreamFixture(llmprotocol.OpenAIChatV1), true, ctx,
+	)
+	mutation := response.GetResponseBody().GetResponse().GetBodyMutation()
+	if mutation == nil {
+		t.Fatal("same-format Chat usage filtering did not produce a public body mutation")
+	}
+	publicBody := mutation.GetBody()
+	if bytes.Contains(publicBody, []byte(`"usage"`)) {
+		t.Fatalf("backend accounting leaked into a client that did not request usage: %s", publicBody)
+	}
+	if !bytes.Contains(publicBody, []byte(`"content":"hello"`)) || !bytes.Contains(publicBody, []byte("data: [DONE]")) {
+		t.Fatalf("usage filtering changed public content or terminal framing: %s", publicBody)
+	}
+	if ctx.SemanticResponse == nil || ctx.SemanticResponse.Usage.State != llmprotocol.UsageAvailable ||
+		ctx.SemanticResponse.Usage.Total.Value == nil || *ctx.SemanticResponse.Usage.Total.Value != 3 {
+		t.Fatalf("backend usage was not retained for Router accounting: %+v", ctx.SemanticResponse)
+	}
+}
+
+func TestSameFormatChatPublishesCodecFailureWhenTransparentUsageFilteringFails(t *testing.T) {
+	includeUsage := false
+	router := &OpenAIRouter{}
+	ctx := &RequestContext{
+		SourceFormat: llmprotocol.OpenAIChatV1,
+		TargetFormat: llmprotocol.OpenAIChatV1,
+		RequestModel: "public-model",
+		TraceContext: t.Context(),
+		SemanticRequest: &llmprotocol.Request{
+			Generation: 1, Model: "public-model", Stream: true,
+			StreamOptions: llmprotocol.StreamOptions{IncludeUsage: &includeUsage},
+		},
+	}
+	payload := append(
+		append([]byte(nil), extProcStreamFixture(llmprotocol.OpenAIChatV1)...),
+		[]byte("data: {\n\n")...,
+	)
+	response := router.handleSemanticStreamingResponseBody(payload, true, ctx)
+	mutation := response.GetResponseBody().GetResponse().GetBodyMutation()
+	if mutation == nil {
+		t.Fatal("malformed same-format stream did not produce a public failure body")
+	}
+	publicBody := mutation.GetBody()
+	if bytes.Contains(publicBody, []byte("data: [DONE]")) {
+		t.Fatalf("malformed same-format stream published a success terminal: %s", publicBody)
+	}
+	if !bytes.Contains(publicBody, []byte(`"error"`)) || !ctx.StreamingAborted {
+		t.Fatalf("malformed same-format stream did not fail closed: aborted=%t body=%s", ctx.StreamingAborted, publicBody)
+	}
+}
+
+func TestSameFormatChatSuppressesDeferredSuccessWhenTrailingFragmentFailsAtEOF(t *testing.T) {
+	includeUsage := false
+	router := &OpenAIRouter{}
+	ctx := &RequestContext{
+		SourceFormat: llmprotocol.OpenAIChatV1,
+		TargetFormat: llmprotocol.OpenAIChatV1,
+		RequestModel: "public-model",
+		TraceContext: t.Context(),
+		SemanticRequest: &llmprotocol.Request{
+			Generation: 1, Model: "public-model", Stream: true,
+			StreamOptions: llmprotocol.StreamOptions{IncludeUsage: &includeUsage},
+		},
+	}
+
+	prefix := router.handleSemanticStreamingResponseBody(
+		extProcStreamFixture(llmprotocol.OpenAIChatV1), false, ctx,
+	)
+	prefixMutation := prefix.GetResponseBody().GetResponse().GetBodyMutation()
+	if prefixMutation == nil {
+		t.Fatal("same-format stream prefix did not produce a body mutation")
+	}
+	if bytes.Contains(prefixMutation.GetBody(), []byte("data: [DONE]")) {
+		t.Fatalf("success terminal escaped before HTTP EOS: %s", prefixMutation.GetBody())
+	}
+
+	terminal := router.handleSemanticStreamingResponseBody([]byte("data: {"), true, ctx)
+	terminalMutation := terminal.GetResponseBody().GetResponse().GetBodyMutation()
+	if terminalMutation == nil {
+		t.Fatal("trailing fragment did not produce a public failure body")
+	}
+	publicBody := terminalMutation.GetBody()
+	if bytes.Contains(publicBody, []byte("data: [DONE]")) {
+		t.Fatalf("trailing fragment published the deferred success terminal: %s", publicBody)
+	}
+	if !bytes.Contains(publicBody, []byte(`"error"`)) || !ctx.StreamingAborted {
+		t.Fatalf("trailing fragment did not fail closed: aborted=%t body=%s", ctx.StreamingAborted, publicBody)
+	}
+	if ctx.SemanticResponse != nil {
+		t.Fatalf("failed stream was reconstructed as a successful semantic response: %+v", ctx.SemanticResponse)
+	}
 }
 
 func forEachExtProcMatrixPair(
@@ -158,6 +421,36 @@ func assertClientStreamDecodes(
 	}
 }
 
+func decodeExtProcClientStreamResponseID(
+	t *testing.T,
+	format llmprotocol.WireFormat,
+	body []byte,
+) string {
+	t.Helper()
+	engine := protocolcodec.NewBuiltinEngine()
+	stream, err := engine.NewStream(format, format, llmprotocol.StreamContext{
+		Context: t.Context(), PublicModel: "public-model",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, events, _, err := stream.Push(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, terminal, _, err := stream.Finalize(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	events = append(events, terminal...)
+	for _, event := range events {
+		if event.ResponseID != "" {
+			return event.ResponseID
+		}
+	}
+	return ""
+}
+
 func assertExtProcMatrixResponse(t *testing.T, response llmprotocol.Response, expectedModel string) {
 	t.Helper()
 	if response.ID != "response_1" || response.Model != expectedModel ||
@@ -186,6 +479,63 @@ func extProcResponseFixture(format llmprotocol.WireFormat) []byte {
 	}
 }
 
+func extProcStructuredOutputRequestFixture(format llmprotocol.WireFormat, streaming bool) []byte {
+	stream := "false"
+	if streaming {
+		stream = "true"
+	}
+	schema := `{"type":"object","properties":{"answer":{"type":"string"}},"required":["answer"],"additionalProperties":false}`
+	switch format {
+	case llmprotocol.OpenAIChatV1:
+		return []byte(`{"model":"client-model","messages":[{"role":"user","content":"answer"}],"reasoning_effort":"high","stream":` + stream + `,"response_format":{"type":"json_schema","json_schema":{"name":"structured_output","strict":true,"schema":` + schema + `}}}`)
+	case llmprotocol.OpenAIResponsesV1:
+		return []byte(`{"model":"client-model","input":"answer","reasoning":{"effort":"high"},"stream":` + stream + `,"text":{"format":{"type":"json_schema","name":"structured_output","strict":true,"schema":` + schema + `}}}`)
+	case llmprotocol.AnthropicMessagesV1:
+		return []byte(`{"model":"client-model","max_tokens":64,"messages":[{"role":"user","content":"answer"}],"stream":` + stream + `,"output_config":{"effort":"high","format":{"type":"json_schema","schema":` + schema + `}}}`)
+	default:
+		panic(fmt.Sprintf("unsupported request fixture format %q", format))
+	}
+}
+
+func assertExtProcStructuredOutputRequest(t *testing.T, request llmprotocol.Request, streaming bool) {
+	t.Helper()
+	if request.Model != "routed-model" || request.Stream != streaming || request.ReasoningEffort != "high" ||
+		request.OutputFormat.Kind != llmprotocol.OutputJSONSchema || request.OutputFormat.Name != "structured_output" ||
+		request.OutputFormat.Strict == nil || !*request.OutputFormat.Strict {
+		t.Fatalf("structured request semantics changed: %+v", request)
+	}
+	want := []byte(`{"type":"object","properties":{"answer":{"type":"string"}},"required":["answer"],"additionalProperties":false}`)
+	var gotValue, wantValue any
+	if err := json.Unmarshal(request.OutputFormat.Schema, &gotValue); err != nil {
+		t.Fatalf("decoded schema is invalid: %v", err)
+	}
+	if err := json.Unmarshal(want, &wantValue); err != nil {
+		t.Fatal(err)
+	}
+	gotJSON, err := json.Marshal(gotValue)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantJSON, err := json.Marshal(wantValue)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(gotJSON, wantJSON) {
+		t.Fatalf("structured schema changed: got=%s want=%s", gotJSON, wantJSON)
+	}
+}
+
+func extProcTransportErrorFixture(format llmprotocol.WireFormat) []byte {
+	switch format {
+	case llmprotocol.OpenAIChatV1, llmprotocol.OpenAIResponsesV1:
+		return []byte(`{"error":{"message":"slow down","type":"rate_limit_error","param":null,"code":"rate_limit_exceeded"}}`)
+	case llmprotocol.AnthropicMessagesV1:
+		return []byte(`{"type":"error","request_id":"request_provider","error":{"type":"rate_limit_error","message":"slow down"}}`)
+	default:
+		panic(fmt.Sprintf("unsupported error fixture format %q", format))
+	}
+}
+
 func extProcStreamFixture(format llmprotocol.WireFormat) []byte {
 	join := func(events ...string) []byte { return []byte(strings.Join(events, "")) }
 	switch format {
@@ -197,11 +547,14 @@ func extProcStreamFixture(format llmprotocol.WireFormat) []byte {
 		)
 	case llmprotocol.OpenAIResponsesV1:
 		return join(
-			"event: response.created\ndata: {\"type\":\"response.created\",\"response\":{\"id\":\"response_1\",\"model\":\"source-model\",\"status\":\"in_progress\"}}\n\n",
-			"event: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"output_1\",\"role\":\"assistant\"}}\n\n",
-			"event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"output_index\":0,\"item_id\":\"output_1\",\"delta\":\"hello\"}\n\n",
-			"event: response.output_item.done\ndata: {\"type\":\"response.output_item.done\",\"output_index\":0,\"item_id\":\"output_1\"}\n\n",
-			"event: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"id\":\"response_1\",\"model\":\"source-model\",\"status\":\"completed\",\"usage\":{\"input_tokens\":2,\"output_tokens\":1,\"total_tokens\":3}}}\n\n",
+			"event: response.created\ndata: {\"type\":\"response.created\",\"sequence_number\":0,\"response\":{\"id\":\"response_1\",\"object\":\"response\",\"created_at\":100,\"model\":\"source-model\",\"status\":\"in_progress\",\"output\":[]}}\n\n",
+			"event: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"sequence_number\":1,\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"output_1\",\"role\":\"assistant\",\"status\":\"in_progress\",\"content\":[]}}\n\n",
+			"event: response.content_part.added\ndata: {\"type\":\"response.content_part.added\",\"sequence_number\":2,\"output_index\":0,\"item_id\":\"output_1\",\"content_index\":0,\"part\":{\"type\":\"output_text\",\"text\":\"\",\"annotations\":[],\"logprobs\":[]}}\n\n",
+			"event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"sequence_number\":3,\"output_index\":0,\"content_index\":0,\"item_id\":\"output_1\",\"delta\":\"hello\",\"logprobs\":[]}\n\n",
+			"event: response.output_text.done\ndata: {\"type\":\"response.output_text.done\",\"sequence_number\":4,\"output_index\":0,\"content_index\":0,\"item_id\":\"output_1\",\"text\":\"hello\",\"logprobs\":[]}\n\n",
+			"event: response.content_part.done\ndata: {\"type\":\"response.content_part.done\",\"sequence_number\":5,\"output_index\":0,\"item_id\":\"output_1\",\"content_index\":0,\"part\":{\"type\":\"output_text\",\"text\":\"hello\",\"annotations\":[],\"logprobs\":[]}}\n\n",
+			"event: response.output_item.done\ndata: {\"type\":\"response.output_item.done\",\"sequence_number\":6,\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"output_1\",\"role\":\"assistant\",\"status\":\"completed\",\"content\":[{\"type\":\"output_text\",\"text\":\"hello\",\"annotations\":[],\"logprobs\":[]}]}}\n\n",
+			"event: response.completed\ndata: {\"type\":\"response.completed\",\"sequence_number\":7,\"response\":{\"id\":\"response_1\",\"object\":\"response\",\"created_at\":100,\"model\":\"source-model\",\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"id\":\"output_1\",\"role\":\"assistant\",\"status\":\"completed\",\"content\":[{\"type\":\"output_text\",\"text\":\"hello\",\"annotations\":[],\"logprobs\":[]}]}],\"usage\":{\"input_tokens\":2,\"input_tokens_details\":{\"cached_tokens\":0},\"output_tokens\":1,\"output_tokens_details\":{\"reasoning_tokens\":0},\"total_tokens\":3}}}\n\n",
 		)
 	case llmprotocol.AnthropicMessagesV1:
 		return join(

@@ -33,25 +33,33 @@ type Event struct {
 	ResponseID string
 	Model      string
 	ItemIndex  int
-	ItemID     string
-	Role       Role
-	Delta      string
-	ToolCall   *ToolCall
-	Content    *Content
-	StopReason StopReason
-	Usage      *Usage
-	Error      *ProtocolError
-	Failure    FailureScope
-	Opaque     []byte
+	// ContentIndex identifies one ordered content block within an output item.
+	// It is independent from ItemIndex: Responses can stream several text or
+	// refusal parts inside one message, while other wire formats may flatten
+	// those blocks on the wire.
+	ContentIndex        int
+	ItemID              string
+	Role                Role
+	Delta               string
+	ToolCall            *ToolCall
+	Content             *Content
+	StopReason          StopReason
+	MatchedStopSequence string
+	Usage               *Usage
+	Error               *ProtocolError
+	Failure             FailureScope
+	Opaque              []byte
 }
 
 type StreamContext struct {
-	Context       context.Context
-	Source        WireFormat
-	Target        WireFormat
-	PublicModel   string
-	ProviderModel string
-	ResponseID    string
+	Context            context.Context
+	Source             WireFormat
+	Target             WireFormat
+	Options            StreamOptions
+	PublicModel        string
+	ProviderModel      string
+	ResponseID         string
+	PreviousResponseID string
 }
 
 type StreamDecoder interface {

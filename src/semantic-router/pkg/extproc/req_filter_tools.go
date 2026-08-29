@@ -26,7 +26,7 @@ func (r *OpenAIRouter) handleToolSelectionForRequest(request *llmprotocol.Reques
 		// Continue without failing the request
 	}
 	if clearSemanticToolChoiceWhenNoTools(request) {
-		if err := r.updateRequestWithTools(request, &response, ctx); err != nil {
+		if err := commitToolSelection(request, ctx); err != nil {
 			logging.Errorf("Error clearing invalid tool_choice without tools: %v", err)
 		}
 	}
@@ -87,7 +87,7 @@ func (r *OpenAIRouter) handleEarlyToolModes(
 		if removed > 0 {
 			logging.Infof("[ToolsPlugin] Decision %q stripped %d prior tool-history messages", ctx.VSRSelectedDecision.Name, removed)
 		}
-		if err := r.updateRequestWithTools(request, response, ctx); err != nil {
+		if err := commitToolSelection(request, ctx); err != nil {
 			return false, err
 		}
 		return false, nil
@@ -100,7 +100,7 @@ func (r *OpenAIRouter) handleEarlyToolModes(
 		request.Tools = filtered
 		if request.ToolChoice.Mode != llmprotocol.ToolChoiceAuto {
 			logging.Infof("[ToolsPlugin] Decision %q filtered explicit tools to %d entries", ctx.VSRSelectedDecision.Name, len(request.Tools))
-			if err := r.updateRequestWithTools(request, response, ctx); err != nil {
+			if err := commitToolSelection(request, ctx); err != nil {
 				return false, err
 			}
 			return false, nil
@@ -138,7 +138,7 @@ func (r *OpenAIRouter) runSemanticToolSelection(
 	if err := r.applySelectedTools(request, selectedTools, strategyID, confidence, latency, classificationText, nil); err != nil {
 		return err
 	}
-	return r.updateRequestWithTools(request, response, ctx)
+	return commitToolSelection(request, ctx)
 }
 
 func (r *OpenAIRouter) handleToolSelectionError(
@@ -152,7 +152,7 @@ func (r *OpenAIRouter) handleToolSelectionError(
 		logging.Warnf("Tool selection failed, falling back to no tools: %v", toolErr)
 		request.Tools = nil
 		request.Generation++
-		return r.updateRequestWithTools(request, response, ctx)
+		return commitToolSelection(request, ctx)
 	}
 	metrics.RecordRequestError(getModelFromCtx(ctx), "classification_failed")
 	return toolErr
@@ -194,7 +194,7 @@ func (r *OpenAIRouter) handleToolSelection(
 	}
 
 	if !toolsCfg.SelectionEnabled() {
-		return r.updateRequestWithTools(request, response, ctx)
+		return commitToolSelection(request, ctx)
 	}
 
 	classificationText, historySummary, ok := buildToolClassificationText(userContent, nonUserMessages)
@@ -596,33 +596,14 @@ func filterToolsByDecisionPolicy(tools []llmprotocol.Tool, allowTools, blockTool
 	return filtered
 }
 
-// updateRequestWithTools updates the request body with the selected tools.
-func (r *OpenAIRouter) updateRequestWithTools(request *llmprotocol.Request, response **ext_proc.ProcessingResponse, ctx *RequestContext) error {
+// commitToolSelection publishes the mutated neutral request to the dispatch
+// context. Provider serialization deliberately remains in
+// finalizeProviderDispatchResponse, after every semantic plugin has run.
+func commitToolSelection(request *llmprotocol.Request, ctx *RequestContext) error {
 	if request == nil || ctx == nil {
 		return fmt.Errorf("neutral inference request is unavailable")
 	}
 	ctx.SemanticRequest = request
-	serializedRequest, err := r.encodeDispatchRequest(ctx)
-	if err != nil {
-		return err
-	}
-	commonResponse := ensureRequestBodyCommonResponse(response)
-	bodyMutation := &ext_proc.BodyMutation{
-		Mutation: &ext_proc.BodyMutation_Body{
-			Body: serializedRequest,
-		},
-	}
-	commonResponse.Status = ext_proc.CommonResponse_CONTINUE
-	commonResponse.BodyMutation = bodyMutation
-	if commonResponse.HeaderMutation == nil {
-		commonResponse.HeaderMutation = &ext_proc.HeaderMutation{}
-	}
-	ensureHeaderRemoved(commonResponse.HeaderMutation, "content-length")
-	setHeaderValue(commonResponse.HeaderMutation, "content-length", fmt.Sprintf("%d", len(serializedRequest)))
-	if r.shouldClearRouteCache() {
-		commonResponse.ClearRouteCache = true
-		logging.Debugf("Setting ClearRouteCache=true (feature enabled) in updateRequestWithTools")
-	}
 	return nil
 }
 

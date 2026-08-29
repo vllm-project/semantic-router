@@ -17,6 +17,7 @@ limitations under the License.
 package protocolcodec
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -46,6 +47,99 @@ func TestDecodeResponseStreamAccumulatesBuiltinFormats(t *testing.T) {
 	}
 }
 
+func TestResponsesReplayPreservesContentGroupingAndReasoningNamespaces(t *testing.T) {
+	engine := NewBuiltinEngine()
+	response := llmprotocol.Response{
+		Generation: 1,
+		ID:         "response_grouped",
+		Model:      "public/model",
+		Output: []llmprotocol.OutputItem{
+			{
+				ID: "reasoning_group", Role: llmprotocol.RoleAssistant,
+				Content: []llmprotocol.Content{
+					{Kind: llmprotocol.ContentReasoning, Reasoning: llmprotocol.ReasoningScopeSummary, Text: "short"},
+					{Kind: llmprotocol.ContentReasoning, Reasoning: llmprotocol.ReasoningScopeText, Text: "full"},
+				},
+			},
+			{
+				ID: "message_group", Role: llmprotocol.RoleAssistant,
+				Content: []llmprotocol.Content{
+					{Kind: llmprotocol.ContentText, Text: "first"},
+					{Kind: llmprotocol.ContentText, Text: "second"},
+				},
+			},
+		},
+		StopReason: llmprotocol.StopEndTurn,
+		Usage:      availableStreamUsage(4, 4),
+	}
+	wire, _, err := engine.EncodeResponseStream(
+		llmprotocol.OpenAIResponsesV1,
+		response,
+		llmprotocol.StreamContext{PublicModel: response.Model},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, _, err := engine.DecodeResponseStream(
+		llmprotocol.OpenAIResponsesV1,
+		wire,
+		llmprotocol.StreamContext{PublicModel: response.Model},
+	)
+	if err != nil {
+		t.Fatalf("decode replayed Responses stream: %v\n%s", err, wire)
+	}
+	if len(decoded.Output) != 2 {
+		t.Fatalf("replayed output items = %d, want 2: %+v", len(decoded.Output), decoded.Output)
+	}
+	if len(decoded.Output[0].Content) != 2 ||
+		decoded.Output[0].Content[0].Reasoning != llmprotocol.ReasoningScopeSummary ||
+		decoded.Output[0].Content[1].Reasoning != llmprotocol.ReasoningScopeText {
+		t.Fatalf("reasoning namespaces or grouping changed: %+v", decoded.Output[0])
+	}
+	if len(decoded.Output[1].Content) != 2 ||
+		decoded.Output[1].Content[0].Text != "first" || decoded.Output[1].Content[1].Text != "second" {
+		t.Fatalf("message content grouping changed: %+v", decoded.Output[1])
+	}
+}
+
+func TestResponsesStreamPreservesContentFilterIncomplete(t *testing.T) {
+	engine := NewBuiltinEngine()
+	response := llmprotocol.Response{
+		Generation: 1,
+		ID:         "response_filtered",
+		Model:      "public/model",
+		Output: []llmprotocol.OutputItem{{
+			ID:   "item_filtered",
+			Role: llmprotocol.RoleAssistant,
+		}},
+		StopReason: llmprotocol.StopContentFilter,
+		Usage:      availableStreamUsage(4, 1),
+	}
+	wire, _, err := engine.EncodeResponseStream(
+		llmprotocol.OpenAIResponsesV1,
+		response,
+		llmprotocol.StreamContext{PublicModel: response.Model},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(wire, []byte(`"type":"response.incomplete"`)) ||
+		!bytes.Contains(wire, []byte(`"reason":"content_filter"`)) {
+		t.Fatalf("Responses stream lost content-filter terminal state: %s", wire)
+	}
+	decoded, _, err := engine.DecodeResponseStream(
+		llmprotocol.OpenAIResponsesV1,
+		wire,
+		llmprotocol.StreamContext{PublicModel: response.Model},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decoded.StopReason != llmprotocol.StopContentFilter {
+		t.Fatalf("decoded stop reason = %q", decoded.StopReason)
+	}
+}
+
 func assertDecodedBuiltinResponseStream(
 	t *testing.T,
 	engine *Engine,
@@ -53,7 +147,10 @@ func assertDecodedBuiltinResponseStream(
 	response llmprotocol.Response,
 ) {
 	t.Helper()
-	wire, _, err := engine.EncodeResponseStream(format, response, llmprotocol.StreamContext{PublicModel: response.Model})
+	wire, _, err := engine.EncodeResponseStream(format, response, llmprotocol.StreamContext{
+		PublicModel: response.Model,
+		Options:     llmprotocol.StreamOptions{IncludeUsage: boolPointer(true)},
+	})
 	if err != nil {
 		t.Fatalf("EncodeResponseStream() error = %v", err)
 	}

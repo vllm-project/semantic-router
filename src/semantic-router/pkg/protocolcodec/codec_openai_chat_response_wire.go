@@ -11,7 +11,7 @@ import (
 type chatResponseWire struct {
 	ID                string                    `json:"id"`
 	Object            string                    `json:"object,omitempty"`
-	Created           int64                     `json:"created,omitempty"`
+	Created           int64                     `json:"created"`
 	Model             string                    `json:"model"`
 	Choices           []chatChoiceWire          `json:"choices"`
 	Usage             *chatUsageWire            `json:"usage,omitempty"`
@@ -124,14 +124,18 @@ type chatUsageWire struct {
 }
 
 type chatPromptTokensDetailsWire struct {
-	CachedTokens int64 `json:"cached_tokens"`
-	AudioTokens  int64 `json:"audio_tokens,omitempty"`
+	CachedTokens     int64 `json:"cached_tokens"`
+	CacheWriteTokens int64 `json:"cache_write_tokens,omitempty"`
+	AudioTokens      int64 `json:"audio_tokens,omitempty"`
+	TextTokens       int64 `json:"text_tokens,omitempty"`
+	ImageTokens      int64 `json:"image_tokens,omitempty"`
 }
 
 type chatCompletionTokensDetailsWire struct {
 	AcceptedPredictionTokens int64 `json:"accepted_prediction_tokens,omitempty"`
 	AudioTokens              int64 `json:"audio_tokens,omitempty"`
 	ReasoningTokens          int64 `json:"reasoning_tokens"`
+	TextTokens               int64 `json:"text_tokens,omitempty"`
 	RejectedPredictionTokens int64 `json:"rejected_prediction_tokens,omitempty"`
 }
 

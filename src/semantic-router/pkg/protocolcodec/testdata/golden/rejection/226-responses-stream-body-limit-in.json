@@ -1,0 +1,11 @@
+{
+  "operation": "stream",
+  "public_model": "public-model",
+  "provider_model": "provider-model",
+  "limits": {
+    "body_bytes": 32
+  },
+  "chunks": [
+    "event: response.created\ndata: {\"type\":\"response.created\",\"sequence_number\":0,\"response\":{\"id\":\"resp_1\",\"object\":\"response\",\"created_at\":1,\"model\":\"provider-model\",\"status\":\"in_progress\",\"output\":[]}}\n\n"
+  ]
+}

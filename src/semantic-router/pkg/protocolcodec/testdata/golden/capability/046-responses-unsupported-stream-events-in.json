@@ -1,0 +1,345 @@
+{
+  "operation": "stream",
+  "cases": [
+    {
+      "name": "response.audio.delta",
+      "stream": {
+        "public_model": "public-model",
+        "provider_model": "provider-model",
+        "chunks": [
+          "event: response.audio.delta\ndata: {\"type\":\"response.audio.delta\",\"sequence_number\":0}\n\n"
+        ]
+      }
+    },
+    {
+      "name": "response.audio.done",
+      "stream": {
+        "public_model": "public-model",
+        "provider_model": "provider-model",
+        "chunks": [
+          "event: response.audio.done\ndata: {\"type\":\"response.audio.done\",\"sequence_number\":0}\n\n"
+        ]
+      }
+    },
+    {
+      "name": "response.audio.transcript.delta",
+      "stream": {
+        "public_model": "public-model",
+        "provider_model": "provider-model",
+        "chunks": [
+          "event: response.audio.transcript.delta\ndata: {\"type\":\"response.audio.transcript.delta\",\"sequence_number\":0}\n\n"
+        ]
+      }
+    },
+    {
+      "name": "response.audio.transcript.done",
+      "stream": {
+        "public_model": "public-model",
+        "provider_model": "provider-model",
+        "chunks": [
+          "event: response.audio.transcript.done\ndata: {\"type\":\"response.audio.transcript.done\",\"sequence_number\":0}\n\n"
+        ]
+      }
+    },
+    {
+      "name": "response.code_interpreter_call_code.delta",
+      "stream": {
+        "public_model": "public-model",
+        "provider_model": "provider-model",
+        "chunks": [
+          "event: response.code_interpreter_call_code.delta\ndata: {\"type\":\"response.code_interpreter_call_code.delta\",\"sequence_number\":0}\n\n"
+        ]
+      }
+    },
+    {
+      "name": "response.code_interpreter_call_code.done",
+      "stream": {
+        "public_model": "public-model",
+        "provider_model": "provider-model",
+        "chunks": [
+          "event: response.code_interpreter_call_code.done\ndata: {\"type\":\"response.code_interpreter_call_code.done\",\"sequence_number\":0}\n\n"
+        ]
+      }
+    },
+    {
+      "name": "response.code_interpreter_call.completed",
+      "stream": {
+        "public_model": "public-model",
+        "provider_model": "provider-model",
+        "chunks": [
+          "event: response.code_interpreter_call.completed\ndata: {\"type\":\"response.code_interpreter_call.completed\",\"sequence_number\":0}\n\n"
+        ]
+      }
+    },
+    {
+      "name": "response.code_interpreter_call.in_progress",
+      "stream": {
+        "public_model": "public-model",
+        "provider_model": "provider-model",
+        "chunks": [
+          "event: response.code_interpreter_call.in_progress\ndata: {\"type\":\"response.code_interpreter_call.in_progress\",\"sequence_number\":0}\n\n"
+        ]
+      }
+    },
+    {
+      "name": "response.code_interpreter_call.interpreting",
+      "stream": {
+        "public_model": "public-model",
+        "provider_model": "provider-model",
+        "chunks": [
+          "event: response.code_interpreter_call.interpreting\ndata: {\"type\":\"response.code_interpreter_call.interpreting\",\"sequence_number\":0}\n\n"
+        ]
+      }
+    },
+    {
+      "name": "response.custom_tool_call_input.delta",
+      "stream": {
+        "public_model": "public-model",
+        "provider_model": "provider-model",
+        "chunks": [
+          "event: response.custom_tool_call_input.delta\ndata: {\"type\":\"response.custom_tool_call_input.delta\",\"sequence_number\":0}\n\n"
+        ]
+      }
+    },
+    {
+      "name": "response.custom_tool_call_input.done",
+      "stream": {
+        "public_model": "public-model",
+        "provider_model": "provider-model",
+        "chunks": [
+          "event: response.custom_tool_call_input.done\ndata: {\"type\":\"response.custom_tool_call_input.done\",\"sequence_number\":0}\n\n"
+        ]
+      }
+    },
+    {
+      "name": "response.file_search_call.completed",
+      "stream": {
+        "public_model": "public-model",
+        "provider_model": "provider-model",
+        "chunks": [
+          "event: response.file_search_call.completed\ndata: {\"type\":\"response.file_search_call.completed\",\"sequence_number\":0}\n\n"
+        ]
+      }
+    },
+    {
+      "name": "response.file_search_call.in_progress",
+      "stream": {
+        "public_model": "public-model",
+        "provider_model": "provider-model",
+        "chunks": [
+          "event: response.file_search_call.in_progress\ndata: {\"type\":\"response.file_search_call.in_progress\",\"sequence_number\":0}\n\n"
+        ]
+      }
+    },
+    {
+      "name": "response.file_search_call.searching",
+      "stream": {
+        "public_model": "public-model",
+        "provider_model": "provider-model",
+        "chunks": [
+          "event: response.file_search_call.searching\ndata: {\"type\":\"response.file_search_call.searching\",\"sequence_number\":0}\n\n"
+        ]
+      }
+    },
+    {
+      "name": "response.image_generation_call.completed",
+      "stream": {
+        "public_model": "public-model",
+        "provider_model": "provider-model",
+        "chunks": [
+          "event: response.image_generation_call.completed\ndata: {\"type\":\"response.image_generation_call.completed\",\"sequence_number\":0}\n\n"
+        ]
+      }
+    },
+    {
+      "name": "response.image_generation_call.generating",
+      "stream": {
+        "public_model": "public-model",
+        "provider_model": "provider-model",
+        "chunks": [
+          "event: response.image_generation_call.generating\ndata: {\"type\":\"response.image_generation_call.generating\",\"sequence_number\":0}\n\n"
+        ]
+      }
+    },
+    {
+      "name": "response.image_generation_call.in_progress",
+      "stream": {
+        "public_model": "public-model",
+        "provider_model": "provider-model",
+        "chunks": [
+          "event: response.image_generation_call.in_progress\ndata: {\"type\":\"response.image_generation_call.in_progress\",\"sequence_number\":0}\n\n"
+        ]
+      }
+    },
+    {
+      "name": "response.image_generation_call.partial_image",
+      "stream": {
+        "public_model": "public-model",
+        "provider_model": "provider-model",
+        "chunks": [
+          "event: response.image_generation_call.partial_image\ndata: {\"type\":\"response.image_generation_call.partial_image\",\"sequence_number\":0}\n\n"
+        ]
+      }
+    },
+    {
+      "name": "response.mcp_call_arguments.delta",
+      "stream": {
+        "public_model": "public-model",
+        "provider_model": "provider-model",
+        "chunks": [
+          "event: response.mcp_call_arguments.delta\ndata: {\"type\":\"response.mcp_call_arguments.delta\",\"sequence_number\":0}\n\n"
+        ]
+      }
+    },
+    {
+      "name": "response.mcp_call_arguments.done",
+      "stream": {
+        "public_model": "public-model",
+        "provider_model": "provider-model",
+        "chunks": [
+          "event: response.mcp_call_arguments.done\ndata: {\"type\":\"response.mcp_call_arguments.done\",\"sequence_number\":0}\n\n"
+        ]
+      }
+    },
+    {
+      "name": "response.mcp_call.completed",
+      "stream": {
+        "public_model": "public-model",
+        "provider_model": "provider-model",
+        "chunks": [
+          "event: response.mcp_call.completed\ndata: {\"type\":\"response.mcp_call.completed\",\"sequence_number\":0}\n\n"
+        ]
+      }
+    },
+    {
+      "name": "response.mcp_call.failed",
+      "stream": {
+        "public_model": "public-model",
+        "provider_model": "provider-model",
+        "chunks": [
+          "event: response.mcp_call.failed\ndata: {\"type\":\"response.mcp_call.failed\",\"sequence_number\":0}\n\n"
+        ]
+      }
+    },
+    {
+      "name": "response.mcp_call.in_progress",
+      "stream": {
+        "public_model": "public-model",
+        "provider_model": "provider-model",
+        "chunks": [
+          "event: response.mcp_call.in_progress\ndata: {\"type\":\"response.mcp_call.in_progress\",\"sequence_number\":0}\n\n"
+        ]
+      }
+    },
+    {
+      "name": "response.mcp_list_tools.completed",
+      "stream": {
+        "public_model": "public-model",
+        "provider_model": "provider-model",
+        "chunks": [
+          "event: response.mcp_list_tools.completed\ndata: {\"type\":\"response.mcp_list_tools.completed\",\"sequence_number\":0}\n\n"
+        ]
+      }
+    },
+    {
+      "name": "response.mcp_list_tools.failed",
+      "stream": {
+        "public_model": "public-model",
+        "provider_model": "provider-model",
+        "chunks": [
+          "event: response.mcp_list_tools.failed\ndata: {\"type\":\"response.mcp_list_tools.failed\",\"sequence_number\":0}\n\n"
+        ]
+      }
+    },
+    {
+      "name": "response.mcp_list_tools.in_progress",
+      "stream": {
+        "public_model": "public-model",
+        "provider_model": "provider-model",
+        "chunks": [
+          "event: response.mcp_list_tools.in_progress\ndata: {\"type\":\"response.mcp_list_tools.in_progress\",\"sequence_number\":0}\n\n"
+        ]
+      }
+    },
+    {
+      "name": "response.shell_call_command.added",
+      "stream": {
+        "public_model": "public-model",
+        "provider_model": "provider-model",
+        "chunks": [
+          "event: response.shell_call_command.added\ndata: {\"type\":\"response.shell_call_command.added\",\"sequence_number\":0}\n\n"
+        ]
+      }
+    },
+    {
+      "name": "response.shell_call_command.delta",
+      "stream": {
+        "public_model": "public-model",
+        "provider_model": "provider-model",
+        "chunks": [
+          "event: response.shell_call_command.delta\ndata: {\"type\":\"response.shell_call_command.delta\",\"sequence_number\":0}\n\n"
+        ]
+      }
+    },
+    {
+      "name": "response.shell_call_command.done",
+      "stream": {
+        "public_model": "public-model",
+        "provider_model": "provider-model",
+        "chunks": [
+          "event: response.shell_call_command.done\ndata: {\"type\":\"response.shell_call_command.done\",\"sequence_number\":0}\n\n"
+        ]
+      }
+    },
+    {
+      "name": "response.shell_call_output_content.delta",
+      "stream": {
+        "public_model": "public-model",
+        "provider_model": "provider-model",
+        "chunks": [
+          "event: response.shell_call_output_content.delta\ndata: {\"type\":\"response.shell_call_output_content.delta\",\"sequence_number\":0}\n\n"
+        ]
+      }
+    },
+    {
+      "name": "response.shell_call_output_content.done",
+      "stream": {
+        "public_model": "public-model",
+        "provider_model": "provider-model",
+        "chunks": [
+          "event: response.shell_call_output_content.done\ndata: {\"type\":\"response.shell_call_output_content.done\",\"sequence_number\":0}\n\n"
+        ]
+      }
+    },
+    {
+      "name": "response.web_search_call.completed",
+      "stream": {
+        "public_model": "public-model",
+        "provider_model": "provider-model",
+        "chunks": [
+          "event: response.web_search_call.completed\ndata: {\"type\":\"response.web_search_call.completed\",\"sequence_number\":0}\n\n"
+        ]
+      }
+    },
+    {
+      "name": "response.web_search_call.in_progress",
+      "stream": {
+        "public_model": "public-model",
+        "provider_model": "provider-model",
+        "chunks": [
+          "event: response.web_search_call.in_progress\ndata: {\"type\":\"response.web_search_call.in_progress\",\"sequence_number\":0}\n\n"
+        ]
+      }
+    },
+    {
+      "name": "response.web_search_call.searching",
+      "stream": {
+        "public_model": "public-model",
+        "provider_model": "provider-model",
+        "chunks": [
+          "event: response.web_search_call.searching\ndata: {\"type\":\"response.web_search_call.searching\",\"sequence_number\":0}\n\n"
+        ]
+      }
+    }
+  ]
+}

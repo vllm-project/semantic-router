@@ -102,7 +102,7 @@ type responseAccumulator struct {
 type responseAccumulatorItem struct {
 	id       string
 	role     llmprotocol.Role
-	contents []llmprotocol.Content
+	contents map[int]*llmprotocol.Content
 	call     *llmprotocol.ToolCall
 }
 
@@ -150,12 +150,12 @@ func (accumulator *responseAccumulator) applyEvent(event llmprotocol.Event) erro
 		return accumulator.completeItem(event)
 	case llmprotocol.EventResponseCompleted:
 		accumulator.result.StopReason = event.StopReason
+		accumulator.result.MatchedStopSequence = event.MatchedStopSequence
 		accumulator.terminal = true
 		return nil
 	case llmprotocol.EventResponseFailed:
 		accumulator.result.Output = nil
 		accumulator.result.StopReason = llmprotocol.StopError
-		accumulator.result.Usage = llmprotocol.Usage{State: llmprotocol.UsageUnavailable}
 		accumulator.result.Error = event.Error
 		accumulator.terminal = true
 		return nil
@@ -192,7 +192,7 @@ func (accumulator *responseAccumulator) startItem(event llmprotocol.Event) error
 	if _, found := accumulator.items[event.ItemIndex]; found {
 		return fmt.Errorf("neutral stream item %d started twice", event.ItemIndex)
 	}
-	item := &responseAccumulatorItem{id: event.ItemID, role: event.Role}
+	item := &responseAccumulatorItem{id: event.ItemID, role: event.Role, contents: make(map[int]*llmprotocol.Content)}
 	if item.role == "" {
 		item.role = llmprotocol.RoleAssistant
 	}
@@ -200,7 +200,8 @@ func (accumulator *responseAccumulator) startItem(event llmprotocol.Event) error
 		call := *event.ToolCall
 		item.call = &call
 	} else if event.Content != nil {
-		item.contents = append(item.contents, *event.Content)
+		content := *event.Content
+		item.contents[event.ContentIndex] = &content
 	}
 	accumulator.items[event.ItemIndex] = item
 	return nil
@@ -213,15 +214,19 @@ func (accumulator *responseAccumulator) appendOutputText(event llmprotocol.Event
 		kind = event.Content.Kind
 		citations = event.Content.Citations
 	}
-	return accumulator.appendText(event.ItemIndex, kind, event.Delta, "", citations)
+	return accumulator.appendText(event.ItemIndex, event.ContentIndex, kind, event.Delta, "", "", citations)
 }
 
 func (accumulator *responseAccumulator) appendReasoning(event llmprotocol.Event) error {
 	signature := ""
+	reasoning := llmprotocol.ReasoningScope("")
 	if event.Content != nil {
 		signature = event.Content.Signature
+		reasoning = event.Content.Reasoning
 	}
-	return accumulator.appendText(event.ItemIndex, llmprotocol.ContentReasoning, event.Delta, signature, nil)
+	return accumulator.appendText(
+		event.ItemIndex, event.ContentIndex, llmprotocol.ContentReasoning, event.Delta, signature, reasoning, nil,
+	)
 }
 
 func (accumulator *responseAccumulator) item(index int) (*responseAccumulatorItem, error) {
@@ -234,28 +239,45 @@ func (accumulator *responseAccumulator) item(index int) (*responseAccumulatorIte
 
 func (accumulator *responseAccumulator) appendText(
 	index int,
+	contentIndex int,
 	kind llmprotocol.ContentKind,
 	text string,
 	signature string,
+	reasoning llmprotocol.ReasoningScope,
 	citations []llmprotocol.Citation,
 ) error {
 	item, err := accumulator.item(index)
 	if err != nil {
 		return err
 	}
-	for contentIndex := range item.contents {
-		content := &item.contents[contentIndex]
-		if content.Kind != kind {
-			continue
-		}
-		content.Text += text
-		if signature != "" {
-			content.Signature = signature
-		}
-		content.Citations = append(content.Citations, citations...)
-		return nil
+	content := item.contents[contentIndex]
+	if content == nil {
+		content = &llmprotocol.Content{Kind: kind}
+		item.contents[contentIndex] = content
+	} else if content.Kind != kind {
+		return llmprotocol.NewError(
+			llmprotocol.ErrorUpstreamUnavailable,
+			"stream_content_kind_mismatch",
+			"upstream stream changed a content block kind",
+			nil,
+		)
 	}
-	item.contents = append(item.contents, llmprotocol.Content{Kind: kind, Text: text, Signature: signature, Citations: append([]llmprotocol.Citation(nil), citations...)})
+	content.Text += text
+	if signature != "" {
+		content.Signature = signature
+	}
+	if reasoning != "" {
+		if content.Reasoning != "" && content.Reasoning != reasoning {
+			return llmprotocol.NewError(
+				llmprotocol.ErrorUpstreamUnavailable,
+				"stream_reasoning_scope_mismatch",
+				"upstream stream changed a reasoning content scope",
+				nil,
+			)
+		}
+		content.Reasoning = reasoning
+	}
+	content.Citations = append(content.Citations, citations...)
 	return nil
 }
 
@@ -299,13 +321,8 @@ func (accumulator *responseAccumulator) completeItem(event llmprotocol.Event) er
 		item.call = &call
 	}
 	if event.Content != nil && event.Content.Kind != "" && event.Content.Text != "" {
-		for index := range item.contents {
-			if item.contents[index].Kind == event.Content.Kind {
-				item.contents[index] = *event.Content
-				return nil
-			}
-		}
-		item.contents = append(item.contents, *event.Content)
+		content := *event.Content
+		item.contents[event.ContentIndex] = &content
 	}
 	return nil
 }
@@ -334,7 +351,15 @@ func (accumulator *responseAccumulator) response() (llmprotocol.Response, error)
 			// semantic content block. It is transport state, not an empty output.
 			continue
 		}
-		contents := append([]llmprotocol.Content(nil), item.contents...)
+		contentIndexes := make([]int, 0, len(item.contents))
+		for contentIndex := range item.contents {
+			contentIndexes = append(contentIndexes, contentIndex)
+		}
+		sort.Ints(contentIndexes)
+		contents := make([]llmprotocol.Content, 0, len(contentIndexes)+1)
+		for _, contentIndex := range contentIndexes {
+			contents = append(contents, *item.contents[contentIndex])
+		}
 		if item.call != nil {
 			call := *item.call
 			contents = append(contents, llmprotocol.Content{Kind: llmprotocol.ContentToolCall, ToolCall: &call})

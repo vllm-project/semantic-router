@@ -123,6 +123,26 @@ func TestHandleResponseHeadersDoesNotForceResponseAPIStreamForError(t *testing.T
 	}
 }
 
+func TestHandleResponseHeadersDoesNotStreamNon2xxSSE(t *testing.T) {
+	router := &OpenAIRouter{}
+	ctx := &RequestContext{
+		SourceFormat:    llmprotocol.OpenAIResponsesV1,
+		SemanticRequest: &llmprotocol.Request{Generation: 1, Stream: true},
+	}
+	response, err := router.handleResponseHeaders(&ext_proc.ProcessingRequest_ResponseHeaders{
+		ResponseHeaders: &ext_proc.HttpHeaders{Headers: &core.HeaderMap{Headers: []*core.HeaderValue{
+			{Key: ":status", Value: "503"},
+			{Key: "content-type", Value: "text/event-stream"},
+		}}},
+	}, ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ctx.IsStreamingResponse || response.ModeOverride != nil {
+		t.Fatalf("non-2xx SSE must use the buffered transport-error path: %#v", response.ModeOverride)
+	}
+}
+
 // The response-header phase must persist the upstream status on the context so
 // the later response-body cache-write path can refuse to cache non-2xx bodies.
 func TestHandleResponseHeadersCapturesUpstreamStatus(t *testing.T) {

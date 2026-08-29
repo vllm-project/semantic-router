@@ -7,6 +7,8 @@ import (
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 func TestHandleRequestBodyReturnsBadRequestForMalformedJSON(t *testing.T) {
@@ -35,6 +37,24 @@ func TestHandleRequestBodyReturnsBadRequestForMissingMessages(t *testing.T) {
 	}
 
 	assertBodyImmediateErrorResponse(t, response, typev3.StatusCode_BadRequest, "invalid inference request")
+}
+
+func TestIngressProtocolErrorSurvivesPublicErrorEncoding(t *testing.T) {
+	router := &OpenAIRouter{}
+	ctx := &RequestContext{
+		Headers:      make(map[string]string),
+		SourceFormat: llmprotocol.OpenAIResponsesV1,
+	}
+
+	response, err := router.HandleRequestBody(&ext_proc.ProcessingRequest_RequestBody{
+		RequestBody: &ext_proc.HttpBody{Body: []byte(`{"model":"model-a"}`)},
+	}, ctx)
+	if err != nil {
+		t.Fatalf("HandleRequestBody returned error: %v", err)
+	}
+
+	response = router.encodeImmediateResponseForClient(response, ctx)
+	assertBodyImmediateErrorResponse(t, response, typev3.StatusCode_BadRequest, "input")
 }
 
 func assertBodyImmediateErrorResponse(

@@ -417,7 +417,9 @@ func encodeCachedSemanticStream(
 		format = llmprotocol.OpenAIChatV1
 	}
 	body, emitted, err := engine.EncodeResponseStream(format, response, llmprotocol.StreamContext{
-		Context: ctx.TraceContext, PublicModel: response.Model, ResponseID: response.ID,
+		Context: ctx.TraceContext, Options: clientStreamOptions(ctx),
+		PublicModel: response.Model, ResponseID: response.ID,
+		PreviousResponseID: responseObjectPreviousID(ctx),
 	})
 	return body, append(diagnostics, emitted...), err
 }

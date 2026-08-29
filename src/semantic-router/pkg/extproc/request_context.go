@@ -76,6 +76,7 @@ type RequestContext struct {
 	StreamingComplete      bool // True after neutral stream finalization runs once.
 	StreamingAborted       bool // True if the neutral stream ended abnormally.
 	ProtocolResponseStream *protocolcodec.StreamEngine
+	PublicChatUsageFilter  *protocolcodec.ChatUsageStreamFilter
 	SemanticStreamState    *semanticResponseStreamState
 
 	// UpstreamStatusCode is the HTTP status the upstream returned, captured at
@@ -240,6 +241,7 @@ type RequestContext struct {
 	ProtocolEnvelope         llmprotocol.Envelope
 	ResponseEnvelope         llmprotocol.Envelope
 	ProtocolDiagnostics      llmprotocol.Diagnostics
+	ImmediateProtocolError   *llmprotocol.ProtocolError
 	ImmediateResponseEncoded bool
 
 	// RAG (Retrieval-Augmented Generation) tracking

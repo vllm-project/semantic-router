@@ -8,6 +8,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
+const defaultAnthropicMaxOutputTokens int64 = 4096
+
 type AnthropicMessagesCodec struct{}
 
 func (AnthropicMessagesCodec) Format() llmprotocol.WireFormat { return llmprotocol.AnthropicMessagesV1 }
@@ -16,32 +18,37 @@ func (AnthropicMessagesCodec) Capabilities() llmprotocol.CapabilitySet {
 	return llmprotocol.Capabilities(
 		llmprotocol.CapabilityText, llmprotocol.CapabilityImageInput, llmprotocol.CapabilityFileInput,
 		llmprotocol.CapabilityTools, llmprotocol.CapabilityParallelTools, llmprotocol.CapabilityReasoning,
+		llmprotocol.CapabilityStrictToolSchema,
 		llmprotocol.CapabilityStreaming, llmprotocol.CapabilityCacheAccounting,
 		llmprotocol.CapabilityReasoningAccounting, llmprotocol.CapabilityAuthoritativeUsage,
+		llmprotocol.CapabilityCacheDirectives, llmprotocol.CapabilityReasoningDisable,
+		llmprotocol.CapabilityReasoningBudget, llmprotocol.CapabilityReasoningEffort,
+		llmprotocol.CapabilityStrictJSONSchema, llmprotocol.CapabilitySamplingTopK,
+		llmprotocol.CapabilityStopSequences, llmprotocol.CapabilityReasoningAdaptive,
+		llmprotocol.CapabilityReasoningSignature, llmprotocol.CapabilityReasoningDisplay,
+		llmprotocol.CapabilityMatchedStopSequence,
 	)
 }
 
 type anthropicRequestWire struct {
-	Model         string                   `json:"model"`
-	System        json.RawMessage          `json:"system,omitempty"`
-	Messages      []anthropicMessageWire   `json:"messages"`
-	MaxTokens     int64                    `json:"max_tokens"`
-	Temperature   *float64                 `json:"temperature,omitempty"`
-	TopP          *float64                 `json:"top_p,omitempty"`
-	TopK          *int64                   `json:"top_k,omitempty"`
-	StopSequences []string                 `json:"stop_sequences,omitempty"`
-	Tools         []anthropicToolWire      `json:"tools,omitempty"`
-	ToolChoice    *anthropicToolChoiceWire `json:"tool_choice,omitempty"`
-	Metadata      *struct {
-		UserID string `json:"user_id,omitempty"`
-	} `json:"metadata,omitempty"`
-	Thinking     *anthropicThinkingWire `json:"thinking,omitempty"`
-	Stream       bool                   `json:"stream,omitempty"`
-	InferenceGeo json.RawMessage        `json:"inference_geo,omitempty"`
-	Container    json.RawMessage        `json:"container,omitempty"`
-	CacheControl json.RawMessage        `json:"cache_control,omitempty"`
-	OutputConfig json.RawMessage        `json:"output_config,omitempty"`
-	ServiceTier  json.RawMessage        `json:"service_tier,omitempty"`
+	Model         string                     `json:"model"`
+	System        json.RawMessage            `json:"system,omitempty"`
+	Messages      []anthropicMessageWire     `json:"messages"`
+	MaxTokens     *int64                     `json:"max_tokens"`
+	Temperature   *float64                   `json:"temperature,omitempty"`
+	TopP          *float64                   `json:"top_p,omitempty"`
+	TopK          *int64                     `json:"top_k,omitempty"`
+	StopSequences []string                   `json:"stop_sequences,omitempty"`
+	Tools         json.RawMessage            `json:"tools,omitempty"`
+	ToolChoice    *anthropicToolChoiceWire   `json:"tool_choice,omitempty"`
+	Metadata      *anthropicMetadataWire     `json:"metadata,omitempty"`
+	Thinking      *anthropicThinkingWire     `json:"thinking,omitempty"`
+	Stream        bool                       `json:"stream,omitempty"`
+	InferenceGeo  json.RawMessage            `json:"inference_geo,omitempty"`
+	Container     json.RawMessage            `json:"container,omitempty"`
+	CacheControl  json.RawMessage            `json:"cache_control,omitempty"`
+	OutputConfig  *anthropicOutputConfigWire `json:"output_config,omitempty"`
+	ServiceTier   json.RawMessage            `json:"service_tier,omitempty"`
 }
 
 type anthropicMessageWire struct {
@@ -50,24 +57,26 @@ type anthropicMessageWire struct {
 }
 
 type anthropicContentWire struct {
-	Type            string                    `json:"type"`
-	Text            string                    `json:"text,omitempty"`
-	Thinking        string                    `json:"thinking,omitempty"`
-	Signature       string                    `json:"signature,omitempty"`
-	ID              string                    `json:"id,omitempty"`
-	Name            string                    `json:"name,omitempty"`
-	Input           json.RawMessage           `json:"input,omitempty"`
-	ToolUseID       string                    `json:"tool_use_id,omitempty"`
-	Content         json.RawMessage           `json:"content,omitempty"`
-	IsError         *bool                     `json:"is_error,omitempty"`
-	Source          *anthropicMediaSourceWire `json:"source,omitempty"`
-	Citations       json.RawMessage           `json:"citations,omitempty"`
-	CacheControl    json.RawMessage           `json:"cache_control,omitempty"`
-	Caller          json.RawMessage           `json:"caller,omitempty"`
-	Context         json.RawMessage           `json:"context,omitempty"`
-	Title           json.RawMessage           `json:"title,omitempty"`
-	ToolsetName     json.RawMessage           `json:"toolset_name,omitempty"`
-	Transformations json.RawMessage           `json:"transformations,omitempty"`
+	Type            string                     `json:"type"`
+	Text            string                     `json:"text,omitempty"`
+	Thinking        string                     `json:"thinking,omitempty"`
+	Signature       string                     `json:"signature,omitempty"`
+	Data            string                     `json:"data,omitempty"`
+	ID              string                     `json:"id,omitempty"`
+	Name            string                     `json:"name,omitempty"`
+	Input           json.RawMessage            `json:"input,omitempty"`
+	ToolUseID       string                     `json:"tool_use_id,omitempty"`
+	Content         json.RawMessage            `json:"content,omitempty"`
+	IsError         *bool                      `json:"is_error,omitempty"`
+	Source          *anthropicMediaSourceWire  `json:"source,omitempty"`
+	Citations       json.RawMessage            `json:"citations,omitempty"`
+	CacheControl    *anthropicCacheControlWire `json:"cache_control,omitempty"`
+	Caller          json.RawMessage            `json:"caller,omitempty"`
+	Context         json.RawMessage            `json:"context,omitempty"`
+	Title           json.RawMessage            `json:"title,omitempty"`
+	ToolsetName     json.RawMessage            `json:"toolset_name,omitempty"`
+	Transformations json.RawMessage            `json:"transformations,omitempty"`
+	FileID          string                     `json:"file_id,omitempty"`
 }
 
 type anthropicMediaSourceWire struct {
@@ -80,16 +89,25 @@ type anthropicMediaSourceWire struct {
 }
 
 type anthropicToolWire struct {
-	Name                string          `json:"name"`
-	Description         string          `json:"description,omitempty"`
-	InputSchema         json.RawMessage `json:"input_schema"`
-	Strict              *bool           `json:"strict,omitempty"`
-	Type                string          `json:"type,omitempty"`
-	AllowedCallers      json.RawMessage `json:"allowed_callers,omitempty"`
-	CacheControl        json.RawMessage `json:"cache_control,omitempty"`
-	DeferLoading        json.RawMessage `json:"defer_loading,omitempty"`
-	EagerInputStreaming json.RawMessage `json:"eager_input_streaming,omitempty"`
-	InputExamples       json.RawMessage `json:"input_examples,omitempty"`
+	Name                string                     `json:"name"`
+	Description         string                     `json:"description,omitempty"`
+	InputSchema         json.RawMessage            `json:"input_schema"`
+	Strict              *bool                      `json:"strict,omitempty"`
+	Type                string                     `json:"type,omitempty"`
+	AllowedCallers      json.RawMessage            `json:"allowed_callers,omitempty"`
+	CacheControl        *anthropicCacheControlWire `json:"cache_control,omitempty"`
+	DeferLoading        json.RawMessage            `json:"defer_loading,omitempty"`
+	EagerInputStreaming json.RawMessage            `json:"eager_input_streaming,omitempty"`
+	InputExamples       json.RawMessage            `json:"input_examples,omitempty"`
+}
+
+type anthropicCacheControlWire struct {
+	Type string `json:"type"`
+	TTL  string `json:"ttl,omitempty"`
+}
+
+type anthropicMetadataWire struct {
+	UserID string `json:"user_id,omitempty"`
 }
 
 type anthropicToolChoiceWire struct {
@@ -100,7 +118,18 @@ type anthropicToolChoiceWire struct {
 
 type anthropicThinkingWire struct {
 	Type         string `json:"type"`
-	BudgetTokens int64  `json:"budget_tokens,omitempty"`
+	BudgetTokens *int64 `json:"budget_tokens,omitempty"`
+	Display      string `json:"display,omitempty"`
+}
+
+type anthropicOutputConfigWire struct {
+	Effort string                         `json:"effort,omitempty"`
+	Format *anthropicJSONOutputFormatWire `json:"format,omitempty"`
+}
+
+type anthropicJSONOutputFormatWire struct {
+	Type   string          `json:"type"`
+	Schema json.RawMessage `json:"schema"`
 }
 
 func (AnthropicMessagesCodec) DecodeRequest(body []byte, policy llmprotocol.Policy) (llmprotocol.Request, llmprotocol.Envelope, llmprotocol.Diagnostics, error) {
@@ -110,13 +139,43 @@ func (AnthropicMessagesCodec) DecodeRequest(body []byte, policy llmprotocol.Poli
 	}
 	if err := rejectUnsupportedRequestFields(map[string]json.RawMessage{
 		"inference_geo": wire.InferenceGeo, "container": wire.Container,
-		"cache_control": wire.CacheControl, "output_config": wire.OutputConfig,
-		"service_tier": wire.ServiceTier,
+		"cache_control": wire.CacheControl,
+		"service_tier":  wire.ServiceTier,
 	}); err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
+	if wire.MaxTokens == nil {
+		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, llmprotocol.NewError(
+			llmprotocol.ErrorInvalidRequest,
+			"max_tokens_required",
+			"Anthropic max_tokens is required",
+			nil,
+		)
+	}
+	if wire.Temperature != nil && *wire.Temperature > 1 {
+		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, llmprotocol.NewError(
+			llmprotocol.ErrorInvalidRequest,
+			"invalid_anthropic_temperature",
+			"Anthropic temperature must be between 0 and 1",
+			nil,
+		)
+	}
+	if len(wire.Messages) == 0 {
+		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, llmprotocol.NewError(
+			llmprotocol.ErrorInvalidRequest,
+			"messages_required",
+			"Anthropic messages must contain at least one item",
+			nil,
+		)
+	}
 	request := decodeAnthropicBaseRequest(wire)
+	if err := decodeAnthropicOutputConfig(wire.OutputConfig, &request); err != nil {
+		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
+	}
 	if err := decodeAnthropicThinking(wire.Thinking, &request); err != nil {
+		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
+	}
+	if err := validateAnthropicReasoningBudget(request, *wire.MaxTokens, llmprotocol.ErrorInvalidRequest); err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
 	if err := decodeAnthropicSystem(wire.System, &request, policy); err != nil {
@@ -125,7 +184,7 @@ func (AnthropicMessagesCodec) DecodeRequest(body []byte, policy llmprotocol.Poli
 	if err := decodeAnthropicMessages(wire.Messages, &request, policy); err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
-	if err := decodeAnthropicTools(wire.Tools, &request); err != nil {
+	if err := decodeAnthropicTools(wire.Tools, &request, policy); err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
 	if err := decodeAnthropicToolChoice(wire.ToolChoice, &request); err != nil {
@@ -134,12 +193,51 @@ func (AnthropicMessagesCodec) DecodeRequest(body []byte, policy llmprotocol.Poli
 	return request, requestEnvelope(llmprotocol.AnthropicMessagesV1, body, request.Generation, policy), nil, nil
 }
 
+func decodeAnthropicOutputConfig(output *anthropicOutputConfigWire, request *llmprotocol.Request) error {
+	if output == nil {
+		return nil
+	}
+	if output.Effort != "" {
+		switch output.Effort {
+		case "low", "medium", "high", "xhigh", "max":
+			request.ReasoningEffort = output.Effort
+		default:
+			return llmprotocol.NewError(
+				llmprotocol.ErrorInvalidRequest,
+				"invalid_reasoning_effort",
+				"Anthropic output effort is invalid",
+				nil,
+			)
+		}
+	}
+	if output.Format == nil {
+		return nil
+	}
+	if output.Format.Type != "json_schema" || len(output.Format.Schema) == 0 {
+		return llmprotocol.NewError(
+			llmprotocol.ErrorInvalidRequest,
+			"invalid_output_format",
+			"Anthropic output format must contain a JSON Schema",
+			nil,
+		)
+	}
+	request.OutputFormat = llmprotocol.OutputFormat{
+		Kind: llmprotocol.OutputJSONSchema,
+		// Anthropic does not name output schemas. The stable neutral name is used
+		// only when translating to an OpenAI wire contract that requires one.
+		Name:   "structured_output",
+		Strict: llmprotocol.Bool(true),
+		Schema: append(json.RawMessage(nil), output.Format.Schema...),
+	}
+	return nil
+}
+
 func decodeAnthropicBaseRequest(wire anthropicRequestWire) llmprotocol.Request {
 	request := llmprotocol.Request{
 		Generation: 1, Model: wire.Model, Stream: wire.Stream,
 		Sampling: llmprotocol.Sampling{
 			Temperature: wire.Temperature, TopP: wire.TopP, TopK: wire.TopK,
-			MaxOutputTokens: llmprotocol.Int64(wire.MaxTokens), Stop: append([]string(nil), wire.StopSequences...),
+			MaxOutputTokens: llmprotocol.Int64(*wire.MaxTokens), Stop: append([]string(nil), wire.StopSequences...),
 		},
 		Trusted: llmprotocol.TrustedMetadata{SourceFormat: llmprotocol.AnthropicMessagesV1},
 	}
@@ -155,8 +253,45 @@ func decodeAnthropicThinking(thinking *anthropicThinkingWire, request *llmprotoc
 	}
 	switch thinking.Type {
 	case "enabled":
-		request.ReasoningBudgetTokens = llmprotocol.Int64(thinking.BudgetTokens)
-	case "disabled", "":
+		if thinking.BudgetTokens == nil {
+			return llmprotocol.NewError(
+				llmprotocol.ErrorInvalidRequest,
+				"reasoning_budget_required",
+				"enabled Anthropic thinking requires budget_tokens",
+				nil,
+			)
+		}
+		request.ReasoningMode = llmprotocol.ReasoningModeEnabled
+		request.ReasoningBudgetTokens = llmprotocol.Int64(*thinking.BudgetTokens)
+		request.ReasoningDisplay = thinking.Display
+	case "disabled":
+		if thinking.BudgetTokens != nil || thinking.Display != "" {
+			return llmprotocol.NewError(
+				llmprotocol.ErrorInvalidRequest,
+				"invalid_disabled_thinking",
+				"disabled Anthropic thinking cannot include budget_tokens or display",
+				nil,
+			)
+		}
+		request.ReasoningMode = llmprotocol.ReasoningModeDisabled
+	case "adaptive":
+		if thinking.BudgetTokens != nil {
+			return llmprotocol.NewError(
+				llmprotocol.ErrorInvalidRequest,
+				"invalid_adaptive_thinking",
+				"adaptive Anthropic thinking cannot include budget_tokens",
+				nil,
+			)
+		}
+		request.ReasoningMode = llmprotocol.ReasoningModeAdaptive
+		request.ReasoningDisplay = thinking.Display
+	case "":
+		return llmprotocol.NewError(
+			llmprotocol.ErrorInvalidRequest,
+			"thinking_type_required",
+			"Anthropic thinking type is required",
+			nil,
+		)
 	default:
 		return llmprotocol.NewError(
 			llmprotocol.ErrorUnsupportedFeature, "unsupported_thinking_mode",
@@ -170,7 +305,7 @@ func decodeAnthropicSystem(raw json.RawMessage, request *llmprotocol.Request, po
 	if len(raw) == 0 || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		return nil
 	}
-	contents, err := decodeAnthropicContent(raw, policy)
+	contents, err := decodeAnthropicRequestContent(raw, policy)
 	if err != nil {
 		return err
 	}
@@ -189,14 +324,30 @@ func decodeAnthropicMessages(messages []anthropicMessageWire, request *llmprotoc
 	return nil
 }
 
-func decodeAnthropicTools(tools []anthropicToolWire, request *llmprotocol.Request) error {
-	for _, toolWire := range tools {
-		if toolWire.Type != "" && toolWire.Type != "custom" {
+func decodeAnthropicTools(raw json.RawMessage, request *llmprotocol.Request, policy llmprotocol.Policy) error {
+	if len(raw) == 0 || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		return nil
+	}
+	var toolBodies []json.RawMessage
+	if err := decodeWire(raw, &toolBodies, policy); err != nil {
+		return err
+	}
+	for _, toolBody := range toolBodies {
+		var discriminator struct {
+			Type string `json:"type"`
+		}
+		if err := json.Unmarshal(toolBody, &discriminator); err != nil {
+			return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_tool", "Anthropic tool is invalid", err)
+		}
+		if discriminator.Type != "" && discriminator.Type != "custom" {
 			return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_tool", "only custom tools enter the model protocol", nil)
+		}
+		var toolWire anthropicToolWire
+		if err := decodeWire(toolBody, &toolWire, policy); err != nil {
+			return err
 		}
 		if err := rejectUnsupportedRequestFields(map[string]json.RawMessage{
 			"tools.allowed_callers":       toolWire.AllowedCallers,
-			"tools.cache_control":         toolWire.CacheControl,
 			"tools.defer_loading":         toolWire.DeferLoading,
 			"tools.eager_input_streaming": toolWire.EagerInputStreaming,
 			"tools.input_examples":        toolWire.InputExamples,
@@ -208,6 +359,7 @@ func decodeAnthropicTools(tools []anthropicToolWire, request *llmprotocol.Reques
 			schema = json.RawMessage(`{"type":"object"}`)
 		}
 		request.Tools = append(request.Tools, llmprotocol.Tool{Name: toolWire.Name, Description: toolWire.Description, InputSchema: schema, Strict: toolWire.Strict})
+		request.Tools[len(request.Tools)-1].Cache = decodeAnthropicCacheControl(toolWire.CacheControl)
 	}
 	return nil
 }
@@ -218,12 +370,27 @@ func decodeAnthropicToolChoice(choice *anthropicToolChoiceWire, request *llmprot
 	}
 	switch choice.Type {
 	case "auto":
+		if choice.Name != "" {
+			return invalidAnthropicToolChoiceVariant("name")
+		}
 		request.ToolChoice.Mode = llmprotocol.ToolChoiceAuto
 	case "none":
+		if choice.Name != "" {
+			return invalidAnthropicToolChoiceVariant("name")
+		}
+		if choice.DisableParallelToolUse != nil {
+			return invalidAnthropicToolChoiceVariant("disable_parallel_tool_use")
+		}
 		request.ToolChoice.Mode = llmprotocol.ToolChoiceNone
 	case "any":
+		if choice.Name != "" {
+			return invalidAnthropicToolChoiceVariant("name")
+		}
 		request.ToolChoice.Mode = llmprotocol.ToolChoiceRequired
 	case "tool":
+		if choice.Name == "" {
+			return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_tool_choice", "Anthropic named tool choice requires a name", nil)
+		}
 		request.ToolChoice = llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceNamed, Name: choice.Name}
 	default:
 		return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_tool_choice", "Anthropic tool choice is invalid", nil)
@@ -235,12 +402,21 @@ func decodeAnthropicToolChoice(choice *anthropicToolChoiceWire, request *llmprot
 	return nil
 }
 
+func invalidAnthropicToolChoiceVariant(field string) error {
+	return llmprotocol.NewError(
+		llmprotocol.ErrorInvalidRequest,
+		"invalid_tool_choice_variant",
+		"Anthropic tool choice includes a field from a different union variant: "+field,
+		nil,
+	)
+}
+
 func decodeAnthropicMessage(wire anthropicMessageWire, messageIndex int, policy llmprotocol.Policy) ([]llmprotocol.Message, error) {
 	role, err := canonicalRole(wire.Role)
-	if err != nil || role != llmprotocol.RoleUser && role != llmprotocol.RoleAssistant {
-		return nil, llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_anthropic_role", "Anthropic message role must be user or assistant", err)
+	if err != nil || role != llmprotocol.RoleSystem && role != llmprotocol.RoleUser && role != llmprotocol.RoleAssistant {
+		return nil, llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_anthropic_role", "Anthropic message role must be system, user, or assistant", err)
 	}
-	contents, err := decodeAnthropicContent(wire.Content, policy)
+	contents, err := decodeAnthropicRequestContent(wire.Content, policy)
 	if err != nil {
 		return nil, err
 	}
@@ -265,7 +441,7 @@ func decodeAnthropicMessage(wire anthropicMessageWire, messageIndex int, policy 
 	return result, nil
 }
 
-func decodeAnthropicContent(raw json.RawMessage, policy llmprotocol.Policy) ([]llmprotocol.Content, error) {
+func decodeAnthropicRequestContent(raw json.RawMessage, policy llmprotocol.Policy) ([]llmprotocol.Content, error) {
 	if len(raw) == 0 || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		return nil, nil
 	}
@@ -273,13 +449,46 @@ func decodeAnthropicContent(raw json.RawMessage, policy llmprotocol.Policy) ([]l
 	if json.Unmarshal(raw, &text) == nil {
 		return []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: text}}, nil
 	}
+	return decodeAnthropicContentArray(raw, policy, false, decodeAnthropicRequestContentBlock)
+}
+
+func decodeAnthropicResponseContent(raw json.RawMessage, policy llmprotocol.Policy) ([]llmprotocol.Content, error) {
+	if len(raw) == 0 || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		return nil, nil
+	}
+	var text string
+	if json.Unmarshal(raw, &text) == nil {
+		return nil, llmprotocol.NewError(
+			llmprotocol.ErrorUpstreamUnavailable,
+			"invalid_response_content",
+			"Anthropic response content must be an array",
+			nil,
+		)
+	}
+	return decodeAnthropicContentArray(raw, policy, true, decodeAnthropicResponseContentBlock)
+}
+
+type anthropicContentBlockDecoder func(json.RawMessage, llmprotocol.Policy) (llmprotocol.Content, error)
+
+func decodeAnthropicContentArray(
+	raw json.RawMessage,
+	policy llmprotocol.Policy,
+	providerOutput bool,
+	decodeBlock anthropicContentBlockDecoder,
+) ([]llmprotocol.Content, error) {
 	var blockBodies []json.RawMessage
-	if err := decodeWire(raw, &blockBodies, policy); err != nil {
+	var err error
+	if providerOutput {
+		err = decodeProviderWire(raw, &blockBodies, policy)
+	} else {
+		err = decodeWire(raw, &blockBodies, policy)
+	}
+	if err != nil {
 		return nil, err
 	}
 	contents := make([]llmprotocol.Content, 0, len(blockBodies))
 	for _, blockBody := range blockBodies {
-		content, err := decodeAnthropicContentBlock(blockBody, policy)
+		content, err := decodeBlock(blockBody, policy)
 		if err != nil {
 			return nil, err
 		}
@@ -288,13 +497,39 @@ func decodeAnthropicContent(raw json.RawMessage, policy llmprotocol.Policy) ([]l
 	return contents, nil
 }
 
-func decodeAnthropicContentBlock(body json.RawMessage, policy llmprotocol.Policy) (llmprotocol.Content, error) {
-	typeName, err := anthropicContentType(body)
+func decodeAnthropicRequestContentBlock(body json.RawMessage, policy llmprotocol.Policy) (llmprotocol.Content, error) {
+	typeName, err := anthropicRequestContentType(body)
 	if err != nil {
 		return llmprotocol.Content{}, err
 	}
+	return decodeAnthropicContentBlock(body, typeName, policy, false)
+}
+
+func decodeAnthropicResponseContentBlock(body json.RawMessage, policy llmprotocol.Policy) (llmprotocol.Content, error) {
+	typeName, err := anthropicResponseContentType(body)
+	if err != nil {
+		return llmprotocol.Content{}, err
+	}
+	return decodeAnthropicContentBlock(body, typeName, policy, true)
+}
+
+func decodeAnthropicContentBlock(
+	body json.RawMessage,
+	typeName string,
+	policy llmprotocol.Policy,
+	providerOutput bool,
+) (llmprotocol.Content, error) {
 	var block anthropicContentWire
-	if err := decodeWire(body, &block, policy); err != nil {
+	var err error
+	if providerOutput {
+		err = decodeProviderWire(body, &block, policy)
+	} else {
+		err = decodeWire(body, &block, policy)
+	}
+	if err != nil {
+		return llmprotocol.Content{}, err
+	}
+	if err := validateAnthropicContentVariant(body, typeName, providerOutput); err != nil {
 		return llmprotocol.Content{}, err
 	}
 	if err := validateAnthropicContentExtensions(block); err != nil {
@@ -303,16 +538,79 @@ func decodeAnthropicContentBlock(body json.RawMessage, policy llmprotocol.Policy
 	return decodeAnthropicTypedContent(typeName, block, policy)
 }
 
-func anthropicContentType(body json.RawMessage) (string, error) {
+func validateAnthropicContentVariant(body json.RawMessage, typeName string, providerOutput bool) error {
+	known := []string{
+		"cache_control", "caller", "citations", "content", "context", "data", "file_id", "id", "input",
+		"is_error", "name", "signature", "source", "text", "thinking", "title", "tool_use_id",
+		"toolset_name", "transformations", "type",
+	}
+	requestAllowed := map[string][]string{
+		"text":        {"cache_control", "citations", "text", "type"},
+		"thinking":    {"signature", "thinking", "type"},
+		"image":       {"cache_control", "source", "transformations", "type"},
+		"document":    {"cache_control", "citations", "context", "source", "title", "type"},
+		"tool_use":    {"cache_control", "caller", "id", "input", "name", "toolset_name", "type"},
+		"tool_result": {"cache_control", "content", "is_error", "tool_use_id", "toolset_name", "type"},
+	}
+	responseAllowed := map[string][]string{
+		"text":     {"citations", "text", "type"},
+		"thinking": {"signature", "thinking", "type"},
+		"tool_use": {"caller", "id", "input", "name", "toolset_name", "type"},
+	}
+	allowedByType := requestAllowed
+	if providerOutput {
+		allowedByType = responseAllowed
+	}
+	allowed, recognized := allowedByType[typeName]
+	if !recognized {
+		return nil
+	}
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal(body, &object); err != nil {
+		return err
+	}
+	allowedSet := make(map[string]struct{}, len(allowed))
+	for _, name := range allowed {
+		allowedSet[name] = struct{}{}
+	}
+	for _, name := range known {
+		if _, present := object[name]; !present {
+			continue
+		}
+		if _, valid := allowedSet[name]; valid {
+			continue
+		}
+		category := llmprotocol.ErrorInvalidRequest
+		code := "invalid_content_variant"
+		message := "Anthropic content includes a field from a different union variant"
+		if providerOutput {
+			category = llmprotocol.ErrorUpstreamUnavailable
+			code = "invalid_response_content"
+			message = "Anthropic provider output mixes content union variants"
+		}
+		return llmprotocol.NewError(category, code, message+": "+name, nil)
+	}
+	return nil
+}
+
+func anthropicContentDiscriminator(body json.RawMessage) (string, error) {
 	var discriminator struct {
 		Type string `json:"type"`
 	}
 	if err := json.Unmarshal(body, &discriminator); err != nil || discriminator.Type == "" {
 		return "", llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "content_type_required", "Anthropic content type is required", err)
 	}
-	switch discriminator.Type {
+	return discriminator.Type, nil
+}
+
+func anthropicRequestContentType(body json.RawMessage) (string, error) {
+	typeName, err := anthropicContentDiscriminator(body)
+	if err != nil {
+		return "", err
+	}
+	switch typeName {
 	case "text", "thinking", "image", "document", "tool_use", "tool_result":
-		return discriminator.Type, nil
+		return typeName, nil
 	case "redacted_thinking":
 		return "", llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "redacted_reasoning", "redacted reasoning cannot be translated", nil)
 	default:
@@ -320,12 +618,24 @@ func anthropicContentType(body json.RawMessage) (string, error) {
 	}
 }
 
+func anthropicResponseContentType(body json.RawMessage) (string, error) {
+	typeName, err := anthropicContentDiscriminator(body)
+	if err != nil {
+		return "", err
+	}
+	switch typeName {
+	case "text", "thinking", "tool_use":
+		return typeName, nil
+	case "redacted_thinking":
+		return "", llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "redacted_reasoning", "redacted reasoning cannot be translated", nil)
+	default:
+		return "", llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_content", "Anthropic response content type is unsupported", nil)
+	}
+}
+
 func validateAnthropicContentExtensions(block anthropicContentWire) error {
 	if len(block.Citations) > 0 {
 		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_citations", "Anthropic citations are not supported by the neutral contract", nil)
-	}
-	if len(block.CacheControl) > 0 {
-		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_cache_control", "Anthropic content cache control is not supported by the neutral contract", nil)
 	}
 	return rejectUnsupportedRequestFields(map[string]json.RawMessage{
 		"content.caller":          block.Caller,
@@ -343,34 +653,56 @@ func decodeAnthropicTypedContent(
 ) (llmprotocol.Content, error) {
 	switch typeName {
 	case "text":
-		return llmprotocol.Content{Kind: llmprotocol.ContentText, Text: block.Text}, nil
+		return llmprotocol.Content{Kind: llmprotocol.ContentText, Text: block.Text, Cache: decodeAnthropicCacheControl(block.CacheControl)}, nil
 	case "thinking":
-		return llmprotocol.Content{Kind: llmprotocol.ContentReasoning, Text: block.Thinking, Signature: block.Signature}, nil
+		if block.CacheControl != nil {
+			return llmprotocol.Content{}, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_cache_directive", "Anthropic Messages cannot attach cache_control to thinking content", nil)
+		}
+		return llmprotocol.Content{
+			Kind: llmprotocol.ContentReasoning, Text: block.Thinking, Signature: block.Signature,
+			Reasoning: llmprotocol.ReasoningScopeText,
+		}, nil
 	case "image", "document":
-		return decodeAnthropicMediaContent(typeName, block.Source)
+		content, err := decodeAnthropicMediaContent(typeName, block.Source)
+		content.Cache = decodeAnthropicCacheControl(block.CacheControl)
+		return content, err
 	case "tool_use":
 		arguments := string(block.Input)
 		if len(block.Input) == 0 {
 			arguments = `{}`
 		}
-		return llmprotocol.Content{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{ID: block.ID, Name: block.Name, Arguments: arguments}}, nil
+		return llmprotocol.Content{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{ID: block.ID, Name: block.Name, Arguments: arguments}, Cache: decodeAnthropicCacheControl(block.CacheControl)}, nil
 	case "tool_result":
-		resultContent, err := decodeAnthropicContent(block.Content, policy)
+		resultContent, err := decodeAnthropicRequestContent(block.Content, policy)
 		if err != nil {
 			return llmprotocol.Content{}, err
 		}
-		return llmprotocol.Content{Kind: llmprotocol.ContentToolResult, ToolResult: &llmprotocol.ToolResult{CallID: block.ToolUseID, Content: resultContent, IsError: block.IsError}}, nil
+		return llmprotocol.Content{Kind: llmprotocol.ContentToolResult, ToolResult: &llmprotocol.ToolResult{CallID: block.ToolUseID, Content: resultContent, IsError: block.IsError}, Cache: decodeAnthropicCacheControl(block.CacheControl)}, nil
 	default:
 		return llmprotocol.Content{}, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_content", "Anthropic content type is unsupported", nil)
 	}
+}
+
+func decodeAnthropicCacheControl(cache *anthropicCacheControlWire) *llmprotocol.CacheDirective {
+	if cache == nil {
+		return nil
+	}
+	return &llmprotocol.CacheDirective{Type: cache.Type, TTL: cache.TTL}
+}
+
+func encodeAnthropicCacheControl(cache *llmprotocol.CacheDirective) *anthropicCacheControlWire {
+	if cache == nil {
+		return nil
+	}
+	return &anthropicCacheControlWire{Type: cache.Type, TTL: cache.TTL}
 }
 
 func decodeAnthropicMediaContent(typeName string, source *anthropicMediaSourceWire) (llmprotocol.Content, error) {
 	if source == nil {
 		return llmprotocol.Content{}, llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "media_source_required", "Anthropic media source is required", nil)
 	}
-	if len(source.Content) > 0 {
-		return llmprotocol.Content{}, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_document_content_source", "Anthropic document content sources are unsupported", nil)
+	if err := validateAnthropicMediaSource(typeName, source); err != nil {
+		return llmprotocol.Content{}, err
 	}
 	kind := llmprotocol.ContentImage
 	if typeName == "document" {
@@ -379,15 +711,83 @@ func decodeAnthropicMediaContent(typeName string, source *anthropicMediaSourceWi
 	return llmprotocol.Content{Kind: kind, MediaType: source.MediaType, Data: source.Data, URL: source.URL, FileID: source.FileID}, nil
 }
 
+func validateAnthropicMediaSource(typeName string, source *anthropicMediaSourceWire) error {
+	invalid := func(message string) error {
+		return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_media_source", message, nil)
+	}
+	switch source.Type {
+	case "base64":
+		if source.Data == "" || source.MediaType == "" {
+			return invalid("Anthropic base64 media sources require data and media_type")
+		}
+		if source.URL != "" || source.FileID != "" || len(source.Content) > 0 {
+			return invalid("Anthropic base64 media sources cannot contain another source variant")
+		}
+	case "url":
+		if source.URL == "" {
+			return invalid("Anthropic URL media sources require url")
+		}
+		if source.Data != "" || source.MediaType != "" || source.FileID != "" || len(source.Content) > 0 {
+			return invalid("Anthropic URL media sources cannot contain another source variant")
+		}
+	case "file":
+		if source.FileID == "" {
+			return invalid("Anthropic file media sources require file_id")
+		}
+		if source.Data != "" || source.MediaType != "" || source.URL != "" || len(source.Content) > 0 {
+			return invalid("Anthropic file media sources cannot contain another source variant")
+		}
+	case "text", "content":
+		if typeName != "document" {
+			return invalid("Anthropic image sources do not support this source type")
+		}
+		return llmprotocol.NewError(
+			llmprotocol.ErrorUnsupportedFeature,
+			"unsupported_document_source",
+			"Anthropic document source cannot be represented by the neutral protocol",
+			nil,
+		)
+	case "":
+		return invalid("Anthropic media source type is required")
+	default:
+		return invalid("Anthropic media source type is invalid")
+	}
+	return nil
+}
+
 func (AnthropicMessagesCodec) EncodeRequest(request llmprotocol.Request, envelope llmprotocol.Envelope, policy llmprotocol.Policy) ([]byte, llmprotocol.Diagnostics, error) {
 	if envelope.CanReplay(llmprotocol.AnthropicMessagesV1, request.Generation, policy, false) {
 		return append([]byte(nil), envelope.Request...), nil, nil
+	}
+	if request.Sampling.Temperature != nil && *request.Sampling.Temperature > 1 {
+		return nil, nil, llmprotocol.NewError(
+			llmprotocol.ErrorUnsupportedFeature,
+			"unsupported_anthropic_temperature",
+			"Anthropic Messages cannot represent a temperature above 1",
+			nil,
+		)
+	}
+	if len(request.Messages) == 0 {
+		return nil, nil, llmprotocol.NewError(
+			llmprotocol.ErrorUnsupportedFeature,
+			"anthropic_messages_required",
+			"Anthropic Messages requires at least one conversation message",
+			nil,
+		)
+	}
+	maxTokens := int64(defaultAnthropicMaxOutputTokens)
+	if request.Sampling.MaxOutputTokens != nil {
+		maxTokens = *request.Sampling.MaxOutputTokens
+	}
+	if err := validateAnthropicReasoningBudget(request, maxTokens, llmprotocol.ErrorUnsupportedFeature); err != nil {
+		return nil, nil, err
 	}
 	diagnostics, validationErr := anthropicRequestDiagnostics(request, policy)
 	if validationErr != nil {
 		return nil, diagnostics, validationErr
 	}
-	wire, baseErr := encodeAnthropicBaseRequest(request)
+	wire, baseDiagnostics, baseErr := encodeAnthropicBaseRequest(request)
+	diagnostics = appendDiagnostics(diagnostics, baseDiagnostics, policy.Limits.Diagnostics)
 	if baseErr != nil {
 		return nil, diagnostics, baseErr
 	}
@@ -397,7 +797,9 @@ func (AnthropicMessagesCodec) EncodeRequest(request llmprotocol.Request, envelop
 	if messagesErr := appendAnthropicMessages(&wire, request.Messages); messagesErr != nil {
 		return nil, diagnostics, messagesErr
 	}
-	appendAnthropicTools(&wire, request.Tools)
+	if toolsErr := appendAnthropicTools(&wire, request.Tools); toolsErr != nil {
+		return nil, diagnostics, toolsErr
+	}
 	if toolChoiceErr := encodeAnthropicToolChoice(&wire, request); toolChoiceErr != nil {
 		return nil, diagnostics, toolChoiceErr
 	}
@@ -454,30 +856,110 @@ func appendAnthropicOutputDiagnostics(
 	request llmprotocol.Request,
 	policy llmprotocol.Policy,
 ) error {
-	if request.OutputFormat.Kind == llmprotocol.OutputJSONObject || request.OutputFormat.Kind == llmprotocol.OutputJSONSchema {
-		return appendLossy(diagnostics, policy, request.Trusted.SourceFormat, llmprotocol.AnthropicMessagesV1, "output_format", "Messages has no native strict output format")
+	if request.ReasoningEffort == "none" || request.ReasoningEffort == "minimal" {
+		return appendLossy(
+			diagnostics,
+			policy,
+			request.Trusted.SourceFormat,
+			llmprotocol.AnthropicMessagesV1,
+			"reasoning_effort",
+			"Messages does not define the requested reasoning effort",
+		)
+	}
+	if request.OutputFormat.Kind == llmprotocol.OutputJSONObject {
+		return appendLossy(diagnostics, policy, request.Trusted.SourceFormat, llmprotocol.AnthropicMessagesV1, "output_format", "Messages requires an explicit JSON Schema")
+	}
+	if request.OutputFormat.Kind != llmprotocol.OutputJSONSchema {
+		return nil
+	}
+	if request.OutputFormat.Strict != nil && !*request.OutputFormat.Strict {
+		return appendLossy(diagnostics, policy, request.Trusted.SourceFormat, llmprotocol.AnthropicMessagesV1, "output_format.strict", "Messages always enforces its output schema")
+	}
+	if request.OutputFormat.Name != "" && request.OutputFormat.Name != "structured_output" {
+		appendProviderFieldOmission(diagnostics, policy, request.Trusted.SourceFormat, "output_format.name", "Messages output schemas are unnamed")
+	}
+	if request.OutputFormat.Description != "" {
+		appendProviderFieldOmission(diagnostics, policy, request.Trusted.SourceFormat, "output_format.description", "Messages output schemas do not carry descriptions")
 	}
 	return nil
 }
 
-func encodeAnthropicBaseRequest(request llmprotocol.Request) (anthropicRequestWire, error) {
+func encodeAnthropicBaseRequest(request llmprotocol.Request) (anthropicRequestWire, llmprotocol.Diagnostics, error) {
 	wire := anthropicRequestWire{
 		Model: request.Model, Stream: request.Stream, Temperature: request.Sampling.Temperature,
 		TopP: request.Sampling.TopP, TopK: request.Sampling.TopK, StopSequences: append([]string(nil), request.Sampling.Stop...),
 	}
-	if request.Sampling.MaxOutputTokens == nil || *request.Sampling.MaxOutputTokens <= 0 {
-		return anthropicRequestWire{}, llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "max_tokens_required", "Anthropic Messages requires max output tokens", nil)
+	var diagnostics llmprotocol.Diagnostics
+	if request.Sampling.MaxOutputTokens == nil {
+		wire.MaxTokens = llmprotocol.Int64(defaultAnthropicMaxOutputTokens)
+		diagnostics = append(diagnostics, llmprotocol.Diagnostic{
+			Source: request.Trusted.SourceFormat,
+			Target: llmprotocol.AnthropicMessagesV1,
+			Field:  "max_tokens",
+			Action: llmprotocol.DiagnosticGenerated,
+			Reason: "Anthropic Messages requires an explicit output limit; the source request omitted one",
+		})
+	} else {
+		wire.MaxTokens = llmprotocol.Int64(*request.Sampling.MaxOutputTokens)
 	}
-	wire.MaxTokens = *request.Sampling.MaxOutputTokens
-	if request.ReasoningBudgetTokens != nil {
-		wire.Thinking = &anthropicThinkingWire{Type: "enabled", BudgetTokens: *request.ReasoningBudgetTokens}
+	switch request.ReasoningMode {
+	case llmprotocol.ReasoningModeDisabled:
+		wire.Thinking = &anthropicThinkingWire{Type: "disabled"}
+	case llmprotocol.ReasoningModeAdaptive:
+		wire.Thinking = &anthropicThinkingWire{Type: "adaptive", Display: request.ReasoningDisplay}
+	case llmprotocol.ReasoningModeEnabled:
+		if request.ReasoningBudgetTokens == nil {
+			return wire, diagnostics, llmprotocol.NewError(
+				llmprotocol.ErrorInvalidRequest,
+				"reasoning_budget_required",
+				"enabled reasoning requires a token budget",
+				nil,
+			)
+		}
+		wire.Thinking = &anthropicThinkingWire{Type: "enabled", BudgetTokens: llmprotocol.Int64(*request.ReasoningBudgetTokens), Display: request.ReasoningDisplay}
+	default:
+		if request.ReasoningBudgetTokens != nil {
+			wire.Thinking = &anthropicThinkingWire{Type: "enabled", BudgetTokens: llmprotocol.Int64(*request.ReasoningBudgetTokens)}
+		}
 	}
 	if userID := request.EndUserID; userID != "" {
-		wire.Metadata = &struct {
-			UserID string `json:"user_id,omitempty"`
-		}{UserID: userID}
+		wire.Metadata = &anthropicMetadataWire{UserID: userID}
 	}
-	return wire, nil
+	if request.ReasoningEffort != "" || request.OutputFormat.Kind == llmprotocol.OutputJSONSchema {
+		wire.OutputConfig = &anthropicOutputConfigWire{Effort: request.ReasoningEffort}
+		if request.OutputFormat.Kind == llmprotocol.OutputJSONSchema {
+			wire.OutputConfig.Format = &anthropicJSONOutputFormatWire{
+				Type:   "json_schema",
+				Schema: append(json.RawMessage(nil), request.OutputFormat.Schema...),
+			}
+		}
+	}
+	return wire, diagnostics, nil
+}
+
+func validateAnthropicReasoningBudget(
+	request llmprotocol.Request,
+	maxTokens int64,
+	category llmprotocol.ErrorCategory,
+) error {
+	if request.ReasoningBudgetTokens == nil ||
+		request.ReasoningMode != "" && request.ReasoningMode != llmprotocol.ReasoningModeEnabled {
+		return nil
+	}
+	budget := *request.ReasoningBudgetTokens
+	if budget >= 1024 && budget < maxTokens {
+		return nil
+	}
+	code := "invalid_anthropic_reasoning_budget"
+	if category == llmprotocol.ErrorUnsupportedFeature {
+		code = "unsupported_anthropic_reasoning_budget"
+	}
+	return llmprotocol.NewError(
+		category,
+		code,
+		"Anthropic reasoning budget must be at least 1024 and less than max_tokens",
+		nil,
+	)
 }
 
 func encodeAnthropicInstructions(
@@ -516,10 +998,17 @@ func appendAnthropicMessages(wire *anthropicRequestWire, messages []llmprotocol.
 	return nil
 }
 
-func appendAnthropicTools(wire *anthropicRequestWire, tools []llmprotocol.Tool) {
+func appendAnthropicTools(wire *anthropicRequestWire, tools []llmprotocol.Tool) error {
+	encoded := make([]anthropicToolWire, 0, len(tools))
 	for _, tool := range tools {
-		wire.Tools = append(wire.Tools, anthropicToolWire{Name: tool.Name, Description: tool.Description, InputSchema: tool.InputSchema, Strict: tool.Strict})
+		encoded = append(encoded, anthropicToolWire{Name: tool.Name, Description: tool.Description, InputSchema: tool.InputSchema, Strict: tool.Strict, CacheControl: encodeAnthropicCacheControl(tool.Cache)})
 	}
+	if len(encoded) == 0 {
+		return nil
+	}
+	var err error
+	wire.Tools, err = json.Marshal(encoded)
+	return err
 }
 
 func encodeAnthropicToolChoice(wire *anthropicRequestWire, request llmprotocol.Request) error {
@@ -547,13 +1036,13 @@ func encodeAnthropicToolChoice(wire *anthropicRequestWire, request llmprotocol.R
 
 func encodeAnthropicMessage(message llmprotocol.Message) ([]anthropicMessageWire, error) {
 	role := message.Role
-	if role == llmprotocol.RoleSystem || role == llmprotocol.RoleDeveloper {
-		return nil, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "system_message_position", "system and developer messages must be normalized as instructions", nil)
+	if role == llmprotocol.RoleDeveloper {
+		return nil, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "developer_message_position", "developer messages must be normalized as instructions", nil)
 	}
 	if role == llmprotocol.RoleTool {
 		role = llmprotocol.RoleUser
 	}
-	if role != llmprotocol.RoleUser && role != llmprotocol.RoleAssistant {
+	if role != llmprotocol.RoleSystem && role != llmprotocol.RoleUser && role != llmprotocol.RoleAssistant {
 		return nil, llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_role", "message role cannot be encoded as Anthropic Messages", nil)
 	}
 	content, err := encodeAnthropicContent(message.Content)
@@ -578,16 +1067,28 @@ func encodeAnthropicContent(contents []llmprotocol.Content) (json.RawMessage, er
 func encodeAnthropicContentBlock(content llmprotocol.Content) (anthropicContentWire, error) {
 	switch content.Kind {
 	case llmprotocol.ContentText:
-		return anthropicContentWire{Type: "text", Text: content.Text}, nil
+		return anthropicContentWire{Type: "text", Text: content.Text, CacheControl: encodeAnthropicCacheControl(content.Cache)}, nil
 	case llmprotocol.ContentReasoning:
-		return anthropicContentWire{Type: "thinking", Thinking: content.Text, Signature: content.Signature}, nil
+		if content.Cache != nil {
+			return anthropicContentWire{}, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_cache_directive", "Anthropic Messages cannot attach cache_control to thinking content", nil)
+		}
+		return anthropicContentWire{Type: "thinking", Thinking: content.Text, Signature: content.Signature, CacheControl: encodeAnthropicCacheControl(content.Cache)}, nil
 	case llmprotocol.ContentImage, llmprotocol.ContentFile:
-		return encodeAnthropicMediaBlock(content), nil
+		block := encodeAnthropicMediaBlock(content)
+		block.CacheControl = encodeAnthropicCacheControl(content.Cache)
+		return block, nil
 	case llmprotocol.ContentToolCall:
-		return encodeAnthropicToolCallBlock(content.ToolCall)
+		block, err := encodeAnthropicToolCallBlock(content.ToolCall)
+		block.CacheControl = encodeAnthropicCacheControl(content.Cache)
+		return block, err
 	case llmprotocol.ContentToolResult:
-		return encodeAnthropicToolResultBlock(content.ToolResult)
+		block, err := encodeAnthropicToolResultBlock(content.ToolResult)
+		block.CacheControl = encodeAnthropicCacheControl(content.Cache)
+		return block, err
 	case llmprotocol.ContentRefusal:
+		if content.Cache != nil {
+			return anthropicContentWire{}, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_cache_directive", "Anthropic Messages cannot attach cache_control to refusal content", nil)
+		}
 		return anthropicContentWire{Type: "text", Text: content.Text}, nil
 	default:
 		return anthropicContentWire{}, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_content", "content cannot be encoded as Anthropic Messages", nil)
@@ -659,30 +1160,42 @@ func anthropicContentDiagnostics(contents []llmprotocol.Content, source llmproto
 
 type anthropicResponseWire struct {
 	ID           string              `json:"id"`
-	Type         string              `json:"type,omitempty"`
-	Role         string              `json:"role,omitempty"`
-	Model        string              `json:"model,omitempty"`
-	Content      json.RawMessage     `json:"content,omitempty"`
-	StopReason   *string             `json:"stop_reason,omitempty"`
-	StopSequence *string             `json:"stop_sequence,omitempty"`
-	Usage        *anthropicUsageWire `json:"usage,omitempty"`
+	Type         string              `json:"type"`
+	Role         string              `json:"role"`
+	Model        string              `json:"model"`
+	Content      json.RawMessage     `json:"content"`
+	StopReason   *string             `json:"stop_reason"`
+	StopSequence *string             `json:"stop_sequence"`
+	Usage        *anthropicUsageWire `json:"usage"`
 	Error        *anthropicErrorWire `json:"error,omitempty"`
-	Container    json.RawMessage     `json:"container,omitempty"`
-	StopDetails  json.RawMessage     `json:"stop_details,omitempty"`
+	Container    json.RawMessage     `json:"container"`
+	StopDetails  json.RawMessage     `json:"stop_details"`
 }
 
 type anthropicUsageWire struct {
-	InputTokens              int64           `json:"input_tokens"`
-	OutputTokens             int64           `json:"output_tokens"`
-	CacheCreationInputTokens int64           `json:"cache_creation_input_tokens,omitempty"`
-	CacheReadInputTokens     int64           `json:"cache_read_input_tokens,omitempty"`
-	CacheCreation            json.RawMessage `json:"cache_creation,omitempty"`
-	InferenceGeo             string          `json:"inference_geo,omitempty"`
-	OutputTokensDetails      *struct {
-		ThinkingTokens int64 `json:"thinking_tokens"`
-	} `json:"output_tokens_details,omitempty"`
-	ServerToolUse json.RawMessage `json:"server_tool_use,omitempty"`
-	ServiceTier   string          `json:"service_tier,omitempty"`
+	InputTokens              int64                           `json:"input_tokens"`
+	OutputTokens             int64                           `json:"output_tokens"`
+	CacheCreationInputTokens int64                           `json:"cache_creation_input_tokens"`
+	CacheReadInputTokens     int64                           `json:"cache_read_input_tokens"`
+	CacheCreation            anthropicCacheCreationUsageWire `json:"cache_creation"`
+	InferenceGeo             string                          `json:"inference_geo"`
+	OutputTokensDetails      anthropicOutputUsageDetailsWire `json:"output_tokens_details"`
+	ServerToolUse            anthropicServerToolUsageWire    `json:"server_tool_use"`
+	ServiceTier              string                          `json:"service_tier"`
+}
+
+type anthropicCacheCreationUsageWire struct {
+	Ephemeral1hInputTokens int64 `json:"ephemeral_1h_input_tokens"`
+	Ephemeral5mInputTokens int64 `json:"ephemeral_5m_input_tokens"`
+}
+
+type anthropicOutputUsageDetailsWire struct {
+	ThinkingTokens int64 `json:"thinking_tokens"`
+}
+
+type anthropicServerToolUsageWire struct {
+	WebFetchRequests  int64 `json:"web_fetch_requests"`
+	WebSearchRequests int64 `json:"web_search_requests"`
 }
 
 type anthropicErrorWire struct {
@@ -701,11 +1214,14 @@ func (AnthropicMessagesCodec) DecodeResponse(body []byte, policy llmprotocol.Pol
 	if err := decodeProviderWire(body, &wire, policy); err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
 	}
+	if err := validateAnthropicResponseResource(wire); err != nil {
+		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
+	}
 	var diagnostics llmprotocol.Diagnostics
-	if len(wire.Container) > 0 {
+	if len(wire.Container) > 0 && !bytes.Equal(bytes.TrimSpace(wire.Container), []byte("null")) {
 		appendProviderFieldOmission(&diagnostics, policy, llmprotocol.AnthropicMessagesV1, "container", "container execution metadata is not model output")
 	}
-	if len(wire.StopDetails) > 0 {
+	if len(wire.StopDetails) > 0 && !bytes.Equal(bytes.TrimSpace(wire.StopDetails), []byte("null")) {
 		appendProviderFieldOmission(&diagnostics, policy, llmprotocol.AnthropicMessagesV1, "stop_details", "structured refusal detail has no neutral representation")
 	}
 	response := llmprotocol.Response{Generation: 1, ID: wire.ID, Model: wire.Model, Usage: llmprotocol.Usage{State: llmprotocol.UsageUnavailable}}
@@ -713,7 +1229,7 @@ func (AnthropicMessagesCodec) DecodeResponse(body []byte, policy llmprotocol.Pol
 		response.Error = &llmprotocol.ProtocolError{Category: decodeProviderErrorCategory(wire.Error.Type), Code: wire.Error.Type, Message: wire.Error.Message}
 		response.StopReason = llmprotocol.StopError
 	}
-	contents, err := decodeAnthropicContent(wire.Content, policy)
+	contents, err := decodeAnthropicResponseContent(wire.Content, policy)
 	if err != nil && wire.Error == nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
 	}
@@ -723,37 +1239,37 @@ func (AnthropicMessagesCodec) DecodeResponse(body []byte, policy llmprotocol.Pol
 	if wire.StopReason != nil && response.Error == nil {
 		response.SourceStopReason = *wire.StopReason
 		response.StopReason = decodeAnthropicStop(*wire.StopReason)
+		if response.StopReason == llmprotocol.StopSequence && wire.StopSequence != nil {
+			response.MatchedStopSequence = *wire.StopSequence
+		}
 	}
 	if wire.Usage != nil {
 		response.Usage = decodeAnthropicUsage(*wire.Usage)
 		appendProviderFieldOmissions(&diagnostics, policy, llmprotocol.AnthropicMessagesV1, map[string]bool{
-			"usage.cache_creation":  len(wire.Usage.CacheCreation) > 0,
-			"usage.inference_geo":   wire.Usage.InferenceGeo != "",
-			"usage.server_tool_use": len(wire.Usage.ServerToolUse) > 0,
-			"usage.service_tier":    wire.Usage.ServiceTier != "",
+			"usage.cache_creation": wire.Usage.CacheCreation.Ephemeral1hInputTokens != 0 ||
+				wire.Usage.CacheCreation.Ephemeral5mInputTokens != 0,
+			"usage.inference_geo": wire.Usage.InferenceGeo != "",
+			"usage.server_tool_use": wire.Usage.ServerToolUse.WebFetchRequests != 0 ||
+				wire.Usage.ServerToolUse.WebSearchRequests != 0,
+			"usage.service_tier": wire.Usage.ServiceTier != "",
 		}, "provider usage metadata has no neutral accounting bucket")
 	}
 	return response, responseEnvelope(llmprotocol.AnthropicMessagesV1, body, response.Generation, response.SourceStopReason, policy), diagnostics, nil
 }
 
 func decodeAnthropicUsage(wire anthropicUsageWire) llmprotocol.Usage {
-	uncached := wire.InputTokens - wire.CacheReadInputTokens - wire.CacheCreationInputTokens
-	if uncached < 0 {
-		uncached = 0
-	}
+	inputTotal := wire.InputTokens + wire.CacheReadInputTokens + wire.CacheCreationInputTokens
 	reasoning := int64(0)
-	if wire.OutputTokensDetails != nil {
-		reasoning = wire.OutputTokensDetails.ThinkingTokens
-	}
+	reasoning = wire.OutputTokensDetails.ThinkingTokens
 	other := wire.OutputTokens - reasoning
 	if other < 0 {
 		other = 0
 	}
 	return llmprotocol.Usage{
 		State:         llmprotocol.UsageAvailable,
-		InputUncached: authoritative(uncached), InputCacheRead: authoritative(wire.CacheReadInputTokens), InputCacheWrite: authoritative(wire.CacheCreationInputTokens),
+		InputUncached: authoritative(wire.InputTokens), InputCacheRead: authoritative(wire.CacheReadInputTokens), InputCacheWrite: authoritative(wire.CacheCreationInputTokens),
 		OutputReasoning: authoritative(reasoning), OutputOther: authoritative(other),
-		InputTotal: authoritative(wire.InputTokens), OutputTotal: authoritative(wire.OutputTokens), Total: llmprotocol.TokenCount{Value: llmprotocol.Int64(wire.InputTokens + wire.OutputTokens), Provenance: llmprotocol.UsageDerived},
+		InputTotal: authoritative(inputTotal), OutputTotal: authoritative(wire.OutputTokens), Total: llmprotocol.TokenCount{Value: llmprotocol.Int64(inputTotal + wire.OutputTokens), Provenance: llmprotocol.UsageDerived},
 	}
 }
 
@@ -762,11 +1278,20 @@ func (AnthropicMessagesCodec) EncodeResponse(response llmprotocol.Response, enve
 		return append([]byte(nil), envelope.Response...), nil, nil
 	}
 	if response.Error != nil {
-		return encodeAnthropicError(response.Error, response.ProviderRequestID), nil, nil
+		var diagnostics llmprotocol.Diagnostics
+		if response.Usage.State == llmprotocol.UsageAvailable {
+			appendAccountingOmission(&diagnostics, policy, envelope.Format, llmprotocol.AnthropicMessagesV1, "usage", "Messages error envelopes cannot carry token usage")
+		}
+		return encodeAnthropicError(response.Error, response.ProviderRequestID), diagnostics, nil
 	}
 	var diagnostics llmprotocol.Diagnostics
-	if response.Usage.OutputReasoning.Value != nil {
-		appendAccountingOmission(&diagnostics, policy, envelope.Format, llmprotocol.AnthropicMessagesV1, "usage.output_reasoning", "Messages has no reasoning-token usage field")
+	if usageUnavailable(response.Usage) {
+		if err := appendLossy(
+			&diagnostics, policy, envelope.Format, llmprotocol.AnthropicMessagesV1,
+			"usage", "Messages requires usage; emitted an explicit zero-valued usage object",
+		); err != nil {
+			return nil, diagnostics, err
+		}
 	}
 	if len(response.Alternatives) > 0 {
 		if err := appendLossy(&diagnostics, policy, envelope.Format, llmprotocol.AnthropicMessagesV1, "response.alternatives", "Messages has one output sequence"); err != nil {
@@ -788,15 +1313,45 @@ func (AnthropicMessagesCodec) EncodeResponse(response llmprotocol.Response, enve
 	}
 	stop := encodeAnthropicStop(response.StopReason)
 	wire := anthropicResponseWire{ID: response.ID, Type: "message", Role: "assistant", Model: response.Model, Content: content, StopReason: &stop, Usage: encodeAnthropicUsage(response.Usage)}
+	if response.StopReason == llmprotocol.StopSequence {
+		wire.StopSequence = &response.MatchedStopSequence
+	}
 	body, err := marshalWire(wire)
 	return body, diagnostics, err
 }
 
 func encodeAnthropicUsage(usage llmprotocol.Usage) *anthropicUsageWire {
-	if usage.State == llmprotocol.UsageUnavailable || usage.InputTotal.Value == nil && usage.OutputTotal.Value == nil {
-		return nil
+	wire := newAnthropicUsageWire()
+	if usageUnavailable(usage) {
+		return wire
 	}
-	return &anthropicUsageWire{InputTokens: tokenValue(usage.InputTotal), OutputTokens: tokenValue(usage.OutputTotal), CacheCreationInputTokens: tokenValue(usage.InputCacheWrite), CacheReadInputTokens: tokenValue(usage.InputCacheRead)}
+	inputTokens := tokenValue(usage.InputUncached)
+	if usage.InputUncached.Value == nil {
+		inputTokens = tokenValue(usage.InputTotal)
+	}
+	cacheWrite := tokenValue(usage.InputCacheWrite)
+	*wire = anthropicUsageWire{
+		InputTokens: inputTokens, OutputTokens: tokenValue(usage.OutputTotal),
+		CacheCreationInputTokens: cacheWrite, CacheReadInputTokens: tokenValue(usage.InputCacheRead),
+		CacheCreation:       anthropicCacheCreationUsageWire{Ephemeral5mInputTokens: cacheWrite},
+		InferenceGeo:        "global",
+		OutputTokensDetails: anthropicOutputUsageDetailsWire{ThinkingTokens: tokenValue(usage.OutputReasoning)},
+		ServerToolUse:       anthropicServerToolUsageWire{},
+		ServiceTier:         "standard",
+	}
+	return wire
+}
+
+func newAnthropicUsageWire() *anthropicUsageWire {
+	return &anthropicUsageWire{
+		InferenceGeo: "global",
+		ServiceTier:  "standard",
+	}
+}
+
+func usageUnavailable(usage llmprotocol.Usage) bool {
+	return usage.State == llmprotocol.UsageUnavailable ||
+		usage.InputTotal.Value == nil && usage.OutputTotal.Value == nil
 }
 
 func decodeAnthropicStop(reason string) llmprotocol.StopReason {
@@ -811,6 +1366,10 @@ func decodeAnthropicStop(reason string) llmprotocol.StopReason {
 		return llmprotocol.StopToolCall
 	case "refusal":
 		return llmprotocol.StopContentFilter
+	case "pause_turn":
+		return llmprotocol.StopPaused
+	case "model_context_window_exceeded":
+		return llmprotocol.StopContextWindow
 	default:
 		return llmprotocol.StopUnknown
 	}
@@ -826,6 +1385,10 @@ func encodeAnthropicStop(reason llmprotocol.StopReason) string {
 		return "tool_use"
 	case llmprotocol.StopContentFilter:
 		return "refusal"
+	case llmprotocol.StopPaused:
+		return "pause_turn"
+	case llmprotocol.StopContextWindow:
+		return "model_context_window_exceeded"
 	default:
 		return "end_turn"
 	}
@@ -845,6 +1408,12 @@ func (AnthropicMessagesCodec) DecodeTransportError(
 	if err := decodeProviderWire(body, &wire, policy); err != nil {
 		return llmprotocol.TransportError{}, nil, err
 	}
+	if wire.Type != "error" {
+		return llmprotocol.TransportError{}, nil, invalidProviderResponse(
+			"invalid_upstream_error_envelope",
+			"Anthropic transport error type must be error",
+		)
+	}
 	if wire.Error == nil {
 		return llmprotocol.TransportError{}, nil, llmprotocol.NewError(
 			llmprotocol.ErrorUpstreamUnavailable,
@@ -852,6 +1421,9 @@ func (AnthropicMessagesCodec) DecodeTransportError(
 			"upstream transport error body is missing error details",
 			nil,
 		)
+	}
+	if err := validateTransportErrorDetails(wire.Error.Type, wire.Error.Message); err != nil {
+		return llmprotocol.TransportError{}, nil, err
 	}
 	return llmprotocol.TransportError{
 		Error: &llmprotocol.ProtocolError{

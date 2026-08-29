@@ -1,0 +1,10 @@
+{
+  "operation": "error",
+  "body": {
+    "error": {
+      "type": "server_error",
+      "code": 500,
+      "message": "Provider failed."
+    }
+  }
+}

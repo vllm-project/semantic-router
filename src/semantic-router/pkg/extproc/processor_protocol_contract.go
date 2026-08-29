@@ -21,10 +21,10 @@ func (r *OpenAIRouter) encodeSyntheticTextResponse(
 	if ctx == nil {
 		return nil, "", nil, fmt.Errorf("request context is unavailable")
 	}
-	format := ctx.TargetFormat
-	if format == "" {
-		format = ctx.SourceFormat
-	}
+	// A synthetic response terminates at the Router and is never sent to the
+	// selected backend. Its wire contract therefore belongs exclusively to the
+	// client-facing ingress protocol; TargetFormat must not leak into it.
+	format := ctx.SourceFormat
 	if format == "" {
 		format = llmprotocol.OpenAIChatV1
 	}
@@ -48,7 +48,9 @@ func (r *OpenAIRouter) encodeSyntheticTextResponse(
 		return nil, "", nil, err
 	}
 	if !streaming {
-		encoded, encodeErr := engine.EncodeResponse(format, *response, llmprotocol.Envelope{})
+		envelope := llmprotocol.Envelope{}
+		envelope.ResponseRender.PreviousResponseID = responseObjectPreviousID(ctx)
+		encoded, encodeErr := engine.EncodeResponse(format, *response, envelope)
 		if encodeErr != nil {
 			return nil, "", nil, encodeErr
 		}
@@ -58,7 +60,9 @@ func (r *OpenAIRouter) encodeSyntheticTextResponse(
 	}
 	body, diagnostics, err := engine.EncodeResponseStream(format, *response, llmprotocol.StreamContext{
 		Context: ctx.TraceContext, Source: format, Target: format,
+		Options:     clientStreamOptions(ctx),
 		PublicModel: response.Model, ResponseID: response.ID,
+		PreviousResponseID: responseObjectPreviousID(ctx),
 	})
 	if err != nil {
 		return nil, "", nil, err
@@ -104,9 +108,14 @@ func (r *OpenAIRouter) prepareProtocolRequest(
 	if err != nil {
 		return nil, r.createErrorResponse(503, "protocol runtime unavailable")
 	}
-	request, envelope, diagnostics, err := engine.DecodeRequest(ctx.SourceFormat, body)
+	request, envelope, diagnostics, err := engine.DecodeRequestForMutation(ctx.SourceFormat, body)
 	if err != nil {
 		recordIngressProtocolError(ctx, err)
+		var protocolError *llmprotocol.ProtocolError
+		if errors.As(err, &protocolError) {
+			copy := *protocolError
+			ctx.ImmediateProtocolError = &copy
+		}
 		return nil, r.createErrorResponse(400, "invalid inference request")
 	}
 	request.Trusted.SourceFormat = ctx.SourceFormat
@@ -117,12 +126,27 @@ func (r *OpenAIRouter) prepareProtocolRequest(
 	ctx.ProtocolDiagnostics = append(llmprotocol.Diagnostics(nil), diagnostics...)
 	ctx.ExpectStreamingResponse = ctx.ExpectStreamingResponse || request.Stream
 	if ctx.SourceFormat == llmprotocol.OpenAIResponsesV1 {
-		if r.ResponseAPIFilter != nil {
-			ctx.ResponseObjectState = r.ResponseAPIFilter.PrepareObjectState(ctx.TraceContext, request, body)
+		state, stateErr := r.ResponseAPIFilter.PrepareObjectState(ctx.TraceContext, request, body)
+		if stateErr != nil {
+			var protocolError *llmprotocol.ProtocolError
+			if errors.As(stateErr, &protocolError) {
+				copy := *protocolError
+				ctx.ImmediateProtocolError = &copy
+				return nil, r.createErrorResponse(responseObjectStateHTTPStatus(protocolError), protocolError.Message)
+			}
+			return nil, r.createErrorResponse(503, "retained response history is unavailable")
 		}
+		ctx.ResponseObjectState = state
 	}
 	populateSessionTransitionFields(ctx)
 	return &request, nil
+}
+
+func responseObjectStateHTTPStatus(protocolError *llmprotocol.ProtocolError) int {
+	if protocolError != nil && protocolError.Category == llmprotocol.ErrorNotFound {
+		return 404
+	}
+	return 503
 }
 
 func recordIngressProtocolError(ctx *RequestContext, err error) {
@@ -157,12 +181,27 @@ func (r *OpenAIRouter) encodeDispatchRequest(ctx *RequestContext) ([]byte, error
 	if format == "" {
 		format = llmprotocol.OpenAIChatV1
 	}
-	encoded, err := engine.EncodeRequest(format, *ctx.SemanticRequest, ctx.ProtocolEnvelope)
+	dispatchRequest := *ctx.SemanticRequest
+	if format == llmprotocol.OpenAIChatV1 && dispatchRequest.Stream {
+		// The Router always asks Chat backends for the final usage chunk so
+		// accounting observes authoritative tokens. Public stream rendering uses
+		// the original client preference retained in ctx.SemanticRequest.
+		includeUsage := true
+		dispatchRequest.StreamOptions.IncludeUsage = &includeUsage
+	}
+	encoded, err := engine.EncodeRequest(format, dispatchRequest, ctx.ProtocolEnvelope)
 	if err != nil {
 		return nil, err
 	}
 	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, encoded.Diagnostics...)
 	return encoded.Body, nil
+}
+
+func clientStreamOptions(ctx *RequestContext) llmprotocol.StreamOptions {
+	if ctx == nil || ctx.SemanticRequest == nil {
+		return llmprotocol.StreamOptions{}
+	}
+	return ctx.SemanticRequest.StreamOptions
 }
 
 func (r *OpenAIRouter) decodeClientResponse(
@@ -176,18 +215,15 @@ func (r *OpenAIRouter) decodeClientResponse(
 	if err != nil {
 		return nil, err
 	}
-	source := ctx.TargetFormat
-	if source == "" {
-		source = ctx.SourceFormat
+	source, target := responseWireFormats(ctx)
+	var mutation protocolcodec.ResponseMutation
+	if responseID := responseObjectPublicID(ctx); responseID != "" {
+		mutation = func(response *llmprotocol.Response) error {
+			response.ID = responseID
+			return nil
+		}
 	}
-	if source == "" {
-		source = llmprotocol.OpenAIChatV1
-	}
-	target := ctx.SourceFormat
-	if target == "" {
-		target = llmprotocol.OpenAIChatV1
-	}
-	decoded, err := engine.TranslateResponse(source, target, body, nil)
+	decoded, err := engine.TranslateResponse(source, target, body, mutation)
 	if err != nil {
 		return nil, err
 	}
@@ -212,6 +248,7 @@ func (r *OpenAIRouter) encodeClientResponse(
 			format = ctx.SourceFormat
 		}
 		envelope = ctx.ResponseEnvelope
+		envelope.ResponseRender.PreviousResponseID = responseObjectPreviousID(ctx)
 	}
 	encoded, err := engine.EncodeResponse(format, response, envelope)
 	if err != nil {
@@ -257,7 +294,11 @@ func (r *OpenAIRouter) encodeImmediateResponseForClient(
 	}
 	status := int(immediate.GetStatus().GetCode())
 	if status >= 400 {
-		if body, encodeErr := engine.EncodeError(format, immediateProtocolError(status)); encodeErr == nil {
+		protocolError := immediateProtocolError(status)
+		if ctx.ImmediateProtocolError != nil {
+			protocolError = ctx.ImmediateProtocolError
+		}
+		if body, encodeErr := engine.EncodeError(format, protocolError); encodeErr == nil {
 			immediate.Body = body
 			setImmediateContentType(immediate, "application/json")
 			ctx.ImmediateResponseEncoded = true

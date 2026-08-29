@@ -11,6 +11,20 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 )
 
+func responseObjectPublicID(ctx *RequestContext) string {
+	if ctx == nil || ctx.SourceFormat != llmprotocol.OpenAIResponsesV1 || ctx.ResponseObjectState == nil {
+		return ""
+	}
+	return strings.TrimSpace(ctx.ResponseObjectState.GeneratedResponseID)
+}
+
+func responseObjectPreviousID(ctx *RequestContext) string {
+	if ctx == nil || ctx.SourceFormat != llmprotocol.OpenAIResponsesV1 || ctx.ResponseObjectState == nil {
+		return ""
+	}
+	return strings.TrimSpace(ctx.ResponseObjectState.PreviousResponseID)
+}
+
 // persistImmediateResponseObject retains successful inference short-circuits
 // after their final client representation has been selected.
 func (r *OpenAIRouter) persistImmediateResponseObject(response *ext_proc.ProcessingResponse, ctx *RequestContext) {
@@ -99,6 +113,8 @@ func cloneResponseInputItems(items []responseapi.InputItem) []responseapi.InputI
 	copy(cloned, items)
 	for index := range cloned {
 		cloned[index].Content = append(json.RawMessage(nil), cloned[index].Content...)
+		cloned[index].Output = append(json.RawMessage(nil), cloned[index].Output...)
+		cloned[index].Summary = append(json.RawMessage(nil), cloned[index].Summary...)
 	}
 	return cloned
 }

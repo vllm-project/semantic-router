@@ -148,11 +148,50 @@ func setResponseBodyMutation(response *ext_proc.ProcessingResponse, body []byte)
 	if !ok {
 		return
 	}
+	if bodyResponse.ResponseBody.Response == nil {
+		bodyResponse.ResponseBody.Response = &ext_proc.CommonResponse{}
+	}
 	bodyResponse.ResponseBody.Response.BodyMutation = &ext_proc.BodyMutation{
 		Mutation: &ext_proc.BodyMutation_Body{
 			Body: body,
 		},
 	}
+	if bodyResponse.ResponseBody.Response.HeaderMutation == nil {
+		bodyResponse.ResponseBody.Response.HeaderMutation = &ext_proc.HeaderMutation{}
+	}
+	// A body rewrite invalidates the upstream byte count. Let Envoy derive the
+	// correct framing instead of forwarding a stale content-length.
+	ensureHeaderRemoved(bodyResponse.ResponseBody.Response.HeaderMutation, "content-length")
+}
+
+func setResponseContentType(response *ext_proc.ProcessingResponse, contentType string) {
+	bodyResponse, ok := response.Response.(*ext_proc.ProcessingResponse_ResponseBody)
+	if !ok {
+		return
+	}
+	if bodyResponse.ResponseBody.Response == nil {
+		bodyResponse.ResponseBody.Response = &ext_proc.CommonResponse{}
+	}
+	if bodyResponse.ResponseBody.Response.HeaderMutation == nil {
+		bodyResponse.ResponseBody.Response.HeaderMutation = &ext_proc.HeaderMutation{}
+	}
+	mutation := bodyResponse.ResponseBody.Response.HeaderMutation
+	for _, option := range mutation.SetHeaders {
+		if option.GetHeader().GetKey() != "content-type" {
+			continue
+		}
+		option.Header.Value = ""
+		option.Header.RawValue = []byte(contentType)
+		option.AppendAction = core.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD
+		return
+	}
+	mutation.SetHeaders = append(mutation.SetHeaders, &core.HeaderValueOption{
+		Header: &core.HeaderValue{
+			Key:      "content-type",
+			RawValue: []byte(contentType),
+		},
+		AppendAction: core.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD,
+	})
 }
 
 func isResponseAPIRequest(ctx *RequestContext) bool {

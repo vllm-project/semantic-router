@@ -1,0 +1,4 @@
+{
+  "operation": "error",
+  "body_json": "{\"type\":\"error\",\"type\":\"error\",\"error\":{\"type\":\"api_error\",\"message\":\"Provider failed.\"}}"
+}

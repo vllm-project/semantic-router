@@ -105,7 +105,155 @@ def anthropic_to_openai(body: dict[str, Any]) -> dict[str, Any]:
     for source, target in field_map.items():
         if source in body:
             translated[target] = body[source]
+    output_config = body.get("output_config")
+    output_format = (
+        output_config.get("format") if isinstance(output_config, dict) else None
+    )
+    if isinstance(output_format, dict) and output_format.get("type") == "json_schema":
+        translated["response_format"] = {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "structured_output",
+                "strict": True,
+                "schema": output_format.get("schema"),
+            },
+        }
+    if translated.get("stream"):
+        translated["stream_options"] = {"include_usage": True}
     return translated
+
+
+class OpenAIStreamToAnthropic:
+    """Stateful adapter from chat-completions chunks to Messages events.
+
+    The adapter emits the official Messages event order and defers terminal
+    events until the OpenAI ``[DONE]`` sentinel (or upstream EOF), allowing a
+    final usage-only chunk to contribute authoritative output accounting.
+    """
+
+    def __init__(self, request_body: dict[str, Any]) -> None:
+        self._request_body = request_body
+        self._started = False
+        self._finished = False
+        self._response_id = "msg_shim_stream"
+        self._model = str(request_body.get("model") or "")
+        self._finish_reason = "stop"
+        self._output_tokens = 0
+
+    def feed(self, payload: str) -> list[bytes]:
+        if self._finished:
+            return []
+        if payload.strip() == "[DONE]":
+            return self.finish()
+        try:
+            chunk = json.loads(payload)
+        except json.JSONDecodeError:
+            return []
+        if not isinstance(chunk, dict):
+            return []
+
+        self._response_id = str(chunk.get("id") or self._response_id)
+        self._model = str(chunk.get("model") or self._model)
+        usage = chunk.get("usage")
+        if isinstance(usage, dict):
+            self._output_tokens = int(usage.get("completion_tokens") or 0)
+
+        events = self._start_events()
+        choices = chunk.get("choices")
+        choice = choices[0] if isinstance(choices, list) and choices else None
+        if not isinstance(choice, dict):
+            return events
+        finish_reason = choice.get("finish_reason")
+        if isinstance(finish_reason, str) and finish_reason:
+            self._finish_reason = finish_reason
+        delta = choice.get("delta")
+        if isinstance(delta, dict) and isinstance(delta.get("content"), str):
+            text = delta["content"]
+            if text:
+                events.append(
+                    _anthropic_sse(
+                        "content_block_delta",
+                        {
+                            "type": "content_block_delta",
+                            "index": 0,
+                            "delta": {"type": "text_delta", "text": text},
+                        },
+                    )
+                )
+        return events
+
+    def finish(self) -> list[bytes]:
+        if self._finished:
+            return []
+        events = self._start_events()
+        self._finished = True
+        stop_reason = _anthropic_stop_reason(
+            self._finish_reason,
+            self._request_body.get("stop_sequences") or [],
+        )
+        events.extend(
+            [
+                _anthropic_sse(
+                    "content_block_stop",
+                    {"type": "content_block_stop", "index": 0},
+                ),
+                _anthropic_sse(
+                    "message_delta",
+                    {
+                        "type": "message_delta",
+                        "delta": {"stop_reason": stop_reason, "stop_sequence": None},
+                        "usage": {"output_tokens": self._output_tokens},
+                    },
+                ),
+                _anthropic_sse("message_stop", {"type": "message_stop"}),
+            ]
+        )
+        return events
+
+    def _start_events(self) -> list[bytes]:
+        if self._started:
+            return []
+        self._started = True
+        return [
+            _anthropic_sse(
+                "message_start",
+                {
+                    "type": "message_start",
+                    "message": {
+                        "id": self._response_id,
+                        "type": "message",
+                        "role": "assistant",
+                        "model": self._model,
+                        "content": [],
+                        "stop_reason": None,
+                        "stop_sequence": None,
+                        "usage": {"input_tokens": 0, "output_tokens": 0},
+                    },
+                },
+            ),
+            _anthropic_sse(
+                "content_block_start",
+                {
+                    "type": "content_block_start",
+                    "index": 0,
+                    "content_block": {"type": "text", "text": ""},
+                },
+            ),
+        ]
+
+
+def _anthropic_sse(event: str, payload: dict[str, Any]) -> bytes:
+    return f"event: {event}\ndata: {json.dumps(payload, separators=(',', ':'))}\n\n".encode()
+
+
+def _anthropic_stop_reason(finish_reason: str, stop_sequences: list[Any]) -> str:
+    if finish_reason == "length":
+        return "max_tokens"
+    if finish_reason == "tool_calls":
+        return "tool_use"
+    if finish_reason == "stop" and stop_sequences:
+        return "stop_sequence"
+    return "end_turn"
 
 
 def openai_to_anthropic(
@@ -120,12 +268,7 @@ def openai_to_anthropic(
     text = str(message.get("content") or "")
     finish_reason = str(choice.get("finish_reason") or "")
     stop_sequences = request_body.get("stop_sequences") or []
-    stop_reason = {
-        "length": "max_tokens",
-        "tool_calls": "tool_use",
-    }.get(finish_reason, "end_turn")
-    if finish_reason == "stop" and stop_sequences:
-        stop_reason = "stop_sequence"
+    stop_reason = _anthropic_stop_reason(finish_reason, stop_sequences)
     usage = response.get("usage") if isinstance(response.get("usage"), dict) else {}
     return {
         "id": response.get("id", "msg_shim"),
