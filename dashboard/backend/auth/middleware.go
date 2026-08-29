@@ -300,8 +300,8 @@ func fleetSimPermission(method, path string) (string, bool) {
 
 func featurePermission(method, path string) (string, bool) {
 	switch {
-	case strings.HasPrefix(path, "/api/evaluation"):
-		if path == "/api/evaluation/run" || strings.HasPrefix(path, "/api/evaluation/cancel/") {
+	case path == "/api/evaluation/v1" || strings.HasPrefix(path, "/api/evaluation/v1/"):
+		if isEvaluationRunAction(path) {
 			return PermEvalRun, true
 		}
 		if method == http.MethodPost || method == http.MethodDelete {
@@ -315,6 +315,13 @@ func featurePermission(method, path string) (string, bool) {
 	default:
 		return "", false
 	}
+}
+
+func isEvaluationRunAction(path string) bool {
+	path = strings.TrimRight(path, "/")
+	rest := strings.TrimPrefix(path, "/api/evaluation/v1/runs/")
+	parts := strings.Split(rest, "/")
+	return len(parts) == 2 && parts[0] != "" && (parts[1] == "start" || parts[1] == "cancel")
 }
 
 func openclawPermission(method, path string) (string, bool) {

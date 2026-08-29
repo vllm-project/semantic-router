@@ -8,9 +8,8 @@ import (
 	"path/filepath"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
-	"github.com/vllm-project/semantic-router/dashboard/backend/evaluation"
+	"github.com/vllm-project/semantic-router/dashboard/backend/evaluationplane"
 	"github.com/vllm-project/semantic-router/dashboard/backend/handlers"
-	"github.com/vllm-project/semantic-router/dashboard/backend/middleware"
 	"github.com/vllm-project/semantic-router/dashboard/backend/mlpipeline"
 	"github.com/vllm-project/semantic-router/dashboard/backend/recipe"
 	"github.com/vllm-project/semantic-router/dashboard/backend/routercontract"
@@ -189,147 +188,45 @@ func registerTopologyRoutes(mux *http.ServeMux, cfg *config.Config, credentialPr
 	log.Printf("Topology Test Query API endpoint registered: /api/topology/test-query (Router API: %s)", cfg.RouterAPIURL)
 }
 
-func registerEvaluationRoutes(mux *http.ServeMux, cfg *config.Config) {
+func registerEvaluationRoutes(mux *http.ServeMux, cfg *config.Config, credentialProviders ...*recipe.Store) *evaluationplane.Service {
+	registerRetiredEvaluationRoutes(mux)
 	if !cfg.EvaluationEnabled {
 		log.Printf("Evaluation feature disabled")
-		return
+		return nil
 	}
-
-	mux.HandleFunc("/api/evaluation/datasets", handlers.GetDatasetsHandler())
-	log.Printf("Evaluation datasets endpoint registered: /api/evaluation/datasets")
-
-	projectRoot := resolveEvaluationProjectRoot(cfg)
-	log.Printf("Evaluation project root: %s", projectRoot)
-
-	evalDB, err := evaluation.NewDB(cfg.EvaluationDBPath)
+	service, err := evaluationplane.NewService(evaluationplane.Options{
+		DataDir:            cfg.EvaluationDataDir,
+		PythonPath:         cfg.PythonPath,
+		RouterAPIURL:       cfg.RouterAPIURL,
+		EnvoyURL:           cfg.EnvoyURL,
+		ConfigPath:         cfg.AbsConfigPath,
+		CodeRevision:       os.Getenv("VLLM_SR_SOURCE_REVISION"),
+		EnvoyAPIKeyEnv:     cfg.EvaluationEnvoyAPIKeyEnv,
+		CredentialProvider: selectedRecipeStore(cfg, credentialProviders),
+		MaxConcurrent:      2,
+	})
 	if err != nil {
-		log.Printf("Warning: failed to initialize evaluation database: %v (other evaluation endpoints disabled)", err)
-		return
+		log.Printf("Warning: failed to initialize Evaluation Plane: %v (evaluation endpoints disabled)", err)
+		return nil
 	}
-
-	// Recover tasks that were running before a dashboard restart so UI state is consistent
-	if err := evalDB.RecoverRunningTasks("Dashboard restarted; task interrupted"); err != nil {
-		log.Printf("Warning: failed to recover running evaluation tasks: %v", err)
-	}
-
-	runner := evaluation.NewRunner(evaluation.RunnerConfig{
-		DB:            evalDB,
-		ProjectRoot:   projectRoot,
-		PythonPath:    cfg.PythonPath,
-		ResultsDir:    cfg.EvaluationResultsDir,
-		MaxConcurrent: 10,
-	})
-	evalHandler := handlers.NewEvaluationHandler(evalDB, runner, cfg.ReadonlyMode, cfg.RouterAPIURL, cfg.EnvoyURL)
-
-	mux.HandleFunc("/api/evaluation/tasks", func(w http.ResponseWriter, r *http.Request) {
-		if middleware.HandleCORSPreflight(w, r) {
-			return
-		}
-		switch r.Method {
-		case http.MethodGet:
-			evalHandler.ListTasksHandler().ServeHTTP(w, r)
-		case http.MethodPost:
-			evalHandler.CreateTaskHandler().ServeHTTP(w, r)
-		default:
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		}
-	})
-	mux.HandleFunc("/api/evaluation/tasks/", func(w http.ResponseWriter, r *http.Request) {
-		if middleware.HandleCORSPreflight(w, r) {
-			return
-		}
-		switch r.Method {
-		case http.MethodGet:
-			evalHandler.GetTaskHandler().ServeHTTP(w, r)
-		case http.MethodDelete:
-			evalHandler.DeleteTaskHandler().ServeHTTP(w, r)
-		default:
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		}
-	})
-	mux.HandleFunc("/api/evaluation/run", evalHandler.RunTaskHandler())
-	mux.HandleFunc("/api/evaluation/cancel/", evalHandler.CancelTaskHandler())
-	mux.HandleFunc("/api/evaluation/stream/", evalHandler.StreamProgressHandler())
-	mux.HandleFunc("/api/evaluation/results/", evalHandler.GetResultsHandler())
-	mux.HandleFunc("/api/evaluation/export/", evalHandler.ExportResultsHandler())
-	mux.HandleFunc("/api/evaluation/history", evalHandler.GetHistoryHandler())
-	log.Printf("Evaluation API endpoints registered: /api/evaluation/*")
+	handler := handlers.NewEvaluationPlaneHandler(service, cfg.ReadonlyMode)
+	mux.HandleFunc("/api/evaluation/v1/catalog", handler.Catalog)
+	mux.HandleFunc("/api/evaluation/v1/runs", handler.Runs)
+	mux.HandleFunc("/api/evaluation/v1/runs/", handler.RunRoute)
+	mux.HandleFunc("/api/evaluation/v1/compare", handler.Compare)
+	log.Printf("Evaluation Plane API endpoints registered: /api/evaluation/v1/*")
+	return service
 }
 
-func resolveEvaluationProjectRoot(cfg *config.Config) string {
-	for _, candidate := range evaluationProjectRootCandidates(cfg) {
-		if root := findEvaluationProjectRoot(candidate); root != "" {
-			return root
-		}
+func registerRetiredEvaluationRoutes(mux *http.ServeMux) {
+	retired := func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Cache-Control", "private, no-store")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"error":"not_found","message":"Legacy evaluation API has been removed; use /api/evaluation/v1"}`))
 	}
-
-	projectRoot := filepath.Dir(cfg.ConfigDir)
-	if projectRoot != "" && projectRoot != "." {
-		return projectRoot
-	}
-
-	if wd, err := os.Getwd(); err == nil {
-		return wd
-	}
-
-	return projectRoot
-}
-
-func evaluationProjectRootCandidates(cfg *config.Config) []string {
-	candidates := []string{
-		cfg.ConfigDir,
-		filepath.Dir(cfg.ConfigDir),
-		cfg.AbsConfigPath,
-	}
-
-	if wd, err := os.Getwd(); err == nil {
-		candidates = append(candidates, wd)
-	}
-
-	return candidates
-}
-
-func findEvaluationProjectRoot(start string) string {
-	if start == "" {
-		return ""
-	}
-
-	info, err := os.Stat(start)
-	if err != nil {
-		return ""
-	}
-
-	dir := filepath.Clean(start)
-	if !info.IsDir() {
-		dir = filepath.Dir(dir)
-	}
-
-	for {
-		if isEvaluationProjectRoot(dir) {
-			return dir
-		}
-
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return ""
-		}
-		dir = parent
-	}
-}
-
-func isEvaluationProjectRoot(dir string) bool {
-	requiredPaths := []string{
-		filepath.Join("src", "training", "model_eval", "mmlu_pro_vllm_eval.py"),
-		filepath.Join("src", "training", "model_eval", "signal_eval.py"),
-	}
-
-	for _, relPath := range requiredPaths {
-		if _, err := os.Stat(filepath.Join(dir, relPath)); err != nil {
-			return false
-		}
-	}
-
-	return true
+	mux.HandleFunc("/api/evaluation", retired)
+	mux.HandleFunc("/api/evaluation/", retired)
 }
 
 func registerMLPipelineRoutes(mux *http.ServeMux, cfg *config.Config, wf *workflowstore.Store) {

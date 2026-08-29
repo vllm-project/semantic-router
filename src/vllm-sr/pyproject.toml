@@ -46,12 +46,13 @@ Repository = "https://github.com/vllm-project/vllm-semantic-router"
 Issues = "https://github.com/vllm-project/vllm-semantic-router/issues"
 
 [tool.setuptools]
-packages = ["cli", "cli.commands", "cli.templates", "cli.model_assets"]
+packages = ["cli", "cli.commands", "cli.templates", "cli.model_assets", "cli.evaluation"]
 include-package-data = false
 
 [tool.setuptools.package-data]
 "cli.templates" = ["*.yaml", "*.json", "*.ini"]
 "cli.model_assets" = ["**/*.yaml", "**/*.md", "**/*.dsl"]
+"cli.evaluation" = ["golden/*.json"]
 
 [tool.pytest.ini_options]
 addopts = ["-v"]

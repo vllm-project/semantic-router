@@ -60,10 +60,10 @@ type Config struct {
 	Platform string
 
 	// Evaluation configuration
-	EvaluationEnabled    bool
-	EvaluationDBPath     string
-	EvaluationResultsDir string
-	PythonPath           string
+	EvaluationEnabled        bool
+	EvaluationDataDir        string
+	PythonPath               string
+	EvaluationEnvoyAPIKeyEnv string
 
 	// MCP configuration
 	MCPEnabled bool
@@ -141,37 +141,37 @@ func defaultPythonBinary() string {
 }
 
 type parsedFlags struct {
-	port                   *string
-	staticDir              *string
-	configFile             *string
-	grafanaURL             *string
-	promURL                *string
-	routerAPI              *string
-	routerMetrics          *string
-	jaegerURL              *string
-	envoyURL               *string
-	fleetSimURL            *string
-	readonlyMode           *bool
-	runtimeConfigWritable  *bool
-	recipeStoreWritable    *bool
-	setupMode              *bool
-	allowOpenBootstrap     *bool
-	allowedOrigins         *string
-	platform               *string
-	evaluationEnabled      *bool
-	evaluationDBPath       *string
-	evaluationResultsDir   *string
-	pythonPath             *string
-	mcpEnabled             *bool
-	mlPipelineEnabled      *bool
-	mlPipelineDataDir      *string
-	mlTrainingDir          *string
-	mlServiceURL           *string
-	workflowDBPath         *string
-	statusDBPath           *string
-	configProjectionDBPath *string
-	auth                   authFlags
-	openClaw               openClawFlags
+	port                     *string
+	staticDir                *string
+	configFile               *string
+	grafanaURL               *string
+	promURL                  *string
+	routerAPI                *string
+	routerMetrics            *string
+	jaegerURL                *string
+	envoyURL                 *string
+	fleetSimURL              *string
+	readonlyMode             *bool
+	runtimeConfigWritable    *bool
+	recipeStoreWritable      *bool
+	setupMode                *bool
+	allowOpenBootstrap       *bool
+	allowedOrigins           *string
+	platform                 *string
+	evaluationEnabled        *bool
+	evaluationDataDir        *string
+	pythonPath               *string
+	evaluationEnvoyAPIKeyEnv *string
+	mcpEnabled               *bool
+	mlPipelineEnabled        *bool
+	mlPipelineDataDir        *string
+	mlTrainingDir            *string
+	mlServiceURL             *string
+	workflowDBPath           *string
+	statusDBPath             *string
+	configProjectionDBPath   *string
+	auth                     authFlags
+	openClaw                 openClawFlags
 }
 
 func applyCoreConfig(cfg *Config, flags parsedFlags) {
@@ -209,9 +209,9 @@ func parseAllowedOrigins(raw string) []string {
 
 func applyFeatureConfig(cfg *Config, flags parsedFlags) {
 	cfg.EvaluationEnabled = *flags.evaluationEnabled
-	cfg.EvaluationDBPath = *flags.evaluationDBPath
-	cfg.EvaluationResultsDir = *flags.evaluationResultsDir
+	cfg.EvaluationDataDir = *flags.evaluationDataDir
 	cfg.PythonPath = *flags.pythonPath
+	cfg.EvaluationEnvoyAPIKeyEnv = *flags.evaluationEnvoyAPIKeyEnv
 	cfg.MCPEnabled = *flags.mcpEnabled
 	cfg.MLPipelineEnabled = *flags.mlPipelineEnabled
 	cfg.MLPipelineDataDir = *flags.mlPipelineDataDir
@@ -308,9 +308,12 @@ func bindCoreFlags() parsedFlags {
 
 func bindFeatureFlags(flags parsedFlags) parsedFlags {
 	flags.evaluationEnabled = flag.Bool("evaluation", env("EVALUATION_ENABLED", "true") == "true", "enable evaluation feature")
-	flags.evaluationDBPath = flag.String("evaluation-db", env("EVALUATION_DB_PATH", "./data/evaluations.db"), "evaluation database path")
-	flags.evaluationResultsDir = flag.String("evaluation-results", env("EVALUATION_RESULTS_DIR", "./data/results"), "evaluation results directory")
+	flags.evaluationDataDir = flag.String("evaluation-data", env("EVALUATION_DATA_DIR", "./data/evaluation"), "evaluation artifact store directory")
 	flags.pythonPath = flag.String("python", env("PYTHON_PATH", defaultPythonBinary()), "path to Python interpreter")
+	flags.evaluationEnvoyAPIKeyEnv = flag.String(
+		"evaluation-envoy-api-key-env", env("EVALUATION_ENVOY_API_KEY_ENV", ""),
+		"server-owned Envoy API key environment variable name exposed to the fixed evaluation worker",
+	)
 	flags.mcpEnabled = flag.Bool("mcp", env("MCP_ENABLED", "true") == "true", "enable MCP (Model Context Protocol) feature")
 	flags.mlPipelineEnabled = flag.Bool("ml-pipeline", env("ML_PIPELINE_ENABLED", "true") == "true", "enable ML pipeline (benchmark, train, config)")
 	flags.mlPipelineDataDir = flag.String("ml-pipeline-data", env("ML_PIPELINE_DATA_DIR", "./data/ml-pipeline"), "ML pipeline data directory")
