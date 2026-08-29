@@ -2,9 +2,9 @@
 
 ## Overview
 
-`classifier` exposes reusable label scores from a local native sequence classifier
-or a configured external LLM. Decisions test a declared label with a required
-numeric predicate.
+`classifier` exposes reusable label scores from a local native sequence classifier,
+a remote sequence classifier, or a configured external LLM. Decisions test a
+declared label with a required numeric predicate.
 
 Specialized domain, PII, jailbreak, fact-check, KB, and preference signals
 remain the preferred interfaces for their respective domains.
@@ -62,6 +62,11 @@ add `instructions`. The runtime fixes temperature, output schema, token bounds,
 and exact-label validation. Classifier leaves are the only decision predicates
 that accept `on_error`; failures expose the bounded
 `classifier_evaluation_failed` code in eval/replay diagnostics.
+
+`sequence_classifier` classifiers also reference a named external model, but
+use the shared `http_classify` contract and preserve its full label distribution.
+They require at least two labels and do not accept `instructions`, `model_path`,
+or `use_cpu`.
 
 This condition-level `on_error` (`no_match` or `match`) decides what the
 predicate evaluates to when the classifier fails. It is a different key from
