@@ -1,0 +1,8 @@
+{
+  "digests": {
+    "catalog": "sha256:c41bbe0bfd9e73108f85bec12f32ea09f5442c933db5305f1ed196ccf22b0482",
+    "manifest": "sha256:022812a0cc758af0a52c18d3603895d763ba897c169e67ed318feb31ff918787",
+    "report": "sha256:abfc5ed69f422822184c882e86ec39da04e9e260bddfdb45b36b001da32dbeb7"
+  },
+  "schema_version": "evaluation.v1"
+}

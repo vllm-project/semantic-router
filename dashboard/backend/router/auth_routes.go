@@ -114,7 +114,7 @@ func registerAuthMethodRoute(
 func wrapWithAuth(mux *http.ServeMux, authSvc *auth.Service) *http.ServeMux {
 	wrappedMux := http.NewServeMux()
 	if authSvc != nil {
-		wrappedMux.Handle("/", auth.AuthenticateRequest(authSvc)(mux))
+		wrappedMux.Handle("/", withEvaluationResponsePolicy(auth.AuthenticateRequest(authSvc)(mux)))
 		return wrappedMux
 	}
 	// authSvc is nil only when the auth store failed to initialize. Fail
@@ -124,6 +124,6 @@ func wrapWithAuth(mux *http.ServeMux, authSvc *auth.Service) *http.ServeMux {
 	// static frontend remain reachable so the dashboard can surface the
 	// misconfiguration.
 	log.Printf("WARNING: auth service unavailable; authenticated routes are failing closed (503). Check AuthDBPath/JWT configuration.")
-	wrappedMux.Handle("/", auth.ServiceUnavailableGuard()(mux))
+	wrappedMux.Handle("/", withEvaluationResponsePolicy(auth.ServiceUnavailableGuard()(mux)))
 	return wrappedMux
 }
