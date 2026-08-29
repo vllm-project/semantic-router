@@ -1,10 +1,10 @@
 {
-  "model": "routed-model",
+  "max_completion_tokens": 32,
   "messages": [
     {
-      "role": "user",
-      "content": "hello"
+      "content": "hello",
+      "role": "user"
     }
   ],
-  "max_completion_tokens": 32
+  "model": "routed-model"
 }

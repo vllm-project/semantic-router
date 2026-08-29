@@ -94,12 +94,16 @@ func TestMalformedTrailingFrameReturnsParseErrorAndPublicFailure(t *testing.T) {
 				if finalizeErr == nil {
 					t.Fatal("malformed trailing frame did not return its parse error")
 				}
+				var protocolError *llmprotocol.ProtocolError
+				if !errors.As(finalizeErr, &protocolError) || protocolError.Code != "invalid_upstream_json" {
+					t.Fatalf("malformed trailing frame error = %T %v", finalizeErr, finalizeErr)
+				}
 				if len(events) != 0 {
 					t.Fatalf("malformed frame produced semantic events: %+v", events)
 				}
 				wire := bytes.Join(frames, nil)
-				if bytes.Count(wire, []byte("stream deadline was exceeded")) != 1 {
-					t.Fatalf("public timeout terminal is missing or duplicated: %s", wire)
+				if bytes.Count(wire, []byte(protocolError.Message)) != 1 {
+					t.Fatalf("public parse-failure terminal is missing or duplicated: %s", wire)
 				}
 				if bytes.Contains(wire, []byte("response.completed")) ||
 					bytes.Contains(wire, []byte("message_stop")) || bytes.Contains(wire, []byte("[DONE]")) {
@@ -480,18 +484,22 @@ func TestResponsesTextEncoderEmitsCompleteContentLifecycleOnce(t *testing.T) {
 	}
 }
 
-func TestResponsesEncoderCollapsesRepeatedSemanticStartEvents(t *testing.T) {
+func TestResponsesEncoderRejectsRepeatedSemanticStartEvents(t *testing.T) {
 	encoder := OpenAIResponsesCodec{}.NewEncoder(
 		llmprotocol.StreamContext{Context: context.Background(), PublicModel: "model", ResponseID: "response_1"},
 		llmprotocol.DefaultPolicy(),
 	)
 	var encoded bytes.Buffer
-	for range 3 {
+	for attempt := 0; attempt < 3; attempt++ {
 		frames, _, err := encoder.Push(llmprotocol.Event{
 			Type: llmprotocol.EventResponseStarted, ResponseID: "response_1", Model: "model",
 		})
-		if err != nil {
+		if attempt == 0 && err != nil {
 			t.Fatal(err)
+		}
+		if attempt > 0 {
+			assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, "duplicate_stream_start")
+			continue
 		}
 		for _, frame := range frames {
 			encoded.Write(frame)
@@ -1016,14 +1024,14 @@ func TestProviderStreamRequiredUnionFieldsAreClosed(t *testing.T) {
 }
 
 func TestResponsesStreamSequenceNumbersAreRequiredAndContiguous(t *testing.T) {
-	for _, sequence := range []uint64{0, 2, ^uint64(0)} {
-		t.Run(fmt.Sprint(sequence), func(t *testing.T) {
+	for _, secondSequence := range []uint64{0, 2, ^uint64(0)} {
+		t.Run(fmt.Sprint(secondSequence), func(t *testing.T) {
 			decoder := OpenAIResponsesCodec{}.NewDecoder(
 				llmprotocol.StreamContext{Context: context.Background()}, llmprotocol.DefaultPolicy(),
 			)
 			first, err := encodeSSE("response.queued", map[string]any{
-				"type": "response.queued", "sequence_number": sequence,
-				"response": map[string]any{"id": "resp_1", "model": "model", "status": "queued"},
+				"type": "response.queued", "sequence_number": 0,
+				"response": map[string]any{"id": "resp_1", "object": "response", "created_at": 1, "model": "model", "status": "queued", "output": []any{}},
 			})
 			if err != nil {
 				t.Fatal(err)
@@ -1032,8 +1040,8 @@ func TestResponsesStreamSequenceNumbersAreRequiredAndContiguous(t *testing.T) {
 				t.Fatal(err)
 			}
 			second, err := encodeSSE("response.in_progress", map[string]any{
-				"type": "response.in_progress", "sequence_number": sequence,
-				"response": map[string]any{"id": "resp_1", "model": "model", "status": "in_progress"},
+				"type": "response.in_progress", "sequence_number": secondSequence,
+				"response": map[string]any{"id": "resp_1", "object": "response", "created_at": 1, "model": "model", "status": "in_progress", "output": []any{}},
 			})
 			if err != nil {
 				t.Fatal(err)
@@ -1086,7 +1094,7 @@ func TestResponsesUnknownEventsCannotBypassSequenceValidation(t *testing.T) {
 		},
 		policy,
 	)
-	first := []byte("event: response.future\ndata: {\"type\":\"response.future\",\"sequence_number\":7}\n\n")
+	first := []byte("event: response.future\ndata: {\"type\":\"response.future\",\"sequence_number\":0}\n\n")
 	events, _, err := decoder.Push(first)
 	if err != nil {
 		t.Fatal(err)
@@ -1094,7 +1102,7 @@ func TestResponsesUnknownEventsCannotBypassSequenceValidation(t *testing.T) {
 	if len(events) != 1 || events[0].Type != llmprotocol.EventProviderOpaque {
 		t.Fatalf("unknown event was not preserved: %+v", events)
 	}
-	gap := []byte("event: response.future\ndata: {\"type\":\"response.future\",\"sequence_number\":9}\n\n")
+	gap := []byte("event: response.future\ndata: {\"type\":\"response.future\",\"sequence_number\":2}\n\n")
 	_, _, err = decoder.Push(gap)
 	assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, "stream_sequence_order")
 }
@@ -1477,7 +1485,7 @@ func TestAnthropicSameFormatStreamPreservesOrderedThinkingTextAndToolBlocks(t *t
 			"event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":3,\"content_block\":{\"type\":\"tool_use\",\"id\":\"call-1\",\"name\":\"lookup\",\"input\":{}}}\n\n" +
 			"event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":3,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"q\\\":\\\"weather\\\"}\"}}\n\n" +
 			"event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":3}\n\n" +
-			"event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\"},\"usage\":{\"output_tokens\":7}}\n\n" +
+			"event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":7}}\n\n" +
 			"event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n",
 	)
 	engine := NewBuiltinEngine()

@@ -1,0 +1,682 @@
+{
+  "cases": [
+    {
+      "name": "choices",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "container": null,
+          "content": [
+            {
+              "text": "alternate",
+              "type": "text"
+            }
+          ],
+          "id": "chatcmpl_1",
+          "model": "routed-model",
+          "role": "assistant",
+          "stop_details": null,
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "type": "message",
+          "usage": {
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 0
+            },
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "inference_geo": "global",
+            "input_tokens": 2,
+            "output_tokens": 1,
+            "output_tokens_details": {
+              "thinking_tokens": 0
+            },
+            "server_tool_use": {
+              "web_fetch_requests": 0,
+              "web_search_requests": 0
+            },
+            "service_tier": "standard"
+          }
+        }
+      }
+    },
+    {
+      "name": "created",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "container": null,
+          "content": [
+            {
+              "text": "done",
+              "type": "text"
+            }
+          ],
+          "id": "chatcmpl_1",
+          "model": "routed-model",
+          "role": "assistant",
+          "stop_details": null,
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "type": "message",
+          "usage": {
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 0
+            },
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "inference_geo": "global",
+            "input_tokens": 2,
+            "output_tokens": 1,
+            "output_tokens_details": {
+              "thinking_tokens": 0
+            },
+            "server_tool_use": {
+              "web_fetch_requests": 0,
+              "web_search_requests": 0
+            },
+            "service_tier": "standard"
+          }
+        }
+      }
+    },
+    {
+      "name": "ec_transfer_params",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "container": null,
+          "content": [
+            {
+              "text": "done",
+              "type": "text"
+            }
+          ],
+          "id": "chatcmpl_1",
+          "model": "routed-model",
+          "role": "assistant",
+          "stop_details": null,
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "type": "message",
+          "usage": {
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 0
+            },
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "inference_geo": "global",
+            "input_tokens": 2,
+            "output_tokens": 1,
+            "output_tokens_details": {
+              "thinking_tokens": 0
+            },
+            "server_tool_use": {
+              "web_fetch_requests": 0,
+              "web_search_requests": 0
+            },
+            "service_tier": "standard"
+          }
+        }
+      }
+    },
+    {
+      "name": "error",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "upstream_unavailable",
+          "code": "invalid_error_response"
+        }
+      }
+    },
+    {
+      "name": "id",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "container": null,
+          "content": [
+            {
+              "text": "done",
+              "type": "text"
+            }
+          ],
+          "id": "chatcmpl_2",
+          "model": "routed-model",
+          "role": "assistant",
+          "stop_details": null,
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "type": "message",
+          "usage": {
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 0
+            },
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "inference_geo": "global",
+            "input_tokens": 2,
+            "output_tokens": 1,
+            "output_tokens_details": {
+              "thinking_tokens": 0
+            },
+            "server_tool_use": {
+              "web_fetch_requests": 0,
+              "web_search_requests": 0
+            },
+            "service_tier": "standard"
+          }
+        }
+      }
+    },
+    {
+      "name": "kv_transfer_params",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "container": null,
+          "content": [
+            {
+              "text": "done",
+              "type": "text"
+            }
+          ],
+          "id": "chatcmpl_1",
+          "model": "routed-model",
+          "role": "assistant",
+          "stop_details": null,
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "type": "message",
+          "usage": {
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 0
+            },
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "inference_geo": "global",
+            "input_tokens": 2,
+            "output_tokens": 1,
+            "output_tokens_details": {
+              "thinking_tokens": 0
+            },
+            "server_tool_use": {
+              "web_fetch_requests": 0,
+              "web_search_requests": 0
+            },
+            "service_tier": "standard"
+          }
+        }
+      }
+    },
+    {
+      "name": "metadata",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "container": null,
+          "content": [
+            {
+              "text": "done",
+              "type": "text"
+            }
+          ],
+          "id": "chatcmpl_1",
+          "model": "routed-model",
+          "role": "assistant",
+          "stop_details": null,
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "type": "message",
+          "usage": {
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 0
+            },
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "inference_geo": "global",
+            "input_tokens": 2,
+            "output_tokens": 1,
+            "output_tokens_details": {
+              "thinking_tokens": 0
+            },
+            "server_tool_use": {
+              "web_fetch_requests": 0,
+              "web_search_requests": 0
+            },
+            "service_tier": "standard"
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "metadata",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
+      "name": "metrics",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "container": null,
+          "content": [
+            {
+              "text": "done",
+              "type": "text"
+            }
+          ],
+          "id": "chatcmpl_1",
+          "model": "routed-model",
+          "role": "assistant",
+          "stop_details": null,
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "type": "message",
+          "usage": {
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 0
+            },
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "inference_geo": "global",
+            "input_tokens": 2,
+            "output_tokens": 1,
+            "output_tokens_details": {
+              "thinking_tokens": 0
+            },
+            "server_tool_use": {
+              "web_fetch_requests": 0,
+              "web_search_requests": 0
+            },
+            "service_tier": "standard"
+          }
+        }
+      }
+    },
+    {
+      "name": "model",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "container": null,
+          "content": [
+            {
+              "text": "done",
+              "type": "text"
+            }
+          ],
+          "id": "chatcmpl_1",
+          "model": "routed-model",
+          "role": "assistant",
+          "stop_details": null,
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "type": "message",
+          "usage": {
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 0
+            },
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "inference_geo": "global",
+            "input_tokens": 2,
+            "output_tokens": 1,
+            "output_tokens_details": {
+              "thinking_tokens": 0
+            },
+            "server_tool_use": {
+              "web_fetch_requests": 0,
+              "web_search_requests": 0
+            },
+            "service_tier": "standard"
+          }
+        }
+      }
+    },
+    {
+      "name": "moderation",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "container": null,
+          "content": [
+            {
+              "text": "done",
+              "type": "text"
+            }
+          ],
+          "id": "chatcmpl_1",
+          "model": "routed-model",
+          "role": "assistant",
+          "stop_details": null,
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "type": "message",
+          "usage": {
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 0
+            },
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "inference_geo": "global",
+            "input_tokens": 2,
+            "output_tokens": 1,
+            "output_tokens_details": {
+              "thinking_tokens": 0
+            },
+            "server_tool_use": {
+              "web_fetch_requests": 0,
+              "web_search_requests": 0
+            },
+            "service_tier": "standard"
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "moderation",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
+      "name": "object",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "container": null,
+          "content": [
+            {
+              "text": "done",
+              "type": "text"
+            }
+          ],
+          "id": "chatcmpl_1",
+          "model": "routed-model",
+          "role": "assistant",
+          "stop_details": null,
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "type": "message",
+          "usage": {
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 0
+            },
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "inference_geo": "global",
+            "input_tokens": 2,
+            "output_tokens": 1,
+            "output_tokens_details": {
+              "thinking_tokens": 0
+            },
+            "server_tool_use": {
+              "web_fetch_requests": 0,
+              "web_search_requests": 0
+            },
+            "service_tier": "standard"
+          }
+        }
+      }
+    },
+    {
+      "name": "prompt_logprobs",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "container": null,
+          "content": [
+            {
+              "text": "done",
+              "type": "text"
+            }
+          ],
+          "id": "chatcmpl_1",
+          "model": "routed-model",
+          "role": "assistant",
+          "stop_details": null,
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "type": "message",
+          "usage": {
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 0
+            },
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "inference_geo": "global",
+            "input_tokens": 2,
+            "output_tokens": 1,
+            "output_tokens_details": {
+              "thinking_tokens": 0
+            },
+            "server_tool_use": {
+              "web_fetch_requests": 0,
+              "web_search_requests": 0
+            },
+            "service_tier": "standard"
+          }
+        }
+      }
+    },
+    {
+      "name": "prompt_text",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "container": null,
+          "content": [
+            {
+              "text": "done",
+              "type": "text"
+            }
+          ],
+          "id": "chatcmpl_1",
+          "model": "routed-model",
+          "role": "assistant",
+          "stop_details": null,
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "type": "message",
+          "usage": {
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 0
+            },
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "inference_geo": "global",
+            "input_tokens": 2,
+            "output_tokens": 1,
+            "output_tokens_details": {
+              "thinking_tokens": 0
+            },
+            "server_tool_use": {
+              "web_fetch_requests": 0,
+              "web_search_requests": 0
+            },
+            "service_tier": "standard"
+          }
+        }
+      }
+    },
+    {
+      "name": "prompt_token_ids",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "container": null,
+          "content": [
+            {
+              "text": "done",
+              "type": "text"
+            }
+          ],
+          "id": "chatcmpl_1",
+          "model": "routed-model",
+          "role": "assistant",
+          "stop_details": null,
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "type": "message",
+          "usage": {
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 0
+            },
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "inference_geo": "global",
+            "input_tokens": 2,
+            "output_tokens": 1,
+            "output_tokens_details": {
+              "thinking_tokens": 0
+            },
+            "server_tool_use": {
+              "web_fetch_requests": 0,
+              "web_search_requests": 0
+            },
+            "service_tier": "standard"
+          }
+        }
+      }
+    },
+    {
+      "name": "service_tier",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "container": null,
+          "content": [
+            {
+              "text": "done",
+              "type": "text"
+            }
+          ],
+          "id": "chatcmpl_1",
+          "model": "routed-model",
+          "role": "assistant",
+          "stop_details": null,
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "type": "message",
+          "usage": {
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 0
+            },
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "inference_geo": "global",
+            "input_tokens": 2,
+            "output_tokens": 1,
+            "output_tokens_details": {
+              "thinking_tokens": 0
+            },
+            "server_tool_use": {
+              "web_fetch_requests": 0,
+              "web_search_requests": 0
+            },
+            "service_tier": "standard"
+          }
+        }
+      }
+    },
+    {
+      "name": "system_fingerprint",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "container": null,
+          "content": [
+            {
+              "text": "done",
+              "type": "text"
+            }
+          ],
+          "id": "chatcmpl_1",
+          "model": "routed-model",
+          "role": "assistant",
+          "stop_details": null,
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "type": "message",
+          "usage": {
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 0
+            },
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "inference_geo": "global",
+            "input_tokens": 2,
+            "output_tokens": 1,
+            "output_tokens_details": {
+              "thinking_tokens": 0
+            },
+            "server_tool_use": {
+              "web_fetch_requests": 0,
+              "web_search_requests": 0
+            },
+            "service_tier": "standard"
+          }
+        }
+      }
+    },
+    {
+      "name": "usage",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "container": null,
+          "content": [
+            {
+              "text": "done",
+              "type": "text"
+            }
+          ],
+          "id": "chatcmpl_1",
+          "model": "routed-model",
+          "role": "assistant",
+          "stop_details": null,
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "type": "message",
+          "usage": {
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 1
+            },
+            "cache_creation_input_tokens": 1,
+            "cache_read_input_tokens": 2,
+            "inference_geo": "global",
+            "input_tokens": 5,
+            "output_tokens": 5,
+            "output_tokens_details": {
+              "thinking_tokens": 3
+            },
+            "server_tool_use": {
+              "web_fetch_requests": 0,
+              "web_search_requests": 0
+            },
+            "service_tier": "standard"
+          }
+        }
+      }
+    }
+  ]
+}

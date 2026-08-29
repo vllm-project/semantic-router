@@ -43,7 +43,7 @@ func TestURLCitationTranslatesBetweenOpenAIFormatsAndFailsClosedForMessages(t *t
 	assertCitationWire(t, translated.Body, `"url":"https://example.com/source"`)
 	decoded, _, _, err := engine.DecodeResponse(llmprotocol.OpenAIResponsesV1, translated.Body)
 	assertDecodedCitation(t, decoded, err)
-	responses := []byte(`{"id":"response_2","model":"source-model","status":"completed","output":[{"type":"message","id":"item_1","role":"assistant","content":[{"type":"output_text","text":"source","annotations":[{"type":"url_citation","url":"https://example.com/source","title":"Source","start_index":0,"end_index":6}]}]}],"usage":{"input_tokens":1,"output_tokens":1,"total_tokens":2}}`)
+	responses := []byte(`{"id":"response_2","object":"response","created_at":1,"model":"source-model","status":"completed","output":[{"type":"message","id":"item_1","role":"assistant","status":"completed","content":[{"type":"output_text","text":"source","annotations":[{"type":"url_citation","url":"https://example.com/source","title":"Source","start_index":0,"end_index":6}]}]}],"usage":{"input_tokens":1,"output_tokens":1,"total_tokens":2}}`)
 	reverse, err := engine.TranslateResponse(llmprotocol.OpenAIResponsesV1, llmprotocol.OpenAIChatV1, responses, nil)
 	if err != nil {
 		t.Fatalf("Responses to Chat error = %v", err)
@@ -206,12 +206,12 @@ func TestResponsesCitationStreamRejectsInvalidAnnotationCoordinates(t *testing.T
 		"annotation index": {mutate: func(wire *responsesEventWire) { wire.AnnotationIndex = &one }, code: "stream_annotation_index"},
 		"missing annotation index": {mutate: func(wire *responsesEventWire) {
 			wire.AnnotationIndex = nil
-		}, code: "stream_annotation_index"},
-		"content index": {mutate: func(wire *responsesEventWire) { wire.ContentIndex = &one }, code: "stream_annotation_content_index"},
+		}, code: "stream_annotation_required"},
+		"content index": {mutate: func(wire *responsesEventWire) { wire.ContentIndex = &one }, code: "stream_content_start_missing"},
 		"missing content index": {mutate: func(wire *responsesEventWire) {
 			wire.ContentIndex = nil
-		}, code: "stream_annotation_content_index"},
-		"item identity": {mutate: func(wire *responsesEventWire) { wire.ItemID = "item_other" }, code: "stream_annotation_item"},
+		}, code: "stream_annotation_required"},
+		"item identity": {mutate: func(wire *responsesEventWire) { wire.ItemID = "item_other" }, code: "stream_item_id_mismatch"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			stream := newCitationTestStream(t, llmprotocol.OpenAIResponsesV1, llmprotocol.OpenAIChatV1)
@@ -293,16 +293,26 @@ func pushResponsesCitationPrefix(t *testing.T, stream *StreamEngine) {
 	t.Helper()
 	for _, wire := range []responsesEventWire{
 		{
-			Type: "response.created", Sequence: 1,
-			Response: &responsesResponseWire{ID: "response_1", Model: "source-model", Status: "in_progress"},
+			Type: "response.created", Sequence: 0,
+			Response: func() *responsesResponseWire {
+				response := newResponsesResponseWire("response_1", "source-model", "in_progress", 1, "")
+				return &response
+			}(),
 		},
 		{
-			Type: "response.output_item.added", Sequence: 2, OutputIndex: responsesOutputIndex(0),
-			Item: marshalResponsesEventItem(responsesItemWire{Type: "message", ID: "item_1", Role: "assistant"}),
+			Type: "response.output_item.added", Sequence: 1, OutputIndex: responsesOutputIndex(0),
+			Item: marshalResponsesEventItem(responsesItemWire{
+				Type: "message", ID: "item_1", Role: "assistant", Status: "in_progress", Content: json.RawMessage(`[]`),
+			}),
+		},
+		{
+			Type: "response.content_part.added", Sequence: 2,
+			ItemID: "item_1", OutputIndex: responsesOutputIndex(0), ContentIndex: responsesContentIndex(0),
+			Part: &responsesContentWire{Type: "output_text", Text: "", Annotations: responsesAnnotations(nil)},
 		},
 		{
 			Type: "response.output_text.delta", Sequence: 3,
-			ItemID: "item_1", OutputIndex: responsesOutputIndex(0), ContentIndex: responsesContentIndex(), Delta: "source",
+			ItemID: "item_1", OutputIndex: responsesOutputIndex(0), ContentIndex: responsesContentIndex(0), Delta: "source",
 		},
 	} {
 		pushCitationWire(t, stream, wire)

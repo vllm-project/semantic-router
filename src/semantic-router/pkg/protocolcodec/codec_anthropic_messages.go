@@ -79,6 +79,25 @@ type anthropicContentWire struct {
 	FileID          string                     `json:"file_id,omitempty"`
 }
 
+func (wire anthropicContentWire) MarshalJSON() ([]byte, error) {
+	type wireAlias anthropicContentWire
+	body, err := json.Marshal(wireAlias(wire))
+	if err != nil {
+		return nil, err
+	}
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal(body, &object); err != nil {
+		return nil, err
+	}
+	switch wire.Type {
+	case "text":
+		object["text"], _ = json.Marshal(wire.Text)
+	case "thinking":
+		object["thinking"], _ = json.Marshal(wire.Thinking)
+	}
+	return json.Marshal(object)
+}
+
 type anthropicMediaSourceWire struct {
 	Type      string          `json:"type"`
 	MediaType string          `json:"media_type,omitempty"`
@@ -329,7 +348,7 @@ func decodeAnthropicTools(raw json.RawMessage, request *llmprotocol.Request, pol
 		return nil
 	}
 	var toolBodies []json.RawMessage
-	if err := decodeWire(raw, &toolBodies, policy); err != nil {
+	if err := decodeWireValue(raw, &toolBodies, policy); err != nil {
 		return err
 	}
 	for _, toolBody := range toolBodies {
@@ -343,7 +362,7 @@ func decodeAnthropicTools(raw json.RawMessage, request *llmprotocol.Request, pol
 			return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_tool", "only custom tools enter the model protocol", nil)
 		}
 		var toolWire anthropicToolWire
-		if err := decodeWire(toolBody, &toolWire, policy); err != nil {
+		if err := decodeWireValue(toolBody, &toolWire, policy); err != nil {
 			return err
 		}
 		if err := rejectUnsupportedRequestFields(map[string]json.RawMessage{
@@ -479,9 +498,9 @@ func decodeAnthropicContentArray(
 	var blockBodies []json.RawMessage
 	var err error
 	if providerOutput {
-		err = decodeProviderWire(raw, &blockBodies, policy)
+		err = decodeProviderValue(raw, &blockBodies, policy)
 	} else {
-		err = decodeWire(raw, &blockBodies, policy)
+		err = decodeWireValue(raw, &blockBodies, policy)
 	}
 	if err != nil {
 		return nil, err
@@ -522,9 +541,9 @@ func decodeAnthropicContentBlock(
 	var block anthropicContentWire
 	var err error
 	if providerOutput {
-		err = decodeProviderWire(body, &block, policy)
+		err = decodeProviderValue(body, &block, policy)
 	} else {
-		err = decodeWire(body, &block, policy)
+		err = decodeWireValue(body, &block, policy)
 	}
 	if err != nil {
 		return llmprotocol.Content{}, err
@@ -568,6 +587,28 @@ func validateAnthropicContentVariant(body json.RawMessage, typeName string, prov
 	var object map[string]json.RawMessage
 	if err := json.Unmarshal(body, &object); err != nil {
 		return err
+	}
+	requiredByType := map[string][]string{
+		"text":        {"text"},
+		"thinking":    {"thinking"},
+		"image":       {"source"},
+		"document":    {"source"},
+		"tool_use":    {"id", "input", "name"},
+		"tool_result": {"content", "tool_use_id"},
+	}
+	for _, name := range requiredByType[typeName] {
+		if _, present := object[name]; present {
+			continue
+		}
+		category := llmprotocol.ErrorInvalidRequest
+		code := "invalid_content_variant"
+		message := "Anthropic content is missing the required field: " + name
+		if providerOutput {
+			category = llmprotocol.ErrorUpstreamUnavailable
+			code = "invalid_response_content"
+			message = "Anthropic provider output is missing the required field: " + name
+		}
+		return llmprotocol.NewError(category, code, message, nil)
 	}
 	allowedSet := make(map[string]struct{}, len(allowed))
 	for _, name := range allowed {
@@ -1074,6 +1115,9 @@ func encodeAnthropicContentBlock(content llmprotocol.Content) (anthropicContentW
 		}
 		return anthropicContentWire{Type: "thinking", Thinking: content.Text, Signature: content.Signature, CacheControl: encodeAnthropicCacheControl(content.Cache)}, nil
 	case llmprotocol.ContentImage, llmprotocol.ContentFile:
+		if content.Kind == llmprotocol.ContentFile && content.Detail != "" {
+			return anthropicContentWire{}, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "file_detail", "Anthropic Messages cannot encode file detail", nil)
+		}
 		block := encodeAnthropicMediaBlock(content)
 		block.CacheControl = encodeAnthropicCacheControl(content.Cache)
 		return block, nil
@@ -1274,15 +1318,15 @@ func decodeAnthropicUsage(wire anthropicUsageWire) llmprotocol.Usage {
 }
 
 func (AnthropicMessagesCodec) EncodeResponse(response llmprotocol.Response, envelope llmprotocol.Envelope, policy llmprotocol.Policy) ([]byte, llmprotocol.Diagnostics, error) {
-	if envelope.CanReplay(llmprotocol.AnthropicMessagesV1, response.Generation, policy, true) {
-		return append([]byte(nil), envelope.Response...), nil, nil
-	}
 	if response.Error != nil {
 		var diagnostics llmprotocol.Diagnostics
 		if response.Usage.State == llmprotocol.UsageAvailable {
 			appendAccountingOmission(&diagnostics, policy, envelope.Format, llmprotocol.AnthropicMessagesV1, "usage", "Messages error envelopes cannot carry token usage")
 		}
 		return encodeAnthropicError(response.Error, response.ProviderRequestID), diagnostics, nil
+	}
+	if envelope.CanReplay(llmprotocol.AnthropicMessagesV1, response.Generation, policy, true) {
+		return append([]byte(nil), envelope.Response...), nil, nil
 	}
 	var diagnostics llmprotocol.Diagnostics
 	if usageUnavailable(response.Usage) {

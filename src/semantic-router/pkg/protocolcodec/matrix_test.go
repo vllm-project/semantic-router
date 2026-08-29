@@ -325,8 +325,13 @@ func assertReasoningAndCacheReadEvidence(t *testing.T, engine *Engine, target ll
 		usage.OutputReasoning.Provenance != llmprotocol.UsageAuthoritative {
 		t.Fatalf("settlement evidence changed: %+v", usage)
 	}
-	if target == llmprotocol.AnthropicMessagesV1 && len(translated.Diagnostics) == 0 {
-		t.Fatal("reasoning accounting omission was not diagnosed")
+	decoded, _, _, err := engine.DecodeResponse(target, translated.Body)
+	if err != nil {
+		t.Fatalf("decode translated usage: %v\n%s", err, translated.Body)
+	}
+	if decoded.Usage.InputCacheRead.Value == nil || *decoded.Usage.InputCacheRead.Value != 4 ||
+		decoded.Usage.OutputReasoning.Value == nil || *decoded.Usage.OutputReasoning.Value != 2 {
+		t.Fatalf("target accounting evidence changed: %+v", decoded.Usage)
 	}
 }
 
@@ -341,8 +346,12 @@ func assertCacheWriteEvidence(t *testing.T, engine *Engine, target llmprotocol.W
 		usage.InputCacheWrite.Provenance != llmprotocol.UsageAuthoritative {
 		t.Fatalf("cache-write settlement evidence changed: %+v", usage)
 	}
-	if target != llmprotocol.AnthropicMessagesV1 && len(translated.Diagnostics) == 0 {
-		t.Fatal("cache-write accounting omission was not diagnosed")
+	decoded, _, _, err := engine.DecodeResponse(target, translated.Body)
+	if err != nil {
+		t.Fatalf("decode translated usage: %v\n%s", err, translated.Body)
+	}
+	if decoded.Usage.InputCacheWrite.Value == nil || *decoded.Usage.InputCacheWrite.Value != 3 {
+		t.Fatalf("target cache-write evidence changed: %+v", decoded.Usage)
 	}
 }
 
@@ -422,7 +431,10 @@ func assertStreamingToolPair(t *testing.T, engine *Engine, source, target llmpro
 
 func mustNewMatrixStream(t *testing.T, engine *Engine, source, target llmprotocol.WireFormat) *StreamEngine {
 	t.Helper()
-	stream, err := engine.NewStream(source, target, llmprotocol.StreamContext{Context: context.Background(), PublicModel: "public-model"})
+	stream, err := engine.NewStream(source, target, llmprotocol.StreamContext{
+		Context: context.Background(), PublicModel: "public-model",
+		Options: llmprotocol.StreamOptions{IncludeUsage: boolPointer(true)},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -724,7 +736,7 @@ func TestCandidateCountIsBoundedAndNeverSilentlyDropped(t *testing.T) {
 
 func TestResponsesContinuationMarksRetainedToolResultLink(t *testing.T) {
 	engine := NewBuiltinEngine()
-	body := []byte(`{"model":"source-model","previous_response_id":"response_previous","input":[{"type":"function_call_output","call_id":"call_previous","output":"done"}],"max_output_tokens":8}`)
+	body := []byte(`{"model":"source-model","previous_response_id":"response_previous","input":[{"type":"function_call_output","call_id":"call_previous","output":"done"}],"max_output_tokens":32}`)
 	request, _, _, err := engine.DecodeRequest(llmprotocol.OpenAIResponsesV1, body)
 	if err != nil {
 		t.Fatal(err)
@@ -774,11 +786,11 @@ func decodeTranslatedResponse(engine *Engine, format llmprotocol.WireFormat, bod
 func requestFixture(format llmprotocol.WireFormat) []byte {
 	switch format {
 	case llmprotocol.OpenAIChatV1:
-		return []byte(`{"model":"source-model","messages":[{"role":"user","content":"hello"}],"max_tokens":8,"tools":[{"type":"function","function":{"name":"lookup","description":"Lookup","parameters":{"type":"object"}}}],"tool_choice":"auto"}`)
+		return []byte(`{"model":"source-model","messages":[{"role":"user","content":"hello"}],"max_tokens":32,"tools":[{"type":"function","function":{"name":"lookup","description":"Lookup","parameters":{"type":"object"}}}],"tool_choice":"auto"}`)
 	case llmprotocol.OpenAIResponsesV1:
-		return []byte(`{"model":"source-model","input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"hello"}]}],"max_output_tokens":8,"tools":[{"type":"function","name":"lookup","description":"Lookup","parameters":{"type":"object"}}],"tool_choice":"auto"}`)
+		return []byte(`{"model":"source-model","input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"hello"}]}],"max_output_tokens":32,"tools":[{"type":"function","name":"lookup","description":"Lookup","parameters":{"type":"object"}}],"tool_choice":"auto"}`)
 	case llmprotocol.AnthropicMessagesV1:
-		return []byte(`{"model":"source-model","max_tokens":8,"messages":[{"role":"user","content":[{"type":"text","text":"hello"}]}],"tools":[{"name":"lookup","description":"Lookup","input_schema":{"type":"object"}}],"tool_choice":{"type":"auto"}}`)
+		return []byte(`{"model":"source-model","max_tokens":32,"messages":[{"role":"user","content":[{"type":"text","text":"hello"}]}],"tools":[{"name":"lookup","description":"Lookup","input_schema":{"type":"object"}}],"tool_choice":{"type":"auto"}}`)
 	default:
 		panic("unknown fixture format")
 	}
@@ -814,7 +826,7 @@ func toolChoiceFixture(format llmprotocol.WireFormat, mode llmprotocol.ToolChoic
 		case llmprotocol.ToolChoiceNamed:
 			choice = `,"tool_choice":{"type":"tool","name":"lookup"}`
 		}
-		return []byte(`{"model":"source-model","max_tokens":8,"messages":[{"role":"user","content":"hello"}],"tools":[{"name":"lookup","input_schema":{"type":"object"}}]` + choice + `}`)
+		return []byte(`{"model":"source-model","max_tokens":32,"messages":[{"role":"user","content":"hello"}],"tools":[{"name":"lookup","input_schema":{"type":"object"}}]` + choice + `}`)
 	default:
 		panic("unknown fixture format")
 	}
@@ -823,11 +835,11 @@ func toolChoiceFixture(format llmprotocol.WireFormat, mode llmprotocol.ToolChoic
 func toolLifecycleFixture(format llmprotocol.WireFormat) []byte {
 	switch format {
 	case llmprotocol.OpenAIChatV1:
-		return []byte(`{"model":"source-model","messages":[{"role":"user","content":"weather"},{"role":"assistant","tool_calls":[{"id":"call_1","type":"function","function":{"name":"lookup","arguments":"{\"city\":\"Paris\"}"}}]},{"role":"tool","tool_call_id":"call_1","content":"sunny"},{"role":"user","content":"summarize"}],"max_tokens":8,"tools":[{"type":"function","function":{"name":"lookup","description":"Lookup weather","parameters":{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}}}],"tool_choice":{"type":"function","function":{"name":"lookup"}},"parallel_tool_calls":false}`)
+		return []byte(`{"model":"source-model","messages":[{"role":"user","content":"weather"},{"role":"assistant","tool_calls":[{"id":"call_1","type":"function","function":{"name":"lookup","arguments":"{\"city\":\"Paris\"}"}}]},{"role":"tool","tool_call_id":"call_1","content":"sunny"},{"role":"user","content":"summarize"}],"max_tokens":32,"tools":[{"type":"function","function":{"name":"lookup","description":"Lookup weather","parameters":{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}}}],"tool_choice":{"type":"function","function":{"name":"lookup"}},"parallel_tool_calls":false}`)
 	case llmprotocol.OpenAIResponsesV1:
-		return []byte(`{"model":"source-model","input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"weather"}]},{"type":"function_call","id":"item_call_1","call_id":"call_1","name":"lookup","arguments":"{\"city\":\"Paris\"}"},{"type":"function_call_output","call_id":"call_1","output":[{"type":"input_text","text":"sunny"}]},{"type":"message","role":"user","content":[{"type":"input_text","text":"summarize"}]}],"max_output_tokens":8,"tools":[{"type":"function","name":"lookup","description":"Lookup weather","parameters":{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}}],"tool_choice":{"type":"function","name":"lookup"},"parallel_tool_calls":false}`)
+		return []byte(`{"model":"source-model","input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"weather"}]},{"type":"function_call","id":"item_call_1","call_id":"call_1","name":"lookup","arguments":"{\"city\":\"Paris\"}"},{"type":"function_call_output","call_id":"call_1","output":[{"type":"input_text","text":"sunny"}]},{"type":"message","role":"user","content":[{"type":"input_text","text":"summarize"}]}],"max_output_tokens":32,"tools":[{"type":"function","name":"lookup","description":"Lookup weather","parameters":{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}}],"tool_choice":{"type":"function","name":"lookup"},"parallel_tool_calls":false}`)
 	case llmprotocol.AnthropicMessagesV1:
-		return []byte(`{"model":"source-model","max_tokens":8,"messages":[{"role":"user","content":[{"type":"text","text":"weather"}]},{"role":"assistant","content":[{"type":"tool_use","id":"call_1","name":"lookup","input":{"city":"Paris"}}]},{"role":"user","content":[{"type":"tool_result","tool_use_id":"call_1","content":[{"type":"text","text":"sunny"}]}]},{"role":"user","content":[{"type":"text","text":"summarize"}]}],"tools":[{"name":"lookup","description":"Lookup weather","input_schema":{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}}],"tool_choice":{"type":"tool","name":"lookup","disable_parallel_tool_use":true}}`)
+		return []byte(`{"model":"source-model","max_tokens":32,"messages":[{"role":"user","content":[{"type":"text","text":"weather"}]},{"role":"assistant","content":[{"type":"tool_use","id":"call_1","name":"lookup","input":{"city":"Paris"}}]},{"role":"user","content":[{"type":"tool_result","tool_use_id":"call_1","content":[{"type":"text","text":"sunny"}]}]},{"role":"user","content":[{"type":"text","text":"summarize"}]}],"tools":[{"name":"lookup","description":"Lookup weather","input_schema":{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}}],"tool_choice":{"type":"tool","name":"lookup","disable_parallel_tool_use":true}}`)
 	default:
 		panic("unknown fixture format")
 	}
@@ -836,11 +848,11 @@ func toolLifecycleFixture(format llmprotocol.WireFormat) []byte {
 func orderedImageFixture(format llmprotocol.WireFormat) []byte {
 	switch format {
 	case llmprotocol.OpenAIChatV1:
-		return []byte(`{"model":"source-model","messages":[{"role":"user","content":[{"type":"text","text":"before"},{"type":"image_url","image_url":{"url":"https://example.com/image.png"}},{"type":"text","text":"after"}]}],"max_tokens":8}`)
+		return []byte(`{"model":"source-model","messages":[{"role":"user","content":[{"type":"text","text":"before"},{"type":"image_url","image_url":{"url":"https://example.com/image.png"}},{"type":"text","text":"after"}]}],"max_tokens":32}`)
 	case llmprotocol.OpenAIResponsesV1:
-		return []byte(`{"model":"source-model","input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"before"},{"type":"input_image","image_url":"https://example.com/image.png"},{"type":"input_text","text":"after"}]}],"max_output_tokens":8}`)
+		return []byte(`{"model":"source-model","input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"before"},{"type":"input_image","image_url":"https://example.com/image.png"},{"type":"input_text","text":"after"}]}],"max_output_tokens":32}`)
 	case llmprotocol.AnthropicMessagesV1:
-		return []byte(`{"model":"source-model","max_tokens":8,"messages":[{"role":"user","content":[{"type":"text","text":"before"},{"type":"image","source":{"type":"url","url":"https://example.com/image.png"}},{"type":"text","text":"after"}]}]}`)
+		return []byte(`{"model":"source-model","max_tokens":32,"messages":[{"role":"user","content":[{"type":"text","text":"before"},{"type":"image","source":{"type":"url","url":"https://example.com/image.png"}},{"type":"text","text":"after"}]}]}`)
 	default:
 		panic("unknown fixture format")
 	}
@@ -915,7 +927,7 @@ func responseFixture(format llmprotocol.WireFormat) []byte {
 	case llmprotocol.OpenAIChatV1:
 		return []byte(`{"id":"response_1","model":"source-model","choices":[{"index":0,"message":{"id":"output_1","role":"assistant","content":"hello"},"finish_reason":"stop"}],"usage":{"prompt_tokens":2,"completion_tokens":1,"total_tokens":3}}`)
 	case llmprotocol.OpenAIResponsesV1:
-		return []byte(`{"id":"response_1","model":"source-model","status":"completed","output":[{"type":"message","id":"output_1","role":"assistant","content":[{"type":"output_text","text":"hello"}]}],"usage":{"input_tokens":2,"output_tokens":1,"total_tokens":3}}`)
+		return []byte(`{"id":"response_1","model":"source-model","status":"completed","output":[{"type":"message","id":"output_1","role":"assistant","status":"completed","content":[{"type":"output_text","text":"hello","annotations":[]}]}],"usage":{"input_tokens":2,"output_tokens":1,"total_tokens":3}}`)
 	case llmprotocol.AnthropicMessagesV1:
 		return []byte(`{"id":"response_1","type":"message","role":"assistant","model":"source-model","content":[{"type":"text","text":"hello"}],"stop_reason":"end_turn","usage":{"input_tokens":2,"output_tokens":1}}`)
 	default:
@@ -949,7 +961,7 @@ func streamFixture(format llmprotocol.WireFormat) []byte {
 			"event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n",
 			"event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"hello\"}}\n\n",
 			"event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\n",
-			"event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"type\":\"message_delta\",\"stop_reason\":\"end_turn\"},\"usage\":{\"output_tokens\":1}}\n\n",
+			"event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"type\":\"message_delta\",\"stop_reason\":\"end_turn\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":1}}\n\n",
 			"event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n",
 		)
 	default:
@@ -986,7 +998,7 @@ func toolStreamFixture(format llmprotocol.WireFormat) []byte {
 			"event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":"+fmt.Sprintf("%q", first)+"}}\n\n",
 			"event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":"+fmt.Sprintf("%q", second)+"}}\n\n",
 			"event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\n",
-			"event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"type\":\"message_delta\",\"stop_reason\":\"tool_use\"},\"usage\":{\"output_tokens\":1}}\n\n",
+			"event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"type\":\"message_delta\",\"stop_reason\":\"tool_use\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":1}}\n\n",
 			"event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n",
 		)
 	default:

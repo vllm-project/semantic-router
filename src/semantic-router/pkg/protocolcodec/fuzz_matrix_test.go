@@ -50,7 +50,7 @@ func FuzzTranslateBuiltinResponseMatrixNeverPanics(f *testing.F) {
 				if err != nil {
 					continue
 				}
-				if _, _, _, err := engine.DecodeResponse(target, translated.Body); err != nil {
+				if err := validateGoldenEncodedResponse(engine, target, translated); err != nil {
 					t.Fatalf("accepted %s to %s response produced invalid target wire: %v\n%s", source, target, err, translated.Body)
 				}
 			}

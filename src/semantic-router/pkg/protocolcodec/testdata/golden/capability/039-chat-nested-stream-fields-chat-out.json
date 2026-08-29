@@ -1,0 +1,83 @@
+{
+  "cases": [
+    {
+      "name": "execution_metadata",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "frames": [
+            {
+              "data": {
+                "choices": [
+                  {
+                    "delta": {
+                      "role": "assistant"
+                    },
+                    "finish_reason": null,
+                    "index": 0
+                  }
+                ],
+                "id": "chatcmpl_1",
+                "model": "public-model",
+                "object": "chat.completion.chunk"
+              },
+              "event": ""
+            },
+            {
+              "data": {
+                "choices": [
+                  {
+                    "delta": {
+                      "content": "done"
+                    },
+                    "finish_reason": null,
+                    "index": 0
+                  }
+                ],
+                "id": "chatcmpl_1",
+                "model": "public-model",
+                "object": "chat.completion.chunk"
+              },
+              "event": ""
+            },
+            {
+              "data": {
+                "choices": [
+                  {
+                    "delta": {},
+                    "finish_reason": "stop",
+                    "index": 0
+                  }
+                ],
+                "id": "chatcmpl_1",
+                "model": "public-model",
+                "object": "chat.completion.chunk"
+              },
+              "event": ""
+            },
+            {
+              "data": "[DONE]",
+              "event": ""
+            }
+          ]
+        },
+        "diagnostics": [
+          {
+            "field": "stream.moderation",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
+      "name": "delta_extensions",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "upstream_unavailable",
+          "code": "unsupported_upstream_audio"
+        }
+      }
+    }
+  ]
+}

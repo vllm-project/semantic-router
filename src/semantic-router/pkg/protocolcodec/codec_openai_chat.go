@@ -80,9 +80,9 @@ type chatMessageWire struct {
 	ID                 string               `json:"id,omitempty"`
 	Role               string               `json:"role"`
 	Content            json.RawMessage      `json:"content,omitempty"`
-	Refusal            string               `json:"refusal,omitempty"`
-	Reasoning          string               `json:"reasoning_content,omitempty"`
-	AlternateReasoning string               `json:"reasoning,omitempty"`
+	Refusal            *string              `json:"refusal,omitempty"`
+	Reasoning          *string              `json:"reasoning_content,omitempty"`
+	AlternateReasoning *string              `json:"reasoning,omitempty"`
 	Audio              *chatAudioOutputWire `json:"audio,omitempty"`
 	LegacyFunctionCall *chatLegacyCallWire  `json:"function_call,omitempty"`
 	ToolCalls          []chatToolCallWire   `json:"tool_calls,omitempty"`
@@ -350,16 +350,16 @@ func assembleChatMessage(
 	policy llmprotocol.Policy,
 ) (llmprotocol.Message, error) {
 	message := llmprotocol.Message{ID: wire.ID, Role: role, Content: contents}
-	if wire.Refusal != "" {
-		message.Content = append(message.Content, llmprotocol.Content{Kind: llmprotocol.ContentRefusal, Text: wire.Refusal})
+	if wire.Refusal != nil {
+		message.Content = append(message.Content, llmprotocol.Content{Kind: llmprotocol.ContentRefusal, Text: *wire.Refusal})
 	}
 	reasoning := wire.Reasoning
-	if reasoning == "" {
+	if reasoning == nil {
 		reasoning = wire.AlternateReasoning
 	}
-	if reasoning != "" {
+	if reasoning != nil {
 		message.Content = append(message.Content, llmprotocol.Content{
-			Kind: llmprotocol.ContentReasoning, Text: reasoning, Reasoning: llmprotocol.ReasoningScopeText,
+			Kind: llmprotocol.ContentReasoning, Text: *reasoning, Reasoning: llmprotocol.ReasoningScopeText,
 		})
 	}
 	toolCalls, err := decodeChatToolCalls(wire.ToolCalls, index, policy)
@@ -409,13 +409,13 @@ func decodeChatRequestMessageContent(
 		return []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: text}}, nil
 	}
 	var partBodies []json.RawMessage
-	if err := decodeWire(raw, &partBodies, policy); err != nil {
+	if err := decodeWireValue(raw, &partBodies, policy); err != nil {
 		return nil, err
 	}
 	contents := make([]llmprotocol.Content, 0, len(partBodies))
 	for _, partBody := range partBodies {
 		var part chatContentWire
-		if err := decodeWire(partBody, &part, policy); err != nil {
+		if err := decodeWireValue(partBody, &part, policy); err != nil {
 			return nil, err
 		}
 		if !chatRequestContentAllowed(role, part.Type) {
@@ -695,7 +695,7 @@ func decodeChatToolChoice(raw json.RawMessage, policy llmprotocol.Policy) (llmpr
 			Name string `json:"name"`
 		} `json:"function"`
 	}
-	if decodeWire(raw, &named, policy) != nil || named.Type != "function" || named.Function.Name == "" {
+	if decodeWireValue(raw, &named, policy) != nil || named.Type != "function" || named.Function.Name == "" {
 		return llmprotocol.ToolChoice{}, llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_tool_choice", "tool choice is invalid", nil)
 	}
 	return llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceNamed, Name: named.Function.Name}, nil
@@ -758,6 +758,14 @@ func (OpenAIChatCodec) EncodeRequest(request llmprotocol.Request, envelope llmpr
 	wire := encodeChatBaseRequest(request)
 	if encodeErr := appendChatMessages(&wire, request); encodeErr != nil {
 		return nil, diagnostics, encodeErr
+	}
+	if len(wire.Messages) == 0 {
+		return nil, diagnostics, llmprotocol.NewError(
+			llmprotocol.ErrorUnsupportedFeature,
+			"chat_messages_required",
+			"Chat Completions requires at least one conversation message",
+			nil,
+		)
 	}
 	appendChatTools(&wire, request.Tools)
 	if encodeErr := encodeChatRequestOptions(&wire, request); encodeErr != nil {
@@ -876,12 +884,18 @@ func (state *chatMessageEncodingState) appendContent(content llmprotocol.Content
 		if content.Cache != nil {
 			return unsupportedChatCacheDirective(string(content.Kind))
 		}
-		state.wire.Refusal += content.Text
+		if state.wire.Refusal == nil {
+			state.wire.Refusal = new(string)
+		}
+		*state.wire.Refusal += content.Text
 	case llmprotocol.ContentReasoning:
 		if content.Cache != nil {
 			return unsupportedChatCacheDirective(string(content.Kind))
 		}
-		state.wire.Reasoning += content.Text
+		if state.wire.Reasoning == nil {
+			state.wire.Reasoning = new(string)
+		}
+		*state.wire.Reasoning += content.Text
 	case llmprotocol.ContentImage:
 		return state.appendImage(content)
 	case llmprotocol.ContentAudio:
@@ -931,6 +945,9 @@ func (state *chatMessageEncodingState) appendImage(content llmprotocol.Content) 
 }
 
 func (state *chatMessageEncodingState) appendFile(content llmprotocol.Content) error {
+	if content.Detail != "" {
+		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "file_detail", "Chat Completions cannot encode file detail", nil)
+	}
 	if content.URL != "" {
 		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "file_url", "Chat Completions cannot encode file URLs", nil)
 	}
@@ -965,7 +982,10 @@ func (state *chatMessageEncodingState) appendToolResult(result *llmprotocol.Tool
 		if resultContent.Kind != llmprotocol.ContentText {
 			return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "tool_result_media", "chat tool results support text only", nil)
 		}
-		state.parts = append(state.parts, chatContentWire{Type: "text", Text: resultContent.Text})
+		state.parts = append(state.parts, chatContentWire{
+			Type: "text", Text: resultContent.Text,
+			CacheControl: encodeAnthropicCacheControl(resultContent.Cache),
+		})
 	}
 	return nil
 }
@@ -1146,15 +1166,15 @@ func decodeChatUsage(wire chatUsageWire) llmprotocol.Usage {
 }
 
 func (OpenAIChatCodec) EncodeResponse(response llmprotocol.Response, envelope llmprotocol.Envelope, policy llmprotocol.Policy) ([]byte, llmprotocol.Diagnostics, error) {
-	if envelope.CanReplay(llmprotocol.OpenAIChatV1, response.Generation, policy, true) {
-		return append([]byte(nil), envelope.Response...), nil, nil
-	}
 	if response.Error != nil {
 		var diagnostics llmprotocol.Diagnostics
 		if response.Usage.State == llmprotocol.UsageAvailable {
 			appendAccountingOmission(&diagnostics, policy, envelope.Format, llmprotocol.OpenAIChatV1, "usage", "Chat Completions error envelopes cannot carry token usage")
 		}
 		return OpenAIChatCodec{}.EncodeTransportError(llmprotocol.TransportError{Error: response.Error}), diagnostics, nil
+	}
+	if envelope.CanReplay(llmprotocol.OpenAIChatV1, response.Generation, policy, true) {
+		return append([]byte(nil), envelope.Response...), nil, nil
 	}
 	var diagnostics llmprotocol.Diagnostics
 	if response.StopReason == llmprotocol.StopPaused || response.StopReason == llmprotocol.StopContextWindow || response.StopReason == llmprotocol.StopCanceled || response.StopReason == llmprotocol.StopUnknown {

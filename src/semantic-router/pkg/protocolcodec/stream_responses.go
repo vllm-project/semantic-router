@@ -152,6 +152,32 @@ type responsesEventWire struct {
 	Param           *string                  `json:"param,omitempty"`
 }
 
+func (wire responsesEventWire) MarshalJSON() ([]byte, error) {
+	type eventAlias responsesEventWire
+	body, err := json.Marshal(eventAlias(wire))
+	if err != nil {
+		return nil, err
+	}
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal(body, &object); err != nil {
+		return nil, err
+	}
+	switch wire.Type {
+	case "response.output_text.delta", "response.refusal.delta",
+		"response.reasoning_text.delta", "response.reasoning_summary_text.delta",
+		"response.function_call_arguments.delta":
+		object["delta"], _ = json.Marshal(wire.Delta)
+	case "response.output_text.done", "response.reasoning_text.done", "response.reasoning_summary_text.done":
+		object["text"], _ = json.Marshal(wire.Text)
+	case "response.refusal.done":
+		object["refusal"], _ = json.Marshal(wire.Refusal)
+	case "response.function_call_arguments.done":
+		object["name"], _ = json.Marshal(wire.Name)
+		object["arguments"], _ = json.Marshal(wire.Arguments)
+	}
+	return json.Marshal(object)
+}
+
 type responsesTransportErrorEventWire struct {
 	Type     string  `json:"type"`
 	Code     *string `json:"code"`
@@ -801,7 +827,7 @@ func (decoder *responsesStreamDecoder) validateResponsesFinalContent(
 ) error {
 	var parts []responsesContentWire
 	if len(raw) > 0 && !bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		if err := decodeProviderWire(raw, &parts, decoder.policy); err != nil {
+		if err := decodeProviderValue(raw, &parts, decoder.policy); err != nil {
 			return err
 		}
 	}
@@ -850,7 +876,7 @@ func responsesFinalPartEvidence(scope responsesContentScope, part responsesConte
 
 func (decoder *responsesStreamDecoder) validateResponsesTerminalOutput(raw json.RawMessage) error {
 	var output []json.RawMessage
-	if err := decodeProviderWire(raw, &output, decoder.policy); err != nil {
+	if err := decodeProviderValue(raw, &output, decoder.policy); err != nil {
 		return err
 	}
 	if len(output) != len(decoder.completedOutput) {
@@ -1232,7 +1258,13 @@ func (encoder *responsesStreamEncoder) encodeResponsesItemStart(event llmprotoco
 	if event.Content != nil && event.Content.Kind == llmprotocol.ContentReasoning {
 		key := contentKey(event)
 		encoder.encodedKinds[key] = llmprotocol.ContentReasoning
-		encoder.reasoningScopes[key] = normalizedReasoningScope(event.Content.Reasoning)
+		// An item-start event may identify a reasoning item without identifying
+		// whether its later content is summary or encrypted reasoning text. Bind
+		// the scope only when the source actually supplies it; the first content
+		// event otherwise establishes the scope for its neutral content index.
+		if event.Content.Reasoning != "" {
+			encoder.reasoningScopes[key] = normalizedReasoningScope(event.Content.Reasoning)
+		}
 		frames, _, err := encoder.ensureResponsesOutputStarted(event, responsesOutputReasoning)
 		return frames, err
 	}
@@ -1304,7 +1336,7 @@ func (encoder *responsesStreamEncoder) encodeResponsesStart(event llmprotocol.Ev
 	frames := make([][]byte, 0, 2)
 	for _, eventType := range []string{"response.created", "response.in_progress"} {
 		wire := responsesEventWire{
-			Type: eventType, Sequence: encoder.nextWireSequence(), Response: response,
+			Type: eventType, Sequence: encoder.nextWireSequence(), Response: &response,
 		}
 		frame, err := encoder.encodeResponsesStreamFrame(wire)
 		if err != nil {
@@ -1386,7 +1418,7 @@ func (encoder *responsesStreamEncoder) responsesFailureWire(
 		return responsesEventWire{}, nil, err
 	}
 	response.Output = output
-	response.Error = &responsesErrorWire{Code: event.Error.Code, Message: event.Error.Message}
+	response.Error = &responsesErrorWire{Code: responsesErrorCode(event.Error), Message: event.Error.Message}
 	if event.Usage != nil && event.Usage.State == llmprotocol.UsageAvailable {
 		response.Usage = encodeResponsesUsage(*event.Usage)
 	}
@@ -1435,6 +1467,14 @@ func (encoder *responsesStreamEncoder) encodeResponsesReasoningDelta(
 	frames, outputKey, err := encoder.ensureResponsesOutputStarted(event, responsesOutputReasoning)
 	if err != nil {
 		return nil, diagnostics, err
+	}
+	started, err := encoder.startResponsesContent(event, outputKey, llmprotocol.ContentReasoning)
+	if err != nil {
+		return nil, diagnostics, err
+	}
+	frames = append(frames, started...)
+	if event.Delta == "" {
+		return frames, diagnostics, nil
 	}
 	scope := responsesScopeForReasoning(reasoningScope)
 	contentIndex := encoder.responsesContentWireIndex(event, outputKey, scope)
@@ -1848,14 +1888,16 @@ func (encoder *responsesStreamEncoder) startResponsesContent(
 	reasoning := encoder.reasoningScopes[key]
 	scope := responsesContentScopeFor(kind, reasoning)
 	contentIndex := encoder.responsesContentWireIndex(event, outputKey, scope)
+	if kind == llmprotocol.ContentReasoning {
+		if normalizedReasoningScope(reasoning) == llmprotocol.ReasoningScopeText {
+			return nil, nil
+		}
+	}
 	wire := responsesEventWire{
 		Type: "response.content_part.added", Sequence: encoder.nextWireSequence(),
 		ItemID: encoder.outputIDs[outputKey], OutputIndex: responsesOutputIndex(encoder.outputIndexes[outputKey]),
 	}
 	if kind == llmprotocol.ContentReasoning {
-		if normalizedReasoningScope(reasoning) == llmprotocol.ReasoningScopeText {
-			return nil, nil
-		}
 		wire.Type = "response.reasoning_summary_part.added"
 		wire.SummaryIndex = responsesContentIndex(contentIndex)
 	} else {

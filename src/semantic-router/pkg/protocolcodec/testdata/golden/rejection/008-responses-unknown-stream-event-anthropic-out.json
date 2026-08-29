@@ -1,1 +1,4 @@
-{"category":"unsupported_feature","code":"unknown_stream_event"}
+{
+  "category": "unsupported_feature",
+  "code": "unknown_stream_event"
+}

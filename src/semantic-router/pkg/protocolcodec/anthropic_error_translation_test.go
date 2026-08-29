@@ -364,9 +364,25 @@ func TestModelFailureEncodingKeepsResponsesResourceSemantics(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encode Responses model failure: %v", err)
 	}
-	responsesGolden := `{"id":"response_1","object":"response","model":"public-model","status":"failed","error":{"code":"authentication_error","message":"API key is invalid."}}`
-	if string(responses) != responsesGolden {
-		t.Fatalf("Responses model failure = %s, want %s", responses, responsesGolden)
+	decoded, _, _, err := NewBuiltinEngine().DecodeResponse(llmprotocol.OpenAIResponsesV1, responses)
+	if err != nil {
+		t.Fatalf("encoded Responses model failure violates its own wire contract: %v\n%s", err, responses)
+	}
+	if decoded.ID != response.ID || decoded.Model != response.Model || decoded.StopReason != llmprotocol.StopError ||
+		decoded.Error == nil || decoded.Error.Category != llmprotocol.ErrorAuthentication ||
+		decoded.Error.Code != response.Error.Code || decoded.Error.Message != response.Error.Message {
+		t.Fatalf("Responses model failure changed semantics: %+v\n%s", decoded, responses)
+	}
+
+	anthropic, _, err := (AnthropicMessagesCodec{}).EncodeResponse(
+		response, llmprotocol.Envelope{}, llmprotocol.DefaultPolicy(),
+	)
+	if err != nil {
+		t.Fatalf("encode Anthropic model failure: %v", err)
+	}
+	anthropicGolden := `{"type":"error","error":{"type":"authentication_error","message":"API key is invalid."}}`
+	if string(anthropic) != anthropicGolden {
+		t.Fatalf("Anthropic model failure = %s, want %s", anthropic, anthropicGolden)
 	}
 }
 

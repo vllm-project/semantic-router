@@ -1,1 +1,4 @@
-{"category":"invalid_request","code":"invalid_media_source"}
+{
+  "category": "invalid_request",
+  "code": "invalid_media_source"
+}

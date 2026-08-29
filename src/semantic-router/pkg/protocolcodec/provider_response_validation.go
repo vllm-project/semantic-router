@@ -153,6 +153,12 @@ func validateResponsesOutputItemStatus(item responsesItemWire) error {
 }
 
 func validateAnthropicResponseResource(wire anthropicResponseWire) error {
+	if wire.Error != nil {
+		return invalidProviderResponse(
+			"anthropic_transport_error_on_response_path",
+			"Anthropic API errors must be decoded as transport error envelopes",
+		)
+	}
 	if wire.Type != "" && wire.Type != "message" {
 		return invalidProviderResponse("invalid_anthropic_response_type", "Anthropic response type must be message")
 	}
@@ -168,9 +174,6 @@ func validateAnthropicResponseResource(wire anthropicResponseWire) error {
 	}
 	if wire.StopSequence != nil && (wire.StopReason == nil || *wire.StopReason != "stop_sequence") {
 		return invalidProviderResponse("anthropic_stop_sequence_reason", "Anthropic stop_sequence value requires stop_sequence reason")
-	}
-	if wire.Error != nil && (strings.TrimSpace(wire.Error.Type) == "" || strings.TrimSpace(wire.Error.Message) == "") {
-		return invalidProviderResponse("invalid_anthropic_response_error", "Anthropic response error requires a type and message")
 	}
 	return nil
 }

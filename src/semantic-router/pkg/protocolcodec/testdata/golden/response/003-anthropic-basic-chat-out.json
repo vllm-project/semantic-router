@@ -1,26 +1,26 @@
 {
-  "id": "response_1",
-  "object": "chat.completion",
-  "created": 0,
-  "model": "routed-model",
   "choices": [
     {
+      "finish_reason": "stop",
       "index": 0,
       "message": {
-        "role": "assistant",
-        "content": "hello"
-      },
-      "finish_reason": "stop"
+        "content": "hello",
+        "role": "assistant"
+      }
     }
   ],
+  "created": 0,
+  "id": "response_1",
+  "model": "routed-model",
+  "object": "chat.completion",
   "usage": {
-    "prompt_tokens": 2,
-    "prompt_tokens_details": {
-      "cached_tokens": 0
-    },
     "completion_tokens": 1,
     "completion_tokens_details": {
       "reasoning_tokens": 0
+    },
+    "prompt_tokens": 2,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
     },
     "total_tokens": 3
   }

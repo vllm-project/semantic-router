@@ -1,1 +1,4 @@
-{"category":"upstream_unavailable","code":"stream_response_id_mismatch"}
+{
+  "category": "upstream_unavailable",
+  "code": "stream_response_id_mismatch"
+}

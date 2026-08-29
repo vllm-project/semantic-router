@@ -1,17 +1,17 @@
 {
-  "model": "routed-model",
   "input": [
     {
-      "type": "message",
-      "id": "msg_1",
-      "role": "user",
       "content": [
         {
-          "type": "input_text",
-          "text": "hello"
+          "text": "hello",
+          "type": "input_text"
         }
-      ]
+      ],
+      "id": "msg_1",
+      "role": "user",
+      "type": "message"
     }
   ],
-  "max_output_tokens": 32
+  "max_output_tokens": 32,
+  "model": "routed-model"
 }

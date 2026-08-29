@@ -1,0 +1,344 @@
+{
+  "cases": [
+    {
+      "name": "response.audio.delta",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unknown_stream_event"
+        }
+      }
+    },
+    {
+      "name": "response.audio.done",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unknown_stream_event"
+        }
+      }
+    },
+    {
+      "name": "response.audio.transcript.delta",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unknown_stream_event"
+        }
+      }
+    },
+    {
+      "name": "response.audio.transcript.done",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unknown_stream_event"
+        }
+      }
+    },
+    {
+      "name": "response.code_interpreter_call_code.delta",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unknown_stream_event"
+        }
+      }
+    },
+    {
+      "name": "response.code_interpreter_call_code.done",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unknown_stream_event"
+        }
+      }
+    },
+    {
+      "name": "response.code_interpreter_call.completed",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unknown_stream_event"
+        }
+      }
+    },
+    {
+      "name": "response.code_interpreter_call.in_progress",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unknown_stream_event"
+        }
+      }
+    },
+    {
+      "name": "response.code_interpreter_call.interpreting",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unknown_stream_event"
+        }
+      }
+    },
+    {
+      "name": "response.custom_tool_call_input.delta",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unknown_stream_event"
+        }
+      }
+    },
+    {
+      "name": "response.custom_tool_call_input.done",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unknown_stream_event"
+        }
+      }
+    },
+    {
+      "name": "response.file_search_call.completed",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unknown_stream_event"
+        }
+      }
+    },
+    {
+      "name": "response.file_search_call.in_progress",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unknown_stream_event"
+        }
+      }
+    },
+    {
+      "name": "response.file_search_call.searching",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unknown_stream_event"
+        }
+      }
+    },
+    {
+      "name": "response.image_generation_call.completed",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unknown_stream_event"
+        }
+      }
+    },
+    {
+      "name": "response.image_generation_call.generating",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unknown_stream_event"
+        }
+      }
+    },
+    {
+      "name": "response.image_generation_call.in_progress",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unknown_stream_event"
+        }
+      }
+    },
+    {
+      "name": "response.image_generation_call.partial_image",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unknown_stream_event"
+        }
+      }
+    },
+    {
+      "name": "response.mcp_call_arguments.delta",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unknown_stream_event"
+        }
+      }
+    },
+    {
+      "name": "response.mcp_call_arguments.done",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unknown_stream_event"
+        }
+      }
+    },
+    {
+      "name": "response.mcp_call.completed",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unknown_stream_event"
+        }
+      }
+    },
+    {
+      "name": "response.mcp_call.failed",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unknown_stream_event"
+        }
+      }
+    },
+    {
+      "name": "response.mcp_call.in_progress",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unknown_stream_event"
+        }
+      }
+    },
+    {
+      "name": "response.mcp_list_tools.completed",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unknown_stream_event"
+        }
+      }
+    },
+    {
+      "name": "response.mcp_list_tools.failed",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unknown_stream_event"
+        }
+      }
+    },
+    {
+      "name": "response.mcp_list_tools.in_progress",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unknown_stream_event"
+        }
+      }
+    },
+    {
+      "name": "response.shell_call_command.added",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unknown_stream_event"
+        }
+      }
+    },
+    {
+      "name": "response.shell_call_command.delta",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unknown_stream_event"
+        }
+      }
+    },
+    {
+      "name": "response.shell_call_command.done",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unknown_stream_event"
+        }
+      }
+    },
+    {
+      "name": "response.shell_call_output_content.delta",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unknown_stream_event"
+        }
+      }
+    },
+    {
+      "name": "response.shell_call_output_content.done",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unknown_stream_event"
+        }
+      }
+    },
+    {
+      "name": "response.web_search_call.completed",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unknown_stream_event"
+        }
+      }
+    },
+    {
+      "name": "response.web_search_call.in_progress",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unknown_stream_event"
+        }
+      }
+    },
+    {
+      "name": "response.web_search_call.searching",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unknown_stream_event"
+        }
+      }
+    }
+  ]
+}

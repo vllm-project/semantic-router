@@ -1,1 +1,4 @@
-{"category":"invalid_request","code":"trailing_json"}
+{
+  "category": "invalid_request",
+  "code": "trailing_json"
+}

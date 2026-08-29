@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"reflect"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -20,6 +21,18 @@ var (
 )
 
 func decodeWire(body []byte, target any, policy llmprotocol.Policy) error {
+	return decodeWireJSON(body, target, policy, true)
+}
+
+// decodeWireValue validates and decodes a nested client JSON value. Unlike a
+// request envelope, a nested value may be an array or scalar. It still receives
+// the same size, UTF-8, duplicate-key, depth, unknown-field, and trailing-data
+// enforcement as the top-level document.
+func decodeWireValue(body []byte, target any, policy llmprotocol.Policy) error {
+	return decodeWireJSON(body, target, policy, false)
+}
+
+func decodeWireJSON(body []byte, target any, policy llmprotocol.Policy, requireObject bool) error {
 	if len(body) == 0 || len(body) > policy.Limits.BodyBytes {
 		return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "body_limit", "request body is empty or exceeds the configured limit", nil)
 	}
@@ -29,7 +42,7 @@ func decodeWire(body []byte, target any, policy llmprotocol.Policy) error {
 	if err := validateJSONUnicodeEscapes(body); err != nil {
 		return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_unicode", "request JSON contains an unpaired Unicode surrogate", err)
 	}
-	if !hasJSONObjectEnvelope(body) {
+	if requireObject && !hasJSONObjectEnvelope(body) {
 		return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_json", "request body must be a JSON object", nil)
 	}
 	if err := validateNoDuplicateKeys(body, policy.Limits.JSONDepth); err != nil {
@@ -43,6 +56,9 @@ func decodeWire(body []byte, target any, policy llmprotocol.Policy) error {
 	}
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	if rejectUnknownFields(body, policy) {
+		if err := validateExactJSONFieldNames(body, reflect.TypeOf(target)); err != nil {
+			return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_json", "request JSON contains a non-canonical field", err)
+		}
 		decoder.DisallowUnknownFields()
 	}
 	if err := decoder.Decode(target); err != nil {
@@ -55,6 +71,17 @@ func decodeWire(body []byte, target any, policy llmprotocol.Policy) error {
 }
 
 func decodeProviderWire(body []byte, target any, policy llmprotocol.Policy) error {
+	return decodeProviderJSON(body, target, policy, true)
+}
+
+// decodeProviderValue is the upstream counterpart to decodeWireValue. Provider
+// response envelopes remain object-only, while their typed nested arrays and
+// scalars use this path without weakening any other JSON validation.
+func decodeProviderValue(body []byte, target any, policy llmprotocol.Policy) error {
+	return decodeProviderJSON(body, target, policy, false)
+}
+
+func decodeProviderJSON(body []byte, target any, policy llmprotocol.Policy, requireObject bool) error {
 	if len(body) == 0 || len(body) > policy.Limits.BodyBytes {
 		return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "upstream_body_limit", "upstream response is empty or too large", nil)
 	}
@@ -64,7 +91,7 @@ func decodeProviderWire(body []byte, target any, policy llmprotocol.Policy) erro
 	if err := validateJSONUnicodeEscapes(body); err != nil {
 		return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_unicode", "upstream response JSON contains an unpaired Unicode surrogate", err)
 	}
-	if !hasJSONObjectEnvelope(body) {
+	if requireObject && !hasJSONObjectEnvelope(body) {
 		return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_json", "upstream response body must be a JSON object", nil)
 	}
 	if err := validateNoDuplicateKeys(body, policy.Limits.JSONDepth); err != nil {
@@ -78,6 +105,9 @@ func decodeProviderWire(body []byte, target any, policy llmprotocol.Policy) erro
 	}
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	if rejectUnknownFields(body, policy) {
+		if err := validateExactJSONFieldNames(body, reflect.TypeOf(target)); err != nil {
+			return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_json", "upstream response JSON contains a non-canonical field", err)
+		}
 		decoder.DisallowUnknownFields()
 	}
 	if err := decoder.Decode(target); err != nil {
@@ -92,6 +122,94 @@ func decodeProviderWire(body []byte, target any, policy llmprotocol.Policy) erro
 func hasJSONObjectEnvelope(body []byte) bool {
 	trimmed := bytes.TrimSpace(body)
 	return len(trimmed) > 0 && trimmed[0] == '{'
+}
+
+var jsonUnmarshalerType = reflect.TypeOf((*json.Unmarshaler)(nil)).Elem()
+
+// encoding/json matches struct fields case-insensitively. JSON object member
+// names are case-sensitive, and every supported wire schema publishes exact
+// names, so accepting variants such as "messAges" would let malformed input
+// bypass unknown-field rejection. Validate the concrete wire shape before the
+// standard decoder runs. Dynamic maps and RawMessage fields remain open by
+// design and are validated when a codec later decodes them into a typed union.
+func validateExactJSONFieldNames(body []byte, targetType reflect.Type) error {
+	return validateExactJSONValue(body, dereferenceJSONType(targetType))
+}
+
+func validateExactJSONValue(body []byte, targetType reflect.Type) error {
+	if targetType == nil || bytes.Equal(bytes.TrimSpace(body), []byte("null")) ||
+		reflect.PointerTo(targetType).Implements(jsonUnmarshalerType) {
+		return nil
+	}
+	switch targetType.Kind() {
+	case reflect.Struct:
+		var object map[string]json.RawMessage
+		if err := json.Unmarshal(body, &object); err != nil {
+			return err
+		}
+		fields := exactJSONStructFields(targetType)
+		for name, value := range object {
+			fieldType, found := fields[name]
+			if !found {
+				return fmt.Errorf("unknown field %q", name)
+			}
+			if err := validateExactJSONValue(value, dereferenceJSONType(fieldType)); err != nil {
+				return fmt.Errorf("field %q: %w", name, err)
+			}
+		}
+	case reflect.Slice, reflect.Array:
+		if targetType.Elem() == reflect.TypeOf(json.RawMessage{}) {
+			return nil
+		}
+		var elements []json.RawMessage
+		if err := json.Unmarshal(body, &elements); err != nil {
+			return err
+		}
+		for index, element := range elements {
+			if err := validateExactJSONValue(element, dereferenceJSONType(targetType.Elem())); err != nil {
+				return fmt.Errorf("element %d: %w", index, err)
+			}
+		}
+	case reflect.Map, reflect.Interface:
+		return nil
+	}
+	return nil
+}
+
+func exactJSONStructFields(targetType reflect.Type) map[string]reflect.Type {
+	fields := make(map[string]reflect.Type)
+	for index := 0; index < targetType.NumField(); index++ {
+		field := targetType.Field(index)
+		if field.PkgPath != "" {
+			continue
+		}
+		tag := field.Tag.Get("json")
+		name := strings.Split(tag, ",")[0]
+		if name == "-" {
+			continue
+		}
+		if field.Anonymous && name == "" {
+			embedded := dereferenceJSONType(field.Type)
+			if embedded.Kind() == reflect.Struct {
+				for embeddedName, embeddedType := range exactJSONStructFields(embedded) {
+					fields[embeddedName] = embeddedType
+				}
+			}
+			continue
+		}
+		if name == "" {
+			name = field.Name
+		}
+		fields[name] = field.Type
+	}
+	return fields
+}
+
+func dereferenceJSONType(targetType reflect.Type) reflect.Type {
+	for targetType != nil && targetType.Kind() == reflect.Pointer {
+		targetType = targetType.Elem()
+	}
+	return targetType
 }
 
 // encoding/json replaces unpaired UTF-16 surrogates with U+FFFD. Translation

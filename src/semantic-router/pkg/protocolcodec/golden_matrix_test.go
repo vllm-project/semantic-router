@@ -40,7 +40,11 @@ func TestGoldenRequestTranslationMatrix(t *testing.T) {
 		})
 		if err == nil {
 			if _, _, _, decodeErr := engine.DecodeRequest(target, result.Body); decodeErr != nil {
-				return nil, fmt.Errorf("target request does not satisfy its own codec contract: %w", decodeErr)
+				return nil, fmt.Errorf(
+					"target request does not satisfy its own codec contract: %w\nencoded body: %s",
+					decodeErr,
+					result.Body,
+				)
 			}
 		}
 		return result.Body, err
@@ -59,8 +63,13 @@ func TestGoldenResponseTranslationMatrix(t *testing.T) {
 			return nil
 		})
 		if err == nil {
-			if _, _, _, decodeErr := engine.DecodeResponse(target, result.Body); decodeErr != nil {
-				return nil, fmt.Errorf("target response does not satisfy its own codec contract: %w", decodeErr)
+			decodeErr := validateGoldenEncodedResponse(engine, target, result)
+			if decodeErr != nil {
+				return nil, fmt.Errorf(
+					"target response does not satisfy its own codec contract: %w\nencoded body: %s",
+					decodeErr,
+					result.Body,
+				)
 			}
 		}
 		return result.Body, err
@@ -690,7 +699,11 @@ func runCapabilityTranslation(
 		})
 		if err == nil {
 			if _, _, _, decodeErr := engine.DecodeRequest(target, result.Body); decodeErr != nil {
-				return nil, result.Diagnostics, fmt.Errorf("target request does not satisfy its own codec contract: %w", decodeErr)
+				return nil, result.Diagnostics, fmt.Errorf(
+					"target request does not satisfy its own codec contract: %w\nencoded body: %s",
+					decodeErr,
+					result.Body,
+				)
 			}
 		}
 		return result.Body, result.Diagnostics, err
@@ -700,8 +713,13 @@ func runCapabilityTranslation(
 			return nil
 		})
 		if err == nil {
-			if _, _, _, decodeErr := engine.DecodeResponse(target, result.Body); decodeErr != nil {
-				return nil, result.Diagnostics, fmt.Errorf("target response does not satisfy its own codec contract: %w", decodeErr)
+			decodeErr := validateGoldenEncodedResponse(engine, target, result)
+			if decodeErr != nil {
+				return nil, result.Diagnostics, fmt.Errorf(
+					"target response does not satisfy its own codec contract: %w\nencoded body: %s",
+					decodeErr,
+					result.Body,
+				)
 			}
 		}
 		return result.Body, result.Diagnostics, err
@@ -718,6 +736,22 @@ func runCapabilityTranslation(
 	default:
 		return nil, nil, fmt.Errorf("unsupported capability operation %q", input.Operation)
 	}
+}
+
+func validateGoldenEncodedResponse(
+	engine *Engine,
+	target llmprotocol.WireFormat,
+	result ResponseResult,
+) error {
+	// Responses can represent a failed model response as a response resource.
+	// Chat Completions and Messages expose the same failure as an HTTP error
+	// envelope, so validate those bodies against the transport-error contract.
+	if result.Response.Error != nil && target != llmprotocol.OpenAIResponsesV1 {
+		_, _, err := engine.DecodeTransportError(target, result.Body)
+		return err
+	}
+	_, _, _, err := engine.DecodeResponse(target, result.Body)
+	return err
 }
 
 func translateGoldenCapabilityStream(

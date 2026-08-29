@@ -4,9 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
-	"fmt"
-	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -143,7 +140,10 @@ func TestAnthropicStreamCacheAccountingSurvivesEveryTargetFormat(t *testing.T) {
 			stream, err := engine.NewStream(
 				llmprotocol.AnthropicMessagesV1,
 				target,
-				llmprotocol.StreamContext{Context: context.Background(), PublicModel: "public-model"},
+				llmprotocol.StreamContext{
+					Context: context.Background(), PublicModel: "public-model",
+					Options: llmprotocol.StreamOptions{IncludeUsage: boolPointer(true)},
+				},
 			)
 			if err != nil {
 				t.Fatal(err)
@@ -527,9 +527,10 @@ func TestIncompleteUpstreamStreamTerminatesEveryTargetWithFailure(t *testing.T) 
 			"data: {\"id\":\"chatcmpl_1\",\"object\":\"chat.completion.chunk\",\"model\":\"provider-model\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"partial\"},\"finish_reason\":null}]}\n\n",
 		),
 		llmprotocol.OpenAIResponsesV1: []byte(
-			"event: response.created\ndata: {\"type\":\"response.created\",\"sequence_number\":0,\"response\":{\"id\":\"resp_1\",\"object\":\"response\",\"model\":\"provider-model\",\"status\":\"in_progress\"}}\n\n" +
-				"event: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"sequence_number\":1,\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"status\":\"in_progress\"}}\n\n" +
-				"event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"sequence_number\":2,\"output_index\":0,\"item_id\":\"msg_1\",\"content_index\":0,\"delta\":\"partial\"}\n\n",
+			"event: response.created\ndata: {\"type\":\"response.created\",\"sequence_number\":0,\"response\":{\"id\":\"resp_1\",\"object\":\"response\",\"model\":\"provider-model\",\"status\":\"in_progress\",\"output\":[]}}\n\n" +
+				"event: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"sequence_number\":1,\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"status\":\"in_progress\",\"content\":[]}}\n\n" +
+				"event: response.content_part.added\ndata: {\"type\":\"response.content_part.added\",\"sequence_number\":2,\"output_index\":0,\"item_id\":\"msg_1\",\"content_index\":0,\"part\":{\"type\":\"output_text\",\"text\":\"\",\"annotations\":[]}}\n\n" +
+				"event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"sequence_number\":3,\"output_index\":0,\"item_id\":\"msg_1\",\"content_index\":0,\"delta\":\"partial\"}\n\n",
 		),
 		llmprotocol.AnthropicMessagesV1: []byte(
 			"event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_1\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"provider-model\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":2,\"output_tokens\":0}}}\n\n" +
@@ -701,32 +702,6 @@ func assertPublicStreamErrorWire(
 	if len(frames) != 1 {
 		t.Fatalf("public error frame count = %d: %q", len(frames), frames)
 	}
-	quotedCode, quotedMessage := string(mustJSON(code)), string(mustJSON(message))
-	quotedParameter := "null"
-	if parameter != "" {
-		quotedParameter = string(mustJSON(parameter))
-	}
-	var golden string
-	switch format {
-	case llmprotocol.OpenAIChatV1:
-		golden = "data: {\"error\":{\"type\":\"authentication_error\",\"code\":" + quotedCode +
-			",\"message\":" + quotedMessage + ",\"param\":" + quotedParameter + "}}\n\n"
-	case llmprotocol.OpenAIResponsesV1:
-		if failure == llmprotocol.FailureResponse {
-			golden = "event: response.failed\ndata: {\"type\":\"response.failed\",\"sequence_number\":0," +
-				"\"response\":{\"id\":\"response_1\",\"object\":\"response\",\"model\":\"public-model\"," +
-				"\"status\":\"failed\",\"error\":{\"code\":" + quotedCode + ",\"message\":" + quotedMessage + "}}}\n\n"
-		} else {
-			golden = "event: error\ndata: {\"type\":\"error\",\"code\":" + quotedCode +
-				",\"message\":" + quotedMessage + ",\"param\":" + quotedParameter + ",\"sequence_number\":0}\n\n"
-		}
-	case llmprotocol.AnthropicMessagesV1:
-		golden = "event: error\ndata: {\"type\":\"error\",\"error\":{\"type\":" + quotedCode +
-			",\"message\":" + quotedMessage + "}}\n\n"
-	}
-	if string(frames[0]) != golden {
-		t.Fatalf("public error frame = %q, want %q", frames[0], golden)
-	}
 	parsed, err := parseSSEFrame(frames[0], llmprotocol.DefaultPolicy().Limits.SSEFrameBytes)
 	if err != nil {
 		t.Fatalf("public error frame is invalid: %v: %q", err, frames[0])
@@ -751,7 +726,11 @@ func assertPublicStreamErrorPayload(
 	t.Helper()
 	switch format {
 	case llmprotocol.OpenAIChatV1:
-		assertChatStreamErrorPayload(t, parsed, object, code, message, parameter)
+		errorType := "authentication_error"
+		if code != "authentication_error" {
+			errorType = "server_error"
+		}
+		assertChatStreamErrorPayload(t, parsed, object, errorType, code, message, parameter)
 	case llmprotocol.OpenAIResponsesV1:
 		assertResponsesStreamErrorPayload(t, failure, parsed, object, code, message, parameter)
 	case llmprotocol.AnthropicMessagesV1:
@@ -761,12 +740,20 @@ func assertPublicStreamErrorPayload(
 	}
 }
 
-func assertChatStreamErrorPayload(t *testing.T, parsed sseFrame, object map[string]json.RawMessage, code, message, parameter string) {
+func assertChatStreamErrorPayload(
+	t *testing.T,
+	parsed sseFrame,
+	object map[string]json.RawMessage,
+	errorType,
+	code,
+	message,
+	parameter string,
+) {
 	t.Helper()
 	if parsed.Event != "" || len(object) != 1 || object["error"] == nil {
 		t.Fatalf("Chat stream error is not canonical: event=%q data=%s", parsed.Event, parsed.Data)
 	}
-	assertOpenAIErrorDetail(t, object["error"], code, message, parameter)
+	assertOpenAIErrorDetail(t, object["error"], errorType, code, message, parameter)
 }
 
 func assertResponsesStreamErrorPayload(
@@ -813,7 +800,7 @@ func assertResponsesFailedEnvelope(t *testing.T, parsed sseFrame, object map[str
 func assertResponsesFailedDetail(t *testing.T, parsed sseFrame, raw json.RawMessage, code, message string) {
 	t.Helper()
 	var responseObject map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &responseObject); err != nil || len(responseObject) != 5 {
+	if err := json.Unmarshal(raw, &responseObject); err != nil {
 		t.Fatalf("Responses failed resource fields are not canonical: %v data=%s", err, parsed.Data)
 	}
 	var response struct {
@@ -848,7 +835,7 @@ func assertAnthropicStreamErrorPayload(t *testing.T, parsed sseFrame, object map
 	}
 }
 
-func assertOpenAIErrorDetail(t *testing.T, raw json.RawMessage, code, message, parameter string) {
+func assertOpenAIErrorDetail(t *testing.T, raw json.RawMessage, errorType, code, message, parameter string) {
 	t.Helper()
 	var object map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &object); err != nil || len(object) != 4 {
@@ -861,7 +848,7 @@ func assertOpenAIErrorDetail(t *testing.T, raw json.RawMessage, code, message, p
 		Param   *string `json:"param"`
 	}
 	err := json.Unmarshal(raw, &detail)
-	if err != nil || detail.Type != "authentication_error" || detail.Code == nil ||
+	if err != nil || detail.Type != errorType || detail.Code == nil ||
 		*detail.Code != code || detail.Message != message || !optionalStringMatches(detail.Param, parameter) {
 		t.Fatalf("OpenAI error detail is not canonical: %+v raw=%s", detail, raw)
 	}

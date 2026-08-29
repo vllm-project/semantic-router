@@ -108,10 +108,6 @@ func TestResponsesStreamPreservesContentFilterIncomplete(t *testing.T) {
 		Generation: 1,
 		ID:         "response_filtered",
 		Model:      "public/model",
-		Output: []llmprotocol.OutputItem{{
-			ID:   "item_filtered",
-			Role: llmprotocol.RoleAssistant,
-		}},
 		StopReason: llmprotocol.StopContentFilter,
 		Usage:      availableStreamUsage(4, 1),
 	}

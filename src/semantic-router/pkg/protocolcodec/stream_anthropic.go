@@ -437,9 +437,30 @@ func (encoder *anthropicStreamEncoder) encodeAnthropicContentEvent(
 		if err != nil {
 			return nil, nil, err
 		}
-		wire := encodeAnthropicReasoningDelta(event, encoder.blockIndexes[key])
-		delta, diagnostics, err := encodeAnthropicWireFrame(wire)
-		return append(frames, delta...), diagnostics, err
+		blockIndex := encoder.blockIndexes[key]
+		if event.Delta != "" {
+			wire := anthropicEventWire{
+				Type: "content_block_delta", Index: anthropicIndex(blockIndex),
+				Delta: &anthropicDeltaWire{Type: "thinking_delta", Thinking: event.Delta},
+			}
+			delta, _, encodeErr := encodeAnthropicWireFrame(wire)
+			if encodeErr != nil {
+				return nil, nil, encodeErr
+			}
+			frames = append(frames, delta...)
+		}
+		if event.Content != nil && event.Content.Signature != "" {
+			wire := anthropicEventWire{
+				Type: "content_block_delta", Index: anthropicIndex(blockIndex),
+				Delta: &anthropicDeltaWire{Type: "signature_delta", Signature: event.Content.Signature},
+			}
+			delta, _, encodeErr := encodeAnthropicWireFrame(wire)
+			if encodeErr != nil {
+				return nil, nil, encodeErr
+			}
+			frames = append(frames, delta...)
+		}
+		return frames, nil, nil
 	case llmprotocol.EventToolCallDelta:
 		if event.ToolCall == nil {
 			return nil, nil, llmprotocol.NewError(llmprotocol.ErrorInternal, "tool_event_invalid", "tool event is invalid", nil)
@@ -566,14 +587,6 @@ func (encoder *anthropicStreamEncoder) encodeAnthropicItemStart(
 		block.Type, block.Text, block.Thinking, block.Signature = "thinking", "", "", signature
 	}
 	return anthropicEventWire{Type: "content_block_start", Index: anthropicIndex(encoder.blockIndexes[key]), ContentBlock: block}
-}
-
-func encodeAnthropicReasoningDelta(event llmprotocol.Event, blockIndex int) anthropicEventWire {
-	delta := &anthropicDeltaWire{Type: "thinking_delta", Thinking: event.Delta}
-	if event.Content != nil && event.Content.Signature != "" {
-		delta = &anthropicDeltaWire{Type: "signature_delta", Signature: event.Content.Signature}
-	}
-	return anthropicEventWire{Type: "content_block_delta", Index: anthropicIndex(blockIndex), Delta: delta}
 }
 
 func (encoder *anthropicStreamEncoder) completeAnthropicItem(
@@ -703,6 +716,9 @@ func (encoder *anthropicStreamEncoder) encodeAnthropicTextDelta(
 	frames, key, err := encoder.ensureAnthropicBlockStarted(event, llmprotocol.ContentText)
 	if err != nil {
 		return nil, diagnostics, err
+	}
+	if event.Delta == "" {
+		return frames, diagnostics, nil
 	}
 	wire := anthropicEventWire{
 		Type: "content_block_delta", Index: anthropicIndex(encoder.blockIndexes[key]),

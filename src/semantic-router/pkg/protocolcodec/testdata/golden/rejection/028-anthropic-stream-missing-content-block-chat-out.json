@@ -1,1 +1,4 @@
-{"category":"upstream_unavailable","code":"stream_content_block_required"}
+{
+  "category": "upstream_unavailable",
+  "code": "stream_content_block_required"
+}

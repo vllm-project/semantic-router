@@ -1,1 +1,4 @@
-{"category":"upstream_unavailable","code":"invalid_chat_choice_index"}
+{
+  "category": "upstream_unavailable",
+  "code": "invalid_chat_choice_index"
+}

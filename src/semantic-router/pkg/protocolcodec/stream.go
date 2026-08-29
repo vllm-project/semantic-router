@@ -870,7 +870,7 @@ func (state *streamState) validateCompletedEvent(event llmprotocol.Event) (llmpr
 	if !state.started {
 		return llmprotocol.Event{}, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "stream_start_missing", "upstream stream completed before response start", nil)
 	}
-	if len(state.items) == 0 {
+	if len(state.items) == 0 && event.StopReason != llmprotocol.StopContentFilter {
 		return llmprotocol.Event{}, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "stream_output_missing", "upstream stream completed without output", nil)
 	}
 	for itemIndex := range state.items {

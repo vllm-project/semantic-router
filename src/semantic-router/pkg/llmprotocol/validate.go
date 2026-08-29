@@ -588,8 +588,8 @@ func validateMediaContent(content Content, limits Limits) error {
 }
 
 func validateMediaKindFields(content Content) error {
-	if content.Kind != ContentImage && content.Detail != "" {
-		return NewError(ErrorInvalidRequest, "invalid_content", "only image content may specify detail", nil)
+	if content.Kind != ContentImage && content.Kind != ContentFile && content.Detail != "" {
+		return NewError(ErrorInvalidRequest, "invalid_content", "only image or file content may specify detail", nil)
 	}
 	if content.Kind != ContentFile && content.Filename != "" {
 		return NewError(ErrorInvalidRequest, "invalid_content", "only file content may specify a filename", nil)
@@ -833,7 +833,7 @@ func validateSuccessfulResponseEnvelope(response Response, limits Limits) error 
 	if response.StopReason != StopSequence && response.MatchedStopSequence != "" {
 		return NewError(ErrorUpstreamUnavailable, "matched_stop_sequence_reason", "upstream matched stop sequence requires stop_sequence reason", nil)
 	}
-	if len(response.Output) == 0 {
+	if len(response.Output) == 0 && response.StopReason != StopContentFilter {
 		return NewError(ErrorUpstreamUnavailable, "empty_response_output", "successful upstream response has no primary output", nil)
 	}
 	if limits.Alternatives > 0 && len(response.Alternatives) > limits.Alternatives {

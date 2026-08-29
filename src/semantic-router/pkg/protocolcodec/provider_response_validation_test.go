@@ -125,7 +125,7 @@ func TestProviderResponseEnumsAndDiscriminatorsAreClosed(t *testing.T) {
 			name:   "anthropic incomplete error",
 			format: llmprotocol.AnthropicMessagesV1,
 			body:   `{"error":{"type":"","message":"failed"}}`,
-			code:   "invalid_anthropic_response_error",
+			code:   "anthropic_transport_error_on_response_path",
 		},
 		{
 			name:   "anthropic missing matched stop sequence",

@@ -1,15 +1,15 @@
 {
-  "model": "routed-model",
   "max_tokens": 32,
   "messages": [
     {
-      "role": "user",
       "content": [
         {
-          "type": "text",
-          "text": "hello"
+          "text": "hello",
+          "type": "text"
         }
-      ]
+      ],
+      "role": "user"
     }
-  ]
+  ],
+  "model": "routed-model"
 }

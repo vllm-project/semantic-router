@@ -152,12 +152,16 @@ func TestCacheDirectivesSurviveChatAndAnthropicTranslation(t *testing.T) {
 	if err := json.Unmarshal(resultContent[0].Content, &nestedResult); err != nil {
 		t.Fatal(err)
 	}
+	var tools []anthropicToolWire
+	if err := json.Unmarshal(anthropicWire.Tools, &tools); err != nil {
+		t.Fatal(err)
+	}
 	if len(system) != 2 || system[0].Text != "stable preface" || system[0].CacheControl != nil ||
 		system[1].CacheControl == nil || system[1].CacheControl.TTL != "1h" ||
 		len(userContent) != 1 || userContent[0].CacheControl == nil ||
 		len(resultContent) != 1 || resultContent[0].Type != "tool_result" ||
 		len(nestedResult) != 1 || nestedResult[0].CacheControl == nil ||
-		len(anthropicWire.Tools) != 1 || anthropicWire.Tools[0].CacheControl == nil {
+		len(tools) != 1 || tools[0].CacheControl == nil {
 		t.Fatalf("cache directives did not retain order and ownership after Chat to Anthropic translation: %s", translated.Body)
 	}
 }
@@ -570,6 +574,11 @@ func TestOfficialResponsesFileDetailRoundTrips(t *testing.T) {
 	content := message["content"].([]any)
 	if got := content[0].(map[string]any)["detail"]; got != "high" {
 		t.Fatalf("file detail round-trip = %v, want high", got)
+	}
+	for _, target := range []llmprotocol.WireFormat{llmprotocol.OpenAIChatV1, llmprotocol.AnthropicMessagesV1} {
+		if _, err := engine.TranslateRequest(llmprotocol.OpenAIResponsesV1, target, body, nil); err == nil {
+			t.Fatalf("%s silently dropped Responses file detail", target)
+		}
 	}
 }
 
@@ -1629,7 +1638,7 @@ func TestOfficialAnthropicTerminalReasonInventoryIsClosed(t *testing.T) {
 
 func TestOfficialResponsesContentFilterIncompleteRoundTrip(t *testing.T) {
 	engine := NewBuiltinEngine()
-	body := []byte(`{"id":"resp_1","object":"response","model":"m","status":"incomplete","output":[{"id":"msg_1","type":"message","status":"incomplete","role":"assistant","content":[]}],"incomplete_details":{"reason":"content_filter"},"usage":{"input_tokens":2,"output_tokens":1,"total_tokens":3}}`)
+	body := []byte(`{"id":"resp_1","object":"response","model":"m","status":"incomplete","output":[],"incomplete_details":{"reason":"content_filter"},"usage":{"input_tokens":2,"output_tokens":1,"total_tokens":3}}`)
 	translated, err := engine.TranslateResponse(
 		llmprotocol.OpenAIResponsesV1,
 		llmprotocol.OpenAIResponsesV1,
@@ -1817,7 +1826,7 @@ func TestOfficialProviderResponseShapesDecodeWithoutSilentLoss(t *testing.T) {
 	responsesBody := []byte(`{
 		"id":"resp_1","object":"response","created_at":1,"completed_at":2,"status":"completed",
 		"error":null,"incomplete_details":null,"instructions":"answer","max_output_tokens":64,
-		"model":"m","output":[{"type":"message","id":"msg_1","role":"assistant","content":[{"type":"output_text","text":"done"}]}],
+		"model":"m","output":[{"type":"message","id":"msg_1","role":"assistant","status":"completed","content":[{"type":"output_text","text":"done","annotations":[]}]}],
 		"parallel_tool_calls":true,"previous_response_id":"resp_0","reasoning":{"effort":"high"},
 		"store":true,"temperature":0.2,"text":{"format":{"type":"text"}},"tool_choice":"auto",
 		"tools":[],"top_p":0.9,"truncation":"disabled","usage":{"input_tokens":5,"output_tokens":3,"total_tokens":8},
@@ -1867,7 +1876,7 @@ func TestOfficialResponseMetadataIsExplicitlyDiagnosed(t *testing.T) {
 
 	responsesBody := []byte(`{
 		"id":"resp_1","object":"response","created_at":1,"status":"completed","model":"m",
-		"output":[{"type":"message","id":"msg_1","role":"assistant","phase":"final_answer","content":[{"type":"output_text","text":"done","logprobs":[]}]}],
+		"output":[{"type":"message","id":"msg_1","role":"assistant","status":"completed","phase":"final_answer","content":[{"type":"output_text","text":"done","annotations":[],"logprobs":[]}]}],
 		"background":false,"conversation":{"id":"conv_1"},"max_tool_calls":4,"moderation":{"status":"passed"},
 		"output_text":"done","prompt":{"id":"pmpt_1"},"prompt_cache_key":"cache_1",
 		"prompt_cache_options":{"retention":"24h"},"prompt_cache_retention":"24h",
@@ -1880,7 +1889,7 @@ func TestOfficialResponseMetadataIsExplicitlyDiagnosed(t *testing.T) {
 	}
 	assertDiagnosticFields(
 		t, diagnostics, "background", "conversation", "max_tool_calls", "moderation", "output.content.logprobs", "output.phase", "output_text",
-		"prompt", "prompt_cache_key", "prompt_cache_options", "prompt_cache_retention",
+		"output.status", "prompt", "prompt_cache_key", "prompt_cache_options", "prompt_cache_retention",
 		"safety_identifier", "service_tier", "top_logprobs", "usage.compute_units",
 	)
 }

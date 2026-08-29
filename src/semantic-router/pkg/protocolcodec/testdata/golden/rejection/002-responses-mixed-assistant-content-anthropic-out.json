@@ -1,1 +1,4 @@
-{"category":"invalid_request","code":"mixed_assistant_content"}
+{
+  "category": "invalid_request",
+  "code": "mixed_assistant_content"
+}

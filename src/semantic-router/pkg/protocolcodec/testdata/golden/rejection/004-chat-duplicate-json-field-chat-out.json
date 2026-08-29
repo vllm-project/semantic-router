@@ -1,1 +1,4 @@
-{"category":"invalid_request","code":"duplicate_json_field"}
+{
+  "category": "invalid_request",
+  "code": "duplicate_json_field"
+}

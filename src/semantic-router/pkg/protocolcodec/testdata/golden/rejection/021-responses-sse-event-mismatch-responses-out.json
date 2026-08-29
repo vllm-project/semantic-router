@@ -1,1 +1,4 @@
-{"category":"upstream_unavailable","code":"upstream_event_type_mismatch"}
+{
+  "category": "upstream_unavailable",
+  "code": "upstream_event_type_mismatch"
+}

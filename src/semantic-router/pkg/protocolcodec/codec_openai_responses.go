@@ -160,6 +160,28 @@ type responsesContentWire struct {
 	PromptCacheBreakpoint json.RawMessage            `json:"prompt_cache_breakpoint,omitempty"`
 }
 
+func (wire responsesContentWire) MarshalJSON() ([]byte, error) {
+	type contentAlias responsesContentWire
+	body, err := json.Marshal(contentAlias(wire))
+	if err != nil {
+		return nil, err
+	}
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal(body, &object); err != nil {
+		return nil, err
+	}
+	switch wire.Type {
+	case "input_text", "output_text", "reasoning_text", "summary_text":
+		object["text"], _ = json.Marshal(wire.Text)
+	case "refusal":
+		object["refusal"], _ = json.Marshal(wire.Refusal)
+	}
+	if wire.Type == "output_text" && wire.Annotations == nil {
+		object["annotations"] = json.RawMessage(`[]`)
+	}
+	return json.Marshal(object)
+}
+
 type responsesAnnotationWire struct {
 	Type       string `json:"type"`
 	URL        string `json:"url,omitempty"`
@@ -251,7 +273,7 @@ func decodeResponsesInstructions(raw json.RawMessage, request *llmprotocol.Reque
 		return nil
 	}
 	var text string
-	if err := decodeWire(raw, &text, policy); err != nil {
+	if err := decodeWireValue(raw, &text, policy); err != nil {
 		return llmprotocol.NewError(
 			llmprotocol.ErrorInvalidRequest,
 			"invalid_instructions",
@@ -271,7 +293,7 @@ func decodeResponsesTools(raw json.RawMessage, request *llmprotocol.Request, pol
 		return nil
 	}
 	var toolBodies []json.RawMessage
-	if err := decodeWire(raw, &toolBodies, policy); err != nil {
+	if err := decodeWireValue(raw, &toolBodies, policy); err != nil {
 		return err
 	}
 	for _, toolBody := range toolBodies {
@@ -285,7 +307,7 @@ func decodeResponsesTools(raw json.RawMessage, request *llmprotocol.Request, pol
 			return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_tool", "only function tools enter the model protocol", nil)
 		}
 		var tool responsesToolWire
-		if err := decodeWire(toolBody, &tool, policy); err != nil {
+		if err := decodeWireValue(toolBody, &tool, policy); err != nil {
 			return err
 		}
 		if err := rejectUnsupportedRequestFields(map[string]json.RawMessage{
@@ -359,7 +381,7 @@ func decodeResponsesInput(raw json.RawMessage, request *llmprotocol.Request, pol
 		return nil
 	}
 	var itemBodies []json.RawMessage
-	if err := decodeWire(raw, &itemBodies, policy); err != nil {
+	if err := decodeWireValue(raw, &itemBodies, policy); err != nil {
 		return err
 	}
 	for index, itemBody := range itemBodies {
@@ -402,9 +424,9 @@ func decodeResponsesItemWire(body json.RawMessage, policy llmprotocol.Policy, pr
 	var item responsesItemWire
 	var err error
 	if providerOutput {
-		err = decodeProviderWire(body, &item, policy)
+		err = decodeProviderValue(body, &item, policy)
 	} else {
-		err = decodeWire(body, &item, policy)
+		err = decodeWireValue(body, &item, policy)
 	}
 	if err != nil {
 		return responsesItemWire{}, err
@@ -633,9 +655,9 @@ func decodeResponsesContent(
 	var partBodies []json.RawMessage
 	var err error
 	if context == responsesProviderOutputContent || context == responsesProviderReasoningContent {
-		err = decodeProviderWire(raw, &partBodies, policy)
+		err = decodeProviderValue(raw, &partBodies, policy)
 	} else {
-		err = decodeWire(raw, &partBodies, policy)
+		err = decodeWireValue(raw, &partBodies, policy)
 	}
 	if err != nil {
 		return nil, err
@@ -672,9 +694,9 @@ func decodeResponsesContentPart(
 	var part responsesContentWire
 	var err error
 	if context == responsesProviderOutputContent || context == responsesProviderReasoningContent {
-		err = decodeProviderWire(body, &part, policy)
+		err = decodeProviderValue(body, &part, policy)
 	} else {
-		err = decodeWire(body, &part, policy)
+		err = decodeWireValue(body, &part, policy)
 	}
 	if err != nil {
 		return "", llmprotocol.Content{}, err
@@ -755,6 +777,26 @@ func validateResponsesContentVariant(
 	var object map[string]json.RawMessage
 	if err := json.Unmarshal(body, &object); err != nil {
 		return err
+	}
+	requiredByType := map[string][]string{
+		"input_text":     {"text"},
+		"output_text":    {"text"},
+		"refusal":        {"refusal"},
+		"reasoning_text": {"text"},
+	}
+	for _, name := range requiredByType[typeName] {
+		if _, present := object[name]; present {
+			continue
+		}
+		category := llmprotocol.ErrorInvalidRequest
+		code := "invalid_content_variant"
+		message := "Responses content is missing the required field: " + name
+		if context == responsesProviderOutputContent || context == responsesProviderReasoningContent {
+			category = llmprotocol.ErrorUpstreamUnavailable
+			code = "invalid_response_content"
+			message = "Responses provider output is missing the required field: " + name
+		}
+		return llmprotocol.NewError(category, code, message, nil)
 	}
 	allowedSet := make(map[string]struct{}, len(allowed))
 	for _, name := range allowed {
@@ -879,7 +921,7 @@ func decodeResponsesToolChoice(raw json.RawMessage, policy llmprotocol.Policy) (
 		Type string `json:"type"`
 		Name string `json:"name"`
 	}
-	if decodeWire(raw, &named, policy) != nil || named.Type != "function" || named.Name == "" {
+	if decodeWireValue(raw, &named, policy) != nil || named.Type != "function" || named.Name == "" {
 		return llmprotocol.ToolChoice{}, llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_tool_choice", "Responses tool choice is invalid", nil)
 	}
 	return llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceNamed, Name: named.Name}, nil
@@ -1062,7 +1104,7 @@ func (state *responsesMessageEncodingState) appendToolResult(result *llmprotocol
 	if result == nil {
 		return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_tool_result", "tool result is invalid", nil)
 	}
-	output, err := encodeResponsesContent(result.Content, "output")
+	output, err := encodeResponsesContent(result.Content, "input")
 	if err != nil {
 		return err
 	}
@@ -1123,9 +1165,9 @@ func decodeResponsesReasoning(
 	}
 	var err error
 	if providerOutput {
-		err = decodeProviderWire(raw, &summaries, policy)
+		err = decodeProviderValue(raw, &summaries, policy)
 	} else {
-		err = decodeWire(raw, &summaries, policy)
+		err = decodeWireValue(raw, &summaries, policy)
 	}
 	if err != nil {
 		return nil, err
@@ -1147,14 +1189,28 @@ func encodeResponsesContent(contents []llmprotocol.Content, direction string) (j
 	for _, content := range contents {
 		switch content.Kind {
 		case llmprotocol.ContentText:
-			parts = append(parts, responsesContentWire{Type: direction + "_text", Text: content.Text, Annotations: responsesAnnotations(content.Citations)})
+			part := responsesContentWire{Type: direction + "_text", Text: content.Text}
+			if direction == "output" {
+				part.Annotations = responsesAnnotations(content.Citations)
+			}
+			parts = append(parts, part)
 		case llmprotocol.ContentRefusal:
 			parts = append(parts, responsesContentWire{Type: "refusal", Refusal: content.Text})
 		case llmprotocol.ContentReasoning:
 			return nil, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "reasoning_content_position", "Responses reasoning must be encoded as an ordered reasoning item", nil)
 		case llmprotocol.ContentImage:
-			parts = append(parts, responsesContentWire{Type: "input_image", ImageURL: content.URL, FileID: content.FileID, Detail: content.Detail})
+			if direction != "input" {
+				return nil, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "image_content_position", "Responses output messages cannot contain input images", nil)
+			}
+			imageURL := content.URL
+			if content.Data != "" {
+				imageURL = "data:" + content.MediaType + ";base64," + content.Data
+			}
+			parts = append(parts, responsesContentWire{Type: "input_image", ImageURL: imageURL, FileID: content.FileID, Detail: content.Detail})
 		case llmprotocol.ContentFile:
+			if direction != "input" {
+				return nil, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "file_content_position", "Responses output messages cannot contain input files", nil)
+			}
 			parts = append(parts, responsesContentWire{Type: "input_file", FileURL: content.URL, FileID: content.FileID, FileData: content.Data, Filename: content.Filename, Detail: content.Detail})
 		default:
 			return nil, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_content", "content cannot be encoded as Responses", nil)
@@ -1256,6 +1312,21 @@ type responsesErrorWire struct {
 	Message string `json:"message"`
 }
 
+func responsesErrorCode(protocolError *llmprotocol.ProtocolError) string {
+	if protocolError.Code != "" {
+		return protocolError.Code
+	}
+	switch protocolError.Category {
+	case llmprotocol.ErrorRateLimited:
+		return "rate_limit_exceeded"
+	case llmprotocol.ErrorInvalidRequest, llmprotocol.ErrorNotFound,
+		llmprotocol.ErrorConflict, llmprotocol.ErrorUnsupportedFeature:
+		return "invalid_prompt"
+	default:
+		return "server_error"
+	}
+}
+
 func (OpenAIResponsesCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (llmprotocol.Response, llmprotocol.Envelope, llmprotocol.Diagnostics, error) {
 	var wire responsesResponseWire
 	if err := decodeProviderWire(body, &wire, policy); err != nil {
@@ -1335,7 +1406,7 @@ func decodeResponsesOutput(
 		return nil, nil
 	}
 	var itemBodies []json.RawMessage
-	if err := decodeProviderWire(raw, &itemBodies, policy); err != nil {
+	if err := decodeProviderValue(raw, &itemBodies, policy); err != nil {
 		return nil, err
 	}
 	output := make([]llmprotocol.OutputItem, 0, len(itemBodies))
@@ -1466,7 +1537,7 @@ func (OpenAIResponsesCodec) EncodeResponse(response llmprotocol.Response, envelo
 			createdAt = response.CreatedAt.Unix()
 		}
 		wire := newResponsesResponseWire(response.ID, response.Model, "failed", createdAt, envelope.ResponseRender.PreviousResponseID)
-		wire.Error = &responsesErrorWire{Code: response.Error.Code, Message: response.Error.Message}
+		wire.Error = &responsesErrorWire{Code: responsesErrorCode(response.Error), Message: response.Error.Message}
 		if response.Usage.State == llmprotocol.UsageAvailable {
 			wire.Usage = encodeResponsesUsage(response.Usage)
 		}

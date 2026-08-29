@@ -255,6 +255,31 @@ func (engine *Engine) TranslateTransportError(
 	}, nil
 }
 
+// DecodeTransportError decodes a provider-native HTTP error body without
+// conflating it with a failed model response resource. It is the symmetric
+// ingress operation for EncodeTransportError and uses the strict provider
+// boundary regardless of same-format source preservation policy.
+func (engine *Engine) DecodeTransportError(
+	format llmprotocol.WireFormat,
+	body []byte,
+) (llmprotocol.TransportError, llmprotocol.Diagnostics, error) {
+	pair, err := engine.codec(format)
+	if err != nil {
+		return llmprotocol.TransportError{}, nil, err
+	}
+	decodePolicy := engine.policy
+	decodePolicy.UnknownFields = llmprotocol.UnknownReject
+	decodePolicy.SourcePreservation = llmprotocol.SourceDisabled
+	transportError, diagnostics, err := pair.buffered.DecodeTransportError(body, decodePolicy)
+	if err != nil {
+		return llmprotocol.TransportError{}, diagnostics, err
+	}
+	if err := llmprotocol.ValidateTransportError(transportError, engine.policy.Limits); err != nil {
+		return transportError, diagnostics, err
+	}
+	return transportError, diagnostics, nil
+}
+
 // Preserve-same-format is legal only for byte-identical replay. Once a
 // translation crosses formats or a semantic mutation is possible, decoding is
 // strict so an unknown field can never disappear without an explicit error.
@@ -531,11 +556,12 @@ func (engine *StreamEngine) Push(frame []byte) ([][]byte, []llmprotocol.Event, l
 		events = engine.deferSuccessfulTerminal(events)
 	}
 	frames := make([][]byte, 0, len(events))
+	acceptedEvents := make([]llmprotocol.Event, 0, len(events))
 	for index := range events {
 		if engine.mutation != nil {
 			if mutationErr := engine.mutation(&events[index]); mutationErr != nil {
 				engine.poison(mutationErr)
-				return frames, events, diagnostics, mutationErr
+				return frames, acceptedEvents, diagnostics, mutationErr
 			}
 		}
 		event := events[index]
@@ -545,15 +571,16 @@ func (engine *StreamEngine) Push(frame []byte) ([][]byte, []llmprotocol.Event, l
 			llmprotocol.RequiredEventCapabilities(event),
 		); capabilityErr != nil {
 			engine.poison(capabilityErr)
-			return frames, events, diagnostics, capabilityErr
+			return frames, acceptedEvents, diagnostics, capabilityErr
 		}
 		encoded, eventDiagnostics, encodeErr := engine.encoder.Push(event)
 		diagnostics = appendDiagnostics(diagnostics, eventDiagnostics, engine.maxDiagnostics)
 		frames = append(frames, encoded...)
 		if encodeErr != nil {
 			engine.poison(encodeErr)
-			return frames, events, diagnostics, encodeErr
+			return frames, acceptedEvents, diagnostics, encodeErr
 		}
+		acceptedEvents = append(acceptedEvents, event)
 		if event.Type == llmprotocol.EventResponseCompleted || event.Type == llmprotocol.EventResponseFailed {
 			engine.terminal = true
 		}
@@ -564,9 +591,9 @@ func (engine *StreamEngine) Push(frame []byte) ([][]byte, []llmprotocol.Event, l
 	// error so network chunk coalescing cannot erase already accepted output.
 	if decodeErr != nil {
 		engine.poison(decodeErr)
-		return frames, events, diagnostics, decodeErr
+		return frames, acceptedEvents, diagnostics, decodeErr
 	}
-	return frames, events, diagnostics, nil
+	return frames, acceptedEvents, diagnostics, nil
 }
 
 func suppressSuccessfulTerminal(events []llmprotocol.Event) []llmprotocol.Event {
@@ -615,8 +642,9 @@ func (engine *StreamEngine) Finalize(reason error) ([][]byte, []llmprotocol.Even
 		return nil, nil, nil, nil
 	}
 	engine.finalized = true
-	if engine.failure != nil {
-		reason = engine.failure
+	firstFailure := engine.failure
+	if firstFailure != nil {
+		reason = firstFailure
 	}
 	events, diagnostics, decodeErr := engine.decoder.Finalize(reason)
 	terminalReason := reason
@@ -624,6 +652,13 @@ func (engine *StreamEngine) Finalize(reason error) ([][]byte, []llmprotocol.Even
 		events = suppressSuccessfulTerminal(events)
 		engine.pendingCompletion = nil
 		terminalReason = decodeErr
+		if firstFailure != nil {
+			// Finalizing a poisoned decoder may surface a secondary state or
+			// resource-limit error while it tries to synthesize its terminal
+			// event. The first failure is the stream contract: use it for both
+			// the public terminal frame and the caller-visible error.
+			terminalReason = firstFailure
+		}
 	} else if terminalReason != nil {
 		// A provider success observed before HTTP EOS is provisional. Transport
 		// cancellation or deadline expiry wins even when the source decoder has
@@ -643,10 +678,11 @@ func (engine *StreamEngine) Finalize(reason error) ([][]byte, []llmprotocol.Even
 		engine.pendingCompletion = nil
 	}
 	frames := make([][]byte, 0, len(events)+1)
+	acceptedEvents := make([]llmprotocol.Event, 0, len(events))
 	for index := range events {
 		if engine.mutation != nil {
 			if mutationErr := engine.mutation(&events[index]); mutationErr != nil {
-				return engine.finalizeFailure(frames, events, diagnostics, mutationErr)
+				return engine.finalizeFailure(frames, acceptedEvents, diagnostics, mutationErr)
 			}
 		}
 		event := events[index]
@@ -655,23 +691,27 @@ func (engine *StreamEngine) Finalize(reason error) ([][]byte, []llmprotocol.Even
 			engine.targetCapabilities,
 			llmprotocol.RequiredEventCapabilities(event),
 		); capabilityErr != nil {
-			return engine.finalizeFailure(frames, events, diagnostics, capabilityErr)
+			return engine.finalizeFailure(frames, acceptedEvents, diagnostics, capabilityErr)
 		}
 		encoded, eventDiagnostics, encodeErr := engine.encoder.Push(event)
 		diagnostics = appendDiagnostics(diagnostics, eventDiagnostics, engine.maxDiagnostics)
 		frames = append(frames, encoded...)
 		if encodeErr != nil {
-			return engine.finalizeFailure(frames, events, diagnostics, encodeErr)
+			return engine.finalizeFailure(frames, acceptedEvents, diagnostics, encodeErr)
 		}
+		acceptedEvents = append(acceptedEvents, event)
 	}
 	encoded, encodeDiagnostics, encodeErr := engine.encoder.Finalize(terminalReason)
 	diagnostics = appendDiagnostics(diagnostics, encodeDiagnostics, engine.maxDiagnostics)
 	frames = append(frames, encoded...)
 	engine.terminal = true
 	if decodeErr != nil {
-		return frames, events, diagnostics, decodeErr
+		if firstFailure != nil {
+			return frames, acceptedEvents, diagnostics, firstFailure
+		}
+		return frames, acceptedEvents, diagnostics, decodeErr
 	}
-	return frames, events, diagnostics, encodeErr
+	return frames, acceptedEvents, diagnostics, encodeErr
 }
 
 func containsFailedTerminal(events []llmprotocol.Event) bool {

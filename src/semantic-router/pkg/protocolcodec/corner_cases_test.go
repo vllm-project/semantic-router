@@ -47,6 +47,68 @@ func TestBufferedWireContractsRejectNonObjectDocuments(t *testing.T) {
 	}
 }
 
+func TestRequestTranslationRejectsTargetsThatRequireConversationMessages(t *testing.T) {
+	engine := NewBuiltinEngine()
+	body := []byte(`{"model":"provider-model","input":[]}`)
+
+	_, err := engine.TranslateRequest(llmprotocol.OpenAIResponsesV1, llmprotocol.OpenAIChatV1, body, nil)
+	assertProtocolError(t, err, llmprotocol.ErrorUnsupportedFeature, "chat_messages_required")
+
+	_, err = engine.TranslateRequest(llmprotocol.OpenAIResponsesV1, llmprotocol.AnthropicMessagesV1, body, nil)
+	assertProtocolError(t, err, llmprotocol.ErrorUnsupportedFeature, "anthropic_messages_required")
+}
+
+func TestResponsesTranslationSynthesizesRequiredErrorCode(t *testing.T) {
+	engine := NewBuiltinEngine()
+	translated, err := engine.TranslateResponse(
+		llmprotocol.OpenAIChatV1,
+		llmprotocol.OpenAIResponsesV1,
+		[]byte(`{"error":{"type":"server_error","message":"upstream failed"}}`),
+		nil,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, err := engine.DecodeResponse(llmprotocol.OpenAIResponsesV1, translated.Body); err != nil {
+		t.Fatalf("translated Responses error is invalid: %v\n%s", err, translated.Body)
+	}
+	if !bytes.Contains(translated.Body, []byte(`"code":"server_error"`)) {
+		t.Fatalf("translated Responses error does not contain its required canonical code: %s", translated.Body)
+	}
+}
+
+func TestAnthropicTransportErrorCannotEnterModelResponsePath(t *testing.T) {
+	engine := NewBuiltinEngine()
+	body := []byte(`{"type":"error","error":{"type":"api_error","message":"upstream failed"}}`)
+
+	_, _, _, err := engine.DecodeResponse(llmprotocol.AnthropicMessagesV1, body)
+	assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, "anthropic_transport_error_on_response_path")
+
+	transportError, _, err := engine.DecodeTransportError(llmprotocol.AnthropicMessagesV1, body)
+	if err != nil {
+		t.Fatalf("Anthropic error envelope was not accepted on the transport-error path: %v", err)
+	}
+	if transportError.Error == nil || transportError.Error.Message != "upstream failed" {
+		t.Fatalf("Anthropic transport error was not decoded: %#v", transportError)
+	}
+}
+
+func TestResponsesContentRequiresItsDiscriminatorFields(t *testing.T) {
+	engine := NewBuiltinEngine()
+	missingRefusal := []byte(`{"id":"response_1","status":"completed","output":[{"type":"message","id":"message_1","role":"assistant","status":"completed","content":[{"type":"refusal"}]}]}`)
+	_, _, _, err := engine.DecodeResponse(llmprotocol.OpenAIResponsesV1, missingRefusal)
+	assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, "invalid_response_content")
+
+	emptyRefusal := []byte(`{"id":"response_1","status":"completed","output":[{"type":"message","id":"message_1","role":"assistant","status":"completed","content":[{"type":"refusal","refusal":""}]}]}`)
+	translated, err := engine.TranslateResponse(llmprotocol.OpenAIResponsesV1, llmprotocol.OpenAIChatV1, emptyRefusal, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, err := engine.DecodeResponse(llmprotocol.OpenAIChatV1, translated.Body); err != nil {
+		t.Fatalf("empty refusal was not preserved as an explicit Chat refusal: %v\n%s", err, translated.Body)
+	}
+}
+
 func TestStreamWireContractsRejectNonObjectEventData(t *testing.T) {
 	fixtures := map[llmprotocol.WireFormat]string{
 		llmprotocol.OpenAIChatV1:        "data: null\n\n",
@@ -290,9 +352,10 @@ func TestValidFramesBeforeMalformedFrameAreNotDroppedAcrossEveryProtocolPair(t *
 			"data: {\"id\":\"chatcmpl_1\",\"object\":\"chat.completion.chunk\",\"model\":\"provider-model\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"partial\"},\"finish_reason\":null}]}\n\n",
 		),
 		llmprotocol.OpenAIResponsesV1: []byte(
-			"event: response.created\ndata: {\"type\":\"response.created\",\"sequence_number\":0,\"response\":{\"id\":\"resp_1\",\"object\":\"response\",\"model\":\"provider-model\",\"status\":\"in_progress\"}}\n\n" +
-				"event: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"sequence_number\":1,\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"status\":\"in_progress\"}}\n\n" +
-				"event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"sequence_number\":2,\"output_index\":0,\"item_id\":\"msg_1\",\"content_index\":0,\"delta\":\"partial\"}\n\n",
+			"event: response.created\ndata: {\"type\":\"response.created\",\"sequence_number\":0,\"response\":{\"id\":\"resp_1\",\"object\":\"response\",\"model\":\"provider-model\",\"status\":\"in_progress\",\"output\":[]}}\n\n" +
+				"event: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"sequence_number\":1,\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"status\":\"in_progress\",\"content\":[]}}\n\n" +
+				"event: response.content_part.added\ndata: {\"type\":\"response.content_part.added\",\"sequence_number\":2,\"output_index\":0,\"item_id\":\"msg_1\",\"content_index\":0,\"part\":{\"type\":\"output_text\",\"text\":\"\",\"annotations\":[]}}\n\n" +
+				"event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"sequence_number\":3,\"output_index\":0,\"item_id\":\"msg_1\",\"content_index\":0,\"delta\":\"partial\"}\n\n",
 		),
 		llmprotocol.AnthropicMessagesV1: []byte(
 			"event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_1\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"provider-model\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":2,\"output_tokens\":0}}}\n\n" +
@@ -1122,7 +1185,7 @@ func TestResponsesFailureUsageSurvivesBufferedAndStreamingDecode(t *testing.T) {
 
 	stream := []byte(
 		"event: response.created\ndata: {\"type\":\"response.created\",\"sequence_number\":0,\"response\":{\"id\":\"resp_failed\",\"object\":\"response\",\"model\":\"provider-model\",\"status\":\"in_progress\",\"output\":[]}}\n\n" +
-			"event: response.failed\ndata: {\"type\":\"response.failed\",\"sequence_number\":0,\"response\":" + resource + "}\n\n",
+			"event: response.failed\ndata: {\"type\":\"response.failed\",\"sequence_number\":1,\"response\":" + resource + "}\n\n",
 	)
 	streamed, _, err := engine.DecodeResponseStream(
 		llmprotocol.OpenAIResponsesV1,
