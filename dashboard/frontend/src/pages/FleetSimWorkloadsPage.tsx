@@ -53,7 +53,7 @@ export default function FleetSimWorkloadsPage() {
           stats,
           statsSummary: `P99 ${formatNumber(stats.p99_total_tokens)} tokens · ${formatNumber(stats.n_requests)} synthetic samples`,
         }
-      })
+      }),
     )
     setWorkloads(enriched)
     setTraces(tracesData)
@@ -171,7 +171,6 @@ export default function FleetSimWorkloadsPage() {
     <FleetSimSurfaceLayout
       title="Workloads"
       description="Curate the traffic inputs behind every planning run, from reusable library profiles to uploaded production traces."
-      currentPath="/fleet-sim/workloads"
       meta={[
         { label: 'Library profiles', value: formatNumber(workloads.length) },
         { label: 'Uploaded traces', value: formatNumber(traces.length) },
@@ -183,14 +182,20 @@ export default function FleetSimWorkloadsPage() {
           <div>
             <span className={styles.sectionKicker}>Upload</span>
             <h2 className={styles.sectionTitle}>Trace Intake</h2>
-            <p className={styles.sectionDescription}>Add replayable traces for traffic you want to compare against the built-in planning library.</p>
+            <p className={styles.sectionDescription}>
+              Add replayable traces for traffic you want to compare against the built-in planning
+              library.
+            </p>
           </div>
         </div>
         <div className={styles.formStack}>
           <div className={styles.fieldSection}>
             <div>
               <span className={styles.sectionKicker}>Trace source</span>
-              <p className={styles.sectionDescription}>Use the same intake formats the simulator already understands and keep them searchable from the dashboard.</p>
+              <p className={styles.sectionDescription}>
+                Use the same intake formats the simulator already understands and keep them
+                searchable from the dashboard.
+              </p>
             </div>
             <div className={styles.formGrid}>
               <label className={styles.field}>
@@ -218,7 +223,9 @@ export default function FleetSimWorkloadsPage() {
           <button type="button" className={styles.primaryButton} onClick={handleUploadButtonClick}>
             Upload Trace
           </button>
-          <span className={styles.inlineHint}>Pick the format first, then choose the trace file from the system upload dialog.</span>
+          <span className={styles.inlineHint}>
+            Pick the format first, then choose the trace file from the system upload dialog.
+          </span>
         </div>
         {message ? <p className={`${styles.message} ${styles.messageSuccess}`}>{message}</p> : null}
         {error ? <p className={`${styles.message} ${styles.messageError}`}>{error}</p> : null}
@@ -229,7 +236,9 @@ export default function FleetSimWorkloadsPage() {
           <div>
             <span className={styles.sectionKicker}>Library</span>
             <h2 className={styles.sectionTitle}>Built-in workloads</h2>
-            <p className={styles.sectionDescription}>Reusable traffic patterns for quick sizing passes before you pull in a custom trace.</p>
+            <p className={styles.sectionDescription}>
+              Reusable traffic patterns for quick sizing passes before you pull in a custom trace.
+            </p>
           </div>
         </div>
         <div className={styles.libraryGrid}>
@@ -238,17 +247,35 @@ export default function FleetSimWorkloadsPage() {
               <div className={styles.libraryCardHeader}>
                 <div>
                   <span className={styles.libraryCardKey}>Built-in profile</span>
-                  <h3 className={styles.libraryCardTitle}>{formatBuiltinWorkloadName(workload.name)}</h3>
+                  <h3 className={styles.libraryCardTitle}>
+                    {formatBuiltinWorkloadName(workload.name)}
+                  </h3>
                 </div>
                 <span className={styles.metricPill}>
-                  {workload.stats ? `P99 ${formatNumber(workload.stats.p99_total_tokens)} tokens` : 'Loading profile'}
+                  {workload.stats
+                    ? `P99 ${formatNumber(workload.stats.p99_total_tokens)} tokens`
+                    : 'Loading profile'}
                 </span>
               </div>
-              <p className={styles.libraryCardText}>{describeBuiltinWorkload(workload.name, workload.description)}</p>
+              <p className={styles.libraryCardText}>
+                {describeBuiltinWorkload(workload.name, workload.description)}
+              </p>
               <div className={styles.metricPillRow}>
-                <span className={styles.metricPill}>{workload.stats ? `${formatNumber(workload.stats.n_requests)} samples` : 'Sampling'}</span>
-                <span className={styles.metricPill}>{workload.stats ? `${formatNumber(workload.stats.arrival_rate_rps, 1)} rps` : 'Profiling'}</span>
-                <span className={styles.metricPill}>{workload.stats ? `P95 ${formatNumber(workload.stats.p95_prompt_tokens)} prompt` : 'Waiting'}</span>
+                <span className={styles.metricPill}>
+                  {workload.stats
+                    ? `${formatNumber(workload.stats.n_requests)} samples`
+                    : 'Sampling'}
+                </span>
+                <span className={styles.metricPill}>
+                  {workload.stats
+                    ? `${formatNumber(workload.stats.arrival_rate_rps, 1)} rps`
+                    : 'Profiling'}
+                </span>
+                <span className={styles.metricPill}>
+                  {workload.stats
+                    ? `P95 ${formatNumber(workload.stats.p95_prompt_tokens)} prompt`
+                    : 'Waiting'}
+                </span>
               </div>
               <p className={styles.cardFootnote}>{workload.path.split('/').slice(-1)[0]}</p>
             </article>
@@ -271,7 +298,12 @@ export default function FleetSimWorkloadsPage() {
           keyExtractor={(row) => row.id}
           onView={(row) => void handleViewTrace(row)}
           onDelete={setTracePendingDelete}
-          pagination={{ pageSize: 25, pageSizeOptions: [25, 50, 100], itemLabel: 'traces', resetKey: search }}
+          pagination={{
+            pageSize: 25,
+            pageSizeOptions: [25, 50, 100],
+            itemLabel: 'traces',
+            resetKey: search,
+          }}
           emptyMessage="No uploaded traces yet."
         />
         <p className={styles.inlineHint} style={{ marginTop: '0.9rem' }}>
@@ -287,7 +319,11 @@ export default function FleetSimWorkloadsPage() {
         isOpen={Boolean(tracePendingDelete)}
         title="Delete uploaded trace?"
         description="This removes the trace from the workspace and from future run selection."
-        details={tracePendingDelete ? `${tracePendingDelete.name} · ${formatNumber(tracePendingDelete.n_requests)} requests` : undefined}
+        details={
+          tracePendingDelete
+            ? `${tracePendingDelete.name} · ${formatNumber(tracePendingDelete.n_requests)} requests`
+            : undefined
+        }
         confirmLabel="Delete trace"
         pending={deletePending}
         tone="danger"

@@ -29,6 +29,7 @@ export const useConversationStorage = <T>({
   preparePayloadForPersistence,
 }: UseConversationStorageOptions<T> = {}) => {
   const [conversations, setConversations] = useState<StoredConversation<T>[]>([])
+  const [isHydrated, setIsHydrated] = useState(false)
   const pendingPersistenceRef = useRef<StoredConversation<T>[] | null>(null)
   const persistenceTimerRef = useRef<number | null>(null)
 
@@ -99,6 +100,8 @@ export const useConversationStorage = <T>({
       setConversations(restored)
     } catch (err) {
       console.error('Failed to load conversations from localStorage', err)
+    } finally {
+      setIsHydrated(true)
     }
   }, [maxConversations, storageKey])
 
@@ -165,6 +168,19 @@ export const useConversationStorage = <T>({
     [updateAndPersist],
   )
 
+  const renameConversation = useCallback(
+    (id: string, title: string) => {
+      const normalizedTitle = title.trim().slice(0, 80)
+      if (!normalizedTitle) return
+      updateAndPersist((prev) =>
+        prev.map((conversation) =>
+          conversation.id === id ? { ...conversation, title: normalizedTitle } : conversation,
+        ),
+      )
+    },
+    [updateAndPersist],
+  )
+
   const clearAll = useCallback(() => {
     updateAndPersist(() => [])
   }, [updateAndPersist])
@@ -181,7 +197,9 @@ export const useConversationStorage = <T>({
 
   return {
     conversations,
+    isHydrated,
     saveConversation,
+    renameConversation,
     deleteConversation,
     clearAll,
     getConversation,

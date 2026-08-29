@@ -232,7 +232,11 @@ func (c *Compiler) compileComplexitySignal(s *SignalDecl) {
 	if obj, ok := s.Fields["composer"]; ok {
 		if ov, ok := obj.(ObjectValue); ok {
 			rc := compileComposerObj(ov)
-			rule.Composer = &rc
+			if err := config.NormalizeRuleOperator(&rc); err != nil {
+				c.addError(s.Pos, "complexity signal %q: %v", s.Name, err)
+			} else {
+				rule.Composer = &rc
+			}
 		}
 	}
 	if obj, ok := s.Fields["hard"]; ok {

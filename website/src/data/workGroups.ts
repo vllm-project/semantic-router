@@ -157,7 +157,8 @@ export const workGroups: WorkGroup[] = [
     goal: 'Deliver production-grade enterprise capabilities across supported environments and hardware.',
     scope: [
       'Multi-tenancy, identity, API keys, quotas, and audit',
-      'Stable, scalable APIs and reference stacks',
+      'Production observability, workload simulation, and capacity planning',
+      'Stable, scalable deployment APIs and reference stacks',
       'Multi-environment and multi-hardware support',
     ],
     leads: [

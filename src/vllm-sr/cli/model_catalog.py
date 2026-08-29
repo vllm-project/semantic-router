@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Iterable
-from copy import deepcopy
 from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
@@ -19,7 +18,6 @@ from cli.model_catalog_types import (
     CatalogCompatibility,
     CatalogComponentVersions,
     CatalogModel,
-    MaterializedCatalog,
     ModelCatalog,
     ModelCatalogError,
 )
@@ -67,17 +65,14 @@ __all__ = [
     "CatalogCompatibility",
     "CatalogComponentVersions",
     "CatalogModel",
-    "MaterializedCatalog",
     "ModelCatalog",
     "ModelCatalogError",
     "available_catalog_versions",
     "catalog_model_to_dict",
     "catalog_to_json",
     "find_catalog_model",
-    "fork_catalog_models",
     "load_all_model_catalogs",
     "load_model_catalog",
-    "materialize_catalog_models",
 ]
 
 
@@ -334,236 +329,6 @@ def find_catalog_model(
     raise ModelCatalogError(f"built-in model is not installed: {model_id}")
 
 
-def fork_catalog_models(
-    model_ids: Iterable[str],
-    destination: Path,
-    *,
-    catalog_version: str = DEFAULT_CHANNEL,
-    default_model: str | None = None,
-    component_versions: CatalogComponentVersions | None = None,
-) -> dict[str, Any]:
-    materialized = materialize_catalog_models(
-        model_ids,
-        catalog_version=catalog_version,
-        default_model=default_model,
-        component_versions=component_versions,
-    )
-
-    destination = destination.resolve()
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    if destination.exists():
-        raise ModelCatalogError(f"refusing to overwrite existing file: {destination}")
-    destination.write_text(
-        yaml.safe_dump(materialized.document, sort_keys=False), encoding="utf-8"
-    )
-    return {
-        "path": str(destination),
-        "catalog_version": materialized.catalog.version,
-        "enabled": list(materialized.enabled_models),
-        "default": materialized.default_model,
-        "verification": "verified",
-    }
-
-
-def materialize_catalog_models(
-    model_ids: Iterable[str],
-    *,
-    catalog_version: str = DEFAULT_CHANNEL,
-    default_model: str | None = None,
-    component_versions: CatalogComponentVersions | None = None,
-) -> MaterializedCatalog:
-    """Build the exact canonical document emitted by ``model fork``.
-
-    The catalog manifest stays outside the Router schema. Selection is encoded by
-    retaining only the chosen entrypoints and their isolated recipes; the default
-    is placed first so it can be recovered without adding distribution metadata to
-    strict runtime YAML.
-    """
-
-    catalog = load_model_catalog(catalog_version, component_versions=component_versions)
-    requested = tuple(
-        dict.fromkeys(model_id.strip() for model_id in model_ids if model_id.strip())
-    )
-    if not requested:
-        requested = catalog.enabled_models
-    known = {model.id: model for model in catalog.models}
-    missing = [model_id for model_id in requested if model_id not in known]
-    if missing:
-        raise ModelCatalogError(f"unknown built-in models: {', '.join(missing)}")
-    if any(not known[model_id].compatibility.compatible for model_id in requested):
-        raise ModelCatalogError("incompatible built-in models cannot be enabled")
-    selected_default = default_model or (
-        catalog.default_model if catalog.default_model in requested else requested[0]
-    )
-    if selected_default not in requested:
-        raise ModelCatalogError("default model must be one of the enabled models")
-
-    ordered_models = (
-        selected_default,
-        *(model_id for model_id in requested if model_id != selected_default),
-    )
-    ordered_assets = tuple(
-        dict.fromkeys(known[model_id].asset for model_id in ordered_models)
-    )
-    document = _merge_asset_documents(
-        [
-            _load_asset_yaml(catalog_version, catalog.assets[asset_id])
-            for asset_id in ordered_assets
-        ]
-    )
-    raw_entrypoints = document.get("entrypoints")
-    raw_recipes = document.get("recipes")
-    if not isinstance(raw_entrypoints, list) or not isinstance(raw_recipes, list):
-        raise ModelCatalogError(
-            "built-in model asset is missing recipes or entrypoints"
-        )
-
-    selected_entries: list[dict[str, Any]] = []
-    selected_recipe_names: list[str] = []
-    for model_id in ordered_models:
-        model = known[model_id]
-        matches = [
-            entry
-            for entry in raw_entrypoints
-            if isinstance(entry, dict)
-            and model.entrypoint in (entry.get("model_names") or [])
-        ]
-        if len(matches) != 1 or matches[0].get("recipe") != model.recipe:
-            raise ModelCatalogError(
-                f"catalog model {model_id} does not match its packaged entrypoint"
-            )
-        selected_entries.append(matches[0])
-        if model.recipe not in selected_recipe_names:
-            selected_recipe_names.append(model.recipe)
-
-    recipes_by_name = {
-        recipe.get("name"): recipe
-        for recipe in raw_recipes
-        if isinstance(recipe, dict) and isinstance(recipe.get("name"), str)
-    }
-    if any(name not in recipes_by_name for name in selected_recipe_names):
-        raise ModelCatalogError("catalog model references a missing packaged recipe")
-    document["entrypoints"] = selected_entries
-    document["recipes"] = [recipes_by_name[name] for name in selected_recipe_names]
-    return MaterializedCatalog(
-        catalog=catalog,
-        enabled_models=ordered_models,
-        default_model=selected_default,
-        document=document,
-    )
-
-
-def _merge_asset_documents(documents: list[dict[str, Any]]) -> dict[str, Any]:
-    """Merge compatible catalog assets without guessing conflict resolution.
-
-    Runtime-global settings must be byte-semantically equal. Provider bindings
-    and model cards are keyed by name and may be extended by another asset, but
-    conflicting definitions fail closed. Entrypoints and recipes are likewise
-    additive and identity-unique. This lets MoM generations coexist while
-    preventing one asset from silently changing another asset's runtime.
-    """
-
-    if not documents:
-        raise ModelCatalogError("no built-in model assets were selected")
-    merged = deepcopy(documents[0])
-    for incoming in documents[1:]:
-        if set(incoming) != set(merged):
-            raise ModelCatalogError("catalog assets have incompatible top-level fields")
-        for key in merged:
-            if key in {"providers", "routing", "entrypoints", "recipes"}:
-                continue
-            if incoming[key] != merged[key]:
-                raise ModelCatalogError(
-                    f"catalog assets conflict on runtime-global field: {key}"
-                )
-        merged["providers"] = _merge_provider_documents(
-            merged.get("providers"), incoming.get("providers")
-        )
-        merged["routing"] = _merge_routing_documents(
-            merged.get("routing"), incoming.get("routing")
-        )
-        merged["entrypoints"] = _merge_named_documents(
-            merged.get("entrypoints"),
-            incoming.get("entrypoints"),
-            key=lambda item: tuple(item.get("model_names") or []),
-            label="entrypoint",
-        )
-        merged["recipes"] = _merge_named_documents(
-            merged.get("recipes"),
-            incoming.get("recipes"),
-            key=lambda item: item.get("name"),
-            label="recipe",
-        )
-    return merged
-
-
-def _merge_provider_documents(base: Any, incoming: Any) -> dict[str, Any]:
-    if not isinstance(base, dict) or not isinstance(incoming, dict):
-        raise ModelCatalogError("catalog asset providers must be mappings")
-    if set(base) != set(incoming):
-        raise ModelCatalogError("catalog assets have incompatible provider fields")
-    merged = deepcopy(base)
-    for key in base:
-        if key == "models":
-            merged[key] = _merge_named_documents(
-                base[key],
-                incoming[key],
-                key=lambda item: item.get("name"),
-                label="provider model",
-            )
-        elif base[key] != incoming[key]:
-            raise ModelCatalogError(f"catalog assets conflict on providers.{key}")
-    return merged
-
-
-def _merge_routing_documents(base: Any, incoming: Any) -> dict[str, Any]:
-    if not isinstance(base, dict) or not isinstance(incoming, dict):
-        raise ModelCatalogError("catalog asset routing must be mappings")
-    if set(base) != set(incoming):
-        raise ModelCatalogError("catalog assets have incompatible routing fields")
-    merged = deepcopy(base)
-    for key in base:
-        if key == "modelCards":
-            merged[key] = _merge_named_documents(
-                base[key],
-                incoming[key],
-                key=lambda item: item.get("name"),
-                label="model card",
-            )
-        elif base[key] != incoming[key]:
-            raise ModelCatalogError(f"catalog assets conflict on routing.{key}")
-    return merged
-
-
-def _merge_named_documents(base: Any, incoming: Any, *, key, label: str) -> list[Any]:
-    if not isinstance(base, list) or not isinstance(incoming, list):
-        raise ModelCatalogError(f"catalog asset {label}s must be lists")
-    merged = deepcopy(base)
-    by_identity: dict[Any, Any] = {}
-    for item in merged:
-        if not isinstance(item, dict) or not key(item):
-            raise ModelCatalogError(f"catalog asset {label} identity is invalid")
-        identity = key(item)
-        if identity in by_identity:
-            raise ModelCatalogError(f"duplicate catalog asset {label}: {identity}")
-        by_identity[identity] = item
-    for item in incoming:
-        if not isinstance(item, dict) or not key(item):
-            raise ModelCatalogError(f"catalog asset {label} identity is invalid")
-        identity = key(item)
-        existing = by_identity.get(identity)
-        if existing is not None:
-            if existing != item:
-                raise ModelCatalogError(
-                    f"catalog assets conflict on {label}: {identity}"
-                )
-            continue
-        copied = deepcopy(item)
-        merged.append(copied)
-        by_identity[identity] = copied
-    return merged
-
-
 def catalog_to_json(catalog: ModelCatalog, models: Iterable[CatalogModel]) -> str:
     payload = {
         "catalog_version": catalog.version,
@@ -610,8 +375,7 @@ def _load_asset_yaml(version: str, asset: dict[str, str]) -> dict[str, Any]:
         raise ModelCatalogError(str(error)) from error
     if digest != asset["sha256"]:
         raise ModelCatalogError("built-in model asset digest verification failed")
-    content = bundle.joinpath("config.yaml").read_bytes()
-    document = yaml.safe_load(content)
+    document = yaml.safe_load(bundle.joinpath("config.yaml").read_bytes())
     if not isinstance(document, dict):
         raise ModelCatalogError("built-in model asset is invalid")
     return document

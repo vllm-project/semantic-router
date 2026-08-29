@@ -46,7 +46,7 @@ For platform notes, detailed setup options, and troubleshooting, see the **[Inst
 <summary>Online playground credentials</summary>
 
 - Username: `love@vllm-sr.ai`
-- Password: `vllm-sr`
+- Password: `vllm-sr-read`
 
 </details>
 

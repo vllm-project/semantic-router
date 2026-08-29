@@ -115,7 +115,7 @@ until the selected cases are known to be isolated.
 ### Supported Profiles
 
 - **envoy-ai-gateway**: baseline routing, safety, cache, and decision contracts.
-- **dashboard**: dashboard API, validation, and security-policy contracts.
+- **dashboard**: dashboard API, validation, and routing-authoring contracts.
 - **aibrix**: AIBrix gateway and control-plane integration.
 - **routing-strategies**: keyword, entropy, and fallback routing.
 - **dynamic-config**: CRD-driven routing and embedding signals.

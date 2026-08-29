@@ -4,6 +4,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
@@ -183,5 +184,67 @@ func TestRouterManagementProxyAllowlistMatchesDashboardSurfaces(t *testing.T) {
 		if got := routerManagementProxyRouteAllowed(test.method, test.path); got != test.want {
 			t.Fatalf("routerManagementProxyRouteAllowed(%q, %q) = %v, want %v", test.method, test.path, got, test.want)
 		}
+	}
+}
+
+func TestRedactCredentialParams(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{
+			name: "authToken is redacted and other params survive",
+			raw:  "http://localhost:8711/embedded/grafana/x?orgId=1&authToken=secret",
+			want: "http://localhost:8711/embedded/grafana/x?authToken=%5BREDACTED%5D&orgId=1",
+		},
+		{
+			name: "token is redacted",
+			raw:  "http://localhost:8711/x?token=secret",
+			want: "http://localhost:8711/x?token=%5BREDACTED%5D",
+		},
+		{
+			name: "access_token is redacted",
+			raw:  "http://localhost:8711/x?access_token=secret",
+			want: "http://localhost:8711/x?access_token=%5BREDACTED%5D",
+		},
+		{
+			name: "repeated authToken collapses to one redaction",
+			raw:  "http://localhost:8711/x?authToken=a&authToken=b",
+			want: "http://localhost:8711/x?authToken=%5BREDACTED%5D",
+		},
+		{
+			name: "fragment is preserved",
+			raw:  "http://localhost:8711/x?authToken=secret#gatewayUrl=http://localhost:8080",
+			want: "http://localhost:8711/x?authToken=%5BREDACTED%5D#gatewayUrl=http://localhost:8080",
+		},
+		{
+			name: "no credential is returned byte for byte",
+			raw:  "http://localhost:8711/embedded/grafana/x?orgId=1&b=2",
+			want: "http://localhost:8711/embedded/grafana/x?orgId=1&b=2",
+		},
+		{name: "empty", raw: "", want: ""},
+		{name: "unparsable", raw: "::::", want: "[unparsable]"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := redactCredentialParams(tc.raw); got != tc.want {
+				t.Fatalf("redactCredentialParams(%q) = %q, want %q", tc.raw, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestRedactCredentialParamsRemovesTheTokenFromTheLoggedReferer(t *testing.T) {
+	t.Parallel()
+
+	fakeJWT := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.payload.signature"
+	logged := redactCredentialParams("http://localhost:8711/embedded/grafana/goto/x?orgId=1&authToken=" + fakeJWT)
+	if strings.Contains(logged, fakeJWT) {
+		t.Fatalf("the token survived redaction: %q", logged)
 	}
 }

@@ -15,7 +15,6 @@ import os
 from pathlib import Path
 
 from cli.bootstrap import is_setup_mode_config
-from cli.commands.runtime_model_source import ServeModelSource
 from cli.commands.runtime_paths import (
     _runtime_config_output_path,
     materialize_runtime_config,
@@ -44,12 +43,9 @@ def _prepare_docker_runtime_config(
     source_setup_mode: bool,
     platform: str | None,
     recipe_env_bindings: tuple[str, ...],
-    *,
-    state_root_dir: Path | None = None,
-    require_exact_source: bool = False,
 ):
     stack_layout = resolve_runtime_stack()
-    state_root_dir = state_root_dir or (
+    state_root_dir = (
         Path(os.environ["VLLM_SR_STATE_ROOT_DIR"]).expanduser().absolute()
         if os.getenv("VLLM_SR_STATE_ROOT_DIR", "").strip()
         else config_path.expanduser().absolute().parent
@@ -77,12 +73,6 @@ def _prepare_docker_runtime_config(
             state_root_dir=state_root_dir, stack_name=stack_layout.stack_name
         )
         if package_active:
-            if require_exact_source:
-                raise ValueError(
-                    "This stack has an active managed Recipe, so the requested "
-                    "catalog model selection was not applied. Deactivate the Recipe "
-                    "in the Dashboard or use a different VLLM_SR_STACK_NAME."
-                )
             # Authorize against what the package declares, not against what
             # the CLI materialized. The runtime config also carries the CLI's
             # own references -- this stack's generated storage credentials --
@@ -109,16 +99,6 @@ def _prepare_docker_runtime_config(
                 state_root_dir=state_root_dir,
                 stack_name=stack_layout.stack_name,
             )
-            if (
-                require_exact_source
-                and effective_config_path.read_bytes() != effective_config_bytes
-            ):
-                raise ValueError(
-                    "The requested catalog model selection conflicts with Dashboard "
-                    "changes preserved in this stack's runtime config. Use a different "
-                    "VLLM_SR_STACK_NAME or serve the edited config explicitly with "
-                    "--config."
-                )
         setup_mode = is_setup_mode_config(effective_config_path)
         return effective_config_path, setup_mode, runtime_lock
     except Exception:
@@ -129,7 +109,6 @@ def _prepare_docker_runtime_config(
 def _prepare_effective_serve_config(
     config_path: Path,
     *,
-    model_source: ServeModelSource | None,
     resolved_target: str,
     algorithm: str | None,
     source_setup_mode: bool,
@@ -138,12 +117,6 @@ def _prepare_effective_serve_config(
 ):
     """Prepare the target-specific active config and its optional runtime lock."""
 
-    if model_source is not None and resolved_target != "docker":
-        raise ValueError(
-            "serve MODEL currently supports the local Docker target. For Kubernetes, "
-            "materialize an editable config with 'vllm-sr model fork' and deploy it "
-            "through the chart or operator workflow."
-        )
     if resolved_target != "docker" and recipe_env_bindings:
         raise ValueError(
             "--recipe-env is supported only for local Docker Recipe packages"
@@ -155,10 +128,6 @@ def _prepare_effective_serve_config(
             source_setup_mode,
             platform,
             recipe_env_bindings,
-            state_root_dir=(
-                model_source.state_root if model_source is not None else None
-            ),
-            require_exact_source=model_source is not None,
         )
         return effective_path, setup_mode, runtime_lock, None
 
