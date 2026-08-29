@@ -50,6 +50,7 @@ repos:
         require_serial: true
         files: \.md$
         exclude: ^(node_modules/|website/node_modules/|dashboard/frontend/node_modules/|dashboard/wizmap/node_modules/|bench/|e2e/config/models/|models/|vsr/|website/docs/api/crd-reference\.md$|CLAUDE\.md$)
+        require_serial: true
 
   # Yaml specific hooks
   - repo: local
