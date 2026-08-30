@@ -1,0 +1,11 @@
+{
+  "operation": "request",
+  "body": {
+    "model": "client-model",
+    "input": "hello",
+    "tools": [
+      {"type": "function", "name": "lookup", "parameters": {"type": "object"}},
+      {"type": "function", "name": "lookup", "parameters": {"type": "object"}}
+    ]
+  }
+}

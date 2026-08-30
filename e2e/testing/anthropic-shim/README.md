@@ -13,17 +13,17 @@ Anthropic behaviour without forking llama.cpp.
 | `tool_result.content` as `TextBlockParam[]` | Same flattening issue inside tool results | Joins text fields with `\n` before forwarding |
 | Prompt-cache token counters | `cache_creation_input_tokens` and `cache_read_input_tokens` are never populated | Tracks per-session request-prefix hashes; sets `cache_creation_input_tokens` on first request and `cache_read_input_tokens` on subsequent repeats |
 
-Everything else (image blocks, `top_k`, `metadata.user_id`,
-`tool_result.is_error`, headers like `anthropic-version` and
-`anthropic-beta`, streaming SSE) is forwarded verbatim.
+The inbound boundary is closed against the pinned Messages schema revision in
+`schema_contract.json`. Published fields and nested unions are retained, while an
+unknown top-level field fails with a native Anthropic error envelope. The three
+llama-server adaptations above happen only after that provider contract is recorded.
 
 ## Debug endpoint
 
-`GET /debug/last-request` returns the most recent translated Anthropic
-Messages body that the shim forwarded to llama-server for a given
-session, plus the original inbound headers. This allows e2e tests to
-assert on request-side preservation (header forwarding, field
-translation) without log-scraping.
+`GET /debug/last-request` returns the most recent native Anthropic Messages body
+received for a given session, before the llama-server adapter runs, plus the inbound
+headers. This lets E2E tests assert the exact provider contract emitted by ExtProc
+without log-scraping.
 
 The session is identified by the `x-vsr-test-session-id` request
 header or the same-named query parameter. Returns 404 when no request
@@ -44,13 +44,16 @@ e2e/testing/anthropic-shim/
 │   ├── __init__.py
 │   ├── __main__.py     # python -m anthropic_shim entry point
 │   ├── app.py          # FastAPI proxy
+│   ├── provider_contract.py
 │   └── translate.py    # pure translation helpers
 ├── tests/
 │   ├── test_app.py
+│   ├── test_provider_contract.py
 │   └── test_translate.py
 ├── Dockerfile
 ├── pyproject.toml
 ├── requirements.txt
+├── schema_contract.json
 └── README.md
 ```
 

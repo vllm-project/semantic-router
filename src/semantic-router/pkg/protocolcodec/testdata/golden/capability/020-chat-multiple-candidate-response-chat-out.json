@@ -1,0 +1,32 @@
+{
+  "status": "ok",
+  "body": {
+    "choices": [
+      {
+        "finish_reason": "stop",
+        "index": 0,
+        "message": {
+          "content": "primary",
+          "role": "assistant"
+        }
+      },
+      {
+        "finish_reason": "stop",
+        "index": 1,
+        "message": {
+          "content": "alternative",
+          "role": "assistant"
+        }
+      }
+    ],
+    "created": 0,
+    "id": "chat_multi_1",
+    "model": "routed-model",
+    "object": "chat.completion",
+    "usage": {
+      "completion_tokens": 2,
+      "prompt_tokens": 2,
+      "total_tokens": 4
+    }
+  }
+}

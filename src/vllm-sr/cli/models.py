@@ -1523,11 +1523,11 @@ class ModelPricing(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    currency: Optional[str] = "USD"
-    prompt_per_1m: Optional[float] = 0.0
-    cached_input_per_1m: Optional[float] = 0.0
-    cache_write_per_1m: Optional[float] = Field(default=None, ge=0)
-    completion_per_1m: Optional[float] = 0.0
+    currency: Optional[str] = Field(default="USD", pattern=r"^[A-Z]{3}$")
+    prompt_per_1m: Optional[float] = Field(default=0.0, ge=0, allow_inf_nan=False)
+    cached_input_per_1m: Optional[float] = Field(default=0.0, ge=0, allow_inf_nan=False)
+    cache_write_per_1m: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False)
+    completion_per_1m: Optional[float] = Field(default=0.0, ge=0, allow_inf_nan=False)
 
 
 class ProviderReliability(BaseModel):

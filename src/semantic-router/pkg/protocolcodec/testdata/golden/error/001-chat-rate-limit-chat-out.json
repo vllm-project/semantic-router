@@ -1,0 +1,8 @@
+{
+  "error": {
+    "code": "rate_limit_exceeded",
+    "message": "Rate limit exceeded.",
+    "param": null,
+    "type": "rate_limit_error"
+  }
+}

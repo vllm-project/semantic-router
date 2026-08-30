@@ -1,0 +1,14 @@
+{
+  "operation": "request",
+  "base": {
+    "model": "client-model",
+    "input": "hello"
+  },
+  "cases": [
+    {"name": "temperature_minimum", "patch": {"temperature": 0}},
+    {"name": "temperature_maximum", "patch": {"temperature": 2}},
+    {"name": "top_p_minimum", "patch": {"top_p": 0}},
+    {"name": "top_p_maximum", "patch": {"top_p": 1}},
+    {"name": "max_output_tokens_minimum", "patch": {"max_output_tokens": 16}}
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "input": [
+    {
+      "content": [
+        {
+          "text": "Return the weather as JSON.",
+          "type": "input_text"
+        }
+      ],
+      "id": "item_6a32e29c376158d871e9638e",
+      "role": "user",
+      "type": "message"
+    }
+  ],
+  "max_output_tokens": 48,
+  "model": "routed-model",
+  "reasoning": {
+    "effort": "high"
+  },
+  "text": {
+    "format": {
+      "name": "structured_output",
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "temperature_c": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "temperature_c"
+        ],
+        "type": "object"
+      },
+      "strict": true,
+      "type": "json_schema"
+    }
+  }
+}

@@ -5,24 +5,24 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 )
 
 // populateSessionTransitionFields derives session-aware metadata from the
-// request context. Must be called after ResponseAPICtx or ChatCompletionMessages
-// are populated.
+// request context. The neutral request is authoritative; optional retained
+// object history augments it without changing protocol semantics.
 func populateSessionTransitionFields(ctx *RequestContext) {
 	if ctx == nil {
 		return
 	}
 
-	isResponseAPI := ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.IsResponseAPIRequest
-	if isResponseAPI {
-		ctx.SessionID = ctx.ResponseAPICtx.ConversationID
-		ctx.PreviousResponseID = ctx.ResponseAPICtx.PreviousResponseID
-		history := ctx.ResponseAPICtx.ConversationHistory
+	if state := ctx.ResponseObjectState; state != nil {
+		ctx.SessionID = state.ConversationID
+		ctx.PreviousResponseID = state.PreviousResponseID
+		history := state.ConversationHistory
 		ctx.TurnIndex = len(history)
 		for i := len(history) - 1; i >= 0; i-- {
 			if history[i] != nil {
@@ -45,17 +45,17 @@ func populateSessionTransitionFields(ctx *RequestContext) {
 		}
 	}
 
-	if len(ctx.ChatCompletionMessages) == 0 {
+	if ctx.SemanticRequest == nil || len(ctx.SemanticRequest.Messages) == 0 {
 		if ctx.SessionID == "" {
 			ctx.SessionID = deriveSessionIDFromRequestID(ctx)
 		}
 		return
 	}
 
-	populateChatCompletionSessionIDIfNeeded(ctx)
+	populateSemanticSessionIDIfNeeded(ctx)
 
-	ctx.TurnIndex = sessiontelemetry.ChatTurnNumber(sessionTransitionChatMessages(ctx.ChatCompletionMessages)) - 1
-	ctx.HistoryTokenCount = historyTokensFromChatMessages(ctx.ChatCompletionMessages)
+	ctx.TurnIndex = sessiontelemetry.ChatTurnNumber(sessionTransitionMessages(ctx.SemanticRequest.Messages)) - 1
+	ctx.HistoryTokenCount = historyTokensFromSemanticMessages(ctx.SemanticRequest.Messages)
 	// Populate PreviousModel for Chat Completions from the in-memory last-model
 	// store, recorded at response time of the previous turn in this session.
 	// (Response API derives PreviousModel from the conversation chain above.)
@@ -114,7 +114,7 @@ func populateLastSessionObservation(ctx *RequestContext) {
 //     conversation; operators wanting privacy should run a hashing plugin
 //     in front.
 //  2. metadata.user_id — populated by the PR2 Anthropic inbound parser
-//     into IRExtensions.MetadataUserID. Returned with an "ant-md-" prefix
+//     into neutral request metadata. Returned with an "ant-md-" prefix
 //     so the namespace is distinguishable from other derivation sources.
 //
 // Returns empty string when neither signal is present, leaving the caller
@@ -126,27 +126,27 @@ func deriveSessionIDFromAnthropicSignals(ctx *RequestContext) string {
 	if sid := strings.TrimSpace(headerValueCI(ctx, headers.XClaudeCodeSessionID)); sid != "" {
 		return sid
 	}
-	if ctx.IRExtensions != nil {
-		if uid := strings.TrimSpace(ctx.IRExtensions.MetadataUserID); uid != "" {
+	if ctx.SemanticRequest != nil {
+		if uid := strings.TrimSpace(ctx.SemanticRequest.Metadata["user_id"]); uid != "" {
 			return "ant-md-" + uid
 		}
 	}
 	return ""
 }
 
-// populateChatCompletionSessionIDIfNeeded sets ctx.SessionID when not already
-// pinned (e.g. by x-session-id). Kept separate to avoid deep nesting in
+// populateSemanticSessionIDIfNeeded sets ctx.SessionID when not already pinned
+// (for example by x-session-id). Kept separate to avoid deep nesting in
 // populateSessionTransitionFields (nestif).
-func populateChatCompletionSessionIDIfNeeded(ctx *RequestContext) {
+func populateSemanticSessionIDIfNeeded(ctx *RequestContext) {
 	if ctx.SessionID != "" {
 		return
 	}
 	userID := extractUserID(ctx)
 	if userID != "" {
-		ctx.SessionID = deriveSessionIDFromMessages(ctx.ChatCompletionMessages, userID)
+		ctx.SessionID = deriveSessionIDFromSemanticMessages(ctx.SemanticRequest.Messages, userID)
 		return
 	}
-	ctx.SessionID = deriveSessionIDFromMessagesStructure(ctx.ChatCompletionMessages)
+	ctx.SessionID = deriveSessionIDFromSemanticStructure(ctx.SemanticRequest.Messages)
 	if ctx.SessionID == "" {
 		ctx.SessionID = deriveSessionIDFromRequestID(ctx)
 	}
@@ -155,12 +155,12 @@ func populateChatCompletionSessionIDIfNeeded(ctx *RequestContext) {
 	}
 }
 
-func sessionTransitionChatMessages(messages []ChatCompletionMessage) []sessiontelemetry.ChatMessage {
+func sessionTransitionMessages(messages []llmprotocol.Message) []sessiontelemetry.ChatMessage {
 	converted := make([]sessiontelemetry.ChatMessage, len(messages))
 	for i := range messages {
 		converted[i] = sessiontelemetry.ChatMessage{
-			Role:    messages[i].Role,
-			Content: messages[i].Content,
+			Role:    string(messages[i].Role),
+			Content: semanticText(messages[i].Content),
 		}
 	}
 	return converted
@@ -203,17 +203,17 @@ func estimateStoredResponseTokens(resp *responseapi.StoredResponse) int {
 	return total
 }
 
-func historyTokensFromChatMessages(messages []ChatCompletionMessage) int {
+func historyTokensFromSemanticMessages(messages []llmprotocol.Message) int {
 	if len(messages) == 0 {
 		return 0
 	}
 	prior := messages
-	if messages[len(messages)-1].Role == "user" {
+	if messages[len(messages)-1].Role == llmprotocol.RoleUser {
 		prior = messages[:len(messages)-1]
 	}
 	total := 0
 	for _, msg := range prior {
-		total += estimateTokenLength(msg.Content)
+		total += estimateTokenLength(semanticText(msg.Content))
 		if total >= historyTokensCap {
 			return historyTokensCap
 		}

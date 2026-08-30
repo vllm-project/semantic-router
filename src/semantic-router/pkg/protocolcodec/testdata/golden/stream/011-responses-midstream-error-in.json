@@ -1,0 +1,8 @@
+{
+  "public_model": "public-model",
+  "provider_model": "provider-model",
+  "chunks": [
+    "event: response.created\ndata: {\"type\":\"response.created\",\"sequence_number\":0,\"response\":{\"id\":\"failed_1\",\"object\":\"response\",\"created_at\":100,\"model\":\"provider-model\",\"status\":\"in_progress\",\"output\":[]}}\n\nevent: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"sequence_number\":1,\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"output_1\",\"role\":\"assistant\",\"status\":\"in_progress\",\"content\":[]}}\n\nevent: response.content_part.added\ndata: {\"type\":\"response.content_part.added\",\"sequence_number\":2,\"output_index\":0,\"item_id\":\"output_1\",\"content_index\":0,\"part\":{\"type\":\"output_text\",\"text\":\"\",\"annotations\":[]}}\n\nevent: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"sequence_number\":3,\"output_index\":0,\"item_id\":\"output_1\",\"content_index\":0,\"delta\":\"partial\",\"logprobs\":[]}\n\n",
+    "event: response.failed\ndata: {\"type\":\"response.failed\",\"sequence_number\":4,\"response\":{\"id\":\"failed_1\",\"object\":\"response\",\"created_at\":100,\"model\":\"provider-model\",\"status\":\"failed\",\"output\":[],\"error\":{\"code\":\"provider_overloaded\",\"message\":\"Provider overloaded.\"}}}\n\n"
+  ]
+}

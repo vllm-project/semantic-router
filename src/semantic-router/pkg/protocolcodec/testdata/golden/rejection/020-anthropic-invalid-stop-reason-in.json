@@ -1,0 +1,12 @@
+{
+  "operation": "response",
+  "body": {
+    "id": "msg_invalid_stop",
+    "type": "message",
+    "role": "assistant",
+    "model": "provider-model",
+    "content": [{"type": "text", "text": "done"}],
+    "stop_reason": "future_reason",
+    "usage": {"input_tokens": 1, "output_tokens": 1}
+  }
+}

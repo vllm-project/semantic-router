@@ -1,14 +1,17 @@
 import { describe, expect, it } from 'vitest'
 
-import type { ConfigData } from './configPageSupport'
+import type { ConfigData, RecipeRoutingConfig } from './configPageSupport'
 import {
   getSignalReferenceCount,
   getSignalReferenceCountInRoutingProfile,
   normalizeConditions,
+  normalizeConversationFeature,
+  normalizeConversationPredicate,
   normalizeStringList,
   normalizeStructureFeature,
   normalizeStructurePredicate,
   normalizeSubjects,
+  readConversationFeature,
 } from './configPageSignalFormSupport'
 
 describe('signal form support', () => {
@@ -166,5 +169,69 @@ describe('signal form support', () => {
         'shared-local-name',
       ),
     ).toBe(1)
+  })
+
+  it('reads a valid default for junk conversation input and round-trips a valid rule', () => {
+    expect(readConversationFeature(null)).toEqual({
+      type: 'exists',
+      source: { type: 'image_content' },
+    })
+    expect(
+      readConversationFeature({ type: 'count', source: { type: 'message', role: 'non_user' } }),
+    ).toEqual({ type: 'count', source: { type: 'message', role: 'non_user' } })
+  })
+
+  it('normalizes conversation features and enforces the validator rules', () => {
+    expect(
+      normalizeConversationFeature({
+        type: 'count',
+        source: { type: 'message', role: 'non_user' },
+      }),
+    ).toEqual({ type: 'count', source: { type: 'message', role: 'non_user' } })
+
+    expect(() =>
+      normalizeConversationFeature({
+        type: 'count',
+        source: { type: 'tool_definition', role: 'user' },
+      }),
+    ).toThrow(/only valid when the source type is "message"/)
+
+    expect(() =>
+      normalizeConversationFeature({ type: 'exists', source: { type: 'telepathy' } }),
+    ).toThrow(/Unsupported conversation source type/)
+
+    expect(() =>
+      normalizeConversationFeature({
+        type: 'count',
+        source: { type: 'message', role: 'wizard' },
+      }),
+    ).toThrow(/Unsupported conversation role/)
+  })
+
+  it('drops the predicate for an exists feature and validates count predicates', () => {
+    const exists = normalizeConversationFeature({ type: 'exists', source: { type: 'message' } })
+    expect(normalizeConversationPredicate(exists, { gte: 2 })).toBeUndefined()
+
+    const count = normalizeConversationFeature({ type: 'count', source: { type: 'message' } })
+    expect(normalizeConversationPredicate(count, { gte: 2 })).toEqual({ gte: 2 })
+    expect(() => normalizeConversationPredicate(count, { gt: 1, gte: 2 })).toThrow(
+      /both gt and gte/,
+    )
+  })
+
+  it('counts conversation signal references in a routing profile', () => {
+    const routing: RecipeRoutingConfig = {
+      decisions: [
+        {
+          name: 'route-images',
+          description: '',
+          priority: 1,
+          rules: { operator: 'AND', conditions: [{ type: 'conversation', name: 'has_images' }] },
+          modelRefs: [],
+        },
+      ],
+    }
+
+    expect(getSignalReferenceCountInRoutingProfile(routing, 'Conversation', 'has_images')).toBe(1)
   })
 })

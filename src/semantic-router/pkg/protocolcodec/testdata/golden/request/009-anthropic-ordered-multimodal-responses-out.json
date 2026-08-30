@@ -1,0 +1,25 @@
+{
+  "input": [
+    {
+      "content": [
+        {
+          "text": "Before image",
+          "type": "input_text"
+        },
+        {
+          "image_url": "https://example.com/image.png",
+          "type": "input_image"
+        },
+        {
+          "text": "After image",
+          "type": "input_text"
+        }
+      ],
+      "id": "item_6a32e29c376158d871e9638e",
+      "role": "user",
+      "type": "message"
+    }
+  ],
+  "max_output_tokens": 24,
+  "model": "routed-model"
+}

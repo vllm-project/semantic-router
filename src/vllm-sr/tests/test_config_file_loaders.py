@@ -171,6 +171,27 @@ def test_parse_user_config_preserves_cache_pricing(tmp_path: Path) -> None:
     assert pricing.model_dump()["cache_write_per_1m"] == 2.5
 
 
+@pytest.mark.parametrize(
+    "pricing, expected",
+    [
+        ({"currency": "usd"}, "currency"),
+        ({"prompt_per_1m": -0.01}, "prompt_per_1m"),
+        ({"completion_per_1m": float("inf")}, "completion_per_1m"),
+    ],
+)
+def test_parse_user_config_rejects_invalid_provider_pricing(
+    tmp_path: Path, pricing: dict[str, object], expected: str
+) -> None:
+    config_path = tmp_path / "config.yaml"
+    write_minimal_config(config_path)
+    data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    data["providers"]["models"][0]["pricing"] = pricing
+    config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+    with pytest.raises(ConfigParseError, match=expected):
+        parse_user_config(str(config_path))
+
+
 def test_embedding_models_config_accepts_remote_endpoint() -> None:
     config = EmbeddingModelsConfig(
         embedding_config={

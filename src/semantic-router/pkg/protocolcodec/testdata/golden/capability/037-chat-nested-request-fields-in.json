@@ -1,0 +1,190 @@
+{
+  "operation": "request",
+  "cases": [
+    {
+      "name": "message_legacy_function_call",
+      "body": {
+        "model": "client-model",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": null,
+            "function_call": {
+              "name": "lookup",
+              "arguments": "{\"q\":\"weather\"}"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "file_data",
+      "body": {
+        "model": "client-model",
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "file",
+                "file": {
+                  "filename": "brief.txt",
+                  "file_data": "data:text/plain;base64,aGVsbG8="
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "file_id",
+      "body": {
+        "model": "client-model",
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "file",
+                "file": {
+                  "file_id": "file_1"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "image_detail",
+      "body": {
+        "model": "client-model",
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "image_url",
+                "image_url": {
+                  "url": "https://example.com/image.png",
+                  "detail": "high"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "input_audio",
+      "body": {
+        "model": "client-model",
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "input_audio",
+                "input_audio": {
+                  "data": "UklGRg==",
+                  "format": "wav"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "prompt_cache_breakpoint",
+      "body": {
+        "model": "client-model",
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "cache me",
+                "prompt_cache_breakpoint": {
+                  "mode": "explicit"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "tool_cache_control",
+      "body": {
+        "model": "client-model",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "lookup",
+              "description": "Look up a value",
+              "parameters": {
+                "type": "object"
+              },
+              "strict": true
+            },
+            "cache_control": {
+              "type": "ephemeral",
+              "ttl": "1h"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "custom_tool_call",
+      "body": {
+        "model": "client-model",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": null,
+            "tool_calls": [
+              {
+                "id": "call_1",
+                "type": "custom",
+                "function": {
+                  "name": "shell"
+                },
+                "custom": {
+                  "input": "pwd"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "assistant_refusal",
+      "body": {
+        "model": "client-model",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "refusal",
+                "refusal": "declined"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
