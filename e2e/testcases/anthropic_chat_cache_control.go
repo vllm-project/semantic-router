@@ -47,15 +47,27 @@ func testAnthropicChatCacheControl(
 	sessionID := fmt.Sprintf("chat-cache-%d", time.Now().UnixNano())
 	request := map[string]any{
 		"model": "MoM",
-		"messages": []any{map[string]any{
-			"role": "user",
-			"content": []any{map[string]any{
-				"type": "text", "text": "Reusable context",
-				"cache_control": map[string]any{"type": "ephemeral", "ttl": "5m"},
-			}},
-		}},
+		"messages": []any{
+			map[string]any{
+				"role": "system",
+				"content": []any{
+					map[string]any{"type": "text", "text": "Stable preface"},
+					map[string]any{
+						"type": "text", "text": "Reusable system context",
+						"cache_control": map[string]any{"type": "ephemeral", "ttl": "1h"},
+					},
+				},
+			},
+			map[string]any{
+				"role": "user",
+				"content": []any{map[string]any{
+					"type": "text", "text": "Reusable user context",
+					"cache_control": map[string]any{"type": "ephemeral", "ttl": "5m"},
+				}},
+			},
+		},
 	}
-	if err := validateBufferedAnthropicChatCache(ctx, session, request, sessionID); err != nil {
+	if err := validateBufferedAnthropicChatCache(ctx, session, backendSession, request, sessionID); err != nil {
 		return err
 	}
 	if err := validateStreamedAnthropicChatCache(ctx, session, backendSession, request, sessionID); err != nil {
@@ -70,6 +82,7 @@ func testAnthropicChatCacheControl(
 func validateBufferedAnthropicChatCache(
 	ctx context.Context,
 	session *fixtures.ServiceSession,
+	backendSession *fixtures.ServiceSession,
 	request map[string]any,
 	sessionID string,
 ) error {
@@ -79,6 +92,13 @@ func validateBufferedAnthropicChatCache(
 			return err
 		}
 		if attempt == 0 {
+			forwarded, err := lastProviderSimulatorRequest(ctx, backendSession, sessionID)
+			if err != nil {
+				return err
+			}
+			if err := validateForwardedCacheMarkers(forwarded); err != nil {
+				return fmt.Errorf("buffered dispatch changed cache_control ownership: %w", err)
+			}
 			continue
 		}
 		cached, err := chatCachedInputTokens(body)
@@ -120,36 +140,53 @@ func validateStreamedAnthropicChatCache(
 	if err != nil {
 		return err
 	}
-	if !hasForwardedCacheMarker(forwarded, "ephemeral", "5m") {
-		return fmt.Errorf("streaming dispatch lost cache_control before the Anthropic backend: %s", truncateString(string(forwarded), 800))
+	if err := validateForwardedCacheMarkers(forwarded); err != nil {
+		return fmt.Errorf("streaming dispatch changed cache_control ownership: %w", err)
 	}
 	return nil
 }
 
-func hasForwardedCacheMarker(body []byte, markerType, ttl string) bool {
+type forwardedCacheControl struct {
+	Type string `json:"type"`
+	TTL  string `json:"ttl"`
+}
+
+type forwardedCacheBlock struct {
+	Type         string                 `json:"type"`
+	Text         string                 `json:"text"`
+	CacheControl *forwardedCacheControl `json:"cache_control"`
+}
+
+func validateForwardedCacheMarkers(body []byte) error {
 	var debug struct {
 		Body struct {
+			System   []forwardedCacheBlock `json:"system"`
 			Messages []struct {
-				Content []struct {
-					CacheControl *struct {
-						Type string `json:"type"`
-						TTL  string `json:"ttl"`
-					} `json:"cache_control"`
-				} `json:"content"`
+				Role    string                `json:"role"`
+				Content []forwardedCacheBlock `json:"content"`
 			} `json:"messages"`
 		} `json:"body"`
 	}
-	if json.Unmarshal(body, &debug) != nil {
-		return false
+	if err := json.Unmarshal(body, &debug); err != nil {
+		return fmt.Errorf("decode provider request: %w", err)
 	}
-	for _, message := range debug.Body.Messages {
-		for _, content := range message.Content {
-			if content.CacheControl != nil && content.CacheControl.Type == markerType && content.CacheControl.TTL == ttl {
-				return true
-			}
-		}
+	if len(debug.Body.System) != 2 ||
+		debug.Body.System[0].Text != "Stable preface" || debug.Body.System[0].CacheControl != nil ||
+		debug.Body.System[1].Text != "Reusable system context" ||
+		!matchesCacheControl(debug.Body.System[1].CacheControl, "ephemeral", "1h") {
+		return fmt.Errorf("system blocks lost order or marker association: %s", truncateString(string(body), 800))
 	}
-	return false
+	if len(debug.Body.Messages) == 0 || debug.Body.Messages[0].Role != "user" ||
+		len(debug.Body.Messages[0].Content) != 1 ||
+		debug.Body.Messages[0].Content[0].Text != "Reusable user context" ||
+		!matchesCacheControl(debug.Body.Messages[0].Content[0].CacheControl, "ephemeral", "5m") {
+		return fmt.Errorf("user cache marker changed after system extraction: %s", truncateString(string(body), 800))
+	}
+	return nil
+}
+
+func matchesCacheControl(cache *forwardedCacheControl, markerType, ttl string) bool {
+	return cache != nil && cache.Type == markerType && cache.TTL == ttl
 }
 
 func sendChatCacheRequest(
