@@ -79,15 +79,16 @@ func TestEmbeddingModelsConfig(t *testing.T) {
 					TargetDimension: 1024,
 				},
 				Endpoint: &EmbeddingEndpointConfig{
-					BaseURL:        "http://embedding-service:8000/v1",
-					Model:          "BAAI/bge-m3",
-					APIKeyEnv:      "EMBEDDING_API_KEY",
-					TimeoutSeconds: 5,
-					MaxRetries:     2,
-					Dimensions:     1024,
+					BaseURL:          "http://embedding-service:8000/v1",
+					Model:            "BAAI/bge-m3",
+					APIKeyEnv:        "EMBEDDING_API_KEY",
+					TimeoutSeconds:   5,
+					MaxRetries:       2,
+					MaxResponseBytes: 16777216,
+					Dimensions:       1024,
 				},
 			},
-			want: `{"embedding_config":{"backend":"openai_compatible","model_type":"remote","target_dimension":1024},"endpoint":{"base_url":"http://embedding-service:8000/v1","model":"BAAI/bge-m3","api_key_env":"EMBEDDING_API_KEY","timeout_seconds":5,"max_retries":2,"dimensions":1024}}`,
+			want: `{"embedding_config":{"backend":"openai_compatible","model_type":"remote","target_dimension":1024},"endpoint":{"base_url":"http://embedding-service:8000/v1","model":"BAAI/bge-m3","api_key_env":"EMBEDDING_API_KEY","timeout_seconds":5,"max_retries":2,"max_response_bytes":16777216,"dimensions":1024}}`,
 		},
 	}
 
@@ -120,12 +121,13 @@ func TestEmbeddingModelsConfigDeepCopyWithRemoteEndpoint(t *testing.T) {
 			TargetDimension: 1024,
 		},
 		Endpoint: &EmbeddingEndpointConfig{
-			BaseURL:        "http://embedding-service:8000/v1",
-			Model:          "BAAI/bge-m3",
-			APIKeyEnv:      "EMBEDDING_API_KEY",
-			TimeoutSeconds: 5,
-			MaxRetries:     2,
-			Dimensions:     1024,
+			BaseURL:          "http://embedding-service:8000/v1",
+			Model:            "BAAI/bge-m3",
+			APIKeyEnv:        "EMBEDDING_API_KEY",
+			TimeoutSeconds:   5,
+			MaxRetries:       2,
+			MaxResponseBytes: 16777216,
+			Dimensions:       1024,
 		},
 	}
 
@@ -156,12 +158,13 @@ func TestEmbeddingModelsConfigDeepCopyWithRemoteEndpoint(t *testing.T) {
 
 func TestEmbeddingEndpointConfigDeepCopy(t *testing.T) {
 	original := &EmbeddingEndpointConfig{
-		BaseURL:        "http://embedding-service:8000/v1",
-		Model:          "BAAI/bge-m3",
-		APIKeyEnv:      "EMBEDDING_API_KEY",
-		TimeoutSeconds: 5,
-		MaxRetries:     2,
-		Dimensions:     1024,
+		BaseURL:          "http://embedding-service:8000/v1",
+		Model:            "BAAI/bge-m3",
+		APIKeyEnv:        "EMBEDDING_API_KEY",
+		TimeoutSeconds:   5,
+		MaxRetries:       2,
+		MaxResponseBytes: 16777216,
+		Dimensions:       1024,
 	}
 
 	copy := original.DeepCopy()

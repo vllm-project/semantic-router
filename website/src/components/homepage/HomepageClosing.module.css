@@ -59,10 +59,11 @@
     border-color 180ms ease;
 }
 
-.routeLink:hover {
-  border-color: var(--site-border-strong);
-  background: var(--site-text);
-  color: var(--site-bg);
+.routeLink:hover,
+.routeLink:focus-visible {
+  border-color: var(--site-hover-border-strong);
+  background: var(--site-hover-surface-bg);
+  color: var(--site-hover-text);
   text-decoration: none;
 }
 

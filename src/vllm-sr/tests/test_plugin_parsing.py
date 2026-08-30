@@ -134,6 +134,7 @@ decisions:
         configuration:
           enabled: true
           backend: "openai"
+          max_response_bytes: 67108864
           backend_config:
             api_key: "test-key"
 providers:
