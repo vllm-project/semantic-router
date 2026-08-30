@@ -3,12 +3,12 @@ package extproc
 import (
 	"testing"
 
-	"github.com/openai/openai-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
@@ -165,7 +165,17 @@ func TestBuildLooperRequestUsesContextEligibleDecisionModels(t *testing.T) {
 	}
 
 	request, response := router.buildLooperRequest(
-		&openai.ChatCompletionNewParams{},
+		&llmprotocol.Request{
+			Model:      "auto",
+			Generation: 1,
+			Messages: []llmprotocol.Message{{
+				Role: llmprotocol.RoleUser,
+				Content: []llmprotocol.Content{{
+					Kind: llmprotocol.ContentText,
+					Text: "test request",
+				}},
+			}},
+		},
 		decisionConfig,
 		ctx,
 	)
