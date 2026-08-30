@@ -108,6 +108,9 @@ func runInputModalityCase(ctx context.Context, localPort string, tc inputModalit
 		return err
 	}
 	request.Header.Set("Content-Type", "application/json")
+	// v0.4 demotes the matched-signal headers behind x-vsr-debug (#2205);
+	// opt in so the assertions can read x-vsr-matched-input-modality.
+	request.Header.Set("x-vsr-debug", "true")
 	response, err := (&http.Client{Timeout: 30 * time.Second}).Do(request)
 	if err != nil {
 		return err
