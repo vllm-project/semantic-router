@@ -93,12 +93,12 @@ by an empty workspace it is `http://localhost:8899`:
 curl -sS http://localhost:8899/v1/chat/completions \
   -H 'Content-Type: application/json' \
   -d '{
-    "model": "MoM",
+    "model": "vllm-sr/auto",
     "messages": [{"role": "user", "content": "Hello"}]
   }'
 ```
 
-Use the virtual model name from your active configuration. `vllm-sr status`
+Use the virtual model name from your active configuration (for example, `vllm-sr/auto` in the default setup). `vllm-sr status`
 shows the stack and published ports when you use a custom listener or port
 offset.
 
