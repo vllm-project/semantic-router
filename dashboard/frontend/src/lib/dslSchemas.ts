@@ -398,7 +398,6 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
                     'active_tool_loop',
                     'image_content', // validator_conversation.go:16 -- #3001
                     'flow_tool_state',
-                    'image_content',
                   ],
                   required: true,
                 },

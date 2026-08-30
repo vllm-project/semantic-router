@@ -112,14 +112,23 @@ describe('DSL structured field schemas', () => {
     expect(requireField(dynamicRetrieval.fields || [], 'weights').type).toBe('object')
   })
 
-  it('offers every conversation source type, including image_content, and non_user as a role', () => {
+  it('offers every conversation source type and non_user as a role', () => {
     const conversationFeature = requireField(getSignalFieldSchema('conversation'), 'feature')
     const source = requireField(conversationFeature.fields || [], 'source')
     const sourceType = requireField(source.fields || [], 'type')
     const role = requireField(source.fields || [], 'role')
 
-    expect(sourceType.options).toContain('image_content')
-    expect(sourceType.options).toHaveLength(6)
+    expect(sourceType.options).toEqual([
+      'message',
+      'tool_definition',
+      'tool_choice_required',
+      'tool_choice_none',
+      'assistant_tool_call',
+      'assistant_tool_cycle',
+      'active_tool_loop',
+      'image_content',
+      'flow_tool_state',
+    ])
     expect(role.options).toContain('non_user')
   })
 })
