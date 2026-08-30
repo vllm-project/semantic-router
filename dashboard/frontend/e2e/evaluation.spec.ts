@@ -1,209 +1,189 @@
-import { expect, test } from '@playwright/test';
-import { mockAuthenticatedAppShell } from './support/auth';
+import { expect, test } from '@playwright/test'
+
+import { mockAuthenticatedAppShell } from './support/auth'
+import { defaultEvaluationRuns, evaluationCatalog, mockEvaluationPlane } from './support/evaluation'
 
 const evalUser = {
   id: 'user-eval-1',
   email: 'eval@example.com',
   name: 'Eval User',
   role: 'read',
-  permissions: ['config.read', 'evaluation.read', 'evaluation.run', 'evaluation.write', 'logs.read', 'topology.read'],
-};
+  permissions: [
+    'config.read',
+    'evaluation.read',
+    'evaluation.run',
+    'evaluation.write',
+    'logs.read',
+    'topology.read',
+  ],
+}
 
-test.describe('Evaluation page', () => {
-  test('loads evaluation page and shows signal/system workflow UI', async ({ page }) => {
-    await mockAuthenticatedAppShell(page, { user: evalUser });
-
-    await page.route('**/api/evaluation/tasks', async (route) => {
-      if (route.request().method() === 'GET') {
-        await route.fulfill({
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify([]),
-        });
-      } else {
-        await route.continue();
-      }
-    });
-    await page.route('**/api/evaluation/datasets', async (route) => {
-      await route.fulfill({
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          domain: [{ name: 'mmlu-pro-en', description: 'MMLU-Pro (English)', dimension: 'domain', level: 'router' }],
-          fact_check: [{ name: 'fact-check-en', description: 'Fact Check (English)', dimension: 'fact_check', level: 'router' }],
-          user_feedback: [{ name: 'feedback-en', description: 'User Feedback (English)', dimension: 'user_feedback', level: 'router' }],
-          accuracy: [{ name: 'mmlu-pro', description: 'MMLU-Pro system accuracy', dimension: 'accuracy', level: 'mom' }],
-        }),
-      });
-    });
-
-    await page.goto('/evaluation');
-    await expect(page.getByRole('heading', { name: 'Evaluation', exact: true })).toBeVisible();
-    await expect(page.getByText(/signal and system level/i)).toBeVisible();
-    await expect(page.getByRole('tab', { name: /tasks/i })).toBeVisible();
-    await expect(page.getByRole('tab', { name: /create/i })).toBeVisible();
-    await expect(page.getByRole('tab', { name: /history/i })).toBeVisible();
-  });
-
-  test('create tab shows signal and system level options', async ({ page }) => {
-    await mockAuthenticatedAppShell(page, { user: evalUser });
-
-    await page.route('**/api/evaluation/tasks', async (route) => {
-      if (route.request().method() === 'GET') {
-        await route.fulfill({ status: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify([]) });
-      } else {
-        await route.continue();
-      }
-    });
-    await page.route('**/api/evaluation/datasets', async (route) => {
-      await route.fulfill({
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          domain: [],
-          fact_check: [],
-          user_feedback: [],
-          accuracy: [],
-        }),
-      });
-    });
-
-    await page.goto('/evaluation');
-    await page.getByRole('tab', { name: /create/i }).click();
-    await expect(page.getByText('Evaluation Level *', { exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Signal Level', exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'System Level', exact: true })).toBeVisible();
-  });
-
-  test('system-level creation normalizes dimensions and datasets before submit', async ({ page }) => {
-    await mockAuthenticatedAppShell(page, { user: evalUser });
-
-    let capturedRequest: Record<string, unknown> | null = null;
-
-    await page.route('**/api/evaluation/tasks', async (route) => {
-      if (route.request().method() === 'GET') {
-        await route.fulfill({ status: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify([]) });
-        return;
-      }
-
-      capturedRequest = route.request().postDataJSON() as Record<string, unknown>;
-      await route.fulfill({
-        status: 201,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: 'task-system-1',
-          name: 'System Eval',
-          description: '',
-          status: 'pending',
-          created_at: '2026-03-23T00:00:00Z',
-          progress_percent: 0,
-          config: capturedRequest?.config,
-        }),
-      });
-    });
-
-    await page.route('**/api/evaluation/datasets', async (route) => {
-      await route.fulfill({
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          domain: [{ name: 'mmlu-pro-en', description: 'MMLU-Pro (English)', dimension: 'domain', level: 'router' }],
-          fact_check: [{ name: 'fact-check-en', description: 'Fact Check (English)', dimension: 'fact_check', level: 'router' }],
-          user_feedback: [{ name: 'feedback-en', description: 'User Feedback (English)', dimension: 'user_feedback', level: 'router' }],
-          accuracy: [{ name: 'mmlu-pro', description: 'MMLU-Pro system accuracy', dimension: 'accuracy', level: 'mom' }],
-        }),
-      });
-    });
-
-    await page.goto('/evaluation');
-    await page.getByRole('tab', { name: /create/i }).click();
-    await page.getByRole('button', { name: /system level/i }).click();
-    await page.getByLabel('Task Name *').fill('System Eval');
-    await page.getByRole('button', { name: 'Next' }).click();
-    await page.getByRole('button', { name: 'Next' }).click();
-    await page.getByRole('button', { name: 'Next' }).click();
-    await page.getByRole('button', { name: /create task/i }).click();
-
-    expect(capturedRequest).not.toBeNull();
-    expect(capturedRequest).toMatchObject({
-      name: 'System Eval',
-      config: {
-        level: 'mom',
-        dimensions: ['accuracy'],
-        endpoint: 'http://localhost:8801',
-      },
-    });
-    expect(capturedRequest?.config).toHaveProperty('datasets');
-    expect(capturedRequest?.config).not.toHaveProperty('datasets.domain');
-    expect((capturedRequest?.config as { datasets: Record<string, string[]> }).datasets.accuracy).toEqual([]);
-  });
-
-  test('signal-level review uses the configured router evaluation endpoint', async ({ page }) => {
+test.describe('Evaluation Plane', () => {
+  test.beforeEach(async ({ page }) => {
     await mockAuthenticatedAppShell(page, {
       user: evalUser,
-      settings: {
-        routerEvalEndpoint: 'http://semantic-router.default.svc.cluster.local:8080/api/v1/eval',
-      },
-    });
+      settings: { readonlyMode: false, serverReadonly: false },
+    })
+  })
 
-    let capturedRequest: Record<string, unknown> | null = null;
+  test('shows the complete information architecture and eight-track coverage map', async ({
+    page,
+  }) => {
+    await mockEvaluationPlane(page)
+    await page.goto('/evaluation')
 
-    await page.route('**/api/evaluation/tasks', async (route) => {
-      if (route.request().method() === 'GET') {
-        await route.fulfill({ status: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify([]) });
-        return;
-      }
+    await expect(page.getByRole('heading', { name: 'Evaluation', exact: true })).toBeVisible()
+    await expect(page.getByText('reproducible evidence and promotion gates')).toBeVisible()
+    for (const tab of ['Overview', 'New experiment', 'Runs', 'Reports', 'Compare']) {
+      await expect(page.getByRole('tab', { name: tab, exact: true })).toBeVisible()
+    }
+    for (const track of evaluationCatalog.tracks) {
+      await expect(
+        page.getByRole('heading', { name: track.name, exact: true }).first(),
+      ).toBeVisible()
+    }
+    await expect(page.getByText('Contract evaluation.v1')).toBeVisible()
+    await expect(page.getByText('evaluation-release-gates.v1')).toBeVisible()
+    await expect(page.getByText('7 change profiles')).toBeVisible()
+  })
 
-      capturedRequest = route.request().postDataJSON() as Record<string, unknown>;
-      await route.fulfill({
-        status: 201,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: 'task-router-1',
-          name: 'Signal Eval',
-          description: '',
-          status: 'pending',
-          created_at: '2026-05-08T00:00:00Z',
-          progress_percent: 0,
-          config: capturedRequest?.config,
-        }),
-      });
-    });
+  test('creates only a catalog-targeted run with all reproducibility controls', async ({
+    page,
+  }) => {
+    const state = await mockEvaluationPlane(page)
+    await page.goto('/evaluation')
+    await page.getByRole('tab', { name: 'New experiment' }).click()
 
-    await page.route('**/api/evaluation/datasets', async (route) => {
-      await route.fulfill({
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          domain: [{ name: 'mmlu-pro-en', description: 'MMLU-Pro (English)', dimension: 'domain', level: 'router' }],
-          fact_check: [],
-          user_feedback: [],
-          accuracy: [],
-        }),
-      });
-    });
+    await expect(page.getByText(/cannot supply its own execution address/i)).toBeVisible()
+    await page.getByLabel('Change profile').selectOption({ label: 'Routing recipe' })
+    const gateMatrix = page.getByLabel('G0–G9 gate applicability')
+    await expect(gateMatrix.locator('article')).toHaveCount(10)
+    await expect(gateMatrix.getByText('G0', { exact: true })).toBeVisible()
+    await expect(gateMatrix.getByText('G9', { exact: true })).toBeVisible()
+    await expect(gateMatrix.getByText('Live fidelity', { exact: true })).toBeVisible()
+    await page.getByLabel('Experiment name').fill('Recipe v4 candidate')
+    await page.getByLabel('Description').fill('Validate the full evaluation surface.')
+    await page.getByLabel('Sample limit').fill('64')
+    await page.getByLabel('Concurrency').fill('8')
+    await page.getByLabel('Seed').fill('7')
+    await page.getByRole('button', { name: 'Create and start' }).click()
 
-    await page.goto('/evaluation');
-    await page.getByRole('tab', { name: /create/i }).click();
-    await page.getByLabel('Task Name *').fill('Signal Eval');
-    await page.getByRole('button', { name: 'Next' }).click();
-    await page.getByRole('button', { name: 'Next' }).click();
-    await page.getByRole('button', { name: 'Next' }).click();
+    await expect.poll(() => state.createdRequests.length).toBe(1)
+    expect(state.createdRequests[0]).toEqual({
+      name: 'Recipe v4 candidate',
+      description: 'Validate the full evaluation surface.',
+      suite_ids: ['evaluation-smoke'],
+      track_ids: [...evaluationCatalog.suites[0].track_ids],
+      mode: 'replay',
+      target_id: 'fixture',
+      change_profile: 'recipe',
+      sample_limit: 64,
+      concurrency: 8,
+      seed: 7,
+      auto_start: false,
+    })
+    await expect.poll(state.getStartCount).toBe(1)
+    expect(state.createdRequests[0]).not.toHaveProperty('endpoint')
+    expect(state.createdRequests[0]).not.toHaveProperty('url')
+    await expect(page.getByRole('tab', { name: 'Runs' })).toHaveAttribute('aria-selected', 'true')
+  })
 
+  test('renders rich report evidence, three cost ledgers, gates, provenance, and artifacts', async ({
+    page,
+  }) => {
+    await mockEvaluationPlane(page)
+    await page.goto('/evaluation')
+    await page.getByRole('tab', { name: 'Reports' }).click()
+
+    await expect(page.getByText('Evidence report · evaluation.v1')).toBeVisible()
+    await expect(page.getByText('Profile recipe', { exact: true })).toBeVisible()
+    await expect(page.getByText('Gate contract evaluation-release-gates.v1')).toBeVisible()
+    for (const metric of ['Quality', 'P95 latency', 'Runtime cost', 'Capacity TCO']) {
+      await expect(page.getByText(metric, { exact: true }).first()).toBeVisible()
+    }
+    await expect(page.getByText('runtime', { exact: true })).toBeVisible()
+    await expect(page.getByText('evaluation overhead', { exact: true })).toBeVisible()
+    await expect(page.getByText('capacity tco', { exact: true })).toBeVisible()
+    const promotionGates = page
+      .getByRole('heading', { name: 'Promotion gates' })
+      .locator('..')
+      .locator('..')
+      .locator('..')
+    await expect(promotionGates).toBeVisible()
     await expect(
-      page.getByText('http://semantic-router.default.svc.cluster.local:8080/api/v1/eval')
-    ).toBeVisible();
+      promotionGates
+        .getByText('Required gate is not satisfied: unavailable evidence never counts as pass.', {
+          exact: true,
+        })
+        .first(),
+    ).toBeVisible()
+    await expect(promotionGates.getByText('N = 4', { exact: true }).first()).toBeVisible()
+    await expect(promotionGates.getByText(/Coverage 4\/4 \(100\.0%\)/).first()).toBeVisible()
+    await expect(promotionGates.getByText('records.jsonl', { exact: true }).first()).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Provenance' })).toBeVisible()
+    await expect(page.getByText('Change profile', { exact: true })).toBeVisible()
+    await expect(page.getByText('Gate contract', { exact: true })).toBeVisible()
+    await expect(page.getByText('sha256:policy')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Artifacts' })).toBeVisible()
+    await expect(page.getByText('sha256:report-html', { exact: true })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Download report.html' })).toHaveCount(0)
+    await expect(
+      page.getByRole('link', { name: 'Download failure-summary.json' }),
+    ).toHaveAttribute(
+      'href',
+      '/api/evaluation/v1/runs/candidate-run/artifacts/failure-summary-json',
+    )
+    await expect(page.getByRole('link', { name: 'Download run-manifest.json' })).toHaveCount(0)
+    await expect(page.getByText(/Collect qualified robustness evidence/)).toBeVisible()
+  })
 
-    await page.getByRole('button', { name: /create task/i }).click();
+  test('compares candidate and baseline through the versioned comparison endpoint', async ({
+    page,
+  }) => {
+    await mockEvaluationPlane(page)
+    await page.goto('/evaluation')
+    await page.getByRole('tab', { name: 'Compare' }).click()
+    await page.getByRole('button', { name: 'Compare runs' }).click()
 
-    expect(capturedRequest).not.toBeNull();
-    expect(capturedRequest).toMatchObject({
-      name: 'Signal Eval',
-      config: {
-        level: 'router',
-        dimensions: ['domain'],
-        endpoint: 'http://semantic-router.default.svc.cluster.local:8080/api/v1/eval',
-      },
-    });
-  });
-});
+    await expect(page.getByText(/required robustness evidence is unavailable/)).toBeVisible()
+    await expect(page.getByText('Comparison gates')).toBeVisible()
+    await expect(
+      page.getByText('Collect qualified robustness evidence before a guarded live trial.'),
+    ).toBeVisible()
+  })
+
+  test('confirms cancellation and keeps unavailable evidence explicit', async ({ page }) => {
+    const state = await mockEvaluationPlane(page, defaultEvaluationRuns)
+    await page.goto('/evaluation')
+    await page.getByRole('tab', { name: 'Runs' }).click()
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click()
+
+    await expect(page.getByRole('alertdialog')).toContainText('Partial evidence remains explicit')
+    await expect(page.getByRole('alertdialog')).toContainText(
+      'unavailable gates will not count as passed',
+    )
+    await page.getByRole('button', { name: 'Cancel run' }).click()
+    await expect.poll(state.getCancelCount).toBe(1)
+    await expect(
+      page
+        .locator('article')
+        .filter({ hasText: 'Live AMD validation' })
+        .getByText('Cancelled', { exact: true }),
+    ).toBeVisible()
+  })
+
+  test('keeps one SSE subscription and deduplicated event across run refresh', async ({ page }) => {
+    const state = await mockEvaluationPlane(page)
+    await page.goto('/evaluation')
+    await page.getByRole('tab', { name: 'Runs' }).click()
+    await page.getByRole('button', { name: /Live AMD validation live-run/ }).click()
+
+    await expect.poll(state.getEventStreamCount).toBe(1)
+    await expect(page.getByText('Executing routing track from SSE')).toHaveCount(1)
+    await page.getByRole('button', { name: 'Refresh evaluation runs' }).click()
+    await page.waitForTimeout(500)
+
+    expect(state.getEventStreamCount()).toBe(1)
+    await expect(page.getByText('Executing routing track from SSE')).toHaveCount(1)
+  })
+})

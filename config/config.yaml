@@ -1562,7 +1562,7 @@ global:
       - auto
       - exhaustive-reference
     include_config_models_in_list: true
-    clear_route_cache: false
+    clear_route_cache: true
     streamed_body:
       enabled: true
       max_bytes: 1048576
@@ -2199,6 +2199,19 @@ global:
         access_key: external-classifier-key
         max_tokens: 128
         temperature: 0
+      # Reached over the http_classify contract; the byte ceilings apply only there.
+      - name: external-sequence-classifier
+        llm_provider: openai
+        model_role: classification
+        llm_endpoint:
+          address: sequence-classifier
+          port: 8080
+          protocol: http
+          name: openai-sequence-classifier
+        llm_timeout_seconds: 5
+        access_key: external-sequence-classifier-key
+        max_request_bytes: 262144
+        max_response_bytes: 1048576
     kbs:
       - name: privacy_kb
         source:

@@ -33,7 +33,7 @@ describe('LayoutMobileNavigation contract', () => {
     expect(markup).toContain('Current')
     expect(markup).toContain('data-mobile-nav-control="true"')
     expect(markup).toContain('Routing')
-    expect(markup).toContain('Integrations &amp; Policy')
+    expect(markup).toContain('Integrations')
   })
 
   it('supports roving keyboard focus and returns focus when dismissed', () => {
@@ -57,7 +57,7 @@ describe('LayoutMobileNavigation contract', () => {
           pathname: '/dashboard',
           sections: [
             { key: 'build', label: 'Build', categories: [] },
-            { key: 'operate', label: 'Operate', categories: BUILD_MENU_CATEGORIES },
+            { key: 'operate', label: 'System', categories: BUILD_MENU_CATEGORIES },
           ],
           onConfigSelect: vi.fn(),
           onNavigate: vi.fn(),
@@ -66,7 +66,7 @@ describe('LayoutMobileNavigation contract', () => {
       ),
     )
 
-    expect(markup).not.toContain('>Build<')
-    expect(markup).toContain('>Operate<')
+    expect(markup).not.toContain('Build</span>')
+    expect(markup).toContain('System</span>')
   })
 })

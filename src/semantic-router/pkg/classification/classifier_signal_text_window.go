@@ -73,7 +73,9 @@ func piiSignalChunks(text string) []string {
 }
 
 func jailbreakSignalChunks(text string) []string {
-	return securitySignalChunks(text, jailbreakSignalChunkBudget, jailbreakSignalOverlapRunes)
+	return uniqueSignalChunks(
+		securitySignalChunks(text, jailbreakSignalChunkBudget, jailbreakSignalOverlapRunes),
+	)
 }
 
 // securitySignalChunks scans the entire input in bounded, overlapping pieces.

@@ -415,6 +415,19 @@ func configModelRefToDSLModelRef(model config.ModelRef) *ModelRef {
 	}
 }
 
+// normalizedRuleOperator trims and upper-cases a rule-tree operator for
+// comparison. A rule tree loaded through the standard config path has
+// already been normalized (see config.NormalizeRuleOperator), but the
+// decompiler also runs directly against configs assembled without going
+// through that path (e.g. a Kubernetes CR merged for preview), so decompiling
+// must not assume the operator is already canonical: an unnormalized value
+// like "or" must still be recognized as OR rather than falling through to a
+// nil expression (dropping the WHEN clause and matching every request) or an
+// invalid lowercase keyword in decompiled DSL text.
+func normalizedRuleOperator(operator string) string {
+	return strings.ToUpper(strings.TrimSpace(operator))
+}
+
 func decompileRuleNodeToExpr(node *config.RuleCombination) BoolExpr {
 	if node == nil {
 		return nil
@@ -422,7 +435,7 @@ func decompileRuleNodeToExpr(node *config.RuleCombination) BoolExpr {
 	if node.Type != "" {
 		return decompileSignalRefNode(node)
 	}
-	switch node.Operator {
+	switch normalizedRuleOperator(node.Operator) {
 	case "AND":
 		exprs := flattenRuleNodeToExprs(node, "AND")
 		if len(exprs) == 0 {
@@ -472,7 +485,7 @@ func decompileSignalRefNode(
 }
 
 func flattenRuleNodeToExprs(node *config.RuleCombination, op string) []BoolExpr {
-	if node.Operator == op {
+	if normalizedRuleOperator(node.Operator) == op {
 		var exprs []BoolExpr
 		for i := range node.Conditions {
 			exprs = append(exprs, flattenRuleNodeToExprs(&node.Conditions[i], op)...)

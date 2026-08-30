@@ -14,7 +14,7 @@ describe('Config Builder entry mode', () => {
 
     expect(source).toContain('serverReadonly ||')
     expect(source).toContain('!runtimeConfigWritable ||')
-    expect(source).toContain('!hasDeployPermission ||')
+    expect(source).toContain('!hasDeployPermission')
     expect(source).toContain('writable runtime configuration mount')
   })
 })

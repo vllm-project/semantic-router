@@ -6,6 +6,7 @@ import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useSt
 
 import { useAuth } from '../contexts/AuthContext'
 import { useReadonly } from '../contexts/ReadonlyContext'
+import ProductLoadingState from './ProductLoadingState'
 import { toolRegistry } from '../tools'
 import type { RegisteredTool } from '../tools'
 import { useMCPServers } from '../tools/mcp'
@@ -265,9 +266,7 @@ export const MCPConfigPanel: React.FC<MCPConfigPanelProps> = ({ onClose, embedde
             ) : null}
           </div>
         ) : null}
-        <div className={styles.loading} role="status">
-          Loading MCP servers and tools…
-        </div>
+        <ProductLoadingState label="Loading tools" compact />
       </div>
     )
   }

@@ -3,9 +3,9 @@
 SERVE_HELP = """
 Start vLLM Semantic Router.
 
-With no MODEL, serve uses --config or config.yaml and preserves the existing
-Dashboard-first setup flow. MODEL operands select installed catalog virtual
-entrypoints such as vllm-sr/mom-v1-blend for the local Docker target.
+Serve uses --config or config.yaml and preserves the Dashboard-first setup flow.
+Connect physical models and publish Mixture-of-Model entrypoints in the
+Dashboard, then keep the same stack running with this single command.
 
 Virtual models are routing policies. Semantic Router starts Router, Envoy, the
 Dashboard, and supporting services; it does not download or launch the physical
@@ -36,19 +36,13 @@ mlp        - MLP selector using shared ML model-selection settings
 multi_factor - Quality, latency, cost, and load scoring
 
 Cross-request learning lives under global.router.learning.adaptation and
-global.router.learning.protection instead of --algorithm. Catalog MODEL
-operands retain their verified recipe algorithms; fork and serve an edited
-config when you need an algorithm override.
+global.router.learning.protection instead of --algorithm.
 
 Examples:
 
 \b
   # Dashboard-first setup or an existing ./config.yaml
   vllm-sr serve
-  # One installed virtual model
-  vllm-sr serve vllm-sr/mom-v1-blend
-  # Multiple virtual entrypoints sharing one provider/backend pool
-  vllm-sr serve vllm-sr/mom-v1-lite vllm-sr/mom-v1-flash
   # User-owned single or multi-model topology
   vllm-sr serve --config my-models.yaml
   # Deploy a user-owned config to Kubernetes

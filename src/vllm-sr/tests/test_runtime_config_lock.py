@@ -15,6 +15,7 @@ from cli.runtime_config_lock import (
     RuntimeConfigLockError,
     acquire_runtime_config_lock,
 )
+from cli.runtime_stack import resolve_runtime_stack
 from click.testing import CliRunner
 
 pytestmark = pytest.mark.skipif(os.name != "posix", reason="POSIX file lock contract")
@@ -130,7 +131,7 @@ def test_serve_fails_fast_when_runtime_config_is_already_mutating(
         output_dir=tmp_path / ".vllm-sr",
         setup_mode=False,
     )
-    stack_name = runtime_commands.resolve_runtime_stack().stack_name
+    stack_name = resolve_runtime_stack().stack_name
     runtime_config_path = state_root / ".vllm-sr" / "runtime-config.yaml"
 
     monkeypatch.setenv("VLLM_SR_STATE_ROOT_DIR", str(state_root))

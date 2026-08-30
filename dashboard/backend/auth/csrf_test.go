@@ -14,6 +14,11 @@ import (
 
 var csrfTestSecret = []byte("test-jwt-secret")
 
+// Keep middleware enforcement tests on a protected route. The public status
+// endpoint intentionally bypasses authentication so operators can inspect a
+// degraded dashboard before signing in.
+const csrfProtectedTestPath = "/api/settings"
+
 func TestCSRFTokenDerivation(t *testing.T) {
 	t.Run("deterministic", func(t *testing.T) {
 		first := csrfTokenFor(csrfTestSecret, "session-1")
@@ -315,10 +320,13 @@ func TestCSRFEnforcement(t *testing.T) {
 	const sameOrigin = "http://example.com"
 
 	cases := []struct {
-		name        string
-		method      string
-		path        string
-		authVia     string
+		name    string
+		method  string
+		path    string
+		authVia string
+		// A valid token in ?authToken=. Orthogonal to authVia because since #2465 it is
+		// not a way to authenticate — only something that may be present on the URL.
+		queryToken  bool
 		origin      string
 		referer     string
 		csrfHeader  string
@@ -341,8 +349,20 @@ func TestCSRFEnforcement(t *testing.T) {
 		{name: "DELETE happy path", method: http.MethodDelete, authVia: "cookie", origin: sameOrigin, csrfHeader: f.csrf, wantStatus: http.StatusNoContent, wantHandler: true},
 		{name: "referer fallback", method: http.MethodPost, authVia: "cookie", referer: sameOrigin + "/dashboard", csrfHeader: f.csrf, wantStatus: http.StatusNoContent, wantHandler: true},
 
-		{name: "query transport is not exempt", method: http.MethodPost, authVia: "query", origin: "https://evil.example", wantStatus: http.StatusForbidden},
-		{name: "query transport needs the token too", method: http.MethodPost, authVia: "query", origin: sameOrigin, csrfHeader: f.csrf, wantStatus: http.StatusNoContent, wantHandler: true},
+		// Inverted for #2465: these two authenticated through ?authToken= and were subject
+		// to the CSRF check. They now fail earlier, at authentication.
+		{name: "query token no longer authenticates", method: http.MethodPost, authVia: "none", queryToken: true, origin: "https://evil.example", wantStatus: http.StatusUnauthorized},
+		{name: "query token fails even with a valid CSRF token", method: http.MethodPost, authVia: "none", queryToken: true, origin: sameOrigin, csrfHeader: f.csrf, wantStatus: http.StatusUnauthorized},
+
+		{name: "query token does not authenticate a safe read", method: http.MethodGet, authVia: "none", queryToken: true, wantStatus: http.StatusUnauthorized},
+		{name: "query token does not authenticate an embedded route", method: http.MethodGet, path: "/embedded/wizmap/", authVia: "none", queryToken: true, wantStatus: http.StatusUnauthorized},
+		{name: "query token does not authenticate an admin write", method: http.MethodPost, path: "/api/admin/users", authVia: "none", queryToken: true, origin: sameOrigin, csrfHeader: f.csrf, wantStatus: http.StatusUnauthorized},
+
+		// A stale bookmark still carries the parameter; the cookie is what authenticates.
+		{name: "cookie wins while a query token rides along", method: http.MethodGet, authVia: "cookie", queryToken: true, wantStatus: http.StatusNoContent, wantHandler: true},
+		{name: "cookie write with a query token still needs CSRF", method: http.MethodPost, authVia: "cookie", queryToken: true, origin: sameOrigin, csrfHeader: f.csrf, wantStatus: http.StatusNoContent, wantHandler: true},
+		{name: "bearer wins while a query token rides along", method: http.MethodGet, authVia: "header", queryToken: true, wantStatus: http.StatusNoContent, wantHandler: true},
+		{name: "public route with a query token is still reachable", method: http.MethodPost, path: "/api/auth/login", authVia: "none", queryToken: true, wantStatus: http.StatusNoContent, wantHandler: true},
 
 		{name: "unauthenticated fails before CSRF", method: http.MethodPost, authVia: "none", origin: sameOrigin, csrfHeader: f.csrf, wantStatus: http.StatusUnauthorized},
 		{name: "public route is untouched", method: http.MethodPost, path: "/api/auth/login", authVia: "none", origin: "https://evil.example", wantStatus: http.StatusNoContent, wantHandler: true},
@@ -352,9 +372,9 @@ func TestCSRFEnforcement(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			path := tc.path
 			if path == "" {
-				path = "/api/status"
+				path = csrfProtectedTestPath
 			}
-			if tc.authVia == "query" {
+			if tc.queryToken {
 				path += "?authToken=" + f.token
 			}
 
@@ -392,7 +412,7 @@ func TestCSRF_BearerAuthenticatedRequestsAreExempt(t *testing.T) {
 
 	for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodDelete} {
 		t.Run(method, func(t *testing.T) {
-			r := httptest.NewRequest(method, "/api/status", nil)
+			r := httptest.NewRequest(method, csrfProtectedTestPath, nil)
 			r.Header.Set("Authorization", "Bearer "+f.token)
 			r.Header.Set("Origin", "https://evil.example")
 
@@ -411,7 +431,7 @@ func TestCSRFCookieBackfill(t *testing.T) {
 	f := newCSRFFixture(t)
 
 	newRequest := func(method string, csrfCookie string) *http.Request {
-		r := httptest.NewRequest(method, "/api/status", nil)
+		r := httptest.NewRequest(method, csrfProtectedTestPath, nil)
 		r.AddCookie(&http.Cookie{Name: authSessionCookieName, Value: f.token})
 		if csrfCookie != "" {
 			r.AddCookie(&http.Cookie{Name: csrfCookieName, Value: csrfCookie})
@@ -561,9 +581,9 @@ func TestCSRFCookieIssuanceOnBootstrapAndLogout(t *testing.T) {
 	})
 }
 
-// The warning fires before the token is verified, so an unauthenticated caller controls
-// the path it prints, and it arrives percent-decoded.
-func TestDeprecatedQueryWarningCannotForgeALogLine(t *testing.T) {
+// Inverted for #2465: this covered the deprecation warning the query transport emitted and
+// the log injection its attacker-controlled path allowed. Both surfaces are now gone.
+func TestQueryTokenIsNeitherAcceptedNorLogged(t *testing.T) {
 	var logged bytes.Buffer
 	log.SetOutput(&logged)
 	t.Cleanup(func() { log.SetOutput(os.Stderr) })
@@ -574,14 +594,12 @@ func TestDeprecatedQueryWarningCannotForgeALogLine(t *testing.T) {
 	q.Set("authToken", "not-a-real-token")
 	r.URL.RawQuery = q.Encode()
 
-	if _, source := extractAccessTokenWithSource(r); source != tokenSourceQuery {
-		t.Fatalf("source = %v, want tokenSourceQuery", source)
+	token, source := extractAccessTokenWithSource(r)
+	if token != "" || source != tokenSourceNone {
+		t.Fatalf("got (%q, %v), want (\"\", tokenSourceNone)", token, source)
 	}
-	if strings.Contains(logged.String(), "\nWARNING: forged line") {
-		t.Fatalf("the path forged a log line: %q", logged.String())
-	}
-	if !strings.Contains(logged.String(), `\nWARNING: forged line`) {
-		t.Fatalf("the path was not logged in escaped form: %q", logged.String())
+	if logged.Len() != 0 {
+		t.Fatalf("the query transport wrote a log line: %q", logged.String())
 	}
 }
 

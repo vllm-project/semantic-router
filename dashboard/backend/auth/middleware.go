@@ -211,6 +211,8 @@ func routerPermission(method, path string) (string, bool) {
 	switch {
 	case path == "/api/models/catalog":
 		return PermConfigRead, true
+	case path == "/api/models/discover":
+		return PermConfigWrite, true
 	case path == "/api/models/verify":
 		return PermEvalRun, true
 	case path == "/api/router/v1/router/outcomes" && method == http.MethodPost:
@@ -298,8 +300,8 @@ func fleetSimPermission(method, path string) (string, bool) {
 
 func featurePermission(method, path string) (string, bool) {
 	switch {
-	case strings.HasPrefix(path, "/api/evaluation"):
-		if path == "/api/evaluation/run" || strings.HasPrefix(path, "/api/evaluation/cancel/") {
+	case path == "/api/evaluation/v1" || strings.HasPrefix(path, "/api/evaluation/v1/"):
+		if isEvaluationRunAction(path) {
 			return PermEvalRun, true
 		}
 		if method == http.MethodPost || method == http.MethodDelete {
@@ -310,18 +312,16 @@ func featurePermission(method, path string) (string, bool) {
 		return openclawPermission(method, path)
 	case strings.HasPrefix(path, "/api/ml-pipeline/"):
 		return PermMlPipeline, true
-	case strings.HasPrefix(path, "/api/security/"):
-		return securityPermission(method), true
 	default:
 		return "", false
 	}
 }
 
-func securityPermission(method string) string {
-	if method == http.MethodGet {
-		return PermConfigRead
-	}
-	return PermSecurityManage
+func isEvaluationRunAction(path string) bool {
+	path = strings.TrimRight(path, "/")
+	rest := strings.TrimPrefix(path, "/api/evaluation/v1/runs/")
+	parts := strings.Split(rest, "/")
+	return len(parts) == 2 && parts[0] != "" && (parts[1] == "start" || parts[1] == "cancel")
 }
 
 func openclawPermission(method, path string) (string, bool) {
@@ -442,9 +442,12 @@ const (
 	tokenSourceNone accessTokenSource = iota
 	tokenSourceHeader
 	tokenSourceCookie
-	tokenSourceQuery // removed in the follow-up PR
 )
 
+// The query-string transport is deliberately absent: a credential in a URL is written down
+// by proxy access logs, browser history and the Referer header. Browser transports use the
+// HttpOnly vsr_session cookie the browser attaches for them; non-browser clients use
+// Authorization: Bearer. See #2465.
 func extractAccessTokenWithSource(r *http.Request) (string, accessTokenSource) {
 	if token := extractBearer(r.Header.Get("Authorization")); token != "" {
 		return token, tokenSourceHeader
@@ -456,14 +459,6 @@ func extractAccessTokenWithSource(r *http.Request) (string, accessTokenSource) {
 		}
 	}
 
-	if token := normalizeAccessToken(r.URL.Query().Get("authToken")); token != "" {
-		// Log that it happened so an operator can find the stale bookmark, never the value.
-		// %q because this runs before ParseToken, so the path is still attacker-controlled
-		// and arrives percent-decoded, newlines included.
-		log.Printf("WARNING: request to %q authenticated with the deprecated ?authToken= "+
-			"query parameter; use the session cookie or an Authorization: Bearer header", r.URL.Path)
-		return token, tokenSourceQuery
-	}
 	return "", tokenSourceNone
 }
 
@@ -495,9 +490,13 @@ func requiresAuthentication(path string) bool {
 		return false
 	case strings.HasPrefix(path, "/api/auth/bootstrap/"):
 		return false
+	case strings.HasPrefix(path, "/api/auth/invitations/"):
+		return false
 	case strings.HasPrefix(path, "/api/auth/me"):
 		return true
 	case strings.HasPrefix(path, "/api/setup/state"):
+		return false
+	case path == "/api/status" || path == "/api/status/":
 		return false
 	case strings.HasPrefix(path, "/embedded/wizmap/assets/"):
 		return false

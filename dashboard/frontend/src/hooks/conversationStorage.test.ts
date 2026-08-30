@@ -64,6 +64,14 @@ describe('conversationStorage', () => {
     expect(restored).toEqual([conversation('messages', 2)])
   })
 
+  it('keeps a trimmed custom conversation title', () => {
+    const restored = normalizeStoredConversations([
+      { ...conversation('named', 2), title: '  Release planning  ' },
+    ])
+
+    expect(restored[0].title).toBe('Release planning')
+  })
+
   it('prunes saved conversations before persistence', () => {
     const pruned = pruneStoredConversations(
       [conversation('first', 1), conversation('third', 3), conversation('second', 2)],

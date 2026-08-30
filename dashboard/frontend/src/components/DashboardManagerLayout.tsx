@@ -1,9 +1,6 @@
 import type { ReactNode } from 'react'
 
-import DashboardSurfaceHero, {
-  type DashboardSurfaceHeroMeta,
-  type DashboardSurfaceHeroPill,
-} from './DashboardSurfaceHero'
+import DashboardSurfaceHero, { type DashboardSurfaceHeroMeta } from './DashboardSurfaceHero'
 import styles from './DashboardManagerLayout.module.css'
 
 interface DashboardManagerLayoutProps {
@@ -11,12 +8,7 @@ interface DashboardManagerLayoutProps {
   eyebrow?: string
   title: string
   description: string
-  meta: DashboardSurfaceHeroMeta[]
-  panelEyebrow?: string
-  panelTitle: string
-  panelDescription: string
-  pills?: DashboardSurfaceHeroPill[]
-  panelFooter?: ReactNode
+  meta?: DashboardSurfaceHeroMeta[]
   children: ReactNode
 }
 
@@ -26,11 +18,6 @@ export default function DashboardManagerLayout({
   title,
   description,
   meta,
-  panelEyebrow,
-  panelTitle,
-  panelDescription,
-  pills,
-  panelFooter,
   children,
 }: DashboardManagerLayoutProps) {
   return (
@@ -41,11 +28,6 @@ export default function DashboardManagerLayout({
         title={title}
         description={description}
         meta={meta}
-        panelEyebrow={panelEyebrow}
-        panelTitle={panelTitle}
-        panelDescription={panelDescription}
-        pills={pills}
-        panelFooter={panelFooter}
       />
       <div className={styles.body}>{children}</div>
     </section>
