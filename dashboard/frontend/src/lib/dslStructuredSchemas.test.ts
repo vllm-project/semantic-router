@@ -80,6 +80,11 @@ describe('DSL structured field schemas', () => {
 
     const metadataPredicate = requireField(getSignalFieldSchema('metadata'), 'predicate')
     expect(metadataPredicate.fields?.map((field) => field.key)).toEqual(['equals', 'in', 'exists'])
+    expect(requireField(getSignalFieldSchema('classifier'), 'type').options).toEqual([
+      'local',
+      'llm',
+      'sequence_classifier',
+    ])
     expect(requireField(getSignalFieldSchema('classifier'), 'labels').type).toBe('string[]')
 
     const headerMutation = getPluginFieldSchema('header_mutation')
