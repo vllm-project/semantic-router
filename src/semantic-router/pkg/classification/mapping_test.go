@@ -107,6 +107,35 @@ func TestCategoryMapping_SequenceLabelMappingMethods(t *testing.T) {
 	}
 }
 
+func TestLoadCategoryMappingRejectsNonBijections(t *testing.T) {
+	valid := `{"category_to_idx":{"math":0,"law":1},"idx_to_category":{"0":"math","1":"law"}}`
+	tests := map[string]string{
+		"mismatched reverse label": `{"category_to_idx":{"math":0,"law":1},"idx_to_category":{"0":"law","1":"math"}}`,
+		"duplicate index":          `{"category_to_idx":{"math":0,"law":0},"idx_to_category":{"0":"math","1":"law"}}`,
+		"missing reverse entry":    `{"category_to_idx":{"math":0,"law":1},"idx_to_category":{"0":"math"}}`,
+		"non-contiguous index":     `{"category_to_idx":{"math":0,"law":2},"idx_to_category":{"0":"math","2":"law"}}`,
+		"non-numeric reverse key":  `{"category_to_idx":{"math":0},"idx_to_category":{"zero":"math"}}`,
+	}
+	for name, data := range tests {
+		t.Run(name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "category_mapping.json")
+			if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := LoadCategoryMapping(path); err == nil {
+				t.Fatal("expected invalid category mapping to be rejected")
+			}
+		})
+	}
+	path := filepath.Join(t.TempDir(), "category_mapping.json")
+	if err := os.WriteFile(path, []byte(valid), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadCategoryMapping(path); err != nil {
+		t.Fatalf("valid category mapping rejected: %v", err)
+	}
+}
+
 // TestLoadJailbreakMapping_RejectsSentinelCollision guards on_error: block's
 // fail-closed sentinel (JailbreakClassificationErrorType): a deployment
 // whose mapping file configures a real label with that exact name would

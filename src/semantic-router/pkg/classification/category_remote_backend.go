@@ -17,6 +17,13 @@ type categoryHTTPBackend struct {
 	backend SequenceClassifierBackend
 }
 
+// fallbackToTop1OnProbabilityError reports whether the historical evaluator
+// fallback is meaningful for this implementation. The remote endpoint already
+// returns the complete distribution for both interface methods, so retrying it
+// through Classify would duplicate a failed request without changing its
+// semantics.
+func (*categoryHTTPBackend) fallbackToTop1OnProbabilityError() bool { return false }
+
 func newCategoryHTTPBackend(
 	external *config.ExternalModelConfig,
 	mapping *CategoryMapping,

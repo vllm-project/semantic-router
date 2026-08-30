@@ -15,6 +15,7 @@ const valuesFile = "e2e/profiles/ai-gateway/values.yaml"
 
 var resourceManifests = []string{
 	"e2e/profiles/ai-gateway/manifests/mock-sequence-classifier.yaml",
+	"e2e/profiles/ai-gateway/manifests/mock-category-classifier.yaml",
 	"e2e/profiles/ai-gateway/gateway-resources/backend.yaml",
 	"deploy/kubernetes/ai-gateway/aigw-resources/gwapi-resources.yaml",
 	"e2e/profiles/ai-gateway/gateway-resources/responses-route.yaml",
@@ -34,6 +35,7 @@ func NewProfile() *Profile {
 			ResourceManifests:        resourceManifests,
 			WaitDeployments: []helpers.DeploymentRef{
 				{Namespace: "default", Name: "mock-sequence-classifier"},
+				{Namespace: "default", Name: "mock-category-classifier"},
 			},
 		}),
 	}

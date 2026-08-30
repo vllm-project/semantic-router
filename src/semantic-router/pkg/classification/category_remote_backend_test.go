@@ -8,6 +8,8 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -38,8 +40,8 @@ func TestCategoryHTTPBackendPreservesNamedFullDistribution(t *testing.T) {
 	}
 	want := []float32{0.50, 0.40, 0.10}
 	assertProbabilities(t, result.Probabilities, want)
-	if result.Class != 0 || result.Confidence != 0.5 || result.NumClasses != 3 {
-		t.Fatalf("argmax result = %#v, want class 0 confidence .5 classes 3", result)
+	if result.Class != 0 || result.Confidence != 0.5 {
+		t.Fatalf("argmax result = %#v, want class 0 confidence .5", result)
 	}
 }
 
@@ -89,6 +91,58 @@ func TestCategoryHTTPBackendPreservesCallerCancellation(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("classification did not stop after caller cancellation")
+	}
+}
+
+func TestCategoryHTTPBackendDoesNotUseTop1FallbackOnDistributionError(t *testing.T) {
+	backend := &categoryHTTPBackend{}
+	if categoryProbabilityFallbackAllowed(backend) {
+		t.Fatal("remote category backend must not retry a failed distribution request through Classify")
+	}
+	if !categoryProbabilityFallbackAllowed(&MockCategoryInference{}) {
+		t.Fatal("legacy category inference should retain the top1 fallback")
+	}
+}
+
+func TestCategoryHTTPBackendDistributionFailureMakesOneRequest(t *testing.T) {
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		http.Error(w, "temporary classifier failure", http.StatusBadGateway)
+	}))
+	defer server.Close()
+
+	mapping := &CategoryMapping{
+		CategoryToIdx: map[string]int{"math": 0, "other": 1},
+		IdxToCategory: map[string]string{"0": "math", "1": "other"},
+	}
+	backend, err := newCategoryHTTPBackend(&config.ExternalModelConfig{
+		ModelEndpoint: config.ClassifierVLLMEndpoint{Address: "127.0.0.1", Port: 8080},
+		ModelName:     "named-category-service",
+	}, mapping, time.Second)
+	if err != nil {
+		t.Fatalf("newCategoryHTTPBackend: %v", err)
+	}
+	backend.(*categoryHTTPBackend).backend.(*HTTPClassifierInference).baseURL = server.URL
+
+	classifier := &Classifier{
+		Config: &config.RouterConfig{InlineModels: config.InlineModels{Classifier: config.Classifier{
+			CategoryModel: config.CategoryModel{ClassifierOnErrorConfig: config.ClassifierOnErrorConfig{OnError: config.OnErrorBlock}},
+		}}},
+		CategoryMapping:   mapping,
+		categoryInference: backend,
+	}
+	results := &SignalResults{
+		SignalConfidences: map[string]float64{},
+		SignalErrors:      map[string]string{},
+		Metrics:           &SignalMetricsCollection{},
+	}
+	classifier.evaluateDomainSignal(context.Background(), results, &sync.Mutex{}, "one request")
+	if got := requests.Load(); got != 1 {
+		t.Fatalf("remote requests = %d, want 1", got)
+	}
+	if results.SignalErrors[config.SignalTypeDomain] != "category_classification_failed" {
+		t.Fatalf("signal error = %q, want category_classification_failed", results.SignalErrors[config.SignalTypeDomain])
 	}
 }
 

@@ -110,6 +110,47 @@ func createCategoryInitializer() CategoryInitializer {
 	return &CategoryInitializerImpl{}
 }
 
+// CandleCategoryInitializerImpl is the explicit candle variant. Unlike the
+// historical auto-detecting initializer, it never probes or falls back to
+// ModernBERT.
+type CandleCategoryInitializerImpl struct{}
+
+func (c *CandleCategoryInitializerImpl) Init(modelID string, useCPU bool, numClasses ...int) error {
+	classes := 0
+	if len(numClasses) > 0 {
+		classes = numClasses[0]
+	}
+	if !candle_binding.InitCandleBertClassifier(modelID, classes, useCPU) {
+		return fmt.Errorf("failed to initialize Candle category classifier")
+	}
+	logging.ComponentEvent("classifier", "category_classifier_initialized", map[string]interface{}{
+		"backend":   "candle",
+		"model_ref": modelID,
+	})
+	return nil
+}
+
+func createCandleCategoryInitializer() CategoryInitializer {
+	return &CandleCategoryInitializerImpl{}
+}
+
+// CandleCategoryInferenceImpl keeps explicit candle selection from silently
+// switching to ModernBERT. Candle currently exposes top-1 classification only,
+// so its probability interface returns the same historical top-1 result.
+type CandleCategoryInferenceImpl struct{}
+
+func (CandleCategoryInferenceImpl) Classify(_ context.Context, text string) (candle_binding.ClassResult, error) {
+	return candle_binding.ClassifyCandleBertText(text)
+}
+
+func (c CandleCategoryInferenceImpl) ClassifyWithProbabilities(ctx context.Context, text string) (candle_binding.ClassResultWithProbs, error) {
+	result, err := c.Classify(ctx, text)
+	if err != nil {
+		return candle_binding.ClassResultWithProbs{}, err
+	}
+	return candle_binding.ClassResultWithProbs{Class: result.Class, Confidence: result.Confidence}, nil
+}
+
 // ModernBERTCategoryInitializerImpl keeps the canonical modernbert selector
 // explicit. The historical empty selector still uses CategoryInitializerImpl's
 // auto-detecting path, while variant: modernbert must not depend on model-name

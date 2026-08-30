@@ -56,10 +56,19 @@ func (c *Classifier) evaluateKeywordSignal(results *SignalResults, mu *sync.Mute
 	}
 }
 
+type categoryProbabilityFallbackPolicy interface {
+	fallbackToTop1OnProbabilityError() bool
+}
+
+func categoryProbabilityFallbackAllowed(inference CategoryInference) bool {
+	policy, ok := inference.(categoryProbabilityFallbackPolicy)
+	return !ok || policy.fallbackToTop1OnProbabilityError()
+}
+
 func (c *Classifier) evaluateDomainSignal(ctx context.Context, results *SignalResults, mu *sync.Mutex, text string) {
 	start := time.Now()
 	domainResult, err := c.categoryInference.ClassifyWithProbabilities(ctx, text)
-	if err != nil {
+	if err != nil && categoryProbabilityFallbackAllowed(c.categoryInference) {
 		// Fall back to Classify() (top-1 only) when ClassifyWithProbabilities is unavailable.
 		logging.Debugf("[Signal Computation] ClassifyWithProbabilities unavailable, falling back to Classify: %v", err)
 		basicResult, basicErr := c.categoryInference.Classify(ctx, text)

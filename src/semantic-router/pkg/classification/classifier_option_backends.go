@@ -69,10 +69,10 @@ func (b *classifierOptionBuilder) addLocalCategoryClassifier(categoryMapping *Ca
 		categoryInference = createCategoryInference()
 	case config.CategoryVariantCandle:
 		logging.ComponentEvent("classifier", "category_classifier_backend_selected", map[string]interface{}{
-			"backend": "candle_bert_auto",
+			"backend": "candle",
 		})
-		categoryInitializer = createCategoryInitializer()
-		categoryInference = createCategoryInference()
+		categoryInitializer = createCandleCategoryInitializer()
+		categoryInference = CandleCategoryInferenceImpl{}
 	default:
 		categoryInitializer = createCategoryInitializer()
 		categoryInference = createCategoryInference()
