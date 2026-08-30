@@ -9,6 +9,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
@@ -44,6 +45,7 @@ type routerComponents struct {
 	lookupTable          lookuptable.LookupTable
 	memoryStore          memory.Store
 	memoryExtractor      *memory.MemoryExtractor
+	protocolCodecs       *protocolcodec.Registry
 	credentialResolver   *authz.CredentialResolver
 	rateLimiter          *ratelimit.RateLimitResolver
 	lookupTableCancel    func()
@@ -179,6 +181,7 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 		cfg:                cfg,
 		resources:          newResourceScope(),
 		routerSessionStore: buildRouterLearningStateStore(cfg),
+		protocolCodecs:     protocolcodec.NewBuiltinRegistry(),
 	}
 	registerRouterSessionStore(components.resources, components.routerSessionStore)
 	mappings, err := loadClassifierMappings(cfg)
@@ -246,20 +249,9 @@ func (components *routerComponents) buildEarlyResources(mappings *classifierMapp
 		components.resources.add(components.semanticCache.Close)
 	}
 
-	// One provider serves both the tools database and the tool embedder, so a
-	// remote endpoint gets a single HTTP client and connection pool.
-	toolsProvider, toolsProviderErr := toolsEmbeddingProvider(components.cfg)
-	if toolsProviderErr != nil && components.cfg.Tools.Enabled {
-		return rollbackResources(components.resources, toolsProviderErr)
-	}
-	components.toolsDatabase, err = createToolsDatabase(components.cfg, toolsProvider)
+	components.toolsDatabase, components.toolEmbedder, err = buildToolsRuntime(components.cfg)
 	if err != nil {
 		return rollbackResources(components.resources, err)
-	}
-	if toolsProviderErr == nil {
-		components.toolEmbedder = newToolEmbedderForConfig(components.cfg, toolsProvider)
-	} else {
-		logging.Warnf("tool_selection: embedding provider unavailable, filter mode will use its fallback: %v", toolsProviderErr)
 	}
 
 	components.recipeClassifiers, components.classifier, components.classificationSvc, err = createRouterClassifier(components.cfg, mappings)
@@ -309,6 +301,24 @@ func rollbackResources(resources *resourceScope, cause error) error {
 	return cause
 }
 
+func buildToolsRuntime(cfg *config.RouterConfig) (*tools.ToolsDatabase, *cachedToolEmbedder, error) {
+	// One provider serves both the tools database and the tool embedder, so a
+	// remote endpoint gets a single HTTP client/connection pool.
+	provider, providerErr := toolsEmbeddingProvider(cfg)
+	if providerErr != nil && cfg.Tools.Enabled {
+		return nil, nil, providerErr
+	}
+	database, err := createToolsDatabase(cfg, provider)
+	if err != nil {
+		return nil, nil, err
+	}
+	if providerErr != nil {
+		logging.Warnf("tool_selection: embedding provider unavailable, filter mode will use its fallback: %v", providerErr)
+		return database, nil, nil
+	}
+	return database, newToolEmbedderForConfig(cfg, provider), nil
+}
+
 func (components *routerComponents) buildRouter() *OpenAIRouter {
 	router := &OpenAIRouter{
 		Config:                  components.cfg,
@@ -328,6 +338,7 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 		ReplayRecorders:         components.replayRecorders,
 		MemoryStore:             components.memoryStore,
 		MemoryExtractor:         components.memoryExtractor,
+		ProtocolCodecs:          components.protocolCodecs,
 		CredentialResolver:      components.credentialResolver,
 		RateLimiter:             components.rateLimiter,
 		lookupTableCancel:       components.lookupTableCancel,

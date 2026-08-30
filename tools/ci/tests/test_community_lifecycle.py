@@ -2,6 +2,7 @@ import importlib.util
 import sys
 import unittest
 from pathlib import Path
+from urllib.parse import quote, unquote
 
 import yaml
 
@@ -14,6 +15,7 @@ assert SPEC and SPEC.loader
 community_lifecycle = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = community_lifecycle
 SPEC.loader.exec_module(community_lifecycle)
+community_lifecycle_github = sys.modules["community_lifecycle_github"]
 
 
 def labels(*names: str) -> list[dict[str, str]]:
@@ -477,6 +479,181 @@ MoM & Routing
             set(policy["labels"]["pr_state"].values()),
             set(community_lifecycle.PR_STATE_LABELS),
         )
+
+
+class FakePullRequestApi:
+    """Serve the endpoints pull-request reconciliation calls and record its writes."""
+
+    def __init__(self, pull_requests, issues=None, listings=None) -> None:
+        self.pull_requests = {int(item["number"]): item for item in pull_requests}
+        self.issues = {int(item["number"]): item for item in (issues or [])}
+        self.listings = listings or {}
+        self.fetched: list[int] = []
+        self.added: set[str] = set()
+        self.removed: set[str] = set()
+
+    def request(
+        self,
+        endpoint: str,
+        *,
+        method: str = "GET",
+        payload=None,
+        ignore_not_found: bool = False,
+    ):
+        if endpoint == "graphql":
+            return self.graphql(payload)
+        if "?" in endpoint:
+            return self.listings.get(endpoint, [])
+        parts = endpoint.split("/")
+        number = int(parts[4])
+        if parts[3] == "pulls":
+            self.fetched.append(number)
+            return self.pull_requests.get(number)
+        tail = parts[5:]
+        if not tail:
+            return self.issues.get(number)
+        if tail == ["labels"]:
+            self.added.update(payload["labels"])
+            return None
+        if tail[0] == "labels":
+            self.removed.add(unquote(tail[1]))
+        return None
+
+    def graphql(self, payload):
+        pull_request = self.pull_requests[payload["variables"]["number"]]
+        if "closingIssuesReferences" in payload["query"]:
+            nodes = [{"number": number} for number in pull_request.get("closes", ())]
+            return {
+                "data": {
+                    "repository": {
+                        "pullRequest": {"closingIssuesReferences": {"nodes": nodes}}
+                    }
+                }
+            }
+        signals = pull_request.get("signals", {})
+        rollup = {"state": signals.get("checks_state")}
+        return {
+            "data": {
+                "repository": {
+                    "pullRequest": {
+                        "reviewDecision": signals.get("review_decision"),
+                        "mergeStateStatus": signals.get("merge_state"),
+                        "commits": {
+                            "nodes": [{"commit": {"statusCheckRollup": rollup}}]
+                        },
+                    }
+                }
+            }
+        }
+
+
+class PullRequestReconciliationTests(unittest.TestCase):
+    REPO = "acme/router"
+
+    def pull_request(self, **overrides):
+        item = {
+            "number": 7,
+            "state": "closed",
+            "draft": False,
+            "user": {"type": "User"},
+            "labels": labels("pr/blocked", "wg/mom-routing"),
+            "milestone": None,
+            "closes": [5],
+            "signals": {
+                "review_decision": "APPROVED",
+                "merge_state": "UNKNOWN",
+                "checks_state": None,
+            },
+        }
+        item.update(overrides)
+        return item
+
+    def accepted_issue(self):
+        return {
+            "number": 5,
+            "labels": labels("accepted", "wg/mom-routing"),
+            "milestone": None,
+        }
+
+    def test_merged_pull_request_drops_its_state_label(self) -> None:
+        client = FakePullRequestApi([self.pull_request()], [self.accepted_issue()])
+
+        community_lifecycle_github.sync_pull_request(client, self.REPO, 7)
+
+        state_labels = set(community_lifecycle.PR_STATE_LABELS)
+        self.assertEqual(client.removed & state_labels, {"pr/blocked"})
+        self.assertEqual(client.added & state_labels, set())
+        self.assertNotIn("wg/mom-routing", client.removed)
+
+    def test_open_pull_request_still_carries_one_state_label(self) -> None:
+        pull_request = self.pull_request(
+            state="open",
+            labels=labels("wg/mom-routing"),
+            signals={
+                "review_decision": "APPROVED",
+                "merge_state": "CLEAN",
+                "checks_state": "SUCCESS",
+            },
+        )
+        client = FakePullRequestApi([pull_request], [self.accepted_issue()])
+
+        community_lifecycle_github.sync_pull_request(client, self.REPO, 7)
+
+        self.assertEqual(client.added, {"pr/merge-ready"})
+
+    def closed_listing(self, label: str, page: int = 1) -> str:
+        return (
+            f"repos/{self.REPO}/issues?state=closed"
+            f"&labels={quote(label, safe='')}"
+            f"&per_page={community_lifecycle_github.API_PAGE_SIZE}&page={page}"
+        )
+
+    def test_closed_sweep_reconciles_only_labeled_pull_requests(self) -> None:
+        listings = {
+            self.closed_listing("pr/blocked"): [
+                {"number": 11, "pull_request": {}},
+                {"number": 9},
+            ],
+            self.closed_listing("pr/needs-review"): [
+                {"number": 12, "pull_request": {}},
+                {"number": 11, "pull_request": {}},
+            ],
+        }
+        client = FakePullRequestApi(
+            [
+                self.pull_request(number=number, labels=labels("pr/blocked"), closes=[])
+                for number in (11, 12)
+            ],
+            listings=listings,
+        )
+
+        community_lifecycle_github.sync_labeled_closed_pull_requests(client, self.REPO)
+
+        self.assertEqual(client.fetched, [11, 12])
+        self.assertIn("pr/blocked", client.removed)
+
+    def test_closed_sweep_pages_through_full_listings(self) -> None:
+        page_size = community_lifecycle_github.API_PAGE_SIZE
+        numbers = list(range(100, 100 + page_size))
+        listings = {
+            self.closed_listing("pr/blocked"): [
+                {"number": number, "pull_request": {}} for number in numbers
+            ],
+            self.closed_listing("pr/blocked", page=2): [
+                {"number": 99, "pull_request": {}}
+            ],
+        }
+        client = FakePullRequestApi(
+            [
+                self.pull_request(number=number, labels=labels("pr/blocked"), closes=[])
+                for number in [99, *numbers]
+            ],
+            listings=listings,
+        )
+
+        community_lifecycle_github.sync_labeled_closed_pull_requests(client, self.REPO)
+
+        self.assertEqual(client.fetched, [99, *numbers])
 
 
 if __name__ == "__main__":

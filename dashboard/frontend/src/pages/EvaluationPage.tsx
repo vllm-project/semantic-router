@@ -1,322 +1,254 @@
-import { useState, useCallback, useEffect } from 'react'
-import type { EvaluationTask, CreateTaskRequest } from '../types/evaluation'
-import { useTasks, useTaskMutations, useResults } from '../hooks/useEvaluation'
-import {
-  TaskList,
-  TaskCreationForm,
-  ProgressTracker,
-  ReportViewer,
-  HistoricalResults,
-} from '../components/evaluation'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+
 import ConfirmDialog from '../components/ConfirmDialog'
 import DashboardSurfaceHero from '../components/DashboardSurfaceHero'
-import ProductIcon, { type ProductIconName } from '../components/ProductIcon'
+import ProductLoadingState from '../components/ProductLoadingState'
+import EvaluationCompare from '../components/evaluation-plane/EvaluationCompare'
+import EvaluationExperimentForm from '../components/evaluation-plane/EvaluationExperimentForm'
+import EvaluationNavigation, {
+  type EvaluationView,
+} from '../components/evaluation-plane/EvaluationNavigation'
+import EvaluationOverview from '../components/evaluation-plane/EvaluationOverview'
+import EvaluationReports from '../components/evaluation-plane/EvaluationReports'
+import EvaluationRuns from '../components/evaluation-plane/EvaluationRuns'
 import { useAuth } from '../contexts/AuthContext'
 import { useReadonly } from '../contexts/ReadonlyContext'
+import {
+  useEvaluationComparison,
+  useEvaluationPlane,
+  useEvaluationReport,
+  useEvaluationRunEvents,
+} from '../hooks/useEvaluationPlane'
+import type { CreateEvaluationRunRequest, EvaluationRun } from '../types/evaluationPlane'
 import { canRunEvaluation, canWriteEvaluation } from '../utils/accessControl'
 import styles from './EvaluationPage.module.css'
-
-type TabType = 'tasks' | 'create' | 'progress' | 'report' | 'history'
-
-interface TabState {
-  active: TabType
-  selectedTaskId: string | null
-}
 
 export function EvaluationPage() {
   const { user } = useAuth()
   const { serverReadonly, isLoading: readonlyLoading } = useReadonly()
-  const evaluationMutationsAllowed = !readonlyLoading && !serverReadonly
-  const canWrite = evaluationMutationsAllowed && canWriteEvaluation(user)
-  const canRun = evaluationMutationsAllowed && canRunEvaluation(user)
-  const { tasks, loading: tasksLoading, error: tasksError, refresh: refreshTasks } = useTasks(true)
-  const {
-    loading: mutationLoading,
-    error: mutationError,
-    createTask,
-    runTask,
-    cancelTask,
-    deleteTask,
-    clearError,
-  } = useTaskMutations()
+  const mutationsAllowed = !readonlyLoading && !serverReadonly
+  const canWrite = mutationsAllowed && canWriteEvaluation(user)
+  const canRun = mutationsAllowed && canRunEvaluation(user)
+  const plane = useEvaluationPlane()
+  const [activeView, setActiveView] = useState<EvaluationView>('overview')
+  const [selectedRunID, setSelectedRunID] = useState<string | null>(null)
+  const [reportRunID, setReportRunID] = useState('')
+  const [baselineRunID, setBaselineRunID] = useState('')
+  const [candidateRunID, setCandidateRunID] = useState('')
+  const [cancelTarget, setCancelTarget] = useState<EvaluationRun | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<EvaluationRun | null>(null)
 
-  const [tabState, setTabState] = useState<TabState>({ active: 'tasks', selectedTaskId: null })
-  const [deleteTarget, setDeleteTarget] = useState<EvaluationTask | null>(null)
-  const [cancelTarget, setCancelTarget] = useState<EvaluationTask | null>(null)
-
-  // Fetch results when viewing a task's report
-  const {
-    results: selectedResults,
-    loading: resultsLoading,
-    error: resultsError,
-    refresh: refreshResults,
-  } = useResults(tabState.active === 'report' ? tabState.selectedTaskId : null)
+  const completedRuns = useMemo(
+    () => plane.runs.filter((run) => run.status === 'completed'),
+    [plane.runs],
+  )
+  const latestCompletedID = completedRuns[0]?.id || null
+  const latestReportState = useEvaluationReport(
+    activeView === 'overview' ? latestCompletedID : null,
+  )
+  const reportState = useEvaluationReport(reportRunID || null)
+  const comparisonState = useEvaluationComparison(baselineRunID, candidateRunID)
+  const selectedRun = plane.runs.find((run) => run.id === selectedRunID) || null
+  const eventState = useEvaluationRunEvents(selectedRun, plane.refreshRuns)
 
   useEffect(() => {
-    if (!canWrite && tabState.active === 'create') {
-      setTabState({ active: 'tasks', selectedTaskId: null })
+    if (activeView === 'reports' && !reportRunID && latestCompletedID) {
+      setReportRunID(latestCompletedID)
     }
-    if (!canWrite) setDeleteTarget(null)
+  }, [activeView, latestCompletedID, reportRunID])
+
+  useEffect(() => {
+    if (!candidateRunID && completedRuns[0]) setCandidateRunID(completedRuns[0].id)
+    if (!baselineRunID && completedRuns[1]) setBaselineRunID(completedRuns[1].id)
+  }, [baselineRunID, candidateRunID, completedRuns])
+
+  useEffect(() => {
+    if (selectedRunID && !plane.runs.some((run) => run.id === selectedRunID)) {
+      setSelectedRunID(null)
+    }
+  }, [plane.runs, selectedRunID])
+
+  useEffect(() => {
     if (!canRun) setCancelTarget(null)
-  }, [canRun, canWrite, tabState.active])
+    if (!canWrite) setDeleteTarget(null)
+  }, [canRun, canWrite])
 
-  const handleViewTask = useCallback((task: EvaluationTask) => {
-    if (task.status === 'pending' || task.status === 'running') {
-      setTabState({ active: 'progress', selectedTaskId: task.id })
-    } else if (
-      task.status === 'completed' ||
-      task.status === 'failed' ||
-      task.status === 'cancelled'
-    ) {
-      setTabState({ active: 'report', selectedTaskId: task.id })
-    }
+  const createRun = useCallback(
+    async (request: CreateEvaluationRunRequest) => {
+      if (!canWrite || (request.auto_start && !canRun)) return false
+      const pendingRun = await plane.createRun({ ...request, auto_start: false })
+      if (!pendingRun) return false
+      setSelectedRunID(pendingRun.id)
+      setActiveView('runs')
+      if (request.auto_start) {
+        const startedRun = await plane.startRun(pendingRun.id)
+        if (startedRun) setSelectedRunID(startedRun.id)
+      }
+      return true
+    },
+    [canRun, canWrite, plane],
+  )
+
+  const openReport = useCallback((run: EvaluationRun) => {
+    setReportRunID(run.id)
+    setActiveView('reports')
   }, [])
 
-  const handleRunTask = useCallback(
-    async (task: EvaluationTask) => {
-      if (!canRun) return
-      const success = await runTask(task.id)
-      if (success) {
-        setTabState({ active: 'progress', selectedTaskId: task.id })
-        void refreshTasks()
-      }
-    },
-    [canRun, runTask, refreshTasks],
-  )
-
-  const handleCancelTask = useCallback(
-    (task: EvaluationTask) => {
-      if (!canRun) return
-      setCancelTarget(task)
-    },
-    [canRun],
-  )
-
-  const confirmCancelTask = useCallback(async () => {
+  const confirmCancel = useCallback(async () => {
     if (!cancelTarget || !canRun) return
-    const cancelled = await cancelTask(cancelTarget.id)
-    if (cancelled) {
+    const run = await plane.cancelRun(cancelTarget.id)
+    if (run) {
       setCancelTarget(null)
-      void refreshTasks()
-      setTabState({ active: 'tasks', selectedTaskId: null })
+      setSelectedRunID(run.id)
     }
-  }, [canRun, cancelTarget, cancelTask, refreshTasks])
+  }, [canRun, cancelTarget, plane])
 
-  const handleDeleteTask = useCallback(
-    (task: EvaluationTask) => {
-      if (!canWrite) return
-      setDeleteTarget(task)
-    },
-    [canWrite],
-  )
-
-  const confirmDeleteTask = useCallback(async () => {
+  const confirmDelete = useCallback(async () => {
     if (!deleteTarget || !canWrite) return
-    const deleted = await deleteTask(deleteTarget.id)
-    if (deleted) {
+    if (await plane.deleteRun(deleteTarget.id)) {
       setDeleteTarget(null)
-      void refreshTasks()
+      if (reportRunID === deleteTarget.id) setReportRunID('')
     }
-  }, [canWrite, deleteTarget, deleteTask, refreshTasks])
-
-  const handleCreateTask = useCallback(
-    async (request: CreateTaskRequest) => {
-      if (!canWrite) return
-      const task = await createTask(request)
-      if (task) {
-        void refreshTasks()
-        setTabState({ active: 'tasks', selectedTaskId: task.id })
-      }
-    },
-    [canWrite, createTask, refreshTasks],
-  )
-
-  const handleCancelCreate = useCallback(() => {
-    setTabState({ active: 'tasks', selectedTaskId: null })
-  }, [])
-
-  const handleProgressComplete = useCallback(() => {
-    void refreshTasks()
-    if (tabState.selectedTaskId) {
-      setTabState({ active: 'report', selectedTaskId: tabState.selectedTaskId })
-    }
-  }, [refreshTasks, tabState.selectedTaskId])
-
-  const handleBackFromReport = useCallback(() => {
-    setTabState({ active: 'tasks', selectedTaskId: null })
-  }, [])
-
-  const handleViewHistoricalResults = useCallback((task: EvaluationTask) => {
-    setTabState({ active: 'report', selectedTaskId: task.id })
-  }, [])
-
-  const tabs: Array<{ id: 'tasks' | 'create' | 'history'; label: string; icon: ProductIconName }> = [
-    { id: 'tasks', label: 'Tasks', icon: 'list' },
-    ...(canWrite ? [{ id: 'create' as const, label: 'Create', icon: 'plus' as const }] : []),
-    { id: 'history', label: 'History', icon: 'chart' },
-  ]
+  }, [canWrite, deleteTarget, plane, reportRunID])
 
   return (
     <div className={styles.container}>
       <DashboardSurfaceHero
-        eyebrow="Outcomes"
+        eyebrow="Evaluation plane"
         title="Evaluation"
-        description="Measure every Mixture-of-Models from signal quality to system outcomes."
+        description="Measure routing recipes, model pools, and end-to-end intelligence with reproducible evidence and promotion gates."
+        meta={[
+          { label: 'Tracks', value: '8' },
+          { label: 'Modes', value: 'Replay · Live' },
+          { label: 'Evidence', value: 'E0–E5' },
+        ]}
       />
-
-      {mutationError && (
-        <div className={styles.errorBanner}>
-          <span>{mutationError}</span>
-          <button type="button" onClick={clearError}>
-            Dismiss
-          </button>
-        </div>
-      )}
 
       {!readonlyLoading && serverReadonly ? (
         <div className={styles.readonlyBanner} role="status">
-          Evaluation history remains available, but the server-wide read-only policy disables task
-          creation, deletion, runs, and cancellation.
+          Evaluation evidence remains readable, but the server-wide read-only policy disables run
+          creation, execution, cancellation, and deletion.
+        </div>
+      ) : null}
+      {plane.mutationError ? (
+        <div className={styles.errorBanner} role="alert">
+          <span>{plane.mutationError}</span>
+          <button type="button" onClick={plane.clearMutationError}>
+            Dismiss
+          </button>
         </div>
       ) : null}
 
-      {tabState.active === 'progress' && tabState.selectedTaskId && (
-        <div className={styles.progressView}>
-          <button
-            type="button"
-            className={styles.backButton}
-            onClick={() => setTabState({ active: 'tasks', selectedTaskId: null })}
-          >
-            Back to Tasks
-          </button>
-          <ProgressTracker
-            taskId={tabState.selectedTaskId}
-            onComplete={handleProgressComplete}
-            onCancel={
-              canRun
-                ? () => {
-                    const task = tasks.find((t) => t.id === tabState.selectedTaskId)
-                    if (task) handleCancelTask(task)
-                  }
-                : undefined
-            }
-          />
-        </div>
-      )}
+      <EvaluationNavigation active={activeView} onChange={setActiveView} />
 
-      {tabState.active === 'report' &&
-        (selectedResults ? (
-          <ReportViewer results={selectedResults} onBack={handleBackFromReport} />
-        ) : (
-          <div className={styles.progressView}>
-            <button type="button" className={styles.backButton} onClick={handleBackFromReport}>
-              Back to Tasks
+      <main
+        id={`evaluation-panel-${activeView}`}
+        role="tabpanel"
+        aria-labelledby={`evaluation-tab-${activeView}`}
+      >
+        {plane.loading ? (
+          <div className={styles.loading}>
+            <ProductLoadingState label="Loading evaluation plane" />
+          </div>
+        ) : null}
+        {!plane.loading && plane.error && !plane.catalog ? (
+          <div className={styles.loadError} role="alert">
+            <h2>Evaluation plane unavailable</h2>
+            <p>{plane.error}</p>
+            <button type="button" onClick={plane.refresh}>
+              Retry
             </button>
-            <div
-              className={`${styles.asyncState} ${resultsError ? styles.asyncStateError : ''}`}
-              role={resultsError ? 'alert' : 'status'}
-            >
-              <h2>{resultsError ? 'Results are unavailable' : 'Loading evaluation results…'}</h2>
-              <p>
-                {resultsError ||
-                  (resultsLoading
-                    ? 'Large reports are loaded only when opened.'
-                    : 'No result payload was returned for this evaluation.')}
-              </p>
-              {resultsError ? (
-                <button type="button" onClick={() => void refreshResults()}>
-                  Retry
-                </button>
-              ) : null}
-            </div>
           </div>
-        ))}
-
-      {tabState.active !== 'progress' && tabState.active !== 'report' && (
-        <>
-          <div className={styles.tabs} role="tablist" aria-label="Evaluation views">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                id={`evaluation-tab-${tab.id}`}
-                type="button"
-                role="tab"
-                aria-selected={tabState.active === tab.id}
-                aria-controls={`evaluation-panel-${tab.id}`}
-                className={`${styles.tab} ${tabState.active === tab.id ? styles.activeTab : ''}`}
-                onClick={() => setTabState({ active: tab.id, selectedTaskId: null })}
-              >
-                <ProductIcon className={styles.tabIcon} name={tab.icon} />
-                <span className={styles.tabLabel}>{tab.label}</span>
-              </button>
-            ))}
-          </div>
-
-          <div
-            id={`evaluation-panel-${tabState.active}`}
-            className={styles.tabContent}
-            role="tabpanel"
-            aria-labelledby={`evaluation-tab-${tabState.active}`}
-          >
-            {tabState.active === 'tasks' && (
-              <TaskList
-                tasks={tasks}
-                loading={tasksLoading || mutationLoading}
-                error={tasksError}
-                onView={handleViewTask}
-                onRun={handleRunTask}
-                onCancel={handleCancelTask}
-                onDelete={handleDeleteTask}
-                onRefresh={refreshTasks}
-                canRunTasks={canRun}
-                canDeleteTasks={canWrite}
-                canCreateTasks={canWrite}
+        ) : null}
+        {!plane.loading && plane.catalog ? (
+          <>
+            {activeView === 'overview' ? (
+              <EvaluationOverview
+                catalog={plane.catalog}
+                runs={plane.runs}
+                latestReport={latestReportState.report}
+                reportLoading={latestReportState.loading}
+                onNavigate={setActiveView}
               />
-            )}
-
-            {tabState.active === 'create' && canWrite && (
-              <TaskCreationForm
-                onSubmit={handleCreateTask}
-                onCancel={handleCancelCreate}
-                loading={mutationLoading}
+            ) : null}
+            {activeView === 'new' ? (
+              <EvaluationExperimentForm
+                catalog={plane.catalog}
+                runs={plane.runs}
+                canCreate={canWrite}
+                canAutoStart={canWrite && canRun}
+                pending={plane.mutationPending}
+                onSubmit={createRun}
               />
-            )}
-
-            {tabState.active === 'history' && (
-              <HistoricalResults
-                tasks={tasks}
-                loading={tasksLoading}
-                error={tasksError}
-                onRefresh={refreshTasks}
-                onViewResults={handleViewHistoricalResults}
+            ) : null}
+            {activeView === 'runs' ? (
+              <EvaluationRuns
+                runs={plane.runs}
+                selectedRunID={selectedRunID}
+                events={eventState.events}
+                eventsConnected={eventState.connected}
+                eventsError={eventState.error}
+                canRun={canRun}
+                canDelete={canWrite}
+                pending={plane.mutationPending}
+                onSelect={(run) => setSelectedRunID(run.id)}
+                onStart={(run) => void plane.startRun(run.id)}
+                onCancel={setCancelTarget}
+                onDelete={setDeleteTarget}
+                onOpenReport={openReport}
+                onRefresh={() => void plane.refreshRuns()}
               />
-            )}
-          </div>
-        </>
-      )}
+            ) : null}
+            {activeView === 'reports' ? (
+              <EvaluationReports
+                runs={plane.runs}
+                selectedRunID={reportRunID}
+                report={reportState.report}
+                loading={reportState.loading}
+                error={reportState.error}
+                onSelect={setReportRunID}
+                onRetry={() => void reportState.refresh()}
+              />
+            ) : null}
+            {activeView === 'compare' ? (
+              <EvaluationCompare
+                runs={plane.runs}
+                baselineID={baselineRunID}
+                candidateID={candidateRunID}
+                comparison={comparisonState.comparison}
+                loading={comparisonState.loading}
+                error={comparisonState.error}
+                onBaselineChange={setBaselineRunID}
+                onCandidateChange={setCandidateRunID}
+                onCompare={() => void comparisonState.compare()}
+              />
+            ) : null}
+          </>
+        ) : null}
+      </main>
 
-      <ConfirmDialog
-        isOpen={deleteTarget !== null}
-        title={`Delete ${deleteTarget?.name || 'this evaluation'}?`}
-        description="The task definition and its dashboard history will be removed. Export any results you still need before continuing."
-        eyebrow="Evaluation lifecycle"
-        confirmLabel="Delete evaluation"
-        pending={mutationLoading}
-        details={deleteTarget ? <code>{deleteTarget.id}</code> : null}
-        onCancel={() => setDeleteTarget(null)}
-        onConfirm={confirmDeleteTask}
-      />
       <ConfirmDialog
         isOpen={cancelTarget !== null}
-        title={`Cancel ${cancelTarget?.name || 'this evaluation'}?`}
-        description="The running evaluation will stop at its current step. Partial result records may remain available."
-        eyebrow="Evaluation run"
-        confirmLabel="Cancel evaluation"
-        pending={mutationLoading}
+        title={`Cancel ${cancelTarget?.name || 'this run'}?`}
+        description="Execution will stop after the active step. Partial evidence remains explicit and unavailable gates will not count as passed."
+        eyebrow="Evaluation execution"
+        confirmLabel="Cancel run"
         tone="warning"
+        pending={plane.mutationPending}
         details={cancelTarget ? <code>{cancelTarget.id}</code> : null}
         onCancel={() => setCancelTarget(null)}
-        onConfirm={confirmCancelTask}
+        onConfirm={confirmCancel}
+      />
+      <ConfirmDialog
+        isOpen={deleteTarget !== null}
+        title={`Delete ${deleteTarget?.name || 'this run'}?`}
+        description="The run snapshot, report index, and dashboard history will be removed. Preserve any required artifacts first."
+        eyebrow="Evaluation evidence"
+        confirmLabel="Delete run"
+        pending={plane.mutationPending}
+        details={deleteTarget ? <code>{deleteTarget.id}</code> : null}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={confirmDelete}
       />
     </div>
   )

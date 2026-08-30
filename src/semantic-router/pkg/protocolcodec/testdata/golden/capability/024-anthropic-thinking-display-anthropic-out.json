@@ -1,0 +1,55 @@
+{
+  "cases": [
+    {
+      "name": "enabled summarized",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "max_tokens": 2048,
+          "messages": [
+            {
+              "content": [
+                {
+                  "text": "Think carefully.",
+                  "type": "text"
+                }
+              ],
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "thinking": {
+            "budget_tokens": 1024,
+            "display": "summarized",
+            "type": "enabled"
+          }
+        }
+      }
+    },
+    {
+      "name": "adaptive omitted",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "max_tokens": 2048,
+          "messages": [
+            {
+              "content": [
+                {
+                  "text": "Think carefully.",
+                  "type": "text"
+                }
+              ],
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "thinking": {
+            "display": "omitted",
+            "type": "adaptive"
+          }
+        }
+      }
+    }
+  ]
+}

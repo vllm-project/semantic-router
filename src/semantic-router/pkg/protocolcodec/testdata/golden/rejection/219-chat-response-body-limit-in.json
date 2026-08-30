@@ -1,0 +1,22 @@
+{
+  "operation": "response",
+  "limits": {
+    "body_bytes": 16
+  },
+  "body": {
+    "id": "chatcmpl_1",
+    "object": "chat.completion",
+    "created": 1,
+    "model": "provider-model",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "hello"
+        },
+        "finish_reason": "stop"
+      }
+    ]
+  }
+}

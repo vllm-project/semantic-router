@@ -21,11 +21,24 @@ config:
     models:
       - name: base-model
         reasoning_family: qwen3
+        pricing:
+          currency: USD
+          prompt_per_1m: 0.10
+          completion_per_1m: 0.30
         backend_refs:
           - name: local-vllm
             endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
             weight: 1
   routing:
+    projections:
+      scores:
+        - name: e2e_contract_score
+          method: weighted_sum
+          inputs:
+            - type: keyword
+              name: retention_probe_keywords
+              weight: 1
+              value_source: binary
     decisions:
       - name: block_jailbreak
         description: Block jailbreak attempts
@@ -731,6 +744,11 @@ config:
     model_catalog:
       kbs: []
     services:
+      response_api:
+        enabled: true
+        store_backend: memory
+        ttl_seconds: 3600
+        max_responses: 1000
       api:
         batch_classification:
           max_batch_size: 100

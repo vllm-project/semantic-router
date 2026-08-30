@@ -21,19 +21,21 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	httputil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 )
 
 // RouterR1Client is a client for the Router-R1 LLM-as-Router server
 // This implements the think/route pattern from arXiv:2506.09033
 // Requires external server: src/training/rl_model_selection/router_r1_server.py
 type RouterR1Client struct {
-	serverURL  string
-	httpClient *http.Client
+	serverURL        string
+	httpClient       *http.Client
+	maxResponseBytes int64
 }
 
 // RouterR1Response is the response from the Router-R1 server
@@ -50,6 +52,7 @@ func NewRouterR1Client(serverURL string) *RouterR1Client {
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
+		maxResponseBytes: config.DefaultMaxResponseBytes,
 	}
 }
 
@@ -77,12 +80,17 @@ func (c *RouterR1Client) Route(ctx context.Context, query string) (*RouterR1Resp
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("server returned status %d: %s", resp.StatusCode, string(body))
+		body, truncated := httputil.ReadTruncatedBody(resp.Body, maxSelectionErrorBodyBytes)
+		return nil, fmt.Errorf("server returned status %d: %s (truncated=%t)", resp.StatusCode, string(body), truncated)
+	}
+
+	body, err := httputil.ReadLimitedBody(resp.Body, c.maxResponseBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
 	var result RouterR1Response
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.NewDecoder(bytes.NewReader(body)).Decode(&result); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
@@ -113,11 +121,12 @@ func (c *RouterR1Client) HealthCheck(ctx context.Context) error {
 // AutoMixVerifierClient is a client for the AutoMix self-verification server
 // This implements few-shot entailment verification from arXiv:2310.12963
 type AutoMixVerifierClient struct {
-	serverURL  string
-	httpClient *http.Client
+	serverURL        string
+	httpClient       *http.Client
+	maxResponseBytes int64
 }
 
-const maxAutoMixVerifierErrorBodyBytes int64 = 8 * 1024
+const maxSelectionErrorBodyBytes int64 = 8 * 1024
 
 // AutoMixVerifyResponse is the response from the AutoMix verifier
 type AutoMixVerifyResponse struct {
@@ -136,6 +145,7 @@ func NewAutoMixVerifierClient(serverURL string) *AutoMixVerifierClient {
 		httpClient: &http.Client{
 			Timeout: 60 * time.Second, // Verification can take longer with multiple samples
 		},
+		maxResponseBytes: config.DefaultMaxResponseBytes,
 	}
 }
 
@@ -147,6 +157,12 @@ func (c *AutoMixVerifierClient) SetTimeout(timeout time.Duration) {
 		return
 	}
 	c.httpClient.Timeout = timeout
+}
+
+func (c *AutoMixVerifierClient) SetMaxResponseBytes(maxResponseBytes int64) {
+	if maxResponseBytes > 0 {
+		c.maxResponseBytes = maxResponseBytes
+	}
 }
 
 // Verify sends a question/answer pair for verification
@@ -178,18 +194,22 @@ func (c *AutoMixVerifierClient) Verify(ctx context.Context, question, answer, op
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		errorBody, _ := io.ReadAll(io.LimitReader(resp.Body, maxAutoMixVerifierErrorBodyBytes+1))
-		truncated := int64(len(errorBody)) > maxAutoMixVerifierErrorBodyBytes
+		errorBody, truncated := httputil.ReadTruncatedBody(resp.Body, maxSelectionErrorBodyBytes)
 		return nil, fmt.Errorf(
 			"server returned status %d (error_body_bytes=%d, truncated=%t)",
 			resp.StatusCode,
-			min(len(errorBody), int(maxAutoMixVerifierErrorBodyBytes)),
+			len(errorBody),
 			truncated,
 		)
 	}
 
+	body, err := httputil.ReadLimitedBody(resp.Body, c.maxResponseBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
 	var result AutoMixVerifyResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.NewDecoder(bytes.NewReader(body)).Decode(&result); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 

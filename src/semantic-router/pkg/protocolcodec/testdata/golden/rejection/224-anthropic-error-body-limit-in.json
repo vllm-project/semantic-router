@@ -1,0 +1,13 @@
+{
+  "operation": "error",
+  "limits": {
+    "body_bytes": 16
+  },
+  "body": {
+    "type": "error",
+    "error": {
+      "type": "rate_limit_error",
+      "message": "rate limited"
+    }
+  }
+}

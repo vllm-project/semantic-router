@@ -49,6 +49,8 @@ class ConfidenceAlgorithmConfig(BaseModel):
     # Behavior on model call failure: "skip" or "fail"
     on_error: str | None = "skip"
 
+    max_response_bytes: int | None = Field(default=None, ge=0)
+
 
 class RatingsAlgorithmConfig(BaseModel):
     """Configuration for the ratings looper algorithm."""
