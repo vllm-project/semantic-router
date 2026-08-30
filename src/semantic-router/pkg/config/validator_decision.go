@@ -148,7 +148,7 @@ func validateClassifierDecisionLeaf(
 			node.Name,
 		)
 	}
-	if rule.Type == "local" {
+	if rule.Type == ClassifierSignalTypeLocal {
 		return validateLocalClassifierDecisionPredicate(decisionName, node)
 	}
 	return nil
