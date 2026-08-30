@@ -24,20 +24,24 @@ func (f fakeImageFileResolver) ResolveImageFile(fileID string) ([]byte, error) {
 
 var responseAPIPNGBytes = []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR")
 
-var _ = Describe("Response API image inputs", func() {
-	var filter *ResponseAPIFilter
+const responseAPIFileIDRequest = `{
+	"model": "vision-model",
+	"input": [{
+		"type": "message",
+		"role": "user",
+		"content": [
+			{"type": "input_text", "text": "what is shown here?"},
+			{"type": "input_image", "file_id": "file-abc123"}
+		]
+	}]
+}`
 
-	fileIDRequest := `{
-		"model": "vision-model",
-		"input": [{
-			"type": "message",
-			"role": "user",
-			"content": [
-				{"type": "input_text", "text": "what is shown here?"},
-				{"type": "input_image", "file_id": "file-abc123"}
-			]
-		}]
-	}`
+func responseAPIImageRequest(part string) string {
+	return `{"model": "vision-model", "input": [{"type": "message", "role": "user", "content": [` + part + `]}]}`
+}
+
+var _ = Describe("Response API file image inputs", func() {
+	var filter *ResponseAPIFilter
 
 	BeforeEach(func() {
 		filter = NewResponseAPIFilter(NewMockResponseStore())
@@ -46,7 +50,7 @@ var _ = Describe("Response API image inputs", func() {
 	It("inlines file_id images from the file store and counts them once", func() {
 		filter.SetImageFileResolver(fakeImageFileResolver{files: map[string][]byte{"file-abc123": responseAPIPNGBytes}})
 
-		respCtx, translatedBody, err := filter.TranslateRequest(context.Background(), []byte(fileIDRequest))
+		respCtx, translatedBody, err := filter.TranslateRequest(context.Background(), []byte(responseAPIFileIDRequest))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(respCtx.NativeImageContentCount).To(Equal(1))
 		Expect(string(translatedBody)).To(ContainSubstring(`"url":"data:image/png;base64,`))
@@ -62,7 +66,7 @@ var _ = Describe("Response API image inputs", func() {
 	})
 
 	It("rejects file_id images that no file store can resolve", func() {
-		_, _, err := filter.TranslateRequest(context.Background(), []byte(fileIDRequest))
+		_, _, err := filter.TranslateRequest(context.Background(), []byte(responseAPIFileIDRequest))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("file-abc123"))
 	})
@@ -70,25 +74,16 @@ var _ = Describe("Response API image inputs", func() {
 	It("rejects file_id images missing from the file store", func() {
 		filter.SetImageFileResolver(fakeImageFileResolver{})
 
-		_, _, err := filter.TranslateRequest(context.Background(), []byte(fileIDRequest))
+		_, _, err := filter.TranslateRequest(context.Background(), []byte(responseAPIFileIDRequest))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("file not found: file-abc123"))
 	})
 
 	It("inlines file_data images without a file store", func() {
 		payload := base64.StdEncoding.EncodeToString(responseAPIPNGBytes)
-		responseAPIReq := `{
-			"model": "vision-model",
-			"input": [{
-				"type": "message",
-				"role": "user",
-				"content": [
-					{"type": "input_image", "file_data": "` + payload + `"}
-				]
-			}]
-		}`
+		body := responseAPIImageRequest(`{"type": "input_image", "file_data": "` + payload + `"}`)
 
-		respCtx, translatedBody, err := filter.TranslateRequest(context.Background(), []byte(responseAPIReq))
+		respCtx, translatedBody, err := filter.TranslateRequest(context.Background(), []byte(body))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(respCtx.NativeImageContentCount).To(Equal(1))
 		Expect(string(translatedBody)).To(ContainSubstring(`"url":"data:image/png;base64,` + payload + `"`))
@@ -97,20 +92,14 @@ var _ = Describe("Response API image inputs", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(fast.ImageContentCount).To(Equal(1))
 	})
+})
 
+var _ = Describe("Response API native image facts", func() {
 	It("does not double-count URL images that survive translation", func() {
-		responseAPIReq := `{
-			"model": "vision-model",
-			"input": [{
-				"type": "message",
-				"role": "user",
-				"content": [
-					{"type": "input_image", "image_url": "https://example.com/a.png"}
-				]
-			}]
-		}`
+		filter := NewResponseAPIFilter(NewMockResponseStore())
+		body := responseAPIImageRequest(`{"type": "input_image", "image_url": "https://example.com/a.png"}`)
 
-		respCtx, translatedBody, err := filter.TranslateRequest(context.Background(), []byte(responseAPIReq))
+		respCtx, translatedBody, err := filter.TranslateRequest(context.Background(), []byte(body))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(respCtx.NativeImageContentCount).To(Equal(1))
 
