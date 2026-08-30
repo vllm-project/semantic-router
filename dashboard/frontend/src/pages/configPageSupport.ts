@@ -446,6 +446,7 @@ export interface EmbeddingEndpointConfig {
   api_key_env?: string
   timeout_seconds?: number
   max_retries?: number
+  max_response_bytes?: number
   dimensions?: number
 }
 
