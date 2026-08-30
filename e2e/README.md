@@ -129,8 +129,8 @@ until the selected cases are known to be isolated.
 - **multi-endpoint**: environment policy across several backends.
 - **authz-rbac**: authorization routing and rate-limit behavior.
 - **streaming**: streamed request bodies and cache round trips.
-- **anthropic-shim**: manual Anthropic-shape translation diagnostics.
-- **response-api**: manual memory-backed Responses API coverage.
+- **anthropic-shim**: affected-change Anthropic backend and cross-protocol matrix coverage.
+- **response-api**: affected-change memory-backed Responses API and cross-protocol matrix coverage.
 - **response-api-redis**: manual Redis persistence and TTL coverage.
 - **response-api-redis-cluster**: manual Redis Cluster persistence and TTL coverage.
 - **router-replay**: manual management-boundary and restart-recovery coverage.
@@ -153,6 +153,16 @@ until the selected cases are known to be isolated.
 owns the exact selection mode, path triggers, and coverage role for every entry.
 “Manual” describes lifecycle and prerequisites; it is not evidence that the
 profile passed in another environment.
+
+The `response-api` and `anthropic-shim` affected-change profiles jointly own the
+three native protocol backends used by the pairwise codec matrix. Their default
+contracts exercise Chat Completions, Responses, and Messages clients against each
+backend in buffered and streaming modes: 3 client protocols x 3 backend protocols
+x 2 response modes, for 18 required end-to-end cells. Each cell validates the
+client-native response envelope or SSE sequence, the terminal event, translated
+backend output, and the absence of leaked backend wire shapes. The same profiles
+also cover tool-call lifecycles, structured JSON Schema output, provider transport
+errors, incomplete streams, and midstream failures.
 
 ## Add or change a profile
 

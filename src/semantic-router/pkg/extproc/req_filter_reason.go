@@ -36,9 +36,24 @@ func (r *OpenAIRouter) setReasoningModeToRequestBodyForProvider(
 	decision *config.Decision,
 	profile *config.ProviderProfile,
 ) ([]byte, error) {
+	return r.setReasoningModeToRequestBodyForModelAndProvider(
+		requestBody, "", enabled, decision, profile,
+	)
+}
+
+func (r *OpenAIRouter) setReasoningModeToRequestBodyForModelAndProvider(
+	requestBody []byte,
+	logicalModel string,
+	enabled bool,
+	decision *config.Decision,
+	profile *config.ProviderProfile,
+) ([]byte, error) {
 	mutation, err := parseReasoningRequestMutation(requestBody)
 	if err != nil {
 		return nil, err
+	}
+	if logicalModel != "" {
+		mutation.model = logicalModel
 	}
 	familyConfig := r.getModelReasoningFamily(mutation.model)
 	dialect := resolveOpenAIBackendDialect(profile)
@@ -378,56 +393,4 @@ func (r *OpenAIRouter) getModelReasoningFamily(model string) *config.ReasoningFa
 		return nil
 	}
 	return r.Config.GetModelReasoningFamily(model)
-}
-
-func (r *OpenAIRouter) buildReasoningRequestFieldsForProvider(
-	model string,
-	useReasoning bool,
-	decision *config.Decision,
-	profile *config.ProviderProfile,
-) (map[string]interface{}, string) {
-	familyConfig := r.getModelReasoningFamily(model)
-	if familyConfig == nil {
-		// No reasoning family configured for this model - don't apply any reasoning syntax
-		// Models without reasoning_family don't support reasoning mode
-		return nil, ""
-	}
-
-	if !useReasoning {
-		// When reasoning is disabled, don't add any reasoning fields
-		return nil, ""
-	}
-
-	// When reasoning is enabled, use the configured family syntax
-	dialect := resolveOpenAIBackendDialect(profile)
-	if usesDeepSeekOfficialReasoning(familyConfig, dialect) {
-		effort := r.getReasoningEffort(decision, model)
-		return map[string]interface{}{
-			"thinking":         map[string]interface{}{"type": "enabled"},
-			"reasoning_effort": effort,
-		}, effort
-	}
-	switch familyConfig.Type {
-	case config.ReasoningFamilyTypeChatTemplateKwargs:
-		kwargs := map[string]interface{}{
-			familyConfig.Parameter: useReasoning,
-		}
-		return map[string]interface{}{"chat_template_kwargs": kwargs}, ""
-	case config.ReasoningFamilyTypeReasoningEffort:
-		effort := r.getReasoningEffort(decision, model)
-		if dialect.usesTopLevelReasoningEffort() {
-			return map[string]interface{}{familyConfig.Parameter: effort}, effort
-		}
-		// Put reasoning_effort inside chat_template_kwargs (vLLM requirement)
-		kwargs := map[string]interface{}{
-			familyConfig.Parameter: effort,
-		}
-		return map[string]interface{}{"chat_template_kwargs": kwargs}, effort
-	case config.ReasoningFamilyTypeTopLevelReasoningEffort:
-		effort := r.getReasoningEffort(decision, model)
-		return map[string]interface{}{familyConfig.Parameter: effort}, effort
-	default:
-		// Unknown reasoning syntax type - don't apply anything
-		return nil, ""
-	}
 }

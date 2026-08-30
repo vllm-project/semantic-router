@@ -168,9 +168,9 @@ func TestPrepareSignalEvaluationInputDoesNotDoubleCountCurrentUserInFloor(t *tes
 	assert.True(t, input.requestFacts.ContextHasNonText)
 }
 
-func TestApplyFastRequestContextEstimateSetsContentFreeScalars(t *testing.T) {
+func TestApplyRequestContextEstimateSetsContentFreeScalars(t *testing.T) {
 	ctx := &RequestContext{}
-	applyFastRequestContextEstimate(&FastExtractResult{
+	applyRequestContextEstimate(&requestSignalSnapshot{
 		ContextTokenFloor:      24_000,
 		ContextTextBytes:       400,
 		ContextEquivalentBytes: 96_000,

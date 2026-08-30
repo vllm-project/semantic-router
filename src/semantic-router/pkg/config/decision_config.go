@@ -114,7 +114,8 @@ type ConfidenceAlgorithmConfig struct {
 	// VerifierTimeoutSeconds bounds each verifier HTTP call. Defaults to 60
 	// when zero, matching selection.NewAutoMixVerifierClient. Only consulted
 	// when confidence_method=automix_entailment and is rejected otherwise.
-	VerifierTimeoutSeconds int `yaml:"verifier_timeout_seconds,omitempty"`
+	VerifierTimeoutSeconds int   `yaml:"verifier_timeout_seconds,omitempty"`
+	MaxResponseBytes       int64 `yaml:"max_response_bytes,omitempty"`
 }
 
 type HybridWeightsConfig struct {

@@ -1,5 +1,7 @@
 import type {
   ConfigData,
+  ConversationFeature,
+  ConversationSource,
   DecisionCondition,
   NumericPredicate,
   RecipeRoutingConfig,
@@ -223,6 +225,81 @@ export function normalizeStructurePredicate(
   return predicate
 }
 
+// Source of truth: pkg/config/validator_conversation.go:10-26. If the router gains a
+// new source type or role, this list must be updated in lockstep -- #3001 exists
+// precisely because two such lists drifted from the Go validator.
+export const CONVERSATION_FEATURE_TYPES = ['count', 'exists'] as const
+export const CONVERSATION_SOURCE_TYPES = [
+  'message', 'tool_definition', 'assistant_tool_call',
+  'assistant_tool_cycle', 'active_tool_loop', 'image_content',
+] as const
+export const CONVERSATION_ROLES = [
+  'user', 'assistant', 'system', 'developer', 'tool', 'non_user',
+] as const
+
+export const DEFAULT_CONVERSATION_FEATURE: ConversationFeature = {
+  type: 'exists',
+  source: { type: 'image_content' },
+}
+
+export function readConversationFeature(value: unknown): ConversationFeature {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return structuredClone(DEFAULT_CONVERSATION_FEATURE)
+  }
+  const record = value as Record<string, unknown>
+  const rawSource =
+    record.source && typeof record.source === 'object' && !Array.isArray(record.source)
+      ? (record.source as Record<string, unknown>)
+      : {}
+  const source: ConversationSource = {
+    type: typeof rawSource.type === 'string' ? rawSource.type : 'image_content',
+  }
+  if (typeof rawSource.role === 'string' && rawSource.role) source.role = rawSource.role
+  return {
+    type: typeof record.type === 'string' ? record.type : 'exists',
+    source,
+  }
+}
+
+export function normalizeConversationFeature(value: unknown): ConversationFeature {
+  const feature = readConversationFeature(value)
+  if (!CONVERSATION_FEATURE_TYPES.includes(feature.type as never)) {
+    throw new Error(`Unsupported conversation feature type "${feature.type}".`)
+  }
+  if (!CONVERSATION_SOURCE_TYPES.includes(feature.source.type as never)) {
+    throw new Error(`Unsupported conversation source type "${feature.source.type}".`)
+  }
+  const role = feature.source.role?.trim()
+  if (!role) {
+    return { type: feature.type, source: { type: feature.source.type } }
+  }
+  // validator_conversation.go:52-55 -- role is only legal on a message source (D4).
+  if (feature.source.type !== 'message') {
+    throw new Error('A message role is only valid when the source type is "message".')
+  }
+  if (!CONVERSATION_ROLES.includes(role as never)) {
+    throw new Error(`Unsupported conversation role "${role}".`)
+  }
+  return { type: feature.type, source: { type: 'message', role } }
+}
+
+export function normalizeConversationPredicate(
+  feature: ConversationFeature,
+  value: unknown,
+): NumericPredicate | undefined {
+  // validator_conversation.go:73-75 -- an "exists" feature must carry no predicate (D3).
+  if (feature.type === 'exists') return undefined
+  const predicate = readStructurePredicate(value) // generic over gt/gte/lt/lte
+  if (Object.keys(predicate).length === 0) return undefined
+  if (predicate.gt !== undefined && predicate.gte !== undefined) {
+    throw new Error('Conversation predicate cannot set both gt and gte.')
+  }
+  if (predicate.lt !== undefined && predicate.lte !== undefined) {
+    throw new Error('Conversation predicate cannot set both lt and lte.')
+  }
+  return predicate
+}
+
 const SIGNAL_CONFIG_TYPES: Record<SignalType, string> = {
   Keywords: 'keyword',
   Embeddings: 'embedding',
@@ -242,6 +319,7 @@ const SIGNAL_CONFIG_TYPES: Record<SignalType, string> = {
   KB: 'kb',
   Metadata: 'metadata',
   Classifier: 'classifier',
+  Conversation: 'conversation',
 }
 
 function countReferences(value: unknown, type: string, name: string): number {

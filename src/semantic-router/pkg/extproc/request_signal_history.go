@@ -1,8 +1,7 @@
 package extproc
 
 import (
-	"github.com/openai/openai-go"
-
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 )
 
@@ -33,7 +32,7 @@ type signalConversationHistory struct {
 	lastUserAfterToolResult bool
 }
 
-func signalConversationHistoryFromFastExtract(result *FastExtractResult) signalConversationHistory {
+func signalConversationHistoryFromSnapshot(result *requestSignalSnapshot) signalConversationHistory {
 	if result == nil {
 		return signalConversationHistory{}
 	}
@@ -74,7 +73,7 @@ func cloneRoutingMetadata(values map[string]string) map[string]string {
 	return cloned
 }
 
-func extractToolTransitionContextFromRequest(req *openai.ChatCompletionNewParams, historyWindow int, ctx *RequestContext) tools.ToolTransitionContext {
+func extractToolTransitionContextFromRequest(req *llmprotocol.Request, historyWindow int, ctx *RequestContext) tools.ToolTransitionContext {
 	if req == nil {
 		return toolTransitionContextFromConversationHistory(signalConversationHistory{}, historyWindow, ctx)
 	}
@@ -91,83 +90,11 @@ func toolTransitionContextFromConversationHistory(history signalConversationHist
 	}
 }
 
-func extractSignalConversationHistory(req *openai.ChatCompletionNewParams) signalConversationHistory {
-	var history signalConversationHistory
-
-	for _, msg := range req.Messages {
-		consumeSignalConversationMessage(msg, &history)
+func extractSignalConversationHistory(req *llmprotocol.Request) signalConversationHistory {
+	if req == nil {
+		return signalConversationHistory{}
 	}
-
-	history.toolDefinitionCount = countSDKToolDefinitions(req)
-	return history
-}
-
-func consumeSignalConversationMessage(msg openai.ChatCompletionMessageParamUnion, history *signalConversationHistory) {
-	previousWasToolResult := history.lastMessageToolResult || history.lastMessageRole == "tool"
-	role, textContent := extractMessageRoleAndContent(msg)
-	history.lastMessageRole = role
-	history.lastMessageToolResult = false
-	history.lastUserAfterToolResult = false
-
-	switch role {
-	case "user":
-		consumeSignalConversationUserMessage(textContent, previousWasToolResult, history)
-	case "system":
-		history.systemMessageCount++
-		recordSignalConversationNonUserMessage(textContent, history)
-	case "assistant":
-		consumeSignalConversationAssistantMessage(msg, textContent, history)
-	case "developer":
-		history.hasDeveloperMessage = true
-		recordSignalConversationNonUserMessage(textContent, history)
-	case "tool":
-		history.toolMessageCount++
-		history.toolResultCount++
-		history.lastMessageToolResult = true
-	}
-}
-
-func consumeSignalConversationUserMessage(textContent string, previousWasToolResult bool, history *signalConversationHistory) {
-	history.userMessageCount++
-	history.lastUserAfterToolResult = previousWasToolResult
-	if textContent == "" {
-		return
-	}
-	if history.currentUserMessage != "" {
-		history.priorUserMessages = append(history.priorUserMessages, history.currentUserMessage)
-	}
-	history.currentUserMessage = textContent
-}
-
-func consumeSignalConversationAssistantMessage(
-	msg openai.ChatCompletionMessageParamUnion,
-	textContent string,
-	history *signalConversationHistory,
-) {
-	history.assistantMessageCount++
-	recordSignalConversationNonUserMessage(textContent, history)
-	history.hasAssistantReply = true
-	history.assistantToolCallCount += len(msg.OfAssistant.ToolCalls)
-	history.assistantToolNames = append(history.assistantToolNames, toolNamesFromAssistantMessage(msg)...)
-}
-
-func recordSignalConversationNonUserMessage(textContent string, history *signalConversationHistory) {
-	if textContent != "" {
-		history.nonUserMessages = append(history.nonUserMessages, textContent)
-	}
-}
-
-func toolNamesFromAssistantMessage(msg openai.ChatCompletionMessageParamUnion) []string {
-	if msg.OfAssistant == nil || len(msg.OfAssistant.ToolCalls) == 0 {
-		return nil
-	}
-	names := make([]string, 0, len(msg.OfAssistant.ToolCalls))
-	for _, toolCall := range msg.OfAssistant.ToolCalls {
-		if toolCall.Function.Name != "" {
-			names = append(names, toolCall.Function.Name)
-		}
-	}
-	return names
+	return signalConversationHistoryFromSnapshot(extractSemanticRequestSignals(req))
 }
 
 func recentToolNames(names []string, historyWindow int) []string {
@@ -195,11 +122,4 @@ func selectedCategoryName(ctx *RequestContext) string {
 		return ""
 	}
 	return ctx.VSRSelectedCategory
-}
-
-func countSDKToolDefinitions(req *openai.ChatCompletionNewParams) int {
-	if req == nil {
-		return 0
-	}
-	return len(req.Tools)
 }

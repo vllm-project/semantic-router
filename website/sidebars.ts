@@ -424,6 +424,7 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       items: [
         'benchmarking/overview',
+        'benchmarking/evaluation-plane',
       ],
     },
     {

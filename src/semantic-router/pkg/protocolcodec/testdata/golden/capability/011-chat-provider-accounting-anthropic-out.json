@@ -1,0 +1,80 @@
+{
+  "status": "ok",
+  "body": {
+    "container": null,
+    "content": [
+      {
+        "text": "done",
+        "type": "text"
+      }
+    ],
+    "id": "chatcmpl_usage_1",
+    "model": "routed-model",
+    "role": "assistant",
+    "stop_details": null,
+    "stop_reason": "end_turn",
+    "stop_sequence": null,
+    "type": "message",
+    "usage": {
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 0,
+        "ephemeral_5m_input_tokens": 2
+      },
+      "cache_creation_input_tokens": 2,
+      "cache_read_input_tokens": 3,
+      "inference_geo": "global",
+      "input_tokens": 5,
+      "output_tokens": 7,
+      "output_tokens_details": {
+        "thinking_tokens": 4
+      },
+      "server_tool_use": {
+        "web_fetch_requests": 0,
+        "web_search_requests": 0
+      },
+      "service_tier": "standard"
+    }
+  },
+  "diagnostics": [
+    {
+      "field": "metadata",
+      "action": "dropped"
+    },
+    {
+      "field": "moderation",
+      "action": "dropped"
+    },
+    {
+      "field": "usage.completion_tokens_details.accepted_prediction_tokens",
+      "action": "dropped"
+    },
+    {
+      "field": "usage.completion_tokens_details.audio_tokens",
+      "action": "dropped"
+    },
+    {
+      "field": "usage.completion_tokens_details.rejected_prediction_tokens",
+      "action": "dropped"
+    },
+    {
+      "field": "usage.completion_tokens_details.text_tokens",
+      "action": "dropped"
+    },
+    {
+      "field": "usage.compute_units",
+      "action": "dropped"
+    },
+    {
+      "field": "usage.prompt_tokens_details.audio_tokens",
+      "action": "dropped"
+    },
+    {
+      "field": "usage.prompt_tokens_details.image_tokens",
+      "action": "dropped"
+    },
+    {
+      "field": "usage.prompt_tokens_details.text_tokens",
+      "action": "dropped"
+    }
+  ]
+}

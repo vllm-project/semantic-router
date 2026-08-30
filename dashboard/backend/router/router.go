@@ -68,7 +68,7 @@ func Setup(cfg *config.Config, setupResolver *setupmode.Resolver) *Server {
 		modelVerificationAuditor: authSvc,
 		statusHandler:            statusMonitor.Handler(),
 	})
-	registerEvaluationRoutes(mux, cfg)
+	evaluationService := registerEvaluationRoutes(mux, cfg, recipeStore)
 	SetupMCP(mux, cfg, wf, openClawHandler)
 	registerMLPipelineRoutes(mux, cfg, wf)
 	registerOpenClawRoutes(mux, cfg, openClawHandler)
@@ -79,11 +79,15 @@ func Setup(cfg *config.Config, setupResolver *setupmode.Resolver) *Server {
 	return &Server{
 		Handler: wrapWithAuth(mux, authSvc),
 		Close: func() error {
+			var evaluationClose error
+			if evaluationService != nil {
+				evaluationClose = evaluationService.Close()
+			}
 			var projectionClose error
 			if cp != nil {
 				projectionClose = cp.Close()
 			}
-			return errors.Join(statusMonitor.Close(), statusHistory.Close(), projectionClose)
+			return errors.Join(evaluationClose, statusMonitor.Close(), statusHistory.Close(), projectionClose, wf.Close())
 		},
 	}
 }

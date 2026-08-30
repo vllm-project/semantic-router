@@ -243,6 +243,7 @@ export default function ConfigPageDecisionsSection({
       'authz',
       'jailbreak',
       'pii',
+      'conversation',
       'projection',
     ] as const
     const projectionOutputs = (config?.projections?.mappings || []).flatMap((mapping) =>
@@ -285,6 +286,8 @@ export default function ConfigPageDecisionsSection({
           return config?.signals?.jailbreak?.map((rule) => rule.name) || []
         case 'pii':
           return config?.signals?.pii?.map((rule) => rule.name) || []
+        case 'conversation':
+          return config?.signals?.conversation?.map((c) => c.name) || []
         case 'projection':
           return projectionOutputs
         default:

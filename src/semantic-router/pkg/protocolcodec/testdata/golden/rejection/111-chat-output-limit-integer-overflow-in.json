@@ -1,0 +1,13 @@
+{
+  "operation": "request",
+  "body": {
+    "model": "client-model",
+    "messages": [
+      {
+        "role": "user",
+        "content": "hello"
+      }
+    ],
+    "max_completion_tokens": 9223372036854775808
+  }
+}

@@ -4,10 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/openai/openai-go"
-	"github.com/openai/openai-go/packages/param"
-
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 type stubToolSelectionEmbeddingProvider struct {
@@ -45,9 +43,9 @@ func TestFilterRequestToolsAgainstQuerySemanticUsesRemoteProvider(t *testing.T) 
 		"get_weather weather reports": {1, 0, 0},
 		"calculator math":             {0, 1, 0},
 	}}
-	requestTools := []openai.ChatCompletionToolParam{
-		{Function: openai.FunctionDefinitionParam{Name: "get_weather", Description: param.NewOpt("weather reports")}},
-		{Function: openai.FunctionDefinitionParam{Name: "calculator", Description: param.NewOpt("math")}},
+	requestTools := []llmprotocol.Tool{
+		{Name: "get_weather", Description: "weather reports", InputSchema: []byte(`{"type":"object"}`)},
+		{Name: "calculator", Description: "math", InputSchema: []byte(`{"type":"object"}`)},
 	}
 
 	filtered, confidence, err := filterRequestToolsAgainstQuerySemantic(
@@ -61,19 +59,13 @@ func TestFilterRequestToolsAgainstQuerySemanticUsesRemoteProvider(t *testing.T) 
 	if err != nil {
 		t.Fatalf("filterRequestToolsAgainstQuerySemantic failed: %v", err)
 	}
-	if confidence <= 0 || len(filtered) != 1 || filtered[0].Function.Name != "get_weather" {
+	if confidence <= 0 || len(filtered) != 1 || filtered[0].Name != "get_weather" {
 		t.Fatalf("filtered=%+v confidence=%v, want get_weather", filtered, confidence)
 	}
 }
 
 func TestToolEmbeddingText_IncludesDescription(t *testing.T) {
-	tp := openai.ChatCompletionToolParam{
-		Type: "function",
-		Function: openai.FunctionDefinitionParam{
-			Name:        "alpha",
-			Description: param.NewOpt("desc here"),
-		},
-	}
+	tp := llmprotocol.Tool{Name: "alpha", Description: "desc here"}
 	if got := toolEmbeddingText(tp); got != "alpha desc here" {
 		t.Fatalf("unexpected text: %q", got)
 	}

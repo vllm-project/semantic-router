@@ -394,6 +394,7 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
                     'assistant_tool_call',
                     'assistant_tool_cycle',
                     'active_tool_loop',
+                    'image_content', // validator_conversation.go:16 -- #3001
                   ],
                   required: true,
                 },
@@ -401,7 +402,10 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
                   key: 'role',
                   label: 'Message Role',
                   type: 'select',
-                  options: ['', 'system', 'developer', 'user', 'assistant', 'tool'],
+                  // 'non_user' is a computed aggregate, not an OpenAI role
+                  // (classifier_signal_conversation.go:139). Valid per
+                  // validator_conversation.go:25 and used by config/config.yaml:497.
+                  options: ['', 'system', 'developer', 'user', 'assistant', 'tool', 'non_user'],
                   description: 'Only used when the source type is message.',
                 },
               ],

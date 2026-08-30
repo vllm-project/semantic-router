@@ -1,0 +1,33 @@
+{
+  "max_tokens": 48,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "Return the weather as JSON.",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "routed-model",
+  "output_config": {
+    "effort": "high",
+    "format": {
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "temperature_c": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "temperature_c"
+        ],
+        "type": "object"
+      },
+      "type": "json_schema"
+    }
+  }
+}

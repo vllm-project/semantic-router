@@ -1,0 +1,25 @@
+{
+  "max_completion_tokens": 24,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "Before image",
+          "type": "text"
+        },
+        {
+          "image_url": {
+            "url": "https://example.com/image.png"
+          },
+          "type": "image_url"
+        },
+        {
+          "text": "After image",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "routed-model"
+}

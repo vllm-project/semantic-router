@@ -1,0 +1,115 @@
+{
+  "status": "ok",
+  "body": {
+    "frames": [
+      {
+        "data": {
+          "choices": [
+            {
+              "delta": {
+                "role": "assistant"
+              },
+              "finish_reason": null,
+              "index": 0
+            }
+          ],
+          "id": "resp_1",
+          "model": "public-model",
+          "object": "chat.completion.chunk"
+        },
+        "event": ""
+      },
+      {
+        "data": {
+          "choices": [
+            {
+              "delta": {
+                "content": ""
+              },
+              "finish_reason": null,
+              "index": 0
+            }
+          ],
+          "id": "resp_1",
+          "model": "public-model",
+          "object": "chat.completion.chunk"
+        },
+        "event": ""
+      },
+      {
+        "data": {
+          "choices": [
+            {
+              "delta": {
+                "content": "source"
+              },
+              "finish_reason": null,
+              "index": 0
+            }
+          ],
+          "id": "resp_1",
+          "model": "public-model",
+          "object": "chat.completion.chunk"
+        },
+        "event": ""
+      },
+      {
+        "data": {
+          "choices": [
+            {
+              "delta": {
+                "annotations": [
+                  {
+                    "type": "url_citation",
+                    "url_citation": {
+                      "end_index": 6,
+                      "start_index": 0,
+                      "title": "Source",
+                      "url": "https://example.com/source"
+                    }
+                  }
+                ],
+                "content": ""
+              },
+              "finish_reason": null,
+              "index": 0
+            }
+          ],
+          "id": "resp_1",
+          "model": "public-model",
+          "object": "chat.completion.chunk"
+        },
+        "event": ""
+      },
+      {
+        "data": {
+          "choices": [
+            {
+              "delta": {},
+              "finish_reason": "stop",
+              "index": 0
+            }
+          ],
+          "id": "resp_1",
+          "model": "public-model",
+          "object": "chat.completion.chunk"
+        },
+        "event": ""
+      },
+      {
+        "data": "[DONE]",
+        "event": ""
+      }
+    ]
+  },
+  "diagnostics": [
+    {
+      "field": "stream.logprobs",
+      "action": "dropped"
+    },
+    {
+      "field": "stream.logprobs",
+      "action": "dropped"
+    }
+  ]
+}

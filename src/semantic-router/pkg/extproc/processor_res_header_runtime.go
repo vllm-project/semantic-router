@@ -50,8 +50,8 @@ func evaluateResponseHeaderOutcome(
 	outcome.statusCode = getStatusFromHeaders(v.ResponseHeaders.Headers)
 	outcome.isSuccessful = outcome.statusCode >= 200 && outcome.statusCode < 300
 	if ctx != nil {
-		ctx.IsStreamingResponse = isStreamingContentType(v.ResponseHeaders.Headers) ||
-			(outcome.isSuccessful && isResponseAPIStreamRequest(ctx))
+		ctx.IsStreamingResponse = outcome.isSuccessful &&
+			(isStreamingContentType(v.ResponseHeaders.Headers) || isResponseAPIStreamRequest(ctx))
 	}
 	recordResponseHeaderErrorMetrics(ctx, outcome.statusCode)
 	return outcome
@@ -128,10 +128,26 @@ func buildResponseHeadersContinueResponse(
 	return response
 }
 
+func buildResponseStreamingMutation(
+	ctx *RequestContext,
+	outcome responseHeaderOutcome,
+) *ext_proc.HeaderMutation {
+	if !outcome.isSuccessful || !isResponseAPIStreamRequest(ctx) {
+		return nil
+	}
+	return &ext_proc.HeaderMutation{
+		SetHeaders: []*core.HeaderValueOption{{
+			Header: &core.HeaderValue{
+				Key: "content-type", RawValue: []byte("text/event-stream; charset=utf-8"),
+			},
+			AppendAction: core.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD,
+		}},
+		RemoveHeaders: []string{"content-length"},
+	}
+}
+
 func isResponseAPIStreamRequest(ctx *RequestContext) bool {
-	return isResponseAPIRequest(ctx) &&
-		ctx.ResponseAPICtx.OriginalRequest != nil &&
-		ctx.ResponseAPICtx.OriginalRequest.Stream
+	return isResponseAPIRequest(ctx) && ctx.SemanticRequest != nil && ctx.SemanticRequest.Stream
 }
 
 func mergeHeaderMutations(mutations ...*ext_proc.HeaderMutation) *ext_proc.HeaderMutation {

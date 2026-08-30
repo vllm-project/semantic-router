@@ -1,0 +1,273 @@
+{
+  "operation": "request",
+  "cases": [
+    {
+      "name": "tool_result",
+      "body": {
+        "model": "client-model",
+        "max_tokens": 32,
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "tool_result",
+                "tool_use_id": "toolu_1",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "sunny"
+                  }
+                ],
+                "is_error": false,
+                "cache_control": {
+                  "type": "ephemeral",
+                  "ttl": "1h"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "image_base64",
+      "body": {
+        "model": "client-model",
+        "max_tokens": 32,
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "image",
+                "source": {
+                  "type": "base64",
+                  "media_type": "image/png",
+                  "data": "aW1hZ2U="
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "document_file",
+      "body": {
+        "model": "client-model",
+        "max_tokens": 32,
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "document",
+                "source": {
+                  "type": "file",
+                  "file_id": "file_document"
+                },
+                "title": "Reference"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "document_content",
+      "body": {
+        "model": "client-model",
+        "max_tokens": 32,
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "document",
+                "source": {
+                  "type": "content",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "document"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "image_transformations",
+      "body": {
+        "model": "client-model",
+        "max_tokens": 32,
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "image",
+                "source": {
+                  "type": "url",
+                  "url": "https://example.com/image.png"
+                },
+                "transformations": {
+                  "on_load": {
+                    "type": "auto"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "search_result_metadata",
+      "body": {
+        "model": "client-model",
+        "max_tokens": 32,
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "search_result",
+                "title": "Source",
+                "content": "result",
+                "citations": [
+                  {
+                    "type": "web_search_result_location"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "server_tool_use_metadata",
+      "body": {
+        "model": "client-model",
+        "max_tokens": 32,
+        "messages": [
+          {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "server_tool_use",
+                "id": "srvtool_1",
+                "name": "web_search",
+                "input": {},
+                "caller": "model",
+                "context": {
+                  "source": "conversation"
+                },
+                "toolset_name": "web",
+                "file_id": "file_1"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "tool_allowed_callers",
+      "body": {
+        "model": "client-model",
+        "max_tokens": 32,
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "tools": [
+          {
+            "name": "lookup",
+            "description": "Look up a value",
+            "input_schema": {
+              "type": "object"
+            },
+            "allowed_callers": ["model"]
+          }
+        ]
+      }
+    },
+    {
+      "name": "tool_defer_loading",
+      "body": {
+        "model": "client-model",
+        "max_tokens": 32,
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "tools": [
+          {
+            "name": "lookup",
+            "input_schema": {
+              "type": "object"
+            },
+            "defer_loading": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "tool_eager_input_streaming",
+      "body": {
+        "model": "client-model",
+        "max_tokens": 32,
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "tools": [
+          {
+            "name": "lookup",
+            "input_schema": {
+              "type": "object"
+            },
+            "eager_input_streaming": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "tool_input_examples",
+      "body": {
+        "model": "client-model",
+        "max_tokens": 32,
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "tools": [
+          {
+            "name": "lookup",
+            "input_schema": {
+              "type": "object"
+            },
+            "input_examples": [
+              {
+                "q": "weather"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
