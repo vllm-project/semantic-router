@@ -384,6 +384,10 @@ func (l *ReMoMLooper) runReMoMSchedule(
 	}
 
 	for roundIdx, numCalls := range schedule {
+		if stop, reason := CheckBudget(req); stop {
+			logging.Infof("[ReMoM] Round %d skipped: budget exhausted (%s)", roundIdx+1, reason)
+			break
+		}
 		logging.Infof("[ReMoM] Round %d/%d: %d parallel calls", roundIdx+1, len(schedule), numCalls)
 
 		updatedMessages, err := l.prepareReMoMRoundMessages(cfg, originalWithOutputContract, roundIdx, allRoundResponses, currentMessages)
@@ -397,6 +401,7 @@ func (l *ReMoMLooper) runReMoMSchedule(
 		usage = usage.Add(roundExecution.attemptedResponses...)
 		totalIterations += len(roundExecution.attemptedResponses)
 		trackReMoMModelsUsed(modelsUsed, roundExecution.attemptedResponses)
+		RecordBudgetUsageForResponses(req, roundExecution.attemptedResponses)
 		if err != nil {
 			if canFallbackToPreviousReMoMRound(cfg, allRoundResponses) {
 				logging.Warnf("[ReMoM] Round %d failed; using previous round responses as fallback: %v", roundIdx+1, err)

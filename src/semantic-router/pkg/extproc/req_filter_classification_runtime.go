@@ -225,6 +225,7 @@ func (r *OpenAIRouter) finalizeDecisionEvaluation(
 	evaluationConfidence := result.Confidence
 
 	ctx.VSRSelectedDecisionConfidence = evaluationConfidence
+	ctx.VSRSelectedDecisionMatchedRules = result.MatchedRules
 	logging.ComponentDebugEvent("extproc", "decision_evaluated", map[string]interface{}{
 		"request_id":    ctx.RequestID,
 		"decision":      decisionName,

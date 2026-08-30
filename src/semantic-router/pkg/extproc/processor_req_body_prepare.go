@@ -104,6 +104,9 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 	ctx *RequestContext,
 ) (requestDecisionState, *ext_proc.ProcessingResponse) {
 	r.resolveEntrypointForRequest(originalModel, ctx)
+	if ctx.Routing.IsDenied() {
+		return requestDecisionState{}, r.createErrorResponse(ctx.Routing.DeniedStatus(), ctx.Routing.DeniedReason())
+	}
 	populatePinnedSessionFromHeaders(ctx)
 	history := signalConversationHistoryFromFastExtract(fast)
 	applyFastRequestContextEstimate(fast, ctx)

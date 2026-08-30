@@ -80,6 +80,10 @@ func (l *RatingsLooper) Execute(ctx context.Context, req *Request) (*Response, e
 	modelsUsed := make([]string, len(req.ModelRefs))
 	errors := make([]error, len(req.ModelRefs))
 
+	if stop, reason := CheckBudget(req); stop {
+		return nil, fmt.Errorf("ratings: budget exhausted before any model call (%s)", reason)
+	}
+
 	for i, modelRef := range req.ModelRefs {
 		wg.Add(1)
 		go func(idx int, ref config.ModelRef) {
@@ -135,6 +139,7 @@ func (l *RatingsLooper) Execute(ctx context.Context, req *Request) (*Response, e
 			} else {
 				responses[idx] = resp
 				modelsUsed[idx] = modelName
+				RecordBudgetUsage(req, resp.Usage, modelName)
 			}
 		}(i, modelRef)
 	}

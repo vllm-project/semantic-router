@@ -34,7 +34,14 @@ global: {}
 - `providers.defaults` defines shared provider behavior;
   `providers.models[]` binds model names to concrete backends.
 - `routing` owns model cards, signals, projections, decisions, and the routing
-  strategy for the default profile.
+  strategy for the default profile. Any looper algorithm (`confidence`,
+  `ratings`, `remom`, `fusion`, `workflows`) can also declare
+  `algorithm.budget`, an optional per-request token/cost/wall-time ceiling
+  separate from the per-subrequest knobs above. It defaults to unlimited and
+  stops further escalation deterministically once exhausted; config
+  validation rejects it on algorithm types that don't execute through
+  Looper. Each supported algorithm now has its own tutorial page under
+  `website/docs/tutorials/algorithm/`.
 - `entrypoints` maps request-facing model names to isolated `recipes`. Each
   recipe has its own signals, decisions, algorithms, and plugins while sharing
   providers and router-wide services. See

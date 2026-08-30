@@ -345,6 +345,28 @@ func TestDecisionAlgorithmRejectsMixedCaseType(t *testing.T) {
 	}
 }
 
+func TestDecisionAlgorithmRejectsBudgetOnNonLooperExecutedType(t *testing.T) {
+	err := validateDecisionAlgorithmConfig(
+		"learning-route",
+		nil,
+		&AlgorithmConfig{Type: "rl_driven", Budget: &BudgetConfig{MaxPromptTokens: 100}},
+	)
+	if err == nil {
+		t.Fatal("expected rl_driven + budget to be rejected")
+	}
+}
+
+func TestDecisionAlgorithmAcceptsBudgetOnLooperExecutedType(t *testing.T) {
+	err := validateDecisionAlgorithmConfig(
+		"confidence-route",
+		nil,
+		&AlgorithmConfig{Type: "confidence", Budget: &BudgetConfig{MaxPromptTokens: 100}},
+	)
+	if err != nil {
+		t.Fatalf("expected confidence + budget to be valid, got: %v", err)
+	}
+}
+
 func TestDecisionPluginRejectsUnknownTypeAndFields(t *testing.T) {
 	payload := MustStructuredPayload(map[string]interface{}{"enabled": true})
 	if err := validateDecisionPluginPayload(

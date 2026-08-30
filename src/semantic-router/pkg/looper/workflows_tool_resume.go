@@ -68,10 +68,14 @@ func (l *WorkflowsLooper) callWorkflowAgentAfterTool(
 	if err != nil {
 		return nil, nil, err
 	}
+	if stop, reason := CheckBudget(req); stop {
+		return nil, nil, fmt.Errorf("workflows: budget exhausted before tool-resume model call (%s)", reason)
+	}
 	resp, err := l.callWorkflowModel(ctx, agentReq, cfg, state.Model, true, state.Iteration+1, req)
 	if err != nil {
 		return nil, nil, fmt.Errorf("workflow tool resume failed for model %q: %w", state.Model, err)
 	}
+	RecordBudgetUsageForResponse(req, resp)
 	state.ToolTrajectory = append(state.ToolTrajectory, workflowAgentToolTurnFromState(state, toolMessages))
 	return resp, agentReq, nil
 }
@@ -125,6 +129,9 @@ func (l *WorkflowsLooper) finishCurrentWorkflowStepAfterResume(
 	results := append([]workflowStepResult(nil), state.StepResults...)
 
 	for modelIndex := state.ModelIndex + 1; modelIndex < len(step.Models); modelIndex++ {
+		if stop, _ := CheckBudget(req); stop {
+			break
+		}
 		modelName := step.Models[modelIndex]
 		nextResp, callErr := l.callWorkflowModel(ctx, state.StepRequest, cfg, modelName, true, workflowResumeModelIteration(state, modelIndex), req)
 		if callErr != nil {
@@ -134,6 +141,7 @@ func (l *WorkflowsLooper) finishCurrentWorkflowStepAfterResume(
 			}
 			continue
 		}
+		RecordBudgetUsageForResponse(req, nextResp)
 		if nextResp.HasToolCalls {
 			nextState := workflowPendingStateForResumedModel(state, results, originalRequest, modelIndex, modelName, currentResponses, currentFailed, currentToolTrajectories, req.IsStreaming)
 			return nil, &workflowToolCallInterrupt{resp: nextResp, state: nextState}, nil
@@ -201,6 +209,9 @@ func (l *WorkflowsLooper) executeRemainingWorkflowStepsAfterResume(
 	results []workflowStepResult,
 ) ([]workflowStepResult, *workflowToolCallInterrupt, error) {
 	for stepIndex := state.StepIndex + 1; stepIndex < len(state.Plan.Steps); stepIndex++ {
+		if stop, _ := CheckBudget(req); stop {
+			break
+		}
 		nextStep := state.Plan.Steps[stepIndex]
 		prompt := buildWorkflowStepPrompt(originalRequest, nextStep, results)
 		stepReq := appendFusionStageMessage(originalRequest, prompt)
@@ -208,7 +219,9 @@ func (l *WorkflowsLooper) executeRemainingWorkflowStepsAfterResume(
 		if err != nil {
 			return nil, nil, err
 		}
+		RecordBudgetUsageForResponses(req, responses)
 		if interrupt != nil {
+			RecordBudgetUsageForResponse(req, interrupt.resp)
 			hydrateResumedWorkflowInterrupt(interrupt, state, results)
 			return results, interrupt, nil
 		}

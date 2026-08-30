@@ -525,6 +525,10 @@ func validateDecisionAlgorithmConfig(decisionName string, modelRefs []ModelRef, 
 		return err
 	}
 
+	if err := ValidateBudgetConfig(normalizedType, algorithm.Budget); err != nil {
+		return fmt.Errorf("decision '%s': %w", decisionName, err)
+	}
+
 	return nil
 }
 

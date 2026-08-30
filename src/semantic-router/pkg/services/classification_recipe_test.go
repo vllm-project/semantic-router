@@ -50,6 +50,49 @@ func TestEvalDecisionCandidatesSelectsEntrypointRecipe(t *testing.T) {
 	require.ErrorIs(t, err, ErrUnknownRoutingModel)
 }
 
+// TestConditionalEntrypointUnresolvableFromClassificationAPI documents a
+// real, intentional Phase-1 limitation of conditional (rules-based)
+// entrypoints (issue #2868): the classification API has no HTTP request —
+// no headers, no path — to evaluate a caller's rules against, so a virtual
+// model name behind conditional rules must be rejected here rather than
+// guessed. Before RecipeForRequestModel/RecipeForRoutingModel were made
+// Rules-aware, this call site would have silently treated the name as an
+// unclaimed/unknown model too, but for the wrong reason (it never even
+// checked whether the name was a real entrypoint); now it's an explicit,
+// documented rejection. Extending eval with a request_context (per the
+// issue's own proposed design) is the natural way to lift this limitation
+// later — deliberately out of scope here.
+func TestConditionalEntrypointUnresolvableFromClassificationAPI(t *testing.T) {
+	routerConfig := &config.RouterConfig{
+		Entrypoints: []config.EntrypointMapping{{
+			ModelNames: []string{"router/tenant-auto"},
+			Rules: []config.EntrypointRule{{
+				Name:   "tenant-a",
+				Recipe: config.DefaultRecipeName,
+				Matches: []config.EntrypointMatch{{
+					Headers: []config.HeaderMatcher{{Name: "x-authz-tenant-id", Type: config.HeaderMatchExact, Value: "A"}},
+				}},
+			}},
+		}},
+		Recipes: []config.RoutingRecipe{{Name: config.DefaultRecipeName}},
+	}
+
+	// IsEntrypointModelName must still recognize the name as claimed (it's a
+	// pure alias-membership test, unaffected by the missing request
+	// context) — only recipe *resolution* is context-free-unresolvable.
+	require.True(t, routerConfig.IsEntrypointModelName("router/tenant-auto"))
+
+	classifiers, err := classification.BuildRecipeClassifiers(routerConfig, nil, nil, nil)
+	require.NoError(t, err)
+	service := NewRecipeClassificationService(classifiers, routerConfig)
+
+	_, _, _, err = service.evalRoutingScope("router/tenant-auto")
+	require.ErrorIs(t, err, ErrUnknownRoutingModel)
+
+	_, err = service.classifierForRequestModel("router/tenant-auto")
+	require.ErrorIs(t, err, ErrUnknownRoutingModel)
+}
+
 func TestRecipeClassificationServiceRejectsConcreteBackendModel(t *testing.T) {
 	routerConfig := &config.RouterConfig{
 		BackendModels: config.BackendModels{

@@ -153,10 +153,15 @@ func (l *WorkflowsLooper) Execute(ctx context.Context, req *Request) (*Response,
 		"streaming":    req.IsStreaming,
 	})
 
+	if stop, reason := CheckBudget(req); stop {
+		return nil, fmt.Errorf("workflows: budget exhausted before any model call (%s)", reason)
+	}
+
 	plan, plannerResp, err := l.buildWorkflowPlan(ctx, req, cfg, original, workerModels)
 	if err != nil {
 		return nil, err
 	}
+	RecordBudgetUsageForResponse(req, plannerResp)
 
 	stepResults, interrupt, err := l.executeWorkflowSteps(ctx, req, cfg, plan, plannerResp, workerModels)
 	if err != nil {
@@ -166,19 +171,12 @@ func (l *WorkflowsLooper) Execute(ctx context.Context, req *Request) (*Response,
 		return l.formatWorkflowToolCallInterrupt(ctx, interrupt, cfg)
 	}
 
-	finalResp, interrupt, err := l.synthesizeWorkflowFinal(ctx, req, cfg, plan, original, stepResults, plannerResp, workerModels)
+	finalResp, interrupt, err := l.synthesizeWorkflowFinalWithFallback(req, stepResults, cfg,
+		func() (*ModelResponse, *workflowToolCallInterrupt, error) {
+			return l.synthesizeWorkflowFinal(ctx, req, cfg, plan, original, stepResults, plannerResp, workerModels)
+		})
 	if err != nil {
-		if cfg.OnError != config.WorkflowOnErrorSkip {
-			return nil, err
-		}
-		finalResp = workflowFallbackFinalResponse(
-			req.OutputContractSpec,
-			stepResults,
-		)
-		if finalResp == nil {
-			return nil, err
-		}
-		logging.Warnf("[Workflows] Final synthesis failed; using worker response fallback because on_error=skip: %v", err)
+		return nil, err
 	}
 	if interrupt != nil {
 		return l.formatWorkflowToolCallInterrupt(ctx, interrupt, cfg)
@@ -194,6 +192,30 @@ func (l *WorkflowsLooper) Execute(ctx context.Context, req *Request) (*Response,
 		return formatWorkflowStreamingResponse(finalResp, summary.modelsUsed, summary.iterations, trace, summary.usage, cfg)
 	}
 	return formatWorkflowJSONResponse(finalResp, summary.modelsUsed, summary.iterations, trace, summary.usage, cfg)
+}
+
+// synthesizeWorkflowFinalWithFallback runs synthesize and, when it fails
+// under on_error=skip, falls back to the last successful worker response
+// instead of failing the whole execution.
+func (l *WorkflowsLooper) synthesizeWorkflowFinalWithFallback(
+	req *Request,
+	stepResults []workflowStepResult,
+	cfg workflowsExecutionConfig,
+	synthesize func() (*ModelResponse, *workflowToolCallInterrupt, error),
+) (*ModelResponse, *workflowToolCallInterrupt, error) {
+	finalResp, interrupt, err := synthesize()
+	if err == nil {
+		return finalResp, interrupt, nil
+	}
+	if cfg.OnError != config.WorkflowOnErrorSkip {
+		return nil, nil, err
+	}
+	finalResp = workflowFallbackFinalResponse(req.OutputContractSpec, stepResults)
+	if finalResp == nil {
+		return nil, nil, err
+	}
+	logging.Warnf("[Workflows] Final synthesis failed; using worker response fallback because on_error=skip: %v", err)
+	return finalResp, interrupt, nil
 }
 
 func (l *WorkflowsLooper) buildWorkflowPlan(
@@ -256,13 +278,21 @@ func (l *WorkflowsLooper) executeWorkflowSteps(
 	results := make([]workflowStepResult, 0, len(plan.Steps))
 	var previous []workflowStepResult
 	for idx, step := range plan.Steps {
+		if stop, reason := CheckBudget(req); stop {
+			logging.ComponentDebugEvent("looper", "budget_exhausted", map[string]interface{}{
+				"looper": "workflows", "decision": req.DecisionName, "reason": string(reason), "step": step.ID,
+			})
+			break
+		}
 		prompt := buildWorkflowStepPrompt(req.OriginalRequest, step, previous)
 		stepReq := appendFusionStageMessage(req.OriginalRequest, prompt)
 		responses, failed, interrupt, err := l.executeWorkflowStep(ctx, req, cfg, plan, step, stepReq, idx, 0, idx+2)
 		if err != nil {
 			return nil, nil, err
 		}
+		RecordBudgetUsageForResponses(req, responses)
 		if interrupt != nil {
+			RecordBudgetUsageForResponse(req, interrupt.resp)
 			interrupt.state.Plan = plan
 			interrupt.state.PlannerResp = plannerResp
 			interrupt.state.WorkerModels = append([]string(nil), workerModels...)
@@ -489,6 +519,7 @@ func (l *WorkflowsLooper) synthesizeWorkflowFinal(
 	if err != nil {
 		return nil, nil, fmt.Errorf("workflow final synthesis failed for model %q: %w", modelName, err)
 	}
+	RecordBudgetUsageForResponse(req, resp)
 	if resp.HasToolCalls {
 		return nil, &workflowToolCallInterrupt{
 			resp: resp,

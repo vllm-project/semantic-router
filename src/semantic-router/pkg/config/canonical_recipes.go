@@ -7,10 +7,13 @@ import (
 )
 
 // CanonicalEntrypoint maps request-facing virtual model names to a named
-// recipe in the public v0.3 contract.
+// recipe in the public v0.3 contract. Exactly one of Recipe (legacy,
+// unconditional) or Rules (conditional, evaluated per-caller) is set — see
+// EntrypointMapping's doc comment (recipes.go) for the full contract.
 type CanonicalEntrypoint struct {
-	ModelNames []string `yaml:"model_names"`
-	Recipe     string   `yaml:"recipe"`
+	ModelNames []string                  `yaml:"model_names"`
+	Recipe     string                    `yaml:"recipe,omitempty"`
+	Rules      []CanonicalEntrypointRule `yaml:"rules,omitempty"`
 }
 
 // CanonicalRecipe is a named routing profile selectable through entrypoints.
@@ -125,34 +128,77 @@ func normalizeCanonicalEntrypoints(cfg *RouterConfig, canonical *CanonicalConfig
 	result := make([]EntrypointMapping, 0, len(entrypoints))
 	claimed := make(map[string]struct{})
 	for index, entrypoint := range entrypoints {
-		recipeName := RecipeName(strings.TrimSpace(entrypoint.Recipe))
-		if recipeName == "" {
-			return nil, fmt.Errorf("entrypoints[%d].recipe cannot be empty", index)
-		}
-		if findRecipe(recipes, recipeName) == nil {
-			return nil, fmt.Errorf("entrypoints[%d]: unknown recipe %q", index, recipeName)
-		}
-
 		names := normalizeAutoModelNames(entrypoint.ModelNames)
 		if len(names) == 0 {
 			return nil, fmt.Errorf("entrypoints[%d].model_names cannot be empty", index)
 		}
-		for _, name := range names {
-			if _, exists := claimed[name]; exists {
-				return nil, fmt.Errorf("entrypoints[%d]: model name %q is already mapped by another entrypoint", index, name)
-			}
-			claimed[name] = struct{}{}
-			if meaning := entrypointNameConflict(cfg, canonical, name); meaning != "" {
-				return nil, fmt.Errorf("entrypoints[%d]: model name %q is already %s; entrypoint names must be new virtual names", index, name, meaning)
-			}
+		if err := claimEntrypointModelNames(cfg, canonical, claimed, names, index); err != nil {
+			return nil, err
 		}
 
-		result = append(result, EntrypointMapping{
-			ModelNames: names,
-			Recipe:     recipeName,
-		})
+		mapping, err := buildEntrypointMapping(entrypoint, names, recipes, index)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, mapping)
 	}
 	return result, nil
+}
+
+// claimEntrypointModelNames records entrypoints[index]'s model names as
+// claimed and rejects duplicates or names that already mean something else
+// to the router (a configured model, LoRA adapter, or algorithm slug).
+func claimEntrypointModelNames(
+	cfg *RouterConfig,
+	canonical *CanonicalConfig,
+	claimed map[string]struct{},
+	names []string,
+	index int,
+) error {
+	for _, name := range names {
+		if _, exists := claimed[name]; exists {
+			return fmt.Errorf("entrypoints[%d]: model name %q is already mapped by another entrypoint", index, name)
+		}
+		claimed[name] = struct{}{}
+		if meaning := entrypointNameConflict(cfg, canonical, name); meaning != "" {
+			return fmt.Errorf("entrypoints[%d]: model name %q is already %s; entrypoint names must be new virtual names", index, name, meaning)
+		}
+	}
+	return nil
+}
+
+// buildEntrypointMapping resolves entrypoints[index] into its legacy
+// single-recipe form or its conditional-rules form; exactly one of the two
+// must be set.
+func buildEntrypointMapping(
+	entrypoint CanonicalEntrypoint,
+	names []string,
+	recipes []RoutingRecipe,
+	index int,
+) (EntrypointMapping, error) {
+	mapping := EntrypointMapping{ModelNames: names}
+	hasRecipe := strings.TrimSpace(entrypoint.Recipe) != ""
+	hasRules := len(entrypoint.Rules) > 0
+	switch {
+	case hasRecipe && hasRules:
+		return mapping, fmt.Errorf("entrypoints[%d]: set either recipe or rules, not both", index)
+	case !hasRecipe && !hasRules:
+		return mapping, fmt.Errorf("entrypoints[%d]: recipe cannot be empty (or set rules for a conditional entrypoint)", index)
+	case hasRecipe:
+		// Legacy, unconditional form: unchanged from the pre-rules contract.
+		recipeName := RecipeName(strings.TrimSpace(entrypoint.Recipe))
+		if findRecipe(recipes, recipeName) == nil {
+			return mapping, fmt.Errorf("entrypoints[%d]: unknown recipe %q", index, recipeName)
+		}
+		mapping.Recipe = recipeName
+	default:
+		rules, err := normalizeCanonicalEntrypointRules(entrypoint.Rules, recipes, index)
+		if err != nil {
+			return mapping, err
+		}
+		mapping.Rules = rules
+	}
+	return mapping, nil
 }
 
 // entrypointNameConflict reports what an entrypoint virtual name already means
@@ -220,6 +266,7 @@ func canonicalEntrypointsFromRouterConfig(cfg *RouterConfig) []CanonicalEntrypoi
 		entrypoints = append(entrypoints, CanonicalEntrypoint{
 			ModelNames: append([]string(nil), entrypoint.ModelNames...),
 			Recipe:     string(entrypoint.Recipe),
+			Rules:      canonicalEntrypointRulesFromNormalized(entrypoint.Rules),
 		})
 	}
 	return entrypoints
