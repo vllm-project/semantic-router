@@ -814,8 +814,8 @@ html[data-route-kind='blog'] body,
 }
 
 .site-blog-layout__toc .table-of-contents__link:hover {
-  background: var(--site-surface-soft);
-  color: var(--site-text-strong);
+  background: var(--site-hover-chrome-bg);
+  color: var(--site-hover-text);
   text-decoration: none;
 }
 

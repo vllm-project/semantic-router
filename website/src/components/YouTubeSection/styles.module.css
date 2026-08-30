@@ -203,8 +203,8 @@
 }
 
 .videoCard:hover {
-  border-color: var(--site-border);
-  background: var(--site-surface);
+  border-color: var(--site-hover-border);
+  background: var(--site-hover-chrome-bg);
 }
 
 .videoCardActive {

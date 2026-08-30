@@ -372,7 +372,7 @@ html[data-theme='dark'] .theme-admonition-danger {
 
 .theme-doc-markdown table tbody tr:hover,
 .site-prose table tbody tr:hover {
-  background: var(--site-surface-soft);
+  background: var(--site-hover-subtle-bg);
 }
 
 /* ------------------------------------------------------------------ *
@@ -439,8 +439,8 @@ html[data-theme='dark'] .theme-admonition-danger {
 }
 
 .tabs__item:hover {
-  background: var(--site-surface-soft);
-  color: var(--site-text);
+  background: var(--site-hover-chrome-bg);
+  color: var(--site-hover-text);
 }
 
 .tabs__item--active {
@@ -494,16 +494,20 @@ details[class*='details_'] {
     box-shadow var(--site-transition-fast);
 }
 
+/* Primary is the only filled control, and it is filled with brand blue —
+ * the same treatment as the hero's "Try the Playground". */
 .site-btn--primary {
-  border-color: var(--site-text-strong);
-  background: var(--site-text-strong);
-  color: var(--site-bg);
+  border-color: var(--site-cta-border);
+  background: var(--site-cta-bg);
+  color: var(--site-cta-text);
+  box-shadow: var(--site-cta-shadow);
 }
 
-.site-btn--primary:hover {
-  background: var(--site-text);
-  color: var(--site-bg);
-  box-shadow: 0 0 0 3px var(--site-accent-soft);
+.site-btn--primary:hover,
+.site-btn--primary:focus-visible {
+  border-color: var(--site-cta-border-hover);
+  background: var(--site-cta-bg-hover);
+  color: var(--site-cta-text);
 }
 
 .site-btn--secondary {
@@ -512,9 +516,11 @@ details[class*='details_'] {
   color: var(--site-text-strong);
 }
 
-.site-btn--secondary:hover {
-  border-color: var(--site-hover-border);
-  background: var(--site-surface-alt);
+.site-btn--secondary:hover,
+.site-btn--secondary:focus-visible {
+  border-color: var(--site-hover-border-strong);
+  background: var(--site-hover-surface-bg);
+  color: var(--site-hover-text);
 }
 
 .site-btn--ghost {
@@ -522,9 +528,10 @@ details[class*='details_'] {
   color: var(--site-muted-bright);
 }
 
-.site-btn--ghost:hover {
-  background: var(--site-surface-soft);
-  color: var(--site-text-strong);
+.site-btn--ghost:hover,
+.site-btn--ghost:focus-visible {
+  background: var(--site-hover-chrome-bg);
+  color: var(--site-hover-text);
 }
 
 /* ------------------------------------------------------------------ *
@@ -539,13 +546,17 @@ details[class*='details_'] {
   overflow: hidden;
   transition:
     border-color var(--site-transition-fast),
+    background var(--site-transition-medium),
     box-shadow var(--site-transition-medium),
     transform var(--site-transition-medium);
 }
 
+/* Tint layered over the card's own surface, not in place of it, so the fill
+ * does not drop out from under the content on hover. */
 .site-card:hover {
-  border-color: var(--site-border-strong);
-  box-shadow: var(--site-shadow-soft);
+  border-color: var(--site-hover-border);
+  background: var(--site-hover-surface-bg-soft), var(--site-surface);
+  box-shadow: var(--site-hover-glow);
   transform: translateY(-2px);
 }
 
