@@ -15,6 +15,18 @@
   --site-accent: #30a2ff;
   --site-accent-strong: #75c5ff;
   --site-accent-soft: rgba(48, 162, 255, 0.14);
+  /* The landing page is dark in both colour modes, so it takes the dark half
+   * of the hover ladder and CTA tier too — otherwise a light-mode visitor gets
+   * the deep-blue #0876c9 fill against a near-black band. */
+  --site-hover-chrome-bg: rgba(48, 162, 255, 0.1);
+  --site-hover-subtle-bg: rgba(48, 162, 255, 0.06);
+  --site-hover-text: #75c5ff;
+  --site-cta-bg: #30a2ff;
+  --site-cta-bg-hover: #75c5ff;
+  --site-cta-text: #04121f;
+  --site-cta-border: #30a2ff;
+  --site-cta-border-hover: #75c5ff;
+  --site-cta-shadow: 0 14px 32px rgba(48, 162, 255, 0.24);
   --site-shadow-soft: 0 18px 42px rgba(0, 0, 0, 0.22);
   --site-shadow: 0 24px 64px rgba(0, 0, 0, 0.3);
   --site-shadow-raised: 0 28px 70px rgba(0, 0, 0, 0.36);
