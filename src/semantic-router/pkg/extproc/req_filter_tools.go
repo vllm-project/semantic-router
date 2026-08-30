@@ -406,6 +406,13 @@ func emitToolObservability(response **ext_proc.ProcessingResponse, ctx *RequestC
 	if !debugHeadersRequested(ctx) {
 		return
 	}
+	if ctx != nil {
+		ctx.ToolObservability = &toolObservability{
+			Strategy:   strategyID,
+			Confidence: strconv.FormatFloat(float64(confidence), 'f', 4, 32),
+			LatencyMs:  strconv.FormatInt(latency.Milliseconds(), 10),
+		}
+	}
 	commonResponse := ensureRequestBodyCommonResponse(response)
 	if commonResponse.HeaderMutation == nil {
 		commonResponse.HeaderMutation = &ext_proc.HeaderMutation{}

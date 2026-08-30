@@ -192,6 +192,7 @@ func (r *OpenAIRouter) createRoutingResponse(
 		return errorResponse
 	}
 	r.applyDecisionHeaderMutations(state, ctx)
+	appendToolObservabilityHeaders(&state.setHeaders, ctx)
 
 	return buildRequestBodyContinueResponse(state, bodyMutation, false)
 }
@@ -236,6 +237,7 @@ func (r *OpenAIRouter) createSpecifiedModelResponse(
 		return errorResponse
 	}
 
+	appendToolObservabilityHeaders(&state.setHeaders, ctx)
 	bodyMutation := r.buildSpecifiedModelBodyMutation(model, upstreamModel, needsBodyMutation || pathMutatesBody, state, ctx)
 	return buildRequestBodyContinueResponse(state, bodyMutation, false)
 }

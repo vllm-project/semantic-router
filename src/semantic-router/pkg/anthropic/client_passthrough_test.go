@@ -576,6 +576,31 @@ func headerMap(headers []HeaderKeyValue) map[string]string {
 	return out
 }
 
+func TestRemapToolsCacheControl_DropsMarkerForFilteredTool(t *testing.T) {
+	pt := &AnthropicPassthrough{
+		CacheControl: map[string]CacheControlSpec{
+			"tools[0]":  {Type: "ephemeral", TTL: "5m"},
+			"system[0]": {Type: "ephemeral", TTL: "1h"},
+			"tools[1]":  {Type: "ephemeral", TTL: "1h"},
+		},
+	}
+	RemapToolsCacheControl(pt, []string{"lookup_weather", "noise_tool"}, []string{"noise_tool"})
+	require.NotContains(t, pt.CacheControl, "tools[1]")
+	require.Contains(t, pt.CacheControl, "system[0]")
+	require.Equal(t, "1h", pt.CacheControl["tools[0]"].TTL)
+}
+
+func TestRemapToolsCacheControl_MovesRetainedToolMarker(t *testing.T) {
+	pt := &AnthropicPassthrough{
+		CacheControl: map[string]CacheControlSpec{
+			"tools[1]": {Type: "ephemeral", TTL: "1h"},
+		},
+	}
+	RemapToolsCacheControl(pt, []string{"lookup_weather", "noise_tool"}, []string{"noise_tool"})
+	require.Equal(t, "1h", pt.CacheControl["tools[0]"].TTL)
+	require.NotContains(t, pt.CacheControl, "tools[1]")
+}
+
 func TestReplay_ToolCacheControl(t *testing.T) {
 	req := &openai.ChatCompletionNewParams{
 		Model:    "claude-sonnet-4-5",

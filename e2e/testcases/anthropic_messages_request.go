@@ -104,11 +104,13 @@ type anthropicMessage struct {
 // used by the Anthropic e2e suite. max_tokens is required by the Anthropic
 // Messages API; everything else mirrors the SDK shape.
 type anthropicMessagesRequestBody struct {
-	Model     string             `json:"model"`
-	MaxTokens int                `json:"max_tokens"`
-	Messages  []anthropicMessage `json:"messages"`
-	System    string             `json:"system,omitempty"`
-	Stream    bool               `json:"stream,omitempty"`
+	Model      string             `json:"model"`
+	MaxTokens  int                `json:"max_tokens"`
+	Messages   []anthropicMessage `json:"messages"`
+	System     string             `json:"system,omitempty"`
+	Stream     bool               `json:"stream,omitempty"`
+	Tools      []anthropicE2ETool `json:"tools,omitempty"`
+	ToolChoice json.RawMessage    `json:"tool_choice,omitempty"`
 }
 
 // sendAnthropicMessagesRequest POSTs an Anthropic Messages body to the
