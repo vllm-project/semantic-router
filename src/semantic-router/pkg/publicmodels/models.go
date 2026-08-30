@@ -91,7 +91,17 @@ func (b *modelListBuilder) appendEntrypointAliases(cfg *config.RouterConfig) {
 		return
 	}
 	for _, entrypoint := range cfg.Entrypoints {
-		description := cfg.EntrypointRecipeDescription(entrypoint.Recipe)
+		// A conditional (rules-based) entrypoint has no single recipe to
+		// describe — entrypoint.Recipe is empty by construction (see
+		// EntrypointMapping's doc comment). Caller-filtered discovery
+		// (only listing conditional aliases a given caller can actually
+		// use, per issue #2868) is a separate, not-yet-implemented change;
+		// this only prevents a malformed description ("Entrypoint for the
+		// routing recipe") and a leaked empty recipe name until then.
+		description := "Conditional entrypoint: routing depends on caller context"
+		if len(entrypoint.Rules) == 0 {
+			description = cfg.EntrypointRecipeDescription(entrypoint.Recipe)
+		}
 		b.appendAll(entrypoint.ModelNames, routerOwner, description, selectableVirtualRoute(entrypoint.Recipe, false))
 	}
 }

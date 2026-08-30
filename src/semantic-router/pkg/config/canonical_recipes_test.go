@@ -224,6 +224,42 @@ func TestCanonicalExportRoundTripsRecipesAndEntrypoints(t *testing.T) {
 	}
 }
 
+func TestCanonicalExportRoundTripsRulesBasedEntrypoints(t *testing.T) {
+	rulesYAML := `
+entrypoints:
+  - model_names: ["vllm-sr/tenant-auto"]
+    rules:
+      - name: tenant-a-user-b
+        matches:
+          - path: {type: exact, value: "/v1/chat/completions"}
+            headers:
+              - {name: x-authz-tenant-id, type: exact, value: "A"}
+              - {name: x-authz-user-id, value: "B"}
+        recipe: privacy
+      - name: tenant-a-default
+        matches:
+          - headers: [{name: x-authz-tenant-id, value: "A"}]
+        recipe: default
+`
+	cfg, err := ParseYAMLBytes([]byte(recipeTestBaseYAML + recipeTestPrivacyBlockYAML + rulesYAML))
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+
+	exported, err := yaml.Marshal(CanonicalConfigFromRouterConfig(cfg))
+	if err != nil {
+		t.Fatalf("unexpected marshal error: %v", err)
+	}
+	reparsed, err := ParseYAMLBytes(exported)
+	if err != nil {
+		t.Fatalf("exported config failed to re-parse: %v", err)
+	}
+
+	if !reflect.DeepEqual(cfg.Entrypoints, reparsed.Entrypoints) {
+		t.Fatalf("rules-based entrypoints did not round-trip:\nbefore: %+v\nafter: %+v", cfg.Entrypoints, reparsed.Entrypoints)
+	}
+}
+
 var canonicalRecipeErrorCases = []struct {
 	name    string
 	extra   string
