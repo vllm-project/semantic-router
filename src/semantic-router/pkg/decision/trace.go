@@ -108,11 +108,11 @@ func (e *DecisionEngine) evalNodeWithTrace(
 
 	op := strings.ToUpper(node.Operator)
 	switch op {
-	case "AND":
+	case config.RuleOperatorAnd:
 		return e.evalANDWithTrace(node.Conditions, signals)
-	case "NOT":
+	case config.RuleOperatorNot:
 		return e.evalNOTWithTrace(node.Conditions, signals)
-	default:
+	default: // config.RuleOperatorOr
 		return e.evalORWithTrace(node.Conditions, signals)
 	}
 }

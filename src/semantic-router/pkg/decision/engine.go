@@ -217,11 +217,11 @@ func (e *DecisionEngine) evalNode(
 	}
 
 	switch strings.ToUpper(node.Operator) {
-	case "AND":
+	case config.RuleOperatorAnd:
 		return e.evalAND(node.Conditions, signals)
-	case "NOT":
+	case config.RuleOperatorNot:
 		return e.evalNOT(node.Conditions, signals)
-	default: // OR
+	default: // config.RuleOperatorOr
 		return e.evalOR(node.Conditions, signals)
 	}
 }

@@ -1,6 +1,9 @@
 package config
 
-import "sort"
+import (
+	"slices"
+	"sort"
+)
 
 const (
 	DecisionAlgorithmAutoMix      = "automix"
@@ -212,6 +215,42 @@ func GetAlgorithmTier(algorithmType string) string {
 		}
 	}
 	return ""
+}
+
+// Rule-tree combination operators, exported so the evaluators can be pinned to
+// the same set instead of restating it as literals: config validation rejects
+// everything outside the set, which is only safe while every member reaches its
+// own branch in pkg/decision's evalNode and evalNodeWithTrace. That agreement is
+// asserted by TestRuleTreeOperatorsAgreeWithEvaluator.
+const (
+	// RuleOperatorAnd matches when every condition matches. It is also the only
+	// operator that matches on zero children.
+	RuleOperatorAnd = "AND"
+	// RuleOperatorOr matches when at least one condition matches. It is the
+	// evaluators' default branch, so an unrecognized operator quietly widens the
+	// rule instead of failing at runtime.
+	RuleOperatorOr = "OR"
+	// RuleOperatorNot is strictly unary: evalNOT negates its single child and
+	// warns and reports a non-match for any other child count.
+	RuleOperatorNot = "NOT"
+)
+
+// ruleTreeOperators is the closed set of operators a decision rule tree may use.
+// The order is the order used in validation errors, so it is deliberately not
+// sorted. The nested-node half of this contract is already enforced by the CLI in
+// src/vllm-sr/cli/models.py (Condition.validate_node_shape).
+var ruleTreeOperators = []string{RuleOperatorAnd, RuleOperatorOr, RuleOperatorNot}
+
+// RuleTreeOperators returns the supported rule-tree combination operators in the
+// order validation errors list them.
+func RuleTreeOperators() []string {
+	return append([]string(nil), ruleTreeOperators...)
+}
+
+// IsRuleTreeOperator reports whether an already upper-cased operator is one the
+// rule-tree evaluators implement.
+func IsRuleTreeOperator(operator string) bool {
+	return slices.Contains(ruleTreeOperators, operator)
 }
 
 func cloneSortedStrings(values []string) []string {
