@@ -19,6 +19,7 @@ export const SIGNAL_TYPES = [
   'event',
   'metadata',
   'classifier',
+  'input_modality',
 ] as const
 
 export type SignalType = (typeof SIGNAL_TYPES)[number]

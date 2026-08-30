@@ -190,6 +190,12 @@ export interface ClassifierSignal {
   use_cpu?: boolean
 }
 
+export interface InputModalitySignal {
+  name: string
+  description?: string
+  modality: 'text' | 'image' | 'audio' | 'video'
+}
+
 export interface ComplexityCandidates {
   candidates: string[]
 }
@@ -265,6 +271,7 @@ export interface Signals {
   conversation?: ConversationSignal[]
   metadata?: MetadataSignal[]
   classifiers?: ClassifierSignal[]
+  input_modality?: InputModalitySignal[]
 }
 
 // =============================================================================
@@ -292,6 +299,7 @@ export type DecisionConditionType =
   | 'event'
   | 'metadata'
   | 'classifier'
+  | 'input_modality'
   | 'projection'
 export interface DecisionCondition {
   type: DecisionConditionType
