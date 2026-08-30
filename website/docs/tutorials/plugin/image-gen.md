@@ -39,5 +39,6 @@ plugins:
 
 The selected backend receives the image prompt and generation parameters. Use
 an authenticated, trusted endpoint and apply request-side safety policy before
-this plugin. See a complete example:
+this plugin. `max_response_bytes` caps each OpenAI or vLLM-Omni response body;
+omitted or `0` uses 64 MiB. See a complete example:
 [`config/fragments/plugin/image-gen/basic.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/image-gen/basic.yaml).

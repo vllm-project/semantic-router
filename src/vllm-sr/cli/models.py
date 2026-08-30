@@ -1230,6 +1230,7 @@ class ImageGenPluginConfig(BaseModel):
     default_height: Optional[int] = Field(default=None, ge=1)
     max_inference_steps: Optional[int] = Field(default=None, ge=1)
     timeout_seconds: Optional[int] = Field(default=None, ge=1)
+    max_response_bytes: Optional[int] = Field(default=None, ge=0)
 
 
 class DecisionLearningAdaptationConfig(BaseModel):
