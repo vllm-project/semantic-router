@@ -427,6 +427,18 @@ var _ = Describe("ImageGenPluginConfig.Validate", func() {
 		Expect(err.Error()).To(ContainSubstring("unknown image_gen backend"))
 	})
 
+	It("rejects a negative response limit", func() {
+		cfg := &ImageGenPluginConfig{
+			Enabled:          true,
+			Backend:          "vllm_omni",
+			BackendConfig:    MustStructuredPayload(&VLLMOmniImageGenConfig{BaseURL: "http://localhost:8001"}),
+			MaxResponseBytes: -1,
+		}
+		err := cfg.Validate()
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("max_response_bytes must be non-negative"))
+	})
+
 	Context("with vllm_omni backend", func() {
 		It("passes with valid vllm_omni + valid modality detection", func() {
 			cfg := &ImageGenPluginConfig{
