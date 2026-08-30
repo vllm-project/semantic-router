@@ -40,7 +40,7 @@ func TestRecordSuccessfulLooperExecutionRecordsAggregateSessionUsageWithoutModel
 		},
 	}
 
-	router.recordSuccessfulLooperExecution(response, "auto", decision, ctx)
+	router.recordSuccessfulLooperExecution(response, "auto", decision, ctx, nil, nil)
 
 	snapshot, ok := sessiontelemetry.GetRouterSessionSnapshot("session-looper", time.Now())
 	require.True(t, ok)
