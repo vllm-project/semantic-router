@@ -333,6 +333,7 @@ class EmbeddingEndpointConfig(BaseModel):
     api_key_env: Optional[str] = None
     timeout_seconds: Optional[int] = Field(default=None, ge=0)
     max_retries: Optional[int] = Field(default=None, ge=0)
+    max_response_bytes: Optional[int] = Field(default=None, ge=0)
     dimensions: Optional[int] = Field(default=None, ge=1)
 
 
