@@ -60,8 +60,9 @@
 }
 
 .translated .editLink:hover {
-  background-color: var(--site-text);
-  color: var(--site-bg);
+  border-color: var(--site-hover-border-strong);
+  background-color: var(--site-accent-soft);
+  color: var(--site-hover-text);
   transform: translateY(-1px);
 }
 
@@ -71,8 +72,9 @@
 }
 
 .outdated .editLink:hover {
-  background-color: var(--site-text);
-  color: var(--site-bg);
+  border-color: var(--site-hover-border-strong);
+  background-color: var(--site-accent-soft);
+  color: var(--site-hover-text);
   transform: translateY(-1px);
 }
 

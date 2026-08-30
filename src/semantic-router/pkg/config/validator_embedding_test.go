@@ -164,10 +164,11 @@ func TestValidateEmbeddingContracts_RejectsInvalidRemoteEmbeddingProvider(t *tes
 					TargetDimension: 768,
 				},
 				Endpoint: EmbeddingEndpointConfig{
-					BaseURL:        "example.test/v1",
-					Dimensions:     1536,
-					TimeoutSeconds: -1,
-					MaxRetries:     -1,
+					BaseURL:          "example.test/v1",
+					Dimensions:       1536,
+					TimeoutSeconds:   -1,
+					MaxRetries:       -1,
+					MaxResponseBytes: -1,
 				},
 			},
 		},
@@ -183,6 +184,7 @@ func TestValidateEmbeddingContracts_RejectsInvalidRemoteEmbeddingProvider(t *tes
 		"endpoint.model",
 		"endpoint.timeout_seconds",
 		"endpoint.max_retries",
+		"endpoint.max_response_bytes",
 		"endpoint.dimensions (1536)",
 		"embedding_config.model_type",
 	} {

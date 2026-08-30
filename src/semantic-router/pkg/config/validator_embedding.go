@@ -70,6 +70,9 @@ func validateRemoteEmbeddingEndpoint(endpoint EmbeddingEndpointConfig) []string 
 	if endpoint.MaxRetries < 0 {
 		problems = append(problems, "endpoint.max_retries must be non-negative")
 	}
+	if endpoint.MaxResponseBytes < 0 {
+		problems = append(problems, "endpoint.max_response_bytes must be non-negative")
+	}
 	return problems
 }
 
