@@ -67,11 +67,12 @@ func (r *OpenAIRouter) extractFastRequestState(
 	return fast, nil
 }
 
-// mergeResponseAPINativeFacts folds facts counted from the native Response API
-// payload into the fast-extract result. Extraction runs on the translated Chat
-// Completions body, which cannot represent file_id/file_data images, so the
-// translated body alone undercounts image content. URL images survive
-// translation and are counted on both sides, hence max rather than sum.
+// mergeResponseAPINativeFacts folds the image count taken from the native
+// Response API input into the fast-extract facts. Translation inlines
+// file_data and file_id images as data URLs, so the two counts normally agree;
+// keeping the native count ties the image routing fact to what the client
+// sent rather than to how translation rendered it. URL images are counted on
+// both sides, hence max rather than sum.
 func mergeResponseAPINativeFacts(fast *FastExtractResult, ctx *RequestContext) {
 	if fast == nil || ctx == nil || ctx.ResponseAPICtx == nil || !ctx.ResponseAPICtx.IsResponseAPIRequest {
 		return

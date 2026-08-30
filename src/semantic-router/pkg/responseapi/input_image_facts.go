@@ -3,10 +3,10 @@ package responseapi
 import "encoding/json"
 
 // CountNativeImageInputs counts image content parts across a request's input
-// and the stored conversation history in their native Response API form.
-// Chat Completions can only express URL images, so translation drops
-// input_image parts referenced by file_id or inline file_data; counting
-// before translation keeps those images visible to request-shape facts.
+// and the stored conversation history in their native Response API form
+// (image_url, file_data, or file_id). Counting before translation keeps the
+// image routing fact tied to what the client sent rather than to how the
+// translator renders each part for Chat Completions.
 // Only user items count, matching the translator (which drops non-user
 // images) and every other image counter on the request path.
 func CountNativeImageInputs(input json.RawMessage, history []*StoredResponse) int {
@@ -47,8 +47,7 @@ func countInputItemImageParts(item InputItem) int {
 	}
 	count := 0
 	for _, part := range parts {
-		if part.Type == ContentTypeInputImage &&
-			(part.ImageURL != "" || part.FileID != "" || part.FileData != "") {
+		if isImagePart(part) {
 			count++
 		}
 	}

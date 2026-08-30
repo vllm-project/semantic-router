@@ -2,6 +2,7 @@ package responseapi
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -12,11 +13,22 @@ import (
 )
 
 // Translator handles conversion between Response API and Chat Completions API.
-type Translator struct{}
+type Translator struct {
+	// imageFiles resolves input_image file_id references so the image can be
+	// inlined for Chat Completions backends. When nil, file_id images are
+	// rejected rather than silently dropped.
+	imageFiles ImageFileResolver
+}
 
 // NewTranslator creates a new translator instance.
 func NewTranslator() *Translator {
 	return &Translator{}
+}
+
+// SetImageFileResolver installs the resolver used for input_image file_id
+// references.
+func (t *Translator) SetImageFileResolver(resolver ImageFileResolver) {
+	t.imageFiles = resolver
 }
 
 // resolveInstructions returns the effective system instructions, falling back to
@@ -78,6 +90,10 @@ func (t *Translator) TranslateToCompletionRequest(
 
 	inputMessages, err := t.parseInput(req.Input)
 	if err != nil {
+		var imageErr *ImageInputError
+		if errors.As(err, &imageErr) {
+			return nil, err
+		}
 		return nil, fmt.Errorf("failed to parse input: %w", err)
 	}
 	messages = append(messages, inputMessages...)
@@ -226,7 +242,7 @@ func (t *Translator) parseInput(input json.RawMessage) ([]openai.ChatCompletionM
 	for _, item := range items {
 		msg, err := t.inputItemToMessage(item)
 		if err != nil {
-			continue
+			return nil, err
 		}
 		messages = append(messages, msg)
 	}
@@ -235,8 +251,10 @@ func (t *Translator) parseInput(input json.RawMessage) ([]openai.ChatCompletionM
 }
 
 // inputItemToMessage converts an InputItem to an SDK message union.
-// Handles both plain string content and multimodal content arrays
-// (text + image_url) by building the appropriate SDK union variant.
+// Handles both plain string content and multimodal content arrays (text plus
+// images given as image_url, file_data, or file_id) by building the
+// appropriate SDK union variant. It returns an ImageInputError when a user
+// image cannot be delivered to the backend.
 func (t *Translator) inputItemToMessage(item InputItem) (openai.ChatCompletionMessageParamUnion, error) {
 	role := item.Role
 	if role == "" {
@@ -256,7 +274,7 @@ func (t *Translator) inputItemToMessage(item InputItem) (openai.ChatCompletionMe
 	if err := json.Unmarshal(item.Content, &parts); err == nil {
 		if hasImageParts(parts) {
 			if role == RoleUser {
-				return userMessageWithParts(parts), nil
+				return t.userMessageWithParts(parts)
 			}
 			logging.Warnf("Response API: image content dropped for non-user role %q (OpenAI only supports images in user messages)", role)
 		}
@@ -266,10 +284,11 @@ func (t *Translator) inputItemToMessage(item InputItem) (openai.ChatCompletionMe
 	return messageForRole(role, ""), nil
 }
 
-// hasImageParts returns true if any part contains image content.
+// hasImageParts returns true if any part contains image content in any of
+// the Response API forms (image_url, file_data, or file_id).
 func hasImageParts(parts []ContentPart) bool {
 	for _, p := range parts {
-		if p.Type == ContentTypeInputImage && p.ImageURL != "" {
+		if isImagePart(p) {
 			return true
 		}
 	}
@@ -277,7 +296,10 @@ func hasImageParts(parts []ContentPart) bool {
 }
 
 // userMessageWithParts builds a user message with multimodal content parts.
-func userMessageWithParts(parts []ContentPart) openai.ChatCompletionMessageParamUnion {
+// Images are always sent upstream as image_url parts: URL images pass through,
+// while file_data and file_id images are inlined as data URLs so the selected
+// backend receives the image the routing decision was made on.
+func (t *Translator) userMessageWithParts(parts []ContentPart) (openai.ChatCompletionMessageParamUnion, error) {
 	sdkParts := make([]openai.ChatCompletionContentPartUnionParam, 0, len(parts))
 	for _, p := range parts {
 		switch {
@@ -285,11 +307,18 @@ func userMessageWithParts(parts []ContentPart) openai.ChatCompletionMessageParam
 			sdkParts = append(sdkParts, openai.ChatCompletionContentPartUnionParam{
 				OfText: &openai.ChatCompletionContentPartTextParam{Text: p.Text},
 			})
-		case p.Type == ContentTypeInputImage && p.ImageURL != "":
+		case p.Type == ContentTypeInputImage:
+			url, err := imagePartURL(p, t.imageFiles)
+			if err != nil {
+				return openai.ChatCompletionMessageParamUnion{}, err
+			}
+			if url == "" {
+				continue
+			}
 			part := openai.ChatCompletionContentPartUnionParam{
 				OfImageURL: &openai.ChatCompletionContentPartImageParam{
 					ImageURL: openai.ChatCompletionContentPartImageImageURLParam{
-						URL: p.ImageURL,
+						URL: url,
 					},
 				},
 			}
@@ -305,7 +334,7 @@ func userMessageWithParts(parts []ContentPart) openai.ChatCompletionMessageParam
 				OfArrayOfContentParts: sdkParts,
 			},
 		},
-	}
+	}, nil
 }
 
 // outputItemToMessage converts an OutputItem to an SDK message union.

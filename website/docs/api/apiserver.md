@@ -332,6 +332,12 @@ These require the corresponding service to be enabled; otherwise the API returns
 | `DELETE` | `/v1/files/{id}` | Delete an uploaded file |
 | `GET` | `/v1/files/{id}/content` | Download uploaded-file content |
 
+File uploads accept documents (`.txt`, `.md`, `.json`, `.csv`, `.html`) for
+vector-store ingestion. Upload an image (`.png`, `.jpg`, `.jpeg`, `.gif`,
+`.webp`) with `purpose=vision` to use it as model input: a Response API request
+can then reference it with `{"type": "input_image", "file_id": "<id>"}`, and
+the router inlines the image for the selected backend.
+
 ### Other endpoints
 
 | Method | Path | Description |

@@ -39,6 +39,15 @@ func (f *ResponseAPIFilter) IsEnabled() bool {
 	return f.enabled
 }
 
+// SetImageFileResolver installs the resolver the translator uses to inline
+// input_image parts that reference an uploaded file by file_id.
+func (f *ResponseAPIFilter) SetImageFileResolver(resolver responseapi.ImageFileResolver) {
+	if f == nil || f.translator == nil {
+		return
+	}
+	f.translator.SetImageFileResolver(resolver)
+}
+
 // ResponseAPIContext holds context for a Response API request during processing.
 type ResponseAPIContext struct {
 	// IsResponseAPIRequest indicates this is a /v1/responses request
@@ -77,11 +86,11 @@ type ResponseAPIContext struct {
 	// Non-nil only when HasImageGenerationTool is true.
 	ImageGenToolParams *responseapi.ImageGenerationToolParams
 
-	// NativeImageContentCount is the number of image content parts in the
-	// request input and stored conversation history, counted before
-	// translation. Chat Completions has no file_id/file_data image form, so
-	// those images do not survive into TranslatedBody and fact extraction
-	// from the translated body alone undercounts image content.
+	// NativeImageContentCount is the number of user image content parts in
+	// the request input and stored conversation history, counted in their
+	// native Response API form (image_url, file_data, or file_id) before
+	// translation, so the image routing fact is tied to what the client sent
+	// rather than to how each part is rendered into TranslatedBody.
 	NativeImageContentCount int
 }
 

@@ -282,5 +282,8 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 	if components.classificationSvc != nil {
 		components.classificationSvc.SetEvalModelSelector(router)
 	}
+	if router.ResponseAPIFilter != nil {
+		router.ResponseAPIFilter.SetImageFileResolver(routerImageFileResolver{router: router})
+	}
 	return router
 }
