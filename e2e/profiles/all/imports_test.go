@@ -113,44 +113,72 @@ func anthropicShimContainerFromBackendYAML(t *testing.T) (string, corev1.PullPol
 
 	reader := utilyaml.NewYAMLReader(bufio.NewReader(bytes.NewReader(raw)))
 	for {
-		doc, err := reader.Read()
+		doc, err := nextYAMLDocument(t, reader)
 		if err == io.EOF {
 			break
 		}
-		if err != nil {
-			t.Fatalf("read backend.yaml document: %v", err)
+		image, pullPolicy, found := anthropicShimFromYAMLDocument(t, doc)
+		if found {
+			return image, pullPolicy
 		}
-		if len(bytes.TrimSpace(doc)) == 0 {
-			continue
-		}
-
-		jsonDocument, err := utilyaml.ToJSON(doc)
-		if err != nil {
-			t.Fatalf("convert backend.yaml document to JSON: %v", err)
-		}
-
-		var typeMeta struct {
-			Kind string `json:"kind"`
-		}
-		if err := json.Unmarshal(jsonDocument, &typeMeta); err != nil {
-			t.Fatalf("decode backend.yaml type meta: %v", err)
-		}
-		if typeMeta.Kind != "Deployment" {
-			continue
-		}
-
-		var deployment appsv1.Deployment
-		if err := json.Unmarshal(jsonDocument, &deployment); err != nil {
-			t.Fatalf("decode backend.yaml deployment: %v", err)
-		}
-		for _, container := range deployment.Spec.Template.Spec.Containers {
-			if container.Name == "anthropic-shim" {
-				return container.Image, container.ImagePullPolicy
-			}
-		}
-		t.Fatal("anthropic-shim container not found in backend.yaml Deployment")
 	}
 
 	t.Fatal("Deployment not found in backend.yaml")
 	return "", ""
+}
+
+func nextYAMLDocument(t *testing.T, reader *utilyaml.YAMLReader) ([]byte, error) {
+	t.Helper()
+	doc, err := reader.Read()
+	if err != nil {
+		if err != io.EOF {
+			t.Fatalf("read backend.yaml document: %v", err)
+		}
+		return nil, err
+	}
+	return doc, nil
+}
+
+func anthropicShimFromYAMLDocument(t *testing.T, doc []byte) (string, corev1.PullPolicy, bool) {
+	t.Helper()
+	jsonDocument, kind, ok := decodeYAMLDocument(t, doc)
+	if !ok || kind != "Deployment" {
+		return "", "", false
+	}
+	return findAnthropicShimContainer(t, jsonDocument)
+}
+
+func decodeYAMLDocument(t *testing.T, doc []byte) ([]byte, string, bool) {
+	t.Helper()
+	if len(bytes.TrimSpace(doc)) == 0 {
+		return nil, "", false
+	}
+
+	jsonDocument, err := utilyaml.ToJSON(doc)
+	if err != nil {
+		t.Fatalf("convert backend.yaml document to JSON: %v", err)
+	}
+
+	var typeMeta struct {
+		Kind string `json:"kind"`
+	}
+	if err := json.Unmarshal(jsonDocument, &typeMeta); err != nil {
+		t.Fatalf("decode backend.yaml type meta: %v", err)
+	}
+	return jsonDocument, typeMeta.Kind, true
+}
+
+func findAnthropicShimContainer(t *testing.T, jsonDocument []byte) (string, corev1.PullPolicy, bool) {
+	t.Helper()
+	var deployment appsv1.Deployment
+	if err := json.Unmarshal(jsonDocument, &deployment); err != nil {
+		t.Fatalf("decode backend.yaml deployment: %v", err)
+	}
+	for _, container := range deployment.Spec.Template.Spec.Containers {
+		if container.Name == "anthropic-shim" {
+			return container.Image, container.ImagePullPolicy, true
+		}
+	}
+	t.Fatal("anthropic-shim container not found in backend.yaml Deployment")
+	return "", "", false
 }
