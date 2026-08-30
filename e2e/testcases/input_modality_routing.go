@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"time"
 
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
@@ -133,13 +132,4 @@ func runInputModalityCase(ctx context.Context, localPort string, tc inputModalit
 		}
 	}
 	return nil
-}
-
-func headerListContains(headerValue string, name string) bool {
-	for _, entry := range strings.Split(headerValue, ",") {
-		if strings.TrimSpace(entry) == name {
-			return true
-		}
-	}
-	return false
 }
