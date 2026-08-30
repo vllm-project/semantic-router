@@ -98,6 +98,7 @@ SIGNAL_FAMILY_SPECS = (
     SignalFamilySpec("events", "events", "event", "events"),
     SignalFamilySpec("metadata", "metadata", "metadata", "metadata"),
     SignalFamilySpec("classifiers", "classifiers", "classifier", "classifiers"),
+    SignalFamilySpec("input_modality", "input_modality", "input_modality", "input_modality"),
 )
 
 LEGACY_SIGNAL_KEY_TO_CANONICAL = {

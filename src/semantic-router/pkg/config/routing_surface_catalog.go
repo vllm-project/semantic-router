@@ -59,6 +59,7 @@ var supportedSignalTypes = []string{
 	SignalTypeEvent,
 	SignalTypeMetadata,
 	SignalTypeClassifier,
+	SignalTypeInputModality,
 }
 
 var supportedDecisionPluginTypes = []string{

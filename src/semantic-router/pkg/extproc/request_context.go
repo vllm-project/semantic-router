@@ -179,6 +179,7 @@ type RequestContext struct {
 	VSRMatchedEvent           []string // Matched event signal names
 	VSRMatchedMetadata        []string // Matched untrusted request metadata signal names
 	VSRMatchedClassifier      []string // Matched generic classifier signal names
+	VSRMatchedInputModality   []string // Matched structural input-modality signal names
 	VSRConversationFacts      classification.ConversationFacts
 	VSRMatchedProjection      []string // Matched projection mapping outputs
 	VSRProjectionScores       map[string]float64

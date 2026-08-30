@@ -143,19 +143,20 @@ func (c *Classifier) evalComposerLeaf(
 
 func composerLeafMatches(signals *SignalResults) map[string][]string {
 	return map[string][]string{
-		"keyword":       signals.MatchedKeywordRules,
-		"embedding":     signals.MatchedEmbeddingRules,
-		"domain":        signals.MatchedDomainRules,
-		"fact_check":    signals.MatchedFactCheckRules,
-		"user_feedback": signals.MatchedUserFeedbackRules,
-		"reask":         signals.MatchedReaskRules,
-		"preference":    signals.MatchedPreferenceRules,
-		"language":      signals.MatchedLanguageRules,
-		"context":       signals.MatchedContextRules,
-		"structure":     signals.MatchedStructureRules,
-		"modality":      signals.MatchedModalityRules,
-		"kb":            signals.MatchedKBRules,
-		"conversation":  signals.MatchedConversationRules,
+		"keyword":        signals.MatchedKeywordRules,
+		"embedding":      signals.MatchedEmbeddingRules,
+		"domain":         signals.MatchedDomainRules,
+		"fact_check":     signals.MatchedFactCheckRules,
+		"user_feedback":  signals.MatchedUserFeedbackRules,
+		"reask":          signals.MatchedReaskRules,
+		"preference":     signals.MatchedPreferenceRules,
+		"language":       signals.MatchedLanguageRules,
+		"context":        signals.MatchedContextRules,
+		"structure":      signals.MatchedStructureRules,
+		"modality":       signals.MatchedModalityRules,
+		"kb":             signals.MatchedKBRules,
+		"conversation":   signals.MatchedConversationRules,
+		"input_modality": signals.MatchedInputModalityRules,
 	}
 }
 

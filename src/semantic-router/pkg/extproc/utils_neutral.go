@@ -107,6 +107,7 @@ func consumeSemanticMessage(result *requestSignalSnapshot, message llmprotocol.M
 	case llmprotocol.RoleUser:
 		result.UserMessageCount++
 		result.LastUserAfterToolResult = previousWasTool
+		recordUserInputModalities(result, message.Content, text)
 		if text != "" {
 			if result.UserContent != "" {
 				result.PriorUserMessages = append(result.PriorUserMessages, result.UserContent)
@@ -148,6 +149,28 @@ func consumeSemanticMessage(result *requestSignalSnapshot, message llmprotocol.M
 		}
 	}
 	consumeNeutralContext(result, message.Content)
+}
+
+// recordUserInputModalities counts the structural input modalities carried by
+// one user message for the input_modality signal family. Only user turns
+// count: they are the input the request asks the model to consume, and the
+// classify/eval APIs scope their counts the same way. Media payloads are never
+// inspected; only the neutral content kind matters.
+func recordUserInputModalities(result *requestSignalSnapshot, contents []llmprotocol.Content, text string) {
+	facts := &result.InputModality
+	if text != "" {
+		facts.TextContentCount++
+	}
+	for _, content := range contents {
+		switch content.Kind {
+		case llmprotocol.ContentImage:
+			facts.ImageContentCount++
+		case llmprotocol.ContentAudio:
+			facts.AudioContentCount++
+		case llmprotocol.ContentVideo:
+			facts.VideoContentCount++
+		}
+	}
 }
 
 func consumeNeutralContext(result *requestSignalSnapshot, contents []llmprotocol.Content) {

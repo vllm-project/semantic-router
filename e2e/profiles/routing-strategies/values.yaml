@@ -46,7 +46,58 @@ config:
   entrypoints:
     - model_names: [vllm-sr/metadata-policy]
       recipe: metadata-policy
+    - model_names: [vllm-sr/input-modality-probe]
+      recipe: input-modality-probe
   recipes:
+    - name: input-modality-probe
+      description: Deterministic structural input-modality routing probe.
+      routing:
+        strategy: priority
+        signals:
+          input_modality:
+            - name: image_input
+              description: Request contains at least one image content part.
+              modality: image
+            - name: audio_input
+              description: Request contains at least one audio content part.
+              modality: audio
+            - name: text_input
+              description: Request contains user-provided text.
+              modality: text
+        decisions:
+          - name: input_modality_vision_decision
+            description: Send image-bearing requests to the vision route.
+            priority: 200
+            rules:
+              operator: AND
+              conditions:
+                - type: input_modality
+                  name: image_input
+            modelRefs:
+              - model: base-model
+                use_reasoning: false
+          - name: input_modality_audio_decision
+            description: Send audio-bearing requests to the audio route.
+            priority: 150
+            rules:
+              operator: AND
+              conditions:
+                - type: input_modality
+                  name: audio_input
+            modelRefs:
+              - model: base-model
+                use_reasoning: false
+          - name: input_modality_text_decision
+            description: Text-only requests continue on the default route.
+            priority: 100
+            rules:
+              operator: AND
+              conditions:
+                - type: input_modality
+                  name: text_input
+            modelRefs:
+              - model: base-model
+                use_reasoning: false
     - name: metadata-policy
       description: Deterministic recipe-local metadata routing probe.
       routing:

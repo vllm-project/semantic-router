@@ -15,6 +15,9 @@ func validateDecisionContracts(cfg *RouterConfig) error {
 	if err := validateClassifierSignalContracts(cfg); err != nil {
 		return err
 	}
+	if err := validateInputModalityContracts(cfg); err != nil {
+		return err
+	}
 	if err := validateDecisionModelContracts(cfg); err != nil {
 		return err
 	}

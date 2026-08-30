@@ -146,6 +146,7 @@ func logSignalEvaluationResults(ctx *RequestContext, signalLatencyMs int64, sign
 		"event":          signals.MatchedEventRules,
 		"metadata":       signals.MatchedMetadataRules,
 		"classifier":     signals.MatchedClassifierRules,
+		"input_modality": signals.MatchedInputModalityRules,
 		"projection":     signals.MatchedProjectionRules,
 		"context_tokens": signals.TokenCount,
 	})
