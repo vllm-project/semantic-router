@@ -250,16 +250,7 @@ func validateSequenceClassifierSignal(cfg *RouterConfig, rule ClassifierSignalRu
 			ModelRoleClassification,
 		)
 	}
-	if strings.TrimSpace(external.ModelEndpoint.Address) == "" ||
-		external.ModelEndpoint.Port < 1 ||
-		external.ModelEndpoint.Port > 65535 {
-		return fmt.Errorf(
-			"routing.signals.classifiers[%q]: external model %q requires a valid llm_endpoint address and port",
-			rule.Name,
-			rule.Model,
-		)
-	}
-	return nil
+	return validateClassifierExternalEndpoint(rule, external)
 }
 
 func validateLLMClassifierExternalDependency(
@@ -273,6 +264,13 @@ func validateLLMClassifierExternalDependency(
 			rule.Model,
 		)
 	}
+	return validateClassifierExternalEndpoint(rule, external)
+}
+
+func validateClassifierExternalEndpoint(
+	rule ClassifierSignalRule,
+	external *ExternalModelConfig,
+) error {
 	if strings.TrimSpace(external.ModelEndpoint.Address) == "" ||
 		external.ModelEndpoint.Port < 1 ||
 		external.ModelEndpoint.Port > 65535 {
@@ -359,7 +357,7 @@ func localClassifierRuleRefs(cfg *RouterConfig) []localClassifierRuleRef {
 	if len(cfg.Recipes) > 0 {
 		for _, recipe := range cfg.Recipes {
 			for _, rule := range recipe.Profile.Signals.ClassifierRules {
-				if rule.Type == "local" {
+				if rule.Type == ClassifierSignalTypeLocal {
 					refs = append(refs, localClassifierRuleRef{
 						Recipe: recipe.Name,
 						Rule:   rule,
@@ -370,7 +368,7 @@ func localClassifierRuleRefs(cfg *RouterConfig) []localClassifierRuleRef {
 		return refs
 	}
 	for _, rule := range cfg.ClassifierRules {
-		if rule.Type == "local" {
+		if rule.Type == ClassifierSignalTypeLocal {
 			refs = append(refs, localClassifierRuleRef{
 				Recipe: DefaultRecipeName,
 				Rule:   rule,

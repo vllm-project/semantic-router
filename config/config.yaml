@@ -540,6 +540,11 @@ routing:
         instructions: >-
           Choose RISKY only for destructive, privileged, or irreversible tool
           operations.
+      - name: remote-safety-score
+        description: Remote binary safety classification head.
+        type: sequence_classifier
+        model: external-sequence-classifier
+        labels: [SAFE, RISKY]
 
   projections:
     partitions:

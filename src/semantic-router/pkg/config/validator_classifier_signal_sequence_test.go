@@ -63,6 +63,15 @@ func TestValidateClassifierSignalContractsRejectsSequenceClassifierWrongRole(t *
 	}
 }
 
+func TestValidateClassifierSignalContractsRejectsSequenceClassifierInvalidProtocol(t *testing.T) {
+	cfg := sequenceClassifierConfig(validSequenceClassifierRule())
+	cfg.ExternalModels[0].ModelEndpoint.Protocol = "grpc"
+
+	if err := validateClassifierSignalContracts(cfg); err == nil {
+		t.Fatal("expected an llm_endpoint.protocol validation error, got nil")
+	}
+}
+
 func TestValidateClassifierSignalContractsRejectsUnknownType(t *testing.T) {
 	rule := validSequenceClassifierRule()
 	rule.Type = "sequence-classifier"

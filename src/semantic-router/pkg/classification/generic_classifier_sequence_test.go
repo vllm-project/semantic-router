@@ -28,7 +28,7 @@ func newTestSequenceClassifier(t *testing.T, server *httptest.Server, rule confi
 	if err != nil {
 		t.Fatalf("failed to construct classifier: %v", err)
 	}
-	classifier.(*sequenceLabelClassifier).backend.(*HTTPClassifierInference).baseURL = server.URL
+	classifier.(*sequenceLabelClassifier).backend.baseURL = server.URL
 	return classifier
 }
 

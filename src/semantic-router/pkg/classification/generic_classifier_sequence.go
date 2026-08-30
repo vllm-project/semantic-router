@@ -45,7 +45,7 @@ func (m *declaredLabelMapping) LabelCount() int {
 // sequenceLabelClassifier lets a rule reuse the backends jailbreak and
 // category already use, instead of a parallel remote path.
 type sequenceLabelClassifier struct {
-	backend SequenceClassifierBackend
+	backend *HTTPClassifierInference
 	labels  []string
 }
 
@@ -76,13 +76,6 @@ func (c *sequenceLabelClassifier) Classify(
 	result, err := c.backend.Classify(ctx, input)
 	if err != nil {
 		return labelClassification{}, err
-	}
-	if len(result.Probabilities) != len(c.labels) {
-		return labelClassification{}, fmt.Errorf(
-			"classifier returned %d scores for %d declared labels",
-			len(result.Probabilities),
-			len(c.labels),
-		)
 	}
 	scores := make(map[string]float64, len(c.labels))
 	for index, label := range c.labels {
