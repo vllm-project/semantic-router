@@ -1,0 +1,49 @@
+{
+  "status": "ok",
+  "body": {
+    "max_completion_tokens": 32,
+    "messages": [
+      {
+        "content": [
+          {
+            "cache_control": {
+              "ttl": "1h",
+              "type": "ephemeral"
+            },
+            "text": "Stable instructions",
+            "type": "text"
+          }
+        ],
+        "role": "system"
+      },
+      {
+        "content": [
+          {
+            "cache_control": {
+              "type": "ephemeral"
+            },
+            "text": "Hello",
+            "type": "text"
+          }
+        ],
+        "role": "user"
+      }
+    ],
+    "model": "routed-model",
+    "tool_choice": "auto",
+    "tools": [
+      {
+        "cache_control": {
+          "type": "ephemeral"
+        },
+        "function": {
+          "name": "lookup",
+          "parameters": {
+            "type": "object"
+          }
+        },
+        "type": "function"
+      }
+    ]
+  }
+}

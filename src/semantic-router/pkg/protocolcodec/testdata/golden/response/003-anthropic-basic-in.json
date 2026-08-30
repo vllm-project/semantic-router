@@ -1,0 +1,18 @@
+{
+  "id": "response_1",
+  "type": "message",
+  "role": "assistant",
+  "model": "provider-model",
+  "content": [
+    {
+      "type": "text",
+      "text": "hello"
+    }
+  ],
+  "stop_reason": "end_turn",
+  "stop_sequence": null,
+  "usage": {
+    "input_tokens": 2,
+    "output_tokens": 1
+  }
+}

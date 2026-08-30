@@ -44,6 +44,12 @@ Keep these boundaries clear:
 - plugins add behavior at route-specific hook points; and
 - providers bind logical model names to inference endpoints.
 
+Provider pricing belongs beside each concrete model under
+`providers.models[].pricing`. It accepts an optional uppercase three-letter
+`currency` plus non-negative `prompt_per_1m`, `completion_per_1m`,
+`cached_input_per_1m`, and `cache_write_per_1m` rates. Routing model cards do not
+repeat deployment prices or credentials.
+
 The [Routing Pipeline](../overview/signal-driven-decisions) explains the design.
 Capability pages under **Capabilities** document each signal, projection,
 decision, algorithm, plugin, and global block.

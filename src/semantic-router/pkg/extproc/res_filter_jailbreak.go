@@ -8,20 +8,27 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
-// performResponseJailbreakDetection runs the jailbreak classifier on the LLM
-// response body to catch adversarial content that passed input-level detection.
-// Returns a blocking response if the action is "block"; otherwise returns nil
-// and sets ctx.ResponseJailbreakDetected for downstream handling.
-func (r *OpenAIRouter) performResponseJailbreakDetection(ctx *RequestContext, responseBody []byte) *ext_proc.ProcessingResponse {
+// performSemanticResponseJailbreakDetection consumes protocol-neutral output,
+// so response safety policy is identical for every public wire format.
+func (r *OpenAIRouter) performSemanticResponseJailbreakDetection(
+	ctx *RequestContext,
+	response *llmprotocol.Response,
+) *ext_proc.ProcessingResponse {
+	return r.performResponseJailbreakDetectionText(ctx, semanticAssistantContent(response))
+}
+
+func (r *OpenAIRouter) performResponseJailbreakDetectionText(
+	ctx *RequestContext,
+	assistantContent string,
+) *ext_proc.ProcessingResponse {
 	if !r.shouldPerformResponseJailbreakDetection(ctx) {
 		return nil
 	}
-
-	assistantContent := extractAssistantContentFromResponse(responseBody)
 	if assistantContent == "" {
 		logging.Debugf("No assistant content to check for response jailbreak")
 		return nil
