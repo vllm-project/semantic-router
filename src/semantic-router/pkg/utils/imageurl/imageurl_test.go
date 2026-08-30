@@ -74,3 +74,25 @@ func TestCanonicalDataURL(t *testing.T) {
 		t.Fatal("CanonicalDataURL must reject non-data-URI inputs")
 	}
 }
+
+func TestIsAllowedMIME(t *testing.T) {
+	cases := []struct {
+		mime string
+		want bool
+	}{
+		{"image/png", true},
+		{"image/jpeg", true},
+		{"IMAGE/WEBP", true},
+		{" image/gif ", true},
+		{"image/svg+xml", false},
+		{"text/plain; charset=utf-8", false},
+		{"", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.mime, func(t *testing.T) {
+			if got := IsAllowedMIME(tc.mime); got != tc.want {
+				t.Fatalf("IsAllowedMIME(%q) = %v, want %v", tc.mime, got, tc.want)
+			}
+		})
+	}
+}

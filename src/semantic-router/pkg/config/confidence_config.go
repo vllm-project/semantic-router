@@ -59,7 +59,7 @@ func ValidateConfidenceAlgorithmConfig(cfg *ConfidenceAlgorithmConfig) error {
 	if err := validateConfidenceHybridWeights(method, cfg.HybridWeights); err != nil {
 		return err
 	}
-	return validateConfidenceVerifier(method, cfg.VerifierServerURL, cfg.VerifierTimeoutSeconds)
+	return validateConfidenceVerifier(method, cfg.VerifierServerURL, cfg.VerifierTimeoutSeconds, cfg.MaxResponseBytes)
 }
 
 func validateConfidenceMethod(method string) (string, error) {
@@ -179,14 +179,17 @@ func validateConfidenceUnitInterval(name string, value float64) error {
 	return nil
 }
 
-func validateConfidenceVerifier(method string, rawURL string, timeoutSeconds int) error {
+func validateConfidenceVerifier(method string, rawURL string, timeoutSeconds int, maxResponseBytes int64) error {
 	if timeoutSeconds < 0 {
 		return fmt.Errorf("verifier_timeout_seconds must be >= 1 when set")
 	}
+	if maxResponseBytes < 0 {
+		return fmt.Errorf("max_response_bytes must be positive when set")
+	}
 	if method != ConfidenceMethodAutoMixEntailment {
-		if rawURL != "" || timeoutSeconds != 0 {
+		if rawURL != "" || timeoutSeconds != 0 || maxResponseBytes != 0 {
 			return fmt.Errorf(
-				"verifier_server_url and verifier_timeout_seconds are only supported when confidence_method=%q",
+				"verifier settings are only supported when confidence_method=%q",
 				ConfidenceMethodAutoMixEntailment,
 			)
 		}

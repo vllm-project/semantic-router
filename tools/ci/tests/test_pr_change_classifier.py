@@ -302,14 +302,30 @@ class PRChangeClassifierTests(unittest.TestCase):
     def test_fixture_builds_follow_active_integration_receipts(self) -> None:
         llm_katan = classify(["e2e/testing/llm-katan/llm_katan/server.py"])
         anthropic = classify(["e2e/testing/anthropic-shim/anthropic_shim/app.py"])
+        responses = classify(["tools/mock-vllm/app.py"])
 
         self.assertIn("memory", llm_katan.selected_jobs)
         self.assertEqual(llm_katan.pr_images, ())
-        self.assertNotIn("anthropic-shim", anthropic.profiles)
-        self.assertIn("images", anthropic.selected_jobs)
-        self.assertEqual(anthropic.pr_images, ("anthropic-shim",))
+        self.assertIn("anthropic-shim", anthropic.profiles)
+        self.assertIn("e2e", anthropic.selected_jobs)
+        self.assertEqual(anthropic.pr_images, ())
+        self.assertEqual(responses.profiles, ("response-api",))
+        self.assertEqual(responses.pr_images, ())
         self.assertEqual(llm_katan.publish_images, ())
         self.assertEqual(anthropic.publish_images, ())
+
+    def test_protocol_codec_changes_select_every_protocol_profile(self) -> None:
+        result = classify(["src/semantic-router/pkg/protocolcodec/stream_responses.go"])
+
+        self.assertEqual(
+            result.profiles,
+            (
+                "envoy-ai-gateway",
+                "streaming",
+                "anthropic-shim",
+                "response-api",
+            ),
+        )
 
     def test_release_and_nightly_image_lifecycles_are_distinct(self) -> None:
         self.assertEqual(

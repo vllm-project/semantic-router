@@ -1,0 +1,7 @@
+{
+  "operation": "request",
+  "body": {
+    "model": "provider-model",
+    "messages": [{"role": "user", "content": "hello"}]
+  }
+}

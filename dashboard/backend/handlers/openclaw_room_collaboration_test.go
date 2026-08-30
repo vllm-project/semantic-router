@@ -111,8 +111,8 @@ func TestRoomCollaborationBus_WSDisconnectDoesNotBreakSSE(t *testing.T) {
 		RoomID:     room.ID,
 		TeamID:     room.TeamID,
 		SenderType: "system",
-		SenderID:   "clawos-system",
-		SenderName: "ClawOS",
+		SenderID:   "openclaw-system",
+		SenderName: "OpenClaw",
 		Content:    "sse still works",
 		CreatedAt:  time.Now().UTC().Format(time.RFC3339),
 	}))

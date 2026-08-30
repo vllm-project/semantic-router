@@ -35,19 +35,6 @@
   margin-bottom: 3rem;
 }
 
-.paperLabel {
-  margin: 0;
-  font-size: 0.875rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #6366F1;
-}
-
-[data-theme='dark'] .paperLabel {
-  color: #A5B4FC;
-}
-
 .paperTitle {
   margin: 0;
   font-size: var(--site-text-h2);
@@ -112,19 +99,11 @@
   background: rgba(22, 22, 22, 0.8);
 }
 
+/* Hover and active colours live in the consolidated blue block at the foot of
+ * this file, which covers every interactive figure element at once. Only the
+ * geometry belongs here. */
 .figureNavItem:hover {
   transform: translateY(-1px);
-  border-color: rgba(99, 102, 241, 0.4);
-}
-
-.figureNavItemActive {
-  border-color: rgba(99, 102, 241, 0.45);
-  background: rgba(99, 102, 241, 0.08);
-}
-
-[data-theme='dark'] .figureNavItemActive {
-  background: rgba(99, 102, 241, 0.18);
-  border-color: rgba(165, 180, 252, 0.55);
 }
 
 .figureIndex {
@@ -1697,7 +1676,11 @@
   transform: translateY(-2px);
 }
 
-.tokenTag:hover {
+/* The dark twin is required, not decorative: the `[data-theme='dark'] .tokenTag`
+ * rest rule below scores the same as a bare `.tokenTag:hover` and comes later,
+ * so without it the hover never paints in dark mode. */
+.tokenTag:hover,
+[data-theme='dark'] .tokenTag:hover {
   border-color: var(--site-hover-border);
   background: rgba(48, 162, 255, 0.14);
   color: var(--site-brand-blue);
@@ -1708,7 +1691,8 @@
 [data-theme='dark'] .agentFeedbackCard:hover,
 .transformerBlock:hover,
 [data-theme='dark'] .transformerBlock:hover {
-  border-color: var(--site-border-strong);
+  border-color: var(--site-hover-border);
+  background: var(--site-hover-surface-bg-soft);
   transform: translateY(-2px);
 }
 
@@ -1722,8 +1706,10 @@
 [data-theme='dark'] .layerCardActive,
 .taxonomyCardActive,
 [data-theme='dark'] .taxonomyCardActive,
-.tokenTagActive,
-[data-theme='dark'] .tokenTagActive,
+/* Doubled: the `.tokenTag` rest rule below sets the `border` shorthand at the
+ * same (0,1,0), so a bare `.tokenTagActive` loses its blue border. */
+.tokenTag.tokenTagActive,
+[data-theme='dark'] .tokenTag.tokenTagActive,
 .agentNodeActive,
 [data-theme='dark'] .agentNodeActive,
 .agentFeedbackCardActive,

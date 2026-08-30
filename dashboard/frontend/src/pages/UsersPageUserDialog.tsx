@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import useAccessibleDialog from '../hooks/useAccessibleDialog'
+import ProductLoadingState from '../components/ProductLoadingState'
 import styles from './UsersPageUserDialog.module.css'
 import type { UsersPageRolePermissions } from './usersPageSupport'
 
@@ -193,7 +194,7 @@ export default function UsersPageUserDialog({
               </div>
               <span className={styles.hint}>Effective permissions granted by the selected role.</span>
               {isLoadingRolePermissions ? (
-                <p className={styles.emptyState}>Loading role permissions...</p>
+                <ProductLoadingState compact label="Loading permissions" />
               ) : selectedRolePermissions.length > 0 ? (
                 <ul className={styles.permissionList}>
                   {selectedRolePermissions.map((permission) => (

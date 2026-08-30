@@ -89,6 +89,7 @@ algorithm:
     # Required when confidence_method = automix_entailment
     verifier_server_url: ""          # AutoMix entailment verifier HTTP URL
     verifier_timeout_seconds: 0      # 0 = default (60s)
+    max_response_bytes: 0            # 0 = default (32 MiB)
 ```
 
 ### Parameters
@@ -105,6 +106,7 @@ algorithm:
 | `hybrid_weights.margin_weight` | float | `0.5` | Weight for margin in hybrid mode. Zero is the unset sentinel; the two effective weights must sum to `1`. |
 | `verifier_server_url` | string | — | Required only when `confidence_method = automix_entailment`. Must be an absolute HTTP(S) URL without credentials, query, or fragment (see [`automix_verifier.py`](https://github.com/vllm-project/semantic-router/blob/main/src/training/model_selection/rl_model_selection/automix_verifier.py)). |
 | `verifier_timeout_seconds` | int | `60` | Positive HTTP timeout for `automix_entailment`; `0` is the unset sentinel and selects 60 seconds. |
+| `max_response_bytes` | int | `33554432` | Maximum AutoMix verifier response size in bytes. |
 
 The method defaults used when `threshold` is omitted (or explicitly `0`) are
 `-1` for `avg_logprob` (the permissive evidence-present default), `0.5` for

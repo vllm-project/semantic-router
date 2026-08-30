@@ -8,6 +8,7 @@ recursive-include cli/templates *.yaml
 recursive-include cli/templates *.json
 recursive-include cli/templates *.ini
 recursive-include cli/model_assets *.yaml *.md *.dsl
+recursive-include cli/evaluation/golden *.json
 
 # Include requirements
 include requirements.txt

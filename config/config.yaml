@@ -767,6 +767,7 @@ routing:
           token_filter: tool_call_args
           verifier_server_url: ""
           verifier_timeout_seconds: 0
+          max_response_bytes: 0
       plugins:
         - type: hallucination
           configuration:
@@ -1562,7 +1563,7 @@ global:
       - auto
       - exhaustive-reference
     include_config_models_in_list: true
-    clear_route_cache: false
+    clear_route_cache: true
     streamed_body:
       enabled: true
       max_bytes: 1048576
@@ -1833,6 +1834,14 @@ global:
       ttl_seconds: 7200
       eviction_policy: lru
       embedding_model: mmbert
+      # Negation/antonym guard for the in-memory backend. "lexical" is the
+      # model-free default; "nli" or "lexical+nli" additionally verifies the
+      # winning candidate once with the hallucination explainer NLI model and
+      # rejects it above nli.contradiction_threshold (~70 ms/hit on CPU).
+      polarity_guard:
+        mode: lexical
+        nli:
+          contradiction_threshold: 0.5
       milvus:
         connection:
           host: milvus
@@ -2191,6 +2200,19 @@ global:
         access_key: external-classifier-key
         max_tokens: 128
         temperature: 0
+      # Reached over the http_classify contract; the byte ceilings apply only there.
+      - name: external-sequence-classifier
+        llm_provider: openai
+        model_role: classification
+        llm_endpoint:
+          address: sequence-classifier
+          port: 8080
+          protocol: http
+          name: openai-sequence-classifier
+        llm_timeout_seconds: 5
+        access_key: external-sequence-classifier-key
+        max_request_bytes: 262144
+        max_response_bytes: 1048576
     kbs:
       - name: privacy_kb
         source:

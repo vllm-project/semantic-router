@@ -1,0 +1,14 @@
+{
+  "operation": "request",
+  "body": {
+    "model": "client-model",
+    "max_tokens": 16,
+    "messages": [
+      {
+        "role": "user",
+        "content": "hello"
+      }
+    ],
+    "top_p": -0.000001
+  }
+}

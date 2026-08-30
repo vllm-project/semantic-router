@@ -93,6 +93,28 @@ func TestModelVerificationHandlerRunsDirectOpenAIInference(t *testing.T) {
 	}
 }
 
+func TestModelVerificationAcceptsReasoningOnlyInferenceEvidence(t *testing.T) {
+	t.Parallel()
+
+	client := modelVerificationRoundTripper(func(*http.Request) (*http.Response, error) {
+		return modelVerificationHTTPResponse(http.StatusOK, `{"choices":[{"finish_reason":"length","message":{"content":null,"reasoning":"provider generated reasoning"}}]}`), nil
+	})
+	config := modelVerificationTestConfig(t, "https://provider.example", "openai", "")
+	handler := newModelVerificationHandler("active-config.yaml", modelVerificationOptions{
+		client:     client,
+		loadConfig: func(string) (*routerconfig.RouterConfig, error) { return config, nil },
+	})
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodPost, modelVerificationPath, strings.NewReader(`{"model":"logical-model"}`)))
+
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "Inference responded successfully.") {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	if strings.Contains(response.Body.String(), "provider generated reasoning") {
+		t.Fatalf("verification response exposed internal reasoning: %s", response.Body.String())
+	}
+}
+
 func TestModelVerificationHandlerRunsAnthropicInference(t *testing.T) {
 	t.Parallel()
 
@@ -290,7 +312,7 @@ func TestModelVerificationHandlerRateLimitsPerAuthenticatedUserAndAudits(t *test
 	t.Parallel()
 
 	config := &routerconfig.RouterConfig{BackendModels: routerconfig.BackendModels{
-		ModelConfig: map[string]routerconfig.ModelParams{"metadata-only": {}},
+		ModelConfig: map[string]routerconfig.ModelParams{"metadata-only": {}, "second-model": {}},
 	}}
 	now := time.Date(2026, 8, 15, 5, 6, 7, 0, time.UTC)
 	auditor := &modelVerificationTestAuditor{}
@@ -317,6 +339,13 @@ func TestModelVerificationHandlerRateLimitsPerAuthenticatedUserAndAudits(t *test
 	if rateLimited.Code != http.StatusTooManyRequests || rateLimited.Header().Get("Retry-After") != "60" {
 		t.Fatalf("rate-limited status = %d, Retry-After = %q, body = %s", rateLimited.Code, rateLimited.Header().Get("Retry-After"), rateLimited.Body.String())
 	}
+	sameUserOtherModel := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, modelVerificationPath, strings.NewReader(`{"model":"second-model"}`))
+	request = request.WithContext(dashboardauth.WithAuthContext(request.Context(), dashboardauth.AuthContext{UserID: "user-a"}))
+	handler.ServeHTTP(sameUserOtherModel, request)
+	if sameUserOtherModel.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("same user, other model status = %d, body = %s", sameUserOtherModel.Code, sameUserOtherModel.Body.String())
+	}
 
 	otherUser := httptest.NewRecorder()
 	handler.ServeHTTP(otherUser, requestForUser("user-b"))
@@ -324,7 +353,7 @@ func TestModelVerificationHandlerRateLimitsPerAuthenticatedUserAndAudits(t *test
 		t.Fatalf("other user status = %d, body = %s", otherUser.Code, otherUser.Body.String())
 	}
 	entries := auditor.Entries()
-	if len(entries) != modelVerificationRateLimitCount+2 {
+	if len(entries) != modelVerificationRateLimitCount+3 {
 		t.Fatalf("audit entries = %d", len(entries))
 	}
 	lastRateLimited := entries[modelVerificationRateLimitCount]

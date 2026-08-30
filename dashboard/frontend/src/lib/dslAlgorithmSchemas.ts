@@ -86,6 +86,12 @@ export function getAlgorithmFieldSchema(algoType: string): FieldSchema[] {
           type: 'number',
           placeholder: '60',
         },
+        {
+          key: 'max_response_bytes',
+          label: 'Max Response Bytes',
+          type: 'number',
+          placeholder: '33554432',
+        },
       ]
     case 'ratings':
       return [

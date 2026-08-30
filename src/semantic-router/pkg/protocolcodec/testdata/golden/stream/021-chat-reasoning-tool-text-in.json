@@ -1,0 +1,10 @@
+{
+  "public_model": "public-model",
+  "provider_model": "provider-model",
+  "chunks": [
+    "data: {\"id\":\"response_mixed_1\",\"object\":\"chat.completion.chunk\",\"created\":100,\"model\":\"provider-model\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\"I should inspect the weather first.\"},\"finish_reason\":null}]}\n\n",
+    "data: {\"id\":\"response_mixed_1\",\"object\":\"chat.completion.chunk\",\"created\":100,\"model\":\"provider-model\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_weather\",\"type\":\"function\",\"function\":{\"name\":\"lookup_weather\",\"arguments\":\"{\\\"city\\\":\\\"Paris\\\"}\"}}]},\"finish_reason\":null}]}\n\n",
+    "data: {\"id\":\"response_mixed_1\",\"object\":\"chat.completion.chunk\",\"created\":100,\"model\":\"provider-model\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"The lookup is ready.\"},\"finish_reason\":\"tool_calls\"}]}\n\n",
+    "data: {\"id\":\"response_mixed_1\",\"object\":\"chat.completion.chunk\",\"created\":100,\"model\":\"provider-model\",\"choices\":[],\"usage\":{\"prompt_tokens\":8,\"completion_tokens\":12,\"total_tokens\":20,\"completion_tokens_details\":{\"reasoning_tokens\":6}}}\n\ndata: [DONE]\n\n"
+  ]
+}

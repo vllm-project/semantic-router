@@ -34,6 +34,15 @@ providers:
         type: chat_template_kwargs
         parameter: enable_thinking
   models:
+    - name: local/omni
+      provider_model_id: local/omni
+      api_format: openai
+      backend_refs:
+        - name: local-omni
+          endpoint: vllm-omni:8000
+          protocol: http
+          type: vllm
+          weight: 1
     - name: qwen-coordinator
       provider_model_id: qwen-coordinator
       api_format: openai
@@ -100,6 +109,9 @@ providers:
 
 routing:
   modelCards:
+    - name: local/omni
+      capabilities: [chat, image_understanding, multimodal, omni, text, vision]
+      modality: omni
     - name: qwen-coordinator
       context_window_size: 32768
       description: Local planner and synthesis model for Router Flow dynamic plans.
@@ -130,6 +142,13 @@ routing:
       tags: [deployment:openrouter, role:worker]
 
   signals:
+    conversation:
+      - name: accuracy_has_images
+        description: Request contains at least one image content part.
+        feature:
+          type: exists
+          source:
+            type: image_content
     keywords:
       - name: accuracy_workflow_request
         operator: OR
@@ -173,6 +192,19 @@ routing:
         description: Long inputs stay on one capable worker to avoid multiplying context cost across a fan-out workflow.
 
   decisions:
+    - name: omni
+      description: Understand image-bearing requests with the dedicated visual-language model.
+      priority: 200
+      rules:
+        operator: OR
+        conditions:
+          - type: conversation
+            name: accuracy_has_images
+      modelRefs:
+        - model: local/omni
+      algorithm:
+        type: static
+
     - name: accuracy_workflow
       description: Decompose evidence-gathering and tool-heavy tasks into a bounded parallel workflow.
       priority: 100

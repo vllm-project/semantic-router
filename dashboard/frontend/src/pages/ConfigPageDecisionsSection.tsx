@@ -63,7 +63,6 @@ export default function ConfigPageDecisionsSection({
     applyScopedConfig,
     routingScopes,
     scopedConfig,
-    selectedScope,
     selectedScopeId,
     setSelectedScopeId,
   } = useRoutingScopeManager(config)
@@ -244,6 +243,7 @@ export default function ConfigPageDecisionsSection({
       'authz',
       'jailbreak',
       'pii',
+      'conversation',
       'projection',
     ] as const
     const projectionOutputs = (config?.projections?.mappings || []).flatMap((mapping) =>
@@ -286,6 +286,8 @@ export default function ConfigPageDecisionsSection({
           return config?.signals?.jailbreak?.map((rule) => rule.name) || []
         case 'pii':
           return config?.signals?.pii?.map((rule) => rule.name) || []
+        case 'conversation':
+          return config?.signals?.conversation?.map((c) => c.name) || []
         case 'projection':
           return projectionOutputs
         default:
@@ -822,7 +824,6 @@ export default function ConfigPageDecisionsSection({
     <ConfigPageManagerLayout
       title="Decisions"
       description="Shape routing outcomes with ordered rules and plugins that map signals to concrete model behavior."
-      scope={selectedScope?.label ?? 'Routing profile'}
     >
       <div className={styles.sectionPanel}>
         <div className={styles.sectionTableBlock}>

@@ -9,6 +9,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
@@ -34,6 +35,7 @@ type routerComponents struct {
 	classificationSvc    *services.ClassificationService
 	semanticCache        cache.CacheBackend
 	toolsDatabase        *tools.ToolsDatabase
+	toolEmbedder         *cachedToolEmbedder
 	responseAPIFilter    *ResponseAPIFilter
 	replayRecorder       *routerreplay.Recorder
 	replayStoreShared    bool
@@ -43,6 +45,7 @@ type routerComponents struct {
 	lookupTable          lookuptable.LookupTable
 	memoryStore          memory.Store
 	memoryExtractor      *memory.MemoryExtractor
+	protocolCodecs       *protocolcodec.Registry
 	credentialResolver   *authz.CredentialResolver
 	rateLimiter          *ratelimit.RateLimitResolver
 	lookupTableCancel    func()
@@ -196,7 +199,7 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 		return nil, err
 	}
 
-	toolsDatabase, err := createToolsDatabase(cfg)
+	toolsDatabase, toolEmbedder, err := buildToolsRuntime(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -238,6 +241,7 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 		classificationSvc:    classificationSvc,
 		semanticCache:        semanticCache,
 		toolsDatabase:        toolsDatabase,
+		toolEmbedder:         toolEmbedder,
 		responseAPIFilter:    responseAPIFilter,
 		replayRecorder:       replayRecorder,
 		replayStoreShared:    replayStoreShared,
@@ -247,6 +251,7 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 		lookupTable:          lookupTable,
 		memoryStore:          memoryStore,
 		memoryExtractor:      memoryExtractor,
+		protocolCodecs:       protocolcodec.NewBuiltinRegistry(),
 		credentialResolver:   credentialResolver,
 		rateLimiter:          rateLimiter,
 		lookupTableCancel:    lookupTableCancel,
@@ -254,6 +259,24 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 	}
 	keepRouterSessionStore = true
 	return components, nil
+}
+
+func buildToolsRuntime(cfg *config.RouterConfig) (*tools.ToolsDatabase, *cachedToolEmbedder, error) {
+	// One provider serves both the tools database and the tool embedder, so a
+	// remote endpoint gets a single HTTP client/connection pool.
+	provider, providerErr := toolsEmbeddingProvider(cfg)
+	if providerErr != nil && cfg.Tools.Enabled {
+		return nil, nil, providerErr
+	}
+	database, err := createToolsDatabase(cfg, provider)
+	if err != nil {
+		return nil, nil, err
+	}
+	if providerErr != nil {
+		logging.Warnf("tool_selection: embedding provider unavailable, filter mode will use its fallback: %v", providerErr)
+		return database, nil, nil
+	}
+	return database, newToolEmbedderForConfig(cfg, provider), nil
 }
 
 func (components *routerComponents) buildRouter() *OpenAIRouter {
@@ -265,6 +288,7 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 		ClassificationService:   components.classificationSvc,
 		Cache:                   components.semanticCache,
 		ToolsDatabase:           components.toolsDatabase,
+		toolEmbedder:            components.toolEmbedder,
 		ResponseAPIFilter:       components.responseAPIFilter,
 		ReplayRecorder:          components.replayRecorder,
 		ReplayStoreShared:       components.replayStoreShared,
@@ -274,6 +298,7 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 		ReplayRecorders:         components.replayRecorders,
 		MemoryStore:             components.memoryStore,
 		MemoryExtractor:         components.memoryExtractor,
+		ProtocolCodecs:          components.protocolCodecs,
 		CredentialResolver:      components.credentialResolver,
 		RateLimiter:             components.rateLimiter,
 		lookupTableCancel:       components.lookupTableCancel,
@@ -281,9 +306,6 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 	}
 	if components.classificationSvc != nil {
 		components.classificationSvc.SetEvalModelSelector(router)
-	}
-	if router.ResponseAPIFilter != nil {
-		router.ResponseAPIFilter.SetImageFileResolver(routerImageFileResolver{router: router})
 	}
 	return router
 }

@@ -52,7 +52,6 @@ surfaces:
   router_service_platform:
     description: Router-side service, API, storage, authz, context, telemetry, provider, and runtime support modules outside the config, decision, selection, and extproc plugin chains.
     paths:
-    - src/semantic-router/pkg/anthropic/**
     - src/semantic-router/pkg/apiserver/**
     - src/semantic-router/pkg/authz/**
     - src/semantic-router/pkg/cache/**
@@ -62,7 +61,7 @@ surfaces:
     - src/semantic-router/pkg/imagegen/**
     - src/semantic-router/pkg/inflight/**
     - src/semantic-router/pkg/internalauth/**
-    - src/semantic-router/pkg/ir/**
+    - src/semantic-router/pkg/llmprotocol/**
     - src/semantic-router/pkg/latency/**
     - src/semantic-router/pkg/mcp/**
     - src/semantic-router/pkg/memory/**
@@ -73,6 +72,7 @@ surfaces:
     - src/semantic-router/pkg/modelruntime/**
     - src/semantic-router/pkg/observability/**
     - src/semantic-router/pkg/openai/**
+    - src/semantic-router/pkg/protocolcodec/**
     - src/semantic-router/pkg/postgres/**
     - src/semantic-router/pkg/promptcompression/**
     - src/semantic-router/pkg/publicmodels/**
@@ -105,7 +105,6 @@ surfaces:
     - src/semantic-router/pkg/extproc/processor_res_header.go
     - src/semantic-router/pkg/extproc/req_filter_looper*.go
     - dashboard/frontend/src/components/HeaderDisplay.tsx
-    - dashboard/frontend/src/components/HeaderReveal.tsx
     - dashboard/frontend/src/components/ChatComponent*.tsx
     task_rules:
     - router-core
@@ -167,7 +166,7 @@ surfaces:
     - dashboard/frontend/src/pages/PlaygroundPage.tsx
     - dashboard/frontend/src/components/ChatComponent*.tsx
     - dashboard/frontend/src/components/HeaderDisplay.tsx
-    - dashboard/frontend/src/components/HeaderReveal.tsx
+    - dashboard/frontend/src/components/ThinkingAnimation.tsx
     task_rules:
     - dashboard
   dsl_crd:

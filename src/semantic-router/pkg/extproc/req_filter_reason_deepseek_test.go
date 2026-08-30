@@ -14,7 +14,7 @@ func TestDeepSeekOfficialBuildReasoningRequestFields(t *testing.T) {
 	router := newDeepSeekOfficialReasoningRouter()
 
 	t.Run("official API uses top-level thinking fields", func(t *testing.T) {
-		fields, effort := router.buildReasoningRequestFieldsForProvider(
+		fields, effort := router.buildReasoningFieldsForTest(
 			"deepseek-v4-pro",
 			true,
 			router.Config.GetDecisionByName("test"),
@@ -25,7 +25,7 @@ func TestDeepSeekOfficialBuildReasoningRequestFields(t *testing.T) {
 	})
 
 	t.Run("local vLLM keeps configured chat template syntax", func(t *testing.T) {
-		fields, effort := router.buildReasoningRequestFieldsForProvider(
+		fields, effort := router.buildReasoningFieldsForTest(
 			"deepseek-v4-pro",
 			true,
 			router.Config.GetDecisionByName("test"),

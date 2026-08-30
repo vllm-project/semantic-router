@@ -170,6 +170,9 @@ consistent across deployment environments.
 - Tenant isolation, audit, reliability, scalability, monitoring, and
   diagnostics.
 - Model, recipe, configuration, and vLLM-SR activation, rollout, and rollback.
+- Workload simulation and capacity planning that connect observed traffic,
+  routing behavior, serving topology, and calibrated hardware profiles to
+  reviewable deployment proposals.
 - Stable deployment and lifecycle APIs, maintained reference stacks, and a
   tested support matrix across deployment environments and hardware.
 
@@ -186,6 +189,7 @@ capabilities rather than publishing private product plans.
 - [Build versioned configuration activation and rollback](https://github.com/vllm-project/semantic-router/issues/2326)
 - [Define deployment architecture and reference stacks across environments and hardware](https://github.com/vllm-project/semantic-router/issues/3043)
 - [Establish production observability and supported-environment qualification](https://github.com/vllm-project/semantic-router/issues/2993)
+- [Build workload-driven capacity planning for inference fleets](https://github.com/vllm-project/semantic-router/issues/3091)
 
 ## [Agentic & Context](https://github.com/vllm-project/semantic-router/issues/2987)
 

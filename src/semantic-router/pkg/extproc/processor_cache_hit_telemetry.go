@@ -17,20 +17,22 @@ func (r *OpenAIRouter) reportCacheHitTelemetry(
 	if r == nil || ctx == nil {
 		return
 	}
-	usage := mergeProviderResponseUsage(
-		ctx,
-		parseResponseUsage(cachedBody, ctx.RequestModel),
-	)
-	totalTokens := usage.promptTokens + usage.completionTokens
+	semanticResponse, err := r.decodeClientResponse(cachedBody, ctx)
+	if err != nil {
+		logging.ComponentWarnEvent("extproc", "cache_hit_response_decode_failed", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"format":     ctx.SourceFormat,
+			"error":      err.Error(),
+		})
+		return
+	}
+	usage := responseUsageFromSemanticUsage(semanticResponse.Usage)
+	totalTokens := responseUsageTotal(usage)
 	if totalTokens > 0 {
 		recordSessionTurn(ctx, usage, sessiontelemetry.TurnPricing{})
 	}
 	if ctx.RequestModel != "" {
-		metrics.RecordModelTokensDetailed(
-			ctx.RequestModel,
-			float64(usage.promptTokens),
-			float64(usage.completionTokens),
-		)
+		recordModelUsageTokens(ctx.RequestModel, usage)
 		metrics.RecordModelCompletionLatency(
 			ctx.RequestModel,
 			lookupLatency.Seconds(),

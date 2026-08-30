@@ -6,6 +6,7 @@ export interface PlaygroundInvocation {
   source: 'recipe-probe'
   probeId: string
   recipeDigest: string
+  recipe: string
   editable: boolean
   model?: string
   messages: RecipeProbeMessage[]
@@ -27,6 +28,7 @@ export function createProbePlaygroundInvocation(
     source: 'recipe-probe',
     probeId: plan.probe_id,
     recipeDigest: plan.recipe_digest,
+    recipe: plan.recipe,
     editable: plan.editable,
     ...(plan.model ? { model: plan.model } : {}),
     messages: plan.messages,
@@ -44,6 +46,7 @@ export function isPlaygroundInvocation(value: unknown): value is PlaygroundInvoc
     candidate.source === 'recipe-probe' &&
     typeof candidate.probeId === 'string' &&
     typeof candidate.recipeDigest === 'string' &&
+    typeof candidate.recipe === 'string' &&
     typeof candidate.editable === 'boolean' &&
     Array.isArray(candidate.messages) &&
     Boolean(candidate.request) &&

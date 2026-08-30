@@ -28,7 +28,7 @@ const AcknowledgementsSection: React.FC = () => {
             <Translate id="acknowledgements.label">Ecosystem</Translate>
           </SectionLabel>
           <h2 className={styles.title}>
-            <Translate id="acknowledgements.title">Built with open source.</Translate>
+            <Translate id="acknowledgements.title">Built with open source</Translate>
           </h2>
           <p className={styles.subtitle}>
             <Translate id="acknowledgements.subtitle">

@@ -1,0 +1,104 @@
+{
+  "cases": [
+    {
+      "name": "content_block:bash_code_execution_tool_result",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_content"
+        }
+      }
+    },
+    {
+      "name": "content_block:code_execution_tool_result",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_content"
+        }
+      }
+    },
+    {
+      "name": "content_block:container_upload",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_content"
+        }
+      }
+    },
+    {
+      "name": "content_block:redacted_thinking",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_content"
+        }
+      }
+    },
+    {
+      "name": "content_block:server_tool_use",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_content"
+        }
+      }
+    },
+    {
+      "name": "content_block:text_editor_code_execution_tool_result",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_content"
+        }
+      }
+    },
+    {
+      "name": "content_block:tool_search_tool_result",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_content"
+        }
+      }
+    },
+    {
+      "name": "content_block:web_fetch_tool_result",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_content"
+        }
+      }
+    },
+    {
+      "name": "content_block:web_search_tool_result",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_content"
+        }
+      }
+    },
+    {
+      "name": "content_delta:citations_delta",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unknown_stream_delta"
+        }
+      }
+    }
+  ]
+}

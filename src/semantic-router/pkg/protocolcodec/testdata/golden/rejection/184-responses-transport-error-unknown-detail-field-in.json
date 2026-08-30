@@ -1,0 +1,10 @@
+{
+  "operation": "error",
+  "body": {
+    "error": {
+      "type": "server_error",
+      "message": "Provider failed.",
+      "future_field": true
+    }
+  }
+}

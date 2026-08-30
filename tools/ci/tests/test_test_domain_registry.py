@@ -30,12 +30,9 @@ class TestDomainRegistryTest(unittest.TestCase):
 
     def test_manual_profile_paths_match_classifier_reporting(self) -> None:
         manual = profile_paths("manual")
-        self.assertIn("anthropic-shim", manual)
-        self.assertTrue(set(NON_PR_E2E_RULES).issubset(manual))
-        self.assertEqual(
-            {name: manual[name] for name in NON_PR_E2E_RULES},
-            {name: tuple(paths) for name, paths in NON_PR_E2E_RULES.items()},
-        )
+        self.assertNotIn("anthropic-shim", manual)
+        self.assertNotIn("response-api", manual)
+        self.assertEqual(manual, NON_PR_E2E_RULES)
 
     def test_registry_models_every_pr_domain_job(self) -> None:
         self.assertEqual(

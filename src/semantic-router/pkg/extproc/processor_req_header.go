@@ -10,9 +10,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ir"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 )
@@ -27,7 +25,7 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	method, path := captureRequestHeaders(v, ctx, r.skipProcessingEnabled())
 
 	setRequestHeaderSpanAttributes(span, ctx, method, path)
-	detectClientProtocol(path, ctx)
+	detectSourceFormat(path, ctx)
 	applyHeaderPassThroughPolicy(ctx)
 
 	// Router Replay contains captured request, response, and tool data. It is a
@@ -205,47 +203,10 @@ var hopByHopDropList = []string{
 	"expect",
 }
 
-// anthropicPassThroughHeader names a header captured from an Anthropic
-// inbound request so the body-phase routing step can layer the value
-// under the provider-profile pin. Stored on IRExtensions; downstream
-// reads decide whether to forward. `anthropicPassThroughHeaders` is
-// the canonical list: both capture (request-header phase) and forward
-// (request-body routing phase via appendCapturedPassThroughHeaders)
-// iterate it, so adding a new header only requires one entry here.
-type anthropicPassThroughHeader struct {
-	name   string
-	assign func(ext *ir.IRExtensions, value string)
-	read   func(ext *ir.IRExtensions) string
-}
-
-var anthropicPassThroughHeaders = []anthropicPassThroughHeader{
-	{
-		name:   "anthropic-version",
-		assign: func(ext *ir.IRExtensions, v string) { ext.InboundAnthropicVersion = v },
-		read:   func(ext *ir.IRExtensions) string { return ext.InboundAnthropicVersion },
-	},
-	{
-		name:   "anthropic-beta",
-		assign: func(ext *ir.IRExtensions, v string) { ext.InboundAnthropicBeta = v },
-		read:   func(ext *ir.IRExtensions) string { return ext.InboundAnthropicBeta },
-	},
-	{
-		name:   "anthropic-dangerous-direct-browser-access",
-		assign: func(ext *ir.IRExtensions, v string) { ext.InboundDangerousDirectBrowserAccess = v },
-		read:   func(ext *ir.IRExtensions) string { return ext.InboundDangerousDirectBrowserAccess },
-	},
-}
-
 // applyHeaderPassThroughPolicy enforces the request-header pass-through
-// contract: hop-by-hop framing headers are stripped from ctx.Headers
-// (defense-in-depth — Envoy already filters most), and on Anthropic
-// ingress the named pass-through headers are captured into
-// IRExtensions so the body-phase routing step can layer them under any
-// provider-profile pin.
-//
-// KEEP-by-default for everything else: ctx.Headers retains the inbound
-// view of any header not in the drop list. The body-phase routing step
-// decides what to forward to the upstream.
+// contract by stripping transport framing from the semantic request view.
+// Provider headers are supplied by the selected provider profile rather than
+// copied from an untrusted client request.
 func applyHeaderPassThroughPolicy(ctx *RequestContext) {
 	if ctx == nil || ctx.Headers == nil {
 		return
@@ -253,39 +214,6 @@ func applyHeaderPassThroughPolicy(ctx *RequestContext) {
 
 	for _, name := range hopByHopDropList {
 		delete(ctx.Headers, name)
-	}
-
-	if ctx.ClientProtocol != config.ClientProtocolAnthropic {
-		return
-	}
-	capturePassThroughHeaders(ctx)
-}
-
-// capturePassThroughHeaders records the inbound values of the named
-// Anthropic pass-through headers into IRExtensions. The PR2 inbound
-// parser may already have allocated IRExtensions when this runs (it
-// runs at body-parse time, after the header phase); both call sites
-// tolerate the other running first.
-func capturePassThroughHeaders(ctx *RequestContext) {
-	captured := make(map[string]string, len(anthropicPassThroughHeaders))
-	for _, h := range anthropicPassThroughHeaders {
-		if v := strings.TrimSpace(headerValueCI(ctx, h.name)); v != "" {
-			captured[h.name] = v
-		}
-	}
-	if len(captured) == 0 {
-		return
-	}
-
-	if ctx.IRExtensions == nil {
-		ctx.IRExtensions = &ir.IRExtensions{
-			SourceProtocol: ctx.ClientProtocol,
-		}
-	}
-	for _, h := range anthropicPassThroughHeaders {
-		if v, ok := captured[h.name]; ok {
-			h.assign(ctx.IRExtensions, v)
-		}
 	}
 }
 

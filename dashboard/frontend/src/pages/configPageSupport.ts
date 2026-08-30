@@ -109,6 +109,18 @@ export interface ModelPricing {
   completion_per_1m?: number
 }
 
+export interface ProviderReliability {
+  lb_policy?: string
+  retry_count?: number
+  retry_on?: string
+  consecutive_5xx?: number
+  base_ejection_time?: string
+  max_ejection_percent?: number
+  health_check_path?: string
+  health_check_interval?: string
+  health_check_timeout?: string
+}
+
 export interface LoRAAdapter {
   name: string
   description?: string
@@ -164,6 +176,7 @@ export interface ProviderModelConfig {
   }>
   access_key?: string
   pricing?: ModelPricing
+  reliability?: ProviderReliability
 }
 
 export interface ProviderDefaultsConfig {
@@ -285,6 +298,7 @@ export interface NormalizedModel {
     cache_write_per_1m?: number
     completion_per_1m?: number
   }
+  reliability?: ProviderReliability
 }
 
 export interface TracingConfig {
@@ -781,6 +795,7 @@ export interface ConfigSignals {
   kb?: KBSignal[]
   metadata?: MetadataSignal[]
   classifiers?: ClassifierSignal[]
+  conversation?: ConversationSignal[]
 }
 
 export interface ConfigProjections {
@@ -1154,6 +1169,23 @@ export interface StructureSignal {
   predicate?: NumericPredicate
 }
 
+export interface ConversationSource {
+  type: string
+  role?: string
+}
+
+export interface ConversationFeature {
+  type: string
+  source: ConversationSource
+}
+
+export interface ConversationSignal {
+  name: string
+  description?: string
+  feature: ConversationFeature
+  predicate?: NumericPredicate
+}
+
 export interface ComplexitySignal {
   name: string
   threshold: number
@@ -1257,6 +1289,7 @@ export type SignalType =
   | 'KB'
   | 'Metadata'
   | 'Classifier'
+  | 'Conversation'
 
 export interface DecisionFormState {
   name: string
@@ -1317,6 +1350,8 @@ export interface AddSignalFormState {
   complexity_threshold?: number
   structure_feature?: StructureFeature
   structure_predicate?: NumericPredicate
+  conversation_feature?: ConversationFeature
+  conversation_predicate?: NumericPredicate
   role?: string
   subjects?: Subject[]
   hard_candidates?: string[]
@@ -1504,6 +1539,7 @@ export const getNormalizedModels = (
         quality_score: cardByName.get(m.name)?.quality_score,
         modality: cardByName.get(m.name)?.modality,
         pricing: m.pricing,
+        reliability: m.reliability,
       }),
     )
 
@@ -1528,6 +1564,7 @@ export const getNormalizedModels = (
         quality_score: card.quality_score,
         modality: card.modality,
         pricing: undefined,
+        reliability: undefined,
       })
     }
 
