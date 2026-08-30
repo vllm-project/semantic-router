@@ -27,10 +27,11 @@ import (
 )
 
 type blockingEmbedder struct {
-	dim     int
-	once    sync.Once
-	started chan struct{}
-	release chan struct{}
+	dim         int
+	once        sync.Once
+	releaseOnce sync.Once
+	started     chan struct{}
+	release     chan struct{}
 }
 
 func newBlockingEmbedder(dim int) *blockingEmbedder {
@@ -60,6 +61,66 @@ func (e *blockingEmbedder) Embed(_ context.Context, _ string) ([]float32, error)
 
 func (e *blockingEmbedder) Dimension() int {
 	return e.dim
+}
+
+// releaseAll unblocks every wedged Embed call. It is idempotent so a test can
+// release the stage itself and still leave cleanup to AfterEach.
+func (e *blockingEmbedder) releaseAll() {
+	e.releaseOnce.Do(func() {
+		close(e.release)
+	})
+}
+
+// wedgeFirstEmbedder blocks its first Embed call until released and serves
+// every later call immediately. It models one generation wedged inside a stage
+// while a later generation still makes progress.
+type wedgeFirstEmbedder struct {
+	dim         int
+	started     chan struct{}
+	release     chan struct{}
+	startedOnce sync.Once
+	releaseOnce sync.Once
+
+	mu    sync.Mutex
+	calls int
+}
+
+func newWedgeFirstEmbedder(dim int) *wedgeFirstEmbedder {
+	return &wedgeFirstEmbedder{
+		dim:     dim,
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+}
+
+func (e *wedgeFirstEmbedder) Embed(_ context.Context, _ string) ([]float32, error) {
+	e.mu.Lock()
+	e.calls++
+	first := e.calls == 1
+	e.mu.Unlock()
+
+	if first {
+		e.startedOnce.Do(func() {
+			close(e.started)
+		})
+		<-e.release
+	}
+
+	emb := make([]float32, e.dim)
+	for i := range emb {
+		emb[i] = 0.1
+	}
+	return emb, nil
+}
+
+func (e *wedgeFirstEmbedder) Dimension() int {
+	return e.dim
+}
+
+func (e *wedgeFirstEmbedder) releaseAll() {
+	e.releaseOnce.Do(func() {
+		close(e.release)
+	})
 }
 
 type pipelineLifecycleFixture struct {
@@ -243,7 +304,7 @@ var _ = Describe("IngestionPipeline bounded Stop", func() {
 
 	AfterEach(func() {
 		// Release the wedged embedder so the worker can unwind, then clean up.
-		close(embedder.release)
+		embedder.releaseAll()
 		_ = os.RemoveAll(f.tempDir)
 	})
 
@@ -276,7 +337,7 @@ var _ = Describe("IngestionPipeline bounded Stop", func() {
 		Expect(time.Since(start)).To(BeNumerically("<", 3*time.Second))
 	})
 
-	It("is idempotent and safe to call after a bounded Stop", func() {
+	It("does not report success from a second Stop while the same generation drains", func() {
 		vs, err := f.mgr.CreateStore(f.ctx, CreateStoreRequest{Name: "double-stop"})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -291,7 +352,78 @@ var _ = Describe("IngestionPipeline bounded Stop", func() {
 		defer cancel()
 		Expect(f.pipeline.Stop(ctx)).To(MatchError(context.DeadlineExceeded))
 
-		// A second Stop on an already-stopped pipeline is a no-op returning nil.
-		Expect(f.pipeline.Stop(context.Background())).To(BeNil())
+		// The first Stop never observed its workers return, so the pipeline is
+		// still stopping. A second Stop joins the same generation and reports
+		// its own deadline rather than a success the pipeline never reached.
+		secondCtx, cancelSecond := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		defer cancelSecond()
+		Expect(f.pipeline.Stop(secondCtx)).To(MatchError(context.DeadlineExceeded))
+
+		// Once the wedged stage unwinds, the generation drains and only then
+		// does Stop report success.
+		embedder.releaseAll()
+		Eventually(func() error {
+			finalCtx, cancelFinal := context.WithTimeout(context.Background(), time.Second)
+			defer cancelFinal()
+			return f.pipeline.Stop(finalCtx)
+		}, 5*time.Second, 50*time.Millisecond).Should(Succeed())
+	})
+})
+
+var _ = Describe("IngestionPipeline restart after a timed-out Stop", func() {
+	var (
+		embedder *wedgeFirstEmbedder
+		f        *pipelineLifecycleFixture
+	)
+
+	BeforeEach(func() {
+		embedder = newWedgeFirstEmbedder(3)
+		f = newPipelineLifecycleFixture(embedder)
+	})
+
+	AfterEach(func() {
+		embedder.releaseAll()
+		_ = os.RemoveAll(f.tempDir)
+	})
+
+	It("serves a new generation while the previous one is still wedged", func() {
+		vs, err := f.mgr.CreateStore(f.ctx, CreateStoreRequest{Name: "restart"})
+		Expect(err).NotTo(HaveOccurred())
+
+		wedged, err := f.store.Save("wedged.txt", []byte("first"), "assistants")
+		Expect(err).NotTo(HaveOccurred())
+
+		wedgedFile, err := f.pipeline.AttachFile(vs.ID, wedged.ID, nil)
+		Expect(err).NotTo(HaveOccurred())
+		Eventually(embedder.started, 5*time.Second).Should(BeClosed())
+
+		stopCtx, cancelStop := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		defer cancelStop()
+		Expect(f.pipeline.Stop(stopCtx)).To(MatchError(context.DeadlineExceeded))
+
+		// Restarting installs a fresh generation. The wedged worker still holds
+		// the previous generation's queue and WaitGroup, so it cannot dequeue
+		// anything attached from here on.
+		f.pipeline.Start()
+
+		fresh, err := f.store.Save("fresh.txt", []byte("second"), "assistants")
+		Expect(err).NotTo(HaveOccurred())
+
+		freshFile, err := f.pipeline.AttachFile(vs.ID, fresh.ID, nil)
+		Expect(err).NotTo(HaveOccurred())
+
+		// The new generation completes its own job while the old one is still
+		// stuck inside Embed.
+		Eventually(func() string {
+			status, statusErr := f.pipeline.GetFileStatus(freshFile.ID)
+			if statusErr != nil {
+				return ""
+			}
+			return status.Status
+		}, 5*time.Second, 20*time.Millisecond).Should(Equal("completed"))
+
+		wedgedStatus, err := f.pipeline.GetFileStatus(wedgedFile.ID)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(wedgedStatus.Status).To(Equal("in_progress"))
 	})
 })
