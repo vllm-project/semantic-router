@@ -46,7 +46,9 @@ func TestInputModalityForContentPartType(t *testing.T) {
 	}{
 		"text":        {InputModalityText, true},
 		"input_text":  {InputModalityText, true},
-		"image":       {InputModalityImage, true},
+		"image":       {"", false},
+		"audio":       {"", false},
+		"video":       {"", false},
 		"image_url":   {InputModalityImage, true},
 		"input_image": {InputModalityImage, true},
 		"input_audio": {InputModalityAudio, true},

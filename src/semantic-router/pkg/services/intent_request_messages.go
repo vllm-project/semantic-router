@@ -36,7 +36,6 @@ type intentSignalInput struct {
 	hasAssistantReply bool
 	imageURL          string
 	conversationFacts classification.ConversationFacts
-	inputModality     classification.InputModalityFacts
 	requestFacts      classification.RequestFacts
 }
 
@@ -98,12 +97,13 @@ func (req IntentRequest) resolveSignalInput() (intentSignalInput, error) {
 		if err != nil {
 			return intentSignalInput{}, err
 		}
+		inputModality := input.requestFacts.InputModality
 		input.requestFacts = requestFactsForIntent(
 			req.Metadata,
 			contextEstimate,
 		)
-		input.requestFacts.InputModality = input.inputModality
-		if useTopLevelTextFallback && input.requestFacts.InputModality.TextContentCount == 0 {
+		input.requestFacts.InputModality = inputModality
+		if useTopLevelTextFallback && text != "" && input.requestFacts.InputModality.TextContentCount == 0 {
 			// req.Text supplied user text the message walk could not see.
 			// Promoted system/assistant text must not count: it is not user
 			// input, and counting it would diverge from the data-plane path.
@@ -136,7 +136,6 @@ func (req IntentRequest) resolveSignalInput() (intentSignalInput, error) {
 		requestFacts: requestFactsForIntent(req.Metadata, contextEstimate),
 	}
 	if text != "" {
-		fallbackInput.inputModality.TextContentCount = 1
 		fallbackInput.requestFacts.InputModality.TextContentCount = 1
 	}
 	return fallbackInput, nil
@@ -243,7 +242,7 @@ func resolveIntentSignalInputFromMessages(messages []IntentMessage, toolDefiniti
 		hasAssistantReply: history.hasAssistantReply,
 		imageURL:          history.currentUserImageURL,
 		conversationFacts: history.conversationFacts,
-		inputModality:     history.inputModality,
+		requestFacts:      classification.RequestFacts{InputModality: history.inputModality},
 	}
 
 	// Promote system/assistant text only with no user text AND no image; the

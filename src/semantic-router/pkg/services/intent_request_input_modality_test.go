@@ -110,3 +110,40 @@ func TestIntentRequestResolveSignalInput_NonUserMediaDoesNotCount(t *testing.T) 
 
 	assert.Equal(t, classification.InputModalityFacts{TextContentCount: 1}, input.requestFacts.InputModality)
 }
+
+func TestIntentRequestResolveSignalInput_WhitespaceOnlyTextIsNotTextInput(t *testing.T) {
+	imageOnlyTurn := IntentMessage{
+		Role: "user",
+		Content: mustMessageContent(t, []map[string]interface{}{
+			{"type": "text", "text": "   "},
+			{"type": "image_url", "image_url": map[string]string{"url": "https://example.com/a.png"}},
+		}),
+	}
+
+	req := IntentRequest{Messages: []IntentMessage{imageOnlyTurn}}
+	input, err := req.resolveSignalInput()
+	require.NoError(t, err)
+	assert.Equal(t, classification.InputModalityFacts{ImageContentCount: 1}, input.requestFacts.InputModality)
+
+	req = IntentRequest{Text: "   ", Messages: []IntentMessage{imageOnlyTurn}}
+	input, err = req.resolveSignalInput()
+	require.NoError(t, err)
+	assert.Equal(t, classification.InputModalityFacts{ImageContentCount: 1}, input.requestFacts.InputModality,
+		"a whitespace-only top-level text must not promote a text fact")
+}
+
+func TestIntentRequestResolveSignalInput_BareImagePartIsNotAnImage(t *testing.T) {
+	req := IntentRequest{
+		Messages: []IntentMessage{{
+			Role: "user",
+			Content: mustMessageContent(t, []map[string]interface{}{
+				{"type": "text", "text": "look"},
+				{"type": "image", "source": map[string]string{"type": "base64", "data": "aGVsbG8="}},
+			}),
+		}},
+	}
+	input, err := req.resolveSignalInput()
+	require.NoError(t, err)
+	assert.Equal(t, classification.InputModalityFacts{TextContentCount: 1}, input.requestFacts.InputModality)
+	assert.Equal(t, 0, input.conversationFacts.ImageContentCount, "conversation image count must keep its Chat Completions part types")
+}

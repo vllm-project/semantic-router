@@ -108,3 +108,17 @@ func TestExtractSemanticRequestSignalsScopesInputModalitiesToUserMessages(t *tes
 		t.Fatalf("ImageContentCount = %d, want 1", snapshot.ImageContentCount)
 	}
 }
+
+// Whitespace-only text is not text input; the classify walk applies the same
+// rule so preview and data plane agree on image_input AND NOT text_input.
+func TestExtractSemanticRequestSignalsIgnoresWhitespaceOnlyText(t *testing.T) {
+	request := decodeSignalRequest(t, llmprotocol.OpenAIChatV1, `{
+		"model": "vision-model",
+		"messages": [{"role": "user", "content": [
+			{"type": "text", "text": "   "},
+			{"type": "image_url", "image_url": {"url": "https://example.com/a.png"}}
+		]}]
+	}`)
+	snapshot := extractSemanticRequestSignals(request)
+	assertInputModalityFacts(t, snapshot.InputModality, classification.InputModalityFacts{ImageContentCount: 1})
+}

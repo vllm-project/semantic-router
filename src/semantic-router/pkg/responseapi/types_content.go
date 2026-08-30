@@ -206,7 +206,6 @@ const (
 	ContentTypeOutputText = "output_text"
 	ContentTypeInputImage = "input_image"
 	ContentTypeInputFile  = "input_file"
-	ContentTypeInputAudio = "input_audio"
 )
 
 // Role constants

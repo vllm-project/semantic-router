@@ -34,18 +34,20 @@ func SupportedInputModalities() []string {
 // input modality it carries. The data plane decodes every wire protocol into
 // the neutral request and counts modalities from its content kinds; this table
 // serves the classify/eval HTTP APIs, which walk raw messages[].content parts,
-// so part-type aliases stay in one place. The type is normalized (trimmed,
-// lowercased) before matching. Returns false for non-modality part types such
-// as tool_use or refusal.
+// so part-type aliases stay in one place. Only Chat Completions and Response
+// API part types are listed: those APIs accept OpenAI-shaped messages, and the
+// image set matches what the conversation signal has always counted there.
+// The type is normalized (trimmed, lowercased) before matching. Returns false
+// for non-modality part types such as tool_use or refusal.
 func InputModalityForContentPartType(partType string) (string, bool) {
 	switch strings.ToLower(strings.TrimSpace(partType)) {
 	case "text", "input_text":
 		return InputModalityText, true
-	case "image", "image_url", "input_image":
+	case "image_url", "input_image":
 		return InputModalityImage, true
-	case "audio", "input_audio", "audio_url":
+	case "input_audio", "audio_url":
 		return InputModalityAudio, true
-	case "video", "video_url", "input_video":
+	case "video_url", "input_video":
 		return InputModalityVideo, true
 	default:
 		return "", false

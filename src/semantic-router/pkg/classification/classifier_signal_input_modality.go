@@ -5,61 +5,49 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 // evaluateInputModalitySignal matches input_modality rules against the
 // structural modality-presence counts extracted from the parsed request.
 // Purely deterministic: a rule matches when at least one content part of its
-// declared modality is present.
+// declared modality is present. Every in-scope rule publishes its count as a
+// signal value, including zero, so traces show the full modality set.
 func (c *Classifier) evaluateInputModalitySignal(
 	results *SignalResults,
 	mu *sync.Mutex,
 	facts RequestFacts,
 	usedSignals map[string]bool,
 ) {
-	rules := c.Config.InputModalityRules
-	if len(rules) == 0 {
-		return
-	}
-
 	start := time.Now()
-	matchedAny := false
-
-	for _, rule := range rules {
+	bestConfidence := 0.0
+	var matched []string
+	values := make(map[string]float64, len(c.Config.InputModalityRules))
+	for _, rule := range c.Config.InputModalityRules {
 		if !signalRuleUsed(usedSignals, config.SignalTypeInputModality, rule.Name) {
 			continue
 		}
-		ruleStart := time.Now()
 		value := float64(inputModalityCount(rule.Modality, facts.InputModality))
-		matched := value > 0
-		elapsed := time.Since(ruleStart)
-		mu.Lock()
-		key := signalConfidenceKey(config.SignalTypeInputModality, rule.Name)
-		results.SignalValues[key] = value
-		if matched {
-			matchedAny = true
-			results.SignalConfidences[key] = 1.0
-			results.MatchedInputModalityRules = append(results.MatchedInputModalityRules, rule.Name)
-		} else {
-			results.SignalConfidences[key] = 0
-		}
-		mu.Unlock()
-
-		c.recordSignalExtraction(config.SignalTypeInputModality, rule.Name, elapsed.Seconds())
-		if matched {
+		values[signalConfidenceKey(config.SignalTypeInputModality, rule.Name)] = value
+		if value > 0 {
+			matched = append(matched, rule.Name)
+			bestConfidence = 1.0
 			c.recordSignalMatch(config.SignalTypeInputModality, rule.Name)
 		}
 	}
-
+	mu.Lock()
+	for key, value := range values {
+		results.SignalValues[key] = value
+		if value > 0 {
+			results.SignalConfidences[key] = 1.0
+		} else {
+			results.SignalConfidences[key] = 0
+		}
+	}
+	results.MatchedInputModalityRules = append(results.MatchedInputModalityRules, matched...)
+	mu.Unlock()
 	elapsed := time.Since(start)
 	results.Metrics.InputModality.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
-	if matchedAny {
-		results.Metrics.InputModality.Confidence = 1.0
-	} else {
-		results.Metrics.InputModality.Confidence = 0
-	}
-	logging.Debugf("[Signal Computation] Input-modality signal evaluation completed in %v", elapsed)
+	results.Metrics.InputModality.Confidence = bestConfidence
 }
 
 func inputModalityCount(modality string, facts InputModalityFacts) int {
