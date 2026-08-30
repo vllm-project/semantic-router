@@ -30,6 +30,26 @@ func getModelPath(t *testing.T) string {
 func TestInitMmBertEmbeddingModel(t *testing.T) {
 	modelPath := getModelPath(t)
 
+	// Runs FIRST, deliberately. The old test reset `initOnce`/`modelInitialized`
+	// before this case so it exercised a fresh invalid initialization. Those
+	// package-level vars no longer exist -- init state now lives in Rust behind
+	// `is_mmbert_model_initialized()`, and the binding exposes no reset -- so
+	// there is nothing a subtest can zero. Ordering supplies what the reset
+	// used to: this is the only point in the function where the model is
+	// genuinely uninitialized, so an empty path is a fresh invalid init rather
+	// than a rejected re-init.
+	t.Run("InitWithEmptyPath", func(t *testing.T) {
+		if r, g := IsModelInitialized(); r || g {
+			t.Fatalf("precondition: model already initialized (r=%v g=%v); "+
+				"this subtest must run before any successful init", r, g)
+		}
+
+		err := InitMmBertEmbeddingModel("", true)
+		if err == nil {
+			t.Fatal("Expected error for empty path")
+		}
+	})
+
 	t.Run("InitWithValidPath", func(t *testing.T) {
 		err := InitMmBertEmbeddingModel(modelPath, true)
 		if err != nil {
@@ -39,16 +59,6 @@ func TestInitMmBertEmbeddingModel(t *testing.T) {
 		readyR, readyG := IsModelInitialized()
 		if !(readyR && readyG) {
 			t.Fatalf("model not ready: r=%v g=%v", readyR, readyG)
-		}
-	})
-
-	t.Run("InitWithEmptyPath", func(t *testing.T) {
-		// Reset for this test
-		_ = true // state reset handled by fresh test harness
-
-		err := InitMmBertEmbeddingModel("", true)
-		if err == nil {
-			t.Fatal("Expected error for empty path")
 		}
 	})
 
