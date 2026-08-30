@@ -1706,8 +1706,10 @@
 [data-theme='dark'] .layerCardActive,
 .taxonomyCardActive,
 [data-theme='dark'] .taxonomyCardActive,
-.tokenTagActive,
-[data-theme='dark'] .tokenTagActive,
+/* Doubled: the `.tokenTag` rest rule below sets the `border` shorthand at the
+ * same (0,1,0), so a bare `.tokenTagActive` loses its blue border. */
+.tokenTag.tokenTagActive,
+[data-theme='dark'] .tokenTag.tokenTagActive,
 .agentNodeActive,
 [data-theme='dark'] .agentNodeActive,
 .agentFeedbackCardActive,

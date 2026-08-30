@@ -97,12 +97,17 @@
   text-transform: uppercase;
 }
 
-.rowTypePaper {
+/* Doubled class on purpose. `.rowType` sets the `border` shorthand, which
+ * resets border-color, and these modifiers score the same (0,1,0) — so in a
+ * production build, where the minifier merges and reorders rules across files,
+ * the shorthand can land after the modifier and repaint the badge grey.
+ * (0,2,0) wins regardless of where the bundler puts each rule. */
+.rowType.rowTypePaper {
   border-color: var(--site-accent);
   color: var(--site-accent-strong);
 }
 
-.rowTypeTalk {
+.rowType.rowTypeTalk {
   border-color: #a1a1aa;
   color: #71717a;
 }
