@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"sync"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -202,6 +203,12 @@ func (c *Classifier) evaluateAllSignalsWithContext(
 		SignalErrors:       make(map[string]string),
 		SignalErrorMatches: make(map[string]bool),
 	}
+	if requestFacts.Context == nil {
+		// The legacy, context-free classifier APIs do not have a caller context.
+		// Keep those APIs working while ensuring every request-aware path passes
+		// its supplied context all the way to remote category HTTP calls.
+		requestFacts.Context = context.Background()
+	}
 
 	var wg sync.WaitGroup
 	var mu sync.Mutex
@@ -230,6 +237,7 @@ func (c *Classifier) evaluateAllSignalsWithContext(
 		imgArg,
 		imgCache,
 		convFacts,
+		requestFacts.Context,
 		requestFacts,
 		usedSignals,
 	)

@@ -3,6 +3,7 @@ package classification
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -130,6 +131,54 @@ func TestNewHTTPClassifierInference_DefaultTimeout(t *testing.T) {
 				t.Errorf("timeout = %v, want %v", inf.timeout, tt.expectedTimeout)
 			}
 		})
+	}
+}
+
+func TestHTTPClassifierInferenceDeadlineStopsSlowRequest(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(200 * time.Millisecond)
+		_, _ = w.Write([]byte(`[{"label":"safe","score":1.0},{"label":"jailbreak","score":0.0}]`))
+	}))
+	defer server.Close()
+
+	inf := newTestHTTPClassifierInference(t, server, testJailbreakMapping())
+	inf.timeout = 25 * time.Millisecond
+	inf.httpClient.Timeout = inf.timeout
+	startedAt := time.Now()
+	_, err := inf.Classify(context.Background(), "slow request")
+	if err == nil {
+		t.Fatal("expected deadline error")
+	}
+	if elapsed := time.Since(startedAt); elapsed > 150*time.Millisecond {
+		t.Fatalf("deadline did not stop the request promptly: %v", elapsed)
+	}
+}
+
+func TestHTTPClassifierInferenceConcurrentClassify(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode([]httpClassifyLabelScore{
+			{Label: "jailbreak", Score: 0.9},
+			{Label: "safe", Score: 0.1},
+		})
+	}))
+	defer server.Close()
+
+	inf := newTestHTTPClassifierInference(t, server, testJailbreakMapping())
+	const calls = 20
+	errs := make(chan error, calls)
+	for i := 0; i < calls; i++ {
+		go func() {
+			result, err := inf.Classify(context.Background(), "concurrent request")
+			if err == nil && (len(result.Probabilities) != 2 || result.Probabilities[1] != 0.9) {
+				err = fmt.Errorf("unexpected result: %#v", result)
+			}
+			errs <- err
+		}()
+	}
+	for i := 0; i < calls; i++ {
+		if err := <-errs; err != nil {
+			t.Fatalf("concurrent classify: %v", err)
+		}
 	}
 }
 

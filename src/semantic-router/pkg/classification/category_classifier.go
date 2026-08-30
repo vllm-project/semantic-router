@@ -8,6 +8,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
 )
 
+const categoryClassificationErrorCode = "category_classification_failed"
+
 // matchDomainCategories returns the domain categories that exceed the configured
 // threshold, using entropy analysis to decide between top-1 and multi-category output.
 func (c *Classifier) matchDomainCategories(

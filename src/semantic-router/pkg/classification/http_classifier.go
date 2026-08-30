@@ -8,6 +8,7 @@ import (
 	"math"
 	"net/http"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -69,6 +70,16 @@ type HTTPClassifierInference struct {
 // NewHTTPClassifierInference creates a new http_classify-backed inference
 // instance from an external model config and label mapping.
 func NewHTTPClassifierInference(cfg *config.ExternalModelConfig, mapping sequenceLabelMapping) (*HTTPClassifierInference, error) {
+	return newHTTPClassifierInference(cfg, mapping, 0)
+}
+
+// newHTTPClassifierInference is shared by the existing prompt_guard connector
+// and category's backend adapter. A non-zero deadline comes from the shared
+// backend block; zero preserves the external-model legacy timeout behavior.
+func newHTTPClassifierInference(cfg *config.ExternalModelConfig, mapping sequenceLabelMapping, deadline time.Duration) (*HTTPClassifierInference, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("http_classify external model config is required")
+	}
 	if cfg.ModelEndpoint.Address == "" {
 		return nil, fmt.Errorf("http_classify endpoint address is required")
 	}
@@ -87,17 +98,19 @@ func NewHTTPClassifierInference(cfg *config.ExternalModelConfig, mapping sequenc
 		return nil, fmt.Errorf("http_classify label mapping must define at least 2 labels, got %d", n)
 	}
 
-	scheme := cfg.ModelEndpoint.Protocol
+	scheme := strings.ToLower(strings.TrimSpace(cfg.ModelEndpoint.Protocol))
 	if scheme == "" {
 		scheme = "http"
 	}
-	baseURL := fmt.Sprintf("%s://%s:%d", scheme, cfg.ModelEndpoint.Address, cfg.ModelEndpoint.Port)
+	baseURL := fmt.Sprintf("%s://%s:%d", scheme, strings.TrimSpace(cfg.ModelEndpoint.Address), cfg.ModelEndpoint.Port)
 
 	// http_classify is a single lightweight forward pass, not a generative
 	// call - it should fail fast rather than share http_chat's more
 	// generous default.
 	timeout := 5 * time.Second
-	if cfg.TimeoutSeconds > 0 {
+	if deadline > 0 {
+		timeout = deadline
+	} else if cfg.TimeoutSeconds > 0 {
 		timeout = time.Duration(cfg.TimeoutSeconds) * time.Second
 	}
 

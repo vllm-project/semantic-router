@@ -72,6 +72,49 @@ global:
 `http_chat` uses a chat-completions prompt. Both send request text to the
 configured service.
 
+### Remote category/domain classifier
+
+Category/domain classification uses the shared `backend` block. The explicit
+`model` is resolved by name in `global.model_catalog.external[]`; role and
+response contract are validated at startup, so an unrelated classification
+model cannot be selected accidentally. `protocol` describes the wire protocol
+and `contract` describes the semantic response product. They are separate
+axes. Category currently supports `http_classify` with
+`label_distribution`, which preserves the complete configured-label score
+distribution used by domain matching and model selection. `timeout_seconds` is
+an optional per-backend timeout and defaults to 5.
+
+```yaml
+global:
+  model_catalog:
+    external:
+      - name: domain-service
+        model_role: classification
+        llm_endpoint:
+          address: domain-classifier.default.svc
+          port: 8080
+          protocol: http
+        llm_model_name: domain-intent-v1
+    modules:
+      classifier:
+        domain:
+          category_mapping_path: models/mmbert32k-intent-classifier-merged/category_mapping.json
+          fallback_category: other
+          backend:
+            protocol: http_classify
+            contract: label_distribution
+            model: domain-service
+            timeout_seconds: 5
+```
+
+Omit `backend` to retain local category inference. The deprecated
+`use_modernbert` and `use_mmbert_32k` keys remain readable for local configs;
+new canonical output uses `variant: candle`, `variant: modernbert`, or
+`variant: mmbert32k`. An agreeing canonical and legacy selector is accepted,
+while contradictory active selectors and both legacy selectors set to `true`
+are rejected deterministically. `backend` is mutually exclusive with active
+local selectors.
+
 ### On a classifier failure
 
 `on_error` controls what an unreachable or failing guardrail classifier does

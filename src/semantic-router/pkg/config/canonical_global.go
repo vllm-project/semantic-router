@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"gopkg.in/yaml.v2"
 )
@@ -197,10 +198,88 @@ func resolveCanonicalGlobal(override *CanonicalGlobal, rawOverride *StructuredPa
 	if err := yaml.Unmarshal(overrideBytes, &resolved); err != nil {
 		return CanonicalGlobal{}, fmt.Errorf("failed to merge global override: %w", err)
 	}
+	categoryModel := &resolved.ModelCatalog.Modules.Classifier.Domain.CategoryModel
+	if rawDomain := rawCanonicalCategoryOverride(rawOverride); rawDomain != nil {
+		if hasRawKey(rawDomain, "backend") && !hasActiveRawCategoryLocalSelector(rawDomain) {
+			// The canonical default is a local mmBERT variant. A remote backend
+			// supplied by a sparse override must replace that inherited local
+			// selector, otherwise the merged value is rejected as a mixed local /
+			// remote configuration. Do this only when backend is present in the
+			// raw override: an unrelated sparse module override must preserve the
+			// inherited local default.
+			categoryModel.Variant = ""
+			categoryModel.UseModernBERT = false
+			categoryModel.UseMmBERT32K = false
+		}
+		if !hasRawKey(rawDomain, "variant") &&
+			(hasRawKey(rawDomain, "use_modernbert") || hasRawKey(rawDomain, "use_mmbert_32k")) {
+			// A sparse legacy override must be able to replace the canonical
+			// default variant, including the explicit false/false form used to
+			// clear it.
+			categoryModel.Variant = ""
+		}
+	}
+	if err := normalizeCanonicalCategoryVariant(categoryModel); err != nil {
+		return CanonicalGlobal{}, err
+	}
 	if err := resolveModuleModelRefs(&resolved); err != nil {
 		return CanonicalGlobal{}, err
 	}
 	return resolved, nil
+}
+
+// normalizeCanonicalCategoryVariant resolves legacy selectors after a sparse
+// canonical override has been merged onto defaults. A legacy key in that
+// override is allowed to replace an inherited default variant; an explicitly
+// configured variant alongside a legacy selector remains an error.
+func normalizeCanonicalCategoryVariant(model *CategoryModel) error {
+	if model == nil {
+		return nil
+	}
+	if err := model.ValidateLocalVariant(); err != nil {
+		return err
+	}
+	variant, err := model.EffectiveVariant()
+	if err != nil {
+		return err
+	}
+	if variant != "" {
+		model.Variant = variant
+		model.UseModernBERT = false
+		model.UseMmBERT32K = false
+	}
+	return nil
+}
+
+func rawCanonicalCategoryOverride(rawOverride *StructuredPayload) map[string]interface{} {
+	if rawOverride == nil || rawOverride.IsEmpty() {
+		return nil
+	}
+	var global map[string]interface{}
+	if err := rawOverride.DecodeInto(&global); err != nil {
+		return nil
+	}
+	modelCatalog := nestedStringMap(global["model_catalog"])
+	modules := nestedStringMap(modelCatalog["modules"])
+	classifier := nestedStringMap(modules["classifier"])
+	return nestedStringMap(classifier["domain"])
+}
+
+func hasRawKey(raw map[string]interface{}, key string) bool {
+	_, ok := raw[key]
+	return ok
+}
+
+func hasActiveRawCategoryLocalSelector(raw map[string]interface{}) bool {
+	if variant, ok := raw["variant"].(string); ok && strings.TrimSpace(variant) != "" {
+		return true
+	}
+	return rawBoolValue(raw, "use_modernbert") || rawBoolValue(raw, "use_mmbert_32k")
+}
+
+func rawBoolValue(raw map[string]interface{}, key string) bool {
+	value, ok := raw[key].(bool)
+	return ok && value
 }
 
 func applyCanonicalGlobal(cfg *RouterConfig, global *CanonicalGlobal) error {

@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -55,13 +56,13 @@ func (c *Classifier) evaluateKeywordSignal(results *SignalResults, mu *sync.Mute
 	}
 }
 
-func (c *Classifier) evaluateDomainSignal(results *SignalResults, mu *sync.Mutex, text string) {
+func (c *Classifier) evaluateDomainSignal(ctx context.Context, results *SignalResults, mu *sync.Mutex, text string) {
 	start := time.Now()
-	domainResult, err := c.categoryInference.ClassifyWithProbabilities(text)
+	domainResult, err := c.categoryInference.ClassifyWithProbabilities(ctx, text)
 	if err != nil {
 		// Fall back to Classify() (top-1 only) when ClassifyWithProbabilities is unavailable.
 		logging.Debugf("[Signal Computation] ClassifyWithProbabilities unavailable, falling back to Classify: %v", err)
-		basicResult, basicErr := c.categoryInference.Classify(text)
+		basicResult, basicErr := c.categoryInference.Classify(ctx, text)
 		if basicErr != nil {
 			err = basicErr
 		} else {
@@ -93,6 +94,20 @@ func (c *Classifier) evaluateDomainSignal(results *SignalResults, mu *sync.Mutex
 
 	if err != nil {
 		logging.Errorf("domain rule evaluation failed: %v", err)
+		mu.Lock()
+		if results.SignalErrors == nil {
+			results.SignalErrors = make(map[string]string)
+		}
+		results.SignalErrors[config.SignalTypeDomain] = categoryClassificationErrorCode
+		if c.Config.CategoryModel.IsBlock() {
+			// Match the established jailbreak fail-closed shape: use a reserved
+			// synthetic category so a backend failure cannot look like a clean
+			// request and can be selected by an explicit domain rule.
+			c.recordSignalMatch(config.SignalTypeDomain, CategoryClassificationErrorType)
+			results.MatchedDomainRules = append(results.MatchedDomainRules, CategoryClassificationErrorType)
+			results.SignalConfidences["domain:"+CategoryClassificationErrorType] = 1.0
+		}
+		mu.Unlock()
 	} else {
 		matched := c.matchDomainCategories(domainResult, categoryName)
 		mu.Lock()

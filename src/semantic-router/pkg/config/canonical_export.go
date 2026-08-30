@@ -190,6 +190,14 @@ func canonicalAutoModelNames(names []string) *[]string {
 }
 
 func canonicalModelCatalogFromRouterConfig(cfg *RouterConfig) CanonicalModelCatalog {
+	categoryModel := cfg.CategoryModel
+	if err := normalizeCanonicalCategoryVariant(&categoryModel); err != nil {
+		// Export is intentionally non-validating. Preserve an invalid runtime
+		// value so the normal configuration validator reports the actionable
+		// error instead of silently changing it during serialization.
+		categoryModel = cfg.CategoryModel
+	}
+
 	return CanonicalModelCatalog{
 		Embeddings: CanonicalEmbeddingModels{
 			Semantic: cfg.EmbeddingModels,
@@ -213,7 +221,7 @@ func canonicalModelCatalogFromRouterConfig(cfg *RouterConfig) CanonicalModelCata
 			},
 			Classifier: CanonicalClassifierModule{
 				Domain: CanonicalCategoryModule{
-					CategoryModel: cfg.CategoryModel,
+					CategoryModel: categoryModel,
 					ModelRef:      "domain_classifier",
 				},
 				MCP: cfg.MCPCategoryModel,

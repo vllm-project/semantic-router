@@ -252,7 +252,7 @@ func defaultClassifierModule() CanonicalClassifierModule {
 			CategoryModel: CategoryModel{
 				Threshold:           0.5,
 				UseCPU:              true,
-				UseMmBERT32K:        true,
+				Variant:             CategoryVariantMmBERT32K,
 				CategoryMappingPath: "models/mmbert32k-intent-classifier-merged/category_mapping.json",
 			},
 		},

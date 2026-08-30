@@ -1,5 +1,7 @@
 package config
 
+import "fmt"
+
 // Classifier represents the configuration for text classification.
 type Classifier struct {
 	CategoryModel    `yaml:"category_model"`
@@ -17,14 +19,22 @@ type BertModel struct {
 type CategoryModel struct {
 	// Enabled turns category classification on or off explicitly. Nil keeps the
 	// historical behaviour of running whenever a model is configured.
-	Enabled             *bool   `yaml:"enabled,omitempty"`
-	ModelID             string  `yaml:"model_id"`
-	Threshold           float32 `yaml:"threshold"`
-	UseCPU              bool    `yaml:"use_cpu"`
-	UseModernBERT       bool    `yaml:"use_modernbert"`
-	UseMmBERT32K        bool    `yaml:"use_mmbert_32k"`
-	CategoryMappingPath string  `yaml:"category_mapping_path"`
-	FallbackCategory    string  `yaml:"fallback_category,omitempty"`
+	Enabled       *bool   `yaml:"enabled,omitempty"`
+	ModelID       string  `yaml:"model_id"`
+	Threshold     float32 `yaml:"threshold"`
+	UseCPU        bool    `yaml:"use_cpu"`
+	UseModernBERT bool    `yaml:"use_modernbert,omitempty"`
+	UseMmBERT32K  bool    `yaml:"use_mmbert_32k,omitempty"`
+	// Variant selects the local category model. Empty preserves the historical
+	// auto-detecting local path; candle, modernbert, and mmbert32k are the
+	// canonical local selectors.
+	Variant string `yaml:"variant,omitempty"`
+	// Backend attaches a named remote classifier. Its absence preserves local
+	// category inference exactly as before.
+	Backend                 *RemoteClassifierBackend `yaml:"backend,omitempty"`
+	CategoryMappingPath     string                   `yaml:"category_mapping_path"`
+	FallbackCategory        string                   `yaml:"fallback_category,omitempty"`
+	ClassifierOnErrorConfig `yaml:",inline"`
 }
 
 type PIIModel struct {
@@ -413,6 +423,58 @@ func moduleActive(enabled *bool) bool { return enabled == nil || *enabled }
 
 // Active reports whether category classification was explicitly disabled.
 func (m CategoryModel) Active() bool { return moduleActive(m.Enabled) }
+
+const (
+	CategoryVariantCandle     = "candle"
+	CategoryVariantModernBERT = "modernbert"
+	CategoryVariantMmBERT32K  = "mmbert32k"
+)
+
+// ValidateLocalVariant rejects ambiguous legacy combinations and validates the
+// canonical variant spelling. Legacy true values remain readable and are
+// interpreted deterministically when Variant is omitted.
+func (m CategoryModel) ValidateLocalVariant() error {
+	if m.UseModernBERT && m.UseMmBERT32K {
+		return fmt.Errorf("classifier.domain: use_modernbert and use_mmbert_32k cannot both be true")
+	}
+	switch m.Variant {
+	case "":
+		return nil
+	case CategoryVariantCandle:
+		if m.UseModernBERT || m.UseMmBERT32K {
+			return fmt.Errorf("classifier.domain: variant %q conflicts with a legacy local selector", m.Variant)
+		}
+	case CategoryVariantModernBERT:
+		if m.UseMmBERT32K {
+			return fmt.Errorf("classifier.domain: variant %q conflicts with use_mmbert_32k=true", m.Variant)
+		}
+	case CategoryVariantMmBERT32K:
+		if m.UseModernBERT {
+			return fmt.Errorf("classifier.domain: variant %q conflicts with use_modernbert=true", m.Variant)
+		}
+	default:
+		return fmt.Errorf("classifier.domain.variant: unsupported value %q", m.Variant)
+	}
+	return nil
+}
+
+// EffectiveVariant maps readable legacy configurations to the canonical local
+// selector used by construction. Empty means the historical auto-detect path.
+func (m CategoryModel) EffectiveVariant() (string, error) {
+	if err := m.ValidateLocalVariant(); err != nil {
+		return "", err
+	}
+	if m.Variant != "" {
+		return m.Variant, nil
+	}
+	if m.UseModernBERT {
+		return CategoryVariantModernBERT, nil
+	}
+	if m.UseMmBERT32K {
+		return CategoryVariantMmBERT32K, nil
+	}
+	return "", nil
+}
 
 // Active reports whether PII classification was explicitly disabled.
 func (m PIIModel) Active() bool { return moduleActive(m.Enabled) }
