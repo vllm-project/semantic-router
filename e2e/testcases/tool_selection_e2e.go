@@ -31,6 +31,7 @@ type toolSelectionE2ECase struct {
 	ExpectToolsStrategy     string
 	ExpectConfidenceGT      float64
 	ExpectInjectedSysPrompt *bool
+	OmitToolChoice          bool
 }
 
 func defaultContractTools(minObjectParams json.RawMessage) []fixtures.ChatTool {
@@ -48,6 +49,15 @@ func toolSelectionContractCases(minObjectParams json.RawMessage) []toolSelection
 			Name:                "add_mode_weather_query",
 			Prompt:              "__TOOL_SELECTION_ADD_WEATHER__ What is the weather forecast for Boston tomorrow?",
 			Tools:               contractTools,
+			ExpectDecision:      "tool_selection_add_weather_decision",
+			ExpectToolsStrategy: "default",
+			ExpectConfidenceGT:  0.01,
+		},
+		{
+			Name:                "add_mode_omitted_tool_choice_matches_auto",
+			Prompt:              "__TOOL_SELECTION_ADD_WEATHER__ What is the weather forecast for Boston tomorrow?",
+			Tools:               contractTools,
+			OmitToolChoice:      true,
 			ExpectDecision:      "tool_selection_add_weather_decision",
 			ExpectToolsStrategy: "default",
 			ExpectConfidenceGT:  0.01,
@@ -209,7 +219,7 @@ func buildToolSelectionChatRequest(tc toolSelectionE2ECase) fixtures.ChatComplet
 		},
 		Tools: tc.Tools,
 	}
-	if len(tc.Tools) > 0 {
+	if len(tc.Tools) > 0 && !tc.OmitToolChoice {
 		req.ToolChoice = json.RawMessage(`"auto"`)
 	}
 	return req
