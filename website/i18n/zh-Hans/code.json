@@ -1324,10 +1324,13 @@
     "message": "贡献流程"
   },
   "contributing.process.step1.title": {
-    "message": "创建 Issue"
+    "message": "认领已接受的工作"
   },
   "contributing.process.step1.desc": {
-    "message": "首先与社区讨论你的想法或错误报告。"
+    "message": "新报告会从 needs-acceptance 进入 accepted，再进入 ready-for-dev；请在实施前发表评论认领 ready-for-dev 工作。"
+  },
+  "contributing.process.step1.docs": {
+    "message": "社区文档"
   },
   "contributing.process.step2.title": {
     "message": "Fork & 分支"
@@ -1426,10 +1429,10 @@
     "message": "从上面的本地运行方法可以看出，过程非常麻烦和复杂。因此，我们提供了基于 Docker 或 Podman 的运行方法。无需安装各种依赖软件；你只需要一个容器运行时。"
   },
   "contributing.docker.tips.1": {
-    "message": "虽然 Docker 可以帮助避免在本地安装过多的检测工具，但这并不意味着它会在提交过程中自动执行。因此，提交时，你可以使用"
+    "message": "Docker 不会自动运行检查。请使用以下命令签署提交"
   },
   "contributing.docker.tips.2": {
-    "message": "来跳过检测。"
+    "message": "并让 pre-commit 钩子正常运行。"
   },
   "contributing.docker.step1.title": {
     "message": "确保 Docker/Podman 已安装"
