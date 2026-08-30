@@ -14,6 +14,7 @@ var BaselineRouterContract = []string{
 	"anthropic-messages-streaming",
 	"apiserver-runtime-config-endpoints",
 	"apiserver-classification-endpoints",
+	"sequence-classifier-routing",
 	"chat-completions-stress-request",
 	"domain-classify",
 	"semantic-cache",
@@ -28,7 +29,7 @@ var BaselineRouterContract = []string{
 	"decision-fallback-behavior",
 	"plugin-config-variations",
 	"chat-completions-progressive-stress",
-	"anthropic-passthrough-openai-regression",
+	"protocol-codec-openai-regression",
 	// Retention directive response-header contract (issue #2009)
 	"retention-directive",
 	// Looper aggregate latency/token-usage response-header contract (issue #2694)
@@ -65,11 +66,25 @@ var DashboardContract = []string{
 // OpenAI-shaped backends because they assert on Anthropic-specific
 // behaviour such as cache-token synthesis and stop-reason mapping.
 var AnthropicShimContract = []string{
+	// Chat clients must receive Chat Completions even though the selected
+	// backend speaks Anthropic Messages.
+	"chat-completions-request",
 	"anthropic-messages-cache-cycle",
+	"anthropic-chat-cache-control",
 	"anthropic-messages-stop-sequence",
+	"anthropic-messages-streaming",
+	"anthropic-chat-completions-streaming",
+	"anthropic-response-api-buffered",
 	// /v1/responses streaming must emit Response API SSE on Anthropic-format
 	// backends instead of leaking chat.completion.chunk frames (issue #3013)
 	"anthropic-response-api-streaming",
+	"protocol-codec-anthropic-backend-buffered-matrix",
+	"protocol-codec-anthropic-backend-streaming-matrix",
+	"protocol-codec-anthropic-backend-tool-lifecycle",
+	"protocol-codec-anthropic-backend-structured-output",
+	"protocol-codec-anthropic-backend-error-matrix",
+	"protocol-codec-anthropic-backend-incomplete-stream-matrix",
+	"protocol-codec-anthropic-backend-midstream-error-matrix",
 }
 
 // Combine preserves order while removing duplicate testcase names.

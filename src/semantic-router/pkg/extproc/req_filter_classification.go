@@ -6,6 +6,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
@@ -15,10 +16,9 @@ import (
 // performDecisionEvaluation performs decision evaluation using DecisionEngine
 // Returns (decisionName, confidence, reasoningDecision, selectedModel)
 // This is the new approach that uses Decision-based routing with AND/OR rule combinations
-// Decision evaluation runs only for request-facing routing models. Concrete
-// backend model IDs are passthrough requests: they do not inherit the default
-// recipe's signals, policy, decisions, or plugins. Direct looper slugs use the
-// default recipe while limiting candidates to their algorithm type.
+// Decision evaluation runs only for request-facing Entrypoints. Concrete
+// backend Model IDs are passthrough requests: they do not inherit a Recipe's
+// signals, policy, decisions, or plugins.
 func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, history signalConversationHistory, ctx *RequestContext) (string, float64, entropy.ReasoningDecision, string, error) {
 	var decisionName string
 	var evaluationConfidence float64
@@ -79,10 +79,6 @@ func (r *OpenAIRouter) prepareDecisionEvaluation(
 	}
 	if r.Config.HasRoutingDecisions() {
 		return "", false
-	}
-	if r.requestModelActsAsAuto(originalModel) {
-		logging.Warnf("No decisions configured, using default model")
-		return r.Config.DefaultModel, true
 	}
 	return "", true
 }
@@ -452,43 +448,50 @@ func (r *OpenAIRouter) extractSessionContext(ctx *RequestContext) (sessionID, us
 		return "", "", nil
 	}
 	userID = extractUserID(ctx)
-	if ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.IsResponseAPIRequest {
-		return r.extractResponseAPISessionContext(ctx, userID)
-	}
-	if len(ctx.ChatCompletionMessages) > 0 {
-		return r.extractChatCompletionSessionContext(ctx, userID)
-	}
-	return ctx.SessionID, userID, nil
-}
-
-func (r *OpenAIRouter) extractResponseAPISessionContext(ctx *RequestContext, userID string) (sessionID, userIDOut string, conversationHistory []string) {
-	sessionID = ctx.ResponseAPICtx.ConversationID
-	if ctx.ResponseAPICtx.ConversationHistory != nil {
-		for _, storedResp := range ctx.ResponseAPICtx.ConversationHistory {
-			for _, inItem := range storedResp.Input {
-				if content := extractContentFromInputItem(inItem); content != "" {
-					conversationHistory = append(conversationHistory, content)
-				}
-			}
-			for _, outItem := range storedResp.Output {
-				if content := extractContentFromOutputItem(outItem); content != "" {
-					conversationHistory = append(conversationHistory, content)
-				}
-			}
-		}
-	}
-	return sessionID, userID, conversationHistory
-}
-
-func (r *OpenAIRouter) extractChatCompletionSessionContext(ctx *RequestContext, userID string) (sessionID, userIDOut string, conversationHistory []string) {
 	sessionID = ctx.SessionID
-	if sessionID == "" {
-		sessionID = deriveSessionIDFromMessages(ctx.ChatCompletionMessages, userID)
+	if state := ctx.ResponseObjectState; state != nil {
+		if sessionID == "" {
+			sessionID = state.ConversationID
+		}
+		conversationHistory = appendStoredConversationHistory(conversationHistory, state)
 	}
-	for i, msg := range ctx.ChatCompletionMessages {
-		if msg.Content != "" && i < len(ctx.ChatCompletionMessages)-1 {
-			conversationHistory = append(conversationHistory, msg.Content)
+	if ctx.SemanticRequest == nil {
+		return sessionID, userID, conversationHistory
+	}
+	if sessionID == "" {
+		sessionID = deriveSessionIDFromSemanticMessages(ctx.SemanticRequest.Messages, userID)
+	}
+	conversationHistory = appendSemanticConversationHistory(conversationHistory, ctx.SemanticRequest.Messages)
+	return sessionID, userID, conversationHistory
+}
+
+func appendStoredConversationHistory(
+	history []string,
+	state *ResponseObjectState,
+) []string {
+	for _, storedResponse := range state.ConversationHistory {
+		for _, input := range storedResponse.Input {
+			if content := extractContentFromInputItem(input); content != "" {
+				history = append(history, content)
+			}
+		}
+		for _, output := range storedResponse.Output {
+			if content := extractContentFromOutputItem(output); content != "" {
+				history = append(history, content)
+			}
 		}
 	}
-	return sessionID, userID, conversationHistory
+	return history
+}
+
+func appendSemanticConversationHistory(
+	history []string,
+	messages []llmprotocol.Message,
+) []string {
+	for index := 0; index < len(messages)-1; index++ {
+		if content := semanticText(messages[index].Content); content != "" {
+			history = append(history, content)
+		}
+	}
+	return history
 }

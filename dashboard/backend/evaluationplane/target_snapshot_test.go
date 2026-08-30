@@ -25,7 +25,7 @@ providers:
           endpoint: private.models.example.test:8000/v1
           api_key: literal-test-secret
       pricing:
-        currency: usd
+        currency: USD
         prompt_per_1m: 1.25
         completion_per_1m: 4.5
     - name: local/omni

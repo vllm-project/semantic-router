@@ -36,6 +36,21 @@ func assertSupportedSignalTypesInReferenceConfig(t testingT, root map[string]int
 			t.Fatalf("config/config.yaml must include at least one %s signal under routing.signals.%s", signalType, key)
 		}
 	}
+
+	coveredClassifierTypes := make(map[string]bool)
+	for _, rawClassifier := range mustSliceAt(t, signals, "classifiers") {
+		classifier := mustMapValue(t, rawClassifier, "routing.signals.classifiers")
+		coveredClassifierTypes[mustStringAt(t, classifier, "type")] = true
+	}
+	for _, classifierType := range []string{
+		ClassifierSignalTypeLocal,
+		ClassifierSignalTypeLLM,
+		ClassifierSignalTypeSequenceClassifier,
+	} {
+		if !coveredClassifierTypes[classifierType] {
+			t.Fatalf("config/config.yaml must include classifier signal type %q", classifierType)
+		}
+	}
 }
 
 func assertSupportedAlgorithmsInReferenceConfig(t testingT, decisions []interface{}) {

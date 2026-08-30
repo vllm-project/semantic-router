@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"time"
 
@@ -14,9 +13,10 @@ import (
 
 // VLLMOmniBackend implements the Backend interface for vLLM-Omni
 type VLLMOmniBackend struct {
-	baseURL    string
-	model      string
-	httpClient *http.Client
+	baseURL          string
+	model            string
+	maxResponseBytes int64
+	httpClient       *http.Client
 
 	// Default parameters
 	defaultSteps    int
@@ -40,9 +40,15 @@ func NewVLLMOmniBackend(cfg *config.ImageGenPluginConfig) (Backend, error) {
 		timeout = 120 * time.Second
 	}
 
+	maxResponseBytes, err := resolveImageGenMaxResponseBytes(cfg.MaxResponseBytes)
+	if err != nil {
+		return nil, err
+	}
+
 	return &VLLMOmniBackend{
-		baseURL: vllmConfig.BaseURL,
-		model:   vllmConfig.Model,
+		baseURL:          vllmConfig.BaseURL,
+		model:            vllmConfig.Model,
+		maxResponseBytes: maxResponseBytes,
 		httpClient: &http.Client{
 			Timeout: timeout,
 		},
@@ -101,15 +107,9 @@ func (b *VLLMOmniBackend) GenerateImage(ctx context.Context, req *GenerateReques
 		_ = resp.Body.Close()
 	}()
 
-	// Read response body
-	respBody, err := io.ReadAll(resp.Body)
+	respBody, err := readImageGenResponse(resp, b.maxResponseBytes)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	// Check for errors
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("request failed with status %d: %s", resp.StatusCode, string(respBody))
+		return nil, err
 	}
 
 	// Parse response

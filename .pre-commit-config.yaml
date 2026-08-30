@@ -47,6 +47,7 @@ repos:
         name: md fmt
         entry: .venv-agent/bin/python tools/agent/scripts/precommit_tool.py markdown
         language: system
+        require_serial: true
         files: \.md$
         exclude: ^(node_modules/|website/node_modules/|dashboard/frontend/node_modules/|dashboard/wizmap/node_modules/|bench/|e2e/config/models/|models/|vsr/|website/docs/api/crd-reference\.md$|CLAUDE\.md$)
 

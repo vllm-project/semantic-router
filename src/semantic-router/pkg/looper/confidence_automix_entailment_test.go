@@ -206,15 +206,20 @@ func TestPerformAutoMixEntailment_ClientCachedPerURL(t *testing.T) {
 	defer server.Close()
 	t.Cleanup(automixVerifierCacheReset)
 
-	c1 := getAutoMixVerifierClient(server.URL, 0)
-	c2 := getAutoMixVerifierClient(server.URL, 0)
+	c1 := getAutoMixVerifierClient(server.URL, 0, 0)
+	c2 := getAutoMixVerifierClient(server.URL, 0, 0)
 	if c1 != c2 {
 		t.Error("expected getAutoMixVerifierClient to return the same client for repeated (url, timeout) tuples")
 	}
 
-	c3 := getAutoMixVerifierClient(server.URL, 30)
+	c3 := getAutoMixVerifierClient(server.URL, 30, 0)
 	if c3 == c1 {
 		t.Error("expected a distinct client when timeout differs")
+	}
+
+	c4 := getAutoMixVerifierClient(server.URL, 30, 1024)
+	if c4 == c3 {
+		t.Error("expected a distinct client when response limit differs")
 	}
 }
 

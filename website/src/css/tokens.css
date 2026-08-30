@@ -33,11 +33,31 @@
   --site-hover-border-strong: rgba(48, 162, 255, 0.52);
   --site-hover-glow: 0 0 0 1px rgba(48, 162, 255, 0.2), 0 14px 32px rgba(48, 162, 255, 0.14);
   --site-hover-inset: inset 0 0 0 1px rgba(48, 162, 255, 0.18);
+  /* Hover ladder. One hue — brand blue — at three weights, chosen by the role
+   * of the thing being hovered, never by which component happens to own it:
+   *   chrome  navbar, sidebar, dropdown and table rows. Lightest, so it reads
+   *           as a pointer cue and never competes with the active row.
+   *   row     list rows inside content (--site-hover-row-bg, above).
+   *   surface cards, chips, pills, secondary buttons
+   *           (--site-hover-surface-bg + --site-hover-border, above).
+   * Solid fills are the separate --site-cta-* tier below. */
+  --site-hover-chrome-bg: rgba(48, 162, 255, 0.08);
+  --site-hover-subtle-bg: rgba(48, 162, 255, 0.05);
+  /* A step deeper than --site-accent-strong (#0876c9), which only reached
+   * 4.1:1 against its own hover tint — under AA for the small caps these
+   * labels use. This clears 5.1:1 on every light-mode hover surface. */
+  --site-hover-text: #0a63a8;
+  /* Primary CTA. The one filled control on the site: solid brand blue, matching
+   * the hero's "Try the Playground". Light mode drops to the deep blue so white
+   * label text clears 4.5:1; dark mode keeps the bright blue with dark ink. */
+  --site-cta-bg: #0876c9;
+  --site-cta-bg-hover: #0a6ab3;
+  --site-cta-text: #ffffff;
+  --site-cta-border: #0876c9;
+  --site-cta-border-hover: #0a6ab3;
+  --site-cta-shadow: 0 12px 28px rgba(8, 118, 201, 0.24);
   --site-gradient-text: linear-gradient(135deg, #75c5ff 0%, #30a2ff 62%, #0876c9 100%);
-  --site-accent-indigo: #818cf8;
-  --site-accent-violet: #a78bfa;
   --site-glow-blue-soft: rgba(48, 162, 255, 0.14);
-  --site-glow-violet-soft: rgba(124, 58, 237, 0.16);
   /* Neutral ladder: bg-alt < surface-alt < bg < surface < raised. */
   --site-bg: #f6f8fb;
   --site-bg-alt: #eef2f7;
@@ -68,7 +88,7 @@
   --site-body-wash: radial-gradient(circle at top, rgba(15, 23, 42, 0.035), transparent 30%),
     linear-gradient(180deg, #ffffff 0%, var(--site-bg) 42%, var(--site-bg-alt) 100%);
   --site-dropdown-bg: rgba(251, 252, 254, 0.96);
-  --site-menu-hover: rgba(17, 17, 17, 0.06);
+  --site-menu-hover: var(--site-hover-chrome-bg);
   --site-table-header-bg: rgba(17, 17, 17, 0.04);
   --site-table-stripe-bg: rgba(17, 17, 17, 0.02);
   --site-admonition-bg: rgba(17, 17, 17, 0.025);
@@ -81,7 +101,6 @@
   --tech-text-primary: var(--site-text-strong);
   --tech-text-secondary: var(--site-muted-bright);
   --tech-primary-blue: var(--site-accent-strong);
-  --tech-accent-purple: var(--site-accent-violet);
   --tech-shadow: var(--site-shadow-soft);
   /* Page geometry. 1536 = rail 288 + rail-gap 110 + measure 736 +
    * column-gap 130 + toc 272, so the docs row fills the frame exactly. */
@@ -210,7 +229,7 @@ html[data-theme='light'],
   --site-body-wash: radial-gradient(circle at top, rgba(15, 23, 42, 0.035), transparent 30%),
     linear-gradient(180deg, #ffffff 0%, var(--site-bg) 42%, var(--site-bg-alt) 100%);
   --site-dropdown-bg: rgba(251, 252, 254, 0.96);
-  --site-menu-hover: rgba(17, 17, 17, 0.06);
+  --site-menu-hover: var(--site-hover-chrome-bg);
   --site-table-header-bg: rgba(17, 17, 17, 0.04);
   --site-table-stripe-bg: rgba(17, 17, 17, 0.02);
   --site-admonition-bg: rgba(17, 17, 17, 0.025);
@@ -270,6 +289,15 @@ html[data-theme='dark'],
   --site-hover-surface-bg: linear-gradient(135deg, rgba(48, 162, 255, 0.14), rgba(8, 118, 201, 0.05));
   --site-hover-surface-bg-soft: linear-gradient(180deg, rgba(48, 162, 255, 0.12), rgba(48, 162, 255, 0.03));
   --site-hover-glow: 0 0 0 1px rgba(48, 162, 255, 0.26), 0 16px 36px rgba(48, 162, 255, 0.14);
+  --site-hover-chrome-bg: rgba(48, 162, 255, 0.1);
+  --site-hover-subtle-bg: rgba(48, 162, 255, 0.06);
+  --site-hover-text: #75c5ff;
+  --site-cta-bg: #30a2ff;
+  --site-cta-bg-hover: #75c5ff;
+  --site-cta-text: #04121f;
+  --site-cta-border: #30a2ff;
+  --site-cta-border-hover: #75c5ff;
+  --site-cta-shadow: 0 14px 32px rgba(48, 162, 255, 0.24);
   --site-code-bg: #111113;
   --site-sidebar-bg: rgba(24, 24, 27, 0.94);
   --site-toc-bg: rgba(24, 24, 27, 0.96);
@@ -277,7 +305,7 @@ html[data-theme='dark'],
   --site-body-wash: radial-gradient(circle at top, rgba(255, 255, 255, 0.03), transparent 32%),
     linear-gradient(180deg, #09090b 0%, var(--site-bg) 42%, var(--site-bg-alt) 100%);
   --site-dropdown-bg: rgba(24, 24, 27, 0.97);
-  --site-menu-hover: rgba(255, 255, 255, 0.06);
+  --site-menu-hover: var(--site-hover-chrome-bg);
   --site-table-header-bg: rgba(255, 255, 255, 0.045);
   --site-table-stripe-bg: rgba(255, 255, 255, 0.025);
   --site-admonition-bg: rgba(255, 255, 255, 0.035);

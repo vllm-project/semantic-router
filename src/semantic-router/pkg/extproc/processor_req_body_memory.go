@@ -1,21 +1,16 @@
 package extproc
 
 import (
-	"encoding/json"
 	"fmt"
-	"strings"
 
-	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
-	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
-	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
 	httputil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 )
 
@@ -24,11 +19,10 @@ import (
 func (r *OpenAIRouter) handleMemoryRetrieval(
 	ctx *RequestContext,
 	userContent string,
-	requestBody []byte,
-	openAIRequest *openai.ChatCompletionNewParams,
-) ([]byte, error) {
+	request *llmprotocol.Request,
+) error {
 	if requestBypassesRouting(ctx) {
-		return requestBody, nil
+		return nil
 	}
 	ctx.MemoryBackend = r.Config.Memory.Backend
 	if ctx.MemoryBackend == "" {
@@ -36,19 +30,19 @@ func (r *OpenAIRouter) handleMemoryRetrieval(
 	}
 	memoryPluginConfig, shouldRetrieve := r.resolveMemoryPluginConfig(ctx)
 	if !shouldRetrieve {
-		return requestBody, nil
+		return nil
 	}
 	store := r.getMemoryStore()
 	if store == nil || !store.IsEnabled() {
 		logging.Debugf("Memory: Store not available or disabled, skipping retrieval")
 		recordMemoryOutcome(ctx, "unavailable", "store_unavailable", true)
-		return requestBody, nil
+		return nil
 	}
 
 	logging.Debugf("Memory: retrieval flow query=%s", logging.ContentDescriptor(userContent))
-	searchQuery, userID, shouldSearch := r.prepareMemorySearchQuery(ctx, userContent, openAIRequest)
+	searchQuery, userID, shouldSearch := r.prepareMemorySearchQuery(ctx, userContent, request)
 	if !shouldSearch {
-		return requestBody, nil
+		return nil
 	}
 	retrieveOpts := r.buildMemoryRetrieveOptions(memoryPluginConfig, searchQuery, userID)
 	memories, err := store.Retrieve(ctx.TraceContext, retrieveOpts)
@@ -58,7 +52,7 @@ func (r *OpenAIRouter) handleMemoryRetrieval(
 			userID, ctx.VSRSelectedDecisionName, logging.ContentDescriptor(searchQuery), err)
 		// The caller records this error in the stack log. Do not propagate the
 		// provider's free-form text because it may echo tenant content or secrets.
-		return requestBody, fmt.Errorf("memory retrieval failed (error_class=%T)", err)
+		return fmt.Errorf("memory retrieval failed (error_class=%T)", err)
 	}
 	retrievedCount := len(memories)
 	memories = r.filterRetrievedMemories(memoryPluginConfig, memories, userID)
@@ -68,9 +62,10 @@ func (r *OpenAIRouter) handleMemoryRetrieval(
 			reason = "filtered"
 		}
 		recordMemoryOutcome(ctx, "missing", reason, false)
-		return requestBody, nil
+		return nil
 	}
-	return r.injectRetrievedMemories(ctx, requestBody, memories), nil
+	r.injectRetrievedMemories(ctx, request, memories)
+	return nil
 }
 
 func (r *OpenAIRouter) resolveMemoryPluginConfig(
@@ -123,7 +118,7 @@ func (r *OpenAIRouter) resolveMemoryPluginConfig(
 func (r *OpenAIRouter) prepareMemorySearchQuery(
 	ctx *RequestContext,
 	userContent string,
-	openAIRequest *openai.ChatCompletionNewParams,
+	request *llmprotocol.Request,
 ) (string, string, bool) {
 	if !ShouldSearchMemory(ctx, userContent) {
 		logging.Debugf("Memory: skipping search (query type not suitable)")
@@ -131,7 +126,7 @@ func (r *OpenAIRouter) prepareMemorySearchQuery(
 		return "", "", false
 	}
 
-	history := r.extractConversationHistory(openAIRequest)
+	history := r.extractConversationHistory(request)
 	searchQuery, err := BuildSearchQuery(ctx.TraceContext, history, userContent, r.Config)
 	if err != nil {
 		logging.Warnf("Memory: Query rewriting failed, using original query (error_class=%T)", err)
@@ -151,19 +146,19 @@ func (r *OpenAIRouter) prepareMemorySearchQuery(
 }
 
 func (r *OpenAIRouter) extractConversationHistory(
-	openAIRequest *openai.ChatCompletionNewParams,
+	request *llmprotocol.Request,
 ) []ConversationMessage {
-	var messagesJSON []byte
-	if openAIRequest.Messages != nil {
-		messagesJSON, _ = json.Marshal(openAIRequest.Messages)
+	if request == nil {
+		return nil
 	}
-
-	history, err := ExtractConversationHistory(messagesJSON)
-	if err != nil {
-		logging.Warnf("Memory: Failed to extract conversation history: %v", err)
-		return []ConversationMessage{}
+	history := make([]ConversationMessage, 0, len(request.Messages))
+	for _, message := range request.Messages {
+		text := semanticText(message.Content)
+		if text == "" {
+			continue
+		}
+		history = append(history, ConversationMessage{Role: string(message.Role), Content: text})
 	}
-
 	return history
 }
 
@@ -233,26 +228,26 @@ func (r *OpenAIRouter) filterRetrievedMemories(
 
 func (r *OpenAIRouter) injectRetrievedMemories(
 	ctx *RequestContext,
-	requestBody []byte,
+	request *llmprotocol.Request,
 	memories []*memory.RetrieveResult,
-) []byte {
+) {
 	ctx.MemoryContext = FormatMemoriesAsContext(memories)
 	if ctx.MemoryContext == "" {
 		recordMemoryOutcome(ctx, "missing", "empty_context", false)
-		return requestBody
+		return
 	}
-
-	injectedBody, messageIndex, err := injectMemoryMessagesWithIndex(
-		requestBody,
-		ctx.MemoryContext,
-	)
-	if err != nil {
-		logging.Warnf("Memory: Failed to inject memory context: %v", err)
+	if request == nil {
 		recordMemoryOutcome(ctx, "unavailable", "injection_error", true)
 		ctx.MemoryContext = ""
-		return requestBody
+		return
 	}
-
+	memoryMessage := llmprotocol.Message{
+		Role:    llmprotocol.RoleUser,
+		Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: ctx.MemoryContext}},
+	}
+	request.Messages = append([]llmprotocol.Message{memoryMessage}, request.Messages...)
+	request.Generation++
+	messageIndex := 0
 	ctx.MemoryResultCount = len(memories)
 	if ctx.MemoryMessageIndexes == nil {
 		ctx.MemoryMessageIndexes = make(map[int]struct{})
@@ -261,7 +256,6 @@ func (r *OpenAIRouter) injectRetrievedMemories(
 	recordMemoryOutcome(ctx, "used", "injected", false)
 	logging.Debugf("Memory: Injected %d memories (decision=%s, context_len=%d)",
 		len(memories), ctx.VSRSelectedDecisionName, len(ctx.MemoryContext))
-	return injectedBody
 }
 
 func recordMemoryOutcome(ctx *RequestContext, status, reason string, failOpen bool) {
@@ -278,78 +272,9 @@ func (r *OpenAIRouter) getMemoryStore() memory.Store {
 	return r.MemoryStore
 }
 
-// getUserIDFromContext extracts user ID from the trusted auth header.
+// getUserIDFromContext returns the Router-authenticated tenant user.
 func (r *OpenAIRouter) getUserIDFromContext(ctx *RequestContext) string {
 	return extractUserID(ctx)
-}
-
-// buildRateLimitContext constructs a ratelimit.Context from the request context.
-func (r *OpenAIRouter) buildRateLimitContext(ctx *RequestContext, selectedModel string) ratelimit.Context {
-	userID := ctx.Headers[r.Config.Authz.Identity.GetUserIDHeader()]
-	groupsStr := ctx.Headers[r.Config.Authz.Identity.GetUserGroupsHeader()]
-	var groups []string
-	if groupsStr != "" {
-		for _, g := range strings.Split(groupsStr, ",") {
-			g = strings.TrimSpace(g)
-			if g != "" {
-				groups = append(groups, g)
-			}
-		}
-	}
-
-	return ratelimit.Context{
-		UserID:     userID,
-		Groups:     groups,
-		Model:      selectedModel,
-		Headers:    ctx.Headers,
-		TokenCount: ctx.VSRContextTokenCount,
-	}
-}
-
-// createRateLimitResponse builds a 429 response with standard rate limit headers.
-func (r *OpenAIRouter) createRateLimitResponse(decision *ratelimit.Decision) *ext_proc.ProcessingResponse {
-	retryAfterSec := "60"
-	if decision != nil && decision.RetryAfter > 0 {
-		retryAfterSec = fmt.Sprintf("%d", int(decision.RetryAfter.Seconds()))
-	}
-
-	body := []byte(fmt.Sprintf(`{"error":{"message":"Rate limit exceeded. Retry after %s seconds.","type":"rate_limit_error","code":429}}`, retryAfterSec))
-
-	respHeaders := []*core.HeaderValueOption{
-		{Header: &core.HeaderValue{Key: "content-type", RawValue: []byte("application/json")}},
-		{Header: &core.HeaderValue{Key: "retry-after", RawValue: []byte(retryAfterSec)}},
-	}
-
-	if decision != nil {
-		respHeaders = append(respHeaders,
-			&core.HeaderValueOption{Header: &core.HeaderValue{
-				Key: "x-ratelimit-limit", RawValue: []byte(fmt.Sprintf("%d", decision.Limit)),
-			}},
-			&core.HeaderValueOption{Header: &core.HeaderValue{
-				Key: "x-ratelimit-remaining", RawValue: []byte(fmt.Sprintf("%d", decision.Remaining)),
-			}},
-		)
-		if !decision.ResetAt.IsZero() {
-			respHeaders = append(respHeaders, &core.HeaderValueOption{Header: &core.HeaderValue{
-				Key: "x-ratelimit-reset", RawValue: []byte(fmt.Sprintf("%d", decision.ResetAt.Unix())),
-			}})
-		}
-	}
-
-	// v0.4 keystone headers: this is the rate-limit path (#2203).
-	respHeaders = append(respHeaders, httputil.KeystoneHeaderOptions(headers.ResponsePathRateLimited)...)
-
-	return &ext_proc.ProcessingResponse{
-		Response: &ext_proc.ProcessingResponse_ImmediateResponse{
-			ImmediateResponse: &ext_proc.ImmediateResponse{
-				Status: &typev3.HttpStatus{Code: typev3.StatusCode_TooManyRequests},
-				Headers: &ext_proc.HeaderMutation{
-					SetHeaders: respHeaders,
-				},
-				Body: body,
-			},
-		},
-	}
 }
 
 // handleFastResponse returns an immediate response for the fast_response plugin.
@@ -366,27 +291,21 @@ func (r *OpenAIRouter) handleFastResponse(ctx *RequestContext, decisionName stri
 	logging.Infof("[FastResponse] Decision '%s' has fast_response plugin, returning immediate response", decisionName)
 	metrics.RecordPluginExecution("fast_response", requestDecisionStateKey(ctx), "executed", 0)
 
-	if isResponseAPIRequest(ctx) {
-		if response, ok := r.createResponseAPIFastResponse(ctx, fastCfg.Message, decisionName); ok {
-			appendRecipeHeaderToImmediateResponse(response, ctx)
-			return response
-		}
-	}
-	if ctx.ClientProtocol == config.ClientProtocolAnthropic {
-		response := createAnthropicFastResponse(
-			ctx,
-			fastCfg.Message,
-			decisionName,
-		)
-		appendRecipeHeaderToImmediateResponse(response, ctx)
-		return response
-	}
-
-	response := httputil.CreateFastResponse(
+	body, contentType, _, err := r.encodeSyntheticTextResponse(
+		ctx,
 		fastCfg.Message,
 		ctx.ExpectStreamingResponse,
-		decisionName,
 	)
+	if err != nil {
+		logging.ComponentErrorEvent("extproc", "fast_response_encode_failed", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"format":     ctx.SourceFormat,
+			"error":      err.Error(),
+		})
+		return r.createErrorResponse(500, "Fast response could not be encoded")
+	}
+	response := httputil.CreateFastResponseWithBody(body, contentType, decisionName)
+	ctx.ImmediateResponseEncoded = true
 	appendRecipeHeaderToImmediateResponse(response, ctx)
 	return response
 }

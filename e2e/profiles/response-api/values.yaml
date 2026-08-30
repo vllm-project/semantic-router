@@ -15,6 +15,12 @@ config:
           - name: test-endpoint
             endpoint: mock-vllm.default.svc.cluster.local:8000
             weight: 1
+      - name: mock/native-responses
+        api_format: responses
+        backend_refs:
+          - name: test-endpoint
+            endpoint: mock-vllm.default.svc.cluster.local:8000
+            weight: 1
   routing:
     decisions:
       - name: default_decision
@@ -29,6 +35,7 @@ config:
     signals: {}
     modelCards:
       - name: openai/gpt-oss-20b
+      - name: mock/native-responses
   global:
     router:
       strategy: priority

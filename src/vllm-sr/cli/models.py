@@ -17,9 +17,15 @@ from pydantic import (
 )
 
 from .algorithms import AlgorithmConfig, ModelRef
+from .config_contract import (
+    CLASSIFIER_TYPE_LLM,
+    CLASSIFIER_TYPE_LOCAL,
+    ClassifierSignalType,
+)
 
 RoutingStrategy = Literal["priority", "confidence"]
 LOCAL_CLASSIFIER_LABEL_COUNT = 2
+SEQUENCE_CLASSIFIER_MIN_LABEL_COUNT = 2
 PROMPT_MIN_CANDIDATES = 2
 MAX_DECISION_ANNOTATIONS = 32
 MAX_DECISION_ANNOTATION_BYTES = 4096
@@ -333,6 +339,7 @@ class EmbeddingEndpointConfig(BaseModel):
     api_key_env: Optional[str] = None
     timeout_seconds: Optional[int] = Field(default=None, ge=0)
     max_retries: Optional[int] = Field(default=None, ge=0)
+    max_response_bytes: Optional[int] = Field(default=None, ge=0)
     dimensions: Optional[int] = Field(default=None, ge=1)
 
 
@@ -487,7 +494,7 @@ class ClassifierSignal(BaseModel):
 
     name: str
     description: Optional[str] = None
-    type: Literal["local", "llm"]
+    type: ClassifierSignalType
     model: Optional[str] = None
     model_path: Optional[str] = None
     labels: List[str]
@@ -506,19 +513,42 @@ class ClassifierSignal(BaseModel):
             raise ValueError("labels must be trimmed and cannot contain ':'")
         if len(set(self.labels)) != len(self.labels):
             raise ValueError("labels cannot contain duplicates")
-        if self.type == "local" and not self.model_path:
-            raise ValueError("local classifiers require model_path")
-        if self.type == "local" and len(self.labels) != LOCAL_CLASSIFIER_LABEL_COUNT:
-            raise ValueError("local classifiers require exactly two labels")
-        if self.type == "local" and (self.model or self.instructions):
-            raise ValueError("local classifiers do not accept model or instructions")
-        if self.type == "llm" and not self.model:
-            raise ValueError("llm classifiers require model")
-        if self.type == "llm" and not self.instructions:
-            raise ValueError("llm classifiers require instructions")
-        if self.type == "llm" and (self.model_path or self.use_cpu):
-            raise ValueError("llm classifiers do not accept model_path or use_cpu")
+
+        if self.type == CLASSIFIER_TYPE_LOCAL:
+            self._validate_local()
+        elif self.type == CLASSIFIER_TYPE_LLM:
+            self._validate_llm()
+        else:
+            self._validate_sequence()
         return self
+
+    def _validate_local(self):
+        if not self.model_path:
+            raise ValueError("local classifiers require model_path")
+        if len(self.labels) != LOCAL_CLASSIFIER_LABEL_COUNT:
+            raise ValueError("local classifiers require exactly two labels")
+        if self.model or self.instructions:
+            raise ValueError("local classifiers do not accept model or instructions")
+
+    def _validate_llm(self):
+        if not self.model:
+            raise ValueError("llm classifiers require model")
+        if not self.instructions:
+            raise ValueError("llm classifiers require instructions")
+        if self.model_path or self.use_cpu:
+            raise ValueError("llm classifiers do not accept model_path or use_cpu")
+
+    def _validate_sequence(self):
+        if not self.model:
+            raise ValueError("sequence_classifier classifiers require model")
+        if len(self.labels) < SEQUENCE_CLASSIFIER_MIN_LABEL_COUNT:
+            raise ValueError(
+                "sequence_classifier classifiers require at least two labels"
+            )
+        if self.model_path or self.use_cpu or self.instructions:
+            raise ValueError(
+                "sequence_classifier classifiers do not accept model_path, use_cpu or instructions"
+            )
 
 
 class Signals(BaseModel):
@@ -1230,6 +1260,7 @@ class ImageGenPluginConfig(BaseModel):
     default_height: Optional[int] = Field(default=None, ge=1)
     max_inference_steps: Optional[int] = Field(default=None, ge=1)
     timeout_seconds: Optional[int] = Field(default=None, ge=1)
+    max_response_bytes: Optional[int] = Field(default=None, ge=0)
 
 
 class DecisionLearningAdaptationConfig(BaseModel):
@@ -1523,11 +1554,11 @@ class ModelPricing(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    currency: Optional[str] = "USD"
-    prompt_per_1m: Optional[float] = 0.0
-    cached_input_per_1m: Optional[float] = 0.0
-    cache_write_per_1m: Optional[float] = Field(default=None, ge=0)
-    completion_per_1m: Optional[float] = 0.0
+    currency: Optional[str] = Field(default="USD", pattern=r"^[A-Z]{3}$")
+    prompt_per_1m: Optional[float] = Field(default=0.0, ge=0, allow_inf_nan=False)
+    cached_input_per_1m: Optional[float] = Field(default=0.0, ge=0, allow_inf_nan=False)
+    cache_write_per_1m: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False)
+    completion_per_1m: Optional[float] = Field(default=0.0, ge=0, allow_inf_nan=False)
 
 
 class ProviderReliability(BaseModel):

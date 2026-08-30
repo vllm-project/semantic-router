@@ -53,6 +53,22 @@ func registerRAGValidationSpecs() {
 		Expect(err.Error()).To(ContainSubstring("request format is required for external API"))
 	})
 
+	It("rejects a negative external API response limit", func() {
+		cfg := &RAGPluginConfig{
+			Enabled: true,
+			Backend: "external_api",
+			BackendConfig: MustStructuredPayload(&ExternalAPIRAGConfig{
+				Endpoint:         "http://localhost:8080/search",
+				RequestFormat:    "custom",
+				MaxResponseBytes: -1,
+			}),
+		}
+
+		err := cfg.Validate()
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("max_response_bytes must be non-negative"))
+	})
+
 	It("rejects invalid similarity thresholds", func() {
 		threshold := float32(1.1)
 		cfg := &RAGPluginConfig{

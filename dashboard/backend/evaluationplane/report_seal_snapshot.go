@@ -196,15 +196,10 @@ func verifyEvidenceFileMetadata(expected sealedEvidenceFile, path string) error 
 	if err != nil || expected.SizeBytes > limit || info.Size() != expected.SizeBytes {
 		return fmt.Errorf("%w: sealed evidence file changed after publication", ErrInvalid)
 	}
-	if bundleFileVersion(info) == expected.FileVersion {
-		return nil
-	}
-
-	// Container startup may repair an unchanged private tree's ownership and
-	// permissions, which legitimately changes filesystem version metadata. Old
-	// anchors also include ctime in FileVersion. Fall back to the sealed content
-	// digest so those durable reports survive a restart without weakening the
-	// evidence identity check.
+	// Filesystem metadata is only a change hint: a same-size overwrite can keep
+	// the same inode and timestamp. The sealed digest is the trust anchor, so
+	// verify it on every read. This also lets unchanged evidence survive benign
+	// ownership or permission repair across a container restart.
 	hash := sha256.New()
 	written, hashErr := io.Copy(hash, io.LimitReader(file, limit+1))
 	if hashErr != nil || written != expected.SizeBytes || written > limit ||

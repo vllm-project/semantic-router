@@ -1,0 +1,24 @@
+{
+  "id": "message_tool_1",
+  "type": "message",
+  "role": "assistant",
+  "model": "provider-model",
+  "content": [
+    {
+      "type": "tool_use",
+      "id": "call_weather_1",
+      "name": "lookup_weather",
+      "input": {
+        "city": "Paris"
+      }
+    }
+  ],
+  "stop_reason": "tool_use",
+  "stop_sequence": null,
+  "usage": {
+    "input_tokens": 5,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 3
+  }
+}

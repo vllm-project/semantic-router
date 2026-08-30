@@ -15,7 +15,11 @@ func (HeuristicTokenCounter) CountRequest(
 	if request == nil {
 		return 0, "heuristic"
 	}
-	encoded, err := json.Marshal(request.Raw)
+	var source any = request.Raw
+	if request.Semantic != nil {
+		source = request.Semantic
+	}
+	encoded, err := json.Marshal(source)
 	if err != nil {
 		return 0, "heuristic"
 	}
@@ -47,7 +51,11 @@ func (counter CalibratedTokenCounter) CountRequest(
 	if request == nil {
 		return 0, "model_heuristic"
 	}
-	encoded, err := json.Marshal(request.Raw)
+	var source any = request.Raw
+	if request.Semantic != nil {
+		source = request.Semantic
+	}
+	encoded, err := json.Marshal(source)
 	if err != nil {
 		return HeuristicTokenCounter{}.CountRequest(model, request)
 	}

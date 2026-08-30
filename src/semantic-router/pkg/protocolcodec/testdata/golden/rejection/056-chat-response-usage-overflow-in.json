@@ -1,0 +1,20 @@
+{
+  "operation": "response",
+  "body": {
+    "id": "chat_1",
+    "object": "chat.completion",
+    "model": "provider-model",
+    "choices": [
+      {
+        "index": 0,
+        "message": {"role": "assistant", "content": "done"},
+        "finish_reason": "stop"
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 9223372036854775807,
+      "completion_tokens": 1,
+      "total_tokens": 0
+    }
+  }
+}

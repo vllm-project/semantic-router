@@ -115,6 +115,15 @@ class AgentMakeContractTests(unittest.TestCase):
         self.assertIn("run-go-lint", lint)
         self.assertIn("run-rust-lint", lint)
 
+    def test_changed_file_gate_uses_a_path_for_language_linters(self) -> None:
+        lint = target_block("agent-lint")
+
+        self.assertIn('LINT_CHANGED_FILES_PATH="$$(mktemp)"', lint)
+        self.assertEqual(
+            lint.count('--changed-files-path "$$LINT_CHANGED_FILES_PATH"'), 4
+        )
+        self.assertNotIn('--changed-files "$$CSV_FILES"', lint)
+
     def test_markdown_and_yaml_hooks_accept_changed_files_directly(self) -> None:
         self.assertEqual(
             local_hook("md-fmt")["entry"],
