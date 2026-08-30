@@ -6,25 +6,25 @@
   padding: 2rem;
   background: rgba(255, 255, 255, 0.8);
   border-radius: var(--radius-lg);
-  border: 1px solid rgba(88, 166, 255, 0.2);
+  border: 1px solid rgba(48, 162, 255, 0.2);
   backdrop-filter: blur(10px);
   transition: all 0.3s ease;
   max-width: 400px;
   margin: 0 auto;
-  box-shadow: 0 8px 32px rgba(9, 105, 218, 0.1);
+  box-shadow: 0 8px 32px rgba(8, 118, 201, 0.1);
 }
 
 .chipContainer:hover {
   transform: translateY(-4px);
-  box-shadow: 0 16px 48px rgba(9, 105, 218, 0.15);
-  border-color: rgba(88, 166, 255, 0.3);
+  box-shadow: 0 16px 48px rgba(8, 118, 201, 0.15);
+  border-color: rgba(48, 162, 255, 0.3);
 }
 
 .chipSvg {
   width: 100%;
   height: auto;
   max-width: 350px;
-  filter: drop-shadow(0 4px 16px rgba(9, 105, 218, 0.2));
+  filter: drop-shadow(0 4px 16px rgba(8, 118, 201, 0.2));
 }
 
 .chipBase {
@@ -86,10 +86,10 @@
 /* Animations */
 @keyframes chipPulse {
   0%, 100% {
-    filter: brightness(1) drop-shadow(0 0 10px rgba(88, 166, 255, 0.3));
+    filter: brightness(1) drop-shadow(0 0 10px rgba(48, 162, 255, 0.3));
   }
   50% {
-    filter: brightness(1.1) drop-shadow(0 0 20px rgba(88, 166, 255, 0.5));
+    filter: brightness(1.1) drop-shadow(0 0 20px rgba(48, 162, 255, 0.5));
   }
 }
 
