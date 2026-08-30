@@ -1203,6 +1203,11 @@ type EmbeddingEndpointConfig struct {
 	// +optional
 	MaxRetries int `json:"max_retries,omitempty"`
 
+	// MaxResponseBytes caps the size of each embedding response body.
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	MaxResponseBytes int64 `json:"max_response_bytes,omitempty"`
+
 	// Dimensions requests a provider-side output dimension when supported.
 	// +kubebuilder:validation:Minimum=1
 	// +optional

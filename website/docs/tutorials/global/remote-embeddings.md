@@ -58,12 +58,14 @@ global:
           api_key_env: EMBEDDING_API_KEY
           timeout_seconds: 10
           max_retries: 2
+          max_response_bytes: 16777216
           dimensions: 1536
 ```
 
 The Router appends `/embeddings` unless `base_url` already ends with that path.
 When both dimensions are set, `endpoint.dimensions` and
 `embedding_config.target_dimension` must match.
+`max_response_bytes` caps each provider response; omitted or `0` uses 16 MiB.
 
 Embedding signals do not change:
 
