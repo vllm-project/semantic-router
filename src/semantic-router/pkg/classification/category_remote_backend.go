@@ -61,6 +61,5 @@ func (c *categoryHTTPBackend) ClassifyWithProbabilities(ctx context.Context, tex
 		Class:         class,
 		Confidence:    confidence,
 		Probabilities: append([]float32(nil), result.Probabilities...),
-		NumClasses:    len(result.Probabilities),
 	}, nil
 }
