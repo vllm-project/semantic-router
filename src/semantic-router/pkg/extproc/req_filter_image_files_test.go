@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
@@ -112,19 +114,33 @@ func TestResolveImageFileReferencesInlinesRouterOwnedFiles(t *testing.T) {
 	}
 }
 
-func TestResolveImageFileReferencesLeavesForeignFilesUntouched(t *testing.T) {
+func TestResolveImageFileReferencesPassesThroughWithoutFileStore(t *testing.T) {
+	router := &OpenAIRouter{}
+	request, _ := decodeImageFileRequest(t, router, responsesImageFileRequest("file-provider-owned"))
+	changed, err := router.resolveImageFileReferences(request)
+	if err != nil || changed {
+		t.Fatalf("resolveImageFileReferences() = %v, %v; want false, nil", changed, err)
+	}
+	if image := firstImageContent(t, request); image.FileID != "file-provider-owned" || image.Data != "" {
+		t.Fatalf("reference was altered: %+v", image)
+	}
+}
+
+func TestResolveImageFileReferencesRejectsUnknownFiles(t *testing.T) {
 	router, _ := newImageFileRouter(t)
-	for name, candidate := range map[string]*OpenAIRouter{"unknown file": router, "no file store": {}} {
-		t.Run(name, func(t *testing.T) {
-			request, _ := decodeImageFileRequest(t, candidate, responsesImageFileRequest("file-provider-owned"))
-			changed, err := candidate.resolveImageFileReferences(request)
-			if err != nil || changed {
-				t.Fatalf("resolveImageFileReferences() = %v, %v; want false, nil", changed, err)
-			}
-			if image := firstImageContent(t, request); image.FileID != "file-provider-owned" || image.Data != "" {
-				t.Fatalf("foreign reference was altered: %+v", image)
-			}
-		})
+	request, _ := decodeImageFileRequest(t, router, responsesImageFileRequest("file_missing"))
+	_, err := router.resolveImageFileReferences(request)
+	assertImageFileError(t, err, imageFileNotFoundCode)
+	if !strings.Contains(err.Error(), "file_missing") {
+		t.Fatalf("error does not name the file: %v", err)
+	}
+}
+
+func assertImageFileError(t *testing.T, err error, code string) {
+	t.Helper()
+	var protocolError *llmprotocol.ProtocolError
+	if !errors.As(err, &protocolError) || protocolError.Code != code || protocolError.Category != llmprotocol.ErrorInvalidRequest {
+		t.Fatalf("error = %v, want invalid_request/%s", err, code)
 	}
 }
 
@@ -134,10 +150,7 @@ func TestResolveImageFileReferencesRejectsNonImageUploads(t *testing.T) {
 	request, _ := decodeImageFileRequest(t, router, responsesImageFileRequest(fileID))
 
 	_, err := router.resolveImageFileReferences(request)
-	var protocolError *llmprotocol.ProtocolError
-	if !errors.As(err, &protocolError) || protocolError.Code != "image_file_unsupported" || protocolError.Category != llmprotocol.ErrorInvalidRequest {
-		t.Fatalf("resolveImageFileReferences() error = %v, want image_file_unsupported", err)
-	}
+	assertImageFileError(t, err, imageFileUnsupportedCode)
 	if !strings.Contains(err.Error(), fileID) {
 		t.Fatalf("error does not name the file: %v", err)
 	}
@@ -177,5 +190,26 @@ func TestPrepareProviderRequestInlinesRetainedHistoryImages(t *testing.T) {
 	}
 	if request.Messages[0].Role != llmprotocol.RoleUser || request.Messages[len(request.Messages)-1].Role != llmprotocol.RoleUser {
 		t.Fatalf("unexpected message order: %+v", request.Messages)
+	}
+}
+
+// An image file rejection raised while preparing the dispatch must reach the
+// client as a 400 in its own wire format; unrelated dispatch errors keep the
+// gRPC failure path.
+func TestImageFileDispatchFailureRendersClient400(t *testing.T) {
+	router, _ := newImageFileRouter(t)
+	request, ctx := decodeImageFileRequest(t, router, responsesImageFileRequest("file_missing"))
+	_, resolveErr := router.resolveImageFileReferences(request)
+
+	immediate, err := router.imageFileDispatchFailure(resolveErr, ctx)
+	if err != nil || immediate == nil {
+		t.Fatalf("imageFileDispatchFailure() = %+v, %v", immediate, err)
+	}
+	immediate = router.encodeImmediateResponseForClient(immediate, ctx)
+	assertBodyImmediateErrorResponse(t, immediate, typev3.StatusCode_BadRequest, `uploaded file "file_missing" was not found in the router file store`)
+
+	other := errors.New("backend unavailable")
+	if immediate, err := router.imageFileDispatchFailure(other, ctx); immediate != nil || !errors.Is(err, other) {
+		t.Fatalf("unrelated error was rewritten: %+v, %v", immediate, err)
 	}
 }
