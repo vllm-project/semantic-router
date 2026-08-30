@@ -795,6 +795,7 @@ export interface ConfigSignals {
   kb?: KBSignal[]
   metadata?: MetadataSignal[]
   classifiers?: ClassifierSignal[]
+  conversation?: ConversationSignal[]
 }
 
 export interface ConfigProjections {
@@ -1168,6 +1169,23 @@ export interface StructureSignal {
   predicate?: NumericPredicate
 }
 
+export interface ConversationSource {
+  type: string
+  role?: string
+}
+
+export interface ConversationFeature {
+  type: string
+  source: ConversationSource
+}
+
+export interface ConversationSignal {
+  name: string
+  description?: string
+  feature: ConversationFeature
+  predicate?: NumericPredicate
+}
+
 export interface ComplexitySignal {
   name: string
   threshold: number
@@ -1271,6 +1289,7 @@ export type SignalType =
   | 'KB'
   | 'Metadata'
   | 'Classifier'
+  | 'Conversation'
 
 export interface DecisionFormState {
   name: string
@@ -1331,6 +1350,8 @@ export interface AddSignalFormState {
   complexity_threshold?: number
   structure_feature?: StructureFeature
   structure_predicate?: NumericPredicate
+  conversation_feature?: ConversationFeature
+  conversation_predicate?: NumericPredicate
   role?: string
   subjects?: Subject[]
   hard_candidates?: string[]

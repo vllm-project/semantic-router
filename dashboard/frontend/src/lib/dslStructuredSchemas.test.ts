@@ -94,4 +94,15 @@ describe('DSL structured field schemas', () => {
     expect(requireField(dynamicRetrieval.fields || [], 'history_window').type).toBe('number')
     expect(requireField(dynamicRetrieval.fields || [], 'weights').type).toBe('object')
   })
+
+  it('offers every conversation source type, including image_content, and non_user as a role', () => {
+    const conversationFeature = requireField(getSignalFieldSchema('conversation'), 'feature')
+    const source = requireField(conversationFeature.fields || [], 'source')
+    const sourceType = requireField(source.fields || [], 'type')
+    const role = requireField(source.fields || [], 'role')
+
+    expect(sourceType.options).toContain('image_content')
+    expect(sourceType.options).toHaveLength(6)
+    expect(role.options).toContain('non_user')
+  })
 })
