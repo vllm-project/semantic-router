@@ -294,6 +294,13 @@ func TestConfidenceEvaluator_Creation(t *testing.T) {
 			}
 		})
 	}
+
+	if got := NewConfidenceEvaluator(nil).MaxResponseBytes; got != config.DefaultMaxResponseBytes {
+		t.Fatalf("default max response bytes = %d, want %d", got, config.DefaultMaxResponseBytes)
+	}
+	if got := NewConfidenceEvaluator(&config.ConfidenceAlgorithmConfig{MaxResponseBytes: 1234}).MaxResponseBytes; got != 1234 {
+		t.Fatalf("configured max response bytes = %d, want 1234", got)
+	}
 }
 
 func TestConfidenceModelCallStreamingRequiresNoLogprobs(t *testing.T) {

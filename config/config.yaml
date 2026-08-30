@@ -767,6 +767,7 @@ routing:
           token_filter: tool_call_args
           verifier_server_url: ""
           verifier_timeout_seconds: 0
+          max_response_bytes: 0
       plugins:
         - type: hallucination
           configuration:
