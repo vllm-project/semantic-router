@@ -26,8 +26,8 @@ A routed request crosses several responsibilities:
 
 1. **Developer Experience & Ecosystem** provides the CLI, Dashboard, APIs,
    recipes, and learning path.
-2. **Enterprise & Environment** applies access, usage, lifecycle, and
-   deployment policy.
+2. **Enterprise & Environment** secures management surfaces and owns lifecycle,
+   capacity, and deployment policy.
 3. **Router Models & Inference Runtime** produces the signals used to route.
 4. **MoM & Routing** chooses models and multi-model strategies.
 5. **Agentic & Context** manages context and chooses or composes agents.
@@ -104,7 +104,7 @@ and new models should not spread engine-specific code throughout the Router.
 ### What it does not own
 
 This Workgroup produces routing intelligence; it does not choose the end-user
-MoM pool, own generic gateway forwarding, manage users and quotas, or rebuild
+MoM pool, own generic gateway forwarding, secure management surfaces, or rebuild
 the tensor engines and GPU schedulers it integrates with.
 
 ### Owned Epics
@@ -137,9 +137,10 @@ the same behavior and failure semantics.
 
 ### What it does not own
 
-This Workgroup executes access and routing policy but does not define who may
-access a model, which quota applies, which hardware is officially supported,
-how a Router Model is trained, or which MoM recipe is best.
+This Workgroup executes request-path networking and deployment-provided access
+policy, but it does not define management identity and authorization, decide
+which hardware is officially supported, train Router Models, or choose the best
+MoM recipe.
 
 ### Owned Epics
 
@@ -151,24 +152,25 @@ how a Router Model is trained, or which MoM recipe is best.
 ## [Enterprise & Environment](https://github.com/vllm-project/semantic-router/issues/2968)
 
 > **Mission:** Make vLLM Semantic Router production-grade across supported
-> organizations, environments, and hardware.
+> environments and hardware.
 
-![Identity, access, quotas, production lifecycle controls, observability, and supported environments form one production platform](/img/blog/vllm/2026-08-24-workgroups-invitation/workgroups/enterprise-environment.svg)
+![Management security, production lifecycle controls, observability, capacity planning, and supported environments form one production platform](/img/blog/vllm/2026-08-24-workgroups-invitation/workgroups/enterprise-environment.svg)
 
 ### The problem
 
-Production users need clear answers to practical questions: Who can call each
-model? How much can they use? What changed? Is the system healthy? Can a model,
-recipe, or Router upgrade be rolled out and reversed safely? Which deployment
-path is maintained, and which components does it own? The answers must remain
-consistent across deployment environments.
+Production operators need clear answers to practical questions: Which
+management surfaces are protected, and by which provider-backed identity? What
+changed? Is the system healthy? Can a model, recipe, or Router upgrade be rolled
+out and reversed safely? Which deployment path is maintained, and which
+components does it own? The answers must remain consistent across deployment
+environments.
 
 ### What this Workgroup owns
 
-- Users, organizations, serving identities, model access, API keys, quotas, and
-  usage accounting.
-- Tenant isolation, audit, reliability, scalability, monitoring, and
-  diagnostics.
+- Management authentication, provider-backed identity integration, route-bound
+  authorization, input and credential boundaries, and durable audit.
+- Reliability, scalability, monitoring, diagnostics, and the existing Insights
+  and operational surfaces.
 - Model, recipe, configuration, and vLLM-SR activation, rollout, and rollback.
 - Workload simulation and capacity planning that connect observed traffic,
   routing behavior, serving topology, and calibrated hardware profiles to
@@ -178,14 +180,19 @@ consistent across deployment environments.
 
 ### What it does not own
 
-This Workgroup does not promise a public hosted-service SLA, expose private
-infrastructure or credentials, define model quality, own evaluation standards,
-or implement networking protocols. It supplies reusable open-source production
-capabilities rather than publishing private product plans.
+This Workgroup does not build organization, team, or project administration;
+virtual API keys; tenant quotas, token rate limits, budgets, billing, or usage
+settlement. It also does not plan routing analytics beyond the existing
+Insights and operational surfaces.
+
+It does not promise a public hosted-service SLA, expose private infrastructure
+or credentials, define model quality, own evaluation standards, or implement
+networking protocols. It supplies reusable open-source production capabilities
+rather than publishing private product plans.
 
 ### Owned Epics
 
-- [Build multi-tenant inference access, quotas, and usage controls](https://github.com/vllm-project/semantic-router/issues/2960)
+- [Secure management, identity, and audit boundaries](https://github.com/vllm-project/semantic-router/issues/3166)
 - [Build versioned configuration activation and rollback](https://github.com/vllm-project/semantic-router/issues/2326)
 - [Define deployment architecture and reference stacks across environments and hardware](https://github.com/vllm-project/semantic-router/issues/3043)
 - [Establish production observability and supported-environment qualification](https://github.com/vllm-project/semantic-router/issues/2993)
@@ -262,6 +269,7 @@ policy, and quality standards owned by other Workgroups.
 ### Owned Epics
 
 - [Build agent-assisted vLLM-SR deployment, recipe, evaluation, and tuning workflows](https://github.com/vllm-project/semantic-router/issues/2977)
+- [Make Dashboard APIs and editing workflows contract-driven](https://github.com/vllm-project/semantic-router/issues/3167)
 - [Reduce time to the first successful routed request](https://github.com/vllm-project/semantic-router/issues/2690)
 - [Publish maintained reference recipes and end-to-end tutorials](https://github.com/vllm-project/semantic-router/issues/2334)
 

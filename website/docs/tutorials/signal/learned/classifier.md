@@ -58,9 +58,14 @@ routing:
 ```
 
 LLM classifiers reference a named `global.model_catalog.external` entry and
-add `instructions`. The runtime fixes temperature, output schema, token bounds,
-and exact-label validation. Classifier leaves are the only decision predicates
-that accept `on_error`; failures expose the bounded
+add `instructions`. The runtime fixes temperature, output schema,
+exact-label validation, and a 1 MiB default response limit. Set
+`max_response_bytes` on the external model entry to override that limit.
+The model must report a score for every declared
+label; each score must be between `0` and `1`, and the complete distribution
+must sum to approximately `1.0`. These are model-reported confidence scores,
+not calibrated classifier probabilities. Classifier leaves are the only
+decision predicates that accept `on_error`; failures expose the bounded
 `classifier_evaluation_failed` code in eval/replay diagnostics.
 
 This condition-level `on_error` (`no_match` or `match`) decides what the

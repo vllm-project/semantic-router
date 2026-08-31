@@ -31,7 +31,6 @@ const (
 	DecisionPluginRouterReplay       = "router_replay"
 	DecisionPluginMemory             = "memory"
 	DecisionPluginRAG                = "rag"
-	DecisionPluginImageGen           = "image_gen"
 	DecisionPluginFastResponse       = "fast_response"
 	DecisionPluginRequestParams      = "request_params"
 	DecisionPluginToolSelection      = "tool_selection"
@@ -66,7 +65,6 @@ var supportedDecisionPluginTypes = []string{
 	DecisionPluginFastResponse,
 	DecisionPluginHallucination,
 	DecisionPluginHeaderMutation,
-	DecisionPluginImageGen,
 	DecisionPluginMemory,
 	DecisionPluginRAG,
 	DecisionPluginRequestParams,

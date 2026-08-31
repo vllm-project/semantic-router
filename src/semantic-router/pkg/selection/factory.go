@@ -477,19 +477,21 @@ func Initialize(cfg *ModelSelectionConfig, modelConfig map[string]config.ModelPa
 		WithEmbeddingFunc(embed, EmbeddingConfig{})
 
 	// Create all selectors and register globally
-	GlobalRegistry = factory.CreateAll()
+	registry := factory.CreateAll()
+	SetGlobalRegistry(registry)
 
 	logging.ComponentEvent("selection", "selection_registry_initialized", map[string]interface{}{
-		"selector_count": len(GlobalRegistry.selectors),
+		"selector_count": len(registry.selectors),
 	})
 }
 
 // GetSelector returns a selector for the specified method from global registry
 func GetSelector(method SelectionMethod) Selector {
-	selector, ok := GlobalRegistry.Get(method)
+	registry := GetGlobalRegistry()
+	selector, ok := registry.Get(method)
 	if !ok {
 		// Fallback to static
-		selector, _ = GlobalRegistry.Get(MethodStatic)
+		selector, _ = registry.Get(MethodStatic)
 	}
 	return selector
 }

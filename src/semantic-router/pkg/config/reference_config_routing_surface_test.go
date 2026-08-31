@@ -155,7 +155,6 @@ func assertReferenceNestedPluginCoverage(t testingT, pluginsByType map[string][]
 	assertReferenceMemoryPluginCoverage(t, pluginsByType["memory"])
 	assertReferenceHeaderMutationCoverage(t, pluginsByType["header_mutation"])
 	assertReferenceRAGPluginCoverage(t, pluginsByType["rag"])
-	assertReferenceImageGenPluginCoverage(t, pluginsByType["image_gen"])
 }
 
 func assertReferenceMemoryPluginCoverage(t testingT, plugins []map[string]interface{}) {
@@ -195,22 +194,6 @@ func assertReferenceRAGPluginCoverage(t testingT, plugins []map[string]interface
 	assertMapCoversStructFields(t, mustMapAt(t, ragByBackend["openai"], "backend_config"), reflect.TypeOf(OpenAIRAGConfig{}), "rag.backend_config(openai)")
 	assertMapCoversStructFields(t, mustMapAt(t, ragByBackend["vectorstore"], "backend_config"), reflect.TypeOf(VectorStoreRAGConfig{}), "rag.backend_config(vectorstore)")
 	assertMapCoversStructFields(t, mustMapAt(t, ragByBackend["hybrid"], "backend_config"), reflect.TypeOf(HybridRAGConfig{}), "rag.backend_config(hybrid)")
-}
-
-func assertReferenceImageGenPluginCoverage(t testingT, plugins []map[string]interface{}) {
-	configs := collectChildMapsFromSlice(t, plugins, "configuration", "plugins(image_gen)")
-	imageGenByBackend := mapByStringField(t, configs, "backend", "image_gen")
-
-	assertSliceUnionCoversStructFields(t, configs, reflect.TypeOf(ImageGenPluginConfig{}), "routing.decisions[].plugins[type=image_gen].configuration")
-	assertMapCoversStructFields(t, mustMapAt(t, imageGenByBackend["openai"], "backend_config"), reflect.TypeOf(OpenAIImageGenConfig{}), "image_gen.backend_config(openai)")
-	assertMapCoversStructFields(t, mustMapAt(t, imageGenByBackend["vllm_omni"], "backend_config"), reflect.TypeOf(VLLMOmniImageGenConfig{}), "image_gen.backend_config(vllm_omni)")
-	assertMapCoversStructFields(t, mustMapAt(t, imageGenByBackend["openai"], "modality_detection"), reflect.TypeOf(ModalityDetectionConfig{}), "image_gen.modality_detection")
-	assertMapCoversStructFields(
-		t,
-		mustMapAt(t, imageGenByBackend["openai"], "modality_detection", "classifier"),
-		reflect.TypeOf(ModalityClassifierConfig{}),
-		"image_gen.modality_detection.classifier",
-	)
 }
 
 func assertDecisionRuleCompositionInReferenceConfig(t testingT, decisions []interface{}) {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -399,7 +400,7 @@ func TestSignalReadinessAllowsContrastiveJailbreakWithoutPromptGuard(t *testing.
 			},
 		},
 		contrastiveJailbreakClassifiers: map[string]*ContrastiveJailbreakClassifier{
-			rule.Name: &ContrastiveJailbreakClassifier{},
+			rule.Name: {},
 		},
 	}
 
@@ -434,4 +435,219 @@ func newHallucinationLifecycleConfig(backend string) *config.RouterConfig {
 			}},
 		},
 	}
+}
+
+func TestClassifierCloseClosesMCPCategoryClient(t *testing.T) {
+	mcpClassifier, mockClient, _ := newTestMCPCategoryClassifier()
+	mcpClassifier.client = mockClient
+	mockClient.connected = true
+
+	classifier, err := newClassifierWithOptions(
+		&config.RouterConfig{},
+		withMCPCategory(mcpClassifier, mcpClassifier),
+	)
+	if err != nil {
+		t.Fatalf("newClassifierWithOptions() error = %v", err)
+	}
+
+	if err := classifier.Close(); err != nil {
+		t.Fatalf("Classifier.Close() error = %v", err)
+	}
+	if mockClient.connected {
+		t.Fatal("Classifier.Close() did not close the MCP category classifier's client; it leaks on every router reload")
+	}
+}
+
+type connectingMCPInitializer struct {
+	connected bool
+	closes    int
+	initiated chan struct{}
+}
+
+func newConnectingMCPInitializer() *connectingMCPInitializer {
+	return &connectingMCPInitializer{initiated: make(chan struct{})}
+}
+
+func (i *connectingMCPInitializer) Init(*config.RouterConfig) error {
+	i.connected = true
+	close(i.initiated)
+	return nil
+}
+
+func (i *connectingMCPInitializer) Close() error {
+	i.connected = false
+	i.closes++
+	return nil
+}
+
+func (i *connectingMCPInitializer) state() (connected bool, closes int) {
+	return i.connected, i.closes
+}
+
+type failAfterInitializer struct {
+	waitFor <-chan struct{}
+	raced   bool
+}
+
+func (i *failAfterInitializer) Init(string, bool, int) error {
+	select {
+	case <-i.waitFor:
+	case <-time.After(5 * time.Second):
+		i.raced = true
+	}
+	return errors.New("pii initializer failed")
+}
+
+func TestInitializeRuntimeReleasesAcquiredResourcesWhenALaterTaskFails(t *testing.T) {
+	mcpInitializer := newConnectingMCPInitializer()
+	piiInitializer := &failAfterInitializer{waitFor: mcpInitializer.initiated}
+
+	classifier := &Classifier{
+		Config: &config.RouterConfig{
+			InlineModels: config.InlineModels{
+				Classifier: config.Classifier{
+					MCPCategoryModel: config.MCPCategoryModel{Enabled: true},
+					PIIModel: config.PIIModel{
+						ModelID:        "models/mmbert32k-pii-detector-merged",
+						PIIMappingPath: "models/mmbert32k-pii-detector-merged/pii_type_mapping.json",
+					},
+				},
+			},
+			IntelligentRouting: config.IntelligentRouting{
+				Decisions: []config.Decision{{
+					Name: "guarded-route",
+					Rules: config.RuleNode{Operator: "OR", Conditions: []config.RuleNode{
+						{Type: config.SignalTypeDomain, Name: "billing"},
+						{Type: config.SignalTypePII, Name: "contains_pii"},
+					}},
+				}},
+			},
+		},
+		CategoryMapping:        &CategoryMapping{CategoryToIdx: map[string]int{"billing": 0, "support": 1}},
+		PIIMapping:             &PIIMapping{LabelToIdx: map[string]int{"EMAIL_ADDRESS": 0, "PHONE_NUMBER": 1}},
+		mcpCategoryInitializer: mcpInitializer,
+		piiInitializer:         piiInitializer,
+	}
+
+	err := classifier.InitializeRuntime()
+	if err == nil {
+		t.Fatal("InitializeRuntime() = nil, want the PII initializer's error")
+	}
+
+	if piiInitializer.raced {
+		t.Fatal("the PII task gave up waiting for the MCP task, so this run never produced a half-initialized classifier")
+	}
+	connected, closes := mcpInitializer.state()
+	if closes == 0 {
+		t.Fatal("InitializeRuntime() left the MCP category connection open after failing;" +
+			" the caller discards the classifier, so it leaks on every failed build")
+	}
+	if connected {
+		t.Fatal("MCP category initializer reports a live connection after rollback")
+	}
+	if closes != 1 {
+		t.Fatalf("MCP category initializer closed %d times, want exactly 1", closes)
+	}
+}
+
+func TestRecipeClassifiersInitializeRuntimeRollsBackEarlierRecipes(t *testing.T) {
+	firstMCP := newConnectingMCPInitializer()
+	secondMCP := newConnectingMCPInitializer()
+	failing := &failAfterInitializer{waitFor: firstMCP.initiated}
+
+	first := recipeClassifierWithMCP(firstMCP, nil)
+	second := recipeClassifierWithMCP(secondMCP, failing)
+	set := &RecipeClassifiers{
+		byRecipe: map[config.RecipeName]*Classifier{"first": first, "second": second},
+		order:    []config.RecipeName{"first", "second"},
+	}
+
+	if err := set.InitializeRuntime(); err == nil {
+		t.Fatal("InitializeRuntime() = nil, want the second recipe's error")
+	}
+
+	if failing.raced {
+		t.Fatal("the failing recipe never observed the first recipe connecting, so no earlier recipe was left initialized")
+	}
+	connected, closes := firstMCP.state()
+	if closes == 0 {
+		t.Fatal("the first recipe's MCP connection survived the second recipe's failure;" +
+			" the caller discards the whole set, so it leaks on every failed build")
+	}
+	if connected {
+		t.Fatal("the first recipe reports a live MCP connection after rollback")
+	}
+	if closes != 1 {
+		t.Fatalf("the first recipe's MCP initializer closed %d times, want exactly 1", closes)
+	}
+	if _, closes := secondMCP.state(); closes != 1 {
+		t.Fatalf("the failing recipe's MCP initializer closed %d times, want exactly 1", closes)
+	}
+}
+
+func TestRecipeClassifiersCloseClosesEveryRecipe(t *testing.T) {
+	defaultMCP := newConnectingMCPInitializer()
+	otherMCP := newConnectingMCPInitializer()
+	set := &RecipeClassifiers{
+		byRecipe: map[config.RecipeName]*Classifier{
+			config.DefaultRecipeName: recipeClassifierWithMCP(defaultMCP, nil),
+			"other":                  recipeClassifierWithMCP(otherMCP, nil),
+		},
+		order: []config.RecipeName{config.DefaultRecipeName, "other"},
+	}
+
+	if err := set.InitializeRuntime(); err != nil {
+		t.Fatalf("InitializeRuntime() error = %v", err)
+	}
+	if err := set.Close(); err != nil {
+		t.Fatalf("RecipeClassifiers.Close() error = %v", err)
+	}
+
+	for name, initializer := range map[string]*connectingMCPInitializer{
+		"default": defaultMCP,
+		"other":   otherMCP,
+	} {
+		connected, closes := initializer.state()
+		if closes != 1 {
+			t.Errorf("%s recipe's MCP initializer closed %d times, want exactly 1", name, closes)
+		}
+		if connected {
+			t.Errorf("%s recipe still reports a live MCP connection after Close", name)
+		}
+	}
+}
+
+func recipeClassifierWithMCP(mcp MCPCategoryInitializer, pii *failAfterInitializer) *Classifier {
+	cfg := &config.RouterConfig{
+		InlineModels: config.InlineModels{
+			Classifier: config.Classifier{
+				MCPCategoryModel: config.MCPCategoryModel{Enabled: true},
+			},
+		},
+		IntelligentRouting: config.IntelligentRouting{
+			Decisions: []config.Decision{{
+				Name: "guarded-route",
+				Rules: config.RuleNode{Operator: "OR", Conditions: []config.RuleNode{
+					{Type: config.SignalTypeDomain, Name: "billing"},
+				}},
+			}},
+		},
+	}
+	classifier := &Classifier{
+		Config:                 cfg,
+		CategoryMapping:        &CategoryMapping{CategoryToIdx: map[string]int{"billing": 0, "support": 1}},
+		mcpCategoryInitializer: mcp,
+	}
+
+	if pii != nil {
+		cfg.PIIModel = config.PIIModel{
+			ModelID:        "models/mmbert32k-pii-detector-merged",
+			PIIMappingPath: "models/mmbert32k-pii-detector-merged/pii_type_mapping.json",
+		}
+		cfg.Decisions[0].Rules.Conditions = append(cfg.Decisions[0].Rules.Conditions,
+			config.RuleNode{Type: config.SignalTypePII, Name: "contains_pii"})
+		classifier.PIIMapping = &PIIMapping{LabelToIdx: map[string]int{"EMAIL_ADDRESS": 0, "PHONE_NUMBER": 1}}
+		classifier.piiInitializer = pii
+	}
+	return classifier
 }

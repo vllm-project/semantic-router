@@ -7,6 +7,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/imageurl"
 )
 
@@ -87,7 +88,10 @@ func (req IntentRequest) resolveSignalInput() (intentSignalInput, error) {
 	text := strings.TrimSpace(rawText)
 
 	toolDefinitionCount := len(req.Tools) + len(req.Functions)
+	toolChoiceFacts := classification.ResolveOpenAIToolChoiceFacts(req.ToolChoice, req.FunctionCall)
 	if input, ok := resolveIntentSignalInputFromMessages(req.Messages, toolDefinitionCount); ok {
+		input.conversationFacts.ToolChoiceRequired = toolChoiceFacts.Required
+		input.conversationFacts.ToolChoiceNone = toolChoiceFacts.None
 		useTopLevelTextFallback := rawText != "" && strings.TrimSpace(input.evaluationText) == ""
 		input = applyTopLevelTextFallback(input, rawText)
 		contextEstimate, err := estimateIntentRequestContext(
@@ -131,6 +135,8 @@ func (req IntentRequest) resolveSignalInput() (intentSignalInput, error) {
 		conversationFacts: classification.ConversationFacts{
 			UserMessageCount:    1,
 			ToolDefinitionCount: toolDefinitionCount,
+			ToolChoiceRequired:  toolChoiceFacts.Required,
+			ToolChoiceNone:      toolChoiceFacts.None,
 			LastMessageRole:     "user",
 		},
 		requestFacts: requestFactsForIntent(req.Metadata, contextEstimate),
@@ -279,6 +285,8 @@ func hasIntentConversationFacts(facts classification.ConversationFacts) bool {
 		facts.ToolMessageCount > 0 ||
 		facts.ImageContentCount > 0 ||
 		facts.ToolDefinitionCount > 0 ||
+		facts.ToolChoiceRequired ||
+		facts.ToolChoiceNone ||
 		facts.AssistantToolCallCount > 0 ||
 		facts.ToolResultCount > 0 ||
 		facts.HasDeveloperMessage
@@ -313,6 +321,7 @@ func extractIntentConversationHistory(messages []IntentMessage, toolDefinitionCo
 			&history.conversationFacts,
 			role,
 			len(msg.ToolCalls),
+			msg.ToolCallID,
 			previousWasToolResult,
 		)
 		if recordIntentUserMessage(&history, role, text, msg.Content) {
@@ -328,10 +337,13 @@ func observeIntentConversationMessage(
 	facts *classification.ConversationFacts,
 	role string,
 	toolCallCount int,
+	toolCallID string,
 	previousWasToolResult bool,
 ) bool {
 	facts.LastMessageRole = role
 	facts.LastMessageToolResult = false
+	facts.LastMessageFlowToolResult = false
+	facts.LastAssistantToolCall = false
 	facts.LastUserAfterToolResult = false
 	switch role {
 	case "user":
@@ -340,6 +352,7 @@ func observeIntentConversationMessage(
 	case "assistant":
 		facts.AssistantMessageCount++
 		facts.AssistantToolCallCount += toolCallCount
+		facts.LastAssistantToolCall = toolCallCount > 0
 	case "system":
 		facts.SystemMessageCount++
 	case "developer":
@@ -348,6 +361,7 @@ func observeIntentConversationMessage(
 		facts.ToolMessageCount++
 		facts.ToolResultCount++
 		facts.LastMessageToolResult = true
+		facts.LastMessageFlowToolResult = looper.IsWorkflowToolCallID(toolCallID)
 	}
 	return facts.LastMessageToolResult
 }

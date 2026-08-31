@@ -6,6 +6,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 )
 
 // semanticAssistantContent returns the ordered, client-visible assistant text
@@ -69,6 +70,12 @@ func prependSemanticOutputText(output []llmprotocol.OutputItem, prefix string) b
 // accepted at ingress. Wire-specific JSON walkers are confined to codecs.
 func extractSemanticRequestSignals(request *llmprotocol.Request) *requestSignalSnapshot {
 	result := &requestSignalSnapshot{Model: request.Model, Stream: request.Stream}
+	switch request.ToolChoice.Mode {
+	case llmprotocol.ToolChoiceRequired, llmprotocol.ToolChoiceNamed:
+		result.ToolChoiceRequired = true
+	case llmprotocol.ToolChoiceNone:
+		result.ToolChoiceNone = true
+	}
 	if len(request.Metadata) > 0 {
 		result.Metadata = make(map[string]string, len(request.Metadata))
 		for key, value := range request.Metadata {
@@ -102,7 +109,11 @@ func consumeSemanticMessage(result *requestSignalSnapshot, message llmprotocol.M
 	previousWasTool := result.LastMessageToolResult || result.LastMessageRole == string(llmprotocol.RoleTool)
 	role := string(message.Role)
 	text := semanticText(message.Content)
-	result.LastMessageRole, result.LastMessageToolResult, result.LastUserAfterToolResult = role, false, false
+	result.LastMessageRole = role
+	result.LastMessageToolResult = false
+	result.LastMessageFlowToolResult = false
+	result.LastAssistantToolCall = false
+	result.LastUserAfterToolResult = false
 	switch message.Role {
 	case llmprotocol.RoleUser:
 		result.UserMessageCount++
@@ -137,6 +148,9 @@ func consumeSemanticMessage(result *requestSignalSnapshot, message llmprotocol.M
 			}
 		case llmprotocol.ContentToolCall:
 			result.AssistantToolCallCount++
+			if message.Role == llmprotocol.RoleAssistant {
+				result.LastAssistantToolCall = true
+			}
 			if content.ToolCall != nil {
 				if content.ToolCall.Name != "" {
 					result.AssistantToolNames = append(result.AssistantToolNames, content.ToolCall.Name)
@@ -146,6 +160,9 @@ func consumeSemanticMessage(result *requestSignalSnapshot, message llmprotocol.M
 		case llmprotocol.ContentToolResult:
 			result.ToolResultCount++
 			result.LastMessageToolResult = true
+			if content.ToolResult != nil && looper.IsWorkflowToolCallID(content.ToolResult.CallID) {
+				result.LastMessageFlowToolResult = true
+			}
 		}
 	}
 	consumeNeutralContext(result, message.Content)

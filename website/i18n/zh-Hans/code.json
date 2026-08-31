@@ -1500,9 +1500,6 @@
   "team.track.academic.description": {
     "message": "围绕项目开展前沿学术研究，并与工程团队紧密协作，推动研究成果转化为项目能力。"
   },
-  "homepage.community.team.subtitle": {
-    "message": "维护者与活跃提交者共同推进研究、基础设施与模型系统建设。"
-  },
   "team.committers.title": {
     "message": "提交者"
   },

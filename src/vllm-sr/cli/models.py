@@ -707,7 +707,6 @@ class PluginType(str, Enum):
     ROUTER_REPLAY = "router_replay"
     MEMORY = "memory"
     RAG = "rag"
-    IMAGE_GEN = "image_gen"
     FAST_RESPONSE = "fast_response"
     REQUEST_PARAMS = "request_params"
     RESPONSE_JAILBREAK = "response_jailbreak"
@@ -1266,20 +1265,6 @@ class PluginConfig(BaseModel):
         return data
 
 
-class ImageGenPluginConfig(BaseModel):
-    """Configuration for image_gen plugin."""
-
-    enabled: bool
-    backend: str
-    backend_config: Optional[Dict[str, Any]] = None
-    modality_detection: Optional[Dict[str, Any]] = None
-    default_width: Optional[int] = Field(default=None, ge=1)
-    default_height: Optional[int] = Field(default=None, ge=1)
-    max_inference_steps: Optional[int] = Field(default=None, ge=1)
-    timeout_seconds: Optional[int] = Field(default=None, ge=1)
-    max_response_bytes: Optional[int] = Field(default=None, ge=0)
-
-
 class DecisionLearningAdaptationConfig(BaseModel):
     """Decision-local control for Router Learning adaptation."""
 
@@ -1527,6 +1512,18 @@ class Decision(BaseModel):
 
     @model_validator(mode="after")
     def validate_prompt_candidates(self):
+        if self.algorithm and self.algorithm.minimum_candidates and self.modelRefs:
+            effective_names = {
+                (model_ref.model.strip(), (model_ref.lora_name or "").strip())
+                for model_ref in self.modelRefs
+                if model_ref.model.strip()
+            }
+            if len(effective_names) < self.algorithm.minimum_candidates:
+                raise ValueError(
+                    "algorithm.minimum_candidates="
+                    f"{self.algorithm.minimum_candidates} requires at least that many "
+                    f"unique modelRefs, got {len(effective_names)}"
+                )
         if (
             self.algorithm
             and self.algorithm.type == "prompt"

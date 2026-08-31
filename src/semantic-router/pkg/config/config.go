@@ -264,11 +264,10 @@ type IntelligentRouting struct {
 
 // BackendModels captures configured backend endpoints and model metadata.
 type BackendModels struct {
-	ModelConfig      map[string]ModelParams          `yaml:"model_config"`
-	DefaultModel     string                          `yaml:"default_model"`
-	VLLMEndpoints    []VLLMEndpoint                  `yaml:"vllm_endpoints"`
-	ImageGenBackends map[string]ImageGenBackendEntry `yaml:"image_gen_backends,omitempty"`
-	ProviderProfiles map[string]ProviderProfile      `yaml:"provider_profiles,omitempty"`
+	ModelConfig      map[string]ModelParams     `yaml:"model_config"`
+	DefaultModel     string                     `yaml:"default_model"`
+	VLLMEndpoints    []VLLMEndpoint             `yaml:"vllm_endpoints"`
+	ProviderProfiles map[string]ProviderProfile `yaml:"provider_profiles,omitempty"`
 }
 
 type ReasoningConfig struct {
