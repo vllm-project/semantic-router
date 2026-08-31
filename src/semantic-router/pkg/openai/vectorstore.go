@@ -11,17 +11,29 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	httputil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 )
+
+const defaultVectorStoreSearchMaxResponseBytes int64 = 4 * 1024 * 1024
 
 // VectorStoreClient handles interactions with OpenAI Vector Store API
 type VectorStoreClient struct {
-	httpClient *http.Client
-	baseURL    string
-	apiKey     string
+	httpClient             *http.Client
+	baseURL                string
+	apiKey                 string
+	maxSearchResponseBytes int64
 }
 
 // NewVectorStoreClient creates a new OpenAI Vector Store client
 func NewVectorStoreClient(baseURL string, apiKey string) *VectorStoreClient {
+	return NewVectorStoreClientWithSearchResponseLimit(baseURL, apiKey, 0)
+}
+
+// NewVectorStoreClientWithSearchResponseLimit creates a client with a search response ceiling.
+func NewVectorStoreClientWithSearchResponseLimit(baseURL string, apiKey string, maxResponseBytes int64) *VectorStoreClient {
+	if maxResponseBytes == 0 {
+		maxResponseBytes = defaultVectorStoreSearchMaxResponseBytes
+	}
 	return &VectorStoreClient{
 		httpClient: &http.Client{
 			Timeout: 60 * time.Second,
@@ -31,8 +43,9 @@ func NewVectorStoreClient(baseURL string, apiKey string) *VectorStoreClient {
 				IdleConnTimeout:     90 * time.Second,
 			},
 		},
-		baseURL: strings.TrimRight(strings.TrimSuffix(strings.TrimRight(baseURL, "/"), "/v1"), "/"),
-		apiKey:  apiKey,
+		baseURL:                strings.TrimRight(strings.TrimSuffix(strings.TrimRight(baseURL, "/"), "/v1"), "/"),
+		apiKey:                 apiKey,
+		maxSearchResponseBytes: maxResponseBytes,
 	}
 }
 
@@ -439,8 +452,13 @@ func (c *VectorStoreClient) SearchVectorStore(ctx context.Context, vectorStoreID
 		return nil, fmt.Errorf("vector store search failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
+	responseBody, err := httputil.ReadLimitedBody(resp.Body, c.maxSearchResponseBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read vector store search response: %w", err)
+	}
+
 	var searchResp VectorStoreSearchResponse
-	if err := json.NewDecoder(resp.Body).Decode(&searchResp); err != nil {
+	if err := json.Unmarshal(responseBody, &searchResp); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
