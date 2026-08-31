@@ -29,6 +29,29 @@ type LookupResult struct {
 	ResponseBody []byte
 	Found        bool
 	Similarity   float32
+	StoredAt     time.Time
+	ExpiresAt    time.Time
+	Age          time.Duration
+	AgeKnown     bool
+}
+
+// lookupResultFromTimestamps constructs a successful LookupResult and calculates Age / AgeKnown.
+func lookupResultFromTimestamps(responseBody []byte, similarity float32, storedAt, expiresAt time.Time) LookupResult {
+	var age time.Duration
+	var ageKnown bool
+	if !storedAt.IsZero() {
+		age = time.Since(storedAt)
+		ageKnown = true
+	}
+	return LookupResult{
+		ResponseBody: responseBody,
+		Found:        true,
+		Similarity:   similarity,
+		StoredAt:     storedAt,
+		ExpiresAt:    expiresAt,
+		Age:          age,
+		AgeKnown:     ageKnown,
+	}
 }
 
 // ExactCacheBackend is an optional exact-response fast path implemented by
