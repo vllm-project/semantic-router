@@ -53,6 +53,10 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 			errors.Is(decisionErr, context.DeadlineExceeded) {
 			return requestDecisionState{}, r.createErrorResponse(499, "request canceled")
 		}
+		if errors.Is(decisionErr, errNoContextEligibleDecisionModel) {
+			logging.Warnf("[Request Body] Decision candidates cannot satisfy request context: %v", decisionErr)
+			return requestDecisionState{}, r.createErrorResponse(422, decisionErr.Error())
+		}
 		logging.Errorf("[Request Body] Decision evaluation failed: %v", decisionErr)
 		if errors.Is(decisionErr, decision.ErrDecisionUnresolved) {
 			resp := r.createErrorResponse(503, decisionErr.Error())

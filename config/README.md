@@ -98,10 +98,17 @@ runtime dependency; they do not define routing behavior by themselves.
   values.
 - `routing.modelCards` describes semantic capabilities; concrete URLs,
   credentials, and pricing belong in `providers.models`.
+- Protocol controls such as `tool_choice` enter routing as conversation facts;
+  projections combine those facts with text-derived intent before decisions
+  apply policy.
 - `routing.projections` derives named routing outputs from signals. Decisions
   consume those outputs instead of embedding free-form computation.
 - Candidate iteration is bounded policy metadata, not a general scripting
   runtime.
+- `routing.decisions[].algorithm.minimum_candidates` keeps a model-free Recipe
+  portable while making its candidate-pool cardinality executable as soon as
+  an Entrypoint assigns Models. Request-time context filtering cannot silently
+  reduce the eligible pool below that contract.
 - Router Learning lives under `global.router.learning`; it is separate from a
   decision's request-time base algorithm.
 - Router replay is disabled by default and can capture request or response

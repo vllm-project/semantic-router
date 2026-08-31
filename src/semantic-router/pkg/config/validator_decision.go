@@ -518,6 +518,9 @@ func validateDecisionAlgorithmConfig(decisionName string, modelRefs []ModelRef, 
 	if err != nil {
 		return err
 	}
+	if minimumErr := validateDecisionMinimumCandidates(decisionName, modelRefs, algorithm); minimumErr != nil {
+		return minimumErr
+	}
 
 	configuredBlocks := configuredAlgorithmBlocks(algorithm)
 	terminal, err := validateAlgorithmBlockContract(
@@ -708,9 +711,9 @@ func validateSpecializedAlgorithmConfig(decisionName string, modelRefs []ModelRe
 	case "remom":
 		return validateDecisionReMoMAlgorithm(decisionName, modelRefs, algorithm.ReMoM)
 	case "fusion":
-		return wrapAlgorithmValidationError(decisionName, "fusion", ValidateFusionAlgorithmConfig(algorithm.Fusion))
+		return validateDecisionFusionAlgorithm(decisionName, modelRefs, algorithm.Fusion)
 	case "workflows":
-		return wrapAlgorithmValidationError(decisionName, "workflows", ValidateWorkflowsAlgorithmConfig(algorithm.Workflows))
+		return validateDecisionWorkflowsAlgorithm(decisionName, modelRefs, algorithm.Workflows)
 	case "prompt":
 		return validatePromptAlgorithmConfig(decisionName, modelRefs, algorithm)
 	}

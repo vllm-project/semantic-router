@@ -64,7 +64,7 @@ describe('Mixture-of-Models workspace contracts', () => {
 
     expect(routing).toContain('<ConfigPageMixtureDialog')
     expect(dialog).toContain('Choose a recipe. Assign the right models.')
-    expect(dialog).toContain('Choose at least one model')
+    expect(dialog).toContain('minimumCandidatesForDecision')
     expect(dialog).toContain('applyRecipeAssignments')
     expect(support).toContain('assignDecisionModels')
   })

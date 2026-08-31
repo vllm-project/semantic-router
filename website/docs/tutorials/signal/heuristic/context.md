@@ -47,5 +47,10 @@ Use `context` when the router should switch candidates based on prompt length or
 
 Token estimates depend on the request representation and are not a guarantee
 that a backend accepts the resulting prompt. Keep model-card context windows
-accurate and allow room for generated output. See a complete example:
+accurate and allow room for generated output. Before selection, the Router
+removes decision candidates whose configured, positive context window is
+smaller than the estimated request. Missing context metadata remains eligible
+for backward compatibility; if every candidate has a known insufficient
+window, the Router rejects the request instead of forwarding it to an
+ineligible backend. See a complete example:
 [`config/fragments/signal/context/long-context.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/context/long-context.yaml).
