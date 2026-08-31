@@ -118,11 +118,35 @@ func TestVLLMOmniBackend_GenerateImage(t *testing.T) {
 	if resp.ImageURL != "data:image/png;base64,iVBORw0KGgo=" {
 		t.Errorf("unexpected image URL: %s", resp.ImageURL)
 	}
+	if resp.ImageBase64 != "iVBORw0KGgo=" {
+		t.Errorf("unexpected image base64: %s", resp.ImageBase64)
+	}
 	if resp.Backend != "vllm_omni" {
 		t.Errorf("expected backend vllm_omni, got %s", resp.Backend)
 	}
 
 	assertVLLMOmniRequest(t, <-received, req, seed)
+}
+
+func TestInlineImageBase64(t *testing.T) {
+	tests := []struct {
+		name     string
+		imageURL string
+		want     string
+	}{
+		{name: "inline PNG", imageURL: "data:image/png;base64,aGVsbG8=", want: "aGVsbG8="},
+		{name: "uppercase data URL", imageURL: "DATA:IMAGE/WEBP;BASE64,AbCdEfGh", want: "AbCdEfGh"},
+		{name: "remote URL", imageURL: "https://example.com/image.png"},
+		{name: "non-image data URL", imageURL: "data:text/plain;base64,aGVsbG8="},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := inlineImageBase64(tt.imageURL); got != tt.want {
+				t.Fatalf("inlineImageBase64(%q) = %q, want %q", tt.imageURL, got, tt.want)
+			}
+		})
+	}
 }
 
 func assertVLLMOmniRequest(t *testing.T, request vllmOmniRequest, req *GenerateRequest, seed int) {

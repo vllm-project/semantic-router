@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/imageurl"
 )
 
 // VLLMOmniBackend implements the Backend interface for vLLM-Omni
@@ -125,10 +127,20 @@ func (b *VLLMOmniBackend) GenerateImage(ctx context.Context, req *GenerateReques
 	}
 
 	return &GenerateResponse{
-		ImageURL: imageURL,
-		Model:    vllmResp.Model,
-		Backend:  b.Name(),
+		ImageURL:    imageURL,
+		ImageBase64: inlineImageBase64(imageURL),
+		Model:       vllmResp.Model,
+		Backend:     b.Name(),
 	}, nil
+}
+
+func inlineImageBase64(imageURL string) string {
+	canonical, ok := imageurl.CanonicalDataURL(imageURL)
+	if !ok {
+		return ""
+	}
+	_, payload, _ := strings.Cut(canonical, ",")
+	return payload
 }
 
 // HealthCheck checks if the vLLM-Omni server is healthy
