@@ -1,4 +1,4 @@
-package aigateway
+package categoryremotebackend
 
 import (
 	"context"
@@ -6,65 +6,53 @@ import (
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
 	gatewaystack "github.com/vllm-project/semantic-router/e2e/pkg/stacks/gateway"
-	"github.com/vllm-project/semantic-router/e2e/pkg/testmatrix"
 
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
 )
 
-const valuesFile = "e2e/profiles/ai-gateway/values.yaml"
+const valuesFile = "e2e/profiles/category-remote-backend/values.yaml"
 
 var resourceManifests = []string{
-	"e2e/profiles/ai-gateway/manifests/mock-sequence-classifier.yaml",
+	"e2e/profiles/category-remote-backend/manifests/mock-category-classifier.yaml",
 	"e2e/profiles/ai-gateway/gateway-resources/backend.yaml",
 	"deploy/kubernetes/ai-gateway/aigw-resources/gwapi-resources.yaml",
 	"e2e/profiles/ai-gateway/gateway-resources/responses-route.yaml",
 }
 
-// Profile implements the Envoy AI Gateway baseline test profile.
+// Profile validates the shared remote category http_classify backend in isolation.
 type Profile struct {
 	stack *gatewaystack.Stack
 }
 
-// NewProfile creates the baseline profile backed by the shared Envoy AI Gateway stack.
 func NewProfile() *Profile {
 	return &Profile{
 		stack: gatewaystack.New(gatewaystack.Config{
-			Name:                     "ai-gateway",
+			Name:                     "category-remote-backend",
 			SemanticRouterValuesFile: valuesFile,
 			ResourceManifests:        resourceManifests,
 			WaitDeployments: []helpers.DeploymentRef{
-				{Namespace: "default", Name: "mock-sequence-classifier"},
+				{Namespace: "default", Name: "mock-category-classifier"},
 			},
 		}),
 	}
 }
 
-// Name returns the profile name.
-func (p *Profile) Name() string {
-	return "envoy-ai-gateway"
-}
+func (p *Profile) Name() string { return "category-remote-backend" }
 
-// Description returns the profile description.
 func (p *Profile) Description() string {
-	return "Tests the baseline Semantic Router contract through Envoy AI Gateway"
+	return "Tests the shared remote category http_classify backend end-to-end"
 }
 
-// Setup deploys the shared gateway stack.
 func (p *Profile) Setup(ctx context.Context, opts *framework.SetupOptions) error {
 	return p.stack.Setup(ctx, opts)
 }
 
-// Teardown removes the shared gateway stack.
 func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions) error {
 	return p.stack.Teardown(ctx, opts)
 }
 
-// GetTestCases returns the list of test cases for this profile.
-func (p *Profile) GetTestCases() []string {
-	return testmatrix.Combine(testmatrix.BaselineRouterContract)
-}
+func (p *Profile) GetTestCases() []string { return []string{"category-backend-routing"} }
 
-// GetServiceConfig returns the service configuration for accessing the deployed service.
 func (p *Profile) GetServiceConfig() framework.ServiceConfig {
 	return p.stack.ServiceConfig()
 }

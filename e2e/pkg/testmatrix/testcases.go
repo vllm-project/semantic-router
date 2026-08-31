@@ -16,7 +16,6 @@ var BaselineRouterContract = []string{
 	"apiserver-classification-endpoints",
 	"llm-classifier-distribution-routing",
 	"sequence-classifier-routing",
-	"category-backend-routing",
 	"chat-completions-stress-request",
 	"domain-classify",
 	"semantic-cache",

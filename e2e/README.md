@@ -121,6 +121,7 @@ until the selected cases are known to be isolated.
 - **dynamic-config**: CRD-driven routing and embedding signals.
 - **multimodal-routing**: image-modality embedding routing.
 - **remote-embedding**: OpenAI-compatible remote embedding providers.
+- **category-remote-backend**: shared remote category `http_classify` backend.
 - **llm-d**: llm-d inference-gateway health and router smoke coverage.
 - **looper**: deterministic Looper algorithm contracts.
 - **istio**: sidecar, mTLS, and tracing behavior.

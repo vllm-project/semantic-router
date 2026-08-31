@@ -335,6 +335,13 @@ profiles:
     paths:
       - e2e/profiles/ai-gateway/**
       - deploy/kubernetes/ai-gateway/**
+  category-remote-backend:
+    owner: e2e
+    coverage_role: category-remote-classifier-backend
+    selection: pr
+    paths:
+      - e2e/profiles/category-remote-backend/**
+      - e2e/testcases/category_backend_routing.go
   aibrix:
     owner: e2e
     coverage_role: aibrix-control-plane-and-gateway

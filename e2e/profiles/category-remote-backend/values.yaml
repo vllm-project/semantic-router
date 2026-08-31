@@ -1,0 +1,72 @@
+config:
+  version: v0.3
+  listeners: []
+  providers:
+    defaults:
+      default_model: base-model
+    models:
+      - name: base-model
+        provider_model_id: base-model
+        backend_refs:
+          - name: local-vllm
+            endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
+            weight: 1
+  routing:
+    decisions:
+      - name: category_backend_math
+        description: Deterministic remote category backend routing contract
+        priority: 2000
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: math
+        modelRefs:
+          - model: base-model
+            use_reasoning: false
+      - name: default-route
+        description: Fallback route for non-math requests
+        priority: 10
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: base-model
+            use_reasoning: false
+  global:
+    router:
+      strategy: priority
+    model_catalog:
+      kbs: []
+      external:
+        - name: e2e-category-classifier
+          model_role: classification
+          llm_endpoint:
+            address: mock-category-classifier.default.svc.cluster.local
+            port: 8000
+            protocol: http
+          llm_model_name: category-service
+          llm_timeout_seconds: 5
+      modules:
+        classifier:
+          domain:
+            category_mapping_path: models/mmbert32k-intent-classifier-merged/category_mapping.json
+            backend:
+              protocol: http_classify
+              contract: label_distribution.v1
+              model: e2e-category-classifier
+              deadline_ms: 5000
+    services:
+      response_api:
+        enabled: true
+        store_backend: memory
+        ttl_seconds: 3600
+        max_responses: 1000
+
+resources:
+  limits:
+    memory: 2Gi
+    cpu: "2"
+  requests:
+    memory: 512Mi
+    cpu: 250m
