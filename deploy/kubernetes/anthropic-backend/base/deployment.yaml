@@ -122,7 +122,7 @@ spec:
                 - ALL
 
         - name: anthropic-shim
-          image: anthropic-shim:latest
+          image: ghcr.io/vllm-project/semantic-router/anthropic-shim:latest
           imagePullPolicy: IfNotPresent
           ports:
             - name: shim
