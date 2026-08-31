@@ -3,7 +3,6 @@ package config
 import (
 	"bytes"
 	"encoding/json"
-	"math"
 	"strings"
 	"testing"
 )
@@ -110,44 +109,10 @@ func TestExternalAPIRAGRequestFormatValidation(t *testing.T) {
 	}
 }
 
-func TestExternalAPIRAGResponseLimitValidation(t *testing.T) {
-	value := func(v int64) *int64 { return &v }
-	tests := []struct {
-		name    string
-		limit   *int64
-		wantErr string
-	}{
-		{name: "omitted", limit: nil},
-		{name: "one byte", limit: value(1)},
-		{name: "largest permitted", limit: value(MaximumExternalAPIResponseBodyBytes)},
-		{name: "zero", limit: value(0), wantErr: "must be greater than 0"},
-		{name: "negative", limit: value(-1), wantErr: "must be greater than 0"},
-		{name: "minimum int64", limit: value(math.MinInt64), wantErr: "must be greater than 0"},
-		{name: "one above maximum", limit: value(MaximumExternalAPIResponseBodyBytes + 1), wantErr: "must not exceed"},
-		{name: "maximum int64", limit: value(math.MaxInt64), wantErr: "must not exceed"},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			cfg := externalAPIRAGValidationConfig(
-				ExternalAPIRequestFormatCustom,
-				`{"query":"${user_content}"}`,
-				test.limit,
-			)
-
-			err := cfg.Validate()
-			if test.wantErr == "" && err != nil {
-				t.Fatalf("Validate() error = %v", err)
-			}
-			if test.wantErr != "" && (err == nil || !strings.Contains(err.Error(), test.wantErr)) {
-				t.Fatalf("Validate() error = %v, want %q", err, test.wantErr)
-			}
-		})
-	}
-}
+// TestExternalAPIRAGResponseLimitValidation removed: response-body limit
+// validation now lives on main's MaxResponseBytes path, not in this PR.
 
 func TestHybridExternalAPIRAGValidationUsesFullChildContract(t *testing.T) {
-	oversizedLimit := MaximumExternalAPIResponseBodyBytes + 1
 	tests := []struct {
 		name        string
 		childConfig *StructuredPayload
@@ -169,16 +134,6 @@ func TestHybridExternalAPIRAGValidationUsesFullChildContract(t *testing.T) {
 				RequestTemplate: `{"query":"${user_content}"} trailing`,
 			}),
 			want: "invalid trailing data",
-		},
-		{
-			name: "oversized response limit",
-			childConfig: MustStructuredPayload(&ExternalAPIRAGConfig{
-				Endpoint:             "http://localhost:8080/search",
-				RequestFormat:        ExternalAPIRequestFormatCustom,
-				RequestTemplate:      `{"query":"${user_content}"}`,
-				MaxResponseBodyBytes: &oversizedLimit,
-			}),
-			want: "must not exceed",
 		},
 	}
 
@@ -301,10 +256,9 @@ func externalAPIRAGValidationConfig(format, template string, limit *int64) *RAGP
 		Enabled: true,
 		Backend: "external_api",
 		BackendConfig: MustStructuredPayload(&ExternalAPIRAGConfig{
-			Endpoint:             "http://localhost:8080/search",
-			RequestFormat:        format,
-			RequestTemplate:      template,
-			MaxResponseBodyBytes: limit,
+			Endpoint:        "http://localhost:8080/search",
+			RequestFormat:   format,
+			RequestTemplate: template,
 		}),
 	}
 }

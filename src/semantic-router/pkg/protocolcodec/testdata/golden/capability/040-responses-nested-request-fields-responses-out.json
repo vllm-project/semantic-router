@@ -1,0 +1,205 @@
+{
+  "cases": [
+    {
+      "name": "reasoning_context",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_reasoning_context"
+        }
+      }
+    },
+    {
+      "name": "reasoning_generate_summary",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_reasoning_generate_summary"
+        }
+      }
+    },
+    {
+      "name": "reasoning_summary",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_reasoning_summary"
+        }
+      }
+    },
+    {
+      "name": "text_verbosity_and_format_description",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_text_verbosity"
+        }
+      }
+    },
+    {
+      "name": "function_tool_allowed_callers",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_tools_allowed_callers"
+        }
+      }
+    },
+    {
+      "name": "function_tool_defer_loading",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_tools_defer_loading"
+        }
+      }
+    },
+    {
+      "name": "function_tool_output_schema",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_tools_output_schema"
+        }
+      }
+    },
+    {
+      "name": "input_file_data",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "input": [
+            {
+              "content": [
+                {
+                  "file_data": "aGVsbG8=",
+                  "filename": "brief.txt",
+                  "type": "input_file"
+                }
+              ],
+              "id": "item_6a32e29c376158d871e9638e",
+              "role": "user",
+              "type": "message"
+            }
+          ],
+          "model": "routed-model"
+        }
+      }
+    },
+    {
+      "name": "input_file_id",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "input": [
+            {
+              "content": [
+                {
+                  "file_id": "file_1",
+                  "type": "input_file"
+                }
+              ],
+              "id": "item_6a32e29c376158d871e9638e",
+              "role": "user",
+              "type": "message"
+            }
+          ],
+          "model": "routed-model"
+        }
+      }
+    },
+    {
+      "name": "input_file_url",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "input": [
+            {
+              "content": [
+                {
+                  "file_url": "https://example.com/brief.pdf",
+                  "filename": "brief.pdf",
+                  "type": "input_file"
+                }
+              ],
+              "id": "item_6a32e29c376158d871e9638e",
+              "role": "user",
+              "type": "message"
+            }
+          ],
+          "model": "routed-model"
+        }
+      }
+    },
+    {
+      "name": "input_image_detail",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "input": [
+            {
+              "content": [
+                {
+                  "detail": "high",
+                  "image_url": "https://example.com/image.png",
+                  "type": "input_image"
+                }
+              ],
+              "id": "item_6a32e29c376158d871e9638e",
+              "role": "user",
+              "type": "message"
+            }
+          ],
+          "model": "routed-model"
+        }
+      }
+    },
+    {
+      "name": "input_prompt_cache_breakpoint",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_content_prompt_cache_breakpoint"
+        }
+      }
+    },
+    {
+      "name": "input_message_phase",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_input_phase"
+        }
+      }
+    },
+    {
+      "name": "encrypted_reasoning_item",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_input_encrypted_content"
+        }
+      }
+    },
+    {
+      "name": "namespaced_function_call",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_input_caller"
+        }
+      }
+    }
+  ]
+}

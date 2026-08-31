@@ -94,17 +94,10 @@ func validateExternalAPIRAGBackend(c *RAGPluginConfig) error {
 			apiConfig.RequestFormat,
 		)
 	}
-	if apiConfig.MaxResponseBodyBytes != nil {
-		if *apiConfig.MaxResponseBodyBytes <= 0 {
-			return fmt.Errorf("external API max_response_body_bytes must be greater than 0, got %d", *apiConfig.MaxResponseBodyBytes)
-		}
-		if *apiConfig.MaxResponseBodyBytes > MaximumExternalAPIResponseBodyBytes {
-			return fmt.Errorf(
-				"external API max_response_body_bytes must not exceed %d, got %d",
-				MaximumExternalAPIResponseBodyBytes,
-				*apiConfig.MaxResponseBodyBytes,
-			)
-		}
+	// Response-body limits are validated by main's
+	// ExternalAPIRAGConfig.MaxResponseBytes path; this PR no longer duplicates it.
+	if apiConfig.MaxResponseBytes < 0 {
+		return fmt.Errorf("external API max_response_bytes must be non-negative")
 	}
 	return nil
 }

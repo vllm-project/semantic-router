@@ -1,0 +1,21 @@
+{
+  "status": "error",
+  "error": {
+    "category": "unsupported_feature",
+    "code": "unsupported_capability"
+  },
+  "diagnostics": [
+    {
+      "field": "parallel_tool_calls",
+      "action": "dropped"
+    },
+    {
+      "field": "tool_choice",
+      "action": "dropped"
+    },
+    {
+      "field": "tools",
+      "action": "dropped"
+    }
+  ]
+}

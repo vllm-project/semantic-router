@@ -61,7 +61,7 @@ This document defines the project-level surfaces used by skills, reports, and va
 ## `response_headers`
 
 - `x-vsr-*` header constants, router emission, dashboard reveal/display allowlists, and user-visible header contracts.
-- Typical paths: `src/semantic-router/pkg/headers/**`, `processor_res_header.go`, `HeaderDisplay.tsx`, `HeaderReveal.tsx`
+- Typical paths: `src/semantic-router/pkg/headers/**`, `processor_res_header.go`, `HeaderDisplay.tsx`, `ChatComponent*.tsx`
 - Task rules: `router-core`, `dashboard`
 
 ## `python_cli_schema`
@@ -103,7 +103,7 @@ This document defines the project-level surfaces used by skills, reports, and va
 ## `playground_reveal`
 
 - Playground chat rendering, reveal overlays, and user-visible route metadata presentation.
-- Typical paths: `PlaygroundPage.tsx`, `ChatComponent*.tsx`, `HeaderDisplay.tsx`, `HeaderReveal.tsx`
+- Typical paths: `PlaygroundPage.tsx`, `ChatComponent*.tsx`, `HeaderDisplay.tsx`, `ThinkingAnimation.tsx`
 - Task rules: `dashboard`
 
 ## `dsl_crd`

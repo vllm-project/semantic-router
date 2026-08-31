@@ -32,6 +32,11 @@ MODEL local/gemma4-26b-balanced {
   modality: "text"
 }
 
+MODEL local/omni {
+  capabilities: ["chat", "image_understanding", "multimodal", "omni", "text", "vision"]
+  modality: "omni"
+}
+
 MODEL local/qwen3.5-122b-frontier {
   context_window_size: 262144
   description: "Large local MoE tier for accuracy-first synthesis and review."
@@ -223,6 +228,11 @@ RECIPE balanced (description = "Mixture-of-Models · Balanced — adaptive quali
     predicate: { gt: 0.08 }
   }
 
+  SIGNAL conversation unified_balance_has_images {
+    description: "Request contains at least one image content part."
+    feature: { source: { type: "image_content" }, type: "exists" }
+  }
+
   SIGNAL conversation unified_balance_multi_turn {
     description: "Multi-turn conversations benefit from a small synthesis allowance."
     feature: { source: { role: "user", type: "message" }, type: "count" }
@@ -252,6 +262,13 @@ RECIPE balanced (description = "Mixture-of-Models · Balanced — adaptive quali
   # ROUTES
   # =============================================================================
 
+  ROUTE omni (description = "Understand image-bearing requests with the dedicated visual-language model.") {
+    PRIORITY 400
+    WHEN conversation("unified_balance_has_images")
+    MODEL "local/omni" (reasoning = false)
+    ALGORITHM static
+  }
+
   ROUTE unified_balance_recovery (description = "Recover from explicit dissatisfaction with a stronger reasoning pool and corrective prompt.") {
     PRIORITY 300
     TIER 1
@@ -264,11 +281,6 @@ RECIPE balanced (description = "Mixture-of-Models · Balanced — adaptive quali
       latency_percentile: 95
       on_no_candidates: "first"
       weights: { cost: 0.1, latency: 0.1, load: 0.15, quality: 0.65 }
-    }
-    PLUGIN system_prompt {
-      enabled: true
-      system_prompt: "Rebuild the answer from first principles, correct the earlier miss directly, and make the improvement explicit."
-      mode: "insert"
     }
   }
 
@@ -338,6 +350,11 @@ RECIPE speed-first (description = "Prefer the lowest observed latency while pres
     feature: { source: { sequences: [["first", "then"], ["first", "next", "finally"], ["首先", "然后"], ["先", "再"]], type: "sequence" }, type: "sequence" }
   }
 
+  SIGNAL conversation unified_speed_has_images {
+    description: "Request contains at least one image content part."
+    feature: { source: { type: "image_content" }, type: "exists" }
+  }
+
   PROJECTION score unified_speed_work_score {
     method: "weighted_sum"
     inputs: [{ type: "keyword", weight: 0.6, name: "unified_speed_heavy_markers", value_source: "confidence" }, { type: "context", weight: 0.35, name: "unified_speed_long_context" }, { type: "structure", weight: 0.25, name: "unified_speed_ordered_workflow" }]
@@ -352,6 +369,13 @@ RECIPE speed-first (description = "Prefer the lowest observed latency while pres
   # =============================================================================
   # ROUTES
   # =============================================================================
+
+  ROUTE omni (description = "Keep visual requests on the dedicated low-latency visual-language model.") {
+    PRIORITY 300
+    WHEN conversation("unified_speed_has_images")
+    MODEL "local/omni" (reasoning = false)
+    ALGORITHM static
+  }
 
   ROUTE unified_speed_heavy_route (description = "Use live TTFT and TPOT percentiles across efficient models for heavier requests.") {
     PRIORITY 200
@@ -424,6 +448,11 @@ RECIPE cost-first (description = "Keep every request local and spend additional 
     feature: { source: { sequences: [["first", "then"], ["first", "next", "finally"], ["首先", "然后"], ["先", "再"]], type: "sequence" }, type: "sequence" }
   }
 
+  SIGNAL conversation unified_cost_has_images {
+    description: "Request contains at least one image content part."
+    feature: { source: { type: "image_content" }, type: "exists" }
+  }
+
   PROJECTION score unified_cost_compute_score {
     method: "weighted_sum"
     inputs: [{ type: "keyword", weight: 0.6, name: "unified_cost_reasoning_markers", value_source: "confidence" }, { type: "context", weight: 0.35, name: "unified_cost_long_context" }, { type: "structure", weight: 0.3, name: "unified_cost_ordered_workflow" }]
@@ -438,6 +467,13 @@ RECIPE cost-first (description = "Keep every request local and spend additional 
   # =============================================================================
   # ROUTES
   # =============================================================================
+
+  ROUTE omni (description = "Keep visual requests on the dedicated local visual-language model.") {
+    PRIORITY 300
+    WHEN conversation("unified_cost_has_images")
+    MODEL "local/omni" (reasoning = false)
+    ALGORITHM static
+  }
 
   ROUTE unified_cost_local_reasoning (description = "Enable bounded reasoning on the self-hosted model for genuinely demanding requests.") {
     PRIORITY 200
@@ -575,6 +611,11 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
     feature: { source: { pattern: "(?i)(\\b(define|translate|explain)\\b.{0,48}\\b(phrase|term|expression)\\b|(définis|traduis|explique).{0,48}(expression|terme)|(define|traduce|explica).{0,48}(frase|expresión|término)|(definiere|übersetze|erkläre).{0,48}(ausdruck|begriff)|(定义|翻译|解释).{0,16}(短语|词语|“|「)|(説明|翻訳).{0,16}(表現|語句|「))", type: "regex" }, type: "exists" }
   }
 
+  SIGNAL conversation unified_frontier_has_images {
+    description: "Request contains at least one image content part."
+    feature: { source: { type: "image_content" }, type: "exists" }
+  }
+
   SIGNAL conversation unified_frontier_tooling_available {
     description: "Tool-rich requests are candidates for Router Flow decomposition."
     feature: { source: { type: "tool_definition" }, type: "count" }
@@ -632,6 +673,13 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
   # =============================================================================
   # ROUTES
   # =============================================================================
+
+  ROUTE omni (description = "Understand image-bearing requests directly before text-only orchestration.") {
+    PRIORITY 500
+    WHEN conversation("unified_frontier_has_images")
+    MODEL "local/omni" (reasoning = false)
+    ALGORITHM static
+  }
 
   ROUTE unified_frontier_workflow (description = "Use Router Flow for explicit investigate-plan-execute tasks with separable roles.") {
     PRIORITY 400
@@ -777,6 +825,11 @@ RECIPE privacy-first (description = "Keep every request local, using recipe-scop
     method: "regex"
   }
 
+  SIGNAL conversation unified_privacy_has_images {
+    description: "Request contains at least one image content part."
+    feature: { source: { type: "image_content" }, type: "exists" }
+  }
+
   SIGNAL jailbreak unified_privacy_jailbreak_strict {
     method: "classifier"
     threshold: 0.45
@@ -821,6 +874,18 @@ RECIPE privacy-first (description = "Keep every request local, using recipe-scop
     TIER 1
     WHEN (jailbreak("unified_privacy_jailbreak_strict") OR keyword("unified_privacy_attack_markers"))
     MODEL "local/qwen3.5-9b-private" (reasoning = false)
+    ALGORITHM static
+    PLUGIN tools {
+      enabled: true
+      mode: "none"
+    }
+  }
+
+  ROUTE omni (description = "Understand private image-bearing requests on the local visual-language model.") {
+    PRIORITY 250
+    TIER 2
+    WHEN conversation("unified_privacy_has_images")
+    MODEL "local/omni" (reasoning = false)
     ALGORITHM static
     PLUGIN tools {
       enabled: true

@@ -7,6 +7,16 @@ import (
 	"strings"
 )
 
+// Supported external-API request formats. Response-body limits are NOT
+// declared here: main now owns that via ExternalAPIRAGConfig.MaxResponseBytes
+// and httputil.ReadLimitedBody, so this PR no longer defines its own.
+const (
+	ExternalAPIRequestFormatPinecone      = "pinecone"
+	ExternalAPIRequestFormatWeaviate      = "weaviate"
+	ExternalAPIRequestFormatElasticsearch = "elasticsearch"
+	ExternalAPIRequestFormatCustom        = "custom"
+)
+
 // ExternalAPICustomRequestTemplate is the validated representation of a
 // custom external API RAG request body. Templates must be JSON objects or
 // arrays so user-controlled substitutions cannot alter the configured shape.

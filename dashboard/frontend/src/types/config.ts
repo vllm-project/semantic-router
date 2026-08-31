@@ -182,7 +182,7 @@ export interface MetadataSignal {
 export interface ClassifierSignal {
   name: string
   description?: string
-  type: 'local' | 'llm'
+  type: 'local' | 'llm' | 'sequence_classifier'
   model?: string
   model_path?: string
   labels: string[]
@@ -335,7 +335,7 @@ export interface PluginConfig {
 
 export interface Decision {
   name: string
-  description: string
+  description?: string
   priority: number
   rules: DecisionRules
   modelRefs: ModelRef[]

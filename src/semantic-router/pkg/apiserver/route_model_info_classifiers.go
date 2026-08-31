@@ -177,7 +177,8 @@ func buildHallucinationModels(
 
 	nliModel := cfg.HallucinationMitigation.NLIModel
 	if cfg.NeedsLocalHallucinationNLIForAPI() ||
-		cfg.NeedsLocalHallucinationNLIForRouting() {
+		cfg.NeedsLocalHallucinationNLIForRouting() ||
+		cfg.NeedsLocalNLIForSemanticCache() {
 		models = append(models, ModelInfo{
 			Name:      "hallucination_explainer",
 			Type:      "nli_explainer",

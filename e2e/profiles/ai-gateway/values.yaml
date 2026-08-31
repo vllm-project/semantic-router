@@ -21,12 +21,40 @@ config:
     models:
       - name: base-model
         reasoning_family: qwen3
+        pricing:
+          currency: USD
+          prompt_per_1m: 0.10
+          completion_per_1m: 0.30
         backend_refs:
           - name: local-vllm
             endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
             weight: 1
   routing:
+    projections:
+      scores:
+        - name: e2e_contract_score
+          method: weighted_sum
+          inputs:
+            - type: keyword
+              name: retention_probe_keywords
+              weight: 1
+              value_source: binary
     decisions:
+      - name: sequence_classifier_toxic
+        description: Route on a score returned by the remote sequence-classifier E2E provider
+        priority: 2000
+        rules:
+          operator: AND
+          conditions:
+            - type: classifier
+              name: remote_toxicity
+              label: toxic
+              predicate:
+                gte: 0.8
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
       - name: block_jailbreak
         description: Block jailbreak attempts
         priority: 1000
@@ -651,6 +679,12 @@ config:
           threshold: 0.5
           include_history: false
           description: Block all PII
+      classifiers:
+        - name: remote_toxicity
+          description: Deterministic outbound http_classify E2E signal
+          type: sequence_classifier
+          model: e2e-sequence-classifier
+          labels: [benign, toxic]
     modelCards:
       - name: base-model
         loras:
@@ -730,7 +764,21 @@ config:
       strategy: priority
     model_catalog:
       kbs: []
+      external:
+        - name: e2e-sequence-classifier
+          model_role: classification
+          llm_endpoint:
+            address: mock-sequence-classifier.default.svc.cluster.local
+            port: 8000
+            protocol: http
+          llm_timeout_seconds: 5
+          access_key: e2e-classifier-key
     services:
+      response_api:
+        enabled: true
+        store_backend: memory
+        ttl_seconds: 3600
+        max_responses: 1000
       api:
         batch_classification:
           max_batch_size: 100
@@ -788,6 +836,12 @@ config:
         ttl_seconds: 3600
         eviction_policy: fifo
         embedding_model: mmbert
+        # Exercised by the semantic-cache-polarity case: the NLI tier reuses the
+        # default hallucination explainer (models/mom-halugate-explainer).
+        polarity_guard:
+          mode: lexical+nli
+          nli:
+            contradiction_threshold: 0.5
       memory:
         embedding_model: mmbert
       vector_store:

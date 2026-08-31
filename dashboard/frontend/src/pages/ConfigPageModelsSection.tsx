@@ -1,7 +1,11 @@
 import { useMemo, useState, type Dispatch, type SetStateAction } from 'react'
 import styles from './ConfigPage.module.css'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
+import ConfigPageModelEndpoints from './ConfigPageModelEndpoints'
 import ConfigPageModelInventoryPanel from './ConfigPageModelInventoryPanel'
+import ConfigPageConnectModelsDialog, {
+  type ConnectedModelInput,
+} from './ConfigPageConnectModelsDialog'
 import ModelDeleteDialog from './ModelDeleteDialog'
 import ConfirmDialog from '../components/ConfirmDialog'
 import TableHeader from '../components/TableHeader'
@@ -41,6 +45,7 @@ import {
   ModelExternalIdsEditor,
   ModelLorasEditor,
   ModelPricingEditor,
+  ModelReliabilityEditor,
   ModelTagsEditor,
 } from './configPageModelStructuredEditors'
 import { useModelLiveVerification } from './useModelLiveVerification'
@@ -98,6 +103,7 @@ export default function ConfigPageModelsSection({
   )
   const [reasoningFamilyDeletePending, setReasoningFamilyDeletePending] = useState(false)
   const [reasoningFamilyDeleteError, setReasoningFamilyDeleteError] = useState<string | null>(null)
+  const [connectModelsOpen, setConnectModelsOpen] = useState(false)
   const liveVerification = useModelLiveVerification(config)
 
   const reasoningFamilyOptions = useMemo(() => getReasoningFamilyFilterOptions(models), [models])
@@ -131,130 +137,6 @@ export default function ConfigPageModelsSection({
   }
 
   type ModelRow = NormalizedModel
-  const renderModelEndpoints = (model: ModelRow) => {
-    if (!model.endpoints || model.endpoints.length === 0) {
-      return (
-        <div style={{ padding: '1rem', color: 'var(--color-text-secondary)', textAlign: 'center' }}>
-          No endpoints configured for this model
-        </div>
-      )
-    }
-
-    return (
-      <div style={{ padding: '1rem', background: 'rgba(0, 0, 0, 0.3)' }}>
-        <h4
-          style={{
-            margin: '0 0 1rem 0',
-            fontSize: '0.875rem',
-            fontWeight: 600,
-            color: 'var(--color-text-secondary)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-          }}
-        >
-          Endpoints for {model.name}
-        </h4>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
-              <th
-                style={{
-                  padding: '0.5rem',
-                  textAlign: 'left',
-                  fontSize: '0.875rem',
-                  fontWeight: 600,
-                  color: 'var(--color-text-secondary)',
-                }}
-              >
-                Name
-              </th>
-              <th
-                style={{
-                  padding: '0.5rem',
-                  textAlign: 'left',
-                  fontSize: '0.875rem',
-                  fontWeight: 600,
-                  color: 'var(--color-text-secondary)',
-                }}
-              >
-                Address
-              </th>
-              <th
-                style={{
-                  padding: '0.5rem',
-                  textAlign: 'center',
-                  fontSize: '0.875rem',
-                  fontWeight: 600,
-                  color: 'var(--color-text-secondary)',
-                  width: '100px',
-                }}
-              >
-                Protocol
-              </th>
-              <th
-                style={{
-                  padding: '0.5rem',
-                  textAlign: 'center',
-                  fontSize: '0.875rem',
-                  fontWeight: 600,
-                  color: 'var(--color-text-secondary)',
-                  width: '100px',
-                }}
-              >
-                Weight
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {model.endpoints.map((ep, idx) => (
-              <tr key={idx} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                <td style={{ padding: '0.75rem 0.5rem', fontSize: '0.875rem', fontWeight: 500 }}>
-                  {ep.name}
-                </td>
-                <td
-                  style={{
-                    padding: '0.75rem 0.5rem',
-                    fontSize: '0.875rem',
-                    fontFamily: 'var(--font-mono)',
-                    color: 'var(--color-text-secondary)',
-                  }}
-                >
-                  {isReadonly ? '************' : ep.endpoint || 'N/A'}
-                </td>
-                <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center' }}>
-                  <span
-                    style={{
-                      padding: '0.25rem 0.5rem',
-                      background:
-                        ep.protocol === 'https'
-                          ? 'rgba(34, 197, 94, 0.15)'
-                          : 'rgba(234, 179, 8, 0.15)',
-                      borderRadius: '4px',
-                      fontSize: '0.75rem',
-                      fontWeight: 600,
-                      textTransform: 'uppercase',
-                    }}
-                  >
-                    {ep.protocol}
-                  </span>
-                </td>
-                <td
-                  style={{
-                    padding: '0.75rem 0.5rem',
-                    textAlign: 'center',
-                    fontSize: '0.875rem',
-                    fontFamily: 'var(--font-mono)',
-                  }}
-                >
-                  {ep.weight}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    )
-  }
 
   const handleViewModel = (model: ModelRow) => {
     const sections: ViewSection[] = [
@@ -349,6 +231,19 @@ export default function ConfigPageModelsSection({
           {
             label: 'Token Pricing',
             value: <ModelPricingEditor value={model.pricing} readOnly />,
+            fullWidth: true,
+          },
+        ],
+      })
+    }
+
+    if (model.reliability) {
+      sections.push({
+        title: 'Delivery',
+        fields: [
+          {
+            label: 'Policy',
+            value: <ModelReliabilityEditor value={model.reliability} readOnly />,
             fullWidth: true,
           },
         ],
@@ -503,6 +398,50 @@ export default function ConfigPageModelsSection({
     )
   }
 
+  const handleConnectModels = async ({
+    provider,
+    baseUrl,
+    apiKey,
+    modelIds,
+    modelNames,
+    reasoningFamily,
+    metadata,
+    pricing,
+    reliability,
+  }: ConnectedModelInput) => {
+    if (!config) return
+    if (!isPythonCLI) {
+      throw new Error('Quick connect requires the canonical providers.models configuration.')
+    }
+    const newConfig = cloneConfigData(config)
+    const providers = ensureProvidersConfig(newConfig)
+
+    for (const modelId of modelIds) {
+      const modelName = validateNewModelName(modelNames[modelId] ?? modelId, models)
+      providers.models.push({
+        name: modelName,
+        reasoning_family: reasoningFamily,
+        provider_model_id: modelId,
+        api_format: provider.apiFormat,
+        pricing,
+        reliability,
+        backend_refs: [
+          {
+            name: `${provider.id}-primary`,
+            base_url: baseUrl,
+            provider: provider.apiFormat,
+            ...(apiKey ? { api_key: apiKey } : {}),
+          },
+        ],
+      })
+      upsertRoutingModelCard(newConfig, modelName, {
+        ...metadata,
+        description: metadata.description || `${provider.name} model`,
+      })
+    }
+    await saveConfig(newConfig)
+  }
+
   const handleEditModel = (model: ModelRow) => {
     const reasoningFamilyNames = Object.keys(reasoningFamilies)
 
@@ -523,6 +462,7 @@ export default function ConfigPageModelsSection({
         modality: model.modality || '',
         backend_refs: model.backend_refs || [],
         pricing: model.pricing || {},
+        reliability: model.reliability || {},
       },
       [
         {
@@ -873,31 +813,20 @@ export default function ConfigPageModelsSection({
       key: 'name',
       header: 'Family Name',
       sortable: true,
-      render: (row) => <span style={{ fontWeight: 600 }}>{row.name}</span>,
+      render: (row) => <span className={styles.reasoningFamilyName}>{row.name}</span>,
     },
     {
       key: 'type',
       header: 'Type',
       width: '200px',
       sortable: true,
-      render: (row) => (
-        <span
-          className={styles.badge}
-          style={{ background: 'rgba(166, 171, 179, 0.15)', color: 'var(--color-accent-cyan)' }}
-        >
-          {row.type}
-        </span>
-      ),
+      render: (row) => <span className={styles.reasoningFamilyType}>{row.type}</span>,
     },
     {
       key: 'parameter',
       header: 'Parameter',
       sortable: true,
-      render: (row) => (
-        <code style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
-          {row.parameter}
-        </code>
-      ),
+      render: (row) => <code className={styles.reasoningFamilyParameter}>{row.parameter}</code>,
     },
   ]
 
@@ -935,13 +864,15 @@ export default function ConfigPageModelsSection({
               }}
               operationError={operationError}
               onDismissOperationError={() => setOperationError(null)}
-              onAddModel={handleAddModel}
+              onAddModel={() => setConnectModelsOpen(true)}
               onViewModel={handleViewModel}
               onEditModel={handleEditModel}
               onDeleteModel={handleDeleteModel}
               expandedModels={expandedModels}
               onToggleExpand={handleToggleExpand}
-              renderExpandedRow={renderModelEndpoints}
+              renderExpandedRow={(model) => (
+                <ConfigPageModelEndpoints model={model} redactEndpoints={isReadonly} />
+              )}
               getDeleteBlocker={getDeleteBlocker}
               liveVerificationStates={liveVerification.states}
               onVerifyModel={(modelName) => void liveVerification.verify(modelName)}
@@ -987,6 +918,18 @@ export default function ConfigPageModelsSection({
         pending={bulkDeletePending}
         onCancel={() => setModelsPendingDelete([])}
         onConfirm={() => void handleDeleteModelsAction(modelsPendingDelete)}
+      />
+
+      <ConfigPageConnectModelsDialog
+        isOpen={connectModelsOpen}
+        existingModelNames={[
+          ...models.map((model) => model.name),
+          ...(config?.entrypoints ?? []).flatMap((entrypoint) => entrypoint.model_names),
+        ]}
+        reasoningFamilies={Object.keys(reasoningFamilies)}
+        onClose={() => setConnectModelsOpen(false)}
+        onImport={handleConnectModels}
+        onManualSetup={() => handleAddModel()}
       />
 
       <ConfirmDialog

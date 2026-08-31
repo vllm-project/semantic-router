@@ -15,6 +15,18 @@
   --site-accent: #30a2ff;
   --site-accent-strong: #75c5ff;
   --site-accent-soft: rgba(48, 162, 255, 0.14);
+  /* The landing page is dark in both colour modes, so it takes the dark half
+   * of the hover ladder and CTA tier too — otherwise a light-mode visitor gets
+   * the deep-blue #0876c9 fill against a near-black band. */
+  --site-hover-chrome-bg: rgba(48, 162, 255, 0.1);
+  --site-hover-subtle-bg: rgba(48, 162, 255, 0.06);
+  --site-hover-text: #75c5ff;
+  --site-cta-bg: #30a2ff;
+  --site-cta-bg-hover: #75c5ff;
+  --site-cta-text: #04121f;
+  --site-cta-border: #30a2ff;
+  --site-cta-border-hover: #75c5ff;
+  --site-cta-shadow: 0 14px 32px rgba(48, 162, 255, 0.24);
   --site-shadow-soft: 0 18px 42px rgba(0, 0, 0, 0.22);
   --site-shadow: 0 24px 64px rgba(0, 0, 0, 0.3);
   --site-shadow-raised: 0 28px 70px rgba(0, 0, 0, 0.36);
@@ -53,373 +65,7 @@
   --site-surface-raised: #222227;
 }
 
-.heroStage {
-  position: relative;
-  display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
-  gap: 0;
-  min-height: calc(100vh - var(--site-header-height));
-  min-height: calc(100svh - var(--site-header-height));
-  padding: clamp(2.25rem, 5vh, 4rem) 0 0;
-  border-bottom: 0;
-  background: var(--site-bg);
-}
-
-.hero {
-  position: relative;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  min-height: 0;
-  padding: 0 0 clamp(1.5rem, 3vh, 2.75rem);
-}
-
-.heroNoise {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  opacity: 0.46;
-}
-
-.heroGrid {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  width: min(100%, 76rem);
-  min-width: 0;
-  margin: 0 auto;
-  justify-items: center;
-}
-
-.heroIntro {
-  position: relative;
-  display: grid;
-  width: min(100%, 56rem);
-  min-width: 0;
-  gap: clamp(1.05rem, 2vh, 1.65rem);
-  justify-items: center;
-  text-align: center;
-}
-
-.heroIntroPanel {
-  width: min(100%, 56rem);
-  min-width: 0;
-}
-
-.heroIntroPanel :global(h1) {
-  max-width: none;
-  font-size: clamp(2.75rem, 6vw, 5.25rem);
-  line-height: 1.05;
-  letter-spacing: -0.05em;
-  text-wrap: pretty;
-}
-
-.heroIntroPanel :global(p) {
-  max-width: 31rem;
-  line-height: 1.5;
-}
-
-.heroBrandLockup {
-  display: inline-flex;
-  width: fit-content;
-  max-width: min(100%, 16rem);
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 0.35rem;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  backdrop-filter: none;
-}
-
-.heroBrandLogo {
-  display: block;
-  width: clamp(11.5rem, 16vw, 14rem);
-  max-width: 100%;
-  height: auto;
-}
-
-.heroTitle {
-  display: grid;
-  width: 100%;
-  min-width: 0;
-  gap: 0.03em;
-  justify-items: center;
-}
-
-.heroTitleLine {
-  display: block;
-  max-width: 100%;
-  white-space: nowrap;
-}
-
-.heroTitleAccent {
-  display: inline-block;
-  white-space: nowrap;
-  color: var(--site-accent);
-  font-size: 1.08em;
-  font-weight: 760;
-  letter-spacing: -0.045em;
-}
-
-.heroDescriptionText {
-  display: inline-block;
-  max-width: 28rem;
-  color: var(--site-muted-bright);
-  font-size: clamp(1rem, 1.15vw, 1.12rem);
-  font-weight: 520;
-  letter-spacing: -0.01em;
-  text-wrap: pretty;
-}
-
-.heroPrimaryCta,
-.heroSecondaryCta {
-  min-width: 15rem;
-  min-height: 3rem;
-  border-width: 1px;
-  font-size: 0.84rem;
-  font-weight: 650;
-  letter-spacing: 0.1em;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.6),
-    0 14px 28px rgba(15, 23, 42, 0.08);
-  backdrop-filter: blur(10px);
-}
-
-.heroPrimaryCta {
-  border-color: rgba(15, 23, 42, 0.16);
-  background: linear-gradient(180deg, rgba(17, 17, 17, 0.96), rgba(5, 5, 5, 0.98));
-  color: #fffdf8;
-}
-
-.heroPrimaryCta:hover {
-  background: linear-gradient(180deg, rgba(5, 5, 5, 0.98), rgba(0, 0, 0, 1));
-  border-color: rgba(5, 5, 5, 0.95);
-  color: #fffdf8;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.14),
-    0 18px 34px rgba(15, 23, 42, 0.14);
-}
-
-.heroSecondaryCta {
-  border-color: var(--site-border);
-  background: var(--site-surface-glass);
-  color: var(--site-text-strong);
-}
-
-.heroSecondaryCta:hover {
-  border-color: var(--site-border-strong);
-  background: rgba(255, 255, 255, 0.92);
-  color: var(--site-text-strong);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.72),
-    0 18px 34px rgba(15, 23, 42, 0.08);
-}
-
-.heroManifesto {
-  max-width: 38rem;
-  margin: 0;
-  padding-top: 0.05rem;
-}
-
-.heroManifesto::before {
-  content: '';
-  display: block;
-  width: 0.5rem;
-  height: 0.5rem;
-  margin-bottom: 0.56rem;
-  border-radius: 999px;
-  background: rgba(17, 17, 17, 0.72);
-  box-shadow: 0 0 0 6px rgba(17, 17, 17, 0.05);
-}
-
-.heroManifestoText {
-  display: inline-block;
-  max-width: 34rem;
-  padding: 0.08rem 0.9rem 0.12rem 1rem;
-  border-left: 1px solid rgba(17, 17, 17, 0.2);
-  background: linear-gradient(90deg, rgba(17, 17, 17, 0.08), rgba(17, 17, 17, 0.03) 72%, transparent);
-  color: rgba(17, 17, 17, 0.92);
-  font-size: clamp(1rem, 1.2vw, 1.12rem);
-  font-weight: 540;
-  line-height: 1.55;
-  letter-spacing: -0.012em;
-  text-wrap: pretty;
-}
-
-.heroModelSection {
-  position: relative;
-  z-index: 1;
-  width: 100%;
-  padding: 0;
-}
-
-.heroModelBand {
-  position: relative;
-  overflow: hidden;
-  display: grid;
-  gap: 0.9rem;
-  width: 100%;
-  margin: 0;
-  padding: 1rem 0 1.35rem;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  backdrop-filter: none;
-}
-
-.heroModelBand::before {
-  content: none;
-}
-
-.heroModelBandHeader {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  gap: 0.28rem;
-  max-width: 36rem;
-  margin: 0 auto;
-  padding: 0 1.4rem;
-  justify-items: center;
-  text-align: center;
-}
-
-.heroModelBandEyebrow {
-  display: inline-flex;
-  width: fit-content;
-  align-items: center;
-  padding: 0;
-  color: var(--site-muted);
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-}
-
-.heroModelBandViewport {
-  --hero-model-gap: 2.35rem;
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  overflow: hidden;
-  width: 100%;
-  min-width: 0;
-  padding: 0 1.45rem;
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
-  mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
-}
-
-.heroModelBandTrack {
-  display: flex;
-  align-items: center;
-  gap: var(--hero-model-gap);
-  width: max-content;
-  min-width: max-content;
-  flex-wrap: nowrap;
-  will-change: transform;
-  animation: heroModelBandScroll 96s linear infinite;
-}
-
-.heroModelBandSequence {
-  display: flex;
-  align-items: center;
-  gap: var(--hero-model-gap);
-  flex: 0 0 auto;
-  min-width: max-content;
-}
-
-.heroModelBand:hover .heroModelBandTrack {
-  animation-play-state: paused;
-}
-
-.heroModelChip {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.84rem;
-  min-height: 3.1rem;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  color: rgba(17, 17, 17, 0.86);
-  white-space: nowrap;
-  opacity: 0.9;
-  transition:
-    opacity 180ms ease,
-    color 180ms ease,
-    transform 180ms ease;
-}
-
-.heroModelBand:hover .heroModelChip {
-  opacity: 0.98;
-}
-
-.heroModelChipIcon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
-  color: rgba(17, 17, 17, 0.66);
-}
-
-.heroModelGlyph {
-  width: 1.75rem;
-  height: 1.75rem;
-  opacity: 0.9;
-}
-
-.heroModelChipLabel {
-  font-size: 1.1rem;
-  font-weight: 600;
-  letter-spacing: -0.012em;
-}
-
-@keyframes heroModelBandScroll {
-  from {
-    transform: translate3d(0, 0, 0);
-  }
-
-  to {
-    transform: translate3d(calc(-50% - (var(--hero-model-gap) / 2)), 0, 0);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .heroModelBandTrack {
-    animation: none;
-  }
-}
-
-[data-theme='dark'] .heroBrandLockup {
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-}
-
-[data-theme='dark'] .heroModelBand {
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-}
-
-[data-theme='dark'] .heroModelChip {
-  color: rgba(255, 255, 255, 0.88);
-}
-
-[data-theme='dark'] .heroModelChipIcon {
-  color: rgba(255, 255, 255, 0.62);
-}
-
 .capabilitySection,
-.encoderSection,
 .momProofSection,
 .finalCtaSection {
   border-bottom: 0;
@@ -437,17 +83,6 @@
   content: none;
 }
 
-.encoderSection {
-  position: relative;
-  overflow: hidden;
-  padding: clamp(3.25rem, 5.5vw, 4.5rem) 0;
-  background: var(--site-bg);
-}
-
-.encoderSection::before {
-  content: none;
-}
-
 .momProofSection {
   position: relative;
   overflow: hidden;
@@ -457,32 +92,6 @@
 
 .momProofSection::before {
   content: none;
-}
-
-.sectionHeading {
-  composes: site-section-intro site-section-intro--wide from global;
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 0.85rem;
-  margin-bottom: 2rem;
-}
-
-.sectionHeading h2 {
-  max-width: none;
-  margin: 0;
-  font-size: var(--site-text-h2);
-  line-height: 1.18;
-  letter-spacing: -0.025em;
-  text-wrap: pretty;
-}
-
-.sectionHeading p {
-  max-width: 42rem;
-  margin: 0;
-  color: var(--site-muted-bright);
-  font-size: 1rem;
-  line-height: 1.65;
-  text-wrap: pretty;
 }
 
 .capabilityFrame {
@@ -496,143 +105,16 @@
   background: var(--site-surface-alt);
 }
 
+/* Section intro above the card; the card holds only the matrix. */
 .capabilityHeading {
-  display: grid;
   gap: 0.65rem;
-}
-
-.capabilityLabel {
-  color: var(--site-muted);
-}
-
-.capabilityLabel::after {
-  color: var(--site-accent);
+  margin-bottom: var(--site-section-gap);
 }
 
 .capabilityHeading h2 {
-  max-width: none;
-  margin: 0;
   color: var(--site-text-strong);
-  font-size: clamp(1.3rem, 2.1vw, 1.7rem);
-  font-weight: 400;
-  line-height: 1.2;
-  letter-spacing: -0.028em;
-  text-wrap: pretty;
-}
-
-.capabilitySummary {
-  display: grid;
-  grid-template-columns: minmax(0, 36rem) auto;
-  align-items: end;
-  justify-content: space-between;
-  gap: 1.25rem;
-}
-
-.capabilitySummary p {
-  max-width: 36rem;
-  margin: 0;
-  color: var(--site-muted-bright);
-  font-size: clamp(0.92rem, 1.05vw, 1rem);
-  line-height: 1.5;
-  letter-spacing: -0.01em;
-}
-
-.capabilitySummary .capabilityCta {
-  flex: 0 0 auto;
-  border-color: rgba(48, 162, 255, 0.38);
-  background: rgba(48, 162, 255, 0.08);
-  color: var(--site-accent-strong);
-  box-shadow: none;
-  backdrop-filter: none;
-}
-
-.capabilitySummary .capabilityCta:hover {
-  border-color: var(--site-accent);
-  background: var(--site-accent);
-  color: #ffffff;
-  box-shadow: none;
-}
-
-.architectureRail {
-  position: relative;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  margin: 0;
-  padding: 0;
-  border-top: 1px solid var(--site-border-strong);
-  border-bottom: 1px solid var(--site-border-strong);
-  list-style: none;
-  background: var(--site-surface);
-}
-
-.architectureRail::before {
-  content: '';
-  position: absolute;
-  z-index: 1;
-  top: -1px;
-  left: 0;
-  width: 100%;
-  height: 2px;
-  background: linear-gradient(90deg, var(--site-accent), rgba(48, 162, 255, 0.16));
-}
-
-.architectureStage {
-  display: grid;
-  min-width: 0;
-  min-height: 13.5rem;
-  align-content: start;
-  gap: 0.72rem;
-  padding: 1.8rem clamp(1.35rem, 2.4vw, 2.35rem) 2rem;
-  border-left: 1px solid var(--site-border);
-}
-
-.architectureStage:first-child {
-  border-left: 0;
-}
-
-.stageMarker {
-  display: flex;
-  align-items: center;
-  gap: 0.7rem;
-  margin-bottom: 0.6rem;
-  color: var(--site-accent-strong);
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-}
-
-.stageMarker::after {
-  content: '';
-  width: 2.25rem;
-  height: 1px;
-  background: rgba(48, 162, 255, 0.52);
-}
-
-.stageLabel {
-  color: var(--site-muted);
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-.architectureStage strong {
-  color: var(--site-text-strong);
-  font-size: clamp(1.35rem, 2.25vw, 2.15rem);
-  font-weight: 500;
-  line-height: 1.08;
-  letter-spacing: -0.035em;
-}
-
-.stageDetail {
-  margin-top: auto;
-  color: var(--site-muted-bright);
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.72rem;
-  line-height: 1.5;
-  letter-spacing: 0.035em;
+  font-weight: var(--site-font-weight-semibold);
+  letter-spacing: -0.025em;
 }
 
 .architectureMatrix {
@@ -797,253 +279,25 @@
   padding-top: 0.25rem;
 }
 
-.encoderFrame {
-  border: 1px solid var(--site-border);
-  border-radius: 1.1rem;
-  background:
-    radial-gradient(ellipse 80% 50% at 100% 0%, rgba(48, 162, 255, 0.08), transparent 55%),
-    var(--site-surface-alt);
-  overflow: hidden;
-}
-
-.encoderShowcase {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  grid-template-columns: minmax(240px, 0.32fr) minmax(0, 0.68fr);
-  gap: 0;
-  margin-bottom: 1rem;
-}
-
-.encoderLead,
-.encoderPipelineFrame,
-.encoderCard {
-  border: 0;
-  background: transparent;
-}
-
-.encoderLead {
-  display: flex;
-  flex-direction: column;
-  align-self: stretch;
-  gap: 0.9rem;
-  padding: clamp(1.1rem, 2vw, 1.35rem);
-  border-right: 1px solid var(--site-border);
-  background: rgba(255, 255, 255, 0.015);
-}
-
-.encoderLeadCopy {
-  display: grid;
-  gap: 0.55rem;
-}
-
-.encoderLeadCopy p {
-  max-width: 22rem;
-  margin: 0;
-  color: var(--site-muted-bright);
-  font-size: clamp(0.88rem, 1vw, 0.96rem);
-  line-height: 1.6;
-  text-wrap: pretty;
-}
-
-.encoderTrackList {
-  display: grid;
-  gap: 0.5rem;
-}
-
-.encoderTrack {
-  display: grid;
-  gap: 0.35rem;
-  width: 100%;
-  padding: 0.7rem 0.8rem;
-  border: 1px solid var(--site-border);
-  border-radius: 0.65rem;
-  background: rgba(255, 255, 255, 0.02);
-  color: var(--site-muted);
-  font-size: 0.8rem;
-  line-height: 1.5;
-  text-align: left;
-  cursor: pointer;
-  transition:
-    border-color var(--site-transition-fast),
-    background var(--site-transition-fast),
-    box-shadow var(--site-transition-fast),
-    transform var(--site-transition-fast);
-}
-
-.encoderTrack:hover {
-  border-color: var(--site-hover-border);
-  background: var(--site-hover-surface-bg-soft);
-  transform: translateY(-1px);
-}
-
-.encoderTrack:focus-visible {
-  outline: 2px solid var(--site-accent);
-  outline-offset: 2px;
-}
-
-.encoderTrackActive {
-  border-color: rgba(48, 162, 255, 0.42);
-  background: rgba(48, 162, 255, 0.08);
-  box-shadow: var(--site-hover-inset);
-  color: var(--site-text);
-}
-
-.encoderTrackActive .encoderTrackLabel {
-  border-color: rgba(48, 162, 255, 0.35);
-  background: rgba(48, 162, 255, 0.14);
-  color: var(--site-brand-blue);
-}
-
-.encoderTrackText {
-  text-wrap: pretty;
-}
-
-.encoderTrackLabel,
-.encoderCardMarker {
-  display: inline-flex;
-  width: fit-content;
-  padding: 0.16rem 0.4rem;
-  border: 1px solid var(--site-border);
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--site-muted-bright);
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.64rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.encoderActions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.65rem;
-  padding-top: 0.15rem;
-  margin-top: auto;
-}
-
-.encoderCta:global(.pill) {
-  border-color: rgba(48, 162, 255, 0.38) !important;
-  background: rgba(48, 162, 255, 0.1) !important;
-  color: var(--site-brand-blue) !important;
-  box-shadow: none !important;
-}
-
-.encoderCta:global(.pill):hover {
-  border-color: var(--site-brand-blue) !important;
-  background: var(--site-brand-blue) !important;
-  color: #030303 !important;
-  box-shadow: var(--site-hover-glow) !important;
-}
-
-.encoderPipelineFrame {
-  position: relative;
-  overflow: hidden;
-  min-height: 28rem;
-  display: flex;
-  align-items: flex-start;
-  padding: clamp(1rem, 1.8vw, 1.25rem);
-  background:
-    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
-    radial-gradient(circle at top, rgba(48, 162, 255, 0.08), transparent 38%);
-  background-size: 32px 32px, 32px 32px, auto;
-}
-
-.encoderPipelineFrame > * {
-  position: relative;
-  z-index: 1;
-  width: 100%;
-}
-
-.encoderCardGrid {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.75rem;
-  margin-top: 0.85rem;
-}
-
-.encoderCard {
-  display: grid;
-  align-content: start;
-  gap: 0.75rem;
-  min-height: 0;
-  padding: 1rem 1.05rem;
-  border: 1px solid var(--site-border);
-  border-radius: 0.75rem;
-  background: var(--site-surface);
-  transition:
-    border-color 180ms ease,
-    transform 180ms ease,
-    background 180ms ease,
-    box-shadow 180ms ease;
-}
-
-.encoderCard:hover {
-  transform: translateY(-3px);
-  border-color: var(--site-hover-border);
-  background: var(--site-hover-surface-bg-soft);
-  box-shadow: var(--site-hover-glow);
-}
-
-.encoderCard:hover h3 {
-  color: var(--site-brand-blue);
-}
-
-.encoderSpotlightCard {
-  display: none;
-}
-
-.encoderCardCopy {
-  display: grid;
-  gap: 0.45rem;
-}
-
-.encoderCardCopy h3 {
-  margin: 0;
-  font-size: clamp(0.95rem, 1.2vw, 1.05rem);
-  line-height: 1.25;
-}
-
-.encoderCardCopy p {
-  margin: 0;
-  max-width: none;
-  color: var(--site-muted);
-  font-size: 0.82rem;
-  line-height: 1.55;
-  text-wrap: pretty;
-}
-
+/* Statement section: same lockup as every other intro, larger display type. */
 .momProofHeading {
+  composes: site-section-intro from global;
   position: relative;
   z-index: 1;
-  display: grid;
-  grid-template-columns: minmax(0, 0.34fr) minmax(0, 0.66fr);
-  gap: clamp(1rem, 2vw, 2rem);
-  align-items: end;
   margin-bottom: clamp(1.4rem, 3vw, 2.4rem);
 }
 
 .momProofHeading h2 {
-  max-width: 48rem;
-  margin: 0;
   color: var(--site-text-strong);
   font-size: clamp(2rem, 4.4vw, 4.5rem);
   font-weight: 690;
   line-height: 0.98;
   letter-spacing: -0.055em;
-  text-wrap: balance;
 }
 
 .momProofHeading p {
-  max-width: 45rem;
-  margin: 0.9rem 0 0;
-  color: var(--site-muted-bright);
   font-size: clamp(0.98rem, 1.35vw, 1.18rem);
   line-height: 1.58;
-  text-wrap: pretty;
 }
 
 .momProofFrame {
@@ -1165,423 +419,426 @@
 }
 
 .finalCtaSection {
-  padding: 1rem 0 5rem;
+  padding: 0.5rem 0 clamp(3rem, 5vw, 4.5rem);
   background: var(--site-bg);
 }
 
-.finalCtaFrame {
+/* Sovereignty shows the mechanism instead of restating it: the same stage
+ * language as the routing pipeline above, with the constraint gate lit. */
+.sovereigntySection {
+  position: relative;
+  padding: clamp(2.75rem, 4.5vw, 4rem) 0 clamp(1.25rem, 2vw, 1.75rem);
+  background: var(--site-bg);
+}
+
+.sovereigntyFrame {
   display: grid;
-  grid-template-columns: 1fr;
-  align-items: start;
   gap: 1.5rem;
-  padding: clamp(1.6rem, 4vw, 3.25rem);
-  border: 1px solid var(--site-border-strong);
-  border-radius: 1.5rem;
+  padding-top: clamp(1.35rem, 2.5vw, 2rem);
+  border-top: 1px solid var(--site-border);
+}
+
+:global(.site-section-intro).sovereigntyCopy {
+  gap: 0.55rem;
+  margin-bottom: 0;
+}
+
+.constraintFlow {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.constraintStage {
+  position: relative;
+  display: grid;
+  gap: 0.3rem;
+  align-content: start;
+  min-width: 0;
+  padding: 0.85rem 0.9rem;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 0.6rem;
+  background: rgba(4, 8, 15, 0.75);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  animation: constraintStageIn 0.6s ease-out var(--stage-delay) both;
+}
+
+.constraintStage:not(:last-child)::after {
+  content: '→';
+  position: absolute;
+  top: 50%;
+  right: -0.46rem;
+  z-index: 1;
+  color: rgba(117, 197, 255, 0.5);
+  font-size: 0.7rem;
+  line-height: 1;
+  transform: translateY(-50%);
+}
+
+/* The gate is the whole point of the diagram, so it is the lit one. */
+.constraintStageGate {
+  border-color: rgba(48, 162, 255, 0.42);
   background:
-    linear-gradient(130deg, rgba(48, 162, 255, 0.11), transparent 42%),
-    var(--site-surface-alt);
+    linear-gradient(180deg, rgba(48, 162, 255, 0.14), rgba(48, 162, 255, 0.04)),
+    rgba(4, 8, 15, 0.75);
+  animation: constraintGate 5.6s ease-in-out infinite;
+}
+
+@keyframes constraintGate {
+  0%,
+  10%,
+  40%,
+  100% {
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+
+  20% {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.04),
+      0 0 0 1px rgba(48, 162, 255, 0.4),
+      0 0 26px rgba(48, 162, 255, 0.22);
+  }
+}
+
+.constraintStageIndex {
+  color: rgba(117, 197, 255, 0.55);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.58rem;
+  letter-spacing: 0.08em;
+}
+
+.constraintStage strong {
+  color: rgba(255, 255, 255, 0.92);
+  font-size: clamp(0.82rem, 1vw, 0.95rem);
+  font-weight: var(--site-font-weight-semibold);
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+.constraintStageDetail {
+  color: var(--site-muted);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.constraintStageGate .constraintStageDetail {
+  color: var(--site-accent-strong);
+}
+
+/* A request travelling the pipeline, on a loop. Same scan-bar language as the
+ * routing pipeline stages above, so the two diagrams animate alike. */
+.constraintStage::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #75c5ff, #30a2ff);
+  transform: scaleX(0);
+  transform-origin: left;
+  animation: constraintScan 5.6s ease-in-out var(--stage-delay) infinite;
+}
+
+.constraintStage:not(:last-child)::after {
+  animation: constraintArrow 5.6s ease-in-out var(--stage-delay) infinite;
+}
+
+@keyframes constraintScan {
+  0%,
+  4% {
+    opacity: 0;
+    transform: scaleX(0);
+  }
+
+  12% {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+
+  34% {
+    opacity: 0.5;
+    transform: scaleX(1);
+  }
+
+  100% {
+    opacity: 0.16;
+    transform: scaleX(1);
+  }
+}
+
+@keyframes constraintArrow {
+  0%,
+  8% {
+    opacity: 0.32;
+    transform: translateY(-50%) translateX(-0.12rem);
+  }
+
+  16% {
+    opacity: 1;
+    transform: translateY(-50%) translateX(0.1rem);
+  }
+
+  32%,
+  100% {
+    opacity: 0.32;
+    transform: translateY(-50%) translateX(0);
+  }
+}
+
+@keyframes constraintStageIn {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 0.5rem, 0);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.constraintFooter {
+  display: grid;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.constraintNote {
+  margin: 0;
+  color: var(--site-muted);
+  font-size: 0.9rem;
+}
+
+.sovereigntyCta {
+  width: fit-content;
+}
+
+@media (min-width: 768px) {
+  .constraintFooter {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 2rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .constraintFlow {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+  }
+
+  .constraintStage:not(:last-child)::after {
+    content: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .constraintStage,
+  .constraintStage::before,
+  .constraintStage:not(:last-child)::after,
+  .constraintStageGate {
+    animation: none;
+  }
+
+  .constraintStage::before {
+    opacity: 0.4;
+    transform: scaleX(1);
+  }
+}
+
+/* Centred card on the same 46rem box as the install command block, so the two
+ * call-to-action moments on the page read as the same component. */
+.finalCtaFrame {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  justify-items: center;
+  gap: 1.25rem;
+  width: 100%;
+  max-width: 46rem;
+  margin-inline: auto;
+  padding: clamp(1.75rem, 3vw, 2.5rem) clamp(1.5rem, 3vw, 2.5rem);
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 1.15rem;
+  background:
+    radial-gradient(120% 160% at 50% 0%, rgba(48, 162, 255, 0.15), transparent 60%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0) 44%),
+    #08080a;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 24px 60px rgba(0, 0, 0, 0.45);
+}
+
+.finalCtaFrame::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(48, 162, 255, 0.65) 22%,
+    rgba(48, 162, 255, 0.65) 46%,
+    transparent 78%
+  );
 }
 
 .finalCtaCopy {
+  position: relative;
   display: grid;
-  gap: 0.85rem;
+  justify-items: center;
+  gap: 0.5rem;
   min-width: 0;
 }
 
 .finalCtaCopy h2 {
-  max-width: min(100%, 30rem);
   margin: 0;
   color: var(--site-text-strong);
-  font-size: var(--site-text-h2);
-  font-weight: 450;
-  line-height: 1.18;
+  font-size: clamp(1.35rem, 2.2vw, 1.85rem);
+  font-weight: 560;
+  line-height: 1.15;
   letter-spacing: -0.03em;
-  text-wrap: pretty;
+  text-wrap: balance;
 }
 
 .finalCtaCopy p {
-  max-width: 36rem;
+  max-width: 52ch;
   margin: 0;
   color: var(--site-muted-bright);
-  font-size: 1.05rem;
+  font-size: 0.98rem;
 }
 
 .finalCtaActions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
-  justify-content: flex-start;
+  justify-content: center;
 }
 
-@media (min-width: 768px) {
-  .finalCtaFrame {
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: end;
-    gap: 2rem;
-  }
+/* The page's last action, so it is solid rather than another outline pill. */
+.finalCtaActions .finalCtaPrimary:global(.pill) {
+  border-color: var(--site-accent) !important;
+  background: var(--site-accent) !important;
+  color: #030303 !important;
+  box-shadow: 0 16px 36px rgba(48, 162, 255, 0.24) !important;
+}
 
-  .finalCtaActions {
-    justify-content: flex-end;
+.finalCtaActions .finalCtaPrimary:global(.pill):hover {
+  border-color: var(--site-accent-strong) !important;
+  background: var(--site-accent-strong) !important;
+  color: #030303 !important;
+  transform: translateY(-1px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .finalCtaActions .finalCtaPrimary:global(.pill):hover {
+    transform: none;
   }
 }
 
 @media (max-width: 996px) {
-  .heroGrid,
-  .sectionHeading,
-  .encoderShowcase,
   .momProofHeading,
-  .momProofArchitecture,
-  .finalCtaFrame {
-    grid-template-columns: 1fr;
+  .momProofArchitecture {
+      grid-template-columns: 1fr;
   }
 
-  .encoderCardGrid,
   .momScorecardGrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .momProofArchitectureCopy {
-    border-right: 0;
-    border-bottom: 1px solid var(--site-border);
-  }
-
-  .encoderLead {
-    border-right: 0;
-    border-bottom: 1px solid var(--site-border);
-  }
-
-  .encoderPipelineFrame {
-    min-height: 0;
-  }
-
-  .heroStage {
-    min-height: calc(100svh - var(--site-header-height));
-    padding: 3rem 0 0;
+      border-right: 0;
+      border-bottom: 1px solid var(--site-border);
   }
 }
 
 @media (max-width: 768px) {
-  .heroStage {
-    gap: 0;
-    padding: 2.35rem 0 0;
-  }
-
-  .heroIntro,
-  .heroIntroPanel {
-    width: 100%;
-    max-width: 100%;
-  }
-
-  .heroGrid,
-  .heroTitle {
-    width: 100%;
-    max-width: 100%;
-  }
-
-  .heroBrandLockup {
-    max-width: 100%;
-    margin-bottom: 0.15rem;
-  }
-
-  .heroBrandLogo {
-    width: min(11rem, 100%);
-  }
-
-  .heroTitleLine {
-    white-space: normal;
-  }
-
-  .heroTitleAccent {
-    white-space: normal;
-    font-size: 1.04em;
-  }
-
-  .heroIntroPanel :global(h1) {
-    width: 100%;
-    max-width: 100%;
-    font-size: clamp(2rem, 8.5vw, 2.45rem);
-    line-height: 1.1;
-  }
-
-  .heroDescriptionText {
-    width: 100%;
-    max-width: 100%;
-  }
-
-  .heroPrimaryCta,
-  .heroSecondaryCta {
-    min-width: 100%;
-    font-size: 0.8rem;
-  }
-
-  .heroModelBand {
-    gap: 0.96rem;
-    padding: 1.12rem 0 1.04rem;
-  }
-
-  .heroModelBandHeader {
-    margin-bottom: 0.1rem;
-    padding: 0 1rem;
-  }
-
-  .heroModelBandViewport {
-    --hero-model-gap: 1.45rem;
-    padding: 0 1rem;
-    -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
-    mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
-  }
-
-  .heroModelBandTrack {
-    animation-duration: 96s;
-  }
-
-  .heroModelChip {
-    gap: 0.7rem;
-    min-height: 2.65rem;
-  }
-
-  .heroModelChipIcon,
-  .heroModelGlyph {
-    width: 1.5rem;
-    height: 1.5rem;
-  }
-
-  .heroModelChipLabel {
-    font-size: 1rem;
-  }
-
-  .heroManifesto {
-    padding-top: 0;
-  }
-
-  .heroManifesto::before {
-    width: 0.46rem;
-    height: 0.46rem;
-    margin-bottom: 0.48rem;
-  }
-
-  .heroManifestoText {
-    padding: 0.04rem 0.72rem 0.08rem 0.84rem;
-    font-size: 0.98rem;
-  }
-
   .capabilitySection,
-  .encoderSection,
   .momProofSection {
-    padding: 3rem 0;
+      padding: 3rem 0;
   }
 
   .capabilityHeading h2 {
-    font-size: clamp(1.25rem, 4vw, 1.55rem);
-    line-height: 1.22;
-  }
-
-  .capabilitySummary {
-    grid-template-columns: 1fr;
-    align-items: start;
-    gap: 1rem;
-  }
-
-  .capabilitySummary .capabilityCta {
-    justify-self: start;
+      font-size: clamp(1.25rem, 4vw, 1.55rem);
+      line-height: 1.22;
   }
 
   .matrixHeader {
-    display: none;
+      display: none;
   }
 
   .architectureMatrix {
-    display: grid;
-    gap: 0.75rem;
-    overflow: visible;
-    border: 0;
-    background: transparent;
+      display: grid;
+      gap: 0.75rem;
+      overflow: visible;
+      border: 0;
+      background: transparent;
   }
 
   .matrixRow {
-    grid-template-columns: 1fr;
-    min-height: 0;
-    border: 1px solid var(--site-border);
-    background: #0d0d0f;
+      grid-template-columns: 1fr;
+      min-height: 0;
+      border: 1px solid var(--site-border);
+      background: #0d0d0f;
   }
 
   .matrixDimension,
   .matrixFragmented,
   .matrixUnified {
-    padding: 0.75rem 0.9rem;
+      padding: 0.75rem 0.9rem;
   }
 
   .matrixFragmented,
   .matrixUnified {
-    display: grid;
-    gap: 0.45rem;
-    border-top: 1px solid var(--site-border);
-    border-left: 0;
+      display: grid;
+      gap: 0.45rem;
+      border-top: 1px solid var(--site-border);
+      border-left: 0;
   }
 
   .matrixMobileLabel {
-    display: block;
-    color: var(--site-muted);
-    font-family: var(--ifm-font-family-monospace);
-    font-size: 0.6rem;
-    font-weight: 700;
-    letter-spacing: 0.11em;
-    text-transform: uppercase;
+      display: block;
+      color: var(--site-muted);
+      font-family: var(--ifm-font-family-monospace);
+      font-size: 0.6rem;
+      font-weight: 700;
+      letter-spacing: 0.11em;
+      text-transform: uppercase;
   }
 
   .matrixUnified .matrixMobileLabel {
-    color: var(--site-accent-strong);
-  }
-
-  .architectureRail {
-    display: flex;
-    overflow-x: auto;
-    gap: 0.75rem;
-    padding-bottom: 0.75rem;
-    border: 0;
-    background: transparent;
-    scroll-padding-inline: 0.1rem;
-    scroll-snap-type: x proximity;
-  }
-
-  .architectureRail::before {
-    content: none;
-  }
-
-  .architectureStage {
-    flex: 0 0 min(18rem, calc(100vw - 5rem));
-    min-width: min(18rem, calc(100vw - 5rem));
-    min-height: 10rem;
-    padding: 1.45rem 1.15rem 1.6rem;
-    border: 1px solid var(--site-border);
-    background: var(--site-surface);
-    scroll-snap-align: start;
-  }
-
-  .architectureStage:first-child {
-    border: 1px solid var(--site-border);
-  }
-
-  .stageDetail {
-    margin-top: 0.35rem;
+      color: var(--site-accent-strong);
   }
 
   .momScorecardGrid {
-    grid-template-columns: 1fr;
+      grid-template-columns: 1fr;
   }
 
   .momProofHeading h2 {
-    font-size: clamp(2.05rem, 13vw, 3.35rem);
+      font-size: clamp(2.05rem, 13vw, 3.35rem);
   }
 
   .momProofArchitectureCopy,
   .momProofArchitectureImageWrap {
-    padding: 1rem;
-  }
-
-  .encoderCardGrid {
-    display: flex;
-    overflow-x: auto;
-    gap: 0.8rem;
-    padding-bottom: 0.75rem;
-    scroll-padding-inline: 0.1rem;
-    scroll-snap-type: x proximity;
-  }
-
-  .encoderCardGrid .encoderCard {
-    flex: 0 0 min(16rem, calc(100vw - 3rem));
-    min-width: min(16rem, calc(100vw - 3rem));
-    min-height: 0;
-    scroll-snap-align: start;
-  }
-
-  .encoderLead,
-  .encoderPipelineFrame,
-  .encoderCard {
-    padding: 1.15rem;
+      padding: 1rem;
   }
 
   .finalCtaActions {
-    justify-content: flex-start;
+      justify-content: center;
   }
 }
 
 @media (max-width: 640px) {
   .capabilityHeading h2 {
-    font-size: clamp(1.2rem, 4.8vw, 1.5rem);
-    line-height: 1.24;
+      font-size: clamp(1.2rem, 4.8vw, 1.5rem);
+      line-height: 1.24;
   }
 
-  .capabilitySummary p {
-    font-size: 0.92rem;
-  }
-
-  .capabilitySummary .capabilityCta {
-    width: 100%;
-  }
-}
-
-@media (max-height: 680px) {
-  .heroStage {
-    padding-top: clamp(0.65rem, 2vh, 1rem);
-  }
-
-  .hero {
-    padding-bottom: 0.35rem;
-  }
-
-  .heroIntro {
-    gap: 0.5rem;
-  }
-
-  .heroBrandLockup {
-    margin-bottom: 0;
-  }
-
-  .heroBrandLogo {
-    width: clamp(7.5rem, 24vh, 10rem);
-  }
-
-  .heroIntroPanel :global(h1) {
-    font-size: clamp(1.75rem, 6.5vh, 2.65rem);
-    line-height: 1.08;
-  }
-
-  .heroIntroPanel :global(p) {
-    line-height: 1.3;
-  }
-
-  .heroDescriptionText {
-    font-size: 0.82rem;
-  }
-
-  .heroPrimaryCta,
-  .heroSecondaryCta {
-    min-height: 2.35rem;
-    font-size: 0.72rem;
-  }
-
-  .heroModelBand {
-    gap: 0.3rem;
-    padding: 0.45rem 0 0.5rem;
-  }
-
-  .heroModelBandHeader {
-    margin-bottom: 0;
-  }
-
-  .heroModelChip {
-    gap: 0.45rem;
-    min-height: 1.7rem;
-  }
-
-  .heroModelChipIcon,
-  .heroModelGlyph {
-    width: 1rem;
-    height: 1rem;
-  }
-
-  .heroModelChipLabel {
-    font-size: 0.8rem;
-  }
 }

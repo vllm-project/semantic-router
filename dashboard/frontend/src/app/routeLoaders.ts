@@ -2,6 +2,7 @@ export type RouteLoader = () => Promise<unknown>
 
 export const loadLandingPage = () => import('../pages/LandingPage')
 export const loadLoginPage = () => import('../pages/LoginPage')
+export const loadInviteAcceptPage = () => import('../pages/InviteAcceptPage')
 export const loadBuilderPage = () => import('../pages/BuilderPage')
 export const loadConfigPage = () => import('../pages/ConfigPage')
 export const loadDashboardPage = () => import('../pages/DashboardPage')
@@ -19,8 +20,6 @@ export const loadMonitoringPage = () => import('../pages/MonitoringPage')
 export const loadOpenClawPage = () => import('../pages/OpenClawPage')
 export const loadPlaygroundFullscreenPage = () => import('../pages/PlaygroundFullscreenPage')
 export const loadPlaygroundPage = () => import('../pages/PlaygroundPage')
-export const loadPluginOperationsPage = () => import('../pages/PluginOperationsPage')
-export const loadSecurityPolicyPage = () => import('../pages/SecurityPolicyPage')
 export const loadSetupWizardPage = () => import('../pages/SetupWizardPage')
 export const loadStatusPage = () => import('../pages/StatusPage')
 export const loadTaxonomyPage = () => import('../pages/TaxonomyPage')
@@ -31,6 +30,7 @@ export const loadUsersPage = () => import('../pages/UsersPage')
 const routeLoaders: Array<{ matches: (pathname: string) => boolean; load: RouteLoader }> = [
   { matches: (pathname) => pathname === '/', load: loadLandingPage },
   { matches: (pathname) => pathname.startsWith('/login'), load: loadLoginPage },
+  { matches: (pathname) => pathname.startsWith('/invite/'), load: loadInviteAcceptPage },
   { matches: (pathname) => pathname.startsWith('/setup'), load: loadSetupWizardPage },
   { matches: (pathname) => pathname.startsWith('/dashboard'), load: loadDashboardPage },
   {
@@ -46,8 +46,7 @@ const routeLoaders: Array<{ matches: (pathname: string) => boolean; load: RouteL
   },
   { matches: (pathname) => pathname.startsWith('/knowledge-bases'), load: loadTaxonomyPage },
   { matches: (pathname) => pathname.startsWith('/topology'), load: loadTopologyPage },
-  { matches: (pathname) => pathname.startsWith('/security'), load: loadSecurityPolicyPage },
-  { matches: (pathname) => pathname.startsWith('/clawos'), load: loadOpenClawPage },
+  { matches: (pathname) => pathname.startsWith('/openclaw'), load: loadOpenClawPage },
   { matches: (pathname) => /^\/insights\/[^/]+/.test(pathname), load: loadInsightsRecordPage },
   { matches: (pathname) => pathname.startsWith('/insights'), load: loadInsightsPage },
   { matches: (pathname) => pathname.startsWith('/evaluation'), load: loadEvaluationPage },
@@ -60,12 +59,6 @@ const routeLoaders: Array<{ matches: (pathname: string) => boolean; load: RouteL
   { matches: (pathname) => pathname.startsWith('/fleet-sim'), load: loadFleetSimOverviewPage },
   { matches: (pathname) => pathname.startsWith('/ml-setup'), load: loadMLSetupPage },
   { matches: (pathname) => pathname.startsWith('/status'), load: loadStatusPage },
-  { matches: (pathname) => pathname.startsWith('/plugins'), load: loadPluginOperationsPage },
-  { matches: (pathname) => pathname.startsWith('/response-cache'), load: loadPluginOperationsPage },
-  {
-    matches: (pathname) => pathname.startsWith('/context-compression'),
-    load: loadPluginOperationsPage,
-  },
   { matches: (pathname) => pathname.startsWith('/logs'), load: loadLogsPage },
   { matches: (pathname) => pathname.startsWith('/monitoring'), load: loadMonitoringPage },
   { matches: (pathname) => pathname.startsWith('/tracing'), load: loadTracingPage },

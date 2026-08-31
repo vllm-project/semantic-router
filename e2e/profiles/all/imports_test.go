@@ -35,3 +35,37 @@ func TestEnvoyAIGatewayProfileKeepsKubernetesAlias(t *testing.T) {
 		t.Fatalf("legacy alias resolved to %q, want envoy-ai-gateway", profile.Name())
 	}
 }
+
+func TestProtocolCodecE2EMatrixProfilesAreClosed(t *testing.T) {
+	profiles := map[string][]string{
+		"response-api": {
+			"protocol-codec-chat-backend-buffered-matrix",
+			"protocol-codec-chat-backend-streaming-matrix",
+			"protocol-codec-responses-backend-buffered-matrix",
+			"protocol-codec-responses-backend-streaming-matrix",
+		},
+		"anthropic-shim": {
+			"protocol-codec-anthropic-backend-buffered-matrix",
+			"protocol-codec-anthropic-backend-streaming-matrix",
+		},
+	}
+
+	for profileName, required := range profiles {
+		profileName, required := profileName, required
+		t.Run(profileName, func(t *testing.T) {
+			profile, err := framework.NewProfileByName(profileName)
+			if err != nil {
+				t.Fatal(err)
+			}
+			actual := make(map[string]struct{}, len(profile.GetTestCases()))
+			for _, name := range profile.GetTestCases() {
+				actual[name] = struct{}{}
+			}
+			for _, name := range required {
+				if _, ok := actual[name]; !ok {
+					t.Errorf("profile %q is missing protocol matrix testcase %q", profileName, name)
+				}
+			}
+		})
+	}
+}

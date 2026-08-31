@@ -540,6 +540,11 @@ routing:
         instructions: >-
           Choose RISKY only for destructive, privileged, or irreversible tool
           operations.
+      - name: remote-safety-score
+        description: Remote binary safety classification head.
+        type: sequence_classifier
+        model: external-sequence-classifier
+        labels: [SAFE, RISKY]
 
   projections:
     partitions:
@@ -767,6 +772,7 @@ routing:
           token_filter: tool_call_args
           verifier_server_url: ""
           verifier_timeout_seconds: 0
+          max_response_bytes: 0
       plugins:
         - type: hallucination
           configuration:
@@ -1201,7 +1207,7 @@ routing:
               request_format: custom
               request_template: "{\"query\":\"{{.Query}}\",\"top_k\":{{.TopK}},\"threshold\":{{.Threshold}}}"
               timeout_seconds: 15
-              max_response_body_bytes: 16777216
+              max_response_bytes: 4194304
               headers:
                 X-Environment: admin
 
@@ -1489,6 +1495,7 @@ routing:
             default_height: 1024
             max_inference_steps: 30
             timeout_seconds: 60
+            max_response_bytes: 67108864
 
     - name: multimodal_route
       description: BOTH-modality route requiring text and image-capable execution.
@@ -1563,7 +1570,7 @@ global:
       - auto
       - exhaustive-reference
     include_config_models_in_list: true
-    clear_route_cache: false
+    clear_route_cache: true
     streamed_body:
       enabled: true
       max_bytes: 1048576
@@ -1602,6 +1609,7 @@ global:
         threshold: 0.6
       ml:
         models_path: models/model-selection
+        model_type: mmbert
         embedding_dim: 384
         knn:
           k: 5
@@ -1833,6 +1841,14 @@ global:
       ttl_seconds: 7200
       eviction_policy: lru
       embedding_model: mmbert
+      # Negation/antonym guard for the in-memory backend. "lexical" is the
+      # model-free default; "nli" or "lexical+nli" additionally verifies the
+      # winning candidate once with the hallucination explainer NLI model and
+      # rejects it above nli.contradiction_threshold (~70 ms/hit on CPU).
+      polarity_guard:
+        mode: lexical
+        nli:
+          contradiction_threshold: 0.5
       milvus:
         connection:
           host: milvus
@@ -2148,6 +2164,7 @@ global:
           api_key_env: EMBEDDING_API_KEY
           timeout_seconds: 5
           max_retries: 2
+          max_response_bytes: 16777216
           dimensions: 1024
     system:
       prompt_guard: models/mmbert32k-jailbreak-detector-merged
@@ -2191,6 +2208,19 @@ global:
         access_key: external-classifier-key
         max_tokens: 128
         temperature: 0
+      # Reached over the http_classify contract; the byte ceilings apply only there.
+      - name: external-sequence-classifier
+        llm_provider: openai
+        model_role: classification
+        llm_endpoint:
+          address: sequence-classifier
+          port: 8080
+          protocol: http
+          name: openai-sequence-classifier
+        llm_timeout_seconds: 5
+        access_key: external-sequence-classifier-key
+        max_request_bytes: 262144
+        max_response_bytes: 1048576
     kbs:
       - name: privacy_kb
         source:

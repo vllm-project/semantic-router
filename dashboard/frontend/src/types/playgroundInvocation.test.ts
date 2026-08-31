@@ -5,6 +5,7 @@ import { createProbePlaygroundInvocation, isPlaygroundInvocation } from './playg
 const plan = {
   probe_id: 'private/zh-review',
   recipe_digest: 'sha256:recipe',
+  recipe: 'private',
   editable: true,
   model: 'vllm-sr/mom-private',
   messages: [{ role: 'user', content: '请检查这个请求' }],
@@ -25,6 +26,7 @@ describe('Playground probe invocation', () => {
       source: 'recipe-probe',
       probeId: plan.probe_id,
       recipeDigest: plan.recipe_digest,
+      recipe: plan.recipe,
       editable: true,
       model: plan.model,
       messages: plan.messages,

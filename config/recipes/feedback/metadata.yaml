@@ -12,6 +12,7 @@ license: Apache-2.0
 tags:
   - cost
   - feedback
+  - multimodal
   - recovery
   - verification
 links:

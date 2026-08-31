@@ -1,0 +1,19 @@
+{
+  "operation": "response",
+  "body": {
+    "id": "resp_1",
+    "object": "response",
+    "model": "provider-model",
+    "status": "completed",
+    "output": [
+      {
+        "type": "function_call",
+        "id": "item_1",
+        "call_id": "call_1",
+        "name": "lookup",
+        "arguments": "{\"query\":\"\\ud800\"}",
+        "status": "completed"
+      }
+    ]
+  }
+}

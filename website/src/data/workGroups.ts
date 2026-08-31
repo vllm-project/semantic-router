@@ -45,6 +45,26 @@ export const workGroups: WorkGroup[] = [
         avatar: 'https://github.com/raghavchitkara36.png',
         profile: 'https://github.com/raghavchitkara36',
       },
+      {
+        name: 'Cerdore',
+        avatar: 'https://github.com/Cerdore.png',
+        profile: 'https://github.com/Cerdore',
+      },
+      {
+        name: 'Ramakrishnan Sathyavageeswaran',
+        avatar: 'https://github.com/ramkrishs.png',
+        profile: 'https://github.com/ramkrishs',
+      },
+      {
+        name: 'Chlins Zhang',
+        avatar: 'https://github.com/chlins.png',
+        profile: 'https://github.com/chlins',
+      },
+      {
+        name: 'yaojiejia',
+        avatar: 'https://github.com/yaojiejia.png',
+        profile: 'https://github.com/yaojiejia',
+      },
     ],
   },
   {
@@ -74,12 +94,37 @@ export const workGroups: WorkGroup[] = [
         avatar: 'https://github.com/adaamko.png',
         profile: 'https://github.com/adaamko',
       },
+      {
+        name: 'Ramakrishnan Sathyavageeswaran',
+        avatar: 'https://github.com/ramkrishs.png',
+        profile: 'https://github.com/ramkrishs',
+      },
     ],
     members: [
       {
         name: 'raghavchitkara',
         avatar: 'https://github.com/raghavchitkara36.png',
         profile: 'https://github.com/raghavchitkara36',
+      },
+      {
+        name: 'Park Soobin',
+        avatar: 'https://github.com/subin9.png',
+        profile: 'https://github.com/subin9',
+      },
+      {
+        name: 'Chlins Zhang',
+        avatar: 'https://github.com/chlins.png',
+        profile: 'https://github.com/chlins',
+      },
+      {
+        name: 'yaojiejia',
+        avatar: 'https://github.com/yaojiejia.png',
+        profile: 'https://github.com/yaojiejia',
+      },
+      {
+        name: 'Guan-Ming Chiu',
+        avatar: 'https://github.com/guan404ming.png',
+        profile: 'https://github.com/guan404ming',
       },
     ],
   },
@@ -117,7 +162,8 @@ export const workGroups: WorkGroup[] = [
     goal: 'Deliver production-grade enterprise capabilities across supported environments and hardware.',
     scope: [
       'Multi-tenancy, identity, API keys, quotas, and audit',
-      'Stability, scalability, observability, and lifecycle operations',
+      'Production observability, workload simulation, and capacity planning',
+      'Stable, scalable deployment APIs and reference stacks',
       'Multi-environment and multi-hardware support',
     ],
     leads: [
@@ -179,6 +225,11 @@ export const workGroups: WorkGroup[] = [
         avatar: 'https://github.com/abhinav-m22.png',
         profile: 'https://github.com/abhinav-m22',
       },
+      {
+        name: 'yaojiejia',
+        avatar: 'https://github.com/yaojiejia.png',
+        profile: 'https://github.com/yaojiejia',
+      },
     ],
   },
   {
@@ -206,6 +257,11 @@ export const workGroups: WorkGroup[] = [
     ],
     members: [
       {
+        name: 'Abhinav Mahajan',
+        avatar: 'https://github.com/abhinav-m22.png',
+        profile: 'https://github.com/abhinav-m22',
+      },
+      {
         name: 'Mahdi Ghodsi',
         avatar: 'https://github.com/Mahdi-CV.png',
         profile: 'https://github.com/Mahdi-CV',
@@ -214,6 +270,11 @@ export const workGroups: WorkGroup[] = [
         name: 'Aakanksha Bhende',
         avatar: 'https://github.com/aakankshabhende.png',
         profile: 'https://github.com/aakankshabhende',
+      },
+      {
+        name: 'Eda Zhou',
+        avatar: 'https://github.com/edamamez.png',
+        profile: 'https://github.com/edamamez',
       },
     ],
   },

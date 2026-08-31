@@ -1,7 +1,10 @@
-/* Docs landing hero: left-aligned lockup on same measure as prose. */
+/* Docs landing hero on the same measure as the prose. The card keeps its full
+ * width; the lockup is centred inside it so the leftover space splits evenly
+ * instead of pooling to the right of a left-clustered logo and tagline. */
 .docs-intro-brand {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: auto auto;
+  justify-content: center;
   align-items: center;
   gap: var(--space-4);
   max-width: var(--measure);
@@ -10,7 +13,7 @@
   border: 1px solid var(--site-border);
   border-radius: var(--radius-lg);
   background:
-    radial-gradient(110% 140% at 0% 0%, var(--site-accent-soft), transparent 60%),
+    radial-gradient(90% 140% at 50% 0%, var(--site-accent-soft), transparent 62%),
     var(--site-surface-alt);
   text-align: left;
 }
@@ -35,8 +38,10 @@
 @media (max-width: 576px) {
   .docs-intro-brand {
     grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
     gap: var(--space-3);
     padding: var(--space-4);
+    text-align: center;
   }
 
   .docs-intro-brand__logo {

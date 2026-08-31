@@ -15,7 +15,10 @@ import (
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	httputil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 )
+
+const defaultExternalRAGMaxResponseBytes int64 = 4 * 1024 * 1024
 
 var (
 	// Shared HTTP client for external API requests with connection pooling
@@ -97,13 +100,13 @@ func (r *OpenAIRouter) retrieveFromExternalAPI(traceCtx context.Context, ctx *Re
 	var buildErr error
 
 	switch apiConfig.RequestFormat {
-	case config.ExternalAPIRequestFormatPinecone:
+	case "pinecone":
 		requestBody, buildErr = r.buildPineconeRequest(ctx, ragConfig)
-	case config.ExternalAPIRequestFormatWeaviate:
+	case "weaviate":
 		requestBody, buildErr = r.buildWeaviateRequest(ctx, ragConfig)
-	case config.ExternalAPIRequestFormatElasticsearch:
+	case "elasticsearch":
 		requestBody, buildErr = r.buildElasticsearchRequest(ctx, ragConfig)
-	case config.ExternalAPIRequestFormatCustom:
+	case "custom":
 		requestBody, buildErr = r.buildCustomRequest(ctx, ragConfig, apiConfig.RequestTemplate)
 	default:
 		return "", fmt.Errorf("unsupported request format: %s", apiConfig.RequestFormat)
@@ -192,20 +195,8 @@ func (r *OpenAIRouter) retrieveFromExternalAPI(traceCtx context.Context, ctx *Re
 		return "", fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
-	maxResponseBodyBytes := externalAPIResponseBodyLimit(apiConfig)
-	responseBody, exceeded, readErr := readExternalAPIResponseBody(resp.Body, maxResponseBodyBytes)
-	if readErr != nil {
-		return "", fmt.Errorf("failed to read external API response: %w", readErr)
-	}
-	if exceeded {
-		return "", fmt.Errorf("external API successful response exceeded configured limit of %d bytes", maxResponseBodyBytes)
-	}
-
-	// Parse the complete bounded response. json.Unmarshal rejects trailing
-	// non-whitespace data and, unlike decoding a limited stream, cannot accept a
-	// valid truncated prefix.
-	var apiResponse map[string]interface{}
-	if decodeErr := json.Unmarshal(responseBody, &apiResponse); decodeErr != nil {
+	apiResponse, decodeErr := decodeExternalRAGResponse(resp.Body, apiConfig.MaxResponseBytes)
+	if decodeErr != nil {
 		return "", fmt.Errorf("failed to parse response: %w", decodeErr)
 	}
 
@@ -219,32 +210,20 @@ func (r *OpenAIRouter) retrieveFromExternalAPI(traceCtx context.Context, ctx *Re
 	return context, nil
 }
 
-func externalAPIResponseBodyLimit(apiConfig *config.ExternalAPIRAGConfig) int64 {
-	if apiConfig.MaxResponseBodyBytes != nil {
-		return *apiConfig.MaxResponseBodyBytes
+func decodeExternalRAGResponse(body io.Reader, maxResponseBytes int64) (map[string]interface{}, error) {
+	if maxResponseBytes == 0 {
+		maxResponseBytes = defaultExternalRAGMaxResponseBytes
 	}
-	return config.DefaultExternalAPIMaxResponseBodyBytes
-}
-
-func readExternalAPIResponseBody(reader io.Reader, maxBytes int64) ([]byte, bool, error) {
-	if maxBytes <= 0 || maxBytes > config.MaximumExternalAPIResponseBodyBytes {
-		return nil, false, fmt.Errorf(
-			"external API response body limit must be between 1 and %d bytes, got %d",
-			config.MaximumExternalAPIResponseBodyBytes,
-			maxBytes,
-		)
-	}
-
-	// Configuration validation caps maxBytes well below MaxInt64, so reserving
-	// one sentinel byte cannot overflow and io.ReadAll remains allocation-bounded.
-	body, err := io.ReadAll(io.LimitReader(reader, maxBytes+1))
+	responseBody, err := httputil.ReadLimitedBody(body, maxResponseBytes)
 	if err != nil {
-		return nil, false, err
+		return nil, fmt.Errorf("read external RAG response: %w", err)
 	}
-	if int64(len(body)) > maxBytes {
-		return nil, true, nil
+
+	var apiResponse map[string]interface{}
+	if err := json.NewDecoder(bytes.NewReader(responseBody)).Decode(&apiResponse); err != nil {
+		return nil, err
 	}
-	return body, false, nil
+	return apiResponse, nil
 }
 
 // buildPineconeRequest builds a Pinecone query request
@@ -335,6 +314,12 @@ func (r *OpenAIRouter) buildElasticsearchRequest(ctx *RequestContext, ragConfig 
 
 // buildCustomRequest builds a custom request using template
 func (r *OpenAIRouter) buildCustomRequest(ctx *RequestContext, ragConfig *config.RAGPluginConfig, template string) ([]byte, error) {
+	if template == "" {
+		return nil, fmt.Errorf("request template is required for custom format")
+	}
+
+	// Simple template substitution (can be enhanced with proper template engine)
+	query := ctx.UserContent
 	topK := 5
 	if ragConfig.TopK != nil {
 		topK = *ragConfig.TopK
@@ -344,23 +329,38 @@ func (r *OpenAIRouter) buildCustomRequest(ctx *RequestContext, ragConfig *config
 		threshold = float64(*ragConfig.SimilarityThreshold)
 	}
 
-	compiled, err := config.ParseExternalAPICustomRequestTemplate(template)
-	if err != nil {
-		return nil, err
+	// Replace template variables with basic validation
+	// Note: This is a simple substitution. For production use, consider using
+	// a proper template engine (e.g., text/template) with escaping.
+	// Basic validation: check if user content contains template markers (could indicate injection attempt)
+	if strings.Contains(query, "{{") || strings.Contains(query, "}}") || strings.Contains(query, "${") {
+		logging.Warnf("User content contains template markers, potential injection attempt")
+		// Escape the markers to prevent injection
+		query = strings.ReplaceAll(query, "{{", "\\{\\{")
+		query = strings.ReplaceAll(query, "}}", "\\}\\}")
+		query = strings.ReplaceAll(query, "${", "\\${")
 	}
-	return compiled.Render(ctx.UserContent, topK, threshold)
+
+	replaced := strings.ReplaceAll(template, "{{.Query}}", query)
+	replaced = strings.ReplaceAll(replaced, "{{.TopK}}", fmt.Sprintf("%d", topK))
+	replaced = strings.ReplaceAll(replaced, "{{.Threshold}}", fmt.Sprintf("%.3f", threshold))
+	replaced = strings.ReplaceAll(replaced, "${user_content}", query)
+	replaced = strings.ReplaceAll(replaced, "${top_k}", fmt.Sprintf("%d", topK))
+	replaced = strings.ReplaceAll(replaced, "${threshold}", fmt.Sprintf("%.3f", threshold))
+
+	return []byte(replaced), nil
 }
 
 // extractContextFromResponse extracts context from API response based on format
 func (r *OpenAIRouter) extractContextFromResponse(response map[string]interface{}, format string) (string, error) {
 	switch format {
-	case config.ExternalAPIRequestFormatPinecone:
+	case "pinecone":
 		return r.extractPineconeContext(response)
-	case config.ExternalAPIRequestFormatWeaviate:
+	case "weaviate":
 		return r.extractWeaviateContext(response)
-	case config.ExternalAPIRequestFormatElasticsearch:
+	case "elasticsearch":
 		return r.extractElasticsearchContext(response)
-	case config.ExternalAPIRequestFormatCustom:
+	case "custom":
 		// For custom format, assume response has a "content" or "text" field
 		if content, ok := response["content"].(string); ok {
 			return content, nil

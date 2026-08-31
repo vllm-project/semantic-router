@@ -115,15 +115,15 @@ func TestInitializeRuntimeWarmsEmbeddingCandidatesAfterBackendInit(t *testing.T)
 	initializer := &countingEmbeddingInitializer{onInit: func() {
 		backendInitialized = true
 	}}
-	originalFunc := getEmbeddingWithModelType
-	getEmbeddingWithModelType = func(text string, modelType string, targetDim int) (*candle_binding.EmbeddingOutput, error) {
+	originalFunc := getEmbedding2DMatryoshka
+	getEmbedding2DMatryoshka = func(text string, modelType string, targetLayer int, targetDim int) (*candle_binding.EmbeddingOutput, error) {
 		if !backendInitialized {
 			return nil, errors.New("embedding preload ran before backend initialization")
 		}
 		return &candle_binding.EmbeddingOutput{Embedding: makeEmbedding(1.0, 0.0, 0.0)}, nil
 	}
 	t.Cleanup(func() {
-		getEmbeddingWithModelType = originalFunc
+		getEmbedding2DMatryoshka = originalFunc
 	})
 
 	embeddingClassifier, err := NewEmbeddingClassifier(cfg.EmbeddingRules, cfg.EmbeddingConfig)
@@ -387,6 +387,28 @@ func TestSignalReadinessRequiresInitializedFactCheckAndFeedbackModels(t *testing
 	ready = classifier.signalReadiness()
 	if !ready[config.SignalTypeFactCheck] || !ready[config.SignalTypeUserFeedback] {
 		t.Fatal("initialized model signals should report ready")
+	}
+}
+
+func TestSignalReadinessAllowsContrastiveJailbreakWithoutPromptGuard(t *testing.T) {
+	rule := config.JailbreakRule{Name: "contrastive-guard", Method: "contrastive"}
+	classifier := &Classifier{
+		Config: &config.RouterConfig{
+			IntelligentRouting: config.IntelligentRouting{
+				Signals: config.Signals{JailbreakRules: []config.JailbreakRule{rule}},
+			},
+		},
+		contrastiveJailbreakClassifiers: map[string]*ContrastiveJailbreakClassifier{
+			rule.Name: &ContrastiveJailbreakClassifier{},
+		},
+	}
+
+	if !classifier.signalReadiness()[config.SignalTypeJailbreak] {
+		t.Fatal("initialized contrastive jailbreak rules must not require Prompt Guard")
+	}
+	delete(classifier.contrastiveJailbreakClassifiers, rule.Name)
+	if classifier.signalReadiness()[config.SignalTypeJailbreak] {
+		t.Fatal("contrastive jailbreak rules without an initialized classifier must not report ready")
 	}
 }
 

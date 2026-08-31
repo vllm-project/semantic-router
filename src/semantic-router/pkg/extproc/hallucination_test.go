@@ -10,7 +10,35 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
+
+func hallucinationTextMessage(role llmprotocol.Role, text string) llmprotocol.Message {
+	return llmprotocol.Message{
+		Role:    role,
+		Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: text}},
+	}
+}
+
+func hallucinationToolResultMessage(callID, text string) llmprotocol.Message {
+	return llmprotocol.Message{
+		Role: llmprotocol.RoleTool,
+		Content: []llmprotocol.Content{{
+			Kind: llmprotocol.ContentToolResult,
+			ToolResult: &llmprotocol.ToolResult{
+				CallID:  callID,
+				Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: text}},
+			},
+		}},
+	}
+}
+
+func hallucinationAssistantResponse(text string) *llmprotocol.Response {
+	return &llmprotocol.Response{Output: []llmprotocol.OutputItem{{
+		Role:    llmprotocol.RoleAssistant,
+		Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: text}},
+	}}}
+}
 
 // findProjectRoot finds the project root by looking for go.mod
 func findProjectRoot() string {
@@ -91,134 +119,84 @@ var _ = Describe("RequestContext Hallucination Fields", func() {
 	})
 })
 
-var _ = Describe("extractToolResultsFromMessages", func() {
-	It("should extract content from tool role messages", func() {
-		messages := []interface{}{
-			map[string]interface{}{
-				"role":    "user",
-				"content": "What is the weather?",
+var _ = Describe("extractSemanticToolResults", func() {
+	It("should extract ordered text from neutral tool results", func() {
+		messages := []llmprotocol.Message{
+			hallucinationTextMessage(llmprotocol.RoleUser, "What is the weather?"),
+			{
+				Role: llmprotocol.RoleAssistant,
+				Content: []llmprotocol.Content{{
+					Kind:     llmprotocol.ContentToolCall,
+					ToolCall: &llmprotocol.ToolCall{ID: "call_1", Name: "weather", Arguments: `{}`},
+				}},
 			},
-			map[string]interface{}{
-				"role":    "assistant",
-				"content": nil,
-				"tool_calls": []interface{}{
-					map[string]interface{}{
-						"id":   "call_1",
-						"type": "function",
-					},
-				},
-			},
-			map[string]interface{}{
-				"role":         "tool",
-				"tool_call_id": "call_1",
-				"content":      "The weather is sunny with 25°C",
-			},
-			map[string]interface{}{
-				"role":         "tool",
-				"tool_call_id": "call_2",
-				"content":      "Humidity is 65%",
-			},
+			hallucinationToolResultMessage("call_1", "The weather is sunny with 25°C"),
+			hallucinationToolResultMessage("call_2", "Humidity is 65%"),
 		}
 
-		results := extractToolResultsFromMessages(messages)
+		results := extractSemanticToolResults(messages)
 
 		Expect(results).To(HaveLen(2))
 		Expect(results[0]).To(Equal("The weather is sunny with 25°C"))
 		Expect(results[1]).To(Equal("Humidity is 65%"))
 	})
 
-	It("should return empty slice when no tool messages", func() {
-		messages := []interface{}{
-			map[string]interface{}{
-				"role":    "user",
-				"content": "Hello",
-			},
-			map[string]interface{}{
-				"role":    "assistant",
-				"content": "Hi there!",
-			},
+	It("should return empty slice when no tool results exist", func() {
+		messages := []llmprotocol.Message{
+			hallucinationTextMessage(llmprotocol.RoleUser, "Hello"),
+			hallucinationTextMessage(llmprotocol.RoleAssistant, "Hi there!"),
 		}
 
-		results := extractToolResultsFromMessages(messages)
+		results := extractSemanticToolResults(messages)
 		Expect(results).To(BeEmpty())
 	})
 
-	It("should skip tool messages with empty content", func() {
-		messages := []interface{}{
-			map[string]interface{}{
-				"role":    "tool",
-				"content": "",
-			},
-			map[string]interface{}{
-				"role":    "tool",
-				"content": "Valid content",
-			},
+	It("should skip empty tool result content", func() {
+		messages := []llmprotocol.Message{
+			hallucinationToolResultMessage("call_1", ""),
+			hallucinationToolResultMessage("call_2", "Valid content"),
 		}
 
-		results := extractToolResultsFromMessages(messages)
+		results := extractSemanticToolResults(messages)
 		Expect(results).To(HaveLen(1))
 		Expect(results[0]).To(Equal("Valid content"))
 	})
 
-	It("should handle malformed messages gracefully", func() {
-		messages := []interface{}{
-			"not a map",
-			nil,
-			map[string]interface{}{
-				"role": 123, // wrong type
-			},
-			map[string]interface{}{
-				"role":    "tool",
-				"content": "Valid",
-			},
+	It("should ignore incomplete neutral tool result blocks", func() {
+		messages := []llmprotocol.Message{
+			{Role: llmprotocol.RoleTool, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolResult}}},
+			hallucinationToolResultMessage("call_2", "Valid"),
 		}
 
-		results := extractToolResultsFromMessages(messages)
+		results := extractSemanticToolResults(messages)
 		Expect(results).To(HaveLen(1))
 	})
 })
 
-var _ = Describe("extractAssistantContentFromResponse", func() {
-	It("should extract content from valid response", func() {
-		response := map[string]interface{}{
-			"id": "chatcmpl-123",
-			"choices": []interface{}{
-				map[string]interface{}{
-					"index": 0,
-					"message": map[string]interface{}{
-						"role":    "assistant",
-						"content": "The capital of France is Paris.",
-					},
-				},
-			},
-		}
-
-		responseBytes, _ := json.Marshal(response)
-		content := extractAssistantContentFromResponse(responseBytes)
+var _ = Describe("semanticAssistantContent", func() {
+	It("should extract client-visible content from neutral assistant output", func() {
+		response := hallucinationAssistantResponse("The capital of France is Paris.")
+		content := semanticAssistantContent(response)
 
 		Expect(content).To(Equal("The capital of France is Paris."))
 	})
 
-	It("should return empty string for empty choices", func() {
-		response := map[string]interface{}{
-			"id":      "chatcmpl-123",
-			"choices": []interface{}{},
-		}
+	It("should keep reasoning separate from delivered content", func() {
+		response := hallucinationAssistantResponse("Visible answer")
+		response.Output[0].Content = append([]llmprotocol.Content{{
+			Kind: llmprotocol.ContentReasoning,
+			Text: "Hidden reasoning",
+		}}, response.Output[0].Content...)
 
-		responseBytes, _ := json.Marshal(response)
-		content := extractAssistantContentFromResponse(responseBytes)
-
-		Expect(content).To(BeEmpty())
+		Expect(semanticAssistantContent(response)).To(Equal("Visible answer"))
 	})
 
-	It("should return empty string for invalid JSON", func() {
-		content := extractAssistantContentFromResponse([]byte("invalid json"))
-		Expect(content).To(BeEmpty())
-	})
-
-	It("should return empty string for nil response", func() {
-		content := extractAssistantContentFromResponse(nil)
-		Expect(content).To(BeEmpty())
+	It("should return empty content for nil or non-assistant output", func() {
+		Expect(semanticAssistantContent(nil)).To(BeEmpty())
+		Expect(semanticAssistantContent(&llmprotocol.Response{Output: []llmprotocol.OutputItem{{
+			Role:    llmprotocol.RoleUser,
+			Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "not an answer"}},
+		}}})).To(BeEmpty())
 	})
 })
 
@@ -431,27 +409,12 @@ var _ = Describe("OpenAIRouter Hallucination Methods", func() {
 
 	Describe("checkRequestHasTools", func() {
 		It("should detect tools in request", func() {
-			requestWithTools := map[string]interface{}{
-				"model": "gpt-4",
-				"messages": []interface{}{
-					map[string]interface{}{
-						"role":    "user",
-						"content": "What is the weather?",
-					},
-				},
-				"tools": []interface{}{
-					map[string]interface{}{
-						"type": "function",
-						"function": map[string]interface{}{
-							"name": "get_weather",
-						},
-					},
-				},
-			}
-
-			body, _ := json.Marshal(requestWithTools)
 			ctx := &RequestContext{
-				OriginalRequestBody: body,
+				SemanticRequest: &llmprotocol.Request{
+					Generation: 1,
+					Messages:   []llmprotocol.Message{neutralTextMessage(llmprotocol.RoleUser, "What is the weather?")},
+					Tools:      []llmprotocol.Tool{{Name: "get_weather", InputSchema: json.RawMessage(`{"type":"object"}`)}},
+				},
 			}
 
 			router.checkRequestHasTools(ctx)
@@ -460,23 +423,16 @@ var _ = Describe("OpenAIRouter Hallucination Methods", func() {
 		})
 
 		It("should extract tool results from messages", func() {
-			requestWithToolResults := map[string]interface{}{
-				"model": "gpt-4",
-				"messages": []interface{}{
-					map[string]interface{}{
-						"role":    "user",
-						"content": "What is the weather?",
-					},
-					map[string]interface{}{
-						"role":    "tool",
-						"content": "The weather is sunny, 25°C in Paris",
-					},
-				},
-			}
-
-			body, _ := json.Marshal(requestWithToolResults)
 			ctx := &RequestContext{
-				OriginalRequestBody: body,
+				SemanticRequest: &llmprotocol.Request{Generation: 1, Messages: []llmprotocol.Message{{
+					Role: llmprotocol.RoleTool,
+					Content: []llmprotocol.Content{{
+						Kind: llmprotocol.ContentToolResult,
+						ToolResult: &llmprotocol.ToolResult{CallID: "call_weather", Content: []llmprotocol.Content{{
+							Kind: llmprotocol.ContentText, Text: "The weather is sunny, 25°C in Paris",
+						}}},
+					}},
+				}}},
 			}
 
 			router.checkRequestHasTools(ctx)
@@ -487,19 +443,8 @@ var _ = Describe("OpenAIRouter Hallucination Methods", func() {
 		})
 
 		It("should handle request without tools", func() {
-			requestWithoutTools := map[string]interface{}{
-				"model": "gpt-4",
-				"messages": []interface{}{
-					map[string]interface{}{
-						"role":    "user",
-						"content": "Hello",
-					},
-				},
-			}
-
-			body, _ := json.Marshal(requestWithoutTools)
 			ctx := &RequestContext{
-				OriginalRequestBody: body,
+				SemanticRequest: testNeutralRequest("gpt-4", "Hello"),
 			}
 
 			router.checkRequestHasTools(ctx)
@@ -509,9 +454,7 @@ var _ = Describe("OpenAIRouter Hallucination Methods", func() {
 		})
 
 		It("should handle nil/empty body", func() {
-			ctx := &RequestContext{
-				OriginalRequestBody: nil,
-			}
+			ctx := &RequestContext{}
 
 			router.checkRequestHasTools(ctx)
 

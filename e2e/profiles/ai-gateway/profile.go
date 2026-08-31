@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
+	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
 	gatewaystack "github.com/vllm-project/semantic-router/e2e/pkg/stacks/gateway"
 	"github.com/vllm-project/semantic-router/e2e/pkg/testmatrix"
 
@@ -13,8 +14,10 @@ import (
 const valuesFile = "e2e/profiles/ai-gateway/values.yaml"
 
 var resourceManifests = []string{
-	"deploy/kubernetes/ai-gateway/aigw-resources/base-model.yaml",
+	"e2e/profiles/ai-gateway/manifests/mock-sequence-classifier.yaml",
+	"e2e/profiles/ai-gateway/gateway-resources/backend.yaml",
 	"deploy/kubernetes/ai-gateway/aigw-resources/gwapi-resources.yaml",
+	"e2e/profiles/ai-gateway/gateway-resources/responses-route.yaml",
 }
 
 // Profile implements the Envoy AI Gateway baseline test profile.
@@ -29,6 +32,9 @@ func NewProfile() *Profile {
 			Name:                     "ai-gateway",
 			SemanticRouterValuesFile: valuesFile,
 			ResourceManifests:        resourceManifests,
+			WaitDeployments: []helpers.DeploymentRef{
+				{Namespace: "default", Name: "mock-sequence-classifier"},
+			},
 		}),
 	}
 }

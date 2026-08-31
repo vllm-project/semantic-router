@@ -1,54 +1,8 @@
 import { expect, test } from '@playwright/test'
 import { mockAuthenticatedAppShell } from './support/auth'
 
-const rolePermissions = {
-  admin: [
-    'config.deploy',
-    'config.read',
-    'config.write',
-    'evaluation.read',
-    'evaluation.run',
-    'evaluation.write',
-    'logs.read',
-    'mcp.manage',
-    'mcp.read',
-    'mlpipeline.manage',
-    'openclaw.manage',
-    'openclaw.read',
-    'tools.use',
-    'topology.read',
-    'users.manage',
-    'users.view',
-  ],
-  write: [
-    'config.deploy',
-    'config.read',
-    'config.write',
-    'evaluation.read',
-    'evaluation.run',
-    'evaluation.write',
-    'logs.read',
-    'mcp.manage',
-    'mcp.read',
-    'mlpipeline.manage',
-    'openclaw.manage',
-    'openclaw.read',
-    'tools.use',
-    'topology.read',
-  ],
-  read: [
-    'config.read',
-    'evaluation.read',
-    'logs.read',
-    'mcp.read',
-    'openclaw.read',
-    'tools.use',
-    'topology.read',
-  ],
-}
-
 test.describe('Users page', () => {
-  test('shows selected role permissions in the create user dialog', async ({ page }) => {
+  test('creates a personal invitation with a clear dashboard role', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
 
     await mockAuthenticatedAppShell(page, {
@@ -80,53 +34,61 @@ test.describe('Users page', () => {
       })
     })
 
-    await page.route('**/api/admin/permissions', async (route) => {
+    await page.goto('/users')
+
+    let invitePayload: Record<string, unknown> | null = null
+    await page.route('**/api/admin/invitations', async (route) => {
+      invitePayload = route.request().postDataJSON() as Record<string, unknown>
       await route.fulfill({
-        status: 200,
+        status: 201,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          rolePermissions,
-          allPermissions: Array.from(new Set(Object.values(rolePermissions).flat())),
+          invitation: {
+            id: 'invite-1',
+            email: invitePayload.email,
+            name: invitePayload.name,
+            role: invitePayload.role,
+            expiresAt: 1893456000,
+          },
+          token: 'one-time-token',
         }),
       })
     })
 
-    await page.goto('/users')
-
-    const createUserButton = page.getByRole('button', { name: 'Create user' })
+    const inviteUserButton = page.getByRole('button', { name: 'Invite user' })
     const overflowBeforeDialog = await page.evaluate(() => document.body.style.overflow)
-    await createUserButton.click()
+    await inviteUserButton.click()
 
-    const dialog = page.getByRole('dialog', { name: 'Create user' })
+    const dialog = page.getByRole('dialog', { name: 'Invite user' })
+    const nameInput = dialog.getByLabel('Name')
     const emailInput = dialog.getByLabel('Email')
-    const passwordInput = dialog.getByLabel('Password')
-    await expect(emailInput).toBeFocused()
-    await expect(emailInput).toHaveAttribute('autocomplete', 'username')
-    await expect(passwordInput).toHaveAttribute('autocomplete', 'new-password')
+    await expect(nameInput).toBeFocused()
     expect(await page.evaluate(() => document.body.style.overflow)).toBe('hidden')
-    await expect(dialog.getByText('Permissions', { exact: true })).toBeVisible()
-    await expect(dialog.getByText('config.read')).toBeVisible()
-    await expect(dialog.getByText('users.manage')).toHaveCount(0)
+    await expect(dialog.getByRole('radio', { name: /Read/ })).toBeChecked()
+    await dialog.getByText('Builder', { exact: true }).click()
+    await nameInput.fill('Grace Hopper')
+    await emailInput.fill('grace@example.com')
 
-    await dialog.getByLabel('Role').selectOption('admin')
-    await expect(dialog.getByText('users.manage')).toBeVisible()
-    await expect(dialog.getByText('users.view')).toBeVisible()
-
-    await dialog.getByLabel('Role').selectOption('write')
-    await expect(dialog.getByText('config.deploy')).toBeVisible()
-    await expect(dialog.getByText('users.manage')).toHaveCount(0)
-
-    const closeButton = dialog.getByRole('button', { name: 'Close user dialog' })
-    const submitButton = dialog.getByRole('button', { name: 'Create user' })
+    const closeButton = dialog.getByRole('button', { name: 'Close invitation' })
+    const submitButton = dialog.getByRole('button', { name: 'Create invitation' })
     await closeButton.focus()
     await page.keyboard.press('Shift+Tab')
     await expect(submitButton).toBeFocused()
     await page.keyboard.press('Tab')
     await expect(closeButton).toBeFocused()
 
-    await page.keyboard.press('Escape')
+    await submitButton.click()
+    await expect.poll(() => invitePayload).toEqual({
+      email: 'grace@example.com',
+      name: 'Grace Hopper',
+      role: 'write',
+    })
+    const readyDialog = page.getByRole('dialog', { name: 'Welcome Grace Hopper' })
+    await expect(readyDialog).toBeVisible()
+    await expect(readyDialog.getByText('One-time invitation URL')).toBeVisible()
+    await readyDialog.getByRole('button', { name: 'Done' }).click()
     await expect(dialog).toBeHidden()
-    await expect(createUserButton).toBeFocused()
+    await expect(inviteUserButton).toBeFocused()
     expect(await page.evaluate(() => document.body.style.overflow)).toBe(overflowBeforeDialog)
   })
 })

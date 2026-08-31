@@ -145,13 +145,23 @@ func (b *classifierOptionBuilder) buildGenericClassifiersOption() (option, error
 			err        error
 		)
 		switch rule.Type {
-		case "local":
+		case config.ClassifierSignalTypeLocal:
 			classifier, err = newLocalLabelClassifier(rule)
-		case "llm":
+		case config.ClassifierSignalTypeLLM:
 			classifier, err = newLLMLabelClassifier(
 				rule,
 				b.cfg.FindExternalModelByName(rule.Model),
 			)
+		case config.ClassifierSignalTypeSequenceClassifier:
+			classifier, err = newSequenceLabelClassifier(
+				rule,
+				b.cfg.FindExternalModelByName(rule.Model),
+			)
+		default:
+			// Config validation rejects unknown types, so reaching here means a
+			// rule bypassed it. Fail instead of storing a nil classifier that
+			// silently drops the signal at request time.
+			err = fmt.Errorf("unsupported type %q", rule.Type)
 		}
 		if err != nil {
 			return nil, fmt.Errorf("build classifier signal %q: %w", rule.Name, err)

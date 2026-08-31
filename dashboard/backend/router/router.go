@@ -1,6 +1,7 @@
 package router
 
 import (
+	"errors"
 	"log"
 	"net/http"
 
@@ -8,6 +9,7 @@ import (
 	"github.com/vllm-project/semantic-router/dashboard/backend/configprojection"
 	"github.com/vllm-project/semantic-router/dashboard/backend/handlers"
 	"github.com/vllm-project/semantic-router/dashboard/backend/setupmode"
+	"github.com/vllm-project/semantic-router/dashboard/backend/statusstore"
 	"github.com/vllm-project/semantic-router/dashboard/backend/workflowstore"
 )
 
@@ -53,12 +55,20 @@ func Setup(cfg *config.Config, setupResolver *setupmode.Resolver) *Server {
 
 	openClawHandler := newOpenClawHandler(cfg, wf)
 	recipeStore := newDashboardRecipeStore(cfg)
+	statusHistory, err := statusstore.Open(cfg.StatusDBPath)
+	if err != nil {
+		log.Printf("Warning: status history is unavailable: %v", err)
+		statusHistory = nil
+	}
+	statusMonitor := handlers.NewStatusMonitor(cfg.RouterAPIURL, cfg.EnvoyURL, cfg.ConfigDir, statusHistory, recipeStore)
+	statusMonitor.Start()
 
 	registerCoreRoutes(mux, cfg, setupResolver, coreRouteOptions{
 		recipeStore:              recipeStore,
 		modelVerificationAuditor: authSvc,
+		statusHandler:            statusMonitor.Handler(),
 	})
-	registerEvaluationRoutes(mux, cfg)
+	evaluationService := registerEvaluationRoutes(mux, cfg, recipeStore)
 	SetupMCP(mux, cfg, wf, openClawHandler)
 	registerMLPipelineRoutes(mux, cfg, wf)
 	registerOpenClawRoutes(mux, cfg, openClawHandler)
@@ -69,10 +79,15 @@ func Setup(cfg *config.Config, setupResolver *setupmode.Resolver) *Server {
 	return &Server{
 		Handler: wrapWithAuth(mux, authSvc),
 		Close: func() error {
-			if cp == nil {
-				return nil
+			var evaluationClose error
+			if evaluationService != nil {
+				evaluationClose = evaluationService.Close()
 			}
-			return cp.Close()
+			var projectionClose error
+			if cp != nil {
+				projectionClose = cp.Close()
+			}
+			return errors.Join(evaluationClose, statusMonitor.Close(), statusHistory.Close(), projectionClose, wf.Close())
 		},
 	}
 }

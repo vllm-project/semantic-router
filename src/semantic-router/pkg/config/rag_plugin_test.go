@@ -1,9 +1,6 @@
 package config
 
 import (
-	"strings"
-	"testing"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -132,49 +129,5 @@ func registerRAGAccessorSpecs() {
 	})
 }
 
-func TestHybridExternalAPIRAGResponseLimitValidation(t *testing.T) {
-	invalidLimit := int64(0)
-	externalConfig := MustStructuredPayload(&ExternalAPIRAGConfig{
-		Endpoint:             "http://localhost:8080/search",
-		RequestFormat:        "custom",
-		RequestTemplate:      `{"query":"${user_content}"}`,
-		MaxResponseBodyBytes: &invalidLimit,
-	})
-
-	tests := []struct {
-		name   string
-		hybrid HybridRAGConfig
-	}{
-		{
-			name: "primary",
-			hybrid: HybridRAGConfig{
-				Primary:       "external_api",
-				PrimaryConfig: externalConfig,
-			},
-		},
-		{
-			name: "fallback",
-			hybrid: HybridRAGConfig{
-				Primary:        "milvus",
-				PrimaryConfig:  MustStructuredPayload(&MilvusRAGConfig{Collection: "docs"}),
-				Fallback:       "external_api",
-				FallbackConfig: externalConfig,
-			},
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			cfg := &RAGPluginConfig{
-				Enabled:       true,
-				Backend:       "hybrid",
-				BackendConfig: MustStructuredPayload(&test.hybrid),
-			}
-
-			err := cfg.Validate()
-			if err == nil || !strings.Contains(err.Error(), "max_response_body_bytes must be greater than 0") {
-				t.Fatalf("Validate() error = %v, want nested external API limit error", err)
-			}
-		})
-	}
-}
+// TestHybridExternalAPIRAGResponseLimitValidation removed: response-body limits
+// are validated by main's MaxResponseBytes path, not by this PR.

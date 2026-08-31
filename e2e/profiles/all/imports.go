@@ -48,7 +48,11 @@ var dashboardLocalImages = []framework.LocalImageBuild{
 
 func init() {
 	register("agentgateway", func() framework.Profile { return agentgateway.NewProfile() }, framework.ProfileCapabilities{})
-	register("envoy-ai-gateway", func() framework.Profile { return aigateway.NewProfile() }, framework.ProfileCapabilities{})
+	register(
+		"envoy-ai-gateway",
+		func() framework.Profile { return aigateway.NewProfile() },
+		framework.ProfileCapabilities{LocalImages: mockVLLMLocalImages},
+	)
 	register("aibrix", func() framework.Profile { return aibrix.NewProfile() }, framework.ProfileCapabilities{})
 	register(
 		"anthropic-shim",

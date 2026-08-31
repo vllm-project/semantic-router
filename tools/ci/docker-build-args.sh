@@ -9,6 +9,7 @@ dashboard_version_mode="${DASHBOARD_VERSION_MODE:-main}"
 project_version_file="${PROJECT_VERSION_FILE:-src/vllm-sr/pyproject.toml}"
 
 dashboard_version=""
+source_revision=""
 
 if [[ "${image_name}" == "dashboard" ]]; then
   project_version=$(sed -n 's/^version = "\(.*\)"/\1/p' "${project_version_file}" | head -n1)
@@ -18,6 +19,11 @@ if [[ "${image_name}" == "dashboard" ]]; then
   fi
 
   short_sha=$(git rev-parse --short=7 HEAD)
+  source_revision=$(git rev-parse HEAD)
+  if [[ ! "${source_revision}" =~ ^[0-9a-f]{40}$ ]]; then
+    echo "::error::Dashboard source revision must be a full immutable Git commit" >&2
+    exit 1
+  fi
 
   case "${dashboard_version_mode}" in
     pr)
@@ -51,6 +57,7 @@ fi
   echo 'CARGO_NET_GIT_FETCH_WITH_CLI=true'
   if [[ -n "${dashboard_version}" ]]; then
     echo "DASHBOARD_VERSION=${dashboard_version}"
+    echo "VLLM_SR_SOURCE_REVISION=${source_revision}"
   fi
   echo 'EOF'
 } >> "${GITHUB_OUTPUT}"

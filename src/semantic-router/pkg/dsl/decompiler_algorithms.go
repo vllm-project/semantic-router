@@ -89,6 +89,7 @@ func confidenceAlgorithmToFields(c *config.ConfidenceAlgorithmConfig, fields map
 	setStringValue(fields, "token_filter", c.TokenFilter)
 	setStringValue(fields, "verifier_server_url", c.VerifierServerURL)
 	setIntValue(fields, "verifier_timeout_seconds", c.VerifierTimeoutSeconds)
+	setIntValue(fields, "max_response_bytes", int(c.MaxResponseBytes))
 	if c.HybridWeights != nil {
 		weights := map[string]Value{}
 		setFloatValue(weights, "logprob_weight", c.HybridWeights.LogprobWeight)
