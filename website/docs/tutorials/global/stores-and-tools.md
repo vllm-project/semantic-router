@@ -63,9 +63,10 @@ in-memory backend serves it:
   `tasksource/ModernBERT-base-nli`); the native binding holds one NLI model, so
   the guard cannot bind a different one. Config loading fails when an NLI mode
   is selected without that model. Expect roughly 70 ms per verified hit on CPU;
-  a cache hit still saves a full generation. If the model errors at lookup
-  time the guard fails open: the hit is served and a
-  `cache_polarity_nli_skipped` warning is logged.
+  a cache hit still saves a full generation. If the model is unavailable or
+  errors at lookup time, the unverified candidate becomes a cache miss so the
+  request continues to the model backend; a `cache_polarity_nli_skipped`
+  warning records the degraded lookup.
 
 Rejections are logged as `cache_negation_reject` with `tier: nli`, count as
 misses, and still surface the rejected score on `x-vsr-cache-similarity`. Remote

@@ -31,7 +31,7 @@ var polarityVerifier atomic.Pointer[PolarityVerifyFunc]
 
 // SetPolarityVerifier wires the NLI backend used by the polarity guard. Safe to
 // call again, from any goroutine, to replace it; nil leaves the tier
-// unavailable, and lookups then fail open (the threshold-verified hit is served).
+// unavailable, and semantic lookups then degrade to cache misses.
 func SetPolarityVerifier(fn PolarityVerifyFunc) {
 	if fn == nil {
 		polarityVerifier.Store(nil)
