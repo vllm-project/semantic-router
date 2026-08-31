@@ -238,6 +238,9 @@ its signal, projection, decision, algorithm, plugin, cache, replay, learning,
 and routing state. Providers, stores, and router-owned classifier assets may be
 shared without allowing policy state to cross recipe boundaries.
 
+Set `max_response_bytes` on external LLM classifier entries and the MCP
+classifier module to cap one upstream classifier response.
+
 In the schema, `entrypoints[].model_names` lists the public aliases,
 `entrypoints[].recipe` selects a named recipe, and `recipes[].routing` contains
 that recipe's policy.
