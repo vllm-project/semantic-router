@@ -145,12 +145,22 @@ export const workGroups: WorkGroup[] = [
         avatar: 'https://github.com/drivebyer.png',
         profile: 'https://github.com/drivebyer',
       },
+      {
+        name: 'Xunzhuo Liu',
+        avatar: 'https://github.com/Xunzhuo.png',
+        profile: 'https://github.com/Xunzhuo',
+      },
     ],
     members: [
       {
         name: 'raghavchitkara',
         avatar: 'https://github.com/raghavchitkara36.png',
         profile: 'https://github.com/raghavchitkara36',
+      },
+      {
+        name: 'Zireael',
+        avatar: 'https://github.com/ZireaelK.png',
+        profile: 'https://github.com/ZireaelK',
       },
     ],
   },
@@ -159,10 +169,10 @@ export const workGroups: WorkGroup[] = [
     name: 'Enterprise & Environment',
     label: 'wg/enterprise-environment',
     charterIssue: 2968,
-    goal: 'Deliver production-grade enterprise capabilities across supported environments and hardware.',
+    goal: 'Deliver production-grade security, operations, and deployments across supported environments and hardware.',
     scope: [
-      'Multi-tenancy, identity, API keys, quotas, and audit',
-      'Production observability, workload simulation, and capacity planning',
+      'Management authentication, authorization, identity integration, and audit',
+      'Existing Insights, production observability, workload simulation, and capacity planning',
       'Stable, scalable deployment APIs and reference stacks',
       'Multi-environment and multi-hardware support',
     ],

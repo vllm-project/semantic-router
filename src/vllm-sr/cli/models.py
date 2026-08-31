@@ -701,7 +701,6 @@ class PluginType(str, Enum):
     ROUTER_REPLAY = "router_replay"
     MEMORY = "memory"
     RAG = "rag"
-    IMAGE_GEN = "image_gen"
     FAST_RESPONSE = "fast_response"
     REQUEST_PARAMS = "request_params"
     RESPONSE_JAILBREAK = "response_jailbreak"
@@ -1258,20 +1257,6 @@ class PluginConfig(BaseModel):
         elif hasattr(data.get("type"), "value"):
             data["type"] = data["type"].value
         return data
-
-
-class ImageGenPluginConfig(BaseModel):
-    """Configuration for image_gen plugin."""
-
-    enabled: bool
-    backend: str
-    backend_config: Optional[Dict[str, Any]] = None
-    modality_detection: Optional[Dict[str, Any]] = None
-    default_width: Optional[int] = Field(default=None, ge=1)
-    default_height: Optional[int] = Field(default=None, ge=1)
-    max_inference_steps: Optional[int] = Field(default=None, ge=1)
-    timeout_seconds: Optional[int] = Field(default=None, ge=1)
-    max_response_bytes: Optional[int] = Field(default=None, ge=0)
 
 
 class DecisionLearningAdaptationConfig(BaseModel):

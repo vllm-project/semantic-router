@@ -325,7 +325,6 @@ export interface PluginConfig {
     | 'hallucination'
     | 'router_replay'
     | 'rag'
-    | 'image_gen'
     | 'fast_response'
     | 'tools'
     | 'request_params'

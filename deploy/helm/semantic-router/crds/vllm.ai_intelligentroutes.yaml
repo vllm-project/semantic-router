@@ -141,7 +141,6 @@ spec:
                             - fast_response
                             - hallucination
                             - header_mutation
-                            - image_gen
                             - memory
                             - rag
                             - request_params

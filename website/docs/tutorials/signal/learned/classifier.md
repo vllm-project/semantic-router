@@ -61,8 +61,11 @@ LLM classifiers reference a named `global.model_catalog.external` entry and
 add `instructions`. The runtime fixes temperature, output schema,
 exact-label validation, and a 1 MiB default response limit. Set
 `max_response_bytes` on the external model entry to override that limit.
-Classifier leaves are the only decision predicates
-that accept `on_error`; failures expose the bounded
+The model must report a score for every declared
+label; each score must be between `0` and `1`, and the complete distribution
+must sum to approximately `1.0`. These are model-reported confidence scores,
+not calibrated classifier probabilities. Classifier leaves are the only
+decision predicates that accept `on_error`; failures expose the bounded
 `classifier_evaluation_failed` code in eval/replay diagnostics.
 
 On failure, the decision tree evaluates this leaf as `Unknown` until the full

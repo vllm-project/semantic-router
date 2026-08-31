@@ -17,7 +17,6 @@ from cli.models import (
     RouterReplayPluginConfig,
     MemoryPluginConfig,
     RAGPluginConfig,
-    ImageGenPluginConfig,
 )
 from cli.terminal import echo, error as terminal_error
 from pydantic import ValidationError as PydanticValidationError
@@ -417,7 +416,6 @@ def validate_plugin_configurations(config: UserConfig) -> List[ValidationError]:
         PluginType.ROUTER_REPLAY.value: RouterReplayPluginConfig,
         PluginType.MEMORY.value: MemoryPluginConfig,
         PluginType.RAG.value: RAGPluginConfig,
-        PluginType.IMAGE_GEN.value: ImageGenPluginConfig,
         PluginType.TOOLS.value: ToolsPluginConfig,
         PluginType.TOOL_SELECTION.value: ToolSelectionPluginConfig,
     }
