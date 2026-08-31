@@ -26,9 +26,13 @@ type evalCaptureClassificationService struct {
 	lastEvalReq services.IntentRequest
 	evalResp    *services.EvalResponse
 	evalErr     error
+	intentErr   error
 }
 
 func (s *evalCaptureClassificationService) ClassifyIntent(req services.IntentRequest) (*services.IntentResponse, error) {
+	if s.intentErr != nil {
+		return nil, s.intentErr
+	}
 	return &services.IntentResponse{}, nil
 }
 
@@ -76,6 +80,25 @@ func (s *evalCaptureClassificationService) UpdateConfig(_ *config.RouterConfig) 
 }
 
 func (s *evalCaptureClassificationService) RefreshRuntimeConfig(_ *config.RouterConfig) {
+}
+
+func TestHandleIntentClassification_Returns503OnDecisionUnresolved(t *testing.T) {
+	fakeSvc := &evalCaptureClassificationService{
+		intentErr: fmt.Errorf("decision guarded failed: %w", decision.ErrDecisionUnresolved),
+	}
+	apiServer := &ClassificationAPIServer{classificationSvc: fakeSvc}
+
+	body, _ := json.Marshal(map[string]string{"text": "hello"})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/classify/intent", bytes.NewReader(body))
+	recorder := httptest.NewRecorder()
+	apiServer.handleIntentClassification(recorder, req)
+
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusServiceUnavailable)
+	}
+	if !strings.Contains(recorder.Body.String(), "DECISION_UNRESOLVED") {
+		t.Fatalf("body = %s, want DECISION_UNRESOLVED", recorder.Body.String())
+	}
 }
 
 func TestHandleEvalClassification_ReturnsTracesWith503OnDecisionError(t *testing.T) {

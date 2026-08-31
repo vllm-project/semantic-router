@@ -56,9 +56,6 @@ func (s *ClassificationService) ClassifyIntentForEval(req IntentRequest) (*EvalR
 			candidates,
 			wantTrace,
 		)
-		if decisionErr != nil && len(traces) == 0 {
-			return nil, decisionErr
-		}
 	}
 
 	resp := s.buildEvalResponse(
