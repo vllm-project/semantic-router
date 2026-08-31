@@ -1273,19 +1273,61 @@ impl BioEntity {
     }
 }
 
+/// Trim surrounding whitespace from an entity span.
+///
+/// Sub-word tokenizers attach the preceding space to a word-initial token, so
+/// a `PERSON` span starts on the space before the name. Callers slice the text
+/// with these offsets, and PII masking then eats that space.
+fn trim_entity_span(text: &str, start: usize, end: usize) -> (usize, usize) {
+    let slice = &text[start..end];
+    let trimmed = slice.trim_matches(|c: char| c.is_whitespace());
+    if trimmed.is_empty() {
+        return (start, end);
+    }
+    let lead = slice.len() - slice.trim_start_matches(|c: char| c.is_whitespace()).len();
+    let trail = slice.len() - slice.trim_end_matches(|c: char| c.is_whitespace()).len();
+    (start + lead, end - trail)
+}
+
 /// Merge a sequence of BIO-labelled tokens into entities.
 ///
 /// `tokens` must already have special tokens removed and must be in text order.
 /// Offsets are byte offsets into `text`.
+///
+/// An `I-` tag that does not continue an open entity opens one of its own type.
+/// Models are not obliged to emit `B-`: the mmBERT-32K PII detector labels
+/// emails and domains with `I-` only, so requiring `B-` dropped them entirely.
 pub(crate) fn merge_bio_entities(text: &str, tokens: &[BioToken<'_>]) -> Vec<BioEntity> {
     let mut entities: Vec<BioEntity> = Vec::new();
     let mut current: Option<BioEntity> = None;
 
+    // Close `current`, trim its span and push it.
+    fn flush(text: &str, entities: &mut Vec<BioEntity>, entity: BioEntity) {
+        let mut entity = entity;
+        let (start, end) = trim_entity_span(text, entity.start, entity.end);
+        entity.start = start;
+        entity.end = end;
+        entity.text = text[start..end].to_string();
+        entities.push(entity);
+    }
+
     for token in tokens {
-        if let Some(entity_type) = token.label.strip_prefix("B-") {
-            // Beginning of a new entity.
+        let opens_new_entity = match token.label.strip_prefix("B-") {
+            Some(entity_type) => Some(entity_type),
+            None => match token.label.strip_prefix("I-") {
+                // Continues the open entity only when the type matches,
+                // otherwise it starts a new one.
+                Some(entity_type) => match current {
+                    Some(ref entity) if entity.entity_type == entity_type => None,
+                    _ => Some(entity_type),
+                },
+                None => None,
+            },
+        };
+
+        if let Some(entity_type) = opens_new_entity {
             if let Some(entity) = current.take() {
-                entities.push(entity);
+                flush(text, &mut entities, entity);
             }
             current = Some(BioEntity {
                 entity_type: entity_type.to_string(),
@@ -1295,30 +1337,23 @@ pub(crate) fn merge_bio_entities(text: &str, tokens: &[BioToken<'_>]) -> Vec<Bio
                 confidence: token.confidence,
                 token_count: 1,
             });
-        } else if let Some(entity_type) = token.label.strip_prefix("I-") {
-            // Continuation of the open entity, when the type matches.
+        } else if token.label.starts_with("I-") {
+            // Continuation of the open entity of the same type.
             if let Some(ref mut entity) = current {
-                if entity.entity_type == entity_type {
-                    entity.end = token.end;
-                    entity.text = text[entity.start..entity.end].to_string();
-                    entity.accumulate(token.confidence);
-                } else {
-                    // Different entity type: close the open entity, drop this token.
-                    entities.push(entity.clone());
-                    current = None;
-                }
+                entity.end = token.end;
+                entity.text = text[entity.start..entity.end].to_string();
+                entity.accumulate(token.confidence);
             }
-            // An I- tag with no open entity is ignored.
         } else {
             // O tag closes any open entity.
             if let Some(entity) = current.take() {
-                entities.push(entity);
+                flush(text, &mut entities, entity);
             }
         }
     }
 
     if let Some(entity) = current.take() {
-        entities.push(entity);
+        flush(text, &mut entities, entity);
     }
 
     entities
