@@ -316,11 +316,10 @@ func assertReferenceConfigModelModuleCoverage(t testingT, modules map[string]int
 
 func assertReferenceConfigClassifierModuleCoverage(t testingT, classifier map[string]interface{}) {
 	assertMapCoversStructFields(t, classifier, reflect.TypeOf(CanonicalClassifierModule{}), "global.model_catalog.modules.classifier")
-	// backend is mutually exclusive with the local variant. The exhaustive
-	// reference keeps the safe local default active; remote backend parsing and
-	// validation are covered by classifier_backend_test.go and documented in the
-	// shared classifier backend section.
-	assertMapCoversStructFields(t, mustMapAt(t, classifier, "domain"), reflect.TypeOf(CanonicalCategoryModule{}), "global.model_catalog.modules.classifier.domain", "backend", "use_modernbert", "use_mmbert_32k")
+	// backend and local selectors are mutually exclusive. The canonical local
+	// variant is supplied by defaults, so the exhaustive reference does not need
+	// to force a variant line that users must delete before adding a backend.
+	assertMapCoversStructFields(t, mustMapAt(t, classifier, "domain"), reflect.TypeOf(CanonicalCategoryModule{}), "global.model_catalog.modules.classifier.domain", "backend", "variant", "use_modernbert", "use_mmbert_32k")
 	assertMapCoversStructFields(t, mustMapAt(t, classifier, "mcp"), reflect.TypeOf(MCPCategoryModel{}), "global.model_catalog.modules.classifier.mcp")
 	assertMapCoversStructFields(t, mustMapAt(t, classifier, "pii"), reflect.TypeOf(CanonicalPIIModule{}), "global.model_catalog.modules.classifier.pii")
 	assertMapCoversStructFields(t, mustMapAt(t, classifier, "preference"), reflect.TypeOf(PreferenceModelConfig{}), "global.model_catalog.modules.classifier.preference")

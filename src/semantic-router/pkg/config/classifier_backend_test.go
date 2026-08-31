@@ -326,6 +326,24 @@ global:
 	}
 }
 
+func TestReferenceConfigCategoryBackendReplacesDefaultVariant(t *testing.T) {
+	data := string(readReferenceConfigYAML(t))
+	data = strings.Replace(data,
+		"          category_mapping_path: models/mmbert32k-intent-classifier-merged/category_mapping.json\n",
+			"          backend:\n"+
+			"            protocol: http_classify\n"+
+			"            contract: label_distribution.v1\n"+
+			"            model: external-sequence-classifier\n"+
+			"            deadline_ms: 5000\n"+
+			"          category_mapping_path: models/mmbert32k-intent-classifier-merged/category_mapping.json\n", 1)
+	if data == string(readReferenceConfigYAML(t)) {
+		t.Fatal("reference config category block was not found")
+	}
+	if _, err := ParseYAMLBytes([]byte(data)); err != nil {
+		t.Fatalf("reference config plus backend rejected: %v", err)
+	}
+}
+
 func TestCanonicalRemoteBackendAllowsExplicitFalseLegacySelector(t *testing.T) {
 	falseLegacyBackendYAML := []byte(`
 version: v0.3
