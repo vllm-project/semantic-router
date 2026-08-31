@@ -2,9 +2,9 @@ package extproc
 
 import (
 	"context"
-	"strings"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
