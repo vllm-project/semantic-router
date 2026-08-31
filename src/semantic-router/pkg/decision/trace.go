@@ -46,22 +46,25 @@ func (e *DecisionEngine) EvaluateDecisionsWithTrace(
 
 	for i := range e.decisions {
 		decision := &e.decisions[i]
-		matched, confidence, scored, matchedRules, trace := e.evalDecisionWithTrace(decision, signals)
+		evaluation, trace := e.evalDecisionWithTrace(decision, signals, false)
+		if evaluation.state == evaluationUnknown {
+			evaluation, trace = e.evalDecisionWithTrace(decision, signals, true)
+		}
+		matched := evaluation.state == evaluationTrue
 
-		dt := DecisionTrace{
+		traces = append(traces, DecisionTrace{
 			DecisionName: decision.Name,
 			Matched:      matched,
-			Confidence:   confidence,
+			Confidence:   evaluation.confidence,
 			RootTrace:    trace,
-		}
-		traces = append(traces, dt)
+		})
 
 		if matched {
 			results = append(results, DecisionResult{
 				Decision:         decision,
-				Confidence:       confidence,
-				MatchedRules:     matchedRules,
-				ConfidenceScored: scored,
+				Confidence:       evaluation.confidence,
+				MatchedRules:     evaluation.matchedRules,
+				ConfidenceScored: evaluation.scored,
 				CatchAll:         isCatchAllRules(decision.Rules),
 			})
 		}
@@ -77,134 +80,16 @@ func (e *DecisionEngine) EvaluateDecisionsWithTrace(
 func (e *DecisionEngine) evalDecisionWithTrace(
 	decision *config.Decision,
 	signals *SignalMatches,
-) (bool, float64, bool, []string, *TraceNode) {
+	legacy bool,
+) (nodeEvaluation, *TraceNode) {
 	if decision.Rules.IsEmpty() {
-		return true, 0, true, nil, &TraceNode{
+		return nodeEvaluation{state: evaluationTrue, scored: true}, &TraceNode{
 			NodeType:         "fallback",
 			Matched:          true,
 			ConfidenceScored: true,
 		}
 	}
-	return e.evalNodeWithTrace(decision.Rules, signals)
-}
-
-// evalNodeWithTrace mirrors evalNode but also builds a TraceNode tree.
-func (e *DecisionEngine) evalNodeWithTrace(
-	node config.RuleNode,
-	signals *SignalMatches,
-) (matched bool, confidence float64, scored bool, matchedRules []string, trace *TraceNode) {
-	if node.IsLeaf() {
-		m, c, s, r := e.evalLeaf(node, signals)
-		return m, c, s, r, &TraceNode{
-			NodeType:         "leaf",
-			SignalType:       node.Type,
-			SignalName:       node.Name,
-			Label:            node.Label,
-			Matched:          m,
-			Confidence:       c,
-			ConfidenceScored: s,
-		}
-	}
-
-	op := strings.ToUpper(node.Operator)
-	switch op {
-	case "AND":
-		return e.evalANDWithTrace(node.Conditions, signals)
-	case "NOT":
-		return e.evalNOTWithTrace(node.Conditions, signals)
-	default:
-		return e.evalORWithTrace(node.Conditions, signals)
-	}
-}
-
-func (e *DecisionEngine) evalANDWithTrace(
-	children []config.RuleNode,
-	signals *SignalMatches,
-) (bool, float64, bool, []string, *TraceNode) {
-	trace := &TraceNode{NodeType: "AND"}
-
-	if len(children) == 0 {
-		trace.Matched = true
-		trace.Confidence = 0
-		trace.ConfidenceScored = true
-		return true, 0, true, nil, trace
-	}
-
-	totalConf := 0.0
-	scored := true
-	var matchedRules []string
-	for _, child := range children {
-		m, c, s, r, childTrace := e.evalNodeWithTrace(child, signals)
-		trace.Children = append(trace.Children, childTrace)
-		if !m {
-			trace.Matched = false
-			trace.Confidence = 0
-			return false, 0, false, nil, trace
-		}
-		totalConf += c
-		scored = scored && s
-		matchedRules = append(matchedRules, r...)
-	}
-
-	avg := totalConf / float64(len(children))
-	trace.Matched = true
-	trace.Confidence = avg
-	trace.ConfidenceScored = scored
-	return true, avg, scored, matchedRules, trace
-}
-
-func (e *DecisionEngine) evalORWithTrace(
-	children []config.RuleNode,
-	signals *SignalMatches,
-) (bool, float64, bool, []string, *TraceNode) {
-	trace := &TraceNode{NodeType: "OR"}
-
-	bestConf := 0.0
-	bestScored := false
-	var bestRules []string
-	anyMatched := false
-
-	for _, child := range children {
-		m, c, s, r, childTrace := e.evalNodeWithTrace(child, signals)
-		trace.Children = append(trace.Children, childTrace)
-		if m && (!anyMatched || c > bestConf) {
-			anyMatched = true
-			bestConf = c
-			bestScored = s
-			bestRules = r
-		}
-	}
-
-	if anyMatched {
-		trace.Matched = true
-		trace.Confidence = bestConf
-		trace.ConfidenceScored = bestScored
-		return true, bestConf, bestScored, bestRules, trace
-	}
-	return false, 0, false, nil, trace
-}
-
-func (e *DecisionEngine) evalNOTWithTrace(
-	children []config.RuleNode,
-	signals *SignalMatches,
-) (bool, float64, bool, []string, *TraceNode) {
-	trace := &TraceNode{NodeType: "NOT"}
-
-	if len(children) != 1 {
-		return false, 0, false, nil, trace
-	}
-
-	m, c, s, r, childTrace := e.evalNodeWithTrace(children[0], signals)
-	trace.Children = append(trace.Children, childTrace)
-
-	if !m {
-		trace.Matched = true
-		trace.Confidence = 1.0
-		return true, 1.0, false, r, trace
-	}
-	trace.Matched = false
-	trace.Confidence = c
-	return false, c, s, r, trace
+	return e.evalNode(decision.Rules, signals, legacy, true)
 }
 
 // FormatTrace returns a human-readable string representation of a decision trace.
