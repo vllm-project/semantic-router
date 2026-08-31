@@ -34,15 +34,25 @@ func TestNewVLLMOmniBackend(t *testing.T) {
 }
 
 func TestVLLMOmniBackend_GenerateImage(t *testing.T) {
-	// Create mock server
+	received := make(chan vllmOmniRequest, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" || r.URL.Path != "/v1/chat/completions" {
 			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
+		if got := r.Header.Get("Content-Type"); got != "application/json" {
+			t.Errorf("Content-Type = %q, want application/json", got)
+		}
 
-		// Return mock image generation response
+		var request vllmOmniRequest
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Errorf("decode request: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		received <- request
+
 		response := vllmOmniResponse{
 			ID:      "chatcmpl-123",
 			Object:  "chat.completion",
@@ -76,8 +86,10 @@ func TestVLLMOmniBackend_GenerateImage(t *testing.T) {
 		Backend:        "vllm_omni",
 		TimeoutSeconds: 10,
 		BackendConfig: config.MustStructuredPayload(&config.VLLMOmniImageGenConfig{
-			BaseURL: server.URL,
-			Model:   "Qwen/Qwen-Image",
+			BaseURL:           server.URL,
+			Model:             "Qwen/Qwen-Image",
+			NumInferenceSteps: 50,
+			CFGScale:          4.0,
 		}),
 	}
 
@@ -86,10 +98,16 @@ func TestVLLMOmniBackend_GenerateImage(t *testing.T) {
 		t.Fatalf("NewVLLMOmniBackend failed: %v", err)
 	}
 
+	seed := 42
 	req := &GenerateRequest{
-		Prompt: "A sunset over mountains",
-		Width:  512,
-		Height: 512,
+		Prompt:            "A sunset over mountains",
+		NegativePrompt:    "low quality",
+		Width:             512,
+		Height:            768,
+		NumInferenceSteps: 28,
+		GuidanceScale:     3.5,
+		Seed:              &seed,
+		Model:             "Qwen/Qwen-Image-override",
 	}
 
 	resp, err := backend.GenerateImage(context.Background(), req)
@@ -102,6 +120,43 @@ func TestVLLMOmniBackend_GenerateImage(t *testing.T) {
 	}
 	if resp.Backend != "vllm_omni" {
 		t.Errorf("expected backend vllm_omni, got %s", resp.Backend)
+	}
+
+	assertVLLMOmniRequest(t, <-received, req, seed)
+}
+
+func assertVLLMOmniRequest(t *testing.T, request vllmOmniRequest, req *GenerateRequest, seed int) {
+	t.Helper()
+
+	if request.Model != req.Model {
+		t.Errorf("model = %q, want %q", request.Model, req.Model)
+	}
+	if len(request.Messages) != 1 || request.Messages[0].Role != "user" || request.Messages[0].Content != req.Prompt {
+		t.Fatalf("messages = %#v, want one user message containing %q", request.Messages, req.Prompt)
+	}
+	if request.ExtraBody == nil {
+		t.Fatal("extra_body is nil")
+	}
+	assertVLLMOmniExtraBody(t, request.ExtraBody, req, seed)
+}
+
+func assertVLLMOmniExtraBody(t *testing.T, extraBody *vllmOmniExtraBody, req *GenerateRequest, seed int) {
+	t.Helper()
+
+	if extraBody.Width != req.Width || extraBody.Height != req.Height {
+		t.Errorf("size = %dx%d, want %dx%d", extraBody.Width, extraBody.Height, req.Width, req.Height)
+	}
+	if extraBody.NumInferenceSteps != req.NumInferenceSteps {
+		t.Errorf("num_inference_steps = %d, want %d", extraBody.NumInferenceSteps, req.NumInferenceSteps)
+	}
+	if extraBody.TrueCFGScale != req.GuidanceScale {
+		t.Errorf("true_cfg_scale = %v, want %v", extraBody.TrueCFGScale, req.GuidanceScale)
+	}
+	if extraBody.Seed == nil || *extraBody.Seed != seed {
+		t.Errorf("seed = %v, want %d", extraBody.Seed, seed)
+	}
+	if extraBody.NegativePrompt != req.NegativePrompt {
+		t.Errorf("negative_prompt = %q, want %q", extraBody.NegativePrompt, req.NegativePrompt)
 	}
 }
 
@@ -191,13 +246,13 @@ func TestExtractImageURL(t *testing.T) {
 				if err == nil {
 					t.Error("expected error, got nil")
 				}
-			} else {
-				if err != nil {
-					t.Errorf("unexpected error: %v", err)
-				}
-				if url != tt.wantURL {
-					t.Errorf("expected URL %s, got %s", tt.wantURL, url)
-				}
+				return
+			}
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			if url != tt.wantURL {
+				t.Errorf("expected URL %s, got %s", tt.wantURL, url)
 			}
 		})
 	}
