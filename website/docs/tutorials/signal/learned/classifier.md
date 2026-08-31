@@ -58,8 +58,8 @@ routing:
 ```
 
 LLM classifiers reference a named `global.model_catalog.external` entry and
-add `instructions`. The runtime fixes temperature, output schema, token bounds,
-and exact-label validation. Classifier leaves are the only decision predicates
+add `instructions`. The runtime fixes temperature, output schema, and
+exact-label validation. Classifier leaves are the only decision predicates
 that accept `on_error`; failures expose the bounded
 `classifier_evaluation_failed` code in eval/replay diagnostics.
 
