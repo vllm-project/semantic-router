@@ -122,6 +122,7 @@ until the selected cases are known to be isolated.
 - **multimodal-routing**: image-modality embedding routing.
 - **remote-embedding**: OpenAI-compatible remote embedding providers.
 - **llm-d**: llm-d inference-gateway health and router smoke coverage.
+- **looper**: deterministic Looper algorithm contracts.
 - **istio**: sidecar, mTLS, and tracing behavior.
 - **agentgateway**: agentgateway routing and ExtProc policy enforcement.
 - **production-stack**: HA, load balancing, failover, and load checks.
