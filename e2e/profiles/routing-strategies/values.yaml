@@ -64,6 +64,9 @@ config:
             - name: text_input
               description: Request contains user-provided text.
               modality: text
+            - name: video_input
+              description: Request contains video content; only the classify/eval APIs can carry it today.
+              modality: video
         decisions:
           - name: input_modality_vision_decision
             description: Send image-bearing requests to the vision route.
@@ -84,6 +87,17 @@ config:
               conditions:
                 - type: input_modality
                   name: audio_input
+            modelRefs:
+              - model: base-model
+                use_reasoning: false
+          - name: input_modality_video_decision
+            description: Send video-bearing requests to the video route; reachable through the classify/eval APIs only.
+            priority: 120
+            rules:
+              operator: AND
+              conditions:
+                - type: input_modality
+                  name: video_input
             modelRefs:
               - model: base-model
                 use_reasoning: false

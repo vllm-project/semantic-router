@@ -32,7 +32,36 @@ config:
         modelRefs:
           - model: openai/gpt-oss-20b
             use_reasoning: false
-    signals: {}
+      - name: input_modality_vision_decision
+        description: Send image-bearing requests to the vision route.
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: input_modality
+              name: image_input
+        modelRefs:
+          - model: openai/gpt-oss-20b
+            use_reasoning: false
+      - name: input_modality_text_decision
+        description: Text-only requests continue on the default route.
+        priority: 50
+        rules:
+          operator: AND
+          conditions:
+            - type: input_modality
+              name: text_input
+        modelRefs:
+          - model: openai/gpt-oss-20b
+            use_reasoning: false
+    signals:
+      input_modality:
+        - name: image_input
+          description: Request contains at least one image content part.
+          modality: image
+        - name: text_input
+          description: Request contains user-provided text.
+          modality: text
     modelCards:
       - name: openai/gpt-oss-20b
       - name: mock/native-responses
