@@ -182,7 +182,7 @@ func TestRouterLearningUnknownAdaptationStrategyKeepsBaseModel(t *testing.T) {
 	}
 }
 
-func TestRouterLearningProtectionOnlyCanGuardWhenAdaptationDisabled(t *testing.T) {
+func TestRouterLearningProtectionOnlyCannotEscapeDecisionCandidates(t *testing.T) {
 	sessiontelemetry.ResetRouterSessionMemoryForTesting()
 	t.Cleanup(sessiontelemetry.ResetRouterSessionMemoryForTesting)
 
@@ -206,15 +206,15 @@ func TestRouterLearningProtectionOnlyCanGuardWhenAdaptationDisabled(t *testing.T
 		CandidateModels: []config.ModelRef{{Model: "cheap"}},
 	}, nil, ctx)
 
-	if selected == nil || selected.Model != "frontier" {
-		t.Fatalf("expected protection-only guard to keep frontier, got %#v", selected)
+	if selected == nil || selected.Model != "cheap" {
+		t.Fatalf("expected protection-only guard to stay inside decision candidates, got %#v", selected)
 	}
 	if _, ok := ctx.VSRLearningPolicies.Policy(routerLearningMethodAdaptation); ok {
 		t.Fatalf("expected no adaptation policy when adaptation is disabled, got %#v", ctx.VSRLearningPolicies)
 	}
 	policy, ok := ctx.VSRLearningPolicies.Policy(routerLearningMethodProtection)
-	if !ok || policy.Action != routerLearningActionHoldCurrent {
-		t.Fatalf("expected protection hold_current policy, got %#v", ctx.VSRLearningPolicies)
+	if !ok || policy.Action != routerLearningActionAllowSwitch || policy.Reason != "previous_model_not_in_candidates" {
+		t.Fatalf("expected protection candidate-boundary release, got %#v", ctx.VSRLearningPolicies)
 	}
 }
 

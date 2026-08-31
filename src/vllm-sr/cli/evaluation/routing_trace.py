@@ -60,8 +60,11 @@ def _trace_node(value: object, depth: int = 0) -> RoutingTraceNode | None:
         signal_type=_safe_token(value.get("signal_type"), limit=128),
         signal_name=_safe_token(value.get("signal_name"), limit=128),
         label=_safe_token(value.get("label"), limit=128),
+        state=_safe_token(value.get("state"), limit=32),
         matched=value.get("matched") is True,
         confidence=_bounded_number(value.get("confidence")),
+        has_signal_error=isinstance(value.get("signal_error"), str)
+        and bool(value.get("signal_error")),
         confidence_scored=value.get("confidence_scored") is True,
         children=normalized_children,
     )
@@ -81,12 +84,27 @@ def _decision_traces(payload: dict[str, Any]) -> tuple[RoutingDecisionTrace, ...
         traces.append(
             RoutingDecisionTrace(
                 decision_name=name,
+                state=_safe_token(row.get("state"), limit=32),
                 matched=row.get("matched") is True,
                 confidence=_bounded_number(row.get("confidence")),
+                on_unknown=_safe_token(row.get("on_unknown"), limit=32),
                 root_trace=_trace_node(row.get("root_trace")),
             )
         )
     return tuple(traces)
+
+
+def _applied_unknown_policies(payload: dict[str, Any]) -> tuple[tuple[str, str], ...]:
+    policies = payload.get("applied_unknown_policies")
+    if not isinstance(policies, dict):
+        return ()
+    rows: list[tuple[str, str]] = []
+    for raw_key in sorted(policies)[:_MAX_SIGNALS]:
+        key = _safe_token(raw_key, limit=128)
+        value = _safe_token(policies.get(raw_key), limit=32)
+        if key and value:
+            rows.append((key, value))
+    return tuple(rows)
 
 
 def _signals(payload: dict[str, Any]) -> tuple[RoutingSignalDiagnostic, ...]:
@@ -140,6 +158,7 @@ def normalize_routing_diagnostic(
         routing_decision=_safe_token(payload.get("routing_decision")),
         traces=_decision_traces(payload),
         signals=_signals(payload),
+        applied_unknown_policies=_applied_unknown_policies(payload),
     )
 
 

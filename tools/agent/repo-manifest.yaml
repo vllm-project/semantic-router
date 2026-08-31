@@ -142,6 +142,7 @@ docs:
 - tools/agent/docs/plans/pl-0037-router-flow-eval-campaign.md
 - tools/agent/docs/plans/pl-0038-dashboard-modeling-experience.md
 - tools/agent/docs/plans/pl-0039-evaluation-plane.md
+- tools/agent/docs/plans/pl-0040-mom-routing-hardening.md
 - tools/agent/docs/tech-debt/td-006-structural-rule-exceptions.md
 - tools/agent/docs/tech-debt/td-016-fleet-sim-shared-ruff-contract-gap.md
 - tools/agent/docs/tech-debt/td-017-fleet-sim-structure-gate-migration-gap.md
@@ -159,6 +160,8 @@ docs:
 - tools/agent/docs/tech-debt/td-051-evaluation-worker-isolation-gap.md
 - tools/agent/docs/tech-debt/td-052-paired-promotion-statistics-gap.md
 - tools/agent/docs/tech-debt/td-053-evaluation-store-lifecycle-durability-gap.md
+- tools/agent/docs/tech-debt/td-054-typed-request-capability-eligibility-gap.md
+- tools/agent/docs/tech-debt/td-055-evidence-calibrated-session-switch-gate-gap.md
 local_agent_rules:
 - path: src/vllm-sr/cli/AGENTS.md
   scope: src/vllm-sr/cli/**
@@ -296,6 +299,9 @@ doc_governance:
   - path: tools/agent/docs/plans/pl-0039-evaluation-plane.md
     steward: dashboard
     freshness: update while the Evaluation Plane implementation and validation work is active
+  - path: tools/agent/docs/plans/pl-0040-mom-routing-hardening.md
+    steward: router-core
+    freshness: update while built-in MoM routing hardening and validation are active
   - path: tools/agent/docs/tech-debt/td-006-structural-rule-exceptions.md
     steward: agent-contract
     freshness: update when the TD006 debt record changes materially
@@ -347,6 +353,12 @@ doc_governance:
   - path: tools/agent/docs/tech-debt/td-053-evaluation-store-lifecycle-durability-gap.md
     steward: dashboard
     freshness: update when Evaluation Plane retention or crash durability changes materially
+  - path: tools/agent/docs/tech-debt/td-054-typed-request-capability-eligibility-gap.md
+    steward: router-core
+    freshness: update when request capability eligibility changes materially
+  - path: tools/agent/docs/tech-debt/td-055-evidence-calibrated-session-switch-gate-gap.md
+    steward: router-core
+    freshness: update when session switch-gate evidence or calibration changes materially
 skills:
 - tools/agent/skills/config-platform-change/SKILL.md
 - tools/agent/skills/harness-contract-change/SKILL.md

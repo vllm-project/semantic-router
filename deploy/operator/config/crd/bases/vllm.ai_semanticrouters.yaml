@@ -1285,6 +1285,14 @@ spec:
                                 - type
                                 type: object
                               type: array
+                            on_unknown:
+                              description: OnUnknown resolves a terminal unknown result
+                                after the rule tree is evaluated.
+                              enum:
+                              - no_match
+                              - match
+                              - fail_request
+                              type: string
                             operator:
                               description: |-
                                 Operator specifies how to combine conditions: "AND", "OR", or "NOT". NOT is strictly unary: it takes

@@ -391,10 +391,13 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
                   options: [
                     'message',
                     'tool_definition',
+                    'tool_choice_required',
+                    'tool_choice_none',
                     'assistant_tool_call',
                     'assistant_tool_cycle',
                     'active_tool_loop',
                     'image_content', // validator_conversation.go:16 -- #3001
+                    'flow_tool_state',
                   ],
                   required: true,
                 },
@@ -589,17 +592,6 @@ export function getPluginFieldSchema(pluginType: string): FieldSchema[] {
           label: 'Delete Headers',
           type: 'string[]',
           placeholder: 'Header name to delete',
-        },
-      ]
-    case 'image_gen':
-      return [
-        { key: 'enabled', label: 'Enabled', type: 'boolean' },
-        {
-          key: 'backend',
-          label: 'Backend',
-          type: 'string',
-          required: true,
-          placeholder: 'my_image_gen_backend',
         },
       ]
     case 'fast_response':

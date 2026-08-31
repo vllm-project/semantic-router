@@ -71,5 +71,10 @@ Every entry uses these sections:
 - [TD052: Paired promotion statistics](td-052-paired-promotion-statistics-gap.md)
 - [TD053: Evaluation store lifecycle durability](td-053-evaluation-store-lifecycle-durability-gap.md)
 
+### PL-0040: MoM Routing Hardening
+
+- [TD054: Typed request capability eligibility](td-054-typed-request-capability-eligibility-gap.md)
+- [TD055: Evidence-calibrated session switch gate](td-055-evidence-calibrated-session-switch-gate-gap.md)
+
 If a gap becomes release-critical, move ownership to the active release plan
 and update both indexes in the same change.

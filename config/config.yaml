@@ -475,12 +475,30 @@ routing:
             type: tool_definition
         predicate:
           gte: 1
+      - name: requires_tool_execution
+        description: Request protocol requires at least one tool call.
+        feature:
+          type: exists
+          source:
+            type: tool_choice_required
+      - name: forbids_tool_execution
+        description: Request protocol explicitly forbids tool calls.
+        feature:
+          type: exists
+          source:
+            type: tool_choice_none
       - name: active_tool_use
         description: Tool-result continuation inside an agent loop.
         feature:
           type: exists
           source:
             type: active_tool_loop
+      - name: resumable_flow_state
+        description: Request ends with a Router Flow tool result carrying continuation state.
+        feature:
+          type: exists
+          source:
+            type: flow_tool_state
       - name: has_developer_msg
         description: Request contains a developer message.
         feature:
@@ -759,6 +777,7 @@ routing:
           weight: 0.6
       algorithm:
         type: confidence
+        minimum_candidates: 2
         on_error: fallback
         confidence:
           confidence_method: hybrid
@@ -1278,13 +1297,13 @@ routing:
       priority: 125
       rules:
         operator: AND
+        on_unknown: no_match
         conditions:
           - type: classifier
             name: generic-safety-score
             label: JAILBREAK
             predicate:
               gte: 0.5
-            on_error: no_match
       modelRefs:
         - model: qwen3-8b
           use_reasoning: false
@@ -1347,6 +1366,7 @@ routing:
               base_url: https://api.openai.com
               api_key: openai-file-search-key
               max_num_results: 12
+              max_response_bytes: 4194304
               file_ids: [file_a, file_b]
               filter:
                 doc_type: manual
@@ -1466,36 +1486,6 @@ routing:
       modelRefs:
         - model: sdxl-image
           use_reasoning: false
-      plugins:
-        - type: image_gen
-          configuration:
-            enabled: true
-            backend: openai
-            backend_config:
-              api_key: openai-image-key
-              base_url: https://api.openai.com/v1
-              model: gpt-image-1
-              quality: hd
-              style: vivid
-            modality_detection:
-              method: hybrid
-              classifier:
-                model_path: models/mmbert32k-modality-router-merged
-                use_cpu: true
-              keywords:
-                - generate an image
-                - draw
-                - create a picture
-              both_keywords:
-                - explain and illustrate
-                - describe with an image
-              confidence_threshold: 0.7
-              lower_threshold_ratio: 0.7
-            default_width: 1024
-            default_height: 1024
-            max_inference_steps: 30
-            timeout_seconds: 60
-            max_response_bytes: 67108864
 
     - name: multimodal_route
       description: BOTH-modality route requiring text and image-capable execution.
@@ -1510,21 +1500,6 @@ routing:
           use_reasoning: true
         - model: sdxl-image
           use_reasoning: false
-      plugins:
-        - type: image_gen
-          configuration:
-            enabled: true
-            backend: vllm_omni
-            backend_config:
-              base_url: http://image-router:8005
-              model: Qwen/Qwen-Image
-              num_inference_steps: 28
-              cfg_scale: 4.5
-              seed: 42
-            default_width: 1024
-            default_height: 1024
-            max_inference_steps: 28
-            timeout_seconds: 90
 
 entrypoints:
   - model_names: ["vllm-sr/exhaustive-default"]
@@ -1720,6 +1695,10 @@ global:
           model_metrics: true
           queue_depth_estimation: true
           max_models: 50
+      profiling:
+        enabled: false
+        port: 6060
+        bind: 127.0.0.1
     authz:
       fail_open: false
       identity:
@@ -2208,7 +2187,6 @@ global:
         access_key: external-classifier-key
         max_tokens: 128
         temperature: 0
-      # Reached over the http_classify contract; the byte ceilings apply only there.
       - name: external-sequence-classifier
         llm_provider: openai
         model_role: classification
@@ -2365,6 +2343,7 @@ global:
           tool_name: classify
           threshold: 0.6
           timeout_seconds: 15
+          max_response_bytes: 16777216
         pii:
           # Omit to keep the historical behaviour of running whenever a model is
           # configured; false disables the classifier outright.

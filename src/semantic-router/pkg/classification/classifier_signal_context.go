@@ -196,10 +196,12 @@ func (c *Classifier) evaluateAllSignalsWithContext(
 	ready := c.signalReadiness()
 
 	results := &SignalResults{
-		Metrics:           &SignalMetricsCollection{},
-		SignalConfidences: make(map[string]float64),
-		SignalValues:      make(map[string]float64),
-		SignalErrors:      make(map[string]string),
+		Metrics:                &SignalMetricsCollection{},
+		SignalConfidences:      make(map[string]float64),
+		SignalValues:           make(map[string]float64),
+		SignalErrors:           make(map[string]string),
+		SignalErrorMatches:     make(map[string]bool),
+		AppliedUnknownPolicies: make(map[string]string),
 	}
 
 	var wg sync.WaitGroup

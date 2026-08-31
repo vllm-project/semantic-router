@@ -62,43 +62,46 @@ func (c *Classifier) evaluateDecisionInternal(signals *SignalResults, trace bool
 	).WithRoutingScope(c.Config.RoutingScope)
 
 	sm := &decision.SignalMatches{
-		KeywordRules:      signals.MatchedKeywordRules,
-		EmbeddingRules:    signals.MatchedEmbeddingRules,
-		DomainRules:       signals.MatchedDomainRules,
-		FactCheckRules:    signals.MatchedFactCheckRules,
-		UserFeedbackRules: signals.MatchedUserFeedbackRules,
-		ReaskRules:        signals.MatchedReaskRules,
-		PreferenceRules:   signals.MatchedPreferenceRules,
-		LanguageRules:     signals.MatchedLanguageRules,
-		ContextRules:      signals.MatchedContextRules,
-		StructureRules:    signals.MatchedStructureRules,
-		ComplexityRules:   signals.MatchedComplexityRules,
-		ModalityRules:     signals.MatchedModalityRules,
-		SignalConfidences: signals.SignalConfidences,
-		AuthzRules:        signals.MatchedAuthzRules,
-		JailbreakRules:    signals.MatchedJailbreakRules,
-		PIIRules:          signals.MatchedPIIRules,
-		KBRules:           signals.MatchedKBRules,
-		ConversationRules: signals.MatchedConversationRules,
-		EventRules:        signals.MatchedEventRules,
-		MetadataRules:     signals.MatchedMetadataRules,
-		ClassifierRules:   signals.MatchedClassifierRules,
-		ProjectionRules:   signals.MatchedProjectionRules,
-		SignalValues:      signals.SignalValues,
-		SignalErrors:      signals.SignalErrors,
+		KeywordRules:       signals.MatchedKeywordRules,
+		EmbeddingRules:     signals.MatchedEmbeddingRules,
+		DomainRules:        signals.MatchedDomainRules,
+		FactCheckRules:     signals.MatchedFactCheckRules,
+		UserFeedbackRules:  signals.MatchedUserFeedbackRules,
+		ReaskRules:         signals.MatchedReaskRules,
+		PreferenceRules:    signals.MatchedPreferenceRules,
+		LanguageRules:      signals.MatchedLanguageRules,
+		ContextRules:       signals.MatchedContextRules,
+		StructureRules:     signals.MatchedStructureRules,
+		ComplexityRules:    signals.MatchedComplexityRules,
+		ModalityRules:      signals.MatchedModalityRules,
+		SignalConfidences:  signals.SignalConfidences,
+		AuthzRules:         signals.MatchedAuthzRules,
+		JailbreakRules:     signals.MatchedJailbreakRules,
+		PIIRules:           signals.MatchedPIIRules,
+		KBRules:            signals.MatchedKBRules,
+		ConversationRules:  signals.MatchedConversationRules,
+		EventRules:         signals.MatchedEventRules,
+		MetadataRules:      signals.MatchedMetadataRules,
+		ClassifierRules:    signals.MatchedClassifierRules,
+		ProjectionRules:    signals.MatchedProjectionRules,
+		SignalValues:       signals.SignalValues,
+		SignalErrors:       signals.SignalErrors,
+		SignalErrorMatches: signals.SignalErrorMatches,
 	}
 
 	var result *decision.DecisionResult
 	var traces []decision.DecisionTrace
+	var diagnostics decision.EvaluationDiagnostics
+	var err error
 
 	if trace {
-		result, traces = engine.EvaluateDecisionsWithTrace(sm)
+		result, traces, diagnostics, err = engine.EvaluateDecisionsWithTraceAndDiagnostics(sm)
 	} else {
-		var err error
-		result, err = engine.EvaluateDecisionsWithSignals(sm)
-		if err != nil {
-			return nil, nil, fmt.Errorf("decision evaluation failed: %w", err)
-		}
+		result, diagnostics, err = engine.EvaluateDecisionsWithDiagnostics(sm)
+	}
+	signals.AppliedUnknownPolicies = diagnostics.AppliedUnknownPolicies
+	if err != nil {
+		return nil, traces, fmt.Errorf("decision evaluation failed: %w", err)
 	}
 
 	if result == nil {

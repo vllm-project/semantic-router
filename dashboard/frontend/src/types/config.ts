@@ -304,6 +304,7 @@ export interface DecisionCondition {
 export interface DecisionRules {
   operator: 'AND' | 'OR' | 'NOT'
   conditions: DecisionCondition[]
+  on_unknown?: 'no_match' | 'match' | 'fail_request'
 }
 
 export interface ModelRef {
@@ -324,7 +325,6 @@ export interface PluginConfig {
     | 'hallucination'
     | 'router_replay'
     | 'rag'
-    | 'image_gen'
     | 'fast_response'
     | 'tools'
     | 'request_params'

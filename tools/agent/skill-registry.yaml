@@ -58,7 +58,6 @@ surfaces:
     - src/semantic-router/pkg/contextcompression/**
     - src/semantic-router/pkg/embedding/**
     - src/semantic-router/pkg/hnsw/**
-    - src/semantic-router/pkg/imagegen/**
     - src/semantic-router/pkg/inflight/**
     - src/semantic-router/pkg/internalauth/**
     - src/semantic-router/pkg/llmprotocol/**

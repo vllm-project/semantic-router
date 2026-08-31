@@ -33,14 +33,15 @@ type MCPRAGConfig struct {
 
 // OpenAIRAGConfig represents configuration for OpenAI file_search-based RAG retrieval.
 type OpenAIRAGConfig struct {
-	VectorStoreID  string             `json:"vector_store_id" yaml:"vector_store_id"`
-	BaseURL        string             `json:"base_url,omitempty" yaml:"base_url,omitempty"`
-	APIKey         string             `json:"api_key" yaml:"api_key"`
-	MaxNumResults  *int               `json:"max_num_results,omitempty" yaml:"max_num_results,omitempty"`
-	FileIDs        []string           `json:"file_ids,omitempty" yaml:"file_ids,omitempty"`
-	Filter         *StructuredPayload `json:"filter,omitempty" yaml:"filter,omitempty"`
-	TimeoutSeconds *int               `json:"timeout_seconds,omitempty" yaml:"timeout_seconds,omitempty"`
-	WorkflowMode   string             `json:"workflow_mode,omitempty" yaml:"workflow_mode,omitempty"`
+	VectorStoreID    string             `json:"vector_store_id" yaml:"vector_store_id"`
+	BaseURL          string             `json:"base_url,omitempty" yaml:"base_url,omitempty"`
+	APIKey           string             `json:"api_key" yaml:"api_key"`
+	MaxNumResults    *int               `json:"max_num_results,omitempty" yaml:"max_num_results,omitempty"`
+	MaxResponseBytes int64              `json:"max_response_bytes,omitempty" yaml:"max_response_bytes,omitempty"`
+	FileIDs          []string           `json:"file_ids,omitempty" yaml:"file_ids,omitempty"`
+	Filter           *StructuredPayload `json:"filter,omitempty" yaml:"filter,omitempty"`
+	TimeoutSeconds   *int               `json:"timeout_seconds,omitempty" yaml:"timeout_seconds,omitempty"`
+	WorkflowMode     string             `json:"workflow_mode,omitempty" yaml:"workflow_mode,omitempty"`
 }
 
 // HybridRAGConfig represents configuration for hybrid RAG with multiple backends.
