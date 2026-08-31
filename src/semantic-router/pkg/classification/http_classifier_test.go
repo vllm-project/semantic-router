@@ -70,7 +70,7 @@ func TestNewHTTPClassifierInference(t *testing.T) {
 			// constructor accepts it, alignScoresToMapping then allocates a
 			// zero-length distribution, and every valid server response is
 			// rejected as "label not in the configured label mapping" - on
-			// every request, blocking all traffic under on_error: block.
+			// every request, blocking all traffic on transport failure.
 			name: "index-to-label-only mapping has zero labels",
 			externalCfg: &config.ExternalModelConfig{
 				ModelEndpoint: config.ClassifierVLLMEndpoint{Address: "127.0.0.1", Port: 8080},

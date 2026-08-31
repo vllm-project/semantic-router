@@ -6,8 +6,6 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -127,7 +125,7 @@ func TestCategoryHTTPBackendDistributionFailureMakesOneRequest(t *testing.T) {
 
 	classifier := &Classifier{
 		Config: &config.RouterConfig{InlineModels: config.InlineModels{Classifier: config.Classifier{
-			CategoryModel: config.CategoryModel{ClassifierOnErrorConfig: config.ClassifierOnErrorConfig{OnError: config.OnErrorBlock}},
+			CategoryModel: config.CategoryModel{},
 		}}},
 		CategoryMapping:   mapping,
 		categoryInference: backend,
@@ -177,48 +175,6 @@ func assertProbabilities(t *testing.T, got, want []float32) {
 	}
 }
 
-func TestCategoryHTTPBackendUsesErrorPolicyAtSignalBoundary(t *testing.T) {
-	categoryMapping := &CategoryMapping{
-		CategoryToIdx: map[string]int{"math": 0, "other": 1},
-		IdxToCategory: map[string]string{"0": "math", "1": "other"},
-	}
-	classifier := &Classifier{
-		Config: &config.RouterConfig{InlineModels: config.InlineModels{Classifier: config.Classifier{
-			CategoryModel: config.CategoryModel{
-				ModelID:             "category",
-				CategoryMappingPath: "mapping",
-				ClassifierOnErrorConfig: config.ClassifierOnErrorConfig{
-					OnError: config.OnErrorBlock,
-				},
-			},
-		}}, IntelligentRouting: config.IntelligentRouting{
-			Signals: config.Signals{Categories: []config.Category{{CategoryMetadata: config.CategoryMetadata{Name: "other"}}}},
-		}},
-		CategoryMapping: categoryMapping,
-		categoryInference: &MockCategoryInference{
-			classifyWithProbsError: errors.New("backend unavailable"),
-			classifyError:          errors.New("backend unavailable"),
-		},
-	}
-	results := classifier.EvaluateAllSignalsWithForceOption("text", true)
-	if len(results.MatchedDomainRules) != 1 || results.MatchedDomainRules[0] != CategoryClassificationErrorType {
-		t.Fatalf("matched domain rules = %v, want [%s]", results.MatchedDomainRules, CategoryClassificationErrorType)
-	}
-	if results.SignalConfidences["domain:"+CategoryClassificationErrorType] != 1 {
-		t.Fatalf("failure confidence = %v, want 1", results.SignalConfidences["domain:"+CategoryClassificationErrorType])
-	}
-	if results.SignalErrors[config.SignalTypeDomain] != "category_classification_failed" {
-		t.Fatalf("signal error = %q, want category_classification_failed", results.SignalErrors[config.SignalTypeDomain])
-	}
-	category, confidence, reasoning, err := classifier.ClassifyCategoryWithEntropy("text")
-	if err != nil {
-		t.Fatalf("ClassifyCategoryWithEntropy on block failure: %v", err)
-	}
-	if category != CategoryClassificationErrorType || confidence != 1 || reasoning.FallbackStrategy != "on_error_block" {
-		t.Fatalf("entropy failure result = (%q, %v, %#v)", category, confidence, reasoning)
-	}
-}
-
 func TestCategoryBackendConstructionUsesSharedModelValidator(t *testing.T) {
 	cfg := &config.RouterConfig{
 		InlineModels: config.InlineModels{Classifier: config.Classifier{CategoryModel: config.CategoryModel{
@@ -242,22 +198,5 @@ func TestCategoryBackendConstructionUsesSharedModelValidator(t *testing.T) {
 	}
 	if err := builder.addCategoryClassifier(categoryMapping); err == nil {
 		t.Fatal("expected direct category construction to reject an external model with the wrong role")
-	}
-}
-
-func TestCategoryMappingRejectsClassificationErrorSentinel(t *testing.T) {
-	for name, content := range map[string]string{
-		"category_to_idx": `{"category_to_idx":{"math":0,"classification_error":1},"idx_to_category":{"0":"math","1":"classification_error"}}`,
-		"idx_to_category": `{"category_to_idx":{"math":0,"other":1},"idx_to_category":{"0":"math","1":"classification_error"}}`,
-	} {
-		t.Run(name, func(t *testing.T) {
-			path := filepath.Join(t.TempDir(), "mapping.json")
-			if err := os.WriteFile(path, []byte(content), 0600); err != nil {
-				t.Fatalf("write mapping: %v", err)
-			}
-			if _, err := LoadCategoryMapping(path); err == nil {
-				t.Fatal("expected classification_error sentinel collision to be rejected")
-			}
-		})
 	}
 }

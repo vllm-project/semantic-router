@@ -117,7 +117,7 @@ func (c *Classifier) classifyCategoryWithEntropyInTree(ctx context.Context, text
 	// Get full probability distribution
 	result, err := c.categoryInference.ClassifyWithProbabilities(ctx, text)
 	if err != nil {
-		return c.handleCategoryEntropyClassificationError(err)
+		return "", 0.0, entropy.ReasoningDecision{}, fmt.Errorf("classification error: %w", err)
 	}
 
 	logging.Debugf("Classification result: class=%d, confidence=%.4f, entropy_available=%t",
@@ -197,21 +197,6 @@ func (c *Classifier) classifyCategoryWithEntropyInTree(ctx context.Context, text
 		genericCategory, categoryName, reasoningDecision.UseReasoning, reasoningDecision.Confidence, reasoningDecision.DecisionReason)
 
 	return genericCategory, float64(result.Confidence), reasoningDecision, nil
-}
-
-func (c *Classifier) handleCategoryEntropyClassificationError(err error) (string, float64, entropy.ReasoningDecision, error) {
-	if c.Config.CategoryModel.IsBlock() {
-		return CategoryClassificationErrorType, 1.0, entropy.ReasoningDecision{
-			Confidence:       1.0,
-			DecisionReason:   "classifier_error_fail_closed",
-			FallbackStrategy: "on_error_block",
-			TopCategories: []entropy.CategoryProbability{{
-				Category:    CategoryClassificationErrorType,
-				Probability: 1.0,
-			}},
-		}, nil
-	}
-	return "", 0.0, entropy.ReasoningDecision{}, fmt.Errorf("classification error: %w", err)
 }
 
 func (c *Classifier) recordEntropyMetrics(probabilities []float32, reasoningDecision entropy.ReasoningDecision, entropyLatency float64) {

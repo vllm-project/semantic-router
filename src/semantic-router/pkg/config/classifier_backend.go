@@ -190,9 +190,6 @@ func ValidateCategoryModelBackend(cfg *RouterConfig) error {
 		return fmt.Errorf("category model configuration is nil")
 	}
 	model := &cfg.CategoryModel
-	if err := model.ValidateOnError(); err != nil {
-		return fmt.Errorf("classifier.domain.%w", err)
-	}
 	if err := model.ValidateLocalVariant(); err != nil {
 		return err
 	}

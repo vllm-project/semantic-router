@@ -136,6 +136,17 @@ func TestLoadCategoryMappingRejectsNonBijections(t *testing.T) {
 	}
 }
 
+func TestLoadCategoryMappingAcceptsClassificationErrorLabel(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "category_mapping.json")
+	data := `{"category_to_idx":{"math":0,"classification_error":1},"idx_to_category":{"0":"math","1":"classification_error"}}`
+	if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadCategoryMapping(path); err != nil {
+		t.Fatalf("classification_error category label rejected: %v", err)
+	}
+}
+
 // TestLoadJailbreakMapping_RejectsSentinelCollision guards on_error: block's
 // fail-closed sentinel (JailbreakClassificationErrorType): a deployment
 // whose mapping file configures a real label with that exact name would

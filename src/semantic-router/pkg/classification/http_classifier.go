@@ -93,7 +93,7 @@ func newHTTPClassifierInference(cfg *config.ExternalModelConfig, mapping sequenc
 	// alignScoresToMapping allocate an undersized distribution, so
 	// assignScoreToMapping's bounds check rejects every label and a perfectly
 	// valid server response fails with an error blaming the server, on every
-	// request. Under on_error: block that blocks all traffic. Fail here instead.
+	// request. Fail here instead of returning a partial response.
 	if n := mapping.LabelCount(); n < 2 {
 		return nil, fmt.Errorf("http_classify label mapping must define at least 2 labels, got %d", n)
 	}

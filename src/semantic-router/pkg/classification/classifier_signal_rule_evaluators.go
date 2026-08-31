@@ -103,20 +103,6 @@ func (c *Classifier) evaluateDomainSignal(ctx context.Context, results *SignalRe
 
 	if err != nil {
 		logging.Errorf("domain rule evaluation failed: %v", err)
-		mu.Lock()
-		if results.SignalErrors == nil {
-			results.SignalErrors = make(map[string]string)
-		}
-		results.SignalErrors[config.SignalTypeDomain] = categoryClassificationErrorCode
-		if c.Config.CategoryModel.IsBlock() {
-			// Match the established jailbreak fail-closed shape: use a reserved
-			// synthetic category so a backend failure cannot look like a clean
-			// request and can be selected by an explicit domain rule.
-			c.recordSignalMatch(config.SignalTypeDomain, CategoryClassificationErrorType)
-			results.MatchedDomainRules = append(results.MatchedDomainRules, CategoryClassificationErrorType)
-			results.SignalConfidences["domain:"+CategoryClassificationErrorType] = 1.0
-		}
-		mu.Unlock()
 	} else {
 		matched := c.matchDomainCategories(domainResult, categoryName)
 		mu.Lock()

@@ -91,11 +91,6 @@ global:
             deadline_ms: 5000
 ```
 
-`on_error` remains owned by the category signal. `allow` (the default) keeps
-classification failures from matching a domain rule; `block` exposes a
-reserved `classification_error` category at confidence `1.0`, which can be
-consumed by an explicit domain decision.
-
 ## Dependencies and Limitations
 
 Domain classification uses the configured classifier module and processes the

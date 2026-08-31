@@ -34,7 +34,6 @@ type CategoryModel struct {
 	Backend                 *RemoteClassifierBackend `yaml:"backend,omitempty"`
 	CategoryMappingPath     string                   `yaml:"category_mapping_path"`
 	FallbackCategory        string                   `yaml:"fallback_category,omitempty"`
-	ClassifierOnErrorConfig `yaml:",inline"`
 }
 
 type PIIModel struct {

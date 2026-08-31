@@ -31,12 +31,6 @@ type JailbreakMapping struct {
 	IDToLabel map[string]string `json:"id_to_label"`
 }
 
-// CategoryClassificationErrorType is the sentinel category reported when
-// category classification fails and on_error is set to "block". It is kept
-// separate from configured model labels so a transport/model failure cannot be
-// mistaken for a real category.
-const CategoryClassificationErrorType = "classification_error"
-
 // LoadCategoryMapping loads the category mapping from a JSON file
 func LoadCategoryMapping(path string) (*CategoryMapping, error) {
 	// Read the mapping file
@@ -52,18 +46,6 @@ func LoadCategoryMapping(path string) (*CategoryMapping, error) {
 	}
 	if err := validateCategoryMapping(path, &mapping); err != nil {
 		return nil, err
-	}
-	if _, collides := mapping.CategoryToIdx[CategoryClassificationErrorType]; collides {
-		return nil, fmt.Errorf(
-			"category mapping %s: label %q is reserved for the on_error: block sentinel and cannot be a configured label",
-			path, CategoryClassificationErrorType)
-	}
-	for _, label := range mapping.IdxToCategory {
-		if label == CategoryClassificationErrorType {
-			return nil, fmt.Errorf(
-				"category mapping %s: label %q is reserved for the on_error: block sentinel and cannot be a configured label",
-				path, CategoryClassificationErrorType)
-		}
 	}
 
 	return &mapping, nil
