@@ -26,10 +26,10 @@ const defaultRemoteClassifierDeadlineMs = 5000
 // existing local implementation. DeadlineMs is a pointer so omitted and
 // an explicitly invalid zero value cannot be confused during validation.
 type RemoteClassifierBackend struct {
-	Protocol       string `yaml:"protocol" json:"protocol"`
-	Contract       string `yaml:"contract,omitempty" json:"contract,omitempty"`
-	Model          string `yaml:"model" json:"model"`
-	DeadlineMs     *int   `yaml:"deadline_ms,omitempty" json:"deadline_ms,omitempty"`
+	Protocol   string `yaml:"protocol" json:"protocol"`
+	Contract   string `yaml:"contract,omitempty" json:"contract,omitempty"`
+	Model      string `yaml:"model" json:"model"`
+	DeadlineMs *int   `yaml:"deadline_ms,omitempty" json:"deadline_ms,omitempty"`
 }
 
 // UnmarshalYAML rejects stale or misspelled deadline fields instead of letting

@@ -131,8 +131,8 @@ func buildAuxiliaryModelsConfig() *config.RouterConfig {
 
 func TestCategoryModelInfoReportsEffectiveVariant(t *testing.T) {
 	for _, test := range []struct {
-		name    string
-		model   config.CategoryModel
+		name     string
+		model    config.CategoryModel
 		wantType string
 	}{
 		{name: "mmbert32k", model: config.CategoryModel{Variant: config.CategoryVariantMmBERT32K}, wantType: config.CategoryVariantMmBERT32K},

@@ -31,9 +31,9 @@ type CategoryModel struct {
 	Variant string `yaml:"variant,omitempty"`
 	// Backend attaches a named remote classifier. Its absence preserves local
 	// category inference exactly as before.
-	Backend                 *RemoteClassifierBackend `yaml:"backend,omitempty"`
-	CategoryMappingPath     string                   `yaml:"category_mapping_path"`
-	FallbackCategory        string                   `yaml:"fallback_category,omitempty"`
+	Backend             *RemoteClassifierBackend `yaml:"backend,omitempty"`
+	CategoryMappingPath string                   `yaml:"category_mapping_path"`
+	FallbackCategory    string                   `yaml:"fallback_category,omitempty"`
 }
 
 type PIIModel struct {

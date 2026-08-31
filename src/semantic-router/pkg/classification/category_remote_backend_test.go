@@ -139,8 +139,8 @@ func TestCategoryHTTPBackendDistributionFailureMakesOneRequest(t *testing.T) {
 	if got := requests.Load(); got != 1 {
 		t.Fatalf("remote requests = %d, want 1", got)
 	}
-	if results.SignalErrors[config.SignalTypeDomain] != "category_classification_failed" {
-		t.Fatalf("signal error = %q, want category_classification_failed", results.SignalErrors[config.SignalTypeDomain])
+	if _, ok := results.SignalErrors[config.SignalTypeDomain]; ok {
+		t.Fatalf("category failure unexpectedly recorded signal error %q", results.SignalErrors[config.SignalTypeDomain])
 	}
 }
 

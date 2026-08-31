@@ -81,9 +81,9 @@ func TestCategoryModelAcceptsAgreeingCanonicalAndLegacySelectors(t *testing.T) {
 func TestValidateCategoryModelBackend(t *testing.T) {
 	deadline := 3000
 	valid := &RemoteClassifierBackend{
-		Protocol:       RemoteClassifierProtocolHTTPClassify,
-		Model:          "named-category",
-		DeadlineMs:     &deadline,
+		Protocol:   RemoteClassifierProtocolHTTPClassify,
+		Model:      "named-category",
+		DeadlineMs: &deadline,
 	}
 	if err := ValidateCategoryModelBackend(categoryBackendTestConfig(valid)); err != nil {
 		t.Fatalf("valid named backend rejected: %v", err)
@@ -330,10 +330,10 @@ func TestReferenceConfigCategoryBackendReplacesDefaultVariant(t *testing.T) {
 	data := string(readReferenceConfigYAML(t))
 	data = strings.Replace(data,
 		"          category_mapping_path: models/mmbert32k-intent-classifier-merged/category_mapping.json\n",
-			"          backend:\n"+
+		"          backend:\n"+
 			"            protocol: http_classify\n"+
 			"            contract: label_distribution.v1\n"+
-			"            model: external-sequence-classifier\n"+
+			"            model: external-classifier\n"+
 			"            deadline_ms: 5000\n"+
 			"          category_mapping_path: models/mmbert32k-intent-classifier-merged/category_mapping.json\n", 1)
 	if data == string(readReferenceConfigYAML(t)) {

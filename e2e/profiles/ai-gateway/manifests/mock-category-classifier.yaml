@@ -37,9 +37,34 @@ data:
                 self.send_json(400, {"error": "invalid request"})
                 return
             is_math = "__CATEGORY_BACKEND_MATH__" in str(text)
+            labels = [
+                "business",
+                "law",
+                "psychology",
+                "biology",
+                "chemistry",
+                "history",
+                "health",
+                "economics",
+                "math",
+                "physics",
+                "computer science",
+                "philosophy",
+                "engineering",
+                "other",
+            ]
             self.send_json(200, [
-                {"label": "math", "score": 0.95 if is_math else 0.05},
-                {"label": "other", "score": 0.05 if is_math else 0.95},
+                {
+                    "label": label,
+                    "score": (
+                        (0.95 if is_math else 0.05)
+                        if label == "math"
+                        else (0.05 if is_math else 0.95)
+                        if label == "other"
+                        else 0.0
+                    ),
+                }
+                for label in labels
             ])
 
     ThreadingHTTPServer(("0.0.0.0", 8000), Handler).serve_forever()
