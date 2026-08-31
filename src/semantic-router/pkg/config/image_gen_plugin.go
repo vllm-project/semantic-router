@@ -1,10 +1,6 @@
 package config
 
-import (
-	"fmt"
-
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
-)
+import "fmt"
 
 // ModalityDetectionMethod defines how modality is detected
 const (
@@ -24,189 +20,12 @@ type ModalityDetectorConfig struct {
 	Enabled bool `yaml:"enabled" json:"enabled"`
 
 	// PromptPrefixes are prefix strings stripped from the user prompt before
-	// sending it to the diffusion model (e.g. "generate an image of ", "draw ").
+	// sending it to the generation backend (e.g. "generate an image of ", "draw ").
 	// Matched case-insensitively; the first match is stripped. Optional.
 	PromptPrefixes []string `yaml:"prompt_prefixes,omitempty" json:"prompt_prefixes,omitempty"`
 
 	// Detection configuration (inlined from ModalityDetectionConfig)
 	ModalityDetectionConfig `yaml:",inline"`
-}
-
-// ImageGenBackendEntry defines a named image generation backend configuration.
-// Follows the same pattern as ReasoningFamilyConfig — named map entries referenced
-// by model_config. The Type field determines which provider-specific fields are relevant.
-//
-// vllm_omni fields: BaseURL, Model, NumInferenceSteps, CFGScale, Seed
-// openai fields:    APIKey, Model, Quality, Style
-type ImageGenBackendEntry struct {
-	// Type identifies the image generation provider: "vllm_omni" or "openai"
-	Type string `yaml:"type" json:"type"`
-
-	// Model name to use for image generation
-	Model string `yaml:"model,omitempty" json:"model,omitempty"`
-
-	// Default image dimensions
-	DefaultWidth  int `yaml:"default_width,omitempty" json:"default_width,omitempty"`
-	DefaultHeight int `yaml:"default_height,omitempty" json:"default_height,omitempty"`
-
-	// Timeout in seconds for image generation requests
-	TimeoutSeconds int `yaml:"timeout_seconds,omitempty" json:"timeout_seconds,omitempty"`
-
-	// --- vllm_omni-specific fields ---
-
-	// BaseURL for vLLM-Omni server (e.g., "http://localhost:8001")
-	BaseURL string `yaml:"base_url,omitempty" json:"base_url,omitempty"`
-
-	// NumInferenceSteps is the number of denoising steps
-	NumInferenceSteps int `yaml:"num_inference_steps,omitempty" json:"num_inference_steps,omitempty"`
-
-	// CFGScale controls classifier-free guidance scale
-	CFGScale float64 `yaml:"cfg_scale,omitempty" json:"cfg_scale,omitempty"`
-
-	// Seed for reproducibility (optional)
-	Seed *int `yaml:"seed,omitempty" json:"seed,omitempty"`
-
-	// --- openai-specific fields ---
-
-	// APIKey for OpenAI image generation API
-	APIKey string `yaml:"api_key,omitempty" json:"api_key,omitempty"`
-
-	// Quality setting: "standard" or "hd" (OpenAI only)
-	Quality string `yaml:"quality,omitempty" json:"quality,omitempty"`
-
-	// Style setting: "vivid" or "natural" (OpenAI only)
-	Style string `yaml:"style,omitempty" json:"style,omitempty"`
-}
-
-// ToPluginConfig converts an ImageGenBackendEntry to an ImageGenPluginConfig
-// that can be used with the existing imagegen.CreateBackend factory.
-func (e *ImageGenBackendEntry) ToPluginConfig() *ImageGenPluginConfig {
-	cfg := &ImageGenPluginConfig{
-		Enabled:        true,
-		Backend:        e.Type,
-		DefaultWidth:   e.DefaultWidth,
-		DefaultHeight:  e.DefaultHeight,
-		TimeoutSeconds: e.TimeoutSeconds,
-	}
-
-	switch e.Type {
-	case "vllm_omni":
-		payload, _ := NewStructuredPayload(&VLLMOmniImageGenConfig{
-			BaseURL:           e.BaseURL,
-			Model:             e.Model,
-			NumInferenceSteps: e.NumInferenceSteps,
-			CFGScale:          e.CFGScale,
-			Seed:              e.Seed,
-		})
-		cfg.BackendConfig = payload
-	case "openai":
-		payload, _ := NewStructuredPayload(&OpenAIImageGenConfig{
-			APIKey:  e.APIKey,
-			BaseURL: e.BaseURL,
-			Model:   e.Model,
-			Quality: e.Quality,
-			Style:   e.Style,
-		})
-		cfg.BackendConfig = payload
-	}
-
-	return cfg
-}
-
-// ModalityRoutingConfig is the top-level configuration for modality-based routing.
-//
-// Deprecated: Use ModalityDetectorConfig (in InlineModels) + ImageGenBackendEntry (in BackendModels) instead.
-type ModalityRoutingConfig struct {
-	// Enabled activates modality routing. When false, the feature is completely skipped.
-	Enabled bool `yaml:"enabled" json:"enabled"`
-
-	// ARModel is the model name for autoregressive (text) responses.
-	// Must match a key in model_config.
-	ARModel string `yaml:"ar_model" json:"ar_model"`
-
-	// AREndpoint is the base URL of the AR model's OpenAI-compatible API.
-	// Required for BOTH modality (the router calls this endpoint directly for text).
-	// Example: "http://localhost:8000/v1"
-	AREndpoint string `yaml:"ar_endpoint" json:"ar_endpoint"`
-
-	// DiffusionModel is the model name for diffusion (image) responses.
-	DiffusionModel string `yaml:"diffusion_model" json:"diffusion_model"`
-
-	// DiffusionEndpoint is the base URL of the diffusion model's API.
-	// Example: "http://localhost:8001/v1"
-	DiffusionEndpoint string `yaml:"diffusion_endpoint" json:"diffusion_endpoint"`
-
-	// ImageGen holds image generation backend settings (size, steps, timeout, etc.).
-	ImageGen ImageGenBackendConfig `yaml:"image_gen" json:"image_gen"`
-
-	// Detection configures how prompts are classified into AR / DIFFUSION / BOTH.
-	Detection ModalityDetectionConfig `yaml:"detection" json:"detection"`
-}
-
-// ImageGenBackendConfig holds the image generation backend settings used by
-// modality routing when the classification is DIFFUSION.
-type ImageGenBackendConfig struct {
-	// Backend type: "vllm_omni", "openai"
-	Backend string `yaml:"backend" json:"backend"`
-
-	// BackendConfig is backend-specific configuration (base_url, model, etc.)
-	BackendConfig *StructuredPayload `yaml:"backend_config,omitempty" json:"backend_config,omitempty"`
-
-	// Default image dimensions (required)
-	DefaultWidth  int `yaml:"default_width" json:"default_width"`
-	DefaultHeight int `yaml:"default_height" json:"default_height"`
-
-	// Timeout in seconds for image generation requests
-	TimeoutSeconds int `yaml:"timeout_seconds,omitempty" json:"timeout_seconds,omitempty"`
-
-	// ResponseText is the canned text returned alongside the generated image
-	// in the Responses API format. Required when modality_routing is enabled.
-	// Example: "Here is the generated image."
-	ResponseText string `yaml:"response_text" json:"response_text"`
-
-	// PromptPrefixes are prefix strings stripped from the user prompt before
-	// sending it to the diffusion model (e.g. "generate an image of ", "draw ").
-	// Matched case-insensitively; the first match is stripped. Optional.
-	PromptPrefixes []string `yaml:"prompt_prefixes,omitempty" json:"prompt_prefixes,omitempty"`
-}
-
-// Validate validates the top-level modality routing configuration.
-func (c *ModalityRoutingConfig) Validate() error {
-	if c == nil || !c.Enabled {
-		return nil
-	}
-
-	if c.ARModel == "" {
-		return fmt.Errorf("modality_routing.ar_model is required when enabled")
-	}
-	if c.AREndpoint == "" {
-		return fmt.Errorf("modality_routing.ar_endpoint is required when enabled (e.g. \"http://localhost:8000/v1\")")
-	}
-	if c.DiffusionModel == "" {
-		return fmt.Errorf("modality_routing.diffusion_model is required when enabled")
-	}
-	if c.DiffusionEndpoint == "" {
-		return fmt.Errorf("modality_routing.diffusion_endpoint is required when enabled")
-	}
-	if c.ImageGen.Backend == "" {
-		return fmt.Errorf("modality_routing.image_gen.backend is required when enabled")
-	}
-	if c.ImageGen.DefaultWidth <= 0 {
-		return fmt.Errorf("modality_routing.image_gen.default_width is required when enabled (e.g. 1024)")
-	}
-	if c.ImageGen.DefaultHeight <= 0 {
-		return fmt.Errorf("modality_routing.image_gen.default_height is required when enabled (e.g. 1024)")
-	}
-	if c.ImageGen.ResponseText == "" {
-		return fmt.Errorf("modality_routing.image_gen.response_text is required when enabled (e.g. \"Here is the generated image.\")")
-	}
-
-	// Validate detection config
-	if err := c.Detection.Validate(); err != nil {
-		return fmt.Errorf("modality_routing.detection: %w", err)
-	}
-
-	return nil
 }
 
 // ModalityDetectionConfig configures how modality routing detects whether a prompt
@@ -282,116 +101,6 @@ func (c *ModalityDetectionConfig) GetLowerThresholdRatio() float32 {
 	return c.LowerThresholdRatio
 }
 
-// ImageGenPluginConfig represents configuration for image generation plugin
-type ImageGenPluginConfig struct {
-	// Enable image generation for this decision
-	Enabled bool `json:"enabled" yaml:"enabled"`
-
-	// Backend type: "vllm_omni", "openai", "replicate"
-	Backend string `json:"backend" yaml:"backend"`
-
-	// Backend-specific configuration
-	BackendConfig *StructuredPayload `json:"backend_config,omitempty" yaml:"backend_config,omitempty"`
-
-	// ModalityDetection configures how prompts are classified into AR/DIFFUSION/BOTH.
-	// If not specified, defaults to hybrid (classifier + keyword fallback).
-	ModalityDetection *ModalityDetectionConfig `json:"modality_detection,omitempty" yaml:"modality_detection,omitempty"`
-
-	// Default image parameters
-	DefaultWidth  int `json:"default_width,omitempty" yaml:"default_width,omitempty"`
-	DefaultHeight int `json:"default_height,omitempty" yaml:"default_height,omitempty"`
-
-	// Maximum inference steps (for diffusion models)
-	MaxInferenceSteps int `json:"max_inference_steps,omitempty" yaml:"max_inference_steps,omitempty"`
-
-	// Timeout in seconds
-	TimeoutSeconds int `json:"timeout_seconds,omitempty" yaml:"timeout_seconds,omitempty"`
-
-	// Maximum response body size in bytes
-	MaxResponseBytes int64 `json:"max_response_bytes,omitempty" yaml:"max_response_bytes,omitempty"`
-}
-
-// VLLMOmniImageGenConfig represents configuration for vLLM-Omni image generation
-type VLLMOmniImageGenConfig struct {
-	// Base URL for vLLM-Omni server (e.g., "http://localhost:8001")
-	BaseURL string `json:"base_url" yaml:"base_url"`
-
-	// Model name to use (e.g., "Qwen/Qwen-Image")
-	Model string `json:"model,omitempty" yaml:"model,omitempty"`
-
-	// Default number of inference steps
-	NumInferenceSteps int `json:"num_inference_steps,omitempty" yaml:"num_inference_steps,omitempty"`
-
-	// CFG scale for guidance
-	CFGScale float64 `json:"cfg_scale,omitempty" yaml:"cfg_scale,omitempty"`
-
-	// Seed for reproducibility (optional)
-	Seed *int `json:"seed,omitempty" yaml:"seed,omitempty"`
-}
-
-// OpenAIImageGenConfig represents configuration for OpenAI image generation
-type OpenAIImageGenConfig struct {
-	// OpenAI API key
-	APIKey string `json:"api_key" yaml:"api_key"`
-
-	// Base URL (defaults to https://api.openai.com/v1)
-	BaseURL string `json:"base_url,omitempty" yaml:"base_url,omitempty"`
-
-	// Model to use (e.g., "gpt-image-1", "dall-e-3")
-	Model string `json:"model,omitempty" yaml:"model,omitempty"`
-
-	// Image quality: "standard" or "hd"
-	Quality string `json:"quality,omitempty" yaml:"quality,omitempty"`
-
-	// Style: "vivid" or "natural"
-	Style string `json:"style,omitempty" yaml:"style,omitempty"`
-}
-
-func (c *ImageGenPluginConfig) VLLMOmniBackendConfig() (*VLLMOmniImageGenConfig, error) {
-	return decodeImageGenBackendConfig[VLLMOmniImageGenConfig](c.Backend, c.BackendConfig, "vllm_omni")
-}
-
-func (c *ImageGenPluginConfig) OpenAIBackendConfig() (*OpenAIImageGenConfig, error) {
-	return decodeImageGenBackendConfig[OpenAIImageGenConfig](c.Backend, c.BackendConfig, "openai")
-}
-
-func (c *ImageGenBackendConfig) VLLMOmniBackendConfig() (*VLLMOmniImageGenConfig, error) {
-	return decodeImageGenBackendConfig[VLLMOmniImageGenConfig](c.Backend, c.BackendConfig, "vllm_omni")
-}
-
-func (c *ImageGenBackendConfig) OpenAIBackendConfig() (*OpenAIImageGenConfig, error) {
-	return decodeImageGenBackendConfig[OpenAIImageGenConfig](c.Backend, c.BackendConfig, "openai")
-}
-
-func decodeImageGenBackendConfig[T any](backend string, payload *StructuredPayload, expectedBackend string) (*T, error) {
-	if backend != expectedBackend {
-		return nil, fmt.Errorf("expected image_gen backend %q, got %q", expectedBackend, backend)
-	}
-	if payload == nil {
-		return nil, fmt.Errorf("backend_config is required for %s", expectedBackend)
-	}
-	result := new(T)
-	if err := payload.DecodeInto(result); err != nil {
-		return nil, fmt.Errorf("decode image_gen backend %s: %w", expectedBackend, err)
-	}
-	return result, nil
-}
-
-// GetImageGenConfig returns the image generation plugin configuration for a decision
-func (d *Decision) GetImageGenConfig() *ImageGenPluginConfig {
-	plugin := d.GetPlugin("image_gen")
-	if plugin == nil || plugin.Configuration == nil {
-		return nil
-	}
-
-	result := &ImageGenPluginConfig{}
-	if err := UnmarshalPluginConfig(plugin.Configuration, result); err != nil {
-		logging.Errorf("Failed to unmarshal image_gen config: %v", err)
-		return nil
-	}
-	return result
-}
-
 // Validate validates the modality detection configuration.
 // It ensures that:
 //   - Method (if set) is one of "classifier", "keyword", or "hybrid"
@@ -402,7 +111,7 @@ func (d *Decision) GetImageGenConfig() *ImageGenPluginConfig {
 //   - ConfidenceThreshold is required when method is "classifier" or "hybrid"
 func (c *ModalityDetectionConfig) Validate() error {
 	if c == nil {
-		return nil // nil config is valid (not used in top-level modality_routing path)
+		return nil // nil config is valid (not referenced by any signal when unset)
 	}
 
 	method := c.GetMethod()
@@ -463,54 +172,5 @@ func (c *ModalityDetectionConfig) validateThresholds(method string) error {
 		return fmt.Errorf("modality_detection.lower_threshold_ratio is required when method is %q (e.g. 0.7)", method)
 	}
 
-	return nil
-}
-
-// Validate validates the image generation plugin configuration
-func (c *ImageGenPluginConfig) Validate() error {
-	if !c.Enabled {
-		return nil
-	}
-
-	if c.Backend == "" {
-		return fmt.Errorf("image_gen backend is required when enabled")
-	}
-	if err := c.validateBackend(); err != nil {
-		return err
-	}
-	if c.MaxResponseBytes < 0 {
-		return fmt.Errorf("image_gen max_response_bytes must be non-negative")
-	}
-
-	if c.ModalityDetection != nil {
-		if err := c.ModalityDetection.Validate(); err != nil {
-			return fmt.Errorf("image_gen: %w", err)
-		}
-	}
-
-	return nil
-}
-
-func (c *ImageGenPluginConfig) validateBackend() error {
-	switch c.Backend {
-	case "vllm_omni":
-		vllmConfig, err := c.VLLMOmniBackendConfig()
-		if err != nil {
-			return err
-		}
-		if vllmConfig.BaseURL == "" {
-			return fmt.Errorf("base_url is required for vllm_omni backend")
-		}
-	case "openai":
-		openaiConfig, err := c.OpenAIBackendConfig()
-		if err != nil {
-			return err
-		}
-		if openaiConfig.APIKey == "" {
-			return fmt.Errorf("api_key is required for openai backend")
-		}
-	default:
-		return fmt.Errorf("unknown image_gen backend: %s", c.Backend)
-	}
 	return nil
 }

@@ -1467,36 +1467,6 @@ routing:
       modelRefs:
         - model: sdxl-image
           use_reasoning: false
-      plugins:
-        - type: image_gen
-          configuration:
-            enabled: true
-            backend: openai
-            backend_config:
-              api_key: openai-image-key
-              base_url: https://api.openai.com/v1
-              model: gpt-image-1
-              quality: hd
-              style: vivid
-            modality_detection:
-              method: hybrid
-              classifier:
-                model_path: models/mmbert32k-modality-router-merged
-                use_cpu: true
-              keywords:
-                - generate an image
-                - draw
-                - create a picture
-              both_keywords:
-                - explain and illustrate
-                - describe with an image
-              confidence_threshold: 0.7
-              lower_threshold_ratio: 0.7
-            default_width: 1024
-            default_height: 1024
-            max_inference_steps: 30
-            timeout_seconds: 60
-            max_response_bytes: 67108864
 
     - name: multimodal_route
       description: BOTH-modality route requiring text and image-capable execution.
@@ -1511,21 +1481,6 @@ routing:
           use_reasoning: true
         - model: sdxl-image
           use_reasoning: false
-      plugins:
-        - type: image_gen
-          configuration:
-            enabled: true
-            backend: vllm_omni
-            backend_config:
-              base_url: http://image-router:8005
-              model: Qwen/Qwen-Image
-              num_inference_steps: 28
-              cfg_scale: 4.5
-              seed: 42
-            default_width: 1024
-            default_height: 1024
-            max_inference_steps: 28
-            timeout_seconds: 90
 
 entrypoints:
   - model_names: ["vllm-sr/exhaustive-default"]
