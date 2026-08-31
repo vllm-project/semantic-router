@@ -61,7 +61,8 @@ deployments and may rely on model or service definitions from a base config.
   Heuristic and learned signal guides live under
   `tutorials/signal/heuristic/` and `tutorials/signal/learned/`.
 - `config/fragments/decision/`: `single`, `and`, `or`, `not`, and nested
-  boolean rule shapes.
+  boolean rule shapes. Classifier-backed rules may resolve a terminal
+  `Unknown` result with `on_unknown: no_match|match|fail_request`.
 - `config/fragments/algorithm/`: per-decision model selection and bounded
   multi-model execution policies.
 - `config/fragments/plugin/`: route-local request or response processing such

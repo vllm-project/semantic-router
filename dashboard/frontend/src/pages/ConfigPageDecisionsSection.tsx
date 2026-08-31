@@ -137,6 +137,7 @@ export default function ConfigPageDecisionsSection({
         title: 'Rules',
         fields: [
           { label: 'Operator', value: decision.rules?.operator || 'N/A' },
+          { label: 'On unknown', value: decision.rules?.on_unknown || 'Legacy default' },
           {
             label: 'Conditions',
             value: decision.rules?.conditions?.length ? (
@@ -300,6 +301,7 @@ export default function ConfigPageDecisionsSection({
       description: '',
       priority: 1,
       operator: 'AND',
+      on_unknown: '',
       conditions: [{ type: 'keyword', name: '' }],
       modelRefs: [
         {
@@ -320,6 +322,7 @@ export default function ConfigPageDecisionsSection({
             description: decision.description || '',
             priority: decision.priority ?? 1,
             operator: decision.rules?.operator || 'AND',
+            on_unknown: decision.rules?.on_unknown || '',
             conditions: cloneDecisionConditions(decision.rules?.conditions),
             modelRefs: (decision.modelRefs || []).map((ref) => ({
               model: ref.model,
@@ -624,6 +627,13 @@ export default function ConfigPageDecisionsSection({
         required: true,
       },
       {
+        name: 'on_unknown',
+        label: 'On Unknown',
+        type: 'select',
+        options: ['', 'no_match', 'match', 'fail_request'],
+        description: 'Resolve classifier backend failures after the complete rule tree is evaluated.',
+      },
+      {
         name: 'conditions',
         label: 'Conditions',
         type: 'custom',
@@ -759,6 +769,7 @@ export default function ConfigPageDecisionsSection({
         rules: decisionRulesForSave(decision?.rules, {
           operator: formData.operator,
           conditions,
+          ...(formData.on_unknown ? { on_unknown: formData.on_unknown } : {}),
         }),
         modelRefs,
         plugins,

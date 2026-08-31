@@ -207,6 +207,11 @@ global:
         enabled: true
 ```
 
+Classifier backend failures remain `Unknown` while the complete boolean tree
+is evaluated. Set `rules.on_unknown` to `no_match`, `match`, or `fail_request`
+to resolve an undetermined terminal result. Omitting it preserves the existing
+classifier-family error behavior.
+
 Requests using an automatic model alias enter the default `routing` profile.
 A concrete provider model name is a direct pass-through request and bypasses
 recipe signals, decisions, route plugins, cache, learning, and session routing.
