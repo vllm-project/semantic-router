@@ -35,7 +35,7 @@ func TestLLMLabelClassifierMaxTokens(t *testing.T) {
 				_ = json.NewEncoder(w).Encode(map[string]interface{}{
 					"choices": []map[string]interface{}{{
 						"message": map[string]interface{}{
-							"content": `{"label":"safe","rationale":"allowed"}`,
+							"content": `{"scores":{"safe":0.9,"unsafe":0.1},"rationale":"allowed"}`,
 						},
 					}},
 				})
