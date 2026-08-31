@@ -88,45 +88,32 @@ type OpenAIRouter struct {
 	routerLearningRuntime   *routerLearningRuntime
 	lookupTableCancel       func()
 	routerSessionStateStore *sessiontelemetry.RouterSessionStateStoreSlot
+
+	resources *resourceScope
 }
 
-// Close releases background resources held by the router (e.g. lookup table
-// auto-save and periodic re-population goroutines).
 func (r *OpenAIRouter) Close() error {
 	if r == nil {
 		return nil
 	}
-	if r.lookupTableCancel != nil {
-		r.lookupTableCancel()
-	}
-	r.routerLearningMu.Lock()
-	learningRuntime := r.routerLearningRuntime
-	r.routerLearningMu.Unlock()
-	if learningRuntime != nil {
-		learningRuntime.RetireAndWait()
-	}
-	var closeErrors []error
-	if r.CompressionRecovery != nil {
-		closeErrors = append(closeErrors, r.CompressionRecovery.Close())
-	}
-	if r.routerSessionStateStore != nil {
-		sessiontelemetry.UnpublishRouterSessionStateStore(r.routerSessionStateStore)
-		closeErrors = append(closeErrors, r.routerSessionStateStore.RetireAndClose())
-	}
-	closeErrors = append(closeErrors, r.closeReplayRecorders())
-	return errors.Join(closeErrors...)
+	return r.resources.close()
 }
 
-func (r *OpenAIRouter) closeReplayRecorders() error {
-	if r.ReplayStoreShared {
-		if r.ReplayRecorder == nil {
+func closeReplayRecorders(
+	replayRecorder *routerreplay.Recorder,
+	replayRecorders map[string]*routerreplay.Recorder,
+	replayStoreShared bool,
+) error {
+	if replayStoreShared {
+		if replayRecorder == nil {
 			return nil
 		}
-		return r.ReplayRecorder.Close()
+		return replayRecorder.Close()
 	}
-	seen := make(map[*routerreplay.Recorder]struct{}, len(r.ReplayRecorders)+1)
-	var closeErrors []error
-	for _, recorder := range r.ReplayRecorders {
+
+	seen := make(map[*routerreplay.Recorder]struct{}, len(replayRecorders)+1)
+	var errs []error
+	for _, recorder := range replayRecorders {
 		if recorder == nil {
 			continue
 		}
@@ -134,14 +121,16 @@ func (r *OpenAIRouter) closeReplayRecorders() error {
 			continue
 		}
 		seen[recorder] = struct{}{}
-		closeErrors = append(closeErrors, recorder.Close())
-	}
-	if r.ReplayRecorder != nil {
-		if _, duplicate := seen[r.ReplayRecorder]; !duplicate {
-			closeErrors = append(closeErrors, r.ReplayRecorder.Close())
+		if err := recorder.Close(); err != nil {
+			errs = append(errs, err)
 		}
 	}
-	return errors.Join(closeErrors...)
+	if replayRecorder != nil {
+		if _, duplicate := seen[replayRecorder]; !duplicate {
+			errs = append(errs, replayRecorder.Close())
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // Ensure OpenAIRouter implements the ext_proc calls.
