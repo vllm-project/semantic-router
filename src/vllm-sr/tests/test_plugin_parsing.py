@@ -65,7 +65,6 @@ class TestPluginTypeValidation:
             PluginType.ROUTER_REPLAY.value,
             PluginType.MEMORY.value,
             PluginType.RAG.value,
-            PluginType.IMAGE_GEN.value,
             PluginType.FAST_RESPONSE.value,
             PluginType.REQUEST_PARAMS.value,
             PluginType.RESPONSE_JAILBREAK.value,
@@ -130,13 +129,6 @@ decisions:
           enabled: true
           threshold: 0.7
           action: "header"
-      - type: "image_gen"
-        configuration:
-          enabled: true
-          backend: "openai"
-          max_response_bytes: 67108864
-          backend_config:
-            api_key: "test-key"
 providers:
   models:
     - name: "test_model"

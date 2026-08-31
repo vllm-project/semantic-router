@@ -351,7 +351,6 @@ type ModelParams struct {
 	QualityScore       float64             `yaml:"quality_score,omitempty"`
 	ExternalModelIDs   map[string]string   `yaml:"external_model_ids,omitempty"`
 	Modality           string              `yaml:"modality,omitempty"`
-	ImageGenBackend    string              `yaml:"image_gen_backend,omitempty"`
 }
 
 type LoRAAdapter struct {
