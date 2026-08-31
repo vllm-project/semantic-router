@@ -64,6 +64,11 @@ func defaultCanonicalServiceGlobal() CanonicalServiceGlobal {
 			Metrics: MetricsConfig{
 				Enabled: canonicalBoolPtr(true),
 			},
+			Profiling: ProfilingConfig{
+				Enabled: false,
+				Port:    DefaultProfilingPort,
+				Bind:    DefaultProfilingBind,
+			},
 			Tracing: TracingConfig{
 				Enabled:  true,
 				Provider: "opentelemetry",

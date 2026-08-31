@@ -22,7 +22,7 @@
   position: absolute;
   inset: 0 auto 0 0;
   width: 3px;
-  background: var(--site-text);
+  background: var(--site-gradient-brand-bar);
   content: "";
 }
 
@@ -71,8 +71,8 @@
 }
 
 .podiumCard:hover {
-  border-color: var(--site-border-strong);
-  background: var(--site-surface-alt);
+  border-color: var(--site-hover-border);
+  background: var(--site-hover-chrome-bg);
 }
 
 .podiumRank {
@@ -112,7 +112,7 @@
 }
 
 .podiumIdentity a:hover {
-  color: var(--site-text);
+  color: var(--site-hover-text);
   text-decoration: none;
 }
 
@@ -283,7 +283,7 @@
 
 .rankItem:hover {
   z-index: 1;
-  background: var(--site-surface-raised);
+  background: var(--site-hover-row-bg);
   box-shadow: var(--site-shadow-soft);
   transform: translateX(2px);
 }
@@ -407,7 +407,7 @@
 }
 
 .githubLink:hover {
-  color: var(--site-text);
+  color: var(--site-hover-text);
   text-decoration: none;
 }
 

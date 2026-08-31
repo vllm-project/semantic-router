@@ -205,6 +205,7 @@ def test_embedding_models_config_accepts_remote_endpoint() -> None:
             "api_key_env": "EMBEDDING_API_KEY",
             "timeout_seconds": 5,
             "max_retries": 2,
+            "max_response_bytes": 16777216,
             "dimensions": 1024,
         },
     )
@@ -214,6 +215,7 @@ def test_embedding_models_config_accepts_remote_endpoint() -> None:
     assert dumped["embedding_config"]["model_type"] == "remote"
     assert dumped["endpoint"]["base_url"] == "http://embedding-service:8000/v1"
     assert dumped["endpoint"]["api_key_env"] == "EMBEDDING_API_KEY"
+    assert dumped["endpoint"]["max_response_bytes"] == 16777216
 
 
 def test_parse_user_config_accepts_decision_learning_controls(
