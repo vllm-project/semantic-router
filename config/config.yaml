@@ -1305,13 +1305,13 @@ routing:
       priority: 125
       rules:
         operator: AND
+        on_unknown: no_match
         conditions:
           - type: classifier
             name: generic-safety-score
             label: JAILBREAK
             predicate:
               gte: 0.5
-            on_error: no_match
       modelRefs:
         - model: qwen3-8b
           use_reasoning: false

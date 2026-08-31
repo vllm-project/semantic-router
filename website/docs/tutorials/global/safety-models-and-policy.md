@@ -79,12 +79,10 @@ is 16 MiB.
 
 ### On a classifier failure
 
-`on_error` controls what an unreachable or failing guardrail classifier does
-to the rule that failed to evaluate: `allow` (the default) tolerates the
-failure and treats the affected content as not matching, so other content
-still evaluates normally; `block` treats the failure itself as a positive
-detection instead, since an inference failure means the content could not be
-verified safe.
+An unreachable or invalid guardrail result is recorded as a signal error and
+enters a decision tree as `Unknown`. Set root-level `rules.on_unknown` on the
+consuming decision to resolve a terminal unknown as `no_match`, `match`, or
+`fail_request`.
 
 ```yaml
 global:
@@ -96,19 +94,28 @@ global:
         on_error: block
 ```
 
-Applies to any prompt guard backend, local or remote - not only the remote
-protocols above - and to both directions: request-side jailbreak signal rules,
-including `method: contrastive` ones, and the response-side `response_jailbreak`
-plugin, which scans LLM output with the same backend.
+When `rules.on_unknown` is omitted, request-side jailbreak decisions retain
+the existing `prompt_guard.on_error` behavior: `allow` (the default) tolerates
+the failure and maps the terminal result to no match, so other content still
+evaluates normally; `block` maps it to a match, treating the failure itself as
+a positive detection, since an inference failure means the content could not
+be verified safe.
 
-A failure is reported exactly as a real detection is. On the request side that
-means the jailbreak signal fires at confidence `1.0` with type
-`classification_error`, so `block` only closes a request if a decision actually
-consumes the jailbreak signal (`type: jailbreak`) and acts on it, typically with
-`fast_response` - without one it looks like a no-op. See the `jailbreak-onerror`
-e2e profile's `block_on_classifier_error` decision for a complete example. On
-the response side the plugin's own `action` decides: `block` returns a 403,
-`header` adds the response warning, `none` stays silent.
+The legacy `on_error` path applies to any prompt guard backend, local or
+remote - not only the remote protocols above - and to both directions:
+request-side jailbreak signal rules, including `method: contrastive` ones, and
+the response-side `response_jailbreak` plugin, which scans LLM output with the
+same backend. Response-side behavior is unchanged either way; the plugin's own
+`action` decides: `block` returns a 403, `header` adds the response warning,
+`none` stays silent.
+
+Under the legacy path a failure is reported exactly as a real detection is. On
+the request side that means the jailbreak signal fires at confidence `1.0`
+with type `classification_error`, so `block` only closes a request if a
+decision actually consumes the jailbreak signal (`type: jailbreak`) and acts
+on it, typically with `fast_response` - without one it looks like a no-op. See
+the `jailbreak-onerror` e2e profile's `block_on_classifier_error` decision for
+a complete example.
 
 :::note
 
@@ -116,7 +123,10 @@ This is not the same key as the `on_error` on a decision's classifier
 condition, which takes `no_match` or `match`. That one answers "what should this
 predicate evaluate to when the classifier fails"; `prompt_guard.on_error`
 answers "was the content verified at all", for every rule the guardrail backend
-serves. See [Classifier signals](../signal/learned/classifier.md).
+serves. Both remain backward-compatible defaults only while the consuming rule
+omits `rules.on_unknown`: setting `rules.on_unknown` disables every
+condition-level `on_error` below it. See
+[Classifier signals](../signal/learned/classifier.md).
 
 :::
 

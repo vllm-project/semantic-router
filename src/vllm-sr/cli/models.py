@@ -618,6 +618,7 @@ class Condition(BaseModel):
     label: Optional[str] = None
     predicate: Optional[NumericPredicate] = None
     on_error: Optional[Literal["no_match", "match"]] = None
+    on_unknown: Optional[Literal["no_match", "match", "fail_request"]] = None
     operator: Optional[str] = None
     conditions: Optional[List["Condition"]] = None
 
@@ -640,18 +641,22 @@ class Condition(BaseModel):
             )
 
         if has_operator:
-            if not self.conditions:
-                raise ValueError(
-                    "composite condition node requires non-empty conditions"
-                )
-            op = self.operator.strip().upper()
-            if op not in {"AND", "OR", "NOT"}:
-                raise ValueError("operator must be one of: AND, OR, NOT")
-            if op == "NOT" and len(self.conditions) != 1:
-                raise ValueError("NOT operator must have exactly one child condition")
-            return self
+            return self._validate_composite_node()
+        return self._validate_leaf_node()
 
-        # Leaf node validation
+    def _validate_composite_node(self):
+        if not self.conditions:
+            raise ValueError("composite condition node requires non-empty conditions")
+        op = self.operator.strip().upper()
+        if op not in {"AND", "OR", "NOT"}:
+            raise ValueError("operator must be one of: AND, OR, NOT")
+        if op == "NOT" and len(self.conditions) != 1:
+            raise ValueError("NOT operator must have exactly one child condition")
+        if self.on_unknown is not None:
+            raise ValueError("on_unknown is only valid on the root rules node")
+        return self
+
+    def _validate_leaf_node(self):
         if self.type is None or self.name is None:
             raise ValueError("leaf condition node requires both type and name")
         if self.conditions:
@@ -662,6 +667,8 @@ class Condition(BaseModel):
             raise ValueError("classifier conditions require label and predicate")
         if self.on_error is not None and self.type != "classifier":
             raise ValueError("on_error is only valid for classifier conditions")
+        if self.on_unknown is not None:
+            raise ValueError("on_unknown is only valid on the root rules node")
         return self
 
 
@@ -678,6 +685,7 @@ class Rules(BaseModel):
 
     operator: str = "AND"
     conditions: List[Condition] = Field(default_factory=list)
+    on_unknown: Optional[Literal["no_match", "match", "fail_request"]] = None
 
     @model_validator(mode="before")
     @classmethod
@@ -693,7 +701,10 @@ class Rules(BaseModel):
                 if key in data
             }
             leaf.setdefault("name", "")
-            return {"operator": "AND", "conditions": [leaf]}
+            rules = {"operator": "AND", "conditions": [leaf]}
+            if "on_unknown" in data:
+                rules["on_unknown"] = data["on_unknown"]
+            return rules
         return data
 
 

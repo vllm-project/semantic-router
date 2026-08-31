@@ -17,6 +17,7 @@ limitations under the License.
 package decision
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"slices"
@@ -27,6 +28,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
+
+var ErrDecisionUnresolved = errors.New("decision unresolved")
 
 // DecisionEngine evaluates routing decisions based on rule combinations
 type DecisionEngine struct {
@@ -106,11 +109,39 @@ const (
 	evaluationUnknown
 )
 
+func (s evaluationState) String() string {
+	switch s {
+	case evaluationTrue:
+		return "true"
+	case evaluationUnknown:
+		return "unknown"
+	default:
+		return "false"
+	}
+}
+
 type nodeEvaluation struct {
 	state        evaluationState
 	confidence   float64
 	scored       bool
 	matchedRules []string
+}
+
+type EvaluationDiagnostics struct {
+	AppliedUnknownPolicies map[string]string `json:"applied_unknown_policies,omitempty"`
+}
+
+type decisionEvaluations struct {
+	result      *DecisionResult
+	traces      []DecisionTrace
+	diagnostics EvaluationDiagnostics
+}
+
+type resolvedDecisionEvaluation struct {
+	evaluation    nodeEvaluation
+	trace         *TraceNode
+	originalState evaluationState
+	policy        string
 }
 
 // DecisionResult represents the result of decision evaluation
@@ -159,40 +190,109 @@ func (e *DecisionEngine) EvaluateDecisionsWithSignals(signals *SignalMatches) (*
 	defer func() {
 		metrics.RecordDecisionEvaluation(time.Since(start).Seconds())
 	}()
+	evaluations, err := e.evaluateDecisions(signals, false)
+	return evaluations.result, err
+}
 
+func (e *DecisionEngine) EvaluateDecisionsWithDiagnostics(
+	signals *SignalMatches,
+) (*DecisionResult, EvaluationDiagnostics, error) {
+	start := time.Now()
+	defer func() {
+		metrics.RecordDecisionEvaluation(time.Since(start).Seconds())
+	}()
+	evaluations, err := e.evaluateDecisions(signals, false)
+	return evaluations.result, evaluations.diagnostics, err
+}
+
+func (e *DecisionEngine) evaluateDecisions(
+	signals *SignalMatches,
+	withTrace bool,
+) (decisionEvaluations, error) {
+	output := decisionEvaluations{
+		diagnostics: EvaluationDiagnostics{AppliedUnknownPolicies: make(map[string]string)},
+	}
 	if len(e.decisions) == 0 {
-		return nil, fmt.Errorf("no decisions configured")
+		return output, fmt.Errorf("no decisions configured")
 	}
 
 	var results []DecisionResult
+	var unresolvedErr error
 
 	for i := range e.decisions {
 		decision := &e.decisions[i]
-		evaluation := e.evaluateDecisionWithSignals(decision, signals, false)
-		if evaluation.state == evaluationUnknown {
-			evaluation = e.evaluateDecisionWithSignals(decision, signals, true)
-			if evaluation.state != evaluationTrue {
-				logging.Debugf("Decision %q unresolved by signal errors %v", decision.Name, signals.SignalErrors)
-			}
+		resolved, err := e.evaluateConfiguredDecision(decision, signals, withTrace)
+		if resolved.policy != "" {
+			output.diagnostics.AppliedUnknownPolicies[decision.Name] = resolved.policy
 		}
-		if evaluation.state == evaluationTrue {
-			metrics.RecordDecisionMatch(config.RoutingDecisionKey(e.routingScope, decision.Name), evaluation.confidence)
+		if withTrace {
+			output.traces = append(output.traces, newDecisionTrace(
+				decision,
+				resolved.evaluation,
+				resolved.originalState,
+				resolved.policy,
+				resolved.trace,
+			))
+		}
+		if err != nil {
+			if unresolvedErr == nil {
+				unresolvedErr = err
+			}
+			continue
+		}
+		if resolved.evaluation.state == evaluationTrue {
 			results = append(results, DecisionResult{
 				Decision:         decision,
-				Confidence:       evaluation.confidence,
-				MatchedRules:     evaluation.matchedRules,
-				ConfidenceScored: evaluation.scored,
+				Confidence:       resolved.evaluation.confidence,
+				MatchedRules:     resolved.evaluation.matchedRules,
+				ConfidenceScored: resolved.evaluation.scored,
 				CatchAll:         isCatchAllRules(decision.Rules),
 			})
 		}
 	}
 
+	if unresolvedErr != nil {
+		return output, unresolvedErr
+	}
+	if !withTrace {
+		for i := range results {
+			metrics.RecordDecisionMatch(config.RoutingDecisionKey(e.routingScope, results[i].Decision.Name), results[i].Confidence)
+		}
+	}
 	if len(results) == 0 {
 		logging.Infof("No decision matched")
-		return nil, nil
+		return output, nil
 	}
 
-	return e.selectBestDecision(results), nil
+	output.result = e.selectBestDecision(results)
+	return output, nil
+}
+
+func (e *DecisionEngine) evaluateConfiguredDecision(
+	decision *config.Decision,
+	signals *SignalMatches,
+	withTrace bool,
+) (resolvedDecisionEvaluation, error) {
+	resolved := resolvedDecisionEvaluation{}
+	if withTrace {
+		resolved.evaluation, resolved.trace = e.evalDecisionWithTrace(decision, signals, false)
+	} else {
+		resolved.evaluation = e.evaluateDecisionWithSignals(decision, signals, false)
+	}
+	resolved.originalState = resolved.evaluation.state
+	if resolved.evaluation.state != evaluationUnknown {
+		return resolved, nil
+	}
+	var legacyTrace *TraceNode
+	var err error
+	resolved.evaluation, legacyTrace, resolved.policy, err = e.resolveUnknown(decision, signals, resolved.evaluation, withTrace)
+	if resolved.policy == "" {
+		resolved.originalState = resolved.evaluation.state
+	}
+	if legacyTrace != nil {
+		resolved.trace = legacyTrace
+	}
+	return resolved, err
 }
 
 func (e *DecisionEngine) evaluateDecisionWithSignals(
@@ -205,6 +305,45 @@ func (e *DecisionEngine) evaluateDecisionWithSignals(
 	}
 	evaluation, _ := e.evalNode(decision.Rules, signals, legacy, false)
 	return evaluation
+}
+
+func (e *DecisionEngine) resolveUnknown(
+	decision *config.Decision,
+	signals *SignalMatches,
+	evaluation nodeEvaluation,
+	withTrace bool,
+) (nodeEvaluation, *TraceNode, string, error) {
+	policy := strings.TrimSpace(decision.Rules.OnUnknown)
+	if policy == "" {
+		var legacy nodeEvaluation
+		var legacyTrace *TraceNode
+		if withTrace {
+			legacy, legacyTrace = e.evalDecisionWithTrace(decision, signals, true)
+		} else {
+			legacy = e.evaluateDecisionWithSignals(decision, signals, true)
+		}
+		if legacy.state != evaluationTrue {
+			logging.Debugf("Decision %q unresolved by signal errors %v", decision.Name, signals.SignalErrors)
+		}
+		return legacy, legacyTrace, "", nil
+	}
+	switch policy {
+	case config.RuleOnUnknownMatch:
+		evaluation.state = evaluationTrue
+		evaluation.confidence = 1
+		evaluation.scored = false
+		evaluation.matchedRules = []string{"on_unknown:match"}
+		return evaluation, nil, policy, nil
+	case config.RuleOnUnknownNoMatch:
+		evaluation.state = evaluationFalse
+		evaluation.confidence = 0
+		evaluation.scored = false
+		return evaluation, nil, policy, nil
+	case config.RuleOnUnknownFailRequest:
+		return evaluation, nil, policy, fmt.Errorf("decision %q could not be resolved because a signal evaluator failed: %w", decision.Name, ErrDecisionUnresolved)
+	default:
+		return evaluation, nil, policy, fmt.Errorf("decision %q has invalid on_unknown policy %q", decision.Name, policy)
+	}
 }
 
 // isCatchAllRules reports whether a decision claims no conditions at all:
@@ -235,9 +374,11 @@ func (e *DecisionEngine) evalNode(
 			SignalType:       node.Type,
 			SignalName:       node.Name,
 			Label:            node.Label,
+			State:            evaluation.state.String(),
 			Matched:          evaluation.state == evaluationTrue,
 			Confidence:       evaluation.confidence,
 			ConfidenceScored: evaluation.scored,
+			SignalError:      signalError(signals, strings.ToLower(strings.TrimSpace(node.Type)), node.Name),
 		}
 	}
 
@@ -269,6 +410,7 @@ func (t *TraceNode) finish(evaluation nodeEvaluation) {
 		return
 	}
 	t.Matched = evaluation.state == evaluationTrue
+	t.State = evaluation.state.String()
 	t.Confidence = evaluation.confidence
 	t.ConfidenceScored = evaluation.scored
 }
@@ -334,6 +476,13 @@ func signalFailed(signals *SignalMatches, signalType, name string) bool {
 	}
 	_, failed := signals.SignalErrors[fmt.Sprintf("%s:%s", signalType, name)]
 	return failed
+}
+
+func signalError(signals *SignalMatches, signalType, name string) string {
+	if signals == nil || signals.SignalErrors == nil {
+		return ""
+	}
+	return signals.SignalErrors[fmt.Sprintf("%s:%s", signalType, name)]
 }
 
 func signalErrorMatch(signals *SignalMatches, signalType, name string) bool {
@@ -585,7 +734,9 @@ func (e *DecisionEngine) evalNOT(
 	trace := newTraceNode("NOT", withTrace)
 	if len(children) != 1 {
 		logging.Warnf("NOT operator requires exactly 1 child, got %d — treating as non-match", len(children))
-		return nodeEvaluation{state: evaluationFalse}, trace
+		evaluation := nodeEvaluation{state: evaluationFalse}
+		trace.finish(evaluation)
+		return evaluation, trace
 	}
 	childEvaluation, childTrace := e.evalNode(children[0], signals, legacy, withTrace)
 	trace.addChild(childTrace)

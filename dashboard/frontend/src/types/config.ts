@@ -312,6 +312,7 @@ export interface DecisionCondition {
 export interface DecisionRules {
   operator: 'AND' | 'OR' | 'NOT'
   conditions: DecisionCondition[]
+  on_unknown?: 'no_match' | 'match' | 'fail_request'
 }
 
 export interface ModelRef {

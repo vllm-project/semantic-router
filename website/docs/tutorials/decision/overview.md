@@ -51,6 +51,12 @@ routing:
           use_reasoning: false
 ```
 
+Classifier failures evaluate as `Unknown`, not `False`. `NOT Unknown` remains
+`Unknown`; `False AND Unknown` is `False`, and `True OR Unknown` is `True`.
+When the final result is still unknown, `rules.on_unknown` chooses `no_match`,
+`match`, or `fail_request`. If omitted, existing generic-classifier
+`on_error` and prompt-guard `on_error` behavior is retained.
+
 Decision matching stays separate from:
 
 - `providers.models[]`, which carries deployment bindings

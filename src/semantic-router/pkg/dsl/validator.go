@@ -523,6 +523,15 @@ func (v *Validator) checkRouteConstraints(r *RouteDecl) {
 		)
 	}
 
+	switch r.OnUnknown {
+	case "", config.RuleOnUnknownNoMatch, config.RuleOnUnknownMatch, config.RuleOnUnknownFailRequest:
+	default:
+		v.addDiag(DiagConstraint, r.Pos,
+			fmt.Sprintf("%s: on_unknown must be no_match, match, or fail_request, got %q", context, r.OnUnknown),
+			nil,
+		)
+	}
+
 	// Check algorithm constraints
 	if r.Algorithm != nil {
 		v.checkAlgorithmConstraints(r.Algorithm, context)

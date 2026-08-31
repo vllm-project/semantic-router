@@ -190,6 +190,7 @@ type RequestContext struct {
 	VSRSignalConfidences      map[string]float64
 	VSRSignalValues           map[string]float64
 	VSRSignalErrors           map[string]string
+	VSRAppliedUnknownPolicies map[string]string
 	VSRProjectionTrace        *projectiontrace.Trace
 
 	// Hallucination mitigation tracking

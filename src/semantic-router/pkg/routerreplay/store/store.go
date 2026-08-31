@@ -159,6 +159,7 @@ type RouteDiagnostics struct {
 	ContextCompressionCostSaved    float64                `json:"context_compression_cost_saved,omitempty"`
 	Annotations                    map[string]interface{} `json:"annotations,omitempty"`
 	SignalErrors                   map[string]string      `json:"signal_errors,omitempty"`
+	AppliedUnknownPolicies         map[string]string      `json:"applied_unknown_policies,omitempty"`
 }
 
 // HallucinationSpan is a single unsupported span with its NLI explanation,
@@ -535,6 +536,7 @@ func cloneRouteDiagnostics(value *RouteDiagnostics) *RouteDiagnostics {
 	cloned := *value
 	cloned.Annotations = cloneInterfaceMap(value.Annotations)
 	cloned.SignalErrors = cloneStringMap(value.SignalErrors)
+	cloned.AppliedUnknownPolicies = cloneStringMap(value.AppliedUnknownPolicies)
 	return &cloned
 }
 
