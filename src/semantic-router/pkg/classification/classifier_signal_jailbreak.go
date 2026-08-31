@@ -28,6 +28,8 @@ type cachedJailbreakResult struct {
 // collide with it.
 const JailbreakClassificationErrorType = "classification_error"
 
+const jailbreakEvaluationFailedCode = "jailbreak_evaluation_failed"
+
 // collectJailbreakClassifierContents returns the deduplicated set of text pieces
 // that need BERT classifier inference (contrastive rules are excluded).
 func (c *Classifier) collectJailbreakClassifierContents(jailbreakText string, nonUserMessages []string) []string {
@@ -137,6 +139,9 @@ func (c *Classifier) evaluateContrastiveJailbreakRule(rule config.JailbreakRule,
 		return
 	}
 	analysisResult := cjc.AnalyzeMessages(contentToAnalyze)
+	if analysisResult.FailedMessages > 0 {
+		c.recordJailbreakRuleError(rule, results, mu)
+	}
 	threshold := rule.Threshold
 	if threshold <= 0 {
 		threshold = 0.10
@@ -167,6 +172,12 @@ func (c *Classifier) recordJailbreakRuleMatch(rule config.JailbreakRule, jailbre
 
 	mu.Lock()
 	results.MatchedJailbreakRules = append(results.MatchedJailbreakRules, rule.Name)
+	if jailbreakType == JailbreakClassificationErrorType {
+		if results.SignalErrorMatches == nil {
+			results.SignalErrorMatches = make(map[string]bool)
+		}
+		results.SignalErrorMatches[signalConfidenceKey(config.SignalTypeJailbreak, rule.Name)] = true
+	}
 	if confidence > results.JailbreakConfidence {
 		results.JailbreakDetected = true
 		results.JailbreakType = jailbreakType
@@ -176,45 +187,32 @@ func (c *Classifier) recordJailbreakRuleMatch(rule config.JailbreakRule, jailbre
 	mu.Unlock()
 }
 
-func (c *Classifier) evaluateBERTJailbreakRule(rule config.JailbreakRule, contentToAnalyze []string, jailbreakCache map[string][]cachedJailbreakResult, start time.Time, results *SignalResults, mu *sync.Mutex) {
-	bestType, bestScore := c.findBestJailbreakMatch(rule, contentToAnalyze, jailbreakCache)
-	if bestScore <= 0 {
-		return
-	}
-
-	c.recordSignalExtraction(config.SignalTypeJailbreak, rule.Name, time.Since(start).Seconds())
-	c.recordSignalMatch(config.SignalTypeJailbreak, rule.Name)
-
+func (c *Classifier) recordJailbreakRuleError(rule config.JailbreakRule, results *SignalResults, mu *sync.Mutex) {
 	mu.Lock()
-	results.MatchedJailbreakRules = append(results.MatchedJailbreakRules, rule.Name)
-	if bestScore > results.JailbreakConfidence {
-		results.JailbreakDetected = true
-		results.JailbreakType = bestType
-		results.JailbreakConfidence = bestScore
+	if results.SignalErrors == nil {
+		results.SignalErrors = make(map[string]string)
 	}
-	results.SignalConfidences["jailbreak:"+rule.Name] = float64(bestScore)
+	results.SignalErrors[signalConfidenceKey(config.SignalTypeJailbreak, rule.Name)] = jailbreakEvaluationFailedCode
 	mu.Unlock()
 }
 
-// jailbreakCandidateOutcome is the disposition of one cached result within
-// findBestJailbreakMatch's scan. A dedicated type (rather than two
-// independent bools) makes the invalid combination - both "matched" and
-// "fail-closed" true at once - unrepresentable.
+func (c *Classifier) evaluateBERTJailbreakRule(rule config.JailbreakRule, contentToAnalyze []string, jailbreakCache map[string][]cachedJailbreakResult, start time.Time, results *SignalResults, mu *sync.Mutex) {
+	bestType, bestScore, unresolved := c.findBestJailbreakMatchOutcome(rule, contentToAnalyze, jailbreakCache)
+	if unresolved {
+		c.recordJailbreakRuleError(rule, results, mu)
+	}
+	if bestScore <= 0 {
+		return
+	}
+	c.recordJailbreakRuleMatch(rule, bestType, bestScore, start, results, mu)
+}
+
 type jailbreakCandidateOutcome int
 
 const (
-	// jailbreakCandidateNone means this cached result contributed nothing:
-	// a classify error tolerated by on_error: allow, an unknown class index,
-	// or a risk score below the rule's threshold. The zero value, so a
-	// zero-value jailbreakCandidate is safely "no contribution".
 	jailbreakCandidateNone jailbreakCandidateOutcome = iota
-	// jailbreakCandidateMatched means jailbreakType/riskScore are a genuine
-	// content-based match.
 	jailbreakCandidateMatched
-	// jailbreakCandidateFailClosed means on_error: block turned a classify
-	// error into a maximum-confidence match, used only when the scan finds
-	// no genuine content-based match to report instead.
-	jailbreakCandidateFailClosed
+	jailbreakCandidateUnknown
 )
 
 // jailbreakCandidate is one cached result's contribution to
@@ -232,10 +230,7 @@ type jailbreakCandidate struct {
 func (c *Classifier) evaluateCachedJailbreakResult(rule config.JailbreakRule, cached cachedJailbreakResult) jailbreakCandidate {
 	if cached.err != nil {
 		logging.Errorf("[Signal Computation] Jailbreak rule %q: inference error: %v", rule.Name, cached.err)
-		if c.Config.PromptGuard.IsBlock() {
-			return jailbreakCandidate{outcome: jailbreakCandidateFailClosed}
-		}
-		return jailbreakCandidate{}
+		return jailbreakCandidate{outcome: jailbreakCandidateUnknown}
 	}
 	class, _ := deriveArgmax(cached.result.Probabilities)
 	jailbreakType, ok := c.JailbreakMapping.GetJailbreakTypeFromIndex(class)
@@ -248,10 +243,7 @@ func (c *Classifier) evaluateCachedJailbreakResult(rule config.JailbreakRule, ca
 		// transport error, so on_error: block must close here too rather than
 		// treat it as a clean result.
 		logging.Errorf("[Signal Computation] Jailbreak rule %q: unknown class index %d", rule.Name, class)
-		if c.Config.PromptGuard.IsBlock() {
-			return jailbreakCandidate{outcome: jailbreakCandidateFailClosed}
-		}
-		return jailbreakCandidate{}
+		return jailbreakCandidate{outcome: jailbreakCandidateUnknown}
 	}
 	aboveThreshold, riskScore := isJailbreakRiskAboveThreshold(c.JailbreakMapping, c.Config.PromptGuard.PositiveLabels, cached.result, rule.Threshold)
 	if !aboveThreshold {
@@ -264,9 +256,14 @@ func (c *Classifier) evaluateCachedJailbreakResult(rule config.JailbreakRule, ca
 // combined-positive-label-risk match, via the same isJailbreakRiskAboveThreshold
 // helper CheckForJailbreakWithRisk uses.
 func (c *Classifier) findBestJailbreakMatch(rule config.JailbreakRule, contentToAnalyze []string, jailbreakCache map[string][]cachedJailbreakResult) (string, float32) {
+	bestType, bestScore, _ := c.findBestJailbreakMatchOutcome(rule, contentToAnalyze, jailbreakCache)
+	return bestType, bestScore
+}
+
+func (c *Classifier) findBestJailbreakMatchOutcome(rule config.JailbreakRule, contentToAnalyze []string, jailbreakCache map[string][]cachedJailbreakResult) (string, float32, bool) {
 	var bestType string
 	var bestScore float32
-	failClosed := false
+	unresolved := false
 	for _, content := range contentToAnalyze {
 		if content == "" {
 			continue
@@ -278,11 +275,8 @@ func (c *Classifier) findBestJailbreakMatch(rule config.JailbreakRule, contentTo
 		for _, cached := range cachedResults {
 			candidate := c.evaluateCachedJailbreakResult(rule, cached)
 			switch candidate.outcome {
-			case jailbreakCandidateNone:
-				// No contribution: a tolerated error, an unknown class
-				// index, or a risk score below the rule's threshold.
-			case jailbreakCandidateFailClosed:
-				failClosed = true
+			case jailbreakCandidateUnknown:
+				unresolved = true
 			case jailbreakCandidateMatched:
 				if candidate.riskScore > bestScore {
 					bestScore = candidate.riskScore
@@ -301,10 +295,10 @@ func (c *Classifier) findBestJailbreakMatch(rule config.JailbreakRule, contentTo
 	// A replayed genuine attack would then be indistinguishable from an
 	// unreachable guardrail, and eval confidence would skew to 1.0.
 	if bestType != "" {
-		return bestType, bestScore
+		return bestType, bestScore, unresolved
 	}
-	if failClosed {
-		return JailbreakClassificationErrorType, 1.0
+	if unresolved && c.Config.PromptGuard.IsBlock() {
+		return JailbreakClassificationErrorType, 1.0, true
 	}
-	return bestType, bestScore
+	return bestType, bestScore, unresolved
 }

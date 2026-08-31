@@ -118,6 +118,41 @@ Common Prometheus metric families:
 | Session | `llm_session_model_transitions_total`, `llm_session_turn_prompt_tokens`, `llm_session_turn_completion_tokens`, `llm_session_turn_cost` |
 | Translation and request-parameter policy | `llm_translation_lossy_total`, `sr_request_params_blocked_total`, `sr_request_params_unknown_field_stripped_total` |
 
+### Profiling
+
+The Router can expose Go `pprof` endpoints on a dedicated listener for CPU,
+heap, goroutine, and execution-trace investigations.
+
+```yaml
+global:
+  services:
+    observability:
+      profiling:
+        enabled: false        # default; opt in only while investigating
+        port: 6060            # default
+        bind: 127.0.0.1       # default; loopback only
+```
+
+Profiling is disabled by default. When enabled it binds `127.0.0.1:6060`, so
+profiles stay reachable from the Router container or host and are never
+published on a routable interface without an explicit `bind` change.
+
+```bash
+go tool pprof http://127.0.0.1:6060/debug/pprof/heap
+```
+
+Notes:
+
+- `bind` must be an IP address or `localhost`. An empty or hostname value is
+  rejected and the profiling listener is skipped.
+- An explicit `port: 0` requests an ephemeral port; the effective address is
+  reported in the `profiling_server_starting` startup log line.
+- The port must not collide with the ExtProc, metrics, or management API port.
+  A conflicting or unbindable listener is logged and skipped; it does not abort
+  Router startup.
+- This switch is read once at startup. Changing it requires a Router restart;
+  config hot reload does not take over the profiling listener.
+
 ### Skip Processing Header
 
 `global.router.skip_processing.enabled` is the deployment-level gate that
@@ -192,5 +227,9 @@ The `store_backend` field controls where routing-decision replay records are per
   authentication before remote exposure.
 - Traces and metric labels should carry bounded identifiers, not raw request
   content or secrets.
+- `pprof` endpoints expose command-line arguments, goroutine stacks, and heap
+  contents. Keep profiling disabled outside an investigation, and keep its
+  `bind` on loopback unless a reachable listener is deliberately fronted by
+  authenticated access controls.
 - See the complete service configuration in
   [`config/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml).

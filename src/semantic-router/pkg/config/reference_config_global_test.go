@@ -126,6 +126,12 @@ func assertReferenceConfigObservabilityCoverage(t testingT, observability map[st
 		reflect.TypeOf(WindowedMetricsConfig{}),
 		"global.services.observability.metrics.windowed_metrics",
 	)
+	assertMapCoversStructFields(
+		t,
+		mustMapAt(t, observability, "profiling"),
+		reflect.TypeOf(ProfilingConfig{}),
+		"global.services.observability.profiling",
+	)
 }
 
 func assertReferenceConfigAuthzCoverage(t testingT, authz map[string]interface{}) {
