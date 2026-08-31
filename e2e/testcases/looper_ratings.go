@@ -22,7 +22,6 @@ type ratingsMessage struct {
 
 type ratingsChoice struct {
 	Index        int            `json:"index"`
-	Model        string         `json:"model"`
 	FinishReason string         `json:"finish_reason"`
 	Message      ratingsMessage `json:"message"`
 }
@@ -85,13 +84,13 @@ func testLooperRatingsHappyPath(ctx context.Context, client *kubernetes.Clientse
 	if completion.Object != "chat.completion" {
 		return fmt.Errorf("response object = %q, want chat.completion", completion.Object)
 	}
-	if completion.Model != "ratings-model-a,ratings-model-b" {
-		return fmt.Errorf("response model = %q, want ratings-model-a,ratings-model-b", completion.Model)
+	if completion.Model != "ratings-model-b" {
+		return fmt.Errorf("response model = %q, want ratings-model-b", completion.Model)
 	}
 
 	wantChoices := []ratingsChoice{
-		{Index: 0, Model: "ratings-model-a", FinishReason: "stop", Message: ratingsMessage{Role: "assistant", Content: "answer-from-ratings-model-a"}},
-		{Index: 1, Model: "ratings-model-b", FinishReason: "stop", Message: ratingsMessage{Role: "assistant", Content: "answer-from-ratings-model-b"}},
+		{Index: 0, FinishReason: "stop", Message: ratingsMessage{Role: "assistant", Content: "answer-from-ratings-model-a"}},
+		{Index: 1, FinishReason: "stop", Message: ratingsMessage{Role: "assistant", Content: "answer-from-ratings-model-b"}},
 	}
 	if !reflect.DeepEqual(completion.Choices, wantChoices) {
 		return fmt.Errorf("ratings choices = %+v, want %+v", completion.Choices, wantChoices)
