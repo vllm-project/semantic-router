@@ -2,7 +2,7 @@
 translation:
   source_commit: "7c874be2"
   source_file: "docs/tutorials/plugin/image-gen.md"
-  outdated: false
+  outdated: true
 ---
 
 # 图像生成（Image Generation）
