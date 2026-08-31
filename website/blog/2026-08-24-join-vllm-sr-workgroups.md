@@ -30,7 +30,7 @@ A routed request crosses several responsibilities:
    capacity, and deployment policy.
 3. **Router Models & Inference Runtime** produces the signals used to route.
 4. **MoM & Routing** chooses models and multi-model strategies.
-5. **Agentic & Context** manages context and chooses or composes agents.
+5. **Agentic & Context** manages bounded context, memory, and session continuity.
 6. **Data Plane & Networking** executes the chosen path.
 7. **Evaluation & Quality** measures results and catches regressions.
 
@@ -73,6 +73,7 @@ compressed, or operate a hosted service.
 ### Owned Epics
 
 - [Define portable MoM model pools, routing recipes, evaluation, and model cards](https://github.com/vllm-project/semantic-router/issues/2971)
+- [Make routing decisions, model eligibility, and fallback behavior correct](https://github.com/vllm-project/semantic-router/issues/3202)
 - [Optimize routing recipes through an offline-to-online lifecycle](https://github.com/vllm-project/semantic-router/issues/2238)
 - [Optimize model-pool members against Mixture-of-Models objectives](https://github.com/vllm-project/semantic-router/issues/3041)
 - [Advance bounded multi-model collaboration algorithms](https://github.com/vllm-project/semantic-router/issues/3037)
@@ -110,9 +111,14 @@ the tensor engines and GPU schedulers it integrates with.
 ### Owned Epics
 
 - [Build an extensible inference runtime for Router Models](https://github.com/vllm-project/semantic-router/issues/2782)
-- [Improve current Router Models and develop routing-native model families](https://github.com/vllm-project/semantic-router/issues/2974)
-- [Build a reproducible SLM self-improvement and Router Model fine-tuning pipeline](https://github.com/vllm-project/semantic-router/issues/2975)
-- [Harden multimodal and image-routing signal robustness](https://github.com/vllm-project/semantic-router/issues/2347)
+- [Make multimodal Router Model inference correct and discoverable](https://github.com/vllm-project/semantic-router/issues/2347)
+- [Unify native Router Model adapters and capability discovery](https://github.com/vllm-project/semantic-router/issues/2396)
+- [Unify built-in classifier backend and result contracts](https://github.com/vllm-project/semantic-router/issues/2760)
+- [Add a model-managed cross-encoder reranking runtime](https://github.com/vllm-project/semantic-router/issues/2247)
+- [Qualify the MIGraphX-first ONNX Runtime path](https://github.com/vllm-project/semantic-router/issues/2395)
+- [Measure and improve built-in Router Model quality](https://github.com/vllm-project/semantic-router/issues/3194)
+- [Develop routing-native Router Model families beyond BERT](https://github.com/vllm-project/semantic-router/issues/2974)
+- [Build a reproducible Router Model training and artifact pipeline](https://github.com/vllm-project/semantic-router/issues/2975)
 
 ## [Data Plane & Networking](https://github.com/vllm-project/semantic-router/issues/2967)
 
@@ -146,6 +152,7 @@ MoM recipe.
 
 - [Support standalone and gateway-integrated data plane modes](https://github.com/vllm-project/semantic-router/issues/1138)
 - [Connect semantic routing to inference-aware backend selection](https://github.com/vllm-project/semantic-router/issues/2332)
+- [Make provider capabilities, protocol codecs, and backend dispatch explicit](https://github.com/vllm-project/semantic-router/issues/2358)
 - [Make semantic caching safe, measurable, and lifecycle-aware](https://github.com/vllm-project/semantic-router/issues/3036)
 - [Optimize data-plane performance, streaming, and failure recovery](https://github.com/vllm-project/semantic-router/issues/2992)
 
@@ -200,45 +207,48 @@ rather than publishing private product plans.
 
 ## [Agentic & Context](https://github.com/vllm-project/semantic-router/issues/2987)
 
-> **Mission:** Manage context and safely select, hand off, and compose agent
-> backends for long-running workloads.
+> **Mission:** Optimize bounded context, memory, session continuity, and safe
+> model or workflow switching for long-running workloads.
 
-![A long session is protected and optimized before the Router selects, hands off to, or composes agent backends within explicit limits](/img/blog/vllm/2026-08-24-workgroups-invitation/workgroups/agentic-context.svg)
+![A long session is protected and optimized while the Router preserves bounded context, memory, and continuity](/img/blog/vllm/2026-08-24-workgroups-invitation/workgroups/agentic-context.svg)
 
 ### The problem
 
 Long-running work accumulates messages, memory, tool output, cost, and risk.
-Important instructions can be lost, while the best model or agent may change as
-the task evolves. The Router must handle those changes without becoming a
-general-purpose agent framework.
+Important instructions can be lost, and model or workflow changes can break
+tool loops or provider state. The Router needs bounded continuity contracts
+without becoming a general-purpose agent framework.
 
 ### What this Workgroup owns
 
 - Context compression, pruning, memory selection, prompt restructuring, and
   protection of critical instructions.
-- Session budgets, state boundaries, retention, recovery, and graceful
-  degradation.
-- Agent selection, fallback, handoff, and bounded multi-agent composition.
-- Safe model or workflow switching as a session evolves, with measurable task,
-  cost, latency, and safety outcomes.
+- Prompt-visible Router Memory with explicit persistence and lifecycle receipts.
+- Session budgets, state boundaries, retention, tool-loop continuity, recovery,
+  and graceful degradation.
+- Safe model or workflow switching as a session evolves.
+- Typed task, context-portability, capability, and collaboration receipts that
+  external agent runtimes can consume.
 
 ### What it does not own
 
-This Workgroup does not build an unrestricted agent orchestrator, own all MoM
-selection algorithms, transport KV caches between models, automate CLI
-installation, or allow silent lossy transformation and unbounded online
+This Workgroup does not select, invoke, host, or compose agent endpoints inside
+the Router. It does not build an agent endpoint catalog, unrestricted agent
+orchestrator, tool platform, or workflow engine; own general MoM selection;
+transport KV caches; or allow silent lossy transformation and unbounded online
 training.
 
 ### Owned Epics
 
 - [Optimize context for long-session and agentic workloads](https://github.com/vllm-project/semantic-router/issues/2984)
-- [Enable agent-based routing and multi-agent composition](https://github.com/vllm-project/semantic-router/issues/2994)
-- [Develop safe model and workflow switching for long-running agents](https://github.com/vllm-project/semantic-router/issues/2973)
+- [Stabilize prompt-visible Router Memory for production use](https://github.com/vllm-project/semantic-router/issues/2339)
+- [Govern long-session state, continuity, and model switching](https://github.com/vllm-project/semantic-router/issues/2973)
+- [Define agent-aware Router contracts and bounded external collaboration](https://github.com/vllm-project/semantic-router/issues/2994)
 
 ## [Developer Experience & Ecosystem](https://github.com/vllm-project/semantic-router/issues/2970)
 
-> **Mission:** Make vLLM Semantic Router easy to discover, install, configure,
-> extend, and operate.
+> **Mission:** Make vLLM Semantic Router easy to adopt, configure, extend,
+> diagnose, and contribute to.
 
 ![A developer journey connects discovery, installation, configuration, the first routed request, understanding, sharing, and contribution](/img/blog/vllm/2026-08-24-workgroups-invitation/workgroups/developer-experience-ecosystem.svg)
 
@@ -251,12 +261,14 @@ on it without reverse-engineering the repository.
 
 ### What this Workgroup owns
 
-- Installation, configuration, deployment, tuning, diagnosis, and operation
-  through the CLI, Dashboard, and APIs.
+- One supported first-run path through the CLI, configuration, recipes, errors,
+  and troubleshooting.
+- Dashboard configuration and diagnostics built on canonical Router and
+  deployment contracts.
 - An agent-facing skill for deployment, recipe generation, evaluation, tuning,
   and reviewed operations.
-- Documentation, reference recipes, tutorials, model cards, blogs, videos, and
-  use-case sharing.
+- Documentation, localization, integration guides, Router Model development
+  guides, technical content, and contributor entry points.
 - Clear extension and contribution paths for models, runtimes, gateways, and
   deployment systems.
 
@@ -269,9 +281,11 @@ policy, and quality standards owned by other Workgroups.
 ### Owned Epics
 
 - [Build agent-assisted vLLM-SR deployment, recipe, evaluation, and tuning workflows](https://github.com/vllm-project/semantic-router/issues/2977)
-- [Make Dashboard APIs and editing workflows contract-driven](https://github.com/vllm-project/semantic-router/issues/3167)
 - [Reduce time to the first successful routed request](https://github.com/vllm-project/semantic-router/issues/2690)
-- [Publish maintained reference recipes and end-to-end tutorials](https://github.com/vllm-project/semantic-router/issues/2334)
+- [Make Dashboard configuration and diagnostics use canonical Router contracts](https://github.com/vllm-project/semantic-router/issues/3167)
+- [Restore and maintain current zh-Hans documentation](https://github.com/vllm-project/semantic-router/issues/3074)
+- [Publish verified ecosystem integration and Router Model development guides](https://github.com/vllm-project/semantic-router/issues/3223)
+- [Remove stale parallel surfaces and contributor dead ends](https://github.com/vllm-project/semantic-router/issues/3224)
 
 ## [Evaluation & Quality](https://github.com/vllm-project/semantic-router/issues/2969)
 
@@ -309,8 +323,9 @@ model research itself. It defines shared measurement and gates.
 
 - [Build reproducible decision-level routing evaluation](https://github.com/vllm-project/semantic-router/issues/2333)
 - [Evaluate each Mixture-of-Models as a first-class model](https://github.com/vllm-project/semantic-router/issues/3038)
-- [Establish cross-platform performance regression coverage](https://github.com/vllm-project/semantic-router/issues/1510)
+- [Establish cross-platform performance benchmark coverage and reporting](https://github.com/vllm-project/semantic-router/issues/1510)
 - [Expand end-to-end quality coverage across Router, Dashboard, and deployments](https://github.com/vllm-project/semantic-router/issues/1519)
+- [Build efficient, reliable, and explainable CI gates](https://github.com/vllm-project/semantic-router/issues/3177)
 
 ## How Workgroups Operate
 
