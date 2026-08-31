@@ -10,6 +10,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
+const defaultLLMLabelClassifierMaxTokens = 128
+
 type labelClassification struct {
 	Scores    map[string]float64
 	Rationale string
@@ -25,6 +27,7 @@ type llmLabelClassifier struct {
 	labels       []string
 	instructions string
 	timeout      time.Duration
+	maxTokens    int
 }
 
 func newLLMLabelClassifier(
@@ -42,12 +45,17 @@ func newLLMLabelClassifier(
 	if timeout <= 0 {
 		timeout = 5 * time.Second
 	}
+	maxTokens := external.MaxTokens
+	if maxTokens <= 0 {
+		maxTokens = defaultLLMLabelClassifierMaxTokens
+	}
 	return &llmLabelClassifier{
 		client:       client,
 		model:        external.ModelName,
 		labels:       append([]string(nil), rule.Labels...),
 		instructions: rule.Instructions,
 		timeout:      timeout,
+		maxTokens:    maxTokens,
 	}, nil
 }
 
@@ -69,7 +77,7 @@ func (c *llmLabelClassifier) Classify(
 		systemPrompt,
 		input,
 		&GenerationOptions{
-			MaxTokens:   128,
+			MaxTokens:   c.maxTokens,
 			Temperature: 0,
 			JSONMode:    true,
 		},
