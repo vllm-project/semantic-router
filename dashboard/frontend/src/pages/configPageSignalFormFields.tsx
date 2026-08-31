@@ -143,7 +143,7 @@ export function buildSignalFormFields(): FieldConfig<AddSignalFormState>[] {
       name: 'classifier_type',
       label: 'Classifier Backend',
       type: 'select',
-      options: ['local', 'llm'],
+      options: ['local', 'llm', 'sequence_classifier'],
       required: true,
       shouldHide: hideUnless('Classifier'),
     },
@@ -152,7 +152,7 @@ export function buildSignalFormFields(): FieldConfig<AddSignalFormState>[] {
       label: 'External Model',
       type: 'text',
       shouldHide: (formData) =>
-        formData.type !== 'Classifier' || formData.classifier_type !== 'llm',
+        formData.type !== 'Classifier' || formData.classifier_type === 'local',
     },
     {
       name: 'classifier_model_path',

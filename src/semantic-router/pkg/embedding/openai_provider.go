@@ -15,13 +15,15 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	httputil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 )
 
 const (
-	maxErrorBodyBytes     = 4096
-	defaultTimeoutSeconds = 10
-	baseRetryDelay        = 50 * time.Millisecond
-	maxRetryDelay         = 500 * time.Millisecond
+	maxErrorBodyBytes       = 4096
+	defaultTimeoutSeconds   = 10
+	defaultMaxResponseBytes = 16 * 1024 * 1024
+	baseRetryDelay          = 50 * time.Millisecond
+	maxRetryDelay           = 500 * time.Millisecond
 )
 
 type OpenAICompatibleConfig struct {
@@ -30,6 +32,7 @@ type OpenAICompatibleConfig struct {
 	APIKeyEnv         string
 	TimeoutSeconds    int
 	MaxRetries        int
+	MaxResponseBytes  int64
 	Dimensions        int
 	ExpectedDimension int
 	HTTPClient        *http.Client
@@ -41,6 +44,7 @@ type OpenAICompatibleProvider struct {
 	apiKeyEnv         string
 	timeout           time.Duration
 	maxRetries        int
+	maxResponseBytes  int64
 	dimensions        int
 	expectedDimension int
 	client            *http.Client
@@ -83,6 +87,10 @@ func NewOpenAICompatibleProvider(cfg OpenAICompatibleConfig) (*OpenAICompatibleP
 	if cfg.TimeoutSeconds < 0 {
 		return nil, fmt.Errorf("embedding endpoint timeout_seconds must be non-negative")
 	}
+	maxResponseBytes, err := resolveMaxResponseBytes(cfg.MaxResponseBytes)
+	if err != nil {
+		return nil, err
+	}
 
 	timeoutSeconds := cfg.TimeoutSeconds
 	if timeoutSeconds == 0 {
@@ -104,10 +112,21 @@ func NewOpenAICompatibleProvider(cfg OpenAICompatibleConfig) (*OpenAICompatibleP
 		apiKeyEnv:         strings.TrimSpace(cfg.APIKeyEnv),
 		timeout:           timeout,
 		maxRetries:        max(0, cfg.MaxRetries),
+		maxResponseBytes:  maxResponseBytes,
 		dimensions:        cfg.Dimensions,
 		expectedDimension: cfg.ExpectedDimension,
 		client:            client,
 	}, nil
+}
+
+func resolveMaxResponseBytes(maxResponseBytes int64) (int64, error) {
+	if maxResponseBytes < 0 {
+		return 0, fmt.Errorf("embedding endpoint max_response_bytes must be non-negative")
+	}
+	if maxResponseBytes == 0 {
+		return defaultMaxResponseBytes, nil
+	}
+	return maxResponseBytes, nil
 }
 
 func (p *OpenAICompatibleProvider) Embed(ctx context.Context, text string) ([]float32, error) {
@@ -209,14 +228,27 @@ func (p *OpenAICompatibleProvider) embedBatchOnce(ctx context.Context, texts []s
 		return nil, responseError(resp)
 	}
 
-	var decoded embeddingsResponse
-	if err := json.NewDecoder(resp.Body).Decode(&decoded); err != nil {
-		return nil, fmt.Errorf("decode embedding response: %w", err)
+	decoded, err := decodeEmbeddingResponse(resp.Body, p.maxResponseBytes)
+	if err != nil {
+		return nil, err
 	}
 	if decoded.Error != nil && decoded.Error.Message != "" {
 		return nil, fmt.Errorf("embedding provider error: %s", decoded.Error.Message)
 	}
 	return p.parseEmbeddings(decoded.Data, len(texts))
+}
+
+func decodeEmbeddingResponse(body io.Reader, maxResponseBytes int64) (embeddingsResponse, error) {
+	responseBody, err := httputil.ReadLimitedBody(body, maxResponseBytes)
+	if err != nil {
+		return embeddingsResponse{}, fmt.Errorf("read embedding response: %w", err)
+	}
+
+	var decoded embeddingsResponse
+	if err := json.NewDecoder(bytes.NewReader(responseBody)).Decode(&decoded); err != nil {
+		return embeddingsResponse{}, fmt.Errorf("decode embedding response: %w", err)
+	}
+	return decoded, nil
 }
 
 func (p *OpenAICompatibleProvider) parseEmbeddings(data []embeddingDatum, expectedCount int) ([][]float32, error) {
