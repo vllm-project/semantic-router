@@ -91,6 +91,9 @@ Built-in defaults live in the router. `global.router.config_source` selects file
 configuration or Kubernetes CRD reconciliation. External templates must not apply
 hidden defaults after validation.
 
+Connector byte ceilings belong to the connector configuration. External LLM
+classifier entries and the MCP classifier module use `max_response_bytes`.
+
 The dashboard, Helm chart, and operator may help users author or transport config, but
 the resulting document still uses the same contract.
 
