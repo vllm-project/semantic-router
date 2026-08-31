@@ -165,7 +165,7 @@ spec:
 
         - name: anthropic-shim
           image: ghcr.io/vllm-project/semantic-router/anthropic-shim:e2e-test
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Never
           ports:
             - name: shim
               containerPort: 8080
