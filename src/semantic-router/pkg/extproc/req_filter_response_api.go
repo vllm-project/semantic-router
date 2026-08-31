@@ -35,6 +35,14 @@ func (f *ResponseAPIFilter) IsEnabled() bool {
 	return f.enabled
 }
 
+// Close releases the response store.
+func (f *ResponseAPIFilter) Close() error {
+	if f == nil || f.store == nil {
+		return nil
+	}
+	return f.store.Close()
+}
+
 // ResponseObjectState is request-scoped state for optional Responses object
 // persistence. It is not part of generation or protocol translation.
 type ResponseObjectState struct {

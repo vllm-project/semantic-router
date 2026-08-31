@@ -188,6 +188,7 @@ func (s *Service) Probe(decisionID, variantID string) (ProbeDetail, string, erro
 		detail.Query = ""
 		detail.Messages = nil
 		detail.Tools = nil
+		detail.ToolChoice = nil
 		detail.RawPayloadHidden = true
 	}
 	return detail, snapshot.recipeDigest, nil
@@ -219,6 +220,7 @@ func (s *Service) RunPlan(decisionID, variantID string, expectedDigest ...string
 		Model:        request.Model,
 		Messages:     request.Messages,
 		Tools:        request.Tools,
+		ToolChoice:   request.ToolChoice,
 		Request:      request,
 		Editable:     probe.Editable,
 	}, nil

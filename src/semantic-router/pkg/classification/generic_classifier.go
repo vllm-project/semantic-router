@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 )
 
 const defaultLLMLabelClassifierMaxTokens = 128
+const llmLabelScoreSumTolerance = 0.02
 
 type labelClassification struct {
 	Scores    map[string]float64
@@ -37,10 +39,7 @@ func newLLMLabelClassifier(
 	if external == nil {
 		return nil, fmt.Errorf("external model %q is not configured", rule.Model)
 	}
-	client := NewVLLMClient(&external.ModelEndpoint)
-	if external.AccessKey != "" {
-		client = NewVLLMClientWithAuth(&external.ModelEndpoint, external.AccessKey)
-	}
+	client := newVLLMClientFromConfig(external)
 	timeout := time.Duration(external.TimeoutSeconds) * time.Second
 	if timeout <= 0 {
 		timeout = 5 * time.Second
@@ -66,8 +65,10 @@ func (c *llmLabelClassifier) Classify(
 	callCtx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
 	systemPrompt := fmt.Sprintf(
-		"%s\n\nChoose exactly one label from: %s.\n"+
-			`Return only JSON: {"label":"<exact label>","rationale":"<short reason>"}.`,
+		"%s\n\nScore every label from: %s.\n"+
+			`Return only JSON with exactly "scores" and "rationale". `+
+			`"scores" must map every exact label to a number between 0 and 1, `+
+			`and all scores must sum to 1. "rationale" must be a short reason.`,
 		strings.TrimSpace(c.instructions),
 		strings.Join(c.labels, ", "),
 	)
@@ -89,51 +90,70 @@ func (c *llmLabelClassifier) Classify(
 		return labelClassification{}, fmt.Errorf("classifier returned no choices")
 	}
 	content := strings.TrimSpace(response.Choices[0].Message.Content)
+	return parseLLMLabelClassification(content, c.labels)
+}
+
+func parseLLMLabelClassification(
+	content string,
+	labels []string,
+) (labelClassification, error) {
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(content), &raw); err != nil {
 		return labelClassification{}, fmt.Errorf("classifier returned invalid JSON: %w", err)
 	}
-	if len(raw) != 2 || raw["label"] == nil || raw["rationale"] == nil {
+	if len(raw) != 2 || raw["scores"] == nil || raw["rationale"] == nil {
 		return labelClassification{}, fmt.Errorf(
-			"classifier response must contain exactly label and rationale",
+			"classifier response must contain exactly scores and rationale",
 		)
 	}
-	var choice struct {
-		Label     string `json:"label"`
-		Rationale string `json:"rationale"`
+	var result struct {
+		Scores    map[string]float64 `json:"scores"`
+		Rationale string             `json:"rationale"`
 	}
 	if err := json.Unmarshal(
 		[]byte(content),
-		&choice,
+		&result,
 	); err != nil {
 		return labelClassification{}, fmt.Errorf("classifier returned invalid JSON: %w", err)
 	}
-	choice.Label = strings.TrimSpace(choice.Label)
-	choice.Rationale = strings.TrimSpace(choice.Rationale)
-	if choice.Rationale == "" {
+	result.Rationale = strings.TrimSpace(result.Rationale)
+	if result.Rationale == "" {
 		return labelClassification{}, fmt.Errorf("classifier returned an empty rationale")
 	}
-	if !containsLabel(c.labels, choice.Label) {
-		return labelClassification{}, fmt.Errorf("classifier returned undeclared label %q", choice.Label)
+	scores, err := validateLLMLabelScores(labels, result.Scores)
+	if err != nil {
+		return labelClassification{}, err
 	}
-	scores := make(map[string]float64, len(c.labels))
-	for _, label := range c.labels {
-		if label == choice.Label {
-			scores[label] = 1
-		} else {
-			scores[label] = 0
-		}
-	}
-	return labelClassification{Scores: scores, Rationale: choice.Rationale}, nil
+	return labelClassification{Scores: scores, Rationale: result.Rationale}, nil
 }
 
-func containsLabel(labels []string, target string) bool {
-	for _, label := range labels {
-		if label == target {
-			return true
-		}
+func validateLLMLabelScores(
+	labels []string,
+	reported map[string]float64,
+) (map[string]float64, error) {
+	if len(reported) != len(labels) {
+		return nil, fmt.Errorf("classifier scores must contain exactly the declared labels")
 	}
-	return false
+	scores := make(map[string]float64, len(labels))
+	var sum float64
+	for _, label := range labels {
+		score, ok := reported[label]
+		if !ok {
+			return nil, fmt.Errorf("classifier scores are missing label %q", label)
+		}
+		if math.IsNaN(score) || math.IsInf(score, 0) || score < 0 || score > 1 {
+			return nil, fmt.Errorf(
+				"classifier score for label %q must be finite and within [0, 1]",
+				label,
+			)
+		}
+		scores[label] = score
+		sum += score
+	}
+	if math.Abs(sum-1) > llmLabelScoreSumTolerance {
+		return nil, fmt.Errorf("classifier scores sum to %v, want approximately 1", sum)
+	}
+	return scores, nil
 }
 
 func withGenericClassifiers(classifiers map[string]labelClassifier) option {

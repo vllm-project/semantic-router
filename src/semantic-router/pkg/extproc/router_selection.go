@@ -3,6 +3,8 @@ package extproc
 import (
 	"context"
 	"strings"
+	"errors"
+	"fmt"
 	"time"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
@@ -14,6 +16,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection/lookuptable"
 )
 
+// createModelSelectorRegistries leaves publication to publishRouterState.
 func createModelSelectorRegistries(cfg *config.RouterConfig, replayReader store.Reader) (map[config.RecipeName]*selection.Registry, *selection.Registry, lookuptable.LookupTableStorage, func()) {
 	lt, cancel := buildLookupTable(cfg, replayReader)
 	embed, defaultEmbeddingConfig := resolveSelectionEmbeddingFunc(cfg)
@@ -22,7 +25,6 @@ func createModelSelectorRegistries(cfg *config.RouterConfig, replayReader store.
 	if len(cfg.Recipes) == 0 {
 		registry := createModelSelectorRegistry(cfg, lt, embed, defaultEmbeddingConfig)
 		registries[config.DefaultRecipeName] = registry
-		selection.GlobalRegistry = registry
 		return registries, registry, lt, cancel
 	}
 
@@ -32,7 +34,6 @@ func createModelSelectorRegistries(cfg *config.RouterConfig, replayReader store.
 		registries[recipe.Name] = createModelSelectorRegistry(scopedConfig, lt, embed, defaultEmbeddingConfig)
 	}
 	defaultRegistry := registries[config.DefaultRecipeName]
-	selection.GlobalRegistry = defaultRegistry
 	return registries, defaultRegistry, lt, cancel
 }
 
@@ -686,4 +687,19 @@ func startLookupTablePopulator(storage lookuptable.LookupTableStorage, reader st
 		"interval": interval.String(),
 	})
 	return cancel
+}
+
+func closeRecipeModelSelectors(registries map[config.RecipeName]*selection.Registry) error {
+	var errs []error
+	closed := make(map[*selection.Registry]bool, len(registries))
+	for recipeName, registry := range registries {
+		if registry == nil || closed[registry] {
+			continue
+		}
+		closed[registry] = true
+		if err := registry.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("closing selection registry for routing recipe %q: %w", recipeName, err))
+		}
+	}
+	return errors.Join(errs...)
 }

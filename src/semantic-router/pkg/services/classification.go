@@ -213,10 +213,8 @@ func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentRespon
 	if classifier.Config != nil && len(classifier.Config.Decisions) > 0 {
 		decisionResult, err = classifier.EvaluateDecisionWithEngine(signals)
 		if err != nil {
-			// Log error but continue with classification
-			// Note: "no decisions configured" error is expected when decisions list is empty
 			if !strings.Contains(err.Error(), "no decisions configured") {
-				logging.Warnf("Decision evaluation failed, continuing with classification: %v", err)
+				return nil, err
 			}
 		}
 	}

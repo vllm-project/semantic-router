@@ -19,18 +19,22 @@ type requestSignalSnapshot struct {
 	ContextEquivalentBytes int
 	ContextHasNonText      bool
 
-	HasDeveloperMessage     bool
-	UserMessageCount        int
-	AssistantMessageCount   int
-	SystemMessageCount      int
-	ToolMessageCount        int
-	ToolDefinitionCount     int
-	AssistantToolCallCount  int
-	ToolResultCount         int
-	AssistantToolNames      []string
-	LastMessageRole         string
-	LastMessageToolResult   bool
-	LastUserAfterToolResult bool
+	HasDeveloperMessage       bool
+	UserMessageCount          int
+	AssistantMessageCount     int
+	SystemMessageCount        int
+	ToolMessageCount          int
+	ToolDefinitionCount       int
+	ToolChoiceRequired        bool
+	ToolChoiceNone            bool
+	AssistantToolCallCount    int
+	ToolResultCount           int
+	AssistantToolNames        []string
+	LastMessageRole           string
+	LastMessageToolResult     bool
+	LastMessageFlowToolResult bool
+	LastAssistantToolCall     bool
+	LastUserAfterToolResult   bool
 }
 
 func recordNonUserSignalMessage(result *requestSignalSnapshot, role string, text string) {

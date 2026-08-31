@@ -110,6 +110,9 @@ func validateOpenAIRAGBackend(c *RAGPluginConfig) error {
 	if openaiConfig.APIKey == "" {
 		return fmt.Errorf("API key is required for OpenAI backend")
 	}
+	if openaiConfig.MaxResponseBytes < 0 {
+		return fmt.Errorf("OpenAI max_response_bytes must be non-negative")
+	}
 	return nil
 }
 

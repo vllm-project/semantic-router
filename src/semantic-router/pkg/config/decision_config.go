@@ -1,5 +1,11 @@
 package config
 
+const (
+	RuleOnUnknownNoMatch     = "no_match"
+	RuleOnUnknownMatch       = "match"
+	RuleOnUnknownFailRequest = "fail_request"
+)
+
 // Decision represents a routing decision that combines multiple rules with boolean logic.
 type Decision struct {
 	Name                string                     `yaml:"name"`
@@ -66,23 +72,24 @@ type CandidateIterationOutputConfig struct {
 
 // AlgorithmConfig defines how multiple models should be executed and aggregated.
 type AlgorithmConfig struct {
-	Type         string                       `yaml:"type"`
-	Confidence   *ConfidenceAlgorithmConfig   `yaml:"confidence,omitempty"`
-	Ratings      *RatingsAlgorithmConfig      `yaml:"ratings,omitempty"`
-	ReMoM        *ReMoMAlgorithmConfig        `yaml:"remom,omitempty"`
-	Fusion       *FusionAlgorithmConfig       `yaml:"fusion,omitempty"`
-	Workflows    *WorkflowsAlgorithmConfig    `yaml:"workflows,omitempty"`
-	Elo          *EloSelectionConfig          `yaml:"-"`
-	RouterDC     *RouterDCSelectionConfig     `yaml:"router_dc,omitempty"`
-	AutoMix      *AutoMixSelectionConfig      `yaml:"automix,omitempty"`
-	Hybrid       *HybridSelectionConfig       `yaml:"hybrid,omitempty"`
-	RLDriven     *RLDrivenSelectionConfig     `yaml:"-"`
-	GMTRouter    *GMTRouterSelectionConfig    `yaml:"-"`
-	LatencyAware *LatencyAwareAlgorithmConfig `yaml:"latency_aware,omitempty"`
-	MultiFactor  *MultiFactorSelectionConfig  `yaml:"multi_factor,omitempty"`
-	Prompt       *PromptSelectionConfig       `yaml:"prompt,omitempty"`
-	SessionAware *SessionAwareSelectionConfig `yaml:"-"`
-	OnError      string                       `yaml:"on_error,omitempty"`
+	Type              string                       `yaml:"type"`
+	MinimumCandidates int                          `yaml:"minimum_candidates,omitempty"`
+	Confidence        *ConfidenceAlgorithmConfig   `yaml:"confidence,omitempty"`
+	Ratings           *RatingsAlgorithmConfig      `yaml:"ratings,omitempty"`
+	ReMoM             *ReMoMAlgorithmConfig        `yaml:"remom,omitempty"`
+	Fusion            *FusionAlgorithmConfig       `yaml:"fusion,omitempty"`
+	Workflows         *WorkflowsAlgorithmConfig    `yaml:"workflows,omitempty"`
+	Elo               *EloSelectionConfig          `yaml:"-"`
+	RouterDC          *RouterDCSelectionConfig     `yaml:"router_dc,omitempty"`
+	AutoMix           *AutoMixSelectionConfig      `yaml:"automix,omitempty"`
+	Hybrid            *HybridSelectionConfig       `yaml:"hybrid,omitempty"`
+	RLDriven          *RLDrivenSelectionConfig     `yaml:"-"`
+	GMTRouter         *GMTRouterSelectionConfig    `yaml:"-"`
+	LatencyAware      *LatencyAwareAlgorithmConfig `yaml:"latency_aware,omitempty"`
+	MultiFactor       *MultiFactorSelectionConfig  `yaml:"multi_factor,omitempty"`
+	Prompt            *PromptSelectionConfig       `yaml:"prompt,omitempty"`
+	SessionAware      *SessionAwareSelectionConfig `yaml:"-"`
+	OnError           string                       `yaml:"on_error,omitempty"`
 }
 
 // PromptSelectionConfig configures deterministic, prompt-driven selection
@@ -167,6 +174,7 @@ type RuleNode struct {
 	Label      string            `yaml:"label,omitempty" json:"label,omitempty"`
 	Predicate  *NumericPredicate `yaml:"predicate,omitempty" json:"predicate,omitempty"`
 	OnError    string            `yaml:"on_error,omitempty" json:"on_error,omitempty"`
+	OnUnknown  string            `yaml:"on_unknown,omitempty" json:"on_unknown,omitempty"`
 	Operator   string            `yaml:"operator,omitempty" json:"operator,omitempty"`
 	Conditions []RuleNode        `yaml:"conditions,omitempty" json:"conditions,omitempty"`
 }
