@@ -37,7 +37,10 @@ go test ./...
 On macOS, use `DYLD_LIBRARY_PATH` instead of `LD_LIBRARY_PATH`. Build with
 `--no-default-features --features metal` to run on the Apple Silicon GPU, or
 `--no-default-features --features accelerate` for CPU inference through
-Accelerate.
+Accelerate. Metal inference runs on a fixed thread pool of
+`METAL_MAX_CONCURRENCY` threads (default 8, max 32) because candle's Metal
+backend keeps one command buffer per OS thread and its single command queue
+deadlocks at 64 in-flight buffers.
 
 From the repository root, the maintained test entry points are:
 

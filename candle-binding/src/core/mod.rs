@@ -10,7 +10,7 @@ pub mod unified_error;
 // Re-export main similarity functionality for backward compatibility
 pub use similarity::{normalize_l2, BertSimilarity};
 
-pub use device::resolve_device;
+pub use device::{drain_loader_queue, resolve_device, run_on_inference_pool};
 
 // Re-export unified configuration loader
 pub use config_loader::{

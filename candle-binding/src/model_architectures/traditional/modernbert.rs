@@ -19,7 +19,10 @@
 /// longer than 512 tokens. This cap matches `max_length` in tokenizer_config.json.
 pub(crate) const MAX_CLASSIFICATION_SEQ_LEN: usize = 512;
 
-use crate::core::{config_errors, processing_errors, resolve_device, ModelErrorType, UnifiedError};
+use crate::core::{
+    config_errors, drain_loader_queue, processing_errors, resolve_device, run_on_inference_pool,
+    ModelErrorType, UnifiedError,
+};
 use crate::model_error;
 use anyhow::{Error as E, Result};
 use candle_core::{DType, Device, IndexOp, Tensor, D};
@@ -807,6 +810,7 @@ impl TraditionalModernBertClassifier {
             })?,
         ) as Box<dyn DualPathTokenizer>;
 
+        drain_loader_queue(&device);
         Ok(Self {
             model,
             head,
@@ -1119,6 +1123,10 @@ impl TraditionalModernBertClassifier {
 
     /// classify_internal classifies text using real model inference - REAL IMPLEMENTATION
     fn classify_internal(&self, text: &str) -> Result<(usize, f32, Vec<f32>), candle_core::Error> {
+        run_on_inference_pool(&self.device, || self.classify_on_device(text))
+    }
+
+    fn classify_on_device(&self, text: &str) -> Result<(usize, f32, Vec<f32>), candle_core::Error> {
         // 1. Tokenize input text
         let tokenization_result = self.tokenizer.tokenize(text).map_err(|e| {
             let unified_err = processing_errors::tensor_operation("tokenization", &e.to_string());
@@ -1446,6 +1454,7 @@ impl TraditionalModernBertTokenClassifier {
         let classifier =
             FixedModernBertTokenClassifier::load_with_classes(vb.clone(), &config, num_classes)?;
 
+        drain_loader_queue(&device);
         Ok(Self {
             model,
             head,
@@ -1491,6 +1500,10 @@ impl TraditionalModernBertTokenClassifier {
 
     /// Classify tokens in text
     pub fn classify_tokens(&self, text: &str) -> Result<Vec<TokenEntityTuple>> {
+        run_on_inference_pool(&self.device, || self.classify_tokens_on_device(text))
+    }
+
+    fn classify_tokens_on_device(&self, text: &str) -> Result<Vec<TokenEntityTuple>> {
         // Tokenize the text
         let tokenization_result = self.tokenizer.tokenize(text)?;
 
