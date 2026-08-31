@@ -37,7 +37,7 @@ Use it to improve quality, cost, latency, privacy, and safety without hard-codin
 ### Install
 
 ```bash
-curl -fsSL https://vllm-sr.ai/install.sh | bash
+curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --channel dev
 ```
 
 For platform notes, detailed setup options, and troubleshooting, see the **[Installation Guide](https://vllm-sr.ai/docs/installation/)**.
