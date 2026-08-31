@@ -305,6 +305,11 @@ type SignalCombination struct {
 	// +kubebuilder:validation:Enum=AND;OR;NOT
 	Operator string `json:"operator" yaml:"operator"`
 
+	// OnUnknown resolves a terminal unknown result after the signal tree is evaluated.
+	// +optional
+	// +kubebuilder:validation:Enum=no_match;match;fail_request
+	OnUnknown string `json:"on_unknown,omitempty" yaml:"on_unknown,omitempty"`
+
 	// Conditions defines the list of signal conditions
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinItems=1

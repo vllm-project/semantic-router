@@ -379,12 +379,7 @@ func rawToRoute(r *rawRouteDecl) *RouteDecl {
 		Pos:  posFromLexer(r.Pos),
 	}
 
-	// Process options
-	for _, opt := range r.Opts {
-		if opt.Key == "description" && opt.Value != nil && opt.Value.Str != nil {
-			route.Description = unquote(*opt.Value.Str)
-		}
-	}
+	applyRouteOptions(route, r.Opts)
 
 	// Process body items
 	for _, item := range r.Body {

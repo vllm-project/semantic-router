@@ -86,21 +86,22 @@ type EvalDecisionResult struct {
 
 // EvalResponse represents the eval classification response with comprehensive signal information.
 type EvalResponse struct {
-	OriginalText      string                                  `json:"original_text"` // The evaluated user turn or fallback query text
-	RequestedModel    string                                  `json:"requested_model,omitempty"`
-	Recipe            config.RecipeName                       `json:"recipe,omitempty"`
-	DecisionResult    *EvalDecisionResult                     `json:"decision_result,omitempty"`
-	EvalTrace         []decision.DecisionTrace                `json:"eval_trace,omitempty"`         // Per-decision evaluation trace (when ?trace=true)
-	RecommendedModels []string                                `json:"recommended_models,omitempty"` // All models from matched decision's modelRefs
-	SelectedModel     string                                  `json:"selected_model,omitempty"`     // Concrete selector result or configured final-output model
-	SelectionStatus   string                                  `json:"selection_status,omitempty"`   // selected, planned_final, fallback, execution_required, unavailable, or failed
-	SelectionMethod   string                                  `json:"selection_method,omitempty"`
-	SelectionReason   string                                  `json:"selection_reason,omitempty"`
-	RoutingDecision   string                                  `json:"routing_decision,omitempty"`
-	Metrics           *classification.SignalMetricsCollection `json:"metrics"`                      // Performance and confidence for each signal
-	SignalConfidences map[string]float64                      `json:"signal_confidences,omitempty"` // Real ML confidence scores per signal, e.g. "domain:economics" -> 0.81
-	SignalValues      map[string]float64                      `json:"signal_values,omitempty"`      // Raw signal values per signal when exposed, e.g. "structure:many_questions" -> 4
-	SignalErrors      map[string]string                       `json:"signal_errors,omitempty"`      // Bounded evaluator failures that can affect on_error routing
+	OriginalText           string                                  `json:"original_text"` // The evaluated user turn or fallback query text
+	RequestedModel         string                                  `json:"requested_model,omitempty"`
+	Recipe                 config.RecipeName                       `json:"recipe,omitempty"`
+	DecisionResult         *EvalDecisionResult                     `json:"decision_result,omitempty"`
+	EvalTrace              []decision.DecisionTrace                `json:"eval_trace,omitempty"`         // Per-decision evaluation trace (when ?trace=true)
+	RecommendedModels      []string                                `json:"recommended_models,omitempty"` // All models from matched decision's modelRefs
+	SelectedModel          string                                  `json:"selected_model,omitempty"`     // Concrete selector result or configured final-output model
+	SelectionStatus        string                                  `json:"selection_status,omitempty"`   // selected, planned_final, fallback, execution_required, unavailable, or failed
+	SelectionMethod        string                                  `json:"selection_method,omitempty"`
+	SelectionReason        string                                  `json:"selection_reason,omitempty"`
+	RoutingDecision        string                                  `json:"routing_decision,omitempty"`
+	Metrics                *classification.SignalMetricsCollection `json:"metrics"`                      // Performance and confidence for each signal
+	SignalConfidences      map[string]float64                      `json:"signal_confidences,omitempty"` // Real ML confidence scores per signal, e.g. "domain:economics" -> 0.81
+	SignalValues           map[string]float64                      `json:"signal_values,omitempty"`      // Raw signal values per signal when exposed, e.g. "structure:many_questions" -> 4
+	SignalErrors           map[string]string                       `json:"signal_errors,omitempty"`
+	AppliedUnknownPolicies map[string]string                       `json:"applied_unknown_policies,omitempty"`
 }
 
 // EvalModelSelectionInput is the content-minimized selection contract passed
@@ -135,9 +136,10 @@ type IntentResponse struct {
 	RoutingDecision  string             `json:"routing_decision,omitempty"`
 
 	// Signal-driven fields
-	MatchedSignals *MatchedSignals   `json:"matched_signals,omitempty"`
-	DecisionResult *DecisionResult   `json:"decision_result,omitempty"`
-	SignalErrors   map[string]string `json:"signal_errors,omitempty"`
+	MatchedSignals         *MatchedSignals   `json:"matched_signals,omitempty"`
+	DecisionResult         *DecisionResult   `json:"decision_result,omitempty"`
+	SignalErrors           map[string]string `json:"signal_errors,omitempty"`
+	AppliedUnknownPolicies map[string]string `json:"applied_unknown_policies,omitempty"`
 }
 
 // Classification represents basic classification result.

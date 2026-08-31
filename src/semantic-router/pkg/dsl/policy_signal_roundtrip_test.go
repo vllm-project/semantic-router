@@ -23,7 +23,7 @@ SIGNAL classifier "risk" {
   use_cpu: true
 }
 
-ROUTE "policy-route" {
+ROUTE "policy-route" (on_unknown = "fail_request") {
   PRIORITY 100
   WHEN metadata("canary") AND classifier(
     "risk",
@@ -35,6 +35,9 @@ ROUTE "policy-route" {
 }`
 	cfg := mustCompilePolicyDSL(t, input)
 	assertPolicySignals(t, cfg)
+	if cfg.Decisions[0].Rules.OnUnknown != "fail_request" {
+		t.Fatalf("on_unknown = %q", cfg.Decisions[0].Rules.OnUnknown)
+	}
 	assertPolicyClassifierLeaf(t, cfg.Decisions[0].Rules.Conditions[1])
 
 	source, err := Decompile(cfg)
@@ -43,6 +46,9 @@ ROUTE "policy-route" {
 	}
 	assertPolicyDSLSource(t, source)
 	roundTrip := mustCompilePolicyDSL(t, source)
+	if roundTrip.Decisions[0].Rules.OnUnknown != "fail_request" {
+		t.Fatalf("round-trip on_unknown = %q", roundTrip.Decisions[0].Rules.OnUnknown)
+	}
 	assertPolicyClassifierLeaf(
 		t,
 		roundTrip.Decisions[0].Rules.Conditions[1],
@@ -167,6 +173,7 @@ func assertPolicyDSLSource(t *testing.T, source string) {
 		`label: "RISKY"`,
 		`predicate: { gte: 0.8 }`,
 		`on_error: "match"`,
+		`on_unknown = "fail_request"`,
 	} {
 		if !strings.Contains(source, expected) {
 			t.Fatalf("decompiled source missing %q:\n%s", expected, source)

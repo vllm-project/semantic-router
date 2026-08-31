@@ -7,7 +7,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 // ClassifyIntentForEval performs intent classification specifically for evaluation scenarios.
@@ -50,12 +49,15 @@ func (s *ClassificationService) ClassifyIntentForEval(req IntentRequest) (*EvalR
 	var decisionResult *decision.DecisionResult
 	var traces []decision.DecisionTrace
 	if len(candidates) > 0 {
-		decisionResult, traces = evaluateIntentDecision(
+		decisionResult, traces, err = evaluateIntentDecision(
 			classifier,
 			signals,
 			candidates,
 			wantTrace,
 		)
+		if err != nil && len(traces) == 0 {
+			return nil, err
+		}
 	}
 
 	resp := s.buildEvalResponse(
@@ -112,13 +114,13 @@ func evaluateIntentDecision(
 	signals *classification.SignalResults,
 	candidates []config.Decision,
 	wantTrace bool,
-) (*decision.DecisionResult, []decision.DecisionTrace) {
+) (*decision.DecisionResult, []decision.DecisionTrace, error) {
 	if !wantTrace {
 		decisionResult, err := classifier.EvaluateDecisionWithEngineForDecisions(signals, candidates)
 		if err != nil && !strings.Contains(err.Error(), "no decisions configured") {
-			logging.Warnf("Decision evaluation failed: %v", err)
+			return nil, nil, err
 		}
-		return decisionResult, nil
+		return decisionResult, nil, nil
 	}
 
 	decisionResult, traces, err := classifier.EvaluateDecisionWithEngineAndTraceForDecisions(
@@ -126,9 +128,9 @@ func evaluateIntentDecision(
 		candidates,
 	)
 	if err != nil && !strings.Contains(err.Error(), "no decisions configured") {
-		logging.Warnf("Decision evaluation failed: %v", err)
+		return nil, traces, err
 	}
-	return decisionResult, traces
+	return decisionResult, traces, nil
 }
 
 func (s *ClassificationService) evalRoutingScopeSnapshot(

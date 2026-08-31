@@ -1278,6 +1278,7 @@ routing:
       priority: 125
       rules:
         operator: AND
+        on_unknown: no_match
         conditions:
           - type: classifier
             name: generic-safety-score

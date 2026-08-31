@@ -45,6 +45,7 @@ routing:
       priority: 200
       rules:
         operator: AND
+        on_unknown: no_match
         conditions:
           - type: classifier
             name: phishing
@@ -63,11 +64,14 @@ exact-label validation. Classifier leaves are the only decision predicates
 that accept `on_error`; failures expose the bounded
 `classifier_evaluation_failed` code in eval/replay diagnostics.
 
-This condition-level `on_error` (`no_match` or `match`) decides what the
-predicate evaluates to when the classifier fails. It is a different key from
-`prompt_guard.on_error` (`allow` or `block`), which decides whether a guardrail
-backend failure counts as unverified content for every rule that backend
-serves. See [Safety models and policy](../../global/safety-models-and-policy.md).
+On failure, the decision tree evaluates this leaf as `Unknown` until the full
+AND/OR/NOT expression is known. Root-level `rules.on_unknown` then chooses
+`no_match`, `match`, or `fail_request`. When it is omitted, condition-level
+`on_error` (`no_match` or `match`) preserves the previous generic-classifier
+result. `prompt_guard.on_error` (`allow` or `block`) remains the compatibility
+default for jailbreak rules. Diagnostics include both the signal error and any
+terminal policy that was applied. See
+[Safety models and policy](../../global/safety-models-and-policy.md).
 
 `sequence_classifier` classifiers also reference a named external model, but
 use the shared `http_classify` contract and preserve its full label distribution.

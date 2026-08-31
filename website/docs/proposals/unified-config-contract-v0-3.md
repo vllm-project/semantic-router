@@ -70,6 +70,12 @@ credentials, listeners, stores, or global runtime services. Import and export mu
 preserve the same canonical routing document rather than invent another steady-state
 schema.
 
+Classifier backend failures enter decision evaluation as `Unknown`. `NOT` preserves
+that state, while `AND` and `OR` use CEL-style short-circuit semantics. A decision
+resolves a terminal `Unknown` with root-level
+`rules.on_unknown: no_match|match|fail_request`; omission preserves the existing
+per-family compatibility behavior.
+
 ## Entrypoints and multi-recipe routing
 
 `entrypoints[]` map request model names to either top-level routing or one named

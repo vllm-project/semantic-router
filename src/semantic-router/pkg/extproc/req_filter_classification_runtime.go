@@ -156,7 +156,7 @@ func (r *OpenAIRouter) runDecisionEngine(
 	ctx *RequestContext,
 	signals *classification.SignalResults,
 	candidates []config.Decision,
-) (*decision.DecisionResult, string) {
+) (*decision.DecisionResult, string, error) {
 	// llm_decision_evaluation_latency_seconds and llm_decision_match_total are
 	// emitted by decision.DecisionEngine.EvaluateDecisionsWithSignals; do not
 	// emit them here or both metrics will be double-counted.
@@ -169,7 +169,7 @@ func (r *OpenAIRouter) runDecisionEngine(
 		})
 		tracing.EndDecisionSpan(decisionSpan, 0.0, []string{}, "")
 		ctx.TraceContext = decisionCtx
-		return nil, r.defaultModelForUnmatchedDecision(originalModel)
+		return nil, r.defaultModelForUnmatchedDecision(originalModel), nil
 	}
 	strategy := classifier.Config.Strategy
 
@@ -179,12 +179,13 @@ func (r *OpenAIRouter) runDecisionEngine(
 		if len(candidates) == 0 {
 			tracing.EndDecisionSpan(decisionSpan, 0.0, []string{}, string(strategy))
 			ctx.TraceContext = decisionCtx
-			return nil, r.defaultModelForUnmatchedDecision(originalModel)
+			return nil, r.defaultModelForUnmatchedDecision(originalModel), nil
 		}
 		result, err = classifier.EvaluateDecisionWithEngineForDecisions(signals, candidates)
 	} else {
 		result, err = classifier.EvaluateDecisionWithEngine(signals)
 	}
+	ctx.VSRAppliedUnknownPolicies = cloneReplayStringMap(signals.AppliedUnknownPolicies)
 	if err != nil {
 		logging.ComponentErrorEvent("extproc", "decision_evaluation_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,
@@ -193,17 +194,17 @@ func (r *OpenAIRouter) runDecisionEngine(
 		})
 		tracing.EndDecisionSpan(decisionSpan, 0.0, []string{}, string(strategy))
 		ctx.TraceContext = decisionCtx
-		return nil, r.defaultModelForUnmatchedDecision(originalModel)
+		return nil, "", err
 	}
 	if result == nil || result.Decision == nil {
 		tracing.EndDecisionSpan(decisionSpan, 0.0, []string{}, string(strategy))
 		ctx.TraceContext = decisionCtx
-		return nil, r.defaultModelForUnmatchedDecision(originalModel)
+		return nil, r.defaultModelForUnmatchedDecision(originalModel), nil
 	}
 
 	tracing.EndDecisionSpan(decisionSpan, result.Confidence, result.MatchedRules, string(strategy))
 	ctx.TraceContext = decisionCtx
-	return result, ""
+	return result, "", nil
 }
 
 func (r *OpenAIRouter) defaultModelForUnmatchedDecision(originalModel string) string {

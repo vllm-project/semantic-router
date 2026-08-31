@@ -1,5 +1,11 @@
 package config
 
+const (
+	RuleOnUnknownNoMatch     = "no_match"
+	RuleOnUnknownMatch       = "match"
+	RuleOnUnknownFailRequest = "fail_request"
+)
+
 // Decision represents a routing decision that combines multiple rules with boolean logic.
 type Decision struct {
 	Name                string                     `yaml:"name"`
@@ -167,6 +173,7 @@ type RuleNode struct {
 	Label      string            `yaml:"label,omitempty" json:"label,omitempty"`
 	Predicate  *NumericPredicate `yaml:"predicate,omitempty" json:"predicate,omitempty"`
 	OnError    string            `yaml:"on_error,omitempty" json:"on_error,omitempty"`
+	OnUnknown  string            `yaml:"on_unknown,omitempty" json:"on_unknown,omitempty"`
 	Operator   string            `yaml:"operator,omitempty" json:"operator,omitempty"`
 	Conditions []RuleNode        `yaml:"conditions,omitempty" json:"conditions,omitempty"`
 }
