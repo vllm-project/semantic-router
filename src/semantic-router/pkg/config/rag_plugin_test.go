@@ -69,6 +69,20 @@ func registerRAGValidationSpecs() {
 		Expect(err.Error()).To(ContainSubstring("max_response_bytes must be non-negative"))
 	})
 
+	It("rejects a negative OpenAI response limit", func() {
+		cfg := &RAGPluginConfig{
+			Enabled: true,
+			Backend: "openai",
+			BackendConfig: MustStructuredPayload(&OpenAIRAGConfig{
+				VectorStoreID:    "vs_123",
+				APIKey:           "secret",
+				MaxResponseBytes: -1,
+			}),
+		}
+
+		Expect(cfg.Validate()).To(MatchError(ContainSubstring("max_response_bytes must be non-negative")))
+	})
+
 	It("rejects invalid similarity thresholds", func() {
 		threshold := float32(1.1)
 		cfg := &RAGPluginConfig{
