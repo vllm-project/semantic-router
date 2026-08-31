@@ -71,6 +71,37 @@ def test_classifier_signal_local_shape():
     assert signal.model_path == "models/risk"
 
 
+def test_classifier_signal_sequence_shape():
+    signal = ClassifierSignal(
+        name="risk",
+        type="sequence_classifier",
+        model="risk-classifier",
+        labels=["SAFE", "RISKY"],
+    )
+    assert signal.model == "risk-classifier"
+
+
+@pytest.mark.parametrize(
+    "invalid_fields",
+    [
+        {"labels": ["RISKY"]},
+        {"instructions": "Choose a label."},
+        {"model_path": "models/risk"},
+        {"use_cpu": True},
+    ],
+)
+def test_classifier_signal_sequence_rejects_invalid_shape(invalid_fields):
+    values = {
+        "name": "risk",
+        "type": "sequence_classifier",
+        "model": "risk-classifier",
+        "labels": ["SAFE", "RISKY"],
+        **invalid_fields,
+    }
+    with pytest.raises(ValidationError):
+        ClassifierSignal(**values)
+
+
 def test_classifier_signal_rejects_backend_mixed_fields():
     with pytest.raises(ValidationError):
         ClassifierSignal(

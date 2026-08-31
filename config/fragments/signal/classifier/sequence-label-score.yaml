@@ -1,0 +1,19 @@
+version: v0.3
+
+global:
+  model_catalog:
+    external:
+      - name: risk-classifier
+        model_role: classification
+        llm_endpoint:
+          address: classifier.example.com
+          port: 443
+          protocol: https
+
+routing:
+  signals:
+    classifiers:
+      - name: tool-risk
+        type: sequence_classifier
+        model: risk-classifier
+        labels: [SAFE, RISKY]

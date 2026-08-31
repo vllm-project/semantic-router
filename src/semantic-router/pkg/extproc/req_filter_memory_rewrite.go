@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -14,7 +13,10 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
+	httputil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 )
+
+const defaultMemoryRewriteMaxResponseBytes int64 = 1024 * 1024
 
 // ConversationMessage represents a message in conversation history.
 type ConversationMessage struct {
@@ -26,12 +28,13 @@ type ConversationMessage struct {
 // used to improve vector-memory queries. It is not a request-selected logical
 // Model backend and cannot participate in routing, fallback, or usage dispatch.
 type memoryRewriteServiceConfig struct {
-	Endpoint       string
-	Model          string
-	AccessKey      string
-	TimeoutSeconds int
-	MaxTokens      int
-	Temperature    float64
+	Endpoint         string
+	Model            string
+	AccessKey        string
+	TimeoutSeconds   int
+	MaxTokens        int
+	Temperature      float64
+	MaxResponseBytes int64
 }
 
 // queryRewriteSystemPrompt is the system prompt for query rewriting.
@@ -165,13 +168,18 @@ func resolveMemoryRewriteServiceConfig(routerCfg *config.RouterConfig) *memoryRe
 		scheme = "http"
 	}
 	endpoint := fmt.Sprintf("%s://%s:%d", scheme, externalCfg.ModelEndpoint.Address, externalCfg.ModelEndpoint.Port)
+	maxResponseBytes := externalCfg.MaxResponseBytes
+	if maxResponseBytes <= 0 {
+		maxResponseBytes = defaultMemoryRewriteMaxResponseBytes
+	}
 	return &memoryRewriteServiceConfig{
-		Endpoint:       endpoint,
-		Model:          externalCfg.ModelName,
-		AccessKey:      externalCfg.AccessKey,
-		TimeoutSeconds: externalCfg.TimeoutSeconds,
-		MaxTokens:      externalCfg.MaxTokens,
-		Temperature:    externalCfg.Temperature,
+		Endpoint:         endpoint,
+		Model:            externalCfg.ModelName,
+		AccessKey:        externalCfg.AccessKey,
+		TimeoutSeconds:   externalCfg.TimeoutSeconds,
+		MaxTokens:        externalCfg.MaxTokens,
+		Temperature:      externalCfg.Temperature,
+		MaxResponseBytes: maxResponseBytes,
 	}
 }
 
@@ -225,7 +233,7 @@ func callMemoryRewriteService(ctx context.Context, resolved *memoryRewriteServic
 		return "", fmt.Errorf("LLM returned status %d", resp.StatusCode)
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := httputil.ReadLimitedBody(resp.Body, resolved.MaxResponseBytes)
 	if err != nil {
 		return "", fmt.Errorf("failed to read response body: %w", err)
 	}

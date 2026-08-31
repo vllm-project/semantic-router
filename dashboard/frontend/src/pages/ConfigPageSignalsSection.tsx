@@ -14,7 +14,6 @@ import type {
   JailbreakSignal,
   MetadataSignal,
   SignalType,
-  ClassifierSignal,
 } from './configPageSupport'
 import { formatThreshold } from './configPageSupport'
 import { hasFlatSignals } from '../types/config'
@@ -33,6 +32,7 @@ import {
   DEFAULT_CONVERSATION_FEATURE,
   DEFAULT_STRUCTURE_FEATURE,
   DEFAULT_STRUCTURE_PREDICATE,
+  buildClassifierSignal,
   getSignalReferenceCountInRoutingProfile,
   normalizeConditions,
   normalizeConversationFeature,
@@ -325,7 +325,11 @@ export default function ConfigPageSignalsSection({
       key: 'name',
       header: 'Name',
       sortable: true,
-      render: (row) => <span style={{ fontWeight: 600 }}>{formatRoutingMetadataValue(`x-vsr-matched-${row.type}`, row.name)}</span>,
+      render: (row) => (
+        <span style={{ fontWeight: 600 }}>
+          {formatRoutingMetadataValue(`x-vsr-matched-${row.type}`, row.name)}
+        </span>
+      ),
     },
     {
       key: 'type',
@@ -1304,28 +1308,7 @@ export default function ConfigPageSignalsSection({
           break
         }
         case 'Classifier': {
-          const classifierType = formData.classifier_type || 'local'
-          const labels = normalizeStringList(formData.classifier_labels, 'Classifier labels')
-          if (labels.length === 0) throw new Error('Classifier labels are required.')
-          const classifier: ClassifierSignal = {
-            name,
-            description: formData.description || undefined,
-            type: classifierType,
-            labels,
-          }
-          if (classifierType === 'local') {
-            if (labels.length !== 2) {
-              throw new Error('Local classifiers require exactly two labels.')
-            }
-            classifier.model_path = (formData.classifier_model_path || '').trim()
-            if (!classifier.model_path) throw new Error('Local model path is required.')
-            classifier.use_cpu = !!formData.classifier_use_cpu
-          } else {
-            classifier.model = (formData.classifier_model || '').trim()
-            classifier.instructions = (formData.classifier_instructions || '').trim()
-            if (!classifier.model) throw new Error('External classifier model is required.')
-            if (!classifier.instructions) throw new Error('Classifier instructions are required.')
-          }
+          const classifier = buildClassifierSignal(formData, name, formData.description)
           newConfig.signals.classifiers = [...(newConfig.signals.classifiers || []), classifier]
           break
         }

@@ -134,6 +134,7 @@ decisions:
         configuration:
           enabled: true
           backend: "openai"
+          max_response_bytes: 67108864
           backend_config:
             api_key: "test-key"
 providers:
@@ -538,6 +539,7 @@ class TestRAGPluginConfig:
                 "endpoint": "http://rag-service:8000/v1/search",
                 "request_format": "openai",
                 "timeout_seconds": 10,
+                "max_response_bytes": 4194304,
             },
             on_failure="skip",
             cache_results=True,
@@ -552,6 +554,7 @@ class TestRAGPluginConfig:
         assert config.injection_mode == "tool_role"
         assert config.backend_config["endpoint"] == "http://rag-service:8000/v1/search"
         assert config.backend_config["request_format"] == "openai"
+        assert config.backend_config["max_response_bytes"] == 4194304
         assert config.on_failure == "skip"
         assert config.cache_results is True
         assert config.cache_ttl_seconds == 300

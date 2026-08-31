@@ -98,6 +98,35 @@ func TestConfigFragmentsAreValidYAML(t *testing.T) {
 	}
 }
 
+func TestClassifierFragmentsCoverRemoteBackendTypes(t *testing.T) {
+	root := repoRootFromTestFile(t)
+	fragments := map[string]string{
+		ClassifierSignalTypeLLM:                "label-score.yaml",
+		ClassifierSignalTypeSequenceClassifier: "sequence-label-score.yaml",
+	}
+	for classifierType, filename := range fragments {
+		path := filepath.Join(root, "config", "fragments", "signal", "classifier", filename)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("failed to read classifier fragment %s: %v", path, err)
+		}
+		var fragment struct {
+			Routing struct {
+				Signals struct {
+					Classifiers []ClassifierSignalRule `yaml:"classifiers"`
+				} `yaml:"signals"`
+			} `yaml:"routing"`
+		}
+		if err := yaml.Unmarshal(data, &fragment); err != nil {
+			t.Fatalf("failed to parse classifier fragment %s: %v", path, err)
+		}
+		if len(fragment.Routing.Signals.Classifiers) != 1 ||
+			fragment.Routing.Signals.Classifiers[0].Type != classifierType {
+			t.Fatalf("classifier fragment %s must contain exactly one %q rule", path, classifierType)
+		}
+	}
+}
+
 func TestConfigFragmentsAvoidRetiredDomainAliases(t *testing.T) {
 	root := repoRootFromTestFile(t)
 	configRoot := filepath.Join(root, "config", "fragments")
