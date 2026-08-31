@@ -2,12 +2,15 @@
 
 // Core modules
 pub mod config_loader;
+pub mod device;
 pub mod similarity;
 pub mod tokenization;
 pub mod unified_error;
 
 // Re-export main similarity functionality for backward compatibility
 pub use similarity::{normalize_l2, BertSimilarity};
+
+pub use device::resolve_device;
 
 // Re-export unified configuration loader
 pub use config_loader::{

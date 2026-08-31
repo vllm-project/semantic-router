@@ -19,7 +19,7 @@
 /// longer than 512 tokens. This cap matches `max_length` in tokenizer_config.json.
 pub(crate) const MAX_CLASSIFICATION_SEQ_LEN: usize = 512;
 
-use crate::core::{config_errors, processing_errors, ModelErrorType, UnifiedError};
+use crate::core::{config_errors, processing_errors, resolve_device, ModelErrorType, UnifiedError};
 use crate::model_error;
 use anyhow::{Error as E, Result};
 use candle_core::{DType, Device, IndexOp, Tensor, D};
@@ -639,11 +639,7 @@ impl TraditionalModernBertClassifier {
         variant: ModernBertVariant,
     ) -> Result<Self, candle_core::Error> {
         // 1. Determine device
-        let device = if use_cpu {
-            Device::Cpu
-        } else {
-            Device::cuda_if_available(0).unwrap_or(Device::Cpu)
-        };
+        let device = resolve_device(use_cpu);
         // 2. Load config.json
         let config_path = format!("{}/config.json", model_path);
         let config_str = std::fs::read_to_string(&config_path).map_err(|_e| {
@@ -1375,11 +1371,7 @@ impl TraditionalModernBertTokenClassifier {
         use_cpu: bool,
         variant: ModernBertVariant,
     ) -> Result<Self> {
-        let device = if use_cpu {
-            Device::Cpu
-        } else {
-            Device::cuda_if_available(0)?
-        };
+        let device = resolve_device(use_cpu);
 
         // Load model configuration
         let config_path = std::path::Path::new(model_id).join("config.json");
