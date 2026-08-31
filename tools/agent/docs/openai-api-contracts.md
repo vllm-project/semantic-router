@@ -103,7 +103,6 @@ These APIs are intentionally outside the inference codec matrix:
 | Models list | `pkg/publicmodels` | OpenAI-compatible model list plus bounded Router discovery metadata |
 | Stored Responses service | `pkg/responseapi` | Persistence and object lifecycle behind the Responses endpoints |
 | Files and vector stores | `pkg/openai` | Narrow outbound clients covered by wire compatibility tests |
-| Image generation backend | `pkg/imagegen` | Plugin-owned outbound contract |
 | E2E request fixtures | `e2e/pkg/fixtures` | Test-isolated minimal wire structures |
 
 ## Regression requirements
