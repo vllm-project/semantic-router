@@ -43,6 +43,7 @@ export const preparePlaygroundInvocation = (
     ...invocation.request,
     messages,
     ...(invocation.tools ? { tools: invocation.tools } : {}),
+    ...(invocation.toolChoice !== undefined ? { tool_choice: invocation.toolChoice } : {}),
     ...(invocation.model ? { model: invocation.model } : {}),
   }
 

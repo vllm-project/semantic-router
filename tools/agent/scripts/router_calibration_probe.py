@@ -70,6 +70,7 @@ VARIANT_FIELDS = frozenset(
         "playground",
         "messages",
         "tools",
+        "tool_choice",
         "repeat",
         "padding",
         "generated_text",
@@ -144,6 +145,7 @@ class Probe:
     generated_text: ProbeGeneratedText | None = None
     messages: tuple[dict[str, Any], ...] = ()
     tools: tuple[dict[str, Any], ...] = ()
+    tool_choice: str | dict[str, Any] | None = None
     expected_alias: str | None = None
     notes: str | None = None
     tags: tuple[str, ...] = ()
@@ -335,6 +337,7 @@ def _load_variant(
         generated_text=generated_text,
         messages=messages,
         tools=_normalize_objects(raw_variant.get("tools"), "tools"),
+        tool_choice=_normalize_tool_choice(raw_variant.get("tool_choice"), probe_id),
         expected_alias=defaults.expected_alias,
         notes=_optional_string(raw_variant.get("notes")) or defaults.notes,
         tags=_normalize_tags(raw_variant.get("tags")),
@@ -473,6 +476,20 @@ def _normalize_tags(raw_tags: Any) -> tuple[str, ...]:
     if len(normalized) != len(set(normalized)):
         raise ValueError("tags must not contain duplicates")
     return tuple(normalized)
+
+
+def _normalize_tool_choice(
+    raw_tool_choice: Any, probe_id: str
+) -> str | dict[str, Any] | None:
+    if raw_tool_choice is None:
+        return None
+    if isinstance(raw_tool_choice, str):
+        value = raw_tool_choice.strip()
+        if value:
+            return value
+    elif isinstance(raw_tool_choice, dict) and raw_tool_choice:
+        return dict(raw_tool_choice)
+    raise TypeError(f"{probe_id} tool_choice must be a non-empty string or mapping")
 
 
 def _normalize_playground_policy(

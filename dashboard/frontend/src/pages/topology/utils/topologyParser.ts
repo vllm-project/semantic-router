@@ -182,6 +182,7 @@ function extractDecisionAlgorithm(
 
   return {
     type: algorithm.type as AlgorithmConfig['type'],
+    minimum_candidates: algorithm.minimum_candidates,
     confidence: algorithm.confidence,
     concurrent: algorithm.concurrent,
     latency_aware: algorithm.latency_aware,

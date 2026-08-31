@@ -90,8 +90,9 @@ func (l *BaseLooper) Execute(ctx context.Context, req *Request) (*Response, erro
 		})
 
 		// BaseLooper doesn't need logprobs (no confidence-based routing).
-		resp, err := l.client.CallModel(
+		resp, err := l.callModelWithContextGate(
 			ctx,
+			req,
 			toolFreeLooperRequest(req.OriginalRequest),
 			modelName,
 			req.IsStreaming,
