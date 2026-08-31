@@ -591,17 +591,6 @@ export function getPluginFieldSchema(pluginType: string): FieldSchema[] {
           placeholder: 'Header name to delete',
         },
       ]
-    case 'image_gen':
-      return [
-        { key: 'enabled', label: 'Enabled', type: 'boolean' },
-        {
-          key: 'backend',
-          label: 'Backend',
-          type: 'string',
-          required: true,
-          placeholder: 'my_image_gen_backend',
-        },
-      ]
     case 'fast_response':
       return [
         {

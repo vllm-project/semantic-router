@@ -260,7 +260,6 @@ export type PluginType =
   | 'hallucination'
   | 'router_replay'
   | 'rag'
-  | 'image_gen'
   | 'fast_response'
   | 'request_params'
   | 'response_jailbreak'
