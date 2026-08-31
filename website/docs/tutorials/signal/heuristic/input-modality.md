@@ -83,9 +83,7 @@ the same way whichever protocol carried the request:
 - **Anthropic Messages**: `text` and `image` blocks; the protocol has no audio
   or video block types.
 - **Response API**: `input_text` counts as text and `input_image` counts as
-  image whether it carries an `image_url` or a `file_id`, because detection no
-  longer depends on how the image is later rendered for the backend. The
-  Response API decoder accepts no audio content type today.
+  image. The Response API decoder accepts no audio content type today.
 - **Classify/eval APIs**: the same part types on `messages[].content`, plus
   `input_audio` / `audio_url` for audio and `video_url` / `input_video` for
   video.
