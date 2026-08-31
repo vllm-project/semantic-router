@@ -37,10 +37,7 @@ func newLLMLabelClassifier(
 	if external == nil {
 		return nil, fmt.Errorf("external model %q is not configured", rule.Model)
 	}
-	client := NewVLLMClient(&external.ModelEndpoint)
-	if external.AccessKey != "" {
-		client = NewVLLMClientWithAuth(&external.ModelEndpoint, external.AccessKey)
-	}
+	client := newVLLMClientFromConfig(external)
 	timeout := time.Duration(external.TimeoutSeconds) * time.Second
 	if timeout <= 0 {
 		timeout = 5 * time.Second
