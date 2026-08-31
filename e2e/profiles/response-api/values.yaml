@@ -117,10 +117,10 @@ config:
 resources:
   limits:
     cpu: '2'
-    memory: 2Gi
+    memory: 10Gi
   requests:
     cpu: 500m
-    memory: 1Gi
+    memory: 2Gi
 
 # E2E/Kind: disable PVC for reliable CI (same as other e2e profiles).
 persistence:
