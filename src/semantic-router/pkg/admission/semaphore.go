@@ -13,8 +13,8 @@ type Overflow string
 const (
 	// OverflowShed rejects the request with ErrQueueFull.
 	OverflowShed Overflow = "shed"
-	// OverflowWait blocks past the queue bound until a slot frees or ctx is
-	// done.
+	// OverflowWait blocks for a queue slot instead of shedding; queued work
+	// never exceeds the queue bound.
 	OverflowWait Overflow = "wait"
 	// OverflowFailOpen admits the request without holding a slot.
 	OverflowFailOpen Overflow = "fail_open"
@@ -42,6 +42,9 @@ func NewSemaphore(maxConcurrency, maxQueue int, queueTimeout time.Duration, over
 	if overflow == "" {
 		overflow = OverflowShed
 	}
+	if overflow == OverflowWait && maxQueue < 1 {
+		maxQueue = 1
+	}
 	return &Semaphore{
 		slots:        make(chan struct{}, maxConcurrency),
 		waiters:      make(chan struct{}, maxQueue),
@@ -57,29 +60,18 @@ func (s *Semaphore) Acquire(ctx context.Context) (Ticket, error) {
 	default:
 	}
 
-	queued := true
-	select {
-	case s.waiters <- struct{}{}:
-	default:
-		switch s.overflow {
-		case OverflowFailOpen:
-			return func() {}, nil
-		case OverflowWait:
-			queued = false
-		default:
-			return nil, ErrQueueFull
-		}
-	}
-	if queued {
-		defer func() { <-s.waiters }()
-	}
-
 	var timeout <-chan time.Time
 	if s.queueTimeout > 0 {
 		timer := time.NewTimer(s.queueTimeout)
 		defer timer.Stop()
 		timeout = timer.C
 	}
+
+	overflowTicket, err := s.enterQueue(ctx, timeout)
+	if err != nil || overflowTicket != nil {
+		return overflowTicket, err
+	}
+	defer func() { <-s.waiters }()
 
 	select {
 	case s.slots <- struct{}{}:
@@ -88,6 +80,32 @@ func (s *Semaphore) Acquire(ctx context.Context) (Ticket, error) {
 		return nil, ErrQueueFull
 	case <-ctx.Done():
 		return nil, ctx.Err()
+	}
+}
+
+// enterQueue takes a queue slot, applying the overflow policy when the queue
+// is full. A nil, nil return means the caller holds a queue slot; a non-nil
+// ticket admits a fail_open caller without one.
+func (s *Semaphore) enterQueue(ctx context.Context, timeout <-chan time.Time) (Ticket, error) {
+	select {
+	case s.waiters <- struct{}{}:
+		return nil, nil
+	default:
+	}
+	switch s.overflow {
+	case OverflowFailOpen:
+		return func() {}, nil
+	case OverflowWait:
+		select {
+		case s.waiters <- struct{}{}:
+			return nil, nil
+		case <-timeout:
+			return nil, ErrQueueFull
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	default:
+		return nil, ErrQueueFull
 	}
 }
 

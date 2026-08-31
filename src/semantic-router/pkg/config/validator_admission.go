@@ -50,6 +50,12 @@ func validateAdmissionConfig(key string, admission AdmissionConfig) error {
 			key,
 		)
 	}
+	if admission.OnOverflow == "wait" && admission.MaxQueue < 1 {
+		return fmt.Errorf(
+			"global.model_catalog.admission.%s: on_overflow wait requires max_queue >= 1",
+			key,
+		)
+	}
 	return nil
 }
 

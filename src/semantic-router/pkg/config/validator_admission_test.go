@@ -19,6 +19,8 @@ func TestValidateModelAdmissionContracts(t *testing.T) {
 		{"negative queue", "prompt_guard", AdmissionConfig{MaxConcurrency: 1, MaxQueue: -1}, "max_queue"},
 		{"negative timeout", "prompt_guard", AdmissionConfig{MaxConcurrency: 1, QueueTimeoutMs: -1}, "queue_timeout_ms"},
 		{"invalid overflow", "prompt_guard", AdmissionConfig{MaxConcurrency: 1, OnOverflow: "drop"}, "on_overflow"},
+		{"wait without queue", "prompt_guard", AdmissionConfig{MaxConcurrency: 1, OnOverflow: "wait"}, "max_queue >= 1"},
+		{"wait with queue", "prompt_guard", AdmissionConfig{MaxConcurrency: 1, MaxQueue: 8, OnOverflow: "wait"}, ""},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

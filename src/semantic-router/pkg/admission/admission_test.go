@@ -113,7 +113,7 @@ func TestSemaphoreFailOpenAdmitsWithoutSlot(t *testing.T) {
 	}
 }
 
-func TestSemaphoreWaitBlocksPastQueueBound(t *testing.T) {
+func TestSemaphoreWaitBlocksForQueueSlot(t *testing.T) {
 	gate := NewSemaphore(1, 0, 0, OverflowWait)
 	ticket, err := gate.Acquire(context.Background())
 	if err != nil {
@@ -138,6 +138,96 @@ func TestSemaphoreWaitBlocksPastQueueBound(t *testing.T) {
 	ticket()
 	if err := <-acquired; err != nil {
 		t.Fatalf("waiter failed after release: %v", err)
+	}
+}
+
+func TestSemaphoreWaitBoundsQueueOccupancy(t *testing.T) {
+	gate := NewSemaphore(1, 1, 0, OverflowWait)
+	ticket, err := gate.Acquire(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	const callers = 3
+	done := make(chan error, callers)
+	for range callers {
+		go func() {
+			waited, err := gate.Acquire(context.Background())
+			if err == nil {
+				waited()
+			}
+			done <- err
+		}()
+	}
+
+	deadline := time.After(100 * time.Millisecond)
+	for {
+		if occupancy := len(gate.waiters); occupancy > cap(gate.waiters) {
+			t.Fatalf("queue occupancy = %d, cap %d", occupancy, cap(gate.waiters))
+		}
+		select {
+		case <-deadline:
+			ticket()
+			for range callers {
+				if err := <-done; err != nil {
+					t.Fatalf("waiter failed after release: %v", err)
+				}
+			}
+			return
+		default:
+			time.Sleep(time.Millisecond)
+		}
+	}
+}
+
+func TestSemaphoreWaitHonorsContextWhileQueueFull(t *testing.T) {
+	gate := NewSemaphore(1, 1, 0, OverflowWait)
+	ticket, err := gate.Acquire(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ticket()
+
+	queued := make(chan struct{})
+	go func() {
+		close(queued)
+		waited, err := gate.Acquire(context.Background())
+		if err == nil {
+			defer waited()
+		}
+	}()
+	<-queued
+	for len(gate.waiters) == 0 {
+		time.Sleep(time.Millisecond)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+	if _, err := gate.Acquire(ctx); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("err = %v, want DeadlineExceeded", err)
+	}
+}
+
+func TestSemaphoreWaitQueueTimeoutWhileQueueFull(t *testing.T) {
+	gate := NewSemaphore(1, 1, 10*time.Millisecond, OverflowWait)
+	ticket, err := gate.Acquire(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ticket()
+
+	go func() {
+		waited, err := gate.Acquire(context.Background())
+		if err == nil {
+			defer waited()
+		}
+	}()
+	for len(gate.waiters) == 0 {
+		time.Sleep(time.Millisecond)
+	}
+
+	if _, err := gate.Acquire(context.Background()); !errors.Is(err, ErrQueueFull) {
+		t.Fatalf("err = %v, want ErrQueueFull", err)
 	}
 }
 
