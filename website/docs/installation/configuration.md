@@ -50,6 +50,13 @@ Provider pricing belongs beside each concrete model under
 `cached_input_per_1m`, and `cache_write_per_1m` rates. Routing model cards do not
 repeat deployment prices or credentials.
 
+Router-wide debugging surfaces stay closed by default.
+`global.services.observability.profiling` serves Go `pprof` endpoints, and only
+when it is explicitly enabled; it then binds `127.0.0.1:6060` so profiles never
+reach a routable interface without an explicit `bind` change. The switch is read
+once at startup, so changing it requires a Router restart. See
+[API and Observability](../tutorials/global/api-and-observability).
+
 The [Routing Pipeline](../overview/signal-driven-decisions) explains the design.
 Capability pages under **Capabilities** document each signal, projection,
 decision, algorithm, plugin, and global block.
