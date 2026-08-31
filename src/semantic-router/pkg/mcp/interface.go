@@ -107,14 +107,15 @@ func (c *BaseClient) log(level LoggingLevel, message string) {
 
 // ClientConfig represents client configuration
 type ClientConfig struct {
-	Command       string            `json:"command,omitempty"`
-	Args          []string          `json:"args,omitempty"`
-	Env           map[string]string `json:"env,omitempty"`
-	URL           string            `json:"url,omitempty"`
-	Headers       map[string]string `json:"headers,omitempty"`
-	TransportType string            `json:"transportType,omitempty"`
-	Timeout       time.Duration     `json:"timeout,omitempty"`
-	Options       ClientOptions     `json:"options"`
+	Command          string            `json:"command,omitempty"`
+	Args             []string          `json:"args,omitempty"`
+	Env              map[string]string `json:"env,omitempty"`
+	URL              string            `json:"url,omitempty"`
+	Headers          map[string]string `json:"headers,omitempty"`
+	TransportType    string            `json:"transportType,omitempty"`
+	Timeout          time.Duration     `json:"timeout,omitempty"`
+	MaxResponseBytes int64             `json:"maxResponseBytes,omitempty"`
+	Options          ClientOptions     `json:"options"`
 }
 
 // ToolFilter represents tool filtering configuration

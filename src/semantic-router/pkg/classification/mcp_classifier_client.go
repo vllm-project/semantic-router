@@ -28,11 +28,12 @@ func (m *MCPCategoryClassifier) Init(cfg *config.RouterConfig) error {
 
 	m.config = cfg
 	mcpConfig := mcpclient.ClientConfig{
-		TransportType: cfg.TransportType,
-		Command:       cfg.Command,
-		Args:          cfg.Args,
-		Env:           cfg.Env,
-		URL:           cfg.URL,
+		TransportType:    cfg.TransportType,
+		Command:          cfg.Command,
+		Args:             cfg.Args,
+		Env:              cfg.Env,
+		URL:              cfg.URL,
+		MaxResponseBytes: cfg.MaxResponseBytes,
 		Options: mcpclient.ClientOptions{
 			LogEnabled: true,
 		},
