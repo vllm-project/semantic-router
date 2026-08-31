@@ -60,7 +60,6 @@ unavailable.
 
 - `src/training/model_classifier/prompt_guard_fine_tuning_lora/` emits the
   dataset, run, and artifact manifests at the end of training.
-
-The evaluation manifest is emitted by whatever measures the artifact. A bundle
-without one does not validate, since an artifact with no measured evaluation is
-not qualified.
+- `src/training/model_eval/quality_baseline.py` emits the dataset, artifact, and
+  evaluation manifests, and can reference an artifact manifest a training run
+  already published rather than minting a second identity for the same bytes.
