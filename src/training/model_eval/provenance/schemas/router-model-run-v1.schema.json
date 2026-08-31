@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vllm-project.github.io/semantic-router/schemas/router-model-run-v1.schema.json",
+  "title": "Router Model training-run manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "kind",
+    "id",
+    "task",
+    "base_model",
+    "code",
+    "dataset_refs",
+    "seed",
+    "hyperparameters",
+    "dependencies",
+    "label_mapping"
+  ],
+  "properties": {
+    "schema_version": {"const": "v1"},
+    "kind": {"const": "run"},
+    "id": {"$ref": "router-model-common-v1.schema.json#/$defs/manifestId"},
+    "task": {"$ref": "router-model-common-v1.schema.json#/$defs/task"},
+    "description": {"type": "string", "maxLength": 2000},
+    "base_model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repo", "revision"],
+      "properties": {
+        "repo": {"$ref": "router-model-common-v1.schema.json#/$defs/repoId"},
+        "revision": {"$ref": "router-model-common-v1.schema.json#/$defs/revision"}
+      }
+    },
+    "code": {"$ref": "router-model-common-v1.schema.json#/$defs/codeRevision"},
+    "dataset_refs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "router-model-common-v1.schema.json#/$defs/datasetRef"}
+    },
+    "seed": {"type": "integer", "minimum": 0},
+    "hyperparameters": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": ["string", "number", "boolean", "null"]
+      }
+    },
+    "dependencies": {"$ref": "router-model-common-v1.schema.json#/$defs/dependencies"},
+    "label_mapping": {"$ref": "router-model-common-v1.schema.json#/$defs/labelMapping"}
+  }
+}
