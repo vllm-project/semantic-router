@@ -38,7 +38,7 @@ func (b *classifierOptionBuilder) addRemoteCategoryClassifier(categoryMapping *C
 	if backendCfg.Protocol != config.RemoteClassifierProtocolHTTPClassify {
 		return fmt.Errorf("category backend protocol %q is not supported", backendCfg.Protocol)
 	}
-	timeout := time.Duration(backendCfg.EffectiveTimeoutSeconds()) * time.Second
+	timeout := time.Duration(backendCfg.EffectiveDeadlineMs()) * time.Millisecond
 	backend, err := newCategoryHTTPBackend(external, categoryMapping, timeout)
 	if err != nil {
 		return err
@@ -52,33 +52,31 @@ func (b *classifierOptionBuilder) addLocalCategoryClassifier(categoryMapping *Ca
 	if err != nil {
 		return err
 	}
-	var categoryInitializer CategoryInitializer
-	var categoryInference CategoryInference
+	categoryInitializer, categoryInference := categoryDependenciesForVariant(variant)
+	b.options = append(b.options, withCategory(categoryMapping, categoryInitializer, categoryInference))
+	return nil
+}
+
+func categoryDependenciesForVariant(variant string) (CategoryInitializer, CategoryInference) {
 	switch variant {
 	case config.CategoryVariantMmBERT32K:
 		logging.ComponentEvent("classifier", "category_classifier_backend_selected", map[string]interface{}{
 			"backend": "mmbert_32k",
 		})
-		categoryInitializer = createMmBERT32KCategoryInitializer()
-		categoryInference = createMmBERT32KCategoryInference()
+		return createMmBERT32KCategoryInitializer(), createMmBERT32KCategoryInference()
 	case config.CategoryVariantModernBERT:
 		logging.ComponentEvent("classifier", "category_classifier_backend_selected", map[string]interface{}{
 			"backend": "modernbert",
 		})
-		categoryInitializer = createModernBERTCategoryInitializer()
-		categoryInference = createCategoryInference()
+		return createModernBERTCategoryInitializer(), createModernBERTCategoryInference()
 	case config.CategoryVariantCandle:
 		logging.ComponentEvent("classifier", "category_classifier_backend_selected", map[string]interface{}{
 			"backend": "candle",
 		})
-		categoryInitializer = createCandleCategoryInitializer()
-		categoryInference = CandleCategoryInferenceImpl{}
+		return createCandleCategoryInitializer(), CandleCategoryInferenceImpl{}
 	default:
-		categoryInitializer = createCategoryInitializer()
-		categoryInference = createCategoryInference()
+		return createCategoryInitializer(), createCategoryInference()
 	}
-	b.options = append(b.options, withCategory(categoryMapping, categoryInitializer, categoryInference))
-	return nil
 }
 
 func (b *classifierOptionBuilder) addMCPCategoryClassifier() {

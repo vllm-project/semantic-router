@@ -16,25 +16,25 @@ const (
 // remote classifier. Category is the first consumer and currently supports
 // the complete label distribution contract.
 const (
-	RemoteClassifierContractLabelDistribution = "label_distribution"
+	RemoteClassifierContractLabelDistribution = "label_distribution.v1"
 )
 
-const defaultRemoteClassifierTimeoutSeconds = 5
+const defaultRemoteClassifierDeadlineMs = 5000
 
 // RemoteClassifierBackend is the shared remote attachment contract for
 // built-in classifier modules. A nil backend means that the module uses its
-// existing local implementation. TimeoutSeconds is a pointer so omitted and
+// existing local implementation. DeadlineMs is a pointer so omitted and
 // an explicitly invalid zero value cannot be confused during validation.
 type RemoteClassifierBackend struct {
 	Protocol       string `yaml:"protocol" json:"protocol"`
 	Contract       string `yaml:"contract,omitempty" json:"contract,omitempty"`
 	Model          string `yaml:"model" json:"model"`
-	TimeoutSeconds *int   `yaml:"timeout_seconds,omitempty" json:"timeout_seconds,omitempty"`
+	DeadlineMs     *int   `yaml:"deadline_ms,omitempty" json:"deadline_ms,omitempty"`
 }
 
-// UnmarshalYAML rejects stale or misspelled timeout fields instead of letting
+// UnmarshalYAML rejects stale or misspelled deadline fields instead of letting
 // yaml.v2 silently discard them. The final public contract has one spelling:
-// timeout_seconds.
+// deadline_ms.
 func (b *RemoteClassifierBackend) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	var raw map[interface{}]interface{}
 	if err := unmarshal(&raw); err != nil {
@@ -46,9 +46,9 @@ func (b *RemoteClassifierBackend) UnmarshalYAML(unmarshal func(interface{}) erro
 			return fmt.Errorf("backend contains a non-string field name %v", key)
 		}
 		switch name {
-		case "protocol", "contract", "model", "timeout_seconds":
+		case "protocol", "contract", "model", "deadline_ms":
 		default:
-			return fmt.Errorf("backend: unsupported field %q (use timeout_seconds for the timeout)", name)
+			return fmt.Errorf("backend: unsupported field %q (use deadline_ms for the request deadline)", name)
 		}
 	}
 	type backendAlias RemoteClassifierBackend
@@ -70,12 +70,12 @@ func (b *RemoteClassifierBackend) EffectiveContract(defaultContract string) stri
 	return b.Contract
 }
 
-// EffectiveTimeoutSeconds returns the shared HTTP classifier timeout default.
-func (b *RemoteClassifierBackend) EffectiveTimeoutSeconds() int {
-	if b == nil || b.TimeoutSeconds == nil {
-		return defaultRemoteClassifierTimeoutSeconds
+// EffectiveDeadlineMs returns the shared HTTP classifier deadline default.
+func (b *RemoteClassifierBackend) EffectiveDeadlineMs() int {
+	if b == nil || b.DeadlineMs == nil {
+		return defaultRemoteClassifierDeadlineMs
 	}
-	return *b.TimeoutSeconds
+	return *b.DeadlineMs
 }
 
 // Validate checks the fields common to every remote classifier attachment.
@@ -102,8 +102,8 @@ func (b *RemoteClassifierBackend) Validate() error {
 			return fmt.Errorf("backend.contract: unsupported value %q", b.Contract)
 		}
 	}
-	if b.TimeoutSeconds != nil && *b.TimeoutSeconds <= 0 {
-		return fmt.Errorf("backend.timeout_seconds must be greater than zero, got %d", *b.TimeoutSeconds)
+	if b.DeadlineMs != nil && *b.DeadlineMs <= 0 {
+		return fmt.Errorf("backend.deadline_ms must be greater than zero, got %d", *b.DeadlineMs)
 	}
 	return nil
 }

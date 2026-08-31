@@ -88,9 +88,9 @@ hidden defaults after validation.
 Built-in category/domain inference keeps its runtime policy in
 `global.model_catalog.modules.classifier.domain`. The local model uses the
 canonical `variant` field; a remote classifier uses the shared `backend` block
-(`protocol`, `contract`, `model`, and `timeout_seconds`) and resolves `model` by
+(`protocol`, `contract`, `model`, and `deadline_ms`) and resolves `model` by
 exact external-catalog name. The category consumer currently accepts
-`http_classify` plus `label_distribution`, preserving the full label-score
+`http_classify` plus `label_distribution.v1`, preserving the full label-score
 distribution. Prompt guard remains on its existing configuration surface until
 its separately scoped migration.
 

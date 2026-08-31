@@ -62,9 +62,9 @@ no remote backend is configured. To call a named external classifier, attach a
 `backend` under `global.model_catalog.modules.classifier.domain` and resolve
 its `model` from `global.model_catalog.external[]` with
 `model_role: classification`. The shared backend fields are `protocol`,
-`contract`, `model`, and optional `deadline_ms`; category currently supports
-`http_classify` with the full `label_distribution.v1` response contract. Omit
-`backend` to retain local behavior. The deprecated
+`contract`, `model`, and optional `deadline_ms`; category
+currently supports `http_classify` with the full `label_distribution.v1`
+response contract. Omit `backend` to retain local behavior. The deprecated
 `use_modernbert` and `use_mmbert_32k` keys remain readable, while generated
 canonical configuration uses `variant: candle`, `variant: modernbert`, or
 `variant: mmbert32k`.

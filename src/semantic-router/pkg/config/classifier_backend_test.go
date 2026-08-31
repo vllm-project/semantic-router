@@ -79,11 +79,11 @@ func TestCategoryModelAcceptsAgreeingCanonicalAndLegacySelectors(t *testing.T) {
 }
 
 func TestValidateCategoryModelBackend(t *testing.T) {
-	timeout := 3
+	deadline := 3000
 	valid := &RemoteClassifierBackend{
 		Protocol:       RemoteClassifierProtocolHTTPClassify,
 		Model:          "named-category",
-		TimeoutSeconds: &timeout,
+		DeadlineMs:     &deadline,
 	}
 	if err := ValidateCategoryModelBackend(categoryBackendTestConfig(valid)); err != nil {
 		t.Fatalf("valid named backend rejected: %v", err)
@@ -111,8 +111,8 @@ func TestValidateCategoryModelBackend(t *testing.T) {
 		}, want: "unsupported"},
 		{name: "invalid timeout", mutate: func(cfg *RouterConfig) {
 			zero := 0
-			cfg.CategoryModel.Backend.TimeoutSeconds = &zero
-		}, want: "timeout_seconds"},
+			cfg.CategoryModel.Backend.DeadlineMs = &zero
+		}, want: "deadline_ms"},
 		{name: "mixed canonical local selector", mutate: func(cfg *RouterConfig) {
 			cfg.CategoryModel.Variant = CategoryVariantMmBERT32K
 		}, want: "mutually exclusive"},
@@ -170,20 +170,20 @@ func TestRemoteClassifierBackendYAMLDefaultsRemainOmitted(t *testing.T) {
 `), &cfg); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if cfg.Backend == nil || cfg.Backend.Contract != "" || cfg.Backend.TimeoutSeconds != nil {
+	if cfg.Backend == nil || cfg.Backend.Contract != "" || cfg.Backend.DeadlineMs != nil {
 		t.Fatalf("omitted defaults lost: %#v", cfg.Backend)
 	}
 	if got := cfg.Backend.EffectiveContract(RemoteClassifierContractLabelDistribution); got != RemoteClassifierContractLabelDistribution {
 		t.Fatalf("omitted contract = %q, want %q", got, RemoteClassifierContractLabelDistribution)
 	}
-	if got := cfg.Backend.EffectiveTimeoutSeconds(); got != defaultRemoteClassifierTimeoutSeconds {
-		t.Fatalf("omitted timeout = %d, want %d", got, defaultRemoteClassifierTimeoutSeconds)
+	if got := cfg.Backend.EffectiveDeadlineMs(); got != defaultRemoteClassifierDeadlineMs {
+		t.Fatalf("omitted deadline = %d, want %d", got, defaultRemoteClassifierDeadlineMs)
 	}
 	encoded, err := yaml.Marshal(cfg)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	if strings.Contains(string(encoded), "timeout_seconds") || !strings.Contains(string(encoded), "protocol: http_classify") {
+	if strings.Contains(string(encoded), "deadline_ms") || !strings.Contains(string(encoded), "protocol: http_classify") {
 		t.Fatalf("unexpected backend serialization: %s", encoded)
 	}
 }
@@ -195,30 +195,30 @@ func TestRemoteClassifierBackendYAMLExplicitFieldsRoundTrip(t *testing.T) {
 	if err := yaml.Unmarshal([]byte(`backend:
   protocol: http_classify
   model: named-category
-  contract: label_distribution
-  timeout_seconds: 7
+  contract: label_distribution.v1
+  deadline_ms: 7000
 `), &canonical); err != nil {
 		t.Fatalf("canonical backend unmarshal: %v", err)
 	}
-	if canonical.Backend == nil || canonical.Backend.TimeoutSeconds == nil || *canonical.Backend.TimeoutSeconds != 7 {
-		t.Fatalf("canonical timeout was not preserved: %#v", canonical.Backend)
+	if canonical.Backend == nil || canonical.Backend.DeadlineMs == nil || *canonical.Backend.DeadlineMs != 7000 {
+		t.Fatalf("canonical deadline was not preserved: %#v", canonical.Backend)
 	}
 	encodedCanonical, err := yaml.Marshal(canonical)
-	if err != nil || !strings.Contains(string(encodedCanonical), "timeout_seconds: 7") || strings.Contains(string(encodedCanonical), "deadline_ms") {
+	if err != nil || !strings.Contains(string(encodedCanonical), "deadline_ms: 7000") || strings.Contains(string(encodedCanonical), "timeout_seconds") {
 		t.Fatalf("canonical backend serialization = %s, err=%v", encodedCanonical, err)
 	}
 }
 
-func TestRemoteClassifierBackendYAMLRejectsDeadlineAlias(t *testing.T) {
+func TestRemoteClassifierBackendYAMLRejectsTimeoutAlias(t *testing.T) {
 	var stale struct {
 		Backend *RemoteClassifierBackend `yaml:"backend"`
 	}
 	if err := yaml.Unmarshal([]byte(`backend:
   protocol: http_classify
   model: named-category
-  deadline_ms: 5000
-`), &stale); err == nil || !strings.Contains(err.Error(), "timeout_seconds") {
-		t.Fatalf("expected stale deadline_ms to be rejected, got %v", err)
+  timeout_seconds: 5
+`), &stale); err == nil || !strings.Contains(err.Error(), "deadline_ms") {
+		t.Fatalf("expected stale timeout_seconds to be rejected, got %v", err)
 	}
 }
 
@@ -307,7 +307,7 @@ global:
         domain:
           backend:
             protocol: http_classify
-            contract: label_distribution
+            contract: label_distribution.v1
             model: named-category
 `)
 	cfg, err := ParseYAMLBytes(canonicalYAML)

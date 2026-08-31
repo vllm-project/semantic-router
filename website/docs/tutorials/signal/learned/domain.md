@@ -68,7 +68,7 @@ legacy selector is accepted; contradictory active selectors are rejected.
 A remote category classifier uses the shared backend block. Its `model` is an
 explicit name from `global.model_catalog.external[]`, and that catalog entry
 must have `model_role: classification`. Category currently accepts only the
-`http_classify` protocol and the `label_distribution` contract so the full
+`http_classify` protocol and the `label_distribution.v1` contract so the full
 label distribution continues to feed domain matching and routing decisions.
 
 ```yaml
@@ -86,9 +86,9 @@ global:
         domain:
           backend:
             protocol: http_classify
-            contract: label_distribution
+            contract: label_distribution.v1
             model: domain-service
-            timeout_seconds: 5
+            deadline_ms: 5000
 ```
 
 `on_error` remains owned by the category signal. `allow` (the default) keeps

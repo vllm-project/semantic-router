@@ -114,7 +114,7 @@ runtime dependency; they do not define routing behavior by themselves.
   `global.model_catalog.modules.classifier.domain.backend`; its `model` must
   name an entry in `global.model_catalog.external[]` with
   `model_role: classification`. The shared backend contract uses
-  `protocol`, `contract`, `model`, and optional `timeout_seconds`.
+  `protocol`, `contract`, `model`, and optional `deadline_ms`.
 
 ## Keep examples in sync
 

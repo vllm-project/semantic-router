@@ -205,6 +205,22 @@ func createCategoryInference() CategoryInference {
 	return &CategoryInferenceImpl{}
 }
 
+// ModernBERTCategoryInferenceImpl keeps explicit ModernBERT selection from
+// falling through to the auto-detecting Candle-first implementation.
+type ModernBERTCategoryInferenceImpl struct{}
+
+func (ModernBERTCategoryInferenceImpl) Classify(_ context.Context, text string) (candle_binding.ClassResult, error) {
+	return candle_binding.ClassifyModernBertText(text)
+}
+
+func (ModernBERTCategoryInferenceImpl) ClassifyWithProbabilities(_ context.Context, text string) (candle_binding.ClassResultWithProbs, error) {
+	return candle_binding.ClassifyModernBertTextWithProbabilities(text)
+}
+
+func createModernBERTCategoryInference() CategoryInference {
+	return ModernBERTCategoryInferenceImpl{}
+}
+
 // MmBERT32KCategoryInferenceImpl uses mmBERT-32K for intent classification.
 // It supports both candle and OpenVINO backends via EMBEDDING_BACKEND_OVERRIDE.
 type MmBERT32KCategoryInferenceImpl struct{}

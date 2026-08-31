@@ -80,9 +80,9 @@ response contract are validated at startup, so an unrelated classification
 model cannot be selected accidentally. `protocol` describes the wire protocol
 and `contract` describes the semantic response product. They are separate
 axes. Category currently supports `http_classify` with
-`label_distribution`, which preserves the complete configured-label score
-distribution used by domain matching and model selection. `timeout_seconds` is
-an optional per-backend timeout and defaults to 5.
+`label_distribution.v1`, which preserves the complete configured-label score
+distribution used by domain matching and model selection. `deadline_ms` is
+an optional per-backend request deadline and defaults to 5000.
 
 ```yaml
 global:
@@ -102,9 +102,9 @@ global:
           fallback_category: other
           backend:
             protocol: http_classify
-            contract: label_distribution
+            contract: label_distribution.v1
             model: domain-service
-            timeout_seconds: 5
+            deadline_ms: 5000
 ```
 
 Omit `backend` to retain local category inference. The deprecated
