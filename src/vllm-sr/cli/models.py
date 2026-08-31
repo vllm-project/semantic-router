@@ -607,8 +607,6 @@ class Condition(BaseModel):
 
     @model_validator(mode="after")
     def validate_node_shape(self):
-        if self.on_unknown is not None:
-            raise ValueError("on_unknown is only valid on the root rules node")
         has_leaf_fields = any(
             (
                 self.type is not None,
@@ -635,6 +633,8 @@ class Condition(BaseModel):
                 raise ValueError("operator must be one of: AND, OR, NOT")
             if op == "NOT" and len(self.conditions) != 1:
                 raise ValueError("NOT operator must have exactly one child condition")
+            if self.on_unknown is not None:
+                raise ValueError("on_unknown is only valid on the root rules node")
             return self
 
         # Leaf node validation
@@ -648,6 +648,8 @@ class Condition(BaseModel):
             raise ValueError("classifier conditions require label and predicate")
         if self.on_error is not None and self.type != "classifier":
             raise ValueError("on_error is only valid for classifier conditions")
+        if self.on_unknown is not None:
+            raise ValueError("on_unknown is only valid on the root rules node")
         return self
 
 

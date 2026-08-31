@@ -48,15 +48,16 @@ func (s *ClassificationService) ClassifyIntentForEval(req IntentRequest) (*EvalR
 
 	var decisionResult *decision.DecisionResult
 	var traces []decision.DecisionTrace
+	var decisionErr error
 	if len(candidates) > 0 {
-		decisionResult, traces, err = evaluateIntentDecision(
+		decisionResult, traces, decisionErr = evaluateIntentDecision(
 			classifier,
 			signals,
 			candidates,
 			wantTrace,
 		)
-		if err != nil && len(traces) == 0 {
-			return nil, err
+		if decisionErr != nil && len(traces) == 0 {
+			return nil, decisionErr
 		}
 	}
 
@@ -69,6 +70,10 @@ func (s *ClassificationService) ClassifyIntentForEval(req IntentRequest) (*EvalR
 	resp.RequestedModel = strings.TrimSpace(req.Model)
 	resp.Recipe = recipeName
 	resp.EvalTrace = traces
+	if decisionErr != nil {
+		resp.DecisionError = decisionErr.Error()
+		return resp, decisionErr
+	}
 	s.populateEvalModelSelection(resp, input, decisionResult)
 	return resp, nil
 }

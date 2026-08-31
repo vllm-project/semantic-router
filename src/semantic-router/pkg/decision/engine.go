@@ -240,9 +240,6 @@ func (e *DecisionEngine) evaluateDecisions(
 			continue
 		}
 		if resolved.evaluation.state == evaluationTrue {
-			if !withTrace {
-				metrics.RecordDecisionMatch(config.RoutingDecisionKey(e.routingScope, decision.Name), resolved.evaluation.confidence)
-			}
 			results = append(results, DecisionResult{
 				Decision:         decision,
 				Confidence:       resolved.evaluation.confidence,
@@ -255,6 +252,11 @@ func (e *DecisionEngine) evaluateDecisions(
 
 	if unresolvedErr != nil {
 		return output, unresolvedErr
+	}
+	if !withTrace {
+		for i := range results {
+			metrics.RecordDecisionMatch(config.RoutingDecisionKey(e.routingScope, results[i].Decision.Name), results[i].Confidence)
+		}
 	}
 	if len(results) == 0 {
 		logging.Infof("No decision matched")

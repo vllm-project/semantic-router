@@ -14,6 +14,7 @@ func TestValidateDecisionOnUnknown(t *testing.T) {
 		{"valid", RuleNode{Operator: "AND", OnUnknown: RuleOnUnknownFailRequest}, ""},
 		{"invalid value", RuleNode{Operator: "AND", OnUnknown: "allow"}, "on_unknown"},
 		{"nested", RuleNode{Operator: "AND", Conditions: []RuleNode{{Type: SignalTypeKeyword, Name: "x", OnUnknown: RuleOnUnknownMatch}}}, "root rules node"},
+		{"conflicts with on_error", RuleNode{Operator: "AND", OnUnknown: RuleOnUnknownNoMatch, Conditions: []RuleNode{{Type: SignalTypeKeyword, Name: "x", OnError: "no_match"}}}, "on_error has no effect"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

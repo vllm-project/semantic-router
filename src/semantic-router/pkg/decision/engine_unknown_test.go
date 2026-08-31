@@ -197,6 +197,35 @@ func TestFailRequestEvaluatesAllDecisions(t *testing.T) {
 	}
 }
 
+func TestFailRequestOverridesHigherPriorityMatch(t *testing.T) {
+	guarded := config.Decision{Name: "guarded", Priority: 1, Rules: config.RuleNode{
+		Type:      config.SignalTypeClassifier,
+		Name:      "risk",
+		Label:     "RISKY",
+		Predicate: &config.NumericPredicate{GTE: float64Ptr(0.5)},
+		OnUnknown: config.RuleOnUnknownFailRequest,
+	}}
+	good := config.Decision{Name: "good", Priority: 100, Rules: config.RuleNode{
+		Type: config.SignalTypeKeyword, Name: "present",
+	}}
+	signals := &SignalMatches{
+		KeywordRules: []string{"present"},
+		SignalErrors: map[string]string{"classifier:risk": "timeout"},
+	}
+	for name, decisions := range map[string][]config.Decision{
+		"guarded first": {guarded, good},
+		"good first":    {good, guarded},
+	} {
+		t.Run(name, func(t *testing.T) {
+			engine := NewDecisionEngine(nil, nil, nil, decisions, config.RoutingStrategyPriority)
+			result, err := engine.EvaluateDecisionsWithSignals(signals)
+			if !errors.Is(err, ErrDecisionUnresolved) || result != nil {
+				t.Fatalf("result = %#v, error = %v", result, err)
+			}
+		})
+	}
+}
+
 func TestUnknownTraceRecordsErrorAndPolicy(t *testing.T) {
 	rule := config.RuleNode{
 		Type:      config.SignalTypeClassifier,

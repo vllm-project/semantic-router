@@ -165,6 +165,30 @@ func assertPolicyClassifierLeaf(
 	}
 }
 
+func TestValidateFlagsInvalidRouteOnUnknown(t *testing.T) {
+	input := `
+SIGNAL keyword "hack" {
+  operator: "contains"
+  values: ["hack"]
+}
+
+ROUTE "x" (on_unknown = "allow") {
+  PRIORITY 100
+  WHEN keyword("hack")
+  MODEL "m"
+}`
+	diagnostics, errs := Validate(input)
+	if len(errs) != 0 {
+		t.Fatalf("parse errors: %v", errs)
+	}
+	for _, diagnostic := range diagnostics {
+		if strings.Contains(diagnostic.Message, "on_unknown") {
+			return
+		}
+	}
+	t.Fatalf("no diagnostic mentions on_unknown: %#v", diagnostics)
+}
+
 func assertPolicyDSLSource(t *testing.T, source string) {
 	t.Helper()
 	for _, expected := range []string{

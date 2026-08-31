@@ -52,7 +52,6 @@ routing:
             label: PHISHING
             predicate:
               gte: 0.5
-            on_error: no_match
       modelRefs:
         - model: local-small
           use_reasoning: false
@@ -66,9 +65,14 @@ that accept `on_error`; failures expose the bounded
 
 On failure, the decision tree evaluates this leaf as `Unknown` until the full
 AND/OR/NOT expression is known. Root-level `rules.on_unknown` then chooses
-`no_match`, `match`, or `fail_request`. When it is omitted, condition-level
-`on_error` (`no_match` or `match`) preserves the previous generic-classifier
-result. `prompt_guard.on_error` (`allow` or `block`) remains the compatibility
+`no_match`, `match`, or `fail_request`. `no_match` and `match` resolve only
+their own decision; `fail_request` is global fail-closed: it rejects the whole
+request with a 503 even when another decision matches cleanly, regardless of
+priority. When `rules.on_unknown` is omitted, condition-level `on_error`
+(`no_match` or `match`) preserves the previous generic-classifier result.
+Setting `rules.on_unknown` disables every condition-level `on_error` in that
+tree, so the Router rejects a configuration that sets both.
+`prompt_guard.on_error` (`allow` or `block`) remains the compatibility
 default for jailbreak rules. Diagnostics include both the signal error and any
 terminal policy that was applied. See
 [Safety models and policy](../../global/safety-models-and-policy.md).

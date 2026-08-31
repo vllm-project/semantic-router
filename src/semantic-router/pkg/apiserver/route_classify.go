@@ -69,6 +69,10 @@ func (s *ClassificationAPIServer) handleEvalClassification(w http.ResponseWriter
 
 	response, err := s.classificationSvc.ClassifyIntentForEval(req)
 	if err != nil {
+		if response != nil {
+			s.writeJSONResponse(w, http.StatusServiceUnavailable, response)
+			return
+		}
 		s.writeClassificationError(w, err)
 		return
 	}

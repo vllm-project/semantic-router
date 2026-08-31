@@ -1285,7 +1285,6 @@ routing:
             label: JAILBREAK
             predicate:
               gte: 0.5
-            on_error: no_match
       modelRefs:
         - model: qwen3-8b
           use_reasoning: false

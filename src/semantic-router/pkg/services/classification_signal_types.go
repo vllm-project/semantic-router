@@ -102,6 +102,7 @@ type EvalResponse struct {
 	SignalValues           map[string]float64                      `json:"signal_values,omitempty"`      // Raw signal values per signal when exposed, e.g. "structure:many_questions" -> 4
 	SignalErrors           map[string]string                       `json:"signal_errors,omitempty"`
 	AppliedUnknownPolicies map[string]string                       `json:"applied_unknown_policies,omitempty"`
+	DecisionError          string                                  `json:"decision_error,omitempty"`
 }
 
 // EvalModelSelectionInput is the content-minimized selection contract passed
