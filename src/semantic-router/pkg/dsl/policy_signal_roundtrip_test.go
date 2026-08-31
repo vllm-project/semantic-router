@@ -28,8 +28,7 @@ ROUTE "policy-route" (on_unknown = "fail_request") {
   WHEN metadata("canary") AND classifier(
     "risk",
     label: "RISKY",
-    predicate: { gte: 0.8 },
-    on_error: "match"
+    predicate: { gte: 0.8 }
   )
   MODEL "model-a"
 }`
@@ -160,7 +159,7 @@ func assertPolicyClassifierLeaf(
 		classifierLeaf.Predicate == nil ||
 		classifierLeaf.Predicate.GTE == nil ||
 		*classifierLeaf.Predicate.GTE != 0.8 ||
-		classifierLeaf.OnError != "match" {
+		classifierLeaf.OnError != "" {
 		t.Fatalf("classifier leaf = %#v", classifierLeaf)
 	}
 }
@@ -196,7 +195,6 @@ func assertPolicyDSLSource(t *testing.T, source string) {
 		`SIGNAL classifier risk`,
 		`label: "RISKY"`,
 		`predicate: { gte: 0.8 }`,
-		`on_error: "match"`,
 		`on_unknown = "fail_request"`,
 	} {
 		if !strings.Contains(source, expected) {

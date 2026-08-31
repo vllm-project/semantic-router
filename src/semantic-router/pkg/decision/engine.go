@@ -285,6 +285,9 @@ func (e *DecisionEngine) evaluateConfiguredDecision(
 	var legacyTrace *TraceNode
 	var err error
 	resolved.evaluation, legacyTrace, resolved.policy, err = e.resolveUnknown(decision, signals, resolved.evaluation, withTrace)
+	if resolved.policy == "" {
+		resolved.originalState = resolved.evaluation.state
+	}
 	if legacyTrace != nil {
 		resolved.trace = legacyTrace
 	}

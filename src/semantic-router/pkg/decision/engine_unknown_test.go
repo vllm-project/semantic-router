@@ -161,7 +161,7 @@ func TestUnknownLegacyTraceShowsResolvedLeaf(t *testing.T) {
 	if err != nil || result == nil {
 		t.Fatalf("result = %#v, error = %v", result, err)
 	}
-	if len(traces) != 1 || !traces[0].Matched || traces[0].OnUnknown != "" {
+	if len(traces) != 1 || traces[0].State != "true" || !traces[0].Matched || traces[0].OnUnknown != "" {
 		t.Fatalf("traces = %#v", traces)
 	}
 	if traces[0].RootTrace == nil || !traces[0].RootTrace.Matched {
