@@ -400,7 +400,7 @@ func TestSignalReadinessAllowsContrastiveJailbreakWithoutPromptGuard(t *testing.
 			},
 		},
 		contrastiveJailbreakClassifiers: map[string]*ContrastiveJailbreakClassifier{
-			rule.Name: &ContrastiveJailbreakClassifier{},
+			rule.Name: {},
 		},
 	}
 

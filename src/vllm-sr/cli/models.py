@@ -1495,6 +1495,18 @@ class Decision(BaseModel):
 
     @model_validator(mode="after")
     def validate_prompt_candidates(self):
+        if self.algorithm and self.algorithm.minimum_candidates and self.modelRefs:
+            effective_names = {
+                (model_ref.model.strip(), (model_ref.lora_name or "").strip())
+                for model_ref in self.modelRefs
+                if model_ref.model.strip()
+            }
+            if len(effective_names) < self.algorithm.minimum_candidates:
+                raise ValueError(
+                    "algorithm.minimum_candidates="
+                    f"{self.algorithm.minimum_candidates} requires at least that many "
+                    f"unique modelRefs, got {len(effective_names)}"
+                )
         if (
             self.algorithm
             and self.algorithm.type == "prompt"

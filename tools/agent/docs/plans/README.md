@@ -84,3 +84,4 @@ do not revive a completed release plan.
 - [PL-0037: Router Flow Evaluation Campaign](pl-0037-router-flow-eval-campaign.md)
 - [PL-0038: Dashboard Modeling Experience](pl-0038-dashboard-modeling-experience.md)
 - [PL-0039: Evaluation Plane](pl-0039-evaluation-plane.md)
+- [PL-0040: MoM Routing Hardening](pl-0040-mom-routing-hardening.md)

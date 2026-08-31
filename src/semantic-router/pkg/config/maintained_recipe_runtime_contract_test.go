@@ -78,7 +78,7 @@ func assertAccuracyWorkflowContract(t *testing.T, workflow Decision) {
 		t.Fatal("accuracy_workflow must use workflows")
 	}
 	workflows := workflow.Algorithm.Workflows
-	if workflows.Planner.Model != "qwen-coordinator" ||
+	if workflows.Planner.Model != "gpt55-worker" ||
 		workflows.Planner.MaxCompletionTokens != 2048 ||
 		workflows.MaxSteps != 4 ||
 		workflows.MaxParallel != 3 ||
