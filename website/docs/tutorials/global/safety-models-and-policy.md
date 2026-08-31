@@ -70,7 +70,12 @@ global:
 
 `http_classify` expects the Router's supported classification contract;
 `http_chat` uses a chat-completions prompt. Both send request text to the
-configured service.
+configured service. Set `max_response_bytes` on the external model entry to
+override the 1 MiB response limit.
+
+The HTTP MCP classifier uses
+`global.model_catalog.modules.classifier.mcp.max_response_bytes`. Its default
+is 16 MiB.
 
 ### Remote category/domain classifier
 

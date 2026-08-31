@@ -14,6 +14,7 @@ var BaselineRouterContract = []string{
 	"anthropic-messages-streaming",
 	"apiserver-runtime-config-endpoints",
 	"apiserver-classification-endpoints",
+	"llm-classifier-distribution-routing",
 	"sequence-classifier-routing",
 	"category-backend-routing",
 	"chat-completions-stress-request",

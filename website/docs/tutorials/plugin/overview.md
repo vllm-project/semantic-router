@@ -64,7 +64,6 @@ routing:
 | `router_replay` | Override replay capture for one route | `global.services.router_replay` | [Router Replay](./router-replay) |
 | `hallucination` | Inspect factual support in a response | Hallucination/NLI modules as configured | [Hallucination](./hallucination) |
 | `response_jailbreak` | Screen a generated response for jailbreak content | Prompt-guard runtime | [Response Jailbreak](./response-jailbreak) |
-| `image_gen` | Send a matched route to an image-generation backend | Configured image backend | [Image Generation](./image-gen) |
 
 [Content Safety](./content-safety) bundles three supported
 plugins, not an additional plugin type.

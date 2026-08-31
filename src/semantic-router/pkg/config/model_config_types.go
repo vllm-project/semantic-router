@@ -109,15 +109,16 @@ func (c HNSWConfig) WithDefaults() HNSWConfig {
 }
 
 type MCPCategoryModel struct {
-	Enabled        bool              `yaml:"enabled"`
-	TransportType  string            `yaml:"transport_type"`
-	Command        string            `yaml:"command,omitempty"`
-	Args           []string          `yaml:"args,omitempty"`
-	Env            map[string]string `yaml:"env,omitempty"`
-	URL            string            `yaml:"url,omitempty"`
-	ToolName       string            `yaml:"tool_name,omitempty"`
-	Threshold      float32           `yaml:"threshold"`
-	TimeoutSeconds int               `yaml:"timeout_seconds,omitempty"`
+	Enabled          bool              `yaml:"enabled"`
+	TransportType    string            `yaml:"transport_type"`
+	Command          string            `yaml:"command,omitempty"`
+	Args             []string          `yaml:"args,omitempty"`
+	Env              map[string]string `yaml:"env,omitempty"`
+	URL              string            `yaml:"url,omitempty"`
+	ToolName         string            `yaml:"tool_name,omitempty"`
+	Threshold        float32           `yaml:"threshold"`
+	TimeoutSeconds   int               `yaml:"timeout_seconds,omitempty"`
+	MaxResponseBytes int64             `yaml:"max_response_bytes,omitempty"`
 }
 
 // PromptCompressionConfig controls NLP-based prompt compression before signal extraction.
@@ -359,7 +360,6 @@ type ModelParams struct {
 	QualityScore       float64             `yaml:"quality_score,omitempty"`
 	ExternalModelIDs   map[string]string   `yaml:"external_model_ids,omitempty"`
 	Modality           string              `yaml:"modality,omitempty"`
-	ImageGenBackend    string              `yaml:"image_gen_backend,omitempty"`
 }
 
 type LoRAAdapter struct {

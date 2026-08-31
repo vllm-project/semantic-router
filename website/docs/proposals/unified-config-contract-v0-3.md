@@ -93,7 +93,8 @@ exact external-catalog name. The category consumer currently accepts
 `http_classify` plus `label_distribution.v1`, preserving the full label-score
 distribution. Prompt guard remains on its existing configuration surface until
 its separately scoped migration.
-
+Connector byte ceilings belong to the connector configuration. External LLM
+classifier entries and the MCP classifier module use `max_response_bytes`.
 The dashboard, Helm chart, and operator may help users author or transport config, but
 the resulting document still uses the same contract.
 

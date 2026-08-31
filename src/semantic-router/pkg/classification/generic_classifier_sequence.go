@@ -66,9 +66,6 @@ func newSequenceLabelClassifier(
 	}, nil
 }
 
-// Classify returns the backend's full distribution. Unlike the llm type, which
-// scores the chosen label 1 and every other 0, each label keeps the score the
-// model actually reported.
 func (c *sequenceLabelClassifier) Classify(
 	ctx context.Context,
 	input string,
