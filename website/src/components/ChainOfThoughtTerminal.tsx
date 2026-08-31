@@ -46,7 +46,7 @@ const TERMINAL_SCRIPT: TerminalLine[] = [
   // Demo 5: Modality
   { type: 'query', content: 'Generate a watercolor painting of a sunset over mountains', delay: 800 },
   { type: 'trace', content: 'signals   modality: DIFFUSION', delay: 200 },
-  { type: 'trace', content: 'decision  image_gen (modality: DIFFUSION) -> matched', delay: 200 },
+  { type: 'trace', content: 'decision  modality_diffusion (modality: DIFFUSION) -> matched', delay: 200 },
   { type: 'trace', content: 'plugins   header_mutation: +X-Modality=diffusion', delay: 200 },
   { type: 'trace', content: 'route     stable-diffusion-xl', delay: 300 },
   { type: 'response', content: 'image/png 1024x1024 generated.', delay: 1200 },

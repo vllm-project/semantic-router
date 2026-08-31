@@ -109,6 +109,9 @@ runtime dependency; they do not define routing behavior by themselves.
   authenticated upstream component owns the bypass header.
 - Knowledge bases are declared under `global.model_catalog.kbs[]`; routing
   signals bind to those shared assets by name.
+- External LLM classifiers use `max_response_bytes` on their
+  `global.model_catalog.external[]` entry. The MCP classifier uses the same key
+  under `global.model_catalog.modules.classifier.mcp`.
 
 ## Keep examples in sync
 
