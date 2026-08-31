@@ -107,7 +107,7 @@ func TestValidateCategoryModelBackend(t *testing.T) {
 			cfg.CategoryModel.Backend.Protocol = RemoteClassifierProtocolHTTPChat
 		}, want: "not supported"},
 		{name: "incorrect contract", mutate: func(cfg *RouterConfig) {
-			cfg.CategoryModel.Backend.Contract = "label_distribution.v1"
+			cfg.CategoryModel.Backend.Contract = "label_distribution.v0"
 		}, want: "unsupported"},
 		{name: "invalid timeout", mutate: func(cfg *RouterConfig) {
 			zero := 0
