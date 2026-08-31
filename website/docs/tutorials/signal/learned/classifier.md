@@ -58,7 +58,7 @@ routing:
 ```
 
 LLM classifiers reference a named `global.model_catalog.external` entry and
-add `instructions`. The runtime fixes temperature, output schema, token bounds,
+add `instructions`. The runtime fixes temperature, output schema,
 exact-label validation, and a 1 MiB default response limit. Set
 `max_response_bytes` on the external model entry to override that limit.
 Classifier leaves are the only decision predicates
