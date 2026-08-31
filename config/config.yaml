@@ -2153,6 +2153,12 @@ global:
       hallucination_detector: models/mom-halugate-detector
       hallucination_explainer: models/mom-halugate-explainer
       feedback_detector: models/mmbert32k-feedback-detector-merged
+    admission:
+      prompt_guard:
+        max_concurrency: 4
+        max_queue: 64
+        queue_timeout_ms: 250
+        on_overflow: shed
     external:
       - name: external-guardrail
         llm_provider: openai
