@@ -560,6 +560,19 @@ class TestRAGPluginConfig:
         assert config.cache_ttl_seconds == 300
         assert config.min_confidence_threshold == 0.5
 
+    def test_openai_response_limit_is_preserved(self):
+        config = RAGPluginConfig(
+            enabled=True,
+            backend="openai",
+            backend_config={
+                "vector_store_id": "vs_123",
+                "api_key": "secret",
+                "max_response_bytes": 4194304,
+            },
+        )
+
+        assert config.backend_config["max_response_bytes"] == 4194304
+
     def test_rag_config_required_fields_only(self):
         """Test RAGPluginConfig with only required fields; optional fields default to None."""
         config = RAGPluginConfig(enabled=True, backend="milvus")

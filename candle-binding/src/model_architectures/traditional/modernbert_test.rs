@@ -1980,7 +1980,7 @@ fn test_modernbert_bio_entity_boundaries() {
             start: 0,
             end: 2,
             confidence: 0.9,
-        }, // orphan, ignored
+        }, // orphan -> opens PERSON
         BioToken {
             label: "B-PERSON",
             start: 3,
@@ -1992,7 +1992,7 @@ fn test_modernbert_bio_entity_boundaries() {
             start: 6,
             end: 8,
             confidence: 0.7,
-        }, // mismatch, closes
+        }, // type change -> closes PERSON, opens GPE
         BioToken {
             label: "B-GPE",
             start: 9,
@@ -2008,15 +2008,155 @@ fn test_modernbert_bio_entity_boundaries() {
     ];
 
     let entities = merge_bio_entities(text, &tokens);
-    assert_eq!(entities.len(), 2);
+    assert_eq!(entities.len(), 4);
 
     assert_eq!(entities[0].entity_type, "PERSON");
-    assert_eq!(entities[0].text, "bb");
+    assert_eq!(entities[0].text, "aa");
     assert_eq!(entities[0].token_count, 1);
-    assert!((entities[0].confidence - 0.8).abs() < 1e-6);
+    assert!((entities[0].confidence - 0.9).abs() < 1e-6);
 
-    assert_eq!(entities[1].entity_type, "GPE");
-    assert_eq!(entities[1].text, "dd");
+    assert_eq!(entities[1].entity_type, "PERSON");
+    assert_eq!(entities[1].text, "bb");
     assert_eq!(entities[1].token_count, 1);
-    assert!((entities[1].confidence - 0.6).abs() < 1e-6);
+    assert!((entities[1].confidence - 0.8).abs() < 1e-6);
+
+    assert_eq!(entities[2].entity_type, "GPE");
+    assert_eq!(entities[2].text, "cc");
+    assert_eq!(entities[2].token_count, 1);
+    assert!((entities[2].confidence - 0.7).abs() < 1e-6);
+
+    assert_eq!(entities[3].entity_type, "GPE");
+    assert_eq!(entities[3].text, "dd");
+    assert_eq!(entities[3].token_count, 1);
+    assert!((entities[3].confidence - 0.6).abs() < 1e-6);
+}
+
+/// The PII checkpoint labels emails with I- tags only, never B-.
+#[test]
+fn test_merge_bio_entities_orphan_i_tag_opens_entity() {
+    let text = "mail bob@example.org now";
+    let tokens = vec![
+        BioToken {
+            label: "O",
+            start: 0,
+            end: 4,
+            confidence: 0.99,
+        },
+        BioToken {
+            label: "I-EMAIL_ADDRESS",
+            start: 5,
+            end: 8,
+            confidence: 0.67,
+        },
+        BioToken {
+            label: "I-EMAIL_ADDRESS",
+            start: 8,
+            end: 9,
+            confidence: 0.64,
+        },
+        BioToken {
+            label: "I-EMAIL_ADDRESS",
+            start: 9,
+            end: 20,
+            confidence: 0.86,
+        },
+        BioToken {
+            label: "O",
+            start: 20,
+            end: 24,
+            confidence: 0.98,
+        },
+    ];
+    let entities = merge_bio_entities(text, &tokens);
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].entity_type, "EMAIL_ADDRESS");
+    assert_eq!(entities[0].text, "bob@example.org");
+    assert_eq!((entities[0].start, entities[0].end), (5, 20));
+}
+
+#[test]
+fn test_merge_bio_entities_type_change_on_i_tag_starts_new_entity() {
+    let text = "John Smith Berlin";
+    let tokens = vec![
+        BioToken {
+            label: "B-PERSON",
+            start: 0,
+            end: 4,
+            confidence: 0.9,
+        },
+        BioToken {
+            label: "I-PERSON",
+            start: 4,
+            end: 10,
+            confidence: 0.9,
+        },
+        BioToken {
+            label: "I-GPE",
+            start: 10,
+            end: 17,
+            confidence: 0.8,
+        },
+    ];
+    let entities = merge_bio_entities(text, &tokens);
+    assert_eq!(entities.len(), 2);
+    assert_eq!(entities[0].entity_type, "PERSON");
+    assert_eq!(entities[0].text, "John Smith");
+    assert_eq!(entities[1].entity_type, "GPE");
+    assert_eq!(entities[1].text, "Berlin");
+}
+
+#[test]
+fn test_merge_bio_entities_trims_leading_space_from_span() {
+    let text = "Contact John Smith at noon";
+    let tokens = vec![
+        BioToken {
+            label: "O",
+            start: 0,
+            end: 7,
+            confidence: 0.99,
+        },
+        BioToken {
+            label: "B-PERSON",
+            start: 7,
+            end: 12,
+            confidence: 0.95,
+        },
+        BioToken {
+            label: "I-PERSON",
+            start: 12,
+            end: 18,
+            confidence: 0.93,
+        },
+        BioToken {
+            label: "O",
+            start: 18,
+            end: 26,
+            confidence: 0.99,
+        },
+    ];
+    let entities = merge_bio_entities(text, &tokens);
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].text, "John Smith");
+    assert_eq!((entities[0].start, entities[0].end), (8, 18));
+    let masked = format!(
+        "{}[PERSON]{}",
+        &text[..entities[0].start],
+        &text[entities[0].end..]
+    );
+    assert_eq!(masked, "Contact [PERSON] at noon");
+}
+
+/// Trimming must not produce an empty or inverted span.
+#[test]
+fn test_merge_bio_entities_whitespace_only_span_is_preserved() {
+    let text = "a   b";
+    let tokens = vec![BioToken {
+        label: "B-PERSON",
+        start: 1,
+        end: 4,
+        confidence: 0.5,
+    }];
+    let entities = merge_bio_entities(text, &tokens);
+    assert_eq!(entities.len(), 1);
+    assert!(entities[0].start < entities[0].end);
 }
