@@ -169,10 +169,10 @@ export const workGroups: WorkGroup[] = [
     name: 'Enterprise & Environment',
     label: 'wg/enterprise-environment',
     charterIssue: 2968,
-    goal: 'Deliver production-grade enterprise capabilities across supported environments and hardware.',
+    goal: 'Deliver production-grade security, operations, and deployments across supported environments and hardware.',
     scope: [
-      'Multi-tenancy, identity, API keys, quotas, and audit',
-      'Production observability, workload simulation, and capacity planning',
+      'Management authentication, authorization, identity integration, and audit',
+      'Existing Insights, production observability, workload simulation, and capacity planning',
       'Stable, scalable deployment APIs and reference stacks',
       'Multi-environment and multi-hardware support',
     ],
