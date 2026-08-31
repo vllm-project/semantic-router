@@ -2,9 +2,9 @@
 
 ## Overview
 
-`classifier` exposes reusable label scores from a local native sequence classifier
-or a configured external LLM. Decisions test a declared label with a required
-numeric predicate.
+`classifier` exposes reusable label scores from a local native sequence classifier,
+a remote sequence classifier, or a configured external LLM. Decisions test a
+declared label with a required numeric predicate.
 
 Specialized domain, PII, jailbreak, fact-check, KB, and preference signals
 remain the preferred interfaces for their respective domains.
@@ -58,8 +58,8 @@ routing:
 ```
 
 LLM classifiers reference a named `global.model_catalog.external` entry and
-add `instructions`. The runtime fixes temperature, output schema, token bounds,
-and exact-label validation. Classifier leaves are the only decision predicates
+add `instructions`. The runtime fixes temperature, output schema, and
+exact-label validation. Classifier leaves are the only decision predicates
 that accept `on_error`; failures expose the bounded
 `classifier_evaluation_failed` code in eval/replay diagnostics.
 
@@ -69,14 +69,23 @@ predicate evaluates to when the classifier fails. It is a different key from
 backend failure counts as unverified content for every rule that backend
 serves. See [Safety models and policy](../../global/safety-models-and-policy.md).
 
+`sequence_classifier` classifiers also reference a named external model, but
+use the shared `http_classify` contract and preserve its full label distribution.
+The response must contain exactly the declared labels, with scores that sum to
+approximately `1.0`; sigmoid multi-label outputs and label subsets are rejected.
+They require at least two labels and do not accept `instructions`, `model_path`,
+or `use_cpu`.
+
 Local classifiers use `model_path`. One binary local classifier is supported
 per Router process, and its decision predicates use `gte: 0.5` or higher on the
 winning-label confidence. Restart the Router after changing the model or label
 order. A management API update that requires this restart returns
 `RESTART_REQUIRED`.
 
-The local path processes request text inside the Router. An `llm` classifier
-sends that text to its configured external model, so choose the provider and
-retention policy accordingly. Labels and thresholds must be evaluated as one
-versioned contract. See a complete example:
-[`config/fragments/signal/classifier/label-score.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/classifier/label-score.yaml).
+The local path processes request text inside the Router. Both `llm` and
+`sequence_classifier` send that text to their configured external model, so
+choose the provider and retention policy accordingly. Labels and thresholds
+must be evaluated as one versioned contract. See complete examples for
+[`llm`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/classifier/label-score.yaml)
+and
+[`sequence_classifier`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/classifier/sequence-label-score.yaml).

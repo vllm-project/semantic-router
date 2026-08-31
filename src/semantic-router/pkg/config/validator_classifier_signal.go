@@ -65,7 +65,8 @@ func validateClassifierSignalRules(cfg *RouterConfig) error {
 		if err := validateClassifierLabels(rule); err != nil {
 			return err
 		}
-		if rule.Type == "local" {
+		switch rule.Type {
+		case ClassifierSignalTypeLocal:
 			if err := validateLocalClassifierSignal(rule); err != nil {
 				return err
 			}
@@ -75,17 +76,23 @@ func validateClassifierSignalRules(cfg *RouterConfig) error {
 					"routing.signals.classifiers: only one local classifier is supported; use llm classifiers or a specialized signal for additional models",
 				)
 			}
-			continue
-		}
-		if rule.Type != "llm" {
+		case ClassifierSignalTypeLLM:
+			if err := validateLLMClassifierSignal(cfg, rule); err != nil {
+				return err
+			}
+		case ClassifierSignalTypeSequenceClassifier:
+			if err := validateSequenceClassifierSignal(cfg, rule); err != nil {
+				return err
+			}
+		default:
 			return fmt.Errorf(
-				"routing.signals.classifiers[%q]: unsupported type %q (supported: local, llm)",
+				"routing.signals.classifiers[%q]: unsupported type %q (supported: %s, %s, %s)",
 				rule.Name,
 				rule.Type,
+				ClassifierSignalTypeLocal,
+				ClassifierSignalTypeLLM,
+				ClassifierSignalTypeSequenceClassifier,
 			)
-		}
-		if err := validateLLMClassifierSignal(cfg, rule); err != nil {
-			return err
 		}
 	}
 	return nil
@@ -203,6 +210,49 @@ func validateLLMClassifierSignal(cfg *RouterConfig, rule ClassifierSignalRule) e
 	return validateLLMClassifierExternalDependency(rule, external)
 }
 
+// validateSequenceClassifierSignal checks a rule against the http_classify
+// contract, where the declared label list is the response contract and no
+// prompt instructions apply.
+func validateSequenceClassifierSignal(cfg *RouterConfig, rule ClassifierSignalRule) error {
+	if strings.TrimSpace(rule.Model) == "" {
+		return fmt.Errorf(
+			"routing.signals.classifiers[%q]: sequence_classifier classifiers require model",
+			rule.Name,
+		)
+	}
+	if rule.ModelPath != "" || rule.UseCPU || rule.Instructions != "" {
+		return fmt.Errorf(
+			"routing.signals.classifiers[%q]: sequence_classifier classifiers do not accept model_path, use_cpu or instructions",
+			rule.Name,
+		)
+	}
+	// The connector aligns a response against the full declared label set, so
+	// a single label has no distribution to report.
+	if len(rule.Labels) < 2 {
+		return fmt.Errorf(
+			"routing.signals.classifiers[%q]: sequence_classifier classifiers require at least two labels",
+			rule.Name,
+		)
+	}
+	external := cfg.FindExternalModelByName(rule.Model)
+	if external == nil {
+		return fmt.Errorf(
+			"routing.signals.classifiers[%q]: sequence_classifier model %q is not declared in global.model_catalog.external[].name",
+			rule.Name,
+			rule.Model,
+		)
+	}
+	if external.ModelRole != ModelRoleClassification {
+		return fmt.Errorf(
+			"routing.signals.classifiers[%q]: external model %q must use model_role %q",
+			rule.Name,
+			rule.Model,
+			ModelRoleClassification,
+		)
+	}
+	return validateClassifierExternalEndpoint(rule, external)
+}
+
 func validateLLMClassifierExternalDependency(
 	rule ClassifierSignalRule,
 	external *ExternalModelConfig,
@@ -214,6 +264,13 @@ func validateLLMClassifierExternalDependency(
 			rule.Model,
 		)
 	}
+	return validateClassifierExternalEndpoint(rule, external)
+}
+
+func validateClassifierExternalEndpoint(
+	rule ClassifierSignalRule,
+	external *ExternalModelConfig,
+) error {
 	if strings.TrimSpace(external.ModelEndpoint.Address) == "" ||
 		external.ModelEndpoint.Port < 1 ||
 		external.ModelEndpoint.Port > 65535 {
@@ -300,7 +357,7 @@ func localClassifierRuleRefs(cfg *RouterConfig) []localClassifierRuleRef {
 	if len(cfg.Recipes) > 0 {
 		for _, recipe := range cfg.Recipes {
 			for _, rule := range recipe.Profile.Signals.ClassifierRules {
-				if rule.Type == "local" {
+				if rule.Type == ClassifierSignalTypeLocal {
 					refs = append(refs, localClassifierRuleRef{
 						Recipe: recipe.Name,
 						Rule:   rule,
@@ -311,7 +368,7 @@ func localClassifierRuleRefs(cfg *RouterConfig) []localClassifierRuleRef {
 		return refs
 	}
 	for _, rule := range cfg.ClassifierRules {
-		if rule.Type == "local" {
+		if rule.Type == ClassifierSignalTypeLocal {
 			refs = append(refs, localClassifierRuleRef{
 				Recipe: DefaultRecipeName,
 				Rule:   rule,

@@ -15,7 +15,10 @@ import (
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	httputil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 )
+
+const defaultExternalRAGMaxResponseBytes int64 = 4 * 1024 * 1024
 
 var (
 	// Shared HTTP client for external API requests with connection pooling
@@ -192,9 +195,8 @@ func (r *OpenAIRouter) retrieveFromExternalAPI(traceCtx context.Context, ctx *Re
 		return "", fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
-	// Parse response
-	var apiResponse map[string]interface{}
-	if decodeErr := json.NewDecoder(resp.Body).Decode(&apiResponse); decodeErr != nil {
+	apiResponse, decodeErr := decodeExternalRAGResponse(resp.Body, apiConfig.MaxResponseBytes)
+	if decodeErr != nil {
 		return "", fmt.Errorf("failed to parse response: %w", decodeErr)
 	}
 
@@ -206,6 +208,22 @@ func (r *OpenAIRouter) retrieveFromExternalAPI(traceCtx context.Context, ctx *Re
 
 	logging.Infof("Retrieved context from external API (latency: %.3fs, format: %s)", latency, apiConfig.RequestFormat)
 	return context, nil
+}
+
+func decodeExternalRAGResponse(body io.Reader, maxResponseBytes int64) (map[string]interface{}, error) {
+	if maxResponseBytes == 0 {
+		maxResponseBytes = defaultExternalRAGMaxResponseBytes
+	}
+	responseBody, err := httputil.ReadLimitedBody(body, maxResponseBytes)
+	if err != nil {
+		return nil, fmt.Errorf("read external RAG response: %w", err)
+	}
+
+	var apiResponse map[string]interface{}
+	if err := json.NewDecoder(bytes.NewReader(responseBody)).Decode(&apiResponse); err != nil {
+		return nil, err
+	}
+	return apiResponse, nil
 }
 
 // buildPineconeRequest builds a Pinecone query request
