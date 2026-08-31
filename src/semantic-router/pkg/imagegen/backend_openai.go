@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"time"
 
@@ -14,12 +13,13 @@ import (
 
 // OpenAIBackend implements the Backend interface for OpenAI image generation
 type OpenAIBackend struct {
-	baseURL    string
-	apiKey     string
-	model      string
-	quality    string
-	style      string
-	httpClient *http.Client
+	baseURL          string
+	apiKey           string
+	model            string
+	quality          string
+	style            string
+	maxResponseBytes int64
+	httpClient       *http.Client
 }
 
 // NewOpenAIBackend creates a new OpenAI image generation backend
@@ -48,12 +48,18 @@ func NewOpenAIBackend(cfg *config.ImageGenPluginConfig) (Backend, error) {
 		model = "gpt-image-1"
 	}
 
+	maxResponseBytes, err := resolveImageGenMaxResponseBytes(cfg.MaxResponseBytes)
+	if err != nil {
+		return nil, err
+	}
+
 	return &OpenAIBackend{
-		baseURL: baseURL,
-		apiKey:  openaiConfig.APIKey,
-		model:   model,
-		quality: openaiConfig.Quality,
-		style:   openaiConfig.Style,
+		baseURL:          baseURL,
+		apiKey:           openaiConfig.APIKey,
+		model:            model,
+		quality:          openaiConfig.Quality,
+		style:            openaiConfig.Style,
+		maxResponseBytes: maxResponseBytes,
 		httpClient: &http.Client{
 			Timeout: timeout,
 		},
@@ -67,29 +73,7 @@ func (b *OpenAIBackend) Name() string {
 
 // GenerateImage generates an image using OpenAI's image generation API
 func (b *OpenAIBackend) GenerateImage(ctx context.Context, req *GenerateRequest) (*GenerateResponse, error) {
-	// Build OpenAI request
-	openaiReq := openAIImageRequest{
-		Model:  b.model,
-		Prompt: req.Prompt,
-		N:      1,
-		Size:   fmt.Sprintf("%dx%d", getIntOrDefault(req.Width, 1024), getIntOrDefault(req.Height, 1024)),
-	}
-
-	if req.Model != "" {
-		openaiReq.Model = req.Model
-	}
-
-	if req.Quality != "" {
-		openaiReq.Quality = req.Quality
-	} else if b.quality != "" {
-		openaiReq.Quality = b.quality
-	}
-
-	if req.Style != "" {
-		openaiReq.Style = req.Style
-	} else if b.style != "" {
-		openaiReq.Style = b.style
-	}
+	openaiReq := b.buildRequest(req)
 
 	// Serialize request
 	body, err := json.Marshal(openaiReq)
@@ -112,15 +96,9 @@ func (b *OpenAIBackend) GenerateImage(ctx context.Context, req *GenerateRequest)
 	}
 	defer resp.Body.Close()
 
-	// Read response body
-	respBody, err := io.ReadAll(resp.Body)
+	respBody, err := readImageGenResponse(resp, b.maxResponseBytes)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	// Check for errors
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("request failed with status %d: %s", resp.StatusCode, string(respBody))
+		return nil, err
 	}
 
 	// Parse response
@@ -149,6 +127,32 @@ func (b *OpenAIBackend) GenerateImage(ctx context.Context, req *GenerateRequest)
 	}
 
 	return result, nil
+}
+
+func (b *OpenAIBackend) buildRequest(req *GenerateRequest) openAIImageRequest {
+	openaiReq := openAIImageRequest{
+		Model:  b.model,
+		Prompt: req.Prompt,
+		N:      1,
+		Size:   fmt.Sprintf("%dx%d", getIntOrDefault(req.Width, 1024), getIntOrDefault(req.Height, 1024)),
+	}
+
+	if req.Model != "" {
+		openaiReq.Model = req.Model
+	}
+
+	if req.Quality != "" {
+		openaiReq.Quality = req.Quality
+	} else if b.quality != "" {
+		openaiReq.Quality = b.quality
+	}
+
+	if req.Style != "" {
+		openaiReq.Style = req.Style
+	} else if b.style != "" {
+		openaiReq.Style = b.style
+	}
+	return openaiReq
 }
 
 // HealthCheck checks if the OpenAI API is accessible

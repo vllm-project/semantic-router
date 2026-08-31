@@ -245,11 +245,7 @@ func (c *InMemoryCache) finishFindSimilarSearch(
 			"model":      model,
 		})
 		metrics.RecordCacheOperation("memory", "find_similar", "hit", time.Since(start).Seconds())
-		return LookupResult{
-			ResponseBody: bestEntry.ResponseBody,
-			Found:        true,
-			Similarity:   bestSimilarity,
-		}, nil
+		return lookupResultFromTimestamps(bestEntry.ResponseBody, bestSimilarity, bestEntry.Timestamp, bestEntry.ExpiresAt), nil
 	}
 
 	atomic.AddInt64(&c.missCount, 1)

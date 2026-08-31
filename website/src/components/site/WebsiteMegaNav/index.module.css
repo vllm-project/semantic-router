@@ -37,7 +37,7 @@
 
 .linkActive,
 .linkActive:hover {
-  background: var(--site-surface-soft);
+  background: var(--site-accent-soft);
   color: var(--site-text-strong);
   font-weight: var(--site-font-weight-semibold);
   text-decoration: none;
@@ -56,7 +56,7 @@
 :global(.site-root--home) .link:hover,
 :global(.site-root--home) .link:focus-visible,
 :global(.site-root--home) .linkActive {
-  background: rgba(255, 255, 255, 0.07);
+  background: rgba(48, 162, 255, 0.12);
   color: #fafafa;
 }
 

@@ -40,8 +40,9 @@
 }
 
 .tab:hover {
-  border-color: var(--site-border-strong);
-  color: var(--site-text);
+  border-color: var(--site-hover-border);
+  background: var(--site-hover-chrome-bg);
+  color: var(--site-hover-text);
   transform: translateY(-1px);
 }
 

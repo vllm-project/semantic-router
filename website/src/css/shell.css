@@ -121,9 +121,11 @@
   color: var(--site-text-strong);
 }
 
+/* Active sits one step above hover on the same blue, so the current page still
+ * reads as current while the pointer is somewhere else in the bar. */
 .navbar__item.navbar__link--active,
 .navbar__item.dropdown > .navbar__link.navbar__link--active {
-  background: var(--site-surface-soft);
+  background: var(--site-accent-soft);
   color: var(--site-text-strong);
 }
 
@@ -149,10 +151,10 @@
   min-height: 2rem;
   margin-left: 0.2rem;
   padding: 0.4rem 0.8rem;
-  border: 1px solid var(--site-text-strong);
+  border: 1px solid var(--site-cta-border);
   border-radius: var(--radius-md);
-  background: var(--site-text-strong);
-  color: var(--site-bg);
+  background: var(--site-cta-bg);
+  color: var(--site-cta-text);
   font-weight: var(--site-font-weight-semibold);
   box-shadow: none;
 }
@@ -161,9 +163,9 @@
 .navbar__item.navbar__link.nav-dashboard-cta:focus-visible,
 .navbar__items--right > .navbar__item.navbar__link.nav-dashboard-cta:hover,
 .navbar__items--right > .navbar__item.navbar__link.nav-dashboard-cta:focus-visible {
-  border-color: var(--site-text);
-  background: var(--site-text);
-  color: var(--site-bg);
+  border-color: var(--site-cta-border-hover);
+  background: var(--site-cta-bg-hover);
+  color: var(--site-cta-text);
   box-shadow: 0 0 0 3px var(--site-accent-soft);
 }
 
@@ -319,17 +321,26 @@ html[data-theme-choice='system'][data-theme='dark'] [class*='darkToggleIcon_'] {
   color: #a1a1aa;
 }
 
+/* The homepage navbar is committed to dark, so it sets its own colours — but
+ * they are the same blues the token ladder uses everywhere else. */
 .site-root--home .navbar__item.navbar__link:hover,
 .site-root--home .navbar__item.dropdown > .navbar__link:hover,
 .site-root--home .navbar__item.navbar__link--active {
-  background: rgba(255, 255, 255, 0.07);
+  background: rgba(48, 162, 255, 0.12);
   color: #fafafa;
 }
 
 .site-root--home .navbar__item.navbar__link.nav-dashboard-cta {
-  border-color: #fafafa;
-  background: #fafafa;
-  color: #09090b;
+  border-color: #30a2ff;
+  background: #30a2ff;
+  color: #04121f;
+}
+
+.site-root--home .navbar__item.navbar__link.nav-dashboard-cta:hover,
+.site-root--home .navbar__item.navbar__link.nav-dashboard-cta:focus-visible {
+  border-color: #75c5ff;
+  background: #75c5ff;
+  color: #04121f;
 }
 
 .site-root--home .navbar__toggle {
@@ -412,6 +423,12 @@ html[data-theme-choice='system'][data-theme='dark'] [class*='darkToggleIcon_'] {
   color: #d4d4d8;
 }
 
+/* Without this the homepage footer has no hover state at all: the rule above
+ * outranks the shared `.footer__link-item:hover` on source order. */
+.site-root--home .footer__link-item:hover {
+  color: #75c5ff;
+}
+
 .pagination-nav__link {
   border: 1px solid var(--site-border);
   border-radius: var(--radius-lg);
@@ -424,8 +441,8 @@ html[data-theme-choice='system'][data-theme='dark'] [class*='darkToggleIcon_'] {
 
 .pagination-nav__link:hover {
   transform: translateY(-1px);
-  border-color: var(--site-border-strong);
-  background: var(--site-surface-alt);
+  border-color: var(--site-hover-border);
+  background: var(--site-hover-chrome-bg);
 }
 
 .table-of-contents,
@@ -433,9 +450,12 @@ html[data-theme-choice='system'][data-theme='dark'] [class*='darkToggleIcon_'] {
   border-color: var(--site-border);
 }
 
-.table-of-contents__link--active,
-.table-of-contents__link:hover {
+.table-of-contents__link--active {
   color: var(--site-text);
+}
+
+.table-of-contents__link:hover {
+  color: var(--site-hover-text);
 }
 
 /* Collapsed navigation at 996px. Right group hidden; search.css re-shows container. */

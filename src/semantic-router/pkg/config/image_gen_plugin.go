@@ -306,6 +306,9 @@ type ImageGenPluginConfig struct {
 
 	// Timeout in seconds
 	TimeoutSeconds int `json:"timeout_seconds,omitempty" yaml:"timeout_seconds,omitempty"`
+
+	// Maximum response body size in bytes
+	MaxResponseBytes int64 `json:"max_response_bytes,omitempty" yaml:"max_response_bytes,omitempty"`
 }
 
 // VLLMOmniImageGenConfig represents configuration for vLLM-Omni image generation
@@ -403,21 +406,28 @@ func (c *ModalityDetectionConfig) Validate() error {
 	}
 
 	method := c.GetMethod()
+	if err := validateModalityDetectionMethod(method); err != nil {
+		return err
+	}
+	if err := c.validateMethodRequirements(method); err != nil {
+		return err
+	}
+	return c.validateThresholds(method)
+}
+
+func validateModalityDetectionMethod(method string) error {
 	if method == "" {
 		return fmt.Errorf("modality_detection.method is required (one of %q, %q, or %q)",
 			ModalityDetectionClassifier, ModalityDetectionKeyword, ModalityDetectionHybrid)
 	}
-
-	// Validate method value
-	switch method {
-	case ModalityDetectionClassifier, ModalityDetectionKeyword, ModalityDetectionHybrid:
-		// valid
-	default:
+	if method != ModalityDetectionClassifier && method != ModalityDetectionKeyword && method != ModalityDetectionHybrid {
 		return fmt.Errorf("modality_detection.method must be one of %q, %q, or %q, got %q",
 			ModalityDetectionClassifier, ModalityDetectionKeyword, ModalityDetectionHybrid, method)
 	}
+	return nil
+}
 
-	// Method-specific validation
+func (c *ModalityDetectionConfig) validateMethodRequirements(method string) error {
 	switch method {
 	case ModalityDetectionClassifier:
 		if c.Classifier == nil || c.Classifier.ModelPath == "" {
@@ -436,26 +446,19 @@ func (c *ModalityDetectionConfig) Validate() error {
 			return fmt.Errorf("modality_detection: method %q requires at least one of classifier.model_path or keywords to be configured", method)
 		}
 	}
+	return nil
+}
 
-	// Validate confidence threshold
-	if c.ConfidenceThreshold != 0 {
-		if c.ConfidenceThreshold < 0 || c.ConfidenceThreshold > 1 {
-			return fmt.Errorf("modality_detection.confidence_threshold must be between 0 and 1, got %.4f", c.ConfidenceThreshold)
-		}
+func (c *ModalityDetectionConfig) validateThresholds(method string) error {
+	if c.ConfidenceThreshold != 0 && (c.ConfidenceThreshold < 0 || c.ConfidenceThreshold > 1) {
+		return fmt.Errorf("modality_detection.confidence_threshold must be between 0 and 1, got %.4f", c.ConfidenceThreshold)
 	}
-
-	// confidence_threshold is required when the classifier is involved
 	if (method == ModalityDetectionClassifier || method == ModalityDetectionHybrid) && c.ConfidenceThreshold == 0 {
 		return fmt.Errorf("modality_detection.confidence_threshold is required when method is %q (e.g. 0.6)", method)
 	}
-
-	// lower_threshold_ratio validation
-	if c.LowerThresholdRatio != 0 {
-		if c.LowerThresholdRatio < 0 || c.LowerThresholdRatio > 1 {
-			return fmt.Errorf("modality_detection.lower_threshold_ratio must be between 0 and 1, got %.4f", c.LowerThresholdRatio)
-		}
+	if c.LowerThresholdRatio != 0 && (c.LowerThresholdRatio < 0 || c.LowerThresholdRatio > 1) {
+		return fmt.Errorf("modality_detection.lower_threshold_ratio must be between 0 and 1, got %.4f", c.LowerThresholdRatio)
 	}
-	// lower_threshold_ratio is required for hybrid (controls classifier-vs-keyword disagreement)
 	if method == ModalityDetectionHybrid && c.LowerThresholdRatio == 0 {
 		return fmt.Errorf("modality_detection.lower_threshold_ratio is required when method is %q (e.g. 0.7)", method)
 	}
@@ -472,7 +475,23 @@ func (c *ImageGenPluginConfig) Validate() error {
 	if c.Backend == "" {
 		return fmt.Errorf("image_gen backend is required when enabled")
 	}
+	if err := c.validateBackend(); err != nil {
+		return err
+	}
+	if c.MaxResponseBytes < 0 {
+		return fmt.Errorf("image_gen max_response_bytes must be non-negative")
+	}
 
+	if c.ModalityDetection != nil {
+		if err := c.ModalityDetection.Validate(); err != nil {
+			return fmt.Errorf("image_gen: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (c *ImageGenPluginConfig) validateBackend() error {
 	switch c.Backend {
 	case "vllm_omni":
 		vllmConfig, err := c.VLLMOmniBackendConfig()
@@ -493,13 +512,5 @@ func (c *ImageGenPluginConfig) Validate() error {
 	default:
 		return fmt.Errorf("unknown image_gen backend: %s", c.Backend)
 	}
-
-	// Validate modality detection if present
-	if c.ModalityDetection != nil {
-		if err := c.ModalityDetection.Validate(); err != nil {
-			return fmt.Errorf("image_gen: %w", err)
-		}
-	}
-
 	return nil
 }

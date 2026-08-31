@@ -26,7 +26,7 @@ export function getPolicySignalFieldSchema(signalType: string): FieldSchema[] | 
           key: 'type',
           label: 'Backend Type',
           type: 'select',
-          options: ['local', 'llm'],
+          options: ['local', 'llm', 'sequence_classifier'],
           required: true,
         },
         { key: 'model', label: 'External Model', type: 'string' },

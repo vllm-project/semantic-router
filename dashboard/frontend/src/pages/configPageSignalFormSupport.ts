@@ -1,4 +1,6 @@
 import type {
+  AddSignalFormState,
+  ClassifierSignal,
   ConfigData,
   ConversationFeature,
   ConversationSource,
@@ -51,6 +53,43 @@ export function normalizeStringList(value: unknown, label: string, required = fa
     seen.add(key)
   }
   return normalized
+}
+
+export function buildClassifierSignal(
+  formData: AddSignalFormState,
+  name: string,
+  description?: string,
+): ClassifierSignal {
+  const classifierType = formData.classifier_type || 'local'
+  const labels = normalizeStringList(formData.classifier_labels, 'Classifier labels')
+  if (labels.length === 0) throw new Error('Classifier labels are required.')
+  const classifier: ClassifierSignal = {
+    name,
+    description: description || undefined,
+    type: classifierType,
+    labels,
+  }
+
+  if (classifierType === 'local') {
+    if (labels.length !== 2) throw new Error('Local classifiers require exactly two labels.')
+    classifier.model_path = (formData.classifier_model_path || '').trim()
+    if (!classifier.model_path) throw new Error('Local model path is required.')
+    classifier.use_cpu = !!formData.classifier_use_cpu
+    return classifier
+  }
+
+  classifier.model = (formData.classifier_model || '').trim()
+  if (!classifier.model) throw new Error('External classifier model is required.')
+  if (classifierType === 'sequence_classifier') {
+    if (labels.length < 2) {
+      throw new Error('Sequence classifiers require at least two labels.')
+    }
+    return classifier
+  }
+
+  classifier.instructions = (formData.classifier_instructions || '').trim()
+  if (!classifier.instructions) throw new Error('Classifier instructions are required.')
+  return classifier
 }
 
 export function readConditions(value: unknown): DecisionCondition[] {
@@ -357,19 +396,10 @@ export function getSignalReferenceCount(
         signalName,
       )
   return (
-    getSignalReferenceCountInRoutingProfile(
-      defaultRouting,
-      signalType,
-      signalName,
-    ) +
+    getSignalReferenceCountInRoutingProfile(defaultRouting, signalType, signalName) +
     (config.recipes ?? []).reduce(
       (total, recipe) =>
-        total +
-        getSignalReferenceCountInRoutingProfile(
-          recipe.routing,
-          signalType,
-          signalName,
-        ),
+        total + getSignalReferenceCountInRoutingProfile(recipe.routing, signalType, signalName),
       0,
     ) +
     legacyReferences

@@ -374,6 +374,14 @@ profiles:
     coverage_role: llm-d-inference-gateway-health
     selection: pr
     paths: [e2e/profiles/llm-d/**, deploy/kubernetes/llmd-base/**]
+  looper:
+    owner: e2e
+    coverage_role: deterministic-looper-algorithm-contracts
+    selection: pr
+    paths:
+      - e2e/profiles/looper/**
+      - e2e/testcases/looper_*.go
+      - src/semantic-router/pkg/looper/**
   routing-strategies:
     owner: e2e
     coverage_role: routing-strategy-contracts

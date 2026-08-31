@@ -79,6 +79,9 @@ func validateExternalAPIRAGBackend(c *RAGPluginConfig) error {
 	if apiConfig.RequestFormat == "" {
 		return fmt.Errorf("request format is required for external API")
 	}
+	if apiConfig.MaxResponseBytes < 0 {
+		return fmt.Errorf("external API max_response_bytes must be non-negative")
+	}
 	return nil
 }
 

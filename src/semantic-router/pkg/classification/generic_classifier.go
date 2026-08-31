@@ -10,6 +10,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
+const defaultLLMLabelClassifierMaxTokens = 128
+
 type labelClassification struct {
 	Scores    map[string]float64
 	Rationale string
@@ -25,6 +27,7 @@ type llmLabelClassifier struct {
 	labels       []string
 	instructions string
 	timeout      time.Duration
+	maxTokens    int
 }
 
 func newLLMLabelClassifier(
@@ -42,12 +45,17 @@ func newLLMLabelClassifier(
 	if timeout <= 0 {
 		timeout = 5 * time.Second
 	}
+	maxTokens := external.MaxTokens
+	if maxTokens <= 0 {
+		maxTokens = defaultLLMLabelClassifierMaxTokens
+	}
 	return &llmLabelClassifier{
 		client:       client,
 		model:        external.ModelName,
 		labels:       append([]string(nil), rule.Labels...),
 		instructions: rule.Instructions,
 		timeout:      timeout,
+		maxTokens:    maxTokens,
 	}, nil
 }
 
@@ -69,7 +77,7 @@ func (c *llmLabelClassifier) Classify(
 		systemPrompt,
 		input,
 		&GenerationOptions{
-			MaxTokens:   128,
+			MaxTokens:   c.maxTokens,
 			Temperature: 0,
 			JSONMode:    true,
 		},
@@ -145,13 +153,23 @@ func (b *classifierOptionBuilder) buildGenericClassifiersOption() (option, error
 			err        error
 		)
 		switch rule.Type {
-		case "local":
+		case config.ClassifierSignalTypeLocal:
 			classifier, err = newLocalLabelClassifier(rule)
-		case "llm":
+		case config.ClassifierSignalTypeLLM:
 			classifier, err = newLLMLabelClassifier(
 				rule,
 				b.cfg.FindExternalModelByName(rule.Model),
 			)
+		case config.ClassifierSignalTypeSequenceClassifier:
+			classifier, err = newSequenceLabelClassifier(
+				rule,
+				b.cfg.FindExternalModelByName(rule.Model),
+			)
+		default:
+			// Config validation rejects unknown types, so reaching here means a
+			// rule bypassed it. Fail instead of storing a nil classifier that
+			// silently drops the signal at request time.
+			err = fmt.Errorf("unsupported type %q", rule.Type)
 		}
 		if err != nil {
 			return nil, fmt.Errorf("build classifier signal %q: %w", rule.Name, err)
