@@ -594,8 +594,8 @@ func TestBuildPIIResponse_DefaultOptions(t *testing.T) {
 	assert.Len(t, resp.Entities, 2)
 	assert.Equal(t, "[DETECTED]", resp.Entities[0].Value)
 	assert.Equal(t, "[DETECTED]", resp.Entities[1].Value)
-	assert.Equal(t, 0, resp.Entities[0].StartPos)
-	assert.Equal(t, 0, resp.Entities[0].EndPos)
+	assert.Nil(t, resp.Entities[0].StartPos)
+	assert.Nil(t, resp.Entities[0].EndPos)
 	assert.Empty(t, resp.MaskedText)
 	assert.Equal(t, "block", resp.SecurityRecommendation)
 }
@@ -631,8 +631,9 @@ func TestBuildPIIResponse_ReturnPositionsOption(t *testing.T) {
 			detections[:1],
 			&PIIOptions{ReturnPositions: true},
 		)
-		assert.Equal(t, 13, resp.Entities[0].StartPos)
-		assert.Equal(t, 29, resp.Entities[0].EndPos)
+		require.NotNil(t, resp.Entities[0].StartPos)
+		assert.Equal(t, 13, *resp.Entities[0].StartPos)
+		assert.Equal(t, 29, *resp.Entities[0].EndPos)
 	})
 
 	t.Run("disabled", func(t *testing.T) {
@@ -641,8 +642,8 @@ func TestBuildPIIResponse_ReturnPositionsOption(t *testing.T) {
 			detections[:1],
 			&PIIOptions{ReturnPositions: false},
 		)
-		assert.Equal(t, 0, resp.Entities[0].StartPos)
-		assert.Equal(t, 0, resp.Entities[0].EndPos)
+		assert.Nil(t, resp.Entities[0].StartPos)
+		assert.Nil(t, resp.Entities[0].EndPos)
 	})
 }
 
@@ -734,8 +735,9 @@ func TestBuildPIIResponse_CombinedOptions(t *testing.T) {
 	entity := resp.Entities[0]
 	assert.Equal(t, "EMAIL", entity.Type)
 	assert.Equal(t, "alice@test.com", entity.Value)
-	assert.Equal(t, 6, entity.StartPos)
-	assert.Equal(t, 20, entity.EndPos)
+	require.NotNil(t, entity.StartPos)
+	assert.Equal(t, 6, *entity.StartPos)
+	assert.Equal(t, 20, *entity.EndPos)
 	assert.Equal(t, "[EMAIL_0]", entity.MaskedValue)
 	assert.Equal(t, "Alice [EMAIL_0]", resp.MaskedText)
 }

@@ -1347,6 +1347,7 @@ routing:
               base_url: https://api.openai.com
               api_key: openai-file-search-key
               max_num_results: 12
+              max_response_bytes: 4194304
               file_ids: [file_a, file_b]
               filter:
                 doc_type: manual
@@ -1720,6 +1721,10 @@ global:
           model_metrics: true
           queue_depth_estimation: true
           max_models: 50
+      profiling:
+        enabled: false
+        port: 6060
+        bind: 127.0.0.1
     authz:
       fail_open: false
       identity:
