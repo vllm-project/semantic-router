@@ -1720,6 +1720,10 @@ global:
           model_metrics: true
           queue_depth_estimation: true
           max_models: 50
+      profiling:
+        enabled: false
+        port: 6060
+        bind: 127.0.0.1
     authz:
       fail_open: false
       identity:
