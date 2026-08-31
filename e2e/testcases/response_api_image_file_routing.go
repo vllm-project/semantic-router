@@ -66,6 +66,38 @@ func testResponseAPIImageFileID(ctx context.Context, client *kubernetes.Clientse
 	defer session.Close()
 
 	sessionID := fmt.Sprintf("response-api-image-file-id-%d", time.Now().UnixNano())
+	if err := assertImageFileSelectsVisionDecision(ctx, session, fileID, sessionID); err != nil {
+		return err
+	}
+	if err := verifyBackendReceivedInlinedImage(ctx, client, opts, sessionID, fileID); err != nil {
+		return err
+	}
+	if err := assertTextOnlySelectsDefaultDecision(ctx, session); err != nil {
+		return err
+	}
+	if err := assertUnknownImageFileRejected(ctx, session); err != nil {
+		return err
+	}
+
+	if opts.SetDetails != nil {
+		opts.SetDetails(map[string]interface{}{
+			"file_id":             fileID,
+			"image_decision":      imageFileVisionDecision,
+			"text_decision":       imageFileDefaultDecision,
+			"unknown_file_status": http.StatusBadRequest,
+		})
+	}
+	return nil
+}
+
+// assertImageFileSelectsVisionDecision sends the uploaded image by file_id and
+// asserts the image decision was selected.
+func assertImageFileSelectsVisionDecision(
+	ctx context.Context,
+	session *fixtures.ServiceSession,
+	fileID string,
+	sessionID string,
+) error {
 	imageResp, err := postResponsesWithHeaders(ctx, session, map[string]any{
 		"model": "MoM",
 		"store": false,
@@ -86,11 +118,12 @@ func testResponseAPIImageFileID(ctx context.Context, client *kubernetes.Clientse
 	if decision := imageResp.Headers.Get("x-vsr-selected-decision"); decision != imageFileVisionDecision {
 		return fmt.Errorf("image request selected decision %q, want %q", decision, imageFileVisionDecision)
 	}
+	return nil
+}
 
-	if err := verifyBackendReceivedInlinedImage(ctx, client, opts, sessionID, fileID); err != nil {
-		return err
-	}
-
+// assertTextOnlySelectsDefaultDecision proves the image decision is driven by
+// the image: a text-only request stays on the default decision.
+func assertTextOnlySelectsDefaultDecision(ctx context.Context, session *fixtures.ServiceSession) error {
 	textResp, err := postResponsesWithHeaders(ctx, session, map[string]any{
 		"model": "MoM",
 		"store": false,
@@ -105,7 +138,12 @@ func testResponseAPIImageFileID(ctx context.Context, client *kubernetes.Clientse
 	if decision := textResp.Headers.Get("x-vsr-selected-decision"); decision != imageFileDefaultDecision {
 		return fmt.Errorf("text request selected decision %q, want %q", decision, imageFileDefaultDecision)
 	}
+	return nil
+}
 
+// assertUnknownImageFileRejected pins the client 400 for a file_id the router
+// file store does not hold, with the missing file named in the error.
+func assertUnknownImageFileRejected(ctx context.Context, session *fixtures.ServiceSession) error {
 	missingID := "file-e2e-does-not-exist"
 	missingResp, err := postResponsesWithHeaders(ctx, session, map[string]any{
 		"model": "MoM",
@@ -126,15 +164,6 @@ func testResponseAPIImageFileID(ctx context.Context, client *kubernetes.Clientse
 	}
 	if !strings.Contains(string(missingResp.Body), missingID) {
 		return fmt.Errorf("unknown file_id error does not name the file: %s", truncateString(string(missingResp.Body), 500))
-	}
-
-	if opts.SetDetails != nil {
-		opts.SetDetails(map[string]interface{}{
-			"file_id":            fileID,
-			"image_decision":     imageFileVisionDecision,
-			"text_decision":      imageFileDefaultDecision,
-			"unknown_file_status": missingResp.StatusCode,
-		})
 	}
 	return nil
 }
