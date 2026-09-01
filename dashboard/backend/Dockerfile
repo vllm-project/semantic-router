@@ -5,6 +5,7 @@ FROM ${IMAGE_REGISTRY}library/golang:1.25-alpine AS wasm-builder
 WORKDIR /app/src/semantic-router
 
 RUN apk add --no-cache git
+# Pipe falls back to direct on any proxy error; comma only on 404 and 410
 ENV GOPROXY="https://proxy.golang.org|direct"
 
 COPY src/semantic-router/go.mod src/semantic-router/go.sum ./
@@ -55,6 +56,7 @@ FROM ${IMAGE_REGISTRY}library/golang:1.25-bookworm AS backend-builder
 WORKDIR /app
 
 # Use Go proxy for reliable downloads
+# Pipe falls back to direct on any proxy error; comma only on 404 and 410
 ENV GOPROXY="https://proxy.golang.org|direct"
 
 # Accept build arguments for target architecture

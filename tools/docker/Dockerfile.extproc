@@ -340,6 +340,7 @@ COPY nlp-binding/go.mod nlp-binding/nlp_binding.go nlp-binding/nlp_binding_mock.
 COPY openvino-binding/go.mod openvino-binding/semantic-router.go openvino-binding/
 
 # Download Go dependencies (cached layer)
+# Pipe falls back to direct on any proxy error; comma only on 404 and 410
 ENV GOPROXY="https://proxy.golang.org|direct"
 RUN cd src/semantic-router && go mod download && \
     cd /app/candle-binding && go mod download
