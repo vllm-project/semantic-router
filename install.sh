@@ -797,7 +797,7 @@ ensure_runtime() {
     return
   fi
 
-  if podman_ready; then
+  if [ "$REQUESTED_RUNTIME" = "auto" ] && podman_ready; then
     SELECTED_RUNTIME="podman"
     write_runtime_env "podman"
     done_step "Using existing Podman runtime"
