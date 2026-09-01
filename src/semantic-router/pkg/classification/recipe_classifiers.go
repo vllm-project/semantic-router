@@ -33,13 +33,14 @@ func BuildRecipeClassifiers(
 		return nil, fmt.Errorf("config is nil")
 	}
 
+	sharedAdmission := buildAdmissionRegistry(cfg)
 	set := &RecipeClassifiers{
 		byRecipe:     make(map[config.RecipeName]*Classifier),
 		runtimeOrder: make([]config.RecipeName, 0, len(cfg.Recipes)),
 		routingOrder: make([]config.RecipeName, 0, len(cfg.Recipes)),
 	}
 	if len(cfg.Recipes) == 0 {
-		classifier, err := BuildClassifier(cfg, categoryMapping, piiMapping, jailbreakMapping)
+		classifier, err := buildClassifierWithAdmission(cfg, categoryMapping, piiMapping, jailbreakMapping, sharedAdmission)
 		if err != nil {
 			return nil, fmt.Errorf("build routing recipe %q: %w", config.DefaultRecipeName, err)
 		}
@@ -55,7 +56,7 @@ func BuildRecipeClassifiers(
 	for i := range cfg.Recipes {
 		recipe := &cfg.Recipes[i]
 		scopedConfig := cfg.ConfigForRecipe(recipe)
-		classifier, err := BuildClassifier(scopedConfig, categoryMapping, piiMapping, jailbreakMapping)
+		classifier, err := buildClassifierWithAdmission(scopedConfig, categoryMapping, piiMapping, jailbreakMapping, sharedAdmission)
 		if err != nil {
 			return nil, fmt.Errorf("build routing recipe %q: %w", recipe.Name, err)
 		}
