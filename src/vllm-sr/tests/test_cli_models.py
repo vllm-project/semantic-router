@@ -65,6 +65,35 @@ def test_decision_route_action_with_jailbreak_condition_parses():
     assert config.decisions[0].action.destination == "safe-model"
 
 
+def test_decision_route_action_accepts_root_leaf_jailbreak_rule():
+    decision = _decision(
+        rules={"type": "jailbreak", "name": "prompt_injection"},
+        action={"type": "route", "destination": "safe-model"},
+    )
+    config = UserConfig(version="0.3", routing={"decisions": [decision]})
+
+    assert config.decisions[0].action.destination == "safe-model"
+    assert config.decisions[0].rules.conditions[0].type == "jailbreak"
+
+
+def test_decision_route_action_accepts_nested_jailbreak_rule():
+    decision = _decision(
+        rules={
+            "operator": "AND",
+            "conditions": [
+                {
+                    "operator": "OR",
+                    "conditions": [{"type": "jailbreak", "name": "prompt_injection"}],
+                }
+            ],
+        },
+        action={"type": "route", "destination": "safe-model"},
+    )
+    config = UserConfig(version="0.3", routing={"decisions": [decision]})
+
+    assert config.decisions[0].action.destination == "safe-model"
+
+
 def test_decision_route_action_rejects_unknown_type():
     with pytest.raises(ValueError):
         _ = UserConfig(

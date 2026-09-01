@@ -235,7 +235,11 @@ func (r *OpenAIRouter) finalizeDecisionEvaluation(
 		"matched_rules": result.MatchedRules,
 	})
 
-	if destination, ok := r.decisionRouteActionDestination(result.Decision, ctx); ok {
+	destination, terminal, actionErr := r.decisionRouteActionDestination(result.Decision, ctx)
+	if actionErr != nil {
+		return decisionName, evaluationConfidence, reasoningDecision, "", actionErr
+	}
+	if terminal {
 		return decisionName, evaluationConfidence, reasoningDecision, destination, nil
 	}
 
