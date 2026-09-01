@@ -543,6 +543,14 @@ routing:
         predicate:
           equals: denied
 
+    input_modality:
+      - name: image_input
+        description: Request contains at least one image content part.
+        modality: image
+      - name: audio_input
+        description: Request contains at least one audio content part.
+        modality: audio
+
     classifiers:
       - name: generic-safety-score
         description: Generic binary safety classification head.
