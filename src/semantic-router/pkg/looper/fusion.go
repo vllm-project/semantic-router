@@ -190,7 +190,7 @@ func (l *FusionLooper) executeFusionPanel(
 				return
 			}
 			defer func() { <-sem }()
-			resp, err := l.callFusionModel(panelCtx, req, cfg, modelName, false, false, index+1, cfg.AnalysisOverrides[modelName])
+			resp, err := l.callFusionModel(panelCtx, req, req.OriginalRequest, cfg, modelName, false, false, index+1, cfg.AnalysisOverrides[modelName])
 			results <- fusionPanelResult{index: index, model: modelName, resp: resp, err: err}
 		}(i, model)
 	}
@@ -287,6 +287,7 @@ func compactFusionPanelResponses(ordered []*ModelResponse) []*ModelResponse {
 func (l *FusionLooper) callFusionModel(
 	ctx context.Context,
 	req *Request,
+	stageReq *openai.ChatCompletionNewParams,
 	cfg fusionExecutionConfig,
 	modelName string,
 	allowTools bool,
@@ -294,7 +295,7 @@ func (l *FusionLooper) callFusionModel(
 	iteration int,
 	override config.FusionModelOverride,
 ) (*ModelResponse, error) {
-	callReq := cloneRequest(req.OriginalRequest)
+	callReq := cloneRequest(stageReq)
 	if !allowTools {
 		callReq = stripFusionToolUse(callReq)
 	}
@@ -308,7 +309,7 @@ func (l *FusionLooper) callFusionModel(
 	} else if cfg.MaxCompletionTokens > 0 {
 		callReq.MaxCompletionTokens = openai.Int(int64(cfg.MaxCompletionTokens))
 	}
-	return l.client.CallModel(ctx, callReq, modelName, streaming, iteration, nil, accessKeyForModel(req, modelName))
+	return l.callModelWithContextGate(ctx, req, callReq, modelName, streaming, iteration, nil, accessKeyForModel(req, modelName))
 }
 
 func accessKeyForModel(req *Request, modelName string) string {
@@ -340,7 +341,7 @@ func (l *FusionLooper) runFusionAnalysis(
 		prompt = prompt + "\n\n" + notes
 	}
 	analysisReq := appendFusionStageMessage(req.OriginalRequest, prompt)
-	resp, err := l.callFusionModel(ctx, &Request{OriginalRequest: analysisReq, ModelParams: req.ModelParams}, cfg, cfg.Model, false, false, len(panelResponses)+1, config.FusionModelOverride{})
+	resp, err := l.callFusionModel(ctx, req, analysisReq, cfg, cfg.Model, false, false, len(panelResponses)+1, config.FusionModelOverride{})
 	if err != nil {
 		logging.ComponentWarnEvent("looper", "fusion_analysis_failed", map[string]interface{}{
 			"judge_model": cfg.Model,
@@ -376,7 +377,7 @@ func (l *FusionLooper) runFusionFinal(
 		prompt = prompt + "\n\n" + notes
 	}
 	finalReq := appendFusionStageMessage(req.OriginalRequest, prompt)
-	resp, err := l.callFusionModel(ctx, &Request{OriginalRequest: finalReq, ModelParams: req.ModelParams}, cfg, cfg.Model, true, false, len(panelResponses)+2, config.FusionModelOverride{})
+	resp, err := l.callFusionModel(ctx, req, finalReq, cfg, cfg.Model, true, false, len(panelResponses)+2, config.FusionModelOverride{})
 	if err != nil {
 		return nil, fmt.Errorf("fusion final synthesis failed for judge model %q: %w", cfg.Model, err)
 	}

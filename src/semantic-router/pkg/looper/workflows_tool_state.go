@@ -118,6 +118,14 @@ func parseWorkflowToolStateID(toolCallID string) (string, bool) {
 	return rest[:idx], true
 }
 
+// IsWorkflowToolCallID reports whether a tool call ID carries Router Flow
+// continuation state. It intentionally exposes only the protocol shape, not
+// the embedded state identifier.
+func IsWorkflowToolCallID(toolCallID string) bool {
+	_, ok := parseWorkflowToolStateID(toolCallID)
+	return ok
+}
+
 func requestHasTools(req *openai.ChatCompletionNewParams) bool {
 	reqMap, ok := requestAsMap(req)
 	if !ok {

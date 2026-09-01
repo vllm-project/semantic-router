@@ -12,14 +12,17 @@ Entrypoint that uses it.
 
 | Recipe | Best for | Decisions |
 | --- | --- | --- |
-| `balance` | General traffic across quality, latency, and workload complexity | `simple`, `medium`, `complex`, `agentic`, `omni` |
+| `balance` | General traffic across quality, latency, and workload complexity | `simple`, `medium`, `complex`, `agentic`, `extended`, `omni` |
 | `speed` | Interactive applications, tools, and visual requests | `instant`, `heavy`, `omni`, `tooling`, `extended` |
 | `cost` | High-volume traffic with bounded escalation | `economy`, `reasoning`, `omni`, `extended` |
 | `accuracy` | Verification, expert synthesis, and bounded orchestration | `direct`, `verify`, `experts`, `orchestrate`, `extended`, `resume`, `omni` |
 | `vault` | Sensitive workloads with local and tool-isolation policy | `private`, `restricted_tools`, `containment`, `sensitive`, `omni` |
 
 These decision names form each Recipe's assignment contract. A published
-Entrypoint must bind every reachable decision to one or more configured Models.
+Entrypoint must bind every reachable decision to its declared
+`algorithm.minimum_candidates` count. Accuracy therefore preserves
+three-worker orchestration and expert panels plus a two-model confidence
+cascade; Vault preserves a two-model private pool.
 
 ## Intended use
 
@@ -33,15 +36,29 @@ name on its own.
 
 ## Routing behavior
 
-Balance separates simple, medium, complex, agentic, and image-bearing work.
-Speed favors instant responses while reserving explicit lanes for tools,
-images, heavy work, and extended context. Cost uses an economy lane by default
-and escalates only when request evidence calls for more capability.
+Balance separates simple, medium, complex, agentic, terminal-context, and
+image-bearing work. The `extended` lane isolates text beyond 240K tokens from
+semantic complexity, while image and active or required tool traffic retain
+their capability-preserving higher-priority lanes. The medium lane is strictly
+conversational; image traffic is owned only by `omni`.
+Balance and Speed treat a declared tool schema as available capability, not as
+proof that the current turn wants to execute a tool. Their tool lanes require
+explicit execution intent, a protocol-level required or named tool choice, or
+an active tool loop. An explicit `tool_choice: none` suppresses fresh textual
+tool intent while an already active loop retains continuity. Speed optimizes
+the tooling lane for first-token latency and the heavy lane for generation
+latency. Cost uses an economy lane by default; context size contributes bounded
+evidence but does not trigger reasoning escalation by itself.
 
 Accuracy activates bounded verification, expert fusion, or workflow
-orchestration only when the matching evidence is present. A completed tool turn
-uses `resume` so the Router does not start another loop. Vault applies local,
-tool-history, and replay constraints for sensitive traffic.
+orchestration only when explicit matching evidence is present. Long context,
+quoted routing phrases, and semantic difficulty alone do not fan out a request.
+An ordinary completed tool turn uses `resume`; a trailing Flow-owned tool result
+returns to `orchestrate` so the managed workflow can continue.
+
+Vault evaluates PII across the conversation, applies local containment, strips
+tool history, disables client tool execution, memory, response cache, replay,
+and learning adaptation for every decision, and emits a drop-retention policy.
 
 Every Recipe includes an `omni` decision for image-bearing requests. No
 built-in decision injects a system prompt.
@@ -59,12 +76,31 @@ language, conversation-shape, structure, and privacy knowledge-base signals.
 Workflow and multi-model algorithms require their corresponding Router
 integrations.
 
+Before model selection, the Router removes candidates whose known context
+window cannot hold the request. Models without context metadata remain eligible
+for compatibility. If every assigned candidate has a known insufficient
+window, the request is rejected instead of being sent to a backend that cannot
+serve it.
+
+If context filtering would reduce a decision below its declared minimum pool,
+the request is rejected rather than silently changing a panel, cascade, or
+selection policy. Looper-generated prompts are checked again before each
+planner, worker, verifier, judge, and synthesis dispatch because intermediate
+responses can grow beyond the original request size.
+
+When Router learning is enabled, ordinary single-model Accuracy decisions keep
+adaptation inside the matched decision. Multi-model decisions and Vault bypass
+adaptation. `resume` bypasses model-choice adaptation while retaining session
+stability protection, which avoids changing lanes in the middle of a client
+tool loop without pinning unrelated future decisions.
+
 ## Data handling and safety
 
-Vault expresses the strictest built-in data boundary: its decisions disable
-client tools, remove prior tool history, and disable replay capture where the
-policy requires it. The control plane must assign Models and connections whose
-placement and retention properties satisfy that boundary.
+Vault expresses the strictest built-in data boundary: all of its decisions
+disable client tools, remove prior tool history, disable memory, response cache,
+replay capture, and learning adaptation, and request immediate retention drop.
+The control plane must still assign Models and connections whose placement and
+retention properties satisfy that boundary.
 
 Other Recipes do not imply a placement boundary. Operators remain responsible
 for provider credentials, network isolation, logs, stores, and retention.
@@ -93,7 +129,8 @@ See the [conformance guide](../../../CONFORMANCE.md) for the validation contract
 
 ## Limitations
 
-- A Recipe cannot prove that an assigned Model is reachable or capable.
+- A Recipe enforces pool cardinality but cannot yet prove every assigned
+  Model's provider-neutral capability traits.
 - Multi-model algorithms can add latency and compute cost.
 - Classifier and knowledge-base errors can affect selection.
 - Tool execution remains the client's responsibility.
