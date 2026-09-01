@@ -548,6 +548,7 @@ func finalizeParsedConfig(cfg *RouterConfig) error {
 	if cfg.VectorStore != nil {
 		cfg.VectorStore.ApplyDefaults()
 	}
+	applyBatchConcurrencyMigration(cfg)
 	if err := validateConfigStructure(cfg); err != nil {
 		logging.ComponentDebugEvent("config", "config_validation_failed", map[string]interface{}{
 			"error": err.Error(),
