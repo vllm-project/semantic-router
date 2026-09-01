@@ -14,6 +14,24 @@ where policy places it, and how strong its evidence is. #3080 stopped unscored r
 from claiming synthetic certainty, but ordering still depends on which rules a given
 request happened to score, so the same configuration can rank differently per request.
 
+## Priority and confidence
+
+`priority` and `confidence` are not two sort orders over one candidate set.
+
+`priority` is declared on every decision and is always available. `confidence` exists
+only when something reported a comparable score. That asymmetry is why #3080 needs a
+pool-level fallback at all, and why `signalConfidence` has to invent `1.0` for an
+absent key.
+
+There is also no single axis to sort on. `SignalConfidences` holds a classifier
+probability, an embedding similarity, a minimum similarity across turns, a projection
+output, and a boolean constant in one `map[string]float64`. Declaring which of those
+are comparable with each other is what DR-06 covers.
+
+This proposal therefore treats `priority` as the ordering, confidence as a refinement
+inside a pool that has declared itself comparable, and `routing.strategy` as the
+switch between the two within a tier.
+
 ## Current ordering
 
 Which branch runs depends on whether any matched decision sets a tier.
