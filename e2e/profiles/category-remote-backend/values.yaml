@@ -12,6 +12,8 @@ config:
             endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
             weight: 1
   routing:
+    modelCards:
+      - name: base-model
     decisions:
       - name: category_backend_math
         description: Deterministic remote category backend routing contract
