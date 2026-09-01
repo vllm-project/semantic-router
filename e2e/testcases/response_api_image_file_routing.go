@@ -23,8 +23,8 @@ import (
 const imageFilePNGBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
 
 const (
-	imageFileVisionDecision  = "vision_decision"
-	imageFileDefaultDecision = "default_decision"
+	imageFileVisionDecision = "input_modality_vision_decision"
+	imageFileTextDecision   = "input_modality_text_decision"
 )
 
 func init() {
@@ -72,7 +72,7 @@ func testResponseAPIImageFileID(ctx context.Context, client *kubernetes.Clientse
 	if err := verifyBackendReceivedInlinedImage(ctx, client, opts, sessionID, fileID); err != nil {
 		return err
 	}
-	if err := assertTextOnlySelectsDefaultDecision(ctx, session); err != nil {
+	if err := assertTextOnlySelectsTextDecision(ctx, session); err != nil {
 		return err
 	}
 	if err := assertUnknownImageFileRejected(ctx, session); err != nil {
@@ -83,7 +83,7 @@ func testResponseAPIImageFileID(ctx context.Context, client *kubernetes.Clientse
 		opts.SetDetails(map[string]interface{}{
 			"file_id":             fileID,
 			"image_decision":      imageFileVisionDecision,
-			"text_decision":       imageFileDefaultDecision,
+			"text_decision":       imageFileTextDecision,
 			"unknown_file_status": http.StatusBadRequest,
 		})
 	}
@@ -121,9 +121,9 @@ func assertImageFileSelectsVisionDecision(
 	return nil
 }
 
-// assertTextOnlySelectsDefaultDecision proves the image decision is driven by
-// the image: a text-only request stays on the default decision.
-func assertTextOnlySelectsDefaultDecision(ctx context.Context, session *fixtures.ServiceSession) error {
+// assertTextOnlySelectsTextDecision proves the image decision is driven by
+// the image: a text-only request stays on the text decision.
+func assertTextOnlySelectsTextDecision(ctx context.Context, session *fixtures.ServiceSession) error {
 	textResp, err := postResponsesWithHeaders(ctx, session, map[string]any{
 		"model": "MoM",
 		"store": false,
@@ -135,8 +135,8 @@ func assertTextOnlySelectsDefaultDecision(ctx context.Context, session *fixtures
 	if textResp.StatusCode != http.StatusOK {
 		return fmt.Errorf("text request returned HTTP %d: %s", textResp.StatusCode, truncateString(string(textResp.Body), 500))
 	}
-	if decision := textResp.Headers.Get("x-vsr-selected-decision"); decision != imageFileDefaultDecision {
-		return fmt.Errorf("text request selected decision %q, want %q", decision, imageFileDefaultDecision)
+	if decision := textResp.Headers.Get("x-vsr-selected-decision"); decision != imageFileTextDecision {
+		return fmt.Errorf("text request selected decision %q, want %q", decision, imageFileTextDecision)
 	}
 	return nil
 }

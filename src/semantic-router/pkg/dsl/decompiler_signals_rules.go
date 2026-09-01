@@ -204,6 +204,17 @@ func (d *decompiler) decompileMetadataSignals() {
 	}
 }
 
+func (d *decompiler) decompileInputModalitySignals() {
+	for _, rule := range d.cfg.InputModalityRules {
+		d.write("SIGNAL input_modality %s {\n", quoteName(rule.Name))
+		if rule.Description != "" {
+			d.write("  description: %q\n", rule.Description)
+		}
+		d.write("  modality: %q\n", rule.Modality)
+		d.write("}\n\n")
+	}
+}
+
 func (d *decompiler) decompileClassifierSignals() {
 	for _, rule := range d.cfg.ClassifierRules {
 		d.write("SIGNAL classifier %s {\n", quoteName(rule.Name))
