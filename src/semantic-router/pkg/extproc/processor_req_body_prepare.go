@@ -14,6 +14,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 )
 
 func (r *OpenAIRouter) extractRequestSignalSnapshot(
@@ -59,14 +60,7 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 		}
 		logging.Errorf("[Request Body] Decision evaluation failed: %v", decisionErr)
 		if errors.Is(decisionErr, decision.ErrDecisionUnresolved) {
-			resp := r.createErrorResponse(503, decisionErr.Error())
-			if ctx.RouterReplayPluginConfig == nil {
-				ctx.RouterReplayPluginConfig = r.Config.EffectiveRouterReplayConfig(nil)
-			}
-			r.startRouterReplay(ctx, originalModel, "", "")
-			r.updateRouterReplayStatus(ctx, 503, false)
-			addRouterReplayHeaderToImmediateResponse(resp, ctx.RouterReplayID)
-			return requestDecisionState{}, resp
+			return requestDecisionState{}, r.respondDecisionUnresolved(ctx, originalModel, decisionErr)
 		}
 		return requestDecisionState{}, r.createErrorResponse(403, decisionErr.Error())
 	}
@@ -106,6 +100,27 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 		reasoningDecision: reasoningDecision,
 		selectedModel:     selectedModel,
 	}, nil
+}
+
+// respondDecisionUnresolved builds the fail_request 503 and finalizes the
+// replay record as failed, matching the looper-failure path.
+func (r *OpenAIRouter) respondDecisionUnresolved(
+	ctx *RequestContext,
+	originalModel string,
+	decisionErr error,
+) *ext_proc.ProcessingResponse {
+	resp := r.createErrorResponse(503, decisionErr.Error())
+	if ctx.RouterReplayPluginConfig == nil {
+		ctx.RouterReplayPluginConfig = r.Config.EffectiveRouterReplayConfig(nil)
+	}
+	r.startRouterReplay(ctx, originalModel, "", "")
+	r.updateRouterReplayStatus(ctx, 503, false)
+	if immediate := resp.GetImmediateResponse(); immediate != nil {
+		r.attachRouterReplayResponse(ctx, immediate.Body, false)
+	}
+	r.finalizeRouterReplay(ctx, routerreplay.LifecycleFailed, "decision_unresolved")
+	addRouterReplayHeaderToImmediateResponse(resp, ctx.RouterReplayID)
+	return resp
 }
 
 func applyRequestContextEstimate(snapshot *requestSignalSnapshot, ctx *RequestContext) {
