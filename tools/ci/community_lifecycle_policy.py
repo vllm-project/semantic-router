@@ -230,14 +230,28 @@ def normalize_proposed_workgroup(
     issue: dict[str, Any],
     *,
     accepted: bool,
+    event_action: str,
+    event_label: str | None,
+    actor_can_manage: bool,
 ) -> set[str]:
+    """Seed an unowned issue from its form without undoing Maintainer triage."""
+
     workgroups = labels.intersection(WORKGROUP_LABELS)
     form_workgroup = proposed_workgroup(issue.get("body"))
-    if accepted or not form_workgroup or workgroups == {form_workgroup}:
+    if accepted or not form_workgroup or workgroups:
         return workgroups
-    plan.remove_labels.update(workgroups - {form_workgroup})
+
+    # A Workgroup selected in the issue form is only the initial proposal. If a
+    # Maintainer removes that owner while reclassifying the issue, do not race
+    # the following label addition by restoring the stale form choice.
+    if (
+        actor_can_manage
+        and event_action == "unlabeled"
+        and event_label in WORKGROUP_LABELS
+    ):
+        return workgroups
+
     plan.add_labels.add(form_workgroup)
-    labels.difference_update(workgroups)
     labels.add(form_workgroup)
     return {form_workgroup}
 
@@ -335,7 +349,15 @@ def plan_issue(
     )
 
     accepted = ACCEPTED in labels
-    workgroups = normalize_proposed_workgroup(plan, labels, issue, accepted=accepted)
+    workgroups = normalize_proposed_workgroup(
+        plan,
+        labels,
+        issue,
+        accepted=accepted,
+        event_action=event_action,
+        event_label=event_label,
+        actor_can_manage=actor_can_manage,
+    )
     owners = labels.intersection(OWNER_LABELS)
     if accepted and len(owners) != 1:
         plan.remove_labels.add(ACCEPTED)

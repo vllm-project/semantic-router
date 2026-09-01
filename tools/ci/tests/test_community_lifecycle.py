@@ -55,6 +55,61 @@ MoM & Routing
             {"needs-acceptance", "wg/evaluation-quality"},
         )
 
+    def test_maintainer_reclassification_overrides_form_workgroup(self) -> None:
+        issue = {
+            "body": "### Proposed Workgroup\n\nEnterprise & Environment\n",
+            "labels": labels("needs-acceptance", "wg/data-plane-networking"),
+            "assignees": [],
+            "milestone": None,
+        }
+        plan = community_lifecycle.plan_issue(
+            issue,
+            event_action="labeled",
+            event_label="wg/data-plane-networking",
+            actor_can_manage=True,
+        )
+        self.assertNotIn("wg/enterprise-environment", plan.add_labels)
+        self.assertNotIn("wg/data-plane-networking", plan.remove_labels)
+
+    def test_maintainer_can_remove_stale_form_workgroup_before_relabeling(self) -> None:
+        issue = {
+            "body": "### Proposed Workgroup\n\nEnterprise & Environment\n",
+            "labels": labels("needs-acceptance"),
+            "assignees": [],
+            "milestone": None,
+        }
+        plan = community_lifecycle.plan_issue(
+            issue,
+            event_action="unlabeled",
+            event_label="wg/enterprise-environment",
+            actor_can_manage=True,
+        )
+        self.assertNotIn("wg/enterprise-environment", plan.add_labels)
+
+    def test_multiple_workgroups_are_not_resolved_from_stale_form_data(self) -> None:
+        issue = {
+            "body": "### Proposed Workgroup\n\nEnterprise & Environment\n",
+            "labels": labels(
+                "needs-acceptance",
+                "wg/enterprise-environment",
+                "wg/data-plane-networking",
+            ),
+            "assignees": [],
+            "milestone": None,
+        }
+        plan = community_lifecycle.plan_issue(
+            issue,
+            event_action="labeled",
+            event_label="wg/data-plane-networking",
+            actor_can_manage=True,
+        )
+        self.assertFalse(
+            plan.add_labels.intersection(community_lifecycle.WORKGROUP_LABELS)
+        )
+        self.assertFalse(
+            plan.remove_labels.intersection(community_lifecycle.WORKGROUP_LABELS)
+        )
+
     def test_unaccepted_issue_cannot_be_assigned_or_prioritized(self) -> None:
         issue = {
             "body": "",
