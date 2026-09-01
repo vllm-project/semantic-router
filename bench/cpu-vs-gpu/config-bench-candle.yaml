@@ -898,7 +898,7 @@ data:
               - other
         complexity:
           - name: needs_reasoning
-            threshold: 0.7
+            threshold: 0.10
             description: Escalate difficult or multi-step prompts.
             hard:
               candidates:
@@ -5190,7 +5190,7 @@ data:
               - other
         complexity:
           - name: needs_reasoning
-            threshold: 0.7
+            threshold: 0.10
             description: Escalate difficult or multi-step prompts.
             hard:
               candidates:

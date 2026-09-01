@@ -40,6 +40,18 @@ export function getPolicySignalFieldSchema(signalType: string): FieldSchema[] | 
         { key: 'instructions', label: 'Instructions', type: 'string' },
         { key: 'use_cpu', label: 'Use CPU', type: 'boolean' },
       ]
+    case 'input_modality':
+      return [
+        { key: 'description', label: 'Description', type: 'string' },
+        {
+          key: 'modality',
+          label: 'Modality',
+          type: 'select',
+          options: ['text', 'image', 'audio', 'video'],
+          required: true,
+          description: 'Input modality whose structural presence this signal matches.',
+        },
+      ]
     default:
       return null
   }

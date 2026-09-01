@@ -80,6 +80,7 @@ func canonicalSignalsFromSignals(signals Signals) CanonicalSignals {
 		EventRules:    append([]EventRule(nil), signals.EventRules...),
 		Metadata:      append([]MetadataRule(nil), signals.MetadataRules...),
 		Classifiers:   append([]ClassifierSignalRule(nil), signals.ClassifierRules...),
+		InputModality: append([]InputModalityRule(nil), signals.InputModalityRules...),
 	}
 }
 

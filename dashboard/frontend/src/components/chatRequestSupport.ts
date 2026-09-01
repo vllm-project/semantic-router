@@ -77,6 +77,7 @@ const RESPONSE_HEADER_KEYS = [
   'x-vsr-matched-kb',
   'x-vsr-matched-conversation',
   'x-vsr-matched-event',
+  'x-vsr-matched-input-modality',
   'x-vsr-matched-projections',
   'x-vsr-looper-model',
   'x-vsr-looper-models-used',
