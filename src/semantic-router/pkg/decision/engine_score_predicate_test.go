@@ -153,7 +153,7 @@ func TestORPreservesZeroConfidenceMatchedRule(t *testing.T) {
 		SignalConfidences: map[string]float64{"keyword:zero": 0},
 	}
 
-	result, traces := engine.EvaluateDecisionsWithTrace(signals)
+	result, traces, _, _ := engine.EvaluateDecisionsWithTraceAndDiagnostics(signals)
 	if result == nil || len(result.MatchedRules) != 1 ||
 		result.MatchedRules[0] != "keyword:zero" {
 		t.Fatalf("result = %#v", result)

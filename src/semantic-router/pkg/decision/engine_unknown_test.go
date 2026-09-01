@@ -1,6 +1,7 @@
 package decision
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -68,7 +69,7 @@ func TestUnknownOrTrueMatchesResolvedBranch(t *testing.T) {
 	if result.Confidence != 0.6 {
 		t.Fatalf("confidence = %v, want 0.6", result.Confidence)
 	}
-	traceResult, traces := engine.EvaluateDecisionsWithTrace(signals)
+	traceResult, traces, _, _ := engine.EvaluateDecisionsWithTraceAndDiagnostics(signals)
 	if traceResult == nil || len(traces) != 1 {
 		t.Fatalf("trace result = %#v, traces = %v", traceResult, traces)
 	}
@@ -104,5 +105,149 @@ func TestUnknownKeepsLegacyPromptGuardResult(t *testing.T) {
 	})
 	if err != nil || result == nil {
 		t.Fatalf("result = %#v, error = %v", result, err)
+	}
+}
+
+func TestOnUnknownPolicies(t *testing.T) {
+	rule := config.RuleNode{
+		Type:      config.SignalTypeClassifier,
+		Name:      "risk",
+		Label:     "RISKY",
+		Predicate: &config.NumericPredicate{GTE: float64Ptr(0.5)},
+		OnError:   "match",
+	}
+	signals := &SignalMatches{SignalErrors: map[string]string{"classifier:risk": "timeout"}}
+	tests := []struct {
+		name      string
+		policy    string
+		wantMatch bool
+		wantError bool
+	}{
+		{"legacy", "", true, false},
+		{"no match", config.RuleOnUnknownNoMatch, false, false},
+		{"match", config.RuleOnUnknownMatch, true, false},
+		{"fail request", config.RuleOnUnknownFailRequest, false, true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			rule.OnUnknown = test.policy
+			engine := NewDecisionEngine(nil, nil, nil, []config.Decision{{Name: "route", Rules: rule}}, config.RoutingStrategyPriority)
+			result, diagnostics, err := engine.EvaluateDecisionsWithDiagnostics(signals)
+			if (err != nil) != test.wantError {
+				t.Fatalf("error = %v, wantError %v", err, test.wantError)
+			}
+			if (result != nil) != test.wantMatch {
+				t.Fatalf("result = %#v, wantMatch %v", result, test.wantMatch)
+			}
+			if diagnostics.AppliedUnknownPolicies["route"] != test.policy {
+				t.Fatalf("applied policies = %v, want %q", diagnostics.AppliedUnknownPolicies, test.policy)
+			}
+		})
+	}
+}
+
+func TestUnknownLegacyTraceShowsResolvedLeaf(t *testing.T) {
+	rule := config.RuleNode{
+		Type:      config.SignalTypeClassifier,
+		Name:      "risk",
+		Label:     "RISKY",
+		Predicate: &config.NumericPredicate{GTE: float64Ptr(0.5)},
+		OnError:   "match",
+	}
+	engine := NewDecisionEngine(nil, nil, nil, []config.Decision{{Name: "route", Rules: rule}}, config.RoutingStrategyPriority)
+	result, traces, diagnostics, err := engine.EvaluateDecisionsWithTraceAndDiagnostics(&SignalMatches{
+		SignalErrors: map[string]string{"classifier:risk": "timeout"},
+	})
+	if err != nil || result == nil {
+		t.Fatalf("result = %#v, error = %v", result, err)
+	}
+	if len(traces) != 1 || traces[0].State != "true" || !traces[0].Matched || traces[0].OnUnknown != "" {
+		t.Fatalf("traces = %#v", traces)
+	}
+	if traces[0].RootTrace == nil || !traces[0].RootTrace.Matched {
+		t.Fatalf("root trace = %#v", traces[0].RootTrace)
+	}
+	if len(diagnostics.AppliedUnknownPolicies) != 0 {
+		t.Fatalf("diagnostics = %#v", diagnostics)
+	}
+}
+
+func TestFailRequestEvaluatesAllDecisions(t *testing.T) {
+	unresolved := config.RuleNode{
+		Type:      config.SignalTypeClassifier,
+		Name:      "risk",
+		Label:     "RISKY",
+		Predicate: &config.NumericPredicate{GTE: float64Ptr(0.5)},
+		OnUnknown: config.RuleOnUnknownFailRequest,
+	}
+	matching := config.RuleNode{Type: config.SignalTypeKeyword, Name: "present"}
+	engine := NewDecisionEngine(nil, nil, nil, []config.Decision{
+		{Name: "guarded", Rules: unresolved},
+		{Name: "route", Rules: matching},
+	}, config.RoutingStrategyPriority)
+	result, traces, _, err := engine.EvaluateDecisionsWithTraceAndDiagnostics(&SignalMatches{
+		KeywordRules: []string{"present"},
+		SignalErrors: map[string]string{"classifier:risk": "timeout"},
+	})
+	if !errors.Is(err, ErrDecisionUnresolved) || result != nil {
+		t.Fatalf("result = %#v, error = %v", result, err)
+	}
+	if len(traces) != 2 || !traces[1].Matched {
+		t.Fatalf("traces = %#v", traces)
+	}
+}
+
+func TestFailRequestOverridesHigherPriorityMatch(t *testing.T) {
+	guarded := config.Decision{Name: "guarded", Priority: 1, Rules: config.RuleNode{
+		Type:      config.SignalTypeClassifier,
+		Name:      "risk",
+		Label:     "RISKY",
+		Predicate: &config.NumericPredicate{GTE: float64Ptr(0.5)},
+		OnUnknown: config.RuleOnUnknownFailRequest,
+	}}
+	good := config.Decision{Name: "good", Priority: 100, Rules: config.RuleNode{
+		Type: config.SignalTypeKeyword, Name: "present",
+	}}
+	signals := &SignalMatches{
+		KeywordRules: []string{"present"},
+		SignalErrors: map[string]string{"classifier:risk": "timeout"},
+	}
+	for name, decisions := range map[string][]config.Decision{
+		"guarded first": {guarded, good},
+		"good first":    {good, guarded},
+	} {
+		t.Run(name, func(t *testing.T) {
+			engine := NewDecisionEngine(nil, nil, nil, decisions, config.RoutingStrategyPriority)
+			result, err := engine.EvaluateDecisionsWithSignals(signals)
+			if !errors.Is(err, ErrDecisionUnresolved) || result != nil {
+				t.Fatalf("result = %#v, error = %v", result, err)
+			}
+		})
+	}
+}
+
+func TestUnknownTraceRecordsErrorAndPolicy(t *testing.T) {
+	rule := config.RuleNode{
+		Type:      config.SignalTypeClassifier,
+		Name:      "risk",
+		Label:     "RISKY",
+		Predicate: &config.NumericPredicate{GTE: float64Ptr(0.5)},
+		OnUnknown: config.RuleOnUnknownNoMatch,
+	}
+	engine := NewDecisionEngine(nil, nil, nil, []config.Decision{{Name: "route", Rules: rule}}, config.RoutingStrategyPriority)
+	_, traces, diagnostics, err := engine.EvaluateDecisionsWithTraceAndDiagnostics(&SignalMatches{
+		SignalErrors: map[string]string{"classifier:risk": "timeout"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(traces) != 1 || traces[0].State != "unknown" || traces[0].OnUnknown != config.RuleOnUnknownNoMatch {
+		t.Fatalf("traces = %#v", traces)
+	}
+	if traces[0].RootTrace == nil || traces[0].RootTrace.SignalError != "timeout" {
+		t.Fatalf("root trace = %#v", traces[0].RootTrace)
+	}
+	if diagnostics.AppliedUnknownPolicies["route"] != config.RuleOnUnknownNoMatch {
+		t.Fatalf("diagnostics = %#v", diagnostics)
 	}
 }

@@ -49,6 +49,19 @@ func TestConvertDecisionPreservesNestedContextCompression(t *testing.T) {
 	assert.Equal(t, 1000, pluginConfig.Targets.ToolOutputs.TargetTokens)
 }
 
+func TestConvertDecisionPreservesOnUnknown(t *testing.T) {
+	converter := &CRDConverter{}
+	decision, err := converter.convertDecision(v1alpha1.Decision{
+		Name: "guarded",
+		Signals: v1alpha1.SignalCombination{
+			Operator:  "AND",
+			OnUnknown: "fail_request",
+		},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "fail_request", decision.Rules.OnUnknown)
+}
+
 // TestConverterWithTestData tests the converter with input/output test data
 // This test reads YAML files from testdata/input, converts them, and writes output to testdata/output
 func TestConverterWithTestData(t *testing.T) {

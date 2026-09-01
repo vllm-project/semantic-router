@@ -91,15 +91,17 @@ func (c *Classifier) evaluateDecisionInternal(signals *SignalResults, trace bool
 
 	var result *decision.DecisionResult
 	var traces []decision.DecisionTrace
+	var diagnostics decision.EvaluationDiagnostics
+	var err error
 
 	if trace {
-		result, traces = engine.EvaluateDecisionsWithTrace(sm)
+		result, traces, diagnostics, err = engine.EvaluateDecisionsWithTraceAndDiagnostics(sm)
 	} else {
-		var err error
-		result, err = engine.EvaluateDecisionsWithSignals(sm)
-		if err != nil {
-			return nil, nil, fmt.Errorf("decision evaluation failed: %w", err)
-		}
+		result, diagnostics, err = engine.EvaluateDecisionsWithDiagnostics(sm)
+	}
+	signals.AppliedUnknownPolicies = diagnostics.AppliedUnknownPolicies
+	if err != nil {
+		return nil, traces, fmt.Errorf("decision evaluation failed: %w", err)
 	}
 
 	if result == nil {
