@@ -29,3 +29,54 @@ func TestValidateDecisionOnUnknown(t *testing.T) {
 		})
 	}
 }
+
+func TestParseYAMLBytesRejectsOnUnknownOnErrorConflict(t *testing.T) {
+	canonicalYAML := []byte(`
+version: v0.3
+listeners:
+  - name: http
+    address: 0.0.0.0
+    port: 8899
+providers:
+  defaults:
+    default_model: qwen2.5:3b
+  models:
+    - name: qwen2.5:3b
+      provider_model_id: served-qwen
+      backend_refs:
+        - name: primary
+          endpoint: 127.0.0.1:11434
+          protocol: http
+routing:
+  modelCards:
+    - name: qwen2.5:3b
+      param_size: 3b
+  signals:
+    classifiers:
+      - name: risk
+        type: local
+        model_path: models/risk
+        labels: [SAFE, RISKY]
+        use_cpu: true
+  decisions:
+    - name: guarded
+      priority: 100
+      rules:
+        operator: AND
+        on_unknown: no_match
+        conditions:
+          - type: classifier
+            name: risk
+            label: RISKY
+            predicate:
+              gte: 0.5
+            on_error: no_match
+      modelRefs:
+        - model: qwen2.5:3b
+          use_reasoning: false
+`)
+	_, err := ParseYAMLBytes(canonicalYAML)
+	if err == nil || !strings.Contains(err.Error(), "on_error has no effect") {
+		t.Fatalf("error = %v, want the on_unknown + on_error conflict rejection", err)
+	}
+}
