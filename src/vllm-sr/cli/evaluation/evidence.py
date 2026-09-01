@@ -97,16 +97,20 @@ class RoutingTraceNode(StrictModel):
     signal_type: str | None = Field(default=None, max_length=128)
     signal_name: str | None = Field(default=None, max_length=128)
     label: str | None = Field(default=None, max_length=128)
+    state: str | None = Field(default=None, max_length=32)
     matched: bool
     confidence: float | None = Field(default=None, ge=0, le=1)
+    has_signal_error: bool = False
     confidence_scored: bool = False
     children: tuple[RoutingTraceNode, ...] = ()
 
 
 class RoutingDecisionTrace(StrictModel):
     decision_name: str = Field(min_length=1, max_length=128)
+    state: str | None = Field(default=None, max_length=32)
     matched: bool
     confidence: float | None = Field(default=None, ge=0, le=1)
+    on_unknown: str | None = Field(default=None, max_length=32)
     root_trace: RoutingTraceNode | None = None
 
 
@@ -133,6 +137,7 @@ class RoutingDiagnostic(StrictModel):
     routing_decision: str | None = Field(default=None, max_length=160)
     traces: tuple[RoutingDecisionTrace, ...] = ()
     signals: tuple[RoutingSignalDiagnostic, ...] = ()
+    applied_unknown_policies: tuple[tuple[str, str], ...] = ()
 
     _case_id = field_validator("case_id")(_validate_id)
 

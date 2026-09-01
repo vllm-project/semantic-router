@@ -9,6 +9,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/inflight"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -57,6 +58,16 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 			return requestDecisionState{}, r.createErrorResponse(422, decisionErr.Error())
 		}
 		logging.Errorf("[Request Body] Decision evaluation failed: %v", decisionErr)
+		if errors.Is(decisionErr, decision.ErrDecisionUnresolved) {
+			resp := r.createErrorResponse(503, decisionErr.Error())
+			if ctx.RouterReplayPluginConfig == nil {
+				ctx.RouterReplayPluginConfig = r.Config.EffectiveRouterReplayConfig(nil)
+			}
+			r.startRouterReplay(ctx, originalModel, "", "")
+			r.updateRouterReplayStatus(ctx, 503, false)
+			addRouterReplayHeaderToImmediateResponse(resp, ctx.RouterReplayID)
+			return requestDecisionState{}, resp
+		}
 		return requestDecisionState{}, r.createErrorResponse(403, decisionErr.Error())
 	}
 	metrics.RecordModelRequest(selectedModel)

@@ -45,13 +45,13 @@ routing:
       priority: 200
       rules:
         operator: AND
+        on_unknown: no_match
         conditions:
           - type: classifier
             name: phishing
             label: PHISHING
             predicate:
               gte: 0.5
-            on_error: no_match
       modelRefs:
         - model: local-small
           use_reasoning: false
@@ -68,11 +68,19 @@ not calibrated classifier probabilities. Classifier leaves are the only
 decision predicates that accept `on_error`; failures expose the bounded
 `classifier_evaluation_failed` code in eval/replay diagnostics.
 
-This condition-level `on_error` (`no_match` or `match`) decides what the
-predicate evaluates to when the classifier fails. It is a different key from
-`prompt_guard.on_error` (`allow` or `block`), which decides whether a guardrail
-backend failure counts as unverified content for every rule that backend
-serves. See [Safety models and policy](../../global/safety-models-and-policy.md).
+On failure, the decision tree evaluates this leaf as `Unknown` until the full
+AND/OR/NOT expression is known. Root-level `rules.on_unknown` then chooses
+`no_match`, `match`, or `fail_request`. `no_match` and `match` resolve only
+their own decision; `fail_request` is global fail-closed: it rejects the whole
+request with a 503 even when another decision matches cleanly, regardless of
+priority. When `rules.on_unknown` is omitted, condition-level `on_error`
+(`no_match` or `match`) preserves the previous generic-classifier result.
+Setting `rules.on_unknown` disables every condition-level `on_error` in that
+tree, so the Router rejects a configuration that sets both.
+`prompt_guard.on_error` (`allow` or `block`) remains the compatibility
+default for jailbreak rules. Diagnostics include both the signal error and any
+terminal policy that was applied. See
+[Safety models and policy](../../global/safety-models-and-policy.md).
 
 `sequence_classifier` classifiers also reference a named external model, but
 use the shared `http_classify` contract and preserve its full label distribution.
