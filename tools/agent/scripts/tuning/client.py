@@ -44,7 +44,7 @@ class RouterClient:
                 payload = json.loads(body)
             except (ValueError, UnicodeDecodeError):
                 raise RuntimeError(f"router eval returned HTTP {exc.code}") from exc
-            if isinstance(payload, dict):
+            if isinstance(payload, dict) and payload.get("decision_error"):
                 return payload
             raise RuntimeError(f"router eval returned HTTP {exc.code}") from exc
 

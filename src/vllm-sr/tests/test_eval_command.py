@@ -182,6 +182,24 @@ def test_format_error_response_renders_decision_error_shape() -> None:
     assert "guarded=fail_request" in msg
 
 
+def test_format_error_response_keeps_legacy_503_envelope() -> None:
+    """A 503 with the classic error envelope and no decision fields renders as before."""
+
+    class FakeResp:
+        status_code = 503
+        text = "{}"
+
+        def json(self):
+            return {
+                "error": {"code": "CLASSIFICATION_ERROR", "message": "classifier down"}
+            }
+
+    msg = _format_error_response(FakeResp())
+    assert "503" in msg
+    assert "CLASSIFICATION_ERROR" in msg
+    assert "classifier down" in msg
+
+
 def test_format_error_response_falls_back_to_raw_text() -> None:
     """Plain-text (non-JSON) error body is surfaced as-is."""
 

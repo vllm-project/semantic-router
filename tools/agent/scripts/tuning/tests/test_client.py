@@ -45,6 +45,33 @@ def test_eval_probe_raises_typed_error_for_non_json_body():
             client.eval_probe("hello")
 
 
+def test_eval_probe_keeps_legacy_error_envelope_as_typed_error():
+    envelope = {"error": {"code": "CLASSIFICATION_ERROR", "message": "boom"}}
+    client = RouterClient()
+    with mock.patch(
+        "tuning.client.request.urlopen",
+        side_effect=_http_error(503, json.dumps(envelope).encode()),
+    ):
+        with pytest.raises(RuntimeError, match="HTTP 503"):
+            client.eval_probe("hello")
+
+
+def test_run_probes_keeps_error_row_for_legacy_503():
+    envelope = {"error": {"code": "CLASSIFICATION_ERROR", "message": "boom"}}
+    client = RouterClient()
+    with mock.patch(
+        "tuning.client.request.urlopen",
+        side_effect=_http_error(503, json.dumps(envelope).encode()),
+    ):
+        results = client.run_probes(
+            [{"id": "p1", "query": "hello", "expected_decision": "guarded"}]
+        )
+    assert len(results) == 1
+    assert results[0]["actual"] == "ERROR"
+    assert results[0]["correct"] is False
+    assert "HTTP 503" in results[0]["error"]
+
+
 def test_run_probes_reports_unresolved_decision_as_bounded_failure():
     payload = {
         "decision_error": "decision unresolved",
