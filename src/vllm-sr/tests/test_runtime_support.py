@@ -85,6 +85,19 @@ def test_append_passthrough_env_vars_includes_router_logging_settings(monkeypatc
     assert env_vars["SR_LOG_ENCODING"] == "console"
 
 
+def test_append_passthrough_env_vars_includes_envoy_log_level_without_changing_router_level(
+    monkeypatch,
+):
+    monkeypatch.setenv("SR_LOG_LEVEL", "debug")
+    monkeypatch.setenv("VLLM_SR_ENVOY_LOG_LEVEL", "WARNING")
+
+    env_vars: dict[str, str] = {}
+    append_passthrough_env_vars(env_vars)
+
+    assert env_vars["SR_LOG_LEVEL"] == "debug"
+    assert env_vars["VLLM_SR_ENVOY_LOG_LEVEL"] == "WARNING"
+
+
 def test_append_passthrough_env_vars_forwards_keys_named_by_trusted_source_config(
     monkeypatch, tmp_path
 ):
