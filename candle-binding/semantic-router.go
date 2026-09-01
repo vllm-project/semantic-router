@@ -813,6 +813,13 @@ func InitEmbeddingModelsBatched(qwen3ModelPath string, maxBatchSize int, maxWait
 //   - *EmbeddingOutput: Embedding output with metadata
 //   - error: Non-nil if embedding generation fails
 func GetEmbeddingBatched(text string, modelType string, targetDim int) (*EmbeddingOutput, error) {
+	if err := validateRequiredText("text", text); err != nil {
+		return nil, err
+	}
+	if err := validateTargetDim(targetDim); err != nil {
+		return nil, err
+	}
+
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 
@@ -1026,6 +1033,9 @@ func MultiModalEncodeText(text string, targetDim int) (*MultiModalEmbeddingOutpu
 	if err := validateRequiredText("text", text); err != nil {
 		return nil, err
 	}
+	if err := validateTargetDim(targetDim); err != nil {
+		return nil, err
+	}
 
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
@@ -1066,12 +1076,8 @@ func MultiModalEncodeText(text string, targetDim int) (*MultiModalEmbeddingOutpu
 //   - MultiModalEmbeddingOutput with the embedding and metadata
 //   - error if encoding fails
 func MultiModalEncodeImage(pixelData []float32, height, width, targetDim int) (*MultiModalEmbeddingOutput, error) {
-	if len(pixelData) == 0 {
-		return nil, fmt.Errorf("pixelData cannot be empty")
-	}
-	expected := 3 * height * width
-	if len(pixelData) != expected {
-		return nil, fmt.Errorf("pixelData length %d != expected %d (3*%d*%d)", len(pixelData), expected, height, width)
+	if err := validateImageTensor(pixelData, height, width, targetDim); err != nil {
+		return nil, err
 	}
 
 	var result C.MultiModalEmbeddingResult
@@ -1116,12 +1122,8 @@ func MultiModalEncodeImage(pixelData []float32, height, width, targetDim int) (*
 //   - MultiModalEmbeddingOutput with the embedding and metadata
 //   - error if encoding fails
 func MultiModalEncodeAudio(melData []float32, nMels, timeFrames, targetDim int) (*MultiModalEmbeddingOutput, error) {
-	if len(melData) == 0 {
-		return nil, fmt.Errorf("melData cannot be empty")
-	}
-	expected := nMels * timeFrames
-	if len(melData) != expected {
-		return nil, fmt.Errorf("melData length %d != expected %d (%d*%d)", len(melData), expected, nMels, timeFrames)
+	if err := validateAudioTensor(melData, nMels, timeFrames, targetDim); err != nil {
+		return nil, err
 	}
 
 	var result C.MultiModalEmbeddingResult
@@ -1167,8 +1169,8 @@ func MultiModalEncodeAudio(melData []float32, nMels, timeFrames, targetDim int) 
 //   - MultiModalEmbeddingOutput with the embedding and metadata
 //   - error if decoding or encoding fails
 func MultiModalEncodeImageFromBytes(imageBytes []byte, targetDim int) (*MultiModalEmbeddingOutput, error) {
-	if len(imageBytes) == 0 {
-		return nil, fmt.Errorf("imageBytes cannot be empty")
+	if err := validateImageBytes(imageBytes, targetDim); err != nil {
+		return nil, err
 	}
 
 	var result C.MultiModalEmbeddingResult
@@ -1211,6 +1213,9 @@ func MultiModalEncodeImageFromBase64(base64Str string, targetDim int) (*MultiMod
 	if err := validateRequiredText("base64Str", base64Str); err != nil {
 		return nil, err
 	}
+	if err := validateTargetDim(targetDim); err != nil {
+		return nil, err
+	}
 
 	payload := base64Str
 	if idx := strings.Index(base64Str, ";base64,"); idx >= 0 {
@@ -1243,6 +1248,9 @@ func MultiModalEncodeImageFromBase64(base64Str string, targetDim int) (*MultiMod
 //   - error if download, decoding, or encoding fails
 func MultiModalEncodeImageFromURL(url string, targetDim int) (*MultiModalEmbeddingOutput, error) {
 	if err := validateRequiredText("url", url); err != nil {
+		return nil, err
+	}
+	if err := validateTargetDim(targetDim); err != nil {
 		return nil, err
 	}
 
@@ -1366,6 +1374,13 @@ func InitEmbeddingModelsWithMmBert(qwen3ModelPath, gemmaModelPath, mmBertModelPa
 //	// Auto dimension (uses full 768)
 //	embedding, err := GetEmbeddingWithDim("medium text", 0.5, 0.5, 0)
 func GetEmbeddingWithDim(text string, qualityPriority, latencyPriority float32, targetDim int) ([]float32, error) {
+	if err := validateRequiredText("text", text); err != nil {
+		return nil, err
+	}
+	if err := validateTargetDim(targetDim); err != nil {
+		return nil, err
+	}
+
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 
@@ -1424,6 +1439,13 @@ func GetEmbeddingWithDim(text string, qualityPriority, latencyPriority float32, 
 //	output, err := GetEmbeddingWithMetadata("Hello world", 0.5, 0.5, 768)
 //	fmt.Printf("Used model: %s, took %.2fms\n", output.ModelType, output.ProcessingTimeMs)
 func GetEmbeddingWithMetadata(text string, qualityPriority, latencyPriority float32, targetDim int) (*EmbeddingOutput, error) {
+	if err := validateRequiredText("text", text); err != nil {
+		return nil, err
+	}
+	if err := validateTargetDim(targetDim); err != nil {
+		return nil, err
+	}
+
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 
@@ -1496,6 +1518,13 @@ func GetEmbeddingWithMetadata(text string, qualityPriority, latencyPriority floa
 //	}
 //	fmt.Printf("Used model: %s\n", output.ModelType)
 func GetEmbeddingWithModelType(text string, modelType string, targetDim int) (*EmbeddingOutput, error) {
+	if err := validateRequiredText("text", text); err != nil {
+		return nil, err
+	}
+	if err := validateTargetDim(targetDim); err != nil {
+		return nil, err
+	}
+
 	// Validate model type
 	if modelType != "qwen3" && modelType != "gemma" && modelType != "mmbert" && modelType != "multimodal" {
 		return nil, fmt.Errorf("invalid model type: %s (must be 'qwen3', 'gemma', 'mmbert', or 'multimodal')", modelType)
@@ -1527,6 +1556,16 @@ func GetEmbeddingWithModelType(text string, modelType string, targetDim int) (*E
 //
 //	output, err := GetEmbedding2DMatryoshka("Hello world", "mmbert", 3, 256)
 func GetEmbedding2DMatryoshka(text string, modelType string, targetLayer int, targetDim int) (*EmbeddingOutput, error) {
+	if err := validateRequiredText("text", text); err != nil {
+		return nil, err
+	}
+	if err := validateTargetDim(targetDim); err != nil {
+		return nil, err
+	}
+	if targetLayer < 0 {
+		return nil, fmt.Errorf("targetLayer cannot be negative, got %d", targetLayer)
+	}
+
 	// Validate model type
 	if modelType != "qwen3" && modelType != "gemma" && modelType != "mmbert" && modelType != "multimodal" {
 		return nil, fmt.Errorf("invalid model type: %s (must be 'qwen3', 'gemma', 'mmbert', or 'multimodal')", modelType)
@@ -1668,9 +1707,8 @@ func cFloatArrayToGoSlice(data *C.float, length C.int) []float32 {
 //	// Use Gemma with 512-dim Matryoshka
 //	result, err = CalculateEmbeddingSimilarity("text1", "text2", "gemma", 512)
 func CalculateEmbeddingSimilarity(text1, text2 string, modelType string, targetDim int) (*SimilarityOutput, error) {
-	// Validate model type
-	if modelType != "auto" && modelType != "qwen3" && modelType != "gemma" {
-		return nil, fmt.Errorf("invalid model type: %s (must be 'auto', 'qwen3', or 'gemma')", modelType)
+	if err := validateEmbeddingSimilarity(text1, text2, modelType, targetDim); err != nil {
+		return nil, err
 	}
 
 	cText1 := C.CString(text1)
@@ -1748,13 +1786,8 @@ type BatchSimilarityOutput struct {
 //   - BatchSimilarityOutput: Top-k matches sorted by similarity (descending)
 //   - error: Error message if operation failed
 func CalculateSimilarityBatch(query string, candidates []string, topK int, modelType string, targetDim int) (*BatchSimilarityOutput, error) {
-	// Validate model type
-	if modelType != "auto" && modelType != "qwen3" && modelType != "gemma" {
-		return nil, fmt.Errorf("invalid model type: %s (must be 'auto', 'qwen3', or 'gemma')", modelType)
-	}
-
-	if len(candidates) == 0 {
-		return nil, fmt.Errorf("candidates array cannot be empty")
+	if err := validateSimilarityBatch(query, candidates, topK, modelType, targetDim); err != nil {
+		return nil, err
 	}
 
 	// Convert query to C string

@@ -2,6 +2,8 @@
 
 package candle_binding
 
+import "fmt"
+
 // This file is the compile-only stub for the Candle backend. It is selected on
 // Windows or whenever CGO is disabled, i.e. whenever the native Candle library
 // cannot be linked. It deliberately does NOT emulate the native backend.
@@ -183,6 +185,12 @@ func InitEmbeddingModelsBatched(qwen3ModelPath string, maxBatchSize int, maxWait
 
 // GetEmbeddingBatched generates an embedding using the continuous batching model
 func GetEmbeddingBatched(text string, modelType string, targetDim int) (*EmbeddingOutput, error) {
+	if err := validateRequiredText("text", text); err != nil {
+		return nil, err
+	}
+	if err := validateTargetDim(targetDim); err != nil {
+		return nil, err
+	}
 	return nil, ErrBackendUnavailable
 }
 
@@ -199,16 +207,37 @@ func InitEmbeddingModels(qwen3ModelPath, gemmaModelPath string, mmBertModelPath 
 
 // GetEmbeddingWithDim generates an embedding with intelligent model selection
 func GetEmbeddingWithDim(text string, qualityPriority, latencyPriority float32, targetDim int) ([]float32, error) {
+	if err := validateRequiredText("text", text); err != nil {
+		return nil, err
+	}
+	if err := validateTargetDim(targetDim); err != nil {
+		return nil, err
+	}
 	return nil, ErrBackendUnavailable
 }
 
 // GetEmbeddingWithMetadata generates an embedding with full metadata
 func GetEmbeddingWithMetadata(text string, qualityPriority, latencyPriority float32, targetDim int) (*EmbeddingOutput, error) {
+	if err := validateRequiredText("text", text); err != nil {
+		return nil, err
+	}
+	if err := validateTargetDim(targetDim); err != nil {
+		return nil, err
+	}
 	return nil, ErrBackendUnavailable
 }
 
 // GetEmbeddingWithModelType generates an embedding with a manually specified model type
 func GetEmbeddingWithModelType(text string, modelType string, targetDim int) (*EmbeddingOutput, error) {
+	if err := validateRequiredText("text", text); err != nil {
+		return nil, err
+	}
+	if err := validateTargetDim(targetDim); err != nil {
+		return nil, err
+	}
+	if modelType != "qwen3" && modelType != "gemma" && modelType != "mmbert" && modelType != "multimodal" {
+		return nil, fmt.Errorf("invalid model type: %s (must be 'qwen3', 'gemma', 'mmbert', or 'multimodal')", modelType)
+	}
 	return nil, ErrBackendUnavailable
 }
 
@@ -227,27 +256,42 @@ func MultiModalEncodeText(text string, targetDim int) (*MultiModalEmbeddingOutpu
 	if err := validateRequiredText("text", text); err != nil {
 		return nil, err
 	}
+	if err := validateTargetDim(targetDim); err != nil {
+		return nil, err
+	}
 	return nil, ErrBackendUnavailable
 }
 
 // MultiModalEncodeImage encodes image using multi-modal model
 func MultiModalEncodeImage(pixelData []float32, height, width, targetDim int) (*MultiModalEmbeddingOutput, error) {
+	if err := validateImageTensor(pixelData, height, width, targetDim); err != nil {
+		return nil, err
+	}
 	return nil, ErrBackendUnavailable
 }
 
 // MultiModalEncodeAudio encodes audio using multi-modal model
 func MultiModalEncodeAudio(melData []float32, nMels, timeFrames, targetDim int) (*MultiModalEmbeddingOutput, error) {
+	if err := validateAudioTensor(melData, nMels, timeFrames, targetDim); err != nil {
+		return nil, err
+	}
 	return nil, ErrBackendUnavailable
 }
 
 // MultiModalEncodeImageFromBytes decodes image bytes and encodes to embedding
 func MultiModalEncodeImageFromBytes(imageBytes []byte, targetDim int) (*MultiModalEmbeddingOutput, error) {
+	if err := validateImageBytes(imageBytes, targetDim); err != nil {
+		return nil, err
+	}
 	return nil, ErrBackendUnavailable
 }
 
 // MultiModalEncodeImageFromBase64 decodes a base64-encoded image and encodes to embedding
 func MultiModalEncodeImageFromBase64(base64Str string, targetDim int) (*MultiModalEmbeddingOutput, error) {
 	if err := validateRequiredText("base64Str", base64Str); err != nil {
+		return nil, err
+	}
+	if err := validateTargetDim(targetDim); err != nil {
 		return nil, err
 	}
 	return nil, ErrBackendUnavailable
@@ -258,11 +302,26 @@ func MultiModalEncodeImageFromURL(url string, targetDim int) (*MultiModalEmbeddi
 	if err := validateRequiredText("url", url); err != nil {
 		return nil, err
 	}
+	if err := validateTargetDim(targetDim); err != nil {
+		return nil, err
+	}
 	return nil, ErrBackendUnavailable
 }
 
 // GetEmbedding2DMatryoshka generates an embedding using the 2D Matryoshka API
 func GetEmbedding2DMatryoshka(text string, modelType string, targetLayer int, targetDim int) (*EmbeddingOutput, error) {
+	if err := validateRequiredText("text", text); err != nil {
+		return nil, err
+	}
+	if err := validateTargetDim(targetDim); err != nil {
+		return nil, err
+	}
+	if targetLayer < 0 {
+		return nil, fmt.Errorf("targetLayer cannot be negative, got %d", targetLayer)
+	}
+	if modelType != "qwen3" && modelType != "gemma" && modelType != "mmbert" && modelType != "multimodal" {
+		return nil, fmt.Errorf("invalid model type: %s (must be 'qwen3', 'gemma', 'mmbert', or 'multimodal')", modelType)
+	}
 	return nil, ErrBackendUnavailable
 }
 
@@ -279,11 +338,17 @@ func CalculateSimilarityDefault(text1, text2 string) float32 {
 
 // CalculateEmbeddingSimilarity calculates cosine similarity
 func CalculateEmbeddingSimilarity(text1, text2 string, modelType string, targetDim int) (*SimilarityOutput, error) {
+	if err := validateEmbeddingSimilarity(text1, text2, modelType, targetDim); err != nil {
+		return nil, err
+	}
 	return nil, ErrBackendUnavailable
 }
 
 // CalculateSimilarityBatch finds top-k most similar candidates
 func CalculateSimilarityBatch(query string, candidates []string, topK int, modelType string, targetDim int) (*BatchSimilarityOutput, error) {
+	if err := validateSimilarityBatch(query, candidates, topK, modelType, targetDim); err != nil {
+		return nil, err
+	}
 	return nil, ErrBackendUnavailable
 }
 
