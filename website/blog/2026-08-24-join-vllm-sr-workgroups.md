@@ -1,7 +1,7 @@
 ---
 slug: "join-vllm-sr-workgroups"
-title: "Find Your Focus and Join a Workgroup"
-description: "Seven durable directions give contributors a clear place to build, lead, and grow with the vLLM Semantic Router community."
+title: "Find Your Focus: How to Join and Work Together"
+description: "Choose a vLLM Semantic Router Workgroup, claim a useful task, grow into a Member or Lead, and make every contribution visible."
 authors:
   - name: "vLLM Semantic Router Team"
     url: "https://github.com/vllm-project/semantic-router"
@@ -293,7 +293,7 @@ model research itself. It defines shared measurement and gates.
 
 [View all current Evaluation & Quality Epics](https://github.com/vllm-project/semantic-router/issues?q=is%3Aissue+is%3Aopen+label%3Aepic+label%3Awg%2Fevaluation-quality)
 
-## How Workgroups Operate
+## How to Join and Work Together
 
 > A Workgroup is a technical home, not a permission level.
 
@@ -302,26 +302,105 @@ connects contributors, maintains the charter, and helps prepare work for
 acceptance. The Open Source Team retains final acceptance, merge, role, and
 release authority.
 
-| Workgroups | Open Source Team |
+The normal Member path has four clear steps:
+
+1. **Apply** — choose a Workgroup in the
+   [Workgroup join guide](https://github.com/vllm-project/semantic-router/issues/15),
+   open its charter, and leave a first-person application comment.
+2. **Claim** — choose an eligible Starter task owned by that Workgroup, open the
+   target issue, and comment `/assign`. The task counts as assigned only after
+   your name appears in the issue's **Assignees** field.
+3. **Deliver** — open a focused PR linked to the claimed issue and get a
+   substantive contribution merged.
+4. **Join the roster** — the Workgroup Operations run collects every eligible
+   person into one reviewed roster PR. You become a canonical Member after that
+   PR merges.
+
+A contribution belongs to the Workgroup that owns its issue or PR. Work in a
+different Workgroup can qualify you there, but it does not complete the
+application you made elsewhere. A requested Lead follows the same contribution
+path and then receives a separate human role review.
+
+### If you have not applied
+
+Pick the Workgroup whose charter matches the work you want to do, then comment
+on that charter in your own words. This compact shape is enough:
+
+```text
+I'd like to join this Workgroup.
+Role: Member
+Background: <relevant experience>
+Interested in: <areas you want to help with>
+```
+
+You do not need to be on a roster before collaborating. After applying, open
+the current
+[weekly Workgroup Issues](https://github.com/vllm-project/semantic-router/issues?q=is%3Aissue%20state%3Aopen%20in%3Atitle%20%22%5BCommunity%5D%20Workgroup%20Issues%22)
+and continue with a Starter task under the same Workgroup.
+
+### If you have applied but do not know how to get started
+
+Choose an `AVAILABLE` Starter task under your applied-to Workgroup, open the
+target issue, comment `/assign`, and verify that GitHub lists you as an
+assignee. That assignee state is what makes the application `TASK_ASSIGNED`;
+the weekly listing or the `/assign` text by itself does not.
+
+If none of the Starter tasks fit, comment on the weekly Workgroup Issues entry
+with exactly:
+
+```text
+Need task: wg/<slug>
+```
+
+The next operations run will bring that request into the task-replenishment
+discussion. It will not assign a task automatically.
+
+Once a substantive PR owned by your applied-to Workgroup merges, your
+application becomes `READY_FOR_ROSTER`. The roster PR still needs review and
+merge before your Member card becomes canonical.
+
+### If you already joined
+
+Choose an `AVAILABLE` Member task under your Workgroup; Leads may also choose a
+bounded Lead task. Use `/assign` on the target issue, keep the issue updated
+when scope or progress changes, and prefer one active implementation task at a
+time. If nothing fits, use the same `Need task: wg/<slug>` comment on the weekly
+Workgroup Issues entry so the next replenishment discussion includes you.
+
+### What each role is responsible for
+
+| Role | How to participate |
 | --- | --- |
-| Direction, boundaries, Epics, and contributor focus | Project governance and repository permissions |
-| Triage and acceptance recommendations | Final acceptance, merge, and release authority |
-| Lead and Member roles | Maintainer, Committer, and Contributor roles |
+| Applicant | Choose one Workgroup, apply on its charter, claim a Starter task, and deliver a focused PR. |
+| Member | Keep building in the Workgroup direction, claim Member tasks, help with scoped discussion and review, and make current ownership visible. |
+| Lead | Maintain the charter and Epic map, keep tasks contributor-ready, coordinate triage and dependencies, and help Members find useful work. |
+| Open Source Team | Confirm acceptance and role decisions, review and merge the roster batch, and retain final merge, release, and repository-permission authority. |
 
-**Lead.** Every active Workgroup has at least one Lead and may have several. A
-Lead is a Committer or Maintainer, or a Contributor with a merged commit and a
-Committer or Maintainer Sponsor. Leads maintain the charter and Epic map and
-coordinate triage.
+Every active Workgroup has at least one Lead and may have several. A Lead is a
+Committer or Maintainer, or a Contributor with a merged commit and a Committer
+or Maintainer Sponsor. A Member has at least one substantive merged repository
+contribution and continues to build in the direction. People may join more than
+one Workgroup, and these roles provide visibility and responsibility rather
+than additional repository permissions.
 
-**Member.** A Member has at least one merged repository commit and continues to
-build in the Direction. Anyone may collaborate before meeting the roster
-requirement, and people may join more than one Workgroup.
+## Make Your Work Visible
 
-To join, open the charter and comment with your requested role, a merged
-contribution, your focus, availability, and Sponsor when required. Confirmed
-Leads and Members appear on the public
-[Workgroups map](/community/work-groups); these roles provide visibility and
-responsibility, not additional repository permissions.
+Contribution is more rewarding when people can see the work, the technical
+home behind it, and the responsibility it grows into. The
+[Community Console](https://community.vllm-sr.ai) turns public repository
+evidence into three shareable cards:
+
+| Workgroup role | Contribution impact | Project team |
+| --- | --- | --- |
+| [![Example Workgroup Member card for the Enterprise and Environment Workgroup](/img/blog/vllm/2026-08-24-workgroups-invitation/cards/workgroup-member-card.webp)](https://community.vllm-sr.ai/workgroups?wg=wg%2Fenterprise-environment&card=abhinav-m22) | [![Example contribution card showing community activity and rank](/img/blog/vllm/2026-08-24-workgroups-invitation/cards/contribution-card.webp)](https://community.vllm-sr.ai/contributors?range=all&card=abhinav-m22) | [![Example Team card for a repository Maintainer](/img/blog/vllm/2026-08-24-workgroups-invitation/cards/team-card.webp)](https://community.vllm-sr.ai/team?range=all&card=Xunzhuo) |
+| Your canonical Lead or Member identity after the roster PR merges. | Your public merged PRs, reviews, commits, discussions, and current rank. | Maintainer, Committer, or Emeritus responsibility after the project's separate promotion process. |
+
+Click a person's avatar or name on the
+[Workgroups](https://community.vllm-sr.ai/workgroups),
+[Contributors](https://community.vllm-sr.ai/contributors), or
+[Team](https://community.vllm-sr.ai/team) page to create the live 3:4 card,
+copy it, or download the full-resolution PNG. The examples above are snapshots;
+the live cards update with the repository.
 
 ## Proposing a New Workgroup
 

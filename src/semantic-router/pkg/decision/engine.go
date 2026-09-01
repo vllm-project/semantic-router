@@ -72,27 +72,28 @@ func NewDecisionEngine(
 
 // SignalMatches contains all matched signals for decision evaluation
 type SignalMatches struct {
-	KeywordRules      []string
-	EmbeddingRules    []string
-	DomainRules       []string
-	FactCheckRules    []string // "needs_fact_check" or "no_fact_check_needed"
-	UserFeedbackRules []string // "need_clarification", "satisfied", "want_different", "wrong_answer"
-	ReaskRules        []string // History-aware dissatisfaction signals from repeated user turns
-	PreferenceRules   []string // Route preference names matched via external LLM
-	LanguageRules     []string // Language codes: "en", "es", "zh", "fr", etc.
-	ContextRules      []string // Context rule names matched (e.g. "low_token_count")
-	StructureRules    []string // Structure rule names matched (e.g. "many_questions")
-	ComplexityRules   []string // Complexity rules with difficulty level (e.g. "code_complexity:hard")
-	ModalityRules     []string // Modality classification: "AR", "DIFFUSION", or "BOTH"
-	AuthzRules        []string // Authz rule names matched for user-level routing (e.g. "premium_tier")
-	JailbreakRules    []string // Jailbreak rule names matched (confidence >= threshold)
-	PIIRules          []string // PII rule names matched (denied PII types detected)
-	KBRules           []string // KB signal names matched from global.model_catalog.kbs bindings
-	ConversationRules []string // Conversation-shape signal names matched
-	EventRules        []string // event rule names (event type, severity, temporal, action codes)
-	MetadataRules     []string // untrusted request metadata rule names matched
-	ClassifierRules   []string // generic classifier label names matched
-	ProjectionRules   []string // Derived routing outputs from routing.projections.mappings
+	KeywordRules       []string
+	EmbeddingRules     []string
+	DomainRules        []string
+	FactCheckRules     []string // "needs_fact_check" or "no_fact_check_needed"
+	UserFeedbackRules  []string // "need_clarification", "satisfied", "want_different", "wrong_answer"
+	ReaskRules         []string // History-aware dissatisfaction signals from repeated user turns
+	PreferenceRules    []string // Route preference names matched via external LLM
+	LanguageRules      []string // Language codes: "en", "es", "zh", "fr", etc.
+	ContextRules       []string // Context rule names matched (e.g. "low_token_count")
+	StructureRules     []string // Structure rule names matched (e.g. "many_questions")
+	ComplexityRules    []string // Complexity rules with difficulty level (e.g. "code_complexity:hard")
+	ModalityRules      []string // Modality classification: "AR", "DIFFUSION", or "BOTH"
+	AuthzRules         []string // Authz rule names matched for user-level routing (e.g. "premium_tier")
+	JailbreakRules     []string // Jailbreak rule names matched (confidence >= threshold)
+	PIIRules           []string // PII rule names matched (denied PII types detected)
+	KBRules            []string // KB signal names matched from global.model_catalog.kbs bindings
+	ConversationRules  []string // Conversation-shape signal names matched
+	EventRules         []string // event rule names (event type, severity, temporal, action codes)
+	MetadataRules      []string // untrusted request metadata rule names matched
+	ClassifierRules    []string // generic classifier label names matched
+	InputModalityRules []string // structural input-modality presence rule names matched
+	ProjectionRules    []string // Derived routing outputs from routing.projections.mappings
 
 	SignalConfidences  map[string]float64 // "signalType:ruleName" → real score (0.0-1.0), e.g. {"embedding:ai": 0.88}. Defaults to 1.0 if missing
 	SignalValues       map[string]float64 // raw numeric values exposed by signal evaluators
@@ -625,6 +626,8 @@ func resolvePolicySignalRules(
 		return signals.EventRules, true
 	case config.SignalTypeMetadata:
 		return signals.MetadataRules, true
+	case config.SignalTypeInputModality:
+		return signals.InputModalityRules, true
 	case config.SignalTypeProjection:
 		return signals.ProjectionRules, true
 	default:
