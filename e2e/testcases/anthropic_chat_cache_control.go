@@ -46,7 +46,8 @@ func testAnthropicChatCacheControl(
 
 	sessionID := fmt.Sprintf("chat-cache-%d", time.Now().UnixNano())
 	request := map[string]any{
-		"model": "MoM",
+		"model":      "MoM",
+		"max_tokens": 16,
 		"messages": []any{
 			map[string]any{
 				"role": "system",
