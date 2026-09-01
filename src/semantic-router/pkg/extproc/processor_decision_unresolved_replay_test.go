@@ -43,6 +43,9 @@ func TestRespondDecisionUnresolvedFinalizesReplayAsFailed(t *testing.T) {
 	if record.LifecycleState != routerreplay.LifecycleFailed {
 		t.Fatalf("lifecycle state = %q, want %q", record.LifecycleState, routerreplay.LifecycleFailed)
 	}
+	if record.TerminalReason != "decision_unresolved" {
+		t.Fatalf("terminal reason = %q, want %q", record.TerminalReason, "decision_unresolved")
+	}
 	if record.RouteDiagnostics == nil ||
 		record.RouteDiagnostics.AppliedUnknownPolicies["guarded"] != "fail_request" {
 		t.Fatalf("route diagnostics = %+v, want applied unknown policy guarded=fail_request", record.RouteDiagnostics)

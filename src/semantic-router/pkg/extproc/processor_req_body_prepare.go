@@ -118,6 +118,8 @@ func (r *OpenAIRouter) respondDecisionUnresolved(
 	if immediate := resp.GetImmediateResponse(); immediate != nil {
 		r.attachRouterReplayResponse(ctx, immediate.Body, false)
 	}
+	// Failed, not aborted: the router itself rejected the request with a
+	// terminal 503; aborted is reserved for streams that end early.
 	r.finalizeRouterReplay(ctx, routerreplay.LifecycleFailed, "decision_unresolved")
 	addRouterReplayHeaderToImmediateResponse(resp, ctx.RouterReplayID)
 	return resp
