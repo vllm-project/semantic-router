@@ -88,15 +88,15 @@ type admittedCategoryInference struct {
 	deployment string
 }
 
-func (a admittedCategoryInference) Classify(text string) (candle_binding.ClassResult, error) {
-	return admitModelInference(context.Background(), a.gate, a.deployment, func() (candle_binding.ClassResult, error) {
-		return a.backend.Classify(text)
+func (a admittedCategoryInference) Classify(ctx context.Context, text string) (candle_binding.ClassResult, error) {
+	return admitModelInference(ctx, a.gate, a.deployment, func() (candle_binding.ClassResult, error) {
+		return a.backend.Classify(ctx, text)
 	})
 }
 
-func (a admittedCategoryInference) ClassifyWithProbabilities(text string) (candle_binding.ClassResultWithProbs, error) {
-	return admitModelInference(context.Background(), a.gate, a.deployment, func() (candle_binding.ClassResultWithProbs, error) {
-		return a.backend.ClassifyWithProbabilities(text)
+func (a admittedCategoryInference) ClassifyWithProbabilities(ctx context.Context, text string) (candle_binding.ClassResultWithProbs, error) {
+	return admitModelInference(ctx, a.gate, a.deployment, func() (candle_binding.ClassResultWithProbs, error) {
+		return a.backend.ClassifyWithProbabilities(ctx, text)
 	})
 }
 
@@ -106,15 +106,27 @@ type admittedPIIInference struct {
 	deployment string
 }
 
-func (a admittedPIIInference) ClassifyTokens(text string) (candle_binding.TokenClassificationResult, error) {
-	return admitModelInference(context.Background(), a.gate, a.deployment, func() (candle_binding.TokenClassificationResult, error) {
-		return a.backend.ClassifyTokens(text)
+func (a admittedPIIInference) ClassifyTokens(ctx context.Context, text string) (candle_binding.TokenClassificationResult, error) {
+	return admitModelInference(ctx, a.gate, a.deployment, func() (candle_binding.TokenClassificationResult, error) {
+		return a.backend.ClassifyTokens(ctx, text)
 	})
 }
 
+// withAdmissionRegistry shares one admission registry across classifiers. The
+// underlying models are process-wide singletons, so recipe classifiers must
+// share gates or every recipe multiplies the configured concurrency bound.
+func withAdmissionRegistry(registry *admission.Registry) option {
+	return func(c *Classifier) {
+		c.admissionRegistry = registry
+	}
+}
+
 func (c *Classifier) applyAdmissionGates() {
-	registry := buildAdmissionRegistry(c.Config)
-	c.admissionRegistry = registry
+	registry := c.admissionRegistry
+	if registry == nil {
+		registry = buildAdmissionRegistry(c.Config)
+		c.admissionRegistry = registry
+	}
 	if c.jailbreakInference != nil {
 		c.jailbreakInference = admittedSequenceClassifier{
 			backend:    c.jailbreakInference,

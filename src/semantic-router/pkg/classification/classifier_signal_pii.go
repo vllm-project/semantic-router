@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"slices"
 	"sync"
 	"time"
@@ -16,7 +17,7 @@ type cachedPIIResult struct {
 	err    error
 }
 
-func (c *Classifier) evaluatePIISignal(results *SignalResults, mu *sync.Mutex, piiText string, nonUserMessages []string) {
+func (c *Classifier) evaluatePIISignal(ctx context.Context, results *SignalResults, mu *sync.Mutex, piiText string, nonUserMessages []string) {
 	start := time.Now()
 
 	// Step 1: Collect the union of unique content pieces across all PII rules.
@@ -48,7 +49,7 @@ func (c *Classifier) evaluatePIISignal(results *SignalResults, mu *sync.Mutex, p
 		chunks := piiSignalChunks(content)
 		cached := make([]cachedPIIResult, 0, len(chunks))
 		for _, chunk := range chunks {
-			tokenResult, err := c.piiInference.ClassifyTokens(chunk)
+			tokenResult, err := c.piiInference.ClassifyTokens(ctx, chunk)
 			cached = append(cached, cachedPIIResult{tokenResult, err})
 		}
 		piiCache[content] = cached
@@ -77,9 +78,27 @@ func (c *Classifier) evaluatePIISignal(results *SignalResults, mu *sync.Mutex, p
 	logging.Debugf("[Signal Computation] PII signal evaluation completed in %v", elapsed)
 }
 
+// piiRuleHasInferenceError reports whether any chunk this rule depends on
+// failed inference, so the rule fails visibly instead of matching as "no PII".
+func piiRuleHasInferenceError(ruleContents []string, piiCache map[string][]cachedPIIResult) bool {
+	for _, content := range ruleContents {
+		for _, cached := range piiCache[content] {
+			if cached.err != nil {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (c *Classifier) evaluatePIIRule(rule config.PIIRule, piiText string, nonUserMessages []string, piiCache map[string][]cachedPIIResult, start time.Time, results *SignalResults, mu *sync.Mutex) {
 	ruleContents := collectPIIRuleContents(piiText, nonUserMessages, rule.IncludeHistory)
 	if len(ruleContents) == 0 {
+		return
+	}
+
+	if piiRuleHasInferenceError(ruleContents, piiCache) {
+		recordSignalRuleErrors(results, mu, config.SignalTypePII, []string{rule.Name}, piiEvaluationFailedCode)
 		return
 	}
 

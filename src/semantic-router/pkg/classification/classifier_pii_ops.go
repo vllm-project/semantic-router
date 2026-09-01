@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -24,7 +25,7 @@ func (c *Classifier) ClassifyPIIWithThreshold(text string, threshold float32) ([
 	}
 
 	// Use ModernBERT PII token classifier for entity detection
-	tokenResult, err := c.piiInference.ClassifyTokens(text)
+	tokenResult, err := c.piiInference.ClassifyTokens(context.Background(), text)
 	if err != nil {
 		return nil, fmt.Errorf("PII token classification error: %w", err)
 	}
@@ -108,7 +109,7 @@ func (c *Classifier) scanPIIChunks(text string, threshold float32) ([]PIIDetecti
 	classified := 0
 
 	for _, span := range piiSignalChunkSpans(text) {
-		tokenResult, err := c.piiInference.ClassifyTokens(span.Text)
+		tokenResult, err := c.piiInference.ClassifyTokens(context.Background(), span.Text)
 		if err != nil {
 			return nil, fmt.Errorf("PII token classification error: %w", err)
 		}
@@ -226,7 +227,7 @@ func (c *Classifier) AnalyzeContentForPIIWithThreshold(contentList []string, thr
 		result.ContentIndex = i
 
 		// Use ModernBERT PII token classifier for detailed analysis
-		tokenResult, err := c.piiInference.ClassifyTokens(content)
+		tokenResult, err := c.piiInference.ClassifyTokens(context.Background(), content)
 		if err != nil {
 			logging.Errorf("Error analyzing content %d: %v", i, err)
 			failedCount++

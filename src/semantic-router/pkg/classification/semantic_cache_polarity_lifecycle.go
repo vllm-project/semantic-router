@@ -38,7 +38,7 @@ func (c *Classifier) initializeSemanticCacheNLI() error {
 		return fmt.Errorf("failed to initialize NLI model %q for semantic cache polarity guard: %w", nliCfg.ModelID, err)
 	}
 
-	cache.SetPolarityVerifier(semanticCachePolarityVerifier)
+	cache.SetPolarityVerifier(c.admittedPolarityVerifier())
 	logging.ComponentEvent("classifier", "semantic_cache_nli_initialized", map[string]interface{}{
 		"backend":                 "candle",
 		"model_ref":               nliCfg.ModelID,
@@ -48,14 +48,20 @@ func (c *Classifier) initializeSemanticCacheNLI() error {
 	return nil
 }
 
-// semanticCachePolarityVerifier scores the contradiction between a cached query
-// (NLI premise) and the incoming query (hypothesis). Only fields of the result
-// are accessed: the cgo binding returns a pointer while the compile-only stub
+// admittedPolarityVerifier scores the contradiction between a cached query
+// (NLI premise) and the incoming query (hypothesis) under the shared
+// hallucination-explainer admission gate. Only fields of the result are
+// accessed: the cgo binding returns a pointer while the compile-only stub
 // returns a value, and this file must build under both.
-func semanticCachePolarityVerifier(_ context.Context, cachedQuery, incomingQuery string) (float32, error) {
-	result, err := candle.ClassifyNLI(cachedQuery, incomingQuery)
-	if err != nil {
-		return 0, err
+func (c *Classifier) admittedPolarityVerifier() func(context.Context, string, string) (float32, error) {
+	gate := c.admissionRegistry.For(admissionDeploymentHallucinationExplainer)
+	return func(ctx context.Context, cachedQuery, incomingQuery string) (float32, error) {
+		result, err := admitModelInference(ctx, gate, admissionDeploymentHallucinationExplainer, func() (*candle.NLIClassificationResult, error) {
+			return candle.ClassifyNLI(cachedQuery, incomingQuery)
+		})
+		if err != nil {
+			return 0, err
+		}
+		return result.ContradictProb, nil
 	}
-	return result.ContradictProb, nil
 }
