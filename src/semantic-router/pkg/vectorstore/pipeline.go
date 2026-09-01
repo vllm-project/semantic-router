@@ -198,13 +198,11 @@ func (p *IngestionPipeline) Stop(ctx context.Context) error {
 	}
 drained:
 	p.lifecycleMu.Unlock()
-	for _, job := range queued {
-		if err := ctx.Err(); err != nil {
-			gen.rootCancel()
-			return err
-		}
-		p.failJobWithPersistContext(ctx, job, "pipeline_stopped", "ingestion pipeline stopped before processing job")
-	}
+	// Persistence is best effort, as it was for individual job failures. The
+	// in-memory status/count transition is applied for every drained job before
+	// this bounded persistence attempt, so a registry error cannot leave jobs
+	// stuck in progress or prevent the worker generation from shutting down.
+	_ = p.failQueuedJobs(ctx, queued)
 	if err := ctx.Err(); err != nil {
 		gen.rootCancel()
 		return err
@@ -532,6 +530,25 @@ func (p *IngestionPipeline) failJobWithPersistContext(ctx context.Context, job I
 		fc.InProgress--
 		fc.Failed++
 	})
+}
+
+// failQueuedJobs marks every job removed from the generation queue before
+// attempting bounded metadata persistence. This ordering keeps queued jobs
+// from becoming permanently invisible when the shutdown context expires
+// during a registry write.
+func (p *IngestionPipeline) failQueuedJobs(ctx context.Context, queued []IngestionJob) error {
+	failedByStore := make(map[string]int)
+	for _, job := range queued {
+		p.setFileStatus(job.VectorStoreFileID, "failed", &FileError{
+			Code:    "pipeline_stopped",
+			Message: "ingestion pipeline stopped before processing job",
+		})
+		failedByStore[job.VectorStoreID]++
+	}
+	if len(failedByStore) == 0 {
+		return nil
+	}
+	return p.manager.failQueuedFileCounts(ctx, failedByStore)
 }
 
 // setFileStatus updates the status and error of a vector store file.

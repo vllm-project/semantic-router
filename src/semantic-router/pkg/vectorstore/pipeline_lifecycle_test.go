@@ -403,9 +403,21 @@ var _ = Describe("IngestionPipeline bounded queued cleanup", func() {
 		Expect(err).To(MatchError(context.DeadlineExceeded))
 		Expect(time.Since(start)).To(BeNumerically("<", 3*time.Second))
 		Expect(registry.started).To(BeClosed())
-		status, statusErr := f.pipeline.GetFileStatus(queued[0].ID)
-		Expect(statusErr).NotTo(HaveOccurred())
-		Expect(status.Status).To(Equal("failed"))
+		for _, queuedStatus := range queued {
+			status, statusErr := f.pipeline.GetFileStatus(queuedStatus.ID)
+			Expect(statusErr).NotTo(HaveOccurred())
+			Expect(status.Status).To(Equal("failed"))
+			Expect(status.LastError).NotTo(BeNil())
+			Expect(status.LastError.Code).To(Equal("pipeline_stopped"))
+		}
+		updated, updateErr := f.mgr.GetStore(vs.ID)
+		Expect(updateErr).NotTo(HaveOccurred())
+		// The first job is intentionally still wedged in Embed until cleanup,
+		// so it remains in progress while Stop returns. All three queued jobs
+		// must have moved to failed.
+		Expect(updated.FileCounts.InProgress).To(Equal(1))
+		Expect(updated.FileCounts.Failed).To(Equal(3))
+		Expect(updated.FileCounts.Total).To(Equal(4))
 	})
 })
 
