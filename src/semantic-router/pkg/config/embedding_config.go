@@ -7,9 +7,18 @@ const (
 	EmbeddingBackendOpenVINO         = "openvino"
 	EmbeddingBackendOpenAICompatible = "openai_compatible"
 
-	EmbeddingModelTypeQwen3  = "qwen3"
-	EmbeddingModelTypeRemote = "remote"
+	EmbeddingModelTypeQwen3      = "qwen3"
+	EmbeddingModelTypeRemote     = "remote"
+	EmbeddingModelTypeMultiModal = "multimodal"
 )
+
+// IsMultiModalEmbeddingModelType reports whether embedding_config.model_type names
+// the multimodal checkpoint. Only then does embedding_config.target_dimension
+// describe the multimodal model; for every other model type it describes the text
+// encoder and must not be checked against the multimodal ladder.
+func IsMultiModalEmbeddingModelType(modelType string) bool {
+	return strings.EqualFold(strings.TrimSpace(modelType), EmbeddingModelTypeMultiModal)
+}
 
 // EmbeddingEndpointConfig defines an external embedding provider endpoint.
 type EmbeddingEndpointConfig struct {

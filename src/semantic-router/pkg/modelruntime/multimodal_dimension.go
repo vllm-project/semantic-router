@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -17,6 +18,19 @@ var multimodalDimensionContract = func() embeddingDimensionContract {
 		Default:   candle_binding.MultiModalGetEmbeddingDim(),
 		Supported: candle_binding.MultiModalGetSupportedDimensions(),
 	}
+}
+
+// configuredMultiModalDimension reports the operator-configured target dimension
+// that will actually be sent to the multimodal encoder. embedding_config is the
+// single semantic-embedding block, so its target_dimension only describes the
+// multimodal model when model_type selects it; with any text model_type (mmbert,
+// qwen3, remote) that width belongs to the text encoder and checking it against
+// the multimodal ladder would reject a valid deployment.
+func configuredMultiModalDimension(cfg *config.RouterConfig) int {
+	if cfg == nil || !config.IsMultiModalEmbeddingModelType(cfg.EmbeddingConfig.ModelType) {
+		return 0
+	}
+	return cfg.EmbeddingConfig.WithDefaults().TargetDimension
 }
 
 func initializeMultiModalEmbeddingModel(component string, useCPU bool, modelPath string, targetDimension int) bool {

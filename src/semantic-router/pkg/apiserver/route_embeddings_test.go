@@ -4,7 +4,9 @@ package apiserver
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -351,6 +353,39 @@ func TestValidateEmbeddingRequestTargetLayerRejectedForNonMmbert(t *testing.T) {
 	}
 }
 
+// The multimodal ladder must not widen the model-agnostic allowlist that the
+// text embedding and similarity endpoints share: 384 is the multimodal native
+// width and no text model here declares it.
+func TestIsValidDimensionKeepsTextAllowlistNarrow(t *testing.T) {
+	for _, dim := range validEmbeddingDimensions {
+		if !isValidDimension(dim) {
+			t.Fatalf("dimension %d should be accepted", dim)
+		}
+	}
+	for _, dim := range []int{0, -1, 32, 384, 500} {
+		if isValidDimension(dim) {
+			t.Fatalf("dimension %d should be rejected on the text path", dim)
+		}
+	}
+
+	req := EmbeddingRequest{Model: "qwen3", Texts: []string{"hello"}, Dimension: 384}
+	code, message, ok := validateEmbeddingRequest(req, nil)
+	if ok || code != "INVALID_DIMENSION" {
+		t.Fatalf("expected INVALID_DIMENSION for qwen3 dimension 384, got ok=%v %q: %q", ok, code, message)
+	}
+}
+
+// The rejection message is generated from the allowlist, so a future entry
+// cannot be accepted while the message still omits it.
+func TestInvalidDimensionMessageMatchesAllowlist(t *testing.T) {
+	message := fmt.Sprintf(invalidDimensionMessage, 500)
+	for _, dim := range validEmbeddingDimensions {
+		if !strings.Contains(message, strconv.Itoa(dim)) {
+			t.Fatalf("message %q should list accepted dimension %d", message, dim)
+		}
+	}
+}
+
 func TestApplyEmbeddingDefaultsUsesResolvedMultimodalDefault(t *testing.T) {
 	stubMultiModalContract(t, embeddingDimensionContract{
 		ModelID:   "multi-modal-embed-small",
@@ -381,12 +416,32 @@ func TestApplyEmbeddingDefaultsTextAutoUsesLegacyDefault(t *testing.T) {
 	}
 }
 
-func TestValidateEmbeddingRequestDefersUnavailableMultimodalModel(t *testing.T) {
+// An unavailable multimodal model is server state, not a bad request. Deferring
+// it let the encode failure surface as 400 INVALID_IMAGE, telling the caller its
+// image was undecodable when the server simply had no model.
+func TestValidateEmbeddingRequestRejectsUnavailableMultimodalModel(t *testing.T) {
 	stubMultiModalContract(t, embeddingDimensionContract{})
 	req := EmbeddingRequest{Model: "multimodal", Images: []string{"data:image/png;base64,aGVsbG8="}, Dimension: 384}
 
-	if code, message, ok := validateEmbeddingRequest(req, nil); !ok {
-		t.Fatalf("expected readiness handling to remain downstream, got %q: %q", code, message)
+	code, message, ok := validateEmbeddingRequest(req, nil)
+	if ok || code != "MODEL_NOT_LOADED" {
+		t.Fatalf("expected MODEL_NOT_LOADED, got ok=%v %q: %q", ok, code, message)
+	}
+	if got := embeddingValidationStatus(code); got != http.StatusServiceUnavailable {
+		t.Fatalf("expected %d for %q, got %d", http.StatusServiceUnavailable, code, got)
+	}
+}
+
+// The binding reports -1 when no multimodal model is loaded. That sentinel must
+// never become the request's dimension.
+func TestApplyEmbeddingDefaultsNeverForwardsUnavailableSentinel(t *testing.T) {
+	stubMultiModalContract(t, embeddingDimensionContract{Default: -1})
+	req := EmbeddingRequest{Model: "multimodal", Images: []string{"data:image/png;base64,aGVsbG8="}}
+
+	applyEmbeddingDefaults(&req)
+
+	if req.Dimension < 0 {
+		t.Fatalf("expected no negative dimension, got %d", req.Dimension)
 	}
 }
 
@@ -428,13 +483,28 @@ func TestValidateEmbeddingRequestRejectsMixedEmbeddingSpaces(t *testing.T) {
 		Default:   384,
 		Supported: []int{384, 256, 128, 64, 32},
 	})
+	// An explicit text model with image inputs is the reachable mismatch; the
+	// space error must win over the text allowlist's dimension error.
 	req := EmbeddingRequest{
-		Texts: []string{"hello"}, Images: []string{"data:image/png;base64,aGVsbG8="}, Dimension: 384,
+		Model: "qwen3", Texts: []string{"hello"}, Images: []string{"data:image/png;base64,aGVsbG8="}, Dimension: 384,
 	}
 
 	code, message, ok := validateEmbeddingRequest(req, nil)
 	if ok || code != "INVALID_PARAMETER" || !strings.Contains(message, "model='multimodal'") {
 		t.Fatalf("expected incompatible mixed request rejection, got %q: %q", code, message)
+	}
+
+	// A mixed request that names no model resolves to the multimodal checkpoint
+	// rather than being rejected.
+	resolved := EmbeddingRequest{
+		Texts: []string{"hello"}, Images: []string{"data:image/png;base64,aGVsbG8="},
+	}
+	applyEmbeddingDefaults(&resolved)
+	if resolved.Model != "multimodal" || resolved.Dimension != 384 {
+		t.Fatalf("expected defaults to resolve to multimodal/384, got %q/%d", resolved.Model, resolved.Dimension)
+	}
+	if code, message, ok := validateEmbeddingRequest(resolved, nil); !ok {
+		t.Fatalf("expected the resolved mixed request to pass, got %q: %q", code, message)
 	}
 }
 

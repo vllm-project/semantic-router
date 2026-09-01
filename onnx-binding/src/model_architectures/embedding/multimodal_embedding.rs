@@ -71,6 +71,10 @@ impl MultiModalConfig {
                 .iter()
                 .filter_map(|dimension| dimension.as_u64().map(|value| value as usize))
                 .collect();
+        } else if !cfg.matryoshka_dims.contains(&cfg.embedding_dim) {
+            // config.json moved embedding_dim off the default ladder without
+            // declaring one; the checkpoint only guarantees its native width.
+            cfg.matryoshka_dims = vec![cfg.embedding_dim];
         }
         if let Some(s) = v
             .get("image_encoder")
@@ -144,8 +148,9 @@ impl MultiModalEmbeddingModel {
     pub fn load<P: AsRef<Path>>(model_path: P, use_cpu: bool) -> UnifiedResult<Self> {
         let dir = model_path.as_ref();
         let model_path_str = dir.display().to_string();
+        // from_pretrained establishes the dimension contract; no second check here.
         let config = MultiModalConfig::from_pretrained(dir)?;
-        config.validate_dimension_contract()?;
+
         let find_artifact = |name: &str| -> Option<std::path::PathBuf> {
             let root = dir.join(name);
             if root.exists() {
@@ -543,6 +548,29 @@ mod tests {
         assert!(config.validate_target_dimension(32).is_ok());
         assert!(config.validate_target_dimension(100).is_err());
         assert!(config.validate_target_dimension(768).is_err());
+    }
+
+    // A checkpoint may set embedding_dim without declaring a Matryoshka ladder.
+    // That used to load and truncate; it must not become a hard load failure
+    // naming a field the operator never wrote.
+    #[test]
+    fn test_native_dimension_without_declared_ladder_loads() {
+        let dir = std::env::temp_dir().join(format!(
+            "onnx-mm-cfg-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("config.json"), r#"{"embedding_dim": 768}"#).unwrap();
+
+        let config = MultiModalConfig::from_pretrained(&dir).unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+
+        assert_eq!(config.embedding_dim, 768);
+        assert_eq!(config.matryoshka_dims, vec![768]);
+        assert!(config.validate_target_dimension(768).is_ok());
+        // No untrained intermediate width is invented on the model's behalf.
+        assert!(config.validate_target_dimension(384).is_err());
     }
 
     #[test]

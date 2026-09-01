@@ -252,9 +252,10 @@ func MultiModalEncodeImageFromURL(url string, targetDim int) (*MultiModalEmbeddi
 	return nil, ErrBackendUnavailable
 }
 
-// MultiModalGetEmbeddingDim reports no loaded model without the native backend.
+// MultiModalGetEmbeddingDim reports no loaded model without the native backend,
+// using the same -1 sentinel as the cgo build.
 func MultiModalGetEmbeddingDim() int {
-	return 0
+	return -1
 }
 
 // MultiModalGetSupportedDimensions reports no loaded model without the native backend.

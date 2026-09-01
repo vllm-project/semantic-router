@@ -123,6 +123,12 @@ impl MultiModalEmbeddingConfig {
                 .iter()
                 .filter_map(|d| d.as_u64().map(|x| x as usize))
                 .collect();
+        } else if !cfg.matryoshka_dims.contains(&cfg.embedding_dim) {
+            // config.json moved embedding_dim off the default ladder without
+            // declaring one. The checkpoint only guarantees its native width, so
+            // publish that alone rather than failing the load over a field the
+            // operator never wrote or inventing untrained truncations.
+            cfg.matryoshka_dims = vec![cfg.embedding_dim];
         }
         cfg.validate_dimension_contract()?;
         Ok(cfg)
@@ -1602,6 +1608,29 @@ mod tests {
         assert!(config.validate_target_dimension(32).is_ok());
         assert!(config.validate_target_dimension(100).is_err());
         assert!(config.validate_target_dimension(768).is_err());
+    }
+
+    // A checkpoint may set embedding_dim without declaring a Matryoshka ladder.
+    // That used to load and truncate; it must not become a hard load failure
+    // naming a field the operator never wrote.
+    #[test]
+    fn test_multimodal_native_dimension_without_declared_ladder_loads() {
+        let dir = std::env::temp_dir().join(format!(
+            "candle-mm-cfg-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("config.json"), r#"{"embedding_dim": 768}"#).unwrap();
+
+        let config = MultiModalEmbeddingConfig::from_pretrained(&dir).unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+
+        assert_eq!(config.embedding_dim, 768);
+        assert_eq!(config.matryoshka_dims, vec![768]);
+        assert!(config.validate_target_dimension(768).is_ok());
+        // No untrained intermediate width is invented on the model's behalf.
+        assert!(config.validate_target_dimension(384).is_err());
     }
 
     #[test]

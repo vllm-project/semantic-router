@@ -1,7 +1,5 @@
 package config
 
-import "strings"
-
 // Classifier represents the configuration for text classification.
 type Classifier struct {
 	CategoryModel    `yaml:"category_model"`
@@ -80,7 +78,9 @@ func (c HNSWConfig) WithDefaults() HNSWConfig {
 			result.ModelType = EmbeddingModelTypeQwen3
 		}
 	}
-	if result.TargetDimension <= 0 && !strings.EqualFold(strings.TrimSpace(result.ModelType), "multimodal") {
+	// The multimodal checkpoint declares its own native dimension, so leave the
+	// value unset and let the loaded model resolve it.
+	if result.TargetDimension <= 0 && !IsMultiModalEmbeddingModelType(result.ModelType) {
 		result.TargetDimension = 768
 	}
 	if result.EnableSoftMatching == nil {

@@ -99,7 +99,25 @@ const (
 	maxImagesPerRequest = 8
 )
 
-const invalidDimensionMessage = "dimension must be one of: 64, 128, 256, 512, 768, 1024 (got %d)"
+// validEmbeddingDimensions is the model-agnostic allowlist for the text
+// embedding and similarity endpoints. The multimodal endpoints never consult it;
+// they validate against the loaded checkpoint's declared ladder instead.
+var validEmbeddingDimensions = []int{64, 128, 256, 512, 768, 1024}
+
+// invalidDimensionMessage is derived from validEmbeddingDimensions so the
+// accepted set and the rejection message cannot drift apart.
+var invalidDimensionMessage = fmt.Sprintf(
+	"dimension must be one of: %s (got %%d)", formatLayerList(validEmbeddingDimensions))
+
+// embeddingValidationStatus maps a validation code to its HTTP status. Model
+// unavailability is server state, not a malformed request, so it is the one code
+// that is not a 400.
+func embeddingValidationStatus(code string) int {
+	if code == "MODEL_NOT_LOADED" {
+		return http.StatusServiceUnavailable
+	}
+	return http.StatusBadRequest
+}
 
 // validatePriority rejects a priority weight outside the documented [0.0, 1.0]
 // range; out-of-range values were previously accepted and passed to the model.
@@ -167,7 +185,7 @@ func (s *ClassificationAPIServer) parseEmbeddingRequest(w http.ResponseWriter, r
 	}
 	availableLayers := config.MmBertAvailableLayers(mmbertPath)
 	if code, message, ok := validateEmbeddingRequest(req, availableLayers); !ok {
-		s.writeErrorResponse(w, http.StatusBadRequest, code, message)
+		s.writeErrorResponse(w, embeddingValidationStatus(code), code, message)
 		return EmbeddingRequest{}, false
 	}
 
@@ -205,7 +223,13 @@ func defaultEmbeddingDimensionForModel(model string) int {
 	if !isMultiModalModelName(model) {
 		return defaultEmbeddingDimension
 	}
-	return multiModalDimensionContract().Default
+	// A non-positive value is the binding's "no model loaded" sentinel. Leave the
+	// dimension unset rather than forwarding the sentinel, so validation reports
+	// unavailability instead of the encoder silently substituting a width.
+	if dimension := multiModalDimensionContract().Default; dimension > 0 {
+		return dimension
+	}
+	return 0
 }
 
 func validateEmbeddingRequest(req EmbeddingRequest, mmbertLayers []int) (string, string, bool) {
@@ -215,10 +239,13 @@ func validateEmbeddingRequest(req EmbeddingRequest, mmbertLayers []int) (string,
 	if code, message, ok := validateEmbeddingImages(req.Images); !ok {
 		return code, message, false
 	}
-	if code, message, ok := validateEmbeddingDimension(req); !ok {
+	// The resolved model decides which dimension ladder applies, so reject an
+	// image request pointed at a text model first; otherwise the caller gets the
+	// text allowlist's dimension error instead of the real mismatch.
+	if code, message, ok := validateImageEmbeddingParams(req); !ok {
 		return code, message, false
 	}
-	if code, message, ok := validateImageEmbeddingParams(req); !ok {
+	if code, message, ok := validateEmbeddingDimension(req); !ok {
 		return code, message, false
 	}
 	if req.TargetLayer != 0 && req.Model != "mmbert" {
@@ -238,7 +265,10 @@ func validateEmbeddingDimension(req EmbeddingRequest) (string, string, bool) {
 		return "INVALID_DIMENSION", fmt.Sprintf(invalidDimensionMessage, req.Dimension), false
 	}
 	contract := multiModalDimensionContract()
-	if len(contract.Supported) == 0 || contract.supports(req.Dimension) {
+	if len(contract.Supported) == 0 {
+		return "MODEL_NOT_LOADED", "the multimodal embedding model is not loaded; check /ready before retrying", false
+	}
+	if contract.supports(req.Dimension) {
 		return "", "", true
 	}
 	return "INVALID_DIMENSION", fmt.Sprintf("dimension %d is not supported by model %q; supported dimensions: %s", req.Dimension, contract.ModelID, contract.supportedList()), false
@@ -534,10 +564,12 @@ func buildBatchSimilarityMatches(result *candle_binding.BatchSimilarityOutput, c
 
 // isValidDimension checks if the provided dimension is valid
 func isValidDimension(dim int) bool {
-	// 384 is the multimodal model's native dimension; it must be accepted so
-	// callers can request the image model's full-width vector explicitly.
-	validDimensions := map[int]bool{64: true, 128: true, 256: true, 384: true, 512: true, 768: true, 1024: true}
-	return validDimensions[dim]
+	for _, valid := range validEmbeddingDimensions {
+		if dim == valid {
+			return true
+		}
+	}
+	return false
 }
 
 // formatLayerList renders a layer set as a comma-separated string for error

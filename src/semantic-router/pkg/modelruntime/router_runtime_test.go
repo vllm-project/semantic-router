@@ -186,6 +186,74 @@ func TestValidateConfiguredMultimodalDimension(t *testing.T) {
 	}
 }
 
+// embedding_config is the single semantic-embedding block. config/config.yaml
+// ships a multimodal_model_path alongside model_type: mmbert with
+// target_dimension: 768, which is the text encoder's width. Reading it as the
+// multimodal target rejected the shipped default and left the multimodal route
+// unready while the checkpoint was already resident in the binding.
+func TestConfiguredMultiModalDimensionIgnoresTextModelWidth(t *testing.T) {
+	shipped := &config.RouterConfig{
+		InlineModels: config.InlineModels{
+			EmbeddingModels: config.EmbeddingModels{
+				MultiModalModelPath: "models/mom-embedding-multimodal",
+				EmbeddingConfig:     config.HNSWConfig{ModelType: "mmbert", TargetDimension: 768},
+			},
+		},
+	}
+	if got := configuredMultiModalDimension(shipped); got != 0 {
+		t.Fatalf("a text model_type must not contribute a multimodal dimension, got %d", got)
+	}
+
+	contract := embeddingDimensionContract{Default: 384, Supported: []int{384, 256, 128, 64, 32}}
+	if err := validateConfiguredMultimodalDimension(configuredMultiModalDimension(shipped), contract); err != nil {
+		t.Fatalf("shipped config must not block multimodal init: %v", err)
+	}
+}
+
+// With model_type: multimodal the configured width really is the multimodal
+// target, so an undeclared one must still fail at load.
+func TestConfiguredMultiModalDimensionUsesMultimodalModelType(t *testing.T) {
+	contract := embeddingDimensionContract{Default: 384, Supported: []int{384, 256, 128, 64, 32}}
+
+	declared := &config.RouterConfig{
+		InlineModels: config.InlineModels{
+			EmbeddingModels: config.EmbeddingModels{
+				EmbeddingConfig: config.HNSWConfig{ModelType: "multimodal", TargetDimension: 256},
+			},
+		},
+	}
+	if got := configuredMultiModalDimension(declared); got != 256 {
+		t.Fatalf("expected the configured multimodal dimension 256, got %d", got)
+	}
+	if err := validateConfiguredMultimodalDimension(configuredMultiModalDimension(declared), contract); err != nil {
+		t.Fatalf("declared dimension 256 should be accepted: %v", err)
+	}
+
+	// An omitted target_dimension stays unset for multimodal and resolves from
+	// the loaded model instead of defaulting to 768.
+	omitted := &config.RouterConfig{
+		InlineModels: config.InlineModels{
+			EmbeddingModels: config.EmbeddingModels{
+				EmbeddingConfig: config.HNSWConfig{ModelType: "multimodal"},
+			},
+		},
+	}
+	if got := configuredMultiModalDimension(omitted); got != 0 {
+		t.Fatalf("expected an omitted multimodal dimension to stay unset, got %d", got)
+	}
+
+	unsupported := &config.RouterConfig{
+		InlineModels: config.InlineModels{
+			EmbeddingModels: config.EmbeddingModels{
+				EmbeddingConfig: config.HNSWConfig{ModelType: "multimodal", TargetDimension: 768},
+			},
+		},
+	}
+	if err := validateConfiguredMultimodalDimension(configuredMultiModalDimension(unsupported), contract); err == nil {
+		t.Fatal("an undeclared multimodal dimension must be rejected at load")
+	}
+}
+
 func assertRemoteEmbeddingFailureEvent(t *testing.T, failedEvent *Event) {
 	t.Helper()
 	if failedEvent == nil || failedEvent.Error == nil {

@@ -755,8 +755,7 @@ func multiModalEmbeddingRuntimeTask(
 		Name:       "router.embedding.multimodal",
 		BestEffort: true,
 		Run: func(context.Context) error {
-			targetDimension := cfg.EmbeddingConfig.WithDefaults().TargetDimension
-			if !initializeMultiModalEmbeddingModel(component, cfg.UseCPU, paths.multiModal, targetDimension) {
+			if !initializeMultiModalEmbeddingModel(component, cfg.UseCPU, paths.multiModal, configuredMultiModalDimension(cfg)) {
 				return fmt.Errorf("failed to initialize multimodal embedding model")
 			}
 			if requiresMultimodalTools {
