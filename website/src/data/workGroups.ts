@@ -65,6 +65,11 @@ export const workGroups: WorkGroup[] = [
         avatar: 'https://github.com/yaojiejia.png',
         profile: 'https://github.com/yaojiejia',
       },
+      {
+        name: 'wuli666',
+        avatar: 'https://github.com/wuli666.png',
+        profile: 'https://github.com/wuli666',
+      },
     ],
   },
   {
@@ -126,6 +131,16 @@ export const workGroups: WorkGroup[] = [
         avatar: 'https://github.com/guan404ming.png',
         profile: 'https://github.com/guan404ming',
       },
+      {
+        name: 'Pranav Thakur',
+        avatar: 'https://github.com/pranavthakur0-0.png',
+        profile: 'https://github.com/pranavthakur0-0',
+      },
+      {
+        name: 'bugkeep',
+        avatar: 'https://github.com/bugkeep.png',
+        profile: 'https://github.com/bugkeep',
+      },
     ],
   },
   {
@@ -161,6 +176,16 @@ export const workGroups: WorkGroup[] = [
         name: 'Zireael',
         avatar: 'https://github.com/ZireaelK.png',
         profile: 'https://github.com/ZireaelK',
+      },
+      {
+        name: 'Hikari',
+        avatar: 'https://github.com/altale.png',
+        profile: 'https://github.com/altale',
+      },
+      {
+        name: 'Binbin Zhang',
+        avatar: 'https://github.com/Bevisy.png',
+        profile: 'https://github.com/Bevisy',
       },
     ],
   },
@@ -286,6 +311,11 @@ export const workGroups: WorkGroup[] = [
         avatar: 'https://github.com/edamamez.png',
         profile: 'https://github.com/edamamez',
       },
+      {
+        name: 'wuli666',
+        avatar: 'https://github.com/wuli666.png',
+        profile: 'https://github.com/wuli666',
+      },
     ],
   },
   {
@@ -309,6 +339,13 @@ export const workGroups: WorkGroup[] = [
         name: 'FAUST',
         avatar: 'https://github.com/FAUST-BENCHOU.png',
         profile: 'https://github.com/FAUST-BENCHOU',
+      },
+    ],
+    members: [
+      {
+        name: 'Nanasis',
+        avatar: 'https://github.com/nanasis.png',
+        profile: 'https://github.com/nanasis',
       },
     ],
   },
