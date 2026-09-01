@@ -66,11 +66,12 @@ type CanonicalIntegrationGlobal struct {
 // CanonicalModelCatalog groups router-owned model assets and the module
 // configs that resolve through those assets.
 type CanonicalModelCatalog struct {
-	Embeddings CanonicalEmbeddingModels `yaml:"embeddings"`
-	System     CanonicalSystemModels    `yaml:"system"`
-	External   []ExternalModelConfig    `yaml:"external,omitempty"`
-	KBs        []KnowledgeBaseConfig    `yaml:"kbs,omitempty"`
-	Modules    CanonicalModelModules    `yaml:"modules"`
+	Embeddings CanonicalEmbeddingModels   `yaml:"embeddings"`
+	System     CanonicalSystemModels      `yaml:"system"`
+	External   []ExternalModelConfig      `yaml:"external,omitempty"`
+	KBs        []KnowledgeBaseConfig      `yaml:"kbs,omitempty"`
+	Modules    CanonicalModelModules      `yaml:"modules"`
+	Admission  map[string]AdmissionConfig `yaml:"admission,omitempty"`
 }
 
 // CanonicalEmbeddingModels groups embedding-related model assets.
@@ -251,8 +252,20 @@ func applyCanonicalGlobal(cfg *RouterConfig, global *CanonicalGlobal) error {
 	cfg.HallucinationMitigation = global.ModelCatalog.Modules.HallucinationMitigation.runtimeConfig()
 	cfg.FeedbackDetector = global.ModelCatalog.Modules.FeedbackDetector.FeedbackDetectorConfig
 	cfg.ModalityDetector = global.ModelCatalog.Modules.ModalityDetector
+	cfg.ModelAdmission = cloneAdmissionMap(global.ModelCatalog.Admission)
 
 	return nil
+}
+
+func cloneAdmissionMap(admission map[string]AdmissionConfig) map[string]AdmissionConfig {
+	if len(admission) == 0 {
+		return nil
+	}
+	cloned := make(map[string]AdmissionConfig, len(admission))
+	for key, value := range admission {
+		cloned[key] = value
+	}
+	return cloned
 }
 
 func resolveModuleModelRefs(global *CanonicalGlobal) error {
