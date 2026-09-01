@@ -102,6 +102,17 @@ def _prompt_to_messages(prompt: str) -> list[dict[str, Any]]:
     return [{"role": "user", "content": prompt}]
 
 
+def _format_decision_error(status_code: int, body: dict) -> str:
+    """Render the eval endpoint's decision-unresolved shape, which returns the
+    full evaluation payload with decision_error instead of the error envelope."""
+    message = f"Router returned {status_code}: {body['decision_error']}"
+    policies = body.get("applied_unknown_policies")
+    if isinstance(policies, dict) and policies:
+        applied = ", ".join(f"{key}={value}" for key, value in sorted(policies.items()))
+        message += f" (applied unknown policies: {applied})"
+    return message
+
+
 def _format_error_response(resp: Any, request_url: str | None = None) -> str:
     """Extract a clean error message from a non-200 router response.
 
@@ -119,6 +130,8 @@ def _format_error_response(resp: Any, request_url: str | None = None) -> str:
                 return f"Router returned {resp.status_code} {code}: {message}"
             if message:
                 return f"Router returned {resp.status_code}: {message}"
+        if isinstance(body, dict) and body.get("decision_error"):
+            return _format_decision_error(resp.status_code, body)
     except ValueError:
         pass
     content_type = getattr(resp, "headers", {}).get("Content-Type", "")

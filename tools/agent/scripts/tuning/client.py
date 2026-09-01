@@ -12,7 +12,9 @@ import os
 import signal
 import time
 from collections.abc import Callable
-from urllib import request
+from urllib import error, request
+
+_MAX_ERROR_BODY_BYTES = 65536
 
 
 class RouterClient:
@@ -33,8 +35,18 @@ class RouterClient:
             method="POST",
             headers={"Content-Type": "application/json"},
         )
-        with request.urlopen(req, timeout=30) as resp:
-            return json.loads(resp.read())
+        try:
+            with request.urlopen(req, timeout=30) as resp:
+                return json.loads(resp.read())
+        except error.HTTPError as exc:
+            body = exc.read(_MAX_ERROR_BODY_BYTES)
+            try:
+                payload = json.loads(body)
+            except (ValueError, UnicodeDecodeError):
+                raise RuntimeError(f"router eval returned HTTP {exc.code}") from exc
+            if isinstance(payload, dict):
+                return payload
+            raise RuntimeError(f"router eval returned HTTP {exc.code}") from exc
 
     def get_config_hash(self) -> str:
         """Fetch the router's current config hash."""
@@ -103,6 +115,24 @@ class RouterClient:
                 if custom is not None:
                     results.append(custom)
                     continue
+
+            decision_error = resp.get("decision_error")
+            if decision_error:
+                results.append(
+                    {
+                        "id": probe.get("id", ""),
+                        "query": query[:200],
+                        "expected": expected,
+                        "actual": "UNRESOLVED",
+                        "correct": False,
+                        "error": str(decision_error)[:500],
+                        "applied_unknown_policies": resp.get(
+                            "applied_unknown_policies", {}
+                        ),
+                        "tags": probe.get("tags", []),
+                    }
+                )
+                continue
 
             dr = resp.get("decision_result", {})
             actual = dr.get("decision_name", "NONE")

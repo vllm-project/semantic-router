@@ -162,6 +162,26 @@ def test_format_error_response_parses_structured_json() -> None:
     assert "400" in msg
 
 
+def test_format_error_response_renders_decision_error_shape() -> None:
+    """The eval endpoint's 503 carries the evaluation payload, not the envelope."""
+
+    class FakeResp:
+        status_code = 503
+        text = "{}"
+
+        def json(self):
+            return {
+                "original_text": "hello",
+                "decision_error": "decision unresolved",
+                "applied_unknown_policies": {"guarded": "fail_request"},
+            }
+
+    msg = _format_error_response(FakeResp())
+    assert "503" in msg
+    assert "decision unresolved" in msg
+    assert "guarded=fail_request" in msg
+
+
 def test_format_error_response_falls_back_to_raw_text() -> None:
     """Plain-text (non-JSON) error body is surfaced as-is."""
 
