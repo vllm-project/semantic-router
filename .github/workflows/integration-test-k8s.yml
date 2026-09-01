@@ -17,6 +17,7 @@ jobs:
     timeout-minutes: 90
     env:
       E2E_SEMANTIC_ROUTER_HELM_TIMEOUT: 60m
+      GOPROXY: 'https://proxy.golang.org|direct'
     strategy:
       fail-fast: false  # Continue testing other profiles even if one fails
       matrix:

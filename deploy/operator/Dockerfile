@@ -22,6 +22,7 @@ WORKDIR /workspace/deploy/operator
 
 # Cache deps before building and copying source so that we don't need to re-download as much
 # and so that source changes don't invalidate our downloaded layer
+ENV GOPROXY="https://proxy.golang.org|direct"
 RUN go mod download
 
 # Copy the go source
