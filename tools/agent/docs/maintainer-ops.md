@@ -35,7 +35,12 @@ must not be committed.
 
 ## Maintainer Label View
 
-Maintainers do not need to scan every area label. The daily operating view is:
+The issue tree uses one structural path: one `wg/*` owner, then an `epic`
+parent where the work belongs to a bounded outcome. `[Epic]` titles and the
+`epic` label are synchronized automatically. The retired `area/*` and
+`track/*` taxonomies must not be recreated.
+
+The daily operating view is:
 
 - `needs-acceptance`: decide whether the issue fits the roadmap, which one
   Workgroup owns it, and whether to accept, request information, backlog, or
@@ -83,7 +88,7 @@ Maintainer ops owns two release-management actions that should not appear as
 active release-plan tasks:
 
 - Sync GitHub milestone, issue, PR, label, review, and CI state into the local
-  board and classify the result by release track.
+  board and classify the result by lifecycle and milestone state.
 - Propose missing release seed issues from the active release plan, review the
   dry-run payload, and apply only after explicit maintainer approval.
 

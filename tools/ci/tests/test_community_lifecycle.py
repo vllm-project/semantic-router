@@ -276,6 +276,23 @@ MoM & Routing
         self.assertFalse(evaluation.valid)
         self.assertIn("bracketed category", evaluation.error or "")
 
+    def test_epic_title_adds_the_structural_label(self) -> None:
+        plan = community_lifecycle.plan_issue_kind(
+            {"title": "[Epic] Make routing behavior measurable", "labels": []}
+        )
+        self.assertEqual(plan.add_labels, {"epic"})
+        self.assertEqual(plan.remove_labels, set())
+
+    def test_non_epic_title_removes_the_structural_label(self) -> None:
+        plan = community_lifecycle.plan_issue_kind(
+            {
+                "title": "[Feature] Make routing behavior measurable",
+                "labels": labels("epic"),
+            }
+        )
+        self.assertEqual(plan.add_labels, set())
+        self.assertEqual(plan.remove_labels, {"epic"})
+
     def test_pr_requires_an_accepted_linked_issue(self) -> None:
         pull_request = {"draft": False, "user": {"type": "User"}}
         evaluation = community_lifecycle.evaluate_pull_request(
@@ -479,6 +496,18 @@ MoM & Routing
             set(policy["labels"]["pr_state"].values()),
             set(community_lifecycle.PR_STATE_LABELS),
         )
+        self.assertEqual(policy["labels"]["structure"]["epic"], "epic")
+
+    def test_retired_parallel_taxonomies_are_not_declared(self) -> None:
+        policy = yaml.safe_load(
+            (REPO_ROOT / "tools/agent/maintainer-policy.yaml").read_text()
+        )
+        prow_labels = yaml.safe_load((REPO_ROOT / ".prowlabels.yaml").read_text())
+        self.assertNotIn("release_tracks", policy)
+        self.assertNotIn("area", prow_labels)
+        self.assertNotIn("track", prow_labels)
+        community_workflow = (REPO_ROOT / ".github/workflows/community.yml").read_text()
+        self.assertNotIn("/area", community_workflow)
 
 
 class FakePullRequestApi:
