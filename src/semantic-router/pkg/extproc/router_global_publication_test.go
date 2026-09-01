@@ -30,7 +30,9 @@ func TestBuildRouterComponentsDoesNotPublishProcessGlobals(t *testing.T) {
 	previous := selection.NewRegistry()
 	selection.SetGlobalRegistry(previous)
 
-	cfg := &config.RouterConfig{}
+	cfg := &config.RouterConfig{IntelligentRouting: config.IntelligentRouting{
+		ModelSelection: config.ModelSelectionConfig{Enabled: true},
+	}}
 	components, err := buildRouterComponents(cfg)
 	require.NoError(t, err)
 	require.NotNil(t, components.modelSelector,

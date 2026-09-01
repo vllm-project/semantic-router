@@ -56,6 +56,7 @@ var maintainedEmbeddedConfigAssets = []string{
 var maintainedValuesConfigAssets = []string{
 	"deploy/helm/semantic-router/values.yaml",
 	"deploy/kubernetes/agentgateway/semantic-router-values/values.yaml",
+	"deploy/kubernetes/ai-gateway/semantic-router-values/responses-state.yaml",
 	"deploy/kubernetes/ai-gateway/semantic-router-values/values.yaml",
 	"deploy/kubernetes/aibrix/semantic-router-values/values.yaml",
 	"deploy/kubernetes/dynamo/semantic-router-values/values.yaml",
@@ -206,9 +207,12 @@ func readEmbeddedConfigAsset(t *testing.T, rel string) []byte {
 func readValuesConfigAsset(t *testing.T, rel string) []byte {
 	t.Helper()
 	root := decodeYAMLMap(t, mustReadRepoFile(t, rel), rel)
-	rawConfig, ok := root["config"]
+	rawConfig, ok := root["configOverride"]
+	if !ok || rawConfig == nil {
+		rawConfig, ok = root["config"]
+	}
 	if !ok {
-		t.Fatalf("%s is missing top-level config block", rel)
+		t.Fatalf("%s is missing top-level config or configOverride block", rel)
 	}
 	data, err := yamlv3.Marshal(rawConfig)
 	if err != nil {

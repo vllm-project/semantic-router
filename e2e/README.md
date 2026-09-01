@@ -115,6 +115,7 @@ until the selected cases are known to be isolated.
 ### Supported Profiles
 
 - **envoy-ai-gateway**: baseline routing, safety, cache, and decision contracts.
+- **external-gateway-responses**: ExtProc-only Responses create, get, and conversation chaining with external gateway-owned dispatch.
 - **dashboard**: dashboard API, validation, and routing-authoring contracts.
 - **aibrix**: AIBrix gateway and control-plane integration.
 - **routing-strategies**: keyword, entropy, and fallback routing.
