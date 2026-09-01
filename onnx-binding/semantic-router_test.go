@@ -688,6 +688,16 @@ func TestGetEmbeddingBatched(t *testing.T) {
 	})
 }
 
+// TestSupportsBatchedEmbedding verifies onnx-binding always reports no batched
+// support, since every model type routes through GetEmbeddingWithModelType.
+func TestSupportsBatchedEmbedding(t *testing.T) {
+	for _, modelType := range []string{"qwen3", "mmbert", "gemma", ""} {
+		if SupportsBatchedEmbedding(modelType) {
+			t.Errorf("SupportsBatchedEmbedding(%q) = true, want false", modelType)
+		}
+	}
+}
+
 // TestGetEmbeddingWithModelType tests model type selection
 func TestGetEmbeddingWithModelType(t *testing.T) {
 	modelPath := getModelPath(t)

@@ -261,7 +261,7 @@ func (v *Validator) checkRouteReferences(route *RouteDecl) {
 		if !v.pluginNames[pr.Name] && !isInlinePluginType(pr.Name) {
 			fix := v.suggestPlugin(pr.Name)
 			v.addDiag(DiagWarning, pr.Pos,
-				fmt.Sprintf("Plugin %q is not defined as a template and is not a recognized inline plugin type. Supported inline types: system_prompt, response_cache, hallucination, memory, rag, tools, image_gen, fast_response, request_params, router_replay, header_mutation, response_jailbreak. Define a template with PLUGIN %s <type> { ... } or use a supported type", pr.Name, pr.Name),
+				fmt.Sprintf("Plugin %q is not defined as a template and is not a recognized inline plugin type. Supported inline types: system_prompt, response_cache, hallucination, memory, rag, tools, fast_response, request_params, router_replay, header_mutation, response_jailbreak. Define a template with PLUGIN %s <type> { ... } or use a supported type", pr.Name, pr.Name),
 				fix,
 			)
 		}
@@ -398,6 +398,7 @@ var constraintRules = []constraintRule{
 	{field: "port", min: &floatMinPort, max: &floatMaxPort},
 	{field: "fuzzy_threshold", min: &floatZero},
 	{field: "ngram_arity", min: &floatOne},
+	{field: "minimum_candidates", min: &floatOne},
 }
 
 func (v *Validator) checkConstraints() {
@@ -519,6 +520,15 @@ func (v *Validator) checkRouteConstraints(r *RouteDecl) {
 		v.addDiag(DiagConstraint, r.Pos,
 			fmt.Sprintf("%s: priority must be >= 0, got %d", context, r.Priority),
 			&QuickFix{Description: "Set priority to 0", NewText: "0"},
+		)
+	}
+
+	switch r.OnUnknown {
+	case "", config.RuleOnUnknownNoMatch, config.RuleOnUnknownMatch, config.RuleOnUnknownFailRequest:
+	default:
+		v.addDiag(DiagConstraint, r.Pos,
+			fmt.Sprintf("%s: on_unknown must be no_match, match, or fail_request, got %q", context, r.OnUnknown),
+			nil,
 		)
 	}
 

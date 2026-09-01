@@ -286,7 +286,7 @@ func pruneZeroValueInfra(raw map[string]interface{}) {
 		"authz", "ratelimit", "mom_registry",
 		"auto_model_name", "include_config_models_in_list",
 		"clear_route_cache",
-		"image_gen_backends", "provider_profiles",
+		"provider_profiles",
 		"batch_classification",
 		"observability",
 	}
