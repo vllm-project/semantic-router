@@ -22,26 +22,42 @@ func validateContextContracts(cfg *RouterConfig) error {
 	if cfg == nil || len(cfg.ContextRules) == 0 {
 		return nil
 	}
+	bands, err := collectContextBands(cfg.ContextRules)
+	if err != nil {
+		return err
+	}
+	logContextBandIssues(bands)
+	logContextBandCoverage(bands)
+	return nil
+}
 
-	seen := make(map[string]struct{}, len(cfg.ContextRules))
-	bands := make([]NamedContextBand, 0, len(cfg.ContextRules))
-	for index, rule := range cfg.ContextRules {
+// collectContextBands parses every rule, rejecting empty or duplicate names
+// and invalid ranges.
+func collectContextBands(rules []ContextRule) ([]NamedContextBand, error) {
+	seen := make(map[string]struct{}, len(rules))
+	bands := make([]NamedContextBand, 0, len(rules))
+	for index, rule := range rules {
 		name := strings.TrimSpace(rule.Name)
 		if name == "" {
-			return fmt.Errorf("routing.signals.context[%d]: name cannot be empty", index)
+			return nil, fmt.Errorf("routing.signals.context[%d]: name cannot be empty", index)
 		}
 		if _, exists := seen[name]; exists {
-			return fmt.Errorf("routing.signals.context[%q]: duplicate rule name", name)
+			return nil, fmt.Errorf("routing.signals.context[%q]: duplicate rule name", name)
 		}
 		seen[name] = struct{}{}
 
 		bounds, err := rule.Bounds()
 		if err != nil {
-			return fmt.Errorf("routing.signals.context[%q]: %w", name, err)
+			return nil, fmt.Errorf("routing.signals.context[%q]: %w", name, err)
 		}
 		bands = append(bands, NamedContextBand{Name: name, Bounds: bounds})
 	}
+	return bands, nil
+}
 
+// logContextBandIssues reports overlaps and gaps. A band that fully contains
+// another is logged at info because it is a common intentional layout.
+func logContextBandIssues(bands []NamedContextBand) {
 	overlaps, gaps := ContextBandIssues(bands)
 	for _, overlap := range overlaps {
 		if overlap.Contains {
@@ -62,7 +78,11 @@ func validateContextContracts(cfg *RouterConfig) error {
 			gap.From, gap.To, gap.Before.Name,
 		)
 	}
+}
 
+// logContextBandCoverage reports how overflow above the largest bounded band
+// is handled: several open-ended bands, or none at all.
+func logContextBandCoverage(bands []NamedContextBand) {
 	unbounded := 0
 	coveredTo := -1
 	for _, band := range bands {
@@ -78,5 +98,4 @@ func validateContextContracts(cfg *RouterConfig) error {
 	case unbounded == 0:
 		logging.Infof("routing.signals.context: no rule is open-ended; requests above %d tokens match no context signal (omit max_tokens on the last band to catch overflow)", coveredTo)
 	}
-	return nil
 }

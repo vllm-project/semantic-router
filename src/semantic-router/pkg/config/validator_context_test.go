@@ -179,28 +179,29 @@ recipes:
 	if recipe == nil {
 		t.Fatal("expected the bands recipe to load")
 	}
-	cfg := recipe.Profile.Signals
-	if len(cfg.ContextRules) != 3 {
-		t.Fatalf("expected 3 context rules, got %d", len(cfg.ContextRules))
+	rules := recipe.Profile.Signals.ContextRules
+	if len(rules) != 3 {
+		t.Fatalf("expected 3 context rules, got %d", len(rules))
 	}
-	overflow := cfg.ContextRules[2]
-	if overflow.MaxTokens.IsSet() {
-		t.Fatalf("expected overflow band to have no max_tokens, got %q", overflow.MaxTokens)
+
+	overflow := mustContextBounds(t, rules[2])
+	if rules[2].MaxTokens.IsSet() || !overflow.Unbounded || overflow.Min != 8001 || !overflow.Matches(1<<40) {
+		t.Fatalf("unexpected bounds for overflow band: %+v (max_tokens=%q)", overflow, rules[2].MaxTokens)
 	}
-	bounds, err := overflow.Bounds()
-	if err != nil {
-		t.Fatalf("unexpected bounds error: %v", err)
-	}
-	if !bounds.Unbounded || bounds.Min != 8001 || !bounds.Matches(1<<40) {
-		t.Fatalf("unexpected bounds for overflow band: %+v", bounds)
-	}
-	exact, err := cfg.ContextRules[1].Bounds()
-	if err != nil {
-		t.Fatalf("unexpected bounds error: %v", err)
-	}
+
+	exact := mustContextBounds(t, rules[1])
 	if !exact.Matches(1000) || exact.Matches(999) || exact.Matches(1001) {
 		t.Fatalf("expected exact band to match only 1000, got %+v", exact)
 	}
+}
+
+func mustContextBounds(t *testing.T, rule ContextRule) ContextBounds {
+	t.Helper()
+	bounds, err := rule.Bounds()
+	if err != nil {
+		t.Fatalf("unexpected bounds error for %q: %v", rule.Name, err)
+	}
+	return bounds
 }
 
 func TestContextBandIssues(t *testing.T) {
