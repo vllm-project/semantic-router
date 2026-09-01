@@ -237,18 +237,15 @@ def normalize_proposed_workgroup(
     """Seed an unowned issue from its form without undoing Maintainer triage."""
 
     workgroups = labels.intersection(WORKGROUP_LABELS)
+    owners = labels.intersection(OWNER_LABELS)
     form_workgroup = proposed_workgroup(issue.get("body"))
-    if accepted or not form_workgroup or workgroups:
+    if accepted or not form_workgroup or owners:
         return workgroups
 
     # A Workgroup selected in the issue form is only the initial proposal. If a
     # Maintainer removes that owner while reclassifying the issue, do not race
     # the following label addition by restoring the stale form choice.
-    if (
-        actor_can_manage
-        and event_action == "unlabeled"
-        and event_label in WORKGROUP_LABELS
-    ):
+    if actor_can_manage and event_action == "unlabeled" and event_label in OWNER_LABELS:
         return workgroups
 
     plan.add_labels.add(form_workgroup)

@@ -86,6 +86,37 @@ MoM & Routing
         )
         self.assertNotIn("wg/enterprise-environment", plan.add_labels)
 
+    def test_maintainer_owner_overrides_stale_form_workgroup(self) -> None:
+        issue = {
+            "body": "### Proposed Workgroup\n\nEnterprise & Environment\n",
+            "labels": labels("needs-acceptance", "owner/maintainers"),
+            "assignees": [],
+            "milestone": None,
+        }
+        plan = community_lifecycle.plan_issue(
+            issue,
+            event_action="labeled",
+            event_label="owner/maintainers",
+            actor_can_manage=True,
+        )
+        self.assertNotIn("wg/enterprise-environment", plan.add_labels)
+        self.assertNotIn("owner/maintainers", plan.remove_labels)
+
+    def test_maintainer_can_remove_owner_without_form_race(self) -> None:
+        issue = {
+            "body": "### Proposed Workgroup\n\nEnterprise & Environment\n",
+            "labels": labels("needs-acceptance"),
+            "assignees": [],
+            "milestone": None,
+        }
+        plan = community_lifecycle.plan_issue(
+            issue,
+            event_action="unlabeled",
+            event_label="owner/maintainers",
+            actor_can_manage=True,
+        )
+        self.assertNotIn("wg/enterprise-environment", plan.add_labels)
+
     def test_multiple_workgroups_are_not_resolved_from_stale_form_data(self) -> None:
         issue = {
             "body": "### Proposed Workgroup\n\nEnterprise & Environment\n",
