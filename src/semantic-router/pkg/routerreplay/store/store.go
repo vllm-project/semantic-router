@@ -12,26 +12,27 @@ import (
 
 // Signal represents various routing signals captured during a request.
 type Signal struct {
-	Keyword      []string `json:"keyword,omitempty"`
-	Embedding    []string `json:"embedding,omitempty"`
-	Domain       []string `json:"domain,omitempty"`
-	FactCheck    []string `json:"fact_check,omitempty"`
-	UserFeedback []string `json:"user_feedback,omitempty"`
-	Reask        []string `json:"reask,omitempty"`
-	Preference   []string `json:"preference,omitempty"`
-	Language     []string `json:"language,omitempty"`
-	Context      []string `json:"context,omitempty"`
-	Structure    []string `json:"structure,omitempty"`
-	Complexity   []string `json:"complexity,omitempty"`
-	Modality     []string `json:"modality,omitempty"`
-	Authz        []string `json:"authz,omitempty"`
-	Jailbreak    []string `json:"jailbreak,omitempty"`
-	PII          []string `json:"pii,omitempty"`
-	KB           []string `json:"kb,omitempty"`
-	Conversation []string `json:"conversation,omitempty"`
-	Event        []string `json:"event,omitempty"`
-	Metadata     []string `json:"metadata,omitempty"`
-	Classifier   []string `json:"classifier,omitempty"`
+	Keyword       []string `json:"keyword,omitempty"`
+	Embedding     []string `json:"embedding,omitempty"`
+	Domain        []string `json:"domain,omitempty"`
+	FactCheck     []string `json:"fact_check,omitempty"`
+	UserFeedback  []string `json:"user_feedback,omitempty"`
+	Reask         []string `json:"reask,omitempty"`
+	Preference    []string `json:"preference,omitempty"`
+	Language      []string `json:"language,omitempty"`
+	Context       []string `json:"context,omitempty"`
+	Structure     []string `json:"structure,omitempty"`
+	Complexity    []string `json:"complexity,omitempty"`
+	Modality      []string `json:"modality,omitempty"`
+	Authz         []string `json:"authz,omitempty"`
+	Jailbreak     []string `json:"jailbreak,omitempty"`
+	PII           []string `json:"pii,omitempty"`
+	KB            []string `json:"kb,omitempty"`
+	Conversation  []string `json:"conversation,omitempty"`
+	Event         []string `json:"event,omitempty"`
+	Metadata      []string `json:"metadata,omitempty"`
+	Classifier    []string `json:"classifier,omitempty"`
+	InputModality []string `json:"input_modality,omitempty"`
 }
 
 // UsageCost captures token usage and pricing-derived cost details for a record.
@@ -441,26 +442,27 @@ func cloneToolTrace(trace *ToolTrace) *ToolTrace {
 
 func cloneSignal(signal Signal) Signal {
 	return Signal{
-		Keyword:      cloneStringSlice(signal.Keyword),
-		Embedding:    cloneStringSlice(signal.Embedding),
-		Domain:       cloneStringSlice(signal.Domain),
-		FactCheck:    cloneStringSlice(signal.FactCheck),
-		UserFeedback: cloneStringSlice(signal.UserFeedback),
-		Reask:        cloneStringSlice(signal.Reask),
-		Preference:   cloneStringSlice(signal.Preference),
-		Language:     cloneStringSlice(signal.Language),
-		Context:      cloneStringSlice(signal.Context),
-		Structure:    cloneStringSlice(signal.Structure),
-		Complexity:   cloneStringSlice(signal.Complexity),
-		Modality:     cloneStringSlice(signal.Modality),
-		Authz:        cloneStringSlice(signal.Authz),
-		Jailbreak:    cloneStringSlice(signal.Jailbreak),
-		PII:          cloneStringSlice(signal.PII),
-		KB:           cloneStringSlice(signal.KB),
-		Conversation: cloneStringSlice(signal.Conversation),
-		Event:        cloneStringSlice(signal.Event),
-		Metadata:     cloneStringSlice(signal.Metadata),
-		Classifier:   cloneStringSlice(signal.Classifier),
+		Keyword:       cloneStringSlice(signal.Keyword),
+		Embedding:     cloneStringSlice(signal.Embedding),
+		Domain:        cloneStringSlice(signal.Domain),
+		FactCheck:     cloneStringSlice(signal.FactCheck),
+		UserFeedback:  cloneStringSlice(signal.UserFeedback),
+		Reask:         cloneStringSlice(signal.Reask),
+		Preference:    cloneStringSlice(signal.Preference),
+		Language:      cloneStringSlice(signal.Language),
+		Context:       cloneStringSlice(signal.Context),
+		Structure:     cloneStringSlice(signal.Structure),
+		Complexity:    cloneStringSlice(signal.Complexity),
+		Modality:      cloneStringSlice(signal.Modality),
+		Authz:         cloneStringSlice(signal.Authz),
+		Jailbreak:     cloneStringSlice(signal.Jailbreak),
+		PII:           cloneStringSlice(signal.PII),
+		KB:            cloneStringSlice(signal.KB),
+		Conversation:  cloneStringSlice(signal.Conversation),
+		Event:         cloneStringSlice(signal.Event),
+		Metadata:      cloneStringSlice(signal.Metadata),
+		Classifier:    cloneStringSlice(signal.Classifier),
+		InputModality: cloneStringSlice(signal.InputModality),
 	}
 }
 

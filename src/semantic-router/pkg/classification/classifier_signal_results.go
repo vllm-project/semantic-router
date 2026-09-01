@@ -10,33 +10,34 @@ type SignalMetrics struct {
 
 // SignalResults contains all evaluated signal results.
 type SignalResults struct {
-	MatchedKeywordRules      []string
-	MatchedKeywords          []string // The actual keywords that matched (not rule names)
-	MatchedEmbeddingRules    []string
-	MatchedDomainRules       []string
-	MatchedFactCheckRules    []string // "needs_fact_check" or "no_fact_check_needed"
-	MatchedUserFeedbackRules []string // "satisfied", "need_clarification", "wrong_answer", "want_different"
-	MatchedReaskRules        []string // History-aware repeated-question dissatisfaction signals
-	MatchedPreferenceRules   []string // Route preference names matched via external LLM
-	MatchedLanguageRules     []string // Language codes: "en", "es", "zh", "fr", etc.
-	MatchedContextRules      []string // Matched context rule names (e.g. "low_token_count")
-	TokenCount               int      // Total token count
-	MatchedStructureRules    []string // Matched structure rule names (e.g. "many_questions")
-	MatchedComplexityRules   []string // Matched complexity rules with difficulty level (e.g. "code_complexity:hard")
-	MatchedModalityRules     []string // Matched modality: "AR", "DIFFUSION", or "BOTH"
-	MatchedAuthzRules        []string // Matched authz role names for user-level RBAC routing
-	MatchedJailbreakRules    []string // Matched jailbreak rule names (confidence >= threshold)
-	MatchedPIIRules          []string // Matched PII rule names (denied PII types detected)
-	MatchedKBRules           []string
-	KBClassifierResults      map[string]*KBClassifyResult
-	KBMetricValues           map[string]float64
-	MatchedConversationRules []string
-	MatchedEventRules        []string // Matched event rule names (event type, severity, temporal, action codes)
-	MatchedMetadataRules     []string // Matched untrusted request metadata rules
-	MatchedClassifierRules   []string // Matched generic classifier label names
-	MatchedProjectionRules   []string // Matched derived routing outputs from routing.projections.mappings
-	ProjectionScores         map[string]float64
-	ProjectionTrace          *projectiontrace.Trace // Explainability payload for projections (replay / dashboard)
+	MatchedKeywordRules       []string
+	MatchedKeywords           []string // The actual keywords that matched (not rule names)
+	MatchedEmbeddingRules     []string
+	MatchedDomainRules        []string
+	MatchedFactCheckRules     []string // "needs_fact_check" or "no_fact_check_needed"
+	MatchedUserFeedbackRules  []string // "satisfied", "need_clarification", "wrong_answer", "want_different"
+	MatchedReaskRules         []string // History-aware repeated-question dissatisfaction signals
+	MatchedPreferenceRules    []string // Route preference names matched via external LLM
+	MatchedLanguageRules      []string // Language codes: "en", "es", "zh", "fr", etc.
+	MatchedContextRules       []string // Matched context rule names (e.g. "low_token_count")
+	TokenCount                int      // Total token count
+	MatchedStructureRules     []string // Matched structure rule names (e.g. "many_questions")
+	MatchedComplexityRules    []string // Matched complexity rules with difficulty level (e.g. "code_complexity:hard")
+	MatchedModalityRules      []string // Matched modality: "AR", "DIFFUSION", or "BOTH"
+	MatchedAuthzRules         []string // Matched authz role names for user-level RBAC routing
+	MatchedJailbreakRules     []string // Matched jailbreak rule names (confidence >= threshold)
+	MatchedPIIRules           []string // Matched PII rule names (denied PII types detected)
+	MatchedKBRules            []string
+	KBClassifierResults       map[string]*KBClassifyResult
+	KBMetricValues            map[string]float64
+	MatchedConversationRules  []string
+	MatchedEventRules         []string // Matched event rule names (event type, severity, temporal, action codes)
+	MatchedMetadataRules      []string // Matched untrusted request metadata rules
+	MatchedClassifierRules    []string // Matched generic classifier label names
+	MatchedInputModalityRules []string // Matched structural input-modality presence rules
+	MatchedProjectionRules    []string // Matched derived routing outputs from routing.projections.mappings
+	ProjectionScores          map[string]float64
+	ProjectionTrace           *projectiontrace.Trace // Explainability payload for projections (replay / dashboard)
 
 	// Jailbreak detection metadata (populated when jailbreak signal is evaluated)
 	JailbreakDetected   bool    // Whether any jailbreak was detected (across all rules)
@@ -59,24 +60,25 @@ type SignalResults struct {
 
 // SignalMetricsCollection contains metrics for all signal types.
 type SignalMetricsCollection struct {
-	Keyword      SignalMetrics `json:"keyword"`
-	Embedding    SignalMetrics `json:"embedding"`
-	Domain       SignalMetrics `json:"domain"`
-	FactCheck    SignalMetrics `json:"fact_check"`
-	UserFeedback SignalMetrics `json:"user_feedback"`
-	Reask        SignalMetrics `json:"reask"`
-	Preference   SignalMetrics `json:"preference"`
-	Language     SignalMetrics `json:"language"`
-	Context      SignalMetrics `json:"context"`
-	Structure    SignalMetrics `json:"structure"`
-	Complexity   SignalMetrics `json:"complexity"`
-	Modality     SignalMetrics `json:"modality"`
-	Authz        SignalMetrics `json:"authz"`
-	Jailbreak    SignalMetrics `json:"jailbreak"`
-	PII          SignalMetrics `json:"pii"`
-	KB           SignalMetrics `json:"kb"`
-	Conversation SignalMetrics `json:"conversation"`
-	Event        SignalMetrics `json:"event"`
-	Metadata     SignalMetrics `json:"metadata"`
-	Classifier   SignalMetrics `json:"classifier"`
+	Keyword       SignalMetrics `json:"keyword"`
+	Embedding     SignalMetrics `json:"embedding"`
+	Domain        SignalMetrics `json:"domain"`
+	FactCheck     SignalMetrics `json:"fact_check"`
+	UserFeedback  SignalMetrics `json:"user_feedback"`
+	Reask         SignalMetrics `json:"reask"`
+	Preference    SignalMetrics `json:"preference"`
+	Language      SignalMetrics `json:"language"`
+	Context       SignalMetrics `json:"context"`
+	Structure     SignalMetrics `json:"structure"`
+	Complexity    SignalMetrics `json:"complexity"`
+	Modality      SignalMetrics `json:"modality"`
+	Authz         SignalMetrics `json:"authz"`
+	Jailbreak     SignalMetrics `json:"jailbreak"`
+	PII           SignalMetrics `json:"pii"`
+	KB            SignalMetrics `json:"kb"`
+	Conversation  SignalMetrics `json:"conversation"`
+	Event         SignalMetrics `json:"event"`
+	Metadata      SignalMetrics `json:"metadata"`
+	Classifier    SignalMetrics `json:"classifier"`
+	InputModality SignalMetrics `json:"input_modality"`
 }

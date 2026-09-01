@@ -1,0 +1,15 @@
+routing:
+  signals:
+    input_modality:
+      - name: image_input
+        description: Request contains at least one image content part.
+        modality: image
+      - name: audio_input
+        description: Request contains at least one audio content part.
+        modality: audio
+      - name: video_input
+        description: Request contains at least one video content part.
+        modality: video
+      - name: text_input
+        description: Request contains user-provided text.
+        modality: text

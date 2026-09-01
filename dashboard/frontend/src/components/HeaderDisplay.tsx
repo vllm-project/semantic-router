@@ -141,6 +141,10 @@ const HEADER_INFO: Record<
     label: 'Event Signal',
     type: 'info',
   },
+  'x-vsr-matched-input-modality': {
+    label: 'Input Modality Signal',
+    type: 'info',
+  },
   'x-vsr-matched-projections': {
     label: 'Projection',
     type: 'info',

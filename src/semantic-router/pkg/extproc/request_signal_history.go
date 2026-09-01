@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 )
@@ -28,6 +29,7 @@ type signalConversationHistory struct {
 	assistantToolCallCount    int
 	toolResultCount           int
 	imageContentCount         int
+	inputModality             classification.InputModalityFacts
 	assistantToolNames        []string
 	lastMessageRole           string
 	lastMessageToolResult     bool
@@ -61,6 +63,7 @@ func signalConversationHistoryFromSnapshot(result *requestSignalSnapshot) signal
 		assistantToolCallCount:    result.AssistantToolCallCount,
 		toolResultCount:           result.ToolResultCount,
 		imageContentCount:         result.ImageContentCount,
+		inputModality:             result.InputModality,
 		assistantToolNames:        append([]string(nil), result.AssistantToolNames...),
 		lastMessageRole:           result.LastMessageRole,
 		lastMessageToolResult:     result.LastMessageToolResult,
