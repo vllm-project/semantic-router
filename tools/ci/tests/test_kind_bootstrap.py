@@ -1,6 +1,5 @@
-from pathlib import Path
 import unittest
-
+from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SETUP_KIND = REPO_ROOT / ".github" / "actions" / "setup-kind" / "action.yml"
