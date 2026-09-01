@@ -16,6 +16,7 @@ RELEASE_BLOCKER = "release-blocker"
 BACKLOG = "backlog"
 CLOSE_CANDIDATE = "close-candidate"
 STALE = "stale"
+EPIC = "epic"
 
 WORKGROUP_LABELS = (
     "wg/mom-routing",
@@ -89,6 +90,13 @@ def title_format_error(title: str | None) -> str | None:
     return None
 
 
+def is_epic_title(title: str | None) -> bool:
+    """Return whether the normalized title declares an Epic work item."""
+
+    match = TITLE_PREFIX_PATTERN.match(title or "")
+    return bool(match and match.group("category").strip().casefold() == "epic")
+
+
 def label_names(item: dict[str, Any]) -> set[str]:
     return {
         label["name"] if isinstance(label, dict) else str(label)
@@ -148,6 +156,19 @@ class IssueAcceptanceEvaluation:
     valid: bool
     error: str | None = None
     owner_label: str | None = None
+
+
+def plan_issue_kind(issue: dict[str, Any]) -> IssuePlan:
+    """Keep the structural Epic label aligned with the issue title."""
+
+    plan = IssuePlan()
+    labels = label_names(issue)
+    if is_epic_title(issue.get("title")):
+        if EPIC not in labels:
+            plan.add_labels.add(EPIC)
+    elif EPIC in labels:
+        plan.remove_labels.add(EPIC)
+    return plan
 
 
 def evaluate_issue_acceptance(
@@ -297,6 +318,9 @@ def plan_issue(
 
     plan = IssuePlan()
     labels = label_names(issue)
+    kind_plan = plan_issue_kind(issue)
+    plan.add_labels.update(kind_plan.add_labels)
+    plan.remove_labels.update(kind_plan.remove_labels)
     assignees = {
         assignee.get("login", "")
         for assignee in issue.get("assignees", [])

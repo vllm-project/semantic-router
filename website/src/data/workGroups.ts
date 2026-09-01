@@ -211,11 +211,11 @@ export const workGroups: WorkGroup[] = [
     name: 'Agentic & Context',
     label: 'wg/agentic-context',
     charterIssue: 2987,
-    goal: 'Manage context and safely select, hand off, and compose agent backends for long-running workloads.',
+    goal: 'Optimize bounded context, memory, and session continuity for long-running and agentic workloads.',
     scope: [
-      'Context optimization, memory, and session state',
-      'Agent backend selection, handoff, and composition',
-      'Bounded multi-agent collaboration and long-session model or workflow switching',
+      'Context optimization, prompt-visible memory, and session state',
+      'Session budgets, tool-loop continuity, and safe model or workflow switching',
+      'Typed agent-aware boundaries and bounded collaboration receipts for external runtimes',
     ],
     leads: [
       {
@@ -247,11 +247,11 @@ export const workGroups: WorkGroup[] = [
     name: 'Developer Experience & Ecosystem',
     label: 'wg/developer-experience-ecosystem',
     charterIssue: 2970,
-    goal: 'Make vLLM Semantic Router easy to adopt, configure, extend, deploy, tune, and operate.',
+    goal: 'Make vLLM Semantic Router easy to adopt, configure, extend, diagnose, and contribute to.',
     scope: [
-      'CLI, Dashboard, APIs, configuration, recipes, and errors',
-      'Agent skill and ecosystem integrations for deployment, tuning, and operations',
-      'Documentation, blogs, video tutorials, and use-case sharing',
+      'First-run CLI, configuration, recipes, errors, and troubleshooting',
+      'Dashboard workflows built on canonical Router and deployment contracts',
+      'Reviewed agent-assisted workflows, documentation, localization, and ecosystem guides',
     ],
     leads: [
       {
@@ -293,11 +293,11 @@ export const workGroups: WorkGroup[] = [
     name: 'Evaluation & Quality',
     label: 'wg/evaluation-quality',
     charterIssue: 2969,
-    goal: 'Provide common evaluation and quality gates across every project direction.',
+    goal: 'Make every supported capability measurable and every change verifiable.',
     scope: [
-      'MoM, Router Model, agent, context, and workflow evaluation',
-      'Model cards, benchmarks, and reproducibility',
-      'CI, E2E, compatibility, and regression gates',
+      'Decision-level routing and first-class MoM evaluation',
+      'Performance coverage, reports, baselines, and hardware qualification',
+      'CI, behavioral E2E, compatibility, security, and regression gates',
     ],
     leads: [
       {
