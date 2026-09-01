@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/admission"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
@@ -58,6 +59,9 @@ type Classifier struct {
 
 	// Context classifier for token count-based routing
 	contextClassifier *ContextClassifier
+
+	// Per-deployment admission gates for Router Model inference
+	admissionRegistry *admission.Registry
 	// tokenCalibrator learns provider-specific prompt token ratios for context routing.
 	tokenCalibrator *CalibratedTokenCounter
 
@@ -196,6 +200,8 @@ func newClassifierWithOptions(cfg *config.RouterConfig, options ...option) (*Cla
 	for _, option := range options {
 		option(classifier)
 	}
+
+	classifier.applyAdmissionGates()
 
 	// Build category name mappings to support generic categories in config
 	classifier.buildCategoryNameMappings()

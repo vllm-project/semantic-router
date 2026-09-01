@@ -63,6 +63,7 @@ func (c *Classifier) initializeFactCheckClassifier() error {
 		return fmt.Errorf("failed to initialize fact-check classifier: %w", err)
 	}
 
+	classifier.SetAdmissioner(c.admissionRegistry.For(admissionDeploymentFactCheckClassifier))
 	c.factCheckClassifier = classifier
 	return nil
 }
@@ -104,6 +105,10 @@ func (c *Classifier) initializeHallucinationDetector() error {
 	}
 
 	c.initializeHallucinationNLI(detector)
+	detector.SetAdmissioners(
+		c.admissionRegistry.For(admissionDeploymentHallucinationDetector),
+		c.admissionRegistry.For(admissionDeploymentHallucinationExplainer),
+	)
 	c.hallucinationDetector = detector
 	wireFusionGroundingBackends(detector.Detect)
 	return nil
