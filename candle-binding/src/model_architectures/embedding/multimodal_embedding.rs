@@ -124,7 +124,60 @@ impl MultiModalEmbeddingConfig {
                 .filter_map(|d| d.as_u64().map(|x| x as usize))
                 .collect();
         }
+        cfg.validate_dimension_contract()?;
         Ok(cfg)
+    }
+
+    pub fn validate_dimension_contract(&self) -> UnifiedResult<()> {
+        if self.embedding_dim == 0 {
+            return Err(UnifiedError::Validation {
+                field: "embedding_dim".to_string(),
+                expected: "a positive native dimension".to_string(),
+                actual: self.embedding_dim.to_string(),
+                context: Some("multimodal embedding dimension contract".to_string()),
+            });
+        }
+        if self.matryoshka_dims.is_empty()
+            || !self.matryoshka_dims.contains(&self.embedding_dim)
+            || self
+                .matryoshka_dims
+                .iter()
+                .any(|&dimension| dimension == 0 || dimension > self.embedding_dim)
+        {
+            return Err(UnifiedError::Validation {
+                field: "matryoshka_dims".to_string(),
+                expected: format!(
+                    "positive dimensions no greater than embedding_dim ({}) and including it",
+                    self.embedding_dim
+                ),
+                actual: format!("{:?}", self.matryoshka_dims),
+                context: Some("multimodal embedding dimension contract".to_string()),
+            });
+        }
+        let mut unique = self.matryoshka_dims.clone();
+        unique.sort_unstable();
+        unique.dedup();
+        if unique.len() != self.matryoshka_dims.len() {
+            return Err(UnifiedError::Validation {
+                field: "matryoshka_dims".to_string(),
+                expected: "unique dimensions".to_string(),
+                actual: format!("{:?}", self.matryoshka_dims),
+                context: Some("multimodal embedding dimension contract".to_string()),
+            });
+        }
+        Ok(())
+    }
+
+    pub fn validate_target_dimension(&self, dimension: usize) -> UnifiedResult<()> {
+        if !self.matryoshka_dims.contains(&dimension) {
+            return Err(UnifiedError::Validation {
+                field: "target_dim".to_string(),
+                expected: format!("one of {:?}", self.matryoshka_dims),
+                actual: dimension.to_string(),
+                context: Some("multimodal embedding dimension contract".to_string()),
+            });
+        }
+        Ok(())
     }
 
     pub fn num_image_patches(&self) -> usize {
@@ -1057,6 +1110,10 @@ impl MultiModalEmbeddingModel {
 
         // Audio encoder: weights under audio_encoder.encoder.* (optional)
         let audio_encoder = WhisperEncoder::load(vb.pp("audio_encoder.encoder"), config).ok();
+        let matryoshka_config = MultiModalMatryoshkaConfig {
+            dimensions: config.matryoshka_dims.clone(),
+            ..MultiModalMatryoshkaConfig::default()
+        };
 
         Ok(Self {
             text_encoder,
@@ -1064,7 +1121,7 @@ impl MultiModalEmbeddingModel {
             image_projection,
             audio_encoder,
             config: config.clone(),
-            matryoshka_config: MultiModalMatryoshkaConfig::default(),
+            matryoshka_config,
             device: device.clone(),
         })
     }
@@ -1120,14 +1177,7 @@ impl MultiModalEmbeddingModel {
         }
 
         let target_dim = target_dim.unwrap_or(self.config.embedding_dim);
-        if target_dim > self.config.embedding_dim {
-            return Err(UnifiedError::Validation {
-                field: "target_dim".to_string(),
-                expected: format!("<= {}", self.config.embedding_dim),
-                actual: target_dim.to_string(),
-                context: None,
-            });
-        }
+        self.config.validate_target_dimension(target_dim)?;
 
         let default_mask;
         let mask = match attention_mask {
@@ -1179,17 +1229,7 @@ impl MultiModalEmbeddingModel {
         target_dim: Option<usize>,
     ) -> UnifiedResult<Tensor> {
         let target_dim = target_dim.unwrap_or(self.config.embedding_dim);
-        // Match the text 2DMSE contract: MRL only truncates down from the
-        // native dimension, so an above-native request cannot be satisfied and
-        // must be rejected rather than silently returning the native vector.
-        if target_dim > self.config.embedding_dim {
-            return Err(UnifiedError::Validation {
-                field: "target_dim".to_string(),
-                expected: format!("<= {}", self.config.embedding_dim),
-                actual: target_dim.to_string(),
-                context: None,
-            });
-        }
+        self.config.validate_target_dimension(target_dim)?;
 
         let pooler_output = self
             .image_encoder
@@ -1226,6 +1266,7 @@ impl MultiModalEmbeddingModel {
         target_dim: Option<usize>,
     ) -> UnifiedResult<Tensor> {
         let target_dim = target_dim.unwrap_or(self.config.embedding_dim);
+        self.config.validate_target_dimension(target_dim)?;
 
         let encoder = self.audio_encoder.as_ref().ok_or_else(|| {
             from_candle_error(
@@ -1552,6 +1593,24 @@ mod tests {
         assert!(config.validate_layer(6));
         assert!(config.validate_layer(1));
         assert!(!config.validate_layer(7));
+    }
+
+    #[test]
+    fn test_multimodal_dimension_contract_rejects_undeclared_prefix() {
+        let config = MultiModalEmbeddingConfig::default();
+        assert!(config.validate_target_dimension(384).is_ok());
+        assert!(config.validate_target_dimension(32).is_ok());
+        assert!(config.validate_target_dimension(100).is_err());
+        assert!(config.validate_target_dimension(768).is_err());
+    }
+
+    #[test]
+    fn test_multimodal_dimension_contract_requires_native_dimension() {
+        let config = MultiModalEmbeddingConfig {
+            matryoshka_dims: vec![256, 128, 64, 32],
+            ..MultiModalEmbeddingConfig::default()
+        };
+        assert!(config.validate_dimension_contract().is_err());
     }
 
     #[test]
@@ -2520,13 +2579,9 @@ mod integration_tests {
         let input_ids = Tensor::from_vec(ids, (1, seq_len), device).unwrap();
         let attention_mask = Tensor::from_vec(mask, (1, seq_len), device).unwrap();
 
-        let result = model.encode_text_with_matryoshka(
-            &input_ids,
-            Some(&attention_mask),
-            None,
-            Some(999), // exceeds embedding_dim
-        );
-        assert!(result.is_err(), "dim=999 should be rejected");
+        let result =
+            model.encode_text_with_matryoshka(&input_ids, Some(&attention_mask), None, Some(100));
+        assert!(result.is_err(), "undeclared dim=100 should be rejected");
     }
 
     #[test]
@@ -2535,18 +2590,17 @@ mod integration_tests {
         let (model, _tokenizer) = load_model_and_tokenizer();
         let img = make_test_image(model.device(), 0.5, 0.3, 0.7);
 
-        // Above-native request must be rejected, mirroring the text 2DMSE path,
-        // rather than silently returning the native-dimension vector.
-        let result = model.encode_image_with_dim(&img, Some(768));
-        assert!(
-            result.is_err(),
-            "image dim=768 (> native) should be rejected"
-        );
-
-        // Native and below-native requests still succeed.
-        let native = model.config().embedding_dim;
-        let ok = model.encode_image_with_dim(&img, Some(native));
-        assert!(ok.is_ok(), "image dim=native ({}) should succeed", native);
+        for dimension in [384, 256, 128, 64, 32] {
+            let output = model.encode_image_with_dim(&img, Some(dimension));
+            assert!(output.is_ok(), "declared dim={dimension} should succeed");
+        }
+        for dimension in [100, 768] {
+            let output = model.encode_image_with_dim(&img, Some(dimension));
+            assert!(
+                output.is_err(),
+                "undeclared dim={dimension} should be rejected"
+            );
+        }
     }
 
     /// Shape-only smoke test for the new SigLIPHead attentional probe pooling.

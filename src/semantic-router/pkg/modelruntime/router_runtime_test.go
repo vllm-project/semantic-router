@@ -171,6 +171,21 @@ func assertBoolPtr(t *testing.T, got *bool, want bool, label string) {
 	}
 }
 
+func TestValidateConfiguredMultimodalDimension(t *testing.T) {
+	contract := embeddingDimensionContract{Default: 384, Supported: []int{384, 256, 128, 64, 32}}
+
+	for _, dimension := range []int{0, 384, 32} {
+		if err := validateConfiguredMultimodalDimension(dimension, contract); err != nil {
+			t.Fatalf("dimension %d should be accepted: %v", dimension, err)
+		}
+	}
+
+	err := validateConfiguredMultimodalDimension(768, contract)
+	if err == nil || !strings.Contains(err.Error(), "384") {
+		t.Fatalf("expected model-specific rejection for dimension 768, got %v", err)
+	}
+}
+
 func assertRemoteEmbeddingFailureEvent(t *testing.T, failedEvent *Event) {
 	t.Helper()
 	if failedEvent == nil || failedEvent.Error == nil {

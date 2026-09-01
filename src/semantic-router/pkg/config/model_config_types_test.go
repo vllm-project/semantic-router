@@ -2,6 +2,15 @@ package config
 
 import "testing"
 
+func TestHNSWConfigWithDefaultsDefersMultimodalDimension(t *testing.T) {
+	for _, modelType := range []string{"multimodal", " MultiModal "} {
+		cfg := HNSWConfig{ModelType: modelType}.WithDefaults()
+		if cfg.TargetDimension != 0 {
+			t.Fatalf("multimodal dimension must be resolved from the loaded model, got %d", cfg.TargetDimension)
+		}
+	}
+}
+
 func TestPreferenceModelConfigWithDefaultsEnablesContrastiveByDefault(t *testing.T) {
 	cfg := PreferenceModelConfig{}.WithDefaults()
 	if cfg.UseContrastive == nil || !*cfg.UseContrastive {

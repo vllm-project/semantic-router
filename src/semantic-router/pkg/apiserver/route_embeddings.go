@@ -20,36 +20,27 @@ import (
 // package-level var so tests can inject a failing encoder without a loaded model.
 var multiModalEncodeImage = candle_binding.MultiModalEncodeImageFromBase64
 
-// multiModalEmbeddingDim reports the loaded multimodal model's native embedding
-// dimension (or <= 0 if none is loaded). It is a package-level var so tests can
-// stub the native dimension without a loaded model.
-var multiModalEmbeddingDim = candle_binding.MultiModalGetEmbeddingDim
-
-// multiModalModelFallbackID is the reported model id when no multimodal model
-// path is configured; it matches the canonical shipped checkpoint.
-const multiModalModelFallbackID = "multi-modal-embed-small"
-
-// imageTargetDimension resolves the image encode dimension. Image-only requests
-// use req.Dimension directly (validated <= native). Mixed requests target the
-// text side, so the image side caps at native and warns once per request rather
-// than forcing text recall down to the image width.
-func imageTargetDimension(req EmbeddingRequest) int {
-	if len(req.Images) == 0 || len(req.Texts) == 0 {
-		return req.Dimension
-	}
-	native := multiModalEmbeddingDim()
-	if native <= 0 || req.Dimension <= native {
-		return req.Dimension
-	}
-	logging.Warnf("Embedding request dimension %d exceeds the multimodal native dimension %d; encoding %d image input(s) at %d, so response dimensions differ by modality",
-		req.Dimension, native, len(req.Images), native)
-	return native
+type embeddingDimensionContract struct {
+	ModelID   string
+	Default   int
+	Supported []int
 }
 
-// isMultiModalModelName reports whether an explicit model selector names the
-// multimodal embedding model. Mirrors the aliases registered in
-// config/registry.go so an image request may name the multimodal model
-// explicitly without being rejected as a text-only selector.
+// multiModalDimensionContract reports the immutable contract registered by
+// the loaded multimodal binding. It is replaceable for tests that do not load
+// a checkpoint.
+var multiModalDimensionContract = func() embeddingDimensionContract {
+	return embeddingDimensionContract{
+		ModelID:   multiModalModelFallbackID,
+		Default:   candle_binding.MultiModalGetEmbeddingDim(),
+		Supported: candle_binding.MultiModalGetSupportedDimensions(),
+	}
+}
+
+// multiModalModelFallbackID is used only when the configured checkpoint cannot
+// be resolved through the model registry.
+const multiModalModelFallbackID = "multi-modal-embed-small"
+
 func isMultiModalModelName(model string) bool {
 	switch model {
 	case "multimodal", "multi-modal-embed-small", "multimodal-embedding",
@@ -57,6 +48,19 @@ func isMultiModalModelName(model string) bool {
 		return true
 	}
 	return false
+}
+
+func (c embeddingDimensionContract) supports(dimension int) bool {
+	for _, supported := range c.Supported {
+		if dimension == supported {
+			return true
+		}
+	}
+	return false
+}
+
+func (c embeddingDimensionContract) supportedList() string {
+	return formatLayerList(c.Supported)
 }
 
 // imageEncodeError marks an image-encode failure driven by the request input:
@@ -95,8 +99,6 @@ const (
 	maxImagesPerRequest = 8
 )
 
-// invalidDimensionMessage matches the dimensions accepted by isValidDimension,
-// including 64 (which the similarity error messages previously omitted).
 const invalidDimensionMessage = "dimension must be one of: 64, 128, 256, 512, 768, 1024 (got %d)"
 
 // validatePriority rejects a priority weight outside the documented [0.0, 1.0]
@@ -181,11 +183,17 @@ func averageEmbeddingProcessingTime(totalProcessingTime int64, req EmbeddingRequ
 }
 
 func applyEmbeddingDefaults(req *EmbeddingRequest) {
-	if req.Model == "" {
-		req.Model = "auto"
+	if req.Model == "" || (req.Model == "auto" && len(req.Images) > 0) {
+		if len(req.Images) > 0 {
+			req.Model = "multimodal"
+		} else {
+			req.Model = "auto"
+		}
+	} else if isMultiModalModelName(req.Model) {
+		req.Model = "multimodal"
 	}
 	if req.Dimension == 0 {
-		req.Dimension = defaultEmbeddingDimensionFor(req.Texts, req.Images)
+		req.Dimension = defaultEmbeddingDimensionForModel(req.Model)
 	}
 	if req.QualityPriority == 0 && req.LatencyPriority == 0 {
 		req.QualityPriority = defaultEmbeddingPriority
@@ -193,17 +201,11 @@ func applyEmbeddingDefaults(req *EmbeddingRequest) {
 	}
 }
 
-// defaultEmbeddingDimensionFor picks the default dimension when the request
-// omits one. req.Dimension targets the text side, so only an image-only request
-// defaults to the multimodal native dimension.
-func defaultEmbeddingDimensionFor(texts, images []string) int {
-	if len(texts) > 0 || len(images) == 0 {
+func defaultEmbeddingDimensionForModel(model string) int {
+	if !isMultiModalModelName(model) {
 		return defaultEmbeddingDimension
 	}
-	if native := multiModalEmbeddingDim(); native > 0 {
-		return native
-	}
-	return defaultEmbeddingDimension
+	return multiModalDimensionContract().Default
 }
 
 func validateEmbeddingRequest(req EmbeddingRequest, mmbertLayers []int) (string, string, bool) {
@@ -213,8 +215,8 @@ func validateEmbeddingRequest(req EmbeddingRequest, mmbertLayers []int) (string,
 	if code, message, ok := validateEmbeddingImages(req.Images); !ok {
 		return code, message, false
 	}
-	if !isValidDimension(req.Dimension) {
-		return "INVALID_DIMENSION", fmt.Sprintf("dimension must be one of: 64, 128, 256, 384, 512, 768, 1024 (got %d)", req.Dimension), false
+	if code, message, ok := validateEmbeddingDimension(req); !ok {
+		return code, message, false
 	}
 	if code, message, ok := validateImageEmbeddingParams(req); !ok {
 		return code, message, false
@@ -228,31 +230,31 @@ func validateEmbeddingRequest(req EmbeddingRequest, mmbertLayers []int) (string,
 	return "", "", true
 }
 
-// validateImageEmbeddingParams enforces the image-specific parameter contract.
-// It is a no-op for text-only requests.
+func validateEmbeddingDimension(req EmbeddingRequest) (string, string, bool) {
+	if !isMultiModalModelName(req.Model) {
+		if isValidDimension(req.Dimension) {
+			return "", "", true
+		}
+		return "INVALID_DIMENSION", fmt.Sprintf(invalidDimensionMessage, req.Dimension), false
+	}
+	contract := multiModalDimensionContract()
+	if len(contract.Supported) == 0 || contract.supports(req.Dimension) {
+		return "", "", true
+	}
+	return "INVALID_DIMENSION", fmt.Sprintf("dimension %d is not supported by model %q; supported dimensions: %s", req.Dimension, contract.ModelID, contract.supportedList()), false
+}
+
+// validateImageEmbeddingParams ensures every image-bearing request resolves all
+// of its inputs to the shared multimodal embedding space.
 func validateImageEmbeddingParams(req EmbeddingRequest) (string, string, bool) {
 	if len(req.Images) == 0 {
 		return "", "", true
 	}
-	// Image-only: req.Dimension is the image target, and MRL only truncates down
-	// from native. Mixed requests target the text side, so the image ceiling is
-	// applied at encode time instead of rejecting a text-legal dimension.
-	if len(req.Texts) == 0 {
-		if native := multiModalEmbeddingDim(); native > 0 && req.Dimension > native {
-			return "INVALID_DIMENSION", fmt.Sprintf("dimension must be <= %d for image inputs (multimodal model native dimension; got %d)", native, req.Dimension), false
-		}
+	if !isMultiModalModelName(req.Model) {
+		return "INVALID_PARAMETER", "image inputs require model='multimodal' so text and image vectors share one embedding space", false
 	}
-	// target_layer is a text-only mmbert 2DMSE control; it cannot apply to
-	// image encoding, so reject instead of silently ignoring it.
 	if req.TargetLayer != 0 {
 		return "INVALID_PARAMETER", "target_layer is not supported for image inputs", false
-	}
-	// Images always use the multimodal model. When there is no text for a
-	// named model to apply to, an explicit text-model selector would be
-	// silently ignored; reject so the contract is explicit. Mixed
-	// text+image requests still honor req.Model for the text side.
-	if len(req.Texts) == 0 && req.Model != "auto" && req.Model != "" && !isMultiModalModelName(req.Model) {
-		return "INVALID_PARAMETER", fmt.Sprintf("model=%q does not produce image embeddings; omit model or use the multimodal model for image inputs", req.Model), false
 	}
 	return "", "", true
 }
@@ -296,7 +298,6 @@ func buildEmbeddingResults(req EmbeddingRequest, multiModalModelID string) ([]Em
 		totalProcessingTime += processingTime
 	}
 
-	imgDim := imageTargetDimension(req)
 	for i, image := range req.Images {
 		// Canonicalize so the FFI's case-sensitive ";base64," scan finds the
 		// payload boundary (validation already guaranteed a safe data URI).
@@ -304,7 +305,7 @@ func buildEmbeddingResults(req EmbeddingRequest, multiModalModelID string) ([]Em
 		if canonical, ok := imageurl.CanonicalDataURL(image); ok {
 			encodeInput = canonical
 		}
-		output, err := multiModalEncodeImage(encodeInput, imgDim)
+		output, err := multiModalEncodeImage(encodeInput, req.Dimension)
 		if err != nil {
 			// The image already passed the safe-data-URI + base64-decode gate, so
 			// an encode failure here is input-caused (undecodable image bytes);

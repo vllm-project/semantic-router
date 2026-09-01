@@ -12,13 +12,13 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-// stubMultiModalDim overrides the native-dimension getter for a test so the
-// image over-dimension contract can be exercised without a loaded model.
-func stubMultiModalDim(t *testing.T, dim int) {
+// stubMultiModalContract overrides the loaded model's dimension contract so
+// request validation can be exercised without loading a checkpoint.
+func stubMultiModalContract(t *testing.T, contract embeddingDimensionContract) {
 	t.Helper()
-	orig := multiModalEmbeddingDim
-	t.Cleanup(func() { multiModalEmbeddingDim = orig })
-	multiModalEmbeddingDim = func() int { return dim }
+	orig := multiModalDimensionContract
+	t.Cleanup(func() { multiModalDimensionContract = orig })
+	multiModalDimensionContract = func() embeddingDimensionContract { return contract }
 }
 
 func TestBuildBatchSimilarityMatchesRejectsInvalidNativeIndex(t *testing.T) {
@@ -64,9 +64,11 @@ func TestValidateEmbeddingRequestRequiresTextsOrImages(t *testing.T) {
 }
 
 func TestValidateEmbeddingRequestAcceptsImagesOnly(t *testing.T) {
+	stubMultiModalContract(t, embeddingDimensionContract{ModelID: "multi-modal-embed-small", Default: 384, Supported: []int{384, 256, 128, 64, 32}})
 	req := EmbeddingRequest{
+		Model:     "multimodal",
 		Images:    []string{"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB"},
-		Dimension: defaultEmbeddingDimension,
+		Dimension: 384,
 	}
 
 	if _, _, ok := validateEmbeddingRequest(req, nil); !ok {
@@ -75,9 +77,11 @@ func TestValidateEmbeddingRequestAcceptsImagesOnly(t *testing.T) {
 }
 
 func TestValidateEmbeddingRequestRejectsUnsafeImage(t *testing.T) {
+	stubMultiModalContract(t, embeddingDimensionContract{ModelID: "multi-modal-embed-small", Default: 384, Supported: []int{384, 256, 128, 64, 32}})
 	req := EmbeddingRequest{
+		Model:     "multimodal",
 		Images:    []string{"https://example.com/cat.png"},
-		Dimension: defaultEmbeddingDimension,
+		Dimension: 384,
 	}
 
 	code, message, ok := validateEmbeddingRequest(req, nil)
@@ -90,9 +94,11 @@ func TestValidateEmbeddingRequestRejectsUnsafeImage(t *testing.T) {
 }
 
 func TestValidateEmbeddingRequestRejectsMalformedBase64(t *testing.T) {
+	stubMultiModalContract(t, embeddingDimensionContract{ModelID: "multi-modal-embed-small", Default: 384, Supported: []int{384, 256, 128, 64, 32}})
 	req := EmbeddingRequest{
+		Model:     "multimodal",
 		Images:    []string{"data:image/png;base64,!!!!"},
-		Dimension: defaultEmbeddingDimension,
+		Dimension: 384,
 	}
 
 	code, message, ok := validateEmbeddingRequest(req, nil)
@@ -105,12 +111,14 @@ func TestValidateEmbeddingRequestRejectsMalformedBase64(t *testing.T) {
 }
 
 func TestValidateEmbeddingRequestAcceptsUppercaseDataURIScheme(t *testing.T) {
+	stubMultiModalContract(t, embeddingDimensionContract{ModelID: "multi-modal-embed-small", Default: 384, Supported: []int{384, 256, 128, 64, 32}})
 	// "DATA:IMAGE/PNG;BASE64,..." passes the safety gate; it must also pass
 	// decode-validation so it is not accepted here only to 500 at the FFI, whose
 	// marker scan is case-sensitive (CanonicalDataURL normalizes it downstream).
 	req := EmbeddingRequest{
+		Model:     "multimodal",
 		Images:    []string{"DATA:IMAGE/PNG;BASE64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB"},
-		Dimension: defaultEmbeddingDimension,
+		Dimension: 384,
 	}
 
 	if _, _, ok := validateEmbeddingRequest(req, nil); !ok {
@@ -119,6 +127,7 @@ func TestValidateEmbeddingRequestAcceptsUppercaseDataURIScheme(t *testing.T) {
 }
 
 func TestBuildEmbeddingResultsWrapsImageEncodeFailure(t *testing.T) {
+	stubMultiModalContract(t, embeddingDimensionContract{ModelID: "multi-modal-embed-small", Default: 384, Supported: []int{384, 256, 128, 64, 32}})
 	// A validated safe data URI whose bytes are not a decodable image fails at the
 	// FFI; buildEmbeddingResults must tag it as an imageEncodeError so the handler
 	// maps it to 400 instead of 500.
@@ -129,8 +138,9 @@ func TestBuildEmbeddingResultsWrapsImageEncodeFailure(t *testing.T) {
 	}
 
 	req := EmbeddingRequest{
+		Model:     "multimodal",
 		Images:    []string{"data:image/png;base64,aGVsbG8="},
-		Dimension: defaultEmbeddingDimension,
+		Dimension: 384,
 	}
 	_, _, err := buildEmbeddingResults(req, multiModalModelFallbackID)
 	if err == nil {
@@ -160,11 +170,12 @@ func TestClassifyEmbeddingErrorMapsInternalFailureTo500(t *testing.T) {
 }
 
 func TestValidateEmbeddingRequestRejectsTooManyImages(t *testing.T) {
+	stubMultiModalContract(t, embeddingDimensionContract{ModelID: "multi-modal-embed-small", Default: 384, Supported: []int{384, 256, 128, 64, 32}})
 	images := make([]string, maxImagesPerRequest+1)
 	for i := range images {
 		images[i] = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB"
 	}
-	req := EmbeddingRequest{Images: images, Dimension: defaultEmbeddingDimension}
+	req := EmbeddingRequest{Model: "multimodal", Images: images, Dimension: 384}
 
 	code, _, ok := validateEmbeddingRequest(req, nil)
 	if ok {
@@ -340,243 +351,109 @@ func TestValidateEmbeddingRequestTargetLayerRejectedForNonMmbert(t *testing.T) {
 	}
 }
 
-func TestIsValidDimensionAcceptsNativeMultimodalDimension(t *testing.T) {
-	// 384 is the multimodal model's native dimension and must be accepted so a
-	// caller can request the image model's full-width vector explicitly.
-	if !isValidDimension(384) {
-		t.Fatalf("expected dimension 384 (multimodal native) to be valid")
+func TestApplyEmbeddingDefaultsUsesResolvedMultimodalDefault(t *testing.T) {
+	stubMultiModalContract(t, embeddingDimensionContract{
+		ModelID:   "multi-modal-embed-small",
+		Default:   384,
+		Supported: []int{384, 256, 128, 64, 32},
+	})
+
+	for _, req := range []*EmbeddingRequest{
+		{Model: "multimodal", Texts: []string{"hello"}},
+		{Images: []string{"data:image/png;base64,aGVsbG8="}},
+		{Model: "multimodal", Texts: []string{"hello"}, Images: []string{"data:image/png;base64,aGVsbG8="}},
+	} {
+		applyEmbeddingDefaults(req)
+		if req.Dimension != 384 {
+			t.Fatalf("expected resolved multimodal default 384, got %d for %+v", req.Dimension, req)
+		}
 	}
 }
 
-func TestApplyEmbeddingDefaultsImageOnlyUsesNativeDimension(t *testing.T) {
-	// An image-only request has no text side to honor the text default, so it
-	// defaults to the multimodal native dimension (the ceiling MRL can produce).
-	stubMultiModalDim(t, 384)
-	req := EmbeddingRequest{Images: []string{"data:image/png;base64,aGVsbG8="}}
-
-	applyEmbeddingDefaults(&req)
-
-	if req.Dimension != 384 {
-		t.Fatalf("expected image-only request to default to native dimension 384, got %d", req.Dimension)
-	}
-}
-
-func TestApplyEmbeddingDefaultsMixedKeepsTextDefault(t *testing.T) {
-	// req.Dimension targets the text side, so an image in the request must not
-	// pull the text default down to the image model's narrower native width.
-	stubMultiModalDim(t, 384)
-	req := EmbeddingRequest{
-		Texts:  []string{"hello"},
-		Images: []string{"data:image/png;base64,aGVsbG8="},
-	}
-
-	applyEmbeddingDefaults(&req)
-
-	if req.Dimension != defaultEmbeddingDimension {
-		t.Fatalf("expected mixed request to keep the text default %d, got %d", defaultEmbeddingDimension, req.Dimension)
-	}
-}
-
-func TestApplyEmbeddingDefaultsTextsUseTextDefault(t *testing.T) {
+func TestApplyEmbeddingDefaultsTextAutoUsesLegacyDefault(t *testing.T) {
+	stubMultiModalContract(t, embeddingDimensionContract{Default: 384, Supported: []int{384, 256, 128, 64, 32}})
 	req := EmbeddingRequest{Texts: []string{"hello"}}
 
 	applyEmbeddingDefaults(&req)
 
 	if req.Dimension != defaultEmbeddingDimension {
-		t.Fatalf("expected text-only request to default to %d, got %d", defaultEmbeddingDimension, req.Dimension)
+		t.Fatalf("expected unresolved text request to retain default %d, got %d", defaultEmbeddingDimension, req.Dimension)
 	}
 }
 
-func TestApplyEmbeddingDefaultsImageOnlyFallsBackWhenModelUnloaded(t *testing.T) {
-	// When no multimodal model is loaded the getter reports <= 0; defaulting an
-	// image-only request falls back to the text default and the encode fails
-	// downstream rather than this layer guessing a native dimension.
-	stubMultiModalDim(t, -1)
-	req := EmbeddingRequest{Images: []string{"data:image/png;base64,aGVsbG8="}}
+func TestValidateEmbeddingRequestDefersUnavailableMultimodalModel(t *testing.T) {
+	stubMultiModalContract(t, embeddingDimensionContract{})
+	req := EmbeddingRequest{Model: "multimodal", Images: []string{"data:image/png;base64,aGVsbG8="}, Dimension: 384}
 
-	applyEmbeddingDefaults(&req)
-
-	if req.Dimension != defaultEmbeddingDimension {
-		t.Fatalf("expected fallback to %d when multimodal model unloaded, got %d", defaultEmbeddingDimension, req.Dimension)
+	if code, message, ok := validateEmbeddingRequest(req, nil); !ok {
+		t.Fatalf("expected readiness handling to remain downstream, got %q: %q", code, message)
 	}
 }
 
-func TestValidateEmbeddingRequestRejectsImageOnlyDimensionAboveNative(t *testing.T) {
-	// Image-only: req.Dimension is the image target and must be <= native.
-	stubMultiModalDim(t, 384)
+func TestValidateEmbeddingRequestUsesDeclaredMultimodalDimensions(t *testing.T) {
+	stubMultiModalContract(t, embeddingDimensionContract{
+		ModelID:   "multi-modal-embed-small",
+		Default:   384,
+		Supported: []int{384, 256, 128, 64, 32},
+	})
+
+	for _, dim := range []int{384, 256, 128, 64, 32} {
+		req := EmbeddingRequest{
+			Model: "multimodal", Images: []string{"data:image/png;base64,aGVsbG8="}, Dimension: dim,
+		}
+		if code, message, ok := validateEmbeddingRequest(req, nil); !ok {
+			t.Fatalf("dimension %d should be supported, got %q: %q", dim, code, message)
+		}
+	}
+
+	for _, dim := range []int{100, 512, 768} {
+		req := EmbeddingRequest{
+			Model: "multimodal", Images: []string{"data:image/png;base64,aGVsbG8="}, Dimension: dim,
+		}
+		code, message, ok := validateEmbeddingRequest(req, nil)
+		if ok || code != "INVALID_DIMENSION" {
+			t.Fatalf("dimension %d should be rejected, got %q: %q", dim, code, message)
+		}
+		for _, want := range []string{"multi-modal-embed-small", "384, 256, 128, 64, 32"} {
+			if !strings.Contains(message, want) {
+				t.Fatalf("error %q should contain %q", message, want)
+			}
+		}
+	}
+}
+
+func TestValidateEmbeddingRequestRejectsMixedEmbeddingSpaces(t *testing.T) {
+	stubMultiModalContract(t, embeddingDimensionContract{
+		ModelID:   "multi-modal-embed-small",
+		Default:   384,
+		Supported: []int{384, 256, 128, 64, 32},
+	})
 	req := EmbeddingRequest{
-		Images:    []string{"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB"},
-		Dimension: 768,
+		Texts: []string{"hello"}, Images: []string{"data:image/png;base64,aGVsbG8="}, Dimension: 384,
 	}
 
 	code, message, ok := validateEmbeddingRequest(req, nil)
-	if ok {
-		t.Fatalf("expected dimension above the multimodal native dimension to be rejected for image-only")
-	}
-	if code != "INVALID_DIMENSION" {
-		t.Fatalf("unexpected error code %q: %q", code, message)
-	}
-	if !strings.Contains(message, "384") {
-		t.Fatalf("error should mention the native dimension, got %q", message)
+	if ok || code != "INVALID_PARAMETER" || !strings.Contains(message, "model='multimodal'") {
+		t.Fatalf("expected incompatible mixed request rejection, got %q: %q", code, message)
 	}
 }
 
-func TestValidateEmbeddingRequestAllowsAboveNativeDimensionForMixed(t *testing.T) {
-	// 768 is legal for the text side; the image ceiling is applied at encode
-	// time, so a mixed request must not be rejected for it.
-	stubMultiModalDim(t, 384)
+func TestValidateEmbeddingRequestAcceptsSharedMultimodalSpace(t *testing.T) {
+	stubMultiModalContract(t, embeddingDimensionContract{
+		ModelID:   "multi-modal-embed-small",
+		Default:   384,
+		Supported: []int{384, 256, 128, 64, 32},
+	})
 	req := EmbeddingRequest{
-		Texts:     []string{"hello"},
-		Images:    []string{"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB"},
-		Dimension: 768,
+		Model: "multimodal", Texts: []string{"hello"}, Images: []string{"data:image/png;base64,aGVsbG8="}, Dimension: 256,
 	}
 
-	code, message, ok := validateEmbeddingRequest(req, nil)
-	if !ok {
-		t.Fatalf("expected mixed request with dimension 768 to be accepted, got %q: %q", code, message)
+	if code, message, ok := validateEmbeddingRequest(req, nil); !ok {
+		t.Fatalf("expected shared-space mixed request to pass, got %q: %q", code, message)
 	}
 }
 
-func TestValidateEmbeddingRequestAcceptsImageNativeDimension(t *testing.T) {
-	stubMultiModalDim(t, 384)
-	req := EmbeddingRequest{
-		Images:    []string{"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB"},
-		Dimension: 384,
-	}
-
-	if _, _, ok := validateEmbeddingRequest(req, nil); !ok {
-		t.Fatalf("expected native dimension 384 to be accepted for image inputs")
-	}
-}
-
-func TestValidateEmbeddingRequestRejectsTargetLayerWithImages(t *testing.T) {
-	stubMultiModalDim(t, 384)
-	req := EmbeddingRequest{
-		Images:      []string{"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB"},
-		Dimension:   384,
-		TargetLayer: 6,
-	}
-
-	code, message, ok := validateEmbeddingRequest(req, []int{6, 11, 16, 22})
-	if ok {
-		t.Fatalf("expected target_layer with image inputs to be rejected")
-	}
-	if code != "INVALID_PARAMETER" || !strings.Contains(message, "image inputs") {
-		t.Fatalf("unexpected error %q: %q", code, message)
-	}
-}
-
-func TestValidateEmbeddingRequestRejectsTextModelForImageOnly(t *testing.T) {
-	// An image-only request naming a text model would have that model silently
-	// ignored; reject so the contract is explicit.
-	stubMultiModalDim(t, 384)
-	req := EmbeddingRequest{
-		Model:     "qwen3",
-		Images:    []string{"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB"},
-		Dimension: 384,
-	}
-
-	code, _, ok := validateEmbeddingRequest(req, nil)
-	if ok {
-		t.Fatalf("expected image-only request with a text model to be rejected")
-	}
-	if code != "INVALID_PARAMETER" {
-		t.Fatalf("expected INVALID_PARAMETER, got %q", code)
-	}
-}
-
-func TestValidateEmbeddingRequestAllowsMultimodalModelForImageOnly(t *testing.T) {
-	stubMultiModalDim(t, 384)
-	req := EmbeddingRequest{
-		Model:     "multimodal",
-		Images:    []string{"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB"},
-		Dimension: 384,
-	}
-
-	if _, _, ok := validateEmbeddingRequest(req, nil); !ok {
-		t.Fatalf("expected an explicit multimodal model selector to be accepted for image inputs")
-	}
-}
-
-func TestValidateEmbeddingRequestAllowsTextModelForMixed(t *testing.T) {
-	// A mixed request still honors req.Model for the text side, so a text model
-	// is not "ignored" and must be accepted.
-	stubMultiModalDim(t, 384)
-	req := EmbeddingRequest{
-		Model:     "qwen3",
-		Texts:     []string{"hello"},
-		Images:    []string{"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB"},
-		Dimension: 384,
-	}
-
-	if _, _, ok := validateEmbeddingRequest(req, nil); !ok {
-		t.Fatalf("expected mixed text+image request with a text model to be accepted")
-	}
-}
-
-func TestImageTargetDimensionImageOnlyPassesThrough(t *testing.T) {
-	stubMultiModalDim(t, 384)
-	req := EmbeddingRequest{
-		Images:    []string{"data:image/png;base64,aGVsbG8="},
-		Dimension: 128,
-	}
-	if got := imageTargetDimension(req); got != 128 {
-		t.Fatalf("expected image-only encode dim 128, got %d", got)
-	}
-}
-
-func TestImageTargetDimensionTextOnlyDoesNotCap(t *testing.T) {
-	// No image to cap: a text-scale dimension must pass through unwarned.
-	stubMultiModalDim(t, 384)
-	req := EmbeddingRequest{Texts: []string{"hello"}, Dimension: 768}
-	if got := imageTargetDimension(req); got != 768 {
-		t.Fatalf("expected text-only dimension 768 to pass through, got %d", got)
-	}
-}
-
-func TestImageTargetDimensionMixedCapsAtNative(t *testing.T) {
-	stubMultiModalDim(t, 384)
-	req := EmbeddingRequest{
-		Texts:     []string{"hello"},
-		Images:    []string{"data:image/png;base64,aGVsbG8="},
-		Dimension: 768,
-	}
-	if got := imageTargetDimension(req); got != 384 {
-		t.Fatalf("expected mixed image encode dim to cap at native 384, got %d", got)
-	}
-}
-
-func TestImageTargetDimensionMixedHonorsSubNativeDimension(t *testing.T) {
-	// 256 fits under native, so both modalities stay uniform without capping.
-	stubMultiModalDim(t, 384)
-	req := EmbeddingRequest{
-		Texts:     []string{"hello"},
-		Images:    []string{"data:image/png;base64,aGVsbG8="},
-		Dimension: 256,
-	}
-	if got := imageTargetDimension(req); got != 256 {
-		t.Fatalf("expected mixed image encode dim to honor 256, got %d", got)
-	}
-}
-
-func TestImageTargetDimensionMixedFallsBackWhenModelUnloaded(t *testing.T) {
-	// No native dimension to cap against: let the encode surface the load error.
-	stubMultiModalDim(t, -1)
-	req := EmbeddingRequest{
-		Texts:     []string{"hello"},
-		Images:    []string{"data:image/png;base64,aGVsbG8="},
-		Dimension: 768,
-	}
-	if got := imageTargetDimension(req); got != 768 {
-		t.Fatalf("expected fallback to req.Dimension 768, got %d", got)
-	}
-}
-
-func TestBuildEmbeddingResultsImageOnlyHonorsRequestDimension(t *testing.T) {
-	// Image-only: req.Dimension is the image target (validated <= native) and
-	// must be passed through to the encoder verbatim.
-	stubMultiModalDim(t, 384)
-
+func TestBuildEmbeddingResultsPassesResolvedDimensionToImages(t *testing.T) {
 	var gotImageDim int
 	orig := multiModalEncodeImage
 	defer func() { multiModalEncodeImage = orig }()
@@ -588,15 +465,12 @@ func TestBuildEmbeddingResultsImageOnlyHonorsRequestDimension(t *testing.T) {
 		}, nil
 	}
 
-	req := EmbeddingRequest{
-		Images:    []string{"data:image/png;base64,aGVsbG8="},
-		Dimension: 128,
-	}
+	req := EmbeddingRequest{Images: []string{"data:image/png;base64,aGVsbG8="}, Dimension: 128}
 	if _, _, err := buildEmbeddingResults(req, "multi-modal-embed-small"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if gotImageDim != 128 {
-		t.Fatalf("expected image encode to receive image-only request dimension 128, got %d", gotImageDim)
+		t.Fatalf("expected image encoder dimension 128, got %d", gotImageDim)
 	}
 }
 

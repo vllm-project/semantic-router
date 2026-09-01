@@ -52,6 +52,34 @@ pub extern "C" fn init_multimodal_embedding_model(
     }
 }
 
+#[no_mangle]
+pub extern "C" fn multimodal_get_embedding_dim() -> i32 {
+    GLOBAL_MULTIMODAL
+        .get()
+        .map_or(-1, |model| model.config().embedding_dim as i32)
+}
+
+#[no_mangle]
+pub extern "C" fn multimodal_get_supported_dimensions_count() -> i32 {
+    GLOBAL_MULTIMODAL
+        .get()
+        .map_or(-1, |model| model.config().matryoshka_dims.len() as i32)
+}
+
+#[no_mangle]
+pub extern "C" fn multimodal_get_supported_dimension(index: i32) -> i32 {
+    if index < 0 {
+        return -1;
+    }
+    GLOBAL_MULTIMODAL.get().map_or(-1, |model| {
+        model
+            .config()
+            .matryoshka_dims
+            .get(index as usize)
+            .map_or(-1, |dimension| *dimension as i32)
+    })
+}
+
 /// Encode text into a multi-modal embedding.
 #[no_mangle]
 pub extern "C" fn multimodal_encode_text(

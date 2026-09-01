@@ -1,5 +1,7 @@
 package config
 
+import "strings"
+
 // Classifier represents the configuration for text classification.
 type Classifier struct {
 	CategoryModel    `yaml:"category_model"`
@@ -78,7 +80,7 @@ func (c HNSWConfig) WithDefaults() HNSWConfig {
 			result.ModelType = EmbeddingModelTypeQwen3
 		}
 	}
-	if result.TargetDimension <= 0 {
+	if result.TargetDimension <= 0 && !strings.EqualFold(strings.TrimSpace(result.ModelType), "multimodal") {
 		result.TargetDimension = 768
 	}
 	if result.EnableSoftMatching == nil {

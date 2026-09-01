@@ -252,11 +252,14 @@ func MultiModalEncodeImageFromURL(url string, targetDim int) (*MultiModalEmbeddi
 	return nil, ErrBackendUnavailable
 }
 
-// MultiModalGetEmbeddingDim reports the multimodal embedding dimension. Without
-// the native backend there is no model to query, so the stub returns 0, the
-// neutral unavailable value, instead of a synthetic dimension.
+// MultiModalGetEmbeddingDim reports no loaded model without the native backend.
 func MultiModalGetEmbeddingDim() int {
 	return 0
+}
+
+// MultiModalGetSupportedDimensions reports no loaded model without the native backend.
+func MultiModalGetSupportedDimensions() []int {
+	return nil
 }
 
 // GetEmbedding2DMatryoshka generates an embedding using the 2D Matryoshka API

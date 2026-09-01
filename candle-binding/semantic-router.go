@@ -263,6 +263,8 @@ extern int multimodal_encode_image(const float* pixel_data, int height, int widt
 extern int multimodal_encode_image_from_bytes(const unsigned char* bytes_ptr, size_t bytes_len, int target_dim, MultiModalEmbeddingResult* result);
 extern int multimodal_encode_audio(const float* mel_data, int n_mels, int time_frames, int target_dim, MultiModalEmbeddingResult* result);
 extern int multimodal_get_embedding_dim();
+extern int multimodal_get_supported_dimensions_count();
+extern int multimodal_get_supported_dimension(int index);
 extern void free_multimodal_embedding(float* data, int length);
 extern void free_tokenization_result(TokenizationResult result);
 extern ClassificationResult classify_text(const char* text);
@@ -1199,13 +1201,22 @@ func MultiModalEncodeImageFromBytes(imageBytes []byte, targetDim int) (*MultiMod
 
 // MultiModalGetEmbeddingDim returns the loaded multimodal model's native
 // embedding dimension, or -1 if no multimodal model is loaded.
-//
-// The router uses this to enforce the over-dimension contract with the real
-// model value instead of a hardcoded constant: the API dimension default (768)
-// exceeds the multimodal native dimension (384), so image-bearing requests must
-// default to and be validated against the native dimension.
 func MultiModalGetEmbeddingDim() int {
 	return int(C.multimodal_get_embedding_dim())
+}
+
+// MultiModalGetSupportedDimensions returns the dimensions declared by the
+// loaded multimodal checkpoint. An unavailable model returns nil.
+func MultiModalGetSupportedDimensions() []int {
+	count := int(C.multimodal_get_supported_dimensions_count())
+	if count <= 0 {
+		return nil
+	}
+	dimensions := make([]int, count)
+	for i := range dimensions {
+		dimensions[i] = int(C.multimodal_get_supported_dimension(C.int(i)))
+	}
+	return dimensions
 }
 
 // MultiModalEncodeImageFromBase64 decodes a base64-encoded image and encodes it

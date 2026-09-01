@@ -66,6 +66,12 @@ impl MultiModalConfig {
         if let Some(d) = v["embedding_dim"].as_u64() {
             cfg.embedding_dim = d as usize;
         }
+        if let Some(dims) = v["matryoshka_dims"].as_array() {
+            cfg.matryoshka_dims = dims
+                .iter()
+                .filter_map(|dimension| dimension.as_u64().map(|value| value as usize))
+                .collect();
+        }
         if let Some(s) = v
             .get("image_encoder")
             .and_then(|o| o["image_size"].as_u64())
@@ -81,7 +87,47 @@ impl MultiModalConfig {
         {
             cfg.max_seq_len = l as usize;
         }
+        cfg.validate_dimension_contract()?;
         Ok(cfg)
+    }
+
+    pub fn validate_dimension_contract(&self) -> UnifiedResult<()> {
+        if self.embedding_dim == 0
+            || self.matryoshka_dims.is_empty()
+            || !self.matryoshka_dims.contains(&self.embedding_dim)
+            || self
+                .matryoshka_dims
+                .iter()
+                .any(|&dimension| dimension == 0 || dimension > self.embedding_dim)
+        {
+            return Err(errors::validation(
+                "multimodal dimension contract",
+                "positive declared dimensions no greater than and including embedding_dim",
+                &format!("{} / {:?}", self.embedding_dim, self.matryoshka_dims),
+            ));
+        }
+        let mut unique = self.matryoshka_dims.clone();
+        unique.sort_unstable();
+        unique.dedup();
+        if unique.len() != self.matryoshka_dims.len() {
+            return Err(errors::validation(
+                "matryoshka_dims",
+                "unique dimensions",
+                &format!("{:?}", self.matryoshka_dims),
+            ));
+        }
+        Ok(())
+    }
+
+    fn validate_target_dimension(&self, dimension: usize) -> UnifiedResult<()> {
+        if !self.matryoshka_dims.contains(&dimension) {
+            return Err(errors::validation(
+                "target_dim",
+                &format!("one of {:?}", self.matryoshka_dims),
+                &dimension.to_string(),
+            ));
+        }
+        Ok(())
     }
 }
 
@@ -98,9 +144,8 @@ impl MultiModalEmbeddingModel {
     pub fn load<P: AsRef<Path>>(model_path: P, use_cpu: bool) -> UnifiedResult<Self> {
         let dir = model_path.as_ref();
         let model_path_str = dir.display().to_string();
-
         let config = MultiModalConfig::from_pretrained(dir)?;
-
+        config.validate_dimension_contract()?;
         let find_artifact = |name: &str| -> Option<std::path::PathBuf> {
             let root = dir.join(name);
             if root.exists() {
@@ -420,7 +465,9 @@ impl MultiModalEmbeddingModel {
         emb: Array1<f32>,
         target_dim: Option<usize>,
     ) -> UnifiedResult<Array1<f32>> {
-        Ok(truncate_embedding_to_dimension(emb, target_dim))
+        let dimension = target_dim.unwrap_or(self.config.embedding_dim);
+        self.config.validate_target_dimension(dimension)?;
+        Ok(truncate_embedding_to_dimension(emb, Some(dimension)))
     }
 }
 
@@ -487,6 +534,15 @@ mod tests {
             (l2_norm(&truncated) - 1.0).abs() < 1e-6,
             "re-normalized prefix must have unit L2 norm"
         );
+    }
+
+    #[test]
+    fn test_dimension_contract_rejects_undeclared_prefix() {
+        let config = MultiModalConfig::default();
+        assert!(config.validate_target_dimension(384).is_ok());
+        assert!(config.validate_target_dimension(32).is_ok());
+        assert!(config.validate_target_dimension(100).is_err());
+        assert!(config.validate_target_dimension(768).is_err());
     }
 
     #[test]

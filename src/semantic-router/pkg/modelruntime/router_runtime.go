@@ -427,29 +427,6 @@ func initializeBERTModel(component string, useCPU bool, bertPath string, eventPr
 	return true
 }
 
-func initializeMultiModalEmbeddingModel(component string, useCPU bool, multiModalPath string) bool {
-	if multiModalPath == "" {
-		return false
-	}
-
-	logging.ComponentEvent(component, "multimodal_embedding_init_started", map[string]interface{}{
-		"model_ref": multiModalPath,
-		"use_cpu":   useCPU,
-	})
-	if err := candle_binding.InitMultiModalEmbeddingModel(multiModalPath, useCPU); err != nil {
-		logging.ComponentWarnEvent(component, "multimodal_embedding_init_failed", map[string]interface{}{
-			"model_ref":               multiModalPath,
-			"error":                   err.Error(),
-			"multimodal_routes_ready": false,
-		})
-		return false
-	}
-	logging.ComponentEvent(component, "multimodal_embedding_initialized", map[string]interface{}{
-		"model_ref": multiModalPath,
-	})
-	return true
-}
-
 func logMissingEmbeddingModelsConfig(component string) {
 	logging.ComponentEvent(component, "embedding_models_not_configured", map[string]interface{}{
 		"hint": "model_catalog.embeddings.semantic",
@@ -778,7 +755,8 @@ func multiModalEmbeddingRuntimeTask(
 		Name:       "router.embedding.multimodal",
 		BestEffort: true,
 		Run: func(context.Context) error {
-			if !initializeMultiModalEmbeddingModel(component, cfg.UseCPU, paths.multiModal) {
+			targetDimension := cfg.EmbeddingConfig.WithDefaults().TargetDimension
+			if !initializeMultiModalEmbeddingModel(component, cfg.UseCPU, paths.multiModal, targetDimension) {
 				return fmt.Errorf("failed to initialize multimodal embedding model")
 			}
 			if requiresMultimodalTools {
