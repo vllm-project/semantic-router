@@ -978,6 +978,7 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `operator` _string_ | Operator specifies how to combine conditions: "AND", "OR", or "NOT". NOT is strictly unary: it takes<br />exactly one child condition and negates its result. Compose NOR/NAND by nesting NOT around OR/AND. |  | Enum: [AND OR NOT] <br /> |
+| `on_unknown` _string_ | OnUnknown resolves a terminal unknown result after the rule tree is evaluated. |  | Enum: [no_match match fail_request] <br />Optional: \{\} <br /> |
 | `conditions` _[RuleConditionConfig](#ruleconditionconfig) array_ | Conditions is the list of rule references to evaluate |  |  |
 
 #### RuleComposition

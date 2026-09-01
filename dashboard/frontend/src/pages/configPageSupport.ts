@@ -215,6 +215,7 @@ export interface DecisionCondition {
 export interface DecisionRuleSet {
   operator: 'AND' | 'OR' | 'NOT'
   conditions: DecisionCondition[]
+  on_unknown?: 'no_match' | 'match' | 'fail_request'
 }
 
 export interface DecisionModelRef {
@@ -1297,6 +1298,7 @@ export interface DecisionFormState {
   description: string
   priority: number
   operator: 'AND' | 'OR' | 'NOT'
+  on_unknown?: '' | 'no_match' | 'match' | 'fail_request'
   conditions: DecisionCondition[]
   modelRefs: DecisionModelRef[]
   plugins: { type: string; configuration: string | DecisionPluginConfiguration }[]
@@ -1317,7 +1319,10 @@ export function decisionRulesForSave(
   next: DecisionRuleSet,
 ): DecisionRuleSet {
   if (existing?.conditions.some(conditionHasNestedRules)) {
-    return JSON.parse(JSON.stringify(existing)) as DecisionRuleSet
+    const preserved = JSON.parse(JSON.stringify(existing)) as DecisionRuleSet
+    if (next.on_unknown) preserved.on_unknown = next.on_unknown
+    else delete preserved.on_unknown
+    return preserved
   }
   return next
 }
