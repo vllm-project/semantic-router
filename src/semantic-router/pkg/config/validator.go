@@ -54,6 +54,7 @@ var (
 		validateEmbeddingSignalContracts,
 		validateRoutingModalityContracts,
 		validateComplexityContracts,
+		validateJailbreakContracts,
 		validateDecisionRouterLearningConfig,
 	}
 )

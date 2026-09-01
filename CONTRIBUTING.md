@@ -50,6 +50,11 @@ needs-acceptance -> accepted -> ready-for-dev -> in-progress -> closed
 - A release milestone is a time-bound commitment and is applied only after
   acceptance.
 
+Project work has exactly one `wg/*` owner. A bounded parent outcome uses an
+`[Epic]` title and the automatically synchronized `epic` label; implementation
+issues are linked below it as sub-issues. The retired `area/*` and `track/*`
+taxonomies are not part of the repository contract and must not be recreated.
+
 Do not begin a non-trivial implementation or open a PR until the tracking issue
 is accepted. PRs must link an accepted issue with exactly one Workgroup owner;
 the Community check enforces this contract.
