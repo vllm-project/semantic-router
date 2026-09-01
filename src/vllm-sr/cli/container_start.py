@@ -58,6 +58,12 @@ from cli.utils import get_logger
 
 log = get_logger(__name__)
 
+ENVOY_LOG_LEVEL_ENV = "VLLM_SR_ENVOY_LOG_LEVEL"
+DEFAULT_ENVOY_LOG_LEVEL = "info"
+VALID_ENVOY_LOG_LEVELS = frozenset(
+    {"trace", "debug", "info", "warn", "warning", "error", "critical", "off"}
+)
+
 
 def container_start_vllm_sr(
     config_file,
@@ -79,6 +85,7 @@ def container_start_vllm_sr(
     """Start the runtime containers and return code, stdout, and stderr."""
     runtime = get_container_runtime()
     env_vars = dict(env_vars or {})
+    envoy_log_level = _resolve_envoy_log_level(env_vars)
     stack_layout = stack_layout or resolve_runtime_stack()
     resolve_runtime_topology(topology)
 
@@ -124,6 +131,7 @@ def container_start_vllm_sr(
         openclaw_network_name=openclaw_network_name,
         stack_layout=stack_layout,
         storage_secret_names=tuple(storage_secret_values),
+        envoy_log_level=envoy_log_level,
     )
 
     log.info(f"Starting vLLM Semantic Router runtime with {runtime}...")
@@ -201,6 +209,7 @@ def _resolve_container_specs(
     openclaw_network_name: str | None,
     stack_layout: RuntimeStackLayout,
     storage_secret_names: tuple[str, ...] = (),
+    envoy_log_level: str = DEFAULT_ENVOY_LOG_LEVEL,
 ):
     runtime_images = get_runtime_images(
         image=image,
@@ -225,6 +234,7 @@ def _resolve_container_specs(
         openclaw_network_name=openclaw_network_name,
         stack_layout=stack_layout,
         storage_secret_names=storage_secret_names,
+        envoy_log_level=envoy_log_level,
     )
 
 
@@ -243,6 +253,7 @@ def _runtime_container_specs(
     openclaw_network_name: str | None,
     stack_layout: RuntimeStackLayout,
     storage_secret_names: tuple[str, ...] = (),
+    envoy_log_level: str = DEFAULT_ENVOY_LOG_LEVEL,
 ):
     listener_port = _primary_listener_port(listeners)
     management_listener = _managed_management_listener(
@@ -282,6 +293,7 @@ def _runtime_container_specs(
         runtime_paths=runtime_paths,
         setup_mode=setup_mode,
         stack_layout=stack_layout,
+        envoy_log_level=envoy_log_level,
     )
 
     specs = [
@@ -396,6 +408,7 @@ def _build_envoy_runtime_command(
     runtime_paths: dict[str, str],
     setup_mode: bool,
     stack_layout: RuntimeStackLayout,
+    envoy_log_level: str,
 ):
     service_entrypoint, service_args = bounded_log_spool_entrypoint(
         "/usr/local/bin/envoy",
@@ -403,7 +416,7 @@ def _build_envoy_runtime_command(
             "-c",
             "/etc/envoy/envoy.yaml",
             "--log-level",
-            "debug",
+            envoy_log_level,
         ],
     )
     return _build_service_run_command(
@@ -588,6 +601,22 @@ def _build_dashboard_runtime_env(
         "OPENCLAW_MODEL_GATEWAY_CONTAINER_NAME", stack_layout.envoy_container_name
     )
     return dashboard_env
+
+
+def _resolve_envoy_log_level(env_vars: dict[str, str]) -> str:
+    """Resolve and validate Envoy's bounded log-level override."""
+    raw_level = env_vars.get(ENVOY_LOG_LEVEL_ENV, os.getenv(ENVOY_LOG_LEVEL_ENV))
+    if raw_level is None:
+        return DEFAULT_ENVOY_LOG_LEVEL
+
+    log_level = raw_level.strip().lower()
+    if log_level not in VALID_ENVOY_LOG_LEVELS:
+        allowed = ", ".join(sorted(VALID_ENVOY_LOG_LEVELS))
+        raise ValueError(
+            f"Invalid {ENVOY_LOG_LEVEL_ENV} value {raw_level!r}. "
+            f"Expected one of: {allowed}."
+        )
+    return log_level
 
 
 def _resolve_platform(env_vars):
