@@ -498,6 +498,11 @@ detect_existing_runtime() {
     return
   fi
 
+  if podman_ready; then
+    printf 'podman\n'
+    return
+  fi
+
   return 1
 }
 
@@ -710,6 +715,10 @@ docker_ready() {
   has_cmd docker && docker info >/dev/null 2>&1
 }
 
+podman_ready() {
+  has_cmd podman && podman info >/dev/null 2>&1
+}
+
 choose_runtime_preference() {
   if [ "$REQUESTED_RUNTIME" != "auto" ]; then
     printf '%s\n' "$REQUESTED_RUNTIME"
@@ -766,7 +775,11 @@ install_linux_docker_runtime() {
 }
 
 write_runtime_env() {
+  local runtime="${1:-}"
   rm -f "$INSTALL_ROOT/runtime.env"
+  if [ -n "$runtime" ]; then
+    printf 'CONTAINER_RUNTIME=%s\n' "$runtime" > "$INSTALL_ROOT/runtime.env"
+  fi
 }
 
 ensure_runtime() {
@@ -781,6 +794,13 @@ ensure_runtime() {
     SELECTED_RUNTIME="docker"
     write_runtime_env
     done_step "Using existing Docker runtime"
+    return
+  fi
+
+  if podman_ready; then
+    SELECTED_RUNTIME="podman"
+    write_runtime_env "podman"
+    done_step "Using existing Podman runtime"
     return
   fi
 
