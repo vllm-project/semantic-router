@@ -129,18 +129,24 @@ ROUTE "guard" {
 			if len(errs) != 0 {
 				t.Fatalf("parse errors: %v", errs)
 			}
-			var found bool
-			for _, diagnostic := range diagnostics {
-				if test.wantDiag != "" && strings.Contains(diagnostic.Message, test.wantDiag) {
-					found = true
+			if test.wantDiag == "" {
+				if message := diagnosticContaining(diagnostics, "action"); message != "" {
+					t.Fatalf("unexpected action diagnostic: %s", message)
 				}
-				if test.wantDiag == "" && strings.Contains(diagnostic.Message, "action") {
-					t.Fatalf("unexpected action diagnostic: %s", diagnostic.Message)
-				}
+				return
 			}
-			if test.wantDiag != "" && !found {
+			if diagnosticContaining(diagnostics, test.wantDiag) == "" {
 				t.Fatalf("no diagnostic contains %q: %#v", test.wantDiag, diagnostics)
 			}
 		})
 	}
+}
+
+func diagnosticContaining(diagnostics []Diagnostic, substring string) string {
+	for _, diagnostic := range diagnostics {
+		if strings.Contains(diagnostic.Message, substring) {
+			return diagnostic.Message
+		}
+	}
+	return ""
 }
