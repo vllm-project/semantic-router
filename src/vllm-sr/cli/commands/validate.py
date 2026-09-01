@@ -28,6 +28,7 @@ _SIGNAL_SUMMARY_FIELDS = (
     ("Event signals", "events"),
     ("Metadata signals", "metadata"),
     ("Classifier signals", "classifiers"),
+    ("Input-modality signals", "input_modality"),
 )
 
 
