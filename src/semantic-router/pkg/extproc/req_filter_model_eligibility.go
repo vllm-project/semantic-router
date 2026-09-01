@@ -64,6 +64,39 @@ func (r *OpenAIRouter) modelRefExceedsContextWindow(ref config.ModelRef, context
 	return r.modelNameExceedsContextWindow(ref.Model, contextTokens)
 }
 
+// decisionRouteActionDestination resolves a matched decision's route action.
+// The destination overrides a caller-pinned model so a detected prompt attack
+// cannot bypass the guard by naming a model. A context-ineligible destination
+// falls through to the decision's normal candidate policy.
+func (r *OpenAIRouter) decisionRouteActionDestination(
+	decision *config.Decision,
+	ctx *RequestContext,
+) (string, bool) {
+	if decision == nil || decision.Action == nil ||
+		decision.Action.Type != config.DecisionActionRoute {
+		return "", false
+	}
+	destination := strings.TrimSpace(decision.Action.Destination)
+	if destination == "" {
+		return "", false
+	}
+	if r.modelNameExceedsContextWindow(destination, ctx.VSRContextTokenCount) {
+		logging.ComponentEvent("extproc", "route_action_destination_ineligible", map[string]interface{}{
+			"request_id":     ctx.RequestID,
+			"decision":       decision.Name,
+			"destination":    destination,
+			"context_tokens": ctx.VSRContextTokenCount,
+		})
+		return "", false
+	}
+	logging.ComponentEvent("extproc", "route_action_applied", map[string]interface{}{
+		"request_id":  ctx.RequestID,
+		"decision":    decision.Name,
+		"destination": destination,
+	})
+	return destination, true
+}
+
 func validateMinimumEligibleDecisionModels(
 	decision *config.Decision,
 	eligible []config.ModelRef,

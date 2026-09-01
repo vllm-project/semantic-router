@@ -235,6 +235,10 @@ func (r *OpenAIRouter) finalizeDecisionEvaluation(
 		"matched_rules": result.MatchedRules,
 	})
 
+	if destination, ok := r.decisionRouteActionDestination(result.Decision, ctx); ok {
+		return decisionName, evaluationConfidence, reasoningDecision, destination, nil
+	}
+
 	if !r.requestModelActsAsAuto(originalModel) {
 		logging.ComponentDebugEvent("extproc", "explicit_model_preserved", map[string]interface{}{
 			"request_id":     ctx.RequestID,
