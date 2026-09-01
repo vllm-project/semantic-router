@@ -204,8 +204,9 @@ func canonicalModelCatalogFromRouterConfig(cfg *RouterConfig) CanonicalModelCata
 			HallucinationExplainer: cfg.HallucinationMitigation.NLIModel.ModelID,
 			FeedbackDetector:       cfg.FeedbackDetector.ModelID,
 		},
-		External: append([]ExternalModelConfig(nil), cfg.ExternalModels...),
-		KBs:      append([]KnowledgeBaseConfig(nil), cfg.KnowledgeBases...),
+		External:  append([]ExternalModelConfig(nil), cfg.ExternalModels...),
+		KBs:       append([]KnowledgeBaseConfig(nil), cfg.KnowledgeBases...),
+		Admission: cloneAdmissionMap(cfg.ModelAdmission),
 		Modules: CanonicalModelModules{
 			PromptCompression: cfg.PromptCompression,
 			PromptGuard: CanonicalPromptGuardModule{
