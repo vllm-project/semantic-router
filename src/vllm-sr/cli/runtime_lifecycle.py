@@ -380,7 +380,10 @@ def log_runtime_summary(
         fields(
             (
                 ("Jaeger UI", stack_layout.jaeger_ui_url),
-                ("Grafana", f"{stack_layout.grafana_url} (admin/admin)"),
+                (
+                    "Grafana",
+                    f"{stack_layout.grafana_url} (generated admin password)",
+                ),
                 ("Prometheus", stack_layout.prometheus_url),
             )
         )
