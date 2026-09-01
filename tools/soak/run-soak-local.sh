@@ -41,7 +41,7 @@ die() {
   exit 1
 }
 
-# shellcheck disable=SC2329
+# shellcheck disable=SC2317,SC2329
 stop_pid() {
   local name=$1 pid=$2
   [[ -z "${pid}" ]] && return 0
@@ -49,7 +49,9 @@ stop_pid() {
   log "stopping ${name} (pid ${pid})"
   local child
   while read -r child; do
-    [[ -n "${child}" ]] && kill "${child}" 2>/dev/null || true
+    if [[ -n "${child}" ]]; then
+      kill "${child}" 2>/dev/null || true
+    fi
   done < <(pgrep -P "${pid}" 2>/dev/null || true)
   kill "${pid}" 2>/dev/null || true
   local i
@@ -61,7 +63,7 @@ stop_pid() {
   kill -9 "${pid}" 2>/dev/null || true
 }
 
-# shellcheck disable=SC2329
+# shellcheck disable=SC2317,SC2329
 cleanup() {
   local status=$?
   stop_pid envoy "${ENVOY_PID}"
