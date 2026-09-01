@@ -775,7 +775,7 @@ install_linux_docker_runtime() {
 }
 
 write_runtime_env() {
-  local runtime="${1:-}"
+  local runtime="${1:-${SELECTED_RUNTIME:-}}"
   rm -f "$INSTALL_ROOT/runtime.env"
   if [ -n "$runtime" ]; then
     printf 'CONTAINER_RUNTIME=%s\n' "$runtime" > "$INSTALL_ROOT/runtime.env"
