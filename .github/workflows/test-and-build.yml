@@ -223,6 +223,16 @@ jobs:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           HUGGINGFACE_HUB_TOKEN: ${{ secrets.HF_TOKEN }}
 
+      - name: Local dev smoke test (no Authorino)
+        run: tools/smoke/test-local-up-router.sh
+        timeout-minutes: 20
+        env:
+          CI: true
+          CGO_ENABLED: 1
+          LD_LIBRARY_PATH: ${{ github.workspace }}/candle-binding/target/release
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HUGGINGFACE_HUB_TOKEN: ${{ secrets.HF_TOKEN }}
+
       - name: Clean Redis service
         if: always()
         run: |
