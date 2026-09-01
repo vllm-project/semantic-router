@@ -9,7 +9,7 @@ import (
 
 // validateContextContracts checks routing.signals.context bands.
 //
-// Errors: empty or duplicate names, a rule with neither limit, unparseable or
+// Errors: empty or duplicate names, a rule with neither limit, unparsable or
 // negative values, and min_tokens > max_tokens. min_tokens == max_tokens is a
 // valid exact-match band, omitting max_tokens is a valid open-ended band, and
 // omitting min_tokens means 0.

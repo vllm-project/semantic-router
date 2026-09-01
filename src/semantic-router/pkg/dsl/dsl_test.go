@@ -6318,7 +6318,7 @@ func TestValidateContextRangeErrors(t *testing.T) {
 		want  string
 	}{
 		{name: "min above max", field: `min_tokens: "5K"` + "\n  " + `max_tokens: "1K"`, want: "must not exceed max_tokens"},
-		{name: "unparseable max", field: `min_tokens: "0"` + "\n  " + `max_tokens: "lots"`, want: "max_tokens: invalid token count format"},
+		{name: "unparsable max", field: `min_tokens: "0"` + "\n  " + `max_tokens: "lots"`, want: "max_tokens: invalid token count format"},
 		{name: "no limits", field: `description: "empty"`, want: "min_tokens or max_tokens must be set"},
 	}
 	for _, tc := range cases {

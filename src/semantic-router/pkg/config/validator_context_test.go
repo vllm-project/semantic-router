@@ -76,12 +76,12 @@ func TestValidateContextContractsRejectsInvalidBands(t *testing.T) {
 			want:  "min_tokens or max_tokens must be set",
 		},
 		{
-			name:  "unparseable min_tokens",
+			name:  "unparsable min_tokens",
 			rules: []ContextRule{{Name: "band", MinTokens: "lots", MaxTokens: "1K"}},
 			want:  "min_tokens: invalid token count format",
 		},
 		{
-			name:  "unparseable max_tokens",
+			name:  "unparsable max_tokens",
 			rules: []ContextRule{{Name: "band", MinTokens: "0", MaxTokens: "1KB"}},
 			want:  "max_tokens: invalid token count format",
 		},
