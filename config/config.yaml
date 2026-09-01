@@ -363,7 +363,7 @@ routing:
 
     complexity:
       - name: needs_reasoning
-        threshold: 0.75
+        threshold: 0.10
         description: Escalate multi-step reasoning or synthesis-heavy prompts.
         hard:
           candidates:
@@ -542,6 +542,14 @@ routing:
         key: consent
         predicate:
           equals: denied
+
+    input_modality:
+      - name: image_input
+        description: Request contains at least one image content part.
+        modality: image
+      - name: audio_input
+        description: Request contains at least one audio content part.
+        modality: audio
 
     classifiers:
       - name: generic-safety-score
@@ -2153,6 +2161,25 @@ global:
       hallucination_detector: models/mom-halugate-detector
       hallucination_explainer: models/mom-halugate-explainer
       feedback_detector: models/mmbert32k-feedback-detector-merged
+    # admission bounds concurrent inference per system model deployment.
+    # Keys must match global.model_catalog.system entries (prompt_guard,
+    # domain_classifier, pii_classifier, fact_check_classifier,
+    # hallucination_detector, hallucination_explainer, feedback_detector).
+    # max_concurrency: inference slots running at once (>= 1).
+    # max_queue: bounded wait queue beyond the slots (0 = no queue).
+    # queue_timeout_ms: longest a request may wait for a slot; on expiry the
+    # request is shed (0 = wait until the request context is done).
+    # on_overflow selects what happens when every slot is busy and the queue
+    # is full: shed (default) rejects the request, wait blocks for a queue
+    # slot and requires max_queue >= 1, fail_open admits without a slot.
+    # The gate is validated here but not yet wired into the request path;
+    # omitting admission means no gate and preserves current behavior.
+    admission:
+      prompt_guard:
+        max_concurrency: 4
+        max_queue: 64
+        queue_timeout_ms: 250
+        on_overflow: shed
     external:
       - name: external-guardrail
         llm_provider: openai

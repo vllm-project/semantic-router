@@ -184,7 +184,10 @@ local `apply` command after maintainer review when mutations are intended.
 perform only deterministic intake-state normalization. They enforce this
 contract without making roadmap, priority, or close decisions:
 
-- issue forms start at `needs-acceptance` and propose one Workgroup;
+- issue forms start at `needs-acceptance` and use the proposed Workgroup only
+  to seed an otherwise unowned issue; once any recognized owner exists (a
+  Workgroup or `owner/maintainers`) it is the triage source of truth, so
+  Maintainer reclassification is not reverted from stale form text;
 - `/accept` lets a collaborator with write, maintain, or admin permission accept
   an issue that already has exactly one recognized owner: one Workgroup for
   project work or `owner/maintainers` for repository governance;

@@ -117,6 +117,7 @@ def test_container_start_vllm_sr_sets_split_service_urls_for_dashboard(
     assert "127.0.0.1:9190:9190" in router_cmd
     envoy_cmd = _find_container_run_cmd(captured, "vllm-sr-envoy-container")
     assert "0.0.0.0:8899:8899" in envoy_cmd
+    assert envoy_cmd[envoy_cmd.index("--log-level") + 1] == "info"
 
     for component, command in (
         ("router", router_cmd),
@@ -146,6 +147,51 @@ def test_container_start_vllm_sr_sets_split_service_urls_for_dashboard(
         for value in _option_values(dashboard_cmd, "-e")
     )
     assert "--group-add" in envoy_cmd
+
+
+def test_split_runtime_uses_explicit_envoy_log_level(tmp_path, monkeypatch):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        "version: v0.1\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
+    )
+    monkeypatch.setenv("VLLM_SR_ENVOY_LOG_LEVEL", "DeBuG")
+    monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(
+        container_start,
+        "get_runtime_images",
+        lambda **_kwargs: {"router": "test-image", "envoy": "test-image"},
+    )
+    captured = _capture_run_commands(monkeypatch)
+    _stub_valid_container_cli(monkeypatch, tmp_path)
+
+    container_cli.container_start_vllm_sr(
+        str(config_path),
+        {},
+        [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
+        network_name="vllm-sr-network",
+        minimal=True,
+    )
+
+    envoy_cmd = _find_container_run_cmd(captured, "vllm-sr-envoy-container")
+    assert envoy_cmd[envoy_cmd.index("--log-level") + 1] == "debug"
+
+
+def test_split_runtime_rejects_invalid_envoy_log_level_before_preparing_paths(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setenv("VLLM_SR_ENVOY_LOG_LEVEL", "verbose")
+    monkeypatch.setattr(
+        container_start,
+        "_prepare_runtime_paths",
+        lambda *args, **kwargs: pytest.fail("runtime paths should not be prepared"),
+    )
+
+    with pytest.raises(ValueError, match="Invalid VLLM_SR_ENVOY_LOG_LEVEL"):
+        container_start.container_start_vllm_sr(
+            str(tmp_path / "config.yaml"),
+            {},
+            [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
+        )
 
 
 def test_split_runtime_honors_management_listener_port(tmp_path, monkeypatch):

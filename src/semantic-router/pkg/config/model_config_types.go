@@ -219,6 +219,15 @@ type ExternalModelConfig struct {
 	MaxResponseBytes int64                  `yaml:"max_response_bytes,omitempty"`
 }
 
+// AdmissionConfig bounds concurrent inference for one Router Model
+// deployment. Absent config means no gate and preserves current behavior.
+type AdmissionConfig struct {
+	MaxConcurrency int    `yaml:"max_concurrency"`
+	MaxQueue       int    `yaml:"max_queue,omitempty"`
+	QueueTimeoutMs int    `yaml:"queue_timeout_ms,omitempty"`
+	OnOverflow     string `yaml:"on_overflow,omitempty"`
+}
+
 type ToolFilteringWeights struct {
 	Embed    *float32 `yaml:"embed,omitempty"`
 	Lexical  *float32 `yaml:"lexical,omitempty"`

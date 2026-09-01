@@ -487,6 +487,22 @@ class MetadataRule(BaseModel):
         return self
 
 
+class InputModalityRule(BaseModel):
+    """Deterministic structural input-modality presence signal."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    description: Optional[str] = None
+    modality: Literal["text", "image", "audio", "video"]
+
+    @model_validator(mode="after")
+    def validate_canonical_names(self):
+        if not self.name.strip() or self.name != self.name.strip():
+            raise ValueError("input_modality signal name must be nonempty and trimmed")
+        return self
+
+
 class ClassifierSignal(BaseModel):
     """Generic label-score classifier signal."""
 
@@ -574,6 +590,7 @@ class Signals(BaseModel):
     events: Optional[List[EventRule]] = []
     metadata: Optional[List[MetadataRule]] = []
     classifiers: Optional[List[ClassifierSignal]] = []
+    input_modality: Optional[List[InputModalityRule]] = []
 
     @model_validator(mode="after")
     def validate_rule_names(self):
@@ -582,7 +599,7 @@ class Signals(BaseModel):
             for signal in getattr(self, family) or []:
                 name = (
                     signal.name.lower()
-                    if family in {"metadata", "classifiers"}
+                    if family in {"metadata", "classifiers", "input_modality"}
                     else signal.name
                 )
                 if name in seen:

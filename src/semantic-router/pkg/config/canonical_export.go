@@ -80,6 +80,7 @@ func canonicalSignalsFromSignals(signals Signals) CanonicalSignals {
 		EventRules:    append([]EventRule(nil), signals.EventRules...),
 		Metadata:      append([]MetadataRule(nil), signals.MetadataRules...),
 		Classifiers:   append([]ClassifierSignalRule(nil), signals.ClassifierRules...),
+		InputModality: append([]InputModalityRule(nil), signals.InputModalityRules...),
 	}
 }
 
@@ -203,8 +204,9 @@ func canonicalModelCatalogFromRouterConfig(cfg *RouterConfig) CanonicalModelCata
 			HallucinationExplainer: cfg.HallucinationMitigation.NLIModel.ModelID,
 			FeedbackDetector:       cfg.FeedbackDetector.ModelID,
 		},
-		External: append([]ExternalModelConfig(nil), cfg.ExternalModels...),
-		KBs:      append([]KnowledgeBaseConfig(nil), cfg.KnowledgeBases...),
+		External:  append([]ExternalModelConfig(nil), cfg.ExternalModels...),
+		KBs:       append([]KnowledgeBaseConfig(nil), cfg.KnowledgeBases...),
+		Admission: cloneAdmissionMap(cfg.ModelAdmission),
 		Modules: CanonicalModelModules{
 			PromptCompression: cfg.PromptCompression,
 			PromptGuard: CanonicalPromptGuardModule{
