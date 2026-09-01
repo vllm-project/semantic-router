@@ -1659,11 +1659,6 @@ global:
     api:
       batch_classification:
         max_batch_size: 100
-        # concurrency_threshold and max_concurrency no longer gate signal
-        # evaluation; use global.model_catalog.admission for per-deployment
-        # inference concurrency bounds.
-        concurrency_threshold: 5
-        max_concurrency: 8
         metrics:
           sample_rate: 1.0
           batch_size_ranges:

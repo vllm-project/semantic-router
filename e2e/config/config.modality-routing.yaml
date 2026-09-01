@@ -88,8 +88,6 @@ global:
     api:
       batch_classification:
         max_batch_size: 10
-        concurrency_threshold: 2
-        max_concurrency: 4
     observability:
       metrics:
         enabled: true
