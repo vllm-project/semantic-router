@@ -34,7 +34,9 @@ cleanup() {
     done
     kill "${HARNESS_PID}" 2>/dev/null || true
   fi
-  [[ -n "${MOCK_PID}" ]] && kill "${MOCK_PID}" 2>/dev/null || true
+  if [[ -n "${MOCK_PID}" ]]; then
+    kill "${MOCK_PID}" 2>/dev/null || true
+  fi
 }
 trap cleanup EXIT INT TERM
 
