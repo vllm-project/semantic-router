@@ -805,14 +805,21 @@ func InitEmbeddingModelsBatched(qwen3ModelPath string, maxBatchSize int, maxWait
 // It automatically benefits from continuous batching for concurrent requests (2-5x throughput).
 //
 // Parameters:
-//   - text: Input text to generate embedding for
+//   - text: Input text to generate embedding for (must be non-empty and cannot contain NUL bytes)
 //   - modelType: "qwen3" (currently only Qwen3 supports batching)
-//   - targetDim: Target dimension (0 for default, or 768, 512, 256, 128)
+//   - targetDim: Target dimension (0 for default, or 768, 512, 256, 128; must be in [0, math.MaxInt32])
 //
 // Returns:
 //   - *EmbeddingOutput: Embedding output with metadata
-//   - error: Non-nil if embedding generation fails
+//   - error: Non-nil if validation fails (empty/NUL text, negative or out-of-range targetDim) or embedding generation fails
 func GetEmbeddingBatched(text string, modelType string, targetDim int) (*EmbeddingOutput, error) {
+	if err := validateRequiredText("text", text); err != nil {
+		return nil, err
+	}
+	if err := validateTargetDim(targetDim); err != nil {
+		return nil, err
+	}
+
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 
@@ -1016,14 +1023,17 @@ func InitMultiModalEmbeddingModel(modelPath string, useCPU bool) error {
 // MultiModalEncodeText encodes text into a 384-dimensional embedding using the multi-modal model.
 //
 // Parameters:
-//   - text: Input text to encode
-//   - targetDim: Target embedding dimension (0 for default 384, or 32/64/128/256)
+//   - text: Input text to encode (must be non-empty and cannot contain NUL bytes)
+//   - targetDim: Target embedding dimension (0 for default 384, or positive values like 32/64/128/256; must be in [0, math.MaxInt32])
 //
 // Returns:
 //   - MultiModalEmbeddingOutput with the embedding and metadata
-//   - error if encoding fails
+//   - error if validation fails (empty/NUL text, negative or out-of-range targetDim) or encoding fails
 func MultiModalEncodeText(text string, targetDim int) (*MultiModalEmbeddingOutput, error) {
 	if err := validateRequiredText("text", text); err != nil {
+		return nil, err
+	}
+	if err := validateTargetDim(targetDim); err != nil {
 		return nil, err
 	}
 
@@ -1057,21 +1067,18 @@ func MultiModalEncodeText(text string, targetDim int) (*MultiModalEmbeddingOutpu
 // MultiModalEncodeImage encodes image pixel data into a 384-dimensional embedding.
 //
 // Parameters:
-//   - pixelData: Raw pixel data as float32 slice (RGB, normalized 0-1), flattened [3*H*W]
-//   - height: Image height (512 for SigLIP-base-patch16-512)
-//   - width: Image width (512)
-//   - targetDim: Target dimension (0 for default 384)
+//   - pixelData: Raw pixel data as float32 slice (RGB, normalized 0-1), flattened [3*H*W].
+//     Must be non-empty and match exact length 3*height*width.
+//   - height: Image height in pixels (must be positive and within [1, math.MaxInt32], 512 for SigLIP)
+//   - width: Image width in pixels (must be positive and within [1, math.MaxInt32], 512 for SigLIP)
+//   - targetDim: Target dimension (0 for default 384; must be in [0, math.MaxInt32])
 //
 // Returns:
 //   - MultiModalEmbeddingOutput with the embedding and metadata
-//   - error if encoding fails
+//   - error if validation fails (empty/mismatched pixelData, invalid dimensions, overflow, out-of-range targetDim) or encoding fails
 func MultiModalEncodeImage(pixelData []float32, height, width, targetDim int) (*MultiModalEmbeddingOutput, error) {
-	if len(pixelData) == 0 {
-		return nil, fmt.Errorf("pixelData cannot be empty")
-	}
-	expected := 3 * height * width
-	if len(pixelData) != expected {
-		return nil, fmt.Errorf("pixelData length %d != expected %d (3*%d*%d)", len(pixelData), expected, height, width)
+	if err := validateImageTensor(pixelData, height, width, targetDim); err != nil {
+		return nil, err
 	}
 
 	var result C.MultiModalEmbeddingResult
@@ -1107,21 +1114,18 @@ func MultiModalEncodeImage(pixelData []float32, height, width, targetDim int) (*
 // MultiModalEncodeAudio encodes a Mel spectrogram into a 384-dimensional embedding.
 //
 // Parameters:
-//   - melData: Mel spectrogram as float32 slice, flattened [nMels * timeFrames]
-//   - nMels: Number of Mel bins (typically 80)
-//   - timeFrames: Number of time frames
-//   - targetDim: Target dimension (0 for default 384)
+//   - melData: Mel spectrogram as float32 slice, flattened [nMels * timeFrames].
+//     Must be non-empty and match exact length nMels*timeFrames.
+//   - nMels: Number of Mel bins (must be positive and within [1, math.MaxInt32], typically 80)
+//   - timeFrames: Number of time frames (must be positive and within [1, math.MaxInt32])
+//   - targetDim: Target dimension (0 for default 384; must be in [0, math.MaxInt32])
 //
 // Returns:
 //   - MultiModalEmbeddingOutput with the embedding and metadata
-//   - error if encoding fails
+//   - error if validation fails (empty/mismatched melData, invalid dimensions, overflow, out-of-range targetDim) or encoding fails
 func MultiModalEncodeAudio(melData []float32, nMels, timeFrames, targetDim int) (*MultiModalEmbeddingOutput, error) {
-	if len(melData) == 0 {
-		return nil, fmt.Errorf("melData cannot be empty")
-	}
-	expected := nMels * timeFrames
-	if len(melData) != expected {
-		return nil, fmt.Errorf("melData length %d != expected %d (%d*%d)", len(melData), expected, nMels, timeFrames)
+	if err := validateAudioTensor(melData, nMels, timeFrames, targetDim); err != nil {
+		return nil, err
 	}
 
 	var result C.MultiModalEmbeddingResult
@@ -1160,15 +1164,15 @@ func MultiModalEncodeAudio(melData []float32, nMels, timeFrames, targetDim int) 
 // numerical parity with the SiglipProcessor reference.
 //
 // Parameters:
-//   - imageBytes: Raw JPEG or PNG image data
-//   - targetDim: Target embedding dimension (0 for default 384)
+//   - imageBytes: Raw JPEG or PNG image data (must be non-empty)
+//   - targetDim: Target embedding dimension (0 for default 384; must be in [0, math.MaxInt32])
 //
 // Returns:
 //   - MultiModalEmbeddingOutput with the embedding and metadata
-//   - error if decoding or encoding fails
+//   - error if validation fails (empty imageBytes, out-of-range targetDim) or decoding/encoding fails
 func MultiModalEncodeImageFromBytes(imageBytes []byte, targetDim int) (*MultiModalEmbeddingOutput, error) {
-	if len(imageBytes) == 0 {
-		return nil, fmt.Errorf("imageBytes cannot be empty")
+	if err := validateImageBytes(imageBytes, targetDim); err != nil {
+		return nil, err
 	}
 
 	var result C.MultiModalEmbeddingResult
@@ -1201,14 +1205,17 @@ func MultiModalEncodeImageFromBytes(imageBytes []byte, targetDim int) (*MultiMod
 // (e.g. "data:image/jpeg;base64,...") as used by the OpenAI API.
 //
 // Parameters:
-//   - base64Str: Base64-encoded image (with or without data URI prefix)
-//   - targetDim: Target embedding dimension (0 for default 384)
+//   - base64Str: Base64-encoded image (with or without data URI prefix; must be non-empty and cannot contain NUL bytes)
+//   - targetDim: Target embedding dimension (0 for default 384; must be in [0, math.MaxInt32])
 //
 // Returns:
 //   - MultiModalEmbeddingOutput with the embedding and metadata
-//   - error if decoding or encoding fails
+//   - error if validation fails (empty/NUL base64Str, out-of-range targetDim) or decoding/encoding fails
 func MultiModalEncodeImageFromBase64(base64Str string, targetDim int) (*MultiModalEmbeddingOutput, error) {
 	if err := validateRequiredText("base64Str", base64Str); err != nil {
+		return nil, err
+	}
+	if err := validateTargetDim(targetDim); err != nil {
 		return nil, err
 	}
 
@@ -1235,14 +1242,17 @@ func MultiModalEncodeImageFromBase64(base64Str string, targetDim int) (*MultiMod
 // configured URLs (e.g. preloading image_candidates from config).
 //
 // Parameters:
-//   - url: HTTP(S) URL pointing to a JPEG or PNG image (trusted source only)
-//   - targetDim: Target embedding dimension (0 for default 384)
+//   - url: HTTP(S) URL pointing to a JPEG or PNG image (trusted source only; must be non-empty and cannot contain NUL bytes)
+//   - targetDim: Target embedding dimension (0 for default 384; must be in [0, math.MaxInt32])
 //
 // Returns:
 //   - MultiModalEmbeddingOutput with the embedding and metadata
-//   - error if download, decoding, or encoding fails
+//   - error if validation fails (empty/NUL URL, out-of-range targetDim) or download/decoding/encoding fails
 func MultiModalEncodeImageFromURL(url string, targetDim int) (*MultiModalEmbeddingOutput, error) {
 	if err := validateRequiredText("url", url); err != nil {
+		return nil, err
+	}
+	if err := validateTargetDim(targetDim); err != nil {
 		return nil, err
 	}
 
@@ -1346,14 +1356,14 @@ func InitEmbeddingModelsWithMmBert(qwen3ModelPath, gemmaModelPath, mmBertModelPa
 // Matryoshka dimensions: 768 (full), 512, 256, 128
 //
 // Parameters:
-//   - text: Input text to generate embedding for
+//   - text: Input text to generate embedding for (must be non-empty and cannot contain NUL bytes)
 //   - qualityPriority: Quality priority [0.0-1.0] (0.0=fastest, 1.0=highest quality)
 //   - latencyPriority: Latency priority [0.0-1.0] (0.0=slowest, 1.0=lowest latency)
-//   - targetDim: Target embedding dimension (768/512/256/128, or 0 for full dimension)
+//   - targetDim: Target embedding dimension (768/512/256/128, or 0 for full dimension; must be in [0, math.MaxInt32])
 //
 // Returns:
 //   - []float32: Embedding vector of the requested dimension
-//   - error: Non-nil if embedding generation fails
+//   - error: Non-nil if validation fails (empty/NUL text, negative or out-of-range targetDim) or embedding generation fails
 //
 // Example:
 //
@@ -1366,6 +1376,13 @@ func InitEmbeddingModelsWithMmBert(qwen3ModelPath, gemmaModelPath, mmBertModelPa
 //	// Auto dimension (uses full 768)
 //	embedding, err := GetEmbeddingWithDim("medium text", 0.5, 0.5, 0)
 func GetEmbeddingWithDim(text string, qualityPriority, latencyPriority float32, targetDim int) ([]float32, error) {
+	if err := validateRequiredText("text", text); err != nil {
+		return nil, err
+	}
+	if err := validateTargetDim(targetDim); err != nil {
+		return nil, err
+	}
+
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 
@@ -1410,20 +1427,27 @@ func GetEmbeddingWithDim(text string, qualityPriority, latencyPriority float32, 
 // This avoids the need for Go to re-implement Rust's routing logic.
 //
 // Parameters:
-// - text: Input text to embed
+// - text: Input text to embed (must be non-empty and cannot contain NUL bytes)
 // - qualityPriority: Quality priority (0.0-1.0), higher values favor quality
 // - latencyPriority: Latency priority (0.0-1.0), higher values favor speed
-// - targetDim: Target dimension (128/256/512/768/1024), 0 for auto
+// - targetDim: Target dimension (128/256/512/768/1024), 0 for auto; must be in [0, math.MaxInt32]
 //
 // Returns:
 // - EmbeddingOutput with full metadata
-// - error if generation failed
+// - error if validation fails (empty/NUL text, negative or out-of-range targetDim) or generation fails
 //
 // Example:
 //
 //	output, err := GetEmbeddingWithMetadata("Hello world", 0.5, 0.5, 768)
 //	fmt.Printf("Used model: %s, took %.2fms\n", output.ModelType, output.ProcessingTimeMs)
 func GetEmbeddingWithMetadata(text string, qualityPriority, latencyPriority float32, targetDim int) (*EmbeddingOutput, error) {
+	if err := validateRequiredText("text", text); err != nil {
+		return nil, err
+	}
+	if err := validateTargetDim(targetDim); err != nil {
+		return nil, err
+	}
+
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 
@@ -1479,13 +1503,13 @@ func GetEmbeddingWithMetadata(text string, qualityPriority, latencyPriority floa
 // Useful when you explicitly want to use a specific embedding model (Qwen3 or Gemma).
 //
 // Parameters:
-// - text: Input text to generate embedding for
+// - text: Input text to generate embedding for (must be non-empty and cannot contain NUL bytes)
 // - modelType: "qwen3" or "gemma" (or "0" for Qwen3, "1" for Gemma)
-// - targetDim: Target dimension (768, 512, 256, or 128)
+// - targetDim: Target dimension (768, 512, 256, or 128; 0 for default; must be in [0, math.MaxInt32])
 //
 // Returns:
 // - EmbeddingOutput with full metadata
-// - error if generation failed or invalid model type
+// - error if validation fails (empty/NUL text, invalid model type, out-of-range targetDim) or generation fails
 //
 // Example:
 //
@@ -1496,6 +1520,13 @@ func GetEmbeddingWithMetadata(text string, qualityPriority, latencyPriority floa
 //	}
 //	fmt.Printf("Used model: %s\n", output.ModelType)
 func GetEmbeddingWithModelType(text string, modelType string, targetDim int) (*EmbeddingOutput, error) {
+	if err := validateRequiredText("text", text); err != nil {
+		return nil, err
+	}
+	if err := validateTargetDim(targetDim); err != nil {
+		return nil, err
+	}
+
 	// Validate model type
 	if modelType != "qwen3" && modelType != "gemma" && modelType != "mmbert" && modelType != "multimodal" {
 		return nil, fmt.Errorf("invalid model type: %s (must be 'qwen3', 'gemma', 'mmbert', or 'multimodal')", modelType)
@@ -1514,19 +1545,29 @@ func GetEmbeddingWithModelType(text string, modelType string, targetDim int) (*E
 // For qwen3 and gemma models, only dimension truncation is supported (targetLayer is ignored).
 //
 // Parameters:
-//   - text: Input text to generate embedding for
+//   - text: Input text to generate embedding for (must be non-empty and cannot contain NUL bytes)
 //   - modelType: "qwen3", "gemma", or "mmbert"
-//   - targetLayer: Target layer for early exit (0 for full model, mmbert: 3/6/11/22)
-//   - targetDim: Target embedding dimension (0 for default)
+//   - targetLayer: Target layer for early exit (0 for full model, mmbert: 3/6/11/22; must be in [0, math.MaxInt32])
+//   - targetDim: Target embedding dimension (0 for default; must be in [0, math.MaxInt32])
 //
 // Returns:
 //   - EmbeddingOutput containing the embedding vector and metadata
-//   - error if embedding generation fails
+//   - error if validation fails or embedding generation fails
 //
 // Example for mmbert with early exit (3 layers, 256 dimensions):
 //
 //	output, err := GetEmbedding2DMatryoshka("Hello world", "mmbert", 3, 256)
 func GetEmbedding2DMatryoshka(text string, modelType string, targetLayer int, targetDim int) (*EmbeddingOutput, error) {
+	if err := validateRequiredText("text", text); err != nil {
+		return nil, err
+	}
+	if err := validateTargetDim(targetDim); err != nil {
+		return nil, err
+	}
+	if err := validateTargetLayer(targetLayer); err != nil {
+		return nil, err
+	}
+
 	// Validate model type
 	if modelType != "qwen3" && modelType != "gemma" && modelType != "mmbert" && modelType != "multimodal" {
 		return nil, fmt.Errorf("invalid model type: %s (must be 'qwen3', 'gemma', 'mmbert', or 'multimodal')", modelType)
@@ -1647,13 +1688,14 @@ func cFloatArrayToGoSlice(data *C.float, length C.int) []float32 {
 // 3. Returns similarity score along with metadata
 //
 // Parameters:
-// - text1, text2: The two texts to compare
-// - modelType: "auto" (intelligent routing), "qwen3", or "gemma"
-// - targetDim: Target embedding dimension (0 for default, or 768/512/256/128 for Matryoshka)
+//   - text1: First input text (must be non-empty and cannot contain NUL bytes)
+//   - text2: Second input text (must be non-empty and cannot contain NUL bytes)
+//   - modelType: "auto" (intelligent routing), "qwen3", or "gemma"
+//   - targetDim: Target embedding dimension (0 for default, or 768/512/256/128 for Matryoshka; must be in [0, math.MaxInt32])
 //
 // Returns:
-// - *SimilarityOutput: Contains similarity score, model used, and processing time
-// - error: If embedding generation or similarity calculation fails
+//   - *SimilarityOutput: Contains similarity score, model used, and processing time
+//   - error: If validation fails (empty/NUL text, invalid model type, out-of-range targetDim) or similarity calculation fails
 //
 // Example:
 //
@@ -1668,9 +1710,8 @@ func cFloatArrayToGoSlice(data *C.float, length C.int) []float32 {
 //	// Use Gemma with 512-dim Matryoshka
 //	result, err = CalculateEmbeddingSimilarity("text1", "text2", "gemma", 512)
 func CalculateEmbeddingSimilarity(text1, text2 string, modelType string, targetDim int) (*SimilarityOutput, error) {
-	// Validate model type
-	if modelType != "auto" && modelType != "qwen3" && modelType != "gemma" {
-		return nil, fmt.Errorf("invalid model type: %s (must be 'auto', 'qwen3', or 'gemma')", modelType)
+	if err := validateEmbeddingSimilarity(text1, text2, modelType, targetDim); err != nil {
+		return nil, err
 	}
 
 	cText1 := C.CString(text1)
@@ -1738,23 +1779,18 @@ type BatchSimilarityOutput struct {
 // ~N times faster than calling CalculateEmbeddingSimilarity in a loop (N = num_candidates).
 //
 // Parameters:
-//   - query: The query text
-//   - candidates: Array of candidate texts
-//   - topK: Maximum number of matches to return (0 = return all, sorted by similarity)
+//   - query: The query text (must be non-empty and cannot contain NUL bytes)
+//   - candidates: Array of candidate texts (must be non-empty, length in [1, math.MaxInt32], items non-empty without NUL bytes)
+//   - topK: Maximum number of matches to return (0 = return all, sorted by similarity; must be in [0, math.MaxInt32])
 //   - modelType: "auto", "qwen3", or "gemma"
-//   - targetDim: Target dimension (0 for default, or 768/512/256/128 for Matryoshka)
+//   - targetDim: Target dimension (0 for default, or 768/512/256/128 for Matryoshka; must be in [0, math.MaxInt32])
 //
 // Returns:
 //   - BatchSimilarityOutput: Top-k matches sorted by similarity (descending)
-//   - error: Error message if operation failed
+//   - error: Error message if validation or operation failed
 func CalculateSimilarityBatch(query string, candidates []string, topK int, modelType string, targetDim int) (*BatchSimilarityOutput, error) {
-	// Validate model type
-	if modelType != "auto" && modelType != "qwen3" && modelType != "gemma" {
-		return nil, fmt.Errorf("invalid model type: %s (must be 'auto', 'qwen3', or 'gemma')", modelType)
-	}
-
-	if len(candidates) == 0 {
-		return nil, fmt.Errorf("candidates array cannot be empty")
+	if err := validateSimilarityBatch(query, candidates, topK, modelType, targetDim); err != nil {
+		return nil, err
 	}
 
 	// Convert query to C string
