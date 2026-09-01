@@ -1340,6 +1340,14 @@ export function conditionHasNestedRules(condition: DecisionCondition): boolean {
   return Boolean(condition.operator || condition.conditions?.length)
 }
 
+export function decisionRulesConflict(rules: DecisionRuleSet): boolean {
+  return Boolean(rules.on_unknown) && (rules.conditions || []).some(conditionSetsOnError)
+}
+
+function conditionSetsOnError(condition: DecisionCondition): boolean {
+  return Boolean(condition.on_error) || (condition.conditions || []).some(conditionSetsOnError)
+}
+
 export interface AddSignalFormState {
   type: SignalType
   name: string

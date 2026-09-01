@@ -708,6 +708,26 @@ class Rules(BaseModel):
             return rules
         return data
 
+    @model_validator(mode="after")
+    def validate_on_unknown_conflict(self):
+        if self.on_unknown is not None and _any_condition_sets_on_error(
+            self.conditions
+        ):
+            raise ValueError(
+                "condition on_error has no effect when rules.on_unknown is set; "
+                "remove one of them"
+            )
+        return self
+
+
+def _any_condition_sets_on_error(conditions: Optional[List["Condition"]]) -> bool:
+    for condition in conditions or []:
+        if condition.on_error is not None:
+            return True
+        if _any_condition_sets_on_error(condition.conditions):
+            return True
+    return False
+
 
 class PluginType(str, Enum):
     """Supported plugin types."""

@@ -342,6 +342,29 @@ func (v *Validator) walkBoolExpr(expr BoolExpr) {
 	}
 }
 
+// checkOnUnknownOnErrorConflict flags condition-level on_error under a route
+// whose on_unknown already resolves terminal unknowns; the config loader
+// rejects the same combination at startup.
+func (v *Validator) checkOnUnknownOnErrorConflict(expr BoolExpr, context string) {
+	switch e := expr.(type) {
+	case *BoolAnd:
+		v.checkOnUnknownOnErrorConflict(e.Left, context)
+		v.checkOnUnknownOnErrorConflict(e.Right, context)
+	case *BoolOr:
+		v.checkOnUnknownOnErrorConflict(e.Left, context)
+		v.checkOnUnknownOnErrorConflict(e.Right, context)
+	case *BoolNot:
+		v.checkOnUnknownOnErrorConflict(e.Expr, context)
+	case *SignalRefExpr:
+		if _, ok := getStringField(e.Fields, "on_error"); ok {
+			v.addDiag(DiagConstraint, e.Pos,
+				fmt.Sprintf("%s: condition on_error has no effect when on_unknown is set; remove one of them", context),
+				nil,
+			)
+		}
+	}
+}
+
 func signalReferenceDefined(names map[string]bool, signalType, name string) bool {
 	if len(names) == 0 {
 		return false
@@ -540,6 +563,9 @@ func (v *Validator) checkRouteConstraints(r *RouteDecl) {
 			fmt.Sprintf("%s: on_unknown must be %s, got %q", context, config.UnknownPolicyChoices(), r.OnUnknown),
 			nil,
 		)
+	}
+	if r.OnUnknown != "" && r.When != nil {
+		v.checkOnUnknownOnErrorConflict(r.When, context)
 	}
 
 	v.checkRouteAction(r, context)

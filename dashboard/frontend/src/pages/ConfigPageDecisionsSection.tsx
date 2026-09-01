@@ -20,6 +20,7 @@ import type {
 import {
   cloneDecisionConditions,
   conditionHasNestedRules,
+  decisionRulesConflict,
   decisionRulesForSave,
   mergeDecisionForSave,
 } from './configPageSupport'
@@ -59,13 +60,8 @@ export default function ConfigPageDecisionsSection({
   const [decisionPendingDelete, setDecisionPendingDelete] = useState<DecisionConfig | null>(null)
   const [decisionDeletePending, setDecisionDeletePending] = useState(false)
   const [decisionDeleteError, setDecisionDeleteError] = useState<string | null>(null)
-  const {
-    applyScopedConfig,
-    routingScopes,
-    scopedConfig,
-    selectedScopeId,
-    setSelectedScopeId,
-  } = useRoutingScopeManager(config)
+  const { applyScopedConfig, routingScopes, scopedConfig, selectedScopeId, setSelectedScopeId } =
+    useRoutingScopeManager(config)
   useEffect(() => {
     setDecisionPendingDelete(null)
     setDecisionDeleteError(null)
@@ -763,15 +759,22 @@ export default function ConfigPageDecisionsSection({
         return { type, configuration }
       })
 
+      const rules = decisionRulesForSave(decision?.rules, {
+        operator: formData.operator,
+        conditions,
+        ...(formData.on_unknown ? { on_unknown: formData.on_unknown } : {}),
+      })
+      if (decisionRulesConflict(rules)) {
+        throw new Error(
+          'Condition on_error has no effect when on_unknown is set; remove one of them.',
+        )
+      }
+
       const newDecision = mergeDecisionForSave(mode === 'edit' ? decision : undefined, {
         name,
         description: formData.description,
         priority: priority || 0,
-        rules: decisionRulesForSave(decision?.rules, {
-          operator: formData.operator,
-          conditions,
-          ...(formData.on_unknown ? { on_unknown: formData.on_unknown } : {}),
-        }),
+        rules,
         modelRefs,
         plugins,
       })

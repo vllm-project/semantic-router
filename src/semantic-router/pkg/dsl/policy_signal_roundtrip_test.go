@@ -188,6 +188,32 @@ ROUTE "x" (on_unknown = "allow") {
 	t.Fatalf("no diagnostic mentions on_unknown: %#v", diagnostics)
 }
 
+func TestValidateFlagsOnUnknownOnErrorConflict(t *testing.T) {
+	input := `
+SIGNAL classifier "risk" {
+  type: "local"
+  model_path: "models/risk"
+  labels: ["SAFE", "RISKY"]
+  use_cpu: true
+}
+
+ROUTE "guarded" (on_unknown = "no_match") {
+  PRIORITY 100
+  WHEN classifier("risk", label: "RISKY", predicate: { gte: 0.5 }, on_error: "no_match")
+  MODEL "m"
+}`
+	diagnostics, errs := Validate(input)
+	if len(errs) != 0 {
+		t.Fatalf("parse errors: %v", errs)
+	}
+	for _, diagnostic := range diagnostics {
+		if strings.Contains(diagnostic.Message, "on_error has no effect") {
+			return
+		}
+	}
+	t.Fatalf("no diagnostic flags the on_unknown + on_error conflict: %#v", diagnostics)
+}
+
 func assertPolicyDSLSource(t *testing.T, source string) {
 	t.Helper()
 	for _, expected := range []string{

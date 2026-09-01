@@ -104,3 +104,38 @@ def test_decision_route_action_rejects_unknown_type():
                 ]
             },
         )
+
+
+def test_rules_reject_on_unknown_with_condition_on_error():
+    import pytest
+
+    Rules = importlib.import_module("cli.models").Rules
+
+    conflicting = {
+        "operator": "AND",
+        "on_unknown": "no_match",
+        "conditions": [
+            {
+                "type": "classifier",
+                "name": "risk",
+                "label": "RISKY",
+                "predicate": {"gte": 0.5},
+                "on_error": "no_match",
+            }
+        ],
+    }
+    with pytest.raises(ValueError, match="on_error has no effect"):
+        Rules(**conflicting)
+
+    nested = {
+        "operator": "AND",
+        "on_unknown": "match",
+        "conditions": [
+            {"operator": "OR", "conditions": [conflicting["conditions"][0]]}
+        ],
+    }
+    with pytest.raises(ValueError, match="on_error has no effect"):
+        Rules(**nested)
+
+    del conflicting["on_unknown"]
+    assert Rules(**conflicting).conditions[0].on_error == "no_match"
