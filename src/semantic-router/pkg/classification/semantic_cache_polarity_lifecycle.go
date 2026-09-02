@@ -56,9 +56,7 @@ func (c *Classifier) initializeSemanticCacheNLI() error {
 func (c *Classifier) admittedPolarityVerifier() func(context.Context, string, string) (float32, error) {
 	gate := c.admissionRegistry.For(admissionDeploymentHallucinationExplainer)
 	return func(ctx context.Context, cachedQuery, incomingQuery string) (float32, error) {
-		result, err := admitModelInference(ctx, gate, admissionDeploymentHallucinationExplainer, func() (*candle.NLIClassificationResult, error) {
-			return candle.ClassifyNLI(cachedQuery, incomingQuery)
-		})
+		result, err := admitNLI(ctx, gate, candle.ClassifyNLI, cachedQuery, incomingQuery)
 		if err != nil {
 			return 0, err
 		}

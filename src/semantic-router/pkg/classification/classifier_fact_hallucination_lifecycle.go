@@ -122,9 +122,7 @@ func (c *Classifier) initializeHallucinationDetector() error {
 func wireFusionGroundingBackends(detect func(context, question, answer string) (*HallucinationResult, error), explainerGate admission.Admissioner) {
 	looper.SetGroundingBackends(
 		func(premise, hypothesis string) (float32, float32, error) {
-			r, err := admitModelInference(nil, explainerGate, admissionDeploymentHallucinationExplainer, func() (*candle.NLIClassificationResult, error) {
-				return candle.ClassifyNLI(premise, hypothesis)
-			})
+			r, err := admitNLI(nil, explainerGate, candle.ClassifyNLI, premise, hypothesis)
 			if err != nil {
 				return 0, 0, err
 			}

@@ -70,6 +70,17 @@ func admitModelInference[T any](
 	return fn()
 }
 
+func admitNLI[T any](
+	ctx context.Context,
+	gate admission.Admissioner,
+	classify func(premise, hypothesis string) (T, error),
+	premise, hypothesis string,
+) (T, error) {
+	return admitModelInference(ctx, gate, admissionDeploymentHallucinationExplainer, func() (T, error) {
+		return classify(premise, hypothesis)
+	})
+}
+
 type admittedSequenceClassifier struct {
 	backend    SequenceClassifierBackend
 	gate       admission.Admissioner

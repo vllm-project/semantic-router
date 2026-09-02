@@ -108,9 +108,7 @@ func (d *HallucinationDetector) ClassifyNLI(premise, hypothesis string) (*NLIRes
 		return nil, fmt.Errorf("NLI model not initialized")
 	}
 
-	candleResult, err := admitModelInference(nil, d.explainerGate, admissionDeploymentHallucinationExplainer, func() (*candle.NLIClassificationResult, error) {
-		return candle.ClassifyNLI(premise, hypothesis)
-	})
+	candleResult, err := admitNLI(nil, d.explainerGate, candle.ClassifyNLI, premise, hypothesis)
 	if err != nil {
 		return nil, fmt.Errorf("NLI classification error: %w", err)
 	}
