@@ -154,6 +154,31 @@ To upgrade to the latest stable release:
 pip install --upgrade vllm-sr
 ```
 
+#### One-time cleanup for the former Fleet Simulator sidecar
+
+Current releases do not build or start Fleet Simulator as part of the
+`vllm-sr serve` lifecycle, and `vllm-sr stop` intentionally does not manage a
+standalone simulator. When upgrading from a release where `vllm-sr serve`
+automatically started the old sidecar, first inspect the exact legacy container
+(substitute `podman` if that was the runtime used):
+
+```bash
+docker container inspect vllm-sr-sim-container \
+  --format '{{.Name}}\t{{.Config.Image}}\t{{.State.Status}}'
+```
+
+Only when deployment history confirms that this exact container is the old
+automatically managed sidecar, remove it once:
+
+```bash
+docker stop vllm-sr-sim-container
+docker rm vllm-sr-sim-container
+```
+
+Do not remove a Fleet Simulator instance started explicitly with the standalone
+package, standalone Make targets, or a custom deployment. Those instances are
+independent of the Router runtime and remain supported.
+
 ### 2d. Fleet simulator Python package upgrade
 
 `vllm-sr-sim` is a separate PyPI package with its own release cadence. Inspect

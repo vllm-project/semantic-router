@@ -8,46 +8,42 @@ from dataclasses import dataclass
 from typing import cast
 
 from cli.evaluation.canonical import digest_value
+from cli.evaluation.case_plan import project_case_tracks
 from cli.evaluation.contracts import (
-    BindingSnapshot,
     CaseGrading,
     CaseVisible,
-    EvaluationTargetArm,
     GradingCaseSet,
-    PolicySnapshot,
-    PoolDefinition,
-    RunEnvironment,
     VisibleCaseSet,
 )
+from cli.evaluation.execution_contract import (
+    EvaluationInputs,
+    NormalizedIdentity,
+    NormalizedSuiteIdentities,
+)
+from cli.evaluation.reporting import TrackID
 from cli.evaluation.suite_contract import (
-    SUITE_CONTRACT_VERSION,
     BenchmarkSuiteManifest,
     NormalizedCapacityObservation,
     NormalizedDecision,
+    NormalizedFault,
     NormalizedMultimodalObservation,
     NormalizedOutcome,
+    NormalizedPerturbation,
     NormalizedPreference,
     NormalizedSafetyObservation,
     NormalizedTrajectoryStep,
 )
-from cli.evaluation.suite_store import NormalizedSuiteStore, SuiteStoreError
+from cli.evaluation.suite_store import NormalizedSuiteStore
+from cli.evaluation.suite_store_error import SuiteStoreError
+from cli.evaluation.target_contracts import (
+    BindingSnapshot,
+    EvaluationTargetArm,
+    PolicySnapshot,
+    PoolDefinition,
+    RunEnvironment,
+)
 
-EXECUTOR_ID = "normalized-suite-replay.v1"
 _OPAQUE_ID_HEX_LENGTH = 24
-
-
-@dataclass(frozen=True)
-class NormalizedSuiteInputs:
-    visible: VisibleCaseSet
-    grading: GradingCaseSet
-    policy: PolicySnapshot
-    pool: PoolDefinition
-    arms: tuple[EvaluationTargetArm, ...]
-    binding: BindingSnapshot
-    environment: RunEnvironment
-    suite_revisions: dict[str, str]
-    private_lineage: dict[str, object]
-    executor_ids: dict[str, str]
 
 
 @dataclass(frozen=True)
@@ -57,6 +53,7 @@ class SelectedCase:
     source_grading: CaseGrading
     visible: CaseVisible
     grading: CaseGrading
+    executor_id: str
 
 
 @dataclass(frozen=True)
@@ -65,6 +62,8 @@ class SuiteEvidence:
     decisions: tuple[NormalizedDecision, ...] | None
     preferences: tuple[NormalizedPreference, ...] | None
     trajectories: tuple[NormalizedTrajectoryStep, ...] | None
+    perturbations: tuple[NormalizedPerturbation, ...] | None
+    faults: tuple[NormalizedFault, ...] | None
     multimodal: tuple[NormalizedMultimodalObservation, ...] | None
     safety: tuple[NormalizedSafetyObservation, ...] | None
     capacity: tuple[NormalizedCapacityObservation, ...] | None
@@ -77,27 +76,30 @@ def opaque_id(prefix: str, revision: str, kind: str, source_id: str) -> str:
     return f"{prefix}-{digest}"
 
 
-def case_alias(manifest: BenchmarkSuiteManifest, source_id: str) -> str:
+def opaque_case_id(manifest: BenchmarkSuiteManifest, source_id: str) -> str:
     return opaque_id("case", manifest.revision, "case", source_id)
 
 
-def arm_alias(manifest: BenchmarkSuiteManifest, source_id: str) -> str:
+def opaque_arm_id(manifest: BenchmarkSuiteManifest, source_id: str) -> str:
     return opaque_id("arm", manifest.revision, "arm", source_id)
 
 
-def action_alias(manifest: BenchmarkSuiteManifest, source_id: str) -> str:
+def opaque_action_id(manifest: BenchmarkSuiteManifest, source_id: str) -> str:
     return opaque_id("action", manifest.revision, "action", source_id)
 
 
-def trajectory_alias(manifest: BenchmarkSuiteManifest, source_id: str) -> str:
+def opaque_trajectory_id(manifest: BenchmarkSuiteManifest, source_id: str) -> str:
     return opaque_id("trajectory", manifest.revision, "trajectory", source_id)
 
 
-def evidence_kind(case: SelectedCase) -> str:
-    # Installation validates schema, content hashes, and source pins, but it
-    # does not yet attest that a repository-owned adapter produced every row.
-    # Imported recorded-policy evidence therefore remains contract-only E0.
-    return f"{EXECUTOR_ID};ceiling=E0"
+def evidence_kind(case: SelectedCase, track_id: TrackID) -> str:
+    """Return the fail-closed E0 ceiling for an imported record track."""
+
+    if track_id not in case.manifest.track_ids:
+        raise SuiteStoreError(
+            f"normalized record track {track_id!r} is absent from its suite manifest"
+        )
+    return f"{case.executor_id};ceiling=E0"
 
 
 def _sample_score(seed: int, manifest: BenchmarkSuiteManifest, case_id: str) -> int:
@@ -107,18 +109,65 @@ def _sample_score(seed: int, manifest: BenchmarkSuiteManifest, case_id: str) -> 
     return int.from_bytes(digest, "big")
 
 
+def _reserved_perturbation_case_ids(
+    store: NormalizedSuiteStore,
+    manifest: BenchmarkSuiteManifest,
+    sample_limit: int,
+    seed: int,
+    selected_track_ids: tuple[str, ...],
+) -> set[str]:
+    if "routing" not in selected_track_ids or manifest.artifacts.perturbations is None:
+        return set()
+    pairs = tuple(
+        cast(NormalizedPerturbation, row)
+        for row in store.load_jsonl(manifest.id, "perturbations")
+    )
+    ranked_pairs = sorted(
+        pairs,
+        key=lambda row: (
+            _sample_score(seed, manifest, row.pair_id),
+            row.pair_id,
+        ),
+    )
+    pair_budget = min(len(ranked_pairs), sample_limit // 2)
+    reserved = {
+        case_id
+        for pair in ranked_pairs[:pair_budget]
+        for case_id in (pair.source_case_id, pair.perturbed_case_id)
+    }
+    if sample_limit == 1 and ranked_pairs:
+        # One case cannot evaluate a pair. Prefer its source, which also
+        # retains any dense base-track coverage on heterogeneous suites.
+        reserved.add(ranked_pairs[0].source_case_id)
+    return reserved
+
+
 def _selected_case_keys(
     store: NormalizedSuiteStore,
     manifests: tuple[BenchmarkSuiteManifest, ...],
     sample_limit: int,
     seed: int,
+    selected_track_ids: tuple[str, ...],
 ) -> tuple[set[tuple[str, str]], dict[str, set[str]]]:
-    """Select the globally smallest deterministic hashes with bounded memory."""
+    """Select up to ``sample_limit`` cases per suite with bounded memory.
 
-    selected: list[tuple[int, str, str]] = []
+    Per-suite stratification keeps every immutable suite represented when a run
+    composes heterogeneous track coverage. The public limit is therefore a
+    bound per selected suite, not a global budget that can erase whole tracks.
+    """
+
+    selected_keys: set[tuple[str, str]] = set()
     seen: set[tuple[str, str]] = set()
     known_by_suite: dict[str, set[str]] = {}
     for manifest in manifests:
+        reserved = _reserved_perturbation_case_ids(
+            store,
+            manifest,
+            sample_limit,
+            seed,
+            selected_track_ids,
+        )
+        selected: list[tuple[int, str]] = []
         observed = 0
         known_by_suite[manifest.id] = set()
         for record in store.load_jsonl(manifest.id, "visible_cases"):
@@ -129,18 +178,28 @@ def _selected_case_keys(
             seen.add(key)
             known_by_suite[manifest.id].add(case.id)
             observed += 1
+            if not set(case.track_ids).intersection(selected_track_ids):
+                continue
+            if case.id in reserved:
+                continue
+            remaining_budget = sample_limit - len(reserved)
+            if remaining_budget <= 0:
+                continue
             score = _sample_score(seed, manifest, case.id)
-            item = (-score, manifest.id, case.id)
-            if len(selected) < sample_limit:
+            item = (-score, case.id)
+            if len(selected) < remaining_budget:
                 heapq.heappush(selected, item)
             elif score < -selected[0][0]:
                 heapq.heapreplace(selected, item)
         if observed != manifest.case_count:
             raise SuiteStoreError("normalized visible case count drifted after install")
-    return (
-        {(suite_id, case_id) for _, suite_id, case_id in selected},
-        known_by_suite,
-    )
+        if not reserved.issubset(known_by_suite[manifest.id]):
+            raise SuiteStoreError(
+                "normalized perturbation pair references a missing case"
+            )
+        selected_keys.update((manifest.id, case_id) for case_id in reserved)
+        selected_keys.update((manifest.id, case_id) for _, case_id in selected)
+    return selected_keys, known_by_suite
 
 
 def load_selected_cases(
@@ -148,9 +207,11 @@ def load_selected_cases(
     manifests: tuple[BenchmarkSuiteManifest, ...],
     sample_limit: int,
     seed: int,
+    selected_track_ids: tuple[str, ...],
+    executor_id: str,
 ) -> tuple[tuple[SelectedCase, ...], dict[str, set[str]]]:
     selected_keys, known_by_suite = _selected_case_keys(
-        store, manifests, sample_limit, seed
+        store, manifests, sample_limit, seed, selected_track_ids
     )
     manifest_by_id = {manifest.id: manifest for manifest in manifests}
     visible_by_key: dict[tuple[str, str], CaseVisible] = {}
@@ -188,7 +249,13 @@ def load_selected_cases(
         source_visible = visible_by_key[key]
         source_grading = grading_by_key[key]
         selected.append(
-            _resolved_selected_case(manifest, source_visible, source_grading)
+            _resolved_selected_case(
+                manifest,
+                source_visible,
+                source_grading,
+                selected_track_ids,
+                executor_id,
+            )
         )
     return tuple(selected), known_by_suite
 
@@ -197,26 +264,31 @@ def _resolved_selected_case(
     manifest: BenchmarkSuiteManifest,
     source_visible: CaseVisible,
     source_grading: CaseGrading,
+    selected_track_ids: tuple[str, ...],
+    executor_id: str,
 ) -> SelectedCase:
-    resolved_case_id = case_alias(manifest, source_visible.id)
+    resolved_case_id = opaque_case_id(manifest, source_visible.id)
     resolved_trajectory_id = (
-        trajectory_alias(manifest, source_visible.trajectory_id)
+        opaque_trajectory_id(manifest, source_visible.trajectory_id)
         if source_visible.trajectory_id
         else None
     )
-    visible = source_visible.model_copy(
-        update={"id": resolved_case_id, "trajectory_id": resolved_trajectory_id}
+    visible = project_case_tracks(
+        source_visible.model_copy(
+            update={"id": resolved_case_id, "trajectory_id": resolved_trajectory_id}
+        ),
+        selected_track_ids,
     )
     grading = source_grading.model_copy(
         update={
             "case_id": resolved_case_id,
             "expected_route": (
-                arm_alias(manifest, source_grading.expected_route)
+                opaque_arm_id(manifest, source_grading.expected_route)
                 if source_grading.expected_route
                 else None
             ),
             "preferred_arm_id": (
-                arm_alias(manifest, source_grading.preferred_arm_id)
+                opaque_arm_id(manifest, source_grading.preferred_arm_id)
                 if source_grading.preferred_arm_id
                 else None
             ),
@@ -228,6 +300,7 @@ def _resolved_selected_case(
         source_grading=source_grading,
         visible=visible,
         grading=grading,
+        executor_id=executor_id,
     )
 
 
@@ -298,8 +371,11 @@ def _normalized_arms(
 ) -> tuple[EvaluationTargetArm, ...]:
     return tuple(
         EvaluationTargetArm(
-            id=arm_alias(manifest_by_id[suite_id], source_id),
-            model=f"normalized-replay-{arm_alias(manifest_by_id[suite_id], source_id)}",
+            id=opaque_arm_id(manifest_by_id[suite_id], source_id),
+            model=(
+                "normalized-replay-"
+                + opaque_arm_id(manifest_by_id[suite_id], source_id)
+            ),
             provider_model_id_digest=digest_value(
                 {
                     "suite_revision": manifest_by_id[suite_id].revision,
@@ -324,6 +400,7 @@ def _normalized_arms(
 def _normalized_binding(
     revisions: dict[str, str],
     arms: tuple[EvaluationTargetArm, ...],
+    target_id: str,
 ) -> tuple[PolicySnapshot, PoolDefinition, BindingSnapshot, RunEnvironment]:
     revision_identity = tuple(sorted(revisions.items()))
     identity_digest = digest_value(revision_identity)
@@ -347,9 +424,9 @@ def _normalized_binding(
         id=opaque_id(
             "environment", identity_digest, "environment", "normalized-replay"
         ),
-        target_id="fixture",
+        target_id=target_id,
         platform="normalized-suite-replay",
-        hardware_class="recorded-unqualified",
+        hardware_class="normalized-recorded-evidence",
     )
     return policy, pool, binding, environment
 
@@ -359,61 +436,64 @@ def build_inputs(
     selected: tuple[SelectedCase, ...],
     evidence_by_suite: dict[str, SuiteEvidence],
     track_ids: tuple[str, ...],
-) -> NormalizedSuiteInputs:
+    executor_id: str,
+    target_id: str,
+) -> EvaluationInputs:
     manifest_by_id = {manifest.id: manifest for manifest in manifests}
     revisions = {manifest.id: manifest.revision for manifest in manifests}
     recorded_arms = sorted(_recorded_arm_ids(manifests, evidence_by_suite))
     recorded_actions = sorted(_recorded_action_ids(manifests, evidence_by_suite))
     arms = _normalized_arms(manifest_by_id, recorded_arms)
-    policy, pool, binding, environment = _normalized_binding(revisions, arms)
-    return NormalizedSuiteInputs(
+    policy, pool, binding, environment = _normalized_binding(revisions, arms, target_id)
+    return EvaluationInputs(
         visible=VisibleCaseSet(cases=tuple(case.visible for case in selected)),
         grading=GradingCaseSet(cases=tuple(case.grading for case in selected)),
+        fixture=None,
         policy=policy,
         pool=pool,
         arms=arms,
         binding=binding,
         environment=environment,
         suite_revisions=revisions,
-        private_lineage=_private_lineage(
+        suite_executors=dict.fromkeys(revisions, executor_id),
+        private_identity_map=_private_identity_map(
             manifest_by_id, revisions, selected, recorded_arms, recorded_actions
         ),
-        executor_ids=dict.fromkeys(track_ids, EXECUTOR_ID),
+        executor_ids=dict.fromkeys(track_ids, executor_id),
     )
 
 
-def _private_lineage(
+def _private_identity_map(
     manifest_by_id: dict[str, BenchmarkSuiteManifest],
     revisions: dict[str, str],
     selected: tuple[SelectedCase, ...],
     recorded_arms: list[tuple[str, str]],
     recorded_actions: list[tuple[str, str]],
-) -> dict[str, object]:
-    return {
-        "schema_version": SUITE_CONTRACT_VERSION,
-        "suite_revisions": revisions,
-        "case_aliases": [
-            {
-                "suite_id": case.manifest.id,
-                "alias": case.visible.id,
-                "source_id": case.source_visible.id,
-            }
+) -> NormalizedSuiteIdentities:
+    return NormalizedSuiteIdentities(
+        suite_revisions=revisions,
+        case_identities=tuple(
+            NormalizedIdentity(
+                suite_id=case.manifest.id,
+                opaque_id=case.visible.id,
+                source_id=case.source_visible.id,
+            )
             for case in selected
-        ],
-        "arm_aliases": [
-            {
-                "suite_id": suite_id,
-                "alias": arm_alias(manifest_by_id[suite_id], source_id),
-                "source_id": source_id,
-            }
+        ),
+        arm_identities=tuple(
+            NormalizedIdentity(
+                suite_id=suite_id,
+                opaque_id=opaque_arm_id(manifest_by_id[suite_id], source_id),
+                source_id=source_id,
+            )
             for suite_id, source_id in recorded_arms
-        ],
-        "action_aliases": [
-            {
-                "suite_id": suite_id,
-                "alias": action_alias(manifest_by_id[suite_id], source_id),
-                "source_id": source_id,
-            }
+        ),
+        action_identities=tuple(
+            NormalizedIdentity(
+                suite_id=suite_id,
+                opaque_id=opaque_action_id(manifest_by_id[suite_id], source_id),
+                source_id=source_id,
+            )
             for suite_id, source_id in recorded_actions
-        ],
-    }
+        ),
+    )

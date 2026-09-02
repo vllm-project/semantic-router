@@ -65,11 +65,8 @@ Every entry uses these sections:
 ### PL-0039: Evaluation Plane
 
 - [TD048: Online evaluation assignment evidence](td-048-online-evaluation-assignment-evidence-gap.md)
-- [TD049: Attested live evaluation target](td-049-attested-live-evaluation-target-gap.md)
 - [TD050: Benchmark adapter execution attestation](td-050-benchmark-adapter-execution-attestation-gap.md)
 - [TD051: Evaluation worker isolation](td-051-evaluation-worker-isolation-gap.md)
-- [TD052: Paired promotion statistics](td-052-paired-promotion-statistics-gap.md)
-- [TD053: Evaluation store lifecycle durability](td-053-evaluation-store-lifecycle-durability-gap.md)
 
 ### PL-0040: MoM Routing Hardening
 

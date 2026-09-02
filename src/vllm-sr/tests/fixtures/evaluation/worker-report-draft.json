@@ -1,0 +1,1300 @@
+{
+  "schema_version": "evaluation.v1",
+  "run": {
+    "schema_version": "evaluation.v1",
+    "id": "00000000-0000-4000-8000-000000000001",
+    "client_request_id": "00000000-0000-4000-8000-000000000001",
+    "name": "00000000-0000-4000-8000-000000000001",
+    "description": "Evaluation suites: evaluation-smoke",
+    "status": "completed",
+    "mode": "replay",
+    "evidence_level": "E0",
+    "target_id": "fixture",
+    "mixture": null,
+    "change_profile": "schema_adapter",
+    "suite_ids": [
+      "evaluation-smoke"
+    ],
+    "track_ids": [
+      "routing",
+      "model_pool",
+      "joint",
+      "agentic",
+      "multimodal",
+      "preference",
+      "safety",
+      "capacity"
+    ],
+    "sample_limit": 4,
+    "concurrency": 2,
+    "capacity_slo": null,
+    "capacity_load_protocol": null,
+    "seed": 17,
+    "baseline_run_id": null,
+    "progress": {
+      "percent": 100.0,
+      "completed": 8,
+      "total": 8,
+      "current_track_id": null,
+      "message": "Evaluation completed"
+    },
+    "created_at": "2026-01-01T00:00:00Z",
+    "started_at": "2026-01-01T00:00:00Z",
+    "completed_at": "2026-01-01T00:00:00Z",
+    "error": null
+  },
+  "summary": {
+    "verdict": "unavailable",
+    "quality_score": null,
+    "latency_p95_ms": null,
+    "runtime_cost": null,
+    "capacity_tco": null,
+    "coverage": {
+      "evaluated": 29,
+      "total": 29,
+      "fraction": 1.0,
+      "unavailable": 0,
+      "confidence_level": 0.95,
+      "confidence_interval": [
+        0.8830302015002593,
+        1.0
+      ]
+    },
+    "passed_gates": 2,
+    "failed_gates": 0,
+    "unavailable_gates": 5
+  },
+  "tracks": [
+    {
+      "track_id": "routing",
+      "status": "completed",
+      "evidence_level": "E0",
+      "summary": "Collected 4 evidence records.",
+      "coverage": {
+        "evaluated": 4,
+        "total": 4,
+        "fraction": 1.0,
+        "unavailable": 0,
+        "confidence_level": 0.95,
+        "confidence_interval": [
+          0.5101091635454027,
+          1.0
+        ]
+      },
+      "metrics": [
+        {
+          "id": "routing.coverage",
+          "name": "Routing coverage",
+          "track_id": "routing",
+          "value": 1.0,
+          "unit": "fraction",
+          "direction": "higher_is_better",
+          "baseline_value": null,
+          "delta": null,
+          "confidence_interval": [
+            0.5101091635454027,
+            1.0
+          ],
+          "sample_count": 4,
+          "analysis_provenance": {
+            "contract_version": "metric-analysis.v1",
+            "estimator_id": "deterministic-routing-case-observed-ratio",
+            "estimator_version": "v1",
+            "analysis_unit": "route_case",
+            "cluster_unit": "case",
+            "weighting": "uniform_case",
+            "missingness": "fail_closed",
+            "exclusion_policy": "exclude_unavailable_evidence",
+            "observed_exclusions": 0
+          }
+        }
+      ],
+      "gates": [
+        {
+          "id": "G4",
+          "name": "Declared-shift robustness",
+          "description": "Server-live execution of source-qualified pinned perturbation relations and their declared slices on the exact frozen corpus.",
+          "track_id": "routing",
+          "disposition": "required",
+          "verdict": "unavailable",
+          "change_profile": "schema_adapter",
+          "contract_version": "evaluation-release-gates.v2",
+          "evidence_refs": [
+            "records.jsonl",
+            "metric:routing.robustness_pass_rate",
+            "metric:routing.robustness_worst_slice_pass_rate"
+          ],
+          "evidence_level": "E4",
+          "observed": null,
+          "threshold": null,
+          "sample_count": 4,
+          "coverage": {
+            "evaluated": 4,
+            "total": 4,
+            "fraction": 1.0,
+            "unavailable": 0,
+            "confidence_level": null,
+            "confidence_interval": null
+          },
+          "owner": "evaluation-workload",
+          "evaluated_at": "2026-01-01T00:00:00Z",
+          "rationale": "No source-qualified declared-shift robustness evidence was attached. Gate contract: evaluation-release-gates.v2."
+        }
+      ],
+      "artifacts": [],
+      "error": null
+    },
+    {
+      "track_id": "model_pool",
+      "status": "completed",
+      "evidence_level": "E0",
+      "summary": "Collected 8 evidence records; 1 executions failed and remain in the denominator.",
+      "coverage": {
+        "evaluated": 4,
+        "total": 4,
+        "fraction": 1.0,
+        "unavailable": 0,
+        "confidence_level": 0.95,
+        "confidence_interval": [
+          0.5101091635454027,
+          1.0
+        ]
+      },
+      "metrics": [
+        {
+          "id": "model_pool.all_arm_failure_rate",
+          "name": "Cases where every arm failed",
+          "track_id": "model_pool",
+          "value": 0.0,
+          "unit": "fraction",
+          "direction": "lower_is_better",
+          "baseline_value": null,
+          "delta": null,
+          "confidence_interval": null,
+          "sample_count": 4,
+          "analysis_provenance": {
+            "contract_version": "metric-analysis.v1",
+            "estimator_id": "model-pool-dense-case-ratio",
+            "estimator_version": "v1",
+            "analysis_unit": "pool_case",
+            "cluster_unit": "case",
+            "weighting": "uniform_case",
+            "missingness": "fail_closed",
+            "exclusion_policy": "exclude_unavailable_evidence",
+            "observed_exclusions": 0
+          }
+        }
+      ],
+      "gates": [],
+      "artifacts": [],
+      "error": null
+    },
+    {
+      "track_id": "joint",
+      "status": "completed",
+      "evidence_level": "E0",
+      "summary": "Collected 4 evidence records.",
+      "coverage": {
+        "evaluated": 4,
+        "total": 4,
+        "fraction": 1.0,
+        "unavailable": 0,
+        "confidence_level": 0.95,
+        "confidence_interval": [
+          0.5101091635454027,
+          1.0
+        ]
+      },
+      "metrics": [
+        {
+          "id": "joint.realized_quality",
+          "name": "Realized routing quality",
+          "track_id": "joint",
+          "value": 0.8,
+          "unit": "score",
+          "direction": "higher_is_better",
+          "baseline_value": null,
+          "delta": null,
+          "confidence_interval": [
+            0.5125,
+            0.9775
+          ],
+          "sample_count": 4,
+          "analysis_provenance": {
+            "contract_version": "metric-analysis.v1",
+            "estimator_id": "deterministic-joint-case-observed-mean",
+            "estimator_version": "v1",
+            "analysis_unit": "routed_case",
+            "cluster_unit": "case",
+            "weighting": "uniform_case",
+            "missingness": "fail_closed",
+            "exclusion_policy": "exclude_unavailable_evidence",
+            "observed_exclusions": 0
+          }
+        }
+      ],
+      "gates": [
+        {
+          "id": "G3",
+          "name": "Offline value",
+          "description": "Server-controlled baseline/candidate value, absolute candidate safeguards, arm reliability, paired regret, and no-information-frontier improvement.",
+          "track_id": "joint",
+          "disposition": "advisory",
+          "verdict": "unavailable",
+          "change_profile": "schema_adapter",
+          "contract_version": "evaluation-release-gates.v2",
+          "evidence_refs": [
+            "metrics.json",
+            "metric:joint.normalized_regret"
+          ],
+          "evidence_level": "E4",
+          "observed": null,
+          "threshold": null,
+          "sample_count": 4,
+          "coverage": {
+            "evaluated": 4,
+            "total": 4,
+            "fraction": 1.0,
+            "unavailable": 0,
+            "confidence_level": null,
+            "confidence_interval": null
+          },
+          "owner": "recipe-and-model-pool",
+          "evaluated_at": "2026-01-01T00:00:00Z",
+          "rationale": "G3 is decided by the server-owned comparative reducer over an immutable baseline/candidate pair; Campaign consumes the same reduction and a single worker run cannot self-attest it. Gate contract: evaluation-release-gates.v2."
+        },
+        {
+          "id": "G5",
+          "name": "Live fidelity",
+          "description": "Qualified reference-to-fresh-live agreement for the unchanged candidate, with complete failure accounting.",
+          "track_id": "joint",
+          "disposition": "advisory",
+          "verdict": "unavailable",
+          "change_profile": "schema_adapter",
+          "contract_version": "evaluation-release-gates.v2",
+          "evidence_refs": [
+            "records.jsonl",
+            "provenance.json"
+          ],
+          "evidence_level": "E5",
+          "observed": null,
+          "threshold": null,
+          "sample_count": 4,
+          "coverage": {
+            "evaluated": 4,
+            "total": 4,
+            "fraction": 1.0,
+            "unavailable": 0,
+            "confidence_level": null,
+            "confidence_interval": null
+          },
+          "owner": "router-and-serving-runtime",
+          "evaluated_at": "2026-01-01T00:00:00Z",
+          "rationale": "No qualified reference-to-fresh-live pair for the unchanged candidate was attached. Gate contract: evaluation-release-gates.v2."
+        }
+      ],
+      "artifacts": [],
+      "error": null
+    },
+    {
+      "track_id": "agentic",
+      "status": "completed",
+      "evidence_level": "E0",
+      "summary": "Collected 4 evidence records; 1 executions failed and remain in the denominator.",
+      "coverage": {
+        "evaluated": 4,
+        "total": 4,
+        "fraction": 1.0,
+        "unavailable": 0,
+        "confidence_level": 0.95,
+        "confidence_interval": [
+          0.5101091635454027,
+          1.0
+        ]
+      },
+      "metrics": [
+        {
+          "id": "agentic.success_rate",
+          "name": "Trajectory success rate",
+          "track_id": "agentic",
+          "value": 0.75,
+          "unit": "fraction",
+          "direction": "higher_is_better",
+          "baseline_value": null,
+          "delta": null,
+          "confidence_interval": [
+            0.30064184258240184,
+            0.9544127391902995
+          ],
+          "sample_count": 4,
+          "analysis_provenance": {
+            "contract_version": "metric-analysis.v1",
+            "estimator_id": "deterministic-trajectory-observed-ratio",
+            "estimator_version": "v1",
+            "analysis_unit": "trajectory",
+            "cluster_unit": "case",
+            "weighting": "uniform_case",
+            "missingness": "fail_closed",
+            "exclusion_policy": "exclude_unavailable_evidence",
+            "observed_exclusions": 0
+          }
+        }
+      ],
+      "gates": [
+        {
+          "id": "G6",
+          "name": "Live fault-recovery continuity",
+          "description": "Server-brokered exact-step fault injection, paired baseline/treatment continuity, recovery latency, retry amplification, state isolation, and side effects.",
+          "track_id": "agentic",
+          "disposition": "not_applicable",
+          "verdict": "not_applicable",
+          "change_profile": "schema_adapter",
+          "contract_version": "evaluation-release-gates.v2",
+          "evidence_refs": [
+            "records.jsonl",
+            "metric:agentic.recovery_cluster_pass_rate_lower_95"
+          ],
+          "evidence_level": "E5",
+          "observed": null,
+          "threshold": null,
+          "sample_count": 4,
+          "coverage": {
+            "evaluated": 4,
+            "total": 4,
+            "fraction": 1.0,
+            "unavailable": 0,
+            "confidence_level": null,
+            "confidence_interval": null
+          },
+          "owner": "agent-runtime",
+          "evaluated_at": "2026-01-01T00:00:00Z",
+          "rationale": "Not applicable for this change profile. No server-brokered live exact-step fault ledger with paired baseline/treatment receipts, state, retry, latency, and side-effect evidence was attached; Continuity labeled-failover exports are diagnostic only."
+        }
+      ],
+      "artifacts": [],
+      "error": null
+    },
+    {
+      "track_id": "multimodal",
+      "status": "completed",
+      "evidence_level": "E0",
+      "summary": "Collected 1 evidence records.",
+      "coverage": {
+        "evaluated": 1,
+        "total": 1,
+        "fraction": 1.0,
+        "unavailable": 0,
+        "confidence_level": 0.95,
+        "confidence_interval": [
+          0.20654931437723745,
+          1.0
+        ]
+      },
+      "metrics": [
+        {
+          "id": "multimodal.support_rate",
+          "name": "Multimodal support rate",
+          "track_id": "multimodal",
+          "value": 1.0,
+          "unit": "fraction",
+          "direction": "higher_is_better",
+          "baseline_value": null,
+          "delta": null,
+          "confidence_interval": [
+            0.20654931437723745,
+            1.0
+          ],
+          "sample_count": 1,
+          "analysis_provenance": {
+            "contract_version": "metric-analysis.v1",
+            "estimator_id": "deterministic-multimodal-case-observed-ratio",
+            "estimator_version": "v1",
+            "analysis_unit": "multimodal_case",
+            "cluster_unit": "case",
+            "weighting": "uniform_case",
+            "missingness": "fail_closed",
+            "exclusion_policy": "exclude_unavailable_evidence",
+            "observed_exclusions": 0
+          }
+        }
+      ],
+      "gates": [],
+      "artifacts": [],
+      "error": null
+    },
+    {
+      "track_id": "preference",
+      "status": "completed",
+      "evidence_level": "E0",
+      "summary": "Collected 4 evidence records.",
+      "coverage": {
+        "evaluated": 4,
+        "total": 4,
+        "fraction": 1.0,
+        "unavailable": 0,
+        "confidence_level": 0.95,
+        "confidence_interval": [
+          0.5101091635454027,
+          1.0
+        ]
+      },
+      "metrics": [
+        {
+          "id": "preference.agreement",
+          "name": "Offline preference agreement",
+          "track_id": "preference",
+          "value": 0.75,
+          "unit": "fraction",
+          "direction": "higher_is_better",
+          "baseline_value": null,
+          "delta": null,
+          "confidence_interval": [
+            0.30064184258240184,
+            0.9544127391902995
+          ],
+          "sample_count": 4,
+          "analysis_provenance": {
+            "contract_version": "metric-analysis.v1",
+            "estimator_id": "offline-preference-case-observed-ratio",
+            "estimator_version": "v1",
+            "analysis_unit": "preference_case",
+            "cluster_unit": "case",
+            "weighting": "uniform_case",
+            "missingness": "fail_closed",
+            "exclusion_policy": "exclude_unavailable_evidence",
+            "observed_exclusions": 0
+          }
+        }
+      ],
+      "gates": [
+        {
+          "id": "G8",
+          "name": "Shadow / canary",
+          "description": "Qualified assignment, divergence, guardrails, risk budget, and rollback evidence.",
+          "track_id": "preference",
+          "disposition": "not_applicable",
+          "verdict": "not_applicable",
+          "change_profile": "schema_adapter",
+          "contract_version": "evaluation-release-gates.v2",
+          "evidence_refs": [
+            "run-manifest.json",
+            "records.jsonl",
+            "metric:experiment.assignment_balance_p_value",
+            "metric:experiment.risk_event_upper_confidence_bound",
+            "metric:experiment.risk_budget_max_rate",
+            "metric:experiment.candidate_safe"
+          ],
+          "evidence_level": "E5",
+          "observed": null,
+          "threshold": null,
+          "sample_count": 4,
+          "coverage": {
+            "evaluated": 4,
+            "total": 4,
+            "fraction": 1.0,
+            "unavailable": 0,
+            "confidence_level": null,
+            "confidence_interval": null
+          },
+          "owner": "release-operations",
+          "evaluated_at": "2026-01-01T00:00:00Z",
+          "rationale": "Not applicable for this change profile. No complete sealed production assignment/exposure ledger with SRM, risk-budget, stop, and rollback receipts was attached."
+        },
+        {
+          "id": "G9",
+          "name": "Online preference",
+          "description": "Participation, exposure, propensity, effective sample size, confidence, and segments.",
+          "track_id": "preference",
+          "disposition": "not_applicable",
+          "verdict": "not_applicable",
+          "change_profile": "schema_adapter",
+          "contract_version": "evaluation-release-gates.v2",
+          "evidence_refs": [
+            "records.jsonl",
+            "metric:preference.online_reward_lift",
+            "metric:preference.online_effective_sample_size",
+            "metric:preference.online_segment_coverage"
+          ],
+          "evidence_level": "E5",
+          "observed": null,
+          "threshold": null,
+          "sample_count": 4,
+          "coverage": {
+            "evaluated": 4,
+            "total": 4,
+            "fraction": 1.0,
+            "unavailable": 0,
+            "confidence_level": null,
+            "confidence_interval": null
+          },
+          "owner": "online-learning",
+          "evaluated_at": "2026-01-01T00:00:00Z",
+          "rationale": "Not applicable for this change profile. No complete production outcome ledger with exposure, propensity, support, ESS, confidence, and segment coverage was attached."
+        }
+      ],
+      "artifacts": [],
+      "error": null
+    },
+    {
+      "track_id": "safety",
+      "status": "completed",
+      "evidence_level": "E0",
+      "summary": "Collected 4 evidence records.",
+      "coverage": {
+        "evaluated": 4,
+        "total": 4,
+        "fraction": 1.0,
+        "unavailable": 0,
+        "confidence_level": 0.95,
+        "confidence_interval": [
+          0.5101091635454027,
+          1.0
+        ]
+      },
+      "metrics": [
+        {
+          "id": "safety.violation_rate",
+          "name": "Safety violation rate",
+          "track_id": "safety",
+          "value": 0.0,
+          "unit": "violations/case",
+          "direction": "lower_is_better",
+          "baseline_value": null,
+          "delta": null,
+          "confidence_interval": null,
+          "sample_count": 4,
+          "analysis_provenance": {
+            "contract_version": "metric-analysis.v1",
+            "estimator_id": "deterministic-policy-case-observed-mean",
+            "estimator_version": "v1",
+            "analysis_unit": "policy_case",
+            "cluster_unit": "case",
+            "weighting": "uniform_case",
+            "missingness": "fail_closed",
+            "exclusion_policy": "exclude_unavailable_evidence",
+            "observed_exclusions": 0
+          }
+        }
+      ],
+      "gates": [
+        {
+          "id": "G2",
+          "name": "Hard policy",
+          "description": "Privacy, security, locality, authorization, modality, context, and tool invariants.",
+          "track_id": "safety",
+          "disposition": "advisory",
+          "verdict": "unavailable",
+          "change_profile": "schema_adapter",
+          "contract_version": "evaluation-release-gates.v2",
+          "evidence_refs": [
+            "records.jsonl",
+            "metric:safety.violation_rate",
+            "metric:safety.block_accuracy",
+            "method:evaluation-hard-policy-proof.v1"
+          ],
+          "evidence_level": "E3",
+          "observed": null,
+          "threshold": null,
+          "sample_count": 4,
+          "coverage": {
+            "evaluated": 4,
+            "total": 4,
+            "fraction": 1.0,
+            "unavailable": 0,
+            "confidence_level": null,
+            "confidence_interval": null
+          },
+          "owner": "router-policy",
+          "evaluated_at": "2026-01-01T00:00:00Z",
+          "rationale": "No qualified live static enforcement proof was attached; dynamic safety metrics remain diagnostic. Gate contract: evaluation-release-gates.v2."
+        }
+      ],
+      "artifacts": [],
+      "error": null
+    },
+    {
+      "track_id": "capacity",
+      "status": "completed",
+      "evidence_level": "E0",
+      "summary": "Collected 4 evidence records.",
+      "coverage": {
+        "evaluated": 4,
+        "total": 4,
+        "fraction": 1.0,
+        "unavailable": 0,
+        "confidence_level": 0.95,
+        "confidence_interval": [
+          0.5101091635454027,
+          1.0
+        ]
+      },
+      "metrics": [
+        {
+          "id": "capacity.throughput_rps",
+          "name": "Peak recorded-source throughput",
+          "track_id": "capacity",
+          "value": 55.0,
+          "unit": "requests/s",
+          "direction": "higher_is_better",
+          "baseline_value": null,
+          "delta": null,
+          "confidence_interval": null,
+          "sample_count": 4,
+          "analysis_provenance": {
+            "contract_version": "metric-analysis.v1",
+            "estimator_id": "capacity-load-level-envelope",
+            "estimator_version": "v1",
+            "analysis_unit": "load_level",
+            "cluster_unit": "repetition",
+            "weighting": "uniform_level",
+            "missingness": "fail_closed",
+            "exclusion_policy": "exclude_unavailable_evidence",
+            "observed_exclusions": 0
+          }
+        }
+      ],
+      "gates": [
+        {
+          "id": "G7",
+          "name": "Cost / latency / capacity",
+          "description": "Three cost ledgers, latency decomposition, saturation, SLO crossing, and headroom.",
+          "track_id": "capacity",
+          "disposition": "advisory",
+          "verdict": "unavailable",
+          "change_profile": "schema_adapter",
+          "contract_version": "evaluation-release-gates.v2",
+          "evidence_refs": [
+            "run-manifest.json",
+            "capacity-profile.json",
+            "metric:capacity.error_rate_upper_bound",
+            "metric:capacity.error_rate_cluster_range_max",
+            "metric:capacity.measurement_cluster_count_min",
+            "metric:capacity.slo_headroom"
+          ],
+          "evidence_level": "E5",
+          "observed": null,
+          "threshold": null,
+          "sample_count": 4,
+          "coverage": {
+            "evaluated": 4,
+            "total": 4,
+            "fraction": 1.0,
+            "unavailable": 0,
+            "confidence_level": null,
+            "confidence_interval": null
+          },
+          "owner": "serving-capacity",
+          "evaluated_at": "2026-01-01T00:00:00Z",
+          "rationale": "A frozen live capacity SLO and measured concurrency headroom are missing. Gate contract: evaluation-release-gates.v2."
+        }
+      ],
+      "artifacts": [],
+      "error": null
+    }
+  ],
+  "metrics": [
+    {
+      "id": "routing.coverage",
+      "name": "Routing coverage",
+      "track_id": "routing",
+      "value": 1.0,
+      "unit": "fraction",
+      "direction": "higher_is_better",
+      "baseline_value": null,
+      "delta": null,
+      "confidence_interval": [
+        0.5101091635454027,
+        1.0
+      ],
+      "sample_count": 4,
+      "analysis_provenance": {
+        "contract_version": "metric-analysis.v1",
+        "estimator_id": "deterministic-routing-case-observed-ratio",
+        "estimator_version": "v1",
+        "analysis_unit": "route_case",
+        "cluster_unit": "case",
+        "weighting": "uniform_case",
+        "missingness": "fail_closed",
+        "exclusion_policy": "exclude_unavailable_evidence",
+        "observed_exclusions": 0
+      }
+    },
+    {
+      "id": "model_pool.all_arm_failure_rate",
+      "name": "Cases where every arm failed",
+      "track_id": "model_pool",
+      "value": 0.0,
+      "unit": "fraction",
+      "direction": "lower_is_better",
+      "baseline_value": null,
+      "delta": null,
+      "confidence_interval": null,
+      "sample_count": 4,
+      "analysis_provenance": {
+        "contract_version": "metric-analysis.v1",
+        "estimator_id": "model-pool-dense-case-ratio",
+        "estimator_version": "v1",
+        "analysis_unit": "pool_case",
+        "cluster_unit": "case",
+        "weighting": "uniform_case",
+        "missingness": "fail_closed",
+        "exclusion_policy": "exclude_unavailable_evidence",
+        "observed_exclusions": 0
+      }
+    },
+    {
+      "id": "joint.realized_quality",
+      "name": "Realized routing quality",
+      "track_id": "joint",
+      "value": 0.8,
+      "unit": "score",
+      "direction": "higher_is_better",
+      "baseline_value": null,
+      "delta": null,
+      "confidence_interval": [
+        0.5125,
+        0.9775
+      ],
+      "sample_count": 4,
+      "analysis_provenance": {
+        "contract_version": "metric-analysis.v1",
+        "estimator_id": "deterministic-joint-case-observed-mean",
+        "estimator_version": "v1",
+        "analysis_unit": "routed_case",
+        "cluster_unit": "case",
+        "weighting": "uniform_case",
+        "missingness": "fail_closed",
+        "exclusion_policy": "exclude_unavailable_evidence",
+        "observed_exclusions": 0
+      }
+    },
+    {
+      "id": "agentic.success_rate",
+      "name": "Trajectory success rate",
+      "track_id": "agentic",
+      "value": 0.75,
+      "unit": "fraction",
+      "direction": "higher_is_better",
+      "baseline_value": null,
+      "delta": null,
+      "confidence_interval": [
+        0.30064184258240184,
+        0.9544127391902995
+      ],
+      "sample_count": 4,
+      "analysis_provenance": {
+        "contract_version": "metric-analysis.v1",
+        "estimator_id": "deterministic-trajectory-observed-ratio",
+        "estimator_version": "v1",
+        "analysis_unit": "trajectory",
+        "cluster_unit": "case",
+        "weighting": "uniform_case",
+        "missingness": "fail_closed",
+        "exclusion_policy": "exclude_unavailable_evidence",
+        "observed_exclusions": 0
+      }
+    },
+    {
+      "id": "multimodal.support_rate",
+      "name": "Multimodal support rate",
+      "track_id": "multimodal",
+      "value": 1.0,
+      "unit": "fraction",
+      "direction": "higher_is_better",
+      "baseline_value": null,
+      "delta": null,
+      "confidence_interval": [
+        0.20654931437723745,
+        1.0
+      ],
+      "sample_count": 1,
+      "analysis_provenance": {
+        "contract_version": "metric-analysis.v1",
+        "estimator_id": "deterministic-multimodal-case-observed-ratio",
+        "estimator_version": "v1",
+        "analysis_unit": "multimodal_case",
+        "cluster_unit": "case",
+        "weighting": "uniform_case",
+        "missingness": "fail_closed",
+        "exclusion_policy": "exclude_unavailable_evidence",
+        "observed_exclusions": 0
+      }
+    },
+    {
+      "id": "preference.agreement",
+      "name": "Offline preference agreement",
+      "track_id": "preference",
+      "value": 0.75,
+      "unit": "fraction",
+      "direction": "higher_is_better",
+      "baseline_value": null,
+      "delta": null,
+      "confidence_interval": [
+        0.30064184258240184,
+        0.9544127391902995
+      ],
+      "sample_count": 4,
+      "analysis_provenance": {
+        "contract_version": "metric-analysis.v1",
+        "estimator_id": "offline-preference-case-observed-ratio",
+        "estimator_version": "v1",
+        "analysis_unit": "preference_case",
+        "cluster_unit": "case",
+        "weighting": "uniform_case",
+        "missingness": "fail_closed",
+        "exclusion_policy": "exclude_unavailable_evidence",
+        "observed_exclusions": 0
+      }
+    },
+    {
+      "id": "safety.violation_rate",
+      "name": "Safety violation rate",
+      "track_id": "safety",
+      "value": 0.0,
+      "unit": "violations/case",
+      "direction": "lower_is_better",
+      "baseline_value": null,
+      "delta": null,
+      "confidence_interval": null,
+      "sample_count": 4,
+      "analysis_provenance": {
+        "contract_version": "metric-analysis.v1",
+        "estimator_id": "deterministic-policy-case-observed-mean",
+        "estimator_version": "v1",
+        "analysis_unit": "policy_case",
+        "cluster_unit": "case",
+        "weighting": "uniform_case",
+        "missingness": "fail_closed",
+        "exclusion_policy": "exclude_unavailable_evidence",
+        "observed_exclusions": 0
+      }
+    },
+    {
+      "id": "capacity.throughput_rps",
+      "name": "Peak recorded-source throughput",
+      "track_id": "capacity",
+      "value": 55.0,
+      "unit": "requests/s",
+      "direction": "higher_is_better",
+      "baseline_value": null,
+      "delta": null,
+      "confidence_interval": null,
+      "sample_count": 4,
+      "analysis_provenance": {
+        "contract_version": "metric-analysis.v1",
+        "estimator_id": "capacity-load-level-envelope",
+        "estimator_version": "v1",
+        "analysis_unit": "load_level",
+        "cluster_unit": "repetition",
+        "weighting": "uniform_level",
+        "missingness": "fail_closed",
+        "exclusion_policy": "exclude_unavailable_evidence",
+        "observed_exclusions": 0
+      }
+    }
+  ],
+  "gates": [
+    {
+      "id": "G0",
+      "name": "Reproducibility",
+      "description": "Frozen manifests, snapshots, seeds, failures, and unbroken artifact lineage.",
+      "track_id": null,
+      "disposition": "required",
+      "verdict": "pass",
+      "change_profile": "schema_adapter",
+      "contract_version": "evaluation-release-gates.v2",
+      "evidence_refs": [
+        "run-manifest.json",
+        "lineage.json",
+        "provenance.json",
+        "checksums.sha256"
+      ],
+      "evidence_level": "E0",
+      "observed": 1.0,
+      "threshold": {
+        "operator": ">=",
+        "value": 1.0,
+        "unit": "fraction"
+      },
+      "sample_count": 29,
+      "coverage": {
+        "evaluated": 29,
+        "total": 29,
+        "fraction": 1.0,
+        "unavailable": 0,
+        "confidence_level": null,
+        "confidence_interval": null
+      },
+      "owner": "evaluation-platform",
+      "evaluated_at": "2026-01-01T00:00:00Z",
+      "rationale": "Manifest, immutable snapshots, normalized records, and lineage are complete. Gate contract: evaluation-release-gates.v2."
+    },
+    {
+      "id": "G1",
+      "name": "Static correctness",
+      "description": "Strict schemas, conformance, references, coverage, and deterministic replayability.",
+      "track_id": null,
+      "disposition": "required",
+      "verdict": "pass",
+      "change_profile": "schema_adapter",
+      "contract_version": "evaluation-release-gates.v2",
+      "evidence_refs": [
+        "run-manifest.json",
+        "records.jsonl"
+      ],
+      "evidence_level": "E0",
+      "observed": 1.0,
+      "threshold": {
+        "operator": ">=",
+        "value": 1.0,
+        "unit": "boolean"
+      },
+      "sample_count": 29,
+      "coverage": {
+        "evaluated": 29,
+        "total": 29,
+        "fraction": 1.0,
+        "unavailable": 0,
+        "confidence_level": null,
+        "confidence_interval": null
+      },
+      "owner": "evaluation-platform",
+      "evaluated_at": "2026-01-01T00:00:00Z",
+      "rationale": "Strict contracts and snapshot references validated. Gate contract: evaluation-release-gates.v2."
+    },
+    {
+      "id": "G2",
+      "name": "Hard policy",
+      "description": "Privacy, security, locality, authorization, modality, context, and tool invariants.",
+      "track_id": "safety",
+      "disposition": "advisory",
+      "verdict": "unavailable",
+      "change_profile": "schema_adapter",
+      "contract_version": "evaluation-release-gates.v2",
+      "evidence_refs": [
+        "records.jsonl",
+        "metric:safety.violation_rate",
+        "metric:safety.block_accuracy",
+        "method:evaluation-hard-policy-proof.v1"
+      ],
+      "evidence_level": "E3",
+      "observed": null,
+      "threshold": null,
+      "sample_count": 4,
+      "coverage": {
+        "evaluated": 4,
+        "total": 4,
+        "fraction": 1.0,
+        "unavailable": 0,
+        "confidence_level": null,
+        "confidence_interval": null
+      },
+      "owner": "router-policy",
+      "evaluated_at": "2026-01-01T00:00:00Z",
+      "rationale": "No qualified live static enforcement proof was attached; dynamic safety metrics remain diagnostic. Gate contract: evaluation-release-gates.v2."
+    },
+    {
+      "id": "G3",
+      "name": "Offline value",
+      "description": "Server-controlled baseline/candidate value, absolute candidate safeguards, arm reliability, paired regret, and no-information-frontier improvement.",
+      "track_id": "joint",
+      "disposition": "advisory",
+      "verdict": "unavailable",
+      "change_profile": "schema_adapter",
+      "contract_version": "evaluation-release-gates.v2",
+      "evidence_refs": [
+        "metrics.json",
+        "metric:joint.normalized_regret"
+      ],
+      "evidence_level": "E4",
+      "observed": null,
+      "threshold": null,
+      "sample_count": 4,
+      "coverage": {
+        "evaluated": 4,
+        "total": 4,
+        "fraction": 1.0,
+        "unavailable": 0,
+        "confidence_level": null,
+        "confidence_interval": null
+      },
+      "owner": "recipe-and-model-pool",
+      "evaluated_at": "2026-01-01T00:00:00Z",
+      "rationale": "G3 is decided by the server-owned comparative reducer over an immutable baseline/candidate pair; Campaign consumes the same reduction and a single worker run cannot self-attest it. Gate contract: evaluation-release-gates.v2."
+    },
+    {
+      "id": "G4",
+      "name": "Declared-shift robustness",
+      "description": "Server-live execution of source-qualified pinned perturbation relations and their declared slices on the exact frozen corpus.",
+      "track_id": "routing",
+      "disposition": "required",
+      "verdict": "unavailable",
+      "change_profile": "schema_adapter",
+      "contract_version": "evaluation-release-gates.v2",
+      "evidence_refs": [
+        "records.jsonl",
+        "metric:routing.robustness_pass_rate",
+        "metric:routing.robustness_worst_slice_pass_rate"
+      ],
+      "evidence_level": "E4",
+      "observed": null,
+      "threshold": null,
+      "sample_count": 4,
+      "coverage": {
+        "evaluated": 4,
+        "total": 4,
+        "fraction": 1.0,
+        "unavailable": 0,
+        "confidence_level": null,
+        "confidence_interval": null
+      },
+      "owner": "evaluation-workload",
+      "evaluated_at": "2026-01-01T00:00:00Z",
+      "rationale": "No source-qualified declared-shift robustness evidence was attached. Gate contract: evaluation-release-gates.v2."
+    },
+    {
+      "id": "G5",
+      "name": "Live fidelity",
+      "description": "Qualified reference-to-fresh-live agreement for the unchanged candidate, with complete failure accounting.",
+      "track_id": "joint",
+      "disposition": "advisory",
+      "verdict": "unavailable",
+      "change_profile": "schema_adapter",
+      "contract_version": "evaluation-release-gates.v2",
+      "evidence_refs": [
+        "records.jsonl",
+        "provenance.json"
+      ],
+      "evidence_level": "E5",
+      "observed": null,
+      "threshold": null,
+      "sample_count": 4,
+      "coverage": {
+        "evaluated": 4,
+        "total": 4,
+        "fraction": 1.0,
+        "unavailable": 0,
+        "confidence_level": null,
+        "confidence_interval": null
+      },
+      "owner": "router-and-serving-runtime",
+      "evaluated_at": "2026-01-01T00:00:00Z",
+      "rationale": "No qualified reference-to-fresh-live pair for the unchanged candidate was attached. Gate contract: evaluation-release-gates.v2."
+    },
+    {
+      "id": "G6",
+      "name": "Live fault-recovery continuity",
+      "description": "Server-brokered exact-step fault injection, paired baseline/treatment continuity, recovery latency, retry amplification, state isolation, and side effects.",
+      "track_id": "agentic",
+      "disposition": "not_applicable",
+      "verdict": "not_applicable",
+      "change_profile": "schema_adapter",
+      "contract_version": "evaluation-release-gates.v2",
+      "evidence_refs": [
+        "records.jsonl",
+        "metric:agentic.recovery_cluster_pass_rate_lower_95"
+      ],
+      "evidence_level": "E5",
+      "observed": null,
+      "threshold": null,
+      "sample_count": 4,
+      "coverage": {
+        "evaluated": 4,
+        "total": 4,
+        "fraction": 1.0,
+        "unavailable": 0,
+        "confidence_level": null,
+        "confidence_interval": null
+      },
+      "owner": "agent-runtime",
+      "evaluated_at": "2026-01-01T00:00:00Z",
+      "rationale": "Not applicable for this change profile. No server-brokered live exact-step fault ledger with paired baseline/treatment receipts, state, retry, latency, and side-effect evidence was attached; Continuity labeled-failover exports are diagnostic only."
+    },
+    {
+      "id": "G7",
+      "name": "Cost / latency / capacity",
+      "description": "Three cost ledgers, latency decomposition, saturation, SLO crossing, and headroom.",
+      "track_id": "capacity",
+      "disposition": "advisory",
+      "verdict": "unavailable",
+      "change_profile": "schema_adapter",
+      "contract_version": "evaluation-release-gates.v2",
+      "evidence_refs": [
+        "run-manifest.json",
+        "capacity-profile.json",
+        "metric:capacity.error_rate_upper_bound",
+        "metric:capacity.error_rate_cluster_range_max",
+        "metric:capacity.measurement_cluster_count_min",
+        "metric:capacity.slo_headroom"
+      ],
+      "evidence_level": "E5",
+      "observed": null,
+      "threshold": null,
+      "sample_count": 4,
+      "coverage": {
+        "evaluated": 4,
+        "total": 4,
+        "fraction": 1.0,
+        "unavailable": 0,
+        "confidence_level": null,
+        "confidence_interval": null
+      },
+      "owner": "serving-capacity",
+      "evaluated_at": "2026-01-01T00:00:00Z",
+      "rationale": "A frozen live capacity SLO and measured concurrency headroom are missing. Gate contract: evaluation-release-gates.v2."
+    },
+    {
+      "id": "G8",
+      "name": "Shadow / canary",
+      "description": "Qualified assignment, divergence, guardrails, risk budget, and rollback evidence.",
+      "track_id": "preference",
+      "disposition": "not_applicable",
+      "verdict": "not_applicable",
+      "change_profile": "schema_adapter",
+      "contract_version": "evaluation-release-gates.v2",
+      "evidence_refs": [
+        "run-manifest.json",
+        "records.jsonl",
+        "metric:experiment.assignment_balance_p_value",
+        "metric:experiment.risk_event_upper_confidence_bound",
+        "metric:experiment.risk_budget_max_rate",
+        "metric:experiment.candidate_safe"
+      ],
+      "evidence_level": "E5",
+      "observed": null,
+      "threshold": null,
+      "sample_count": 4,
+      "coverage": {
+        "evaluated": 4,
+        "total": 4,
+        "fraction": 1.0,
+        "unavailable": 0,
+        "confidence_level": null,
+        "confidence_interval": null
+      },
+      "owner": "release-operations",
+      "evaluated_at": "2026-01-01T00:00:00Z",
+      "rationale": "Not applicable for this change profile. No complete sealed production assignment/exposure ledger with SRM, risk-budget, stop, and rollback receipts was attached."
+    },
+    {
+      "id": "G9",
+      "name": "Online preference",
+      "description": "Participation, exposure, propensity, effective sample size, confidence, and segments.",
+      "track_id": "preference",
+      "disposition": "not_applicable",
+      "verdict": "not_applicable",
+      "change_profile": "schema_adapter",
+      "contract_version": "evaluation-release-gates.v2",
+      "evidence_refs": [
+        "records.jsonl",
+        "metric:preference.online_reward_lift",
+        "metric:preference.online_effective_sample_size",
+        "metric:preference.online_segment_coverage"
+      ],
+      "evidence_level": "E5",
+      "observed": null,
+      "threshold": null,
+      "sample_count": 4,
+      "coverage": {
+        "evaluated": 4,
+        "total": 4,
+        "fraction": 1.0,
+        "unavailable": 0,
+        "confidence_level": null,
+        "confidence_interval": null
+      },
+      "owner": "online-learning",
+      "evaluated_at": "2026-01-01T00:00:00Z",
+      "rationale": "Not applicable for this change profile. No complete production outcome ledger with exposure, propensity, support, ESS, confidence, and segment coverage was attached."
+    }
+  ],
+  "costs": {
+    "runtime": {
+      "amount": 0.03195,
+      "currency": "USD",
+      "input_tokens": 144,
+      "output_tokens": 65,
+      "gpu_seconds": null,
+      "energy_kwh": null
+    },
+    "evaluation_overhead": {
+      "amount": 0.0016499999999999991,
+      "currency": "USD",
+      "input_tokens": null,
+      "output_tokens": null,
+      "gpu_seconds": null,
+      "energy_kwh": null
+    },
+    "capacity_tco": {
+      "amount": 0.03899999999999999,
+      "currency": "USD",
+      "input_tokens": null,
+      "output_tokens": null,
+      "gpu_seconds": 0.39,
+      "energy_kwh": 0.0018
+    }
+  },
+  "provenance": {
+    "schema_version": "evaluation.v1",
+    "generated_at": "2026-01-01T00:00:00Z",
+    "code_revision": "8dedee734ba3abae9bceae9309903147fda8eeab",
+    "benchmark_revisions": {
+      "evaluation-smoke": "builtin-v1"
+    },
+    "workload_snapshot_digest": "sha256:a871d4322037b48bd1f339d1cc2cfe518d8cc8f7bdc168b958416270d2e180fb",
+    "policy_snapshot_digest": "sha256:a40e35bf530247b2d6e2b524c72765735e6927d309e1dc46d80378fdb432e76b",
+    "binding_snapshot_digest": "sha256:22c68601ac776c8bd261dbb6fa34a6ba14f2af3f2ab2174790bfca6ce55fd292",
+    "pool_snapshot_digest": "sha256:e9d70da6ff25ec8754dda94b0211b42a35b858f061ef6872059ccb902f424406",
+    "environment_snapshot_digest": "sha256:e7e1f2885493f9e5bd54363b92af57f85a636145d217d472ae503252d09c7d92",
+    "target_id": "fixture",
+    "seed": 17,
+    "redaction_policy": "public-safe-v1"
+  },
+  "artifacts": [
+    {
+      "id": "metrics-json",
+      "name": "metrics.json",
+      "kind": "json",
+      "uri": "metrics.json",
+      "digest": "sha256:74c4c33f084da30f0a8884a8e22f062fdde375a5d88e2acd3828067b90f36e13",
+      "media_type": "application/json",
+      "size_bytes": 128923
+    },
+    {
+      "id": "gates-json",
+      "name": "gates.json",
+      "kind": "json",
+      "uri": "gates.json",
+      "digest": "sha256:ac39d640acaef29de1c6de4c33833478c76c68b6cd561a812cac57608fde7838",
+      "media_type": "application/json",
+      "size_bytes": 11237
+    },
+    {
+      "id": "provenance-json",
+      "name": "provenance.json",
+      "kind": "json",
+      "uri": "provenance.json",
+      "digest": "sha256:43209477cc0bbf1c41a3870b79f990e7ef2b73a067f3e34a7986448e43287d99",
+      "media_type": "application/json",
+      "size_bytes": 822
+    },
+    {
+      "id": "failure-summary-json",
+      "name": "failure-summary.json",
+      "kind": "json",
+      "uri": "failure-summary.json",
+      "digest": "sha256:212ca6e2d4559632d73ddb9933041c6bf2e2fdd9e9e60d433b06ff817992db3a",
+      "media_type": "application/json",
+      "size_bytes": 973
+    },
+    {
+      "id": "checksums-sha256",
+      "name": "checksums.sha256",
+      "kind": "sha256",
+      "uri": "checksums.sha256",
+      "digest": "sha256:e7f9c647f74560b557aafd5189848aed48db204bfa59c0d266ef8d92c6a508fa",
+      "media_type": "text/plain",
+      "size_bytes": 325
+    }
+  ]
+}

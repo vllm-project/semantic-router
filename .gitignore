@@ -184,6 +184,7 @@ FactCHD_dataset/
 *.safetensors
 
 .vllm-sr/
+.vllm-sr-evaluation-staging/
 .codex-go-cache/
 .copilot-tmp/
 

@@ -134,7 +134,6 @@ def _deploy_serve_backend(
     router_image: str | None,
     envoy_image: str | None,
     dashboard_image: str | None,
-    sim_image: str | None,
     image_pull_policy: str,
     minimal: bool,
     readonly: bool,
@@ -159,7 +158,6 @@ def _deploy_serve_backend(
         router_image=router_image,
         envoy_image=envoy_image,
         dashboard_image=dashboard_image,
-        sim_image=sim_image,
         pull_policy=image_pull_policy,
         enable_observability=not minimal,
         minimal=minimal,
@@ -173,7 +171,6 @@ def _execute_serve(
     router_image: str | None,
     envoy_image: str | None,
     dashboard_image: str | None,
-    sim_image: str | None,
     image_pull_policy: str,
     readonly: bool,
     minimal: bool,
@@ -241,7 +238,6 @@ def _execute_serve(
             router_image=router_image,
             envoy_image=envoy_image,
             dashboard_image=dashboard_image,
-            sim_image=sim_image,
             image_pull_policy=image_pull_policy,
             minimal=minimal,
             readonly=readonly,
@@ -277,11 +273,6 @@ def _execute_serve(
     "--dashboard-image",
     default=None,
     help="Docker image for the dashboard container (Docker target only; defaults to --image or VLLM_SR_IMAGE)",
-)
-@click.option(
-    "--sim-image",
-    default=None,
-    help="Docker image for the simulator sidecar (Docker target only; defaults to VLLM_SR_SIM_IMAGE)",
 )
 @click.option(
     "--image-pull-policy",
@@ -375,7 +366,6 @@ def serve(
     router_image: str | None,
     envoy_image: str | None,
     dashboard_image: str | None,
-    sim_image: str | None,
     image_pull_policy: str,
     readonly: bool,
     minimal: bool,
@@ -396,7 +386,6 @@ def serve(
         router_image,
         envoy_image,
         dashboard_image,
-        sim_image,
         image_pull_policy,
         readonly,
         minimal,
@@ -416,7 +405,7 @@ def serve(
 @click.command()
 @click.argument(
     "service",
-    type=click.Choice(["envoy", "router", "dashboard", "simulator", "all"]),
+    type=click.Choice(["envoy", "router", "dashboard", "all"]),
     default="all",
 )
 @click.option("--target", default=None, help=TARGET_HELP)
@@ -448,7 +437,6 @@ def status(
         vllm-sr status all          # Show all services
         vllm-sr status router       # Show router status
         vllm-sr status dashboard    # Show dashboard status
-        vllm-sr status simulator    # Show simulator status
         vllm-sr status --target k8s # Show Kubernetes status
     """
     apply_container_runtime_override(runtime)
@@ -457,9 +445,7 @@ def status(
 
 
 @click.command()
-@click.argument(
-    "service", type=click.Choice(["envoy", "router", "dashboard", "simulator"])
-)
+@click.argument("service", type=click.Choice(["envoy", "router", "dashboard"]))
 @click.option("--follow", "-f", is_flag=True, help="Follow log output")
 @click.option("--target", default=None, help=TARGET_HELP)
 @click.option(
@@ -490,7 +476,6 @@ def logs(
         vllm-sr logs envoy
         vllm-sr logs router
         vllm-sr logs dashboard
-        vllm-sr logs simulator
         vllm-sr logs envoy --follow
         vllm-sr logs router -f
         vllm-sr logs router --target k8s        # Kubernetes logs

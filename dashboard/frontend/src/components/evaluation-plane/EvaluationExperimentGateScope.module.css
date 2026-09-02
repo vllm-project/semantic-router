@@ -1,0 +1,130 @@
+.profileHeader {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 0.85rem;
+  margin-bottom: 0.85rem;
+}
+
+.profileHeader > label {
+  display: grid;
+  gap: 0.38rem;
+  min-width: 0;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.profileHeader select {
+  width: 100%;
+}
+
+.profileHeader small {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 400;
+  line-height: 1.45;
+}
+
+.profileHeader > div {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 230px;
+  padding: 0.45rem 0 0.45rem 0.8rem;
+  border-left: 1px solid var(--border-subtle);
+  background: transparent;
+}
+
+.profileHeader > div span {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+}
+
+.profileHeader > div strong {
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.gateMatrix {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  border-top: 1px solid var(--border-subtle);
+  border-left: 1px solid var(--border-subtle);
+}
+
+.gateMatrix article {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.3rem 0.65rem;
+  padding: 0.65rem;
+  border-right: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+  background: transparent;
+}
+
+.gateMatrix article > div {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+}
+
+.gateMatrix article small {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+}
+
+.gateMatrix article strong {
+  color: var(--text-primary);
+  font-size: 0.75rem;
+}
+
+.gateMatrix article > [data-evaluation-tag='true'] {
+  align-self: start;
+  text-transform: capitalize;
+}
+
+.gateMatrix article > small {
+  grid-column: 1 / -1;
+  line-height: 1.45;
+}
+
+.gateDisclosure {
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+  --evaluation-disclosure-indicator-color: var(--text-secondary);
+}
+
+.gateDisclosureSummary {
+  min-height: var(--control-height);
+  padding: 0.55rem 0;
+}
+
+.gateDisclosureSummary > span {
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  font-weight: 650;
+}
+
+.gateDisclosureSummary > small {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: 0.68rem;
+}
+
+.gateDisclosure[open] > .gateDisclosureSummary {
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+@media (max-width: 680px) {
+  .profileHeader,
+  .gateMatrix {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .profileHeader > div {
+    min-width: 0;
+  }
+}

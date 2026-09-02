@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -99,11 +100,11 @@ func TestMCPReadResponsesRedactStoredServerSecrets(t *testing.T) {
 	}
 	handler := NewMCPHandler(manager, false)
 
-	if got := auth.RequiredPermission(http.MethodGet, "/api/mcp/servers"); got != auth.PermMcpRead {
-		t.Fatalf("list permission = %q, want %q", got, auth.PermMcpRead)
+	if got := auth.RequiredPermissions(http.MethodGet, "/api/mcp/servers"); !reflect.DeepEqual(got, []string{auth.PermMcpRead}) {
+		t.Fatalf("list permissions = %q, want %q", got, []string{auth.PermMcpRead})
 	}
-	if got := auth.RequiredPermission(http.MethodGet, "/api/mcp/servers/"+config.ID+"/status"); got != auth.PermMcpRead {
-		t.Fatalf("status permission = %q, want %q", got, auth.PermMcpRead)
+	if got := auth.RequiredPermissions(http.MethodGet, "/api/mcp/servers/"+config.ID+"/status"); !reflect.DeepEqual(got, []string{auth.PermMcpRead}) {
+		t.Fatalf("status permissions = %q, want %q", got, []string{auth.PermMcpRead})
 	}
 
 	tests := []struct {

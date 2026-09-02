@@ -257,7 +257,7 @@ def container_start_redis(
     stack_layout = stack_layout or resolve_runtime_stack()
     container_name = stack_layout.redis_container_name
     # Storage defaults to the data network, never the application network:
-    # sidecars, the simulator, and user-selected OpenClaw workloads all join the
+    # observability sidecars and user-selected OpenClaw workloads join the
     # latter, and reaching a storage port from one of them is the east-west half
     # of the exposure that loopback-only publication closes from the host side.
     network_name = network_name or stack_layout.data_network_name
