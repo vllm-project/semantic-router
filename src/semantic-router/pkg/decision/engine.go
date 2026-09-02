@@ -364,7 +364,7 @@ func isCatchAllRules(rules config.RuleCombination) bool {
 	if rules.IsEmpty() {
 		return true
 	}
-	return !rules.IsLeaf() && strings.ToUpper(rules.Operator) == "AND" && len(rules.Conditions) == 0
+	return !rules.IsLeaf() && strings.ToUpper(rules.Operator) == config.RuleOperatorAnd && len(rules.Conditions) == 0
 }
 
 // evalNode recursively evaluates a RuleNode (boolean expression tree) against signal matches.
@@ -394,12 +394,15 @@ func (e *DecisionEngine) evalNode(
 		}
 	}
 
+	// config.NormalizeRuleOperator guarantees a validated tree only carries
+	// AND, OR, or NOT here; the default branch is unreachable for loaded
+	// config and only covers trees built programmatically.
 	switch strings.ToUpper(node.Operator) {
-	case "AND":
+	case config.RuleOperatorAnd:
 		return e.evalAND(node.Conditions, signals, legacy, withTrace)
-	case "NOT":
+	case config.RuleOperatorNot:
 		return e.evalNOT(node.Conditions, signals, legacy, withTrace)
-	default: // OR
+	default: // config.RuleOperatorOr
 		return e.evalOR(node.Conditions, signals, legacy, withTrace)
 	}
 }
