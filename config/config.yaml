@@ -1433,6 +1433,25 @@ routing:
               - name: x-escalation-reason
                 value: repeated-question
 
+    # A route action sends every request matching this decision to
+    # action.destination, overriding a caller-pinned model, so a detected
+    # prompt attack cannot bypass the guard by naming a model. The action
+    # requires an explicit jailbreak condition in rules, and destination must
+    # be defined in model_config. If the destination cannot satisfy the
+    # request context window, the decision falls back to its normal candidate
+    # policy (modelRefs/default selection).
+    - name: prompt_attack_guard_route
+      description: Route detected prompt attacks to a safe fallback model.
+      priority: 120
+      rules:
+        type: jailbreak
+        name: prompt_injection
+      action:
+        type: route
+        destination: qwen3-8b
+      modelRefs:
+        - model: qwen3-8b
+          use_reasoning: false
     - name: safe_only_svm_route
       description: SVM route that only matches when prompt-injection signals are absent.
       priority: 110
@@ -1961,7 +1980,7 @@ global:
       embedding_model: multimodal
       embedding_dimension: 384
       ingestion_workers: 4
-      ingestion_drain_timeout_seconds: 30
+      ingestion_drain_timeout_seconds: 25
       supported_formats: [.txt, .md, .json, .csv, .html, .pdf]
       milvus:
         connection:
@@ -2355,8 +2374,6 @@ global:
           model_id: models/mmbert32k-intent-classifier-merged
           threshold: 0.5
           use_cpu: true
-          use_modernbert: false
-          use_mmbert_32k: true
           category_mapping_path: models/mmbert32k-intent-classifier-merged/category_mapping.json
           fallback_category: other
         mcp:

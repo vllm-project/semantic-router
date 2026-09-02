@@ -45,6 +45,14 @@ from cli.container_start_paths import (
     _runtime_mount_specs,
 )
 from cli.container_start_runner import run_container_specs
+from cli.evaluation_runtime_env import (
+    EVALUATION_DASHBOARD_CONFIG_ENV_NAMES,
+    EVALUATION_DEPLOYMENTS_DIR_ENV,
+    EVALUATION_ENABLED_ENV,
+    configure_dashboard_evaluation_deployments,
+    configure_dashboard_evaluation_env,
+    evaluation_dashboard_secret_env_names,
+)
 from cli.parser import parse_user_config
 from cli.runtime_stack import PORT_OFFSET_ENV, RuntimeStackLayout, resolve_runtime_stack
 from cli.runtime_topology import resolve_runtime_topology
@@ -57,6 +65,12 @@ from cli.storage_secrets import (
 from cli.utils import get_logger
 
 log = get_logger(__name__)
+
+ENVOY_LOG_LEVEL_ENV = "VLLM_SR_ENVOY_LOG_LEVEL"
+DEFAULT_ENVOY_LOG_LEVEL = "info"
+VALID_ENVOY_LOG_LEVELS = frozenset(
+    {"trace", "debug", "info", "warn", "warning", "error", "critical", "off"}
+)
 
 
 def container_start_vllm_sr(
@@ -79,6 +93,7 @@ def container_start_vllm_sr(
     """Start the runtime containers and return code, stdout, and stderr."""
     runtime = get_container_runtime()
     env_vars = dict(env_vars or {})
+    envoy_log_level = _resolve_envoy_log_level(env_vars)
     stack_layout = stack_layout or resolve_runtime_stack()
     resolve_runtime_topology(topology)
 
@@ -124,6 +139,7 @@ def container_start_vllm_sr(
         openclaw_network_name=openclaw_network_name,
         stack_layout=stack_layout,
         storage_secret_names=tuple(storage_secret_values),
+        envoy_log_level=envoy_log_level,
     )
 
     log.info(f"Starting vLLM Semantic Router runtime with {runtime}...")
@@ -160,6 +176,14 @@ def _build_common_runtime_env(
     recipe_store_dir: str | None = None,
 ):
     common_env = dict(env_vars or {})
+    # Evaluation configuration is a Dashboard-only control-plane input. Rebuild
+    # it from the trusted host environment after the service environments split;
+    # the deployment path is then replaced with a read-only container mount.
+    for name in (
+        EVALUATION_DEPLOYMENTS_DIR_ENV,
+        *EVALUATION_DASHBOARD_CONFIG_ENV_NAMES,
+    ):
+        common_env.pop(name, None)
     common_env["VLLM_SR_RUNTIME_CONFIG_PATH"] = runtime_container_config
     common_env["VLLM_SR_SOURCE_CONFIG_PATH"] = runtime_container_config
     common_env["VLLM_SR_STATE_ROOT_DIR"] = "/app"
@@ -201,6 +225,7 @@ def _resolve_container_specs(
     openclaw_network_name: str | None,
     stack_layout: RuntimeStackLayout,
     storage_secret_names: tuple[str, ...] = (),
+    envoy_log_level: str = DEFAULT_ENVOY_LOG_LEVEL,
 ):
     runtime_images = get_runtime_images(
         image=image,
@@ -225,6 +250,7 @@ def _resolve_container_specs(
         openclaw_network_name=openclaw_network_name,
         stack_layout=stack_layout,
         storage_secret_names=storage_secret_names,
+        envoy_log_level=envoy_log_level,
     )
 
 
@@ -243,6 +269,7 @@ def _runtime_container_specs(
     openclaw_network_name: str | None,
     stack_layout: RuntimeStackLayout,
     storage_secret_names: tuple[str, ...] = (),
+    envoy_log_level: str = DEFAULT_ENVOY_LOG_LEVEL,
 ):
     listener_port = _primary_listener_port(listeners)
     management_listener = _managed_management_listener(
@@ -282,6 +309,7 @@ def _runtime_container_specs(
         runtime_paths=runtime_paths,
         setup_mode=setup_mode,
         stack_layout=stack_layout,
+        envoy_log_level=envoy_log_level,
     )
 
     specs = [
@@ -396,6 +424,7 @@ def _build_envoy_runtime_command(
     runtime_paths: dict[str, str],
     setup_mode: bool,
     stack_layout: RuntimeStackLayout,
+    envoy_log_level: str,
 ):
     service_entrypoint, service_args = bounded_log_spool_entrypoint(
         "/usr/local/bin/envoy",
@@ -403,7 +432,7 @@ def _build_envoy_runtime_command(
             "-c",
             "/etc/envoy/envoy.yaml",
             "--log-level",
-            "debug",
+            envoy_log_level,
         ],
     )
     return _build_service_run_command(
@@ -463,6 +492,10 @@ def _build_dashboard_runtime_command(
         stack_layout=stack_layout,
         management_port=int(management_listener["port"]),
     )
+    configure_dashboard_evaluation_env(
+        dashboard_env,
+        source_config_path=runtime_paths.get("source_config_path"),
+    )
     dashboard_mount_specs = _runtime_mount_specs(
         runtime_paths, include_dashboard_data=True
     )
@@ -473,6 +506,13 @@ def _build_dashboard_runtime_command(
         ]
     )
     dashboard_mount_specs.extend(_active_recipe_mount_specs(runtime_paths))
+    if dashboard_env.get(EVALUATION_ENABLED_ENV) != "false":
+        configure_dashboard_evaluation_deployments(
+            dashboard_env,
+            dashboard_mount_specs,
+            staging_root=runtime_paths["evaluation_deployment_staging_root"],
+            readable_gid=int(runtime_paths["log_spool_gid"]),
+        )
     if runtime_paths.get("active_recipe_root"):
         dashboard_env["VLLM_SR_ACTIVE_RECIPE_DIR"] = "/app/recipe"
     else:
@@ -511,7 +551,9 @@ def _build_dashboard_runtime_command(
         port_mappings=[(stack_layout.dashboard_port, 8700)],
         entrypoint=service_entrypoint,
         command_args=service_args,
-        inherited_env_keys={"DASHBOARD_ADMIN_PASSWORD"} | inherited_sensitive_env,
+        inherited_env_keys={"DASHBOARD_ADMIN_PASSWORD"}
+        | inherited_sensitive_env
+        | evaluation_dashboard_secret_env_names(dashboard_env),
     )
 
 
@@ -588,6 +630,22 @@ def _build_dashboard_runtime_env(
         "OPENCLAW_MODEL_GATEWAY_CONTAINER_NAME", stack_layout.envoy_container_name
     )
     return dashboard_env
+
+
+def _resolve_envoy_log_level(env_vars: dict[str, str]) -> str:
+    """Resolve and validate Envoy's bounded log-level override."""
+    raw_level = env_vars.get(ENVOY_LOG_LEVEL_ENV, os.getenv(ENVOY_LOG_LEVEL_ENV))
+    if raw_level is None:
+        return DEFAULT_ENVOY_LOG_LEVEL
+
+    log_level = raw_level.strip().lower()
+    if log_level not in VALID_ENVOY_LOG_LEVELS:
+        allowed = ", ".join(sorted(VALID_ENVOY_LOG_LEVELS))
+        raise ValueError(
+            f"Invalid {ENVOY_LOG_LEVEL_ENV} value {raw_level!r}. "
+            f"Expected one of: {allowed}."
+        )
+    return log_level
 
 
 def _resolve_platform(env_vars):

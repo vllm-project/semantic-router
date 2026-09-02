@@ -17,6 +17,8 @@ jobs:
     timeout-minutes: 90
     env:
       E2E_SEMANTIC_ROUTER_HELM_TIMEOUT: 60m
+      # Pipe falls back to direct on any proxy error; comma only on 404 and 410
+      GOPROXY: 'https://proxy.golang.org|direct'
     strategy:
       fail-fast: false  # Continue testing other profiles even if one fails
       matrix:
@@ -26,29 +28,11 @@ jobs:
       - name: Check out the repo
         uses: actions/checkout@v4
 
-      - name: Free disk space and relocate Docker to /mnt
-        run: |
-          echo "=== Before cleanup ==="
-          df -h / /mnt
-
-          # Remove large pre-installed toolchains that E2E tests don't need
-          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
-            /usr/local/share/boost /usr/local/graalvm /usr/local/.ghcup \
-            /usr/share/swift /usr/local/lib/node_modules 2>/dev/null || true
-          sudo docker image prune -af 2>/dev/null || true
-
-          # Move Docker data root to /mnt (75 GB+ free vs ~14 GB on /)
-          sudo systemctl stop docker
-          sudo mv /var/lib/docker /mnt/docker
-          sudo ln -s /mnt/docker /var/lib/docker
-          sudo systemctl start docker
-
-          # Redirect temp dir so `kind load docker-image` tarballs land on /mnt
-          sudo mkdir -p /mnt/tmp
-          sudo chmod 1777 /mnt/tmp
-
-          echo "=== After cleanup ==="
-          df -h / /mnt
+      - name: Set up Kind
+        uses: ./.github/actions/setup-kind
+        with:
+          show-usage: "true"
+          relocate-docker: "true"
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -72,35 +56,6 @@ jobs:
             make \
             build-essential \
             pkg-config
-
-      - name: Install Kind
-        run: |
-          ARCH="$(uname -m)"
-          case "$ARCH" in
-            x86_64) KIND_ARCH="amd64" ;;
-            aarch64) KIND_ARCH="arm64" ;;
-            *) echo "unsupported arch: $ARCH" && exit 1 ;;
-          esac
-          curl --retry 5 --retry-delay 5 --retry-all-errors -Lo ./kind "https://kind.sigs.k8s.io/dl/v0.22.0/kind-linux-${KIND_ARCH}"
-          chmod +x ./kind
-          sudo mv ./kind /usr/local/bin/kind
-
-      - name: Pre-pull Kind node image
-        run: |
-          KIND_NODE_IMAGE="kindest/node:v1.29.2"
-          echo "Pre-pulling ${KIND_NODE_IMAGE} with retries..."
-          for attempt in 1 2 3 4 5; do
-            if docker pull "${KIND_NODE_IMAGE}"; then
-              echo "Successfully pulled ${KIND_NODE_IMAGE}"
-              break
-            fi
-            if [ "$attempt" -eq 5 ]; then
-              echo "ERROR: Failed to pull ${KIND_NODE_IMAGE} after 5 attempts"
-              exit 1
-            fi
-            echo "Pull attempt ${attempt} failed, retrying in $((attempt * 15))s..."
-            sleep $((attempt * 15))
-          done
 
       - name: Download E2E test dependencies
         run: |

@@ -156,13 +156,11 @@ docs:
 - tools/agent/docs/tech-debt/td-046-onnx-binding-ci-coverage-gap.md
 - tools/agent/docs/tech-debt/td-047-response-cache-polarity-guard-surface-mirrors.md
 - tools/agent/docs/tech-debt/td-048-online-evaluation-assignment-evidence-gap.md
-- tools/agent/docs/tech-debt/td-049-attested-live-evaluation-target-gap.md
 - tools/agent/docs/tech-debt/td-050-benchmark-adapter-execution-attestation-gap.md
 - tools/agent/docs/tech-debt/td-051-evaluation-worker-isolation-gap.md
-- tools/agent/docs/tech-debt/td-052-paired-promotion-statistics-gap.md
-- tools/agent/docs/tech-debt/td-053-evaluation-store-lifecycle-durability-gap.md
 - tools/agent/docs/tech-debt/td-054-typed-request-capability-eligibility-gap.md
 - tools/agent/docs/tech-debt/td-055-evidence-calibrated-session-switch-gate-gap.md
+- tools/agent/docs/tech-debt/td-056-onnx-candle-image-resize-duplication.md
 local_agent_rules:
 - path: src/vllm-sr/cli/AGENTS.md
   scope: src/vllm-sr/cli/**
@@ -339,27 +337,21 @@ doc_governance:
   - path: tools/agent/docs/tech-debt/td-048-online-evaluation-assignment-evidence-gap.md
     steward: dashboard
     freshness: update when online Evaluation Plane assignment evidence changes materially
-  - path: tools/agent/docs/tech-debt/td-049-attested-live-evaluation-target-gap.md
-    steward: dashboard
-    freshness: update when live direct-arm or load attestation changes materially
   - path: tools/agent/docs/tech-debt/td-050-benchmark-adapter-execution-attestation-gap.md
     steward: dashboard
     freshness: update when native benchmark adapter attestation changes materially
   - path: tools/agent/docs/tech-debt/td-051-evaluation-worker-isolation-gap.md
     steward: dashboard
     freshness: update when Evaluation Plane worker isolation or public artifact trust changes materially
-  - path: tools/agent/docs/tech-debt/td-052-paired-promotion-statistics-gap.md
-    steward: dashboard
-    freshness: update when paired candidate comparison evidence changes materially
-  - path: tools/agent/docs/tech-debt/td-053-evaluation-store-lifecycle-durability-gap.md
-    steward: dashboard
-    freshness: update when Evaluation Plane retention or crash durability changes materially
   - path: tools/agent/docs/tech-debt/td-054-typed-request-capability-eligibility-gap.md
     steward: router-core
     freshness: update when request capability eligibility changes materially
   - path: tools/agent/docs/tech-debt/td-055-evidence-calibrated-session-switch-gate-gap.md
     steward: router-core
     freshness: update when session switch-gate evidence or calibration changes materially
+  - path: tools/agent/docs/tech-debt/td-056-onnx-candle-image-resize-duplication.md
+    steward: candle-binding
+    freshness: update when the shared resize implementation is deduplicated or the exit criteria change
 skills:
 - tools/agent/skills/config-platform-change/SKILL.md
 - tools/agent/skills/harness-contract-change/SKILL.md

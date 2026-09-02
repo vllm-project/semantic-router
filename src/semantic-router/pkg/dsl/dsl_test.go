@@ -6216,3 +6216,136 @@ func TestExplicitModelListRoundTripOmitsModelDirective(t *testing.T) {
 		t.Fatalf("recompiled model refs = %d, want 2", len(recompiled.Decisions[0].ModelRefs))
 	}
 }
+
+func TestValidateContextOpenEndedRangeOverlapWarns(t *testing.T) {
+	input := `
+SIGNAL context short_context {
+  min_tokens: "0"
+  max_tokens: "8K"
+}
+SIGNAL context overflow_context {
+  min_tokens: "4K"
+}
+`
+	diags, _ := Validate(input)
+	for _, d := range diags {
+		if d.Level == DiagWarning && strings.Contains(d.Message, "overflow_context [4000, ∞) overlaps") {
+			return
+		}
+	}
+	t.Fatalf("expected an overlap warning for the open-ended band, got: %v", diags)
+}
+
+func TestContextSignalsDisjointHonorsOpenEndedBands(t *testing.T) {
+	ranges := map[string]config.ContextBounds{
+		"short":    {Min: 0, Max: 8000},
+		"tail":     {Min: 4000, Unbounded: true},
+		"far_tail": {Min: 8001, Unbounded: true},
+	}
+	if contextSignalsDisjoint(ranges, "short", "tail") {
+		t.Fatal("open-ended band starting inside a bounded band must not be disjoint")
+	}
+	if !contextSignalsDisjoint(ranges, "short", "far_tail") {
+		t.Fatal("open-ended band starting after a bounded band must be disjoint")
+	}
+	if contextSignalsDisjoint(ranges, "tail", "far_tail") {
+		t.Fatal("two open-ended bands always overlap")
+	}
+}
+
+func TestValidateContextOpenEndedRangeDisjointDoesNotWarn(t *testing.T) {
+	input := `
+SIGNAL context short_context {
+  min_tokens: "0"
+  max_tokens: "8K"
+}
+SIGNAL context overflow_context {
+  min_tokens: "8001"
+}
+
+ROUTE short_route {
+  PRIORITY 200
+  WHEN context("short_context")
+  MODEL "m1"
+}
+
+ROUTE overflow_route {
+  PRIORITY 100
+  WHEN context("overflow_context")
+  MODEL "m2"
+}
+`
+	diags, _ := Validate(input)
+	for _, d := range diags {
+		if strings.Contains(d.Message, "no mutual exclusion guard") ||
+			strings.Contains(d.Message, "overlaps") ||
+			strings.Contains(d.Message, "No context signal covers") {
+			t.Fatalf("expected adjacent bounded and open-ended bands to be clean, got: %s", d.Message)
+		}
+	}
+}
+
+func TestValidateContextGapWarns(t *testing.T) {
+	input := `
+SIGNAL context short_context {
+  min_tokens: "0"
+  max_tokens: "1K"
+}
+SIGNAL context long_context {
+  min_tokens: "4K"
+  max_tokens: "128K"
+}
+
+ROUTE short_route {
+  PRIORITY 200
+  WHEN context("short_context")
+  MODEL "m1"
+}
+`
+	diags, _ := Validate(input)
+	for _, d := range diags {
+		if d.Level == DiagWarning && strings.Contains(d.Message, "No context signal covers token counts 1001 to 3999") {
+			return
+		}
+	}
+	t.Fatalf("expected a gap warning between 1K and 4K, got: %v", diags)
+}
+
+func TestValidateContextRangeErrors(t *testing.T) {
+	cases := []struct {
+		name  string
+		field string
+		want  string
+	}{
+		{name: "min above max", field: `min_tokens: "5K"` + "\n  " + `max_tokens: "1K"`, want: "must not exceed max_tokens"},
+		{name: "unparsable max", field: `min_tokens: "0"` + "\n  " + `max_tokens: "lots"`, want: "max_tokens: invalid token count format"},
+		{name: "no limits", field: `description: "empty"`, want: "min_tokens or max_tokens must be set"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			input := "SIGNAL context band {\n  " + tc.field + "\n}\n"
+			diags, _ := Validate(input)
+			for _, d := range diags {
+				if strings.Contains(d.Message, tc.want) {
+					return
+				}
+			}
+			t.Fatalf("expected diagnostic containing %q, got: %v", tc.want, diags)
+		})
+	}
+}
+
+func TestValidateContextExactBandIsValid(t *testing.T) {
+	input := `
+SIGNAL context exact_band {
+  min_tokens: "1K"
+  max_tokens: "1K"
+}
+`
+	diags, _ := Validate(input)
+	for _, d := range diags {
+		if strings.Contains(d.Message, "exact_band") && d.Level != DiagWarning {
+			t.Fatalf("expected an equal min/max band to be valid, got: %s", d.Message)
+		}
+	}
+}

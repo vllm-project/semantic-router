@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"sync"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -25,6 +26,7 @@ func (c *Classifier) buildSignalDispatchers(
 	imgArg string,
 	imgCache *requestImageEmbeddingCache, // may be nil; both image-consuming evaluators handle nil via cache.resolve's nil-receiver fallthrough
 	convFacts ConversationFacts,
+	requestCtx context.Context,
 	requestFacts RequestFacts,
 	usedSignals map[string]bool,
 ) []signalDispatch {
@@ -37,6 +39,7 @@ func (c *Classifier) buildSignalDispatchers(
 		hasPriorAssistantReply,
 		imgArg,
 		imgCache,
+		requestCtx,
 	)
 	dispatchers = append(dispatchers, c.buildRequestFactSignalDispatchers(
 		results,
@@ -72,6 +75,7 @@ func (c *Classifier) buildPrimarySignalDispatchers(
 	hasPriorAssistantReply bool,
 	imgArg string,
 	imgCache *requestImageEmbeddingCache,
+	requestCtx context.Context,
 ) []signalDispatch {
 	return []signalDispatch{
 		{
@@ -86,7 +90,7 @@ func (c *Classifier) buildPrimarySignalDispatchers(
 		},
 		{
 			config.SignalTypeDomain, "Domain",
-			func() { c.evaluateDomainSignal(results, mu, textForSignal(config.SignalTypeDomain)) },
+			func() { c.evaluateDomainSignal(requestCtx, results, mu, textForSignal(config.SignalTypeDomain)) },
 		},
 		{
 			config.SignalTypeFactCheck, "Fact-check",

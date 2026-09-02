@@ -65,11 +65,6 @@ export const workGroups: WorkGroup[] = [
         avatar: 'https://github.com/yaojiejia.png',
         profile: 'https://github.com/yaojiejia',
       },
-      {
-        name: 'wuli666',
-        avatar: 'https://github.com/wuli666.png',
-        profile: 'https://github.com/wuli666',
-      },
     ],
   },
   {
@@ -132,14 +127,34 @@ export const workGroups: WorkGroup[] = [
         profile: 'https://github.com/guan404ming',
       },
       {
-        name: 'Pranav Thakur',
-        avatar: 'https://github.com/pranavthakur0-0.png',
-        profile: 'https://github.com/pranavthakur0-0',
-      },
-      {
         name: 'bugkeep',
         avatar: 'https://github.com/bugkeep.png',
         profile: 'https://github.com/bugkeep',
+      },
+      {
+        name: 'JiaoliangYu',
+        avatar: 'https://github.com/JiaoliangYu.png',
+        profile: 'https://github.com/JiaoliangYu',
+      },
+      {
+        name: 'Xuetao Li',
+        avatar: 'https://github.com/Alanxtl.png',
+        profile: 'https://github.com/Alanxtl',
+      },
+      {
+        name: 'Nanasis',
+        avatar: 'https://github.com/nanasis.png',
+        profile: 'https://github.com/nanasis',
+      },
+      {
+        name: 'karthikeyan1592',
+        avatar: 'https://github.com/karthikeyan1592.png',
+        profile: 'https://github.com/karthikeyan1592',
+      },
+      {
+        name: 'Binbin Zhang',
+        avatar: 'https://github.com/Bevisy.png',
+        profile: 'https://github.com/Bevisy',
       },
     ],
   },
@@ -265,6 +280,11 @@ export const workGroups: WorkGroup[] = [
         avatar: 'https://github.com/yaojiejia.png',
         profile: 'https://github.com/yaojiejia',
       },
+      {
+        name: 'Binbin Zhang',
+        avatar: 'https://github.com/Bevisy.png',
+        profile: 'https://github.com/Bevisy',
+      },
     ],
   },
   {
@@ -312,9 +332,9 @@ export const workGroups: WorkGroup[] = [
         profile: 'https://github.com/edamamez',
       },
       {
-        name: 'wuli666',
-        avatar: 'https://github.com/wuli666.png',
-        profile: 'https://github.com/wuli666',
+        name: 'ZiYiMing',
+        avatar: 'https://github.com/Zi-Yi-Ming.png',
+        profile: 'https://github.com/Zi-Yi-Ming',
       },
     ],
   },

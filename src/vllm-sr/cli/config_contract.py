@@ -17,6 +17,9 @@ ClassifierSignalType = Literal[
     "sequence_classifier",
 ]
 
+UNKNOWN_POLICY_VALUES = ("no_match", "match", "fail_request")
+UnknownPolicy = Literal["no_match", "match", "fail_request"]
+
 CONDITION_TYPE_DOMAIN = "domain"
 CONDITION_TYPE_PROJECTION = "projection"
 

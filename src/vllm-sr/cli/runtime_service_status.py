@@ -1,9 +1,8 @@
 """Per-service readiness probes behind ``vllm-sr status``.
 
 Each managed service answers "is it up" differently -- Router and Dashboard over
-HTTP inside the container, Envoy through its admin ``/ready`` with a config
-validation fallback, the simulator through a short Python one-liner -- and none
-of that is runtime orchestration. Keeping the probes here leaves ``core`` owning
+HTTP inside the container, and Envoy through its admin ``/ready`` with a config
+validation fallback. None of that is runtime orchestration. Keeping the probes here leaves ``core`` owning
 the start and stop flow, which is what its ratchet is for.
 
 Every probe reports "not ready" rather than raising: status output must survive
@@ -40,19 +39,10 @@ def report_service_status(service: str, stack_layout) -> None:
             _check_dashboard_status,
             stack_layout.dashboard_url,
         ),
-        "simulator": (
-            "Fleet Sim",
-            _check_fleet_sim_status,
-            stack_layout.fleet_sim_url,
-        ),
     }
     label, checker, detail = checkers[service]
     try:
-        container_name = (
-            stack_layout.fleet_sim_container_name
-            if service == "simulator"
-            else runtime_service_container_name(service, stack_layout)
-        )
+        container_name = runtime_service_container_name(service, stack_layout)
         is_running = checker(container_name)
         _log_service_status(label, is_running, detail if is_running else None)
     except Exception as exc:
@@ -123,22 +113,6 @@ def _check_dashboard_status(container_name: str) -> bool:
         ],
     )
     return return_code == 0 and stdout.strip() in {"200", "301", "302"}
-
-
-def _check_fleet_sim_status(container_name: str) -> bool:
-    return_code, stdout, _stderr = container_exec(
-        container_name,
-        [
-            "python",
-            "-c",
-            (
-                "import sys, urllib.request; "
-                "resp = urllib.request.urlopen('http://localhost:8000/healthz', timeout=3); "
-                "sys.stdout.write(str(resp.getcode()))"
-            ),
-        ],
-    )
-    return return_code == 0 and stdout.strip() == "200"
 
 
 def _log_service_status(

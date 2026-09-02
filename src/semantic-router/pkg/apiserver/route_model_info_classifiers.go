@@ -75,7 +75,7 @@ func buildRoutingClassifierModels(
 			Categories: configuredCategoryNames(cfg),
 			Metadata: map[string]string{
 				"mapping_path": categoryModel.CategoryMappingPath,
-				"model_type":   resolveInlineModelType(categoryModel.UseMmBERT32K, categoryModel.UseModernBERT, false),
+				"model_type":   categoryModelInfoType(categoryModel),
 				"threshold":    fmt.Sprintf("%.2f", categoryModel.Threshold),
 			},
 		})
@@ -119,6 +119,18 @@ func buildRoutingClassifierModels(
 	}
 
 	return models
+}
+
+func categoryModelInfoType(model routerconfig.CategoryModel) string {
+	if model.Backend != nil {
+		// Match the existing prompt_guard convention: a remote classifier reports
+		// its effective transport rather than pretending to be a local model.
+		return model.Backend.Protocol
+	}
+	if variant, err := model.EffectiveVariant(); err == nil && variant != "" {
+		return variant
+	}
+	return resolveInlineModelType(model.UseMmBERT32K, model.UseModernBERT, false)
 }
 
 func buildHallucinationModels(

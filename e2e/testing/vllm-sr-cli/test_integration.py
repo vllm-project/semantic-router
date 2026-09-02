@@ -20,8 +20,8 @@ from urllib import request as urllib_request
 from cli_test_base import CLITestBase
 from serve_session import ServeSessionMixin
 
-DEFAULT_MOCK_OPENAI_IMAGE = "ghcr.io/vllm-project/semantic-router/vllm-sr-sim:latest"
-MOCK_OPENAI_IMAGE_ENV = "VLLM_SR_SIM_IMAGE"
+DEFAULT_MOCK_OPENAI_IMAGE = "ghcr.io/vllm-project/semantic-router/vllm-sr:latest"
+MOCK_OPENAI_IMAGE_ENV = "VLLM_SR_TEST_UPSTREAM_IMAGE"
 MOCK_OPENAI_SERVER_PORT = 18080
 MOCK_OPENAI_SERVER_PATH = Path(__file__).with_name("mock_openai_upstream.py").resolve()
 
@@ -72,9 +72,16 @@ class TestServeIntegration(ServeSessionMixin, CLITestBase):
         self.assertEqual(process.communicate.call_count, 2)
 
     @contextmanager
-    def _running_mock_upstream(self, container_name: str):
+    def _running_mock_upstream(
+        self, container_name: str, *, expected_authorization: str | None = None
+    ):
         """Run the mock OpenAI upstream on the active stack network."""
         image = os.getenv(MOCK_OPENAI_IMAGE_ENV, DEFAULT_MOCK_OPENAI_IMAGE)
+        expected_authorization_env = (
+            ["-e", f"MOCK_EXPECT_AUTHORIZATION={expected_authorization}"]
+            if expected_authorization is not None
+            else []
+        )
         result = self._run_subprocess(
             [
                 self.container_runtime,
@@ -86,6 +93,7 @@ class TestServeIntegration(ServeSessionMixin, CLITestBase):
                 self.runtime_stack.network_name,
                 "-v",
                 f"{MOCK_OPENAI_SERVER_PATH}:/mock_openai_upstream.py:ro",
+                *expected_authorization_env,
                 "--entrypoint",
                 "python3",
                 image,
@@ -133,7 +141,9 @@ class TestServeIntegration(ServeSessionMixin, CLITestBase):
             )
         return "\n".join(diagnostics)
 
-    def _send_mock_chat_completion(self, mock_container: str):
+    def _send_mock_chat_completion(
+        self, mock_container: str, *, redact_values: tuple[str, ...] = ()
+    ):
         """Send a chat request, retrying until the local stack is ready."""
         listener_port = 8888 + self.runtime_stack.port_offset
         request = urllib_request.Request(
@@ -171,6 +181,8 @@ class TestServeIntegration(ServeSessionMixin, CLITestBase):
                 self.ENVOY_CONTAINER_NAME,
             )
         )
+        for value in redact_values:
+            diagnostics = diagnostics.replace(value, "[redacted]")
         self.fail(f"request did not reach mock upstream: {last_error}\n{diagnostics}")
 
     def _mock_upstream_paths(self, mock_container: str) -> set[str]:
@@ -337,7 +349,7 @@ class TestServeIntegration(ServeSessionMixin, CLITestBase):
         """Verify the logs command returns container output for one service."""
         time.sleep(5)
         service_failures: list[str] = []
-        for service in ("router", "envoy", "dashboard", "simulator"):
+        for service in ("router", "envoy", "dashboard"):
             return_code, stdout, stderr = self.run_cli(["logs", service])
             output = stdout + stderr
             if return_code == 0 and output.strip():
@@ -384,48 +396,59 @@ class TestServeIntegration(ServeSessionMixin, CLITestBase):
         os.environ.get("RUN_INTEGRATION_TESTS", "").lower() == "true",
         "Integration tests disabled. Set RUN_INTEGRATION_TESTS=true to enable.",
     )
-    def test_fleet_sim_sidecar_contracts(self):
-        """Test that serve starts the simulator sidecar and exposes its health."""
-        self.print_test_header(
-            "Fleet Sim Sidecar Integration Test",
-            "Verifies serve starts vllm-sr-sim, wires TARGET_FLEET_SIM_URL, and exposes /healthz",
-        )
+    def test_envoy_log_level_is_safe_and_provider_key_is_not_logged(self):
+        """Use a synthetic provider key to exercise the safe Envoy default."""
+        canary = "synthetic-provider-key-canary"
+        with self._running_serve(
+            env={"PROVIDER_KEY_CANARY": canary},
+            base_url=(
+                f"http://{self.runtime_stack.stack_name}-envoy-log-upstream:"
+                f"{MOCK_OPENAI_SERVER_PORT}"
+            ),
+            provider="openai",
+            api_key_env="PROVIDER_KEY_CANARY",
+            api_only=True,
+        ):
+            return_code, command, stderr = self.inspect_container(
+                "{{json .Config.Cmd}}",
+                container_name=self.ENVOY_CONTAINER_NAME,
+            )
+            self.assertEqual(return_code, 0, stderr)
+            self.assertIn("--log-level", command)
+            self.assertIn('"info"', command)
 
-        with self._running_serve():
-            if not self.wait_for_container_running(
-                timeout=60, container_name=self.SIM_CONTAINER_NAME
+            mock_container = f"{self.runtime_stack.stack_name}-envoy-log-upstream"
+            with self._running_mock_upstream(
+                mock_container, expected_authorization=canary
             ):
-                self.fail("Fleet simulator sidecar did not reach running state")
+                self._send_mock_chat_completion(mock_container, redact_values=(canary,))
+                upstream_logs = self._run_subprocess(
+                    [self.container_runtime, "logs", mock_container],
+                    timeout=10,
+                )
+                self.assertEqual(upstream_logs.returncode, 0, upstream_logs.stderr)
+                self.assertIn(
+                    "authorization-canary-received",
+                    upstream_logs.stdout + upstream_logs.stderr,
+                )
 
-            return_code, stdout, stderr = self.inspect_container(
-                "{{.Config.Env}}",
-                container_name=self.resolve_runtime_inspect_container_name(),
+            logs = self._run_subprocess(
+                [self.container_runtime, "logs", self.ENVOY_CONTAINER_NAME],
+                timeout=10,
             )
-            if return_code != 0:
-                self.fail(f"router container inspect failed: {stderr}")
-            self.assertIn(
-                (
-                    "TARGET_FLEET_SIM_URL=http://"
-                    f"{self.runtime_stack.fleet_sim_container_name}:8000"
-                ),
-                stdout,
+            self.assertEqual(logs.returncode, 0, logs.stderr)
+            combined_logs = logs.stdout + logs.stderr
+            canary_absent = canary not in combined_logs
+            redacted_logs = combined_logs.replace(canary, "<redacted-canary>")
+            self.assertTrue(canary_absent, msg=redacted_logs)
+
+        with self._running_serve(env={"VLLM_SR_ENVOY_LOG_LEVEL": "DeBuG"}):
+            return_code, command, stderr = self.inspect_container(
+                "{{json .Config.Cmd}}",
+                container_name=self.ENVOY_CONTAINER_NAME,
             )
-
-            with urllib_request.urlopen(
-                f"{self.runtime_stack.fleet_sim_url}/healthz", timeout=10
-            ) as response:
-                body = response.read().decode("utf-8")
-                self.assertEqual(response.status, 200)
-                self.assertIn('"service":"vllm-sr-sim"', body.replace(" ", ""))
-
-            print("  ✓ Simulator sidecar is running")
-            print("  ✓ Router container received TARGET_FLEET_SIM_URL")
-            print(
-                "  ✓ Simulator health endpoint responded on "
-                f"localhost:{self.runtime_stack.fleet_sim_port}"
-            )
-
-        self.print_test_result(True, "Fleet simulator sidecar contracts verified")
+            self.assertEqual(return_code, 0, stderr)
+            self.assertIn('"debug"', command)
 
     @unittest.skipUnless(
         os.environ.get("RUN_INTEGRATION_TESTS", "").lower() == "true",
@@ -454,7 +477,6 @@ class TestServeIntegration(ServeSessionMixin, CLITestBase):
 
             managed_names = (
                 *self._runtime_container_names(),
-                self.SIM_CONTAINER_NAME,
                 *self.AUXILIARY_CONTAINER_NAMES,
             )
             remaining = {

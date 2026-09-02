@@ -22,6 +22,8 @@ permissions:
 
 env:
   GO_VERSION: '1.25'
+  # Pipe falls back to direct on any proxy error; comma only on 404 and 410
+  GOPROXY: 'https://proxy.golang.org|direct'
 
 jobs:
   lint:
@@ -255,11 +257,8 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
 
-      - name: Install kind
-        run: |
-          curl --retry 5 --retry-delay 5 --retry-all-errors -Lo ./kind https://kind.sigs.k8s.io/dl/v0.31.0/kind-linux-amd64
-          chmod +x ./kind
-          sudo mv ./kind /usr/local/bin/kind
+      - name: Set up Kind
+        uses: ./.github/actions/setup-kind
 
       - name: Install kubectl
         run: |
@@ -269,7 +268,7 @@ jobs:
 
       - name: Create kind cluster
         run: |
-          cat <<EOF | kind create cluster --name operator-test-${{ matrix.cache-backend }} --image kindest/node:v1.33.7@sha256:d26ef333bdb2cbe9862a0f7c3803ecc7b4303d8cea8e814b481b09949d353040 --config=-
+          cat <<EOF | kind create cluster --name operator-test-${{ matrix.cache-backend }} --image "${KIND_NODE_IMAGE}" --config=-
           kind: Cluster
           apiVersion: kind.x-k8s.io/v1alpha4
           nodes:

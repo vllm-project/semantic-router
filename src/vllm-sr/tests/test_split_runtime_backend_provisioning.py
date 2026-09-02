@@ -58,9 +58,6 @@ def test_start_vllm_sr_loads_runtime_config_for_backend_provisioning(monkeypatch
         record("container_create_network"),
     )
     monkeypatch.setattr(
-        core, "start_fleet_sim_sidecar", record("start_fleet_sim_sidecar", False)
-    )
-    monkeypatch.setattr(
         core, "container_start_vllm_sr", record("container_start_vllm_sr")
     )
     monkeypatch.setattr(

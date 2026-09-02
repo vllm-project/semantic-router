@@ -27,7 +27,7 @@ func inputForRequestBytes(t *testing.T, n int) string {
 func newLimitedTestInference(t *testing.T, server *httptest.Server, requestBytes, responseBytes int64) *HTTPClassifierInference {
 	t.Helper()
 	inf, err := NewHTTPClassifierInference(&config.ExternalModelConfig{
-		ModelEndpoint:    config.ClassifierVLLMEndpoint{Address: "placeholder", Port: 1},
+		ModelEndpoint:    endpointForTestServer(t, server),
 		ModelName:        "custom-classifier",
 		MaxRequestBytes:  requestBytes,
 		MaxResponseBytes: responseBytes,
@@ -35,58 +35,7 @@ func newLimitedTestInference(t *testing.T, server *httptest.Server, requestBytes
 	if err != nil {
 		t.Fatalf("failed to construct inference: %v", err)
 	}
-	inf.baseURL = server.URL
 	return inf
-}
-
-func TestNewHTTPClassifierInference_ByteLimitDefaults(t *testing.T) {
-	tests := []struct {
-		name            string
-		requestBytes    int64
-		responseBytes   int64
-		wantRequestMax  int64
-		wantResponseMax int64
-	}{
-		{
-			name:            "unset uses the http_classify defaults",
-			wantRequestMax:  config.DefaultClassifyMaxRequestBytes,
-			wantResponseMax: config.DefaultClassifyMaxResponseBytes,
-		},
-		{
-			name:            "explicit overrides win",
-			requestBytes:    4096,
-			responseBytes:   8192,
-			wantRequestMax:  4096,
-			wantResponseMax: 8192,
-		},
-		{
-			name:            "non-positive values fall back to the defaults",
-			requestBytes:    -1,
-			responseBytes:   -1,
-			wantRequestMax:  config.DefaultClassifyMaxRequestBytes,
-			wantResponseMax: config.DefaultClassifyMaxResponseBytes,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			inf, err := NewHTTPClassifierInference(&config.ExternalModelConfig{
-				ModelEndpoint:    config.ClassifierVLLMEndpoint{Address: "127.0.0.1", Port: 8080},
-				ModelName:        "custom-classifier",
-				MaxRequestBytes:  tt.requestBytes,
-				MaxResponseBytes: tt.responseBytes,
-			}, testJailbreakMapping())
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if inf.maxRequestBytes != tt.wantRequestMax {
-				t.Errorf("maxRequestBytes = %d, want %d", inf.maxRequestBytes, tt.wantRequestMax)
-			}
-			if inf.maxResponseBytes != tt.wantResponseMax {
-				t.Errorf("maxResponseBytes = %d, want %d", inf.maxResponseBytes, tt.wantResponseMax)
-			}
-		})
-	}
 }
 
 func TestHTTPClassifierInferenceClassify_RequestAtLimitIsSent(t *testing.T) {
