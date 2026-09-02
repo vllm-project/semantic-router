@@ -12,10 +12,6 @@ on:
     - cron: "17 * * * *"
   workflow_dispatch:
 
-concurrency:
-  group: community-label-sync
-  cancel-in-progress: false
-
 permissions:
   contents: read
 
@@ -29,6 +25,11 @@ jobs:
       && github.event.workflow_run.pull_requests[0] != null)
       || (github.event_name == 'check_suite'
       && github.event.check_suite.pull_requests[0] != null)
+    # Serialize duplicate lifecycle events for one PR without blocking other PRs
+    # or the scheduled queue reconciliation job.
+    concurrency:
+      group: community-label-sync-pr-${{ github.event.workflow_run.pull_requests[0].number || github.event.check_suite.pull_requests[0].number || github.run_id }}
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -51,6 +52,9 @@ jobs:
     if: >-
       github.event_name == 'schedule'
       || github.event_name == 'workflow_dispatch'
+    concurrency:
+      group: community-label-sync-sweep
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     permissions:
       contents: read

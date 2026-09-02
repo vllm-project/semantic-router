@@ -4,7 +4,9 @@ ARG VLLM_SR_SOURCE_REVISION=unavailable
 FROM ${IMAGE_REGISTRY}library/golang:1.25-alpine AS wasm-builder
 WORKDIR /app/src/semantic-router
 
-ENV GOPROXY=https://proxy.golang.org,direct
+RUN apk add --no-cache git
+# Pipe falls back to direct on any proxy error; comma only on 404 and 410
+ENV GOPROXY="https://proxy.golang.org|direct"
 
 COPY src/semantic-router/go.mod src/semantic-router/go.sum ./
 COPY src/semantic-router/ ./
@@ -55,7 +57,8 @@ FROM ${IMAGE_REGISTRY}library/golang:1.25-bookworm AS backend-builder
 WORKDIR /app
 
 # Use Go proxy for reliable downloads
-ENV GOPROXY=https://proxy.golang.org,direct
+# Pipe falls back to direct on any proxy error; comma only on 404 and 410
+ENV GOPROXY="https://proxy.golang.org|direct"
 
 # Accept build arguments for target architecture
 ARG TARGETARCH=amd64
@@ -122,7 +125,7 @@ RUN set -eux; \
       done; \
       return 1; \
     }; \
-    apt_get_install_with_retry ca-certificates curl docker.io gosu wget
+    apt_get_install_with_retry ca-certificates curl docker.io gosu libseccomp2 wget
 WORKDIR /app
 COPY --from=backend-builder /app/dashboard-backend /app/dashboard-backend
 COPY --from=backend-builder /app/dashboard-backend /usr/local/bin/dashboard-backend
@@ -146,6 +149,10 @@ RUN python3 -m venv "${VIRTUAL_ENV}" && \
 RUN groupadd --gid 65532 nonroot && \
     useradd --uid 65532 --gid 65532 --create-home --shell /usr/sbin/nologin nonroot && \
     install -d -o nonroot -g root -m 0770 /app/data && \
+    chown -R root:root /app/cli && \
+    find /app/cli -type d -exec chmod 0555 {} + && \
+    find /app/cli -type f -exec chmod 0444 {} + && \
+    chmod 0555 /app/cli/evaluation/sandbox_worker.py && \
     chown root:root \
       /app/entrypoint.sh \
       /app/entrypoint_permissions.py \

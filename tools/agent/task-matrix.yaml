@@ -144,11 +144,15 @@ rules:
       - src/semantic-router/pkg/modelinventory/**
       - src/semantic-router/pkg/nlgen/**
       - src/semantic-router/pkg/startupstatus/**
+      - src/vllm-sr/cli/evaluation/golden/metric_analysis_catalog.v1.json
+      - src/vllm-sr/cli/evaluation/golden/research_benchmark_inventory.v1.json
+      - tools/ci/sync_evaluation_catalogs.py
       - tools/make/dashboard.mk
       - .github/workflows/dashboard-test.yml
     fast_tests:
       - make dashboard-check
-    feature_tests: []
+    feature_tests:
+      - make dashboard-test-e2e-evaluation
     requires_local_smoke: true
   - name: e2e-framework
     doc_only: false

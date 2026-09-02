@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"math"
 	"os"
 	"sort"
 	"strings"
@@ -15,20 +14,28 @@ import (
 
 // Empty deployments still have an immutable configuration identity: SHA256 of
 // the empty byte sequence. This is not a claim that a Router config exists.
-const unavailableConfigDigest = "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+const emptyConfigDigest = "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 
 // fixturePolicySnapshotDigest is the content identity of the immutable
 // builtin replay policy executed by the Python fixture adapter.
 const fixturePolicySnapshotDigest = "sha256:34063b31576749e60610d650ba7a045988db38b7de9d27b69b71e3f1e426a9f3"
 
-// ModelArmSnapshot is the public, connectivity-free view of the models that a
-// live evaluation can address through the server-owned Envoy target. The
-// digest and arms are derived from the same immutable byte slice.
+// ModelArmSnapshot freezes every request-reachable Mixture-of-Models from one
+// immutable Router configuration byte slice.
 type ModelArmSnapshot struct {
-	ModelArms             []ModelArm
-	ConfigDigest          string
-	PolicySnapshotDigest  string
+	Mixtures     []MixtureTargetSnapshot
+	ConfigDigest string
+}
+
+// MixtureTargetSnapshot carries the server-owned execution identity for one
+// recipe-scoped target. Ready is deliberately not serialized; it controls
+// whether the registry exposes executable tracks for an otherwise inspectable
+// catalog subject.
+type MixtureTargetSnapshot struct {
+	Mixture               ManifestMixture
 	BackendTopologyDigest string
+	ConfigDigest          string
+	Ready                 bool
 }
 
 // LoadModelArmSnapshot reads and freezes the current Router config. An empty
@@ -36,10 +43,7 @@ type ModelArmSnapshot struct {
 func LoadModelArmSnapshot(configPath, runtimeRevision string) (ModelArmSnapshot, error) {
 	configPath = strings.TrimSpace(configPath)
 	if configPath == "" {
-		return ModelArmSnapshot{
-			ConfigDigest:         unavailableConfigDigest,
-			PolicySnapshotDigest: policySnapshotDigest(routerconfig.CanonicalConfig{}),
-		}, nil
+		return ModelArmSnapshot{ConfigDigest: emptyConfigDigest}, nil
 	}
 
 	data, err := os.ReadFile(configPath)
@@ -60,141 +64,120 @@ func ModelArmSnapshotFromYAML(data []byte, runtimeRevision string) (ModelArmSnap
 		return ModelArmSnapshot{}, fmt.Errorf("parse evaluated Router config: %w", err)
 	}
 	canonical := routerconfig.CanonicalConfigFromRouterConfig(cfg)
+	mixtures, err := mixtureSnapshotsFromConfig(cfg, canonical, runtimeRevision)
+	if err != nil {
+		return ModelArmSnapshot{}, err
+	}
+	for index := range mixtures {
+		mixtures[index].ConfigDigest = digest
+	}
 	return ModelArmSnapshot{
-		ModelArms:             modelArmsFromCanonical(canonical, runtimeRevision),
-		ConfigDigest:          digest,
-		PolicySnapshotDigest:  policySnapshotDigest(canonical),
-		BackendTopologyDigest: backendTopologyDigest(canonical),
+		Mixtures:     mixtures,
+		ConfigDigest: digest,
 	}, nil
 }
 
-// policySnapshotFingerprint deliberately excludes model cards, providers,
-// listeners, and global runtime state. Those inputs belong to the pool,
-// backend-topology, or full-config lineage factors instead of the routing
-// policy treatment.
-type policySnapshotFingerprint struct {
-	Entrypoints []routerconfig.CanonicalEntrypoint `json:"entrypoints,omitempty"`
-	Routing     policyRoutingFingerprint           `json:"routing"`
-	Recipes     []policyRecipeFingerprint          `json:"recipes,omitempty"`
+type policyRoutingFingerprint struct {
+	Signals   routerconfig.CanonicalSignals `json:"signals"`
+	Decisions []routerconfig.Decision       `json:"decisions,omitempty"`
+	Strategy  routerconfig.RoutingStrategy  `json:"strategy,omitempty"`
 }
 
-type policyRoutingFingerprint struct {
-	Signals     routerconfig.CanonicalSignals     `json:"signals"`
-	Projections routerconfig.CanonicalProjections `json:"projections"`
-	Decisions   []routerconfig.Decision           `json:"decisions,omitempty"`
-	Strategy    routerconfig.RoutingStrategy      `json:"strategy,omitempty"`
+type selectorDecisionFingerprint struct {
+	Algorithm *routerconfig.AlgorithmConfig `json:"algorithm,omitempty"`
+}
+
+type selectorPolicyFingerprint struct {
+	Classifiers []routerconfig.ClassifierSignalRule `json:"classifiers,omitempty"`
+	Projections routerconfig.CanonicalProjections   `json:"projections"`
+	Decisions   []selectorDecisionFingerprint       `json:"decisions,omitempty"`
+}
+
+type adaptationDecisionFingerprint struct {
+	Adaptations routerconfig.DecisionAdaptationsConfig `json:"adaptations"`
 }
 
 type policyRecipeFingerprint struct {
-	Name        string                   `json:"name"`
-	Description string                   `json:"description,omitempty"`
-	Routing     policyRoutingFingerprint `json:"routing"`
-}
-
-func policySnapshotDigest(canonical routerconfig.CanonicalConfig) string {
-	recipes := make([]policyRecipeFingerprint, 0, len(canonical.Recipes))
-	for _, recipe := range canonical.Recipes {
-		recipes = append(recipes, policyRecipeFingerprint{
-			Name:        recipe.Name,
-			Description: recipe.Description,
-			Routing:     policyRoutingFromCanonical(recipe.Routing),
-		})
-	}
-	return digestJSON(policySnapshotFingerprint{
-		Entrypoints: canonical.Entrypoints,
-		Routing:     policyRoutingFromCanonical(canonical.Routing),
-		Recipes:     recipes,
-	})
+	Name    string                   `json:"name"`
+	Routing policyRoutingFingerprint `json:"routing"`
 }
 
 func policyRoutingFromCanonical(routing routerconfig.CanonicalRouting) policyRoutingFingerprint {
+	signals := routing.Signals
+	// Classifier configuration is a selector factor. Keeping it out of the
+	// Recipe factor prevents one executable delta from being declared as either
+	// a Recipe or selector treatment.
+	signals.Classifiers = nil
+	decisions := make([]routerconfig.Decision, len(routing.Decisions))
+	for index, decision := range routing.Decisions {
+		// Candidate identity, selector algorithms, and online adaptations each
+		// have their own factor. The Recipe factor retains the decision/rule/plugin
+		// structure while removing those independently testable treatments.
+		decision.ModelRefs = nil
+		decision.Algorithm = nil
+		decision.Adaptations = routerconfig.DecisionAdaptationsConfig{}
+		// Human-facing descriptions and transport/replay annotations are
+		// explicitly non-executable config metadata. They remain in the raw config
+		// lineage, but cannot define a routing-policy treatment.
+		decision.Description = ""
+		decision.Annotations = nil
+		if len(decision.CandidateIterations) > 0 {
+			iterations := append([]routerconfig.CandidateIterationConfig(nil), decision.CandidateIterations...)
+			for iterationIndex := range iterations {
+				iterations[iterationIndex].Models = nil
+			}
+			decision.CandidateIterations = iterations
+		}
+		decisions[index] = decision
+	}
 	return policyRoutingFingerprint{
-		Signals:     routing.Signals,
+		Signals: signals, Decisions: decisions, Strategy: routing.Strategy,
+	}
+}
+
+func selectorPolicySnapshotDigest(routing routerconfig.CanonicalRouting) string {
+	decisions := make([]selectorDecisionFingerprint, 0, len(routing.Decisions))
+	for _, decision := range routing.Decisions {
+		decisions = append(decisions, selectorDecisionFingerprint{
+			Algorithm: decision.Algorithm,
+		})
+	}
+	return digestJSON(selectorPolicyFingerprint{
+		Classifiers: append([]routerconfig.ClassifierSignalRule(nil), routing.Signals.Classifiers...),
 		Projections: routing.Projections,
-		Decisions:   routing.Decisions,
-		Strategy:    routing.Strategy,
-	}
-}
-
-func modelArmsFromCanonical(
-	canonical routerconfig.CanonicalConfig,
-	runtimeRevision string,
-) []ModelArm {
-	cards := make(map[string]routerconfig.RoutingModel, len(canonical.Routing.ModelCards))
-	for _, card := range canonical.Routing.ModelCards {
-		cards[card.Name] = card
-	}
-
-	arms := make([]ModelArm, 0, len(canonical.Providers.Models))
-	seenModels := make(map[string]struct{}, len(canonical.Providers.Models))
-	for _, provider := range canonical.Providers.Models {
-		model := strings.TrimSpace(provider.Name)
-		if !validProviderArm(provider, model) {
-			continue
-		}
-		if _, duplicate := seenModels[model]; duplicate {
-			continue
-		}
-		seenModels[model] = struct{}{}
-
-		providerIdentity := strings.TrimSpace(provider.ProviderModelID)
-		if providerIdentity == "" {
-			providerIdentity = model
-		}
-		card := cards[provider.Name]
-		arm := ModelArm{
-			ID:                            portableModelArmID(model),
-			Model:                         model,
-			ProviderModelIDDigest:         digestString(providerIdentity),
-			InputCostPerMillionTokensUSD:  provider.Pricing.PromptPer1M,
-			OutputCostPerMillionTokensUSD: provider.Pricing.CompletionPer1M,
-			Capabilities:                  normalizedCapabilities(card.Capabilities),
-			Modalities:                    normalizedModalities(card),
-			ContextWindowTokens:           positiveInt(card.ContextWindowSize),
-			ParameterSize:                 boundedOptionalString(card.ParamSize, 64),
-			RuntimeRevision:               runtimeRevisionPointer(runtimeRevision),
-		}
-		arm.ConfigDigest = stringPointer(modelArmConfigDigest(provider, arm))
-		arms = append(arms, arm)
-	}
-
-	sort.Slice(arms, func(i, j int) bool {
-		return arms[i].Model < arms[j].Model
+		Decisions:   decisions,
 	})
-	if len(arms) == 0 {
-		return nil
-	}
-	return arms
 }
 
-type armConfigFingerprint struct {
-	Model                         string   `json:"model"`
-	ProviderModelIDDigest         string   `json:"provider_model_id_digest"`
-	ReasoningFamily               string   `json:"reasoning_family,omitempty"`
-	APIFormat                     string   `json:"api_format,omitempty"`
-	InputCostPerMillionTokensUSD  float64  `json:"input_cost_per_million_tokens_usd"`
-	OutputCostPerMillionTokensUSD float64  `json:"output_cost_per_million_tokens_usd"`
-	Capabilities                  []string `json:"capabilities,omitempty"`
-	Modalities                    []string `json:"modalities,omitempty"`
-	ContextWindowTokens           *int     `json:"context_window_tokens,omitempty"`
-	ParameterSize                 *string  `json:"parameter_size,omitempty"`
-	ExternalModelIDDigest         string   `json:"external_model_ids_digest,omitempty"`
+func adaptationSnapshotDigest(routing routerconfig.CanonicalRouting) string {
+	decisions := make([]adaptationDecisionFingerprint, 0, len(routing.Decisions))
+	for _, decision := range routing.Decisions {
+		decisions = append(decisions, adaptationDecisionFingerprint{
+			Adaptations: decision.Adaptations,
+		})
+	}
+	return digestJSON(struct {
+		Decisions []adaptationDecisionFingerprint `json:"decisions"`
+	}{Decisions: decisions})
 }
 
-func modelArmConfigDigest(provider routerconfig.CanonicalProviderModel, arm ModelArm) string {
-	externalDigest := ""
-	if len(provider.ExternalModelIDs) > 0 {
-		externalDigest = digestJSON(provider.ExternalModelIDs)
+func appendUniqueStrings(existing []string, values ...string) []string {
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value != "" && !containsString(existing, value) {
+			existing = append(existing, value)
+		}
 	}
-	return digestJSON(armConfigFingerprint{
-		Model: arm.Model, ProviderModelIDDigest: arm.ProviderModelIDDigest,
-		ReasoningFamily: provider.ReasoningFamily, APIFormat: provider.APIFormat,
-		InputCostPerMillionTokensUSD:  arm.InputCostPerMillionTokensUSD,
-		OutputCostPerMillionTokensUSD: arm.OutputCostPerMillionTokensUSD,
-		Capabilities:                  arm.Capabilities, Modalities: arm.Modalities,
-		ContextWindowTokens: arm.ContextWindowTokens, ParameterSize: arm.ParameterSize,
-		ExternalModelIDDigest: externalDigest,
-	})
+	return existing
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
 
 type topologyBackendFingerprint struct {
@@ -216,10 +199,17 @@ type topologyModelFingerprint struct {
 	Backends              []topologyBackendFingerprint `json:"backends"`
 }
 
-func backendTopologyDigest(canonical routerconfig.CanonicalConfig) string {
+func backendTopologyDigestForModels(
+	canonical routerconfig.CanonicalConfig,
+	allowedModels map[string]struct{},
+) string {
+	if len(allowedModels) == 0 {
+		return ""
+	}
 	models := make([]topologyModelFingerprint, 0, len(canonical.Providers.Models))
 	for _, provider := range canonical.Providers.Models {
-		if len(provider.BackendRefs) == 0 {
+		modelName := strings.TrimSpace(provider.Name)
+		if _, allowed := allowedModels[modelName]; !allowed || len(provider.BackendRefs) == 0 {
 			continue
 		}
 		identity := strings.TrimSpace(provider.ProviderModelID)
@@ -227,7 +217,7 @@ func backendTopologyDigest(canonical routerconfig.CanonicalConfig) string {
 			identity = strings.TrimSpace(provider.Name)
 		}
 		model := topologyModelFingerprint{
-			Model: strings.TrimSpace(provider.Name), ProviderModelIDDigest: digestString(identity),
+			Model: modelName, ProviderModelIDDigest: digestString(identity),
 			Backends: make([]topologyBackendFingerprint, 0, len(provider.BackendRefs)),
 		}
 		for _, backend := range provider.BackendRefs {
@@ -249,6 +239,9 @@ func backendTopologyDigest(canonical routerconfig.CanonicalConfig) string {
 		})
 		models = append(models, model)
 	}
+	if len(models) != len(allowedModels) {
+		return ""
+	}
 	sort.Slice(models, func(i, j int) bool { return models[i].Model < models[j].Model })
 	return digestJSON(models)
 }
@@ -267,50 +260,6 @@ func digestJSON(value any) string {
 		panic(fmt.Sprintf("canonical evaluation digest: %v", err))
 	}
 	return digestBytes(encoded)
-}
-
-func validProviderArm(provider routerconfig.CanonicalProviderModel, model string) bool {
-	if model == "" || len(model) > 512 || len(provider.BackendRefs) == 0 {
-		return false
-	}
-	pricing := provider.Pricing
-	if pricing.PromptPer1M < 0 || pricing.CompletionPer1M < 0 ||
-		math.IsNaN(pricing.PromptPer1M) || math.IsNaN(pricing.CompletionPer1M) ||
-		math.IsInf(pricing.PromptPer1M, 0) || math.IsInf(pricing.CompletionPer1M, 0) {
-		return false
-	}
-	currency := strings.TrimSpace(pricing.Currency)
-	if strings.EqualFold(currency, "USD") {
-		return true
-	}
-	return currency == "" && pricing.PromptPer1M == 0 && pricing.CompletionPer1M == 0
-}
-
-func portableModelArmID(model string) string {
-	var base strings.Builder
-	lastSeparator := false
-	for _, value := range strings.ToLower(model) {
-		if (value >= 'a' && value <= 'z') || (value >= '0' && value <= '9') || value == '.' || value == '_' {
-			base.WriteRune(value)
-			lastSeparator = false
-			continue
-		}
-		if !lastSeparator && base.Len() > 0 {
-			base.WriteByte('-')
-			lastSeparator = true
-		}
-	}
-	readable := strings.Trim(base.String(), ".-_")
-	if readable == "" || !startsWithASCIILetterOrDigit(readable) {
-		readable = "model"
-	}
-	// A full digest makes IDs collision-resistant even when different model
-	// names normalize to the same portable prefix. 63+1+64 is the Python
-	// contract's 128-character maximum.
-	if len(readable) > 63 {
-		readable = strings.TrimRight(readable[:63], ".-_")
-	}
-	return readable + "-" + strings.TrimPrefix(digestString(model), "sha256:")
 }
 
 func normalizedCapabilities(values []string) []string {
@@ -403,11 +352,6 @@ func digestString(value string) string {
 	return digestBytes([]byte(value))
 }
 
-func startsWithASCIILetterOrDigit(value string) bool {
-	first := value[0]
-	return (first >= 'a' && first <= 'z') || (first >= '0' && first <= '9')
-}
-
 func positiveInt(value int) *int {
 	if value <= 0 {
 		return nil
@@ -424,10 +368,15 @@ func boundedOptionalString(value string, limit int) *string {
 }
 
 func runtimeRevisionPointer(value string) *string {
-	if strings.EqualFold(strings.TrimSpace(value), "unavailable") {
+	return boundedOptionalString(value, 160)
+}
+
+func copyStringPointer(value *string) *string {
+	if value == nil {
 		return nil
 	}
-	return boundedOptionalString(value, 160)
+	copy := *value
+	return &copy
 }
 
 func stringPointer(value string) *string {

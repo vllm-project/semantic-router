@@ -19,19 +19,38 @@ OPENCLAW_INSTALL_DOC_PATH = (
 )
 
 
-def test_install_script_only_mentions_docker_runtime() -> None:
+def test_install_script_runtime_contract_supports_podman_fallback() -> None:
     content = INSTALL_SCRIPT_PATH.read_text(encoding="utf-8")
 
-    assert "podman" not in content.lower()
+    # User-facing --runtime choices are unchanged: Podman is an internal
+    # fallback during auto detection, not a first-class option.
     assert "--runtime auto|docker|skip" in content
+
+    # Auto detection must prefer Docker but fall back to Podman when Docker
+    # is not reachable. The fallback has to be gated on --runtime auto so
+    # explicit --runtime docker/skip paths are unaffected.
+    assert "podman_ready" in content
+    assert 'REQUESTED_RUNTIME" = "auto" ] && podman_ready' in content
+
+    # Linux auto still resolves to Docker first.
     assert "Linux auto -> docker" in content
 
 
-def test_installation_doc_only_mentions_docker_runtime() -> None:
+def test_install_script_persists_selected_runtime() -> None:
+    content = INSTALL_SCRIPT_PATH.read_text(encoding="utf-8")
+
+    # The selected runtime is written to runtime.env so later CLI sessions
+    # reuse it instead of re-probing the host.
+    assert "runtime.env" in content
+    assert "CONTAINER_RUNTIME=" in content
+
+
+def test_installation_doc_documents_runtime_options() -> None:
     content = INSTALL_DOC_PATH.read_text(encoding="utf-8")
 
-    assert "Podman" not in content
     assert "Docker" in content
+    # Podman is now documented as a fallback when Docker is absent.
+    assert "Podman" in content
 
 
 def test_install_script_defaults_to_dev_channel() -> None:

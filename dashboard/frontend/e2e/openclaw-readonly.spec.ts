@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { mockAuthenticatedSession } from './support/auth'
+import { dashboardSettingsResponse, mockAuthenticatedSession } from './support/auth'
 import { openComposerAddMenu } from './support/playground'
 
 const setupState = {
@@ -12,25 +12,14 @@ const setupState = {
   canActivate: true,
 }
 
-const serverReadonlySettings = {
+const serverReadonlySettings = dashboardSettingsResponse({
   readonlyMode: true,
   serverReadonly: true,
   runtimeConfigWritable: false,
   recipeStoreWritable: false,
-  setupMode: false,
-  platform: '',
-  envoyUrl: '',
-}
+})
 
-const writableSettings = {
-  readonlyMode: false,
-  serverReadonly: false,
-  runtimeConfigWritable: true,
-  recipeStoreWritable: true,
-  setupMode: false,
-  platform: '',
-  envoyUrl: '',
-}
+const writableSettings = dashboardSettingsResponse()
 
 const openClawTeam = {
   id: 'team-alpha',

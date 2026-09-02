@@ -1,17 +1,18 @@
 package classification
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	httputil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/connector"
 )
 
 // probabilitySumTolerance bounds how far an http_classify response's scores
@@ -57,18 +58,24 @@ type sequenceLabelMapping interface {
 // external model (a 14-label category classifier) during #2918, not just a
 // synthetic mock.
 type HTTPClassifierInference struct {
-	httpClient       *http.Client
-	baseURL          string
-	accessKey        string
-	timeout          time.Duration
-	maxRequestBytes  int64
-	maxResponseBytes int64
-	mapping          sequenceLabelMapping
+	connector *connector.Client
+	timeout   time.Duration
+	mapping   sequenceLabelMapping
 }
 
 // NewHTTPClassifierInference creates a new http_classify-backed inference
 // instance from an external model config and label mapping.
 func NewHTTPClassifierInference(cfg *config.ExternalModelConfig, mapping sequenceLabelMapping) (*HTTPClassifierInference, error) {
+	return newHTTPClassifierInference(cfg, mapping, 0)
+}
+
+// newHTTPClassifierInference is shared by the existing prompt_guard connector
+// and category's backend adapter. A non-zero deadline comes from the shared
+// backend block; zero preserves the external-model legacy timeout behavior.
+func newHTTPClassifierInference(cfg *config.ExternalModelConfig, mapping sequenceLabelMapping, deadline time.Duration) (*HTTPClassifierInference, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("http_classify external model config is required")
+	}
 	if cfg.ModelEndpoint.Address == "" {
 		return nil, fmt.Errorf("http_classify endpoint address is required")
 	}
@@ -82,33 +89,42 @@ func NewHTTPClassifierInference(cfg *config.ExternalModelConfig, mapping sequenc
 	// alignScoresToMapping allocate an undersized distribution, so
 	// assignScoreToMapping's bounds check rejects every label and a perfectly
 	// valid server response fails with an error blaming the server, on every
-	// request. Under on_error: block that blocks all traffic. Fail here instead.
+	// request. Fail here instead of returning a partial response.
 	if n := mapping.LabelCount(); n < 2 {
 		return nil, fmt.Errorf("http_classify label mapping must define at least 2 labels, got %d", n)
 	}
 
-	scheme := cfg.ModelEndpoint.Protocol
+	scheme := strings.ToLower(strings.TrimSpace(cfg.ModelEndpoint.Protocol))
 	if scheme == "" {
 		scheme = "http"
 	}
-	baseURL := fmt.Sprintf("%s://%s:%d", scheme, cfg.ModelEndpoint.Address, cfg.ModelEndpoint.Port)
+	baseURL := fmt.Sprintf("%s://%s:%d", scheme, strings.TrimSpace(cfg.ModelEndpoint.Address), cfg.ModelEndpoint.Port)
 
 	// http_classify is a single lightweight forward pass, not a generative
 	// call - it should fail fast rather than share http_chat's more
 	// generous default.
 	timeout := 5 * time.Second
-	if cfg.TimeoutSeconds > 0 {
+	if deadline > 0 {
+		timeout = deadline
+	} else if cfg.TimeoutSeconds > 0 {
 		timeout = time.Duration(cfg.TimeoutSeconds) * time.Second
 	}
 
+	remote, err := connector.New(baseURL, bearerAuthorizer(cfg.AccessKey), connector.Options{
+		AttemptTimeout:   timeout,
+		MaxRetries:       1,
+		MaxRequestBytes:  cfg.GetMaxRequestBytes(),
+		MaxResponseBytes: cfg.GetMaxResponseBytes(),
+		MaxErrorBytes:    maxClassifyErrorBodyBytes,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create http_classify connector: %w", err)
+	}
+
 	return &HTTPClassifierInference{
-		httpClient:       &http.Client{Timeout: timeout},
-		baseURL:          baseURL,
-		accessKey:        cfg.AccessKey,
-		timeout:          timeout,
-		maxRequestBytes:  cfg.GetMaxRequestBytes(),
-		maxResponseBytes: cfg.GetMaxResponseBytes(),
-		mapping:          mapping,
+		connector: remote,
+		timeout:   timeout,
+		mapping:   mapping,
 	}, nil
 }
 
@@ -137,6 +153,13 @@ type httpClassifyLabelScore struct {
 	Score float32 `json:"score"`
 }
 
+var httpClassifyOperation = connector.Operation{
+	Name:      "http_classify",
+	Method:    http.MethodPost,
+	Path:      "/classify",
+	RetrySafe: true,
+}
+
 // Classify implements the SequenceClassifierBackend interface. It derives its
 // deadline from the caller's ctx (so the request can be cancelled if the
 // caller gives up first) bounded by h.timeout, rather than always running to
@@ -145,73 +168,52 @@ func (h *HTTPClassifierInference) Classify(ctx context.Context, text string) (Se
 	ctx, cancel := context.WithTimeout(ctx, h.timeout)
 	defer cancel()
 
-	httpReq, err := h.buildClassifyRequest(ctx, text)
-	if err != nil {
-		return SequenceClassificationResult{}, err
-	}
-
-	scores, err := h.doClassifyRequest(httpReq)
-	if err != nil {
-		return SequenceClassificationResult{}, err
-	}
-
-	return alignScoresToMapping(h.mapping, scores)
-}
-
-// buildClassifyRequest builds the outgoing http_classify HTTP request.
-func (h *HTTPClassifierInference) buildClassifyRequest(ctx context.Context, text string) (*http.Request, error) {
 	reqBody, err := json.Marshal(httpClassifyRequest{Inputs: text})
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal http_classify request: %w", err)
+		return SequenceClassificationResult{}, fmt.Errorf("failed to marshal http_classify request: %w", err)
 	}
-	if int64(len(reqBody)) > h.maxRequestBytes {
-		return nil, fmt.Errorf(
-			"http_classify request body is %d bytes, exceeding the limit of %d bytes", len(reqBody), h.maxRequestBytes)
+	responseBody, err := h.connector.Do(ctx, httpClassifyOperation, reqBody)
+	if err != nil {
+		return SequenceClassificationResult{}, formatHTTPClassifyConnectorError(err)
 	}
 
-	url := fmt.Sprintf("%s/classify", h.baseURL)
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(reqBody))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create http_classify request: %w", err)
+	var scores []httpClassifyLabelScore
+	if err := json.Unmarshal(responseBody, &scores); err != nil {
+		return SequenceClassificationResult{}, fmt.Errorf("failed to parse http_classify response: %w", err)
 	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Accept", "application/json")
-	if h.accessKey != "" {
-		httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", h.accessKey))
+	if len(scores) == 0 {
+		return SequenceClassificationResult{}, fmt.Errorf("http_classify response contained no labels")
 	}
-	return httpReq, nil
+	return alignScoresToMapping(h.mapping, scores)
 }
 
 const maxClassifyErrorBodyBytes int64 = 8 * 1024
 
-// doClassifyRequest sends the request and parses the label/score list from a
-// successful response.
-func (h *HTTPClassifierInference) doClassifyRequest(httpReq *http.Request) ([]httpClassifyLabelScore, error) {
-	resp, err := h.httpClient.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("http_classify request failed: %w", err)
+func formatHTTPClassifyConnectorError(err error) error {
+	var connectorErr *connector.Error
+	if !errors.As(err, &connectorErr) {
+		return fmt.Errorf("http_classify request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	switch connectorErr.Kind {
+	case connector.KindStatus:
+		body, truncated := connectorErr.ResponseBody()
+		return fmt.Errorf(
+			"http_classify endpoint returned status %d: %s (truncated=%t): %w",
+			connectorErr.StatusCode, string(body), truncated, connectorErr,
+		)
+	case connector.KindResponse:
+		return fmt.Errorf("failed to read http_classify response: %w", connectorErr)
+	default:
+		return fmt.Errorf("http_classify request failed: %w", connectorErr)
+	}
+}
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		errBody, truncated := httputil.ReadTruncatedBody(resp.Body, maxClassifyErrorBodyBytes)
-		return nil, fmt.Errorf(
-			"http_classify endpoint returned status %d: %s (truncated=%t)", resp.StatusCode, string(errBody), truncated)
+// Close releases idle connections owned by the remote connector.
+func (h *HTTPClassifierInference) Close() error {
+	if h == nil || h.connector == nil {
+		return nil
 	}
-
-	body, err := httputil.ReadLimitedBody(resp.Body, h.maxResponseBytes)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read http_classify response: %w", err)
-	}
-
-	var scores []httpClassifyLabelScore
-	if err := json.Unmarshal(body, &scores); err != nil {
-		return nil, fmt.Errorf("failed to parse http_classify response: %w", err)
-	}
-	if len(scores) == 0 {
-		return nil, fmt.Errorf("http_classify response contained no labels")
-	}
-	return scores, nil
+	return h.connector.Close()
 }
 
 // alignScoresToMapping matches response labels against the configured label

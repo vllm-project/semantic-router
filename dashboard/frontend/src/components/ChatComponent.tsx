@@ -717,6 +717,7 @@ const ChatComponent = ({
             ) : (
               <>
                 <ChatComponentErrors
+                  overlay={isConversationEmpty}
                   onDismissError={() => {
                     if (visibleErrorConversationId) {
                       setConversationError(visibleErrorConversationId, null)

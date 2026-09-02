@@ -28,6 +28,31 @@ from cli.utils import get_logger
 log = get_logger(__name__)
 
 
+def _prepare_runtime_directories(
+    config_dir: str,
+    vllm_sr_dir: str,
+    stack_layout: RuntimeStackLayout,
+    *,
+    managed_recipe: bool,
+) -> tuple[str, str, str, str]:
+    """Create mutable runtime roots and return their resolved host paths."""
+
+    evaluation_staging_root = os.path.join(config_dir, ".vllm-sr-evaluation-staging")
+    models_dir = (
+        os.path.join(vllm_sr_dir, "models")
+        if managed_recipe
+        else os.path.join(config_dir, "models")
+    )
+    dashboard_data_dir = os.path.join(vllm_sr_dir, "dashboard-data")
+    recipe_store_dir = os.path.join(
+        vllm_sr_dir, "recipe-store", stack_layout.stack_name
+    )
+    for directory in (models_dir, dashboard_data_dir, recipe_store_dir):
+        os.makedirs(directory, exist_ok=True)
+    log.info("Mounting dashboard data directory: %s", dashboard_data_dir)
+    return evaluation_staging_root, models_dir, dashboard_data_dir, recipe_store_dir
+
+
 def _prepare_runtime_paths(
     config_file,
     runtime_config_file=None,
@@ -46,7 +71,9 @@ def _prepare_runtime_paths(
     vllm_sr_dir = os.path.join(config_dir, ".vllm-sr")
     os.makedirs(vllm_sr_dir, exist_ok=True)
     log.info(f"Mounting .vllm-sr directory: {vllm_sr_dir}")
-
+    # Keep immutable Evaluation deployment snapshots outside .vllm-sr. The
+    # latter is mounted read-write into Dashboard, which would otherwise give
+    # the container an alias around the snapshot's dedicated read-only mount.
     active_config_path = _runtime_config_output_path(
         Path(source_config_path),
         state_root_dir=config_dir,
@@ -65,21 +92,17 @@ def _prepare_runtime_paths(
     # A managed Recipe source is a distributable five-file directory. Keep
     # mutable model/runtime state under its explicitly ignored .vllm-sr area
     # so serving it never changes the package contract.
-    models_dir = (
-        os.path.join(vllm_sr_dir, "models")
-        if active_recipe
-        else os.path.join(config_dir, "models")
+    (
+        evaluation_deployment_staging_root,
+        models_dir,
+        dashboard_data_dir,
+        recipe_store_dir,
+    ) = _prepare_runtime_directories(
+        config_dir,
+        vllm_sr_dir,
+        stack_layout,
+        managed_recipe=active_recipe is not None,
     )
-    os.makedirs(models_dir, exist_ok=True)
-
-    dashboard_data_dir = os.path.join(config_dir, ".vllm-sr", "dashboard-data")
-    os.makedirs(dashboard_data_dir, exist_ok=True)
-    log.info(f"Mounting dashboard data directory: {dashboard_data_dir}")
-
-    recipe_store_dir = os.path.join(
-        vllm_sr_dir, "recipe-store", stack_layout.stack_name
-    )
-    os.makedirs(recipe_store_dir, exist_ok=True)
 
     log_spool = prepare_runtime_log_spool(vllm_sr_dir, stack_layout.stack_name)
 
@@ -106,6 +129,7 @@ def _prepare_runtime_paths(
             "source_config_path": source_config_path,
             "effective_config_path": effective_config_path,
             "vllm_sr_dir": vllm_sr_dir,
+            "evaluation_deployment_staging_root": (evaluation_deployment_staging_root),
             "models_dir": models_dir,
             "dashboard_data_dir": dashboard_data_dir,
             "recipe_store_dir": recipe_store_dir,

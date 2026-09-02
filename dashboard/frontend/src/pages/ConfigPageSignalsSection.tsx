@@ -203,7 +203,9 @@ export default function ConfigPageSignalsSection({
     allSignals.push({
       name: ctx.name,
       type: 'Context',
-      summary: `${ctx.min_tokens} to ${ctx.max_tokens} tokens`,
+      summary: ctx.max_tokens
+        ? `${ctx.min_tokens ?? '0'} to ${ctx.max_tokens} tokens`
+        : `${ctx.min_tokens ?? '0'} tokens and above`,
       rawData: ctx,
     })
   })
@@ -530,8 +532,12 @@ export default function ConfigPageSignalsSection({
       sections.push({
         title: 'Context Signal',
         fields: [
-          { label: 'Min Tokens', value: signal.rawData.min_tokens || 'N/A', fullWidth: true },
-          { label: 'Max Tokens', value: signal.rawData.max_tokens || 'N/A', fullWidth: true },
+          { label: 'Min Tokens', value: signal.rawData.min_tokens || '0', fullWidth: true },
+          {
+            label: 'Max Tokens',
+            value: signal.rawData.max_tokens || 'No upper bound',
+            fullWidth: true,
+          },
           { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true },
         ],
       })
@@ -893,7 +899,7 @@ export default function ConfigPageSignalsSection({
             preference_threshold: signal.rawData.threshold,
             lookback_turns: signal.rawData.lookback_turns,
             min_tokens: signal.rawData.min_tokens || '0',
-            max_tokens: signal.rawData.max_tokens || '8K',
+            max_tokens: signal.rawData.max_tokens || '',
             structure_feature:
               signal.type === 'Structure' ? signal.rawData.feature : defaultForm.structure_feature,
             structure_predicate:
@@ -1106,16 +1112,14 @@ export default function ConfigPageSignalsSection({
         }
         case 'Context': {
           const min_tokens = (formData.min_tokens || '0').trim()
-          const max_tokens = (formData.max_tokens || '8K').trim()
-          if (!min_tokens || !max_tokens) {
-            throw new Error('Both min_tokens and max_tokens are required.')
-          }
+          // An empty max_tokens is an open-ended band with no upper limit.
+          const max_tokens = (formData.max_tokens || '').trim()
           newConfig.signals.context = [
             ...(newConfig.signals.context || []),
             {
               name,
               min_tokens,
-              max_tokens,
+              max_tokens: max_tokens || undefined,
               description: formData.description || undefined,
             },
           ]
