@@ -15,7 +15,7 @@ runs:
   using: composite
   steps:
     - name: Reclaim disk space
-      uses: $/.github/actions/free-disk-space
+      uses: ./.github/actions/free-disk-space
       with:
         show-usage: ${{ inputs.show-usage }}
         relocate-docker: ${{ inputs.relocate-docker }}

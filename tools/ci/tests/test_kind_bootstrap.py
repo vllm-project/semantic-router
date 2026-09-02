@@ -18,6 +18,8 @@ class KindBootstrapContractTests(unittest.TestCase):
     def test_one_pinned_bootstrap_is_used_by_both_workflows(self) -> None:
         setup_text = SETUP_KIND.read_text(encoding="utf-8")
 
+        self.assertEqual(setup_text.count("uses: ./.github/actions/free-disk-space"), 1)
+        self.assertNotIn("uses: $/.github/actions/free-disk-space", setup_text)
         self.assertEqual(setup_text.count(f"KIND_VERSION: {KIND_VERSION}"), 1)
         self.assertEqual(setup_text.count(f"KIND_NODE_IMAGE: {KIND_NODE_IMAGE}"), 1)
         self.assertIn(
