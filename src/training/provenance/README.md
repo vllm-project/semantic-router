@@ -27,6 +27,18 @@ Validation fails when a required field is empty, a source lacks a license,
 a cross-reference points at a different manifest, artifact file digests differ
 from the export directory, or a key or value looks like a secret.
 
+## When to validate
+
+| Lifecycle step | Call | Gate |
+|---|---|---|
+| training finishes | `validate_manifest(dataset)`, `validate_manifest(run)` | do not start evaluation on an incomplete run |
+| evaluation finishes | `validate_manifest(evaluation)` | do not export without recorded metrics |
+| export finishes, before upload | `validate-bundle <dir> --artifact-dir <export dir>` | do not publish an artifact whose digests or references disagree |
+| runtime or CI loads an artifact | `validate-bundle <dir> --artifact-dir <downloaded dir>` | do not load bytes that differ from the manifest |
+
+Publishing and loading are the two hard gates; the earlier calls fail fast so a
+problem is caught before compute is spent.
+
 ## Emit
 
 ```python
