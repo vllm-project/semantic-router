@@ -1,0 +1,95 @@
+.tableScroll {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+  border-radius: 0;
+  scrollbar-gutter: stable;
+  contain: inline-size;
+}
+
+.table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+  font-size: var(--text-xs);
+}
+
+.table caption {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.table th,
+.table td {
+  padding: 0.7rem 0.75rem;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface-raised);
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+}
+
+.table tbody tr:last-child > * {
+  border-bottom: 0;
+}
+
+.table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.tableReadiness th,
+.tableReadiness td {
+  padding: 0.75rem;
+}
+
+.tableReadiness thead th {
+  background: var(--surface-shell);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+}
+
+.tableReadiness tbody th {
+  width: 38%;
+}
+
+.tableReadiness tbody th strong,
+.tableReadiness tbody th span {
+  display: block;
+}
+
+.tableReadiness tbody th strong {
+  color: var(--text-primary);
+}
+
+.tableReadiness tbody th span {
+  margin-top: 0.15rem;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.inlineStatus {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}

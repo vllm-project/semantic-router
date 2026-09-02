@@ -1,0 +1,206 @@
+.sloSection {
+  border-color: var(--border-subtle);
+  background: transparent;
+}
+
+.sloHeadingRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.sloHeadingRow > :first-child {
+  margin-bottom: 0;
+}
+
+.sloExplanation {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.28fr) minmax(0, 1fr);
+  gap: 0.75rem;
+  margin: 1rem 0;
+  padding: 0.65rem 0 0.65rem 0.8rem;
+  border-left: 2px solid var(--brand-amd);
+}
+
+.sloExplanation strong {
+  color: var(--text-primary);
+  font-size: var(--text-xs);
+}
+
+.sloExplanation span {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.protocolSummary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  margin: 0 0 1rem;
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.protocolSummary > div {
+  min-width: 0;
+  padding: 0.7rem;
+  border-left: 1px solid var(--border-subtle);
+}
+
+.protocolSummary > div:first-child {
+  border-left: 0;
+}
+
+.protocolSummary dt {
+  color: var(--text-muted);
+  font-size: 0.66rem;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.protocolSummary dd {
+  margin: 0.2rem 0 0;
+  overflow-wrap: anywhere;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  line-height: 1.45;
+}
+
+.sloPresets {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  padding: 0.65rem 0;
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.sloPresets > div {
+  display: grid;
+  align-content: center;
+  flex: 1 1 240px;
+  gap: 0.18rem;
+  min-width: 0;
+  text-align: left;
+}
+
+.sloPresets > div span {
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.sloPresets button {
+  flex: 0 0 auto;
+}
+
+.sloPresets small,
+.sloGrid small {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+.sloGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 0.9rem 1rem;
+}
+
+.sloGrid label {
+  display: grid;
+  align-content: start;
+  gap: 0.38rem;
+  min-width: 0;
+}
+
+.sloGrid label > span:first-child {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 650;
+}
+
+.sloGrid input {
+  width: 100%;
+  min-width: 0;
+}
+
+.unitInput {
+  position: relative;
+  min-width: 0;
+}
+
+.unitInput input {
+  padding-right: 3.6rem;
+}
+
+.unitInput > span {
+  position: absolute;
+  top: 50%;
+  right: 0.7rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+@media (max-width: 680px) {
+  .sloExplanation,
+  .sloGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .sloPresets {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .sloPresets > div {
+    flex-basis: auto;
+  }
+
+  .sloPresets button {
+    width: 100%;
+  }
+
+  .sloHeadingRow {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .protocolSummary {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .protocolSummary > div:nth-child(3) {
+    border-top: 1px solid var(--border-subtle);
+    border-left: 0;
+  }
+
+  .protocolSummary > div:nth-child(4) {
+    border-top: 1px solid var(--border-subtle);
+  }
+}
+
+@media (max-width: 420px) {
+  .protocolSummary {
+    grid-template-columns: 1fr;
+  }
+
+  .protocolSummary > div,
+  .protocolSummary > div:nth-child(4) {
+    border-top: 1px solid var(--border-subtle);
+    border-left: 0;
+  }
+
+  .protocolSummary > div:first-child {
+    border-top: 0;
+  }
+}

@@ -29,6 +29,9 @@ func canonicalValueDigest(value any) (string, error) {
 }
 
 func decodeJSONValue(data []byte) (any, error) {
+	if err := rejectDuplicateJSONKeys(data); err != nil {
+		return nil, fmt.Errorf("decode canonical JSON: %w", err)
+	}
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.UseNumber()
 	var value any

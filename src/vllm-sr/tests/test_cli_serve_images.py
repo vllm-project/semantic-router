@@ -92,8 +92,6 @@ def test_serve_passes_role_specific_images_to_backend(monkeypatch, tmp_path: Pat
             "test/envoy:latest",
             "--dashboard-image",
             "test/dashboard:latest",
-            "--sim-image",
-            "test/sim:latest",
             "--image-pull-policy",
             "never",
         ],
@@ -104,4 +102,3 @@ def test_serve_passes_role_specific_images_to_backend(monkeypatch, tmp_path: Pat
     assert captured["router_image"] == "test/router:latest"
     assert captured["envoy_image"] == "test/envoy:latest"
     assert captured["dashboard_image"] == "test/dashboard:latest"
-    assert captured["sim_image"] == "test/sim:latest"

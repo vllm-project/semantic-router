@@ -1,0 +1,85 @@
+.navigationShell {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.navigation {
+  display: flex;
+  gap: 1.25rem;
+  min-width: 0;
+  padding: 0 0.25rem;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--border-subtle);
+  scrollbar-width: none;
+}
+
+.navigation::-webkit-scrollbar {
+  display: none;
+}
+
+.navigationButton {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-height: 42px;
+  padding: 0.4rem 0.1rem 0.55rem;
+  border: 0;
+  border-radius: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  font-weight: 650;
+  scroll-snap-align: center;
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.navigationButton svg {
+  width: 16px;
+  height: 16px;
+}
+
+.navigationButton:hover {
+  background: transparent;
+  color: var(--text-primary);
+}
+
+.navigationActive {
+  background: transparent;
+  color: #fff;
+}
+
+.navigationActive::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  background: var(--brand-amd);
+}
+
+.navigationButton:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -3px;
+}
+
+@media (max-width: 760px) {
+  .navigation {
+    justify-content: flex-start;
+    padding-inline: 0.25rem;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+  }
+
+  .navigationButton {
+    display: flex;
+    min-width: max-content;
+  }
+}
