@@ -461,6 +461,8 @@ func GetEmbedding2DMatryoshka(text string, modelType string, targetLayer int, ta
 // GetEmbeddingWithModelType generates embedding with specific model type
 func GetEmbeddingWithModelType(text string, modelType string, targetDim int) (*EmbeddingOutput, error) {
 	switch strings.ToLower(strings.TrimSpace(modelType)) {
+	case "mmbert":
+		return GetEmbeddingWithMetadata(text, 0, 0, targetDim)
 	case "multimodal":
 		output, err := MultiModalEncodeText(text, targetDim)
 		if err != nil {
@@ -473,8 +475,7 @@ func GetEmbeddingWithModelType(text string, modelType string, targetDim int) (*E
 			ProcessingTimeMs: output.ProcessingTimeMs,
 		}, nil
 	default:
-		// ONNX binding uses mmBERT path for all non-multimodal requests.
-		return GetEmbeddingWithMetadata(text, 0, 0, targetDim)
+		return nil, fmt.Errorf("%w: %q", ErrUnsupportedModelType, modelType)
 	}
 }
 

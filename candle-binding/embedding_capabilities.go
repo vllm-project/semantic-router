@@ -18,6 +18,8 @@ const (
 	ModelTypeGemma      ModelType = "gemma"
 	ModelTypeMmBert     ModelType = "mmbert"
 	ModelTypeMultimodal ModelType = "multimodal"
+
+	DefaultEmbeddingModelType = ModelTypeQwen3
 )
 
 type Modality string

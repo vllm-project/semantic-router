@@ -358,7 +358,7 @@ func initializeUnifiedEmbeddingModels(cfg *config.RouterConfig, component string
 		return false
 	}
 
-	semanticCacheNeedsBatched, mlSelectionNeedsBatched, err := batchedEmbeddingNeeds(cfg, paths.qwen3)
+	semanticCacheNeedsBatched, mlSelectionNeedsBatched, err := batchedEmbeddingNeeds(cfg, paths)
 	if err != nil {
 		logging.ComponentErrorEvent(component, "embedding_capabilities_query_failed", map[string]interface{}{
 			"error": err.Error(),
