@@ -1,4 +1,5 @@
 import json
+import logging
 import sys
 from pathlib import Path
 
@@ -166,10 +167,10 @@ def test_detect_container_runtime_env_var_overrides_persisted_file(
 
 
 def test_detect_container_runtime_ignores_unsupported_persisted_value(
-    monkeypatch, tmp_path
+    monkeypatch, tmp_path, caplog
 ):
     """A stale or hand-edited runtime.env must not abort; fall back to
-    auto-detection."""
+    auto-detection with a warning."""
     _write_persisted_runtime_env(tmp_path, "lxc")
     monkeypatch.delenv("CONTAINER_RUNTIME", raising=False)
     monkeypatch.setattr(
@@ -180,11 +181,17 @@ def test_detect_container_runtime_ignores_unsupported_persisted_value(
     monkeypatch.setattr(container_runtime.os.path, "realpath", lambda path: path)
     _stub_docker_version(monkeypatch)
 
-    assert container_runtime.get_container_runtime() == "docker"
+    with caplog.at_level(logging.WARNING, logger="cli.container_runtime"):
+        assert container_runtime.get_container_runtime() == "docker"
+
+    assert any(
+        "Ignoring unsupported CONTAINER_RUNTIME=lxc" in record.message
+        for record in caplog.records
+    )
 
 
 def test_detect_container_runtime_falls_back_when_persisted_runtime_missing_from_path(
-    monkeypatch, tmp_path
+    monkeypatch, tmp_path, caplog
 ):
     """A persisted runtime whose binary is gone is a stale hint, not an
     error: warn and auto-detect."""
@@ -198,7 +205,14 @@ def test_detect_container_runtime_falls_back_when_persisted_runtime_missing_from
     monkeypatch.setattr(container_runtime.os.path, "realpath", lambda path: path)
     _stub_docker_version(monkeypatch)
 
-    assert container_runtime.get_container_runtime() == "docker"
+    with caplog.at_level(logging.WARNING, logger="cli.container_runtime"):
+        assert container_runtime.get_container_runtime() == "docker"
+
+    assert any(
+        "CONTAINER_RUNTIME=podman" in record.message
+        and "was not found in PATH" in record.message
+        for record in caplog.records
+    )
 
 
 def test_detect_container_runtime_ignores_malformed_persisted_file(
