@@ -16,3 +16,9 @@ Router configuration is intentionally separate:
 Do not add prose-only guides, benchmark output, helper programs, or standalone
 router examples here. Public instructions belong in `website/` and repository
 automation belongs in `tools/`.
+
+The public
+[Deployment and Hardware Support Matrix](../website/docs/installation/support-matrix.md)
+is the canonical classification of these assets. Adding or removing a direct
+child of `deploy/` or `deploy/kubernetes/` requires updating that matrix; the
+repository's deployment-matrix check enforces complete coverage.
