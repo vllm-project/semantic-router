@@ -41,12 +41,11 @@ Poisson arrivals. If that split or arrival process does not resemble your
 traffic, use the result only as a sensitivity study or use the Python library's
 `TraceWorkload` with the `Fleet` API.
 
-The dashboard accepts JSONL and CSV trace uploads and summarizes prompt,
-output, arrival, and routing distributions. For simulation jobs, the service
-currently converts the uploaded lengths to a CDF and generates Poisson
-arrivals; it does not replay original timestamps or route labels. Remove prompt
-text and user identifiers before upload because only numeric planning fields
-are needed.
+The standalone HTTP service accepts JSONL and CSV trace uploads and summarizes
+prompt, output, arrival, and routing distributions. For simulation jobs, it
+converts the uploaded lengths to a CDF and generates Poisson arrivals; it does
+not replay original timestamps or route labels. Remove prompt text and user
+identifiers before upload because only numeric planning fields are needed.
 
 ## 2. Establish a fixed-fleet baseline
 

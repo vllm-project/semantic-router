@@ -55,6 +55,7 @@ languages:
     globs:
       - dashboard/frontend/src/**/*.ts
       - dashboard/frontend/src/**/*.tsx
+      - dashboard/frontend/e2e/evaluation/**/*.ts
 
 ignore_globs:
   - website/**

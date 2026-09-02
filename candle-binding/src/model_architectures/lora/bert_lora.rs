@@ -113,7 +113,7 @@ impl LoRABertClassifier {
                 "bert.pooler.dense.weight",
             )?;
             let pooler_bias = base_vb.get(config.hidden_size, "bert.pooler.dense.bias")?;
-            Linear::new(pooler_weight.t()?, Some(pooler_bias))
+            Linear::new(pooler_weight, Some(pooler_bias))
         };
 
         // Load LoRA adapters
@@ -160,7 +160,7 @@ impl LoRABertClassifier {
                     &format!("{}_classifier.weight", task_name),
                 )?;
                 let bias = lora_vb.get(num_classes, &format!("{}_classifier.bias", task_name))?;
-                Linear::new(weight.t()?, Some(bias))
+                Linear::new(weight, Some(bias))
             };
 
             lora_adapters.insert(task, adapter);
