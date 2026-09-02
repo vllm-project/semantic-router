@@ -13,6 +13,7 @@ from community_lifecycle_github import (
     accept_issue_event,
     sync_issue_event,
     sync_issue_kind_event,
+    sync_issue_queue,
     sync_pull_request_event,
     sync_pull_request_queue,
     validate_pull_request_event,
@@ -20,6 +21,7 @@ from community_lifecycle_github import (
 )
 from community_lifecycle_policy import (
     EPIC,
+    ISSUE_DELIVERY_STATE_LABELS,
     MAINTAINER_OWNER,
     OWNER_LABELS,
     PR_STATE_LABELS,
@@ -37,6 +39,7 @@ from community_lifecycle_policy import (
 
 __all__ = [
     "EPIC",
+    "ISSUE_DELIVERY_STATE_LABELS",
     "MAINTAINER_OWNER",
     "OWNER_LABELS",
     "PR_STATE_LABELS",
@@ -64,6 +67,7 @@ def build_parser() -> argparse.ArgumentParser:
         choices=(
             "sync-issue",
             "sync-issue-kind",
+            "sync-issues",
             "accept-issue",
             "validate-pr",
             "sync-pr",
@@ -86,6 +90,8 @@ def main() -> int:
         sync_issue_event(client, event)
     elif args.command == "sync-issue-kind":
         sync_issue_kind_event(client, event)
+    elif args.command == "sync-issues":
+        sync_issue_queue(client, event)
     elif args.command == "accept-issue":
         accept_issue_event(client, event)
     elif args.command == "validate-pr":

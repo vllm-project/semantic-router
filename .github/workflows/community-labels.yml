@@ -71,3 +71,26 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python3 tools/ci/community_lifecycle.py sync-prs --event "$GITHUB_EVENT_PATH"
+
+  issue-sweep:
+    name: Reconcile closed issue labels
+    if: >-
+      github.event_name == 'schedule'
+      || github.event_name == 'workflow_dispatch'
+    concurrency:
+      group: community-label-sync-issue-sweep
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Check out trusted default-branch code
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Strip delivery-state labels from closed issues
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 tools/ci/community_lifecycle.py sync-issues --event "$GITHUB_EVENT_PATH"

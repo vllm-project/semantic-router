@@ -55,6 +55,97 @@ MoM & Routing
             {"needs-acceptance", "wg/evaluation-quality"},
         )
 
+    def test_closed_issue_drops_its_delivery_state_labels(self) -> None:
+        issue = {
+            "state": "closed",
+            "labels": labels(
+                "needs-acceptance",
+                "ready-for-dev",
+                "in-progress",
+                "help wanted",
+                "good first issue",
+                "wg/mom-routing",
+            ),
+            "assignees": [],
+            "milestone": None,
+        }
+        plan = community_lifecycle.plan_issue(
+            issue,
+            event_action="closed",
+            event_label=None,
+            actor_can_manage=False,
+        )
+        self.assertEqual(
+            plan.remove_labels,
+            set(community_lifecycle.ISSUE_DELIVERY_STATE_LABELS),
+        )
+        self.assertEqual(plan.add_labels, set())
+        self.assertNotIn("wg/mom-routing", plan.remove_labels)
+
+    def test_closed_issue_keeps_owner_priority_and_record_labels(self) -> None:
+        issue = {
+            "title": "[Epic] Restore something",
+            "state": "closed",
+            "labels": labels(
+                "needs-acceptance",
+                "accepted",
+                "wg/mom-routing",
+                "priority/P1",
+                "backlog",
+                "release-blocker",
+                "epic",
+            ),
+            "assignees": [],
+            "milestone": None,
+        }
+        plan = community_lifecycle.plan_issue(
+            issue,
+            event_action="closed",
+            event_label=None,
+            actor_can_manage=False,
+        )
+        self.assertEqual(plan.remove_labels, {"needs-acceptance"})
+        for durable in (
+            "accepted",
+            "wg/mom-routing",
+            "priority/P1",
+            "backlog",
+            "release-blocker",
+            "epic",
+        ):
+            self.assertNotIn(durable, plan.remove_labels)
+
+    def test_closed_issue_with_no_delivery_state_label_is_a_no_op(self) -> None:
+        issue = {
+            "state": "closed",
+            "labels": labels("accepted", "wg/mom-routing"),
+            "assignees": [],
+            "milestone": None,
+        }
+        plan = community_lifecycle.plan_issue(
+            issue,
+            event_action="closed",
+            event_label=None,
+            actor_can_manage=False,
+        )
+        self.assertEqual(plan.remove_labels, set())
+        self.assertEqual(plan.add_labels, set())
+
+    def test_open_issue_is_unaffected_by_the_closed_branch(self) -> None:
+        issue = {
+            "state": "open",
+            "labels": labels("needs-acceptance"),
+            "assignees": [],
+            "milestone": None,
+        }
+        plan = community_lifecycle.plan_issue(
+            issue,
+            event_action="edited",
+            event_label=None,
+            actor_can_manage=False,
+        )
+        self.assertNotIn("needs-acceptance", plan.remove_labels)
+
     def test_maintainer_reclassification_overrides_form_workgroup(self) -> None:
         issue = {
             "body": "### Proposed Workgroup\n\nEnterprise & Environment\n",
@@ -769,6 +860,152 @@ class PullRequestReconciliationTests(unittest.TestCase):
         community_lifecycle_github.sync_labeled_closed_pull_requests(client, self.REPO)
 
         self.assertEqual(client.fetched, [99, *numbers])
+
+
+class FakeIssueApi:
+    """Serve the endpoints issue reconciliation calls and record its writes."""
+
+    def __init__(self, issues, listings=None) -> None:
+        self.issues = {int(item["number"]): item for item in issues}
+        self.listings = listings or {}
+        self.fetched: list[int] = []
+        self.added: set[str] = set()
+        self.removed: set[str] = set()
+
+    def request(
+        self,
+        endpoint: str,
+        *,
+        method: str = "GET",
+        payload=None,
+        ignore_not_found: bool = False,
+    ):
+        if "?" in endpoint:
+            return self.listings.get(endpoint, [])
+        parts = endpoint.split("/")
+        number = int(parts[4])
+        tail = parts[5:]
+        if not tail:
+            self.fetched.append(number)
+            return self.issues.get(number)
+        if tail == ["labels"]:
+            self.added.update(payload["labels"])
+            return None
+        if tail[0] == "labels":
+            self.removed.add(unquote(tail[1]))
+        return None
+
+
+class IssueReconciliationTests(unittest.TestCase):
+    REPO = "acme/router"
+
+    def closed_issue(self, **overrides):
+        item = {
+            "number": 20,
+            "state": "closed",
+            "labels": labels("needs-acceptance", "wg/mom-routing"),
+            "assignees": [],
+            "milestone": None,
+        }
+        item.update(overrides)
+        return item
+
+    def test_closed_issue_drops_its_delivery_state_label(self) -> None:
+        client = FakeIssueApi([self.closed_issue()])
+
+        community_lifecycle_github.sync_issue(client, self.REPO, 20)
+
+        self.assertEqual(client.removed, {"needs-acceptance"})
+        self.assertEqual(client.added, set())
+
+    def test_open_issue_keeps_its_delivery_state_label(self) -> None:
+        client = FakeIssueApi(
+            [self.closed_issue(state="open", labels=labels("needs-acceptance"))]
+        )
+
+        community_lifecycle_github.sync_issue(client, self.REPO, 20)
+
+        self.assertNotIn("needs-acceptance", client.removed)
+
+    def test_missing_issue_is_a_no_op(self) -> None:
+        client = FakeIssueApi([])
+
+        community_lifecycle_github.sync_issue(client, self.REPO, 404)
+
+        self.assertEqual(client.removed, set())
+        self.assertEqual(client.added, set())
+
+    def closed_listing(self, label: str, page: int = 1) -> str:
+        return (
+            f"repos/{self.REPO}/issues?state=closed"
+            f"&labels={quote(label, safe='')}"
+            f"&per_page={community_lifecycle_github.API_PAGE_SIZE}&page={page}"
+        )
+
+    def test_closed_sweep_reconciles_only_labeled_issues(self) -> None:
+        listings = {
+            self.closed_listing("needs-acceptance"): [
+                {"number": 21, "labels": labels("needs-acceptance")},
+                {
+                    "number": 22,
+                    "labels": labels("needs-acceptance"),
+                    "pull_request": {},
+                },
+            ],
+        }
+        client = FakeIssueApi(
+            [self.closed_issue(number=21, labels=labels("needs-acceptance"))],
+            listings=listings,
+        )
+
+        community_lifecycle_github.sync_labeled_closed_issues(client, self.REPO)
+
+        self.assertEqual(client.fetched, [21])
+        self.assertIn("needs-acceptance", client.removed)
+
+    def test_closed_sweep_covers_every_delivery_state_label(self) -> None:
+        listings = {
+            self.closed_listing("help wanted"): [
+                {"number": 30, "labels": labels("help wanted", "good first issue")}
+            ],
+            self.closed_listing("good first issue"): [
+                {"number": 30, "labels": labels("help wanted", "good first issue")}
+            ],
+        }
+        client = FakeIssueApi(
+            [
+                self.closed_issue(
+                    number=30, labels=labels("help wanted", "good first issue")
+                )
+            ],
+            listings=listings,
+        )
+
+        community_lifecycle_github.sync_labeled_closed_issues(client, self.REPO)
+
+        self.assertEqual(client.fetched, [30])
+        self.assertEqual(client.removed, {"help wanted", "good first issue"})
+
+    def test_closed_sweep_pages_through_full_listings(self) -> None:
+        page_size = community_lifecycle_github.API_PAGE_SIZE
+        numbers = list(range(200, 200 + page_size))
+        listings = {
+            self.closed_listing("needs-acceptance"): [
+                {"number": number} for number in numbers
+            ],
+            self.closed_listing("needs-acceptance", page=2): [{"number": 199}],
+        }
+        client = FakeIssueApi(
+            [
+                self.closed_issue(number=number, labels=labels("needs-acceptance"))
+                for number in [199, *numbers]
+            ],
+            listings=listings,
+        )
+
+        community_lifecycle_github.sync_labeled_closed_issues(client, self.REPO)
+
+        self.assertEqual(client.fetched, [199, *numbers])
 
 
 if __name__ == "__main__":
