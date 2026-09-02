@@ -6,12 +6,11 @@ the Router rejects fails early with the same message.
 """
 
 import math
-from typing import Optional
 
 TOKEN_COUNT_MULTIPLIERS = {"K": 1_000, "M": 1_000_000}
 
 
-def normalize_token_count(value: object, field: str) -> Optional[str]:
+def normalize_token_count(value: object, field: str) -> str | None:
     """Return the string form of a YAML token count, or None when omitted.
 
     YAML authors write ``min_tokens: 8001`` and ``max_tokens: 64K``
@@ -29,12 +28,12 @@ def normalize_token_count(value: object, field: str) -> Optional[str]:
     raise ValueError(f"{field} must be a token count such as 8001 or 64K")
 
 
-def token_count_is_set(value: Optional[str]) -> bool:
+def token_count_is_set(value: str | None) -> bool:
     """Report whether a token count was configured (non-empty after trimming)."""
     return value is not None and value.strip() != ""
 
 
-def parse_token_count(value: Optional[str]) -> int:
+def parse_token_count(value: str | None) -> int:
     """Parse ``"8001"``, ``"64K"`` or ``"1.5M"`` into an integer token count.
 
     An omitted or empty value parses as 0, matching the Router.
@@ -57,7 +56,7 @@ def parse_token_count(value: Optional[str]) -> int:
     return int(number * multiplier)
 
 
-def validate_context_band(min_tokens: Optional[str], max_tokens: Optional[str]) -> None:
+def validate_context_band(min_tokens: str | None, max_tokens: str | None) -> None:
     """Reject a band the Router would reject.
 
     A band needs at least one limit. An omitted min_tokens means 0 and an

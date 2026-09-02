@@ -120,4 +120,4 @@ def test_user_config_reports_context_band_path_on_error():
             routing={"signals": {"context": [{"name": "empty"}]}},
         )
 
-    assert ("routing", "signals", "context", 0) == excinfo.value.errors()[0]["loc"][:4]
+    assert excinfo.value.errors()[0]["loc"][:4] == ("routing", "signals", "context", 0)
