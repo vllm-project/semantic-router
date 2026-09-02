@@ -1,4 +1,4 @@
-"""Public report contracts kept in lockstep with the Dashboard types."""
+"""Shared evidence values emitted by workers and verified by the Dashboard."""
 
 from __future__ import annotations
 
@@ -8,8 +8,21 @@ from typing import Literal
 from pydantic import Field, field_validator, model_validator
 
 from cli.evaluation.constants import SCHEMA_VERSION
-from cli.evaluation.contracts import StrictModel
-from cli.evaluation.gate_contract import GATE_CONTRACT_VERSION, ChangeProfile
+from cli.evaluation.contract_primitives import StrictModel
+from cli.evaluation.gate_contract import (
+    GATE_CONTRACT_VERSION,
+    ChangeProfile,
+    GateDisposition,
+)
+from cli.evaluation.metric_analysis_catalog import (
+    PROVENANCE_CONTRACT_VERSION as METRIC_ANALYSIS_CONTRACT_VERSION,
+)
+from cli.evaluation.metric_analysis_catalog import (
+    CatalogMetricAnalysisSpecification as MetricAnalysisSpecification,
+)
+from cli.evaluation.metric_analysis_catalog import (
+    resolve_metric_analysis,
+)
 
 TrackID = Literal[
     "routing",
@@ -22,38 +35,16 @@ TrackID = Literal[
     "capacity",
 ]
 EvidenceLevel = Literal["E0", "E1", "E2", "E3", "E4", "E5"]
-GateVerdict = Literal["pass", "fail", "unavailable", "waived", "not_applicable"]
+GateVerdict = Literal["pass", "fail", "unavailable", "not_applicable"]
+DecisionVerdict = Literal["pass", "fail", "unavailable"]
+
+_MAX_METRIC_ANALYSIS_IDENTIFIER_LENGTH = 160
 
 
-class EvaluationRunProgress(StrictModel):
-    percent: float = Field(ge=0, le=100)
-    completed: int = Field(ge=0)
-    total: int = Field(ge=0)
-    current_track_id: TrackID | None = None
-    message: str | None = None
+def metric_analysis_specification(metric_id: str) -> MetricAnalysisSpecification:
+    """Resolve one exact catalog contract; unknown metrics fail closed."""
 
-
-class EvaluationRun(StrictModel):
-    schema_version: Literal[SCHEMA_VERSION] = SCHEMA_VERSION
-    id: str
-    name: str
-    description: str
-    status: Literal["pending", "running", "completed", "failed", "cancelled"]
-    mode: Literal["replay", "live"]
-    evidence_level: EvidenceLevel
-    target_id: str
-    change_profile: ChangeProfile
-    suite_ids: tuple[str, ...]
-    track_ids: tuple[TrackID, ...]
-    sample_limit: int
-    concurrency: int
-    seed: int
-    baseline_run_id: str | None = None
-    progress: EvaluationRunProgress
-    created_at: datetime
-    started_at: datetime | None = None
-    completed_at: datetime | None = None
-    error: str | None = None
+    return resolve_metric_analysis(metric_id).specification
 
 
 class EvaluationCoverage(StrictModel):
@@ -63,6 +54,39 @@ class EvaluationCoverage(StrictModel):
     unavailable: int | None = Field(default=None, ge=0)
     confidence_level: float | None = Field(default=None, gt=0, lt=1)
     confidence_interval: tuple[float, float] | None = None
+
+
+class MetricAnalysisProvenance(StrictModel):
+    """Auditable estimator contract required for every published metric."""
+
+    contract_version: Literal[METRIC_ANALYSIS_CONTRACT_VERSION]
+    estimator_id: str
+    estimator_version: str
+    analysis_unit: str
+    cluster_unit: str
+    weighting: str
+    missingness: Literal["fail_closed"]
+    exclusion_policy: Literal["exclude_unavailable_evidence"]
+    observed_exclusions: int = Field(ge=0)
+
+    @field_validator(
+        "estimator_id",
+        "estimator_version",
+        "analysis_unit",
+        "cluster_unit",
+        "weighting",
+    )
+    @classmethod
+    def validate_contract_identifier(cls, value: str) -> str:
+        if (
+            not value
+            or value.strip() != value
+            or len(value) > _MAX_METRIC_ANALYSIS_IDENTIFIER_LENGTH
+        ):
+            raise ValueError(
+                "metric analysis provenance identifiers must be trimmed and non-blank"
+            )
+        return value
 
 
 class EvaluationMetric(StrictModel):
@@ -76,6 +100,25 @@ class EvaluationMetric(StrictModel):
     delta: float | None = None
     confidence_interval: tuple[float, float] | None = None
     sample_count: int | None = Field(default=None, ge=0)
+    analysis_provenance: MetricAnalysisProvenance
+
+    @model_validator(mode="after")
+    def analysis_provenance_matches_registered_metric(self) -> EvaluationMetric:
+        specification = metric_analysis_specification(self.id)
+        provenance = self.analysis_provenance
+        if (
+            provenance.estimator_id != specification.estimator_id
+            or provenance.estimator_version != specification.estimator_version
+            or provenance.analysis_unit != specification.analysis_unit
+            or provenance.cluster_unit != specification.cluster_unit
+            or provenance.weighting != specification.weighting
+            or provenance.missingness != specification.missingness
+            or provenance.exclusion_policy != specification.exclusion_policy
+        ):
+            raise ValueError(
+                "metric analysis provenance does not match the registered estimator"
+            )
+        return self
 
 
 class GateThreshold(StrictModel):
@@ -89,7 +132,7 @@ class EvaluationGate(StrictModel):
     name: str
     description: str | None = None
     track_id: TrackID | None = None
-    disposition: Literal["required", "advisory", "not_applicable", "waived"]
+    disposition: GateDisposition
     verdict: GateVerdict
     change_profile: ChangeProfile
     contract_version: Literal[GATE_CONTRACT_VERSION]
@@ -110,6 +153,17 @@ class EvaluationGate(StrictModel):
             raise ValueError("gate evidence refs must be unique and non-blank")
         return value
 
+    @model_validator(mode="after")
+    def validate_disposition_contract(self) -> EvaluationGate:
+        not_applicable = self.disposition == "not_applicable"
+        if not_applicable != (self.verdict == "not_applicable"):
+            raise ValueError("not-applicable gate disposition and verdict must match")
+        if not_applicable and (self.observed is not None or self.threshold is not None):
+            raise ValueError(
+                "not-applicable gate cannot publish an observation or threshold"
+            )
+        return self
+
 
 class EvaluationArtifact(StrictModel):
     id: str
@@ -122,7 +176,7 @@ class EvaluationArtifact(StrictModel):
 
 
 class EvaluationProvenance(StrictModel):
-    schema_version: Literal[SCHEMA_VERSION] = SCHEMA_VERSION
+    schema_version: Literal[SCHEMA_VERSION]
     generated_at: datetime
     code_revision: str | None = None
     benchmark_revisions: dict[str, str] | None = None
@@ -149,77 +203,3 @@ class EvaluationCostLedgers(StrictModel):
     runtime: EvaluationCostAmount
     evaluation_overhead: EvaluationCostAmount
     capacity_tco: EvaluationCostAmount
-
-
-class EvaluationTrackReport(StrictModel):
-    track_id: TrackID
-    status: Literal[
-        "pending",
-        "running",
-        "completed",
-        "failed",
-        "cancelled",
-        "unavailable",
-        "skipped",
-    ]
-    evidence_level: EvidenceLevel
-    summary: str
-    coverage: EvaluationCoverage
-    metrics: tuple[EvaluationMetric, ...]
-    gates: tuple[EvaluationGate, ...]
-    artifacts: tuple[EvaluationArtifact, ...] = ()
-    error: str | None = None
-
-
-class EvaluationReportSummary(StrictModel):
-    verdict: GateVerdict
-    quality_score: float | None
-    latency_p95_ms: float | None
-    runtime_cost: float | None
-    capacity_tco: float | None
-    coverage: EvaluationCoverage
-    passed_gates: int = Field(ge=0)
-    failed_gates: int = Field(ge=0)
-    unavailable_gates: int = Field(ge=0)
-
-
-class EvaluationReport(StrictModel):
-    schema_version: Literal[SCHEMA_VERSION] = SCHEMA_VERSION
-    run: EvaluationRun
-    summary: EvaluationReportSummary
-    tracks: tuple[EvaluationTrackReport, ...]
-    metrics: tuple[EvaluationMetric, ...]
-    gates: tuple[EvaluationGate, ...]
-    costs: EvaluationCostLedgers
-    recommendations: tuple[str, ...]
-    provenance: EvaluationProvenance
-    artifacts: tuple[EvaluationArtifact, ...]
-
-    @model_validator(mode="after")
-    def coherent_gate_contract(self) -> EvaluationReport:
-        expected_ids = tuple(f"G{index}" for index in range(10))
-        if tuple(gate.id for gate in self.gates) != expected_ids:
-            raise ValueError("report must contain G0 through G9 exactly once in order")
-        if any(gate.change_profile != self.run.change_profile for gate in self.gates):
-            raise ValueError("report gates must match the run change profile")
-        return self
-
-
-class EvaluationComparison(StrictModel):
-    schema_version: Literal[SCHEMA_VERSION] = SCHEMA_VERSION
-    baseline_run_id: str
-    candidate_run_id: str
-    verdict: GateVerdict
-    summary: str
-    metrics: tuple[EvaluationMetric, ...]
-    gates: tuple[EvaluationGate, ...]
-    recommendations: tuple[str, ...]
-    created_at: datetime | None = None
-
-
-class WorkerEvent(StrictModel):
-    type: str
-    message: str
-    track_id: TrackID | None = None
-    progress: EvaluationRunProgress | None = None
-    payload: dict[str, object] | None = None

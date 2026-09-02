@@ -345,7 +345,6 @@ const sidebars: SidebarsConfig = {
       items: [
         'fleet-sim/overview',
         'fleet-sim/getting-started',
-        'fleet-sim/dashboard-integration',
         'fleet-sim/use-cases',
         'fleet-sim/sim-algorithms',
         'fleet-sim/power-model',

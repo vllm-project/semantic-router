@@ -3,7 +3,7 @@
 The Dashboard is the authenticated control and observability UI for a Semantic
 Router deployment. It combines a React frontend with a Go backend that serves
 the SPA, stores dashboard state, and proxies Router, Envoy, Grafana,
-Prometheus, Jaeger, and Fleet Simulator endpoints.
+Prometheus, and Jaeger endpoints.
 
 Use it to:
 
@@ -52,19 +52,22 @@ The current installation and first-run workflow is documented in
 ```bash
 make dashboard-build
 make dashboard-check
+make dashboard-test-e2e-evaluation
 make dashboard-test-backend
 ```
 
-`dashboard-check` is the single entrypoint for dashboard quality, and the required
-`Dashboard` CI workflow runs the **same target** — nothing here is CI-only, and
-nothing in CI is missing locally. Run it before pushing. It runs, in order:
+The required `Dashboard` CI workflow runs `dashboard-check`, then the Evaluation
+browser acceptance target shown above. Both gates are available locally; run
+`dashboard-check` before every Dashboard change and the browser acceptance gate
+when changing Evaluation UI or workflows. `dashboard-check` runs, in order:
 
 | Step | What it covers |
 | --- | --- |
+| `dashboard-evaluation-catalog-check` | Verifies the generated Evaluation catalog mirrors match their canonical CLI sources. |
 | `dashboard-lint` | ESLint on the frontend, golangci-lint on the backend |
 | `dashboard-type-check` | TypeScript type checking (frontend + Knowledge Map) |
 | `dashboard-test-frontend` | Frontend unit tests |
-| `dashboard-test-backend` | `go test ./...` on `dashboard/backend` |
+| `dashboard-test-backend` | `go test ./...` on `dashboard/backend`, including the real Go → sandboxed Python Evaluation worker contract |
 | `dashboard-go-mod-tidy` | Verifies `go.mod` / `go.sum` are tidy |
 
 The dashboard backend is a **separate Go module**, so `go test ./...` from the
@@ -107,7 +110,6 @@ variables. Defaults are defined in
 | `TARGET_GRAFANA_URL` | Optional Grafana base URL. |
 | `TARGET_PROMETHEUS_URL` | Optional Prometheus base URL. |
 | `TARGET_JAEGER_URL` | Optional Jaeger base URL. |
-| `TARGET_FLEET_SIM_URL` | Optional Fleet Simulator service URL. |
 
 Feature controls:
 
@@ -119,7 +121,9 @@ Feature controls:
 | `DASHBOARD_SETUP_MODE` | Enable the trusted first-run setup flow. |
 | `EVALUATION_ENABLED` | Enable evaluation jobs. |
 | `EVALUATION_DATA_DIR` | Durable Evaluation Plane artifact store; default `./data/evaluation`. |
+| `EVALUATION_DEPLOYMENTS_DIR` | Optional read-only directory containing a strict `evaluation-deployments.v1` `registry.json` plus relative deployment configs. Enables deployment-scoped baseline and candidate targets; unset preserves the single-runtime target. |
 | `EVALUATION_ENVOY_API_KEY_ENV` | Optional server-owned environment variable name containing the Envoy evaluation credential; the browser never supplies or receives it. |
+| `EVALUATION_AGENT_TASK_LEDGER_URL`, `_API_KEY_ENV`, `_TIMEOUT` | Optional typed server-owned endpoint for a complete sealed provider-observed agent-task ledger. Its credential and URL remain outside public catalog responses and worker argv. |
 | `VLLM_SR_SOURCE_REVISION` | Immutable source identity required to create an evaluation run: a full 40-character Git commit or `sha256:` source-tree digest. Dashboard images set this from their build argument. |
 | `ML_PIPELINE_ENABLED` | Enable benchmark, training, and config-generation jobs. |
 | `ML_TRAINING_DIR` | Training script directory for subprocess mode. |
@@ -136,6 +140,18 @@ private to the Dashboard process (`0700` directories and `0600` bundle files).
 The Dashboard container defaults this store to `/app/data/evaluation`; its
 entrypoint excludes that subtree from shared-data permission widening and
 reapplies the private modes before every restart.
+
+For a local multi-deployment experiment, export
+`EVALUATION_DEPLOYMENTS_DIR` before the canonical `vllm-sr serve` command. The
+CLI validates every host path component, mounts the directory read-only into
+Dashboard only, and rewrites the environment value to the container path.
+Router and Envoy do not inherit the mount or variable. The registry accepts
+only deployment ID/name/description, a confined relative config path, and exact
+Router/Envoy origins. It rejects symlinks, traversal, unknown fields,
+duplicates, and literal credential or ledger configuration. Public catalog
+responses expose the safe deployment label but never origins, paths, or secret
+references. See the [Evaluation Plane guide](../website/docs/benchmarking/evaluation-plane.md#address-baseline-and-candidate-deployments-together)
+for the versioned schema and controlled-pair contract.
 
 Dashboard image builds accept `VLLM_SR_SOURCE_REVISION` as a build argument and
 embed it in the runtime image. The Dockerfile default is `unavailable`, which
@@ -229,7 +245,7 @@ Browser
   -> Go API and reverse proxy (dashboard/backend)
        -> Router management API
        -> Envoy inference listener
-       -> optional monitoring and simulator services
+       -> optional monitoring services
        -> local SQLite and config/Recipe storage
 ```
 
