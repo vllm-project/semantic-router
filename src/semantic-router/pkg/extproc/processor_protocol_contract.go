@@ -182,12 +182,17 @@ func (r *OpenAIRouter) encodeDispatchRequest(ctx *RequestContext) ([]byte, error
 		format = llmprotocol.OpenAIChatV1
 	}
 	dispatchRequest := *ctx.SemanticRequest
-	if format == llmprotocol.OpenAIChatV1 && dispatchRequest.Stream {
+	if format == llmprotocol.OpenAIChatV1 && dispatchRequest.Stream &&
+		!streamUsageAlreadyRequested(dispatchRequest.StreamOptions) {
 		// The Router always asks Chat backends for the final usage chunk so
 		// accounting observes authoritative tokens. Public stream rendering uses
 		// the original client preference retained in ctx.SemanticRequest.
 		includeUsage := true
 		dispatchRequest.StreamOptions.IncludeUsage = &includeUsage
+		// Source bytes no longer describe the dispatch request, so retire the
+		// replay claim on them. Without this the encoder forwards the original
+		// client bytes and the forced flag never reaches the backend.
+		dispatchRequest.Generation++
 	}
 	encoded, err := engine.EncodeRequest(format, dispatchRequest, ctx.ProtocolEnvelope)
 	if err != nil {
@@ -195,6 +200,10 @@ func (r *OpenAIRouter) encodeDispatchRequest(ctx *RequestContext) ([]byte, error
 	}
 	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, encoded.Diagnostics...)
 	return encoded.Body, nil
+}
+
+func streamUsageAlreadyRequested(options llmprotocol.StreamOptions) bool {
+	return options.IncludeUsage != nil && *options.IncludeUsage
 }
 
 func clientStreamOptions(ctx *RequestContext) llmprotocol.StreamOptions {
