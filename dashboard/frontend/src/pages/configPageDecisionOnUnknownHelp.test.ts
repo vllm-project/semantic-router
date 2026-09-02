@@ -9,6 +9,8 @@ describe('decision editor on_unknown help', () => {
     )
     const field = source.slice(source.indexOf("name: 'on_unknown'"))
     const description = field.slice(0, field.indexOf('},'))
+    expect(description).toContain('When a signal evaluator fails')
+    expect(description).not.toContain('classifier')
     expect(description).toContain('no_match skips this decision')
     expect(description).toContain('match selects it')
     expect(description).toContain('fail_request rejects the request')

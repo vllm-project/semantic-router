@@ -632,7 +632,7 @@ export default function ConfigPageDecisionsSection({
         type: 'select',
         options: ['', 'no_match', 'match', 'fail_request'],
         description:
-          'When a classifier fails: no_match skips this decision, match selects it, fail_request rejects the request with 503. Empty keeps condition on_error.',
+          'When a signal evaluator fails: no_match skips this decision, match selects it, fail_request rejects the request with 503. Empty keeps condition on_error.',
       },
       {
         name: 'conditions',
