@@ -326,7 +326,8 @@ impl MmBertEmbeddingModel {
             .map_err(|e| errors::tokenization_error(&e.to_string()))?;
 
         // Find ONNX model candidates (priority order)
-        let onnx_candidates = Self::find_onnx_models(&model_path, &matryoshka_config.layers)?;
+        let onnx_candidates =
+            Self::find_onnx_models(&model_path, &matryoshka_config.layers, use_cpu)?;
 
         // Create ONNX Runtime session with fallback across candidates.
         // We intentionally prefer GPU-optimized model variants first.
@@ -385,6 +386,7 @@ impl MmBertEmbeddingModel {
     fn find_onnx_models<P: AsRef<Path>>(
         model_path: P,
         layers: &[usize],
+        use_cpu: bool,
     ) -> UnifiedResult<Vec<std::path::PathBuf>> {
         let dir = model_path.as_ref();
         let onnx_subdir = dir.join("onnx");
@@ -393,7 +395,17 @@ impl MmBertEmbeddingModel {
             .ok()
             .filter(|s| !s.is_empty())
             .is_some();
-        let candidates: &[&str] = if has_fa {
+        // See the note in mmbert_classifier.rs: an FP16 graph is the slowest
+        // candidate on the CPU provider, so it goes last there rather than first.
+        let candidates: &[&str] = if use_cpu {
+            &[
+                "model.onnx",
+                "encoder.onnx",
+                "mmbert.onnx",
+                "model_optimized.onnx",
+                "model_sdpa_fp16.onnx",
+            ]
+        } else if has_fa {
             &[
                 "model_fa_fp16.onnx",
                 "model_fa.onnx",
