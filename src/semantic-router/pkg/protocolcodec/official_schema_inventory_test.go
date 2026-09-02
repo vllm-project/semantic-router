@@ -210,7 +210,8 @@ func TestOfficialUsageFieldInventoriesAreClosed(t *testing.T) {
 			wire: anthropicUsageWire{},
 			official: fields(
 				"cache_creation", "cache_creation_input_tokens", "cache_read_input_tokens", "inference_geo",
-				"input_tokens", "output_tokens", "output_tokens_details", "server_tool_use", "service_tier",
+				"input_tokens", "iterations", "output_tokens", "output_tokens_details", "server_tool_use",
+				"service_tier",
 			),
 		},
 	}

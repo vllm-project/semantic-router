@@ -31,6 +31,7 @@ type anthropicUsageWire struct {
 	OutputTokensDetails      anthropicOutputUsageDetailsWire `json:"output_tokens_details"`
 	ServerToolUse            anthropicServerToolUsageWire    `json:"server_tool_use"`
 	ServiceTier              string                          `json:"service_tier"`
+	Iterations               json.RawMessage                 `json:"iterations,omitempty"`
 }
 
 type anthropicCacheCreationUsageWire struct {

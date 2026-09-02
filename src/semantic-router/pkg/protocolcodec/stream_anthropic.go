@@ -56,6 +56,7 @@ type anthropicMessageDeltaUsageWire struct {
 	OutputTokens             int64                           `json:"output_tokens"`
 	OutputTokensDetails      anthropicOutputUsageDetailsWire `json:"output_tokens_details"`
 	ServerToolUse            anthropicServerToolUsageWire    `json:"server_tool_use"`
+	Iterations               json.RawMessage                 `json:"iterations,omitempty"`
 }
 
 type anthropicDeltaWire struct {

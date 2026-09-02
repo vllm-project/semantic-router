@@ -19,6 +19,6 @@
     {"wire": "anthropic_server_tool_usage", "official": ["web_fetch_requests", "web_search_requests"], "fixtures": ["capability/018-anthropic-official-response-fields-in.json"]},
     {"wire": "anthropic_error", "official": ["message", "type"], "fixtures": ["error/003-anthropic-overloaded-in.json", "stream/012-anthropic-midstream-error-in.json"]},
     {"wire": "anthropic_transport_error", "official": ["error", "request_id", "type"], "fixtures": ["error/003-anthropic-overloaded-in.json"]},
-    {"wire": "anthropic_message_delta_usage", "official": ["cache_creation_input_tokens", "cache_read_input_tokens", "input_tokens", "output_tokens", "output_tokens_details", "server_tool_use"], "fixtures": ["stream/003-anthropic-text-in.json", "capability/019-anthropic-stop-sequence-stream-in.json", "capability/045-anthropic-nested-stream-fields-in.json"]}
+    {"wire": "anthropic_message_delta_usage", "official": ["cache_creation_input_tokens", "cache_read_input_tokens", "input_tokens", "iterations", "output_tokens", "output_tokens_details", "server_tool_use"], "fixtures": ["stream/003-anthropic-text-in.json", "capability/019-anthropic-stop-sequence-stream-in.json", "capability/045-anthropic-nested-stream-fields-in.json"]}
   ]
 }
