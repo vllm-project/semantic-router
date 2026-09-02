@@ -184,8 +184,16 @@ type rawRouteItem struct {
 	Algorithm    *rawAlgoSpec         `parser:"| 'ALGORITHM' @@"`
 	Plugin       *rawPluginRef        `parser:"| 'PLUGIN' @@"`
 	Description  *string              `parser:"| 'DESCRIPTION' @String"`
+	Action       *rawActionDecl       `parser:"| 'ACTION' @@"`
 	CandidateFor *rawCandidateForDecl `parser:"| @@"`
 	Emit         *rawEmitDecl         `parser:"| @@"`
+}
+
+// rawActionDecl: ACTION <type> <destination>, e.g. ACTION route "safe-model".
+type rawActionDecl struct {
+	Pos         lexer.Position
+	Type        string `parser:"@Ident"`
+	Destination string `parser:"@(Ident | String)"`
 }
 
 // rawCandidateForDecl: FOR <var> IN decision.candidates|[models...] { body... }
@@ -429,6 +437,7 @@ type RouteDecl struct {
 	Name                string
 	Description         string
 	OnUnknown           string
+	Action              *ActionDecl
 	Priority            int
 	Tier                int
 	When                BoolExpr
@@ -438,6 +447,13 @@ type RouteDecl struct {
 	CandidateIterations []*CandidateIterationDecl
 	Emits               []*EmitDecl
 	Pos                 Position
+}
+
+// ActionDecl is the resolved AST node for a route ACTION statement.
+type ActionDecl struct {
+	Type        string
+	Destination string
+	Pos         Position
 }
 
 // EmitDecl is the resolved AST node for an EMIT block. The Retention pointer
