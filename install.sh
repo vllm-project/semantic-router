@@ -622,10 +622,13 @@ create_launcher() {
   executable_path="$INSTALL_ROOT/venv/bin/vllm-sr"
 
   mkdir -p "$BIN_DIR"
+  # Export the install root so runtime detection reads the runtime.env
+  # persisted next to this installation instead of the default location.
   cat >"$launcher_path" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
 
+export VLLM_SR_INSTALL_ROOT="$INSTALL_ROOT"
 exec "$executable_path" "\$@"
 EOF
   chmod +x "$launcher_path"
