@@ -412,3 +412,39 @@ func TestCRDValidationErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestCRDConverterConvertsOpenEndedContextRule(t *testing.T) {
+	pool := testPoolWithModels(v1alpha1.ModelConfig{Name: "test-model"})
+	route := &v1alpha1.IntelligentRoute{
+		Spec: v1alpha1.IntelligentRouteSpec{
+			Signals: v1alpha1.Signals{
+				ContextRules: []v1alpha1.ContextRule{
+					{Name: "short_context", MinTokens: "0", MaxTokens: "8K"},
+					{Name: "overflow_context", MinTokens: "8001"},
+				},
+			},
+			Decisions: []v1alpha1.Decision{
+				testDecision(
+					[]v1alpha1.ModelRef{{Model: "test-model"}},
+					v1alpha1.SignalCondition{Type: "context", Name: "overflow_context"},
+				),
+			},
+		},
+	}
+
+	require.NoError(t, validateCRDs(pool, route, testValidationBaseConfig()))
+
+	outputConfig, err := NewCRDConverter().Convert(pool, route, &config.CanonicalConfig{})
+	require.NoError(t, err)
+	require.Len(t, outputConfig.Routing.Signals.Context, 2)
+
+	overflow := outputConfig.Routing.Signals.Context[1]
+	assert.Equal(t, "overflow_context", overflow.Name)
+	assert.Equal(t, config.TokenCount("8001"), overflow.MinTokens)
+	assert.False(t, overflow.MaxTokens.IsSet())
+
+	bounds, err := overflow.Bounds()
+	require.NoError(t, err)
+	assert.True(t, bounds.Unbounded)
+	assert.True(t, bounds.Matches(1<<40))
+}

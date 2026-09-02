@@ -451,10 +451,22 @@ func (v *Validator) checkSignalConstraints(s *SignalDecl) {
 		}
 	case "domain":
 		v.checkDomainSignalConstraints(s, context)
+	case "context":
+		v.checkContextSignalConstraints(s, context)
 	case "structure":
 		v.checkStructureSignalConstraints(s)
 	case "conversation":
 		v.checkConversationSignalConstraints(s)
+	}
+}
+
+// checkContextSignalConstraints rejects token bands the runtime would refuse:
+// neither limit set, unparsable or negative values, or min_tokens above
+// max_tokens. Equal values are an exact-match band, omitting max_tokens makes
+// the band open-ended, and omitting min_tokens means 0.
+func (v *Validator) checkContextSignalConstraints(s *SignalDecl, context string) {
+	if _, err := contextSignalBounds(s); err != nil {
+		v.addDiag(DiagConstraint, s.Pos, fmt.Sprintf("%s: %v", context, err), nil)
 	}
 }
 
