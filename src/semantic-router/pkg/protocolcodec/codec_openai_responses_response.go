@@ -371,6 +371,9 @@ func decodeResponsesUsage(wire responsesUsageWire) llmprotocol.Usage {
 }
 
 func (OpenAIResponsesCodec) EncodeResponse(response llmprotocol.Response, envelope llmprotocol.Envelope, policy llmprotocol.Policy) ([]byte, llmprotocol.Diagnostics, error) {
+	if err := validateDynamoResponseEnvelope(envelope, llmprotocol.OpenAIResponsesV1, policy); err != nil {
+		return nil, nil, err
+	}
 	if envelope.CanReplay(llmprotocol.OpenAIResponsesV1, response.Generation, policy, true) {
 		return append([]byte(nil), envelope.Response...), nil, nil
 	}

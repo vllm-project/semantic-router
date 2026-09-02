@@ -344,6 +344,9 @@ func invalidAnthropicMediaSource(message string) error {
 }
 
 func (AnthropicMessagesCodec) EncodeRequest(request llmprotocol.Request, envelope llmprotocol.Envelope, policy llmprotocol.Policy) ([]byte, llmprotocol.Diagnostics, error) {
+	if err := validateDynamoRequestEnvelope(envelope, llmprotocol.AnthropicMessagesV1, policy); err != nil {
+		return nil, nil, err
+	}
 	if envelope.CanReplay(llmprotocol.AnthropicMessagesV1, request.Generation, policy, false) {
 		return append([]byte(nil), envelope.Request...), nil, nil
 	}
