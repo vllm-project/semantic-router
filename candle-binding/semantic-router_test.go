@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -4824,25 +4825,49 @@ func TestMmBert32KAllClassifiersLongPrompt(t *testing.T) {
 	t.Run("pii_tokens", func(t *testing.T) { runPIILongPrompt(t, longText) })
 }
 
-// TestSupportsBatchedEmbedding verifies that only qwen3 reports batched support;
-// all other model types (including the default mmbert) use the single-text path.
-func TestSupportsBatchedEmbedding(t *testing.T) {
+// TestEmbeddingCapabilitiesConformance verifies the shared versioned capability
+// contract without requiring any model to be loaded.
+func TestEmbeddingCapabilitiesConformance(t *testing.T) {
 	cases := []struct {
-		modelType string
-		want      bool
+		modelType      string
+		wantModelType  ModelType
+		wantBatching   bool
+		wantModalities []Modality
 	}{
-		{"qwen3", true},
-		{"Qwen3", true},
-		{"  qwen3  ", true},
-		{"mmbert", false},
-		{"gemma", false},
-		{"bert", false},
-		{"modernbert", false},
-		{"", false},
+		{"qwen3", ModelTypeQwen3, true, []Modality{ModalityText}},
+		{"  Qwen3  ", ModelTypeQwen3, true, []Modality{ModalityText}},
+		{"gemma", ModelTypeGemma, false, []Modality{ModalityText}},
+		{"mmbert", ModelTypeMmBert, false, []Modality{ModalityText}},
+		{"multimodal", ModelTypeMultimodal, false, []Modality{ModalityText, ModalityImage, ModalityAudio}},
 	}
 	for _, tc := range cases {
-		if got := SupportsBatchedEmbedding(tc.modelType); got != tc.want {
-			t.Errorf("SupportsBatchedEmbedding(%q) = %v, want %v", tc.modelType, got, tc.want)
+		t.Run(tc.modelType, func(t *testing.T) {
+			got, err := EmbeddingCapabilitiesFor(tc.modelType)
+			if err != nil {
+				t.Fatalf("EmbeddingCapabilitiesFor(%q) error = %v", tc.modelType, err)
+			}
+			if got.Version != EmbeddingCapabilitiesVersionV1 || got.Backend != BackendCandle {
+				t.Fatalf("EmbeddingCapabilitiesFor(%q) identity = v%d/%q, want v1/candle", tc.modelType, got.Version, got.Backend)
+			}
+			if got.ModelType != tc.wantModelType || got.SupportsBatching != tc.wantBatching {
+				t.Errorf("EmbeddingCapabilitiesFor(%q) model/batching = %q/%v, want %q/%v", tc.modelType, got.ModelType, got.SupportsBatching, tc.wantModelType, tc.wantBatching)
+			}
+			if fmt.Sprint(got.Modalities) != fmt.Sprint(tc.wantModalities) {
+				t.Errorf("EmbeddingCapabilitiesFor(%q) modalities = %v, want %v", tc.modelType, got.Modalities, tc.wantModalities)
+			}
+			if len(got.SupportedDimensions) != 0 {
+				t.Errorf("EmbeddingCapabilitiesFor(%q) dimensions = %v, want no finite inference allowlist", tc.modelType, got.SupportedDimensions)
+			}
+			if len(got.SupportedDevices) == 0 || got.SupportedDevices[0] != DeviceCPU {
+				t.Errorf("EmbeddingCapabilitiesFor(%q) devices = %v, want CPU first", tc.modelType, got.SupportedDevices)
+			}
+		})
+	}
+
+	for _, modelType := range []string{"", "bert", "modernbert", "unknown", "qwen3\x00ignored"} {
+		_, err := EmbeddingCapabilitiesFor(modelType)
+		if !errors.Is(err, ErrUnsupportedModelType) {
+			t.Errorf("EmbeddingCapabilitiesFor(%q) error = %v, want ErrUnsupportedModelType", modelType, err)
 		}
 	}
 }

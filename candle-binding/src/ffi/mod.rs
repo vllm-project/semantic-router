@@ -3,6 +3,7 @@
 #![allow(dead_code)]
 
 // FFI modules
+pub mod capabilities; // static embedding capability discovery
 pub mod classify; //  classification functions
 pub mod embedding; //  embedding functions
 pub mod generative_classifier; // Qwen3 LoRA generative classifier
@@ -19,6 +20,7 @@ pub mod memory_safety; // Dual-path memory safety system
 pub mod state_manager; // Global state management system
 
 // Re-export types and functions
+pub use capabilities::*;
 pub use classify::*;
 pub use embedding::*; // Intelligent embedding functions
 pub use generative_classifier::*; // Qwen3 LoRA generative classifier functions

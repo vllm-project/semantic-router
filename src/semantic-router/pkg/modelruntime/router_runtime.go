@@ -358,7 +358,13 @@ func initializeUnifiedEmbeddingModels(cfg *config.RouterConfig, component string
 		return false
 	}
 
-	semanticCacheNeedsBatched, mlSelectionNeedsBatched := batchedEmbeddingNeeds(cfg, paths.qwen3)
+	semanticCacheNeedsBatched, mlSelectionNeedsBatched, err := batchedEmbeddingNeeds(cfg, paths.qwen3)
+	if err != nil {
+		logging.ComponentErrorEvent(component, "embedding_capabilities_query_failed", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return false
+	}
 	useBatched := semanticCacheNeedsBatched || mlSelectionNeedsBatched
 	logBatchedEmbeddingNeeds(component, semanticCacheNeedsBatched, mlSelectionNeedsBatched)
 	if err := initUnifiedEmbeddingModelFactory(cfg, paths, useBatched); err != nil {
@@ -377,16 +383,6 @@ func initializeUnifiedEmbeddingModels(cfg *config.RouterConfig, component string
 		"use_batched": useBatched,
 	})
 	return true
-}
-
-func batchedEmbeddingNeeds(cfg *config.RouterConfig, qwen3Path string) (bool, bool) {
-	semanticCacheNeedsBatched := cfg.Enabled &&
-		strings.ToLower(strings.TrimSpace(cfg.EmbeddingModel)) == "qwen3" &&
-		qwen3Path != ""
-	mlSelectionNeedsBatched := cfg.ModelSelection.Enabled &&
-		cfg.ModelSelection.ML.ModelsPath != "" &&
-		cfg.Qwen3ModelPath != ""
-	return semanticCacheNeedsBatched, mlSelectionNeedsBatched
 }
 
 func logBatchedEmbeddingNeeds(component string, semanticCacheNeedsBatched bool, mlSelectionNeedsBatched bool) {

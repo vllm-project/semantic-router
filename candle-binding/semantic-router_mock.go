@@ -186,10 +186,9 @@ func GetEmbeddingBatched(text string, modelType string, targetDim int) (*Embeddi
 	return nil, ErrBackendUnavailable
 }
 
-// SupportsBatchedEmbedding reports batched-embedding capability. Returns false
-// because the native backend is unavailable.
-func SupportsBatchedEmbedding(modelType string) bool {
-	return false
+// EmbeddingCapabilitiesFor fails closed because no native runtime is linked.
+func EmbeddingCapabilitiesFor(modelType string) (EmbeddingCapabilities, error) {
+	return EmbeddingCapabilities{}, ErrBackendUnavailable
 }
 
 // InitEmbeddingModels initializes Qwen3 and/or Gemma embedding models

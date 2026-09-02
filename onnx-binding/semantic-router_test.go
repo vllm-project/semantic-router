@@ -1,6 +1,7 @@
 package onnx_binding
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -688,13 +689,52 @@ func TestGetEmbeddingBatched(t *testing.T) {
 	})
 }
 
-// TestSupportsBatchedEmbedding verifies onnx-binding always reports no batched
-// support, since every model type routes through GetEmbeddingWithModelType.
-func TestSupportsBatchedEmbedding(t *testing.T) {
-	for _, modelType := range []string{"qwen3", "mmbert", "gemma", ""} {
-		if SupportsBatchedEmbedding(modelType) {
-			t.Errorf("SupportsBatchedEmbedding(%q) = true, want false", modelType)
+// TestEmbeddingCapabilitiesConformance verifies the same versioned contract as
+// Candle while retaining ONNX-specific model and batching facts.
+func TestEmbeddingCapabilitiesConformance(t *testing.T) {
+	cases := []struct {
+		modelType      string
+		wantModelType  ModelType
+		wantModalities []Modality
+	}{
+		{"mmbert", ModelTypeMmBert, []Modality{ModalityText}},
+		{"  MMBERT  ", ModelTypeMmBert, []Modality{ModalityText}},
+		{"multimodal", ModelTypeMultimodal, []Modality{ModalityText, ModalityImage, ModalityAudio}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.modelType, func(t *testing.T) {
+			assertEmbeddingCapabilities(t, tc.modelType, tc.wantModelType, tc.wantModalities)
+		})
+	}
+
+	for _, modelType := range []string{"", "qwen3", "gemma", "unknown", "mmbert\x00ignored"} {
+		_, err := EmbeddingCapabilitiesFor(modelType)
+		if !errors.Is(err, ErrUnsupportedModelType) {
+			t.Errorf("EmbeddingCapabilitiesFor(%q) error = %v, want ErrUnsupportedModelType", modelType, err)
 		}
+	}
+}
+
+func assertEmbeddingCapabilities(t *testing.T, input string, wantModelType ModelType, wantModalities []Modality) {
+	t.Helper()
+	got, err := EmbeddingCapabilitiesFor(input)
+	if err != nil {
+		t.Fatalf("EmbeddingCapabilitiesFor(%q) error = %v", input, err)
+	}
+	if got.Version != EmbeddingCapabilitiesVersionV1 || got.Backend != BackendONNX {
+		t.Fatalf("EmbeddingCapabilitiesFor(%q) identity = v%d/%q, want v1/onnx", input, got.Version, got.Backend)
+	}
+	if got.ModelType != wantModelType || got.SupportsBatching {
+		t.Errorf("EmbeddingCapabilitiesFor(%q) model/batching = %q/%v, want %q/false", input, got.ModelType, got.SupportsBatching, wantModelType)
+	}
+	if fmt.Sprint(got.Modalities) != fmt.Sprint(wantModalities) {
+		t.Errorf("EmbeddingCapabilitiesFor(%q) modalities = %v, want %v", input, got.Modalities, wantModalities)
+	}
+	if len(got.SupportedDimensions) != 0 {
+		t.Errorf("EmbeddingCapabilitiesFor(%q) dimensions = %v, want no finite inference allowlist", input, got.SupportedDimensions)
+	}
+	if len(got.SupportedDevices) == 0 || got.SupportedDevices[0] != DeviceCPU {
+		t.Errorf("EmbeddingCapabilitiesFor(%q) devices = %v, want CPU first", input, got.SupportedDevices)
 	}
 }
 
