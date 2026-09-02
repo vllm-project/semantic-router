@@ -27,6 +27,18 @@ func UnknownPolicyChoices() string {
 	return strings.Join(names[:len(names)-1], ", ") + ", or " + names[len(names)-1]
 }
 
+const DecisionActionRoute = "route"
+
+// DecisionAction is an explicit action a matched decision applies instead of
+// candidate ranking. The only supported type is "route": send the request to
+// Destination, overriding a caller-pinned model, so a detected prompt attack
+// cannot bypass the guard by naming a model. Destination must resolve in
+// model_config and the decision's rules must reference a jailbreak signal.
+type DecisionAction struct {
+	Type        string `yaml:"type" json:"type"`
+	Destination string `yaml:"destination" json:"destination"`
+}
+
 // Decision represents a routing decision that combines multiple rules with boolean logic.
 type Decision struct {
 	Name                string                     `yaml:"name"`
@@ -36,6 +48,7 @@ type Decision struct {
 	OutputContract      string                     `yaml:"output_contract,omitempty" json:"output_contract,omitempty"`
 	OutputContractSpec  *OutputContractSpec        `yaml:"output_contract_spec,omitempty" json:"output_contract_spec,omitempty"`
 	Rules               RuleCombination            `yaml:"rules"`
+	Action              *DecisionAction            `yaml:"action,omitempty" json:"action,omitempty"`
 	ModelRefs           []ModelRef                 `yaml:"modelRefs,omitempty"`
 	Algorithm           *AlgorithmConfig           `yaml:"algorithm,omitempty"`
 	Adaptations         DecisionAdaptationsConfig  `yaml:"adaptations,omitempty"`
