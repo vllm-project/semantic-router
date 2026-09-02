@@ -59,7 +59,6 @@ var supportedSignalTypes = []string{
 	SignalTypeMetadata,
 	SignalTypeClassifier,
 	SignalTypeInputModality,
-	SignalTypeResponseJailbreak,
 }
 
 var supportedDecisionPluginTypes = []string{

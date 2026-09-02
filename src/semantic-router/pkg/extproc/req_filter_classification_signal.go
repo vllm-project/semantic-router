@@ -106,6 +106,7 @@ func (r *OpenAIRouter) compressSignalEvaluationText(evaluationText string) (stri
 }
 
 func (r *OpenAIRouter) applySignalResultsToContext(ctx *RequestContext, signals *classification.SignalResults) {
+	ctx.VSRSignalResults = signals
 	ctx.VSRMatchedKeywords = signals.MatchedKeywordRules
 	ctx.VSRMatchedEmbeddings = signals.MatchedEmbeddingRules
 	ctx.VSRMatchedDomains = signals.MatchedDomainRules

@@ -302,6 +302,9 @@ func (c *Compiler) compileJailbreakSignal(s *SignalDecl) {
 	if v, ok := getBoolField(s.Fields, "include_history"); ok {
 		rule.IncludeHistory = v
 	}
+	if v, ok := getStringField(s.Fields, "direction"); ok {
+		rule.Direction = v
+	}
 	if v, ok := getStringField(s.Fields, "description"); ok {
 		rule.Description = v
 	}

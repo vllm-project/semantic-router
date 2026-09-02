@@ -46,7 +46,11 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 
 	// Response-stage signals are computed from the declared rules before any
 	// plugin runs, so a decision can read them whether or not one is enabled.
+	// The response-stage decisions are then resolved from the request-stage
+	// evidence and that observation together, and the plugins enforce on
+	// whichever decision matched.
 	r.evaluateResponseJailbreakSignal(ctx, semanticAssistantContent(semanticResponse))
+	r.evaluateResponseStageDecision(ctx)
 
 	if jailbreakResponse := r.performSemanticResponseJailbreakDetection(ctx, semanticResponse); jailbreakResponse != nil {
 		return jailbreakResponse

@@ -78,10 +78,6 @@ const (
 	SignalTypeConversation = "conversation"
 	SignalTypeEvent        = "event"
 	SignalTypeProjection   = "projection"
-
-	// SignalTypeResponseJailbreak observes the model's output rather than the
-	// request, so it is the first response-stage signal type. See SignalStage.
-	SignalTypeResponseJailbreak = "response_jailbreak"
 )
 
 // API format constants for model backends.

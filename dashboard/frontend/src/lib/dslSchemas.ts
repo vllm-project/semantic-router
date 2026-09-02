@@ -272,6 +272,13 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
           description: 'Detection algorithm',
         },
         {
+          key: 'direction',
+          label: 'Direction',
+          type: 'select',
+          options: ['request', 'response'],
+          description: 'request (default) scores the prompt; response scores the model output',
+        },
+        {
           key: 'threshold',
           label: 'Threshold',
           type: 'number',

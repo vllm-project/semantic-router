@@ -10,7 +10,7 @@ import (
 )
 
 // evaluateResponseJailbreakSignal scores the model's output against the
-// declared response_jailbreak rules.
+// jailbreak rules declared with direction: response.
 //
 // It is driven by the rules, not by the plugin: a signal that only existed
 // while an enforcement plugin happened to be enabled would not be a signal, it
@@ -20,7 +20,7 @@ func (r *OpenAIRouter) evaluateResponseJailbreakSignal(ctx *RequestContext, assi
 	if ctx == nil || r.Config == nil {
 		return
 	}
-	rules := r.Config.ResponseJailbreakRules
+	rules := r.Config.ResponseJailbreakRules()
 	if len(rules) == 0 {
 		return
 	}
@@ -56,7 +56,7 @@ func (r *OpenAIRouter) evaluateResponseJailbreakSignal(ctx *RequestContext, assi
 		return
 	}
 	for _, rule := range rules {
-		metrics.RecordSignalExtraction(config.SignalTypeResponseJailbreak, rule.Name, latency)
+		metrics.RecordSignalExtraction(config.SignalTypeJailbreak, rule.Name, latency)
 	}
 	ctx.VSRResponseJailbreakType = jailbreakType
 	ctx.VSRResponseJailbreakRisk = riskScore
@@ -65,7 +65,7 @@ func (r *OpenAIRouter) evaluateResponseJailbreakSignal(ctx *RequestContext, assi
 
 // lowestResponseJailbreakThreshold returns the most permissive declared
 // threshold, so the single classify call is never the reason a rule misses.
-func lowestResponseJailbreakThreshold(rules []config.ResponseJailbreakRule) float32 {
+func lowestResponseJailbreakThreshold(rules []config.JailbreakRule) float32 {
 	lowest := float32(1)
 	for _, rule := range rules {
 		if rule.Threshold < lowest {
@@ -75,27 +75,74 @@ func lowestResponseJailbreakThreshold(rules []config.ResponseJailbreakRule) floa
 	return lowest
 }
 
-// responseJailbreakSignalDeclared reports whether the signal is configured, and
-// therefore whether the plugin should read it instead of classifying again.
+// responseJailbreakSignalDeclared reports whether a response-direction rule is
+// configured, and therefore whether the plugin should read the signal instead
+// of classifying again.
 func (r *OpenAIRouter) responseJailbreakSignalDeclared() bool {
-	return r.Config != nil && len(r.Config.ResponseJailbreakRules) > 0
+	return r.Config != nil && len(r.Config.ResponseJailbreakRules()) > 0
 }
 
 // responseJailbreakSignalOutcome reads the published signal back for the
 // plugin: whether any declared rule matched, and whether the detector resolved.
-func responseJailbreakSignalOutcome(ctx *RequestContext) (matched bool, resolved bool) {
-	if ctx == nil {
+func (r *OpenAIRouter) responseJailbreakSignalOutcome(ctx *RequestContext) (matched bool, resolved bool) {
+	if ctx == nil || r.Config == nil {
 		return false, false
 	}
-	for key := range ctx.VSRSignalErrors {
-		if isResponseJailbreakSignalKey(key) {
+	for _, rule := range r.Config.ResponseJailbreakRules() {
+		if _, failed := ctx.VSRSignalErrors[signalKey(config.SignalTypeJailbreak, rule.Name)]; failed {
 			return false, false
 		}
 	}
 	return len(ctx.VSRMatchedResponseJailbreak) > 0, true
 }
 
-func isResponseJailbreakSignalKey(key string) bool {
-	prefix := classification.ResponseJailbreakSignalKeyPrefix
-	return len(key) > len(prefix) && key[:len(prefix)] == prefix
+func signalKey(signalType, name string) string {
+	return signalType + ":" + name
+}
+
+// evaluateResponseStageDecision resolves the decisions that read a
+// response-stage signal, now that the signal exists. The request-stage matches
+// are reused as they were recorded, with the response observation added, so a
+// decision can compose both. The result is kept beside the request-time
+// selection rather than replacing it: the model has already answered, and the
+// decision only chooses which response policy applies.
+func (r *OpenAIRouter) evaluateResponseStageDecision(ctx *RequestContext) {
+	if ctx == nil {
+		return
+	}
+	classifier := r.classifierForRequest(ctx)
+	if classifier == nil {
+		return
+	}
+	result, err := classifier.EvaluateResponseStageDecision(responseStageSignalResults(ctx))
+	if err != nil {
+		logging.Warnf("Response-stage decision evaluation failed: %v", err)
+		return
+	}
+	if result == nil || result.Decision == nil {
+		return
+	}
+	ctx.VSRResponseDecision = result.Decision
+	ctx.VSRResponseDecisionName = result.Decision.Name
+	logging.Infof("Response-stage decision selected: decision=%s, confidence=%.3f, matched_rules=%v",
+		result.Decision.Name, result.Confidence, result.MatchedRules)
+}
+
+// responseStageSignalResults is the request-stage signal record plus the
+// response-stage jailbreak observation. The response-direction matches join
+// the request-direction ones under the same signal type, since a decision reads
+// both as {type: jailbreak, name: <rule>}.
+func responseStageSignalResults(ctx *RequestContext) *classification.SignalResults {
+	signals := classification.SignalResults{}
+	if ctx.VSRSignalResults != nil {
+		signals = *ctx.VSRSignalResults
+	}
+	matched := make([]string, 0, len(signals.MatchedJailbreakRules)+len(ctx.VSRMatchedResponseJailbreak))
+	matched = append(matched, signals.MatchedJailbreakRules...)
+	matched = append(matched, ctx.VSRMatchedResponseJailbreak...)
+	signals.MatchedJailbreakRules = matched
+	signals.SignalConfidences = ctx.VSRSignalConfidences
+	signals.SignalValues = ctx.VSRSignalValues
+	signals.SignalErrors = ctx.VSRSignalErrors
+	return &signals
 }

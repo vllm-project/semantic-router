@@ -306,6 +306,9 @@ func (d *decompiler) decompileJailbreakSignals() {
 		if jb.IncludeHistory {
 			d.write("  include_history: true\n")
 		}
+		if jb.Direction != "" {
+			d.write("  direction: %q\n", jb.Direction)
+		}
 		if jb.Description != "" {
 			d.write("  description: %q\n", jb.Description)
 		}

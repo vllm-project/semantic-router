@@ -1,0 +1,13 @@
+# Response-direction jailbreak signal.
+#
+# Scores the model's output rather than the request, so it is only available
+# after the model has answered. A decision that reads it is a response-stage
+# decision and is evaluated once the response-stage signals exist, not while
+# the request is still being routed.
+routing:
+  signals:
+    jailbreak:
+      - name: unsafe_completion
+        direction: response
+        threshold: 0.85
+        description: Detect jailbreak content in the model's own output.

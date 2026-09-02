@@ -52,6 +52,42 @@ routing:
 
 Use `include_history` for multi-turn attacks, and treat the pattern lists as tuning data for the configured detection method.
 
+### Direction
+
+`direction` selects what a rule scores. The default, `request`, scores the
+prompt before the Router commits to a route. `response` scores the model's own
+output, so the rule only exists once the model has answered:
+
+```yaml
+routing:
+  signals:
+    jailbreak:
+      - name: unsafe_completion
+        direction: response
+        threshold: 0.85
+        description: Detect jailbreak content in the model's own output.
+```
+
+A response-direction rule uses the sequence classifier only: `method: contrastive`,
+the pattern lists and `include_history` are request-stage settings and are
+rejected on it. Matches, scores and failures are reported under the same
+`jailbreak:<name>` key as a request-direction rule, so a decision reads it as
+`{type: jailbreak, name: unsafe_completion}` and can compose it with request
+signals.
+
+A decision that reads a response-direction rule is a response-stage decision.
+It is not evaluated while the request is still being routed, because the signal
+does not exist yet; it is evaluated once the response arrives, alongside the
+request-stage matches, and its `response_jailbreak` plugin then applies. At
+least one decision must stay resolvable from request-stage signals alone, which
+is checked when the configuration loads. The `response_jailbreak` plugin's own
+`threshold` is ignored once a response-direction rule is declared, and the load
+reports that; the rule owns the threshold.
+
+An unresolved detector (backend failure, or a response with no text to score)
+is reported through `SignalErrors`, the way every other signal reports one,
+rather than looking like a clean response. Streaming responses are not scored.
+
 ## Dependencies and Limitations
 
 The configured prompt-guard runtime processes the current prompt and,

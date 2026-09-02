@@ -22,11 +22,46 @@ config:
     # a passthrough to a concrete backend model, which skips plugins
     # entirely (see performDecisionEvaluation).
     #
-    # There is deliberately no jailbreak signal rule here: prompt_guard is
-    # enabled for the response filter, but nothing on the request path
-    # thresholds it, so the probe prompt reaches the backend and comes back
-    # as LLM output - which is the surface under test.
+    # There is deliberately no request-direction jailbreak rule here:
+    # prompt_guard is enabled for the response filter, but nothing on the
+    # request path thresholds it, so the probe prompt reaches the backend and
+    # comes back as LLM output - which is the surface under test. The one
+    # jailbreak rule below has direction: response, so it is scored from that
+    # output only.
     decisions:
+      # Composition: the request-stage keyword AND the response-direction rule
+      # select this decision once the response exists, and its plugin blocks.
+      # The request-stage decision that routes the same probe carries no
+      # plugin, so a 403 can only come from this response-stage decision.
+      - name: response_jailbreak_compose_block
+        description: Blocks the response when a request signal composes with the response-direction jailbreak rule
+        priority: 300
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: response_compose_probe
+            - type: jailbreak
+              name: unsafe_completion
+        modelRefs:
+          - model: openai/mock-model
+            use_reasoning: false
+        plugins:
+          - type: response_jailbreak
+            configuration:
+              enabled: true
+              action: block
+      - name: response_jailbreak_compose_route
+        description: Routes the composition probe with no response plugin of its own
+        priority: 200
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: response_compose_probe
+        modelRefs:
+          - model: openai/mock-model
+            use_reasoning: false
       - name: response_jailbreak_block
         description: Blocks the response when the guardrail flags LLM output
         priority: 200
@@ -80,6 +115,19 @@ config:
           operator: OR
           keywords:
             - __response_warn_probe__
+        - name: response_compose_probe
+          operator: OR
+          keywords:
+            - __response_compose_probe__
+      # Scored from the model's output, not the request. The block and warn
+      # decisions above enforce on this observation through their plugins;
+      # their plugin thresholds are ignored once this rule exists, so the
+      # threshold that decides lives here.
+      jailbreak:
+        - name: unsafe_completion
+          direction: response
+          threshold: 0.5
+          description: Detect jailbreak content in the model's own output.
     modelCards:
       - name: openai/mock-model
   global:

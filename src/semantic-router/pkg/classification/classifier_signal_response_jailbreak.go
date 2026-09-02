@@ -4,9 +4,10 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-// responseJailbreakSignalFailedCode marks a response_jailbreak rule the
-// detector could not resolve. It mirrors jailbreakEvaluationFailedCode so both
-// stages report an unresolved detector the same way.
+// responseJailbreakSignalFailedCode marks a response-direction jailbreak rule
+// the detector could not resolve. It is distinct from
+// jailbreakEvaluationFailedCode so replay evidence tells a failed response scan
+// apart from a failed request scan under the same "jailbreak:<name>" key.
 const responseJailbreakSignalFailedCode = "response_jailbreak_evaluation_failed"
 
 // ResponseJailbreakSignal is the response-stage jailbreak observation for one
@@ -18,7 +19,7 @@ type ResponseJailbreakSignal struct {
 }
 
 // EvaluateResponseJailbreakSignal thresholds one response's risk score against
-// every declared response_jailbreak rule.
+// every response-direction jailbreak rule.
 //
 // The detector runs once for the response, not once per rule: every rule asks
 // the same model the same question about the same text and differs only in
@@ -26,7 +27,7 @@ type ResponseJailbreakSignal struct {
 // cost an inference each time. This is the same reason the request-stage
 // evaluator classifies each unique content piece once and lets every rule read
 // the cache.
-func EvaluateResponseJailbreakSignal(rules []config.ResponseJailbreakRule, riskScore float32, resolved bool) *ResponseJailbreakSignal {
+func EvaluateResponseJailbreakSignal(rules []config.JailbreakRule, riskScore float32, resolved bool) *ResponseJailbreakSignal {
 	if len(rules) == 0 {
 		return nil
 	}
@@ -35,7 +36,7 @@ func EvaluateResponseJailbreakSignal(rules []config.ResponseJailbreakRule, riskS
 		Errors:      make(map[string]string),
 	}
 	for _, rule := range rules {
-		key := signalConfidenceKey(config.SignalTypeResponseJailbreak, rule.Name)
+		key := signalConfidenceKey(config.SignalTypeJailbreak, rule.Name)
 		if !resolved {
 			// Unresolved, not clean. Recorded where every other signal records
 			// it, so a decision reading this rule resolves through on_unknown
@@ -50,7 +51,3 @@ func EvaluateResponseJailbreakSignal(rules []config.ResponseJailbreakRule, riskS
 	}
 	return signal
 }
-
-// ResponseJailbreakSignalKeyPrefix is the prefix every response_jailbreak
-// signal key carries, for callers reading the published signal back.
-const ResponseJailbreakSignalKeyPrefix = config.SignalTypeResponseJailbreak + ":"

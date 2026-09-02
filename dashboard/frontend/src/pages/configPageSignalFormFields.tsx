@@ -409,6 +409,13 @@ export function buildSignalFormFields(): FieldConfig<AddSignalFormState>[] {
       shouldHide: hideUnless('Jailbreak'),
     },
     {
+      name: 'jailbreak_direction',
+      label: 'Direction (jailbreak only)',
+      type: 'select',
+      options: ['request', 'response'],
+      shouldHide: hideUnless('Jailbreak'),
+    },
+    {
       name: 'include_history',
       label: 'Include History (jailbreak only)',
       type: 'boolean',

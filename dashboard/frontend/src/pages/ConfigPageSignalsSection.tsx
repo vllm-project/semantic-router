@@ -265,7 +265,7 @@ export default function ConfigPageSignalsSection({
     allSignals.push({
       name: jb.name,
       type: 'Jailbreak',
-      summary: `Method: ${method}, Threshold: ${jb.threshold}${jb.include_history ? ', includes history' : ''}`,
+      summary: `Method: ${method}, Threshold: ${jb.threshold}${jb.direction === 'response' ? ', scores the response' : ''}${jb.include_history ? ', includes history' : ''}`,
       rawData: jb,
     })
   })
@@ -706,6 +706,11 @@ export default function ConfigPageSignalsSection({
           fullWidth: true,
         },
         {
+          label: 'Direction',
+          value: signal.rawData.direction || 'request',
+          fullWidth: true,
+        },
+        {
           label: 'Include History',
           value: signal.rawData.include_history ? 'Yes' : 'No',
           fullWidth: true,
@@ -859,6 +864,7 @@ export default function ConfigPageSignalsSection({
       composer_conditions: [],
       jailbreak_threshold: 0.65,
       jailbreak_method: 'classifier',
+      jailbreak_direction: 'request',
       include_history: false,
       jailbreak_patterns: [],
       benign_patterns: [],
@@ -923,6 +929,7 @@ export default function ConfigPageSignalsSection({
             composer_conditions: [...(signal.rawData.composer?.conditions || [])],
             jailbreak_threshold: signal.rawData.threshold ?? 0.65,
             jailbreak_method: signal.rawData.method || 'classifier',
+            jailbreak_direction: signal.rawData.direction || 'request',
             include_history: !!signal.rawData.include_history,
             jailbreak_patterns: [...(signal.rawData.jailbreak_patterns || [])],
             benign_patterns: [...(signal.rawData.benign_patterns || [])],
@@ -1226,6 +1233,9 @@ export default function ConfigPageSignalsSection({
           }
           if (method !== 'classifier') {
             jailbreakEntry.method = method
+          }
+          if (formData.jailbreak_direction === 'response') {
+            jailbreakEntry.direction = 'response'
           }
           if (method === 'contrastive') {
             const jailbreakPatterns = normalizeStringList(

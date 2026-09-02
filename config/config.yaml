@@ -409,11 +409,6 @@ routing:
           - kind: Group
             name: premium-tier
 
-    response_jailbreak:
-      - name: unsafe_completion
-        threshold: 0.85
-        description: Detect jailbreak content in the model's own output.
-
     jailbreak:
       - name: prompt_injection
         method: contrastive
@@ -427,6 +422,13 @@ routing:
         benign_patterns:
           - explain the policy
           - summarize the safety rules
+      # direction: response scores the model's output instead of the prompt, so
+      # this rule only exists once the model has answered and a decision that
+      # reads it is evaluated at the response stage.
+      - name: unsafe_completion
+        direction: response
+        threshold: 0.85
+        description: Detect jailbreak content in the model's own output.
 
     pii:
       - name: restricted_pii
