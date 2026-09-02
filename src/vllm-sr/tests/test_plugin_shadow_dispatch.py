@@ -39,7 +39,9 @@ class TestShadowDispatchPluginConfig:
     )
     def test_out_of_range_bounds_rejected(self, field, value):
         with pytest.raises(PydanticValidationError):
-            ShadowDispatchPluginConfig(enabled=True, model="candidate", **{field: value})
+            ShadowDispatchPluginConfig(
+                enabled=True, model="candidate", **{field: value}
+            )
 
     def test_unknown_fields_rejected(self):
         with pytest.raises(PydanticValidationError):
