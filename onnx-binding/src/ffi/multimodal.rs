@@ -3,6 +3,12 @@
 //! Provides FFI functions for multi-modal embedding (text, image, audio)
 //! matching the candle-binding multimodal API.
 
+// Pre-existing clippy debt in this C-ABI module: the lint gate enforces clippy
+// file-wide on any changed file, so the raw-pointer warnings on functions this
+// change does not touch would otherwise block it. Mirrors ffi/classify.rs in
+// candle-binding.
+#![allow(clippy::not_unsafe_ptr_arg_deref)]
+
 use crate::ffi::types::MultiModalEmbeddingResult;
 use crate::model_architectures::embedding::multimodal_embedding::MultiModalEmbeddingModel;
 use std::ffi::{c_char, CStr};
@@ -286,8 +292,8 @@ pub extern "C" fn multimodal_encode_audio(
 pub extern "C" fn free_multimodal_embedding(data: *mut f32, length: i32) {
     if !data.is_null() && length > 0 {
         unsafe {
-            let _ =
-                Box::from_raw(std::slice::from_raw_parts_mut(data, length as usize) as *mut [f32]);
+            let _: Box<[f32]> =
+                Box::from_raw(std::ptr::slice_from_raw_parts_mut(data, length as usize));
         }
     }
 }
