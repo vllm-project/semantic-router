@@ -13,6 +13,7 @@ type chatStreamDecoder struct {
 	framer             sseFramer
 	contentIndexes     map[chatContentKey]int
 	nextContentIndexes map[int]int
+	dynamoNVExtBytes   int
 }
 
 type chatContentKey struct {
@@ -62,6 +63,7 @@ type chatChunkWire struct {
 	RemoteEngineID    *string                   `json:"remote_engine_id,omitempty"`
 	RemoteHost        *string                   `json:"remote_host,omitempty"`
 	RemotePort        *int64                    `json:"remote_port,omitempty"`
+	NVExt             json.RawMessage           `json:"nvext,omitempty"`
 }
 
 func (wire chatChunkWire) hasLegacyKVTransferMetadata() bool {
@@ -149,16 +151,56 @@ func (decoder *chatStreamDecoder) pushFrame(frame []byte) ([]llmprotocol.Event, 
 	if err := validateChatStreamChunk(chunk); err != nil {
 		return nil, nil, err
 	}
+	dynamoNVExt, err := decoder.decodeDynamoNVExt(chunk.NVExt)
+	if err != nil {
+		return nil, nil, err
+	}
 	if err := decoder.observeProviderIdentity(chunk.ID, chunk.Model); err != nil {
 		return nil, nil, err
 	}
+	return decoder.decodeValidatedChunk(chunk, dynamoNVExt)
+}
+
+func (decoder *chatStreamDecoder) decodeValidatedChunk(chunk chatChunkWire, dynamoNVExt *llmprotocol.DynamoResponseNVExt) ([]llmprotocol.Event, llmprotocol.Diagnostics, error) {
 	if chunk.Error != nil {
+		if dynamoNVExt != nil {
+			return nil, nil, invalidProviderResponse("dynamo_nvext_error_chunk", "Chat stream error chunks cannot carry Dynamo nvext")
+		}
 		event, err := decoder.next(chatStreamFailureEvent(chunk.Error))
 		return []llmprotocol.Event{event}, nil, err
 	}
 	events, diagnostics, err := decoder.decodeChunkEvents(chunk)
+	if err == nil && dynamoNVExt != nil {
+		extensionEvent, extensionErr := decoder.next(llmprotocol.Event{
+			Type: llmprotocol.EventProviderOpaque, ResponseID: chunk.ID, Model: chunk.Model,
+			DynamoNVExt: dynamoNVExt,
+		})
+		if extensionErr != nil {
+			return events, diagnostics, extensionErr
+		}
+		events = append(events, extensionEvent)
+	}
 	diagnostics = decoder.appendProviderChunkDiagnostics(chunk, diagnostics)
 	return events, diagnostics, err
+}
+
+func (decoder *chatStreamDecoder) decodeDynamoNVExt(raw json.RawMessage) (*llmprotocol.DynamoResponseNVExt, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+	limit := decoder.policy.Limits.DynamoNVExtStreamBytes
+	if limit > 0 && (decoder.dynamoNVExtBytes > limit || len(raw) > limit-decoder.dynamoNVExtBytes) {
+		return nil, llmprotocol.NewError(
+			llmprotocol.ErrorUpstreamUnavailable, "dynamo_nvext_stream_size_limit",
+			"upstream Dynamo nvext stream exceeds the configured cumulative limit", nil,
+		)
+	}
+	extension, err := decodeDynamoResponseNVExt(raw, decoder.policy)
+	if err != nil {
+		return nil, err
+	}
+	decoder.dynamoNVExtBytes += len(raw)
+	return extension, nil
 }
 
 func (decoder *chatStreamDecoder) appendProviderChunkDiagnostics(
@@ -613,13 +655,45 @@ func (encoder *chatStreamEncoder) encodeDirectEvent(event llmprotocol.Event) ([]
 		frame, err := encodeSSE("", openAITransportErrorEnvelope(event.Error))
 		return [][]byte{frame}, diagnostics, err
 	case llmprotocol.EventProviderOpaque:
-		if encoder.policy.UnknownFields != llmprotocol.UnknownPreserveSameFormat || encoder.context.Source != encoder.context.Target {
-			return nil, nil, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "opaque_event", "opaque provider event cannot cross formats", nil)
-		}
-		return [][]byte{append([]byte(nil), event.Opaque...)}, nil, nil
+		return encoder.encodeProviderOpaqueEvent(event)
 	default:
 		return nil, nil, nil
 	}
+}
+
+func (encoder *chatStreamEncoder) encodeProviderOpaqueEvent(event llmprotocol.Event) ([][]byte, llmprotocol.Diagnostics, error) {
+	if event.DynamoNVExt != nil {
+		return encoder.encodeDynamoProviderEvent(event)
+	}
+	if encoder.policy.UnknownFields != llmprotocol.UnknownPreserveSameFormat || encoder.context.Source != encoder.context.Target {
+		return nil, nil, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "opaque_event", "opaque provider event cannot cross formats", nil)
+	}
+	return [][]byte{append([]byte(nil), event.Opaque...)}, nil, nil
+}
+
+func (encoder *chatStreamEncoder) encodeDynamoProviderEvent(event llmprotocol.Event) ([][]byte, llmprotocol.Diagnostics, error) {
+	if encoder.context.Source != llmprotocol.OpenAIChatV1 || encoder.context.Target != llmprotocol.OpenAIChatV1 {
+		return nil, nil, llmprotocol.NewError(
+			llmprotocol.ErrorUnsupportedFeature, "unsupported_dynamo_nvext_translation",
+			"Dynamo nvext stream chunks cannot be translated across wire formats", nil,
+		)
+	}
+	if len(event.Opaque) != 0 {
+		return nil, nil, llmprotocol.NewError(llmprotocol.ErrorInternal, "invalid_dynamo_nvext_event", "Dynamo nvext stream event mixes structured and opaque data", nil)
+	}
+	raw, err := encodeDynamoResponseNVExt(event.DynamoNVExt, encoder.policy)
+	if err != nil {
+		return nil, nil, err
+	}
+	frame, err := encodeChatStreamFrame(encoder.context, chatChunkWire{
+		ID: event.ResponseID, Object: "chat.completion.chunk", Model: event.Model,
+		NVExt: raw,
+		Choices: []chatChunkChoiceWire{{
+			Index: 0,
+			Delta: chatChunkDeltaWire{},
+		}},
+	})
+	return [][]byte{frame}, nil, err
 }
 
 func (encoder *chatStreamEncoder) encodeCompletion(

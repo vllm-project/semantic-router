@@ -146,12 +146,11 @@ func decodeAnthropicUsage(wire anthropicUsageWire) llmprotocol.Usage {
 }
 
 func (AnthropicMessagesCodec) EncodeResponse(response llmprotocol.Response, envelope llmprotocol.Envelope, policy llmprotocol.Policy) ([]byte, llmprotocol.Diagnostics, error) {
+	if err := validateDynamoResponseEnvelope(envelope, llmprotocol.AnthropicMessagesV1, policy); err != nil {
+		return nil, nil, err
+	}
 	if response.Error != nil {
-		var diagnostics llmprotocol.Diagnostics
-		if response.Usage.State == llmprotocol.UsageAvailable {
-			appendAccountingOmission(&diagnostics, policy, envelope.Format, llmprotocol.AnthropicMessagesV1, "usage", "Messages error envelopes cannot carry token usage")
-		}
-		return encodeAnthropicError(response.Error, response.ProviderRequestID), diagnostics, nil
+		return encodeAnthropicErrorResponse(response, envelope, policy)
 	}
 	if envelope.CanReplay(llmprotocol.AnthropicMessagesV1, response.Generation, policy, true) {
 		return append([]byte(nil), envelope.Response...), nil, nil
@@ -190,6 +189,14 @@ func (AnthropicMessagesCodec) EncodeResponse(response llmprotocol.Response, enve
 	}
 	body, err := marshalWire(wire)
 	return body, diagnostics, err
+}
+
+func encodeAnthropicErrorResponse(response llmprotocol.Response, envelope llmprotocol.Envelope, policy llmprotocol.Policy) ([]byte, llmprotocol.Diagnostics, error) {
+	var diagnostics llmprotocol.Diagnostics
+	if response.Usage.State == llmprotocol.UsageAvailable {
+		appendAccountingOmission(&diagnostics, policy, envelope.Format, llmprotocol.AnthropicMessagesV1, "usage", "Messages error envelopes cannot carry token usage")
+	}
+	return encodeAnthropicError(response.Error, response.ProviderRequestID), diagnostics, nil
 }
 
 func encodeAnthropicUsage(usage llmprotocol.Usage) *anthropicUsageWire {

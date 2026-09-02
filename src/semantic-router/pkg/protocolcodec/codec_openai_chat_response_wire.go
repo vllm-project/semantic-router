@@ -32,6 +32,7 @@ type chatResponseWire struct {
 	RemoteEngineID    *string                   `json:"remote_engine_id,omitempty"`
 	RemoteHost        *string                   `json:"remote_host,omitempty"`
 	RemotePort        *int64                    `json:"remote_port,omitempty"`
+	NVExt             json.RawMessage           `json:"nvext,omitempty"`
 }
 
 // hasLegacyKVTransferMetadata recognizes the flat KV-transfer response

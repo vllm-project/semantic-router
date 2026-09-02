@@ -11,6 +11,16 @@
       }
     },
     {
+      "name": "cache_salt",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_dynamo_nvext_translation"
+        }
+      }
+    },
+    {
       "name": "frequency_penalty",
       "outcome": {
         "status": "error",
@@ -182,6 +192,16 @@
         "error": {
           "category": "unsupported_feature",
           "code": "unsupported_capability"
+        }
+      }
+    },
+    {
+      "name": "nvext",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_dynamo_nvext_translation"
         }
       }
     },

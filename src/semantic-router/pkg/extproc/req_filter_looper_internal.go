@@ -97,6 +97,13 @@ func (r *OpenAIRouter) buildLooperBackendDispatchResponse(
 	modelName string,
 	ctx *RequestContext,
 ) (*ext_proc.ProcessingResponse, error) {
+	if err := validateDynamoBackendPool(r.Config, modelName, ctx.ProtocolEnvelope); err != nil {
+		if protocolError, ok := err.(*llmprotocol.ProtocolError); ok {
+			copy := *protocolError
+			ctx.ImmediateProtocolError = &copy
+		}
+		return r.createErrorResponse(400, err.Error()), nil
+	}
 	dispatch, err := r.prepareProviderDispatch(ctx.SemanticRequest, modelName, "", false, ctx)
 	if err != nil {
 		return nil, err

@@ -21,6 +21,7 @@
     {"name": "metrics", "patch": {"metrics": null}},
     {"name": "model", "patch": {"model": "alternate-provider-model"}},
     {"name": "moderation", "patch": {"moderation": {"status": "passed"}}},
+    {"name": "nvext", "patch": {"nvext": {"worker_id": {"prefill_worker_id": 1, "decode_worker_id": 2}, "timing": {"request_received_ms": 100, "ttft_ms": 45.2}, "completion_token_ids": [10, 11]}}},
     {"name": "object", "patch": {"object": "chat.completion"}},
     {"name": "prompt_logprobs", "patch": {"prompt_logprobs": null}},
     {"name": "prompt_text", "patch": {"prompt_text": null}},

@@ -11,6 +11,22 @@
       }
     },
     {
+      "name": "cache_salt",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "cache_salt": "legacy-tenant-a",
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model"
+        }
+      }
+    },
+    {
       "name": "frequency_penalty",
       "outcome": {
         "status": "ok",
@@ -183,6 +199,67 @@
           ],
           "model": "routed-model",
           "n": 2
+        }
+      }
+    },
+    {
+      "name": "nvext",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "nvext": {
+            "agent_hints": {
+              "latency_sensitivity": 0.5,
+              "osl": 2048,
+              "priority": -2,
+              "speculative_prefill": true,
+              "strict_priority": 1
+            },
+            "annotations": [
+              "worker_id",
+              "timing"
+            ],
+            "backend_instance_id": 1,
+            "cache_salt": "tenant-a",
+            "decode_worker_id": 3,
+            "dp_rank": 0,
+            "extra_fields": [
+              "worker_id",
+              "timing"
+            ],
+            "greed_sampling": true,
+            "max_thinking_tokens": 128,
+            "metadata_upload": {
+              "url": "https://metadata.example/upload"
+            },
+            "prefill_dp_rank": 1,
+            "prefill_worker_id": 2,
+            "request_timestamp_ms": 123.5,
+            "router": {
+              "itl_target": 20,
+              "ttft_target": 100
+            },
+            "routing_constraints": {
+              "preferred_taints": {
+                "zone-a": 0.75
+              },
+              "required_taints": [
+                "gpu"
+              ]
+            },
+            "token_data": [
+              10,
+              11
+            ],
+            "use_raw_prompt": false
+          }
         }
       }
     },
