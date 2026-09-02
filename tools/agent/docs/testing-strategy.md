@@ -118,7 +118,7 @@ See [environments.md](environments.md) for the concrete commands.
   add the core test receipt.
 - Core changes receive one Kubernetes smoke. Standalone image validation
   subtracts images already built by active suites: Kubernetes E2E supplies
-  `extproc`; CLI supplies `extproc`, `vllm-sr`, `dashboard`, and `vllm-sr-sim`;
+  `extproc`; CLI supplies `extproc`, `vllm-sr`, and `dashboard`;
   Memory adds `llm-katan`; Operator supplies `extproc`, `operator`, and
   `operator-bundle`; Recipe Conformance supplies `vllm-sr`.
 - Performance runs only for `perf/**` (plus its explicit manual/nightly

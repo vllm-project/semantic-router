@@ -1,0 +1,32 @@
+.refreshCluster {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.refreshCluster > span {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+.runWorkspace {
+  display: grid;
+  grid-template-columns: minmax(340px, 0.82fr) minmax(0, 1.68fr);
+  align-items: start;
+  gap: clamp(1.5rem, 2.5vw, 2.25rem);
+  min-width: 0;
+}
+
+@media (max-width: 1160px) {
+  .runWorkspace {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .refreshCluster {
+    justify-content: space-between;
+    flex-wrap: wrap;
+    width: 100%;
+  }
+}

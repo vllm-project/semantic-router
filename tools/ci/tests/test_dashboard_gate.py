@@ -1,9 +1,10 @@
-"""CI configuration tests for the Dashboard backend test gate (issue #2793).
+"""CI configuration tests for the canonical Dashboard gates (issue #2793).
 
-The required Dashboard workflow runs ``make dashboard-check``. Before #2793 that
-target gated lint, type-check, frontend unit tests and go mod tidy, but never ran
-``go test`` on ``dashboard/backend`` -- so a backend regression could pass the
-required gate unnoticed. These tests assert the wiring stays in place.
+The required Dashboard workflow runs ``make dashboard-check`` plus the dedicated
+Evaluation browser target. Before #2793 the fast target gated lint, type-check,
+frontend unit tests and go mod tidy, but never ran ``go test`` on
+``dashboard/backend`` -- so a backend regression could pass the required gate
+unnoticed. These tests assert both canonical entrypoints stay wired.
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DASHBOARD_MK = REPO_ROOT / "tools" / "make" / "dashboard.mk"
+DASHBOARD_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "dashboard-test.yml"
 
 ISSUE = "issue #2793"
 
@@ -94,7 +96,7 @@ TARGETS, VARIABLES = _parse_makefile(DASHBOARD_MK)
 
 
 class DashboardGateTest(unittest.TestCase):
-    """Guards the one Makefile prerequisite that #2793 was filed about."""
+    """Guard the required Dashboard Make and workflow entrypoints."""
 
     def test_dashboard_check_requires_the_backend_test_target(self) -> None:
         check = TARGETS.get("dashboard-check")
@@ -113,6 +115,16 @@ class DashboardGateTest(unittest.TestCase):
             f"the gap {ISSUE} was filed to close. Found prerequisites: "
             f"{check.prereqs}.",
         )
+
+    def test_dashboard_check_requires_fresh_evaluation_catalog_mirrors(self) -> None:
+        check = TARGETS.get("dashboard-check")
+        self.assertIsNotNone(check)
+        self.assertIn("dashboard-evaluation-catalog-check", check.prereqs)
+
+        catalog_check = TARGETS.get("dashboard-evaluation-catalog-check")
+        self.assertIsNotNone(catalog_check)
+        recipe = _expand(" ".join(catalog_check.recipe), VARIABLES)
+        self.assertIn("tools/ci/sync_evaluation_catalogs.py --check", recipe)
 
     def test_dashboard_test_backend_runs_go_test_in_the_backend_directory(self) -> None:
         backend = TARGETS.get("dashboard-test-backend")
@@ -158,6 +170,22 @@ class DashboardGateTest(unittest.TestCase):
             f"({ISSUE}, acceptance criterion 5) so 'make help' describes the gate "
             f"accurately. Found: {check.help_text!r}.",
         )
+
+    def test_evaluation_browser_target_owns_install_and_acceptance(self) -> None:
+        browser = TARGETS.get("dashboard-test-e2e-evaluation")
+        self.assertIsNotNone(
+            browser,
+            "dashboard.mk must define the repo-native Evaluation browser gate.",
+        )
+        recipe = _expand(" ".join(browser.recipe), VARIABLES)
+        self.assertIn("playwright install --with-deps chromium", recipe)
+        self.assertIn("npm run test:e2e:evaluation", recipe)
+
+    def test_dashboard_workflow_reuses_the_browser_make_target(self) -> None:
+        workflow = DASHBOARD_WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("run: make dashboard-test-e2e-evaluation", workflow)
+        self.assertNotIn("run: npm run test:e2e:evaluation", workflow)
+        self.assertNotIn("run: npx playwright install", workflow)
 
 
 if __name__ == "__main__":

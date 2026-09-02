@@ -1,0 +1,140 @@
+.pairedTableFrame {
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+  border-radius: 0;
+  scrollbar-gutter: stable;
+}
+
+.pairedTable {
+  width: 100%;
+  min-width: 820px;
+  border-collapse: collapse;
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+}
+
+.pairedTable th,
+.pairedTable td {
+  padding: 0.65rem 0.7rem;
+  border-top: 1px solid var(--border-subtle);
+  text-align: left;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.pairedTable thead th {
+  border-top: 0;
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--text-muted);
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.pairedTable th:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  width: 13rem;
+  min-width: 13rem;
+  background: var(--surface-panel);
+  box-shadow: 1px 0 0 var(--border-subtle);
+}
+
+.pairedTable thead th:first-child {
+  z-index: 2;
+  background: var(--surface-raised);
+}
+
+.pairedTable tbody tr[data-verdict='fail'] {
+  background: rgba(239, 68, 68, 0.045);
+}
+
+.pairedTable tbody tr[data-verdict='unavailable'] {
+  background: rgba(245, 158, 11, 0.035);
+}
+
+.pairedTable tbody th {
+  display: grid;
+  gap: 0.12rem;
+  white-space: normal;
+}
+
+.pairedTable tbody th > span {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  text-transform: uppercase;
+}
+
+.pairedTable tbody th > strong {
+  color: var(--text-primary);
+  font-size: 0.72rem;
+}
+
+.pairedTable tbody th > small {
+  color: var(--text-muted);
+  font-size: 0.62rem;
+  font-weight: 500;
+}
+
+.pairedTable tbody td > span,
+.pairedTable tbody td > small {
+  display: block;
+}
+
+.pairedTable tbody td > small {
+  margin-top: 0.16rem;
+  color: var(--text-muted);
+  font-size: 0.61rem;
+}
+
+.promotionBoundary,
+.diagnosticBoundary {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.diagnosticBoundary,
+.armReliabilitySection {
+  margin-top: 0.8rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.armReliabilitySection {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.armReliabilityHeader {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.armReliabilityHeader h5 {
+  margin: 0.18rem 0 0;
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  letter-spacing: -0.015em;
+}
+
+.armReliabilityHeader p {
+  max-width: 48rem;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  line-height: 1.5;
+}
+
+@media (max-width: 760px) {
+  .armReliabilityHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
