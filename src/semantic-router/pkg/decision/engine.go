@@ -227,6 +227,14 @@ func (e *DecisionEngine) evaluateDecisions(
 
 	for i := range e.decisions {
 		decision := &e.decisions[i]
+		// A response-stage decision cannot be resolved here: the model has not
+		// answered, so the signal was never evaluated, and on_unknown would
+		// otherwise decide the request on a detector that never ran. Config
+		// validation keeps such a decision from being the only thing standing
+		// between a request and a model.
+		if config.DecisionStage(&decision.Rules) == config.SignalStageResponse {
+			continue
+		}
 		resolved, err := e.evaluateConfiguredDecision(decision, signals, withTrace)
 		if resolved.policy != "" {
 			output.diagnostics.AppliedUnknownPolicies[decision.Name] = string(resolved.policy)

@@ -30,6 +30,20 @@ type Signals struct {
 	MetadataRules      []MetadataRule         `yaml:"metadata,omitempty"`
 	ClassifierRules    []ClassifierSignalRule `yaml:"classifiers,omitempty"`
 	InputModalityRules []InputModalityRule    `yaml:"input_modality,omitempty"`
+
+	// ResponseJailbreakRules observe the model's output, so they are evaluated
+	// at the response stage. See SignalStageOf.
+	ResponseJailbreakRules []ResponseJailbreakRule `yaml:"response_jailbreak,omitempty"`
+}
+
+// ResponseJailbreakRule scores the assistant's output for jailbreak content.
+// It carries no include_history or pattern list: there is no conversation
+// history on a single response, and the contrastive method compares a prompt
+// against patterns, which is a request-stage question.
+type ResponseJailbreakRule struct {
+	Name        string  `yaml:"name"`
+	Threshold   float32 `yaml:"threshold"`
+	Description string  `yaml:"description,omitempty"`
 }
 
 // EventRule matches structured event metadata extracted from request text.

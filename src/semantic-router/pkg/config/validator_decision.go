@@ -24,7 +24,32 @@ func validateDecisionContracts(cfg *RouterConfig) error {
 	if err := validateDecisionEmitContracts(cfg); err != nil {
 		return err
 	}
+	if err := validateResponseJailbreakRules(cfg); err != nil {
+		return err
+	}
+	if err := validateDecisionStages(cfg); err != nil {
+		return err
+	}
 	return validateDecisionPluginContracts(cfg)
+}
+
+// validateDecisionStages keeps a configuration from routing nothing. A decision
+// that reads a response-stage signal is skipped while the request is still
+// being routed, because that signal does not exist yet, so a configuration made
+// only of those has no decision left to select a model with. Caught here rather
+// than as an unresolved request at runtime.
+func validateDecisionStages(cfg *RouterConfig) error {
+	decisions := cfg.AllRoutingDecisions()
+	if len(decisions) == 0 {
+		return nil
+	}
+	for _, decision := range decisions {
+		if DecisionStage(&decision.Rules) == SignalStageRequest {
+			return nil
+		}
+	}
+	return fmt.Errorf("every decision reads a response-stage signal (%s), so no decision can select a model at request time; at least one decision must be resolvable from request-stage signals",
+		strings.Join(responseStageSignalTypeNames(), ", "))
 }
 
 func validateDecisionModelContracts(cfg *RouterConfig) error {

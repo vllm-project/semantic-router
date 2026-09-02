@@ -409,6 +409,11 @@ routing:
           - kind: Group
             name: premium-tier
 
+    response_jailbreak:
+      - name: unsafe_completion
+        threshold: 0.85
+        description: Detect jailbreak content in the model's own output.
+
     jailbreak:
       - name: prompt_injection
         method: contrastive
