@@ -66,7 +66,8 @@ in-memory backend serves it:
   a cache hit still saves a full generation. If the model is unavailable or
   errors at lookup time, the unverified candidate becomes a cache miss so the
   request continues to the model backend; a `cache_polarity_nli_skipped`
-  warning records the degraded lookup.
+  warning records the degraded lookup. This intentionally prioritizes response
+  correctness over cache-hit latency while the verifier is unavailable.
 
 Rejections are logged as `cache_negation_reject` with `tier: nli`, count as
 misses, and still surface the rejected score on `x-vsr-cache-similarity`. Remote
