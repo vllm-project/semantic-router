@@ -12,7 +12,7 @@ The deployment guides are organized into three paths: **Docker** for one host,
 **Kubernetes** for cluster-managed deployments, and **Hardware** for preparing
 GPU-backed model servers or accelerating Router-side models.
 
-Before choosing an asset, check the
+Before choosing an option, check the
 [Deployment and Hardware Support Matrix](support-matrix) for its maintenance
 level, recurring evidence, version constraints, and production boundaries.
 
