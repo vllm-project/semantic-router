@@ -13,7 +13,7 @@ import (
 
 func TestDynamoNVExtBufferedChatRoundTrip(t *testing.T) {
 	engine := NewBuiltinEngine()
-	request := []byte(`{"model":"provider-model","messages":[{"role":"user","content":"hi"}],"cache_salt":"legacy","nvext":{"greed_sampling":true,"annotations":["worker_id","timing"],"cache_salt":"tenant-a","request_timestamp_ms":123.5,"routing_constraints":{"required_taints":["gpu"],"preferred_taints":{"zone-a":0.75}},"router":{"ttft_target":100,"itl_target":20},"agent_hints":{"priority":-2,"strict_priority":1,"osl":2048,"speculative_prefill":true,"latency_sensitivity":0.5}}}`)
+	request := []byte(`{"model":"provider-model","messages":[{"role":"user","content":"hi"}],"cache_salt":"legacy","nvext":{"greed_sampling":true,"annotations":["worker_id","timing"],"extra_fields":["prompt_token_ids"],"cache_salt":"tenant-a","request_timestamp_ms":123.5,"routing_constraints":{"required_taints":["gpu"],"preferred_taints":{"zone-a":0.75}},"router":{"ttft_target":100,"itl_target":20},"agent_hints":{"priority":-2,"strict_priority":1,"osl":2048,"speculative_prefill":true,"latency_sensitivity":0.5}}}`)
 	requestResult, err := engine.TranslateRequest(llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, request, nil)
 	if err != nil {
 		t.Fatalf("TranslateRequest() error = %v", err)
@@ -24,8 +24,9 @@ func TestDynamoNVExtBufferedChatRoundTrip(t *testing.T) {
 	assertJSONField(t, requestResult.Body, "cache_salt", "legacy")
 	assertNestedJSONField(t, requestResult.Body, "nvext", "cache_salt", "tenant-a")
 	assertNestedJSONField(t, requestResult.Body, "nvext", "request_timestamp_ms", float64(123.5))
+	assertNestedJSONField(t, requestResult.Body, "nvext", "extra_fields", []any{"prompt_token_ids"})
 
-	response := []byte(`{"id":"chatcmpl-1","object":"chat.completion","created":1,"model":"provider-model","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"nvext":{"worker_id":{"prefill_worker_id":1,"decode_worker_id":2},"timing":{"request_received_ms":100,"ttft_ms":4.5},"completion_token_ids":[10,11],"prompt_logprobs":[null,{"42":{"logprob":-0.25,"rank":1,"decoded_token":"hello"}}]}}`)
+	response := []byte(`{"id":"chatcmpl-1","object":"chat.completion","created":1,"model":"provider-model","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"nvext":{"worker_id":{"prefill_worker_id":1,"decode_worker_id":2},"timing":{"request_received_ms":100,"ttft_ms":4.5},"prompt_token_ids":[1,2],"completion_token_ids":[10,11],"prompt_logprobs":[null,{"42":{"logprob":-0.25,"rank":1,"decoded_token":"hello"}}]}}`)
 	responseResult, err := engine.TranslateResponse(llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, response, nil)
 	if err != nil {
 		t.Fatalf("TranslateResponse() error = %v", err)
@@ -33,6 +34,7 @@ func TestDynamoNVExtBufferedChatRoundTrip(t *testing.T) {
 	if responseResult.Envelope.Dynamo == nil || responseResult.Envelope.Dynamo.ResponseNVExt == nil {
 		t.Fatal("decoded response did not retain Dynamo nvext")
 	}
+	assertNestedJSONField(t, responseResult.Body, "nvext", "prompt_token_ids", []any{float64(1), float64(2)})
 	assertNestedJSONField(t, responseResult.Body, "nvext", "completion_token_ids", []any{float64(10), float64(11)})
 }
 
@@ -71,7 +73,7 @@ func TestDynamoNVExtResponseRequiresOfficialTypedFields(t *testing.T) {
 
 func TestDynamoNVExtStreamPreservesRealChunkWithoutCopyingToTerminalFrames(t *testing.T) {
 	stream := newDynamoTestStream(t, llmprotocol.DefaultPolicy(), llmprotocol.OpenAIChatV1)
-	payload := []byte("data: {\"id\":\"chatcmpl-1\",\"object\":\"chat.completion.chunk\",\"model\":\"provider-model\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\"},\"finish_reason\":\"stop\"}],\"nvext\":{\"worker_id\":{\"decode_worker_id\":2},\"stop_reason\":\"stop\"}}\n\n" +
+	payload := []byte("data: {\"id\":\"chatcmpl-1\",\"object\":\"chat.completion.chunk\",\"model\":\"provider-model\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\"},\"finish_reason\":\"stop\"}],\"nvext\":{\"worker_id\":{\"decode_worker_id\":2},\"stop_reason\":\"stop\",\"prompt_token_ids\":[1,2]}}\n\n" +
 		"data: {\"id\":\"chatcmpl-1\",\"object\":\"chat.completion.chunk\",\"model\":\"provider-model\",\"choices\":[],\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":1,\"total_tokens\":2}}\n\n" +
 		"data: [DONE]\n\n")
 	frames, events, _, err := stream.Push(payload)
@@ -86,7 +88,8 @@ func TestDynamoNVExtStreamPreservesRealChunkWithoutCopyingToTerminalFrames(t *te
 	for _, event := range events {
 		if event.DynamoNVExt != nil {
 			extensionEvents++
-			if event.Type != llmprotocol.EventProviderOpaque || event.DynamoNVExt.WorkerID == nil {
+			if event.Type != llmprotocol.EventProviderOpaque || event.DynamoNVExt.WorkerID == nil ||
+				len(event.DynamoNVExt.PromptTokenIDs) != 2 {
 				t.Fatalf("unexpected Dynamo stream event: %#v", event)
 			}
 		}

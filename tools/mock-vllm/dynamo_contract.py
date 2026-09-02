@@ -29,6 +29,7 @@ def build_dynamo_response_nvext(req: ChatRequest) -> dict[str, Any] | None:
         "routed_experts": [[1, 3]],
         "engine_data": {"mock": "dynamo"},
         "stop_reason": "stop",
+        "prompt_token_ids": [11, 12],
         "completion_token_ids": [101, 102],
         "prompt_logprobs": [
             {"101": {"logprob": -0.25, "rank": 1, "decoded_token": "mock"}}

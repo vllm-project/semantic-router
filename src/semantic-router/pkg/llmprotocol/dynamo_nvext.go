@@ -69,6 +69,7 @@ type DynamoResponseNVExt struct {
 	RoutedExperts      json.RawMessage
 	EngineData         json.RawMessage
 	StopReason         json.RawMessage
+	PromptTokenIDs     []uint32
 	CompletionTokenIDs []uint32
 	PromptLogprobs     []map[uint32]DynamoPromptLogprobEntry
 	TokenIDs           []uint32
@@ -100,7 +101,7 @@ type DynamoWorkerInfo struct {
 
 var supportedDynamoExtraFields = map[string]struct{}{
 	"worker_id": {}, "timing": {}, "routed_experts": {}, "engine_data": {},
-	"stop_reason": {}, "completion_token_ids": {}, "prompt_logprobs": {},
+	"stop_reason": {}, "prompt_token_ids": {}, "completion_token_ids": {}, "prompt_logprobs": {},
 }
 
 // ValidateDynamoRequestNVExt enforces the bounded request-side nvext contract
@@ -232,11 +233,12 @@ func ValidateDynamoResponseNVExt(extension *DynamoResponseNVExt, limits Limits) 
 	if extension == nil {
 		return nil
 	}
-	if exceedsDynamoTokenIDs(len(extension.CompletionTokenIDs), limits) ||
+	if exceedsDynamoTokenIDs(len(extension.PromptTokenIDs), limits) ||
+		exceedsDynamoTokenIDs(len(extension.CompletionTokenIDs), limits) ||
 		exceedsDynamoTokenIDs(len(extension.TokenIDs), limits) {
 		return NewError(ErrorUpstreamUnavailable, "dynamo_nvext_token_limit", "upstream Dynamo nvext token ID limit exceeded", nil)
 	}
-	totalBytes := 4 * (len(extension.CompletionTokenIDs) + len(extension.TokenIDs))
+	totalBytes := 4 * (len(extension.PromptTokenIDs) + len(extension.CompletionTokenIDs) + len(extension.TokenIDs))
 	if err := validateDynamoTiming(extension.Timing); err != nil {
 		return err
 	}
