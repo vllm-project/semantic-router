@@ -738,7 +738,8 @@ func (p *ProviderProfile) ResolveAuthHeader() (string, string, error) {
 //
 // Resolution order (no silent fallback):
 //  1. Explicit ChatPath field on the profile (used as-is, plus ?api-version for azure-openai).
-//  2. base_url path + type-default suffix from providerTypeRegistry.
+//  2. base_url path + type-default suffix from providerTypeRegistry, with a
+//     version segment repeated by both sides collapsed to one.
 //  3. Type-default suffix alone if base_url has no path component.
 //
 // Returns error if the type is not recognised or base_url is unparsable.
@@ -761,10 +762,7 @@ func (p *ProviderProfile) ResolveChatPath() (string, error) {
 		return path, nil
 	}
 
-	suffix := info.ChatPath
-	if p.Type == "azure-openai" && p.APIVersion != "" {
-		suffix += "?api-version=" + p.APIVersion
-	}
+	path := info.ChatPath
 
 	// Prepend base_url path component if present
 	if p.BaseURL != "" {
@@ -772,10 +770,30 @@ func (p *ProviderProfile) ResolveChatPath() (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("cannot parse base_url %q: %w", p.BaseURL, err)
 		}
-		if u.Path != "" && u.Path != "/" {
-			return strings.TrimRight(u.Path, "/") + suffix, nil
-		}
+		path = joinProviderBasePath(u.Path, path)
 	}
 
-	return suffix, nil
+	if p.Type == "azure-openai" && p.APIVersion != "" {
+		path += "?api-version=" + p.APIVersion
+	}
+
+	return path, nil
+}
+
+// joinProviderBasePath prefixes a type-default endpoint suffix with the
+// base_url path component.
+//
+// Some type suffixes carry the API version and some expect it from base_url,
+// so the documented versioned API root (https://provider.example/v1) would
+// double it for the former. Collapse the repeat, matching providerProtocolPath
+// in pkg/extproc so both upstream-URL builders agree.
+func joinProviderBasePath(basePath, suffix string) string {
+	basePath = strings.TrimRight(basePath, "/")
+	if basePath == "" {
+		return suffix
+	}
+	if strings.HasSuffix(basePath, "/v1") && strings.HasPrefix(suffix, "/v1/") {
+		return basePath + strings.TrimPrefix(suffix, "/v1")
+	}
+	return basePath + suffix
 }

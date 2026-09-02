@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
-import { mockAuthenticatedSession } from './support/auth'
+import { dashboardSettingsResponse, mockAuthenticatedSession } from './support/auth'
 
 const setupState = {
   setupMode: false,
@@ -11,13 +11,7 @@ const setupState = {
   canActivate: true,
 }
 
-const settingsResponse = {
-  readonlyMode: false,
-  setupMode: false,
-  platform: '',
-  envoyUrl: '',
-  fleetSimEnabled: true,
-}
+const settingsResponse = dashboardSettingsResponse()
 
 const readUser = {
   id: 'user-read-1',
@@ -278,6 +272,7 @@ async function mockCommon(
       role?: string
       permissions?: string[]
     }
+    settings?: Record<string, unknown>
   } = {},
 ) {
   await mockAuthenticatedSession(page, options)
@@ -294,7 +289,7 @@ async function mockCommon(
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify(settingsResponse),
+      body: JSON.stringify({ ...settingsResponse, ...(options.settings ?? {}) }),
     })
   })
 
@@ -418,6 +413,27 @@ async function expectBalancedDesktopFrame(page: Page, locator: Locator) {
 }
 
 test.describe('Layout top navigation', () => {
+  test('hides Evaluation and explains direct access when the service is unavailable', async ({
+    page,
+  }) => {
+    await mockCommon(page, {
+      settings: {
+        evaluationAvailable: false,
+        evaluationUnavailableReason: 'Evaluation is disabled for this deployment.',
+      },
+    })
+    await page.goto('/dashboard')
+
+    await page.getByRole('button', { name: 'Build' }).click()
+    const buildMenu = page.getByRole('navigation', { name: 'Build' })
+    await buildMenu.getByRole('tab', { name: /Outcomes/ }).click()
+    await expect(buildMenu.getByRole('link', { name: 'Evaluation' })).toHaveCount(0)
+
+    await page.goto('/evaluation')
+    await expect(page.getByRole('heading', { name: 'Evaluation is not available' })).toBeVisible()
+    await expect(page.getByText('Evaluation is disabled for this deployment.')).toBeVisible()
+  })
+
   test('keeps every mobile header control inside 320px and 375px viewports', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 700 })
     await mockCommon(page)
@@ -475,10 +491,8 @@ test.describe('Layout top navigation', () => {
       ),
     ).not.toBe('rgba(0, 0, 0, 0)')
     const buildToggle = mobileNavigation.getByRole('button', { name: 'Build' })
-    const analyzeToggle = mobileNavigation.getByRole('button', { name: 'Analyze' })
     const operateToggle = mobileNavigation.getByRole('button', { name: 'System' })
     await expect(buildToggle).toBeVisible()
-    await expect(analyzeToggle).toBeVisible()
     await expect(operateToggle).toBeVisible()
     await expect(buildToggle).toHaveAttribute('aria-expanded', 'false')
 
@@ -499,24 +513,20 @@ test.describe('Layout top navigation', () => {
     await page.goto('/dashboard')
 
     await expect(page.getByRole('group', { name: 'Workflow navigation' })).toHaveCount(0)
-    await expect(page.getByRole('button', { name: /^(Build|Analyze|System)$/ })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: /^(Build|System)$/ })).toHaveCount(0)
 
     await page.setViewportSize({ width: 900, height: 700 })
     const menuButton = page.getByRole('button', { name: 'Toggle menu' })
     await menuButton.click()
 
     const mobileNavigation = page.getByRole('navigation', { name: 'Mobile navigation' })
-    await expect(
-      mobileNavigation.getByRole('button', { name: /^(Build|Analyze|System)$/ }),
-    ).toHaveCount(0)
+    await expect(mobileNavigation.getByRole('button', { name: /^(Build|System)$/ })).toHaveCount(0)
     await expect(mobileNavigation.getByRole('link')).toHaveCount(2)
     await page.keyboard.press('End')
     await expect(mobileNavigation.getByRole('link', { name: 'Playground' })).toBeFocused()
   })
 
-  test('organizes the control plane around Build, Analyze, and System mega navigation', async ({
-    page,
-  }) => {
+  test('organizes the control plane around Build and System mega navigation', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await mockCommon(page)
 
@@ -530,13 +540,15 @@ test.describe('Layout top navigation', () => {
     await expect(primaryGroup.getByRole('link')).toHaveCount(2)
 
     const buildTrigger = workflowGroup.getByRole('button', { name: 'Build' })
-    const analyzeTrigger = workflowGroup.getByRole('button', { name: 'Analyze' })
     const operateTrigger = workflowGroup.getByRole('button', { name: 'System' })
+    await expect(workflowGroup.getByRole('button')).toHaveCount(2)
+    await expect(workflowGroup.getByRole('button', { name: 'Analyze' })).toHaveCount(0)
+    await expect(page.getByRole('link', { name: 'Fleet Simulation' })).toHaveCount(0)
+    await expect(page.locator('a[href^="/fleet-sim"]')).toHaveCount(0)
     await expect(buildTrigger).toHaveAttribute('aria-controls', 'layout-mega-menu-build')
-    await expect(analyzeTrigger).toHaveAttribute('aria-controls', 'layout-mega-menu-analyze')
     await expect(operateTrigger).toHaveAttribute('aria-controls', 'layout-mega-menu-operate')
     await expect(buildTrigger).not.toHaveAttribute('aria-haspopup')
-    await expect(workflowGroup.getByRole('button')).toHaveCount(3)
+    await expect(workflowGroup.getByRole('button')).toHaveCount(2)
 
     const header = page.locator('header').first()
     await expect(header).toHaveCSS('background-color', 'rgb(0, 0, 0)')
@@ -612,15 +624,6 @@ test.describe('Layout top navigation', () => {
     await expect(buildMenu.getByRole('link', { name: 'Insights' })).toBeVisible()
     await expect(buildMenu.getByRole('link', { name: 'Evaluation' })).toBeVisible()
     await expect(buildMenu.getByRole('link', { name: 'ML Setup' })).toBeVisible()
-
-    await analyzeTrigger.click()
-    const analyzeMenu = page.getByRole('navigation', { name: 'Analyze' })
-    await expect(analyzeMenu.getByRole('tab', { name: /Fleet Simulation/ })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    )
-    await expect(analyzeMenu.getByRole('link', { name: 'Overview' })).toBeVisible()
-    await expect(analyzeMenu.getByRole('link', { name: 'Runs' })).toBeVisible()
 
     await operateTrigger.click()
     const operateMenu = page.getByRole('navigation', { name: 'System' })
@@ -699,7 +702,7 @@ test.describe('Layout top navigation', () => {
     const workflowGroup = page.getByRole('group', { name: 'Workflow navigation' })
     const menuWidths: number[] = []
 
-    for (const label of ['Build', 'Analyze', 'System'] as const) {
+    for (const label of ['Build', 'System'] as const) {
       const trigger = workflowGroup.getByRole('button', { name: label })
       await trigger.click()
       const menu = page.getByRole('navigation', { name: label })
@@ -740,6 +743,18 @@ test.describe('Layout top navigation', () => {
       'aria-expanded',
       'false',
     )
+  })
+
+  test('removes Fleet Simulation navigation and redirects its retired direct route', async ({
+    page,
+  }) => {
+    await mockCommon(page)
+
+    await page.goto('/fleet-sim')
+
+    await expect(page).toHaveURL(/\/dashboard$/)
+    await expect(page.getByText('Fleet Simulation', { exact: true })).toHaveCount(0)
+    await expect(page.locator('a[href^="/fleet-sim"]')).toHaveCount(0)
   })
 
   test('switches to compact navigation at 961px with full access and a long account name', async ({
@@ -864,7 +879,10 @@ test.describe('Layout top navigation', () => {
 
     await page.goto('/dashboard')
     await page.getByRole('button', { name: 'Build' }).click()
-    await page.getByRole('navigation', { name: 'Build' }).getByRole('tab', { name: /Outcomes/ }).click()
+    await page
+      .getByRole('navigation', { name: 'Build' })
+      .getByRole('tab', { name: /Outcomes/ })
+      .click()
     await page
       .getByRole('navigation', { name: 'Build' })
       .getByRole('link', { name: 'Insights' })

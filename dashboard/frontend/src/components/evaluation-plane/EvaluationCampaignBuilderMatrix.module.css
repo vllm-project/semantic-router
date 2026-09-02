@@ -1,0 +1,213 @@
+.evidenceDisclosure {
+  min-width: 0;
+  margin-top: 0.9rem;
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+  --evaluation-disclosure-focus-offset: 4px;
+  --evaluation-disclosure-indicator-color: var(--text-secondary);
+}
+
+.evidenceDisclosureSummary {
+  padding: 0.8rem 0;
+}
+
+.evidenceDisclosure[open] > .evidenceDisclosureSummary {
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.evidenceDisclosureSummary span {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.evidenceDisclosureSummary strong {
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+}
+
+.evidenceDisclosureSummary small,
+.evidenceDisclosureSummary b {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+}
+
+.evidenceDisclosureSummary b {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-weight: 650;
+}
+
+.evidenceDisclosureBody {
+  padding-bottom: 0.9rem;
+}
+
+.roleMatrixFrame {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  contain: inline-size;
+  margin-top: 0;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+  border-radius: 0;
+}
+
+.roleMatrix {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: collapse;
+}
+
+.roleMatrix th,
+.roleMatrix td {
+  padding: 0.65rem 0.75rem;
+  border-bottom: 1px solid var(--border-subtle);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.roleMatrix thead th {
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  font-weight: 650;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+.roleMatrix tbody tr:last-child > * {
+  border-bottom: 0;
+}
+
+.roleMatrix tbody tr[data-selected='true'] {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.roleMatrix tbody th {
+  width: 34%;
+}
+
+.roleMatrix tbody th strong,
+.roleMatrix tbody th small,
+.roleMatrix td > small {
+  display: block;
+}
+
+.roleMatrix tbody th strong {
+  color: var(--text-primary);
+  font-size: 0.76rem;
+}
+
+.roleMatrix tbody th small,
+.roleMatrix td > small {
+  margin-top: 0.18rem;
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+.roleMatrix tbody td:nth-child(2) {
+  width: 17%;
+}
+
+.roleMatrix select {
+  width: 100%;
+}
+
+.pairInputs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.pairInputs label {
+  min-width: 0;
+}
+
+.roleMatrix output {
+  display: flex;
+  align-items: center;
+  min-height: var(--control-height);
+  padding: 0.45rem 0.6rem;
+  border-left: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  overflow-wrap: anywhere;
+}
+
+.roleEmpty {
+  color: #f9d38b !important;
+}
+
+.roleReady {
+  color: var(--text-secondary) !important;
+}
+
+@media (max-width: 760px) {
+  .pairInputs {
+    grid-template-columns: 1fr;
+  }
+
+  .evidenceDisclosureSummary {
+    align-items: flex-start;
+  }
+
+  .roleMatrix {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .roleMatrix thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .roleMatrix,
+  .roleMatrix tbody,
+  .roleMatrix tr,
+  .roleMatrix th,
+  .roleMatrix td {
+    display: block;
+  }
+
+  .roleMatrix tr {
+    padding: 0.75rem;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .roleMatrix tbody tr:last-child {
+    border-bottom: 0;
+  }
+
+  .roleMatrix th,
+  .roleMatrix td,
+  .roleMatrix tbody td:nth-child(2) {
+    width: auto;
+    padding: 0.3rem 0;
+    border-bottom: 0;
+  }
+
+  .roleMatrix td::before {
+    display: block;
+    margin-bottom: 0.25rem;
+    color: var(--text-muted);
+    content: attr(data-label);
+    font-size: 0.65rem;
+    font-weight: 650;
+    letter-spacing: 0.055em;
+    text-transform: uppercase;
+  }
+
+  .roleMatrix output {
+    border-left: 0;
+  }
+}

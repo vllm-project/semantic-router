@@ -16,7 +16,7 @@ func (s *Service) validatePrivateReceipt(runID string) (map[string]string, error
 	if err != nil {
 		return nil, err
 	}
-	receipt, err := readEvidenceBytes(filepath.Join(runDir, privateChecksumArtifactName), maxStructuredArtifactBytes)
+	receipt, err := s.store.readPrivateChecksumReceipt(runID)
 	if err != nil {
 		return nil, fmt.Errorf("read private artifact checksum receipt: %w", err)
 	}
@@ -28,9 +28,7 @@ func (s *Service) validatePrivateReceipt(runID string) (map[string]string, error
 	if err != nil {
 		return nil, fmt.Errorf("%w: private artifact checksum receipt is invalid", ErrInvalid)
 	}
-	excluded := map[string]bool{
-		"events.jsonl": true, privateChecksumArtifactName: true, reportFileName: true,
-	}
+	excluded := map[string]bool{privateChecksumArtifactName: true, reportFileName: true}
 	expected := make(map[string]bool)
 	for _, name := range workerRunArtifactNames {
 		if excluded[name] {
@@ -62,6 +60,14 @@ func (s *Service) validatePrivateReceipt(runID string) (map[string]string, error
 		}
 	}
 	return checksums, nil
+}
+
+func (s *Store) readPrivateChecksumReceipt(runID string) ([]byte, error) {
+	runDir, err := s.checkedRunDir(runID)
+	if err != nil {
+		return nil, err
+	}
+	return readEvidenceBytes(filepath.Join(runDir, privateChecksumArtifactName), maxStructuredArtifactBytes)
 }
 
 func parseChecksumReceipt(data []byte, allowed map[string]bool) (map[string]string, error) {

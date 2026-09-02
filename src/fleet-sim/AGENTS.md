@@ -7,7 +7,7 @@
 
 ## Responsibilities
 
-- Keep the simulator package runnable as both the `vllm-sr-sim` CLI and the HTTP service used by the dashboard sidecar.
+- Keep the standalone simulator package runnable as both the `vllm-sr-sim` CLI and its optional HTTP service.
 - Keep core simulation logic, API transport, and catalog data separated so package moves do not break imports.
 
 ## Change Rules

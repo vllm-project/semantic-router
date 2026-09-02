@@ -94,6 +94,15 @@
   --radius-xl: 0.75rem;
   --radius-2xl: 1rem;
 
+  /* Shared control geometry. Product surfaces use these instead of local button/form sizing. */
+  --control-height: 2.5rem;
+  --control-height-compact: 2.125rem;
+  --control-radius: var(--radius-md);
+  --control-padding-inline: 0.75rem;
+  --control-padding-inline-compact: 0.625rem;
+  --tag-height: 1.375rem;
+  --tag-radius: 999px;
+
   /* Transitions - Smooth */
   --transition-fast: 150ms ease;
   --transition-base: 250ms ease;
@@ -127,21 +136,22 @@ body {
   background:
     radial-gradient(circle at 78% -12%, rgba(255, 255, 255, 0.055), transparent 27rem),
     linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px),
-    var(--surface-canvas);
-  background-size: auto, 40px 40px, 40px 40px, auto;
+    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px), var(--surface-canvas);
+  background-size:
+    auto,
+    40px 40px,
+    40px 40px,
+    auto;
   color: var(--color-text);
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  height: 100%;
+  min-height: 100%;
   overflow-x: hidden;
-  overflow-y: auto;
 }
 
 #root {
   min-height: 100vh;
-  height: 100%;
   display: flex;
   flex-direction: column;
 }
@@ -185,7 +195,7 @@ textarea {
   background: var(--color-bg-tertiary);
   border: 1px solid var(--color-border);
   color: var(--color-text);
-  border-radius: var(--radius-md);
+  border-radius: var(--control-radius);
   padding: 0.5rem 0.75rem;
   transition: all var(--transition-fast);
 }
