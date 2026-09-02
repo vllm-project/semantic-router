@@ -234,16 +234,25 @@ def _exit_unavailable_runtime(runtime: str, details: str) -> None:
 
 
 def container_image_exists(image_name):
-    """Check if a container image exists locally."""
+    """Check if a container image exists locally.
+
+    Uses ``image inspect`` rather than ``images -q`` because the latter does
+    not reliably resolve ``repo@sha256:...`` references: a digest-pinned image
+    that is present locally still yields no ID, so ``--image-pull-policy
+    never`` rejected it and air-gapped deployments could not combine immutable
+    image identity with no pull at startup (#3277). ``image inspect`` resolves
+    tag and digest references alike and reports presence through its exit
+    status.
+    """
     runtime = get_container_runtime()
     try:
         result = subprocess.run(
-            [runtime, "images", "-q", image_name],
+            [runtime, "image", "inspect", image_name],
             capture_output=True,
             text=True,
             check=False,
         )
-        return bool(result.stdout.strip())
+        return result.returncode == 0
     except Exception as exc:
         log.warning(f"Failed to check container image: {exc}")
         return False
