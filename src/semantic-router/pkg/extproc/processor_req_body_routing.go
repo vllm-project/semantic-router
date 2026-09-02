@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -19,6 +20,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 )
 
 type routeHeaderState struct {
@@ -62,6 +64,9 @@ func (r *OpenAIRouter) prepareProviderDispatch(
 	if changed {
 		request.Generation++
 	}
+	if protocolErr := r.rejectDispatchCapabilityMismatch(request, dispatch.targetFormat, ctx); protocolErr != nil {
+		return nil, protocolErr
+	}
 	ctx.TargetFormat = dispatch.targetFormat
 	ctx.SemanticRequest = request
 	logging.ComponentDebugEvent("extproc", "provider_dispatch_prepared", map[string]interface{}{
@@ -71,6 +76,40 @@ func (r *OpenAIRouter) prepareProviderDispatch(
 		"wire_format": dispatch.targetFormat,
 	})
 	return dispatch, nil
+}
+
+func (r *OpenAIRouter) codecCapabilitiesForFormat(format llmprotocol.WireFormat) (llmprotocol.CapabilitySet, bool) {
+	if r == nil || r.ProtocolCodecs == nil {
+		return protocolcodec.NewBuiltinRegistry().CapabilitiesFor(format)
+	}
+	return r.ProtocolCodecs.CapabilitiesFor(format)
+}
+
+// rejectDispatchCapabilityMismatch applies the same wire-fidelity gate the
+// codec engine enforces at encode, but at dispatch time so a request whose
+// required capabilities the chosen backend wire cannot express surfaces as a
+// protocol error instead of a generic 500 from encoding. This is the first
+// slice of capability-driven dispatch: it turns "crash with 500" into "clean
+// 400 unsupported_capability" and gives future capability-aware re-routing a
+// single check point.
+func (r *OpenAIRouter) rejectDispatchCapabilityMismatch(
+	request *llmprotocol.Request,
+	format llmprotocol.WireFormat,
+	ctx *RequestContext,
+) error {
+	available, ok := r.codecCapabilitiesForFormat(format)
+	if !ok {
+		// Unknown wire formats are rejected earlier by wireFormatForModel.
+		return nil
+	}
+	if err := llmprotocol.RequireCapabilities(format, available, llmprotocol.RequiredCapabilities(*request)); err != nil {
+		var protocolError *llmprotocol.ProtocolError
+		if errors.As(err, &protocolError) && ctx != nil {
+			ctx.ImmediateProtocolError = protocolError
+		}
+		return err
+	}
+	return nil
 }
 
 func (r *OpenAIRouter) resolveProviderDispatch(

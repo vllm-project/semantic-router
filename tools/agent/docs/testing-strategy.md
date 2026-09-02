@@ -104,6 +104,10 @@ See [environments.md](environments.md) for the concrete commands.
 
 ## Behavior and Coverage Rules
 
+- Main-branch validation runs are per-commit: do not add branch-wide workflow
+  concurrency that cancels or coalesces push runs, because the change
+  classifier receives each push's immediate predecessor and cannot recover
+  domains or publication targets from a skipped commit.
 - Behavior-visible routing, startup, config, Docker, CLI, or API changes require updated or new E2E coverage unless the change is a pure refactor.
 - Documentation-only changes should not trigger local smoke or heavy E2E unless the task matrix escalates them.
 - Repository ownership metadata (`OWNER` files and `.github/CODEOWNERS`) stays
