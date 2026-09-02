@@ -13,6 +13,7 @@ from pathlib import Path
 import tree_sitter_go
 import tree_sitter_python
 import tree_sitter_rust
+import tree_sitter_typescript
 import yaml
 from tree_sitter import Language, Parser
 
@@ -24,16 +25,26 @@ FUNCTION_NODE_TYPES = {
     "go": {"function_declaration", "method_declaration", "func_literal"},
     "python": {"function_definition", "async_function_definition"},
     "rust": {"function_item"},
+    "typescript": {
+        "arrow_function",
+        "function_declaration",
+        "function_expression",
+        "generator_function",
+        "generator_function_declaration",
+        "method_definition",
+    },
 }
 
 INTERFACE_NODE_TYPES = {
     "go": {"interface_type"},
     "rust": {"trait_item"},
+    "typescript": {"interface_declaration"},
 }
 
 INTERFACE_METHOD_NODE_TYPES = {
     "go": {"method_elem", "method_spec"},
     "rust": {"function_item", "function_signature_item"},
+    "typescript": {"method_signature"},
 }
 
 CONTROL_NODE_TYPES = {
@@ -58,6 +69,15 @@ CONTROL_NODE_TYPES = {
         "while_expression",
         "loop_expression",
         "match_expression",
+    },
+    "typescript": {
+        "do_statement",
+        "for_in_statement",
+        "for_statement",
+        "if_statement",
+        "switch_statement",
+        "try_statement",
+        "while_statement",
     },
 }
 
@@ -89,6 +109,7 @@ def build_parser(parser_name: str) -> Parser:
         "go": build_language(tree_sitter_go),
         "python": build_language(tree_sitter_python),
         "rust": build_language(tree_sitter_rust),
+        "typescript": Language(tree_sitter_typescript.language_tsx()),
     }
     parser = Parser()
     language = language_map[parser_name]
@@ -174,20 +195,41 @@ def load_baseline_line_count(path: str, base_ref: str | None) -> int | None:
     return baseline_source.count("\n") + 1
 
 
-def evaluate_dependency_rules(path: str, text: str, rules: dict) -> list[Finding]:
+def evaluate_dependency_rules(
+    path: str, text: str, rules: dict, base_ref: str | None = None
+) -> list[Finding]:
     findings: list[Finding] = []
+    baseline_source: str | None = None
     for rule in rules["dependency_rules"]:
         if not any(fnmatch.fnmatch(path, pattern) for pattern in rule["applies_to"]):
             continue
         for literal in rule["forbidden_literals"]:
-            if literal in text:
-                findings.append(
-                    Finding(
-                        level="ERROR",
-                        file=path,
-                        message=f"{rule['name']}: forbidden literal '{literal}'",
+            current_count = text.count(literal)
+            if current_count == 0:
+                continue
+            if rule.get("policy", "error") == "no-new":
+                if baseline_source is None:
+                    baseline_source = load_baseline_source(path, base_ref) or ""
+                baseline_count = baseline_source.count(literal)
+                if current_count <= baseline_count:
+                    findings.append(
+                        Finding(
+                            level="WARN",
+                            file=path,
+                            message=(
+                                f"{rule['name']}: pre-existing forbidden dependency "
+                                f"'{literal}' did not grow from baseline {baseline_count}"
+                            ),
+                        )
                     )
+                    continue
+            findings.append(
+                Finding(
+                    level="ERROR",
+                    file=path,
+                    message=f"{rule['name']}: forbidden dependency '{literal}'",
                 )
+            )
     return findings
 
 
@@ -372,7 +414,7 @@ def ratchet_or_error(
         return Finding(
             "WARN",
             path,
-            f"structure exception {message} but did not exceed baseline {baseline_value_getter(baseline)}",
+            f"pre-existing {message} but did not exceed baseline {baseline_value_getter(baseline)}",
         )
     return Finding("ERROR", path, message)
 
@@ -431,9 +473,12 @@ def evaluate_ast_rules(
     findings: list[Finding] = []
     tree = parser.parse(source_bytes)
     structure_exception = get_structure_exception_rule(path, rules)
+    ratchet_existing = rules["languages"][language_name].get(
+        "ratchet_existing_violations", False
+    )
     baseline_metrics = (
         load_baseline_function_metrics(path, language_name, parser, base_ref)
-        if structure_exception
+        if structure_exception or ratchet_existing
         else {}
     )
     occurrence_counts: dict[str, int] = defaultdict(int)
@@ -512,7 +557,7 @@ def evaluate_file(
 
     source_bytes = absolute_path.read_bytes()
     source_text = source_bytes.decode("utf-8", errors="ignore")
-    findings = evaluate_dependency_rules(path, source_text, rules)
+    findings = evaluate_dependency_rules(path, source_text, rules, base_ref)
     findings.extend(
         evaluate_file_line_count(path, source_text.count("\n") + 1, rules, base_ref)
     )
