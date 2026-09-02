@@ -243,7 +243,12 @@ async def test_dynamo_nvext_buffered_contract_and_request_observation() -> None:
         "cache_salt": "tenant-cache-a",
         "nvext": {
             "cache_salt": "tenant-cache-b",
-            "extra_fields": ["worker_id", "timing", "completion_token_ids"],
+            "extra_fields": [
+                "worker_id",
+                "timing",
+                "prompt_token_ids",
+                "completion_token_ids",
+            ],
         },
     }
     headers = {"x-vsr-test-session-id": session_id}
@@ -270,6 +275,7 @@ async def test_dynamo_nvext_buffered_contract_and_request_observation() -> None:
             "ttft_ms": 3.75,
             "total_time_ms": 8.0,
         },
+        "prompt_token_ids": [11, 12],
         "completion_token_ids": [101, 102],
     }
 
@@ -280,7 +286,7 @@ async def test_dynamo_nvext_streaming_contract() -> None:
         "model": "provider-model",
         "messages": [{"role": "user", "content": "hello"}],
         "stream": True,
-        "nvext": {"extra_fields": ["stop_reason", "engine_data"]},
+        "nvext": {"extra_fields": ["stop_reason", "engine_data", "prompt_token_ids"]},
     }
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://simulator"
@@ -295,7 +301,11 @@ async def test_dynamo_nvext_streaming_contract() -> None:
     ]
     extension_chunks = [payload["nvext"] for payload in payloads if "nvext" in payload]
     assert extension_chunks == [
-        {"stop_reason": "stop", "engine_data": {"mock": "dynamo"}}
+        {
+            "stop_reason": "stop",
+            "engine_data": {"mock": "dynamo"},
+            "prompt_token_ids": [11, 12],
+        }
     ]
 
 

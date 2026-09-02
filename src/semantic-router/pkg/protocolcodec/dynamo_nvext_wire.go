@@ -54,6 +54,7 @@ type dynamoResponseNVExtWire struct {
 	RoutedExperts      json.RawMessage                           `json:"routed_experts,omitempty"`
 	EngineData         json.RawMessage                           `json:"engine_data,omitempty"`
 	StopReason         json.RawMessage                           `json:"stop_reason,omitempty"`
+	PromptTokenIDs     []uint32                                  `json:"prompt_token_ids,omitempty"`
 	CompletionTokenIDs []uint32                                  `json:"completion_token_ids,omitempty"`
 	PromptLogprobs     []map[uint32]dynamoPromptLogprobEntryWire `json:"prompt_logprobs,omitempty"`
 	TokenIDs           []uint32                                  `json:"token_ids,omitempty"`
@@ -232,6 +233,7 @@ func decodeDynamoResponseNVExt(raw json.RawMessage, policy llmprotocol.Policy) (
 		RoutedExperts:      append(json.RawMessage(nil), wire.RoutedExperts...),
 		EngineData:         append(json.RawMessage(nil), wire.EngineData...),
 		StopReason:         append(json.RawMessage(nil), wire.StopReason...),
+		PromptTokenIDs:     append([]uint32(nil), wire.PromptTokenIDs...),
 		CompletionTokenIDs: append([]uint32(nil), wire.CompletionTokenIDs...),
 		TokenIDs:           append([]uint32(nil), wire.TokenIDs...),
 	}
@@ -271,6 +273,7 @@ func encodeDynamoResponseNVExt(extension *llmprotocol.DynamoResponseNVExt, polic
 		RoutedExperts:      append(json.RawMessage(nil), extension.RoutedExperts...),
 		EngineData:         append(json.RawMessage(nil), extension.EngineData...),
 		StopReason:         append(json.RawMessage(nil), extension.StopReason...),
+		PromptTokenIDs:     append([]uint32(nil), extension.PromptTokenIDs...),
 		CompletionTokenIDs: append([]uint32(nil), extension.CompletionTokenIDs...),
 		TokenIDs:           append([]uint32(nil), extension.TokenIDs...),
 	}

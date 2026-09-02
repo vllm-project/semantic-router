@@ -9,7 +9,7 @@ func TestValidateDynamoRequestNVExtAcceptsDocumentedFields(t *testing.T) {
 	extension := &DynamoRequestNVExt{
 		GreedSampling: Bool(true), UseRawPrompt: Bool(false),
 		Annotations: []string{"worker_id", "timing"}, TokenData: []uint32{1, 2, 3},
-		CacheSalt: "tenant-a", ExtraFields: []string{"worker_id", "timing", "engine_data"},
+		CacheSalt: "tenant-a", ExtraFields: []string{"worker_id", "timing", "engine_data", "prompt_token_ids"},
 		MetadataUpload:     &DynamoMetadataUpload{URL: "https://metadata.example/upload"},
 		AgentHints:         &DynamoAgentHints{Priority: int32Pointer(5), StrictPriority: uint32Pointer(1), OSL: uint32Pointer(1024), SpeculativePrefill: Bool(true), LatencySensitivity: float64Pointer(0.5)},
 		RequestTimestampMS: float64Pointer(100),
@@ -64,7 +64,7 @@ func TestValidateDynamoResponseNVExtAcceptsBoundedMetadata(t *testing.T) {
 		WorkerID:   &DynamoWorkerInfo{PrefillWorkerID: uint64Pointer(1), DecodeDPRank: uint32Pointer(2)},
 		Timing:     &DynamoTimingInfo{RequestReceivedMS: 100, TTFTMS: float64Pointer(45.2)},
 		EngineData: json.RawMessage(`{"backend":"vllm"}`),
-		StopReason: json.RawMessage(`"length"`), CompletionTokenIDs: []uint32{10, 11},
+		StopReason: json.RawMessage(`"length"`), PromptTokenIDs: []uint32{1, 2}, CompletionTokenIDs: []uint32{10, 11},
 		PromptLogprobs: []map[uint32]DynamoPromptLogprobEntry{nil, {42: {Logprob: -0.25, Rank: uint32Pointer(1)}}},
 	}
 	if err := ValidateDynamoResponseNVExt(extension, DefaultPolicy().Limits); err != nil {
@@ -92,8 +92,8 @@ func TestValidateDynamoResponseNVExtRejectsMalformedDeepAndOversizedMetadata(t *
 	}
 }
 
-func TestValidateDynamoResponseNVExtRejectsTokenLimit(t *testing.T) {
-	extension := &DynamoResponseNVExt{TokenIDs: []uint32{1, 2}}
+func TestValidateDynamoResponseNVExtRejectsPromptTokenIDsLimit(t *testing.T) {
+	extension := &DynamoResponseNVExt{PromptTokenIDs: []uint32{1, 2}}
 	limits := DefaultPolicy().Limits
 	limits.DynamoNVExtTokenIDs = 1
 	requireLLMProtocolErrorCode(t, ValidateDynamoResponseNVExt(extension, limits), "dynamo_nvext_token_limit")
