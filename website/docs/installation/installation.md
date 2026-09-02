@@ -12,7 +12,7 @@ The Router itself runs on CPU; the model backend can be local or remote.
 ## Requirements
 
 - Python 3.10 or newer
-- Docker
+- Docker, or Podman as a fallback on Linux
 - Linux, macOS, or WSL2 on Windows
 
 Native Windows Python can run configuration and validation commands, but the
@@ -30,7 +30,11 @@ curl -fsSL https://vllm-sr.ai/install.sh | \
 ```
 
 The installer creates an isolated CLI environment, adds a launcher under
-`~/.local/bin`, prepares Docker, and starts `vllm-sr serve` unless you opt out.
+`~/.local/bin`, prepares a container runtime, and starts `vllm-sr serve`
+unless you opt out. Under `--runtime auto` (the default) it prefers an
+existing Docker daemon and falls back to Podman on Linux when Docker is
+not reachable; the selected runtime is persisted to
+`~/.local/share/vllm-sr/runtime.env` so later CLI sessions reuse it.
 The development channel resolves and pins the newest published `.dev` package
 so the Quickstart follows current project capabilities. It prints the
 Dashboard URL and, on a remote host, an SSH tunnel hint.
