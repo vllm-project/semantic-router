@@ -2,15 +2,53 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from collections.abc import Mapping
+from typing import Any, Literal
 
 from pydantic import Field, model_validator
 
 from cli.evaluation.benchmark_registry import ADAPTER_CONTRACT_VERSION
-from cli.evaluation.contracts import ArtifactRef, StrictModel
-from cli.evaluation.reporting import EvidenceLevel, TrackID
+from cli.evaluation.canonical import digest_value
+from cli.evaluation.constants import TRACK_IDS
+from cli.evaluation.contract_primitives import ArtifactRef, StrictModel
+from cli.evaluation.reporting import TrackID
+from cli.evaluation.suite_qualification import (
+    NORMALIZED_REPLAY_EXECUTOR_DIGEST,
+    BenchmarkQualificationReceipt,
+)
 
 SUITE_CONTRACT_VERSION = "evaluation-suite.v1"
+
+
+def _subject_field(value: object, name: str) -> Any:
+    if isinstance(value, Mapping):
+        return value[name]
+    return getattr(value, name)
+
+
+def qualification_manifest_subject_digest(value: object) -> str:
+    """Digest manifest semantics that exist before qualification is issued."""
+
+    return digest_value(
+        {
+            "schema_version": SUITE_CONTRACT_VERSION,
+            "id": _subject_field(value, "id"),
+            "name": _subject_field(value, "name"),
+            "adapter_id": _subject_field(value, "adapter_id"),
+            "adapter_contract_version": ADAPTER_CONTRACT_VERSION,
+            "source_receipt": _subject_field(value, "source_receipt"),
+            "decision_unit": _subject_field(value, "decision_unit"),
+            "action_space": _subject_field(value, "action_space"),
+            "track_ids": _subject_field(value, "track_ids"),
+            "split_protocol": _subject_field(value, "split_protocol"),
+            "case_count": _subject_field(value, "case_count"),
+            "arm_ids": _subject_field(value, "arm_ids"),
+            "data_classification": _subject_field(value, "data_classification"),
+            "redistribution": _subject_field(value, "redistribution"),
+            "artifacts": _subject_field(value, "artifacts"),
+            "limitations": _subject_field(value, "limitations"),
+        }
+    )
 
 
 class NormalizedOutcome(StrictModel):
@@ -83,9 +121,29 @@ class NormalizedPerturbation(StrictModel):
     relation: Literal["invariant", "expected_change"]
     expected_action_id: str | None = None
     slice_ids: tuple[str, ...] = ()
+    native_pair_count: int = Field(ge=1, strict=True)
+    source_record_digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def expected_change_has_an_action(self) -> NormalizedPerturbation:
+        if self.source_case_id == self.perturbed_case_id:
+            raise ValueError("perturbation source and target cases must differ")
+        if self.relation == "expected_change" and not self.expected_action_id:
+            raise ValueError("expected-change perturbations require an action")
+        if self.relation == "invariant" and self.expected_action_id is not None:
+            raise ValueError(
+                "invariant perturbations cannot override the source action"
+            )
+        if len(self.slice_ids) != len(set(self.slice_ids)) or any(
+            not value or value.strip() != value for value in self.slice_ids
+        ):
+            raise ValueError("perturbation slice ids must be unique and non-empty")
+        return self
 
 
 class NormalizedFault(StrictModel):
+    """Continuity source diagnostic; this is not a real runtime fault receipt."""
+
     schema_version: Literal[SUITE_CONTRACT_VERSION] = SUITE_CONTRACT_VERSION
     id: str
     trajectory_id: str
@@ -97,10 +155,37 @@ class NormalizedFault(StrictModel):
         "disconnect",
         "malformed_response",
         "state_loss",
-        "labeled_proxy",
     ]
-    expected_recovery: str
-    is_real_fault: bool
+    diagnostic_scope: Literal["provider_fallback_label_and_context_preservation"]
+    method_id: Literal["continuity.labeled-failover.v1"]
+    cohort_pair_id: str
+    conversation_id: str
+    system_role: Literal["treatment"]
+    concurrency: int = Field(ge=1, strict=True)
+    failure_turn: int = Field(ge=0, strict=True)
+    native_repetition_count: Literal[1]
+    repeated_seed_evidence: Literal[False]
+    native_pair_count: int = Field(ge=1, strict=True)
+    failover_labeled: bool
+    context_preserved: bool
+    experiment_manifest_digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    baseline_record_digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    treatment_record_digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    baseline_terminal_success: bool
+    treatment_terminal_success: bool
+    baseline_latency_ms: float = Field(ge=0, allow_inf_nan=False)
+    treatment_latency_ms: float = Field(ge=0, allow_inf_nan=False)
+    source_record_digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def labeled_failover_is_bound(self) -> NormalizedFault:
+        if not self.failover_labeled:
+            raise ValueError("continuity diagnostic requires a source failover label")
+        if self.context_preserved != self.treatment_terminal_success:
+            raise ValueError(
+                "context-preservation label must bind the treatment terminal outcome"
+            )
+        return self
 
 
 class NormalizedDecision(StrictModel):
@@ -226,7 +311,7 @@ class BenchmarkSuiteManifest(StrictModel):
     decision_unit: str
     action_space: str
     track_ids: tuple[TrackID, ...]
-    evidence_level_ceiling: EvidenceLevel
+    qualification_receipt: BenchmarkQualificationReceipt
     split_protocol: str
     case_count: int = Field(gt=0)
     arm_ids: tuple[str, ...] = ()
@@ -243,6 +328,29 @@ class BenchmarkSuiteManifest(StrictModel):
             raise ValueError("suite source receipt must be verified")
         if len(self.track_ids) != len(set(self.track_ids)):
             raise ValueError("suite track ids must be unique")
+        canonical_tracks = tuple(
+            track_id for track_id in TRACK_IDS if track_id in self.track_ids
+        )
+        if self.track_ids != canonical_tracks:
+            raise ValueError("suite track ids must use canonical catalog order")
         if len(self.arm_ids) != len(set(self.arm_ids)):
             raise ValueError("suite arm ids must be unique")
+        if self.qualification_receipt.source_receipt_digest != digest_value(
+            self.source_receipt
+        ):
+            raise ValueError("qualification receipt does not bind the source receipt")
+        if self.qualification_receipt.artifact_set_digest != digest_value(
+            self.artifacts
+        ):
+            raise ValueError("qualification receipt does not bind the artifact set")
+        if (
+            self.qualification_receipt.manifest_subject_digest
+            != qualification_manifest_subject_digest(self)
+        ):
+            raise ValueError("qualification receipt does not bind the manifest")
+        if (
+            self.qualification_receipt.executor_digest
+            != NORMALIZED_REPLAY_EXECUTOR_DIGEST
+        ):
+            raise ValueError("qualification receipt does not bind the executor")
         return self

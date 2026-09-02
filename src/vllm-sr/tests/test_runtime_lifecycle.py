@@ -87,7 +87,6 @@ def test_runtime_summary_is_clean_human_stdout(capsys):
         stack_layout,
         dashboard_disabled=False,
         enable_observability=True,
-        fleet_sim_enabled=True,
         started_backends={"postgres", "redis"},
     )
 

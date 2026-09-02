@@ -933,7 +933,7 @@ export const newContributorsSinceRelease = {
 export const contributorRankData = {
   "v03ToNow": {
     "id": "v03ToNow",
-    "label": "v0.3 -> Now",
+    "label": "v0.3 → Now",
     "generatedAt": "2026-08-26",
     "startDate": "2026-06-05",
     "endDate": "2026-08-26",
@@ -1817,7 +1817,7 @@ export const contributorRankData = {
   },
   "v02ToV03": {
     "id": "v02ToV03",
-    "label": "v0.2 -> v0.3",
+    "label": "v0.2 → v0.3",
     "generatedAt": "2026-08-26",
     "startDate": "2026-03-10",
     "endDate": "2026-06-05",
@@ -2863,7 +2863,7 @@ export const contributorRankData = {
   },
   "v01ToV02": {
     "id": "v01ToV02",
-    "label": "v0.1 -> v0.2",
+    "label": "v0.1 → v0.2",
     "generatedAt": "2026-08-26",
     "startDate": "2026-01-05",
     "endDate": "2026-03-10",
@@ -3536,7 +3536,7 @@ export const contributorRankData = {
   },
   "v0ToV01": {
     "id": "v0ToV01",
-    "label": "v0 -> v0.1",
+    "label": "v0 → v0.1",
     "generatedAt": "2026-08-26",
     "startDate": null,
     "endDate": "2026-01-05",

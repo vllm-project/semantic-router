@@ -8,7 +8,7 @@ from unittest import mock
 
 import cli_test_base
 import run_cli_tests
-from cli_test_base import CLITestBase
+from cli_test_base import CLITestBase, stack_scoped_test_container_name
 
 
 def _completed_process(*, stdout: str = "", stderr: str = "", returncode: int = 0):
@@ -113,7 +113,7 @@ class TestCLITestBaseRuntimeTopology(unittest.TestCase):
             CLITestBase.ROUTER_CONTAINER_NAME,
             CLITestBase.ENVOY_CONTAINER_NAME,
             CLITestBase.DASHBOARD_CONTAINER_NAME,
-            CLITestBase.SIM_CONTAINER_NAME,
+            CLITestBase.PROBE_CONTAINER_NAME,
             *CLITestBase.AUXILIARY_CONTAINER_NAMES,
         ):
             self.assertIn(container_name, removed_container_names)
@@ -143,10 +143,25 @@ class TestCLITestBaseRuntimeTopology(unittest.TestCase):
             "isolated-test-vllm-sr-router-container",
         )
         self.assertEqual(
-            IsolatedCLITestBase.SIM_CONTAINER_NAME,
-            "isolated-test-vllm-sr-sim",
+            IsolatedCLITestBase.PROBE_CONTAINER_NAME,
+            "isolated-test-vllm-sr-cli-test-probe",
         )
         self.assertEqual(IsolatedCLITestBase.runtime_stack.port_offset, 4200)
+
+    def test_test_only_container_names_follow_the_runtime_stack(self):
+        base_name = "vllm-sr-cli-test-control-redis"
+
+        self.assertEqual(
+            stack_scoped_test_container_name("vllm-sr", base_name), base_name
+        )
+        self.assertEqual(
+            stack_scoped_test_container_name("first-run", base_name),
+            "first-run-vllm-sr-cli-test-control-redis",
+        )
+        self.assertNotEqual(
+            stack_scoped_test_container_name("first-run", base_name),
+            stack_scoped_test_container_name("second-run", base_name),
+        )
 
     @mock.patch.dict(os.environ, {"CONTAINER_RUNTIME": "podman"}, clear=False)
     def test_cli_test_base_accepts_podman_env_override(self):
