@@ -86,7 +86,7 @@ func recordSignalRuleErrors(results *SignalResults, mu *sync.Mutex, signalType s
 func (c *Classifier) evaluateDomainSignal(ctx context.Context, results *SignalResults, mu *sync.Mutex, text string) {
 	start := time.Now()
 	domainResult, err := c.categoryInference.ClassifyWithProbabilities(ctx, text)
-	if err != nil && categoryProbabilityFallbackAllowed(c.categoryInference) {
+	if err != nil && !isAdmissionError(err) && categoryProbabilityFallbackAllowed(c.categoryInference) {
 		// Fall back to Classify() (top-1 only) when ClassifyWithProbabilities is unavailable.
 		logging.Debugf("[Signal Computation] ClassifyWithProbabilities unavailable, falling back to Classify: %v", err)
 		basicResult, basicErr := c.categoryInference.Classify(ctx, text)
