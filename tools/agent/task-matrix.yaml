@@ -9,7 +9,8 @@ rules:
       - website/**
       - README.md
       - CONTRIBUTING.md
-    fast_tests: []
+    fast_tests:
+      - make docs-check-translation-coverage
     feature_tests: []
     requires_local_smoke: false
   - name: agent_text

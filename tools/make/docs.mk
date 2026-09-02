@@ -54,9 +54,17 @@ docs-check-translations: ## Audit documentation translation coverage, metadata, 
 	@$(LOG_TARGET)
 	website/scripts/check-translation-sync.sh --locale $(DOCS_TRANSLATION_LOCALE)
 
+docs-check-translation-coverage: ## Guard current documentation locale override coverage
+	@$(LOG_TARGET)
+	website/scripts/check-translation-sync.sh --coverage-only
+
 docs-test-translation-sync: ## Test documentation translation status synchronization
 	@$(LOG_TARGET)
 	website/scripts/check-translation-sync.test.sh
+
+docs-update-translation-baseline: ## Record current documentation locale override paths for review
+	@$(LOG_TARGET)
+	website/scripts/check-translation-sync.sh --update-baseline
 
 docs-fix-translation-status: ## Update unambiguous documentation translation outdated flags
 	@$(LOG_TARGET)
