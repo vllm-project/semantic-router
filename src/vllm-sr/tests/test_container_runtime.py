@@ -234,6 +234,36 @@ def test_detect_container_runtime_ignores_malformed_persisted_file(
     assert container_runtime.get_container_runtime() == "docker"
 
 
+def test_detect_container_runtime_warns_when_persisted_file_unreadable(
+    monkeypatch, tmp_path, caplog
+):
+    """An existing but unreadable runtime.env warns (so the ignored persisted
+    selection stays diagnosable) and falls back to auto-detection."""
+    env_path = tmp_path / "runtime.env"
+    env_path.write_text("CONTAINER_RUNTIME=podman\n", encoding="utf-8")
+
+    def unreadable_open(path, *args, **kwargs):
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.delenv("CONTAINER_RUNTIME", raising=False)
+    monkeypatch.setattr(
+        container_runtime.shutil,
+        "which",
+        lambda name: "/usr/local/bin/docker" if name == "docker" else None,
+    )
+    monkeypatch.setattr(container_runtime.os.path, "realpath", lambda path: path)
+    _stub_docker_version(monkeypatch)
+    monkeypatch.setattr("builtins.open", unreadable_open)
+
+    with caplog.at_level(logging.WARNING, logger="cli.container_runtime"):
+        assert container_runtime.get_container_runtime() == "docker"
+
+    assert any(
+        "Could not read persisted CONTAINER_RUNTIME" in record.message
+        for record in caplog.records
+    )
+
+
 def test_detect_container_runtime_rejects_native_windows(monkeypatch):
     monkeypatch.setattr(container_runtime.sys, "platform", "win32")
 
