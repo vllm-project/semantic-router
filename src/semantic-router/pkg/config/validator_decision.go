@@ -65,10 +65,8 @@ func validateDecisionRuleNode(cfg *RouterConfig, decisionName string, node *Rule
 		if !root {
 			return fmt.Errorf("decision '%s': on_unknown is only supported on the root rules node", decisionName)
 		}
-		switch node.OnUnknown {
-		case RuleOnUnknownNoMatch, RuleOnUnknownMatch, RuleOnUnknownFailRequest:
-		default:
-			return fmt.Errorf("decision '%s': rules on_unknown must be no_match, match, or fail_request", decisionName)
+		if !node.OnUnknown.IsValid() {
+			return fmt.Errorf("decision '%s': rules on_unknown must be %s", decisionName, UnknownPolicyChoices())
 		}
 		if ruleTreeSetsOnError(node) {
 			return fmt.Errorf("decision '%s': condition on_error has no effect when rules.on_unknown is set; remove one of them", decisionName)

@@ -31,6 +31,18 @@ import (
 
 var ErrDecisionUnresolved = errors.New("decision unresolved")
 
+type DecisionUnresolvedError struct {
+	Decision string
+}
+
+func (e *DecisionUnresolvedError) Error() string {
+	return fmt.Sprintf("decision %q could not be resolved because a signal evaluator failed: %v", e.Decision, ErrDecisionUnresolved)
+}
+
+func (e *DecisionUnresolvedError) Unwrap() error {
+	return ErrDecisionUnresolved
+}
+
 // DecisionEngine evaluates routing decisions based on rule combinations
 type DecisionEngine struct {
 	keywordRules   []config.KeywordRule
@@ -141,7 +153,7 @@ type resolvedDecisionEvaluation struct {
 	evaluation    nodeEvaluation
 	trace         *TraceNode
 	originalState evaluationState
-	policy        string
+	policy        config.UnknownPolicy
 }
 
 // DecisionResult represents the result of decision evaluation
@@ -223,14 +235,14 @@ func (e *DecisionEngine) evaluateDecisions(
 		decision := &e.decisions[i]
 		resolved, err := e.evaluateConfiguredDecision(decision, signals, withTrace)
 		if resolved.policy != "" {
-			output.diagnostics.AppliedUnknownPolicies[decision.Name] = resolved.policy
+			output.diagnostics.AppliedUnknownPolicies[decision.Name] = string(resolved.policy)
 		}
 		if withTrace {
 			output.traces = append(output.traces, newDecisionTrace(
 				decision,
 				resolved.evaluation,
 				resolved.originalState,
-				resolved.policy,
+				string(resolved.policy),
 				resolved.trace,
 			))
 		}
@@ -312,8 +324,8 @@ func (e *DecisionEngine) resolveUnknown(
 	signals *SignalMatches,
 	evaluation nodeEvaluation,
 	withTrace bool,
-) (nodeEvaluation, *TraceNode, string, error) {
-	policy := strings.TrimSpace(decision.Rules.OnUnknown)
+) (nodeEvaluation, *TraceNode, config.UnknownPolicy, error) {
+	policy := config.UnknownPolicy(strings.TrimSpace(string(decision.Rules.OnUnknown)))
 	if policy == "" {
 		var legacy nodeEvaluation
 		var legacyTrace *TraceNode
@@ -340,7 +352,7 @@ func (e *DecisionEngine) resolveUnknown(
 		evaluation.scored = false
 		return evaluation, nil, policy, nil
 	case config.RuleOnUnknownFailRequest:
-		return evaluation, nil, policy, fmt.Errorf("decision %q could not be resolved because a signal evaluator failed: %w", decision.Name, ErrDecisionUnresolved)
+		return evaluation, nil, policy, &DecisionUnresolvedError{Decision: decision.Name}
 	default:
 		return evaluation, nil, policy, fmt.Errorf("decision %q has invalid on_unknown policy %q", decision.Name, policy)
 	}

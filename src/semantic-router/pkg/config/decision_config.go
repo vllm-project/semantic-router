@@ -1,10 +1,31 @@
 package config
 
-const (
-	RuleOnUnknownNoMatch     = "no_match"
-	RuleOnUnknownMatch       = "match"
-	RuleOnUnknownFailRequest = "fail_request"
+import (
+	"slices"
+	"strings"
 )
+
+type UnknownPolicy string
+
+const (
+	RuleOnUnknownNoMatch     UnknownPolicy = "no_match"
+	RuleOnUnknownMatch       UnknownPolicy = "match"
+	RuleOnUnknownFailRequest UnknownPolicy = "fail_request"
+)
+
+var UnknownPolicies = []UnknownPolicy{RuleOnUnknownNoMatch, RuleOnUnknownMatch, RuleOnUnknownFailRequest}
+
+func (p UnknownPolicy) IsValid() bool {
+	return slices.Contains(UnknownPolicies, p)
+}
+
+func UnknownPolicyChoices() string {
+	names := make([]string, len(UnknownPolicies))
+	for i, policy := range UnknownPolicies {
+		names[i] = string(policy)
+	}
+	return strings.Join(names[:len(names)-1], ", ") + ", or " + names[len(names)-1]
+}
 
 // Decision represents a routing decision that combines multiple rules with boolean logic.
 type Decision struct {
@@ -174,7 +195,7 @@ type RuleNode struct {
 	Label      string            `yaml:"label,omitempty" json:"label,omitempty"`
 	Predicate  *NumericPredicate `yaml:"predicate,omitempty" json:"predicate,omitempty"`
 	OnError    string            `yaml:"on_error,omitempty" json:"on_error,omitempty"`
-	OnUnknown  string            `yaml:"on_unknown,omitempty" json:"on_unknown,omitempty"`
+	OnUnknown  UnknownPolicy     `yaml:"on_unknown,omitempty" json:"on_unknown,omitempty"`
 	Operator   string            `yaml:"operator,omitempty" json:"operator,omitempty"`
 	Conditions []RuleNode        `yaml:"conditions,omitempty" json:"conditions,omitempty"`
 }

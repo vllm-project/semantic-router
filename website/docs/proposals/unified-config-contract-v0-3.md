@@ -101,9 +101,16 @@ Built-in defaults live in the router. `global.router.config_source` selects file
 configuration or Kubernetes CRD reconciliation. External templates must not apply
 hidden defaults after validation.
 
+Built-in category/domain inference keeps its runtime policy in
+`global.model_catalog.modules.classifier.domain`. The local model uses the
+canonical `variant` field; a remote classifier uses the shared `backend` block
+(`protocol`, `contract`, `model`, and `deadline_ms`) and resolves `model` by
+exact external-catalog name. The category consumer currently accepts
+`http_classify` plus `label_distribution.v1`, preserving the full label-score
+distribution. Prompt guard remains on its existing configuration surface until
+its separately scoped migration.
 Connector byte ceilings belong to the connector configuration. External LLM
 classifier entries and the MCP classifier module use `max_response_bytes`.
-
 The dashboard, Helm chart, and operator may help users author or transport config, but
 the resulting document still uses the same contract.
 
