@@ -58,7 +58,7 @@ func TestEvalNode_AgreesWithNormalizedOperatorSet(t *testing.T) {
 			if err != nil {
 				t.Fatalf("expected config validation to accept this tree, got: %v", err)
 			}
-			evaluation, _ := engine.evalNode(node, signals, false, false)
+			evaluation, _ := engine.evalNode(node, signals, "", false)
 			if evaluation.state != tc.want {
 				t.Fatalf("state = %s, want %s", evaluation.state, tc.want)
 			}
@@ -81,7 +81,7 @@ func TestEvalNode_OperatorConstantsCoverEveryBranch(t *testing.T) {
 			children = children[:1]
 		}
 		node := config.RuleNode{Operator: op, Conditions: children}
-		_, trace := engine.evalNode(node, signals, false, true)
+		_, trace := engine.evalNode(node, signals, "", true)
 		if trace == nil || trace.NodeType != op {
 			t.Fatalf("operator %q: expected trace node type %q, got %+v", op, op, trace)
 		}
