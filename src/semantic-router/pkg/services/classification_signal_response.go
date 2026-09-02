@@ -36,7 +36,7 @@ func (s *ClassificationService) buildIntentResponseFromSignals(
 	if signals != nil {
 		response.MatchedSignals = buildMatchedSignals(signals)
 		response.SignalErrors = signals.SignalErrors
-		response.AppliedUnknownPolicies = signals.AppliedUnknownPolicies
+		response.AppliedUnknownPolicies = signals.Diagnostics.AppliedUnknownPolicies
 	}
 	if decisionPayload := buildDecisionResultPayload(decisionResult); decisionPayload != nil {
 		response.DecisionResult = decisionPayload
@@ -58,7 +58,7 @@ func (s *ClassificationService) buildEvalResponse(
 		SignalConfidences:      signals.SignalConfidences,
 		SignalValues:           signals.SignalValues,
 		SignalErrors:           signals.SignalErrors,
-		AppliedUnknownPolicies: signals.AppliedUnknownPolicies,
+		AppliedUnknownPolicies: signals.Diagnostics.AppliedUnknownPolicies,
 	}
 
 	matchedSignals := buildMatchedSignals(signals)

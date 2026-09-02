@@ -100,7 +100,7 @@ func (c *Classifier) evaluateDecisionInternal(signals *SignalResults, trace bool
 	} else {
 		result, diagnostics, err = engine.EvaluateDecisionsWithDiagnostics(sm)
 	}
-	signals.AppliedUnknownPolicies = diagnostics.AppliedUnknownPolicies
+	signals.Diagnostics = diagnostics
 	if err != nil {
 		return nil, traces, fmt.Errorf("decision evaluation failed: %w", err)
 	}
