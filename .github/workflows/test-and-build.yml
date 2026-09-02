@@ -229,7 +229,6 @@ jobs:
         env:
           CI: true
           CGO_ENABLED: 1
-          LD_LIBRARY_PATH: ${{ github.workspace }}/candle-binding/target/release
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           HUGGINGFACE_HUB_TOKEN: ${{ secrets.HF_TOKEN }}
 

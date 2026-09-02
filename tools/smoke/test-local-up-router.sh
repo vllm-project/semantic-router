@@ -5,6 +5,8 @@ set -euo pipefail
 SR_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 cd "${SR_ROOT}"
 
+export LD_LIBRARY_PATH="${SR_ROOT}/candle-binding/target/release:${SR_ROOT}/ml-binding/target/release:${SR_ROOT}/nlp-binding/target/release${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+
 ROUTER_CONFIG=${ROUTER_CONFIG:-"e2e/config/config.e2e.yaml"}
 MOCK_PYTHON=${MOCK_PYTHON:-"python3"}
 MOCK_PORT=8000
