@@ -10,6 +10,8 @@ import (
 	"sync"
 
 	"github.com/openai/openai-go"
+
+	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 )
 
 // extractUserContent returns the text portion of a user message's content.
@@ -181,20 +183,12 @@ func normalizeEmbeddingModel(model string) string {
 }
 
 func semanticCacheEmbeddingDimension(configured int, embeddingModel string) int {
-	if configured > 0 {
-		return configured
+	dimension, err := candle_binding.ResolveEmbeddingDimension(
+		normalizeEmbeddingModel(embeddingModel),
+		configured,
+	)
+	if err != nil {
+		return 0
 	}
-
-	switch normalizeEmbeddingModel(embeddingModel) {
-	case "qwen3":
-		return 1024
-	case "gemma":
-		return 768
-	case "mmbert":
-		return 768
-	case "multimodal":
-		return 384
-	default:
-		return 384
-	}
+	return dimension
 }

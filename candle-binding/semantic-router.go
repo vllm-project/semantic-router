@@ -156,6 +156,15 @@ typedef struct {
     bool error;                 // Whether an error occurred
 } EmbeddingModelsInfoResult;
 
+// Embedding dimension contract for one loaded model.
+typedef struct {
+    char* model_name;
+    int native_dimension;
+    int* supported_dimensions;
+    int num_supported_dimensions;
+    bool error;
+} EmbeddingDimensionContractResult;
+
 // Tokenization result structure
 typedef struct {
     int* token_ids;
@@ -245,6 +254,8 @@ extern int calculate_similarity_batch(const char* query, const char** candidates
 extern void free_batch_similarity_result(BatchSimilarityResult* result);
 extern int get_embedding_models_info(EmbeddingModelsInfoResult* result);
 extern void free_embedding_models_info(EmbeddingModelsInfoResult* result);
+extern int get_embedding_dimension_contract(const char* model_type, EmbeddingDimensionContractResult* result);
+extern void free_embedding_dimension_contract(EmbeddingDimensionContractResult* result);
 extern TokenizationResult tokenize_text(const char* text, int max_length);
 extern void free_cstring(char* s);
 extern void free_embedding(float* data, int length);
@@ -1884,6 +1895,79 @@ func GetEmbeddingModelsInfo() (*ModelsInfoOutput, error) {
 
 	return &ModelsInfoOutput{
 		Models: models,
+	}, nil
+}
+
+// GetEmbeddingDimensionContract returns the dimension contract of a loaded
+// embedding model. The contract is produced by the native binding from the
+// model that was actually loaded, so callers do not need a second model-
+// specific dimension table.
+func GetEmbeddingDimensionContract(modelType string) (EmbeddingDimensionContract, error) {
+	normalizedModelType := normalizeEmbeddingModelType(modelType)
+	cModelType := C.CString(normalizedModelType)
+	defer C.free(unsafe.Pointer(cModelType))
+
+	var result C.EmbeddingDimensionContractResult
+	status := C.get_embedding_dimension_contract(cModelType, &result)
+	defer C.free_embedding_dimension_contract(&result)
+
+	if status != 0 || bool(result.error) {
+		return EmbeddingDimensionContract{}, fmt.Errorf(
+			"failed to get embedding dimension contract for model %q (status: %d)",
+			normalizedModelType,
+			status,
+		)
+	}
+
+	nativeDimension := int(result.native_dimension)
+	if nativeDimension <= 0 {
+		return EmbeddingDimensionContract{}, fmt.Errorf(
+			"embedding model %q returned invalid native dimension %d",
+			normalizedModelType,
+			nativeDimension,
+		)
+	}
+
+	contractModel := normalizedModelType
+	if result.model_name != nil {
+		if loadedModel := C.GoString(result.model_name); loadedModel != "" {
+			contractModel = loadedModel
+		}
+	}
+
+	numSupportedDimensions := int(result.num_supported_dimensions)
+	if numSupportedDimensions < 0 {
+		return EmbeddingDimensionContract{}, fmt.Errorf(
+			"embedding model %q returned invalid supported dimension count %d",
+			normalizedModelType,
+			numSupportedDimensions,
+		)
+	}
+
+	supportedDimensions := make([]int, 0, numSupportedDimensions+1)
+	if numSupportedDimensions > 0 {
+		if result.supported_dimensions == nil {
+			return EmbeddingDimensionContract{}, fmt.Errorf(
+				"embedding model %q returned a nil supported dimension list",
+				normalizedModelType,
+			)
+		}
+		dimensions := (*[1 << 30]C.int)(unsafe.Pointer(result.supported_dimensions))[:numSupportedDimensions:numSupportedDimensions]
+		for _, dimension := range dimensions {
+			if int(dimension) > 0 {
+				supportedDimensions = append(supportedDimensions, int(dimension))
+			}
+		}
+	}
+
+	if len(supportedDimensions) == 0 {
+		supportedDimensions = append(supportedDimensions, nativeDimension)
+	}
+
+	return EmbeddingDimensionContract{
+		Model:               contractModel,
+		NativeDimension:     nativeDimension,
+		SupportedDimensions: supportedDimensions,
 	}, nil
 }
 

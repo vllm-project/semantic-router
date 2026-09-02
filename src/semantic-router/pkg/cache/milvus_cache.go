@@ -34,6 +34,9 @@ type MilvusCache struct {
 	lastCleanupTime     *time.Time
 	mu                  sync.RWMutex
 	embeddingModel      string // "bert", "qwen3", "gemma", "mmbert", or "multimodal"
+	// effectiveDimension is resolved once from the binding contract and reused
+	// for collection creation, existing-collection validation, and embeddings.
+	effectiveDimension int
 }
 
 // MilvusCacheOptions contains configuration parameters for Milvus cache initialization
@@ -70,6 +73,15 @@ func NewMilvusCache(options MilvusCacheOptions) (*MilvusCache, error) {
 	} else {
 		milvusConfig = options.Config
 	}
+	embeddingModel := normalizeEmbeddingModel(options.EmbeddingModel)
+	effectiveDimension, err := candle_binding.ResolveEmbeddingDimension(
+		embeddingModel,
+		milvusConfig.Collection.VectorField.Dimension,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("invalid Milvus cache embedding dimension: %w", err)
+	}
+	milvusConfig.Collection.VectorField.Dimension = effectiveDimension
 	// Normalize once: the raw string feeds index creation, searches, and score conversion.
 	milvusConfig.Collection.VectorField.MetricType = normalizeMilvusMetricType(milvusConfig.Collection.VectorField.MetricType)
 	if m := milvusConfig.Collection.VectorField.MetricType; m != "IP" && m != "COSINE" && m != "L2" {
@@ -78,7 +90,7 @@ func NewMilvusCache(options MilvusCacheOptions) (*MilvusCache, error) {
 	warnUnrecognizedMilvusConsistencyLevel(milvusConfig.Search.ConsistencyLevel)
 	logging.Debugf("MilvusCache: config loaded - host=%s:%d, collection=%s, dimension=%d",
 		milvusConfig.Connection.Host, milvusConfig.Connection.Port, milvusConfig.Collection.Name,
-		semanticCacheEmbeddingDimension(milvusConfig.Collection.VectorField.Dimension, options.EmbeddingModel))
+		effectiveDimension)
 
 	// Establish connection to Milvus server
 	connectionString := fmt.Sprintf("%s:%d", milvusConfig.Connection.Host, milvusConfig.Connection.Port)
@@ -98,8 +110,6 @@ func NewMilvusCache(options MilvusCacheOptions) (*MilvusCache, error) {
 		return nil, fmt.Errorf("failed to create Milvus client: %w", err)
 	}
 
-	embeddingModel := normalizeEmbeddingModel(options.EmbeddingModel)
-
 	cache := &MilvusCache{
 		client:              milvusClient,
 		config:              milvusConfig,
@@ -108,6 +118,7 @@ func NewMilvusCache(options MilvusCacheOptions) (*MilvusCache, error) {
 		ttlSeconds:          options.TTLSeconds,
 		enabled:             options.Enabled,
 		embeddingModel:      embeddingModel,
+		effectiveDimension:  effectiveDimension,
 	}
 
 	// Test connection using the new CheckConnection method
@@ -229,24 +240,48 @@ func (c *MilvusCache) initializeCollection() error {
 		})
 	}
 
-	if err := milvuslifecycle.EnsureCollectionLoadedWithRetry(ctx, c.client, c.collectionName, func(innerCtx context.Context) error {
-		logging.Debugf("MilvusCache: collection '%s' does not exist. AutoCreateCollection=%v",
-			c.collectionName, c.config.Development.AutoCreateCollection)
-		if !c.config.Development.AutoCreateCollection {
-			return fmt.Errorf("collection %s does not exist and auto-creation is disabled", c.collectionName)
-		}
-		if err := c.createCollection(innerCtx); err != nil {
-			return err
-		}
-		logging.Debugf("MilvusCache: created new collection '%s' with dimension %d",
-			c.collectionName, c.config.Collection.VectorField.Dimension)
-		logging.LogEvent("collection_created", map[string]interface{}{
-			"backend":    "milvus",
-			"collection": c.collectionName,
-			"dimension":  c.config.Collection.VectorField.Dimension,
-		})
-		return nil
-	}, milvuslifecycle.CollectionRetryOptions{}); err != nil {
+	expectedDimension := c.embeddingDimension()
+	if expectedDimension <= 0 {
+		return fmt.Errorf("invalid semantic cache embedding dimension: %d", expectedDimension)
+	}
+	vectorFieldName := c.config.Collection.VectorField.Name
+	if vectorFieldName == "" {
+		vectorFieldName = "embedding"
+	}
+
+	if err := milvuslifecycle.EnsureCollectionLoadedWithHooksRetry(
+		ctx,
+		c.client,
+		c.collectionName,
+		func(innerCtx context.Context) error {
+			logging.Debugf("MilvusCache: collection '%s' does not exist. AutoCreateCollection=%v",
+				c.collectionName, c.config.Development.AutoCreateCollection)
+			if !c.config.Development.AutoCreateCollection {
+				return fmt.Errorf("collection %s does not exist and auto-creation is disabled", c.collectionName)
+			}
+			if err := c.createCollection(innerCtx); err != nil {
+				return err
+			}
+			logging.Debugf("MilvusCache: created new collection '%s' with dimension %d",
+				c.collectionName, c.config.Collection.VectorField.Dimension)
+			logging.LogEvent("collection_created", map[string]interface{}{
+				"backend":    "milvus",
+				"collection": c.collectionName,
+				"dimension":  c.config.Collection.VectorField.Dimension,
+			})
+			return nil
+		},
+		func(innerCtx context.Context) error {
+			return milvuslifecycle.ValidateVectorDimension(
+				innerCtx,
+				c.client,
+				c.collectionName,
+				vectorFieldName,
+				expectedDimension,
+			)
+		},
+		milvuslifecycle.CollectionRetryOptions{},
+	); err != nil {
 		logging.Debugf("MilvusCache: failed to ensure/load collection: %v", err)
 		return fmt.Errorf("failed to ensure/load collection: %w", err)
 	}
@@ -298,15 +333,31 @@ func (c *MilvusCache) getEmbedding(ctx context.Context, text string) ([]float32,
 }
 
 func (c *MilvusCache) embeddingDimension() int {
-	if c == nil || c.config == nil {
-		return semanticCacheEmbeddingDimension(0, "")
+	if c == nil {
+		return 0
 	}
-	return semanticCacheEmbeddingDimension(c.config.Collection.VectorField.Dimension, c.embeddingModel)
+	if c.effectiveDimension > 0 {
+		return c.effectiveDimension
+	}
+	if c.config == nil {
+		return 0
+	}
+	dimension, err := candle_binding.ResolveEmbeddingDimension(
+		c.embeddingModel,
+		c.config.Collection.VectorField.Dimension,
+	)
+	if err != nil {
+		return 0
+	}
+	return dimension
 }
 
 // createCollection builds the Milvus collection with the appropriate schema
 func (c *MilvusCache) createCollection(ctx context.Context) error {
 	actualDimension := c.embeddingDimension()
+	if actualDimension <= 0 {
+		return fmt.Errorf("invalid semantic cache embedding dimension: %d", actualDimension)
+	}
 	c.config.Collection.VectorField.Dimension = actualDimension
 
 	logging.Debugf("MilvusCache.createCollection: using embedding dimension: %d", actualDimension)

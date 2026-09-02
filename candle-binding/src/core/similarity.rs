@@ -20,6 +20,8 @@ pub struct BertSimilarity {
     tokenizer: Tokenizer,
     /// Computing device (CPU or CUDA)
     device: Device,
+    /// Output width established by the loaded checkpoint configuration.
+    embedding_dimension: usize,
 }
 
 impl BertSimilarity {
@@ -132,13 +134,20 @@ impl BertSimilarity {
             }
         };
 
+        let embedding_dimension = config.hidden_size;
         let model = BertModel::load(vb, &config)?;
 
         Ok(Self {
             model,
             tokenizer,
             device,
+            embedding_dimension,
         })
+    }
+
+    /// Return the output width declared by the loaded checkpoint.
+    pub fn embedding_dimension(&self) -> usize {
+        self.embedding_dimension
     }
 
     /// Tokenize a text string into token IDs and token strings

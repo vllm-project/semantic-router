@@ -4,9 +4,12 @@
 //! intelligent embedding generation with automatic model selection.
 
 use crate::classifiers::unified::{DualPathUnifiedClassifier, EmbeddingRequirements};
+use crate::ffi::init::BERT_SIMILARITY;
 use crate::ffi::types::{
-    BatchSimilarityResult, EmbeddingResult, EmbeddingSimilarityResult, SimilarityMatch,
+    BatchSimilarityResult, EmbeddingDimensionContractResult, EmbeddingResult,
+    EmbeddingSimilarityResult, SimilarityMatch,
 };
+use crate::model_architectures::traits::LongContextEmbeddingCapable;
 use crate::model_architectures::ModelType;
 use std::ffi::{c_char, CStr};
 
@@ -1754,6 +1757,183 @@ pub extern "C" fn free_batch_similarity_result(result: *mut BatchSimilarityResul
     }
 }
 
+fn append_supported_dimension(dimensions: &mut Vec<usize>, dimension: usize) {
+    if dimension > 0 && !dimensions.contains(&dimension) {
+        dimensions.push(dimension);
+    }
+}
+
+fn loaded_embedding_dimension_contract(model_type: &str) -> Result<(usize, Vec<usize>), String> {
+    match model_type {
+        "bert" => {
+            let model = BERT_SIMILARITY
+                .get()
+                .ok_or_else(|| "BERT similarity model is not initialized".to_string())?;
+            let native_dimension = model.embedding_dimension();
+            Ok((native_dimension, vec![native_dimension]))
+        }
+        "qwen3" => {
+            let factory = GLOBAL_MODEL_FACTORY
+                .get()
+                .ok_or_else(|| "embedding model factory is not initialized".to_string())?;
+            let model = factory
+                .get_qwen3_model()
+                .ok_or_else(|| "Qwen3 embedding model is not loaded".to_string())?;
+            Ok((
+                model.get_embedding_dimension(),
+                model.get_matryoshka_dimensions(),
+            ))
+        }
+        "gemma" => {
+            let factory = GLOBAL_MODEL_FACTORY
+                .get()
+                .ok_or_else(|| "embedding model factory is not initialized".to_string())?;
+            let model = factory
+                .get_gemma_model()
+                .ok_or_else(|| "Gemma embedding model is not loaded".to_string())?;
+            Ok(model.embedding_dimension_contract())
+        }
+        "mmbert" => {
+            let factory = GLOBAL_MODEL_FACTORY
+                .get()
+                .ok_or_else(|| "embedding model factory is not initialized".to_string())?;
+            let model = factory
+                .get_mmbert_model()
+                .ok_or_else(|| "mmBERT embedding model is not loaded".to_string())?;
+            Ok((
+                model.get_embedding_dimension(),
+                model.get_matryoshka_dimensions(),
+            ))
+        }
+        "multimodal" => {
+            let (model, _) = get_multimodal_refs()
+                .ok_or_else(|| "multi-modal embedding model is not loaded".to_string())?;
+            Ok((
+                model.get_embedding_dimension(),
+                model.get_matryoshka_dimensions(),
+            ))
+        }
+        other => Err(format!("unsupported embedding model type: {other}")),
+    }
+}
+
+/// Return the dimension contract of the model loaded by the native binding.
+///
+/// The native model instance is the source of truth for both its native width
+/// and any supported Matryoshka widths. This keeps Go callers from maintaining
+/// a second model-to-dimension table.
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+#[no_mangle]
+pub extern "C" fn get_embedding_dimension_contract(
+    model_type: *const c_char,
+    result: *mut EmbeddingDimensionContractResult,
+) -> i32 {
+    if model_type.is_null() || result.is_null() {
+        return -1;
+    }
+
+    let model_type = unsafe {
+        match CStr::from_ptr(model_type).to_str() {
+            Ok(value) => {
+                let normalized = value.trim().to_ascii_lowercase();
+                if normalized.is_empty() {
+                    "bert".to_string()
+                } else {
+                    normalized
+                }
+            }
+            Err(_) => {
+                (*result) = EmbeddingDimensionContractResult::default();
+                return -1;
+            }
+        }
+    };
+
+    let (native_dimension, declared_dimensions) =
+        match loaded_embedding_dimension_contract(&model_type) {
+            Ok(contract) => contract,
+            Err(error) => {
+                eprintln!(
+                    "ERROR: failed to resolve embedding dimension contract for {}: {}",
+                    model_type, error
+                );
+                unsafe {
+                    (*result) = EmbeddingDimensionContractResult::default();
+                }
+                return -1;
+            }
+        };
+
+    if native_dimension == 0
+        || native_dimension > i32::MAX as usize
+        || declared_dimensions
+            .iter()
+            .any(|dimension| *dimension == 0 || *dimension > i32::MAX as usize)
+    {
+        eprintln!(
+            "ERROR: invalid embedding dimension contract for {}: native={}, supported={:?}",
+            model_type, native_dimension, declared_dimensions
+        );
+        unsafe {
+            (*result) = EmbeddingDimensionContractResult::default();
+        }
+        return -1;
+    }
+
+    let mut supported_dimensions = Vec::with_capacity(declared_dimensions.len() + 1);
+    append_supported_dimension(&mut supported_dimensions, native_dimension);
+    for dimension in declared_dimensions {
+        append_supported_dimension(&mut supported_dimensions, dimension);
+    }
+
+    let model_name = match std::ffi::CString::new(model_type) {
+        Ok(value) => value.into_raw(),
+        Err(_) => {
+            unsafe {
+                (*result) = EmbeddingDimensionContractResult::default();
+            }
+            return -1;
+        }
+    };
+    let num_supported_dimensions = supported_dimensions.len() as i32;
+    let supported_dimensions = Box::into_raw(supported_dimensions.into_boxed_slice()) as *mut i32;
+
+    unsafe {
+        (*result) = EmbeddingDimensionContractResult {
+            model_name,
+            native_dimension: native_dimension as i32,
+            supported_dimensions,
+            num_supported_dimensions,
+            error: false,
+        };
+    }
+
+    0
+}
+
+/// Free a dimension contract returned by `get_embedding_dimension_contract`.
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+#[no_mangle]
+pub extern "C" fn free_embedding_dimension_contract(result: *mut EmbeddingDimensionContractResult) {
+    if result.is_null() {
+        return;
+    }
+
+    unsafe {
+        let contract = &mut *result;
+        if !contract.model_name.is_null() {
+            let _ = std::ffi::CString::from_raw(contract.model_name);
+        }
+        if !contract.supported_dimensions.is_null() && contract.num_supported_dimensions > 0 {
+            let _ = Box::from_raw(std::ptr::slice_from_raw_parts_mut(
+                contract.supported_dimensions,
+                contract.num_supported_dimensions as usize,
+            ));
+        }
+        *contract = EmbeddingDimensionContractResult::default();
+    }
+}
+
 /// Get information about loaded embedding models
 ///
 /// This function returns metadata about all available embedding models,
@@ -1792,6 +1972,14 @@ pub extern "C" fn get_embedding_models_info(
     // Check which models are loaded
     let qwen3_loaded = factory.get_qwen3_model().is_some();
     let gemma_loaded = factory.get_gemma_model().is_some();
+    let qwen3_dimension = factory
+        .get_qwen3_model()
+        .map(LongContextEmbeddingCapable::get_embedding_dimension)
+        .unwrap_or(0);
+    let gemma_dimension = factory
+        .get_gemma_model()
+        .map(|model| model.embedding_dimension_contract().0)
+        .unwrap_or(0);
 
     // Get model paths from factory
     let qwen3_path = factory.get_qwen3_model_path();
@@ -1813,7 +2001,7 @@ pub extern "C" fn get_embedding_models_info(
             model_name: model_name.into_raw(),
             is_loaded: qwen3_loaded,
             max_sequence_length: if qwen3_loaded { 32768 } else { 0 },
-            default_dimension: if qwen3_loaded { 1024 } else { 0 },
+            default_dimension: qwen3_dimension as i32,
             model_path: model_path.into_raw(),
         });
     }
@@ -1831,7 +2019,7 @@ pub extern "C" fn get_embedding_models_info(
             model_name: model_name.into_raw(),
             is_loaded: gemma_loaded,
             max_sequence_length: if gemma_loaded { 8192 } else { 0 },
-            default_dimension: if gemma_loaded { 768 } else { 0 },
+            default_dimension: gemma_dimension as i32,
             model_path: model_path.into_raw(),
         });
     }

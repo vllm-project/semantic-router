@@ -13,11 +13,30 @@ import (
 )
 
 func (m *MilvusStore) ensureCollection(ctx context.Context) error {
-	logging.Infof("MilvusStore: ensuring collection '%s' (dimension=%d)", m.collectionName, m.config.Milvus.Dimension)
+	if m.effectiveDimension <= 0 {
+		return fmt.Errorf("memory Milvus embedding dimension must be positive: %d", m.effectiveDimension)
+	}
 
-	err := milvuslifecycle.EnsureCollectionLoadedWithRetry(ctx, m.client, m.collectionName, func(innerCtx context.Context) error {
-		return m.createMemoryCollection(innerCtx)
-	}, milvuslifecycle.CollectionRetryOptions{})
+	logging.Infof("MilvusStore: ensuring collection '%s' (dimension=%d)", m.collectionName, m.effectiveDimension)
+
+	err := milvuslifecycle.EnsureCollectionLoadedWithHooksRetry(
+		ctx,
+		m.client,
+		m.collectionName,
+		func(innerCtx context.Context) error {
+			return m.createMemoryCollection(innerCtx)
+		},
+		func(innerCtx context.Context) error {
+			return milvuslifecycle.ValidateVectorDimension(
+				innerCtx,
+				m.client,
+				m.collectionName,
+				"embedding",
+				m.effectiveDimension,
+			)
+		},
+		milvuslifecycle.CollectionRetryOptions{},
+	)
 	if err != nil {
 		return err
 	}
@@ -27,7 +46,7 @@ func (m *MilvusStore) ensureCollection(ctx context.Context) error {
 }
 
 func (m *MilvusStore) createMemoryCollection(ctx context.Context) error {
-	schema := memoryCollectionSchema(m.collectionName, m.config.Milvus.Dimension)
+	schema := memoryCollectionSchema(m.collectionName, m.effectiveDimension)
 
 	numPartitions := int64(16)
 	if m.config.Milvus.NumPartitions > 0 {

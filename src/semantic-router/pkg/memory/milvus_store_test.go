@@ -33,19 +33,23 @@ func TestMain(m *testing.M) {
 
 // MockMilvusClient facilitates testing without a running Milvus instance
 type MockMilvusClient struct {
-	SearchFunc           func(ctx context.Context, coll string, parts []string, expr string, out []string, vectors []entity.Vector, vField string, mType entity.MetricType, topK int, sp entity.SearchParam, opts ...client.SearchQueryOptionFunc) ([]client.SearchResult, error)
-	HasCollectionFunc    func(ctx context.Context, coll string) (bool, error)
-	InsertFunc           func(ctx context.Context, coll string, part string, cols ...entity.Column) (entity.Column, error)
-	UpsertFunc           func(ctx context.Context, coll string, part string, cols ...entity.Column) (entity.Column, error)
-	DeleteFunc           func(ctx context.Context, coll string, part string, expr string) error
-	QueryFunc            func(ctx context.Context, coll string, parts []string, expr string, out []string, opts ...client.SearchQueryOptionFunc) (client.ResultSet, error)
-	CreateCollectionFunc func(ctx context.Context, schema *entity.Schema, shardNum int32, opts ...client.CreateCollectionOption) error
-	SearchCallCount      int
-	InsertCallCount      int
-	UpsertCallCount      int
-	DeleteCallCount      int
-	QueryCallCount       int
-	CapturedSchema       *entity.Schema // Captures schema passed to CreateCollection
+	SearchFunc                  func(ctx context.Context, coll string, parts []string, expr string, out []string, vectors []entity.Vector, vField string, mType entity.MetricType, topK int, sp entity.SearchParam, opts ...client.SearchQueryOptionFunc) ([]client.SearchResult, error)
+	HasCollectionFunc           func(ctx context.Context, coll string) (bool, error)
+	InsertFunc                  func(ctx context.Context, coll string, part string, cols ...entity.Column) (entity.Column, error)
+	UpsertFunc                  func(ctx context.Context, coll string, part string, cols ...entity.Column) (entity.Column, error)
+	DeleteFunc                  func(ctx context.Context, coll string, part string, expr string) error
+	QueryFunc                   func(ctx context.Context, coll string, parts []string, expr string, out []string, opts ...client.SearchQueryOptionFunc) (client.ResultSet, error)
+	CreateCollectionFunc        func(ctx context.Context, schema *entity.Schema, shardNum int32, opts ...client.CreateCollectionOption) error
+	DescribeCollectionFunc      func(ctx context.Context, coll string) (*entity.Collection, error)
+	LoadCollectionFunc          func(ctx context.Context, coll string, async bool, opts ...client.LoadCollectionOption) error
+	SearchCallCount             int
+	InsertCallCount             int
+	UpsertCallCount             int
+	DeleteCallCount             int
+	QueryCallCount              int
+	DescribeCollectionCallCount int
+	LoadCollectionCallCount     int
+	CapturedSchema              *entity.Schema // Captures schema passed to CreateCollection
 }
 
 func (m *MockMilvusClient) Search(ctx context.Context, coll string, parts []string, expr string, out []string, vectors []entity.Vector, vField string, mType entity.MetricType, topK int, sp entity.SearchParam, opts ...client.SearchQueryOptionFunc) ([]client.SearchResult, error) {
@@ -100,8 +104,12 @@ func (m *MockMilvusClient) CreateCollection(ctx context.Context, schema *entity.
 	return nil
 }
 
-func (m *MockMilvusClient) DescribeCollection(context.Context, string) (*entity.Collection, error) {
-	return nil, nil
+func (m *MockMilvusClient) DescribeCollection(ctx context.Context, coll string) (*entity.Collection, error) {
+	m.DescribeCollectionCallCount++
+	if m.DescribeCollectionFunc != nil {
+		return m.DescribeCollectionFunc(ctx, coll)
+	}
+	return &entity.Collection{Schema: memoryCollectionSchema(coll, 384)}, nil
 }
 
 func (m *MockMilvusClient) DropCollection(context.Context, string, ...client.DropCollectionOption) error {
@@ -112,7 +120,11 @@ func (m *MockMilvusClient) GetCollectionStatistics(context.Context, string) (map
 	return nil, nil
 }
 
-func (m *MockMilvusClient) LoadCollection(context.Context, string, bool, ...client.LoadCollectionOption) error {
+func (m *MockMilvusClient) LoadCollection(ctx context.Context, coll string, async bool, opts ...client.LoadCollectionOption) error {
+	m.LoadCollectionCallCount++
+	if m.LoadCollectionFunc != nil {
+		return m.LoadCollectionFunc(ctx, coll, async, opts...)
+	}
 	return nil
 }
 
@@ -1016,6 +1028,80 @@ func TestMilvusStore_Schema_UserIDPartitionKey(t *testing.T) {
 
 	require.NotNil(t, userIDField, "user_id field should exist in schema")
 	assert.True(t, userIDField.IsPartitionKey, "user_id field should have IsPartitionKey=true for efficient per-user queries")
+}
+
+func TestMilvusStore_ExistingCollectionDimensionMismatch(t *testing.T) {
+	mockClient := &MockMilvusClient{
+		HasCollectionFunc: func(context.Context, string) (bool, error) {
+			return true, nil
+		},
+		DescribeCollectionFunc: func(context.Context, string) (*entity.Collection, error) {
+			return &entity.Collection{Schema: memoryCollectionSchema("existing", 768)}, nil
+		},
+	}
+	store := &MilvusStore{
+		client:             mockClient,
+		collectionName:     "existing",
+		config:             DefaultMemoryConfig(),
+		enabled:            true,
+		effectiveDimension: 384,
+	}
+
+	err := store.ensureCollection(context.Background())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "stored=768")
+	assert.Contains(t, err.Error(), "expected=384")
+	assert.Zero(t, mockClient.LoadCollectionCallCount)
+}
+
+func TestMilvusStore_ExistingCollectionMatchingDimensionLoads(t *testing.T) {
+	mockClient := &MockMilvusClient{
+		HasCollectionFunc: func(context.Context, string) (bool, error) {
+			return true, nil
+		},
+		DescribeCollectionFunc: func(context.Context, string) (*entity.Collection, error) {
+			return &entity.Collection{Schema: memoryCollectionSchema("existing", 384)}, nil
+		},
+	}
+	store := &MilvusStore{
+		client:             mockClient,
+		collectionName:     "existing",
+		config:             DefaultMemoryConfig(),
+		enabled:            true,
+		effectiveDimension: 384,
+	}
+
+	require.NoError(t, store.ensureCollection(context.Background()))
+	assert.Equal(t, 1, mockClient.DescribeCollectionCallCount)
+	assert.Equal(t, 1, mockClient.LoadCollectionCallCount)
+}
+
+func TestMilvusStore_CreatesCollectionWithEffectiveDimension(t *testing.T) {
+	mockClient := &MockMilvusClient{
+		HasCollectionFunc: func(context.Context, string) (bool, error) {
+			return false, nil
+		},
+	}
+	store := &MilvusStore{
+		client:             mockClient,
+		collectionName:     "new",
+		config:             DefaultMemoryConfig(),
+		enabled:            true,
+		effectiveDimension: 512,
+	}
+
+	require.NoError(t, store.ensureCollection(context.Background()))
+	require.NotNil(t, mockClient.CapturedSchema)
+	var embeddingField *entity.Field
+	for _, field := range mockClient.CapturedSchema.Fields {
+		if field.Name == "embedding" {
+			embeddingField = field
+			break
+		}
+	}
+	require.NotNil(t, embeddingField)
+	assert.Equal(t, "512", embeddingField.TypeParams["dim"])
+	assert.Equal(t, 1, mockClient.LoadCollectionCallCount)
 }
 
 // ============================================================================
