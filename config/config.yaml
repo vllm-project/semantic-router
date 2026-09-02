@@ -1961,7 +1961,7 @@ global:
       embedding_model: multimodal
       embedding_dimension: 384
       ingestion_workers: 4
-      ingestion_drain_timeout_seconds: 30
+      ingestion_drain_timeout_seconds: 25
       supported_formats: [.txt, .md, .json, .csv, .html, .pdf]
       milvus:
         connection:
@@ -2355,8 +2355,6 @@ global:
           model_id: models/mmbert32k-intent-classifier-merged
           threshold: 0.5
           use_cpu: true
-          use_modernbert: false
-          use_mmbert_32k: true
           category_mapping_path: models/mmbert32k-intent-classifier-merged/category_mapping.json
           fallback_category: other
         mcp:

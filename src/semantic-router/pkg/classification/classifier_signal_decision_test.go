@@ -76,7 +76,7 @@ func TestEvaluateDecisionWithEngineAppliesOnUnknown(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected fail_request error")
 	}
-	if signals.AppliedUnknownPolicies["guarded"] != config.RuleOnUnknownFailRequest {
+	if signals.AppliedUnknownPolicies["guarded"] != string(config.RuleOnUnknownFailRequest) {
 		t.Fatalf("applied policies = %v", signals.AppliedUnknownPolicies)
 	}
 }

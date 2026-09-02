@@ -21,6 +21,7 @@ from .config_contract import (
     CLASSIFIER_TYPE_LLM,
     CLASSIFIER_TYPE_LOCAL,
     ClassifierSignalType,
+    UnknownPolicy,
 )
 
 RoutingStrategy = Literal["priority", "confidence"]
@@ -618,7 +619,7 @@ class Condition(BaseModel):
     label: Optional[str] = None
     predicate: Optional[NumericPredicate] = None
     on_error: Optional[Literal["no_match", "match"]] = None
-    on_unknown: Optional[Literal["no_match", "match", "fail_request"]] = None
+    on_unknown: Optional[UnknownPolicy] = None
     operator: Optional[str] = None
     conditions: Optional[List["Condition"]] = None
 
@@ -685,7 +686,7 @@ class Rules(BaseModel):
 
     operator: str = "AND"
     conditions: List[Condition] = Field(default_factory=list)
-    on_unknown: Optional[Literal["no_match", "match", "fail_request"]] = None
+    on_unknown: Optional[UnknownPolicy] = None
 
     @model_validator(mode="before")
     @classmethod

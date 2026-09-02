@@ -307,7 +307,7 @@ The normal Member path has four clear steps:
 1. **Apply** — choose a Workgroup in the
    [Workgroup join guide](https://github.com/vllm-project/semantic-router/issues/15),
    open its charter, and leave a first-person application comment.
-2. **Claim** — choose an eligible Starter task owned by that Workgroup, open the
+2. **Claim** — choose an `AVAILABLE` issue owned by that Workgroup, open the
    target issue, and comment `/assign`. The task counts as assigned only after
    your name appears in the issue's **Assignees** field.
 3. **Deliver** — open a focused PR linked to the claimed issue and get a
@@ -336,16 +336,19 @@ Interested in: <areas you want to help with>
 You do not need to be on a roster before collaborating. After applying, open
 the current
 [weekly Workgroup Issues](https://github.com/vllm-project/semantic-router/issues?q=is%3Aissue%20state%3Aopen%20in%3Atitle%20%22%5BCommunity%5D%20Workgroup%20Issues%22)
-and continue with a Starter task under the same Workgroup.
+or the [Community Weekly Issues view](https://community.vllm-sr.ai/weekly-issues)
+and continue with any `AVAILABLE` issue under the same Workgroup.
 
 ### If you have applied but do not know how to get started
 
-Choose an `AVAILABLE` Starter task under your applied-to Workgroup, open the
+Choose any `AVAILABLE` issue under your applied-to Workgroup, open the
 target issue, comment `/assign`, and verify that GitHub lists you as an
 assignee. That assignee state is what makes the application `TASK_ASSIGNED`;
-the weekly listing or the `/assign` text by itself does not.
+the weekly listing or the `/assign` text by itself does not. Please claim one
+issue at a time so ownership stays clear and other contributors can find open
+work; finish or hand off the current issue before claiming another.
 
-If none of the Starter tasks fit, comment on the weekly Workgroup Issues entry
+If none of the available issues fit, comment on the weekly Workgroup Issues entry
 with exactly:
 
 ```text
@@ -361,18 +364,27 @@ merge before your Member card becomes canonical.
 
 ### If you already joined
 
-Choose an `AVAILABLE` Member task under your Workgroup; Leads may also choose a
-bounded Lead task. Use `/assign` on the target issue, keep the issue updated
-when scope or progress changes, and prefer one active implementation task at a
-time. If nothing fits, use the same `Need task: wg/<slug>` comment on the weekly
-Workgroup Issues entry so the next replenishment discussion includes you.
+Applicants, Members, and Leads use the same `AVAILABLE` list. Use `/assign` on
+the target issue, keep the issue updated when scope or progress changes, and
+keep one active implementation issue at a time. If nothing fits, use the same
+`Need task: wg/<slug>` comment on the weekly Workgroup Issues entry so the next
+replenishment discussion includes you.
+
+### When the weekly list changes
+
+The Workgroup Operations run posts one consolidated update on the weekly issue,
+the join guide when needed, and each Workgroup charter. A single comment may
+mention several current applicants, Members, and Leads so the charter does not
+fill with repeated one-person automation replies. The update links the shared
+Workgroup list and explains `/assign`; a mention or recommendation is not an
+assignment. Only the target issue's **Assignees** field establishes ownership.
 
 ### What each role is responsible for
 
 | Role | How to participate |
 | --- | --- |
-| Applicant | Choose one Workgroup, apply on its charter, claim a Starter task, and deliver a focused PR. |
-| Member | Keep building in the Workgroup direction, claim Member tasks, help with scoped discussion and review, and make current ownership visible. |
+| Applicant | Choose one Workgroup, apply on its charter, claim one `AVAILABLE` issue, and deliver a focused PR. |
+| Member | Keep building in the Workgroup direction, claim from the shared `AVAILABLE` list, help with scoped discussion and review, and make current ownership visible. |
 | Lead | Maintain the charter and Epic map, keep tasks contributor-ready, coordinate triage and dependencies, and help Members find useful work. |
 | Open Source Team | Confirm acceptance and role decisions, review and merge the roster batch, and retain final merge, release, and repository-permission authority. |
 

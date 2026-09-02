@@ -197,7 +197,7 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 			request, originalModel, decisionName, reasoningDecision.UseReasoning, ctx,
 		)
 		if err != nil {
-			return nil, err
+			return r.imageFileDispatchFailure(err, ctx)
 		}
 		response := r.buildProviderDispatchResponse(dispatch, ctx)
 		r.handleToolSelectionForRequest(request, response, ctx)
@@ -218,7 +218,7 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 		request, matchedModel, decisionName, reasoningDecision.UseReasoning, ctx,
 	)
 	if err != nil {
-		return nil, err
+		return r.imageFileDispatchFailure(err, ctx)
 	}
 
 	response := r.buildProviderDispatchResponse(dispatch, ctx)
@@ -272,7 +272,7 @@ func (r *OpenAIRouter) handleSpecifiedModelRouting(request *llmprotocol.Request,
 
 	dispatch, err := r.prepareProviderDispatch(request, originalModel, "", false, ctx)
 	if err != nil {
-		return nil, err
+		return r.imageFileDispatchFailure(err, ctx)
 	}
 	response := r.buildProviderDispatchResponse(dispatch, ctx)
 

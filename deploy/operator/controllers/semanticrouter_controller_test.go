@@ -270,6 +270,15 @@ func TestGenerateDeployment(t *testing.T) {
 	if deployment.Namespace != "default" {
 		t.Errorf("expected namespace 'default', got '%s'", deployment.Namespace)
 	}
+
+	// The Router starts directly and has no supervisor-directory dependency,
+	// so the Operator must not inject the obsolete setup-dirs initContainer.
+	// Helm renders the same runtime requirement without an initContainer.
+	for _, initContainer := range deployment.Spec.Template.Spec.InitContainers {
+		if initContainer.Name == "setup-dirs" {
+			t.Errorf("unexpected setup-dirs initContainer in rendered PodSpec")
+		}
+	}
 }
 
 func TestGetPodSecurityContext(t *testing.T) {

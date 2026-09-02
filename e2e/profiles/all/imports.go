@@ -7,6 +7,7 @@ import (
 	aibrix "github.com/vllm-project/semantic-router/e2e/profiles/aibrix"
 	anthropicshim "github.com/vllm-project/semantic-router/e2e/profiles/anthropic-shim"
 	authzrbac "github.com/vllm-project/semantic-router/e2e/profiles/authz-rbac"
+	categoryremotebackend "github.com/vllm-project/semantic-router/e2e/profiles/category-remote-backend"
 	dashboard "github.com/vllm-project/semantic-router/e2e/profiles/dashboard"
 	dynamicconfig "github.com/vllm-project/semantic-router/e2e/profiles/dynamic-config"
 	dynamo "github.com/vllm-project/semantic-router/e2e/profiles/dynamo"
@@ -60,6 +61,7 @@ func init() {
 		framework.ProfileCapabilities{LocalImages: anthropicshim.LocalImages()},
 	)
 	register("authz-rbac", func() framework.Profile { return authzrbac.NewProfile() }, framework.ProfileCapabilities{})
+	register("category-remote-backend", func() framework.Profile { return categoryremotebackend.NewProfile() }, framework.ProfileCapabilities{LocalImages: mockVLLMLocalImages})
 	register(
 		"dashboard",
 		func() framework.Profile { return dashboard.NewProfile() },
