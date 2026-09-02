@@ -23,6 +23,7 @@ from .config_contract import (
     ClassifierSignalType,
     UnknownPolicy,
 )
+from .context_bands import normalize_token_count, validate_context_band
 
 RoutingStrategy = Literal["priority", "confidence"]
 LOCAL_CLASSIFIER_LABEL_COUNT = 2
@@ -186,12 +187,29 @@ class Language(BaseModel):
 
 
 class ContextRule(BaseModel):
-    """Context-based (token count) signal configuration."""
+    """Context-based (token count) signal configuration.
+
+    A rule is an inclusive band: min_tokens <= token_count <= max_tokens.
+    Both limits accept "1K" and "1.5M" suffixes. At least one limit must be
+    set. Omitting min_tokens means 0; omitting max_tokens makes the band
+    open-ended so every count at or above min_tokens matches. Equal limits
+    are an exact-match band.
+    """
 
     name: str
-    min_tokens: str  # Supports suffixes: "1K", "1.5M", etc.
-    max_tokens: str
+    min_tokens: Optional[str] = None
+    max_tokens: Optional[str] = None
     description: Optional[str] = None
+
+    @field_validator("min_tokens", "max_tokens", mode="before")
+    @classmethod
+    def coerce_token_count(cls, value, info):
+        return normalize_token_count(value, info.field_name)
+
+    @model_validator(mode="after")
+    def validate_band(self):
+        validate_context_band(self.min_tokens, self.max_tokens)
+        return self
 
 
 class StructureSource(BaseModel):
