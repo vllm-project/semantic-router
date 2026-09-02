@@ -186,7 +186,7 @@ func (r *OpenAIRouter) runDecisionEngine(
 	} else {
 		result, err = classifier.EvaluateDecisionWithEngine(signals)
 	}
-	ctx.VSRAppliedUnknownPolicies = cloneReplayStringMap(signals.AppliedUnknownPolicies)
+	ctx.VSRDecisionDiagnostics = signals.Diagnostics
 	if err != nil {
 		logging.ComponentErrorEvent("extproc", "decision_evaluation_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,
