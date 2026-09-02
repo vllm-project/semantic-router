@@ -8,8 +8,8 @@ Fleet Sim answers planning questions that are expensive to explore on a live
 GPU fleet: how many workers a workload may need, where to split traffic across
 pools, and which assumptions most affect a latency or cost target.
 
-It provides the `vllm-sr-sim` command-line tool and an HTTP service used by the
-vLLM Semantic Router dashboard.
+It provides the `vllm-sr-sim` command-line tool and an optional standalone HTTP
+service for automation or custom planning clients.
 
 ## What goes into a study
 
@@ -52,9 +52,9 @@ represent different model sizes and parallel layouts. Comparing their output
 directly can measure the combined system choice, but it does not isolate the GPU
 itself.
 
-The current dashboard job path converts an uploaded trace to a total-token CDF
-and generates Poisson arrivals for simulation. It does not replay the trace's
-original inter-arrival times or per-request route labels. The Python library's
+The HTTP service converts an uploaded trace to a total-token CDF and generates
+Poisson arrivals for simulation. It does not replay the trace's original
+inter-arrival times or per-request route labels. The Python library's
 `TraceWorkload` is available when an exact timestamped replay is required.
 
 ## What Fleet Sim does not do
@@ -74,7 +74,6 @@ original inter-arrival times or per-request route labels. The Python library's
 | Work through a planning decision | [Capacity-planning workflows](./use-cases) |
 | Understand equations and simulator behavior | [Simulation model](./sim-algorithms) |
 | Calibrate energy estimates | [Power model](./power-model) |
-| Use the web interface | [Dashboard integration](./dashboard-integration) |
 
 The [research context](./related-work) explains how this planning tool
 relates to serving engines, high-fidelity simulators, and autoscaling systems.

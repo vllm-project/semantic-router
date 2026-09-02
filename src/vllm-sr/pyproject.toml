@@ -27,6 +27,7 @@ dependencies = [
     "jinja2>=3.1.4",
     "requests>=2.31.0",
     "pydantic>=2.0.0",
+    "typing-extensions>=4.6.0",
     "huggingface_hub[cli]>=0.20.0",
 ]
 
@@ -52,7 +53,11 @@ include-package-data = false
 [tool.setuptools.package-data]
 "cli.templates" = ["*.yaml", "*.json", "*.ini"]
 "cli.model_assets" = ["**/*.yaml", "**/*.md", "**/*.dsl"]
-"cli.evaluation" = ["golden/*.json"]
+"cli.evaluation" = [
+    "golden/metric_analysis_catalog.v1.json",
+    "golden/research_benchmark_inventory.v1.json",
+    "resources/live_mom_cases.v1.json",
+]
 
 [tool.pytest.ini_options]
 addopts = ["-v"]

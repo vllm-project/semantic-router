@@ -10,26 +10,57 @@ import (
 
 const aggregateLatencyRegressionBudget = 0.05
 
-func comparePairedReports(baseline, candidate Report) (Comparison, error) {
+func comparePairedReports(
+	baseline, candidate Report,
+	baselineRecords, candidateRecords []executionRecordEvidence,
+) (Comparison, error) {
 	if err := validatePairedReportCohort(baseline, candidate); err != nil {
 		return Comparison{}, err
 	}
-	metrics, evidence := pairedMetricEvidence(baseline.Metrics, candidate.Metrics)
-	verdict, reason := comparisonVerdict(candidate, evidence, baseline.Summary, candidate.Summary)
+	statistics, err := computePairedStatistics(baselineRecords, candidateRecords, candidate.Run.Seed)
+	if err != nil {
+		return Comparison{}, err
+	}
+	metrics, evidence := pairedMetricEvidence(baseline.Metrics, candidate.Metrics, statistics)
+	gates := comparisonGates(baseline, candidate, statistics)
+	verdict, reason := comparisonVerdict(baseline, candidate, gates, evidence)
 	recommendations := comparisonRecommendations(verdict, evidence)
 	return Comparison{
-		SchemaVersion: SchemaVersion, BaselineRunID: baseline.Run.ID, CandidateRunID: candidate.Run.ID,
+		SchemaVersion: SchemaVersion, AttestationRevision: ServerAttestationRevision,
+		BaselineRunID: baseline.Run.ID, CandidateRunID: candidate.Run.ID,
 		Verdict: verdict,
 		Summary: fmt.Sprintf(
 			"Compared %d metrics (%d matched aggregate deltas): %d improved, %d regressed. %s",
 			len(metrics), evidence.matched, evidence.improvements, evidence.regressions, reason,
 		),
-		Metrics: metrics, Gates: candidate.Gates, Recommendations: recommendations,
+		Metrics: metrics, Statistics: statistics, Gates: gates, Recommendations: recommendations,
 		CreatedAt: time.Now().UTC(),
 	}, nil
 }
 
+func compareControlledPairReports(
+	baseline, candidate campaignRunEvidence,
+) (Comparison, error) {
+	// This is intentionally stricter than generic report comparison: distinct
+	// deployment targets are comparable only when the server-owned AB/BA
+	// protocol, manifests, attestations, and observation receipts all validate.
+	if _, err := buildCampaignPairedLiveEvidence(baseline, candidate); err != nil {
+		return Comparison{}, err
+	}
+	normalizedCandidate := normalizeControlledPairCandidate(baseline.report, candidate.report)
+	return comparePairedReports(
+		baseline.report,
+		normalizedCandidate,
+		baseline.records,
+		candidate.records,
+	)
+}
+
 func validatePairedReportCohort(baseline, candidate Report) error {
+	if baseline.AttestationRevision != ServerAttestationRevision ||
+		candidate.AttestationRevision != ServerAttestationRevision {
+		return fmt.Errorf("%w: both reports must use the current server attestation contract", ErrInvalid)
+	}
 	if baseline.Run.ID == candidate.Run.ID {
 		return fmt.Errorf("%w: baseline and candidate runs must be distinct", ErrInvalid)
 	}
@@ -37,9 +68,12 @@ func validatePairedReportCohort(baseline, candidate Report) error {
 		return fmt.Errorf("%w: candidate baseline_run_id must identify the compared baseline", ErrInvalid)
 	}
 	if baseline.Run.Mode != candidate.Run.Mode || baseline.Run.TargetID != candidate.Run.TargetID ||
+		!sameRunMixtureIdentity(baseline.Run.Mixture, candidate.Run.Mixture) ||
 		baseline.Run.ChangeProfile != candidate.Run.ChangeProfile ||
 		baseline.Run.SampleLimit != candidate.Run.SampleLimit || baseline.Run.Concurrency != candidate.Run.Concurrency || baseline.Run.Seed != candidate.Run.Seed ||
-		!sameStringSet(baseline.Run.SuiteIDs, candidate.Run.SuiteIDs) || !sameTrackSet(baseline.Run.TrackIDs, candidate.Run.TrackIDs) {
+		!reflect.DeepEqual(baseline.Run.CapacitySLO, candidate.Run.CapacitySLO) ||
+		!reflect.DeepEqual(baseline.Run.CapacityLoadProtocol, candidate.Run.CapacityLoadProtocol) ||
+		!reflect.DeepEqual(baseline.Run.SuiteIDs, candidate.Run.SuiteIDs) || !reflect.DeepEqual(baseline.Run.TrackIDs, candidate.Run.TrackIDs) {
 		return fmt.Errorf("%w: baseline and candidate report cohorts do not match", ErrInvalid)
 	}
 	if !validChangeProfile(baseline.Run.ChangeProfile) {
@@ -59,23 +93,55 @@ func validatePairedReportCohort(baseline, candidate Report) error {
 	return nil
 }
 
+func sameRunMixtureIdentity(left, right *CatalogMixture) bool {
+	if left == nil || right == nil {
+		return left == nil && right == nil
+	}
+	return left.ID == right.ID && left.RecipeName == right.RecipeName
+}
+
 type treatmentFactors struct {
+	supported   bool
+	primary     string
+	code        bool
 	policy      bool
+	selector    bool
+	adaptation  bool
 	binding     bool
 	pool        bool
 	environment bool
 }
 
-// comparisonTreatment returns the only snapshot factors that may change for
-// each v1 profile. All other factors are frozen and must match exactly.
+// comparisonTreatment defines an identifiable treatment, not a loose allowlist.
+// Primary is the factor that must change; every false factor must remain frozen.
+// model_pool is the sole explicit composite because pool membership can also
+// change its candidate binding and candidate-serving topology.
 func comparisonTreatment(profile ChangeProfile) treatmentFactors {
 	switch profile {
-	case "recipe", "selector", "agent_multimodal", "online_adaptation":
-		return treatmentFactors{policy: true, binding: true}
+	case "schema_adapter":
+		return treatmentFactors{supported: true, primary: "code", code: true}
+	case "recipe":
+		return treatmentFactors{supported: true, primary: "policy", policy: true}
+	case "selector":
+		return treatmentFactors{supported: true, primary: "selector", selector: true}
 	case "model_pool":
-		return treatmentFactors{binding: true, pool: true}
+		// Executable arm composition and its serving topology are one treatment:
+		// adding or removing an arm necessarily changes the target-scoped backend
+		// topology. Create-time validation still freezes the Router/Envoy origins,
+		// credentials, and every production ledger so an unrelated environment
+		// change cannot hide inside this profile.
+		return treatmentFactors{
+			supported: true, primary: "pool", binding: true, pool: true, environment: true,
+		}
 	case "runtime_capacity":
-		return treatmentFactors{environment: true}
+		return treatmentFactors{supported: true, primary: "environment", environment: true}
+	case "online_adaptation":
+		return treatmentFactors{supported: true, primary: "adaptation", adaptation: true}
+	case "agent_multimodal":
+		// Agent/trajectory and multimodal behavior do not yet have a server-owned
+		// independent factor identity. Accepting policy or binding drift here would
+		// let the same delta bypass the recipe/selector treatment contract.
+		return treatmentFactors{}
 	default:
 		return treatmentFactors{}
 	}
@@ -83,76 +149,142 @@ func comparisonTreatment(profile ChangeProfile) treatmentFactors {
 
 func validateTreatmentFactors(baseline, candidate Report) error {
 	allowed := comparisonTreatment(baseline.Run.ChangeProfile)
-	if baseline.Run.ChangeProfile == "schema_adapter" {
-		if baseline.Provenance.CodeRevision == "" || candidate.Provenance.CodeRevision == "" ||
-			baseline.Provenance.CodeRevision == candidate.Provenance.CodeRevision {
-			return fmt.Errorf("%w: change_profile %q requires the source code revision treatment to change", ErrInvalid, baseline.Run.ChangeProfile)
-		}
+	if !allowed.supported {
+		return fmt.Errorf(
+			"%w: change_profile %q has no independent server-owned treatment factor and cannot be paired",
+			ErrInvalid, baseline.Run.ChangeProfile,
+		)
 	}
+	if baseline.Provenance.CodeRevision == "" || candidate.Provenance.CodeRevision == "" {
+		return fmt.Errorf("%w: baseline and candidate code revision identities are required", ErrInvalid)
+	}
+	codeChanged := baseline.Provenance.CodeRevision != candidate.Provenance.CodeRevision
+	if codeChanged && !allowed.code {
+		return fmt.Errorf(
+			"%w: baseline and candidate code revisions must match for change_profile %q",
+			ErrInvalid, baseline.Run.ChangeProfile,
+		)
+	}
+
+	baselineSelector, candidateSelector, selectorAvailable := comparisonMixtureFactor(
+		baseline.Run.Mixture, candidate.Run.Mixture, func(mixture *CatalogMixture) string { return mixture.SelectorDigest },
+	)
+	baselineAdaptation, candidateAdaptation, adaptationAvailable := comparisonMixtureFactor(
+		baseline.Run.Mixture, candidate.Run.Mixture, func(mixture *CatalogMixture) string { return mixture.AdaptationDigest },
+	)
 	factors := []struct {
-		name                string
-		baseline, candidate string
-		mayChange           bool
+		name                 string
+		baseline, candidate  string
+		available, mayChange bool
 	}{
-		{"policy", baseline.Provenance.PolicySnapshotDigest, candidate.Provenance.PolicySnapshotDigest, allowed.policy},
-		{"binding", baseline.Provenance.BindingSnapshotDigest, candidate.Provenance.BindingSnapshotDigest, allowed.binding},
-		{"pool", baseline.Provenance.PoolSnapshotDigest, candidate.Provenance.PoolSnapshotDigest, allowed.pool},
-		{"environment", baseline.Provenance.EnvironmentSnapshotDigest, candidate.Provenance.EnvironmentSnapshotDigest, allowed.environment},
+		{"policy", baseline.Provenance.PolicySnapshotDigest, candidate.Provenance.PolicySnapshotDigest, true, allowed.policy},
+		{"selector", baselineSelector, candidateSelector, selectorAvailable, allowed.selector},
+		{"adaptation", baselineAdaptation, candidateAdaptation, adaptationAvailable, allowed.adaptation},
+		{"binding", baseline.Provenance.BindingSnapshotDigest, candidate.Provenance.BindingSnapshotDigest, true, allowed.binding},
+		{"pool", baseline.Provenance.PoolSnapshotDigest, candidate.Provenance.PoolSnapshotDigest, true, allowed.pool},
+		{"environment", baseline.Provenance.EnvironmentSnapshotDigest, candidate.Provenance.EnvironmentSnapshotDigest, true, allowed.environment},
 	}
-	changedTreatment := false
-	hasTreatment := false
+	primaryChanged := allowed.primary == "code" && codeChanged
 	for _, factor := range factors {
+		if !factor.available {
+			if factor.name == allowed.primary {
+				return fmt.Errorf(
+					"%w: change_profile %q requires a server-owned %s snapshot",
+					ErrInvalid, baseline.Run.ChangeProfile, factor.name,
+				)
+			}
+			continue
+		}
 		if factor.baseline == "" || factor.candidate == "" {
 			return fmt.Errorf("%w: baseline and candidate %s snapshot identities are required", ErrInvalid, factor.name)
 		}
 		if !factor.mayChange && factor.candidate != factor.baseline {
 			return fmt.Errorf("%w: baseline and candidate %s snapshots must match for change_profile %q", ErrInvalid, factor.name, baseline.Run.ChangeProfile)
 		}
-		if factor.mayChange {
-			hasTreatment = true
-			changedTreatment = changedTreatment || factor.candidate != factor.baseline
+		if factor.name == allowed.primary {
+			primaryChanged = factor.candidate != factor.baseline
 		}
 	}
-	if hasTreatment && !changedTreatment {
-		return fmt.Errorf("%w: change_profile %q requires at least one declared treatment factor to change", ErrInvalid, baseline.Run.ChangeProfile)
+	if !primaryChanged {
+		return fmt.Errorf(
+			"%w: change_profile %q requires the %s treatment factor to change",
+			ErrInvalid, baseline.Run.ChangeProfile, allowed.primary,
+		)
 	}
 	return nil
 }
 
-type comparisonEvidence struct {
-	matched           int
-	improvements      int
-	regressions       int
-	primaryRegression bool
-	latencyOverBudget bool
+func comparisonMixtureFactor(
+	baseline, candidate *CatalogMixture,
+	value func(*CatalogMixture) string,
+) (string, string, bool) {
+	if baseline == nil || candidate == nil {
+		return "", "", false
+	}
+	return value(baseline), value(candidate), true
 }
 
-func pairedMetricEvidence(baseline, candidate []Metric) ([]Metric, comparisonEvidence) {
+type comparisonEvidence struct {
+	matched             int
+	improvements        int
+	regressions         int
+	latencyOverBudget   bool
+	intervalCount       int
+	intervalFailed      bool
+	intervalPassed      bool
+	intervalUnavailable bool
+}
+
+func pairedMetricEvidence(
+	baseline, candidate []Metric,
+	statistics []ComparisonStatistic,
+) ([]Metric, comparisonEvidence) {
 	baselineByID := make(map[string]Metric, len(baseline))
 	for _, metric := range baseline {
 		baselineByID[metric.ID] = metric
 	}
-	metrics := make([]Metric, 0, len(candidate))
 	evidence := comparisonEvidence{}
+	statisticsByID := make(map[string]ComparisonStatistic, len(statistics))
+	allIntervalsPassed := true
+	for _, statistic := range statistics {
+		statisticsByID[statistic.ID] = statistic
+		switch statistic.Verdict {
+		case "pass":
+		case "fail":
+			evidence.intervalFailed = true
+			allIntervalsPassed = false
+		default:
+			evidence.intervalUnavailable = true
+			allIntervalsPassed = false
+		}
+		evidence.intervalCount++
+	}
+	metrics := make([]Metric, 0, len(candidate))
+	evidence.intervalPassed = evidence.intervalCount > 0 && allIntervalsPassed
 	for _, metric := range candidate {
 		old, ok := baselineByID[metric.ID]
 		if !ok || old.Value == nil || metric.Value == nil ||
-			(old.Direction != "" && metric.Direction != "" && old.Direction != metric.Direction) {
+			old.Unit != metric.Unit || old.TrackID != metric.TrackID || old.Direction != metric.Direction {
+			metric.BaselineValue = nil
+			metric.Delta = nil
 			metrics = append(metrics, metric)
 			continue
 		}
 		baselineValue := *old.Value
 		delta := *metric.Value - baselineValue
 		metric.BaselineValue, metric.Delta = &baselineValue, &delta
+		if statistic, registered := statisticsByID[metric.ID]; registered {
+			metric.BaselineValue = float64Reference(statistic.BaselineValue)
+			metric.Delta = float64Reference(statistic.Delta)
+			metric.ConfidenceInterval = append([]float64(nil), statistic.DeltaConfidenceInterval...)
+			metric.SampleCount = statistic.SampleCount
+		}
 		evidence.matched++
 		if delta != 0 && metric.Direction != "target" && metric.Direction != "" {
 			if metricImproved(metric.Direction, delta) {
 				evidence.improvements++
 			} else {
 				evidence.regressions++
-				if primaryPromotionMetric(metric.ID) {
-					evidence.primaryRegression = true
-				}
 			}
 		}
 		if latencyMetric(metric.ID) && exceedsRegressionBudget(baselineValue, *metric.Value, aggregateLatencyRegressionBudget) {
@@ -163,10 +295,13 @@ func pairedMetricEvidence(baseline, candidate []Metric) ([]Metric, comparisonEvi
 	return metrics, evidence
 }
 
-func comparisonVerdict(candidate Report, evidence comparisonEvidence, baseline, current ReportSummary) (GateVerdict, string) {
+func float64Reference(value float64) *float64 { return &value }
+
+func comparisonVerdict(baseline, candidate Report, gates []Gate, evidence comparisonEvidence) (DecisionVerdict, string) {
+	baselineSummary, current := baseline.Summary, candidate.Summary
 	requiredUnavailable := false
-	for _, gate := range candidate.Gates {
-		if gate.Disposition != "required" {
+	for _, gate := range gates {
+		if gate.Disposition != GateDispositionRequired {
 			continue
 		}
 		if gate.Verdict == "fail" {
@@ -179,22 +314,44 @@ func comparisonVerdict(candidate Report, evidence comparisonEvidence, baseline, 
 	if current.Verdict == "fail" {
 		return "fail", "The candidate report failed."
 	}
-	if evidence.primaryRegression {
-		return "fail", "A primary quality or joint-system metric regressed."
+	if evidence.intervalFailed {
+		return "fail", "A registered paired statistic regressed with 95% confidence."
 	}
-	if summaryQualityRegressed(baseline, current) {
-		return "fail", "A primary quality or joint-system metric regressed."
-	}
-	if evidence.latencyOverBudget || summaryLatencyOverBudget(baseline, current) {
+	if evidence.latencyOverBudget || summaryLatencyOverBudget(baselineSummary, current) {
 		return "fail", "Tail latency exceeded the 5% aggregate regression budget."
 	}
-	if current.Verdict == "unavailable" || requiredUnavailable {
+	if !completeQualifiedTrackVector(baseline) || !completeQualifiedTrackVector(candidate) {
+		return "unavailable", "Every selected track needs complete qualified evidence for paired promotion."
+	}
+	if requiredUnavailable {
 		return "unavailable", "Required candidate evidence is unavailable."
 	}
-	if evidence.matched == 0 {
-		return "unavailable", "No matched direction-aware aggregate metric evidence is available."
+	if evidence.intervalUnavailable {
+		return "unavailable", fmt.Sprintf(
+			"Every registered statistic needs at least %d independent case units and a decisive 95%% non-inferiority interval.",
+			comparisonMinimumAnalysisUnits,
+		)
 	}
-	return "unavailable", "Aggregate point deltas are descriptive only; case-level paired deltas and their confidence interval are unavailable."
+	if evidence.intervalPassed {
+		return "pass", "Registered case-aligned paired confidence intervals passed."
+	}
+	if evidence.intervalCount == 0 {
+		return "unavailable", "No registered paired statistic has a valid interval."
+	}
+	return "unavailable", "A registered paired confidence interval crosses the promotion boundary."
+}
+
+func completeQualifiedTrackVector(report Report) bool {
+	if len(report.Tracks) != len(report.Run.TrackIDs) {
+		return false
+	}
+	for index, trackID := range report.Run.TrackIDs {
+		track := report.Tracks[index]
+		if track.TrackID != trackID || track.Status != "completed" || track.EvidenceLevel == "E0" || track.Coverage.Unavailable != 0 {
+			return false
+		}
+	}
+	return true
 }
 
 func metricImproved(direction string, delta float64) bool {
@@ -202,16 +359,6 @@ func metricImproved(direction string, delta float64) bool {
 		return delta < 0
 	}
 	return delta > 0
-}
-
-func primaryPromotionMetric(id string) bool {
-	switch id {
-	case "routing.accuracy", "model_pool.oracle_quality", "joint.realized_quality",
-		"joint.oracle_regret", "joint.normalized_regret", "joint.reliability":
-		return true
-	default:
-		return false
-	}
 }
 
 func latencyMetric(id string) bool {
@@ -228,16 +375,12 @@ func exceedsRegressionBudget(baseline, candidate, budget float64) bool {
 	return candidate > baseline*(1+budget)
 }
 
-func summaryQualityRegressed(baseline, candidate ReportSummary) bool {
-	return baseline.QualityScore != nil && candidate.QualityScore != nil && *candidate.QualityScore < *baseline.QualityScore
-}
-
 func summaryLatencyOverBudget(baseline, candidate ReportSummary) bool {
 	return baseline.LatencyP95MS != nil && candidate.LatencyP95MS != nil &&
 		exceedsRegressionBudget(*baseline.LatencyP95MS, *candidate.LatencyP95MS, aggregateLatencyRegressionBudget)
 }
 
-func comparisonRecommendations(verdict GateVerdict, evidence comparisonEvidence) []string {
+func comparisonRecommendations(verdict DecisionVerdict, evidence comparisonEvidence) []string {
 	switch verdict {
 	case "fail":
 		return []string{"Do not promote until required gates and promotion-critical regressions are resolved."}
