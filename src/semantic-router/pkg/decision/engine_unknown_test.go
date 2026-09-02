@@ -34,11 +34,11 @@ func TestUnknownTruthTable(t *testing.T) {
 	engine := NewDecisionEngine(nil, nil, nil, nil, config.RoutingStrategyPriority)
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			evaluation, _ := engine.evalNode(test.rule, signals, false, false)
+			evaluation, _ := engine.evalNode(test.rule, signals, config.RuleOnUnknownNoMatch, false)
 			if evaluation.state != test.want {
 				t.Fatalf("state = %v, want %v", evaluation.state, test.want)
 			}
-			traced, trace := engine.evalNode(test.rule, signals, false, true)
+			traced, trace := engine.evalNode(test.rule, signals, config.RuleOnUnknownNoMatch, true)
 			if traced.state != test.want || trace == nil {
 				t.Fatalf("traced state = %v (trace %v), want %v", traced.state, trace, test.want)
 			}
@@ -253,5 +253,44 @@ func TestUnknownTraceRecordsErrorAndPolicy(t *testing.T) {
 	}
 	if diagnostics.AppliedUnknownPolicies["route"] != string(config.RuleOnUnknownNoMatch) {
 		t.Fatalf("diagnostics = %#v", diagnostics)
+	}
+}
+
+func TestOnErrorResolvedBranchNeverOutranksRealMatch(t *testing.T) {
+	failed := config.RuleNode{
+		Type:      config.SignalTypeClassifier,
+		Name:      "risk",
+		Label:     "RISKY",
+		Predicate: &config.NumericPredicate{GTE: float64Ptr(0.5)},
+	}
+	failedMatch := failed
+	failedMatch.OnError = "match"
+	present := config.RuleNode{Type: config.SignalTypeKeyword, Name: "present"}
+	other := config.RuleNode{Type: config.SignalTypeKeyword, Name: "other"}
+	signals := &SignalMatches{
+		KeywordRules:      []string{"present", "other"},
+		SignalConfidences: map[string]float64{"keyword:present": 0.6, "keyword:other": 0.5},
+		SignalErrors:      map[string]string{"classifier:risk": "timeout"},
+	}
+	for name, rule := range map[string]config.RuleNode{
+		"not": {Operator: "OR", Conditions: []config.RuleNode{
+			{Operator: "NOT", Conditions: []config.RuleNode{failed}},
+			present,
+		}},
+		"and": {Operator: "OR", Conditions: []config.RuleNode{
+			{Operator: "AND", Conditions: []config.RuleNode{other, failedMatch}},
+			present,
+		}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			engine := NewDecisionEngine(nil, nil, nil, []config.Decision{{Name: "route", Rules: rule}}, config.RoutingStrategyPriority)
+			result, err := engine.EvaluateDecisionsWithSignals(signals)
+			if err != nil || result == nil {
+				t.Fatalf("result = %#v, error = %v", result, err)
+			}
+			if result.Confidence != 0.6 || len(result.MatchedRules) != 1 || result.MatchedRules[0] != "keyword:present" {
+				t.Fatalf("confidence = %v, rules = %v", result.Confidence, result.MatchedRules)
+			}
+		})
 	}
 }
