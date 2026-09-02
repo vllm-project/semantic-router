@@ -143,7 +143,6 @@ func TestHTTPClassifierInferenceDeadlineStopsSlowRequest(t *testing.T) {
 
 	inf := newTestHTTPClassifierInference(t, server, testJailbreakMapping())
 	inf.timeout = 25 * time.Millisecond
-	inf.httpClient.Timeout = inf.timeout
 	startedAt := time.Now()
 	_, err := inf.Classify(context.Background(), "slow request")
 	if err == nil {
@@ -187,13 +186,12 @@ func TestHTTPClassifierInferenceConcurrentClassify(t *testing.T) {
 func newTestHTTPClassifierInference(t *testing.T, server *httptest.Server, mapping sequenceLabelMapping) *HTTPClassifierInference {
 	t.Helper()
 	inf, err := NewHTTPClassifierInference(&config.ExternalModelConfig{
-		ModelEndpoint: config.ClassifierVLLMEndpoint{Address: "placeholder", Port: 1},
+		ModelEndpoint: endpointForTestServer(t, server),
 		ModelName:     "custom-classifier",
 	}, mapping)
 	if err != nil {
 		t.Fatalf("failed to construct inference: %v", err)
 	}
-	inf.baseURL = server.URL
 	return inf
 }
 

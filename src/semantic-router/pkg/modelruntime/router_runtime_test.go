@@ -71,6 +71,21 @@ func TestEmbeddingRuntimeTasksUseOnlyRemoteProviderWhenConfigured(t *testing.T) 
 	}
 }
 
+func TestEmbeddingRuntimeTasksDoNotUseCandleForOpenVINO(t *testing.T) {
+	cfg := &config.RouterConfig{InlineModels: config.InlineModels{EmbeddingModels: config.EmbeddingModels{
+		Qwen3ModelPath: "models/openvino-embedding",
+		EmbeddingConfig: config.HNSWConfig{
+			Backend:   config.EmbeddingBackendOpenVINO,
+			ModelType: config.EmbeddingModelTypeQwen3,
+		},
+	}}}
+
+	_, tasks, _ := embeddingRuntimeTasks(cfg, "test", resolveEmbeddingPaths(cfg))
+	if len(tasks) != 0 {
+		t.Fatalf("embeddingRuntimeTasks() returned %d task(s), want no Candle tasks for OpenVINO", len(tasks))
+	}
+}
+
 func TestPrepareRouterRuntimeProbesRemoteEmbeddingProvider(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		writeRuntimeEmbeddingResponse(t, w, []float64{0.1, 0.2})
