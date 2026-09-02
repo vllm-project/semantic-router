@@ -58,7 +58,7 @@ func dynamoNVExtRequest(stream bool) map[string]any {
 		"cache_salt": "top-level-cache",
 		"nvext": map[string]any{
 			"cache_salt":   "nested-cache",
-			"extra_fields": []string{"worker_id", "timing", "completion_token_ids"},
+			"extra_fields": []string{"worker_id", "timing", "prompt_token_ids", "completion_token_ids"},
 		},
 	}
 }
@@ -109,6 +109,7 @@ func verifyDynamoNVExtPayload(raw json.RawMessage) error {
 			RequestReceivedMS uint64  `json:"request_received_ms"`
 			TTFTMS            float64 `json:"ttft_ms"`
 		} `json:"timing"`
+		PromptTokenIDs     []uint32 `json:"prompt_token_ids"`
 		CompletionTokenIDs []uint32 `json:"completion_token_ids"`
 	}
 	if err := json.Unmarshal(raw, &extension); err != nil {
@@ -116,6 +117,7 @@ func verifyDynamoNVExtPayload(raw json.RawMessage) error {
 	}
 	if extension.WorkerID.PrefillWorkerID != 11 || extension.WorkerID.DecodeWorkerID != 22 ||
 		extension.Timing.RequestReceivedMS != 1000 || extension.Timing.TTFTMS != 3.75 ||
+		len(extension.PromptTokenIDs) != 2 || extension.PromptTokenIDs[0] != 11 || extension.PromptTokenIDs[1] != 12 ||
 		len(extension.CompletionTokenIDs) != 2 || extension.CompletionTokenIDs[0] != 101 || extension.CompletionTokenIDs[1] != 102 {
 		return fmt.Errorf("unexpected Dynamo nvext payload: %s", raw)
 	}
