@@ -81,6 +81,10 @@ func admitNLI[T any](
 	})
 }
 
+func isAdmissionError(err error) bool {
+	return errors.Is(err, admission.ErrQueueFull) || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
+}
+
 type admittedSequenceClassifier struct {
 	backend    SequenceClassifierBackend
 	gate       admission.Admissioner
@@ -109,6 +113,10 @@ func (a admittedCategoryInference) ClassifyWithProbabilities(ctx context.Context
 	return admitModelInference(ctx, a.gate, a.deployment, func() (candle_binding.ClassResultWithProbs, error) {
 		return a.backend.ClassifyWithProbabilities(ctx, text)
 	})
+}
+
+func (a admittedCategoryInference) fallbackToTop1OnProbabilityError() bool {
+	return categoryProbabilityFallbackAllowed(a.backend)
 }
 
 type admittedPIIInference struct {

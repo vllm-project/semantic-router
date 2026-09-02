@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
-
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/admission"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
@@ -134,6 +133,67 @@ func TestDomainInferenceErrorPopulatesSignalErrors(t *testing.T) {
 		if results.SignalErrors["domain:"+name] != domainEvaluationFailedCode {
 			t.Fatalf("SignalErrors = %#v, want %q for %q", results.SignalErrors, domainEvaluationFailedCode, name)
 		}
+	}
+}
+
+type countingCategoryInference struct{ classify, classifyWithProbs int }
+
+func (c *countingCategoryInference) Classify(context.Context, string) (candle_binding.ClassResult, error) {
+	c.classify++
+	return candle_binding.ClassResult{}, nil
+}
+
+func (c *countingCategoryInference) ClassifyWithProbabilities(context.Context, string) (candle_binding.ClassResultWithProbs, error) {
+	c.classifyWithProbs++
+	return candle_binding.ClassResultWithProbs{}, nil
+}
+
+type countingGate struct {
+	calls int
+	err   error
+}
+
+func (g *countingGate) Acquire(context.Context) (admission.Ticket, error) {
+	g.calls++
+	return nil, g.err
+}
+
+func TestDomainSignalDoesNotRetryAdmissionErrors(t *testing.T) {
+	for name, gateErr := range map[string]error{"shed": admission.ErrQueueFull, "canceled": context.Canceled} {
+		t.Run(name, func(t *testing.T) {
+			cfg := &config.RouterConfig{}
+			cfg.Categories = []config.Category{{CategoryMetadata: config.CategoryMetadata{Name: "business"}}}
+			backend := &countingCategoryInference{}
+			gate := &countingGate{err: gateErr}
+			classifier := &Classifier{Config: cfg, categoryInference: admittedCategoryInference{backend: backend, gate: gate, deployment: admissionDeploymentDomainClassifier}}
+			results := &SignalResults{Metrics: &SignalMetricsCollection{}, SignalErrors: make(map[string]string), SignalConfidences: make(map[string]float64)}
+			var mu sync.Mutex
+
+			classifier.evaluateDomainSignal(context.Background(), results, &mu, "text")
+
+			if gate.calls != 1 {
+				t.Fatalf("gate acquisitions = %d, want 1", gate.calls)
+			}
+			if backend.classify != 0 || backend.classifyWithProbs != 0 {
+				t.Fatalf("backend calls = %d/%d, want none", backend.classifyWithProbs, backend.classify)
+			}
+			if results.SignalErrors["domain:business"] != domainEvaluationFailedCode {
+				t.Fatalf("SignalErrors = %#v, want %q", results.SignalErrors, domainEvaluationFailedCode)
+			}
+		})
+	}
+}
+
+type noFallbackCategoryInference struct{ countingCategoryInference }
+
+func (*noFallbackCategoryInference) fallbackToTop1OnProbabilityError() bool { return false }
+
+func TestAdmittedCategoryInferenceForwardsFallbackPolicy(t *testing.T) {
+	if categoryProbabilityFallbackAllowed(admittedCategoryInference{backend: &countingCategoryInference{}}) != true {
+		t.Fatal("backend without a policy must keep the fallback")
+	}
+	if categoryProbabilityFallbackAllowed(admittedCategoryInference{backend: &noFallbackCategoryInference{}}) {
+		t.Fatal("wrapper must forward the backend's no-fallback policy")
 	}
 }
 
