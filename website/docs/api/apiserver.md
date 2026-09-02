@@ -161,7 +161,11 @@ OpenAI-compatible storage and router memory:
 | Files | `/v1/files` | Upload, list, inspect, download, and delete |
 
 These routes return `503` when their required service is unavailable. File
-upload uses multipart form data; consult the live schema for limits and fields.
+upload uses multipart form data and accepts documents (`.txt`, `.md`, `.json`,
+`.csv`, `.html`) for vector-store ingestion; upload an image (`.png`, `.jpg`,
+`.jpeg`, `.gif`, `.webp`) with `purpose=vision` to reference it from a Response
+API `input_image` part by `file_id`. Consult the live schema for limits and
+fields.
 
 ## Operate the response cache
 

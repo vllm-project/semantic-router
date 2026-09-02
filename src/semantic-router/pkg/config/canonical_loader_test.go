@@ -427,8 +427,8 @@ global:
 	if cfg.CategoryModel.ModelID != "models/mmbert32k-intent-classifier-merged" {
 		t.Fatalf("expected sparse category override to keep default system model, got %q", cfg.CategoryModel.ModelID)
 	}
-	if !cfg.CategoryModel.UseMmBERT32K {
-		t.Fatal("expected sparse category override to keep mmBERT-32K enabled")
+	if cfg.CategoryModel.Variant != CategoryVariantMmBERT32K || cfg.CategoryModel.UseMmBERT32K {
+		t.Fatalf("expected sparse category override to keep canonical mmBERT-32K variant, got variant=%q legacy=%v", cfg.CategoryModel.Variant, cfg.CategoryModel.UseMmBERT32K)
 	}
 	if cfg.PIIModel.ModelID != "models/mmbert32k-pii-detector-merged" {
 		t.Fatalf("expected sparse PII override to keep default system model, got %q", cfg.PIIModel.ModelID)

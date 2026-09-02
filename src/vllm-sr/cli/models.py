@@ -21,6 +21,7 @@ from .config_contract import (
     CLASSIFIER_TYPE_LLM,
     CLASSIFIER_TYPE_LOCAL,
     ClassifierSignalType,
+    UnknownPolicy,
 )
 
 RoutingStrategy = Literal["priority", "confidence"]
@@ -487,6 +488,22 @@ class MetadataRule(BaseModel):
         return self
 
 
+class InputModalityRule(BaseModel):
+    """Deterministic structural input-modality presence signal."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    description: Optional[str] = None
+    modality: Literal["text", "image", "audio", "video"]
+
+    @model_validator(mode="after")
+    def validate_canonical_names(self):
+        if not self.name.strip() or self.name != self.name.strip():
+            raise ValueError("input_modality signal name must be nonempty and trimmed")
+        return self
+
+
 class ClassifierSignal(BaseModel):
     """Generic label-score classifier signal."""
 
@@ -574,6 +591,7 @@ class Signals(BaseModel):
     events: Optional[List[EventRule]] = []
     metadata: Optional[List[MetadataRule]] = []
     classifiers: Optional[List[ClassifierSignal]] = []
+    input_modality: Optional[List[InputModalityRule]] = []
 
     @model_validator(mode="after")
     def validate_rule_names(self):
@@ -582,7 +600,7 @@ class Signals(BaseModel):
             for signal in getattr(self, family) or []:
                 name = (
                     signal.name.lower()
-                    if family in {"metadata", "classifiers"}
+                    if family in {"metadata", "classifiers", "input_modality"}
                     else signal.name
                 )
                 if name in seen:
@@ -601,7 +619,7 @@ class Condition(BaseModel):
     label: Optional[str] = None
     predicate: Optional[NumericPredicate] = None
     on_error: Optional[Literal["no_match", "match"]] = None
-    on_unknown: Optional[Literal["no_match", "match", "fail_request"]] = None
+    on_unknown: Optional[UnknownPolicy] = None
     operator: Optional[str] = None
     conditions: Optional[List["Condition"]] = None
 
@@ -668,7 +686,7 @@ class Rules(BaseModel):
 
     operator: str = "AND"
     conditions: List[Condition] = Field(default_factory=list)
-    on_unknown: Optional[Literal["no_match", "match", "fail_request"]] = None
+    on_unknown: Optional[UnknownPolicy] = None
 
     @model_validator(mode="before")
     @classmethod

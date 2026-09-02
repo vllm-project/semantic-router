@@ -57,6 +57,18 @@ reach a routable interface without an explicit `bind` change. The switch is read
 once at startup, so changing it requires a Router restart. See
 [API and Observability](../tutorials/global/api-and-observability).
 
+Built-in category/domain classification uses the local `variant` selector when
+no remote backend is configured. To call a named external classifier, attach a
+`backend` under `global.model_catalog.modules.classifier.domain` and resolve
+its `model` from `global.model_catalog.external[]` with
+`model_role: classification`. The shared backend fields are `protocol`,
+`contract`, `model`, and optional `deadline_ms`; category
+currently supports `http_classify` with the full `label_distribution.v1`
+response contract. Omit `backend` to retain local behavior. The deprecated
+`use_modernbert` and `use_mmbert_32k` keys remain readable, while generated
+canonical configuration uses `variant: candle`, `variant: modernbert`, or
+`variant: mmbert32k`.
+
 The [Routing Pipeline](../overview/signal-driven-decisions) explains the design.
 Capability pages under **Capabilities** document each signal, projection,
 decision, algorithm, plugin, and global block.
@@ -84,6 +96,7 @@ build regenerates this block and fails if the checked-in catalog has drifted.
 | `embedding` — learned signal | `embedding` matches requests by semantic similarity to representative examples. | [`config/fragments/signal/embedding/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/embedding/) | [Guide](../tutorials/signal/learned/embedding) |
 | `event` — heuristic signal | `event` routes structured event-like requests by event type, severity, urgency, or domain-specific action code. | [`config/fragments/signal/event/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/event/) | [Guide](../tutorials/signal/heuristic/event) |
 | `fact-check` — learned signal | `fact-check` decides whether a prompt should be treated as evidence-sensitive traffic. | [`config/fragments/signal/fact-check/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/fact-check/) | [Guide](../tutorials/signal/learned/fact-check) |
+| `input-modality` — heuristic signal | `input_modality` deterministically matches which kinds of input — `text`, `image`, `audio`, or `video` — are present in the parsed request. | [`config/fragments/signal/input-modality/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/input-modality/) | [Guide](../tutorials/signal/heuristic/input-modality) |
 | `jailbreak` — learned signal | `jailbreak` detects prompt-injection and jailbreak attempts before the Router commits to a route. | [`config/fragments/signal/jailbreak/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/jailbreak/) | [Guide](../tutorials/signal/learned/jailbreak) |
 | `kb` — learned signal | `kb` binds routing signals to the output of a named knowledge base instance. | [`config/fragments/signal/kb/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/kb/) | [Guide](../tutorials/signal/learned/kb) |
 | `keyword` — heuristic signal | `keyword` matches explicit words and phrases in the request. | [`config/fragments/signal/keyword/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/keyword/) | [Guide](../tutorials/signal/heuristic/keyword) |

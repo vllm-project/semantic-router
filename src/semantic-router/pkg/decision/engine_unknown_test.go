@@ -119,7 +119,7 @@ func TestOnUnknownPolicies(t *testing.T) {
 	signals := &SignalMatches{SignalErrors: map[string]string{"classifier:risk": "timeout"}}
 	tests := []struct {
 		name      string
-		policy    string
+		policy    config.UnknownPolicy
 		wantMatch bool
 		wantError bool
 	}{
@@ -139,7 +139,7 @@ func TestOnUnknownPolicies(t *testing.T) {
 			if (result != nil) != test.wantMatch {
 				t.Fatalf("result = %#v, wantMatch %v", result, test.wantMatch)
 			}
-			if diagnostics.AppliedUnknownPolicies["route"] != test.policy {
+			if diagnostics.AppliedUnknownPolicies["route"] != string(test.policy) {
 				t.Fatalf("applied policies = %v, want %q", diagnostics.AppliedUnknownPolicies, test.policy)
 			}
 		})
@@ -222,6 +222,10 @@ func TestFailRequestOverridesHigherPriorityMatch(t *testing.T) {
 			if !errors.Is(err, ErrDecisionUnresolved) || result != nil {
 				t.Fatalf("result = %#v, error = %v", result, err)
 			}
+			var unresolved *DecisionUnresolvedError
+			if !errors.As(err, &unresolved) || unresolved.Decision != "guarded" {
+				t.Fatalf("error = %#v", err)
+			}
 		})
 	}
 }
@@ -241,13 +245,13 @@ func TestUnknownTraceRecordsErrorAndPolicy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(traces) != 1 || traces[0].State != "unknown" || traces[0].OnUnknown != config.RuleOnUnknownNoMatch {
+	if len(traces) != 1 || traces[0].State != "unknown" || traces[0].OnUnknown != string(config.RuleOnUnknownNoMatch) {
 		t.Fatalf("traces = %#v", traces)
 	}
 	if traces[0].RootTrace == nil || traces[0].RootTrace.SignalError != "timeout" {
 		t.Fatalf("root trace = %#v", traces[0].RootTrace)
 	}
-	if diagnostics.AppliedUnknownPolicies["route"] != config.RuleOnUnknownNoMatch {
+	if diagnostics.AppliedUnknownPolicies["route"] != string(config.RuleOnUnknownNoMatch) {
 		t.Fatalf("diagnostics = %#v", diagnostics)
 	}
 }

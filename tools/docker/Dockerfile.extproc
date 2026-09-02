@@ -340,6 +340,8 @@ COPY nlp-binding/go.mod nlp-binding/nlp_binding.go nlp-binding/nlp_binding_mock.
 COPY openvino-binding/go.mod openvino-binding/semantic-router.go openvino-binding/
 
 # Download Go dependencies (cached layer)
+# Pipe falls back to direct on any proxy error; comma only on 404 and 410
+ENV GOPROXY="https://proxy.golang.org|direct"
 RUN cd src/semantic-router && go mod download && \
     cd /app/candle-binding && go mod download
 
@@ -473,7 +475,7 @@ RUN cd src/semantic-router && \
 # ============================================================================
 # Final stage: runtime image (candle on all platforms, onnx + openvino on amd64 only)
 # ============================================================================
-FROM quay.io/centos/centos:stream10
+FROM quay.io/centos/centos:stream10-development@sha256:556c6f559c63a24e52843778ed7ee0887be572f7df4219a971d2b2820bbb6675
 
 # Install runtime dependencies including OpenSSL, Python and HuggingFace CLI
 RUN dnf update -y && \

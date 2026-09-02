@@ -184,7 +184,7 @@ domains:
       - src/semantic-router/pkg/sessiontelemetry/*memory*
       - src/semantic-router/pkg/vectorstore/*memory*
       - src/semantic-router/pkg/cache/*memory*
-      - src/vllm-sr/**/*memory*
+      - src/vllm-sr/cli/models.py
       - tools/make/milvus.mk
       - e2e/testing/09-memory-features-test.py
       - e2e/testing/run_memory_integration.sh
@@ -335,6 +335,13 @@ profiles:
     paths:
       - e2e/profiles/ai-gateway/**
       - deploy/kubernetes/ai-gateway/**
+  category-remote-backend:
+    owner: e2e
+    coverage_role: category-remote-classifier-backend
+    selection: pr
+    paths:
+      - e2e/profiles/category-remote-backend/**
+      - e2e/testcases/category_backend_routing.go
   aibrix:
     owner: e2e
     coverage_role: aibrix-control-plane-and-gateway

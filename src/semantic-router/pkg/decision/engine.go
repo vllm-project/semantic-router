@@ -31,6 +31,18 @@ import (
 
 var ErrDecisionUnresolved = errors.New("decision unresolved")
 
+type DecisionUnresolvedError struct {
+	Decision string
+}
+
+func (e *DecisionUnresolvedError) Error() string {
+	return fmt.Sprintf("decision %q could not be resolved because a signal evaluator failed: %v", e.Decision, ErrDecisionUnresolved)
+}
+
+func (e *DecisionUnresolvedError) Unwrap() error {
+	return ErrDecisionUnresolved
+}
+
 // DecisionEngine evaluates routing decisions based on rule combinations
 type DecisionEngine struct {
 	keywordRules   []config.KeywordRule
@@ -72,27 +84,28 @@ func NewDecisionEngine(
 
 // SignalMatches contains all matched signals for decision evaluation
 type SignalMatches struct {
-	KeywordRules      []string
-	EmbeddingRules    []string
-	DomainRules       []string
-	FactCheckRules    []string // "needs_fact_check" or "no_fact_check_needed"
-	UserFeedbackRules []string // "need_clarification", "satisfied", "want_different", "wrong_answer"
-	ReaskRules        []string // History-aware dissatisfaction signals from repeated user turns
-	PreferenceRules   []string // Route preference names matched via external LLM
-	LanguageRules     []string // Language codes: "en", "es", "zh", "fr", etc.
-	ContextRules      []string // Context rule names matched (e.g. "low_token_count")
-	StructureRules    []string // Structure rule names matched (e.g. "many_questions")
-	ComplexityRules   []string // Complexity rules with difficulty level (e.g. "code_complexity:hard")
-	ModalityRules     []string // Modality classification: "AR", "DIFFUSION", or "BOTH"
-	AuthzRules        []string // Authz rule names matched for user-level routing (e.g. "premium_tier")
-	JailbreakRules    []string // Jailbreak rule names matched (confidence >= threshold)
-	PIIRules          []string // PII rule names matched (denied PII types detected)
-	KBRules           []string // KB signal names matched from global.model_catalog.kbs bindings
-	ConversationRules []string // Conversation-shape signal names matched
-	EventRules        []string // event rule names (event type, severity, temporal, action codes)
-	MetadataRules     []string // untrusted request metadata rule names matched
-	ClassifierRules   []string // generic classifier label names matched
-	ProjectionRules   []string // Derived routing outputs from routing.projections.mappings
+	KeywordRules       []string
+	EmbeddingRules     []string
+	DomainRules        []string
+	FactCheckRules     []string // "needs_fact_check" or "no_fact_check_needed"
+	UserFeedbackRules  []string // "need_clarification", "satisfied", "want_different", "wrong_answer"
+	ReaskRules         []string // History-aware dissatisfaction signals from repeated user turns
+	PreferenceRules    []string // Route preference names matched via external LLM
+	LanguageRules      []string // Language codes: "en", "es", "zh", "fr", etc.
+	ContextRules       []string // Context rule names matched (e.g. "low_token_count")
+	StructureRules     []string // Structure rule names matched (e.g. "many_questions")
+	ComplexityRules    []string // Complexity rules with difficulty level (e.g. "code_complexity:hard")
+	ModalityRules      []string // Modality classification: "AR", "DIFFUSION", or "BOTH"
+	AuthzRules         []string // Authz rule names matched for user-level routing (e.g. "premium_tier")
+	JailbreakRules     []string // Jailbreak rule names matched (confidence >= threshold)
+	PIIRules           []string // PII rule names matched (denied PII types detected)
+	KBRules            []string // KB signal names matched from global.model_catalog.kbs bindings
+	ConversationRules  []string // Conversation-shape signal names matched
+	EventRules         []string // event rule names (event type, severity, temporal, action codes)
+	MetadataRules      []string // untrusted request metadata rule names matched
+	ClassifierRules    []string // generic classifier label names matched
+	InputModalityRules []string // structural input-modality presence rule names matched
+	ProjectionRules    []string // Derived routing outputs from routing.projections.mappings
 
 	SignalConfidences  map[string]float64 // "signalType:ruleName" → real score (0.0-1.0), e.g. {"embedding:ai": 0.88}. Defaults to 1.0 if missing
 	SignalValues       map[string]float64 // raw numeric values exposed by signal evaluators
@@ -140,7 +153,7 @@ type resolvedDecisionEvaluation struct {
 	evaluation    nodeEvaluation
 	trace         *TraceNode
 	originalState evaluationState
-	policy        string
+	policy        config.UnknownPolicy
 }
 
 // DecisionResult represents the result of decision evaluation
@@ -222,14 +235,14 @@ func (e *DecisionEngine) evaluateDecisions(
 		decision := &e.decisions[i]
 		resolved, err := e.evaluateConfiguredDecision(decision, signals, withTrace)
 		if resolved.policy != "" {
-			output.diagnostics.AppliedUnknownPolicies[decision.Name] = resolved.policy
+			output.diagnostics.AppliedUnknownPolicies[decision.Name] = string(resolved.policy)
 		}
 		if withTrace {
 			output.traces = append(output.traces, newDecisionTrace(
 				decision,
 				resolved.evaluation,
 				resolved.originalState,
-				resolved.policy,
+				string(resolved.policy),
 				resolved.trace,
 			))
 		}
@@ -311,8 +324,8 @@ func (e *DecisionEngine) resolveUnknown(
 	signals *SignalMatches,
 	evaluation nodeEvaluation,
 	withTrace bool,
-) (nodeEvaluation, *TraceNode, string, error) {
-	policy := strings.TrimSpace(decision.Rules.OnUnknown)
+) (nodeEvaluation, *TraceNode, config.UnknownPolicy, error) {
+	policy := config.UnknownPolicy(strings.TrimSpace(string(decision.Rules.OnUnknown)))
 	if policy == "" {
 		var legacy nodeEvaluation
 		var legacyTrace *TraceNode
@@ -339,7 +352,7 @@ func (e *DecisionEngine) resolveUnknown(
 		evaluation.scored = false
 		return evaluation, nil, policy, nil
 	case config.RuleOnUnknownFailRequest:
-		return evaluation, nil, policy, fmt.Errorf("decision %q could not be resolved because a signal evaluator failed: %w", decision.Name, ErrDecisionUnresolved)
+		return evaluation, nil, policy, &DecisionUnresolvedError{Decision: decision.Name}
 	default:
 		return evaluation, nil, policy, fmt.Errorf("decision %q has invalid on_unknown policy %q", decision.Name, policy)
 	}
@@ -625,6 +638,8 @@ func resolvePolicySignalRules(
 		return signals.EventRules, true
 	case config.SignalTypeMetadata:
 		return signals.MetadataRules, true
+	case config.SignalTypeInputModality:
+		return signals.InputModalityRules, true
 	case config.SignalTypeProjection:
 		return signals.ProjectionRules, true
 	default:

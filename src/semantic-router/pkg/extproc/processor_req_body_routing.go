@@ -110,6 +110,11 @@ func (r *OpenAIRouter) prepareProviderRequest(
 	if err != nil {
 		return false, err
 	}
+	inlined, err := r.resolveImageFileReferences(request)
+	if err != nil {
+		return false, err
+	}
+	changed = inlined || changed
 	changed = request.Model != dispatch.upstreamModel || request.Stream != ctx.ExpectStreamingResponse || changed
 	request.Model = dispatch.upstreamModel
 	request.Stream = ctx.ExpectStreamingResponse

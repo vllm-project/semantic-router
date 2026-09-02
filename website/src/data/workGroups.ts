@@ -126,6 +126,11 @@ export const workGroups: WorkGroup[] = [
         avatar: 'https://github.com/guan404ming.png',
         profile: 'https://github.com/guan404ming',
       },
+      {
+        name: 'bugkeep',
+        avatar: 'https://github.com/bugkeep.png',
+        profile: 'https://github.com/bugkeep',
+      },
     ],
   },
   {
@@ -161,6 +166,16 @@ export const workGroups: WorkGroup[] = [
         name: 'Zireael',
         avatar: 'https://github.com/ZireaelK.png',
         profile: 'https://github.com/ZireaelK',
+      },
+      {
+        name: 'Hikari',
+        avatar: 'https://github.com/altale.png',
+        profile: 'https://github.com/altale',
+      },
+      {
+        name: 'Binbin Zhang',
+        avatar: 'https://github.com/Bevisy.png',
+        profile: 'https://github.com/Bevisy',
       },
     ],
   },
@@ -211,11 +226,11 @@ export const workGroups: WorkGroup[] = [
     name: 'Agentic & Context',
     label: 'wg/agentic-context',
     charterIssue: 2987,
-    goal: 'Manage context and safely select, hand off, and compose agent backends for long-running workloads.',
+    goal: 'Optimize bounded context, memory, and session continuity for long-running and agentic workloads.',
     scope: [
-      'Context optimization, memory, and session state',
-      'Agent backend selection, handoff, and composition',
-      'Bounded multi-agent collaboration and long-session model or workflow switching',
+      'Context optimization, prompt-visible memory, and session state',
+      'Session budgets, tool-loop continuity, and safe model or workflow switching',
+      'Typed agent-aware boundaries and bounded collaboration receipts for external runtimes',
     ],
     leads: [
       {
@@ -240,6 +255,11 @@ export const workGroups: WorkGroup[] = [
         avatar: 'https://github.com/yaojiejia.png',
         profile: 'https://github.com/yaojiejia',
       },
+      {
+        name: 'Binbin Zhang',
+        avatar: 'https://github.com/Bevisy.png',
+        profile: 'https://github.com/Bevisy',
+      },
     ],
   },
   {
@@ -247,11 +267,11 @@ export const workGroups: WorkGroup[] = [
     name: 'Developer Experience & Ecosystem',
     label: 'wg/developer-experience-ecosystem',
     charterIssue: 2970,
-    goal: 'Make vLLM Semantic Router easy to adopt, configure, extend, deploy, tune, and operate.',
+    goal: 'Make vLLM Semantic Router easy to adopt, configure, extend, diagnose, and contribute to.',
     scope: [
-      'CLI, Dashboard, APIs, configuration, recipes, and errors',
-      'Agent skill and ecosystem integrations for deployment, tuning, and operations',
-      'Documentation, blogs, video tutorials, and use-case sharing',
+      'First-run CLI, configuration, recipes, errors, and troubleshooting',
+      'Dashboard workflows built on canonical Router and deployment contracts',
+      'Reviewed agent-assisted workflows, documentation, localization, and ecosystem guides',
     ],
     leads: [
       {
@@ -293,11 +313,11 @@ export const workGroups: WorkGroup[] = [
     name: 'Evaluation & Quality',
     label: 'wg/evaluation-quality',
     charterIssue: 2969,
-    goal: 'Provide common evaluation and quality gates across every project direction.',
+    goal: 'Make every supported capability measurable and every change verifiable.',
     scope: [
-      'MoM, Router Model, agent, context, and workflow evaluation',
-      'Model cards, benchmarks, and reproducibility',
-      'CI, E2E, compatibility, and regression gates',
+      'Decision-level routing and first-class MoM evaluation',
+      'Performance coverage, reports, baselines, and hardware qualification',
+      'CI, behavioral E2E, compatibility, security, and regression gates',
     ],
     leads: [
       {
@@ -309,6 +329,13 @@ export const workGroups: WorkGroup[] = [
         name: 'FAUST',
         avatar: 'https://github.com/FAUST-BENCHOU.png',
         profile: 'https://github.com/FAUST-BENCHOU',
+      },
+    ],
+    members: [
+      {
+        name: 'Nanasis',
+        avatar: 'https://github.com/nanasis.png',
+        profile: 'https://github.com/nanasis',
       },
     ],
   },

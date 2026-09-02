@@ -17,6 +17,8 @@ jobs:
     timeout-minutes: 90
     env:
       E2E_SEMANTIC_ROUTER_HELM_TIMEOUT: 60m
+      # Pipe falls back to direct on any proxy error; comma only on 404 and 410
+      GOPROXY: 'https://proxy.golang.org|direct'
     strategy:
       fail-fast: false  # Continue testing other profiles even if one fails
       matrix:

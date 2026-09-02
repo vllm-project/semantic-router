@@ -44,8 +44,60 @@ func LoadCategoryMapping(path string) (*CategoryMapping, error) {
 	if err := json.Unmarshal(data, &mapping); err != nil {
 		return nil, fmt.Errorf("failed to parse mapping JSON: %w", err)
 	}
+	if err := validateCategoryMapping(path, &mapping); err != nil {
+		return nil, err
+	}
 
 	return &mapping, nil
+}
+
+// validateCategoryMapping requires both directions to describe the same
+// zero-based contiguous bijection. Remote scores are aligned through the
+// category->index direction, while routing resolves the winning index through
+// index->category; accepting disagreement between them can silently route a
+// correct score to the wrong category.
+func validateCategoryMapping(path string, mapping *CategoryMapping) error {
+	if len(mapping.CategoryToIdx) != len(mapping.IdxToCategory) {
+		return fmt.Errorf("category mapping %s: category_to_idx and idx_to_category must have the same size", path)
+	}
+	if err := validateCategoryMappingIndexes(path, mapping); err != nil {
+		return err
+	}
+	if err := validateCategoryMappingLabels(path, mapping); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateCategoryMappingIndexes(path string, mapping *CategoryMapping) error {
+	for idx := 0; idx < len(mapping.CategoryToIdx); idx++ {
+		if _, ok := mapping.IdxToCategory[strconv.Itoa(idx)]; !ok {
+			return fmt.Errorf("missing label for index %d in category mapping %s", idx, path)
+		}
+	}
+	for label, idx := range mapping.CategoryToIdx {
+		if idx < 0 || idx >= len(mapping.CategoryToIdx) {
+			return fmt.Errorf("category mapping %s: index for %q must be contiguous from 0, got %d", path, label, idx)
+		}
+		reverse, ok := mapping.IdxToCategory[strconv.Itoa(idx)]
+		if !ok || reverse != label {
+			return fmt.Errorf("category mapping %s: category_to_idx and idx_to_category disagree for %q", path, label)
+		}
+	}
+	return nil
+}
+
+func validateCategoryMappingLabels(path string, mapping *CategoryMapping) error {
+	for index, label := range mapping.IdxToCategory {
+		idx, err := strconv.Atoi(index)
+		if err != nil || idx < 0 || idx >= len(mapping.CategoryToIdx) {
+			return fmt.Errorf("category mapping %s: index->category key %q is not contiguous from 0", path, index)
+		}
+		if mapped, ok := mapping.CategoryToIdx[label]; !ok || mapped != idx {
+			return fmt.Errorf("category mapping %s: idx_to_category and category_to_idx disagree for index %q", path, index)
+		}
+	}
+	return nil
 }
 
 // LoadPIIMapping loads the PII mapping from a JSON file

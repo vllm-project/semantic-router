@@ -51,7 +51,7 @@ def container_start_jaeger(
         f"{stack_layout.jaeger_otlp_port}:4317",
         "-p",
         f"{stack_layout.jaeger_ui_port}:16686",
-        "docker.io/jaegertracing/all-in-one:latest",
+        "docker.io/jaegertracing/all-in-one:1.76.0",
     ]
     return _run_service_start(cmd, "Jaeger")
 
