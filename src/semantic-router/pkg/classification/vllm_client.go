@@ -27,19 +27,19 @@ type VLLMClient struct {
 
 // NewVLLMClient creates a new vLLM REST API client for classifiers
 func NewVLLMClient(endpoint *config.ClassifierVLLMEndpoint) *VLLMClient {
-	return newVLLMClient(endpoint, "", config.DefaultClassifyMaxResponseBytes)
+	return newVLLMClient(endpoint, "", config.DefaultClassifyMaxResponseBytes, time.Duration(config.DefaultClassifierTimeoutSeconds)*time.Second)
 }
 
 // NewVLLMClientWithAuth creates a new vLLM REST API client with access key
 func NewVLLMClientWithAuth(endpoint *config.ClassifierVLLMEndpoint, accessKey string) *VLLMClient {
-	return newVLLMClient(endpoint, accessKey, config.DefaultClassifyMaxResponseBytes)
+	return newVLLMClient(endpoint, accessKey, config.DefaultClassifyMaxResponseBytes, time.Duration(config.DefaultClassifierTimeoutSeconds)*time.Second)
 }
 
 func newVLLMClientFromConfig(cfg *config.ExternalModelConfig) *VLLMClient {
-	return newVLLMClient(&cfg.ModelEndpoint, cfg.AccessKey, cfg.GetMaxResponseBytes())
+	return newVLLMClient(&cfg.ModelEndpoint, cfg.AccessKey, cfg.GetMaxResponseBytes(), cfg.GetTimeout())
 }
 
-func newVLLMClient(endpoint *config.ClassifierVLLMEndpoint, accessKey string, maxResponseBytes int64) *VLLMClient {
+func newVLLMClient(endpoint *config.ClassifierVLLMEndpoint, accessKey string, maxResponseBytes int64, timeout time.Duration) *VLLMClient {
 	scheme := endpoint.Protocol
 	if scheme == "" {
 		scheme = "http"
@@ -48,7 +48,7 @@ func newVLLMClient(endpoint *config.ClassifierVLLMEndpoint, accessKey string, ma
 
 	return &VLLMClient{
 		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout: timeout,
 		},
 		endpoint:         endpoint,
 		baseURL:          baseURL,
