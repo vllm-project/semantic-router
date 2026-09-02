@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from cli.evaluation.errors import SuiteStoreError
 from cli.evaluation.orchestrator import run_evaluation
 from cli.evaluation.store import LocalArtifactStore
 from cli.evaluation.suite_contract import (
@@ -15,7 +16,6 @@ from cli.evaluation.suite_install_contract import (
     BenchmarkSuiteInstallRequest,
 )
 from cli.evaluation.suite_store import NormalizedSuiteStore
-from cli.evaluation.suite_store_error import SuiteStoreError
 from evaluation_normalized_suite_test_support import (
     _decision,
     _digest,

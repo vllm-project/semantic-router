@@ -14,9 +14,9 @@ from cli.evaluation.canonical import (
     strict_json_load,
 )
 from cli.evaluation.contract_primitives import ArtifactRef, StrictModel
+from cli.evaluation.errors import SuiteStoreError
 from cli.evaluation.suite_contract import BenchmarkSuiteManifest
 from cli.evaluation.suite_store_cas import SuiteCAS
-from cli.evaluation.suite_store_error import SuiteStoreError
 
 
 class SuiteIndexRecord(StrictModel):

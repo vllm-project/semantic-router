@@ -458,7 +458,7 @@ def test_same_installed_workload_replays_history_or_executes_current_target(
     model_pool_live = _live_manifest(
         "mmr-model-pool-live", suite_id, suite_store, track_ids=("model_pool",)
     )
-    with pytest.raises(ValueError, match="no first-party normalized live method"):
+    with pytest.raises(ValueError, match="no supported normalized live method"):
         run_evaluation(
             model_pool_live,
             LocalArtifactStore(tmp_path / "blocked-model-pool"),
@@ -495,7 +495,7 @@ def test_non_admitted_normalized_imports_cannot_reach_live_tracks(
         track_ids=("capacity",),
     )
 
-    with pytest.raises(ValueError, match="no first-party normalized live method"):
+    with pytest.raises(ValueError, match="no supported normalized live method"):
         run_evaluation(
             manifest,
             LocalArtifactStore(tmp_path / "evaluation"),
@@ -513,7 +513,7 @@ def test_non_admitted_normalized_imports_cannot_reach_live_tracks(
     mmr_live = _live_manifest(
         "user-mmr-live", mmr_id, suite_store, track_ids=("multimodal",)
     )
-    with pytest.raises(ValueError, match="no first-party normalized live method"):
+    with pytest.raises(ValueError, match="no supported normalized live method"):
         run_evaluation(
             mmr_live,
             LocalArtifactStore(tmp_path / "blocked-user-mmr"),

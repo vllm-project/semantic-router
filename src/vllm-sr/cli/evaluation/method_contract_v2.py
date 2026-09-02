@@ -68,7 +68,7 @@ class AnalysisPlan(StrictModel):
         return self
 
 
-class EvaluationMethodPlugin(StrictModel):
+class EvaluationMethodDefinition(StrictModel):
     """Versioned declaration of what a method can honestly execute and grade."""
 
     schema_version: Literal[EVALUATION_METHOD_CONTRACT_VERSION]
@@ -98,9 +98,9 @@ class EvaluationMethodPlugin(StrictModel):
         return validate_portable_id(value)
 
     @model_validator(mode="after")
-    def validate_live_claim(self) -> EvaluationMethodPlugin:
+    def validate_live_claim(self) -> EvaluationMethodDefinition:
         if self.version != EVALUATION_METHOD_CONTRACT_VERSION:
-            raise ValueError("method plugin version must match the v2 contract")
+            raise ValueError("method version must match the v2 contract")
         if (
             not self.applicable_tracks
             or len(self.applicable_tracks) != len(set(self.applicable_tracks))
@@ -178,7 +178,7 @@ class SharedDomainCurvePoint(StrictModel):
 class CompoundModelBudgetReport(StrictModel):
     """Report payload for R2: identity, analysis plan, curve and missingness."""
 
-    method: EvaluationMethodPlugin
+    method: EvaluationMethodDefinition
     analysis_plan: AnalysisPlan
     action_refs: tuple[ActionRef, ...]
     slice_refs: tuple[SliceRef, ...]
@@ -190,7 +190,7 @@ class CompoundModelBudgetReport(StrictModel):
     missing_case_action_budget_cells: int = Field(ge=0)
 
 
-R2_COMPOUND_MODEL_BUDGET_PLUGIN = EvaluationMethodPlugin(
+R2_COMPOUND_MODEL_BUDGET_METHOD = EvaluationMethodDefinition(
     schema_version=EVALUATION_METHOD_CONTRACT_VERSION,
     id=COMPOUND_MODEL_BUDGET_METHOD_ID,
     version=EVALUATION_METHOD_CONTRACT_VERSION,
@@ -230,7 +230,7 @@ R2_COMPOUND_MODEL_BUDGET_PLUGIN = EvaluationMethodPlugin(
 
 def _compound_domain(
     rows: tuple[CompoundModelBudgetOutcome, ...],
-    method: EvaluationMethodPlugin,
+    method: EvaluationMethodDefinition,
 ) -> tuple[
     tuple[str, ...],
     tuple[str, ...],
@@ -327,7 +327,7 @@ def _compound_summary(
 def reduce_compound_model_budget(
     outcomes: Iterable[CompoundModelBudgetOutcome],
     *,
-    method: EvaluationMethodPlugin = R2_COMPOUND_MODEL_BUDGET_PLUGIN,
+    method: EvaluationMethodDefinition = R2_COMPOUND_MODEL_BUDGET_METHOD,
 ) -> CompoundModelBudgetReport:
     """Reduce R2 with exact rectangular cardinality and a shared raw domain.
 
@@ -338,7 +338,7 @@ def reduce_compound_model_budget(
     """
 
     if method.id != COMPOUND_MODEL_BUDGET_METHOD_ID:
-        raise ValueError("compound reducer requires the R2 compound method plugin")
+        raise ValueError("compound reducer requires the R2 compound method")
     rows = tuple(outcomes)
     if not rows:
         raise ValueError("compound reducer requires outcomes")

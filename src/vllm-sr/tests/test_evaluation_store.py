@@ -11,7 +11,6 @@ from typing import Literal
 
 import pytest
 from cli.evaluation import private_filesystem_mutation as filesystem_mutation_module
-from cli.evaluation.artifact_store_error import StoreError
 from cli.evaluation.bundle import PRIVATE_RECEIPT_PREFIX_NAMES, checksum_bytes
 from cli.evaluation.canonical import (
     canonical_json_bytes,
@@ -21,6 +20,7 @@ from cli.evaluation.canonical import (
 from cli.evaluation.constants import SCHEMA_VERSION
 from cli.evaluation.contract_primitives import ArtifactRef
 from cli.evaluation.contracts import RunManifest
+from cli.evaluation.errors import StoreError
 from cli.evaluation.report_transaction import (
     ReportAlreadyPublishedError,
     ReportBundleTransaction,

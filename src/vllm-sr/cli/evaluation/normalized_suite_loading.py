@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TypeVar, cast
 
+from cli.evaluation.errors import SuiteStoreError
 from cli.evaluation.normalized_suite_inputs import SuiteEvidence
 from cli.evaluation.suite_contract import (
     BenchmarkSuiteManifest,
@@ -19,7 +20,6 @@ from cli.evaluation.suite_contract import (
 )
 from cli.evaluation.suite_install_contract import SuiteArtifactRole
 from cli.evaluation.suite_store import NormalizedSuiteStore
-from cli.evaluation.suite_store_error import SuiteStoreError
 
 _ModelT = TypeVar("_ModelT")
 

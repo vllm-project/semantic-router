@@ -1,9 +1,10 @@
 import ProductLoadingState from '../ProductLoadingState'
+import useEvaluationReportDiagnostics from '../../hooks/useEvaluationReportDiagnostics'
 import type { EvaluationRun } from '../../types/evaluationPlane'
 import type { EvaluationReport } from '../../types/evaluationReport'
 import EvaluationIssueDetails from './EvaluationIssueDetails'
 import { EvaluationActionButton } from './EvaluationPrimitives'
-import EvaluationReportContainer from './EvaluationReportContainer'
+import EvaluationReportView from './EvaluationReportView'
 import { runOptionLabels } from './evaluationRunPresentation'
 import styles from './EvaluationPlane.module.css'
 import reportStyles from './EvaluationReports.module.css'
@@ -135,6 +136,8 @@ function ReportResult({
   EvaluationReportsProps,
   'loading' | 'error' | 'report' | 'runLedgerAvailable' | 'hasMoreRuns' | 'onRetry'
 > & { reportableRuns: EvaluationRun[] }) {
+  const diagnostics = useEvaluationReportDiagnostics(report)
+
   return (
     <>
       {loading ? (
@@ -154,7 +157,9 @@ function ReportResult({
           </EvaluationActionButton>
         </div>
       ) : null}
-      {!loading && !error && report ? <EvaluationReportContainer report={report} /> : null}
+      {!loading && !error && report ? (
+        <EvaluationReportView report={report} diagnostics={diagnostics} />
+      ) : null}
       {!loading && !error && !report ? (
         <div className={styles.emptyState}>
           <p>

@@ -12,12 +12,12 @@ from pathlib import Path, PurePosixPath
 
 from cli.evaluation.canonical import sha256_digest
 from cli.evaluation.contract_primitives import ArtifactRef
+from cli.evaluation.errors import SuiteStoreError
 from cli.evaluation.suite_install_contract import (
     ARTIFACT_ROLE_LAYOUT,
     SuiteArtifactInstall,
     SuiteArtifactRole,
 )
-from cli.evaluation.suite_store_error import SuiteStoreError
 
 _PRIVATE_DIR_MODE = 0o700
 _PRIVATE_FILE_MODE = 0o600

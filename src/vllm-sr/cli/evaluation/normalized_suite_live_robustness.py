@@ -12,6 +12,7 @@ from typing import cast
 
 from cli.evaluation.canonical import digest_value
 from cli.evaluation.contracts import CaseVisible
+from cli.evaluation.errors import SuiteStoreError
 from cli.evaluation.evidence import ExecutionRecord
 from cli.evaluation.evidence_source_ids import (
     DECLARED_SHIFT_LIVE_EVIDENCE_SOURCE_ID,
@@ -23,7 +24,6 @@ from cli.evaluation.suite_contract import (
     NormalizedPerturbation,
 )
 from cli.evaluation.suite_store import NormalizedSuiteStore
-from cli.evaluation.suite_store_error import SuiteStoreError
 from cli.evaluation.target_arm_resolution import resolve_target_arm_id
 from cli.evaluation.target_contracts import EvaluationTargetArm
 

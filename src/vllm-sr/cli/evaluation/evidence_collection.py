@@ -6,10 +6,10 @@ from cli.evaluation.builtin_executors import DEFAULT_EXECUTOR_REGISTRY
 from cli.evaluation.case_plan import require_complete_evidence_plan
 from cli.evaluation.contracts import RunManifest
 from cli.evaluation.execution_contract import (
+    ExecutionPlan,
     require_discovered_entrypoint_binding,
     require_normalized_identity_binding,
 )
-from cli.evaluation.execution_plan import ExecutionPlan
 from cli.evaluation.executor_registry import CollectedEvidence, ExecutorRegistry
 from cli.evaluation.routing_trace import require_routing_trace_binding
 from cli.evaluation.store import ArtifactStore

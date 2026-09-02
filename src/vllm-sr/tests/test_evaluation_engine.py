@@ -8,7 +8,6 @@ from threading import Lock
 
 import cli.evaluation.orchestrator as evaluation_orchestrator
 import pytest
-from cli.evaluation.artifact_store_error import StoreError
 from cli.evaluation.builtin_executors import (
     DEFAULT_EXECUTOR_REGISTRY,
     FixtureReplayExecutor,
@@ -23,6 +22,7 @@ from cli.evaluation.contracts import (
     RunManifest,
     VisibleCaseSet,
 )
+from cli.evaluation.errors import StoreError
 from cli.evaluation.evidence import ExecutionRecord
 from cli.evaluation.evidence_collection import collect_evidence
 from cli.evaluation.execution_contract import (

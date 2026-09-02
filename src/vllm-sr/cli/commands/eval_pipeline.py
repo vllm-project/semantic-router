@@ -266,6 +266,35 @@ def suite_install_command(
     click.echo(_dump(manifest))
 
 
+@click.command("benchmark-install")
+@click.option(
+    "--pack",
+    "pack_root",
+    required=True,
+    type=click.Path(
+        path_type=Path,
+        exists=True,
+        file_okay=False,
+        dir_okay=True,
+        readable=True,
+    ),
+    help="Clean exact-revision checkout containing benchmark.yaml and bundle/.",
+)
+@click.option(
+    "--suite-store",
+    "suite_store_path",
+    type=click.Path(path_type=Path, file_okay=False, dir_okay=True),
+    default=DEFAULT_SUITE_STORE,
+    show_default=True,
+)
+@_user_errors
+def benchmark_install_command(pack_root: Path, suite_store_path: Path) -> None:
+    """Install a data-only Benchmark Pack for replay or supported live tracks."""
+
+    manifest = NormalizedSuiteStore(suite_store_path).install_pack(pack_root)
+    click.echo(_dump(manifest))
+
+
 @click.command("suite-list")
 @click.option(
     "--suite-store",
@@ -442,6 +471,7 @@ EVALUATION_COMMANDS = (
     verify_source_command,
     suite_normalize_command,
     suite_install_command,
+    benchmark_install_command,
     suite_list_command,
     suite_show_command,
     validate_command,

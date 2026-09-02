@@ -9,8 +9,6 @@ from cli.evaluation.catalog_suites import CatalogSuite
 from cli.evaluation.catalog_tracks import CatalogMethod, CatalogMethodEvidenceSource
 from cli.evaluation.executor_contracts import Mode
 from cli.evaluation.executor_registry import ExecutorRegistry
-from cli.evaluation.method_contract_v2 import EvaluationMethodPlugin
-from cli.evaluation.method_registry_v2 import method_plugin_for_benchmark
 from cli.evaluation.normalized_suite_live_admission import (
     NormalizedSuiteLiveAdmission,
     normalized_suite_live_admissions,
@@ -53,9 +51,13 @@ class NormalizedSuiteCatalog:
         )
 
     def _project(self, manifest: BenchmarkSuiteManifest) -> CatalogSuite:
-        descriptor = get_benchmark_adapter(manifest.adapter_id)
+        source_description = "Imported third-party benchmark workload"
+        if manifest.source_receipt.source_kind == "registered_adapter":
+            source_description = (
+                f"Imported {get_benchmark_adapter(manifest.adapter_id).name} "
+                "benchmark workload"
+            )
         replay = self._contracts["replay"]
-        plugin = method_plugin_for_benchmark(manifest.adapter_id)
         executors: dict[Mode, str] = {"replay": replay.id}
         live_admissions = normalized_suite_live_admissions(self._store, manifest)
         if live_admissions:
@@ -82,7 +84,7 @@ class NormalizedSuiteCatalog:
             id=manifest.id,
             name=manifest.name,
             description=(
-                f"Imported {descriptor.name} benchmark workload pinned to a specific "
+                f"{source_description} pinned to a specific "
                 f"revision. {import_summary} Imported results are exploratory and do not "
                 "attest the original benchmark run; release evidence requires a separately "
                 "supported live evaluation. Raw cases, labels, outcomes, and artifact "
@@ -105,7 +107,6 @@ class NormalizedSuiteCatalog:
                     else "user-provided-import"
                 ),
                 "native-run-unattested",
-                f"research-method:{plugin.status}",
                 *(("target-live",) if live_admissions else ()),
                 f"adapter:{manifest.adapter_id}",
                 f"classification:{manifest.data_classification}",
@@ -113,7 +114,6 @@ class NormalizedSuiteCatalog:
             ),
             methods=_installed_catalog_methods(
                 manifest,
-                plugin=plugin,
                 live_admissions=live_admissions,
             ),
         )
@@ -122,21 +122,20 @@ class NormalizedSuiteCatalog:
 def _installed_catalog_methods(
     manifest: BenchmarkSuiteManifest,
     *,
-    plugin: EvaluationMethodPlugin,
     live_admissions: tuple[NormalizedSuiteLiveAdmission, ...],
 ) -> tuple[CatalogMethod, ...]:
     """Keep imports E0 while projecting independent exact live methods.
 
     A parser-verified or user-provided normalized import is configured for
     replay once installed. It never inherits native or gate qualification from
-    the research inventory. Exact immutable first-party source contracts may
-    additionally configure server-owned live methods; only fresh broker
+    the research inventory. Exact immutable source cohorts may additionally
+    configure platform-owned live methods; only fresh broker
     evidence can later earn a non-E0 level.
     """
 
     methods = [
         CatalogMethod(
-            id=f"{plugin.id}.{track_id}",
+            id=f"normalized.{manifest.adapter_id}.{track_id}.v1",
             track_id=track_id,
             qualified_gate_ids=(),
             evidence_source=CatalogMethodEvidenceSource.NORMALIZED_IMPORT,

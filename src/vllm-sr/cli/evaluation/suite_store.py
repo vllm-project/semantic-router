@@ -59,6 +59,12 @@ class NormalizedSuiteStore:
     def get_suite_manifest(self, suite_id: str) -> BenchmarkSuiteManifest:
         return self._index.get(suite_id)
 
+    def install_pack(
+        self,
+        pack_root: str | Path,
+    ) -> BenchmarkSuiteManifest:
+        return self._installer.install_pack(pack_root)
+
     def list_suite_manifests(self) -> tuple[BenchmarkSuiteManifest, ...]:
         """List validated private manifests in stable ID order."""
 

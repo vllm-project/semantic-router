@@ -4,7 +4,6 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
-from cli.evaluation.artifact_store_error import StoreError
 from cli.evaluation.builtin_executors import (
     LiveRuntimeExecutor,
 )
@@ -19,6 +18,7 @@ from cli.evaluation.catalog_tracks import (
 )
 from cli.evaluation.compare import compare_worker_drafts
 from cli.evaluation.constants import TRACK_IDS
+from cli.evaluation.errors import StoreError
 from cli.evaluation.evidence import ExecutionRecord
 from cli.evaluation.evidence_level import run_evidence_level, track_evidence_level
 from cli.evaluation.evidence_source_ids import LIVE_JOINT_EVIDENCE_SOURCE_ID
