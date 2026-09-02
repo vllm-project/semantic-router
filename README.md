@@ -5,6 +5,10 @@
 <p><strong>Make Your Mixture-of-Models Programmable.</strong></p>
 
 <p>
+  <b>English</b> · <a href="https://vllm-sr.ai/zh-Hans/">简体中文文档</a>
+</p>
+
+<p>
   <a href="https://vllm-sr.ai">Documentation</a> |
   <a href="https://app.vllm-sr.ai/playground">Playground</a> |
   <a href="https://vllm-sr.ai/blog/">Blog</a> |
