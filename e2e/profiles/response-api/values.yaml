@@ -33,7 +33,7 @@ config:
           - model: openai/gpt-oss-20b
             use_reasoning: false
       - name: input_modality_vision_decision
-        description: Send image-bearing requests to the vision route.
+        description: Send image-bearing requests to the vision route, including input_image parts that reference an uploaded file_id.
         priority: 100
         rules:
           operator: AND
@@ -93,7 +93,10 @@ config:
       memory:
         embedding_model: mmbert
       vector_store:
+        enabled: true
+        backend_type: memory
         embedding_model: mmbert
+        file_storage_dir: /tmp/vsr-data
     integrations: {}
     model_catalog:
       kbs: []
