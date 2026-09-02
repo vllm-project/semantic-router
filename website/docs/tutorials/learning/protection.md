@@ -61,7 +61,9 @@ global:
 
 Use `conversation` when each agent run should be independently routed. Use
 `session` when one session-level model choice should remain stable across
-multiple user-initiated runs.
+multiple user-initiated runs. Both scopes reset continuity when the matched
+decision changes, and neither scope can retain a previous model outside the
+current adaptation candidate set.
 
 If the configured identity headers are missing, protection fails open and
 records diagnostics instead of failing the request.

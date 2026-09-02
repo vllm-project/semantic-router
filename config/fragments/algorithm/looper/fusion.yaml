@@ -1,5 +1,6 @@
 algorithm:
   type: fusion
+  minimum_candidates: 2
   fusion:
     model: qwen3-32b
     analysis_models:

@@ -143,6 +143,10 @@ type RequestContext struct {
 	VSRCacheTTLSeconds              int
 	VSRInjectedSystemPrompt         bool             // Whether a system prompt was injected into the request
 	VSRSelectedDecision             *config.Decision // The decision object selected by DecisionEngine (for plugins)
+	// VSREligibleModelRefs is the selected decision's model set after applying
+	// request contracts. Loopers consume this exact set; broader Router Learning
+	// candidate sets must independently apply the same request contracts.
+	VSREligibleModelRefs []config.ModelRef
 
 	// ResponsePath records how the final response was produced, surfaced as the
 	// v0.4 keystone x-vsr-response-path header (one of the headers.ResponsePath*
@@ -179,12 +183,14 @@ type RequestContext struct {
 	VSRMatchedEvent           []string // Matched event signal names
 	VSRMatchedMetadata        []string // Matched untrusted request metadata signal names
 	VSRMatchedClassifier      []string // Matched generic classifier signal names
+	VSRMatchedInputModality   []string // Matched structural input-modality signal names
 	VSRConversationFacts      classification.ConversationFacts
 	VSRMatchedProjection      []string // Matched projection mapping outputs
 	VSRProjectionScores       map[string]float64
 	VSRSignalConfidences      map[string]float64
 	VSRSignalValues           map[string]float64
 	VSRSignalErrors           map[string]string
+	VSRAppliedUnknownPolicies map[string]string
 	VSRProjectionTrace        *projectiontrace.Trace
 
 	// Hallucination mitigation tracking

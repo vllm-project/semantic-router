@@ -78,6 +78,12 @@ func validateExternalAPIRAGBackend(c *RAGPluginConfig) error {
 	if apiConfig.Endpoint == "" {
 		return fmt.Errorf("external API endpoint is required")
 	}
+	// Cheap scalar checks before the structural template parse, so a config
+	// with several problems reports the simplest one rather than failing on
+	// template compilation first.
+	if apiConfig.MaxResponseBytes < 0 {
+		return fmt.Errorf("external API max_response_bytes must be non-negative")
+	}
 	switch apiConfig.RequestFormat {
 	case ExternalAPIRequestFormatPinecone,
 		ExternalAPIRequestFormatWeaviate,
@@ -93,11 +99,6 @@ func validateExternalAPIRAGBackend(c *RAGPluginConfig) error {
 			"unsupported external API request format %q; supported formats are pinecone, weaviate, elasticsearch, and custom",
 			apiConfig.RequestFormat,
 		)
-	}
-	// Response-body limits are validated by main's
-	// ExternalAPIRAGConfig.MaxResponseBytes path; this PR no longer duplicates it.
-	if apiConfig.MaxResponseBytes < 0 {
-		return fmt.Errorf("external API max_response_bytes must be non-negative")
 	}
 	return nil
 }
@@ -126,6 +127,9 @@ func validateOpenAIRAGBackend(c *RAGPluginConfig) error {
 	}
 	if openaiConfig.APIKey == "" {
 		return fmt.Errorf("API key is required for OpenAI backend")
+	}
+	if openaiConfig.MaxResponseBytes < 0 {
+		return fmt.Errorf("OpenAI max_response_bytes must be non-negative")
 	}
 	return nil
 }

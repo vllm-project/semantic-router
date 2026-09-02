@@ -19,6 +19,7 @@ const (
 	WorkflowStateBackendFile   = "file"
 	WorkflowStateBackendRedis  = "redis"
 
+	DefaultWorkflowMaxParallel     = 2
 	DefaultWorkflowStateTTLSeconds = 1800
 )
 
@@ -241,6 +242,17 @@ func validateWorkflowPositiveControls(cfg *WorkflowsAlgorithmConfig) error {
 	if cfg.MinSuccessfulResponses < 0 {
 		return fmt.Errorf("min_successful_responses must be >= 1 when set")
 	}
+	maxParallel := cfg.MaxParallel
+	if maxParallel == 0 {
+		maxParallel = DefaultWorkflowMaxParallel
+	}
+	if cfg.MinSuccessfulResponses > maxParallel {
+		return fmt.Errorf(
+			"min_successful_responses=%d exceeds max_parallel=%d",
+			cfg.MinSuccessfulResponses,
+			maxParallel,
+		)
+	}
 	if cfg.Planner.MaxCompletionTokens < 0 {
 		return fmt.Errorf("planner.max_completion_tokens must be >= 1 when set")
 	}
@@ -263,6 +275,14 @@ func validateWorkflowStaticPlanConfig(mode string, cfg *WorkflowsAlgorithmConfig
 	for i, role := range cfg.Roles {
 		if err := validateWorkflowRoleConfig(i, role); err != nil {
 			return err
+		}
+		if cfg.MinSuccessfulResponses > len(role.Models) {
+			return fmt.Errorf(
+				"min_successful_responses=%d exceeds roles[%d] model count %d",
+				cfg.MinSuccessfulResponses,
+				i,
+				len(role.Models),
+			)
 		}
 	}
 	return nil

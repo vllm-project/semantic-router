@@ -62,6 +62,16 @@ Routing owns:
 - decisions, candidate `modelRefs`, algorithms, and plugins;
 - route-local output and adaptation policy.
 
+Algorithms may declare `minimum_candidates` as a portable Recipe contract.
+Model-free assets can carry the declaration with empty `modelRefs`; a concrete
+Entrypoint binding must satisfy it, and request-time eligibility filters must
+preserve it before selection or multi-model execution begins.
+
+Structured request controls remain facts at the signal boundary. For example,
+conversation signals expose whether the protocol requires or forbids tool
+execution, projections reconcile those facts with text-derived observations,
+and decisions consume the resulting policy-facing output.
+
 Top-level `entrypoints` select the default routing profile or a named item from
 top-level `recipes`; they are not nested inside `routing`.
 
@@ -69,6 +79,12 @@ The DSL is an authoring view of routing semantics. It does not own provider
 credentials, listeners, stores, or global runtime services. Import and export must
 preserve the same canonical routing document rather than invent another steady-state
 schema.
+
+Classifier backend failures enter decision evaluation as `Unknown`. `NOT` preserves
+that state, while `AND` and `OR` use CEL-style short-circuit semantics. A decision
+resolves a terminal `Unknown` with root-level
+`rules.on_unknown: no_match|match|fail_request`; omission preserves the existing
+per-family compatibility behavior.
 
 ## Entrypoints and multi-recipe routing
 
@@ -84,6 +100,9 @@ one process. An entrypoint resolves the recipe before signals and decisions run.
 Built-in defaults live in the router. `global.router.config_source` selects file-backed
 configuration or Kubernetes CRD reconciliation. External templates must not apply
 hidden defaults after validation.
+
+Connector byte ceilings belong to the connector configuration. External LLM
+classifier entries and the MCP classifier module use `max_response_bytes`.
 
 The dashboard, Helm chart, and operator may help users author or transport config, but
 the resulting document still uses the same contract.

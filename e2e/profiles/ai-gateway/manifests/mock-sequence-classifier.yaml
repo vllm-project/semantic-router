@@ -9,6 +9,7 @@ data:
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
     EXPECTED_AUTH = "Bearer e2e-classifier-key"
+    LLM_TOXIC_MARKER = "__LLM_CLASSIFIER_TOXIC__"
     TOXIC_MARKER = "__SEQUENCE_CLASSIFIER_TOXIC__"
 
     class Handler(BaseHTTPRequestHandler):
@@ -30,28 +31,47 @@ data:
             self.send_json(404, {"error": "not found"})
 
         def do_POST(self):
-            if self.path != "/classify":
-                self.send_json(404, {"error": "not found"})
-                return
             if self.headers.get("Authorization") != EXPECTED_AUTH:
                 self.send_json(401, {"error": "invalid bearer token"})
                 return
             try:
                 length = int(self.headers.get("Content-Length", "0"))
                 payload = json.loads(self.rfile.read(length))
-                text = payload["inputs"]
-            except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+                if not isinstance(payload, dict):
+                    raise TypeError
+            except (TypeError, ValueError, json.JSONDecodeError):
                 self.send_json(400, {"error": "invalid request"})
                 return
 
-            toxic = TOXIC_MARKER in str(text)
-            self.send_json(
-                200,
-                [
-                    {"label": "toxic", "score": 0.95 if toxic else 0.05},
-                    {"label": "benign", "score": 0.05 if toxic else 0.95},
-                ],
-            )
+            if self.path == "/classify":
+                text = payload.get("inputs", "")
+                toxic = TOXIC_MARKER in str(text)
+                self.send_json(
+                    200,
+                    [
+                        {"label": "toxic", "score": 0.95 if toxic else 0.05},
+                        {"label": "benign", "score": 0.05 if toxic else 0.95},
+                    ],
+                )
+                return
+
+            if self.path == "/v1/chat/completions":
+                messages = payload.get("messages", [])
+                text = " ".join(str(message.get("content", "")) for message in messages)
+                toxic = LLM_TOXIC_MARKER in text
+                content = json.dumps(
+                    {
+                        "scores": {
+                            "toxic": 0.9 if toxic else 0.1,
+                            "benign": 0.1 if toxic else 0.9,
+                        },
+                        "rationale": "deterministic E2E response",
+                    }
+                )
+                self.send_json(200, {"choices": [{"message": {"content": content}}]})
+                return
+
+            self.send_json(404, {"error": "not found"})
 
     ThreadingHTTPServer(("0.0.0.0", 8000), Handler).serve_forever()
 ---

@@ -14,6 +14,7 @@ import (
 	istio "github.com/vllm-project/semantic-router/e2e/profiles/istio"
 	jailbreakonerror "github.com/vllm-project/semantic-router/e2e/profiles/jailbreak-onerror"
 	llmd "github.com/vllm-project/semantic-router/e2e/profiles/llm-d"
+	looper "github.com/vllm-project/semantic-router/e2e/profiles/looper"
 	mlmodelselection "github.com/vllm-project/semantic-router/e2e/profiles/ml-model-selection"
 	multiendpoint "github.com/vllm-project/semantic-router/e2e/profiles/multi-endpoint"
 	multimodalrouting "github.com/vllm-project/semantic-router/e2e/profiles/multimodal-routing"
@@ -79,6 +80,7 @@ func init() {
 		framework.ProfileCapabilities{LocalImages: mockVLLMLocalImages},
 	)
 	register("llm-d", func() framework.Profile { return llmd.NewProfile() }, framework.ProfileCapabilities{})
+	register("looper", func() framework.Profile { return looper.NewProfile() }, framework.ProfileCapabilities{})
 	register(
 		"ml-model-selection",
 		func() framework.Profile { return mlmodelselection.NewProfile() },

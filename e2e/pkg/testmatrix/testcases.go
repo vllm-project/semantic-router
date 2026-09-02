@@ -14,6 +14,7 @@ var BaselineRouterContract = []string{
 	"anthropic-messages-streaming",
 	"apiserver-runtime-config-endpoints",
 	"apiserver-classification-endpoints",
+	"llm-classifier-distribution-routing",
 	"sequence-classifier-routing",
 	"chat-completions-stress-request",
 	"domain-classify",
@@ -21,6 +22,8 @@ var BaselineRouterContract = []string{
 	// NLI polarity tier of the semantic cache (issue #2751)
 	"semantic-cache-polarity",
 	"pii-detection",
+	// PII entity positions are code-point offsets (issue #3146)
+	"pii-entity-offsets",
 	"jailbreak-detection",
 	"decision-priority-selection",
 	"plugin-chain-execution",

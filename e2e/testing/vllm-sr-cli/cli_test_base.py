@@ -337,6 +337,7 @@ class CLITestBase(unittest.TestCase):
         endpoint: str = "host.docker.internal:8000",
         base_url: str | None = None,
         provider: str | None = None,
+        api_key_env: str | None = None,
         api_only: bool = False,
         managed_storage: bool = False,
     ) -> str:
@@ -357,6 +358,8 @@ class CLITestBase(unittest.TestCase):
             backend_ref["protocol"] = "http"
         if provider is not None:
             backend_ref["provider"] = provider
+        if api_key_env is not None:
+            backend_ref["api_key_env"] = api_key_env
 
         config = {
             "version": "v0.3",

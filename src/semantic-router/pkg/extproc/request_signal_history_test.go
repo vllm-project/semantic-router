@@ -5,6 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
@@ -28,6 +29,40 @@ func TestExtractSignalConversationHistoryMixedNeutralRoles(t *testing.T) {
 	assert.Equal(t, []string{"System prompt", "Developer policy", "first answer"}, history.nonUserMessages)
 	assert.True(t, history.hasAssistantReply)
 	assert.True(t, history.hasDeveloperMessage)
+}
+
+func TestExtractSignalConversationHistoryFlowToolStateRequiresTrailingResult(t *testing.T) {
+	req := &llmprotocol.Request{Messages: []llmprotocol.Message{
+		{Role: llmprotocol.RoleUser, Content: textBlocks("run the workflow")},
+		neutralToolResult("flowtool_deadbeef__call_1", "done"),
+	}}
+	history := extractSignalConversationHistory(req)
+	assert.True(t, history.lastMessageFlowToolResult)
+
+	req.Messages = append(req.Messages, llmprotocol.Message{
+		Role: llmprotocol.RoleUser, Content: textBlocks("new request"),
+	})
+	history = extractSignalConversationHistory(req)
+	assert.False(t, history.lastMessageFlowToolResult)
+}
+
+func TestExtractSignalConversationHistoryToolChoiceFacts(t *testing.T) {
+	req := &llmprotocol.Request{ToolChoice: llmprotocol.ToolChoice{
+		Mode: llmprotocol.ToolChoiceRequired,
+	}}
+	history := extractSignalConversationHistory(req)
+	assert.True(t, history.toolChoiceRequired)
+	assert.False(t, history.toolChoiceNone)
+
+	req.ToolChoice = llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceNamed, Name: "lookup"}
+	history = extractSignalConversationHistory(req)
+	assert.True(t, history.toolChoiceRequired)
+	assert.False(t, history.toolChoiceNone)
+
+	req.ToolChoice = llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceNone}
+	history = extractSignalConversationHistory(req)
+	assert.False(t, history.toolChoiceRequired)
+	assert.True(t, history.toolChoiceNone)
 }
 
 func TestExtractToolTransitionContextFromNeutralHistory(t *testing.T) {
@@ -63,6 +98,27 @@ func TestExtractSignalConversationHistoryMarksUserAfterToolResult(t *testing.T) 
 	assert.Equal(t, "user", history.lastMessageRole)
 	assert.False(t, history.lastMessageToolResult)
 	assert.True(t, history.lastUserAfterToolResult)
+}
+
+func TestExtractSignalConversationHistoryBoundsPendingToolCallToTail(t *testing.T) {
+	req := &llmprotocol.Request{Messages: []llmprotocol.Message{
+		neutralAssistantToolCalls("lookup"),
+		{Role: llmprotocol.RoleUser, Content: textBlocks("start a separate task")},
+		{Role: llmprotocol.RoleAssistant, Content: textBlocks("done")},
+		{Role: llmprotocol.RoleUser, Content: textBlocks("ordinary follow-up")},
+	}}
+
+	history := extractSignalConversationHistory(req)
+
+	assert.Equal(t, 1, history.assistantToolCallCount)
+	assert.Zero(t, history.toolResultCount)
+	assert.False(t, history.lastAssistantToolCall)
+	assert.False(t, conversationFactsIndicateActiveToolLoop(classification.ConversationFacts{
+		AssistantToolCallCount: history.assistantToolCallCount,
+		ToolResultCount:        history.toolResultCount,
+		LastMessageRole:        history.lastMessageRole,
+		LastAssistantToolCall:  history.lastAssistantToolCall,
+	}))
 }
 
 func TestToolTransitionContextWindowAndCopy(t *testing.T) {

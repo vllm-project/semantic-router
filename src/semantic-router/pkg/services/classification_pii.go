@@ -33,12 +33,14 @@ type PIIResponse struct {
 
 // PIIEntity represents a detected PII entity
 type PIIEntity struct {
-	Type        string  `json:"type"`
-	Value       string  `json:"value"`
-	Confidence  float64 `json:"confidence"`
-	StartPos    int     `json:"start_position,omitempty"`
-	EndPos      int     `json:"end_position,omitempty"`
-	MaskedValue string  `json:"masked_value,omitempty"`
+	Type       string  `json:"type"`
+	Value      string  `json:"value"`
+	Confidence float64 `json:"confidence"`
+	// Pointers so that an absent field means the caller did not ask for
+	// positions. With a plain int, omitempty also drops an offset of 0.
+	StartPos    *int   `json:"start_position,omitempty"`
+	EndPos      *int   `json:"end_position,omitempty"`
+	MaskedValue string `json:"masked_value,omitempty"`
 }
 
 // DetectPII performs PII detection

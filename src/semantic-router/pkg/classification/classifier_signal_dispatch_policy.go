@@ -77,6 +77,10 @@ func (c *Classifier) buildPolicySignalDispatchers(
 			func() { c.evaluateMetadataSignal(results, mu, requestFacts, usedSignals) },
 		},
 		{
+			config.SignalTypeInputModality, "InputModality",
+			func() { c.evaluateInputModalitySignal(results, mu, requestFacts, usedSignals) },
+		},
+		{
 			config.SignalTypeClassifier, "Classifier",
 			func() {
 				c.evaluateGenericClassifierSignals(

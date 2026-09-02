@@ -118,6 +118,9 @@ func (s *Service) executePlan(
 			&recoveryBytes,
 		)
 		if applyErr != nil {
+			for _, applied := range appliedCandidates {
+				applied.block.SetText(applied.originalText)
+			}
 			return result, appliedCandidates, applyErr
 		}
 		if !applied {

@@ -21,7 +21,7 @@ defaults:
 assets:
   - id: mom-v1
     bundle: mom-v1
-    sha256: sha256:3a6c08e86cb730b63e09c256234c9f8b6701c6acdd5d97a93e9d53dd1bf0b154
+    sha256: sha256:e7d6d1d29901f65f5b5d13c600624dc019116399995e2af33ce03ef47d125522
 models:
   - id: vllm-sr/mom-v1-blend
     display_name: MoM V1 Blend
@@ -29,7 +29,7 @@ models:
     kind: virtual
     family: mom
     generation: 1
-    policy_version: 1.0.0
+    policy_version: 1.3.0
     asset: mom-v1
     entrypoint: vllm-sr/mom-v1-blend
     recipe: balance
@@ -46,6 +46,11 @@ models:
         minimum_candidates: 2
         traits: [chat, reasoning, tools]
         recommended_pool: [local/qwen3.6-35b, local/step-3.7-flash, local/qwen3.5-122b, local/mistral-small-4]
+      - name: vision
+        required: true
+        minimum_candidates: 1
+        traits: [chat, vision, multimodal, tools]
+        recommended_pool: [local/qwen3.6-35b, local/step-3.7-flash]
       - name: terminal_context
         required: true
         minimum_candidates: 1
@@ -53,14 +58,14 @@ models:
         recommended_pool: [local/glm-5.2]
     verification:
       authority: vllm-sr-maintainers
-      asset_sha256: sha256:3a6c08e86cb730b63e09c256234c9f8b6701c6acdd5d97a93e9d53dd1bf0b154
+      asset_sha256: sha256:e7d6d1d29901f65f5b5d13c600624dc019116399995e2af33ce03ef47d125522
   - id: vllm-sr/mom-v1-lite
     display_name: MoM V1 Lite
     description: Economy-first direct answers with bounded opt-in reasoning.
     kind: virtual
     family: mom
     generation: 1
-    policy_version: 1.0.0
+    policy_version: 1.2.0
     asset: mom-v1
     entrypoint: vllm-sr/mom-v1-lite
     recipe: cost
@@ -84,14 +89,14 @@ models:
         recommended_pool: [local/glm-5.2]
     verification:
       authority: vllm-sr-maintainers
-      asset_sha256: sha256:3a6c08e86cb730b63e09c256234c9f8b6701c6acdd5d97a93e9d53dd1bf0b154
+      asset_sha256: sha256:e7d6d1d29901f65f5b5d13c600624dc019116399995e2af33ce03ef47d125522
   - id: vllm-sr/mom-v1-flash
     display_name: MoM V1 Flash
     description: Latency-first interactive, tool, vision, and heavy-workload routing.
     kind: virtual
     family: mom
     generation: 1
-    policy_version: 1.0.0
+    policy_version: 1.3.0
     asset: mom-v1
     entrypoint: vllm-sr/mom-v1-flash
     recipe: speed
@@ -104,7 +109,7 @@ models:
         traits: [chat, tools, low_latency]
         recommended_pool: [local/qwen3.5-9b, local/qwen3.6-35b]
       - name: vision
-        required: false
+        required: true
         minimum_candidates: 1
         traits: [vision, multimodal, tools]
         recommended_pool: [local/qwen3.6-35b, local/step-3.7-flash]
@@ -115,14 +120,14 @@ models:
         recommended_pool: [local/glm-5.2]
     verification:
       authority: vllm-sr-maintainers
-      asset_sha256: sha256:3a6c08e86cb730b63e09c256234c9f8b6701c6acdd5d97a93e9d53dd1bf0b154
+      asset_sha256: sha256:e7d6d1d29901f65f5b5d13c600624dc019116399995e2af33ce03ef47d125522
   - id: vllm-sr/mom-v1-ultra
     display_name: MoM V1 Ultra
     description: Accuracy-first direct and bounded multi-model orchestration.
     kind: virtual
     family: mom
     generation: 1
-    policy_version: 1.0.0
+    policy_version: 1.2.0
     asset: mom-v1
     entrypoint: vllm-sr/mom-v1-ultra
     recipe: accuracy
@@ -132,28 +137,38 @@ models:
       - name: frontier
         required: true
         minimum_candidates: 1
-        traits: [chat, reasoning, structured_output, long_context]
+        traits: [chat, reasoning, structured_output, long_context, tools]
         recommended_pool: [local/glm-5.2, local/qwen3.5-122b]
       - name: panel
         required: true
         minimum_candidates: 3
-        traits: [reasoning, provider_diversity]
+        traits: [reasoning, provider_diversity, tools]
         recommended_pool: [local/step-3.7-flash, local/mistral-small-4, local/gpt-oss-120b]
       - name: confidence
         required: true
         minimum_candidates: 2
         traits: [token_logprobs, reasoning]
         recommended_pool: [local/qwen3.6-35b, local/step-3.7-flash, local/glm-5.2]
+      - name: vision
+        required: true
+        minimum_candidates: 1
+        traits: [chat, vision, multimodal, tools]
+        recommended_pool: [local/qwen3.6-35b, local/step-3.7-flash]
+      - name: terminal_context
+        required: true
+        minimum_candidates: 1
+        traits: [chat, reasoning, text, long_context, tools]
+        recommended_pool: [local/glm-5.2]
     verification:
       authority: vllm-sr-maintainers
-      asset_sha256: sha256:3a6c08e86cb730b63e09c256234c9f8b6701c6acdd5d97a93e9d53dd1bf0b154
+      asset_sha256: sha256:e7d6d1d29901f65f5b5d13c600624dc019116399995e2af33ce03ef47d125522
   - id: vllm-sr/mom-v1-vault
     display_name: MoM V1 Vault
     description: Local-only privacy, containment, and tool-history minimization.
     kind: virtual
     family: mom
     generation: 1
-    policy_version: 1.0.0
+    policy_version: 1.2.0
     asset: mom-v1
     entrypoint: vllm-sr/mom-v1-vault
     recipe: vault
@@ -177,4 +192,4 @@ models:
         recommended_pool: [local/glm-5.2]
     verification:
       authority: vllm-sr-maintainers
-      asset_sha256: sha256:3a6c08e86cb730b63e09c256234c9f8b6701c6acdd5d97a93e9d53dd1bf0b154
+      asset_sha256: sha256:e7d6d1d29901f65f5b5d13c600624dc019116399995e2af33ce03ef47d125522

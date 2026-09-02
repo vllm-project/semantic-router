@@ -19,6 +19,7 @@ package selection
 import (
 	"context"
 	"fmt"
+	"io"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelselection"
@@ -114,6 +115,18 @@ func (a *MLSelectorAdapter) UpdateFeedback(ctx context.Context, feedback *Feedba
 	logging.Debugf("[MLAdapter] Feedback received for %s, model=%s (training via Train() method)",
 		a.method, feedback.WinnerModel)
 	return nil
+}
+
+// Close releases the wrapped selector when it is closeable.
+func (a *MLSelectorAdapter) Close() error {
+	if a == nil || a.mlSelector == nil {
+		return nil
+	}
+	closer, ok := a.mlSelector.(io.Closer)
+	if !ok {
+		return nil
+	}
+	return closer.Close()
 }
 
 // GetMLSelector returns the underlying ML selector for direct access (e.g., for training).

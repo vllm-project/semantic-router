@@ -1,3 +1,5 @@
+import pytest
+from cli.algorithms import AlgorithmConfig
 from cli.config_contract import (
     LEGACY_SIGNAL_KEY_TO_CANONICAL,
     build_projection_reference_index,
@@ -115,6 +117,24 @@ def test_decision_without_rules_is_a_match_all_fallback():
 
     assert decision.rules.operator == "AND"
     assert decision.rules.conditions == []
+
+
+def test_decision_enforces_minimum_candidates_after_materialization():
+    with pytest.raises(ValueError, match="minimum_candidates=2"):
+        Decision(
+            name="panel",
+            priority=1,
+            modelRefs=[{"model": "model-a", "use_reasoning": False}],
+            algorithm=AlgorithmConfig(type="fusion", minimum_candidates=2),
+        )
+
+    model_free = Decision(
+        name="model-free-panel",
+        priority=1,
+        modelRefs=[],
+        algorithm=AlgorithmConfig(type="fusion", minimum_candidates=2),
+    )
+    assert model_free.modelRefs == []
 
 
 def test_decision_accepts_terminal_action_output_contract_spec():

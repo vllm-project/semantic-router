@@ -34,6 +34,7 @@ var (
 		validateAdvancedToolFilteringConfig,
 		validatePromptCompressionContracts,
 		validateHallucinationContracts,
+		validateModelAdmissionContracts,
 	}
 
 	routingProfileContractValidators = []configContractValidator{
@@ -54,6 +55,7 @@ var (
 		validateEmbeddingSignalContracts,
 		validateRoutingModalityContracts,
 		validateComplexityContracts,
+		validateJailbreakContracts,
 		validateDecisionRouterLearningConfig,
 	}
 )
