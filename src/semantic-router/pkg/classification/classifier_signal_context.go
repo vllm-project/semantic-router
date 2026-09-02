@@ -11,25 +11,26 @@ import (
 // Separated from EvaluateAllSignalsWithContext to keep cyclomatic complexity under the linter limit.
 func (c *Classifier) signalReadiness() map[string]bool {
 	return map[string]bool{
-		config.SignalTypeKeyword:      c.keywordClassifier != nil,
-		config.SignalTypeEmbedding:    c.keywordEmbeddingClassifier != nil,
-		config.SignalTypeDomain:       c.IsCategoryEnabled() && c.categoryInference != nil && c.CategoryMapping != nil,
-		config.SignalTypeFactCheck:    len(c.Config.FactCheckRules) > 0 && c.factCheckClassifier != nil && c.factCheckClassifier.IsInitialized(),
-		config.SignalTypeUserFeedback: len(c.Config.UserFeedbackRules) > 0 && c.feedbackDetector != nil && c.feedbackDetector.IsInitialized(),
-		config.SignalTypeReask:        c.reaskClassifier != nil,
-		config.SignalTypePreference:   len(c.Config.PreferenceRules) > 0 && c.IsPreferenceClassifierEnabled(),
-		config.SignalTypeLanguage:     len(c.Config.LanguageRules) > 0 && c.IsLanguageEnabled(),
-		config.SignalTypeContext:      c.contextClassifier != nil,
-		config.SignalTypeStructure:    c.structureClassifier != nil,
-		config.SignalTypeComplexity:   c.complexityClassifier != nil,
-		config.SignalTypeModality:     len(c.Config.ModalityRules) > 0 && c.Config.ModalityDetector.Enabled,
-		config.SignalTypeJailbreak:    c.isJailbreakSignalReady(),
-		config.SignalTypePII:          len(c.Config.PIIRules) > 0 && c.IsPIIEnabled(),
-		config.SignalTypeKB:           len(c.kbClassifiers) > 0,
-		config.SignalTypeConversation: len(c.Config.ConversationRules) > 0,
-		config.SignalTypeEvent:        c.eventClassifier != nil,
-		config.SignalTypeMetadata:     len(c.Config.MetadataRules) > 0,
-		config.SignalTypeClassifier:   len(c.genericClassifiers) > 0,
+		config.SignalTypeKeyword:       c.keywordClassifier != nil,
+		config.SignalTypeEmbedding:     c.keywordEmbeddingClassifier != nil,
+		config.SignalTypeDomain:        c.IsCategoryEnabled() && c.categoryInference != nil && c.CategoryMapping != nil,
+		config.SignalTypeFactCheck:     len(c.Config.FactCheckRules) > 0 && c.factCheckClassifier != nil && c.factCheckClassifier.IsInitialized(),
+		config.SignalTypeUserFeedback:  len(c.Config.UserFeedbackRules) > 0 && c.feedbackDetector != nil && c.feedbackDetector.IsInitialized(),
+		config.SignalTypeReask:         c.reaskClassifier != nil,
+		config.SignalTypePreference:    len(c.Config.PreferenceRules) > 0 && c.IsPreferenceClassifierEnabled(),
+		config.SignalTypeLanguage:      len(c.Config.LanguageRules) > 0 && c.IsLanguageEnabled(),
+		config.SignalTypeContext:       c.contextClassifier != nil,
+		config.SignalTypeStructure:     c.structureClassifier != nil,
+		config.SignalTypeComplexity:    c.complexityClassifier != nil,
+		config.SignalTypeModality:      len(c.Config.ModalityRules) > 0 && c.Config.ModalityDetector.Enabled,
+		config.SignalTypeJailbreak:     c.isJailbreakSignalReady(),
+		config.SignalTypePII:           len(c.Config.PIIRules) > 0 && c.IsPIIEnabled(),
+		config.SignalTypeKB:            len(c.kbClassifiers) > 0,
+		config.SignalTypeConversation:  len(c.Config.ConversationRules) > 0,
+		config.SignalTypeEvent:         c.eventClassifier != nil,
+		config.SignalTypeMetadata:      len(c.Config.MetadataRules) > 0,
+		config.SignalTypeClassifier:    len(c.genericClassifiers) > 0,
+		config.SignalTypeInputModality: len(c.Config.InputModalityRules) > 0,
 	}
 }
 
@@ -196,10 +197,12 @@ func (c *Classifier) evaluateAllSignalsWithContext(
 	ready := c.signalReadiness()
 
 	results := &SignalResults{
-		Metrics:           &SignalMetricsCollection{},
-		SignalConfidences: make(map[string]float64),
-		SignalValues:      make(map[string]float64),
-		SignalErrors:      make(map[string]string),
+		Metrics:                &SignalMetricsCollection{},
+		SignalConfidences:      make(map[string]float64),
+		SignalValues:           make(map[string]float64),
+		SignalErrors:           make(map[string]string),
+		SignalErrorMatches:     make(map[string]bool),
+		AppliedUnknownPolicies: make(map[string]string),
 	}
 
 	var wg sync.WaitGroup

@@ -23,6 +23,7 @@ Current maintainer rule:
 
 - one active release plan per release
 - one active debt plan for non-release debt
+- one `wg/*` owner per project issue, with `[Epic]` parents marked by `epic`
 - generated issue/PR board under `.agent-harness/maintainer/`
 
 ## Contributor

@@ -64,6 +64,14 @@ def test_cli_version_matches_project_metadata():
     assert result.output.strip() == f"vllm-sr version: {expected_version}"
 
 
+def test_registered_serve_command_comes_from_cli_commands_runtime():
+    registered_serve = main.commands["serve"]
+    assert registered_serve is runtime_commands.serve
+    assert registered_serve.name == "serve"
+    assert importlib.util.find_spec("cli.commands.serve") is None
+    assert importlib.util.find_spec("cli.models_memory") is None
+
+
 def test_serve_materializes_active_config_under_custom_host_state_root(
     monkeypatch, tmp_path: Path
 ):

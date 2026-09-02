@@ -100,15 +100,16 @@ func (c HNSWConfig) WithDefaults() HNSWConfig {
 }
 
 type MCPCategoryModel struct {
-	Enabled        bool              `yaml:"enabled"`
-	TransportType  string            `yaml:"transport_type"`
-	Command        string            `yaml:"command,omitempty"`
-	Args           []string          `yaml:"args,omitempty"`
-	Env            map[string]string `yaml:"env,omitempty"`
-	URL            string            `yaml:"url,omitempty"`
-	ToolName       string            `yaml:"tool_name,omitempty"`
-	Threshold      float32           `yaml:"threshold"`
-	TimeoutSeconds int               `yaml:"timeout_seconds,omitempty"`
+	Enabled          bool              `yaml:"enabled"`
+	TransportType    string            `yaml:"transport_type"`
+	Command          string            `yaml:"command,omitempty"`
+	Args             []string          `yaml:"args,omitempty"`
+	Env              map[string]string `yaml:"env,omitempty"`
+	URL              string            `yaml:"url,omitempty"`
+	ToolName         string            `yaml:"tool_name,omitempty"`
+	Threshold        float32           `yaml:"threshold"`
+	TimeoutSeconds   int               `yaml:"timeout_seconds,omitempty"`
+	MaxResponseBytes int64             `yaml:"max_response_bytes,omitempty"`
 }
 
 // PromptCompressionConfig controls NLP-based prompt compression before signal extraction.
@@ -216,6 +217,15 @@ type ExternalModelConfig struct {
 	Temperature      float64                `yaml:"temperature,omitempty"`
 	MaxRequestBytes  int64                  `yaml:"max_request_bytes,omitempty"`
 	MaxResponseBytes int64                  `yaml:"max_response_bytes,omitempty"`
+}
+
+// AdmissionConfig bounds concurrent inference for one Router Model
+// deployment. Absent config means no gate and preserves current behavior.
+type AdmissionConfig struct {
+	MaxConcurrency int    `yaml:"max_concurrency"`
+	MaxQueue       int    `yaml:"max_queue,omitempty"`
+	QueueTimeoutMs int    `yaml:"queue_timeout_ms,omitempty"`
+	OnOverflow     string `yaml:"on_overflow,omitempty"`
 }
 
 type ToolFilteringWeights struct {
@@ -350,7 +360,6 @@ type ModelParams struct {
 	QualityScore       float64             `yaml:"quality_score,omitempty"`
 	ExternalModelIDs   map[string]string   `yaml:"external_model_ids,omitempty"`
 	Modality           string              `yaml:"modality,omitempty"`
-	ImageGenBackend    string              `yaml:"image_gen_backend,omitempty"`
 }
 
 type LoRAAdapter struct {

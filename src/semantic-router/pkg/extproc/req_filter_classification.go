@@ -44,12 +44,15 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, history s
 		return "", 0, entropy.ReasoningDecision{}, "", authzErr
 	}
 
-	result, defaultModel := r.runDecisionEngine(originalModel, ctx, signals, candidates)
+	result, defaultModel, err := r.runDecisionEngine(originalModel, ctx, signals, candidates)
+	if err != nil {
+		return "", 0, entropy.ReasoningDecision{}, "", err
+	}
 	if result == nil {
 		return "", 0.0, entropy.ReasoningDecision{}, defaultModel, nil
 	}
 
-	decisionName, evaluationConfidence, reasoningDecision, selectedModel, err := r.finalizeDecisionEvaluation(
+	decisionName, evaluationConfidence, reasoningDecision, selectedModel, err = r.finalizeDecisionEvaluation(
 		result,
 		originalModel,
 		history.currentUserMessage,
@@ -343,7 +346,7 @@ func conversationFactsIndicateActiveToolLoop(facts classification.ConversationFa
 	return facts.LastMessageToolResult ||
 		facts.LastMessageRole == "tool" ||
 		facts.LastUserAfterToolResult ||
-		facts.AssistantToolCallCount > facts.ToolResultCount
+		facts.LastAssistantToolCall
 }
 
 func (r *OpenAIRouter) agenticCacheWarmth(

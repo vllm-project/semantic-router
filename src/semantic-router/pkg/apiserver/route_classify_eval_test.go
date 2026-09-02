@@ -18,22 +18,28 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
 
 type evalCaptureClassificationService struct {
 	lastEvalReq services.IntentRequest
 	evalResp    *services.EvalResponse
+	evalErr     error
+	intentErr   error
 }
 
 func (s *evalCaptureClassificationService) ClassifyIntent(req services.IntentRequest) (*services.IntentResponse, error) {
+	if s.intentErr != nil {
+		return nil, s.intentErr
+	}
 	return &services.IntentResponse{}, nil
 }
 
 func (s *evalCaptureClassificationService) ClassifyIntentForEval(req services.IntentRequest) (*services.EvalResponse, error) {
 	s.lastEvalReq = req
 	if s.evalResp != nil {
-		return s.evalResp, nil
+		return s.evalResp, s.evalErr
 	}
 	return &services.EvalResponse{OriginalText: "captured"}, nil
 }
@@ -74,6 +80,53 @@ func (s *evalCaptureClassificationService) UpdateConfig(_ *config.RouterConfig) 
 }
 
 func (s *evalCaptureClassificationService) RefreshRuntimeConfig(_ *config.RouterConfig) {
+}
+
+func TestHandleIntentClassification_Returns503OnDecisionUnresolved(t *testing.T) {
+	fakeSvc := &evalCaptureClassificationService{
+		intentErr: fmt.Errorf("decision guarded failed: %w", decision.ErrDecisionUnresolved),
+	}
+	apiServer := &ClassificationAPIServer{classificationSvc: fakeSvc}
+
+	body, _ := json.Marshal(map[string]string{"text": "hello"})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/classify/intent", bytes.NewReader(body))
+	recorder := httptest.NewRecorder()
+	apiServer.handleIntentClassification(recorder, req)
+
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusServiceUnavailable)
+	}
+	if !strings.Contains(recorder.Body.String(), "DECISION_UNRESOLVED") {
+		t.Fatalf("body = %s, want DECISION_UNRESOLVED", recorder.Body.String())
+	}
+}
+
+func TestHandleEvalClassification_ReturnsTracesWith503OnDecisionError(t *testing.T) {
+	fakeSvc := &evalCaptureClassificationService{
+		evalResp: &services.EvalResponse{
+			OriginalText:  "text",
+			EvalTrace:     []decision.DecisionTrace{{DecisionName: "guarded", State: "unknown"}},
+			DecisionError: "decision unresolved",
+		},
+		evalErr: decision.ErrDecisionUnresolved,
+	}
+	apiServer := &ClassificationAPIServer{classificationSvc: fakeSvc}
+
+	body, _ := json.Marshal(map[string]string{"text": "hello"})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/eval?trace=true", bytes.NewReader(body))
+	recorder := httptest.NewRecorder()
+	apiServer.handleEvalClassification(recorder, req)
+
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusServiceUnavailable)
+	}
+	var response services.EvalResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if len(response.EvalTrace) != 1 || response.DecisionError == "" {
+		t.Fatalf("response = %+v, want eval_trace and decision_error", response)
+	}
 }
 
 func TestHandleEvalClassification_AcceptsMessagesArray(t *testing.T) {

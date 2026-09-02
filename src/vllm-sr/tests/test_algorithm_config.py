@@ -71,6 +71,13 @@ class TestAlgorithmConfigTypes:
         config = AlgorithmConfig(type="static", on_error="fail")
         assert config.on_error == "fail"
 
+    def test_minimum_candidates_must_be_positive(self):
+        config = AlgorithmConfig(type="static", minimum_candidates=2)
+        assert config.minimum_candidates == 2
+
+        with pytest.raises(PydanticValidationError):
+            AlgorithmConfig(type="static", minimum_candidates=0)
+
 
 class TestPromptSelectionConfig:
     """Test prompt-driven selection configuration."""

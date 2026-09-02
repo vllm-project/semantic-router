@@ -53,9 +53,6 @@ func TestDeclaredLabelMappingUsesConfigOrder(t *testing.T) {
 }
 
 func TestSequenceLabelClassifierReportsTheModelDistribution(t *testing.T) {
-	// The llm type scores the chosen label 1 and every other 0. A sequence
-	// classifier must pass the model's own scores through untouched, and match
-	// labels by name rather than by the order the endpoint happened to use.
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_ = json.NewEncoder(w).Encode([]httpClassifyLabelScore{
 			{Label: "toxic", Score: 0.73},

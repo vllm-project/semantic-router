@@ -2,6 +2,9 @@ package extproc
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
@@ -13,6 +16,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection/lookuptable"
 )
 
+// createModelSelectorRegistries leaves publication to publishRouterState.
 func createModelSelectorRegistries(cfg *config.RouterConfig, replayReader store.Reader) (map[config.RecipeName]*selection.Registry, *selection.Registry, lookuptable.LookupTableStorage, func()) {
 	lt, cancel := buildLookupTable(cfg, replayReader)
 	embed, defaultEmbeddingConfig := resolveSelectionEmbeddingFunc(cfg)
@@ -21,7 +25,6 @@ func createModelSelectorRegistries(cfg *config.RouterConfig, replayReader store.
 	if len(cfg.Recipes) == 0 {
 		registry := createModelSelectorRegistry(cfg, lt, embed, defaultEmbeddingConfig)
 		registries[config.DefaultRecipeName] = registry
-		selection.GlobalRegistry = registry
 		return registries, registry, lt, cancel
 	}
 
@@ -31,7 +34,6 @@ func createModelSelectorRegistries(cfg *config.RouterConfig, replayReader store.
 		registries[recipe.Name] = createModelSelectorRegistry(scopedConfig, lt, embed, defaultEmbeddingConfig)
 	}
 	defaultRegistry := registries[config.DefaultRecipeName]
-	selection.GlobalRegistry = defaultRegistry
 	return registries, defaultRegistry, lt, cancel
 }
 
@@ -97,7 +99,7 @@ func resolveSelectionEmbeddingFunc(cfg *config.RouterConfig) (func(string, selec
 		case config.EmbeddingBackendOpenVINO:
 			return openvinoEmbeddingFunc(embeddingConfig.ModelType)(text)
 		default:
-			if embeddingConfig.ModelType == config.EmbeddingModelTypeQwen3 {
+			if candle_binding.SupportsBatchedEmbedding(embeddingConfig.ModelType) {
 				output, err := candle_binding.GetEmbeddingBatched(text, embeddingConfig.ModelType, embeddingConfig.TargetDimension)
 				if err != nil {
 					return nil, err
@@ -114,7 +116,14 @@ func resolveSelectionEmbeddingFunc(cfg *config.RouterConfig) (func(string, selec
 }
 
 func selectionEmbeddingModelType(models config.EmbeddingModels, backend string) string {
-	modelType := models.EmbeddingConfig.ModelType
+	// Normalized once here so every downstream consumer -- the batched-FFI
+	// capability check, GetEmbeddingBatched, and GetEmbeddingWithModelType's
+	// own exact-match validation -- sees the same casing. Config validation
+	// already accepts "Qwen3" case-insensitively without rewriting the
+	// configured value, so an unnormalized modelType would otherwise pass
+	// SupportsBatchedEmbedding's tolerant check and then fail the FFI's
+	// strict one, or fail GetEmbeddingWithModelType's exact match either way.
+	modelType := strings.ToLower(strings.TrimSpace(models.EmbeddingConfig.ModelType))
 	if modelType != "" {
 		return modelType
 	}
@@ -327,6 +336,11 @@ func buildHybridSelectionConfig(
 func buildMLSelectionConfig(cfg *config.RouterConfig) *selection.MLSelectorConfig {
 	intelligentRouting := cfg.IntelligentRouting
 	mlCfg := intelligentRouting.ModelSelection.ML
+	// Same normalization as selectionEmbeddingModelType, and for the same
+	// reason: nothing validates or rewrites ml.model_type, so an unnormalized
+	// "Qwen3" would reach factory.go's mlEmbeddingConfig unnormalized and hit
+	// the identical SupportsBatchedEmbedding/FFI casing mismatch.
+	mlCfg.ModelType = strings.ToLower(strings.TrimSpace(mlCfg.ModelType))
 	if mlCfg.ModelsPath == "" &&
 		mlCfg.KNN.PretrainedPath == "" &&
 		mlCfg.KMeans.PretrainedPath == "" &&
@@ -673,4 +687,19 @@ func startLookupTablePopulator(storage lookuptable.LookupTableStorage, reader st
 		"interval": interval.String(),
 	})
 	return cancel
+}
+
+func closeRecipeModelSelectors(registries map[config.RecipeName]*selection.Registry) error {
+	var errs []error
+	closed := make(map[*selection.Registry]bool, len(registries))
+	for recipeName, registry := range registries {
+		if registry == nil || closed[registry] {
+			continue
+		}
+		closed[registry] = true
+		if err := registry.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("closing selection registry for routing recipe %q: %w", recipeName, err))
+		}
+	}
+	return errors.Join(errs...)
 }

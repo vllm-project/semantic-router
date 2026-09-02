@@ -116,8 +116,9 @@ func (l *ReMoMLooper) remomRunOneParallelCall(
 	}
 
 	startTime := time.Now()
-	resp, err := l.client.CallModel(
+	resp, err := l.callModelWithContextGate(
 		ctx,
+		req,
 		msgCopy,
 		modelName,
 		false,

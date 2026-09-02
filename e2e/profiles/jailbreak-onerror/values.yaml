@@ -17,6 +17,19 @@ config:
             weight: 1
   routing:
     decisions:
+      - name: skip_on_classifier_error
+        description: Skips the decision when the guardrail classifier is unreachable
+        priority: 110
+        rules:
+          operator: OR
+          on_unknown: no_match
+          conditions:
+            - type: jailbreak
+              name: guardrail_unreachable
+        plugins:
+          - type: fast_response
+            configuration:
+              message: This response must not be selected.
       # #2918: PromptGuardOnErrorBlock forces every request to match this
       # rule, because prompt_guard.protocol points at an endpoint nothing
       # listens on (127.0.0.1:1 inside the router pod) - the classify call

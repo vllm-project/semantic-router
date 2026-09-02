@@ -184,7 +184,7 @@ domains:
       - src/semantic-router/pkg/sessiontelemetry/*memory*
       - src/semantic-router/pkg/vectorstore/*memory*
       - src/semantic-router/pkg/cache/*memory*
-      - src/vllm-sr/**/*memory*
+      - src/vllm-sr/cli/models.py
       - tools/make/milvus.mk
       - e2e/testing/09-memory-features-test.py
       - e2e/testing/run_memory_integration.sh
@@ -374,6 +374,14 @@ profiles:
     coverage_role: llm-d-inference-gateway-health
     selection: pr
     paths: [e2e/profiles/llm-d/**, deploy/kubernetes/llmd-base/**]
+  looper:
+    owner: e2e
+    coverage_role: deterministic-looper-algorithm-contracts
+    selection: pr
+    paths:
+      - e2e/profiles/looper/**
+      - e2e/testcases/looper_*.go
+      - src/semantic-router/pkg/looper/**
   routing-strategies:
     owner: e2e
     coverage_role: routing-strategy-contracts

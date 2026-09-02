@@ -4,7 +4,9 @@ ARG VLLM_SR_SOURCE_REVISION=unavailable
 FROM ${IMAGE_REGISTRY}library/golang:1.25-alpine AS wasm-builder
 WORKDIR /app/src/semantic-router
 
-ENV GOPROXY=https://proxy.golang.org,direct
+RUN apk add --no-cache git
+# Pipe falls back to direct on any proxy error; comma only on 404 and 410
+ENV GOPROXY="https://proxy.golang.org|direct"
 
 COPY src/semantic-router/go.mod src/semantic-router/go.sum ./
 COPY src/semantic-router/ ./
@@ -54,7 +56,8 @@ FROM ${IMAGE_REGISTRY}library/golang:1.25-bookworm AS backend-builder
 WORKDIR /app
 
 # Use Go proxy for reliable downloads
-ENV GOPROXY=https://proxy.golang.org,direct
+# Pipe falls back to direct on any proxy error; comma only on 404 and 410
+ENV GOPROXY="https://proxy.golang.org|direct"
 
 # Accept build arguments for target architecture
 ARG TARGETARCH=amd64
