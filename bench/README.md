@@ -170,7 +170,7 @@ The related tools are intentionally separate:
 | --- | --- |
 | `agent_task_live_benchmark.py` | Score maintained smoke or long-horizon tasks and their tool transitions |
 | `cache_token_probe.py` | Repeat a session prefix and classify cached-token reporting as missing, zero, or positive |
-| `openai_fault_proxy.py` | Inject controlled upstream failures for recovery tests |
+| `openai_fault_proxy.py` | Inject controlled upstream failures, plus optional fixed and jittered response latency, for recovery tests |
 | `session_routing_branch_image_probe.py` | Record diagnostics from a reviewed branch image |
 | `session_routing_branch_image_benchmark.py` | Assemble the diagnostic, live, failure, task, and cache summaries |
 | `session_routing_ga_report.py` | Apply release thresholds to the assembled machine-readable evidence |
