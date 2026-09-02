@@ -486,6 +486,16 @@
       }
     },
     {
+      "name": "nvext",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_dynamo_nvext_translation"
+        }
+      }
+    },
+    {
       "name": "object",
       "outcome": {
         "status": "ok",

@@ -8,6 +8,9 @@ import (
 )
 
 func (OpenAIResponsesCodec) EncodeRequest(request llmprotocol.Request, envelope llmprotocol.Envelope, policy llmprotocol.Policy) ([]byte, llmprotocol.Diagnostics, error) {
+	if err := validateDynamoRequestEnvelope(envelope, llmprotocol.OpenAIResponsesV1, policy); err != nil {
+		return nil, nil, err
+	}
 	if envelope.CanReplay(llmprotocol.OpenAIResponsesV1, request.Generation, policy, false) {
 		return append([]byte(nil), envelope.Request...), nil, nil
 	}

@@ -125,6 +125,12 @@ func (state *streamState) prepareEvent(event llmprotocol.Event) (llmprotocol.Eve
 	if !validStreamEventType(event.Type) {
 		return llmprotocol.Event{}, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "unknown_stream_event", "upstream stream event type is invalid", nil)
 	}
+	if event.DynamoNVExt != nil && event.Type != llmprotocol.EventProviderOpaque {
+		return llmprotocol.Event{}, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_dynamo_nvext_event", "Dynamo nvext is only valid on provider extension stream events", nil)
+	}
+	if event.DynamoNVExt != nil && len(event.Opaque) != 0 {
+		return llmprotocol.Event{}, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_dynamo_nvext_event", "Dynamo nvext stream events cannot mix structured and opaque data", nil)
+	}
 	state.events++
 	if state.policy.Limits.Events > 0 && state.events > state.policy.Limits.Events {
 		return llmprotocol.Event{}, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "stream_event_limit", "stream event limit exceeded", nil)

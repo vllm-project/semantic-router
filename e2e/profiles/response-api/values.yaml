@@ -15,6 +15,7 @@ config:
           - name: test-endpoint
             provider: vllm
             endpoint: mock-vllm.default.svc.cluster.local:8000
+            type: dynamo
             weight: 1
       - name: mock/native-responses
         api_format: responses

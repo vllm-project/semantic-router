@@ -332,6 +332,47 @@
       }
     },
     {
+      "name": "nvext",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "done",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 100,
+          "id": "chatcmpl_1",
+          "model": "routed-model",
+          "nvext": {
+            "completion_token_ids": [
+              10,
+              11
+            ],
+            "timing": {
+              "request_received_ms": 100,
+              "ttft_ms": 45.2
+            },
+            "worker_id": {
+              "decode_worker_id": 2,
+              "prefill_worker_id": 1
+            }
+          },
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 1,
+            "prompt_tokens": 2,
+            "total_tokens": 3
+          }
+        }
+      }
+    },
+    {
       "name": "object",
       "outcome": {
         "status": "ok",

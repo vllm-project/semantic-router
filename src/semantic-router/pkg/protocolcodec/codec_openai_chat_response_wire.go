@@ -33,6 +33,7 @@ type chatResponseWire struct {
 	RemoteEngineID      *string                   `json:"remote_engine_id,omitempty"`
 	RemoteHost          *string                   `json:"remote_host,omitempty"`
 	RemotePort          *int64                    `json:"remote_port,omitempty"`
+	NVExt               json.RawMessage           `json:"nvext,omitempty"`
 	// Groq attaches its request id here; it is provider metadata, not output.
 	XGroq json.RawMessage `json:"x_groq,omitempty"`
 	// Groq reports per-model usage for compound requests and null otherwise.
