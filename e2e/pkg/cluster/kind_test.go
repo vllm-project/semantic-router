@@ -61,3 +61,30 @@ func TestWorkspaceModelsMountDoesNotOverlapKindStorageMount(t *testing.T) {
 		)
 	}
 }
+
+func TestCreateClusterArgsUsesPinnedNodeImage(t *testing.T) {
+	t.Setenv("KIND_NODE_IMAGE", "kindest/node:test@sha256:abc")
+	cluster := NewKindCluster("unit-test", false)
+
+	args := cluster.createClusterArgs("/tmp/kind-config.yaml")
+
+	expected := []string{
+		"create", "cluster", "--name", "unit-test",
+		"--image", "kindest/node:test@sha256:abc",
+		"--config", "/tmp/kind-config.yaml",
+	}
+	if strings.Join(args, " ") != strings.Join(expected, " ") {
+		t.Fatalf("createClusterArgs returned %v, want %v", args, expected)
+	}
+}
+
+func TestCreateClusterArgsKeepsDefaultNodeImageWhenUnset(t *testing.T) {
+	t.Setenv("KIND_NODE_IMAGE", "")
+	cluster := NewKindCluster("unit-test", false)
+
+	args := cluster.createClusterArgs("/tmp/kind-config.yaml")
+
+	if strings.Contains(strings.Join(args, " "), " --image ") {
+		t.Fatalf("createClusterArgs unexpectedly selected an image: %v", args)
+	}
+}
