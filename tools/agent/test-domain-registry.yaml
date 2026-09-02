@@ -458,6 +458,17 @@ profiles:
       - src/semantic-router/pkg/extproc/processor_res_body_pipeline.go
       - src/semantic-router/pkg/extproc/processor_res_semantic_stream.go
       - src/semantic-router/pkg/extproc/provider_request_adapter.go
+  route-action:
+    owner: e2e
+    coverage_role: decision-route-action-contracts
+    selection: pr
+    paths:
+      - e2e/profiles/route-action/**
+      - e2e/testcases/route_action.go
+      - deploy/kubernetes/route-action/**
+      - src/semantic-router/pkg/config/validator_decision_action*.go
+      - src/semantic-router/pkg/dsl/validator_route_action.go
+      - src/semantic-router/pkg/extproc/req_filter_model_eligibility.go
   response-api:
     owner: e2e
     coverage_role: responses-api-memory
