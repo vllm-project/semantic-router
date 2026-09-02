@@ -65,16 +65,6 @@ export const workGroups: WorkGroup[] = [
         avatar: 'https://github.com/yaojiejia.png',
         profile: 'https://github.com/yaojiejia',
       },
-      {
-        name: 'wuli666',
-        avatar: 'https://github.com/wuli666.png',
-        profile: 'https://github.com/wuli666',
-      },
-      {
-        name: 'Mahdi Ghodsi',
-        avatar: 'https://github.com/Mahdi-CV.png',
-        profile: 'https://github.com/Mahdi-CV',
-      },
     ],
   },
   {
@@ -212,21 +202,6 @@ export const workGroups: WorkGroup[] = [
         avatar: 'https://github.com/Bevisy.png',
         profile: 'https://github.com/Bevisy',
       },
-      {
-        name: 'yaojiejia',
-        avatar: 'https://github.com/yaojiejia.png',
-        profile: 'https://github.com/yaojiejia',
-      },
-      {
-        name: 'Guan-Ming Chiu',
-        avatar: 'https://github.com/guan404ming.png',
-        profile: 'https://github.com/guan404ming',
-      },
-      {
-        name: 'bugkeep',
-        avatar: 'https://github.com/bugkeep.png',
-        profile: 'https://github.com/bugkeep',
-      },
     ],
   },
   {
@@ -268,11 +243,6 @@ export const workGroups: WorkGroup[] = [
         name: 'Pranav Thakur',
         avatar: 'https://github.com/pranavthakur0-0.png',
         profile: 'https://github.com/pranavthakur0-0',
-      },
-      {
-        name: 'PepperoniBlvd',
-        avatar: 'https://github.com/PepperoniBlvd.png',
-        profile: 'https://github.com/PepperoniBlvd',
       },
     ],
   },
@@ -366,16 +336,6 @@ export const workGroups: WorkGroup[] = [
         avatar: 'https://github.com/Zi-Yi-Ming.png',
         profile: 'https://github.com/Zi-Yi-Ming',
       },
-      {
-        name: 'wuli666',
-        avatar: 'https://github.com/wuli666.png',
-        profile: 'https://github.com/wuli666',
-      },
-      {
-        name: 'Park Soobin',
-        avatar: 'https://github.com/subin9.png',
-        profile: 'https://github.com/subin9',
-      },
     ],
   },
   {
@@ -406,16 +366,6 @@ export const workGroups: WorkGroup[] = [
         name: 'Nanasis',
         avatar: 'https://github.com/nanasis.png',
         profile: 'https://github.com/nanasis',
-      },
-      {
-        name: 'yaojiejia',
-        avatar: 'https://github.com/yaojiejia.png',
-        profile: 'https://github.com/yaojiejia',
-      },
-      {
-        name: 'Hikari',
-        avatar: 'https://github.com/altale.png',
-        profile: 'https://github.com/altale',
       },
     ],
   },
