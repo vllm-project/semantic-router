@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import math
 import re
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -21,7 +22,14 @@ from provenance.manifests import (
 REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     "dataset": ("name", "sources", "splits"),
     "run": ("name", "task", "dataset_id", "base_model", "code_revision", "seed"),
-    "evaluation": ("run_id", "dataset_id", "split", "metrics"),
+    "evaluation": (
+        "run_id",
+        "dataset_id",
+        "split",
+        "sample_count",
+        "command",
+        "metrics",
+    ),
     "artifact": ("run_id", "evaluation_id", "format", "files", "digest"),
 }
 REQUIRED_SOURCE_KEYS = ("name", "revision", "license")
@@ -32,6 +40,93 @@ SECRET_KEY_PATTERN = re.compile(
 SECRET_VALUE_PATTERN = re.compile(
     r"\b(hf_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16})\b"
 )
+DIGEST_PATTERN = re.compile(r"^sha256:[0-9a-f]{64}$")
+
+
+def _is_int(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _is_number(value: Any) -> bool:
+    return _is_int(value) or (isinstance(value, float) and math.isfinite(value))
+
+
+def _is_digest(value: Any) -> bool:
+    return isinstance(value, str) and bool(DIGEST_PATTERN.match(value))
+
+
+def _is_str_map(value: Any) -> bool:
+    return isinstance(value, dict) and all(
+        isinstance(k, str) and isinstance(v, str) for k, v in value.items()
+    )
+
+
+def _is_count_map(value: Any) -> bool:
+    return isinstance(value, dict) and all(
+        isinstance(k, str) and _is_int(v) and v >= 0 for k, v in value.items()
+    )
+
+
+def _is_int_map(value: Any) -> bool:
+    return isinstance(value, dict) and all(
+        isinstance(k, str) and _is_int(v) for k, v in value.items()
+    )
+
+
+def _is_metric_map(value: Any) -> bool:
+    return isinstance(value, dict) and all(
+        isinstance(k, str) and _is_number(v) for k, v in value.items()
+    )
+
+
+def _is_digest_map(value: Any) -> bool:
+    return isinstance(value, dict) and all(
+        isinstance(k, str) and _is_digest(v) for k, v in value.items()
+    )
+
+
+def _is_str_list(value: Any) -> bool:
+    return isinstance(value, list) and all(isinstance(v, str) for v in value)
+
+
+def _is_dict_list(value: Any) -> bool:
+    return isinstance(value, list) and all(isinstance(v, dict) for v in value)
+
+
+FIELD_CHECKS: dict[str, dict[str, tuple[Callable[[Any], bool], str]]] = {
+    "dataset": {
+        "sources": (_is_dict_list, "a list of objects"),
+        "splits": (_is_count_map, "a map of split name to non-negative int"),
+        "preprocessing": (_is_str_list, "a list of strings"),
+        "label_mapping": (_is_int_map, "a map of label to int"),
+    },
+    "run": {
+        "dataset_id": (_is_digest, "a sha256:<64 hex> identity"),
+        "base_model": (_is_str_map, "a map of string to string"),
+        "dependencies": (_is_str_map, "a map of string to string"),
+        "seed": (lambda v: _is_int(v) and v >= 0, "a non-negative int"),
+        "hyperparameters": (lambda v: isinstance(v, dict), "an object"),
+    },
+    "evaluation": {
+        "run_id": (_is_digest, "a sha256:<64 hex> identity"),
+        "dataset_id": (_is_digest, "a sha256:<64 hex> identity"),
+        "sample_count": (lambda v: _is_int(v) and v > 0, "a positive int"),
+        "metrics": (_is_metric_map, "a map of metric to finite number"),
+    },
+    "artifact": {
+        "run_id": (_is_digest, "a sha256:<64 hex> identity"),
+        "evaluation_id": (_is_digest, "a sha256:<64 hex> identity"),
+        "files": (_is_digest_map, "a map of path to sha256:<64 hex> digest"),
+        "digest": (_is_digest, "a sha256:<64 hex> digest"),
+        "label_mapping": (_is_int_map, "a map of label to int"),
+    },
+}
+STRING_FIELDS: dict[str, tuple[str, ...]] = {
+    "dataset": ("name",),
+    "run": ("name", "task", "code_revision"),
+    "evaluation": ("name", "split", "command"),
+    "artifact": ("name", "format"),
+}
 BUNDLE_FILES = {
     "dataset": "dataset.json",
     "run": "run.json",
@@ -70,6 +165,22 @@ def _completeness_errors(manifest: Manifest) -> list[str]:
     return errors
 
 
+def _type_errors(manifest: Manifest) -> list[str]:
+    errors = []
+    if not _is_int(manifest.schema_version):
+        errors.append(f"{manifest.kind}: schema_version must be an int")
+    if not isinstance(manifest.extra, dict):
+        errors.append(f"{manifest.kind}: extra must be an object")
+    for name in STRING_FIELDS[manifest.kind]:
+        if not isinstance(getattr(manifest, name), str):
+            errors.append(f"{manifest.kind}: {name} must be a string")
+    for name, (check, expected) in FIELD_CHECKS[manifest.kind].items():
+        value = getattr(manifest, name)
+        if not _is_missing(value) and not check(value):
+            errors.append(f"{manifest.kind}: {name} must be {expected}")
+    return errors
+
+
 def _nested_errors(manifest: Manifest) -> list[str]:
     errors = []
     if isinstance(manifest, DatasetManifest):
@@ -93,7 +204,11 @@ def _artifact_path_errors(manifest: ArtifactManifest) -> list[str]:
             errors.append(
                 f"artifact: file path must be relative and inside the artifact: {name!r}"
             )
-    if manifest.files and manifest.digest != tree_digest(manifest.files):
+    if (
+        _is_digest_map(manifest.files)
+        and manifest.files
+        and manifest.digest != tree_digest(manifest.files)
+    ):
         errors.append("artifact: digest does not match files")
     return errors
 
@@ -116,6 +231,7 @@ def _secret_errors(kind: str, value: Any, path: str = "") -> list[str]:
 def manifest_errors(manifest: Manifest) -> list[str]:
     return (
         _completeness_errors(manifest)
+        + _type_errors(manifest)
         + _nested_errors(manifest)
         + _secret_errors(manifest.kind, manifest.to_dict())
     )

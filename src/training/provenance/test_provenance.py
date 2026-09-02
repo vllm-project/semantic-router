@@ -154,7 +154,8 @@ def test_artifact_digest_field_must_match_files(tmp_path):
 
 def test_artifact_file_paths_must_be_relative(tmp_path):
     bundle, _ = _bundle(tmp_path)
-    bundle.artifact.files = {"/abs/weights.bin": "sha256:x", "../up.bin": "sha256:y"}
+    digest = "sha256:" + "0" * 64
+    bundle.artifact.files = {"/abs/weights.bin": digest, "../up.bin": digest}
     bundle.artifact.digest = tree_digest(bundle.artifact.files)
     with pytest.raises(ProvenanceError) as err:
         validate_manifest(bundle.artifact)
@@ -170,6 +171,32 @@ def test_secret_like_key_and_value_fail():
         validate_manifest(dataset)
     assert any("secret-like key" in e for e in err.value.errors)
     assert any("secret-like value" in e for e in err.value.errors)
+
+
+@pytest.mark.parametrize(
+    ("kind", "field", "value", "message"),
+    [
+        ("evaluation", "sample_count", 0, "sample_count must be a positive int"),
+        ("evaluation", "command", "", "missing required field 'command'"),
+        ("evaluation", "sample_count", -3, "sample_count must be a positive int"),
+        ("evaluation", "sample_count", "100", "sample_count must be a positive int"),
+        ("evaluation", "metrics", {"accuracy": "0.9"}, "metrics must be a map"),
+        ("evaluation", "metrics", {"accuracy": float("nan")}, "metrics must be a map"),
+        ("evaluation", "run_id", "sha256:short", "run_id must be a sha256"),
+        ("dataset", "splits", {"train": -1}, "splits must be a map"),
+        ("dataset", "splits", {"train": "800"}, "splits must be a map"),
+        ("run", "seed", True, "seed must be a non-negative int"),
+        ("run", "dataset_id", "abc", "dataset_id must be a sha256"),
+        ("artifact", "digest", "md5:abc", "digest must be a sha256"),
+        ("artifact", "files", {"weights.bin": "sha256:xyz"}, "files must be a map"),
+    ],
+)
+def test_type_and_format_violations_fail(tmp_path, kind, field, value, message):
+    bundle, _ = _bundle(tmp_path)
+    manifest = getattr(bundle, kind)
+    setattr(manifest, field, value)
+    with pytest.raises(ProvenanceError, match=message):
+        validate_manifest(manifest)
 
 
 def test_unknown_kind_rejected(tmp_path):
