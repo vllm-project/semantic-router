@@ -59,7 +59,7 @@ func TestConvertDecisionPreservesOnUnknown(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	assert.Equal(t, "fail_request", decision.Rules.OnUnknown)
+	assert.Equal(t, config.RuleOnUnknownFailRequest, decision.Rules.OnUnknown)
 }
 
 // TestConverterWithTestData tests the converter with input/output test data

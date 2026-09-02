@@ -523,11 +523,9 @@ func (v *Validator) checkRouteConstraints(r *RouteDecl) {
 		)
 	}
 
-	switch r.OnUnknown {
-	case "", config.RuleOnUnknownNoMatch, config.RuleOnUnknownMatch, config.RuleOnUnknownFailRequest:
-	default:
+	if r.OnUnknown != "" && !config.UnknownPolicy(r.OnUnknown).IsValid() {
 		v.addDiag(DiagConstraint, r.Pos,
-			fmt.Sprintf("%s: on_unknown must be no_match, match, or fail_request, got %q", context, r.OnUnknown),
+			fmt.Sprintf("%s: on_unknown must be %s, got %q", context, config.UnknownPolicyChoices(), r.OnUnknown),
 			nil,
 		)
 	}
