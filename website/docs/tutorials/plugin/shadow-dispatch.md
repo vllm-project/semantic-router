@@ -79,6 +79,19 @@ The request path does one non-blocking slot check and returns. Everything else r
 
 Results and reasons are exported as `sr_shadow_dispatch_total{decision,result,reason}`, with `sr_shadow_dispatch_latency_seconds`, `sr_shadow_dispatch_inflight`, and `sr_shadow_dispatch_queued`. Drops caused by resource bounds are reported through metrics and a structured `shadow_dispatch_dropped` event rather than a replay write, so an overloaded shadow lane cannot amplify load on the replay store.
 
+### Interpreting failures
+
+A `failed` outcome does not always say something about the candidate model. Read the reason together with `status_code`, `attempts`, and the truncated `error` in the outcome metadata:
+
+| Meaning | Reasons | How to read it |
+| --- | --- | --- |
+| Candidate rejected the request | `upstream_status` with a 4xx `status_code` | The shadow model could not accept the approved request, for example an unsupported parameter or a context window that is too small. Count it against the candidate. |
+| Candidate health or capacity | `upstream_status` with a 5xx `status_code`, `timeout`, `transport_error` | The backend was unreachable, overloaded, or too slow within `timeout_seconds` after `max_retries`. This measures the deployment, not answer quality. |
+| Candidate output problem | `malformed_response`, `response_too_large` | The backend answered but the body was not a valid response for its wire format or exceeded `max_response_bytes`. |
+| Router-side, not about the candidate | `backend_unresolved`, `credential_unresolved`, `encode_failed` | The router could not build or address the shadow call. Fix the configuration and exclude these from any candidate comparison. |
+
+`dropped` and `sampled_out` never reach the replay record. They mean the router chose not to send the shadow, so they carry no signal about the candidate model and are visible only in metrics and logs.
+
 ### Replay and audit capture
 
 Completed and failed shadows append one outcome to the primary request's replay record with `source: shadow_dispatch`, `target: model`, `target_ref: <shadow model>`, the verdict, and the reason. The outcome metadata carries primary and shadow request identity, primary and shadow model and backend, decision and recipe, sample rate, enqueue, start, and finish timestamps, queue wait and latency, attempts, status code, response size, stop reason, token counts, and a SHA-256 of the shadow text. Outcomes are append-only.
