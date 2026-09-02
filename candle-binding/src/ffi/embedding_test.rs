@@ -148,3 +148,30 @@ fn test_get_embedding_smart_priority_combinations(
         crate::ffi::memory::free_embedding(result.data, result.length);
     }
 }
+
+/// The multimodal text encoder holds a fixed number of position embeddings, so
+/// a longer sequence has to be clamped before it reaches the position lookup.
+/// Regression for a long input failing with
+/// "index-select invalid index 512 with dim size 512".
+#[rstest]
+#[case(0, 512, 0)]
+#[case(1, 512, 1)]
+#[case(511, 512, 511)]
+#[case(512, 512, 512)]
+#[case(513, 512, 512)]
+#[case(4096, 512, 512)]
+fn test_clamp_to_position_limit(
+    #[case] input_len: usize,
+    #[case] max_position: usize,
+    #[case] want_len: usize,
+) {
+    let mut ids: Vec<u32> = (0..input_len as u32).collect();
+    let mut mask: Vec<u32> = vec![1; input_len];
+
+    clamp_to_position_limit(&mut ids, &mut mask, max_position);
+
+    assert_eq!(ids.len(), want_len, "clamped ids length");
+    assert_eq!(mask.len(), want_len, "mask must stay the same length as ids");
+    // The kept tokens are the start of the sequence, not an arbitrary window.
+    assert!(ids.iter().enumerate().all(|(i, id)| *id == i as u32));
+}

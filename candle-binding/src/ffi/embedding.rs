@@ -810,8 +810,13 @@ fn generate_multimodal_text_embedding(
         .encode(text, true)
         .map_err(|e| format!("Tokenization failed: {:?}", e))?;
 
-    let token_ids: Vec<u32> = encoding.get_ids().to_vec();
-    let attention_mask: Vec<u32> = encoding.get_attention_mask().to_vec();
+    let mut token_ids: Vec<u32> = encoding.get_ids().to_vec();
+    let mut attention_mask: Vec<u32> = encoding.get_attention_mask().to_vec();
+    clamp_to_position_limit(
+        &mut token_ids,
+        &mut attention_mask,
+        model.config().text_max_position_embeddings,
+    );
     let seq_len = token_ids.len();
 
     let device = model.device();
@@ -2289,6 +2294,18 @@ pub extern "C" fn init_multimodal_embedding_model(
 /// - `target_dim`: Target dimension (0 for default 384, or 32/64/128/256)
 /// - `result`: Output pointer for embedding result
 ///
+/// Clamp a tokenized sequence to the text encoder's position-embedding limit.
+///
+/// The encoder holds a fixed number of position embeddings, so a longer sequence
+/// fails in the position lookup instead of being scored on its start. The batch
+/// path applies the same limit in `encode_text_batch_with_matryoshka`.
+pub(crate) fn clamp_to_position_limit(ids: &mut Vec<u32>, mask: &mut Vec<u32>, max_position: usize) {
+    if ids.len() > max_position {
+        ids.truncate(max_position);
+        mask.truncate(max_position);
+    }
+}
+
 /// # Returns
 /// 0 on success, -1 on error
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
@@ -2347,8 +2364,13 @@ pub extern "C" fn multimodal_encode_text(
         }
     };
 
-    let ids: Vec<u32> = encoding.get_ids().to_vec();
-    let mask: Vec<u32> = encoding.get_attention_mask().to_vec();
+    let mut ids: Vec<u32> = encoding.get_ids().to_vec();
+    let mut mask: Vec<u32> = encoding.get_attention_mask().to_vec();
+    clamp_to_position_limit(
+        &mut ids,
+        &mut mask,
+        model.config().text_max_position_embeddings,
+    );
     let seq_len = ids.len();
 
     let device = model.device();
