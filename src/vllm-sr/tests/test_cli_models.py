@@ -8,7 +8,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-UserConfig = importlib.import_module("cli.models").UserConfig
+models = importlib.import_module("cli.models")
+UserConfig = models.UserConfig
+Rules = models.Rules
 
 
 def _decision(**overrides):
@@ -107,10 +109,6 @@ def test_decision_route_action_rejects_unknown_type():
 
 
 def test_rules_reject_on_unknown_with_condition_on_error():
-    import pytest
-
-    Rules = importlib.import_module("cli.models").Rules
-
     conflicting = {
         "operator": "AND",
         "on_unknown": "no_match",
