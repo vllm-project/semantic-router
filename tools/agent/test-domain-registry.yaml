@@ -142,7 +142,7 @@ domains:
     workflow: .github/workflows/integration-test-k8s.yml
     cadence: [pr, main, nightly]
     resource_class: heavy
-    local: {fast: [make build-e2e], feature: []}
+    local: {fast: [make build-e2e, make soak-test], feature: []}
     image_receipts: [extproc]
     reporting:
       kind: e2e-profile
