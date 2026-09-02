@@ -59,6 +59,29 @@ func (s *stubSequenceBackend) Classify(ctx context.Context, text string) (Sequen
 	return SequenceClassificationResult{}, nil
 }
 
+type closingStubSequenceBackend struct {
+	stubSequenceBackend
+	closed bool
+}
+
+func (s *closingStubSequenceBackend) Close() error {
+	s.closed = true
+	return nil
+}
+
+func TestAdmittedSequenceClassifierForwardsClose(t *testing.T) {
+	backend := &closingStubSequenceBackend{}
+	if err := (admittedSequenceClassifier{backend: backend}).Close(); err != nil {
+		t.Fatal(err)
+	}
+	if !backend.closed {
+		t.Fatal("wrapper must close the wrapped backend")
+	}
+	if err := (admittedSequenceClassifier{backend: &stubSequenceBackend{}}).Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestApplyAdmissionGatesWrapsJailbreakBackend(t *testing.T) {
 	stub := &stubSequenceBackend{}
 	cfg := &config.RouterConfig{}

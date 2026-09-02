@@ -97,6 +97,13 @@ func (a admittedSequenceClassifier) Classify(ctx context.Context, text string) (
 	})
 }
 
+func (a admittedSequenceClassifier) Close() error {
+	if closer, ok := a.backend.(interface{ Close() error }); ok {
+		return closer.Close()
+	}
+	return nil
+}
+
 type admittedCategoryInference struct {
 	backend    CategoryInference
 	gate       admission.Admissioner
