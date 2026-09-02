@@ -1,0 +1,18 @@
+{
+  "max_completion_tokens": 32,
+  "messages": [
+    {
+      "content": "before",
+      "role": "user"
+    },
+    {
+      "content": "policy update",
+      "role": "system"
+    },
+    {
+      "content": "after",
+      "role": "user"
+    }
+  ],
+  "model": "routed-model"
+}

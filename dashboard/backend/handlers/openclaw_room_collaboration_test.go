@@ -111,8 +111,8 @@ func TestRoomCollaborationBus_WSDisconnectDoesNotBreakSSE(t *testing.T) {
 		RoomID:     room.ID,
 		TeamID:     room.TeamID,
 		SenderType: "system",
-		SenderID:   "clawos-system",
-		SenderName: "ClawOS",
+		SenderID:   "openclaw-system",
+		SenderName: "OpenClaw",
 		Content:    "sse still works",
 		CreatedAt:  time.Now().UTC().Format(time.RFC3339),
 	}))
@@ -124,6 +124,22 @@ func TestRoomCollaborationBus_WSDisconnectDoesNotBreakSSE(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("expected sse client to receive event after websocket disconnect")
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		clientCount := 0
+		h.roomWSClientMap(room.ID).Range(func(_, _ any) bool {
+			clientCount++
+			return true
+		})
+		if clientCount == 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("websocket client was not reclaimed after disconnect: %d remain", clientCount)
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 

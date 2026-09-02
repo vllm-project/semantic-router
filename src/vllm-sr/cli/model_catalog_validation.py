@@ -255,8 +255,11 @@ def _validate_catalog_model_role_pool(
         )
 
     providers = asset_document.get("providers")
-    provider_models = providers.get("models") if isinstance(providers, dict) else None
-    if not isinstance(provider_models, list):
+    if providers is None:
+        provider_models: list[Any] = []
+    elif isinstance(providers, dict) and isinstance(providers.get("models"), list):
+        provider_models = providers["models"]
+    else:
         raise ModelCatalogError("built-in model asset providers are invalid")
     provider_names = {
         item.get("name")

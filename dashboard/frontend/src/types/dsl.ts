@@ -233,7 +233,14 @@ export interface FormatResult {
 
 // ---------- Deploy Types ----------
 
-export type DeployStep = 'compiling' | 'validating' | 'backing_up' | 'writing' | 'reloading' | 'done' | 'error'
+export type DeployStep =
+  | 'compiling'
+  | 'validating'
+  | 'backing_up'
+  | 'writing'
+  | 'reloading'
+  | 'done'
+  | 'error'
 
 export interface DeployProgress {
   step: DeployStep
@@ -253,93 +260,9 @@ export interface ConfigVersion {
   filename: string
 }
 
-// ---------- Natural Language Builder ----------
-
-export type BuilderNLConnectionMode = 'default' | 'custom'
-export type BuilderNLProviderKind = 'vllm' | 'openai-compatible' | 'anthropic'
-
-export interface BuilderNLConnection {
-  providerKind: BuilderNLProviderKind
-  modelName: string
-  baseUrl: string
-  accessKey?: string
-  endpointName?: string
-}
-
-export interface BuilderNLGenerateRequest {
-  prompt: string
-  currentDsl?: string
-  connectionMode: BuilderNLConnectionMode
-  customConnection?: BuilderNLConnection
-  temperature?: number
-  maxRetries?: number
-  timeoutSeconds?: number
-}
-
-export interface BuilderNLVerifyRequest {
-  connectionMode: BuilderNLConnectionMode
-  customConnection?: BuilderNLConnection
-  timeoutSeconds?: number
-}
-
-export interface BuilderNLReview {
-  ready: boolean
-  summary: string
-  warnings: string[]
-  checks: string[]
-}
-
-export type BuilderNLProgressLevel = 'info' | 'success' | 'warning' | 'error'
-
-export interface BuilderNLProgressEvent {
-  phase: string
-  level: BuilderNLProgressLevel
-  message: string
-  attempt?: number
-  kind?: 'stage' | 'heartbeat'
-  elapsedSeconds?: number
-  timestamp: number
-}
-
-export interface BuilderNLValidation {
-  ready: boolean
-  diagnostics: Diagnostic[]
-  errorCount: number
-  compileError?: string
-}
-
-export interface BuilderNLStagedDraft {
-  prompt: string
-  dsl: string
-  baseYaml: string
-  summary: string
-  suggestedTestQuery?: string
-  review: BuilderNLReview
-  validation: BuilderNLValidation
-}
-
-export interface BuilderNLVerifyResponse {
-  ready: boolean
-  summary: string
-  connectionMode: BuilderNLConnectionMode
-  providerKind?: BuilderNLProviderKind
-  modelName?: string
-  targetModelName?: string
-  endpoint?: string
-}
-
-export interface BuilderNLGenerateResponse {
-  dsl: string
-  baseYaml: string
-  summary: string
-  suggestedTestQuery?: string
-  review: BuilderNLReview
-  validation: BuilderNLValidation
-}
-
 // ---------- Editor State ----------
 
-export type EditorMode = 'dsl' | 'visual' | 'nl'
+export type EditorMode = 'dsl' | 'visual'
 
 export interface EditorState {
   /** Current DSL source text in the editor */

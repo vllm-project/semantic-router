@@ -1,0 +1,200 @@
+.field {
+  display: grid;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.field > span {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 650;
+}
+
+.field input,
+.field textarea,
+.field select {
+  width: 100%;
+}
+
+.field textarea {
+  min-height: 92px;
+  resize: vertical;
+}
+
+.field small {
+  color: var(--text-muted);
+  font-size: 0.69rem;
+  line-height: 1.45;
+}
+
+.builderHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.profileGrid {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.45fr) minmax(0, 1fr);
+  gap: 0.85rem;
+  margin-top: 0.9rem;
+}
+
+.profileSummary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0;
+  padding: 0;
+}
+
+.profileSummary > div {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 9rem;
+  padding: 0.2rem 1rem;
+  border-left: 1px solid var(--border-subtle);
+}
+
+.profileSummary > div:first-child {
+  border-left: 0;
+}
+
+.profileSummary dt {
+  color: var(--text-muted);
+  font-size: 0.68rem;
+}
+
+.profileSummary dd {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--text-xs);
+  font-weight: 650;
+}
+
+.ledgerBoundary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.85rem;
+  padding: 0.75rem 0.85rem;
+  border: 0;
+  border-left: 2px solid var(--color-warning);
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  line-height: 1.45;
+}
+
+.ledgerBoundary > div {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.ledgerBoundary strong {
+  color: var(--text-primary);
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: minmax(260px, 34rem);
+  align-items: start;
+  gap: 0.85rem;
+  margin-top: 0.85rem;
+}
+
+.contextDisclosure {
+  min-width: 0;
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+  border-radius: 0;
+  --evaluation-disclosure-indicator-color: var(--text-secondary);
+}
+
+.contextDisclosureSummary {
+  min-height: var(--control-height);
+  padding: 0.55rem 0;
+}
+
+.contextDisclosureSummary span {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 650;
+}
+
+.contextDisclosureSummary small {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: 0.68rem;
+}
+
+.contextDisclosure[open] > .contextDisclosureSummary {
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.contextField {
+  padding: 0.7rem 0;
+}
+
+.formActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.9rem;
+  padding: 0.8rem 0;
+  border-top: 1px solid var(--border-subtle);
+  background: transparent;
+}
+
+.formActions > span {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+.builderNotice {
+  margin-top: 0.85rem;
+}
+
+@media (max-width: 760px) {
+  .builderHeader,
+  .ledgerBoundary {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .profileGrid,
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .formActions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .formActions button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .profileSummary {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .profileSummary > div {
+    min-width: 0;
+    padding: 0.55rem 0;
+    border-left: 0;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .profileSummary > div:last-child {
+    border-bottom: 0;
+  }
+}

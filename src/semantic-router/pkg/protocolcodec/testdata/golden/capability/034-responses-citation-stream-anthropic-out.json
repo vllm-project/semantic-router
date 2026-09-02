@@ -1,0 +1,13 @@
+{
+  "status": "error",
+  "error": {
+    "category": "unsupported_feature",
+    "code": "lossy_translation"
+  },
+  "diagnostics": [
+    {
+      "field": "stream.logprobs",
+      "action": "dropped"
+    }
+  ]
+}

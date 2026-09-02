@@ -15,6 +15,9 @@ func validateDecisionContracts(cfg *RouterConfig) error {
 	if err := validateClassifierSignalContracts(cfg); err != nil {
 		return err
 	}
+	if err := validateInputModalityContracts(cfg); err != nil {
+		return err
+	}
 	if err := validateDecisionModelContracts(cfg); err != nil {
 		return err
 	}
@@ -26,13 +29,16 @@ func validateDecisionContracts(cfg *RouterConfig) error {
 
 func validateDecisionModelContracts(cfg *RouterConfig) error {
 	for _, decision := range cfg.AllRoutingDecisions() {
-		if err := validateDecisionRuleNode(cfg, decision.Name, &decision.Rules); err != nil {
+		if err := validateDecisionRuleNode(cfg, decision.Name, &decision.Rules, true); err != nil {
 			return err
 		}
 		if err := validateDecisionAnnotations(decision); err != nil {
 			return err
 		}
 		if err := validateDecisionModelRefs(cfg, decision); err != nil {
+			return err
+		}
+		if err := validateDecisionAction(cfg, decision); err != nil {
 			return err
 		}
 		if err := validateDecisionAlgorithmConfig(decision.Name, decision.ModelRefs, decision.Algorithm); err != nil {
@@ -54,19 +60,45 @@ func validateDecisionModelContracts(cfg *RouterConfig) error {
 	return nil
 }
 
-func validateDecisionRuleNode(cfg *RouterConfig, decisionName string, node *RuleNode) error {
+func validateDecisionRuleNode(cfg *RouterConfig, decisionName string, node *RuleNode, root bool) error {
 	if node == nil {
 		return nil
+	}
+	if node.OnUnknown != "" {
+		if !root {
+			return fmt.Errorf("decision '%s': on_unknown is only supported on the root rules node", decisionName)
+		}
+		if !node.OnUnknown.IsValid() {
+			return fmt.Errorf("decision '%s': rules on_unknown must be %s", decisionName, UnknownPolicyChoices())
+		}
+		if ruleTreeSetsOnError(node) {
+			return fmt.Errorf("decision '%s': condition on_error has no effect when rules.on_unknown is set; remove one of them", decisionName)
+		}
 	}
 	if node.IsLeaf() {
 		return validateDecisionLeafNode(cfg, decisionName, node)
 	}
 	for i := range node.Conditions {
-		if err := validateDecisionRuleNode(cfg, decisionName, &node.Conditions[i]); err != nil {
+		if err := validateDecisionRuleNode(cfg, decisionName, &node.Conditions[i], false); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func ruleTreeSetsOnError(node *RuleNode) bool {
+	if node == nil {
+		return false
+	}
+	if node.OnError != "" {
+		return true
+	}
+	for i := range node.Conditions {
+		if ruleTreeSetsOnError(&node.Conditions[i]) {
+			return true
+		}
+	}
+	return false
 }
 
 func validateDecisionLeafNode(
@@ -145,7 +177,7 @@ func validateClassifierDecisionLeaf(
 			node.Name,
 		)
 	}
-	if rule.Type == "local" {
+	if rule.Type == ClassifierSignalTypeLocal {
 		return validateLocalClassifierDecisionPredicate(decisionName, node)
 	}
 	return nil
@@ -393,11 +425,6 @@ func validateOneDecisionPluginContracts(
 			return fmt.Errorf("decision '%s': %w", decision.Name, err)
 		}
 	}
-	if imageGenCfg := decision.GetImageGenConfig(); imageGenCfg != nil {
-		if err := imageGenCfg.Validate(); err != nil {
-			return fmt.Errorf("decision '%s': %w", decision.Name, err)
-		}
-	}
 	return validateDecisionRAGAndMemoryPlugins(cfg, decision)
 }
 
@@ -494,6 +521,9 @@ func validateDecisionAlgorithmConfig(decisionName string, modelRefs []ModelRef, 
 	)
 	if err != nil {
 		return err
+	}
+	if minimumErr := validateDecisionMinimumCandidates(decisionName, modelRefs, algorithm); minimumErr != nil {
+		return minimumErr
 	}
 
 	configuredBlocks := configuredAlgorithmBlocks(algorithm)
@@ -685,9 +715,9 @@ func validateSpecializedAlgorithmConfig(decisionName string, modelRefs []ModelRe
 	case "remom":
 		return validateDecisionReMoMAlgorithm(decisionName, modelRefs, algorithm.ReMoM)
 	case "fusion":
-		return wrapAlgorithmValidationError(decisionName, "fusion", ValidateFusionAlgorithmConfig(algorithm.Fusion))
+		return validateDecisionFusionAlgorithm(decisionName, modelRefs, algorithm.Fusion)
 	case "workflows":
-		return wrapAlgorithmValidationError(decisionName, "workflows", ValidateWorkflowsAlgorithmConfig(algorithm.Workflows))
+		return validateDecisionWorkflowsAlgorithm(decisionName, modelRefs, algorithm.Workflows)
 	case "prompt":
 		return validatePromptAlgorithmConfig(decisionName, modelRefs, algorithm)
 	}

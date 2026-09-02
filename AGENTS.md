@@ -57,6 +57,7 @@ tool-mandated entrypoints. The executable allowlist is in
 - Drive the active task to its reported completion boundary: fix failures and rerun the applicable gates until the current change or subtask is done, and do not hand off on the first failing run.
 - Treat docs-only and website-only edits as lightweight unless the task matrix says otherwise.
 - Contributor workflow, issue or PR intake rules, and maintainer label taxonomy live in `CONTRIBUTING.md`, `.github/PULL_REQUEST_TEMPLATE.md`, `.github/ISSUE_TEMPLATE/**`, and `.prowlabels.yaml`; commits intended for PRs must use `git commit -s`.
+- GitHub work uses one `wg/*` owner and an `epic` structural label for `[Epic]` issues. Do not recreate the retired `area/*` or `track/*` taxonomies; navigate work through Workgroup and Epic relationships instead.
 - Keep commits reviewable and logically coherent. Each commit must build and lint, describe why the change exists, and avoid unrelated drive-by cleanup.
 - Keep PR blast radius aligned with the requested behavior; couple subsystems only when their contracts change together.
 - Maintainer release, issue, PR, stale-work, and daily-board workflows live in [tools/agent/docs/maintainer-ops.md](tools/agent/docs/maintainer-ops.md) and write local state only under `.agent-harness/maintainer/` unless an explicit reviewed apply step mutates GitHub.
@@ -80,7 +81,7 @@ tool-mandated entrypoints. The executable allowlist is in
 - Entry and navigation: [tools/agent/docs/README.md](tools/agent/docs/README.md), [tools/agent/docs/governance.md](tools/agent/docs/governance.md)
 - Architecture and boundaries: [tools/agent/docs/architecture-guardrails.md](tools/agent/docs/architecture-guardrails.md), nearest local `AGENTS.md`
 - Testing and done criteria: [tools/agent/docs/feature-complete-checklist.md](tools/agent/docs/feature-complete-checklist.md)
-- Executable contract: [tools/agent/repo-manifest.yaml](tools/agent/repo-manifest.yaml), [tools/agent/test-domain-registry.yaml](tools/agent/test-domain-registry.yaml), [tools/agent/task-matrix.yaml](tools/agent/task-matrix.yaml), [tools/agent/skill-registry.yaml](tools/agent/skill-registry.yaml), [tools/agent/e2e-profile-map.yaml](tools/agent/e2e-profile-map.yaml), [tools/agent/structure-rules.yaml](tools/agent/structure-rules.yaml)
+- Executable contract: [tools/agent/repo-manifest.yaml](tools/agent/repo-manifest.yaml), [tools/agent/test-domain-registry.yaml](tools/agent/test-domain-registry.yaml), [tools/agent/task-matrix.yaml](tools/agent/task-matrix.yaml), [tools/agent/skill-registry.yaml](tools/agent/skill-registry.yaml), [tools/agent/structure-rules.yaml](tools/agent/structure-rules.yaml)
 - Maintainer ops: [tools/agent/docs/maintainer-ops.md](tools/agent/docs/maintainer-ops.md), [tools/agent/maintainer-policy.yaml](tools/agent/maintainer-policy.yaml)
 
 Temporary working notes can exist when needed, but they are not part of the canonical harness unless promoted into the docs or executable rule layer above.

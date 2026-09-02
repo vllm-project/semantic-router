@@ -1,0 +1,50 @@
+{
+  "operation": "request",
+  "base": {
+    "model": "client-model",
+    "max_tokens": 32,
+    "messages": [
+      {
+        "role": "user",
+        "content": "Use the selected tool."
+      }
+    ]
+  },
+  "cases": [
+    {
+      "name": "custom",
+      "patch": {
+        "tools": [
+          {
+            "type": "custom",
+            "name": "lookup",
+            "description": "Look up a value",
+            "input_schema": {
+              "type": "object"
+            }
+          }
+        ]
+      }
+    },
+    {"name": "bash_20250124", "patch": {"tools": [{"type": "bash_20250124"}]}},
+    {"name": "browser_toolset_20260801", "patch": {"tools": [{"type": "browser_toolset_20260801"}]}},
+    {"name": "code_execution_20250522", "patch": {"tools": [{"type": "code_execution_20250522"}]}},
+    {"name": "code_execution_20250825", "patch": {"tools": [{"type": "code_execution_20250825"}]}},
+    {"name": "code_execution_20260120", "patch": {"tools": [{"type": "code_execution_20260120"}]}},
+    {"name": "code_execution_20260521", "patch": {"tools": [{"type": "code_execution_20260521"}]}},
+    {"name": "computer_toolset_20260801", "patch": {"tools": [{"type": "computer_toolset_20260801"}]}},
+    {"name": "memory_20250818", "patch": {"tools": [{"type": "memory_20250818"}]}},
+    {"name": "text_editor_20250124", "patch": {"tools": [{"type": "text_editor_20250124"}]}},
+    {"name": "text_editor_20250429", "patch": {"tools": [{"type": "text_editor_20250429"}]}},
+    {"name": "text_editor_20250728", "patch": {"tools": [{"type": "text_editor_20250728"}]}},
+    {"name": "tool_search_tool_bm25_20251119", "patch": {"tools": [{"type": "tool_search_tool_bm25_20251119"}]}},
+    {"name": "tool_search_tool_regex_20251119", "patch": {"tools": [{"type": "tool_search_tool_regex_20251119"}]}},
+    {"name": "web_fetch_20250910", "patch": {"tools": [{"type": "web_fetch_20250910"}]}},
+    {"name": "web_fetch_20260209", "patch": {"tools": [{"type": "web_fetch_20260209"}]}},
+    {"name": "web_fetch_20260309", "patch": {"tools": [{"type": "web_fetch_20260309"}]}},
+    {"name": "web_fetch_20260318", "patch": {"tools": [{"type": "web_fetch_20260318"}]}},
+    {"name": "web_search_20250305", "patch": {"tools": [{"type": "web_search_20250305"}]}},
+    {"name": "web_search_20260209", "patch": {"tools": [{"type": "web_search_20260209"}]}},
+    {"name": "web_search_20260318", "patch": {"tools": [{"type": "web_search_20260318"}]}}
+  ]
+}

@@ -11,18 +11,23 @@ arbitrary debug routes) straight through.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 from collections import OrderedDict
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
+from copy import deepcopy
+from http import HTTPStatus
 from typing import Any
 
 import httpx
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 
+from .provider_contract import ContractViolationError, validate_provider_request
 from .translate import (
+    OpenAIStreamToAnthropic,
     anthropic_to_openai,
     apply_cache_usage,
     cache_prefix_hash,
@@ -53,6 +58,278 @@ _HOP_BY_HOP = {
 _MAX_REQUEST_STORE_SESSIONS = 32
 
 
+def _contains_text(value: Any, marker: str) -> bool:
+    if isinstance(value, str):
+        return marker in value
+    if isinstance(value, list):
+        return any(_contains_text(item, marker) for item in value)
+    if isinstance(value, dict):
+        return any(_contains_text(item, marker) for item in value.values())
+    return False
+
+
+def _has_mock_tool_result(body: dict[str, Any]) -> bool:
+    calls: set[str] = set()
+    for message in body.get("messages", []):
+        if not isinstance(message, dict) or not isinstance(
+            message.get("content"), list
+        ):
+            continue
+        for block in message["content"]:
+            if not isinstance(block, dict):
+                continue
+            block_type = block.get("type")
+            if block_type == "tool_use":
+                call_id = block.get("id")
+                if isinstance(call_id, str) and call_id:
+                    calls.add(call_id)
+            elif block_type == "tool_result" and block.get("tool_use_id") in calls:
+                return True
+    return False
+
+
+def _mock_anthropic_tool_response(body: dict[str, Any]) -> dict[str, Any] | None:
+    if _has_mock_tool_result(body):
+        return {
+            "id": "msg_mock_tool_result_123",
+            "type": "message",
+            "role": "assistant",
+            "model": body.get("model", ""),
+            "content": [{"type": "text", "text": "tool result accepted"}],
+            "stop_reason": "end_turn",
+            "stop_sequence": None,
+            "usage": {"input_tokens": 6, "output_tokens": 3},
+        }
+    if _contains_text(body.get("messages"), "__mock_tool_call__") and body.get("tools"):
+        return {
+            "id": "msg_mock_tool_123",
+            "type": "message",
+            "role": "assistant",
+            "model": body.get("model", ""),
+            "content": [
+                {
+                    "type": "tool_use",
+                    "id": "call_mock_lookup",
+                    "name": "lookup",
+                    "input": {"query": "weather"},
+                }
+            ],
+            "stop_reason": "tool_use",
+            "stop_sequence": None,
+            "usage": {"input_tokens": 4, "output_tokens": 3},
+        }
+    return None
+
+
+def _mock_anthropic_text_response(body: dict[str, Any]) -> dict[str, Any] | None:
+    if not _contains_text(body.get("messages"), "__mock_protocol_matrix__"):
+        return None
+    return {
+        "id": "msg_mock_protocol_matrix_123",
+        "type": "message",
+        "role": "assistant",
+        "model": body.get("model", ""),
+        "content": [{"type": "text", "text": '{"protocol":"anthropic_messages"}'}],
+        "stop_reason": "end_turn",
+        "stop_sequence": None,
+        "usage": {"input_tokens": 4, "output_tokens": 3},
+    }
+
+
+def _mock_anthropic_structured_response(
+    body: dict[str, Any],
+) -> tuple[dict[str, Any], str] | None:
+    if not _contains_text(body.get("messages"), "__mock_structured_output__"):
+        return None
+    output_config = body.get("output_config")
+    output_format = (
+        output_config.get("format") if isinstance(output_config, dict) else None
+    )
+    if (
+        not isinstance(output_format, dict)
+        or output_format.get("type") != "json_schema"
+    ):
+        return None
+    text = json.dumps(
+        {"mock": "mock-vllm", "structured_output": output_format},
+        separators=(",", ":"),
+    )
+    response = {
+        "id": "msg_mock_structured_123",
+        "type": "message",
+        "role": "assistant",
+        "model": body.get("model", ""),
+        "content": [{"type": "text", "text": text}],
+        "stop_reason": "end_turn",
+        "stop_sequence": None,
+        "usage": {"input_tokens": 4, "output_tokens": 3},
+    }
+    return response, text
+
+
+def _mock_anthropic_tool_stream(body: dict[str, Any]) -> Iterator[bytes]:
+    events = [
+        (
+            "message_start",
+            {
+                "type": "message_start",
+                "message": {
+                    "id": "msg_mock_tool_123",
+                    "type": "message",
+                    "role": "assistant",
+                    "model": body.get("model", ""),
+                    "content": [],
+                    "stop_reason": None,
+                    "stop_sequence": None,
+                    "usage": {"input_tokens": 4, "output_tokens": 0},
+                },
+            },
+        ),
+        (
+            "content_block_start",
+            {
+                "type": "content_block_start",
+                "index": 0,
+                "content_block": {
+                    "type": "tool_use",
+                    "id": "call_mock_lookup",
+                    "name": "lookup",
+                    "input": {},
+                },
+            },
+        ),
+        (
+            "content_block_delta",
+            {
+                "type": "content_block_delta",
+                "index": 0,
+                "delta": {"type": "input_json_delta", "partial_json": '{"query":'},
+            },
+        ),
+        (
+            "content_block_delta",
+            {
+                "type": "content_block_delta",
+                "index": 0,
+                "delta": {"type": "input_json_delta", "partial_json": '"weather"}'},
+            },
+        ),
+        ("content_block_stop", {"type": "content_block_stop", "index": 0}),
+        (
+            "message_delta",
+            {
+                "type": "message_delta",
+                "delta": {"stop_reason": "tool_use", "stop_sequence": None},
+                "usage": {"output_tokens": 3},
+            },
+        ),
+        ("message_stop", {"type": "message_stop"}),
+    ]
+    for event, payload in events:
+        yield f"event: {event}\ndata: {json.dumps(payload, separators=(',', ':'))}\n\n".encode()
+
+
+def _mock_anthropic_text_stream(body: dict[str, Any], text: str) -> Iterator[bytes]:
+    events = [
+        (
+            "message_start",
+            {
+                "type": "message_start",
+                "message": {
+                    "id": "msg_mock_tool_result_123",
+                    "type": "message",
+                    "role": "assistant",
+                    "model": body.get("model", ""),
+                    "content": [],
+                    "stop_reason": None,
+                    "stop_sequence": None,
+                    "usage": {"input_tokens": 6, "output_tokens": 0},
+                },
+            },
+        ),
+        (
+            "content_block_start",
+            {
+                "type": "content_block_start",
+                "index": 0,
+                "content_block": {"type": "text", "text": "", "citations": None},
+            },
+        ),
+        (
+            "content_block_delta",
+            {
+                "type": "content_block_delta",
+                "index": 0,
+                "delta": {"type": "text_delta", "text": text},
+            },
+        ),
+        ("content_block_stop", {"type": "content_block_stop", "index": 0}),
+        (
+            "message_delta",
+            {
+                "type": "message_delta",
+                "delta": {"stop_reason": "end_turn", "stop_sequence": None},
+                "usage": {"output_tokens": 3},
+            },
+        ),
+        ("message_stop", {"type": "message_stop"}),
+    ]
+    for event, payload in events:
+        yield f"event: {event}\ndata: {json.dumps(payload, separators=(',', ':'))}\n\n".encode()
+
+
+def _mock_incomplete_anthropic_stream(body: dict[str, Any]) -> Iterator[bytes]:
+    model = str(body.get("model", ""))
+    events = [
+        (
+            "message_start",
+            {
+                "type": "message_start",
+                "message": {
+                    "id": "msg_mock_incomplete",
+                    "type": "message",
+                    "role": "assistant",
+                    "model": model,
+                    "content": [],
+                    "stop_reason": None,
+                    "stop_sequence": None,
+                    "usage": {"input_tokens": 2, "output_tokens": 0},
+                },
+            },
+        ),
+        (
+            "content_block_start",
+            {
+                "type": "content_block_start",
+                "index": 0,
+                "content_block": {"type": "text", "text": ""},
+            },
+        ),
+        (
+            "content_block_delta",
+            {
+                "type": "content_block_delta",
+                "index": 0,
+                "delta": {"type": "text_delta", "text": "partial"},
+            },
+        ),
+    ]
+    for event, payload in events:
+        yield f"event: {event}\ndata: {json.dumps(payload, separators=(',', ':'))}\n\n".encode()
+
+
+def _mock_midstream_anthropic_error(body: dict[str, Any]) -> Iterator[bytes]:
+    yield from _mock_incomplete_anthropic_stream(body)
+    payload = {
+        "type": "error",
+        "error": {
+            "type": "overloaded_error",
+            "message": "mock provider stream failed",
+        },
+    }
+    yield f"event: error\ndata: {json.dumps(payload, separators=(',', ':'))}\n\n".encode()
+
+
 def _filtered_headers(headers: dict[str, str]) -> dict[str, str]:
     return {k: v for k, v in headers.items() if k.lower() not in _HOP_BY_HOP}
 
@@ -78,15 +355,10 @@ class SessionCacheTracker:
 
 
 class RequestStore:
-    """Per-session ring buffer (size 1) of the most recent request the shim
-    was about to forward.
+    """Per-session ring buffer (size 1) of the most recent provider request.
 
-    Stores the translated request body alongside the headers the shim received,
-    so tests can inspect what would have reached upstream without scraping logs.
-    Note: ``record()`` is called *before* the upstream POST, so an upstream
-    failure leaves a stale entry for that session. This is acceptable for a
-    test-only shim — callers should treat the stored body as "last attempted
-    forward", not "last successful forward".
+    The native Messages body is recorded before the llama-server adapter mutates
+    it, so E2E assertions observe the same provider contract that ExtProc sent.
 
     Bounded to ``_MAX_REQUEST_STORE_SESSIONS`` sessions with LRU eviction so
     long-running multi-session test suites do not leak memory.
@@ -108,7 +380,7 @@ class RequestStore:
         body: dict[str, Any],
         headers: dict[str, str],
     ) -> None:
-        """Store the most recent forwarded body + headers for ``session_id``."""
+        """Store the most recent provider body + headers for ``session_id``."""
         if session_id in self._store:
             self._store.move_to_end(session_id)
         elif len(self._store) >= _MAX_REQUEST_STORE_SESSIONS:
@@ -210,35 +482,144 @@ def create_app(
     return app
 
 
-async def _handle_messages(request: Request, app: FastAPI) -> Response:
+def _mock_messages_response(body: dict[str, Any]) -> Response | None:
+    failure = _mock_anthropic_failure_response(body)
+    if failure is not None:
+        return failure
+    return _mock_anthropic_success_response(body)
+
+
+def _mock_anthropic_failure_response(body: dict[str, Any]) -> Response | None:
+    messages = body.get("messages")
+    if _contains_text(messages, "__mock_provider_error__"):
+        return JSONResponse(
+            status_code=HTTPStatus.TOO_MANY_REQUESTS,
+            content={
+                "type": "error",
+                "error": {
+                    "type": "rate_limit_error",
+                    "message": "mock provider rate limit",
+                },
+                "request_id": "req_mock_rate_limit",
+            },
+        )
+
+    if body.get("stream") and _contains_text(messages, "__mock_midstream_error__"):
+        return StreamingResponse(
+            _mock_midstream_anthropic_error(body),
+            media_type="text/event-stream",
+        )
+
+    if body.get("stream") and _contains_text(messages, "__mock_incomplete_stream__"):
+        return StreamingResponse(
+            _mock_incomplete_anthropic_stream(body),
+            media_type="text/event-stream",
+        )
+    return None
+
+
+def _mock_anthropic_success_response(body: dict[str, Any]) -> Response | None:
+    mock_structured = _mock_anthropic_structured_response(body)
+    if mock_structured is not None:
+        response, text = mock_structured
+        if body.get("stream"):
+            return StreamingResponse(
+                _mock_anthropic_text_stream(body, text),
+                media_type="text/event-stream",
+            )
+        return JSONResponse(content=response)
+
+    mock_text_response = _mock_anthropic_text_response(body)
+    if mock_text_response is not None:
+        if body.get("stream"):
+            return StreamingResponse(
+                _mock_anthropic_text_stream(body, '{"protocol":"anthropic_messages"}'),
+                media_type="text/event-stream",
+            )
+        return JSONResponse(content=mock_text_response)
+
+    mock_tool_response = _mock_anthropic_tool_response(body)
+    if mock_tool_response is not None:
+        if body.get("stream"):
+            if mock_tool_response.get("stop_reason") == "tool_use":
+                iterator = _mock_anthropic_tool_stream(body)
+            else:
+                iterator = _mock_anthropic_text_stream(body, "tool result accepted")
+            return StreamingResponse(iterator, media_type="text/event-stream")
+        return JSONResponse(content=mock_tool_response)
+    return None
+
+
+def _invalid_messages_request(message: str) -> JSONResponse:
+    return JSONResponse(
+        status_code=HTTPStatus.BAD_REQUEST,
+        content={
+            "type": "error",
+            "error": {
+                "type": "invalid_request_error",
+                "message": message,
+            },
+            "request_id": "req_mock_invalid",
+        },
+    )
+
+
+async def _parse_messages_body(
+    request: Request,
+) -> tuple[dict[str, Any] | None, JSONResponse | None]:
     raw_body = await request.body()
     try:
         body: dict[str, Any] = (
-            httpx.Response(200, content=raw_body).json() if raw_body else {}
+            httpx.Response(HTTPStatus.OK, content=raw_body).json() if raw_body else {}
         )
     except ValueError:
-        return JSONResponse(
-            status_code=400,
-            content={"error": "invalid_json", "detail": "body is not JSON"},
-        )
+        return None, _invalid_messages_request("request body is not valid JSON")
 
+    try:
+        return validate_provider_request(body), None
+    except ContractViolationError as error:
+        return None, _invalid_messages_request(str(error))
+
+
+async def _handle_messages(request: Request, app: FastAPI) -> Response:
+    body, error_response = await _parse_messages_body(request)
+    if error_response is not None:
+        return error_response
+    assert body is not None
+
+    session_id = request.headers.get(app.state.session_header) or "__global__"
+    app.state.request_store.record(
+        session_id,
+        deepcopy(body),
+        dict(request.headers),
+    )
     request_had_cache_control = has_cache_control(body)
     prefix_hash = cache_prefix_hash(body) if request_had_cache_control else ""
 
     body = join_system_array(body)
     body = join_tool_result_content(body)
 
-    session_id = request.headers.get(app.state.session_header) or "__global__"
+    mock_response = _mock_messages_response(body)
+    if mock_response is not None:
+        return mock_response
+
     headers = _filtered_headers(dict(request.headers))
     headers.pop("content-length", None)
 
     is_streaming = bool(body.get("stream"))
     if is_streaming:
-        return await _proxy_stream(app, "/v1/messages", body, headers)
-
-    # Record what the shim is about to forward so /debug/last-request can
-    # return the translated body + inbound headers for test assertions.
-    app.state.request_store.record(session_id, body, dict(request.headers))
+        upstream_path = (
+            "/v1/chat/completions" if app.state.openai_upstream else "/v1/messages"
+        )
+        upstream_body = anthropic_to_openai(body) if app.state.openai_upstream else body
+        return await _proxy_stream(
+            app,
+            upstream_path,
+            upstream_body,
+            headers,
+            request_body=body,
+            translate_openai=app.state.openai_upstream,
+        )
 
     upstream_path = (
         "/v1/chat/completions" if app.state.openai_upstream else "/v1/messages"
@@ -283,22 +664,44 @@ async def _proxy_stream(
     path: str,
     body: dict[str, Any],
     headers: dict[str, str],
+    *,
+    request_body: dict[str, Any],
+    translate_openai: bool,
 ) -> StreamingResponse:
-    """Stream upstream SSE bytes verbatim.
+    """Stream a native Messages response or adapt OpenAI SSE to Messages.
 
     Cache usage post-processing is not applied to streamed responses
-    because the bytes-on-the-wire format would need to be parsed and
-    re-emitted; the e2e cache-cycle tests use non-streaming requests.
+    because the e2e cache-cycle tests use non-streaming requests.
     """
 
-    async def iterate() -> AsyncIterator[bytes]:
-        async with app.state.client.stream(
-            "POST", path, json=body, headers=headers
-        ) as upstream:
-            async for chunk in upstream.aiter_raw():
-                yield chunk
+    upstream_request = app.state.client.build_request(
+        "POST", path, json=body, headers=headers
+    )
+    upstream = await app.state.client.send(upstream_request, stream=True)
 
-    return StreamingResponse(iterate(), media_type="text/event-stream")
+    async def iterate() -> AsyncIterator[bytes]:
+        try:
+            if not translate_openai or upstream.status_code >= HTTPStatus.BAD_REQUEST:
+                async for chunk in upstream.aiter_raw():
+                    yield chunk
+                return
+            adapter = OpenAIStreamToAnthropic(request_body)
+            async for line in upstream.aiter_lines():
+                if not line.startswith("data:"):
+                    continue
+                for event in adapter.feed(line.removeprefix("data:").strip()):
+                    yield event
+            for event in adapter.finish():
+                yield event
+        finally:
+            await upstream.aclose()
+
+    return StreamingResponse(
+        iterate(),
+        status_code=upstream.status_code,
+        headers=_filtered_headers(dict(upstream.headers)),
+        media_type="text/event-stream",
+    )
 
 
 async def _proxy_raw(request: Request, path: str, app: FastAPI) -> Response:

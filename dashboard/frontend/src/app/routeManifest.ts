@@ -1,19 +1,13 @@
 export type ShellRoutePage =
   | 'builder'
-  | 'clawos'
   | 'dashboard'
   | 'evaluation'
-  | 'fleet-sim'
-  | 'fleet-sim-fleets'
-  | 'fleet-sim-runs'
-  | 'fleet-sim-workloads'
   | 'insights'
   | 'insights-record'
   | 'logs'
   | 'monitoring'
+  | 'openclaw'
   | 'playground'
-  | 'plugins'
-  | 'security'
   | 'status'
   | 'topology'
   | 'tracing'
@@ -43,28 +37,18 @@ export const shellRouteDefinitions: readonly ShellRouteDefinition[] = [
   { path: '/topology', page: 'topology' },
   { path: '/tracing', page: 'tracing' },
   { path: '/status', page: 'status' },
-  { path: '/plugins', page: 'plugins' },
-  { path: '/plugins/:plugin', page: 'plugins' },
   { path: '/logs', page: 'logs' },
   { path: '/insights', page: 'insights' },
   { path: '/insights/:recordId', page: 'insights-record' },
   { path: '/evaluation', page: 'evaluation' },
-  { path: '/fleet-sim', page: 'fleet-sim' },
-  { path: '/fleet-sim/workloads', page: 'fleet-sim-workloads' },
-  { path: '/fleet-sim/fleets', page: 'fleet-sim-fleets' },
-  { path: '/fleet-sim/runs', page: 'fleet-sim-runs' },
   { path: '/builder', page: 'builder' },
-  { path: '/clawos', page: 'clawos' },
+  { path: '/openclaw', page: 'openclaw' },
   { path: '/users', page: 'users' },
-  { path: '/security', page: 'security' },
 ]
 
 export const redirectRouteDefinitions: readonly RedirectRouteDefinition[] = [
   { path: '/knowledge-bases', to: '/knowledge-bases/bases' },
   { path: '/taxonomy', to: '/knowledge-bases/bases' },
-  { path: '/openclaw', to: '/clawos' },
-  { path: '/response-cache', to: '/plugins/response-cache' },
-  { path: '/context-compression', to: '/plugins/context-compression' },
 ]
 
 export const fallbackRouteTarget = (setupMode: boolean): string =>

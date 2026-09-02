@@ -44,6 +44,8 @@ __all__ = [
     "unique_preserve_order",
 ]
 
+FALLBACK_PRIMARY_SKILL = "project-change"
+
 
 def resolve_environment(env_name: str) -> EnvironmentResolution:
     repo_manifest, _, _, _, _ = load_manifests()
@@ -104,7 +106,7 @@ def resolve_primary_skill(changed_files: list[str]) -> dict:
     best_score = None
 
     for skill in primary_skills:
-        if skill["name"] == "cross-stack-bugfix":
+        if skill["name"] == FALLBACK_PRIMARY_SKILL:
             fallback = skill
             continue
 
@@ -122,7 +124,7 @@ def resolve_primary_skill(changed_files: list[str]) -> dict:
         return best_match
     if fallback is not None:
         return fallback
-    raise KeyError("Primary skill 'cross-stack-bugfix' is missing from registry")
+    raise KeyError(f"Primary skill '{FALLBACK_PRIMARY_SKILL}' is missing from registry")
 
 
 def resolve_skill(changed_files: list[str]) -> SkillResolution:

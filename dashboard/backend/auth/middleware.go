@@ -33,7 +33,7 @@ func AuthenticateRequest(service *Service) func(http.Handler) http.Handler {
 				next.ServeHTTP(w, r)
 				return
 			}
-			token := extractAccessToken(r)
+			token, tokenSource := extractAccessTokenWithSource(r)
 			if token == "" {
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return
@@ -45,6 +45,30 @@ func AuthenticateRequest(service *Service) func(http.Handler) http.Handler {
 				return
 			}
 
+			// Repairs sessions minted before this shipped, which would otherwise 403 on
+			// every write. Safe methods too, so a page load fixes it. Sets a response
+			// cookie only; it must not authorise this request.
+			if tokenSource == tokenSourceCookie {
+				if existing, cookieErr := r.Cookie(csrfCookieName); cookieErr != nil ||
+					!csrfTokenValid(service.jwtSecret, claims.ID, existing.Value) {
+					setCSRFCookie(w, r, claims.ID, service.jwtSecret, service.ttlDuration)
+				}
+			}
+
+			// The browser attaches the session cookie to any request aimed here, including
+			// one a hostile page caused, so a cookie-authenticated write must prove it
+			// originated here. Bearer is exempt: a browser never sets it. See #2465.
+			if tokenSource != tokenSourceHeader && requiresCSRFCheck(r.Method) {
+				if !originAllowed(r, service.allowedOrigins) {
+					http.Error(w, "Forbidden: request origin is not permitted", http.StatusForbidden)
+					return
+				}
+				if !csrfTokenValid(service.jwtSecret, claims.ID, r.Header.Get(csrfHeaderName)) {
+					http.Error(w, "Forbidden: missing or invalid CSRF token", http.StatusForbidden)
+					return
+				}
+			}
+
 			user, perms, err := service.ResolveSessionUser(r.Context(), claims)
 			if err != nil {
 				log.Printf("permission load failed for user %s: %v", claims.UserID, err)
@@ -52,10 +76,11 @@ func AuthenticateRequest(service *Service) func(http.Handler) http.Handler {
 				return
 			}
 
-			required := RequiredPermission(r.Method, r.URL.Path)
-			if required != "" && !perms[required] {
-				http.Error(w, "Forbidden", http.StatusForbidden)
-				return
+			for _, required := range RequiredPermissions(r.Method, r.URL.Path) {
+				if !perms[required] {
+					http.Error(w, "Forbidden", http.StatusForbidden)
+					return
+				}
 			}
 
 			ctx := context.WithValue(r.Context(), authContextKey, AuthContext{
@@ -91,7 +116,7 @@ func ServiceUnavailableGuard() func(http.Handler) http.Handler {
 	}
 }
 
-func RequiredPermission(method, path string) string {
+func requiredPermission(method, path string) string {
 	path = strings.TrimSpace(strings.ToLower(path))
 	for _, resolver := range []func(string, string) (string, bool){
 		adminPermission,
@@ -101,7 +126,6 @@ func RequiredPermission(method, path string) string {
 		toolsPermission,
 		observabilityPermission,
 		recipePermission,
-		fleetSimPermission,
 		featurePermission,
 	} {
 		if permission, ok := resolver(method, path); ok {
@@ -114,6 +138,21 @@ func RequiredPermission(method, path string) string {
 	}
 
 	return ""
+}
+
+// RequiredPermissions returns every permission needed by a request. Most
+// routes require one permission; controlled-pair creation is both an evidence
+// write and an immediate two-worker launch, so it deliberately requires both.
+func RequiredPermissions(method, path string) []string {
+	path = strings.TrimSpace(strings.ToLower(path))
+	if method == http.MethodPost && path == "/api/evaluation/v1/controlled-pairs" {
+		return []string{PermEvalWrite, PermEvalRun}
+	}
+	primary := requiredPermission(method, path)
+	if primary == "" {
+		return nil
+	}
+	return []string{primary}
 }
 
 func recipePermission(_ string, path string) (string, bool) {
@@ -187,6 +226,8 @@ func routerPermission(method, path string) (string, bool) {
 	switch {
 	case path == "/api/models/catalog":
 		return PermConfigRead, true
+	case path == "/api/models/discover":
+		return PermConfigWrite, true
 	case path == "/api/models/verify":
 		return PermEvalRun, true
 	case path == "/api/router/v1/router/outcomes" && method == http.MethodPost:
@@ -265,17 +306,10 @@ func observabilityPermission(_ string, path string) (string, bool) {
 	}
 }
 
-func fleetSimPermission(method, path string) (string, bool) {
-	if !strings.HasPrefix(path, "/api/fleet-sim/") && path != "/api/fleet-sim" {
-		return "", false
-	}
-	return readOrManagePermission(method, PermConfigRead, PermConfigWrite), true
-}
-
 func featurePermission(method, path string) (string, bool) {
 	switch {
-	case strings.HasPrefix(path, "/api/evaluation"):
-		if path == "/api/evaluation/run" || strings.HasPrefix(path, "/api/evaluation/cancel/") {
+	case path == "/api/evaluation/v1" || strings.HasPrefix(path, "/api/evaluation/v1/"):
+		if isEvaluationRunAction(path) || isControlledPairCancelAction(path) {
 			return PermEvalRun, true
 		}
 		if method == http.MethodPost || method == http.MethodDelete {
@@ -286,18 +320,23 @@ func featurePermission(method, path string) (string, bool) {
 		return openclawPermission(method, path)
 	case strings.HasPrefix(path, "/api/ml-pipeline/"):
 		return PermMlPipeline, true
-	case strings.HasPrefix(path, "/api/security/"):
-		return securityPermission(method), true
 	default:
 		return "", false
 	}
 }
 
-func securityPermission(method string) string {
-	if method == http.MethodGet {
-		return PermConfigRead
-	}
-	return PermSecurityManage
+func isControlledPairCancelAction(path string) bool {
+	path = strings.TrimRight(path, "/")
+	rest := strings.TrimPrefix(path, "/api/evaluation/v1/controlled-pairs/")
+	parts := strings.Split(rest, "/")
+	return len(parts) == 2 && parts[0] != "" && parts[1] == "cancel"
+}
+
+func isEvaluationRunAction(path string) bool {
+	path = strings.TrimRight(path, "/")
+	rest := strings.TrimPrefix(path, "/api/evaluation/v1/runs/")
+	parts := strings.Split(rest, "/")
+	return len(parts) == 2 && parts[0] != "" && (parts[1] == "start" || parts[1] == "cancel")
 }
 
 func openclawPermission(method, path string) (string, bool) {
@@ -411,18 +450,36 @@ func extractBearer(raw string) string {
 	return normalizeAccessToken(parts[1])
 }
 
-func extractAccessToken(r *http.Request) string {
+// Which transport supplied the credential, so the CSRF check can apply to cookies only.
+type accessTokenSource int
+
+const (
+	tokenSourceNone accessTokenSource = iota
+	tokenSourceHeader
+	tokenSourceCookie
+)
+
+// The query-string transport is deliberately absent: a credential in a URL is written down
+// by proxy access logs, browser history and the Referer header. Browser transports use the
+// HttpOnly vsr_session cookie the browser attaches for them; non-browser clients use
+// Authorization: Bearer. See #2465.
+func extractAccessTokenWithSource(r *http.Request) (string, accessTokenSource) {
 	if token := extractBearer(r.Header.Get("Authorization")); token != "" {
-		return token
+		return token, tokenSourceHeader
 	}
 
 	if cookie, err := r.Cookie(authSessionCookieName); err == nil {
 		if token := normalizeAccessToken(cookie.Value); token != "" {
-			return token
+			return token, tokenSourceCookie
 		}
 	}
 
-	return normalizeAccessToken(r.URL.Query().Get("authToken"))
+	return "", tokenSourceNone
+}
+
+func extractAccessToken(r *http.Request) string {
+	token, _ := extractAccessTokenWithSource(r)
+	return token
 }
 
 func normalizeAccessToken(raw string) string {
@@ -448,9 +505,13 @@ func requiresAuthentication(path string) bool {
 		return false
 	case strings.HasPrefix(path, "/api/auth/bootstrap/"):
 		return false
+	case strings.HasPrefix(path, "/api/auth/invitations/"):
+		return false
 	case strings.HasPrefix(path, "/api/auth/me"):
 		return true
 	case strings.HasPrefix(path, "/api/setup/state"):
+		return false
+	case path == "/api/status" || path == "/api/status/":
 		return false
 	case strings.HasPrefix(path, "/embedded/wizmap/assets/"):
 		return false

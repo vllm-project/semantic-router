@@ -2,7 +2,9 @@ package classification
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"sort"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
@@ -18,6 +20,9 @@ func BuildClassifier(
 	piiMapping *PIIMapping,
 	jailbreakMapping *JailbreakMapping,
 ) (*Classifier, error) {
+	if err := config.ValidateCategoryModelBackend(cfg); err != nil {
+		return nil, err
+	}
 	jailbreakInitializer, jailbreakInference, err := buildJailbreakDependencies(cfg, jailbreakMapping)
 	if err != nil {
 		return nil, err
@@ -88,6 +93,11 @@ func (c *Classifier) executeRuntimeTasks(tasks []modelruntime.Task) error {
 		OnEvent:        logRuntimeInitializationEvent,
 	})
 	if err != nil {
+		if closeErr := c.Close(); closeErr != nil {
+			logging.ComponentWarnEvent("classifier", "runtime_initialization_rollback_failed", map[string]interface{}{
+				"error": closeErr.Error(),
+			})
+		}
 		return err
 	}
 
@@ -121,6 +131,35 @@ func (c *Classifier) defaultAPIRuntimeTasks() []modelruntime.Task {
 	return tasks
 }
 
+// Close releases the classifier's runtime resources.
+func (c *Classifier) Close() error {
+	if c == nil {
+		return nil
+	}
+	var closeErrors []error
+	closeResource := func(name string, resource interface{}) {
+		closer, ok := resource.(interface{ Close() error })
+		if !ok || closer == nil {
+			return
+		}
+		if err := closer.Close(); err != nil {
+			closeErrors = append(closeErrors, fmt.Errorf("close %s: %w", name, err))
+		}
+	}
+
+	closeResource("MCP category classifier", c.mcpCategoryInitializer)
+	closeResource("jailbreak classifier", c.jailbreakInference)
+	genericNames := make([]string, 0, len(c.genericClassifiers))
+	for name := range c.genericClassifiers {
+		genericNames = append(genericNames, name)
+	}
+	sort.Strings(genericNames)
+	for _, name := range genericNames {
+		closeResource("generic classifier "+name, c.genericClassifiers[name])
+	}
+	return errors.Join(closeErrors...)
+}
+
 func (c *Classifier) runtimeTasks() []modelruntime.Task {
 	tasks := make([]modelruntime.Task, 0, 9)
 	appendTask := func(name string, bestEffort bool, enabled bool, init func() error) {
@@ -142,6 +181,9 @@ func (c *Classifier) runtimeTasks() []modelruntime.Task {
 	appendTask("classifier.keyword_embedding", false, c.IsKeywordEmbeddingClassifierEnabled(), c.initializeKeywordEmbeddingClassifier)
 	appendTask("classifier.fact_check", true, c.needsFactCheckModelForRuntime(), c.initializeFactCheckClassifier)
 	appendTask("classifier.hallucination", true, c.needsHallucinationDetectorForRuntime(), c.initializeHallucinationDetector)
+	// Not best-effort: an NLI polarity mode with an unloadable model must fail
+	// startup rather than silently serve unverified cache hits.
+	appendTask("classifier.semantic_cache_nli", false, c.needsSemanticCacheNLIForRuntime(), c.initializeSemanticCacheNLI)
 	appendTask("classifier.feedback", true, c.needsFeedbackModelForRuntime(), c.initializeFeedbackDetector)
 	appendTask("classifier.preference", true, c.IsPreferenceClassifierEnabled(), c.initializePreferenceClassifier)
 	appendTask("classifier.language", true, len(c.Config.LanguageRules) > 0, c.initializeLanguageClassifier)

@@ -3,7 +3,7 @@
 The Dashboard is the authenticated control and observability UI for a Semantic
 Router deployment. It combines a React frontend with a Go backend that serves
 the SPA, stores dashboard state, and proxies Router, Envoy, Grafana,
-Prometheus, Jaeger, and Fleet Simulator endpoints.
+Prometheus, and Jaeger endpoints.
 
 Use it to:
 
@@ -52,19 +52,22 @@ The current installation and first-run workflow is documented in
 ```bash
 make dashboard-build
 make dashboard-check
+make dashboard-test-e2e-evaluation
 make dashboard-test-backend
 ```
 
-`dashboard-check` is the single entrypoint for dashboard quality, and the required
-`Dashboard` CI workflow runs the **same target** — nothing here is CI-only, and
-nothing in CI is missing locally. Run it before pushing. It runs, in order:
+The required `Dashboard` CI workflow runs `dashboard-check`, then the Evaluation
+browser acceptance target shown above. Both gates are available locally; run
+`dashboard-check` before every Dashboard change and the browser acceptance gate
+when changing Evaluation UI or workflows. `dashboard-check` runs, in order:
 
 | Step | What it covers |
 | --- | --- |
+| `dashboard-evaluation-catalog-check` | Verifies the generated Evaluation catalog mirrors match their canonical CLI sources. |
 | `dashboard-lint` | ESLint on the frontend, golangci-lint on the backend |
 | `dashboard-type-check` | TypeScript type checking (frontend + Knowledge Map) |
 | `dashboard-test-frontend` | Frontend unit tests |
-| `dashboard-test-backend` | `go test ./...` on `dashboard/backend` |
+| `dashboard-test-backend` | `go test ./...` on `dashboard/backend`, including the real Go → sandboxed Python Evaluation worker contract |
 | `dashboard-go-mod-tidy` | Verifies `go.mod` / `go.sum` are tidy |
 
 The dashboard backend is a **separate Go module**, so `go test ./...` from the
@@ -107,7 +110,6 @@ variables. Defaults are defined in
 | `TARGET_GRAFANA_URL` | Optional Grafana base URL. |
 | `TARGET_PROMETHEUS_URL` | Optional Prometheus base URL. |
 | `TARGET_JAEGER_URL` | Optional Jaeger base URL. |
-| `TARGET_FLEET_SIM_URL` | Optional Fleet Simulator service URL. |
 
 Feature controls:
 
@@ -118,6 +120,11 @@ Feature controls:
 | `DASHBOARD_RECIPE_STORE_WRITABLE` | Allow Recipe package import. |
 | `DASHBOARD_SETUP_MODE` | Enable the trusted first-run setup flow. |
 | `EVALUATION_ENABLED` | Enable evaluation jobs. |
+| `EVALUATION_DATA_DIR` | Durable Evaluation Plane artifact store; default `./data/evaluation`. |
+| `EVALUATION_DEPLOYMENTS_DIR` | Optional read-only directory containing a strict `evaluation-deployments.v1` `registry.json` plus relative deployment configs. Enables deployment-scoped baseline and candidate targets; unset preserves the single-runtime target. |
+| `EVALUATION_ENVOY_API_KEY_ENV` | Optional server-owned environment variable name containing the Envoy evaluation credential; the browser never supplies or receives it. |
+| `EVALUATION_AGENT_TASK_LEDGER_URL`, `_API_KEY_ENV`, `_TIMEOUT` | Optional typed server-owned endpoint for a complete sealed provider-observed agent-task ledger. Its credential and URL remain outside public catalog responses and worker argv. |
+| `VLLM_SR_SOURCE_REVISION` | Immutable source identity required to create an evaluation run: a full 40-character Git commit or `sha256:` source-tree digest. Dashboard images set this from their build argument. |
 | `ML_PIPELINE_ENABLED` | Enable benchmark, training, and config-generation jobs. |
 | `ML_TRAINING_DIR` | Training script directory for subprocess mode. |
 | `ML_SERVICE_URL` | Use an external ML service instead of local subprocesses. |
@@ -125,9 +132,34 @@ Feature controls:
 | `OPENCLAW_ENABLED` | Enable OpenClaw provisioning and room workflows. |
 
 Persistent SQLite paths include `DASHBOARD_AUTH_DB_PATH`,
-`EVALUATION_DB_PATH`, `DASHBOARD_WORKFLOW_DB_PATH`, and
-`DASHBOARD_CONFIG_PROJECTION_DB_PATH`. Mount writable persistent storage for
-any state that must survive a container restart.
+`DASHBOARD_WORKFLOW_DB_PATH`, and `DASHBOARD_CONFIG_PROJECTION_DB_PATH`.
+Evaluation evidence is not stored in SQLite: mount `EVALUATION_DATA_DIR` as
+writable persistent storage so complete run bundles survive container restarts.
+The Evaluation Plane fails closed unless its store and run directories are
+private to the Dashboard process (`0700` directories and `0600` bundle files).
+The Dashboard container defaults this store to `/app/data/evaluation`; its
+entrypoint excludes that subtree from shared-data permission widening and
+reapplies the private modes before every restart.
+
+For a local multi-deployment experiment, export
+`EVALUATION_DEPLOYMENTS_DIR` before the canonical `vllm-sr serve` command. The
+CLI validates every host path component, mounts the directory read-only into
+Dashboard only, and rewrites the environment value to the container path.
+Router and Envoy do not inherit the mount or variable. The registry accepts
+only deployment ID/name/description, a confined relative config path, and exact
+Router/Envoy origins. It rejects symlinks, traversal, unknown fields,
+duplicates, and literal credential or ledger configuration. Public catalog
+responses expose the safe deployment label but never origins, paths, or secret
+references. See the [Evaluation Plane guide](../website/docs/benchmarking/evaluation-plane.md#address-baseline-and-candidate-deployments-together)
+for the versioned schema and controlled-pair contract.
+
+Dashboard image builds accept `VLLM_SR_SOURCE_REVISION` as a build argument and
+embed it in the runtime image. The Dockerfile default is `unavailable`, which
+keeps the Dashboard usable but makes Evaluation Plane run creation fail closed;
+release and CI builds must pass an immutable full commit or source-tree digest.
+Repository Make targets derive the full commit only from a clean checkout; a
+dirty checkout resolves to `unavailable` unless the caller explicitly supplies
+a canonical `sha256:` source-tree digest.
 
 ## Authentication and write safety
 
@@ -135,6 +167,23 @@ Set a stable `DASHBOARD_JWT_SECRET` and provision the first administrator with
 `DASHBOARD_ADMIN_EMAIL`, `DASHBOARD_ADMIN_PASSWORD`, and optionally
 `DASHBOARD_ADMIN_NAME`. Public web-form bootstrap is disabled by default; only
 set `DASHBOARD_ALLOW_OPEN_BOOTSTRAP=true` in a controlled first-run environment.
+
+Writes authenticated by the session cookie must carry an `X-CSRF-Token` header
+and a matching `Origin`. The frontend does this on its own. Set
+`DASHBOARD_ALLOWED_ORIGINS` to a comma-separated list when the browser's origin
+differs from the backend's `Host`, as behind a reverse proxy or the Vite dev
+proxy (`http://localhost:3001`). Unset, the origin check is advisory and the
+CSRF token is the guarantee. `Authorization: Bearer` requests are exempt.
+
+The same list governs the ClawRoom WebSocket handshake. CORS does not apply to
+handshakes, so the origin check is the only cross-origin control there; a
+split-origin frontend that is not listed can authenticate and write but cannot
+open the room socket.
+
+Evaluation Plane evidence APIs are intentionally stricter: they accept browser
+requests only when `Origin` exactly matches the request scheme and `Host`.
+TLS-terminating proxies must overwrite `X-Forwarded-Proto` with the external
+scheme; arbitrary sibling origins never receive credentialed CORS headers.
 
 Read-only mode and the two writable-surface flags are independent. A read-only
 ConfigMap, GitOps-owned config, or read-only Recipe store should be reflected in
@@ -145,6 +194,37 @@ Some local workflows can manage containers. Do not mount a container-runtime
 socket unless users with Dashboard access are allowed to control that runtime.
 See the [security hardening guide](../website/docs/installation/security-hardening.md)
 for the deployment boundary.
+
+## Session contract
+
+Browsers authenticate with the `vsr_session` cookie the backend sets at login,
+and with nothing else. It is `HttpOnly`, `SameSite=Lax`, and `Secure` behind
+HTTPS, so page script cannot read it and the browser attaches it to same-origin
+requests on its own — `fetch`, `EventSource`, `WebSocket`, and iframes alike.
+The frontend does not store, copy, or forward it.
+
+- **`?authToken=` is not accepted.** The backend used to read a session token
+  from the query string, which put a live credential into reverse-proxy access
+  logs, browser history, and the `Referer` header. Any saved link or automation
+  still using it now receives `401`; move it to `Authorization: Bearer`.
+  Token-shaped query parameters are redacted from the logs the dashboard writes,
+  because old links keep arriving for a while.
+- **Non-browser clients use `Authorization: Bearer`.** `POST /api/auth/login`
+  returns the token in its response body for exactly this case. Bearer requests
+  are exempt from the CSRF check described above, since a browser never attaches
+  that header by itself.
+- **`vsr_csrf` is readable by script on purpose.** The frontend reads it and
+  copies the value into `X-CSRF-Token` on every unsafe request
+  ([`frontend/src/utils/authFetch.ts`](frontend/src/utils/authFetch.ts)), which
+  is why it is not `HttpOnly`. It is not a credential: it authenticates nothing
+  on its own, and the server recomputes the expected value from the session id
+  inside the session token rather than reading the cookie back, so planting one
+  achieves nothing without the session cookie as well.
+- **`SameSite=Lax` is deliberate.** `Strict` would withhold the cookie from
+  top-level navigation into the dashboard, so following a link from chat or an
+  alert would land on the login page despite a valid session. `Lax` still
+  withholds it from cross-site subrequests and form posts, and the CSRF token
+  covers what is left.
 
 ## Setup mode contract
 
@@ -165,7 +245,7 @@ Browser
   -> Go API and reverse proxy (dashboard/backend)
        -> Router management API
        -> Envoy inference listener
-       -> optional monitoring and simulator services
+       -> optional monitoring services
        -> local SQLite and config/Recipe storage
 ```
 

@@ -1,15 +1,14 @@
+import subprocess
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from cli import container_cli, container_start, core, runtime_lifecycle
-from cli.consts import (
-    DEFAULT_API_PORT,
-    DEFAULT_DASHBOARD_PORT,
-    DEFAULT_FLEET_SIM_PORT,
-    DEFAULT_METRICS_PORT,
-    DEFAULT_ROUTER_PORT,
+from cli import (
+    container_cli,
+    container_start,
+    core,
+    runtime_lifecycle,
 )
-from cli.runtime_stack import resolve_runtime_stack
 
 
 @pytest.fixture(autouse=True)
@@ -20,11 +19,11 @@ def _split_runtime_topology(monkeypatch):
 def _capture_run_commands(monkeypatch):
     captured = []
 
-    def fake_run(cmd, capture_output, text, check):
+    def fake_run(cmd, capture_output, text, check, env=None):
         captured.append(cmd)
         return SimpleNamespace(stdout="container-id\n", stderr="")
 
-    monkeypatch.setattr(container_start.subprocess, "run", fake_run)
+    monkeypatch.setattr(subprocess, "run", fake_run)
     monkeypatch.setattr(
         container_start, "_render_split_envoy_config", lambda *args, **kwargs: None
     )
@@ -119,6 +118,7 @@ def test_container_start_vllm_sr_sets_split_service_urls_for_dashboard(
     assert "127.0.0.1:9190:9190" in router_cmd
     envoy_cmd = _find_container_run_cmd(captured, "vllm-sr-envoy-container")
     assert "0.0.0.0:8899:8899" in envoy_cmd
+    assert envoy_cmd[envoy_cmd.index("--log-level") + 1] == "info"
 
     for component, command in (
         ("router", router_cmd),
@@ -148,6 +148,227 @@ def test_container_start_vllm_sr_sets_split_service_urls_for_dashboard(
         for value in _option_values(dashboard_cmd, "-e")
     )
     assert "--group-add" in envoy_cmd
+
+
+def test_split_runtime_rejects_invalid_evaluation_enabled(tmp_path, monkeypatch):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        "version: v0.3\nlisteners:\n  - name: public\n    address: 0.0.0.0\n    port: 8899\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("EVALUATION_ENABLED", "enabled")
+    monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(
+        container_start,
+        "get_runtime_images",
+        lambda **_kwargs: {
+            "router": "router-image",
+            "envoy": "envoy-image",
+            "dashboard": "dashboard-image",
+        },
+    )
+    _capture_run_commands(monkeypatch)
+    _stub_valid_container_cli(monkeypatch, tmp_path)
+
+    with pytest.raises(
+        ValueError, match="EVALUATION_ENABLED must be exactly 'true' or 'false'"
+    ):
+        container_cli.container_start_vllm_sr(
+            str(config_path),
+            {},
+            [{"name": "public", "address": "0.0.0.0", "port": 8899}],
+            network_name="vllm-sr-network",
+            minimal=False,
+        )
+
+
+def test_split_runtime_disabled_evaluation_ignores_stale_config(tmp_path, monkeypatch):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        "version: v0.3\nlisteners:\n  - name: public\n    address: 0.0.0.0\n    port: 8899\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("EVALUATION_ENABLED", "false")
+    monkeypatch.setenv("EVALUATION_DEPLOYMENTS_DIR", " invalid ")
+    monkeypatch.setenv(
+        "EVALUATION_AGENT_TASK_LEDGER_URL", "https://stale.internal/path"
+    )
+    monkeypatch.setenv("EVALUATION_AGENT_TASK_LEDGER_API_KEY_ENV", "MISSING_TOKEN")
+    monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(
+        container_start,
+        "get_runtime_images",
+        lambda **_kwargs: {
+            "router": "router-image",
+            "envoy": "envoy-image",
+            "dashboard": "dashboard-image",
+        },
+    )
+    captured = _capture_run_commands(monkeypatch)
+    _stub_valid_container_cli(monkeypatch, tmp_path)
+
+    rc, _, _ = container_cli.container_start_vllm_sr(
+        str(config_path),
+        {},
+        [{"name": "public", "address": "0.0.0.0", "port": 8899}],
+        network_name="vllm-sr-network",
+        minimal=False,
+    )
+
+    assert rc == 0
+    commands = {
+        name: _find_container_run_cmd(captured, name)
+        for name in (
+            "vllm-sr-router-container",
+            "vllm-sr-envoy-container",
+            "vllm-sr-dashboard-container",
+        )
+    }
+    dashboard_env = set(_option_values(commands["vllm-sr-dashboard-container"], "-e"))
+    assert "EVALUATION_ENABLED=false" in dashboard_env
+    assert not any("EVALUATION_AGENT_TASK_LEDGER" in value for value in dashboard_env)
+    assert not any(
+        value.endswith(":/app/evaluation-deployments:ro,z")
+        for value in _option_values(commands["vllm-sr-dashboard-container"], "-v")
+    )
+    for name in ("vllm-sr-router-container", "vllm-sr-envoy-container"):
+        service_env = set(_option_values(commands[name], "-e"))
+        assert not any(value.startswith("EVALUATION_") for value in service_env)
+
+
+def test_split_runtime_mounts_evaluation_deployments_into_dashboard_only(
+    tmp_path, monkeypatch
+):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        "version: v0.3\nlisteners:\n  - name: public\n    address: 0.0.0.0\n    port: 8899\n",
+        encoding="utf-8",
+    )
+    deployments = tmp_path / "evaluation-deployments"
+    deployments.mkdir()
+    (deployments / "deployment.yaml").write_text("version: v0.3\n", encoding="utf-8")
+    (deployments / "registry.json").write_text(
+        '{"schema_version":"evaluation-deployments.v1","deployments":['
+        '{"id":"baseline","name":"Baseline","config_file":"deployment.yaml",'
+        '"router_origin":"https://router.internal",'
+        '"envoy_origin":"https://envoy.internal"}]}',
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("EVALUATION_DEPLOYMENTS_DIR", str(deployments))
+    monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(
+        container_start,
+        "get_runtime_images",
+        lambda **_kwargs: {
+            "router": "router-image",
+            "envoy": "envoy-image",
+            "dashboard": "dashboard-image",
+        },
+    )
+    captured = _capture_run_commands(monkeypatch)
+    _stub_valid_container_cli(monkeypatch, tmp_path)
+
+    rc, _, _ = container_cli.container_start_vllm_sr(
+        str(config_path),
+        {"EVALUATION_DEPLOYMENTS_DIR": str(deployments)},
+        [{"name": "public", "address": "0.0.0.0", "port": 8899}],
+        network_name="vllm-sr-network",
+        minimal=False,
+    )
+
+    assert rc == 0
+    commands = {
+        name: _find_container_run_cmd(captured, name)
+        for name in (
+            "vllm-sr-router-container",
+            "vllm-sr-envoy-container",
+            "vllm-sr-dashboard-container",
+        )
+    }
+    dashboard_mounts = _option_values(commands["vllm-sr-dashboard-container"], "-v")
+    deployment_mounts = [
+        value
+        for value in dashboard_mounts
+        if value.endswith(":/app/evaluation-deployments:ro,z")
+    ]
+    assert len(deployment_mounts) == 1
+    snapshot_root = Path(deployment_mounts[0].split(":", 1)[0])
+    assert snapshot_root != deployments
+    assert snapshot_root.is_relative_to(tmp_path / ".vllm-sr-evaluation-staging")
+    assert not snapshot_root.is_relative_to(tmp_path / ".vllm-sr")
+    assert (snapshot_root / "registry.json").read_bytes() == (
+        deployments / "registry.json"
+    ).read_bytes()
+    assert (snapshot_root / "deployment.yaml").read_bytes() == (
+        deployments / "deployment.yaml"
+    ).read_bytes()
+    dashboard_gid = int(
+        next(
+            value.split("=", 1)[1]
+            for value in _option_values(commands["vllm-sr-dashboard-container"], "-e")
+            if value.startswith("VLLM_SR_LOG_SPOOL_GID=")
+        )
+    )
+    assert snapshot_root.stat().st_gid == dashboard_gid
+    assert (snapshot_root / "registry.json").stat().st_gid == dashboard_gid
+    assert (snapshot_root / "deployment.yaml").stat().st_gid == dashboard_gid
+    assert "EVALUATION_DEPLOYMENTS_DIR=/app/evaluation-deployments" in _option_values(
+        commands["vllm-sr-dashboard-container"], "-e"
+    )
+    for name in ("vllm-sr-router-container", "vllm-sr-envoy-container"):
+        assert not any(
+            value.endswith(":/app/evaluation-deployments:ro,z")
+            for value in _option_values(commands[name], "-v")
+        )
+        assert not any(
+            value.startswith("EVALUATION_DEPLOYMENTS_DIR=")
+            for value in _option_values(commands[name], "-e")
+        )
+
+
+def test_split_runtime_uses_explicit_envoy_log_level(tmp_path, monkeypatch):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        "version: v0.1\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
+    )
+    monkeypatch.setenv("VLLM_SR_ENVOY_LOG_LEVEL", "DeBuG")
+    monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(
+        container_start,
+        "get_runtime_images",
+        lambda **_kwargs: {"router": "test-image", "envoy": "test-image"},
+    )
+    captured = _capture_run_commands(monkeypatch)
+    _stub_valid_container_cli(monkeypatch, tmp_path)
+
+    container_cli.container_start_vllm_sr(
+        str(config_path),
+        {},
+        [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
+        network_name="vllm-sr-network",
+        minimal=True,
+    )
+
+    envoy_cmd = _find_container_run_cmd(captured, "vllm-sr-envoy-container")
+    assert envoy_cmd[envoy_cmd.index("--log-level") + 1] == "debug"
+
+
+def test_split_runtime_rejects_invalid_envoy_log_level_before_preparing_paths(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setenv("VLLM_SR_ENVOY_LOG_LEVEL", "verbose")
+    monkeypatch.setattr(
+        container_start,
+        "_prepare_runtime_paths",
+        lambda *args, **kwargs: pytest.fail("runtime paths should not be prepared"),
+    )
+
+    with pytest.raises(ValueError, match="Invalid VLLM_SR_ENVOY_LOG_LEVEL"):
+        container_start.container_start_vllm_sr(
+            str(tmp_path / "config.yaml"),
+            {},
+            [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
+        )
 
 
 def test_split_runtime_honors_management_listener_port(tmp_path, monkeypatch):
@@ -471,9 +692,6 @@ def test_start_vllm_sr_creates_and_connects_shared_network_without_observability
         record("container_create_network"),
     )
     monkeypatch.setattr(
-        core, "start_fleet_sim_sidecar", record("start_fleet_sim_sidecar", True)
-    )
-    monkeypatch.setattr(
         core, "container_start_vllm_sr", record("container_start_vllm_sr")
     )
     monkeypatch.setattr(
@@ -497,298 +715,16 @@ def test_start_vllm_sr_creates_and_connects_shared_network_without_observability
     core.start_vllm_sr("/tmp/config.yaml", env_vars={}, enable_observability=False)
 
     create_calls = [c for c in calls if c[0] == "container_create_network"]
-    fleet_sim_calls = [c for c in calls if c[0] == "start_fleet_sim_sidecar"]
     start_calls = [c for c in calls if c[0] == "container_start_vllm_sr"]
     connect_calls = [c for c in calls if c[0] == "container_network_connect"]
 
     assert create_calls[0][1] == ("vllm-sr-network",)
-    assert fleet_sim_calls[0][1][0] == "/tmp"
-    assert fleet_sim_calls[0][1][2].fleet_sim_container_name == "vllm-sr-sim-container"
     assert start_calls[0][2]["network_name"] == "vllm-sr-network"
     assert start_calls[0][2]["openclaw_network_name"] == "vllm-sr-network"
     assert start_calls[0][2]["runtime_config_file"] == "/tmp/config.yaml"
-    assert (
-        start_calls[0][2]["env_vars"]["TARGET_FLEET_SIM_URL"]
-        == "http://vllm-sr-sim-container:8000"
-    )
+    assert "TARGET_FLEET_SIM_URL" not in start_calls[0][2]["env_vars"]
     assert [call[1] for call in connect_calls] == [
         ("vllm-sr-network", "vllm-sr-router-container"),
         ("vllm-sr-network", "vllm-sr-envoy-container"),
         ("vllm-sr-network", "vllm-sr-dashboard-container"),
     ]
-
-
-def test_resolve_runtime_stack_supports_custom_stack_name_and_port_offset():
-    stack_layout = resolve_runtime_stack(stack_name="audit-a", port_offset=200)
-
-    assert stack_layout.router_container_name == "audit-a-vllm-sr-router-container"
-    assert stack_layout.envoy_container_name == "audit-a-vllm-sr-envoy-container"
-    assert (
-        stack_layout.dashboard_container_name == "audit-a-vllm-sr-dashboard-container"
-    )
-    assert stack_layout.fleet_sim_container_name == "audit-a-vllm-sr-sim"
-    assert stack_layout.network_name == "audit-a-vllm-sr-network"
-    assert stack_layout.jaeger_container_name == "audit-a-vllm-sr-jaeger"
-    assert stack_layout.prometheus_container_name == "audit-a-vllm-sr-prometheus"
-    assert stack_layout.grafana_container_name == "audit-a-vllm-sr-grafana"
-    assert stack_layout.router_port == DEFAULT_ROUTER_PORT + 200
-    assert stack_layout.metrics_port == DEFAULT_METRICS_PORT + 200
-    assert stack_layout.dashboard_port == DEFAULT_DASHBOARD_PORT + 200
-    assert stack_layout.api_port == DEFAULT_API_PORT + 200
-    assert stack_layout.fleet_sim_port == DEFAULT_FLEET_SIM_PORT + 200
-    assert (
-        stack_layout.dashboard_service_url
-        == "http://audit-a-vllm-sr-dashboard-container:8700"
-    )
-    assert (
-        stack_layout.router_api_service_url
-        == "http://audit-a-vllm-sr-router-container:8080"
-    )
-    assert (
-        stack_layout.router_metrics_service_url
-        == "http://audit-a-vllm-sr-router-container:9190/metrics"
-    )
-    assert (
-        stack_layout.envoy_admin_service_url
-        == "http://audit-a-vllm-sr-envoy-container:9901"
-    )
-    assert (
-        stack_layout.envoy_listener_service_url(8899)
-        == "http://audit-a-vllm-sr-envoy-container:8899"
-    )
-
-
-def test_start_vllm_sr_uses_state_root_override(monkeypatch, tmp_path):
-    calls = []
-    state_root = tmp_path / "workspace-root"
-    state_root.mkdir()
-
-    def record(name, ret=(0, "", "")):
-        def _fn(*args, **kwargs):
-            calls.append((name, args, kwargs))
-            return ret
-
-        return _fn
-
-    monkeypatch.setenv("VLLM_SR_STATE_ROOT_DIR", str(state_root))
-    monkeypatch.setattr(core, "ensure_clean_runtime_container", lambda _name: None)
-    monkeypatch.setattr(
-        core,
-        "load_config",
-        lambda _path: {
-            "listeners": [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}]
-        },
-    )
-    monkeypatch.setattr(
-        core, "provision_storage_backends", lambda *args, **kwargs: set()
-    )
-    monkeypatch.setattr(
-        runtime_lifecycle,
-        "container_status",
-        lambda _name: "running",
-    )
-    monkeypatch.setattr(
-        runtime_lifecycle,
-        "container_create_network",
-        record("container_create_network"),
-    )
-    monkeypatch.setattr(
-        core, "start_fleet_sim_sidecar", record("start_fleet_sim_sidecar", True)
-    )
-    monkeypatch.setattr(
-        core, "container_start_vllm_sr", record("container_start_vllm_sr")
-    )
-    monkeypatch.setattr(
-        runtime_lifecycle,
-        "container_network_connect",
-        record("container_network_connect"),
-    )
-    monkeypatch.setattr(
-        runtime_lifecycle, "container_logs_since", lambda *args, **kwargs: (0, "", "")
-    )
-    monkeypatch.setattr(
-        runtime_lifecycle, "container_exec", lambda *args, **kwargs: (0, "ok", "")
-    )
-    monkeypatch.setattr(
-        runtime_lifecycle, "load_openclaw_registry", lambda *args, **kwargs: []
-    )
-    monkeypatch.setattr(
-        runtime_lifecycle, "container_logs", lambda *args, **kwargs: None
-    )
-    monkeypatch.setattr(
-        core, "recover_openclaw_containers", record("recover_openclaw_containers")
-    )
-
-    core.start_vllm_sr("/tmp/config.yaml", env_vars={}, enable_observability=False)
-
-    fleet_sim_calls = [c for c in calls if c[0] == "start_fleet_sim_sidecar"]
-    start_calls = [c for c in calls if c[0] == "container_start_vllm_sr"]
-    recover_calls = [c for c in calls if c[0] == "recover_openclaw_containers"]
-
-    assert fleet_sim_calls[0][1][0] == str(state_root)
-    assert start_calls[0][2]["state_root_dir"] == str(state_root)
-    assert recover_calls[0][1][0] == str(state_root)
-
-
-def test_resolve_runtime_stack_supports_default_role_container_names():
-    stack_layout = resolve_runtime_stack()
-
-    assert stack_layout.router_container_name == "vllm-sr-router-container"
-    assert stack_layout.envoy_container_name == "vllm-sr-envoy-container"
-    assert stack_layout.dashboard_container_name == "vllm-sr-dashboard-container"
-    assert (
-        stack_layout.dashboard_service_url == "http://vllm-sr-dashboard-container:8700"
-    )
-    assert stack_layout.router_api_service_url == "http://vllm-sr-router-container:8080"
-    assert (
-        stack_layout.router_metrics_service_url
-        == "http://vllm-sr-router-container:9190/metrics"
-    )
-    assert stack_layout.envoy_admin_service_url == "http://vllm-sr-envoy-container:9901"
-    assert (
-        stack_layout.envoy_listener_service_url(8899)
-        == "http://vllm-sr-envoy-container:8899"
-    )
-
-
-def test_container_start_vllm_sr_applies_custom_stack_name_and_port_offset(
-    tmp_path, monkeypatch
-):
-    config_path = tmp_path / "config.yaml"
-    config_path.write_text(
-        "version: v0.1\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
-    )
-
-    monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
-    monkeypatch.setattr(
-        container_start,
-        "get_runtime_images",
-        lambda **kwargs: {
-            "router": "test-image",
-            "envoy": "test-image",
-            "dashboard": "test-image",
-        },
-    )
-    captured = _capture_run_commands(monkeypatch)
-    _stub_valid_container_cli(monkeypatch, tmp_path)
-    monkeypatch.setenv("VLLM_SR_STACK_NAME", "audit-a")
-    monkeypatch.setenv("VLLM_SR_PORT_OFFSET", "200")
-
-    rc, _, _ = container_cli.container_start_vllm_sr(
-        str(config_path),
-        {},
-        [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
-        network_name=None,
-        openclaw_network_name=None,
-        minimal=False,
-    )
-
-    assert rc == 0
-    router_cmd = _find_container_run_cmd(captured, "audit-a-vllm-sr-router-container")
-    envoy_cmd = _find_container_run_cmd(captured, "audit-a-vllm-sr-envoy-container")
-    dashboard_cmd = _find_container_run_cmd(
-        captured, "audit-a-vllm-sr-dashboard-container"
-    )
-    assert "OPENCLAW_DEFAULT_NETWORK_MODE=audit-a-vllm-sr-network" in dashboard_cmd
-    assert "VLLM_SR_PORT_OFFSET=200" in dashboard_cmd
-    assert "0.0.0.0:9099:8899" in envoy_cmd
-    assert "127.0.0.1:50251:50051" in router_cmd
-    assert "127.0.0.1:9390:9190" in router_cmd
-    assert "8900:8700" in dashboard_cmd
-    assert "127.0.0.1:8280:8080" in router_cmd
-
-
-def test_container_start_vllm_sr_propagates_stack_name_to_dashboard(
-    tmp_path, monkeypatch
-):
-    """Dashboard's runtime-config sync resolves the per-stack filename via
-    VLLM_SR_STACK_NAME. Without the env propagated into the dashboard container,
-    sync writes to runtime-config.yaml while the CLI wrote
-    runtime-config.<stack>.yaml; router stays pinned to the stale path and
-    setup-mode never disengages.
-    """
-    config_path = tmp_path / "config.yaml"
-    config_path.write_text(
-        "version: v0.1\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
-    )
-
-    monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
-    monkeypatch.setattr(
-        container_start,
-        "get_runtime_images",
-        lambda **kwargs: {
-            "router": "test-image",
-            "envoy": "test-image",
-            "dashboard": "test-image",
-        },
-    )
-    captured = _capture_run_commands(monkeypatch)
-    _stub_valid_container_cli(monkeypatch, tmp_path)
-    monkeypatch.setenv("VLLM_SR_STACK_NAME", "audit-a")
-
-    rc, _, _ = container_cli.container_start_vllm_sr(
-        str(config_path),
-        {},
-        [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
-        network_name=None,
-        openclaw_network_name=None,
-        minimal=False,
-    )
-
-    assert rc == 0
-    router_cmd = _find_container_run_cmd(captured, "audit-a-vllm-sr-router-container")
-    dashboard_cmd = _find_container_run_cmd(
-        captured, "audit-a-vllm-sr-dashboard-container"
-    )
-    # Dashboard runs the runtime-config sync, router consumes the resolved
-    # path; both need stack-name visibility.
-    assert "VLLM_SR_STACK_NAME=audit-a" in dashboard_cmd
-    assert "VLLM_SR_STACK_NAME=audit-a" in router_cmd
-    assert (
-        "VLLM_SR_RECIPE_STORE_DIR=/app/.vllm-sr/recipe-store/audit-a" in dashboard_cmd
-    )
-    assert "/app/.vllm-sr/runtime-config.audit-a.yaml" in dashboard_cmd
-    assert "/app/.vllm-sr/runtime-config.audit-a.yaml" in router_cmd
-
-
-def test_container_start_vllm_sr_omits_stack_name_env_for_default_stack(
-    tmp_path, monkeypatch
-):
-    """Default stack uses the unsuffixed runtime-config.yaml on both ends, so
-    we do not need to inject VLLM_SR_STACK_NAME and should not start doing so
-    accidentally.
-    """
-    config_path = tmp_path / "config.yaml"
-    config_path.write_text(
-        "version: v0.1\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
-    )
-
-    monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
-    monkeypatch.setattr(
-        container_start,
-        "get_runtime_images",
-        lambda **kwargs: {
-            "router": "test-image",
-            "envoy": "test-image",
-            "dashboard": "test-image",
-        },
-    )
-    captured = _capture_run_commands(monkeypatch)
-    _stub_valid_container_cli(monkeypatch, tmp_path)
-    monkeypatch.delenv("VLLM_SR_STACK_NAME", raising=False)
-
-    rc, _, _ = container_cli.container_start_vllm_sr(
-        str(config_path),
-        {},
-        [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
-        network_name="vllm-sr-network",
-        openclaw_network_name="vllm-sr-network",
-        minimal=False,
-    )
-
-    assert rc == 0
-    dashboard_cmd = _find_container_run_cmd(captured, "vllm-sr-dashboard-container")
-    router_cmd = _find_container_run_cmd(captured, "vllm-sr-router-container")
-    for token in dashboard_cmd + router_cmd:
-        message = f"unexpected stack-name env on default stack: {token}"
-        assert not token.startswith("VLLM_SR_STACK_NAME="), message

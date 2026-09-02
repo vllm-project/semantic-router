@@ -1,171 +1,260 @@
-.container {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-lg, 1.5rem);
-  padding: var(--spacing-lg, 1.5rem);
-  max-width: 1400px;
-  margin: 0 auto;
+.pageShell {
+  box-sizing: border-box;
   width: 100%;
+  max-width: 1440px;
+  min-height: calc(100vh - 80px);
+  margin: 0 auto;
+  padding: 1.75rem 2rem 2.5rem;
 }
 
-.header {
+.evaluationScope {
+  display: contents;
+  /* Evaluation uses dense technical copy; keep its muted and accent text AA without altering
+     unrelated Dashboard surfaces. */
+  --text-muted: #85858e;
+  --evaluation-accent-text: #ff555b;
+}
+
+.readonlyBanner,
+.staleBanner,
+.ledgerBanner,
+.errorBanner {
   display: flex;
+  align-items: center;
   justify-content: space-between;
+  gap: 1rem;
+  min-height: var(--control-height);
+  padding: 0.7rem 0 0.7rem 0.85rem;
+  border: 0;
+  border-left: 2px solid var(--border-strong);
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.ledgerBanner {
   align-items: flex-start;
-  gap: var(--spacing-md, 1rem);
+  border-color: color-mix(in srgb, var(--color-danger) 58%, transparent);
+  color: #ffc2c4;
 }
 
-.titleSection h1 {
+.ledgerBanner > div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.ledgerBanner strong {
+  color: var(--text-primary);
+  font-size: var(--text-md);
+}
+
+.ledgerBanner small {
+  color: #f9d38b;
+  font-size: var(--text-xs);
+}
+
+.warningDetails {
+  width: min(32rem, 100%);
+  min-width: 0;
+}
+
+.warningDetailsSummary {
+  padding: 0.35rem 0;
+  color: #f9d38b;
+  font-size: var(--text-xs);
+  font-weight: 650;
+}
+
+.ledgerBanner ul {
+  display: grid;
+  gap: 0.25rem;
+  min-width: min(32rem, 100%);
   margin: 0;
-  font-size: var(--text-2xl, 1.5rem);
-  font-weight: 600;
+  padding: 0;
+  list-style: none;
 }
 
-.titleSection p {
-  margin: var(--spacing-xs, 0.25rem) 0 0;
-  color: var(--color-text-secondary, #999);
+.ledgerBanner li {
+  display: grid;
+  grid-template-columns: minmax(8rem, 0.5fr) minmax(14rem, 1fr);
+  gap: 0.65rem;
+}
+
+.ledgerBanner code {
+  overflow: hidden;
+  color: var(--text-primary);
+  text-overflow: ellipsis;
+}
+
+.evidenceIdentity {
+  display: grid;
+  min-width: 0;
+  gap: 0.1rem;
+}
+
+.evidenceIdentity small {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.staleBanner {
+  border-color: color-mix(in srgb, var(--color-warning) 54%, transparent);
+  color: #f9d38b;
 }
 
 .errorBanner {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--spacing-sm, 0.5rem) var(--spacing-md, 1rem);
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: var(--radius-md, 0.375rem);
-  color: var(--color-danger, #ef4444);
+  border-color: color-mix(in srgb, var(--color-danger) 58%, transparent);
+  color: #ffb0b3;
 }
 
-.errorBanner button {
-  padding: var(--spacing-xs, 0.25rem) var(--spacing-sm, 0.5rem);
-  background: transparent;
-  border: 1px solid rgba(239, 68, 68, 0.5);
-  border-radius: var(--radius-sm, 0.25rem);
-  color: var(--color-danger, #ef4444);
-  cursor: pointer;
-  font-size: var(--text-sm, 0.875rem);
+.issueCopy {
+  display: grid;
+  min-width: 0;
+  gap: 0.3rem;
 }
 
-.errorBanner button:hover {
-  background: rgba(239, 68, 68, 0.1);
+.panelRegion {
+  min-width: 0;
+  padding-bottom: calc(clamp(3rem, 8vh, 5.5rem) + env(safe-area-inset-bottom, 0px));
+  scroll-padding-bottom: calc(clamp(3rem, 8vh, 5.5rem) + env(safe-area-inset-bottom, 0px));
+  scroll-margin-top: calc(var(--app-header-height) + 1rem);
 }
 
-.readonlyBanner {
-  padding: var(--spacing-sm, 0.5rem) var(--spacing-md, 1rem);
-  border: 1px solid var(--color-border, #333);
-  border-radius: var(--radius-md, 0.375rem);
-  background: var(--color-bg-secondary, #242424);
-  color: var(--color-text-secondary, #999);
+.panelRegion :is(input:not([type='radio']):not([type='checkbox']), select, textarea) {
+  box-sizing: border-box;
+  min-width: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--control-radius);
+  background: var(--surface-shell);
+  color: var(--text-primary);
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast),
+    box-shadow var(--transition-fast);
 }
 
-.progressView {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-md, 1rem);
+.panelRegion :is(input:not([type='radio']):not([type='checkbox']), select) {
+  height: var(--control-height);
+  min-height: var(--control-height);
 }
 
-.asyncState {
-  display: flex;
-  min-height: 280px;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
+.panelRegion select option {
+  background: var(--surface-panel);
+  color: var(--text-primary);
+}
+
+.panelRegion
+  :is(input:not([type='radio']):not([type='checkbox']), select, textarea):hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--text-secondary) 58%, transparent);
+}
+
+.panelRegion :is(input:not([type='radio']):not([type='checkbox']), select, textarea):focus-visible {
+  border-color: var(--focus-ring);
+  outline: 0;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--focus-ring) 28%, transparent);
+}
+
+.panelRegion :is(input:not([type='radio']):not([type='checkbox']), select, textarea):disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.compareWorkspace {
+  display: grid;
+  gap: 1.25rem;
+  min-width: 0;
+}
+
+.promotionDisclosure {
+  min-width: 0;
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+  --evaluation-disclosure-indicator-color: var(--text-secondary);
+  --evaluation-disclosure-indicator-size: 0.5rem;
+  --evaluation-disclosure-focus-offset: 4px;
+}
+
+.promotionDisclosureSummary {
+  padding: 1rem 0;
+}
+
+.promotionDisclosureSummary span {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.promotionDisclosureSummary strong {
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+}
+
+.promotionDisclosureSummary small {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.promotionDisclosureBody {
+  padding-bottom: 1rem;
+}
+
+.loading,
+.loadError {
+  display: grid;
+  min-height: 220px;
+  place-items: center;
+  align-content: center;
+  gap: 0.75rem;
   padding: 2rem;
-  border: 1px solid var(--color-border, #333);
-  border-radius: var(--radius-lg, 0.5rem);
-  background: var(--color-bg-secondary, #242424);
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+  border-radius: 0;
+  background: transparent;
   text-align: center;
 }
 
-.asyncState h2 {
-  margin: 0 0 0.45rem;
-  font-size: 1.15rem;
+.loadError {
+  border-color: color-mix(in srgb, var(--color-danger) 36%, transparent);
 }
 
-.asyncState p {
-  max-width: 560px;
-  margin: 0;
-  color: var(--color-text-secondary, #999);
+.loadError h2 {
+  color: #ffb0b3;
+  font-size: var(--text-xl);
 }
 
-.asyncState button {
-  margin-top: 1rem;
-  padding: 0.5rem 1rem;
-  border: 1px solid currentColor;
-  border-radius: var(--radius-md, 0.375rem);
-  background: transparent;
-  color: var(--color-text, #e8e8e8);
-  cursor: pointer;
+.loadError p {
+  max-width: 42rem;
+  color: var(--text-secondary);
 }
 
-.asyncStateError {
-  border-color: rgba(239, 68, 68, 0.35);
-}
+@media (max-width: 768px) {
+  .pageShell {
+    min-height: calc(100dvh - 64px);
+    padding: 1rem 1rem 2.5rem;
+  }
 
-.asyncStateError h2,
-.asyncStateError button {
-  color: var(--color-danger, #ef4444);
-}
+  .panelRegion {
+    padding-bottom: calc(3rem + env(safe-area-inset-bottom, 0px));
+    scroll-padding-bottom: calc(3rem + env(safe-area-inset-bottom, 0px));
+  }
 
-.backButton {
-  align-self: flex-start;
-  padding: var(--spacing-sm, 0.5rem) var(--spacing-md, 1rem);
-  background: transparent;
-  border: 1px solid var(--color-border, #333);
-  border-radius: var(--radius-md, 0.375rem);
-  color: var(--color-text-secondary, #999);
-  cursor: pointer;
-  transition: all var(--transition-fast, 150ms);
-}
+  .readonlyBanner,
+  .staleBanner,
+  .ledgerBanner,
+  .errorBanner {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 
-.backButton:hover {
-  border-color: var(--color-primary, #8f949c);
-  color: var(--color-text, #e8e8e8);
-}
+  .ledgerBanner li {
+    grid-template-columns: 1fr;
+  }
 
-.tabs {
-  display: flex;
-  gap: var(--spacing-xs, 0.25rem);
-  padding: var(--spacing-xs, 0.25rem);
-  background: var(--color-bg-secondary, #242424);
-  border: 1px solid var(--color-border, #333);
-  border-radius: var(--radius-lg, 0.5rem);
-}
-
-.tab {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-xs, 0.25rem);
-  padding: var(--spacing-sm, 0.5rem) var(--spacing-lg, 1.5rem);
-  background: transparent;
-  border: none;
-  border-radius: var(--radius-md, 0.375rem);
-  color: var(--color-text-secondary, #999);
-  cursor: pointer;
-  font-size: var(--text-sm, 0.875rem);
-  font-weight: 500;
-  transition: all var(--transition-fast, 150ms);
-}
-
-.tab:hover {
-  color: var(--color-text, #e8e8e8);
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.tab.activeTab {
-  color: var(--color-text, #e8e8e8);
-  background: var(--color-bg, #1a1a1a);
-}
-
-.tabIcon {
-  font-size: 16px;
-}
-
-.tabLabel {
-  font-weight: 500;
-}
-
-.tabContent {
-  flex: 1;
+  .warningDetails {
+    width: 100%;
+  }
 }

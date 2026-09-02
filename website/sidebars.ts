@@ -66,6 +66,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/signal/heuristic/authz',
                 'tutorials/signal/heuristic/context',
                 'tutorials/signal/heuristic/conversation',
+                'tutorials/signal/heuristic/input-modality',
                 'tutorials/signal/heuristic/keyword',
                 'tutorials/signal/heuristic/language',
                 'tutorials/signal/heuristic/event',
@@ -174,7 +175,6 @@ const sidebars: SidebarsConfig = {
               items: [
                 'tutorials/plugin/fast-response',
                 'tutorials/plugin/header-mutation',
-                'tutorials/plugin/image-gen',
                 'tutorials/plugin/context-compression',
                 'tutorials/plugin/request-params',
                 'tutorials/plugin/system-prompt',
@@ -345,7 +345,6 @@ const sidebars: SidebarsConfig = {
       items: [
         'fleet-sim/overview',
         'fleet-sim/getting-started',
-        'fleet-sim/dashboard-integration',
         'fleet-sim/use-cases',
         'fleet-sim/sim-algorithms',
         'fleet-sim/power-model',
@@ -424,6 +423,7 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       items: [
         'benchmarking/overview',
+        'benchmarking/evaluation-plane',
       ],
     },
     {

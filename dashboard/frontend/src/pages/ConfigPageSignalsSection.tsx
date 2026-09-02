@@ -14,7 +14,6 @@ import type {
   JailbreakSignal,
   MetadataSignal,
   SignalType,
-  ClassifierSignal,
 } from './configPageSupport'
 import { formatThreshold } from './configPageSupport'
 import { hasFlatSignals } from '../types/config'
@@ -23,16 +22,21 @@ import { cloneConfigData } from './configPageCanonicalization'
 import { buildSignalFormFields } from './configPageSignalFormFields'
 import {
   SignalConditionsEditor,
+  SignalConversationFeatureEditor,
   SignalStringListEditor,
   SignalStructureFeatureEditor,
   SignalStructurePredicateEditor,
   SignalSubjectsEditor,
 } from './configPageSignalStructuredEditors'
 import {
+  DEFAULT_CONVERSATION_FEATURE,
   DEFAULT_STRUCTURE_FEATURE,
   DEFAULT_STRUCTURE_PREDICATE,
+  buildClassifierSignal,
   getSignalReferenceCountInRoutingProfile,
   normalizeConditions,
+  normalizeConversationFeature,
+  normalizeConversationPredicate,
   normalizeStringList,
   normalizeStructureFeature,
   normalizeStructurePredicate,
@@ -199,7 +203,9 @@ export default function ConfigPageSignalsSection({
     allSignals.push({
       name: ctx.name,
       type: 'Context',
-      summary: `${ctx.min_tokens} to ${ctx.max_tokens} tokens`,
+      summary: ctx.max_tokens
+        ? `${ctx.min_tokens ?? '0'} to ${ctx.max_tokens} tokens`
+        : `${ctx.min_tokens ?? '0'} tokens and above`,
       rawData: ctx,
     })
   })
@@ -210,6 +216,17 @@ export default function ConfigPageSignalsSection({
       type: 'Structure',
       summary: `${structure.feature?.type || 'unknown'} from ${structure.feature?.source?.type || 'unknown'}`,
       rawData: structure,
+    })
+  })
+
+  effectiveSignals?.conversation?.forEach((conversation) => {
+    const source = conversation.feature?.source
+    const role = source?.role ? `(${source.role})` : ''
+    allSignals.push({
+      name: conversation.name,
+      type: 'Conversation',
+      summary: `${conversation.feature?.type || 'unknown'} of ${source?.type || 'unknown'}${role}`,
+      rawData: conversation,
     })
   })
 
@@ -310,7 +327,11 @@ export default function ConfigPageSignalsSection({
       key: 'name',
       header: 'Name',
       sortable: true,
-      render: (row) => <span style={{ fontWeight: 600 }}>{formatRoutingMetadataValue(`x-vsr-matched-${row.type}`, row.name)}</span>,
+      render: (row) => (
+        <span style={{ fontWeight: 600 }}>
+          {formatRoutingMetadataValue(`x-vsr-matched-${row.type}`, row.name)}
+        </span>
+      ),
     },
     {
       key: 'type',
@@ -511,8 +532,12 @@ export default function ConfigPageSignalsSection({
       sections.push({
         title: 'Context Signal',
         fields: [
-          { label: 'Min Tokens', value: signal.rawData.min_tokens || 'N/A', fullWidth: true },
-          { label: 'Max Tokens', value: signal.rawData.max_tokens || 'N/A', fullWidth: true },
+          { label: 'Min Tokens', value: signal.rawData.min_tokens || '0', fullWidth: true },
+          {
+            label: 'Max Tokens',
+            value: signal.rawData.max_tokens || 'No upper bound',
+            fullWidth: true,
+          },
           { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true },
         ],
       })
@@ -526,6 +551,39 @@ export default function ConfigPageSignalsSection({
             label: 'Feature',
             value: (
               <SignalStructureFeatureEditor
+                value={signal.rawData.feature}
+                onChange={() => undefined}
+                readOnly
+              />
+            ),
+            fullWidth: true,
+          },
+          {
+            label: 'Predicate',
+            value: signal.rawData.predicate ? (
+              <SignalStructurePredicateEditor
+                value={signal.rawData.predicate}
+                onChange={() => undefined}
+                readOnly
+              />
+            ) : (
+              'None'
+            ),
+            fullWidth: true,
+          },
+          { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true },
+        ],
+      })
+    } else if (signal.type === 'Conversation') {
+      sections.push({
+        title: 'Conversation Signal',
+        fields: [
+          { label: 'Feature Type', value: signal.rawData.feature?.type || 'N/A' },
+          { label: 'Source Type', value: signal.rawData.feature?.source?.type || 'N/A' },
+          {
+            label: 'Feature',
+            value: (
+              <SignalConversationFeatureEditor
                 value={signal.rawData.feature}
                 onChange={() => undefined}
                 readOnly
@@ -790,6 +848,8 @@ export default function ConfigPageSignalsSection({
       max_tokens: '8K',
       structure_feature: structuredClone(DEFAULT_STRUCTURE_FEATURE),
       structure_predicate: { ...DEFAULT_STRUCTURE_PREDICATE },
+      conversation_feature: structuredClone(DEFAULT_CONVERSATION_FEATURE),
+      conversation_predicate: {},
       complexity_threshold: 0.1,
       role: '',
       subjects: [],
@@ -839,13 +899,21 @@ export default function ConfigPageSignalsSection({
             preference_threshold: signal.rawData.threshold,
             lookback_turns: signal.rawData.lookback_turns,
             min_tokens: signal.rawData.min_tokens || '0',
-            max_tokens: signal.rawData.max_tokens || '8K',
+            max_tokens: signal.rawData.max_tokens || '',
             structure_feature:
               signal.type === 'Structure' ? signal.rawData.feature : defaultForm.structure_feature,
             structure_predicate:
               signal.type === 'Structure'
                 ? signal.rawData.predicate
                 : defaultForm.structure_predicate,
+            conversation_feature:
+              signal.type === 'Conversation'
+                ? signal.rawData.feature
+                : defaultForm.conversation_feature,
+            conversation_predicate:
+              signal.type === 'Conversation'
+                ? signal.rawData.predicate
+                : defaultForm.conversation_predicate,
             complexity_threshold: signal.rawData.threshold ?? 0.1,
             role: signal.type === 'Authz' ? signal.rawData.role || '' : '',
             subjects: signal.type === 'Authz' ? [...(signal.rawData.subjects || [])] : [],
@@ -1044,16 +1112,14 @@ export default function ConfigPageSignalsSection({
         }
         case 'Context': {
           const min_tokens = (formData.min_tokens || '0').trim()
-          const max_tokens = (formData.max_tokens || '8K').trim()
-          if (!min_tokens || !max_tokens) {
-            throw new Error('Both min_tokens and max_tokens are required.')
-          }
+          // An empty max_tokens is an open-ended band with no upper limit.
+          const max_tokens = (formData.max_tokens || '').trim()
           newConfig.signals.context = [
             ...(newConfig.signals.context || []),
             {
               name,
               min_tokens,
-              max_tokens,
+              max_tokens: max_tokens || undefined,
               description: formData.description || undefined,
             },
           ]
@@ -1065,6 +1131,21 @@ export default function ConfigPageSignalsSection({
 
           newConfig.signals.structure = [
             ...(newConfig.signals.structure || []),
+            {
+              name,
+              description: formData.description || undefined,
+              feature,
+              ...(predicate ? { predicate } : {}),
+            },
+          ]
+          break
+        }
+        case 'Conversation': {
+          const feature = normalizeConversationFeature(formData.conversation_feature)
+          const predicate = normalizeConversationPredicate(feature, formData.conversation_predicate)
+
+          newConfig.signals.conversation = [
+            ...(newConfig.signals.conversation || []),
             {
               name,
               description: formData.description || undefined,
@@ -1231,28 +1312,7 @@ export default function ConfigPageSignalsSection({
           break
         }
         case 'Classifier': {
-          const classifierType = formData.classifier_type || 'local'
-          const labels = normalizeStringList(formData.classifier_labels, 'Classifier labels')
-          if (labels.length === 0) throw new Error('Classifier labels are required.')
-          const classifier: ClassifierSignal = {
-            name,
-            description: formData.description || undefined,
-            type: classifierType,
-            labels,
-          }
-          if (classifierType === 'local') {
-            if (labels.length !== 2) {
-              throw new Error('Local classifiers require exactly two labels.')
-            }
-            classifier.model_path = (formData.classifier_model_path || '').trim()
-            if (!classifier.model_path) throw new Error('Local model path is required.')
-            classifier.use_cpu = !!formData.classifier_use_cpu
-          } else {
-            classifier.model = (formData.classifier_model || '').trim()
-            classifier.instructions = (formData.classifier_instructions || '').trim()
-            if (!classifier.model) throw new Error('External classifier model is required.')
-            if (!classifier.instructions) throw new Error('Classifier instructions are required.')
-          }
+          const classifier = buildClassifierSignal(formData, name, formData.description)
           newConfig.signals.classifiers = [...(newConfig.signals.classifiers || []), classifier]
           break
         }
@@ -1333,7 +1393,6 @@ export default function ConfigPageSignalsSection({
     <ConfigPageManagerLayout
       title="Signals"
       description="Review the signal catalog that drives semantic routing, guardrails, and context-aware behavior."
-      scope={selectedScope?.label ?? 'Routing profile'}
     >
       <div className={styles.sectionPanel}>
         {actionError ? (

@@ -7,9 +7,7 @@ They are slower than unit tests and should be run with --integration flag.
 
 """
 
-import json
 import os
-import stat
 import subprocess
 import time
 import unittest
@@ -19,15 +17,16 @@ from unittest import mock
 from urllib import error as urllib_error
 from urllib import request as urllib_request
 
-from cli_test_base import HTTP_STATUS_OK, CLITestBase
+from cli_test_base import CLITestBase
+from serve_session import ServeSessionMixin
 
-DEFAULT_MOCK_OPENAI_IMAGE = "ghcr.io/vllm-project/semantic-router/vllm-sr-sim:latest"
-MOCK_OPENAI_IMAGE_ENV = "VLLM_SR_SIM_IMAGE"
+DEFAULT_MOCK_OPENAI_IMAGE = "ghcr.io/vllm-project/semantic-router/vllm-sr:latest"
+MOCK_OPENAI_IMAGE_ENV = "VLLM_SR_TEST_UPSTREAM_IMAGE"
 MOCK_OPENAI_SERVER_PORT = 18080
 MOCK_OPENAI_SERVER_PATH = Path(__file__).with_name("mock_openai_upstream.py").resolve()
 
 
-class TestServeIntegration(CLITestBase):
+class TestServeIntegration(ServeSessionMixin, CLITestBase):
     """Integration tests for the complete serve workflow."""
 
     # Timeout for waiting for container to be running
@@ -35,102 +34,6 @@ class TestServeIntegration(CLITestBase):
 
     def _create_minimal_config(self, port: int = 8888) -> str:
         return self.write_minimal_canonical_config(port=port)
-
-    def _start_serve_background(
-        self,
-        env: dict[str, str] | None = None,
-        arguments: tuple[str, ...] = (),
-    ) -> subprocess.Popen:
-        """Start vllm-sr serve in background (non-blocking)."""
-        cmd = [
-            "vllm-sr",
-            "serve",
-            *arguments,
-            "--image-pull-policy",
-            "ifnotpresent",
-        ]
-        print(f"\nStarting in background: {' '.join(cmd)}")
-
-        process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            cwd=self.test_dir,
-            env=env,
-        )
-        return process
-
-    def _stop_serve_process(
-        self, serve_process: subprocess.Popen | None
-    ) -> tuple[str, str]:
-        """Terminate a background serve process and drain its output pipes."""
-        if serve_process is None:
-            return "", ""
-        if serve_process.poll() is None:
-            serve_process.terminate()
-        try:
-            stdout, stderr = serve_process.communicate(timeout=10)
-        except subprocess.TimeoutExpired:
-            serve_process.kill()
-            stdout, stderr = serve_process.communicate(timeout=10)
-        return stdout or "", stderr or ""
-
-    def _wait_for_serve_success(self, serve_process: subprocess.Popen) -> None:
-        """Drain the one-shot serve command and require successful startup."""
-        try:
-            stdout, stderr = serve_process.communicate(
-                timeout=self.HEALTH_CHECK_TIMEOUT
-            )
-        except subprocess.TimeoutExpired:
-            serve_process.terminate()
-            try:
-                stdout, stderr = serve_process.communicate(timeout=10)
-            except subprocess.TimeoutExpired:
-                serve_process.kill()
-                stdout, stderr = serve_process.communicate(timeout=10)
-            self.fail(
-                "Serve did not complete startup before the timeout: "
-                f"{(stderr or stdout or '')[:500]}"
-            )
-        if serve_process.returncode != 0:
-            self.fail(
-                "Serve failed before completing runtime startup: "
-                f"{(stderr or stdout or '')[:500]}"
-            )
-        print("  ✓ Serve command completed runtime startup")
-
-    @contextmanager
-    def _running_serve(
-        self,
-        *,
-        env: dict[str, str] | None = None,
-        endpoint: str = "host.docker.internal:8000",
-        base_url: str | None = None,
-        provider: str | None = None,
-        api_only: bool = False,
-        ensure_models_dir: bool = False,
-    ):
-        """Start one background serve session and clean it up automatically."""
-        self.write_minimal_canonical_config(
-            endpoint=endpoint,
-            base_url=base_url,
-            provider=provider,
-            api_only=api_only,
-        )
-        if ensure_models_dir:
-            os.makedirs(os.path.join(self.test_dir, "models"), exist_ok=True)
-
-        full_env = os.environ.copy()
-        if env:
-            full_env.update(env)
-
-        serve_process = self._start_serve_background(env=full_env)
-        try:
-            self._wait_for_serve_success(serve_process)
-            yield serve_process
-        finally:
-            self._stop_serve_process(serve_process)
 
     def test_wait_for_serve_success_does_not_terminate_a_successful_process(self):
         process = mock.Mock(spec=subprocess.Popen)
@@ -169,9 +72,16 @@ class TestServeIntegration(CLITestBase):
         self.assertEqual(process.communicate.call_count, 2)
 
     @contextmanager
-    def _running_mock_upstream(self, container_name: str):
+    def _running_mock_upstream(
+        self, container_name: str, *, expected_authorization: str | None = None
+    ):
         """Run the mock OpenAI upstream on the active stack network."""
         image = os.getenv(MOCK_OPENAI_IMAGE_ENV, DEFAULT_MOCK_OPENAI_IMAGE)
+        expected_authorization_env = (
+            ["-e", f"MOCK_EXPECT_AUTHORIZATION={expected_authorization}"]
+            if expected_authorization is not None
+            else []
+        )
         result = self._run_subprocess(
             [
                 self.container_runtime,
@@ -183,6 +93,7 @@ class TestServeIntegration(CLITestBase):
                 self.runtime_stack.network_name,
                 "-v",
                 f"{MOCK_OPENAI_SERVER_PATH}:/mock_openai_upstream.py:ro",
+                *expected_authorization_env,
                 "--entrypoint",
                 "python3",
                 image,
@@ -230,14 +141,15 @@ class TestServeIntegration(CLITestBase):
             )
         return "\n".join(diagnostics)
 
-    def _send_mock_chat_completion(self, mock_container: str):
+    def _send_mock_chat_completion(
+        self, mock_container: str, *, redact_values: tuple[str, ...] = ()
+    ):
         """Send a chat request, retrying until the local stack is ready."""
         listener_port = 8888 + self.runtime_stack.port_offset
         request = urllib_request.Request(
             f"http://localhost:{listener_port}/v1/chat/completions",
             data=(
-                b'{"model":"test-model","messages":'
-                b'[{"role":"user","content":"ping"}]}'
+                b'{"model":"test-model","messages":[{"role":"user","content":"ping"}]}'
             ),
             headers={"Content-Type": "application/json"},
             method="POST",
@@ -269,6 +181,8 @@ class TestServeIntegration(CLITestBase):
                 self.ENVOY_CONTAINER_NAME,
             )
         )
+        for value in redact_values:
+            diagnostics = diagnostics.replace(value, "[redacted]")
         self.fail(f"request did not reach mock upstream: {last_error}\n{diagnostics}")
 
     def _mock_upstream_paths(self, mock_container: str) -> set[str]:
@@ -326,124 +240,6 @@ class TestServeIntegration(CLITestBase):
             self._assert_logs_command()
 
         self.print_test_result(True, "Running container contracts verified")
-
-    @unittest.skipUnless(
-        os.environ.get("RUN_INTEGRATION_TESTS", "").lower() == "true",
-        "Integration tests disabled. Set RUN_INTEGRATION_TESTS=true to enable.",
-    )
-    def test_catalog_model_operands_expose_only_selected_virtual_entrypoints(self):
-        """Serve two installed virtual models from a private catalog projection."""
-        self.print_test_header(
-            "Catalog Model Selection Integration Test",
-            "Verifies serve MODEL... reaches the live Router model inventory",
-        )
-        selected = {
-            "vllm-sr/mom-v1-lite",
-            "vllm-sr/mom-v1-flash",
-        }
-        list_code, list_stdout, list_stderr = self.run_cli(
-            ["model", "list", "--output", "json"]
-        )
-        self.assertEqual(list_code, 0, list_stderr)
-        installed_catalog_ids = {
-            str(model["id"]) for model in json.loads(list_stdout)["models"]
-        }
-
-        process = self._start_serve_background(
-            env=os.environ.copy(),
-            arguments=(*sorted(selected), "--minimal"),
-        )
-        try:
-            self._wait_for_serve_success(process)
-            model_ids = self._wait_for_catalog_model_ids()
-        finally:
-            self._stop_serve_process(process)
-
-        self.assertEqual(model_ids & installed_catalog_ids, selected)
-        self.assertFalse(
-            os.path.exists(os.path.join(self.test_dir, "config.yaml")),
-            "catalog serving must not overwrite the user's config.yaml",
-        )
-        self.print_test_result(True, "Selected catalog entrypoints are live")
-
-    def _wait_for_catalog_model_ids(self) -> set[str]:
-        """Poll the authenticated Router inventory for selected entrypoints."""
-        token = self._read_catalog_management_credential()
-        endpoint = f"http://127.0.0.1:{self.runtime_stack.api_port}/v1/models"
-        request = urllib_request.Request(
-            endpoint,
-            headers={"Authorization": f"Bearer {token}"},
-        )
-        deadline = time.monotonic() + 90
-        last_error = "no response"
-        while time.monotonic() < deadline:
-            try:
-                with urllib_request.urlopen(request, timeout=5) as response:
-                    if response.status != HTTP_STATUS_OK:
-                        last_error = f"HTTP {response.status}"
-                        time.sleep(1)
-                        continue
-                    payload = json.load(response)
-                models = payload.get("data") if isinstance(payload, dict) else None
-                if isinstance(models, list):
-                    return {
-                        str(model["id"])
-                        for model in models
-                        if isinstance(model, dict) and isinstance(model.get("id"), str)
-                    }
-                last_error = "response did not contain a model list"
-            except (OSError, ValueError) as error:
-                last_error = str(error)
-            time.sleep(1)
-        self.fail(f"Router catalog inventory did not become ready: {last_error}")
-
-    def _read_catalog_management_credential(self) -> str:
-        """Read the stack credential only after verifying its private file contract."""
-        credential_path = os.path.join(
-            self.test_dir,
-            ".vllm-sr",
-            "catalog-credentials",
-            f"{self.runtime_stack.stack_name}.token",
-        )
-        descriptor = os.open(
-            credential_path,
-            os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0),
-        )
-        try:
-            file_info = os.fstat(descriptor)
-            self.assertTrue(
-                stat.S_ISREG(file_info.st_mode),
-                "catalog management credential must be a regular file",
-            )
-            self.assertEqual(
-                file_info.st_nlink,
-                1,
-                "catalog management credential must not have multiple hard links",
-            )
-            if os.name == "posix":
-                self.assertEqual(
-                    file_info.st_uid,
-                    os.getuid(),
-                    "catalog management credential must be owned by the CLI user",
-                )
-                self.assertEqual(
-                    stat.S_IMODE(file_info.st_mode),
-                    0o600,
-                    "catalog management credential must be readable only by its owner",
-                )
-            with os.fdopen(descriptor, encoding="utf-8") as credential_file:
-                descriptor = -1
-                token = credential_file.read().strip()
-        finally:
-            if descriptor >= 0:
-                os.close(descriptor)
-
-        self.assertEqual(len(token), 64, "catalog management credential is malformed")
-        self.assertTrue(
-            all(character in "0123456789abcdef" for character in token),
-            "catalog management credential is malformed",
-        )
-        return token
 
     @unittest.skipUnless(
         os.environ.get("RUN_INTEGRATION_TESTS", "").lower() == "true",
@@ -553,7 +349,7 @@ class TestServeIntegration(CLITestBase):
         """Verify the logs command returns container output for one service."""
         time.sleep(5)
         service_failures: list[str] = []
-        for service in ("router", "envoy", "dashboard", "simulator"):
+        for service in ("router", "envoy", "dashboard"):
             return_code, stdout, stderr = self.run_cli(["logs", service])
             output = stdout + stderr
             if return_code == 0 and output.strip():
@@ -600,48 +396,59 @@ class TestServeIntegration(CLITestBase):
         os.environ.get("RUN_INTEGRATION_TESTS", "").lower() == "true",
         "Integration tests disabled. Set RUN_INTEGRATION_TESTS=true to enable.",
     )
-    def test_fleet_sim_sidecar_contracts(self):
-        """Test that serve starts the simulator sidecar and exposes its health."""
-        self.print_test_header(
-            "Fleet Sim Sidecar Integration Test",
-            "Verifies serve starts vllm-sr-sim, wires TARGET_FLEET_SIM_URL, and exposes /healthz",
-        )
+    def test_envoy_log_level_is_safe_and_provider_key_is_not_logged(self):
+        """Use a synthetic provider key to exercise the safe Envoy default."""
+        canary = "synthetic-provider-key-canary"
+        with self._running_serve(
+            env={"PROVIDER_KEY_CANARY": canary},
+            base_url=(
+                f"http://{self.runtime_stack.stack_name}-envoy-log-upstream:"
+                f"{MOCK_OPENAI_SERVER_PORT}"
+            ),
+            provider="openai",
+            api_key_env="PROVIDER_KEY_CANARY",
+            api_only=True,
+        ):
+            return_code, command, stderr = self.inspect_container(
+                "{{json .Config.Cmd}}",
+                container_name=self.ENVOY_CONTAINER_NAME,
+            )
+            self.assertEqual(return_code, 0, stderr)
+            self.assertIn("--log-level", command)
+            self.assertIn('"info"', command)
 
-        with self._running_serve():
-            if not self.wait_for_container_running(
-                timeout=60, container_name=self.SIM_CONTAINER_NAME
+            mock_container = f"{self.runtime_stack.stack_name}-envoy-log-upstream"
+            with self._running_mock_upstream(
+                mock_container, expected_authorization=canary
             ):
-                self.fail("Fleet simulator sidecar did not reach running state")
+                self._send_mock_chat_completion(mock_container, redact_values=(canary,))
+                upstream_logs = self._run_subprocess(
+                    [self.container_runtime, "logs", mock_container],
+                    timeout=10,
+                )
+                self.assertEqual(upstream_logs.returncode, 0, upstream_logs.stderr)
+                self.assertIn(
+                    "authorization-canary-received",
+                    upstream_logs.stdout + upstream_logs.stderr,
+                )
 
-            return_code, stdout, stderr = self.inspect_container(
-                "{{.Config.Env}}",
-                container_name=self.resolve_runtime_inspect_container_name(),
+            logs = self._run_subprocess(
+                [self.container_runtime, "logs", self.ENVOY_CONTAINER_NAME],
+                timeout=10,
             )
-            if return_code != 0:
-                self.fail(f"router container inspect failed: {stderr}")
-            self.assertIn(
-                (
-                    "TARGET_FLEET_SIM_URL=http://"
-                    f"{self.runtime_stack.fleet_sim_container_name}:8000"
-                ),
-                stdout,
+            self.assertEqual(logs.returncode, 0, logs.stderr)
+            combined_logs = logs.stdout + logs.stderr
+            canary_absent = canary not in combined_logs
+            redacted_logs = combined_logs.replace(canary, "<redacted-canary>")
+            self.assertTrue(canary_absent, msg=redacted_logs)
+
+        with self._running_serve(env={"VLLM_SR_ENVOY_LOG_LEVEL": "DeBuG"}):
+            return_code, command, stderr = self.inspect_container(
+                "{{json .Config.Cmd}}",
+                container_name=self.ENVOY_CONTAINER_NAME,
             )
-
-            with urllib_request.urlopen(
-                f"{self.runtime_stack.fleet_sim_url}/healthz", timeout=10
-            ) as response:
-                body = response.read().decode("utf-8")
-                self.assertEqual(response.status, 200)
-                self.assertIn('"service":"vllm-sr-sim"', body.replace(" ", ""))
-
-            print("  ✓ Simulator sidecar is running")
-            print("  ✓ Router container received TARGET_FLEET_SIM_URL")
-            print(
-                "  ✓ Simulator health endpoint responded on "
-                f"localhost:{self.runtime_stack.fleet_sim_port}"
-            )
-
-        self.print_test_result(True, "Fleet simulator sidecar contracts verified")
+            self.assertEqual(return_code, 0, stderr)
+            self.assertIn('"debug"', command)
 
     @unittest.skipUnless(
         os.environ.get("RUN_INTEGRATION_TESTS", "").lower() == "true",
@@ -670,7 +477,6 @@ class TestServeIntegration(CLITestBase):
 
             managed_names = (
                 *self._runtime_container_names(),
-                self.SIM_CONTAINER_NAME,
                 *self.AUXILIARY_CONTAINER_NAMES,
             )
             remaining = {

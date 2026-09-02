@@ -3,16 +3,19 @@ package contextcompression
 import (
 	"encoding/json"
 	"strings"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 type MessageIR struct {
-	Index      int
-	Role       string
-	Raw        map[string]interface{}
-	ToolCallID string
-	ToolName   string
-	Protected  bool
-	Blocks     []*TextBlockIR
+	Index       int
+	Role        string
+	Raw         map[string]interface{}
+	ToolCallID  string
+	ToolName    string
+	Protected   bool
+	Blocks      []*TextBlockIR
+	ToolCallIDs []string
 }
 
 type TextBlockIR struct {
@@ -24,23 +27,141 @@ type TextBlockIR struct {
 	Text         string
 	JSON         bool
 
-	parent map[string]interface{}
-	field  string
+	parent  map[string]interface{}
+	field   string
+	setText func(string)
 }
 
 func (block *TextBlockIR) SetText(text string) {
-	if block == nil || block.parent == nil || block.field == "" {
+	if block == nil {
 		return
 	}
 	block.Text = text
+	if block.setText != nil {
+		block.setText(text)
+		return
+	}
+	if block.parent == nil || block.field == "" {
+		return
+	}
 	block.parent[block.field] = text
 }
 
 type RequestIR struct {
 	Raw         map[string]interface{}
+	Semantic    *llmprotocol.Request
 	Messages    []*MessageIR
 	ToolIntents map[string]string
 	LastUser    string
+}
+
+// ParseSemanticRequest builds the compression view directly over neutral
+// request content. Text mutations are applied to the original semantic blocks;
+// no protocol wire representation is manufactured inside the Router.
+//
+//nolint:gocognit // Conversion walks the complete neutral message and tool-result hierarchy.
+func ParseSemanticRequest(request *llmprotocol.Request, provenance Provenance) *RequestIR {
+	ir := &RequestIR{Semantic: request, ToolIntents: make(map[string]string)}
+	if request == nil {
+		return ir
+	}
+	lastUser, lastAssistant := -1, -1
+	for index := range request.Messages {
+		message := &request.Messages[index]
+		entry := &MessageIR{Index: index, Role: string(message.Role)}
+		for contentIndex := range message.Content {
+			content := &message.Content[contentIndex]
+			appendSemanticContent(ir, entry, contentIndex, content, provenance)
+		}
+		if _, memory := provenance.MemoryMessageIndexes[index]; memory {
+			for _, block := range entry.Blocks {
+				block.Source = TargetMemory
+			}
+		}
+		if message.Role == llmprotocol.RoleUser {
+			lastUser = index
+			for _, block := range entry.Blocks {
+				if strings.TrimSpace(block.Text) != "" {
+					ir.LastUser = block.Text
+				}
+			}
+		}
+		if message.Role == llmprotocol.RoleAssistant {
+			lastAssistant = index
+		}
+		ir.Messages = append(ir.Messages, entry)
+	}
+	for _, message := range ir.Messages {
+		message.Protected = message.Index == lastUser || message.Index == lastAssistant
+	}
+	protectAtomicToolExchanges(ir.Messages)
+	return ir
+}
+
+func appendSemanticContent(
+	ir *RequestIR,
+	message *MessageIR,
+	contentIndex int,
+	content *llmprotocol.Content,
+	provenance Provenance,
+) {
+	switch content.Kind {
+	case llmprotocol.ContentText, llmprotocol.ContentRefusal, llmprotocol.ContentReasoning:
+		message.Blocks = append(message.Blocks, semanticTextBlock(message, contentIndex, "", TargetHistory, content))
+	case llmprotocol.ContentToolCall:
+		if content.ToolCall == nil {
+			return
+		}
+		call := content.ToolCall
+		message.ToolCallIDs = append(message.ToolCallIDs, call.ID)
+		ir.ToolIntents[call.ID] = strings.TrimSpace(call.Name + " " + call.Arguments)
+	case llmprotocol.ContentToolResult:
+		appendSemanticToolResult(message, contentIndex, content.ToolResult, provenance)
+	}
+}
+
+func appendSemanticToolResult(
+	message *MessageIR,
+	contentIndex int,
+	result *llmprotocol.ToolResult,
+	provenance Provenance,
+) {
+	if result == nil {
+		return
+	}
+	message.ToolCallID = result.CallID
+	source := TargetToolOutput
+	if isRAGToolMessage(result.CallID, provenance) {
+		source = TargetRAG
+	}
+	for nestedIndex := range result.Content {
+		nested := &result.Content[nestedIndex]
+		if nested.Kind == llmprotocol.ContentText || nested.Kind == llmprotocol.ContentRefusal {
+			message.Blocks = append(message.Blocks, semanticTextBlock(
+				message, contentIndex*1000+nestedIndex, result.CallID, source, nested,
+			))
+		}
+	}
+}
+
+func semanticTextBlock(
+	message *MessageIR,
+	blockIndex int,
+	toolCallID string,
+	source TargetKind,
+	content *llmprotocol.Content,
+) *TextBlockIR {
+	block := &TextBlockIR{
+		MessageIndex: message.Index,
+		BlockIndex:   blockIndex,
+		Role:         message.Role,
+		ToolCallID:   toolCallID,
+		Source:       source,
+		Text:         content.Text,
+		JSON:         isJSONObjectOrArray(content.Text),
+	}
+	block.setText = func(text string) { content.Text = text }
+	return block
 }
 
 func ParseRequestIR(
@@ -100,27 +221,46 @@ func protectAtomicToolExchanges(messages []*MessageIR) {
 	owners := make(map[string]*MessageIR)
 	results := make(map[string]*MessageIR)
 	for _, message := range messages {
-		if message.Role == "assistant" {
-			for _, id := range assistantToolCallIDs(message.Raw) {
-				owners[id] = message
-			}
-		}
-		if message.ToolCallID != "" {
-			results[message.ToolCallID] = message
-		}
-		for _, block := range message.Blocks {
-			if block.ToolCallID != "" && block.Source != TargetHistory {
-				results[block.ToolCallID] = message
-			}
-		}
+		indexToolExchange(message, owners, results)
 	}
 	for id, owner := range owners {
-		result := results[id]
-		if result != nil && (owner.Protected || result.Protected) {
-			owner.Protected = true
-			result.Protected = true
+		protectToolExchange(owner, results[id])
+	}
+}
+
+func indexToolExchange(
+	message *MessageIR,
+	owners map[string]*MessageIR,
+	results map[string]*MessageIR,
+) {
+	if message.Role == "assistant" {
+		for _, id := range messageToolCallIDs(message) {
+			owners[id] = message
 		}
 	}
+	if message.ToolCallID != "" {
+		results[message.ToolCallID] = message
+	}
+	for _, block := range message.Blocks {
+		if block.ToolCallID != "" && block.Source != TargetHistory {
+			results[block.ToolCallID] = message
+		}
+	}
+}
+
+func messageToolCallIDs(message *MessageIR) []string {
+	if len(message.ToolCallIDs) > 0 {
+		return message.ToolCallIDs
+	}
+	return assistantToolCallIDs(message.Raw)
+}
+
+func protectToolExchange(owner, result *MessageIR) {
+	if result == nil || (!owner.Protected && !result.Protected) {
+		return
+	}
+	owner.Protected = true
+	result.Protected = true
 }
 
 func assistantToolCallIDs(message map[string]interface{}) []string {

@@ -1,15 +1,7 @@
 """Container startup orchestration for vLLM Semantic Router."""
 
 import os
-import subprocess
-from pathlib import Path
 
-from cli.commands.runtime_paths import (
-    _container_readonly_source_config_path,
-    _container_runtime_config_path,
-    _runtime_config_output_path,
-    materialize_runtime_config,
-)
 from cli.commands.runtime_support import (
     RECIPE_ENV_ALLOWLIST_ENV,
     sensitive_env_names,
@@ -21,6 +13,7 @@ from cli.consts import (
     PLATFORM_AMD,
     PLATFORM_NVIDIA,
 )
+from cli.container_data_network import router_data_network_commands
 from cli.container_gpu_isolation import router_runtime_env
 from cli.container_images import (
     _normalize_platform,
@@ -31,7 +24,6 @@ from cli.container_log_spool import (
     LOG_SPOOL_READER_DIR,
     LOG_SPOOL_ROOT_ENV,
     bounded_log_spool_entrypoint,
-    prepare_runtime_log_spool,
 )
 from cli.container_management_listener import _managed_management_listener
 from cli.container_openclaw_support import configure_openclaw_support
@@ -47,18 +39,38 @@ from cli.container_run_command import (
     maybe_append_nvidia_gpu_passthrough,
 )
 from cli.container_runtime import get_container_runtime, resolve_container_cli_path
-from cli.container_services import (
-    container_remove_container,
-    container_status,
-    container_stop_container,
+from cli.container_start_paths import (
+    _active_recipe_mount_specs,
+    _prepare_runtime_paths,
+    _runtime_mount_specs,
+)
+from cli.container_start_runner import run_container_specs
+from cli.evaluation_runtime_env import (
+    EVALUATION_DASHBOARD_CONFIG_ENV_NAMES,
+    EVALUATION_DEPLOYMENTS_DIR_ENV,
+    EVALUATION_ENABLED_ENV,
+    configure_dashboard_evaluation_deployments,
+    configure_dashboard_evaluation_env,
+    evaluation_dashboard_secret_env_names,
 )
 from cli.parser import parse_user_config
-from cli.recipe_directory import resolve_active_recipe_directory
 from cli.runtime_stack import PORT_OFFSET_ENV, RuntimeStackLayout, resolve_runtime_stack
 from cli.runtime_topology import resolve_runtime_topology
+from cli.storage_secrets import (
+    STORAGE_SECRET_ENV_NAMES,
+    load_storage_secrets,
+    storage_secret_env,
+    storage_state_path,
+)
 from cli.utils import get_logger
 
 log = get_logger(__name__)
+
+ENVOY_LOG_LEVEL_ENV = "VLLM_SR_ENVOY_LOG_LEVEL"
+DEFAULT_ENVOY_LOG_LEVEL = "info"
+VALID_ENVOY_LOG_LEVELS = frozenset(
+    {"trace", "debug", "info", "warn", "warning", "error", "critical", "off"}
+)
 
 
 def container_start_vllm_sr(
@@ -81,6 +93,7 @@ def container_start_vllm_sr(
     """Start the runtime containers and return code, stdout, and stderr."""
     runtime = get_container_runtime()
     env_vars = dict(env_vars or {})
+    envoy_log_level = _resolve_envoy_log_level(env_vars)
     stack_layout = stack_layout or resolve_runtime_stack()
     resolve_runtime_topology(topology)
 
@@ -102,6 +115,7 @@ def container_start_vllm_sr(
         runtime_container_config=runtime_container_config,
         recipe_store_dir=runtime_paths["container_recipe_store_dir"],
     )
+    storage_secret_values = _resolve_storage_secret_env(config_dir, stack_layout)
     _render_split_envoy_config(
         runtime_paths["effective_config_path"],
         runtime_paths["envoy_config_path"],
@@ -124,32 +138,34 @@ def container_start_vllm_sr(
         runtime_paths=runtime_paths,
         openclaw_network_name=openclaw_network_name,
         stack_layout=stack_layout,
+        storage_secret_names=tuple(storage_secret_values),
+        envoy_log_level=envoy_log_level,
     )
 
     log.info(f"Starting vLLM Semantic Router runtime with {runtime}...")
-    started_containers = []
-    stdout_chunks = []
-    stderr_chunks = []
+    return run_container_specs(
+        container_specs, storage_secret_values=storage_secret_values
+    )
 
-    for service_name, container_name, cmd in container_specs:
-        log.info(f"Starting {service_name} container: {container_name}")
-        log.debug(f"Container command: {' '.join(cmd)}")
-        try:
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        except subprocess.CalledProcessError as exc:
-            if exc.stdout:
-                stdout_chunks.append(exc.stdout)
-            stderr_chunks.append(exc.stderr)
-            _cleanup_started_containers(started_containers)
-            return (exc.returncode, "\n".join(stdout_chunks), "\n".join(stderr_chunks))
 
-        started_containers.append(container_name)
-        if result.stdout:
-            stdout_chunks.append(result.stdout)
-        if result.stderr:
-            stderr_chunks.append(result.stderr)
+def _resolve_storage_secret_env(
+    state_root_dir: str, stack_layout: RuntimeStackLayout
+) -> dict[str, str]:
+    """Return this stack's storage credentials, for one child process only.
 
-    return (0, "\n".join(stdout_chunks), "\n".join(stderr_chunks))
+    No credential state means this stack provisions no managed storage, so
+    there is nothing to hand Router. An unreadable state is a different thing
+    and is left to raise: continuing would start Router with no credential and
+    turn a damaged state file into an unexplained authentication failure.
+    """
+
+    path = storage_state_path(state_root_dir, stack_layout=stack_layout)
+    if not os.path.lexists(path):
+        log.debug(f"No storage credential state for this stack: {path}")
+        return {}
+    return storage_secret_env(
+        load_storage_secrets(state_root_dir, stack_layout=stack_layout)
+    )
 
 
 def _build_common_runtime_env(
@@ -160,6 +176,14 @@ def _build_common_runtime_env(
     recipe_store_dir: str | None = None,
 ):
     common_env = dict(env_vars or {})
+    # Evaluation configuration is a Dashboard-only control-plane input. Rebuild
+    # it from the trusted host environment after the service environments split;
+    # the deployment path is then replaced with a read-only container mount.
+    for name in (
+        EVALUATION_DEPLOYMENTS_DIR_ENV,
+        *EVALUATION_DASHBOARD_CONFIG_ENV_NAMES,
+    ):
+        common_env.pop(name, None)
     common_env["VLLM_SR_RUNTIME_CONFIG_PATH"] = runtime_container_config
     common_env["VLLM_SR_SOURCE_CONFIG_PATH"] = runtime_container_config
     common_env["VLLM_SR_STATE_ROOT_DIR"] = "/app"
@@ -200,6 +224,8 @@ def _resolve_container_specs(
     runtime_paths: dict[str, str],
     openclaw_network_name: str | None,
     stack_layout: RuntimeStackLayout,
+    storage_secret_names: tuple[str, ...] = (),
+    envoy_log_level: str = DEFAULT_ENVOY_LOG_LEVEL,
 ):
     runtime_images = get_runtime_images(
         image=image,
@@ -223,6 +249,8 @@ def _resolve_container_specs(
         runtime_paths=runtime_paths,
         openclaw_network_name=openclaw_network_name,
         stack_layout=stack_layout,
+        storage_secret_names=storage_secret_names,
+        envoy_log_level=envoy_log_level,
     )
 
 
@@ -240,6 +268,8 @@ def _runtime_container_specs(
     runtime_paths: dict[str, str],
     openclaw_network_name: str | None,
     stack_layout: RuntimeStackLayout,
+    storage_secret_names: tuple[str, ...] = (),
+    envoy_log_level: str = DEFAULT_ENVOY_LOG_LEVEL,
 ):
     listener_port = _primary_listener_port(listeners)
     management_listener = _managed_management_listener(
@@ -264,10 +294,10 @@ def _runtime_container_specs(
         normalized_platform=normalized_platform,
         common_env=common_env,
         runtime_paths=runtime_paths,
-        setup_mode=setup_mode,
         stack_layout=stack_layout,
         inherited_sensitive_env=inherited_sensitive_env,
         management_listener=management_listener,
+        storage_secret_names=storage_secret_names,
     )
     envoy_cmd = _build_envoy_runtime_command(
         runtime=runtime,
@@ -279,11 +309,24 @@ def _runtime_container_specs(
         runtime_paths=runtime_paths,
         setup_mode=setup_mode,
         stack_layout=stack_layout,
+        envoy_log_level=envoy_log_level,
     )
 
     specs = [
-        ("router", stack_layout.router_container_name, router_cmd),
-        ("envoy", stack_layout.envoy_container_name, envoy_cmd),
+        (
+            "router",
+            stack_layout.router_container_name,
+            (
+                router_cmd,
+                *router_data_network_commands(
+                    runtime,
+                    stack_layout.router_container_name,
+                    stack_layout.data_network_name,
+                    start_now=not setup_mode,
+                ),
+            ),
+        ),
+        ("envoy", stack_layout.envoy_container_name, (envoy_cmd,)),
     ]
 
     if minimal:
@@ -303,7 +346,7 @@ def _runtime_container_specs(
         inherited_sensitive_env=inherited_sensitive_env,
         management_listener=management_listener,
     )
-    specs.append(("dashboard", stack_layout.dashboard_container_name, dashboard_cmd))
+    specs.append(("dashboard", stack_layout.dashboard_container_name, (dashboard_cmd,)))
 
     return specs
 
@@ -317,12 +360,19 @@ def _build_router_runtime_command(
     normalized_platform: str,
     common_env: dict[str, str],
     runtime_paths: dict[str, str],
-    setup_mode: bool,
     stack_layout: RuntimeStackLayout,
     inherited_sensitive_env: set[str],
     management_listener: dict[str, int | str],
+    storage_secret_names: tuple[str, ...] = (),
 ):
     router_env = router_runtime_env(common_env, normalized_platform)
+    # Names only. Each one is rendered as an inheriting `-e NAME` flag, and the
+    # value reaches Docker through the Router child process environment. They
+    # stay out of `common_env` on purpose: `_build_dashboard_runtime_env()`
+    # copies that mapping, which would hand two unused credentials to the one
+    # container holding the Docker socket.
+    for name in storage_secret_names:
+        router_env.setdefault(name, "")
     service_entrypoint, service_args = bounded_log_spool_entrypoint(
         "/app/start-router.sh",
         [
@@ -354,7 +404,11 @@ def _build_router_runtime_command(
         command_args=service_args,
         enable_amd_gpu=normalized_platform == PLATFORM_AMD,
         enable_nvidia_gpu=normalized_platform == PLATFORM_NVIDIA,
-        start_immediately=not setup_mode,
+        # Never `run`: Router is the one container on both stack networks, and
+        # the second one can only be attached to a container that already
+        # exists. `router_data_network_commands` supplies the connect and the
+        # start that follow, in that order.
+        start_immediately=False,
         inherited_env_keys=inherited_sensitive_env,
     )
 
@@ -370,6 +424,7 @@ def _build_envoy_runtime_command(
     runtime_paths: dict[str, str],
     setup_mode: bool,
     stack_layout: RuntimeStackLayout,
+    envoy_log_level: str,
 ):
     service_entrypoint, service_args = bounded_log_spool_entrypoint(
         "/usr/local/bin/envoy",
@@ -377,7 +432,7 @@ def _build_envoy_runtime_command(
             "-c",
             "/etc/envoy/envoy.yaml",
             "--log-level",
-            "debug",
+            envoy_log_level,
         ],
     )
     return _build_service_run_command(
@@ -437,6 +492,10 @@ def _build_dashboard_runtime_command(
         stack_layout=stack_layout,
         management_port=int(management_listener["port"]),
     )
+    configure_dashboard_evaluation_env(
+        dashboard_env,
+        source_config_path=runtime_paths.get("source_config_path"),
+    )
     dashboard_mount_specs = _runtime_mount_specs(
         runtime_paths, include_dashboard_data=True
     )
@@ -447,6 +506,13 @@ def _build_dashboard_runtime_command(
         ]
     )
     dashboard_mount_specs.extend(_active_recipe_mount_specs(runtime_paths))
+    if dashboard_env.get(EVALUATION_ENABLED_ENV) != "false":
+        configure_dashboard_evaluation_deployments(
+            dashboard_env,
+            dashboard_mount_specs,
+            staging_root=runtime_paths["evaluation_deployment_staging_root"],
+            readable_gid=int(runtime_paths["log_spool_gid"]),
+        )
     if runtime_paths.get("active_recipe_root"):
         dashboard_env["VLLM_SR_ACTIVE_RECIPE_DIR"] = "/app/recipe"
     else:
@@ -485,7 +551,9 @@ def _build_dashboard_runtime_command(
         port_mappings=[(stack_layout.dashboard_port, 8700)],
         entrypoint=service_entrypoint,
         command_args=service_args,
-        inherited_env_keys={"DASHBOARD_ADMIN_PASSWORD"} | inherited_sensitive_env,
+        inherited_env_keys={"DASHBOARD_ADMIN_PASSWORD"}
+        | inherited_sensitive_env
+        | evaluation_dashboard_secret_env_names(dashboard_env),
     )
 
 
@@ -497,11 +565,17 @@ def _recipe_env_binding_names(common_env: dict[str, str]) -> set[str]:
 def _sensitive_runtime_env_names(
     common_env: dict[str, str], runtime_paths: dict[str, str]
 ) -> set[str]:
-    """Return value-bearing env names that must stay out of Docker argv/logs."""
+    """Return value-bearing env names that must stay out of Docker argv/logs.
+
+    The storage credential names are added after the intersection rather than
+    through it: they are deliberately kept out of ``common_env`` so only the
+    Router command carries them, which is exactly what the intersection would
+    otherwise filter away.
+    """
 
     names = set(sensitive_env_names(runtime_paths.get("source_config_path")))
     names.update(_recipe_env_binding_names(common_env))
-    return names & set(common_env)
+    return (names & set(common_env)) | set(STORAGE_SECRET_ENV_NAMES)
 
 
 def _build_dashboard_runtime_env(
@@ -558,6 +632,22 @@ def _build_dashboard_runtime_env(
     return dashboard_env
 
 
+def _resolve_envoy_log_level(env_vars: dict[str, str]) -> str:
+    """Resolve and validate Envoy's bounded log-level override."""
+    raw_level = env_vars.get(ENVOY_LOG_LEVEL_ENV, os.getenv(ENVOY_LOG_LEVEL_ENV))
+    if raw_level is None:
+        return DEFAULT_ENVOY_LOG_LEVEL
+
+    log_level = raw_level.strip().lower()
+    if log_level not in VALID_ENVOY_LOG_LEVELS:
+        allowed = ", ".join(sorted(VALID_ENVOY_LOG_LEVELS))
+        raise ValueError(
+            f"Invalid {ENVOY_LOG_LEVEL_ENV} value {raw_level!r}. "
+            f"Expected one of: {allowed}."
+        )
+    return log_level
+
+
 def _resolve_platform(env_vars):
     platform = (
         env_vars.get("DASHBOARD_PLATFORM")
@@ -578,141 +668,6 @@ def _resolve_nofile_limit():
     if nofile_limit != DEFAULT_NOFILE_LIMIT:
         log.info(f"Using custom file descriptor limit: {nofile_limit}")
     return nofile_limit
-
-
-def _prepare_runtime_paths(
-    config_file,
-    runtime_config_file=None,
-    state_root_dir=None,
-    stack_layout: RuntimeStackLayout | None = None,
-):
-    stack_layout = stack_layout or resolve_runtime_stack()
-    source_config_path = os.path.abspath(config_file)
-    runtime_config_path = os.path.abspath(runtime_config_file or config_file)
-    config_dir = (
-        os.path.abspath(state_root_dir)
-        if state_root_dir
-        else os.path.dirname(source_config_path)
-    )
-
-    vllm_sr_dir = os.path.join(config_dir, ".vllm-sr")
-    os.makedirs(vllm_sr_dir, exist_ok=True)
-    log.info(f"Mounting .vllm-sr directory: {vllm_sr_dir}")
-
-    active_config_path = _runtime_config_output_path(
-        Path(source_config_path),
-        state_root_dir=config_dir,
-        stack_name=stack_layout.stack_name,
-    )
-    if Path(runtime_config_path).resolve() != active_config_path.resolve():
-        active_config_path = materialize_runtime_config(
-            Path(source_config_path),
-            Path(runtime_config_path).read_bytes(),
-            state_root_dir=config_dir,
-            stack_name=stack_layout.stack_name,
-        )
-    runtime_config_path = str(active_config_path)
-
-    active_recipe = resolve_active_recipe_directory(source_config_path)
-    # A managed Recipe source is a distributable five-file directory. Keep
-    # mutable model/runtime state under its explicitly ignored .vllm-sr area
-    # so serving it never changes the package contract.
-    models_dir = (
-        os.path.join(vllm_sr_dir, "models")
-        if active_recipe
-        else os.path.join(config_dir, "models")
-    )
-    os.makedirs(models_dir, exist_ok=True)
-
-    dashboard_data_dir = os.path.join(config_dir, ".vllm-sr", "dashboard-data")
-    os.makedirs(dashboard_data_dir, exist_ok=True)
-    log.info(f"Mounting dashboard data directory: {dashboard_data_dir}")
-
-    recipe_store_dir = os.path.join(
-        vllm_sr_dir, "recipe-store", stack_layout.stack_name
-    )
-    os.makedirs(recipe_store_dir, exist_ok=True)
-
-    log_spool = prepare_runtime_log_spool(vllm_sr_dir, stack_layout.stack_name)
-
-    effective_config_path = runtime_config_path
-    envoy_config_path = os.path.join(vllm_sr_dir, "envoy.yaml")
-
-    runtime_container_config = _container_runtime_config_path(
-        Path(source_config_path), stack_name=stack_layout.stack_name
-    )
-    log.info(
-        "Using read-only source config %s with active runtime config %s",
-        source_config_path,
-        runtime_container_config,
-    )
-
-    active_recipe_paths = {
-        f"active_recipe_{name.replace('.', '_').replace('-', '_')}_path": str(path)
-        for name, path in (active_recipe.assets if active_recipe else ())
-    }
-
-    return (
-        config_dir,
-        {
-            "source_config_path": source_config_path,
-            "effective_config_path": effective_config_path,
-            "vllm_sr_dir": vllm_sr_dir,
-            "models_dir": models_dir,
-            "dashboard_data_dir": dashboard_data_dir,
-            "recipe_store_dir": recipe_store_dir,
-            "log_spool_logs_root": str(log_spool.root.parent),
-            "log_spool_root": str(log_spool.root),
-            "log_spool_gid": str(log_spool.gid),
-            **{
-                f"log_spool_{component}_mount": log_spool.producer_mount(component)
-                for component in ("router", "envoy", "dashboard")
-            },
-            "container_recipe_store_dir": (
-                f"/app/.vllm-sr/recipe-store/{stack_layout.stack_name}"
-            ),
-            "envoy_config_path": envoy_config_path,
-            "runtime_container_config": runtime_container_config,
-            "active_recipe_root": str(active_recipe.root) if active_recipe else "",
-            **active_recipe_paths,
-        },
-        runtime_container_config,
-    )
-
-
-def _runtime_mount_specs(
-    runtime_paths: dict[str, str],
-    *,
-    include_models: bool = False,
-    include_dashboard_data: bool = False,
-):
-    mounts = [
-        f"{runtime_paths['source_config_path']}:{_container_readonly_source_config_path()}:ro,z",
-        f"{runtime_paths['vllm_sr_dir']}:/app/.vllm-sr:z",
-        f"{runtime_paths['log_spool_logs_root']}:/app/.vllm-sr/logs:ro,z",
-    ]
-    if include_models:
-        mounts.append(f"{runtime_paths['models_dir']}:/app/models:z")
-    if include_dashboard_data:
-        mounts.append(f"{runtime_paths['dashboard_data_dir']}:/app/data:z")
-    return mounts
-
-
-def _active_recipe_mount_specs(runtime_paths: dict[str, str]) -> list[str]:
-    if not runtime_paths.get("active_recipe_root"):
-        return []
-
-    mounts = []
-    for filename in (
-        "config.yaml",
-        "metadata.yaml",
-        "probes.yaml",
-        "recipe.dsl",
-        "README.md",
-    ):
-        key = f"active_recipe_{filename.replace('.', '_').replace('-', '_')}_path"
-        mounts.append(f"{runtime_paths[key]}:/app/recipe/{filename}:ro,z")
-    return mounts
 
 
 def _primary_listener_port(listeners):
@@ -787,10 +742,3 @@ def _build_service_run_command(
     cmd.append(image)
     cmd.extend(command_args)
     return cmd
-
-
-def _cleanup_started_containers(container_names: list[str]) -> None:
-    for container_name in reversed(container_names):
-        if container_status(container_name) == "running":
-            container_stop_container(container_name)
-        container_remove_container(container_name)

@@ -75,10 +75,8 @@ describe('runPlaygroundTask', () => {
       expandedToolCardCount: 0,
       generateId: () => `message-${nextId++}`,
       getConversationMessagesSnapshot: () => messages,
-      getCurrentConversationId: () => 'conversation-1',
       registerAbortController: vi.fn(),
       setConversationError: vi.fn(),
-      setConversationHeaderReveal: vi.fn(),
       setConversationThinking: vi.fn(),
       setExpandedToolCards: vi.fn(),
       task,
@@ -167,10 +165,8 @@ describe('runPlaygroundTask', () => {
       expandedToolCardCount: 0,
       generateId: () => `message-${nextID++}`,
       getConversationMessagesSnapshot: () => messages,
-      getCurrentConversationId: () => task.conversationId,
       registerAbortController: vi.fn(),
       setConversationError: vi.fn(),
-      setConversationHeaderReveal: vi.fn(),
       setConversationThinking: vi.fn(),
       setExpandedToolCards: vi.fn(),
       task,
@@ -250,10 +246,8 @@ describe('runPlaygroundTask', () => {
       expandedToolCardCount: 0,
       generateId: () => `message-${nextId++}`,
       getConversationMessagesSnapshot: () => messages,
-      getCurrentConversationId: () => 'conversation-tool-loop',
       registerAbortController: vi.fn(),
       setConversationError: vi.fn(),
-      setConversationHeaderReveal: vi.fn(),
       setConversationThinking: vi.fn(),
       setExpandedToolCards: vi.fn(),
       task,
@@ -269,5 +263,60 @@ describe('runPlaygroundTask', () => {
       isStreaming: false,
       toolCalls: [{ id: 'call-1', status: 'completed' }],
     })
+  })
+
+  it('separates an actionable HTTP failure from the raw response body', async () => {
+    const rawResponse = 'worker://private-stack upstream=http://internal.example'
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(rawResponse, {
+          status: 503,
+          statusText: 'Service Unavailable',
+        }),
+      ),
+    )
+    const task: PlaygroundTask = {
+      id: 'task-http-failure',
+      conversationId: 'conversation-http-failure',
+      prompt: 'Hello',
+      createdAt: 1,
+      requestOptions: {
+        enableClawMode: false,
+        enableWebSearch: false,
+        model: 'vllm-sr/auto',
+      },
+    }
+    const setConversationError = vi.fn()
+    let messages: Message[] = []
+
+    await runPlaygroundTask({
+      buildTaskTools: () => [],
+      clawManagementDisabled: false,
+      clearConversationActiveTask: vi.fn(),
+      endpoint: '/api/router/v1/chat/completions',
+      executeTools: vi.fn(async () => []),
+      expandedToolCardCount: 0,
+      generateId: () => crypto.randomUUID(),
+      getConversationMessagesSnapshot: () => messages,
+      registerAbortController: vi.fn(),
+      setConversationError,
+      setConversationThinking: vi.fn(),
+      setExpandedToolCards: vi.fn(),
+      task,
+      updateConversationMessages: (_conversationId, updater) => {
+        messages = updater(messages)
+      },
+    })
+
+    const lastFailureCall =
+      setConversationError.mock.calls[setConversationError.mock.calls.length - 1]
+    const failure = lastFailureCall?.[1]
+    expect(failure).toEqual({
+      message: 'The model service is temporarily unavailable. Try again.',
+      technicalDetails: `HTTP 503 Service Unavailable\n${rawResponse}`,
+    })
+    expect(failure.message).not.toContain(rawResponse)
+    expect(messages).toHaveLength(1)
   })
 })

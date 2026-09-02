@@ -24,22 +24,6 @@ pr_job_order:
   - recipe-conformance
   - paper
 
-local_full_ci_paths:
-  - src/semantic-router/**
-  - src/vllm-sr/**
-  - src/vllm-sr/Dockerfile*
-  - tools/make/**
-  - tools/agent/*.yaml
-  - tools/agent/scripts/**
-  - tools/make/agent.mk
-  - .github/workflows/**
-  - e2e/pkg/**
-  - e2e/cmd/**
-  - e2e/testcases/**
-  - e2e/go.mod
-  - e2e/go.sum
-  - e2e/config/**
-
 domains:
   quality:
     owner: ci
@@ -104,7 +88,7 @@ domains:
 
   dashboard:
     owner: dashboard
-    contract: Dashboard frontend and backend APIs preserve their component and handler contracts.
+    contract: Dashboard frontend and backend APIs preserve their component, browser, and handler contracts.
     layer: unit-integration
     selector: dashboard
     pr_job: dashboard
@@ -121,9 +105,14 @@ domains:
       - src/semantic-router/pkg/modelinventory/**
       - src/semantic-router/pkg/nlgen/**
       - src/semantic-router/pkg/startupstatus/**
+      - src/vllm-sr/cli/evaluation/golden/metric_analysis_catalog.v1.json
+      - src/vllm-sr/cli/evaluation/golden/research_benchmark_inventory.v1.json
+      - tools/ci/sync_evaluation_catalogs.py
       - tools/make/dashboard.mk
       - .github/workflows/dashboard-test.yml
-    local: {fast: [make dashboard-check], feature: []}
+    local:
+      fast: [make dashboard-check]
+      feature: [make dashboard-test-e2e-evaluation]
     image_receipts: []
     reporting: {kind: check}
 
@@ -161,7 +150,7 @@ domains:
 
   cli:
     owner: vllm-sr-cli
-    contract: CLI serve, status, logs, stop, topology, and image-pull behavior works with real containers.
+    contract: CLI serve, status, logs, stop, topology, storage network isolation, and image-pull behavior works with real containers.
     layer: runtime-integration
     selector: cli
     pr_job: cli
@@ -177,7 +166,7 @@ domains:
     local:
       fast: [make vllm-sr-test]
       feature: [make vllm-sr-test-integration]
-    image_receipts: [dashboard, extproc, vllm-sr, vllm-sr-sim]
+    image_receipts: [dashboard, extproc, vllm-sr]
     reporting: {kind: check}
 
   memory:
@@ -200,7 +189,7 @@ domains:
       - src/semantic-router/pkg/sessiontelemetry/*memory*
       - src/semantic-router/pkg/vectorstore/*memory*
       - src/semantic-router/pkg/cache/*memory*
-      - src/vllm-sr/**/*memory*
+      - src/vllm-sr/cli/models.py
       - tools/make/milvus.mk
       - e2e/testing/09-memory-features-test.py
       - e2e/testing/run_memory_integration.sh
@@ -211,7 +200,7 @@ domains:
       - e2e/profiles/response-api-redis-cluster/**
       - deploy/kubernetes/response-api/**
     local: {fast: [], feature: [make memory-test-integration]}
-    image_receipts: [dashboard, extproc, llm-katan, vllm-sr, vllm-sr-sim]
+    image_receipts: [dashboard, extproc, llm-katan, vllm-sr]
     reporting: {kind: check}
 
   recipe-conformance:
@@ -231,7 +220,7 @@ domains:
       - src/semantic-router/pkg/classification/**
       - src/semantic-router/pkg/decision/**
       - src/semantic-router/pkg/dsl/**
-      - src/semantic-router/pkg/projection/**
+      - src/semantic-router/pkg/projectiontrace/**
       - src/semantic-router/pkg/services/classification*
       - src/semantic-router/pkg/apiserver/route_classify*
       - tools/agent/scripts/recipe_conformance*
@@ -351,6 +340,13 @@ profiles:
     paths:
       - e2e/profiles/ai-gateway/**
       - deploy/kubernetes/ai-gateway/**
+  category-remote-backend:
+    owner: e2e
+    coverage_role: category-remote-classifier-backend
+    selection: pr
+    paths:
+      - e2e/profiles/category-remote-backend/**
+      - e2e/testcases/category_backend_routing.go
   aibrix:
     owner: e2e
     coverage_role: aibrix-control-plane-and-gateway
@@ -364,9 +360,7 @@ profiles:
     paths:
       - e2e/profiles/dashboard/**
       - e2e/testcases/dashboard_*.go
-      - e2e/testcases/security_policy_apply.go
       - deploy/kubernetes/observability/dashboard/**
-      - dashboard/backend/handlers/security_policy*.go
       - dashboard/backend/handlers/deploy.go
       - dashboard/backend/handlers/canonical_transport.go
   dynamic-config:
@@ -392,6 +386,14 @@ profiles:
     coverage_role: llm-d-inference-gateway-health
     selection: pr
     paths: [e2e/profiles/llm-d/**, deploy/kubernetes/llmd-base/**]
+  looper:
+    owner: e2e
+    coverage_role: deterministic-looper-algorithm-contracts
+    selection: pr
+    paths:
+      - e2e/profiles/looper/**
+      - e2e/testcases/looper_*.go
+      - src/semantic-router/pkg/looper/**
   routing-strategies:
     owner: e2e
     coverage_role: routing-strategy-contracts
@@ -426,15 +428,12 @@ profiles:
       - tools/demos/multi-endpoint.sh
   authz-rbac:
     owner: e2e
-    coverage_role: authz-and-rate-limit-contracts
+    coverage_role: trusted-identity-routing-contracts
     selection: pr
     paths:
       - e2e/profiles/authz-rbac/**
       - e2e/config/config.authz-rbac.yaml
-      - e2e/config/authz-profile-*.yaml
       - src/semantic-router/pkg/classification/authz*.go
-      - src/semantic-router/pkg/authz/**
-      - dashboard/backend/handlers/security_policy*.go
   streaming:
     owner: e2e
     coverage_role: streaming-request-and-cache
@@ -442,25 +441,57 @@ profiles:
     paths:
       - e2e/profiles/streaming/**
       - deploy/kubernetes/streaming/**
+      - src/semantic-router/pkg/llmprotocol/**
+      - src/semantic-router/pkg/protocolcodec/**
       - src/semantic-router/pkg/extproc/processor_req_body_streamed*.go
+      - src/semantic-router/pkg/extproc/processor_res_body_pipeline.go
+      - src/semantic-router/pkg/extproc/processor_res_semantic_stream.go
   anthropic-shim:
     owner: e2e
     coverage_role: anthropic-shape-backend-translation-contracts
-    selection: manual
+    selection: pr
     image_receipts: [anthropic-shim]
     paths:
       - e2e/profiles/anthropic-shim/**
       - e2e/testing/anthropic-shim/**
+      - e2e/testcases/anthropic_*.go
+      - e2e/testcases/protocol_codec_*.go
       - deploy/kubernetes/anthropic-backend/**
-      - src/semantic-router/pkg/anthropic/outbound*.go
+      - src/semantic-router/pkg/llmprotocol/**
+      - src/semantic-router/pkg/protocolcodec/**
+      - src/semantic-router/pkg/extproc/processor_protocol_contract.go
+      - src/semantic-router/pkg/extproc/processor_res_body_pipeline.go
+      - src/semantic-router/pkg/extproc/processor_res_semantic_stream.go
+      - src/semantic-router/pkg/extproc/provider_request_adapter.go
+  route-action:
+    owner: e2e
+    coverage_role: decision-route-action-contracts
+    selection: pr
+    paths:
+      - e2e/profiles/route-action/**
+      - e2e/testcases/route_action.go
+      - deploy/kubernetes/route-action/**
+      - src/semantic-router/pkg/config/validator_decision_action*.go
+      - src/semantic-router/pkg/dsl/validator_route_action.go
+      - src/semantic-router/pkg/extproc/req_filter_model_eligibility.go
   response-api:
     owner: e2e
     coverage_role: responses-api-memory
-    selection: manual
+    selection: pr
     paths:
       - e2e/profiles/response-api/**
+      - e2e/testcases/anthropic_response_api_streaming.go
+      - e2e/testcases/protocol_codec_*.go
       - deploy/kubernetes/response-api/gwapi-resources.yaml
       - deploy/kubernetes/response-api/mock-vllm.yaml
+      - tools/mock-vllm/**
+      - src/semantic-router/pkg/llmprotocol/**
+      - src/semantic-router/pkg/protocolcodec/**
+      - src/semantic-router/pkg/extproc/processor_protocol_contract.go
+      - src/semantic-router/pkg/extproc/processor_req_body_response_object.go
+      - src/semantic-router/pkg/extproc/processor_res_body_pipeline.go
+      - src/semantic-router/pkg/extproc/processor_res_semantic_stream.go
+      - src/semantic-router/pkg/extproc/provider_request_adapter.go
   response-api-redis:
     owner: e2e
     coverage_role: responses-api-redis-ttl

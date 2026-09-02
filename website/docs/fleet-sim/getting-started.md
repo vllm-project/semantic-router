@@ -4,26 +4,10 @@ title: Getting Started
 
 # Getting started
 
-Use the local stack when you want the dashboard. Install the Python package
-directly when you only need the CLI or simulator API.
+Fleet Sim is a standalone planning tool. It is not started by `vllm-sr serve`
+and is not exposed through the Semantic Router dashboard.
 
-## Run with the local vLLM Semantic Router stack
-
-From the repository root:
-
-```bash
-make vllm-sr-dev
-vllm-sr serve --image-pull-policy never
-```
-
-The CLI starts Fleet Sim as a sibling container by default and connects the
-dashboard backend to it on the runtime network. Open the dashboard and choose
-**Fleet Sim** to manage workloads, fleet definitions, and runs.
-
-This flow uses locally built images. It does not require a separate Python
-installation for Fleet Sim.
-
-## Install the standalone CLI
+## Install the CLI
 
 From a source checkout:
 
@@ -106,22 +90,6 @@ Interactive API documentation is available at
 Use `--host 0.0.0.0` only when another host or container must connect, and put
 authentication and network controls in front of the service. Fleet Sim's
 FastAPI application does not add its own authentication layer.
-
-## Use an external service with the dashboard
-
-Set the service URL before starting the local stack:
-
-```bash
-export TARGET_FLEET_SIM_URL=http://fleet-sim.internal:8000
-vllm-sr serve --image-pull-policy never
-```
-
-When that variable is present, the CLI does not start its Fleet Sim sidecar. To
-disable Fleet Sim without providing an external service:
-
-```bash
-export VLLM_SR_SIM_ENABLED=false
-```
 
 Continue with [capacity-planning workflows](./use-cases) before treating a
 sample result as a deployment recommendation.

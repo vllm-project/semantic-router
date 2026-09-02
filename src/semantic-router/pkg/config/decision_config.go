@@ -1,5 +1,44 @@
 package config
 
+import (
+	"slices"
+	"strings"
+)
+
+type UnknownPolicy string
+
+const (
+	RuleOnUnknownNoMatch     UnknownPolicy = "no_match"
+	RuleOnUnknownMatch       UnknownPolicy = "match"
+	RuleOnUnknownFailRequest UnknownPolicy = "fail_request"
+)
+
+var UnknownPolicies = []UnknownPolicy{RuleOnUnknownNoMatch, RuleOnUnknownMatch, RuleOnUnknownFailRequest}
+
+func (p UnknownPolicy) IsValid() bool {
+	return slices.Contains(UnknownPolicies, p)
+}
+
+func UnknownPolicyChoices() string {
+	names := make([]string, len(UnknownPolicies))
+	for i, policy := range UnknownPolicies {
+		names[i] = string(policy)
+	}
+	return strings.Join(names[:len(names)-1], ", ") + ", or " + names[len(names)-1]
+}
+
+const DecisionActionRoute = "route"
+
+// DecisionAction is an explicit action a matched decision applies instead of
+// candidate ranking. The only supported type is "route": send the request to
+// Destination, overriding a caller-pinned model, so a detected prompt attack
+// cannot bypass the guard by naming a model. Destination must resolve in
+// model_config and the decision's rules must reference a jailbreak signal.
+type DecisionAction struct {
+	Type        string `yaml:"type" json:"type"`
+	Destination string `yaml:"destination" json:"destination"`
+}
+
 // Decision represents a routing decision that combines multiple rules with boolean logic.
 type Decision struct {
 	Name                string                     `yaml:"name"`
@@ -9,6 +48,7 @@ type Decision struct {
 	OutputContract      string                     `yaml:"output_contract,omitempty" json:"output_contract,omitempty"`
 	OutputContractSpec  *OutputContractSpec        `yaml:"output_contract_spec,omitempty" json:"output_contract_spec,omitempty"`
 	Rules               RuleCombination            `yaml:"rules"`
+	Action              *DecisionAction            `yaml:"action,omitempty" json:"action,omitempty"`
 	ModelRefs           []ModelRef                 `yaml:"modelRefs,omitempty"`
 	Algorithm           *AlgorithmConfig           `yaml:"algorithm,omitempty"`
 	Adaptations         DecisionAdaptationsConfig  `yaml:"adaptations,omitempty"`
@@ -66,23 +106,24 @@ type CandidateIterationOutputConfig struct {
 
 // AlgorithmConfig defines how multiple models should be executed and aggregated.
 type AlgorithmConfig struct {
-	Type         string                       `yaml:"type"`
-	Confidence   *ConfidenceAlgorithmConfig   `yaml:"confidence,omitempty"`
-	Ratings      *RatingsAlgorithmConfig      `yaml:"ratings,omitempty"`
-	ReMoM        *ReMoMAlgorithmConfig        `yaml:"remom,omitempty"`
-	Fusion       *FusionAlgorithmConfig       `yaml:"fusion,omitempty"`
-	Workflows    *WorkflowsAlgorithmConfig    `yaml:"workflows,omitempty"`
-	Elo          *EloSelectionConfig          `yaml:"-"`
-	RouterDC     *RouterDCSelectionConfig     `yaml:"router_dc,omitempty"`
-	AutoMix      *AutoMixSelectionConfig      `yaml:"automix,omitempty"`
-	Hybrid       *HybridSelectionConfig       `yaml:"hybrid,omitempty"`
-	RLDriven     *RLDrivenSelectionConfig     `yaml:"-"`
-	GMTRouter    *GMTRouterSelectionConfig    `yaml:"-"`
-	LatencyAware *LatencyAwareAlgorithmConfig `yaml:"latency_aware,omitempty"`
-	MultiFactor  *MultiFactorSelectionConfig  `yaml:"multi_factor,omitempty"`
-	Prompt       *PromptSelectionConfig       `yaml:"prompt,omitempty"`
-	SessionAware *SessionAwareSelectionConfig `yaml:"-"`
-	OnError      string                       `yaml:"on_error,omitempty"`
+	Type              string                       `yaml:"type"`
+	MinimumCandidates int                          `yaml:"minimum_candidates,omitempty"`
+	Confidence        *ConfidenceAlgorithmConfig   `yaml:"confidence,omitempty"`
+	Ratings           *RatingsAlgorithmConfig      `yaml:"ratings,omitempty"`
+	ReMoM             *ReMoMAlgorithmConfig        `yaml:"remom,omitempty"`
+	Fusion            *FusionAlgorithmConfig       `yaml:"fusion,omitempty"`
+	Workflows         *WorkflowsAlgorithmConfig    `yaml:"workflows,omitempty"`
+	Elo               *EloSelectionConfig          `yaml:"-"`
+	RouterDC          *RouterDCSelectionConfig     `yaml:"router_dc,omitempty"`
+	AutoMix           *AutoMixSelectionConfig      `yaml:"automix,omitempty"`
+	Hybrid            *HybridSelectionConfig       `yaml:"hybrid,omitempty"`
+	RLDriven          *RLDrivenSelectionConfig     `yaml:"-"`
+	GMTRouter         *GMTRouterSelectionConfig    `yaml:"-"`
+	LatencyAware      *LatencyAwareAlgorithmConfig `yaml:"latency_aware,omitempty"`
+	MultiFactor       *MultiFactorSelectionConfig  `yaml:"multi_factor,omitempty"`
+	Prompt            *PromptSelectionConfig       `yaml:"prompt,omitempty"`
+	SessionAware      *SessionAwareSelectionConfig `yaml:"-"`
+	OnError           string                       `yaml:"on_error,omitempty"`
 }
 
 // PromptSelectionConfig configures deterministic, prompt-driven selection
@@ -114,7 +155,8 @@ type ConfidenceAlgorithmConfig struct {
 	// VerifierTimeoutSeconds bounds each verifier HTTP call. Defaults to 60
 	// when zero, matching selection.NewAutoMixVerifierClient. Only consulted
 	// when confidence_method=automix_entailment and is rejected otherwise.
-	VerifierTimeoutSeconds int `yaml:"verifier_timeout_seconds,omitempty"`
+	VerifierTimeoutSeconds int   `yaml:"verifier_timeout_seconds,omitempty"`
+	MaxResponseBytes       int64 `yaml:"max_response_bytes,omitempty"`
 }
 
 type HybridWeightsConfig struct {
@@ -166,6 +208,7 @@ type RuleNode struct {
 	Label      string            `yaml:"label,omitempty" json:"label,omitempty"`
 	Predicate  *NumericPredicate `yaml:"predicate,omitempty" json:"predicate,omitempty"`
 	OnError    string            `yaml:"on_error,omitempty" json:"on_error,omitempty"`
+	OnUnknown  UnknownPolicy     `yaml:"on_unknown,omitempty" json:"on_unknown,omitempty"`
 	Operator   string            `yaml:"operator,omitempty" json:"operator,omitempty"`
 	Conditions []RuleNode        `yaml:"conditions,omitempty" json:"conditions,omitempty"`
 }

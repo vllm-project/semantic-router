@@ -4,6 +4,7 @@ import {
   createProbePlaygroundTask,
   materializeEditedProbeRequest,
   preparePlaygroundInvocation,
+  resolveProbeRequestModel,
   toPlaygroundHistory,
 } from './playgroundInvocationSupport'
 import type { PlaygroundInvocation } from '../types/playgroundInvocation'
@@ -14,6 +15,7 @@ const invocation = (intent: 'run' | 'edit'): PlaygroundInvocation => ({
   source: 'recipe-probe',
   probeId: 'balanced_recovery/semantic_reask',
   recipeDigest: 'sha256:recipe',
+  recipe: 'balanced',
   editable: true,
   model: 'team/custom-balanced',
   messages: [
@@ -22,10 +24,25 @@ const invocation = (intent: 'run' | 'edit'): PlaygroundInvocation => ({
     { role: 'user', content: 'Explain vector clocks.' },
   ],
   tools: [{ type: 'function', function: { name: 'lookup', parameters: {} } }],
+  toolChoice: { type: 'function', function: { name: 'lookup' } },
   request: { temperature: 0 },
 })
 
 describe('playgroundInvocationSupport', () => {
+  it('resolves a model-free probe through the active Recipe entrypoint', () => {
+    const prepared = preparePlaygroundInvocation({
+      ...invocation('run'),
+      model: 'vllm-sr/auto',
+    })
+
+    expect(
+      resolveProbeRequestModel(prepared, [
+        { id: 'vllm-sr/mom-v1-lite', description: '', recipe: 'cost' },
+        { id: 'vllm-sr/mom-v1-blend', description: '', recipe: 'balanced' },
+      ]),
+    ).toBe('vllm-sr/mom-v1-blend')
+  })
+
   it('prepares the final user turn as the editable prompt', () => {
     const prepared = preparePlaygroundInvocation(invocation('edit'))
 
@@ -35,6 +52,7 @@ describe('playgroundInvocationSupport', () => {
       model: 'team/custom-balanced',
       temperature: 0,
       tools: expect.any(Array),
+      tool_choice: { type: 'function', function: { name: 'lookup' } },
       messages: expect.any(Array),
     })
   })
@@ -89,6 +107,7 @@ describe('playgroundInvocationSupport', () => {
         model: 'team/custom-balanced',
         temperature: 0,
         tools: expect.any(Array),
+        tool_choice: { type: 'function', function: { name: 'lookup' } },
         messages: expect.any(Array),
       },
       appendPromptMessage: true,

@@ -1,7 +1,8 @@
 import React, { useState } from 'react'
 import Link from '@docusaurus/Link'
 import Translate, { translate } from '@docusaurus/Translate'
-import { PillLink } from '@site/src/components/site/Chrome'
+import IconExternalLink from '@theme/Icon/ExternalLink'
+import { PillLink, SectionLabel } from '@site/src/components/site/Chrome'
 import ScrollReveal from '@site/src/components/site/ScrollReveal'
 import shared from './homepageShared.module.css'
 import styles from './UseCaseExplorer.module.css'
@@ -374,6 +375,7 @@ function UseCasePanel({ tab, active }: { tab: UseCaseTab, active: boolean }): JS
           </PillLink>
           <PillLink href="https://github.com/vllm-project/semantic-router" muted rel="noreferrer" target="_blank">
             <Translate id="homepage.useCases.secondaryCta">View on GitHub</Translate>
+            <IconExternalLink />
           </PillLink>
         </div>
       </div>
@@ -388,10 +390,10 @@ export default function UseCaseExplorer(): JSX.Element {
     <section className={shared.bandSection} aria-labelledby="use-case-explorer-title">
       <div className={`site-shell-container ${shared.sectionInner}`}>
         <ScrollReveal>
-          <header className={`${shared.sectionHeader} ${shared.sectionHeaderWide}`}>
-            <span className={shared.eyebrow}>
+          <header className={`site-section-intro ${shared.sectionHeader}`}>
+            <SectionLabel>
               <Translate id="homepage.useCases.label">How it works</Translate>
-            </span>
+            </SectionLabel>
             <h2 id="use-case-explorer-title" className={shared.sectionTitle}>
               <Translate id="homepage.useCases.title">One router, three use cases</Translate>
             </h2>

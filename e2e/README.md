@@ -55,7 +55,7 @@ make build-e2e
 ./bin/e2e -help
 ```
 
-[`tools/agent/e2e-profile-map.yaml`](../tools/agent/e2e-profile-map.yaml)
+[`tools/agent/test-domain-registry.yaml`](../tools/agent/test-domain-registry.yaml)
 records CI ownership, selection mode, and path triggers. Profile code remains
 the source of truth for deployment behavior and its exact test list.
 
@@ -115,13 +115,15 @@ until the selected cases are known to be isolated.
 ### Supported Profiles
 
 - **envoy-ai-gateway**: baseline routing, safety, cache, and decision contracts.
-- **dashboard**: dashboard API, validation, and security-policy contracts.
+- **dashboard**: dashboard API, validation, and routing-authoring contracts.
 - **aibrix**: AIBrix gateway and control-plane integration.
 - **routing-strategies**: keyword, entropy, and fallback routing.
 - **dynamic-config**: CRD-driven routing and embedding signals.
 - **multimodal-routing**: image-modality embedding routing.
 - **remote-embedding**: OpenAI-compatible remote embedding providers.
+- **category-remote-backend**: shared remote category `http_classify` backend.
 - **llm-d**: llm-d inference-gateway health and router smoke coverage.
+- **looper**: deterministic Looper algorithm contracts.
 - **istio**: sidecar, mTLS, and tracing behavior.
 - **agentgateway**: agentgateway routing and ExtProc policy enforcement.
 - **production-stack**: HA, load balancing, failover, and load checks.
@@ -129,8 +131,9 @@ until the selected cases are known to be isolated.
 - **multi-endpoint**: environment policy across several backends.
 - **authz-rbac**: authorization routing and rate-limit behavior.
 - **streaming**: streamed request bodies and cache round trips.
-- **anthropic-shim**: manual Anthropic-shape translation diagnostics.
-- **response-api**: manual memory-backed Responses API coverage.
+- **anthropic-shim**: affected-change Anthropic backend and cross-protocol matrix coverage.
+- **response-api**: affected-change memory-backed Responses API and cross-protocol matrix coverage.
+- **route-action**: decision route action for detected prompt attacks and benign traffic.
 - **response-api-redis**: manual Redis persistence and TTL coverage.
 - **response-api-redis-cluster**: manual Redis Cluster persistence and TTL coverage.
 - **router-replay**: manual management-boundary and restart-recovery coverage.
@@ -144,15 +147,25 @@ until the selected cases are known to be isolated.
 
 | Selection | Meaning | Source of truth |
 | --- | --- | --- |
-| Default local | Runs when no profile is specified | `default_local_profiles` in the profile map |
-| Full CI | Runs in the complete E2E matrix | `full_ci_profiles` in the profile map |
-| Affected | Selected when owned paths change | `profile_rules` in the profile map |
-| Manual only | Requires explicit selection and profile prerequisites | `manual_profile_rules` in the profile map |
+| Default local | Runs when no profile is specified | `default_local: true` in the test-domain registry |
+| Full CI | Runs in the complete E2E matrix | `full_ci: true` in the test-domain registry |
+| Affected | Selected when owned paths change | `selection: pr` and `paths` in the test-domain registry |
+| Manual only | Requires explicit selection and profile prerequisites | `selection: manual` in the test-domain registry |
 
-[`tools/agent/e2e-profile-map.yaml`](../tools/agent/e2e-profile-map.yaml) owns
-the exact selection mode, path triggers, and coverage role for every entry.
+[`tools/agent/test-domain-registry.yaml`](../tools/agent/test-domain-registry.yaml)
+owns the exact selection mode, path triggers, and coverage role for every entry.
 “Manual” describes lifecycle and prerequisites; it is not evidence that the
 profile passed in another environment.
+
+The `response-api` and `anthropic-shim` affected-change profiles jointly own the
+three native protocol backends used by the pairwise codec matrix. Their default
+contracts exercise Chat Completions, Responses, and Messages clients against each
+backend in buffered and streaming modes: 3 client protocols x 3 backend protocols
+x 2 response modes, for 18 required end-to-end cells. Each cell validates the
+client-native response envelope or SSE sequence, the terminal event, translated
+backend output, and the absence of leaked backend wire shapes. The same profiles
+also cover tool-call lifecycles, structured JSON Schema output, provider transport
+errors, incomplete streams, and midstream failures.
 
 ## Add or change a profile
 
@@ -161,7 +174,7 @@ profile passed in another environment.
    access.
 3. Register it in `e2e/profiles/all/imports.go`.
 4. Add its ownership and selection mode to
-   `tools/agent/e2e-profile-map.yaml`.
+   `tools/agent/test-domain-registry.yaml`.
 5. Reuse test cases where the contract is shared; add a new test only for a new
    externally visible behavior.
 6. Add deterministic assertions. A request that merely returned any response

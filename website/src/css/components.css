@@ -1,0 +1,604 @@
+/*
+ * Shared UI primitives, styled once so docs, blog, research and community
+ * stop re-styling Infima's defaults locally. All colour comes from --site-*,
+ * so every rule works in both themes without a [data-theme] branch.
+ */
+
+/* ------------------------------------------------------------------ *
+ * Selection, focus, scrollbars
+ * ------------------------------------------------------------------ */
+::selection {
+  background: var(--site-accent-soft);
+  color: var(--site-text-strong);
+}
+
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--site-accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--site-border-strong) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 0.5rem;
+  height: 0.5rem;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  border-radius: var(--radius-full);
+  background: var(--site-border-strong);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--site-muted);
+}
+
+/* ------------------------------------------------------------------ *
+ * Prose links — underlined in body copy so colour is not the only cue,
+ * but never in navigation, cards or headings.
+ * ------------------------------------------------------------------ */
+.theme-doc-markdown a:not(.card):not(.button):not([class*='anchor']),
+.site-prose a:not(.card):not(.button) {
+  color: var(--site-accent-strong);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--site-accent) 40%, transparent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+  transition: text-decoration-color var(--site-transition-fast);
+}
+
+.theme-doc-markdown a:not(.card):not(.button):not([class*='anchor']):hover,
+.site-prose a:not(.card):not(.button):hover {
+  text-decoration-color: var(--site-accent);
+}
+
+/* Heading anchors: present for keyboard and hover, quiet at rest. */
+.theme-doc-markdown .hash-link {
+  opacity: 0;
+  padding-left: 0.35em;
+  color: var(--site-muted);
+  text-decoration: none;
+  transition: opacity var(--site-transition-fast);
+}
+
+.theme-doc-markdown :hover > .hash-link,
+.theme-doc-markdown .hash-link:focus-visible {
+  opacity: 1;
+}
+
+/* ------------------------------------------------------------------ *
+ * Inline code
+ * ------------------------------------------------------------------ */
+/* Same ground as a code block, and the same token docs.css uses, so a chip
+ * looks identical in a sentence, in a fence, and across surfaces. */
+:not(pre) > code {
+  padding: 0.15em 0.4em;
+  border: 1px solid var(--site-border);
+  border-radius: var(--radius-sm);
+  background: var(--site-code-bg);
+  color: var(--site-text-strong);
+  font-size: 0.875em;
+  font-weight: var(--site-font-weight-normal);
+  /* Not nowrap: a long token would refuse to break and push its container
+   * sideways in a narrow cell or at 640px. */
+  overflow-wrap: break-word;
+  vertical-align: baseline;
+}
+
+a :not(pre) > code,
+:not(pre) > code a {
+  color: inherit;
+}
+
+kbd {
+  padding: 0.15em 0.45em;
+  border: 1px solid var(--site-border-strong);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-sm);
+  background: var(--site-surface-alt);
+  color: var(--site-text);
+  font-size: 0.8em;
+  line-height: 1.6;
+}
+
+/* ------------------------------------------------------------------ *
+ * Code blocks — card on the container, inset via --ifm-pre-padding so
+ * Docusaurus pads the <code> that scrolls rather than the <pre> that doesn't.
+ * Values match docs.css, which styles the same surface and loads later.
+ * ------------------------------------------------------------------ */
+div[class*='codeBlockContainer'] {
+  --ifm-pre-padding: var(--space-4);
+  margin-bottom: var(--space-5);
+  border: 1px solid var(--site-border);
+  border-radius: var(--radius-md);
+  background: var(--site-code-bg);
+  box-shadow: none;
+  overflow: hidden;
+}
+
+div[class*='codeBlockTitle'] {
+  padding: 0.55rem var(--ifm-pre-padding, var(--space-4));
+  border-bottom: 1px solid var(--site-border);
+  background: var(--site-surface-alt);
+  color: var(--site-muted-bright);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: var(--text-xs);
+  font-weight: var(--site-font-weight-medium);
+  letter-spacing: 0.02em;
+}
+
+div[class*='codeBlockContent'] {
+  position: relative;
+  border-radius: 0;
+}
+
+div[class*='codeBlockContainer'] pre {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+/* Type only — the padding comes from --ifm-pre-padding above. */
+div[class*='codeBlockContainer'] pre code {
+  font-size: var(--text-sm);
+  line-height: 1.6;
+}
+
+/* The copy and word-wrap controls sit in the corner, quiet until hover. */
+div[class*='buttonGroup'] {
+  top: 0.5rem;
+  right: 0.5rem;
+  gap: 0.25rem;
+}
+
+div[class*='buttonGroup'] button {
+  border: 1px solid var(--site-border);
+  border-radius: var(--radius-md);
+  background: var(--site-surface);
+  color: var(--site-muted);
+  opacity: 0;
+  transition:
+    opacity var(--site-transition-fast),
+    border-color var(--site-transition-fast),
+    color var(--site-transition-fast);
+}
+
+div[class*='codeBlockContainer']:hover div[class*='buttonGroup'] button,
+div[class*='buttonGroup'] button:focus-visible {
+  opacity: 1;
+}
+
+div[class*='buttonGroup'] button:hover {
+  border-color: var(--site-hover-border);
+  background: var(--site-surface-raised);
+  color: var(--site-text-strong);
+}
+
+/* Standalone <pre> outside a code block container (MDX, raw HTML). */
+pre:not([class*='codeBlock']) {
+  padding: var(--space-4);
+  border: 1px solid var(--site-border);
+  border-radius: var(--radius-md);
+  background: var(--site-code-bg);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  overflow-x: auto;
+}
+
+/* ------------------------------------------------------------------ *
+ * Admonitions — a single tinted field carrying the variant colour, rather
+ * than a grey card with a coloured rail. Each variant sets three values:
+ * --admonition-tint  the icon, and the colour the field is derived from
+ * --admonition-field the background wash
+ * --admonition-edge  the hairline, which runs the whole way round
+ * Heading and body stay in normal text colours; the tint alone identifies
+ * the variant, which is what keeps a page of admonitions calm.
+ * ------------------------------------------------------------------ */
+.theme-admonition {
+  --admonition-tint: var(--site-muted);
+  --admonition-field: rgba(15, 23, 42, 0.04);
+  --admonition-edge: rgba(15, 23, 42, 0.12);
+  margin-bottom: var(--space-5);
+  padding: var(--space-4);
+  border: 1px solid var(--admonition-edge);
+  border-radius: var(--radius-md);
+  background: var(--admonition-field);
+  color: var(--site-text);
+  box-shadow: none;
+  font-size: var(--text-base);
+}
+
+.theme-admonition > div:first-child,
+.theme-admonition [class*='admonitionHeading'] {
+  margin-bottom: var(--space-2);
+  color: var(--site-text-strong);
+  font-size: var(--text-base);
+  font-weight: var(--site-font-weight-semibold);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.theme-admonition [class*='admonitionIcon'] {
+  color: var(--admonition-tint);
+}
+
+.theme-admonition [class*='admonitionIcon'] svg {
+  fill: currentColor;
+}
+
+.theme-admonition > :last-child {
+  margin-bottom: 0;
+}
+
+.theme-admonition-note,
+.theme-admonition-secondary {
+  --admonition-tint: var(--site-muted);
+  --admonition-field: rgba(15, 23, 42, 0.04);
+  --admonition-edge: rgba(15, 23, 42, 0.12);
+}
+
+.theme-admonition-tip,
+.theme-admonition-success {
+  --admonition-tint: #0d8f5e;
+  --admonition-field: rgba(13, 143, 94, 0.08);
+  --admonition-edge: rgba(13, 143, 94, 0.24);
+}
+
+.theme-admonition-info {
+  --admonition-tint: var(--site-accent-strong);
+  --admonition-field: rgba(48, 162, 255, 0.09);
+  --admonition-edge: rgba(48, 162, 255, 0.28);
+}
+
+.theme-admonition-warning,
+.theme-admonition-caution {
+  --admonition-tint: #b06d0a;
+  --admonition-field: rgba(176, 109, 10, 0.09);
+  --admonition-edge: rgba(176, 109, 10, 0.26);
+}
+
+.theme-admonition-danger {
+  --admonition-tint: #c2410c;
+  --admonition-field: rgba(194, 65, 12, 0.08);
+  --admonition-edge: rgba(194, 65, 12, 0.24);
+}
+
+/* Dark mode. Every variant is restated so no field or edge is inherited from
+ * the light ramp — a wash tuned against white goes muddy on a dark ground. */
+html[data-theme='dark'] .theme-admonition-note,
+html[data-theme='dark'] .theme-admonition-secondary {
+  --admonition-field: rgba(255, 255, 255, 0.05);
+  --admonition-edge: rgba(255, 255, 255, 0.13);
+}
+
+html[data-theme='dark'] .theme-admonition-tip,
+html[data-theme='dark'] .theme-admonition-success {
+  --admonition-tint: #4ade80;
+  --admonition-field: rgba(74, 222, 128, 0.11);
+  --admonition-edge: rgba(74, 222, 128, 0.28);
+}
+
+html[data-theme='dark'] .theme-admonition-info {
+  --admonition-tint: #6cc0ff;
+  --admonition-field: rgba(108, 192, 255, 0.11);
+  --admonition-edge: rgba(108, 192, 255, 0.3);
+}
+
+html[data-theme='dark'] .theme-admonition-warning,
+html[data-theme='dark'] .theme-admonition-caution {
+  --admonition-tint: #fbbf24;
+  --admonition-field: rgba(251, 191, 36, 0.11);
+  --admonition-edge: rgba(251, 191, 36, 0.28);
+}
+
+html[data-theme='dark'] .theme-admonition-danger {
+  --admonition-tint: #fb923c;
+  --admonition-field: rgba(251, 146, 60, 0.11);
+  --admonition-edge: rgba(251, 146, 60, 0.28);
+}
+
+/* ------------------------------------------------------------------ *
+ * Tables — keep Infima's `display: block` so a wide table scrolls itself
+ * instead of overrunning the column; `display: table` would hand its
+ * min-content width to the page. overflow-y clips to the radius.
+ * ------------------------------------------------------------------ */
+.theme-doc-markdown table,
+.site-prose table {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  margin: 0 0 var(--space-5);
+  border: 1px solid var(--site-border);
+  border-collapse: separate;
+  border-spacing: 0;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
+}
+
+.theme-doc-markdown table th,
+.site-prose table th {
+  padding: 0.7rem 0.9rem;
+  border: 0;
+  border-bottom: 1px solid var(--site-border);
+  background: var(--site-table-header-bg);
+  color: var(--site-muted);
+  font-size: var(--text-xs);
+  font-weight: var(--site-font-weight-semibold);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  text-align: left;
+}
+
+.theme-doc-markdown table td,
+.site-prose table td {
+  padding: 0.7rem 0.9rem;
+  border: 0;
+  border-bottom: 1px solid var(--site-border);
+  color: var(--site-muted-bright);
+  vertical-align: top;
+}
+
+/* Headers wrap and long tokens break, so min-content stays small and the
+ * scroll container above is a fallback rather than the everyday case. */
+.theme-doc-markdown table th,
+.theme-doc-markdown table td,
+.site-prose table th,
+.site-prose table td {
+  overflow-wrap: break-word;
+  hyphens: none;
+}
+
+.theme-doc-markdown table tr:last-child td,
+.site-prose table tr:last-child td {
+  border-bottom: 0;
+}
+
+.theme-doc-markdown table tr:nth-child(2n),
+.site-prose table tr:nth-child(2n) {
+  background: transparent;
+}
+
+.theme-doc-markdown table tbody tr:hover,
+.site-prose table tbody tr:hover {
+  background: var(--site-hover-subtle-bg);
+}
+
+/* ------------------------------------------------------------------ *
+ * Quotes, rules, lists, images
+ * ------------------------------------------------------------------ */
+.theme-doc-markdown blockquote,
+.site-prose blockquote {
+  margin: var(--space-5) 0;
+  padding: var(--space-1) 0 var(--space-1) var(--space-4);
+  border: 0;
+  border-left: 2px solid var(--site-border-strong);
+  background: transparent;
+  color: var(--site-muted);
+  font-style: normal;
+}
+
+.theme-doc-markdown blockquote > :last-child {
+  margin-bottom: 0;
+}
+
+.theme-doc-markdown hr,
+.site-prose hr {
+  height: 1px;
+  margin: var(--space-8) 0;
+  border: 0;
+  background: var(--site-border);
+}
+
+.theme-doc-markdown img,
+.site-prose img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-md);
+}
+
+.theme-doc-markdown li::marker {
+  color: var(--site-muted);
+}
+
+.theme-doc-markdown li > ul,
+.theme-doc-markdown li > ol {
+  margin-block: 0.4em;
+}
+
+/* ------------------------------------------------------------------ *
+ * Tabs
+ * ------------------------------------------------------------------ */
+.tabs {
+  gap: 0.15rem;
+  margin-bottom: var(--space-4);
+  border-bottom: 1px solid var(--site-border);
+}
+
+.tabs__item {
+  padding: 0.45rem 0.8rem;
+  border: 0;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  color: var(--site-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--site-font-weight-medium);
+  transition:
+    color var(--site-transition-fast),
+    background var(--site-transition-fast);
+}
+
+.tabs__item:hover {
+  background: var(--site-hover-chrome-bg);
+  color: var(--site-hover-text);
+}
+
+.tabs__item--active {
+  border-bottom: 2px solid var(--site-accent);
+  background: transparent;
+  color: var(--site-text-strong);
+}
+
+/* ------------------------------------------------------------------ *
+ * Details / summary
+ * ------------------------------------------------------------------ */
+.theme-doc-markdown details,
+details[class*='details_'] {
+  margin-bottom: var(--space-5);
+  border: 1px solid var(--site-border);
+  border-radius: var(--radius-md);
+  background: var(--site-surface-alt);
+}
+
+.theme-doc-markdown details > summary {
+  padding: 0.7rem 0.9rem;
+  color: var(--site-text-strong);
+  font-size: var(--text-sm);
+  font-weight: var(--site-font-weight-medium);
+  cursor: pointer;
+}
+
+/* ------------------------------------------------------------------ *
+ * Buttons — one control family for CTAs across marketing pages
+ * ------------------------------------------------------------------ */
+.site-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 2.5rem;
+  padding: 0 var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font-family: var(--ifm-font-family-base);
+  font-size: var(--text-sm);
+  font-weight: var(--site-font-weight-medium);
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background var(--site-transition-fast),
+    border-color var(--site-transition-fast),
+    color var(--site-transition-fast),
+    box-shadow var(--site-transition-fast);
+}
+
+/* Primary is the only filled control, and it is filled with brand blue —
+ * the same treatment as the hero's "Try the Playground". */
+.site-btn--primary {
+  border-color: var(--site-cta-border);
+  background: var(--site-cta-bg);
+  color: var(--site-cta-text);
+  box-shadow: var(--site-cta-shadow);
+}
+
+.site-btn--primary:hover,
+.site-btn--primary:focus-visible {
+  border-color: var(--site-cta-border-hover);
+  background: var(--site-cta-bg-hover);
+  color: var(--site-cta-text);
+}
+
+.site-btn--secondary {
+  border-color: var(--site-border-strong);
+  background: var(--site-surface);
+  color: var(--site-text-strong);
+}
+
+.site-btn--secondary:hover,
+.site-btn--secondary:focus-visible {
+  border-color: var(--site-hover-border-strong);
+  background: var(--site-hover-surface-bg);
+  color: var(--site-hover-text);
+}
+
+.site-btn--ghost {
+  background: transparent;
+  color: var(--site-muted-bright);
+}
+
+.site-btn--ghost:hover,
+.site-btn--ghost:focus-visible {
+  background: var(--site-hover-chrome-bg);
+  color: var(--site-hover-text);
+}
+
+/* ------------------------------------------------------------------ *
+ * Cards and chips
+ * ------------------------------------------------------------------ */
+.site-card {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--site-border);
+  border-radius: var(--radius-lg);
+  background: var(--site-surface);
+  overflow: hidden;
+  transition:
+    border-color var(--site-transition-fast),
+    background var(--site-transition-medium),
+    box-shadow var(--site-transition-medium),
+    transform var(--site-transition-medium);
+}
+
+/* Tint layered over the card's own surface, not in place of it, so the fill
+ * does not drop out from under the content on hover. */
+.site-card:hover {
+  border-color: var(--site-hover-border);
+  background: var(--site-hover-surface-bg-soft), var(--site-surface);
+  box-shadow: var(--site-hover-glow);
+  transform: translateY(-2px);
+}
+
+.site-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--site-border);
+  border-radius: var(--radius-full);
+  background: var(--site-surface-alt);
+  color: var(--site-muted);
+  font-size: var(--text-xs);
+  font-weight: var(--site-font-weight-medium);
+  line-height: 1.6;
+  white-space: nowrap;
+}
+
+a.site-chip:hover {
+  border-color: var(--site-hover-border);
+  background: var(--site-accent-soft);
+  color: var(--site-accent-strong);
+  text-decoration: none;
+}
+
+.site-eyebrow {
+  color: var(--site-accent-strong);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: var(--text-xs);
+  font-weight: var(--site-font-weight-semibold);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .site-card,
+  .site-btn,
+  div[class*='buttonGroup'] button {
+    transition: none;
+  }
+
+  .site-card:hover {
+    transform: none;
+  }
+}

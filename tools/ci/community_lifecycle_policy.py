@@ -16,23 +16,28 @@ RELEASE_BLOCKER = "release-blocker"
 BACKLOG = "backlog"
 CLOSE_CANDIDATE = "close-candidate"
 STALE = "stale"
+EPIC = "epic"
 
 WORKGROUP_LABELS = (
-    "wg/mom-routing-intelligence",
-    "wg/router-models-runtime-ecosystem",
-    "wg/data-plane-deployment",
-    "wg/platform-operations",
-    "wg/quality-release",
-    "wg/dev-community",
+    "wg/mom-routing",
+    "wg/router-models-inference-runtime",
+    "wg/data-plane-networking",
+    "wg/enterprise-environment",
+    "wg/agentic-context",
+    "wg/developer-experience-ecosystem",
+    "wg/evaluation-quality",
 )
+MAINTAINER_OWNER = "owner/maintainers"
+OWNER_LABELS = (*WORKGROUP_LABELS, MAINTAINER_OWNER)
 
 WORKGROUP_OPTIONS = {
-    "MoM & Routing Intelligence": "wg/mom-routing-intelligence",
-    "Router Models, Runtime & Ecosystem": "wg/router-models-runtime-ecosystem",
-    "Data Plane & Deployment": "wg/data-plane-deployment",
-    "Platform & Operations": "wg/platform-operations",
-    "Quality & Release": "wg/quality-release",
-    "Developer Experience & Community": "wg/dev-community",
+    "MoM & Routing": "wg/mom-routing",
+    "Router Models & Inference Runtime": "wg/router-models-inference-runtime",
+    "Data Plane & Networking": "wg/data-plane-networking",
+    "Enterprise & Environment": "wg/enterprise-environment",
+    "Agentic & Context": "wg/agentic-context",
+    "Developer Experience & Ecosystem": "wg/developer-experience-ecosystem",
+    "Evaluation & Quality": "wg/evaluation-quality",
 }
 
 PR_STATE_LABELS = (
@@ -63,6 +68,33 @@ RELATED_PATTERN = re.compile(
     r"(?P<repo>[\w.-]+/[\w.-]+)(?:/issues/|#)|#)(?P<number>\d+)",
     re.IGNORECASE,
 )
+TITLE_PREFIX_PATTERN = re.compile(
+    r"^\[(?P<category>[^\[\]\r\n]+)\]\s+(?P<summary>\S.*)$"
+)
+
+
+def title_format_error(title: str | None) -> str | None:
+    """Return a concise error when a public work-item title is not normalized."""
+
+    match = TITLE_PREFIX_PATTERN.match(title or "")
+    if (
+        not match
+        or not match.group("category").strip()
+        or match.group("summary").startswith("[")
+    ):
+        return (
+            "Title must begin with exactly one bracketed category and a summary, "
+            "for example `[Feature] Add standalone serving`; do not use `feat:` "
+            "or stacked prefixes such as `[Router][Docs]`."
+        )
+    return None
+
+
+def is_epic_title(title: str | None) -> bool:
+    """Return whether the normalized title declares an Epic work item."""
+
+    match = TITLE_PREFIX_PATTERN.match(title or "")
+    return bool(match and match.group("category").strip().casefold() == "epic")
 
 
 def label_names(item: dict[str, Any]) -> set[str]:
@@ -119,6 +151,51 @@ class IssuePlan:
         self.comments.append((code, message))
 
 
+@dataclass(frozen=True)
+class IssueAcceptanceEvaluation:
+    valid: bool
+    error: str | None = None
+    owner_label: str | None = None
+
+
+def plan_issue_kind(issue: dict[str, Any]) -> IssuePlan:
+    """Keep the structural Epic label aligned with the issue title."""
+
+    plan = IssuePlan()
+    labels = label_names(issue)
+    if is_epic_title(issue.get("title")):
+        if EPIC not in labels:
+            plan.add_labels.add(EPIC)
+    elif EPIC in labels:
+        plan.remove_labels.add(EPIC)
+    return plan
+
+
+def evaluate_issue_acceptance(
+    issue: dict[str, Any],
+    *,
+    actor_can_manage: bool,
+) -> IssueAcceptanceEvaluation:
+    """Validate the explicit ``/accept`` transition for one issue."""
+
+    if not actor_can_manage:
+        return IssueAcceptanceEvaluation(
+            False,
+            "`/accept` requires repository write, maintain, or admin permission.",
+        )
+    title_error = title_format_error(issue.get("title"))
+    if title_error:
+        return IssueAcceptanceEvaluation(False, title_error)
+    owners = label_names(issue).intersection(OWNER_LABELS)
+    if len(owners) != 1:
+        return IssueAcceptanceEvaluation(
+            False,
+            "`/accept` requires exactly one recognized owner label: one `wg/*` "
+            "label for project work or `owner/maintainers` for repository governance.",
+        )
+    return IssueAcceptanceEvaluation(True, owner_label=next(iter(owners)))
+
+
 def guard_protected_label(
     plan: IssuePlan,
     labels: set[str],
@@ -127,7 +204,7 @@ def guard_protected_label(
     event_label: str | None,
     actor_can_manage: bool,
 ) -> None:
-    protected_labels = PROTECTED_ISSUE_LABELS.union(WORKGROUP_LABELS, PRIORITY_LABELS)
+    protected_labels = PROTECTED_ISSUE_LABELS.union(OWNER_LABELS, PRIORITY_LABELS)
     if actor_can_manage or event_label not in protected_labels:
         return
     if event_action == "labeled":
@@ -153,14 +230,25 @@ def normalize_proposed_workgroup(
     issue: dict[str, Any],
     *,
     accepted: bool,
+    event_action: str,
+    event_label: str | None,
+    actor_can_manage: bool,
 ) -> set[str]:
+    """Seed an unowned issue from its form without undoing Maintainer triage."""
+
     workgroups = labels.intersection(WORKGROUP_LABELS)
+    owners = labels.intersection(OWNER_LABELS)
     form_workgroup = proposed_workgroup(issue.get("body"))
-    if accepted or not form_workgroup or workgroups == {form_workgroup}:
+    if accepted or not form_workgroup or owners:
         return workgroups
-    plan.remove_labels.update(workgroups - {form_workgroup})
+
+    # A Workgroup selected in the issue form is only the initial proposal. If a
+    # Maintainer removes that owner while reclassifying the issue, do not race
+    # the following label addition by restoring the stale form choice.
+    if actor_can_manage and event_action == "unlabeled" and event_label in OWNER_LABELS:
+        return workgroups
+
     plan.add_labels.add(form_workgroup)
-    labels.difference_update(workgroups)
     labels.add(form_workgroup)
     return {form_workgroup}
 
@@ -241,6 +329,9 @@ def plan_issue(
 
     plan = IssuePlan()
     labels = label_names(issue)
+    kind_plan = plan_issue_kind(issue)
+    plan.add_labels.update(kind_plan.add_labels)
+    plan.remove_labels.update(kind_plan.remove_labels)
     assignees = {
         assignee.get("login", "")
         for assignee in issue.get("assignees", [])
@@ -255,8 +346,17 @@ def plan_issue(
     )
 
     accepted = ACCEPTED in labels
-    workgroups = normalize_proposed_workgroup(plan, labels, issue, accepted=accepted)
-    if accepted and len(workgroups) != 1:
+    workgroups = normalize_proposed_workgroup(
+        plan,
+        labels,
+        issue,
+        accepted=accepted,
+        event_action=event_action,
+        event_label=event_label,
+        actor_can_manage=actor_can_manage,
+    )
+    owners = labels.intersection(OWNER_LABELS)
+    if accepted and len(owners) != 1:
         plan.remove_labels.add(ACCEPTED)
         plan.add_labels.add(NEEDS_ACCEPTANCE)
         labels.discard(ACCEPTED)
@@ -264,8 +364,9 @@ def plan_issue(
         accepted = False
         plan.add_comment(
             "accepted-owner",
-            "`accepted` requires exactly one `wg/*` owner. The issue has been "
-            "returned to `needs-acceptance` for Maintainer triage.",
+            "`accepted` requires exactly one recognized owner: one `wg/*` label "
+            "for project work or `owner/maintainers` for repository governance. "
+            "The issue has been returned to `needs-acceptance` for Maintainer triage.",
         )
 
     if accepted:
@@ -348,11 +449,11 @@ def evaluate_pull_request(
         label
         for issue in accepted_issues
         for label in label_names(issue)
-        if label in WORKGROUP_LABELS
+        if label in OWNER_LABELS
     }
     if accepted_issues and len(owner_labels) != 1:
         errors.append(
-            "Accepted linked work must resolve to exactly one owning `wg/*` label."
+            "Accepted linked work must resolve to exactly one recognized owner label."
         )
 
     milestone_numbers = {
@@ -379,7 +480,7 @@ def evaluate_pull_request(
         tuple(errors),
         state_label,
         owner_label=(
-            "wg/quality-release"
+            "wg/evaluation-quality"
             if is_bot
             else next(iter(owner_labels)) if len(owner_labels) == 1 else None
         ),

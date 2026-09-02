@@ -30,7 +30,7 @@ const (
 
 func init() {
 	pkgtestcases.Register("dashboard-restart-recovery", pkgtestcases.TestCase{
-		Description: "Dashboard workflow SQLite state survives a dashboard pod restart",
+		Description: "Dashboard workflow state and sealed Evaluation Plane evidence survive a pod restart",
 		Tags:        []string{"dashboard", "functional", "restart"},
 		Fn:          testDashboardRestartRecovery,
 	})
@@ -49,9 +49,17 @@ func testDashboardRestartRecovery(ctx context.Context, client *kubernetes.Client
 	baseURL := fmt.Sprintf("http://localhost:%s", localPort)
 	httpClient := &http.Client{Timeout: 30 * time.Second}
 
-	if err := seedDashboardWorkflowState(ctx, httpClient, baseURL, opts.Verbose); err != nil {
+	token, err := seedDashboardWorkflowState(ctx, httpClient, baseURL, opts.Verbose)
+	if err != nil {
 		stop()
 		return err
+	}
+	evaluationRun, _, err := executeVerifiedEvaluationBaseline(
+		ctx, httpClient, baseURL, token, newEvaluationClientRequestID(),
+	)
+	if err != nil {
+		stop()
+		return fmt.Errorf("seed restart evaluation evidence: %w", err)
 	}
 	stop()
 
@@ -74,20 +82,24 @@ func testDashboardRestartRecovery(ctx context.Context, client *kubernetes.Client
 		&http.Client{Timeout: 30 * time.Second},
 		fmt.Sprintf("http://localhost:%s", localPort),
 		opts,
+		evaluationRun.ID,
 	)
 }
 
-func seedDashboardWorkflowState(ctx context.Context, client *http.Client, baseURL string, verbose bool) error {
+func seedDashboardWorkflowState(ctx context.Context, client *http.Client, baseURL string, verbose bool) (string, error) {
 	token, err := dashboardAuthToken(ctx, client, baseURL, verbose)
 	if err != nil {
-		return fmt.Errorf("pre-restart login: %w", err)
+		return "", fmt.Errorf("pre-restart login: %w", err)
 	}
 
 	if err := createRestartTestMCPServer(ctx, client, baseURL, token, verbose); err != nil {
-		return err
+		return "", err
 	}
 
-	return assertMCPServerPresent(ctx, client, baseURL, token, verbose, "before restart")
+	if err := assertMCPServerPresent(ctx, client, baseURL, token, verbose, "before restart"); err != nil {
+		return "", err
+	}
+	return token, nil
 }
 
 func createRestartTestMCPServer(ctx context.Context, client *http.Client, baseURL, token string, verbose bool) error {
@@ -140,6 +152,7 @@ func verifyDashboardWorkflowStateAfterRestart(
 	client *http.Client,
 	baseURL string,
 	opts pkgtestcases.TestCaseOptions,
+	evaluationRunID string,
 ) error {
 	const verifyTimeout = 90 * time.Second
 	deadline := time.Now().Add(verifyTimeout)
@@ -164,21 +177,45 @@ func verifyDashboardWorkflowStateAfterRestart(
 			time.Sleep(3 * time.Second)
 			continue
 		}
+		if err := assertEvaluationReportPresentAfterRestart(ctx, client, baseURL, token, evaluationRunID); err != nil {
+			lastErr = err
+			time.Sleep(3 * time.Second)
+			continue
+		}
 
 		if opts.Verbose {
 			fmt.Printf("[Test] Dashboard workflow state survived restart (mcp_server_id=%s)\n", dashboardRestartMCPServerID)
 		}
 		if opts.SetDetails != nil {
 			opts.SetDetails(map[string]interface{}{
-				"mcp_server_id":   dashboardRestartMCPServerID,
-				"mcp_server_name": dashboardRestartMCPServerName,
-				"survived":        true,
+				"mcp_server_id":              dashboardRestartMCPServerID,
+				"mcp_server_name":            dashboardRestartMCPServerName,
+				"evaluation_report_survived": true,
+				"survived":                   true,
 			})
 		}
 		return nil
 	}
 
 	return fmt.Errorf("dashboard workflow state not recoverable after %s: %w", verifyTimeout, lastErr)
+}
+
+func assertEvaluationReportPresentAfterRestart(
+	ctx context.Context,
+	client *http.Client,
+	baseURL, token, runID string,
+) error {
+	report, err := fetchEvaluationReport(ctx, client, baseURL, token, runID)
+	if err != nil {
+		return fmt.Errorf("read sealed evaluation report after restart: %w", err)
+	}
+	if err := verifyEvaluationReport(report); err != nil {
+		return fmt.Errorf("verify sealed evaluation report after restart: %w", err)
+	}
+	if err := verifyEvaluationArtifactDownload(ctx, client, baseURL, token, runID, report); err != nil {
+		return fmt.Errorf("verify evaluation artifacts after restart: %w", err)
+	}
+	return nil
 }
 
 func assertMCPServerPresent(ctx context.Context, client *http.Client, baseURL, token string, verbose bool, phase string) error {

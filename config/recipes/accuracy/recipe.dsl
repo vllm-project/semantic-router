@@ -23,6 +23,11 @@ SIGNAL context accuracy_long_context {
   max_tokens: "1M"
 }
 
+SIGNAL conversation accuracy_has_images {
+  description: "Request contains at least one image content part."
+  feature: { source: { type: "image_content" }, type: "exists" }
+}
+
 # =============================================================================
 # MODELS
 # =============================================================================
@@ -38,11 +43,16 @@ MODEL gemini31-worker {
 
 MODEL gpt55-worker {
   context_window_size: 1048576
-  description: "OpenRouter worker for frontier synthesis."
-  capabilities: ["chat", "code", "reasoning", "long-context"]
-  tags: ["deployment:openrouter", "role:worker"]
+  description: "OpenRouter worker for long-context planning and frontier synthesis."
+  capabilities: ["chat", "code", "reasoning", "long-context", "planning", "synthesis"]
+  tags: ["deployment:openrouter", "role:worker", "role:planner"]
   quality_score: 0.94
   modality: "text"
+}
+
+MODEL local/omni {
+  capabilities: ["chat", "image_understanding", "multimodal", "omni", "text", "vision"]
+  modality: "omni"
 }
 
 MODEL opus48-worker {
@@ -67,6 +77,13 @@ MODEL qwen-coordinator {
 # ROUTES
 # =============================================================================
 
+ROUTE omni (description = "Understand image-bearing requests with the dedicated visual-language model.") {
+  PRIORITY 200
+  WHEN conversation("accuracy_has_images")
+  MODEL "local/omni" (reasoning = false)
+  ALGORITHM static
+}
+
 ROUTE accuracy_workflow (description = "Decompose evidence-gathering and tool-heavy tasks into a bounded parallel workflow.") {
   PRIORITY 100
   WHEN keyword("accuracy_workflow_request")
@@ -81,7 +98,7 @@ ROUTE accuracy_workflow (description = "Decompose evidence-gathering and tool-he
     min_successful_responses: 2
     mode: "dynamic"
     on_error: "skip"
-    planner: { max_completion_tokens: 2048, model: "qwen-coordinator" }
+    planner: { max_completion_tokens: 2048, model: "gpt55-worker" }
     template: "micro_agent"
   }
 }

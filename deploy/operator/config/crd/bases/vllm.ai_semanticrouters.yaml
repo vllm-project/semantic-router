@@ -1285,6 +1285,14 @@ spec:
                                 - type
                                 type: object
                               type: array
+                            on_unknown:
+                              description: OnUnknown resolves a terminal unknown result
+                                after the rule tree is evaluated.
+                              enum:
+                              - no_match
+                              - match
+                              - fail_request
+                              type: string
                             operator:
                               description: |-
                                 Operator specifies how to combine conditions: "AND", "OR", or "NOT". NOT is strictly unary: it takes
@@ -1386,6 +1394,12 @@ spec:
                             description: Dimensions requests a provider-side output
                               dimension when supported.
                             minimum: 1
+                            type: integer
+                          max_response_bytes:
+                            description: MaxResponseBytes caps the size of each embedding
+                              response body.
+                            format: int64
+                            minimum: 0
                             type: integer
                           max_retries:
                             description: MaxRetries is the maximum number of retry

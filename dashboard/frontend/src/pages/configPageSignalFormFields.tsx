@@ -2,6 +2,7 @@ import type { FieldConfig } from '../components/EditModal'
 import ConfigPageDomainCategoryPicker from './ConfigPageDomainCategoryPicker'
 import {
   SignalConditionsEditor,
+  SignalConversationFeatureEditor,
   SignalStringListEditor,
   SignalStructureFeatureEditor,
   SignalStructurePredicateEditor,
@@ -29,6 +30,7 @@ const signalTypes: SignalType[] = [
   'KB',
   'Metadata',
   'Classifier',
+  'Conversation',
 ]
 
 const hideUnless = (type: SignalType) => (formData: AddSignalFormState) => formData.type !== type
@@ -141,7 +143,7 @@ export function buildSignalFormFields(): FieldConfig<AddSignalFormState>[] {
       name: 'classifier_type',
       label: 'Classifier Backend',
       type: 'select',
-      options: ['local', 'llm'],
+      options: ['local', 'llm', 'sequence_classifier'],
       required: true,
       shouldHide: hideUnless('Classifier'),
     },
@@ -150,7 +152,7 @@ export function buildSignalFormFields(): FieldConfig<AddSignalFormState>[] {
       label: 'External Model',
       type: 'text',
       shouldHide: (formData) =>
-        formData.type !== 'Classifier' || formData.classifier_type !== 'llm',
+        formData.type !== 'Classifier' || formData.classifier_type === 'local',
     },
     {
       name: 'classifier_model_path',
@@ -289,7 +291,7 @@ export function buildSignalFormFields(): FieldConfig<AddSignalFormState>[] {
       name: 'max_tokens',
       label: 'Maximum Tokens (context only)',
       type: 'text',
-      placeholder: '8K or 1024K',
+      placeholder: '8K or 1024K (leave empty for no upper bound)',
       shouldHide: hideUnless('Context'),
     },
     {
@@ -311,6 +313,27 @@ export function buildSignalFormFields(): FieldConfig<AddSignalFormState>[] {
       ),
       description: 'Set numeric bounds. Exists features ignore predicate bounds.',
       shouldHide: hideUnless('Structure'),
+    },
+    {
+      name: 'conversation_feature',
+      label: 'Feature (conversation only)',
+      type: 'custom',
+      customRender: (value, onChange) => (
+        <SignalConversationFeatureEditor value={value} onChange={onChange} />
+      ),
+      description: 'Count or detect part of the conversation, such as messages, tools or images.',
+      shouldHide: hideUnless('Conversation'),
+    },
+    {
+      name: 'conversation_predicate',
+      label: 'Predicate (conversation only)',
+      type: 'custom',
+      customRender: (value, onChange) => (
+        <SignalStructurePredicateEditor value={value} onChange={onChange} />
+      ),
+      description: 'Numeric bounds for a count feature.',
+      shouldHide: (formData) =>
+        formData.type !== 'Conversation' || formData.conversation_feature?.type !== 'count',
     },
     {
       name: 'complexity_threshold',

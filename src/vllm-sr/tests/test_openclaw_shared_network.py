@@ -1,3 +1,4 @@
+import subprocess
 from types import SimpleNamespace
 
 import pytest
@@ -8,6 +9,7 @@ from cli import (
     container_start,
     core,
     runtime_lifecycle,
+    runtime_service_status,
 )
 from cli.runtime_stack import resolve_runtime_stack
 
@@ -25,11 +27,11 @@ def _split_runtime_topology(monkeypatch):
 def _capture_run_commands(monkeypatch):
     captured = []
 
-    def fake_run(cmd, capture_output, text, check):
+    def fake_run(cmd, capture_output, text, check, env=None):
         captured.append(cmd)
         return SimpleNamespace(stdout="container-id\n", stderr="")
 
-    monkeypatch.setattr(container_start.subprocess, "run", fake_run)
+    monkeypatch.setattr(subprocess, "run", fake_run)
     monkeypatch.setattr(
         container_start, "_render_split_envoy_config", lambda *args, **kwargs: None
     )
@@ -475,9 +477,6 @@ def test_start_vllm_sr_uses_isolated_network_and_container_names(monkeypatch):
         record("container_create_network"),
     )
     monkeypatch.setattr(
-        core, "start_fleet_sim_sidecar", record("start_fleet_sim_sidecar", True)
-    )
-    monkeypatch.setattr(
         core, "container_start_vllm_sr", record("container_start_vllm_sr")
     )
     monkeypatch.setattr(
@@ -501,22 +500,17 @@ def test_start_vllm_sr_uses_isolated_network_and_container_names(monkeypatch):
     core.start_vllm_sr("/tmp/config.yaml", env_vars={}, enable_observability=False)
 
     create_calls = [c for c in calls if c[0] == "container_create_network"]
-    fleet_sim_calls = [c for c in calls if c[0] == "start_fleet_sim_sidecar"]
     start_calls = [c for c in calls if c[0] == "container_start_vllm_sr"]
     connect_calls = [c for c in calls if c[0] == "container_network_connect"]
 
     assert create_calls[0][1] == ("audit-a-vllm-sr-network",)
-    assert fleet_sim_calls[0][1][2].fleet_sim_container_name == "audit-a-vllm-sr-sim"
     assert start_calls[0][2]["network_name"] == "audit-a-vllm-sr-network"
     assert start_calls[0][2]["openclaw_network_name"] == "audit-a-vllm-sr-network"
     assert (
         start_calls[0][2]["stack_layout"].router_container_name
         == "audit-a-vllm-sr-router-container"
     )
-    assert (
-        start_calls[0][2]["env_vars"]["TARGET_FLEET_SIM_URL"]
-        == "http://audit-a-vllm-sr-sim:8000"
-    )
+    assert "TARGET_FLEET_SIM_URL" not in start_calls[0][2]["env_vars"]
     assert [call[1] for call in connect_calls] == [
         ("audit-a-vllm-sr-network", "audit-a-vllm-sr-router-container"),
         ("audit-a-vllm-sr-network", "audit-a-vllm-sr-envoy-container"),
@@ -528,7 +522,6 @@ def test_stop_vllm_sr_cleans_residual_observability_and_openclaw(monkeypatch):
     calls = []
     stack_layout = resolve_runtime_stack(stack_name="audit-a")
     status_map = {
-        stack_layout.fleet_sim_container_name: "not found",
         stack_layout.grafana_container_name: "running",
         stack_layout.prometheus_container_name: "exited",
         stack_layout.jaeger_container_name: "not found",
@@ -565,8 +558,8 @@ def test_stop_vllm_sr_cleans_residual_observability_and_openclaw(monkeypatch):
     )
     monkeypatch.setattr(
         core,
-        "container_network_disconnect",
-        record("container_network_disconnect"),
+        "container_network_disconnect_if_attached",
+        record("container_network_disconnect_if_attached"),
     )
     monkeypatch.setattr(
         core,
@@ -583,7 +576,9 @@ def test_stop_vllm_sr_cleans_residual_observability_and_openclaw(monkeypatch):
         args[0] for name, args, _ in calls if name == "container_remove_container"
     ]
     disconnect_calls = [
-        args for name, args, _ in calls if name == "container_network_disconnect"
+        args
+        for name, args, _ in calls
+        if name == "container_network_disconnect_if_attached"
     ]
     remove_network_calls = [
         args for name, args, _ in calls if name == "container_remove_network"
@@ -594,11 +589,20 @@ def test_stop_vllm_sr_cleans_residual_observability_and_openclaw(monkeypatch):
         stack_layout.grafana_container_name,
         stack_layout.prometheus_container_name,
     ]
+    # A workload normally joins the application network only, but the network
+    # comes from OPENCLAW_DEFAULT_NETWORK_MODE, which the caller's environment
+    # can point at the data network. Teardown covers both so `stop` can remove
+    # both; detaching from one it never joined is reported as success.
     assert disconnect_calls == [
         (stack_layout.network_name, "openclaw-a"),
+        (stack_layout.data_network_name, "openclaw-a"),
         (stack_layout.network_name, "openclaw-b"),
+        (stack_layout.data_network_name, "openclaw-b"),
     ]
-    assert remove_network_calls == [(stack_layout.network_name,)]
+    assert remove_network_calls == [
+        (stack_layout.network_name,),
+        (stack_layout.data_network_name,),
+    ]
 
 
 def test_runtime_service_container_name_prefers_split_runtime_container(monkeypatch):
@@ -612,7 +616,7 @@ def test_runtime_service_container_name_prefers_split_runtime_container(monkeypa
     )
 
     assert (
-        core._runtime_service_container_name("router", stack_layout)
+        runtime_service_status.runtime_service_container_name("router", stack_layout)
         == stack_layout.router_container_name
     )
 
@@ -628,7 +632,7 @@ def test_runtime_service_container_name_returns_split_name_when_container_missin
     )
 
     assert (
-        core._runtime_service_container_name("router", stack_layout)
+        runtime_service_status.runtime_service_container_name("router", stack_layout)
         == stack_layout.router_container_name
     )
 
@@ -655,7 +659,6 @@ def test_stop_vllm_sr_stops_split_runtime_containers(monkeypatch):
         stack_layout.router_container_name: "running",
         stack_layout.envoy_container_name: "exited",
         stack_layout.dashboard_container_name: "running",
-        stack_layout.fleet_sim_container_name: "not found",
         stack_layout.grafana_container_name: "not found",
         stack_layout.prometheus_container_name: "not found",
         stack_layout.jaeger_container_name: "not found",
@@ -686,8 +689,8 @@ def test_stop_vllm_sr_stops_split_runtime_containers(monkeypatch):
     )
     monkeypatch.setattr(
         core,
-        "container_network_disconnect",
-        record("container_network_disconnect"),
+        "container_network_disconnect_if_attached",
+        record("container_network_disconnect_if_attached"),
     )
     monkeypatch.setattr(
         core,

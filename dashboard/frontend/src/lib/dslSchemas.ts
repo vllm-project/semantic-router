@@ -108,15 +108,15 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
           key: 'min_tokens',
           label: 'Min Tokens',
           type: 'string',
-          required: true,
-          placeholder: '4K',
+          placeholder: '4K (defaults to 0)',
+          description: 'Inclusive lower bound. Defaults to 0 when empty.',
         },
         {
           key: 'max_tokens',
           label: 'Max Tokens',
           type: 'string',
-          required: true,
-          placeholder: '32K',
+          placeholder: '32K (leave empty for no upper bound)',
+          description: 'Inclusive upper bound. Leave empty for an open-ended band.',
         },
         { key: 'description', label: 'Description', type: 'string' },
       ]
@@ -391,9 +391,13 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
                   options: [
                     'message',
                     'tool_definition',
+                    'tool_choice_required',
+                    'tool_choice_none',
                     'assistant_tool_call',
                     'assistant_tool_cycle',
                     'active_tool_loop',
+                    'image_content', // validator_conversation.go:16 -- #3001
+                    'flow_tool_state',
                   ],
                   required: true,
                 },
@@ -401,7 +405,10 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
                   key: 'role',
                   label: 'Message Role',
                   type: 'select',
-                  options: ['', 'system', 'developer', 'user', 'assistant', 'tool'],
+                  // 'non_user' is a computed aggregate, not an OpenAI role
+                  // (classifier_signal_conversation.go:139). Valid per
+                  // validator_conversation.go:25 and used by config/config.yaml:497.
+                  options: ['', 'system', 'developer', 'user', 'assistant', 'tool', 'non_user'],
                   description: 'Only used when the source type is message.',
                 },
               ],
@@ -585,17 +592,6 @@ export function getPluginFieldSchema(pluginType: string): FieldSchema[] {
           label: 'Delete Headers',
           type: 'string[]',
           placeholder: 'Header name to delete',
-        },
-      ]
-    case 'image_gen':
-      return [
-        { key: 'enabled', label: 'Enabled', type: 'boolean' },
-        {
-          key: 'backend',
-          label: 'Backend',
-          type: 'string',
-          required: true,
-          placeholder: 'my_image_gen_backend',
         },
       ]
     case 'fast_response':

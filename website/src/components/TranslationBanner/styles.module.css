@@ -5,7 +5,7 @@
   padding: 1rem 1.1rem;
   margin: 0 0 1.1rem 0;
   border: 1px solid var(--site-border);
-  border-radius: 1rem;
+  border-radius: var(--radius-lg);
   font-size: 0.88rem;
   line-height: 1.65;
   background: var(--site-admonition-bg);
@@ -18,10 +18,10 @@
   min-height: 1.8rem;
   padding: 0.15rem 0.55rem;
   border: 1px solid var(--site-border);
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   color: var(--site-muted-bright);
   font-size: 0.68rem;
-  font-weight: 600;
+  font-weight: var(--site-font-weight-semibold);
   letter-spacing: 0.08em;
   line-height: 1;
   text-transform: uppercase;
@@ -42,9 +42,9 @@
   flex-shrink: 0;
   padding: 0.55rem 0.85rem;
   border: 1px solid var(--site-border-strong);
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   font-size: 0.72rem;
-  font-weight: 500;
+  font-weight: var(--site-font-weight-medium);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   text-decoration: none;
@@ -60,8 +60,9 @@
 }
 
 .translated .editLink:hover {
-  background-color: var(--site-text);
-  color: var(--site-bg);
+  border-color: var(--site-hover-border-strong);
+  background-color: var(--site-accent-soft);
+  color: var(--site-hover-text);
   transform: translateY(-1px);
 }
 
@@ -71,8 +72,9 @@
 }
 
 .outdated .editLink:hover {
-  background-color: var(--site-text);
-  color: var(--site-bg);
+  border-color: var(--site-hover-border-strong);
+  background-color: var(--site-accent-soft);
+  color: var(--site-hover-text);
   transform: translateY(-1px);
 }
 

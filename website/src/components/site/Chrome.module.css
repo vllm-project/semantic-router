@@ -20,7 +20,7 @@
   min-height: 2.8rem;
   padding: 0.75rem 1.4rem;
   border: 1px solid var(--site-border);
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background: var(--site-surface-glass);
   color: var(--site-text);
   text-decoration: none;
@@ -45,25 +45,10 @@
   font-family: inherit;
 }
 
-.pill:hover {
-  background: var(--site-text);
-  color: var(--site-bg);
-  border-color: var(--site-text);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.14),
-    0 16px 30px rgba(15, 23, 42, 0.12);
-  text-decoration: none;
-  transform: translateY(-1px);
-}
-
 .pillMuted {
   border-color: var(--site-border);
   background: var(--site-surface-glass);
   color: var(--site-muted-bright);
-}
-
-.pillMuted:hover {
-  color: var(--site-bg);
 }
 
 [data-theme='dark'] .pill {
@@ -78,10 +63,25 @@
   color: var(--site-muted-bright);
 }
 
-[data-theme='dark'] .pillMuted:hover {
-  border-color: var(--site-accent);
-  background: rgba(48, 162, 255, 0.12);
-  color: var(--site-text-strong);
+/* One hover for both variants and both colour modes: the tinted blue surface
+ * from the hover ladder. The variants differ at rest, not on hover. Inverting
+ * to solid ink here made the primary pill flash white while the pill beside it
+ * went blue — the inconsistency reported in #3122.
+ *
+ * Must stay below the [data-theme] rest rules above: those score the same
+ * (0,2,0) as `.pill:hover`, so source order alone decides which one paints a
+ * hovered muted pill in dark mode.
+ *
+ * The tint is layered over the resting glass rather than replacing it, so the
+ * pill keeps its surface instead of going translucent mid-hover. */
+.pill:hover,
+.pill:focus-visible {
+  border-color: var(--site-hover-border-strong);
+  background: var(--site-hover-surface-bg), var(--site-surface-glass);
+  color: var(--site-hover-text);
+  box-shadow: var(--site-hover-glow);
+  text-decoration: none;
+  transform: translateY(-1px);
 }
 
 .pageIntro {
@@ -103,7 +103,7 @@
   margin: 0;
   font-size: clamp(2.25rem, 5.5vw, 3.75rem);
   line-height: 1.1;
-  font-weight: 400;
+  font-weight: var(--site-font-weight-normal);
   letter-spacing: -0.04em;
   text-wrap: pretty;
 }

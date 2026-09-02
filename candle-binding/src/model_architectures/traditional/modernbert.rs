@@ -19,7 +19,10 @@
 /// longer than 512 tokens. This cap matches `max_length` in tokenizer_config.json.
 pub(crate) const MAX_CLASSIFICATION_SEQ_LEN: usize = 512;
 
-use crate::core::{config_errors, processing_errors, ModelErrorType, UnifiedError};
+use crate::core::{
+    config_errors, drain_loader_queue, processing_errors, resolve_device, run_on_inference_pool,
+    ModelErrorType, UnifiedError,
+};
 use crate::model_error;
 use anyhow::{Error as E, Result};
 use candle_core::{DType, Device, IndexOp, Tensor, D};
@@ -639,11 +642,7 @@ impl TraditionalModernBertClassifier {
         variant: ModernBertVariant,
     ) -> Result<Self, candle_core::Error> {
         // 1. Determine device
-        let device = if use_cpu {
-            Device::Cpu
-        } else {
-            Device::cuda_if_available(0).unwrap_or(Device::Cpu)
-        };
+        let device = resolve_device(use_cpu);
         // 2. Load config.json
         let config_path = format!("{}/config.json", model_path);
         let config_str = std::fs::read_to_string(&config_path).map_err(|_e| {
@@ -811,6 +810,7 @@ impl TraditionalModernBertClassifier {
             })?,
         ) as Box<dyn DualPathTokenizer>;
 
+        drain_loader_queue(&device);
         Ok(Self {
             model,
             head,
@@ -1123,6 +1123,10 @@ impl TraditionalModernBertClassifier {
 
     /// classify_internal classifies text using real model inference - REAL IMPLEMENTATION
     fn classify_internal(&self, text: &str) -> Result<(usize, f32, Vec<f32>), candle_core::Error> {
+        run_on_inference_pool(&self.device, || self.classify_on_device(text))
+    }
+
+    fn classify_on_device(&self, text: &str) -> Result<(usize, f32, Vec<f32>), candle_core::Error> {
         // 1. Tokenize input text
         let tokenization_result = self.tokenizer.tokenize(text).map_err(|e| {
             let unified_err = processing_errors::tensor_operation("tokenization", &e.to_string());
@@ -1234,6 +1238,131 @@ impl TraditionalModernBertClassifier {
 /// Token entity tuple returned by `classify_tokens`: (token, label_id, confidence, start, end)
 type TokenEntityTuple = (String, usize, f32, usize, usize);
 
+/// One token's resolved BIO classification, consumed by [`merge_bio_entities`].
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct BioToken<'a> {
+    /// Full BIO label, for example `B-PERSON`, `I-PERSON` or `O`.
+    pub label: &'a str,
+    /// Byte offset of the token's start in the original text.
+    pub start: usize,
+    /// Byte offset of the token's end in the original text.
+    pub end: usize,
+    /// Probability the model assigned to `label`.
+    pub confidence: f32,
+}
+
+/// A run of BIO tokens merged into a single entity.
+#[derive(Debug, Clone)]
+pub(crate) struct BioEntity {
+    pub entity_type: String,
+    pub start: usize,
+    pub end: usize,
+    pub text: String,
+    /// Arithmetic mean of the per-token confidences merged into this entity.
+    pub confidence: f32,
+    /// Number of tokens merged into this entity.
+    pub token_count: u32,
+}
+
+impl BioEntity {
+    /// Fold one more token's confidence into the running arithmetic mean.
+    ///
+    /// This deliberately is not `(self.confidence + confidence) / 2.0`. That
+    /// form is a running pairwise fold, which gives the last token weight 1/2
+    /// and the leading `B-` token weight 1/2^(n-1), so an entity's confidence
+    /// ends up depending on how many tokens it happened to split into.
+    fn accumulate(&mut self, confidence: f32) {
+        self.token_count += 1;
+        self.confidence += (confidence - self.confidence) / self.token_count as f32;
+    }
+}
+
+/// Trim surrounding whitespace from an entity span.
+///
+/// Sub-word tokenizers attach the preceding space to a word-initial token, so
+/// a `PERSON` span starts on the space before the name. Callers slice the text
+/// with these offsets, and PII masking then eats that space.
+fn trim_entity_span(text: &str, start: usize, end: usize) -> (usize, usize) {
+    let slice = &text[start..end];
+    let trimmed = slice.trim_matches(|c: char| c.is_whitespace());
+    if trimmed.is_empty() {
+        return (start, end);
+    }
+    let lead = slice.len() - slice.trim_start_matches(|c: char| c.is_whitespace()).len();
+    let trail = slice.len() - slice.trim_end_matches(|c: char| c.is_whitespace()).len();
+    (start + lead, end - trail)
+}
+
+/// Merge a sequence of BIO-labelled tokens into entities.
+///
+/// `tokens` must already have special tokens removed and must be in text order.
+/// Offsets are byte offsets into `text`.
+///
+/// An `I-` tag that does not continue an open entity opens one of its own type.
+/// Models are not obliged to emit `B-`: the mmBERT-32K PII detector labels
+/// emails and domains with `I-` only, so requiring `B-` dropped them entirely.
+pub(crate) fn merge_bio_entities(text: &str, tokens: &[BioToken<'_>]) -> Vec<BioEntity> {
+    let mut entities: Vec<BioEntity> = Vec::new();
+    let mut current: Option<BioEntity> = None;
+
+    // Close `current`, trim its span and push it.
+    fn flush(text: &str, entities: &mut Vec<BioEntity>, entity: BioEntity) {
+        let mut entity = entity;
+        let (start, end) = trim_entity_span(text, entity.start, entity.end);
+        entity.start = start;
+        entity.end = end;
+        entity.text = text[start..end].to_string();
+        entities.push(entity);
+    }
+
+    for token in tokens {
+        let opens_new_entity = match token.label.strip_prefix("B-") {
+            Some(entity_type) => Some(entity_type),
+            None => match token.label.strip_prefix("I-") {
+                // Continues the open entity only when the type matches,
+                // otherwise it starts a new one.
+                Some(entity_type) => match current {
+                    Some(ref entity) if entity.entity_type == entity_type => None,
+                    _ => Some(entity_type),
+                },
+                None => None,
+            },
+        };
+
+        if let Some(entity_type) = opens_new_entity {
+            if let Some(entity) = current.take() {
+                flush(text, &mut entities, entity);
+            }
+            current = Some(BioEntity {
+                entity_type: entity_type.to_string(),
+                start: token.start,
+                end: token.end,
+                text: text[token.start..token.end].to_string(),
+                confidence: token.confidence,
+                token_count: 1,
+            });
+        } else if token.label.starts_with("I-") {
+            // Continuation of the open entity of the same type.
+            if let Some(ref mut entity) = current {
+                entity.end = token.end;
+                entity.text = text[entity.start..entity.end].to_string();
+                entity.accumulate(token.confidence);
+            }
+        } else {
+            // O tag closes any open entity.
+            if let Some(entity) = current.take() {
+                flush(text, &mut entities, entity);
+            }
+        }
+    }
+
+    if let Some(entity) = current.take() {
+        flush(text, &mut entities, entity);
+    }
+
+    entities
+}
+
 impl TraditionalModernBertTokenClassifier {
     /// Create a new traditional ModernBERT token classifier with auto-detected variant
     pub fn new(model_id: &str, use_cpu: bool) -> Result<Self> {
@@ -1250,11 +1379,7 @@ impl TraditionalModernBertTokenClassifier {
         use_cpu: bool,
         variant: ModernBertVariant,
     ) -> Result<Self> {
-        let device = if use_cpu {
-            Device::Cpu
-        } else {
-            Device::cuda_if_available(0)?
-        };
+        let device = resolve_device(use_cpu);
 
         // Load model configuration
         let config_path = std::path::Path::new(model_id).join("config.json");
@@ -1329,6 +1454,7 @@ impl TraditionalModernBertTokenClassifier {
         let classifier =
             FixedModernBertTokenClassifier::load_with_classes(vb.clone(), &config, num_classes)?;
 
+        drain_loader_queue(&device);
         Ok(Self {
             model,
             head,
@@ -1374,6 +1500,10 @@ impl TraditionalModernBertTokenClassifier {
 
     /// Classify tokens in text
     pub fn classify_tokens(&self, text: &str) -> Result<Vec<TokenEntityTuple>> {
+        run_on_inference_pool(&self.device, || self.classify_tokens_on_device(text))
+    }
+
+    fn classify_tokens_on_device(&self, text: &str) -> Result<Vec<TokenEntityTuple>> {
         // Tokenize the text
         let tokenization_result = self.tokenizer.tokenize(text)?;
 
@@ -1471,78 +1601,25 @@ impl TraditionalModernBertTokenClassifier {
             return Ok(results);
         }
 
-        // BIO tag entity extraction (like old architecture)
-        #[derive(Debug, Clone)]
-        struct TokenEntity {
-            entity_type: String,
-            start: usize,
-            end: usize,
-            text: String,
-            confidence: f32,
-        }
-
-        let mut entities = Vec::new();
-        let mut current_entity: Option<TokenEntity> = None;
-
-        for (i, (&pred_id, offset)) in predictions_vec
+        // BIO tag entity extraction
+        let labeled: Vec<BioToken<'_>> = predictions_vec
             .iter()
             .zip(tokenization_result.offsets.iter())
             .enumerate()
-        {
-            // Skip special tokens (BOS, EOS, PAD, etc. have offset (0,0))
-            // Note: All special tokens have zero-length offsets, including BOS at index 0
-            if offset.0 == 0 && offset.1 == 0 {
-                continue;
-            }
+            // Skip special tokens (BOS, EOS, PAD, etc. have offset (0,0)).
+            .filter(|(_, (_, offset))| !(offset.0 == 0 && offset.1 == 0))
+            .map(|(i, (&pred_id, offset))| BioToken {
+                label: id2label
+                    .get(&pred_id.to_string())
+                    .map(String::as_str)
+                    .unwrap_or("O"),
+                start: offset.0,
+                end: offset.1,
+                confidence: probs_data[i][pred_id as usize],
+            })
+            .collect();
 
-            // Get label from prediction ID
-            let label = id2label
-                .get(&pred_id.to_string())
-                .unwrap_or(&"O".to_string())
-                .clone();
-            let confidence = probs_data[i][pred_id as usize];
-
-            if let Some(stripped) = label.strip_prefix("B-") {
-                // Beginning of new entity
-                if let Some(entity) = current_entity.take() {
-                    entities.push(entity);
-                }
-
-                let entity_type = stripped.to_string();
-                current_entity = Some(TokenEntity {
-                    entity_type,
-                    start: offset.0,
-                    end: offset.1,
-                    text: text[offset.0..offset.1].to_string(),
-                    confidence,
-                });
-            } else if let Some(entity_type) = label.strip_prefix("I-") {
-                // Inside current entity
-                if let Some(ref mut entity) = current_entity {
-                    if entity.entity_type == entity_type {
-                        // Extend current entity
-                        entity.end = offset.1;
-                        entity.text = text[entity.start..entity.end].to_string();
-                        // Update confidence with average
-                        entity.confidence = (entity.confidence + confidence) / 2.0;
-                    } else {
-                        // Different entity type, finish current and don't start new
-                        entities.push(entity.clone());
-                        current_entity = None;
-                    }
-                } // If no current entity, ignore I- tag
-            } else {
-                // Outside entity (O tag or different entity type)
-                if let Some(entity) = current_entity.take() {
-                    entities.push(entity);
-                }
-            }
-        }
-
-        // Add final entity if exists
-        if let Some(entity) = current_entity.take() {
-            entities.push(entity);
-        }
+        let entities = merge_bio_entities(text, &labeled);
 
         // Convert entities to results format
         for entity in entities {

@@ -26,6 +26,25 @@ func TestSettingsHandlerReflectsEffectiveReadonlyMode(t *testing.T) {
 	t.Run("keeps config editing available when only the package store is read-only", testSettingsStoreReadonly)
 }
 
+func TestSettingsHandlerReportsFrozenEvaluationAvailability(t *testing.T) {
+	t.Parallel()
+	authContext := adminSettingsAuthContext("evaluation-admin")
+
+	available := requestSettings(t, &config.Config{
+		EvaluationAvailable: true,
+	}, authContext)
+	if !available.EvaluationAvailable || available.EvaluationUnavailableReason != "" {
+		t.Fatalf("available Evaluation response = %#v", available)
+	}
+
+	unavailable := requestSettings(t, &config.Config{
+		EvaluationUnavailableReason: "Evaluation could not be initialized.",
+	}, authContext)
+	if unavailable.EvaluationAvailable || unavailable.EvaluationUnavailableReason != "Evaluation could not be initialized." {
+		t.Fatalf("unavailable Evaluation response = %#v", unavailable)
+	}
+}
+
 func requestSettings(t *testing.T, cfg *config.Config, authContext auth.AuthContext) SettingsResponse {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodGet, "/api/settings", nil)
@@ -51,7 +70,6 @@ func testSettingsReadUser(t *testing.T) {
 		RuntimeConfigWritable: true,
 		RecipeStoreWritable:   true,
 		RouterAPIURL:          "http://router:8080",
-		FleetSimURL:           "http://fleet-sim:8000",
 	}, auth.AuthContext{
 		UserID: "user-read-1",
 		Role:   auth.RoleRead,
@@ -62,9 +80,6 @@ func testSettingsReadUser(t *testing.T) {
 	}
 	if response.ServerReadonly || !response.RuntimeConfigWritable || !response.RecipeStoreWritable {
 		t.Fatalf("unexpected server capability response: %#v", response)
-	}
-	if !response.FleetSimEnabled {
-		t.Fatalf("fleetSimEnabled = false, want true")
 	}
 	if response.RouterEvalURL != "http://router:8080/api/v1/eval" {
 		t.Fatalf("routerEvalEndpoint = %q, want %q", response.RouterEvalURL, "http://router:8080/api/v1/eval")
@@ -88,7 +103,7 @@ func testSettingsWriteUser(t *testing.T) {
 	if response.ReadonlyMode || response.ServerReadonly || !response.RuntimeConfigWritable || !response.RecipeStoreWritable {
 		t.Fatalf("unexpected writable server capability response: %#v", response)
 	}
-	if response.FleetSimEnabled || response.RouterEvalURL != fallbackRouterEvalEndpoint {
+	if response.RouterEvalURL != fallbackRouterEvalEndpoint {
 		t.Fatalf("unexpected optional service response: %#v", response)
 	}
 

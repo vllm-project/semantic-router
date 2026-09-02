@@ -19,12 +19,14 @@ var (
 	ipv6PortRegex = regexp.MustCompile(`^\[.*\]:\d+$`)
 
 	globalConfigContractValidators = []configContractValidator{
+		validateModelPricingContracts,
 		validateReasoningFamilyContracts,
 		validateGlobalSemanticCacheContracts,
 		validateGlobalMemoryContracts,
 		validateEmbeddingModelContracts,
 		validateGlobalModalityContracts,
 		validateModelSelectionConfig,
+		validateCategoryModelBackendContracts,
 		validateGlobalClassifierRuntimeContracts,
 		validateGlobalRouterLearningConfig,
 		validateReMoMContracts,
@@ -33,11 +35,14 @@ var (
 		validateAdvancedToolFilteringConfig,
 		validatePromptCompressionContracts,
 		validateHallucinationContracts,
+		validateModelAdmissionContracts,
 	}
 
 	routingProfileContractValidators = []configContractValidator{
+		validateRuleOperatorContracts,
 		validateRoutingLocalNames,
 		validateLanguageContracts,
+		validateContextContracts,
 		validateRoutingStrategy,
 		validateDecisionSignalReferences,
 		validateDomainContracts,
@@ -52,6 +57,7 @@ var (
 		validateEmbeddingSignalContracts,
 		validateRoutingModalityContracts,
 		validateComplexityContracts,
+		validateJailbreakContracts,
 		validateDecisionRouterLearningConfig,
 	}
 )

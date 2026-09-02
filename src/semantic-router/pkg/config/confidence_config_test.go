@@ -44,6 +44,7 @@ func TestValidateConfidenceAlgorithmConfigAcceptsCanonicalValues(t *testing.T) {
 				Threshold:              0.7,
 				VerifierServerURL:      "https://verifier.example.com/api",
 				VerifierTimeoutSeconds: 30,
+				MaxResponseBytes:       1234,
 			},
 		},
 		{
@@ -241,6 +242,7 @@ func TestValidateConfidenceAlgorithmConfigRejectsInvalidVerifier(t *testing.T) {
 		method     string
 		url        string
 		timeout    int
+		maxBytes   int64
 		wantErrSub string
 	}{
 		{name: "missing URL", method: ConfidenceMethodAutoMixEntailment, wantErrSub: "verifier_server_url is required"},
@@ -251,6 +253,7 @@ func TestValidateConfidenceAlgorithmConfigRejectsInvalidVerifier(t *testing.T) {
 		{name: "query", method: ConfidenceMethodAutoMixEntailment, url: "https://verifier.example.com?token=secret", wantErrSub: "must not include a query or fragment"},
 		{name: "whitespace", method: ConfidenceMethodAutoMixEntailment, url: " https://verifier.example.com", wantErrSub: "must not contain leading or trailing whitespace"},
 		{name: "verifier config on another method", method: ConfidenceMethodSelfVerify, url: "https://verifier.example.com", timeout: 30, wantErrSub: "only supported when confidence_method"},
+		{name: "negative response limit", method: ConfidenceMethodAutoMixEntailment, url: "https://verifier.example.com", maxBytes: -1, wantErrSub: "max_response_bytes must be positive"},
 	}
 
 	for _, tc := range tests {
@@ -259,6 +262,7 @@ func TestValidateConfidenceAlgorithmConfigRejectsInvalidVerifier(t *testing.T) {
 				ConfidenceMethod:       tc.method,
 				VerifierServerURL:      tc.url,
 				VerifierTimeoutSeconds: tc.timeout,
+				MaxResponseBytes:       tc.maxBytes,
 			})
 			if err == nil || !strings.Contains(err.Error(), tc.wantErrSub) {
 				t.Fatalf("error = %v, want substring %q", err, tc.wantErrSub)

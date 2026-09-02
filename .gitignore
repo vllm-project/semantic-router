@@ -12,7 +12,7 @@ target/
 *.pyz
 __pycache__/
 .venv/
-.venv-agent/
+.venv-agent
 pii_env/
 
 # Python build artifacts
@@ -166,7 +166,7 @@ dashboard/backend/dashboard-backend.exe
 dashboard/backend/dashboard-server
 dashboard/backend/dashboard-server.exe
 
-# Dashboard backend runtime data (SQLite evaluation database)
+# Dashboard backend runtime data (auth/workflow SQLite and Evaluation Plane bundles)
 dashboard/backend/data/*
 !dashboard/backend/data/.gitignore
 
@@ -184,6 +184,7 @@ FactCHD_dataset/
 *.safetensors
 
 .vllm-sr/
+.vllm-sr-evaluation-staging/
 .codex-go-cache/
 .copilot-tmp/
 

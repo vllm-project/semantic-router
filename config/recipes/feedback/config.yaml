@@ -24,6 +24,15 @@ providers:
         parameter: enable_thinking
     default_reasoning_effort: medium
   models:
+    - name: local/omni
+      provider_model_id: local/omni
+      api_format: openai
+      backend_refs:
+        - name: local-omni
+          endpoint: vllm-omni:8000
+          protocol: http
+          type: vllm
+          weight: 1
     - name: qwen/qwen3.5-rocm
       provider_model_id: qwen/qwen3.5-rocm
       reasoning_family: qwen3
@@ -61,6 +70,9 @@ providers:
 
 routing:
   modelCards:
+    - name: local/omni
+      capabilities: [chat, image_understanding, multimodal, omni, text, vision]
+      modality: omni
     - name: qwen/qwen3.5-rocm
       context_window_size: 131072
       description: Cheap default lane for standard follow-ups and lightweight clarification.
@@ -89,6 +101,13 @@ routing:
   # 3. code-error follow-ups
   # 4. verification-sensitive recovery for high-stakes corrections
   signals:
+    conversation:
+      - name: feedback_has_images
+        description: Request contains at least one image content part.
+        feature:
+          type: exists
+          source:
+            type: image_content
     keywords:
       - name: verification_markers
         operator: OR
@@ -279,6 +298,19 @@ routing:
             gte: 0.42
 
   decisions:
+    - name: omni
+      description: Understand image-bearing follow-ups with the dedicated visual-language model.
+      priority: 260
+      rules:
+        operator: OR
+        conditions:
+          - type: conversation
+            name: feedback_has_images
+      modelRefs:
+        - model: local/omni
+      algorithm:
+        type: static
+
     - name: feedback_verified_recovery
       description: Premium recovery lane for explicit or persistent dissatisfaction on evidence-sensitive follow-ups.
       priority: 240
@@ -316,11 +348,6 @@ routing:
           use_reasoning: true
           reasoning_effort: high
       plugins:
-        - type: system_prompt
-          configuration:
-            enabled: true
-            mode: insert
-            system_prompt: You are handling a dissatisfied follow-up on a high-stakes or verification-sensitive question. Briefly acknowledge the miss, correct the answer directly, state uncertainty when needed, and cite evidence when the user asks for verification.
         - type: header_mutation
           configuration:
             add:
@@ -349,11 +376,6 @@ routing:
           use_reasoning: true
           reasoning_effort: high
       plugins:
-        - type: system_prompt
-          configuration:
-            enabled: true
-            mode: insert
-            system_prompt: The user has repeated the same failing coding question multiple times. Rebuild the diagnosis from first principles, identify the faulty assumption in the earlier answer, and return a corrected implementation plus a concrete validation step.
         - type: header_mutation
           configuration:
             add:
@@ -396,11 +418,6 @@ routing:
           use_reasoning: true
           reasoning_effort: medium
       plugins:
-        - type: system_prompt
-          configuration:
-            enabled: true
-            mode: insert
-            system_prompt: The previous answer likely failed in execution. Diagnose the failing assumption, explain the bug briefly, and return corrected code plus the smallest useful validation step.
         - type: header_mutation
           configuration:
             add:
@@ -437,11 +454,6 @@ routing:
           use_reasoning: true
           reasoning_effort: high
       plugins:
-        - type: system_prompt
-          configuration:
-            enabled: true
-            mode: insert
-            system_prompt: "The user has re-asked essentially the same question multiple times. Treat this as a hard recovery task: do not paraphrase the old answer, rebuild the answer from first principles, and make the improvement obvious."
         - type: header_mutation
           configuration:
             add:
@@ -488,11 +500,6 @@ routing:
           use_reasoning: true
           reasoning_effort: medium
       plugins:
-        - type: system_prompt
-          configuration:
-            enabled: true
-            mode: insert
-            system_prompt: The user is likely dissatisfied with the previous answer. Do not repeat the earlier wording. Answer the same question again with a cleaner structure, tighter reasoning, and one concrete improvement over the last reply.
         - type: header_mutation
           configuration:
             add:
@@ -538,11 +545,6 @@ routing:
         - model: qwen/qwen3.5-rocm
           use_reasoning: false
       plugins:
-        - type: system_prompt
-          configuration:
-            enabled: true
-            mode: insert
-            system_prompt: The user wants a clearer restatement, not a brand-new policy. Rewrite the answer simply, keep it concise, and give one small example when it helps.
         - type: response_cache
           configuration:
             enabled: true

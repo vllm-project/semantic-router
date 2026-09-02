@@ -363,7 +363,7 @@ routing:
 
     complexity:
       - name: needs_reasoning
-        threshold: 0.75
+        threshold: 0.10
         description: Escalate multi-step reasoning or synthesis-heavy prompts.
         hard:
           candidates:
@@ -411,7 +411,7 @@ routing:
 
     jailbreak:
       - name: prompt_injection
-        method: hybrid
+        method: contrastive
         threshold: 0.8
         include_history: true
         description: Detect common prompt-injection or jailbreak attempts.
@@ -475,12 +475,30 @@ routing:
             type: tool_definition
         predicate:
           gte: 1
+      - name: requires_tool_execution
+        description: Request protocol requires at least one tool call.
+        feature:
+          type: exists
+          source:
+            type: tool_choice_required
+      - name: forbids_tool_execution
+        description: Request protocol explicitly forbids tool calls.
+        feature:
+          type: exists
+          source:
+            type: tool_choice_none
       - name: active_tool_use
         description: Tool-result continuation inside an agent loop.
         feature:
           type: exists
           source:
             type: active_tool_loop
+      - name: resumable_flow_state
+        description: Request ends with a Router Flow tool result carrying continuation state.
+        feature:
+          type: exists
+          source:
+            type: flow_tool_state
       - name: has_developer_msg
         description: Request contains a developer message.
         feature:
@@ -525,6 +543,14 @@ routing:
         predicate:
           equals: denied
 
+    input_modality:
+      - name: image_input
+        description: Request contains at least one image content part.
+        modality: image
+      - name: audio_input
+        description: Request contains at least one audio content part.
+        modality: audio
+
     classifiers:
       - name: generic-safety-score
         description: Generic binary safety classification head.
@@ -540,6 +566,11 @@ routing:
         instructions: >-
           Choose RISKY only for destructive, privileged, or irreversible tool
           operations.
+      - name: remote-safety-score
+        description: Remote binary safety classification head.
+        type: sequence_classifier
+        model: external-sequence-classifier
+        labels: [SAFE, RISKY]
 
   projections:
     partitions:
@@ -754,6 +785,7 @@ routing:
           weight: 0.6
       algorithm:
         type: confidence
+        minimum_candidates: 2
         on_error: fallback
         confidence:
           confidence_method: hybrid
@@ -767,6 +799,7 @@ routing:
           token_filter: tool_call_args
           verifier_server_url: ""
           verifier_timeout_seconds: 0
+          max_response_bytes: 0
       plugins:
         - type: hallucination
           configuration:
@@ -1209,6 +1242,7 @@ routing:
               request_format: custom
               request_template: "{\"query\":\"{{.Query}}\",\"top_k\":{{.TopK}},\"threshold\":{{.Threshold}}}"
               timeout_seconds: 15
+              max_response_bytes: 4194304
               headers:
                 X-Environment: admin
 
@@ -1279,13 +1313,13 @@ routing:
       priority: 125
       rules:
         operator: AND
+        on_unknown: no_match
         conditions:
           - type: classifier
             name: generic-safety-score
             label: JAILBREAK
             predicate:
               gte: 0.5
-            on_error: no_match
       modelRefs:
         - model: qwen3-8b
           use_reasoning: false
@@ -1348,6 +1382,7 @@ routing:
               base_url: https://api.openai.com
               api_key: openai-file-search-key
               max_num_results: 12
+              max_response_bytes: 4194304
               file_ids: [file_a, file_b]
               filter:
                 doc_type: manual
@@ -1406,6 +1441,25 @@ routing:
               - name: x-escalation-reason
                 value: repeated-question
 
+    # A route action sends every request matching this decision to
+    # action.destination, overriding a caller-pinned model, so a detected
+    # prompt attack cannot bypass the guard by naming a model. The action
+    # requires an explicit jailbreak condition in rules, and destination must
+    # be defined in model_config. If the destination cannot satisfy the
+    # request context window, the decision falls back to its normal candidate
+    # policy (modelRefs/default selection).
+    - name: prompt_attack_guard_route
+      description: Route detected prompt attacks to a safe fallback model.
+      priority: 120
+      rules:
+        type: jailbreak
+        name: prompt_injection
+      action:
+        type: route
+        destination: qwen3-8b
+      modelRefs:
+        - model: qwen3-8b
+          use_reasoning: false
     - name: safe_only_svm_route
       description: SVM route that only matches when prompt-injection signals are absent.
       priority: 110
@@ -1467,35 +1521,6 @@ routing:
       modelRefs:
         - model: sdxl-image
           use_reasoning: false
-      plugins:
-        - type: image_gen
-          configuration:
-            enabled: true
-            backend: openai
-            backend_config:
-              api_key: openai-image-key
-              base_url: https://api.openai.com/v1
-              model: gpt-image-1
-              quality: hd
-              style: vivid
-            modality_detection:
-              method: hybrid
-              classifier:
-                model_path: models/mmbert32k-modality-router-merged
-                use_cpu: true
-              keywords:
-                - generate an image
-                - draw
-                - create a picture
-              both_keywords:
-                - explain and illustrate
-                - describe with an image
-              confidence_threshold: 0.7
-              lower_threshold_ratio: 0.7
-            default_width: 1024
-            default_height: 1024
-            max_inference_steps: 30
-            timeout_seconds: 60
 
     - name: multimodal_route
       description: BOTH-modality route requiring text and image-capable execution.
@@ -1510,21 +1535,6 @@ routing:
           use_reasoning: true
         - model: sdxl-image
           use_reasoning: false
-      plugins:
-        - type: image_gen
-          configuration:
-            enabled: true
-            backend: vllm_omni
-            backend_config:
-              base_url: http://image-router:8005
-              model: Qwen/Qwen-Image
-              num_inference_steps: 28
-              cfg_scale: 4.5
-              seed: 42
-            default_width: 1024
-            default_height: 1024
-            max_inference_steps: 28
-            timeout_seconds: 90
 
 entrypoints:
   - model_names: ["vllm-sr/exhaustive-default"]
@@ -1570,7 +1580,7 @@ global:
       - auto
       - exhaustive-reference
     include_config_models_in_list: true
-    clear_route_cache: false
+    clear_route_cache: true
     streamed_body:
       enabled: true
       max_bytes: 1048576
@@ -1617,6 +1627,7 @@ global:
         threshold: 0.6
       ml:
         models_path: models/model-selection
+        model_type: mmbert
         embedding_dim: 384
         knn:
           k: 5
@@ -1656,7 +1667,7 @@ global:
         timeout_ms: 50
         redis:
           address: redis:6379
-          password: redis-secret
+          password: "${VLLM_SR_STACK_REDIS_PASSWORD}"
           database: 2
           key_prefix: "vsr:router-session:v1:"
 
@@ -1687,7 +1698,7 @@ global:
       max_responses: 2000
       redis:
         address: redis:6379
-        password: redis-secret
+        password: "${VLLM_SR_STACK_REDIS_PASSWORD}"
         db: 1
         key_prefix: "vsr:responses:"
         cluster_mode: false
@@ -1727,6 +1738,10 @@ global:
           model_metrics: true
           queue_depth_estimation: true
           max_models: 50
+      profiling:
+        enabled: false
+        port: 6060
+        bind: 127.0.0.1
     authz:
       fail_open: false
       identity:
@@ -1808,7 +1823,7 @@ global:
       redis:
         address: redis:6379
         db: 2
-        password: redis-secret
+        password: "${VLLM_SR_STACK_REDIS_PASSWORD}"
         use_tls: false
         tls_skip_verify: false
         max_retries: 3
@@ -1819,7 +1834,7 @@ global:
         port: 5432
         database: vsr
         user: router
-        password: router-secret
+        password: "${VLLM_SR_STACK_POSTGRES_PASSWORD}"
         ssl_mode: disable
         max_open_conns: 20
         max_idle_conns: 10
@@ -1828,7 +1843,7 @@ global:
       milvus:
         address: milvus:19530
         username: root
-        password: milvus-secret
+        password: "${MILVUS_PASSWORD}"
         collection_name: router_replay
         consistency_level: Bounded
         shard_num: 2
@@ -1848,6 +1863,14 @@ global:
       ttl_seconds: 7200
       eviction_policy: lru
       embedding_model: mmbert
+      # Negation/antonym guard for the in-memory backend. "lexical" is the
+      # model-free default; "nli" or "lexical+nli" additionally verifies the
+      # winning candidate once with the hallucination explainer NLI model and
+      # rejects it above nli.contradiction_threshold (~70 ms/hit on CPU).
+      polarity_guard:
+        mode: lexical
+        nli:
+          contradiction_threshold: 0.5
       milvus:
         connection:
           host: milvus
@@ -1857,7 +1880,7 @@ global:
           auth:
             enabled: true
             username: root
-            password: milvus-secret
+            password: "${MILVUS_PASSWORD}"
           tls:
             enabled: false
             cert_file: certs/milvus.crt
@@ -1973,7 +1996,7 @@ global:
       embedding_model: multimodal
       embedding_dimension: 384
       ingestion_workers: 4
-      ingestion_drain_timeout_seconds: 30
+      ingestion_drain_timeout_seconds: 25
       supported_formats: [.txt, .md, .json, .csv, .html, .pdf]
       milvus:
         connection:
@@ -1984,7 +2007,7 @@ global:
           auth:
             enabled: true
             username: root
-            password: milvus-secret
+            password: "${MILVUS_PASSWORD}"
           tls:
             enabled: false
             cert_file: certs/milvus.crt
@@ -2062,7 +2085,7 @@ global:
         port: 5432
         database: vsr
         user: router
-        password: router-secret
+        password: "${VLLM_SR_STACK_POSTGRES_PASSWORD}"
         ssl_mode: disable
         max_open_conns: 25
         max_idle_conns: 5
@@ -2163,6 +2186,7 @@ global:
           api_key_env: EMBEDDING_API_KEY
           timeout_seconds: 5
           max_retries: 2
+          max_response_bytes: 16777216
           dimensions: 1024
     system:
       prompt_guard: models/mmbert32k-jailbreak-detector-merged
@@ -2172,6 +2196,25 @@ global:
       hallucination_detector: models/mom-halugate-detector
       hallucination_explainer: models/mom-halugate-explainer
       feedback_detector: models/mmbert32k-feedback-detector-merged
+    # admission bounds concurrent inference per system model deployment.
+    # Keys must match global.model_catalog.system entries (prompt_guard,
+    # domain_classifier, pii_classifier, fact_check_classifier,
+    # hallucination_detector, hallucination_explainer, feedback_detector).
+    # max_concurrency: inference slots running at once (>= 1).
+    # max_queue: bounded wait queue beyond the slots (0 = no queue).
+    # queue_timeout_ms: longest a request may wait for a slot; on expiry the
+    # request is shed (0 = wait until the request context is done).
+    # on_overflow selects what happens when every slot is busy and the queue
+    # is full: shed (default) rejects the request, wait blocks for a queue
+    # slot and requires max_queue >= 1, fail_open admits without a slot.
+    # The gate is validated here but not yet wired into the request path;
+    # omitting admission means no gate and preserves current behavior.
+    admission:
+      prompt_guard:
+        max_concurrency: 4
+        max_queue: 64
+        queue_timeout_ms: 250
+        on_overflow: shed
     external:
       - name: external-guardrail
         llm_provider: openai
@@ -2206,6 +2249,18 @@ global:
         access_key: external-classifier-key
         max_tokens: 128
         temperature: 0
+      - name: external-sequence-classifier
+        llm_provider: openai
+        model_role: classification
+        llm_endpoint:
+          address: sequence-classifier
+          port: 8080
+          protocol: http
+          name: openai-sequence-classifier
+        llm_timeout_seconds: 5
+        access_key: external-sequence-classifier-key
+        max_request_bytes: 262144
+        max_response_bytes: 1048576
     kbs:
       - name: privacy_kb
         source:
@@ -2335,8 +2390,6 @@ global:
           model_id: models/mmbert32k-intent-classifier-merged
           threshold: 0.5
           use_cpu: true
-          use_modernbert: false
-          use_mmbert_32k: true
           category_mapping_path: models/mmbert32k-intent-classifier-merged/category_mapping.json
           fallback_category: other
         mcp:
@@ -2350,6 +2403,7 @@ global:
           tool_name: classify
           threshold: 0.6
           timeout_seconds: 15
+          max_response_bytes: 16777216
         pii:
           # Omit to keep the historical behaviour of running whenever a model is
           # configured; false disables the classifier outright.

@@ -94,7 +94,7 @@ func decompileRuleNode(node *config.RuleCombination) string {
 		return decompileRuleLeaf(node)
 	}
 
-	switch node.Operator {
+	switch normalizedRuleOperator(node.Operator) {
 	case "AND":
 		// Flatten nested ANDs into a flat list: a AND b AND c
 		parts := flattenRuleNode(node, "AND")
@@ -147,7 +147,7 @@ func decompileRuleFallback(node *config.RuleCombination) string {
 }
 
 func flattenRuleNode(node *config.RuleCombination, op string) []string {
-	if node.Operator == op {
+	if normalizedRuleOperator(node.Operator) == op {
 		var parts []string
 		for i := range node.Conditions {
 			parts = append(parts, flattenRuleNode(&node.Conditions[i], op)...)
@@ -188,7 +188,7 @@ func decompileComposerObj(node *config.RuleCombination) string {
 	for i := range node.Conditions {
 		parts = append(parts, decompileComposerObj(&node.Conditions[i]))
 	}
-	return fmt.Sprintf("{ operator: %q, conditions: [%s] }", node.Operator, strings.Join(parts, ", "))
+	return fmt.Sprintf("{ operator: %q, conditions: [%s] }", normalizedRuleOperator(node.Operator), strings.Join(parts, ", "))
 }
 
 func (d *decompiler) decompileDecisions() {
@@ -206,6 +206,9 @@ func (d *decompiler) decompileDecision(dec config.Decision) {
 	if ruleExpr := decompileRuleNode(&dec.Rules); ruleExpr != "" {
 		d.write("  WHEN %s\n", ruleExpr)
 	}
+	if dec.Action != nil {
+		d.write("  ACTION %s %q\n", dec.Action.Type, dec.Action.Destination)
+	}
 	d.writeDecisionModels(dec)
 	for _, iter := range dec.CandidateIterations {
 		d.decompileCandidateIteration(iter)
@@ -219,8 +222,15 @@ func (d *decompiler) decompileDecision(dec config.Decision) {
 }
 
 func (d *decompiler) writeDecisionHeader(dec config.Decision) {
+	var options []string
 	if dec.Description != "" {
-		d.write("ROUTE %s (description = %q) {\n", quoteName(dec.Name), dec.Description)
+		options = append(options, fmt.Sprintf("description = %q", dec.Description))
+	}
+	if dec.Rules.OnUnknown != "" {
+		options = append(options, fmt.Sprintf("on_unknown = %q", dec.Rules.OnUnknown))
+	}
+	if len(options) > 0 {
+		d.write("ROUTE %s (%s) {\n", quoteName(dec.Name), strings.Join(options, ", "))
 		return
 	}
 	d.write("ROUTE %s {\n", quoteName(dec.Name))

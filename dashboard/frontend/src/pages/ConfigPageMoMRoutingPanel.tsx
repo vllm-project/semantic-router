@@ -1,25 +1,20 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 import ConfirmDialog from '../components/ConfirmDialog'
 import type { FieldConfig } from '../components/EditModal'
-import type { BuiltInModelCatalog } from '../types/modelCatalog'
+import ConfigPageMixtureDialog from './ConfigPageMixtureDialog'
+import ConfigPageModelUsageDialog from './ConfigPageModelUsageDialog'
 import ConfigPageMoMTopologyDialog from './ConfigPageMoMTopologyDialog'
 import { ConfigPageMoMEntrypointsList, ConfigPageMoMRecipesList } from './ConfigPageMoMRoutingLists'
-import ConfigPageRecipeDecisionsEditor from './ConfigPageRecipeDecisionsEditor'
-import ConfigPageRecipePolicyEditor from './ConfigPageRecipePolicyEditor'
 import pageStyles from './ConfigPageEntrypointsRecipesSection.module.css'
 import { cloneConfigData } from './configPageCanonicalization'
 import {
   collectRecipeTargetModels,
   countRecipeEntrypoints,
-  DEFAULT_RECIPE_NAME,
-  getRecipeByName,
   getRecipeDeleteBlocker,
-  getRecipeNames,
   normalizeRecipeStrategy,
-  type EntrypointFormState,
   type RecipeFormState,
-  validateEntrypointForm,
   validateRecipeForm,
 } from './configPageEntrypointsRecipesSupport'
 import type {
@@ -30,6 +25,7 @@ import type {
 } from './configPageSupport'
 import { DEFAULT_ROUTING_STRATEGY, ROUTING_STRATEGIES } from './configPageSupport'
 import type { OpenEditModal, OpenViewModal } from './configPageRouterSectionSupport'
+import type { MixtureWorkspaceView } from './ConfigPageEntrypointsRecipesSection'
 import {
   countProjectionsInProfile,
   countSignalsInProfile,
@@ -37,16 +33,13 @@ import {
 } from '../utils/routingScopes'
 
 interface ConfigPageMoMRoutingPanelProps {
+  activeView: Exclude<MixtureWorkspaceView, 'probes'>
   config: ConfigData
   isReadonly: boolean
   models: NormalizedModel[]
   saveConfig: (config: ConfigData) => Promise<void>
   openEditModal: OpenEditModal
   openViewModal: OpenViewModal
-  catalog: BuiltInModelCatalog | null
-  catalogLoading: boolean
-  catalogError: string | null
-  onCatalogRetry: () => void
 }
 
 interface PendingEntrypointDelete {
@@ -54,24 +47,16 @@ interface PendingEntrypointDelete {
   index: number
 }
 
-const cloneDecisions = (recipe: RecipeConfig): NonNullable<RecipeConfig['routing']['decisions']> =>
-  JSON.parse(JSON.stringify(recipe.routing.decisions ?? []))
-
-const cloneSignals = (recipe?: RecipeConfig): NonNullable<RecipeConfig['routing']['signals']> =>
-  JSON.parse(JSON.stringify(recipe?.routing.signals ?? {}))
-
 export default function ConfigPageMoMRoutingPanel({
+  activeView,
   config,
   isReadonly,
   models,
   saveConfig,
   openEditModal,
   openViewModal,
-  catalog,
-  catalogLoading,
-  catalogError,
-  onCatalogRetry,
 }: ConfigPageMoMRoutingPanelProps) {
+  const navigate = useNavigate()
   const [entrypointPendingDelete, setEntrypointPendingDelete] =
     useState<PendingEntrypointDelete | null>(null)
   const [recipePendingDelete, setRecipePendingDelete] = useState<RecipeConfig | null>(null)
@@ -81,52 +66,13 @@ export default function ConfigPageMoMRoutingPanel({
     entrypoint: EntrypointConfig
     recipe: RecipeConfig
   } | null>(null)
+  const [mixtureEditor, setMixtureEditor] = useState<{
+    entrypoint?: EntrypointConfig
+    index?: number
+  } | null>(null)
+  const [usageTarget, setUsageTarget] = useState<EntrypointConfig | null>(null)
 
   const entrypoints = config.entrypoints ?? []
-
-  const openEntrypointEditor = (
-    mode: 'add' | 'edit',
-    entrypoint?: EntrypointConfig,
-    originalIndex: number | null = null,
-  ) => {
-    const form: EntrypointFormState = {
-      modelNames: entrypoint?.model_names.join('\n') ?? '',
-      recipe: entrypoint?.recipe ?? DEFAULT_RECIPE_NAME,
-    }
-    const fields: FieldConfig<EntrypointFormState>[] = [
-      {
-        name: 'modelNames',
-        label: 'Public model names',
-        type: 'textarea',
-        required: true,
-        placeholder: 'team/custom-model',
-        description: 'One virtual model ID per line. These names appear in /v1/models.',
-      },
-      {
-        name: 'recipe',
-        label: 'Routing recipe',
-        type: 'select',
-        required: true,
-        options: getRecipeNames(config),
-        description: 'Requests using any model above evaluate only this recipe.',
-      },
-    ]
-    openEditModal(
-      mode === 'add' ? 'Add Entrypoint' : 'Edit Entrypoint',
-      form,
-      fields,
-      async (data) => {
-        const normalized = validateEntrypointForm(data, config, models, originalIndex)
-        const nextConfig = cloneConfigData(config)
-        const nextEntrypoints = [...(nextConfig.entrypoints ?? [])]
-        if (originalIndex === null) nextEntrypoints.push(normalized)
-        else nextEntrypoints[originalIndex] = normalized
-        nextConfig.entrypoints = nextEntrypoints
-        await saveConfig(nextConfig)
-      },
-      mode,
-    )
-  }
 
   const openRecipeEditor = (mode: 'add' | 'edit', recipe?: RecipeConfig) => {
     const originalName = recipe?.name ?? null
@@ -136,8 +82,6 @@ export default function ConfigPageMoMRoutingPanel({
       strategy: normalizeRecipeStrategy(
         recipe?.routing.strategy ?? config.global?.router?.strategy,
       ),
-      signals: cloneSignals(recipe),
-      decisions: recipe ? cloneDecisions(recipe) : [],
     }
     const fields: FieldConfig<RecipeFormState>[] = [
       {
@@ -162,34 +106,9 @@ export default function ConfigPageMoMRoutingPanel({
         options: [...ROUTING_STRATEGIES],
         description: 'How this recipe chooses among matching decisions.',
       },
-      {
-        name: 'signals',
-        label: 'Recipe policy signals',
-        type: 'custom',
-        description: 'Author metadata and classifier signals inside this isolated recipe.',
-        customRender: (value, onChange) => (
-          <ConfigPageRecipePolicyEditor
-            value={value && typeof value === 'object' ? value : {}}
-            onChange={(nextValue) => onChange(nextValue)}
-          />
-        ),
-      },
-      {
-        name: 'decisions',
-        label: 'Decision model routes',
-        type: 'custom',
-        description: 'Manage every decision and its complete target model reference data.',
-        customRender: (value, onChange) => (
-          <ConfigPageRecipeDecisionsEditor
-            value={Array.isArray(value) ? value : []}
-            models={models}
-            onChange={(nextValue) => onChange(nextValue)}
-          />
-        ),
-      },
     ]
     openEditModal(
-      mode === 'add' ? 'Add Routing Recipe' : `Edit Recipe · ${recipe?.name ?? ''}`,
+      mode === 'add' ? 'Create Recipe' : `Edit Recipe · ${recipe?.name ?? ''}`,
       form,
       fields,
       async (data) => {
@@ -214,30 +133,6 @@ export default function ConfigPageMoMRoutingPanel({
         await saveConfig(nextConfig)
       },
       mode,
-    )
-  }
-
-  const viewEntrypoint = (entrypoint: EntrypointConfig, index: number) => {
-    const recipe = getRecipeByName(config, entrypoint.recipe)
-    const targets = collectRecipeTargetModels(recipe)
-    openViewModal(
-      entrypoint.model_names.join(', '),
-      [
-        {
-          title: 'Entrypoint mapping',
-          fields: [
-            { label: 'Public models', value: entrypoint.model_names.join('\n'), fullWidth: true },
-            { label: 'Recipe', value: entrypoint.recipe },
-            { label: 'Recipe decisions', value: recipe?.routing.decisions?.length ?? 0 },
-            {
-              label: 'Configured targets',
-              value: targets.join('\n') || 'No target models',
-              fullWidth: true,
-            },
-          ],
-        },
-      ],
-      isReadonly ? undefined : () => openEntrypointEditor('edit', entrypoint, index),
     )
   }
 
@@ -324,34 +219,49 @@ export default function ConfigPageMoMRoutingPanel({
   return (
     <>
       <div className={pageStyles.tablesGrid}>
-        <ConfigPageMoMEntrypointsList
-          config={config}
-          isReadonly={isReadonly}
-          onAdd={() => openEntrypointEditor('add')}
-          onView={viewEntrypoint}
-          onEdit={(entrypoint, index) => openEntrypointEditor('edit', entrypoint, index)}
-          onDelete={(entrypoint, index) => {
-            setDeleteError(null)
-            setEntrypointPendingDelete({ entrypoint, index })
-          }}
-          onTopology={(entrypoint, recipe) => setTopologyTarget({ entrypoint, recipe })}
-          catalog={catalog}
-          catalogLoading={catalogLoading}
-          catalogError={catalogError}
-          onCatalogRetry={onCatalogRetry}
-        />
-        <ConfigPageMoMRecipesList
-          config={config}
-          isReadonly={isReadonly}
-          onAdd={() => openRecipeEditor('add')}
-          onView={viewRecipe}
-          onEdit={(recipe) => openRecipeEditor('edit', recipe)}
-          onDelete={(recipe) => {
-            setDeleteError(getRecipeDeleteBlocker(config, recipe.name))
-            setRecipePendingDelete(recipe)
-          }}
-        />
+        {activeView === 'models' ? (
+          <ConfigPageMoMEntrypointsList
+            config={config}
+            isReadonly={isReadonly}
+            onAdd={() => setMixtureEditor({})}
+            onUsage={setUsageTarget}
+            onEvaluate={(entrypoint) => {
+              const model = entrypoint.model_names[0]
+              if (!model) return
+              navigate(`/evaluation?view=new&entrypoint=${encodeURIComponent(model)}`)
+            }}
+            onEdit={(entrypoint, index) => setMixtureEditor({ entrypoint, index })}
+            onDelete={(entrypoint, index) => {
+              setDeleteError(null)
+              setEntrypointPendingDelete({ entrypoint, index })
+            }}
+            onTopology={(entrypoint, recipe) => setTopologyTarget({ entrypoint, recipe })}
+          />
+        ) : (
+          <ConfigPageMoMRecipesList
+            config={config}
+            isReadonly={isReadonly}
+            onAdd={() => openRecipeEditor('add')}
+            onView={viewRecipe}
+            onEdit={(recipe) => openRecipeEditor('edit', recipe)}
+            onDelete={(recipe) => {
+              setDeleteError(getRecipeDeleteBlocker(config, recipe.name))
+              setRecipePendingDelete(recipe)
+            }}
+          />
+        )}
       </div>
+
+      {mixtureEditor ? (
+        <ConfigPageMixtureDialog
+          config={config}
+          models={models}
+          entrypoint={mixtureEditor.entrypoint}
+          entrypointIndex={mixtureEditor.index}
+          onClose={() => setMixtureEditor(null)}
+          onSave={saveConfig}
+        />
+      ) : null}
 
       {topologyTarget ? (
         <ConfigPageMoMTopologyDialog
@@ -359,6 +269,10 @@ export default function ConfigPageMoMRoutingPanel({
           recipe={topologyTarget.recipe}
           onClose={() => setTopologyTarget(null)}
         />
+      ) : null}
+
+      {usageTarget ? (
+        <ConfigPageModelUsageDialog entrypoint={usageTarget} onClose={() => setUsageTarget(null)} />
       ) : null}
 
       <ConfirmDialog

@@ -14,10 +14,16 @@ var BaselineRouterContract = []string{
 	"anthropic-messages-streaming",
 	"apiserver-runtime-config-endpoints",
 	"apiserver-classification-endpoints",
+	"llm-classifier-distribution-routing",
+	"sequence-classifier-routing",
 	"chat-completions-stress-request",
 	"domain-classify",
 	"semantic-cache",
+	// NLI polarity tier of the semantic cache (issue #2751)
+	"semantic-cache-polarity",
 	"pii-detection",
+	// PII entity positions are code-point offsets (issue #3146)
+	"pii-entity-offsets",
 	"jailbreak-detection",
 	"decision-priority-selection",
 	"plugin-chain-execution",
@@ -26,13 +32,15 @@ var BaselineRouterContract = []string{
 	"decision-fallback-behavior",
 	"plugin-config-variations",
 	"chat-completions-progressive-stress",
-	"anthropic-passthrough-openai-regression",
+	"protocol-codec-openai-regression",
 	// Retention directive response-header contract (issue #2009)
 	"retention-directive",
 	// Looper aggregate latency/token-usage response-header contract (issue #2694)
 	"looper-latency-token-headers",
 	// Entrypoint virtual names select routing recipes (issue #2331)
 	"entrypoint-recipe-routing",
+	// json_schema response_format survives auto-routing model rewrite (issue #3024)
+	"chat-completions-structured-output",
 	// Session observability
 	"session-telemetry-metrics",
 	"session-pricing-chat-completions",
@@ -49,12 +57,10 @@ var DashboardContract = []string{
 	"dashboard-deploy-preview",
 	"dashboard-config-versions",
 	"dashboard-deploy-invalid-yaml",
-	// Evaluation endpoints (tasks/CRUD require CGO — only datasets works without it)
-	"dashboard-eval-datasets",
+	// Evaluation Plane lifecycle, evidence, report, comparison, and cancellation.
+	"dashboard-evaluation-plane",
 	// Workflow persistence survives dashboard pod restart (requires dashboard PVC)
 	"dashboard-restart-recovery",
-	// Security Policy RBAC + ratelimit apply
-	"security-policy-apply",
 }
 
 // AnthropicShimContract is the test suite that exercises the Anthropic-
@@ -63,8 +69,25 @@ var DashboardContract = []string{
 // OpenAI-shaped backends because they assert on Anthropic-specific
 // behaviour such as cache-token synthesis and stop-reason mapping.
 var AnthropicShimContract = []string{
+	// Chat clients must receive Chat Completions even though the selected
+	// backend speaks Anthropic Messages.
+	"chat-completions-request",
 	"anthropic-messages-cache-cycle",
+	"anthropic-chat-cache-control",
 	"anthropic-messages-stop-sequence",
+	"anthropic-messages-streaming",
+	"anthropic-chat-completions-streaming",
+	"anthropic-response-api-buffered",
+	// /v1/responses streaming must emit Response API SSE on Anthropic-format
+	// backends instead of leaking chat.completion.chunk frames (issue #3013)
+	"anthropic-response-api-streaming",
+	"protocol-codec-anthropic-backend-buffered-matrix",
+	"protocol-codec-anthropic-backend-streaming-matrix",
+	"protocol-codec-anthropic-backend-tool-lifecycle",
+	"protocol-codec-anthropic-backend-structured-output",
+	"protocol-codec-anthropic-backend-error-matrix",
+	"protocol-codec-anthropic-backend-incomplete-stream-matrix",
+	"protocol-codec-anthropic-backend-midstream-error-matrix",
 }
 
 // Combine preserves order while removing duplicate testcase names.

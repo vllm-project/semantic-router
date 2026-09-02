@@ -1,8 +1,8 @@
 # Anthropic-Shim Backend Resources
 #
 # Deploys the Qwen-flavoured anthropic-shim backend (llama.cpp + Python shim)
-# and exposes it to Envoy AI Gateway so the router can forward Anthropic-
-# protocol requests to it.
+# and exposes it to Envoy so the router can forward Anthropic-protocol
+# requests to it.
 #
 # The backend runs in the anthropic-backend-system namespace (created by
 # deploy/kubernetes/anthropic-backend/base/namespace.yaml). The shim Service
@@ -110,6 +110,13 @@ spec:
             - "8081"
             - "-c"
             - "4096"
+            # Keep llama.cpp from sizing its thread pools from the Kind host.
+            # Large CI and development hosts can expose hundreds of CPUs to the
+            # container while this fixture is intentionally CPU constrained.
+            - "--threads"
+            - "4"
+            - "--threads-batch"
+            - "4"
           ports:
             - name: llama
               containerPort: 8081
@@ -158,7 +165,7 @@ spec:
 
         - name: anthropic-shim
           image: ghcr.io/vllm-project/semantic-router/anthropic-shim:e2e-test
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Never
           ports:
             - name: shim
               containerPort: 8080
@@ -232,22 +239,7 @@ spec:
       targetPort: shim
       protocol: TCP
 ---
-# ── Envoy AI Gateway Backend + AIServiceBackend ───────────────────────────────
-# The router uses the Anthropic schema so the AI Gateway knows to translate
-# outbound requests to Anthropic Messages shape before forwarding.
-apiVersion: aigateway.envoyproxy.io/v1alpha1
-kind: AIServiceBackend
-metadata:
-  name: anthropic-backend-qwen
-  namespace: default
-spec:
-  schema:
-    name: Anthropic
-  backendRef:
-    name: anthropic-backend-qwen
-    kind: Backend
-    group: gateway.envoyproxy.io
----
+# ── Gateway API backend ───────────────────────────────────────────────────────
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: Backend
 metadata:

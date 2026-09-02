@@ -29,6 +29,24 @@ AGENT_SMOKE_CONFIG_PATH = (
 )
 
 
+def stack_scoped_test_container_name(stack_name: str, base_name: str) -> str:
+    """Keep test-only containers inside the selected runtime stack namespace."""
+
+    if stack_name == DEFAULT_STACK_NAME:
+        return base_name
+    return f"{stack_name}-{base_name}"
+
+
+# Services whose store backends the CLI provisions locally. They are written
+# out in full rather than left to the canonical defaults: a test that rides on
+# a default is silently retargeted the day that default changes, and these two
+# exist to name Redis and Postgres specifically.
+MANAGED_STORAGE_SERVICES: dict[str, dict[str, object]] = {
+    "response_api": {"enabled": True, "store_backend": "redis"},
+    "router_replay": {"enabled": True, "store_backend": "postgres"},
+}
+
+
 def _coerce_timeout_stream(value: str | bytes | None) -> str:
     """Normalize TimeoutExpired output/stderr values into text."""
     if value is None:
@@ -55,12 +73,21 @@ class CLITestBase(unittest.TestCase):
     ROUTER_CONTAINER_NAME = "vllm-sr-router-container"
     ENVOY_CONTAINER_NAME = "vllm-sr-envoy-container"
     DASHBOARD_CONTAINER_NAME = "vllm-sr-dashboard-container"
-    SIM_CONTAINER_NAME = "vllm-sr-sim-container"
+    REDIS_CONTAINER_NAME = "vllm-sr-redis"
+    POSTGRES_CONTAINER_NAME = "vllm-sr-postgres"
+    MILVUS_CONTAINER_NAME = "vllm-sr-milvus"
+    NETWORK_NAME = "vllm-sr-network"
+    DATA_NETWORK_NAME = "vllm-sr-data-network"
     AUXILIARY_CONTAINER_NAMES = (
         "vllm-sr-grafana",
         "vllm-sr-prometheus",
         "vllm-sr-jaeger",
     )
+
+    # One-shot container a test drives to probe a network from the inside.
+    # Named rather than anonymous so a probe that outlives its test is still
+    # removed by the class-level cleanup.
+    PROBE_CONTAINER_NAME = "vllm-sr-cli-test-probe"
 
     # Default timeout for CLI commands
     DEFAULT_TIMEOUT = 60
@@ -81,7 +108,14 @@ class CLITestBase(unittest.TestCase):
         cls.ROUTER_CONTAINER_NAME = cls.runtime_stack.router_container_name
         cls.ENVOY_CONTAINER_NAME = cls.runtime_stack.envoy_container_name
         cls.DASHBOARD_CONTAINER_NAME = cls.runtime_stack.dashboard_container_name
-        cls.SIM_CONTAINER_NAME = cls.runtime_stack.fleet_sim_container_name
+        cls.REDIS_CONTAINER_NAME = cls.runtime_stack.redis_container_name
+        cls.POSTGRES_CONTAINER_NAME = cls.runtime_stack.postgres_container_name
+        cls.MILVUS_CONTAINER_NAME = cls.runtime_stack.milvus_container_name
+        cls.NETWORK_NAME = cls.runtime_stack.network_name
+        cls.DATA_NETWORK_NAME = cls.runtime_stack.data_network_name
+        cls.PROBE_CONTAINER_NAME = stack_scoped_test_container_name(
+            stack_name, "vllm-sr-cli-test-probe"
+        )
         cls.AUXILIARY_CONTAINER_NAMES = (
             cls.runtime_stack.grafana_container_name,
             cls.runtime_stack.prometheus_container_name,
@@ -185,7 +219,7 @@ class CLITestBase(unittest.TestCase):
             cls.ROUTER_CONTAINER_NAME,
             cls.ENVOY_CONTAINER_NAME,
             cls.DASHBOARD_CONTAINER_NAME,
-            cls.SIM_CONTAINER_NAME,
+            cls.PROBE_CONTAINER_NAME,
             *cls.AUXILIARY_CONTAINER_NAMES,
         )
         for container_name in managed_container_names:
@@ -312,9 +346,15 @@ class CLITestBase(unittest.TestCase):
         endpoint: str = "host.docker.internal:8000",
         base_url: str | None = None,
         provider: str | None = None,
+        api_key_env: str | None = None,
         api_only: bool = False,
+        managed_storage: bool = False,
     ) -> str:
-        """Write a minimal runnable canonical v0.3 config into the temp workspace."""
+        """Write a minimal runnable canonical v0.3 config into the temp workspace.
+
+        *managed_storage* asks for the service backends this CLI provisions
+        locally, which is what makes `serve` start Redis and Postgres.
+        """
         config_path = Path(self.test_dir) / "config.yaml"
         backend_ref: dict[str, object] = {
             "name": "primary",
@@ -327,6 +367,8 @@ class CLITestBase(unittest.TestCase):
             backend_ref["protocol"] = "http"
         if provider is not None:
             backend_ref["provider"] = provider
+        if api_key_env is not None:
+            backend_ref["api_key_env"] = api_key_env
 
         config = {
             "version": "v0.3",
@@ -366,6 +408,15 @@ class CLITestBase(unittest.TestCase):
         }
         if api_only:
             config["global"] = _api_only_global_config()
+        if managed_storage:
+            global_config = config.get("global")
+            if not isinstance(global_config, dict):
+                global_config = {}
+                config["global"] = global_config
+            global_config["services"] = {
+                service_key: dict(service_config)
+                for service_key, service_config in MANAGED_STORAGE_SERVICES.items()
+            }
         config_path.write_text(
             yaml.safe_dump(config, sort_keys=False),
             encoding="utf-8",
@@ -484,6 +535,61 @@ class CLITestBase(unittest.TestCase):
             timeout=timeout,
         )
         return result.returncode, result.stdout, result.stderr
+
+    def container_networks(self, container_name: str) -> set[str]:
+        """Return the networks *container_name* is currently attached to."""
+        result = self._run_subprocess(
+            [
+                self.container_runtime,
+                "inspect",
+                "--format",
+                "{{range $name, $_ := .NetworkSettings.Networks}}{{$name}} {{end}}",
+                container_name,
+            ],
+            timeout=10,
+        )
+        if result.returncode != 0:
+            self.fail(
+                f"Could not inspect the networks of {container_name}: "
+                f"{result.stderr.strip() or f'exit code {result.returncode}'}"
+            )
+        return set(result.stdout.split())
+
+    def run_network_probe(
+        self,
+        *,
+        network_name: str,
+        image: str,
+        shell_command: str,
+        timeout: int = 60,
+    ) -> subprocess.CompletedProcess[str]:
+        """Run *shell_command* from a throwaway container on *network_name*.
+
+        The probe has to run from inside a network, because that is the only
+        vantage point from which "can this workload reach that store" has an
+        answer: the host reaches a published port either way.
+        """
+        with suppress(Exception):
+            self._run_subprocess(
+                [self.container_runtime, "rm", "-f", self.PROBE_CONTAINER_NAME],
+                timeout=30,
+            )
+        return self._run_subprocess(
+            [
+                self.container_runtime,
+                "run",
+                "--rm",
+                "--name",
+                self.PROBE_CONTAINER_NAME,
+                "--network",
+                network_name,
+                image,
+                "sh",
+                "-c",
+                shell_command,
+            ],
+            timeout=timeout,
+        )
 
     def image_exists(self, image_name: str) -> bool:
         """Check if a container image exists locally."""

@@ -19,6 +19,7 @@ export const SIGNAL_TYPES = [
   'event',
   'metadata',
   'classifier',
+  'input_modality',
 ] as const
 
 export type SignalType = (typeof SIGNAL_TYPES)[number]
@@ -31,7 +32,6 @@ export const PLUGIN_TYPES = [
   'hallucination',
   'router_replay',
   'rag',
-  'image_gen',
   'fast_response',
   'tools',
   'tool_selection',
@@ -48,7 +48,6 @@ export const PLUGIN_DESCRIPTIONS: Record<string, string> = {
   hallucination: 'Detect hallucinated content using NLI or other methods',
   router_replay: 'Record request/response pairs for replay and debugging',
   rag: 'Retrieval-Augmented Generation — inject retrieved context into prompts',
-  image_gen: 'Route to image generation backends',
   fast_response: 'Short-circuit and return a fixed response without calling upstream models',
   tools: 'Route-local tool filtering and semantic tool selection',
   tool_selection: 'Semantic tool add/filter plugin for route-local tool catalogs',
@@ -65,5 +64,4 @@ export const BACKEND_TYPES = [
   'memory',
   'response_api',
   'vector_store',
-  'image_gen_backend',
 ] as const

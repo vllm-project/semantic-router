@@ -1,0 +1,47 @@
+{
+  "status": "ok",
+  "body": {
+    "created_at": 100,
+    "error": null,
+    "id": "chatcmpl_1",
+    "incomplete_details": {
+      "reason": "content_filter"
+    },
+    "instructions": null,
+    "metadata": {},
+    "model": "routed-model",
+    "object": "response",
+    "output": [
+      {
+        "content": [
+          {
+            "refusal": "I cannot help with that.",
+            "type": "refusal"
+          }
+        ],
+        "id": "item_778767bae4047c000ddcae9a",
+        "role": "assistant",
+        "status": "completed",
+        "type": "message"
+      }
+    ],
+    "parallel_tool_calls": true,
+    "status": "incomplete",
+    "temperature": null,
+    "tool_choice": "auto",
+    "tools": [],
+    "top_p": null,
+    "usage": {
+      "input_tokens": 4,
+      "input_tokens_details": {
+        "cache_write_tokens": 0,
+        "cached_tokens": 0
+      },
+      "output_tokens": 2,
+      "output_tokens_details": {
+        "reasoning_tokens": 0
+      },
+      "total_tokens": 6
+    }
+  }
+}

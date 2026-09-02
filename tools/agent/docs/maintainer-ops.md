@@ -35,7 +35,12 @@ must not be committed.
 
 ## Maintainer Label View
 
-Maintainers do not need to scan every area label. The daily operating view is:
+The issue tree uses one structural path: one `wg/*` owner, then an `epic`
+parent where the work belongs to a bounded outcome. `[Epic]` titles and the
+`epic` label are synchronized automatically. The retired `area/*` and
+`track/*` taxonomies must not be recreated.
+
+The daily operating view is:
 
 - `needs-acceptance`: decide whether the issue fits the roadmap, which one
   Workgroup owns it, and whether to accept, request information, backlog, or
@@ -83,7 +88,7 @@ Maintainer ops owns two release-management actions that should not appear as
 active release-plan tasks:
 
 - Sync GitHub milestone, issue, PR, label, review, and CI state into the local
-  board and classify the result by release track.
+  board and classify the result by lifecycle and milestone state.
 - Propose missing release seed issues from the active release plan, review the
   dry-run payload, and apply only after explicit maintainer approval.
 
@@ -179,21 +184,39 @@ local `apply` command after maintainer review when mutations are intended.
 perform only deterministic intake-state normalization. They enforce this
 contract without making roadmap, priority, or close decisions:
 
-- issue forms start at `needs-acceptance` and propose one Workgroup;
+- issue forms start at `needs-acceptance` and use the proposed Workgroup only
+  to seed an otherwise unowned issue; once any recognized owner exists (a
+  Workgroup or `owner/maintainers`) it is the triage source of truth, so
+  Maintainer reclassification is not reverted from stale form text;
+- `/accept` lets a collaborator with write, maintain, or admin permission accept
+  an issue that already has exactly one recognized owner: one Workgroup for
+  project work or `owner/maintainers` for repository governance;
 - `accepted`, `ready-for-dev`, contributor-ready labels, priority, assignment,
   and milestones cannot bypass their prerequisites;
 - assignment moves accepted work to `in-progress`;
-- non-trivial PRs must link accepted work with exactly one Workgroup owner.
+- title-only issue edits validate naming without changing acceptance,
+  assignment, priority, milestone, or delivery state;
+- non-trivial PRs must link accepted work with exactly one recognized owner.
 
 Because `pull_request_target` is prohibited, the PR check is read-only on the
 untrusted pull-request event. `.github/workflows/community-labels.yml` runs
 after that check from trusted default-branch code and synchronizes one
-`pr/*` state label, Workgroup ownership, release-blocker status, and milestone
+`pr/*` state label, ownership, release-blocker status, and milestone
 inheritance. Review submissions and check-suite completion refresh that state,
 so `pr/needs-review`, `pr/needs-author`, `pr/needs-rebase`, `pr/blocked`, and
 `pr/merge-ready` remain mutually exclusive. The workflow never executes
 pull-request code with a write token. An hourly reconciliation covers status
-changes that do not emit a trusted write-capable event.
+changes that do not emit a trusted write-capable event, including the merge or
+close that ends a pull request's review lifecycle.
+
+`pr/blocked` means the PR currently fails admission, has an errored or failed
+check rollup, or is approved while required check or merge signals remain
+pending or unknown. An explicitly behind or dirty branch resolves to
+`pr/needs-rebase` instead. The next reconciliation removes `pr/blocked` when
+the PR resolves to needs-author, needs-rebase, needs-review, close-candidate,
+or merge-ready. A merged or closed pull request holds no `pr/*` state label,
+because no review action remains for it; ownership and milestone inheritance
+are retained.
 
 ### Relationship to `stale.yml`
 
