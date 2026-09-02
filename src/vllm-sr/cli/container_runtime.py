@@ -74,7 +74,7 @@ def _persisted_runtime_env_path() -> str:
     return os.path.join(install_root, "runtime.env")
 
 
-def _load_persisted_runtime() -> str | None:
+def _load_persisted_runtime(env_path: str) -> str | None:
     """Read the ``CONTAINER_RUNTIME`` choice persisted by ``install.sh``.
 
     The file is a hint rather than a hard contract: a missing, unreadable, or
@@ -82,13 +82,13 @@ def _load_persisted_runtime() -> str | None:
     Returns ``None`` when no value is present.
     """
     try:
-        with open(_persisted_runtime_env_path(), encoding="utf-8") as env_file:
+        with open(env_path, encoding="utf-8") as env_file:
             for raw_line in env_file:
                 line = raw_line.strip()
                 if not line or line.startswith("#") or "=" not in line:
                     continue
                 key, _, value = line.partition("=")
-                if key.strip() == CONTAINER_RUNTIME_ENV:
+                if key.strip().upper() == CONTAINER_RUNTIME_ENV:
                     return value.strip().lower() or None
     except OSError:
         return None
@@ -97,7 +97,12 @@ def _load_persisted_runtime() -> str | None:
 
 @lru_cache(maxsize=1)
 def _detect_container_runtime():
-    """Detect a supported runtime, honoring the explicit ``CONTAINER_RUNTIME`` env."""
+    """Detect a supported runtime for local ``vllm-sr`` deployments.
+
+    Resolution order: the explicit ``CONTAINER_RUNTIME`` environment
+    variable, the runtime persisted by ``install.sh`` in ``runtime.env``
+    (#3370), then auto-detection (Docker first, Podman fallback).
+    """
     if sys.platform.startswith("win"):
         _exit_unsupported_runtime(
             "native Windows",
@@ -124,19 +129,20 @@ def _detect_container_runtime():
         log.info(f"Using container runtime from {CONTAINER_RUNTIME_ENV}: {explicit}")
         return explicit
 
-    persisted = _load_persisted_runtime()
+    persisted_env_path = _persisted_runtime_env_path()
+    persisted = _load_persisted_runtime(persisted_env_path)
     if persisted:
         if persisted not in SUPPORTED_CONTAINER_RUNTIMES:
             log.warning(
                 f"Ignoring unsupported {CONTAINER_RUNTIME_ENV}={persisted} from "
-                f"{_persisted_runtime_env_path()}; supported values: "
+                f"{persisted_env_path}; supported values: "
                 f"{', '.join(SUPPORTED_CONTAINER_RUNTIMES)}."
             )
         else:
             persisted_path = resolve_runtime_cli_path(persisted)
             if not persisted_path:
                 log.warning(
-                    f"{_persisted_runtime_env_path()} persists "
+                    f"{persisted_env_path} persists "
                     f"{CONTAINER_RUNTIME_ENV}={persisted}, but `{persisted}` "
                     "was not found in PATH; falling back to auto-detection."
                 )
@@ -144,7 +150,7 @@ def _detect_container_runtime():
                 _ensure_supported_runtime_daemon(persisted, persisted_path)
                 log.info(
                     "Using container runtime persisted by install.sh "
-                    f"({_persisted_runtime_env_path()}): {persisted}"
+                    f"({persisted_env_path}): {persisted}"
                 )
                 return persisted
 
