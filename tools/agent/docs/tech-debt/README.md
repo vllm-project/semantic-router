@@ -76,5 +76,9 @@ Every entry uses these sections:
 - [TD054: Typed request capability eligibility](td-054-typed-request-capability-eligibility-gap.md)
 - [TD055: Evidence-calibrated session switch gate](td-055-evidence-calibrated-session-switch-gate-gap.md)
 
+### Unassigned
+
+- [TD056: onnx-binding/candle-binding image resize duplication](td-056-onnx-candle-image-resize-duplication.md)
+
 If a gap becomes release-critical, move ownership to the active release plan
 and update both indexes in the same change.

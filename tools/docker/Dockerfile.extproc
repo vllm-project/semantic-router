@@ -310,9 +310,25 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
         ls -la libopenvino_semantic_router.so; \
     fi
 
+# Collect the CPU runtime needed by the tagged router binary. Keep the
+# directory present on arm64 so later cross-stage copies remain valid while
+# OpenVINO stays unsupported there.
+RUN mkdir -p /app/openvino-runtime && \
+    if [ "$TARGETARCH" != "arm64" ]; then \
+        ov_libs="$(python3 -c 'import openvino, os; print(os.path.join(os.path.dirname(openvino.__file__), "libs"))')" && \
+        ov_tokenizers="$(python3 -c 'import openvino_tokenizers, os; print(os.path.join(os.path.dirname(openvino_tokenizers.__file__), "lib"))')" && \
+        cp -a \
+            "$ov_libs"/libopenvino.so.* \
+            "$ov_libs"/libopenvino_auto_plugin.so \
+            "$ov_libs"/libopenvino_intel_cpu_plugin.so \
+            "$ov_libs"/libopenvino_ir_frontend.so.* \
+            "$ov_libs"/libtbb.so.* \
+            "$ov_tokenizers"/libopenvino_tokenizers.so \
+            /app/openvino-runtime/; \
+    fi
 
 # ============================================================================
-# Stage 5: Build Go application (candle on all platforms, onnx on amd64 only)
+# Stage 5: Build Go application (candle on all platforms, onnx/openvino on amd64 only)
 # ============================================================================
 ARG BUILDPLATFORM
 FROM --platform=$BUILDPLATFORM golang:1.25 AS go-builder
@@ -338,6 +354,7 @@ COPY onnx-binding/go.mod onnx-binding/semantic-router.go onnx-binding/
 COPY ml-binding/go.mod ml-binding/ml_binding.go ml-binding/
 COPY nlp-binding/go.mod nlp-binding/nlp_binding.go nlp-binding/nlp_binding_mock.go nlp-binding/
 COPY openvino-binding/go.mod openvino-binding/semantic-router.go openvino-binding/
+COPY openvino-binding/cpp/include/ openvino-binding/cpp/include/
 
 # Download Go dependencies (cached layer)
 # Pipe falls back to direct on any proxy error; comma only on 404 and 410
@@ -400,20 +417,21 @@ RUN mkdir -p /app/nlp-binding/target/release && \
 
 # Copy openvino-binding library (x86_64 only, built with CMake not Rust)
 COPY --from=openvino-builder /app/openvino-binding/build/ /tmp/openvino-build/
+COPY --from=openvino-builder /app/openvino-runtime/ /app/openvino-runtime/
 RUN mkdir -p /app/openvino-binding/build && \
     if [ "$TARGETARCH" = "arm64" ]; then \
         echo "Skipping OpenVINO library copy for arm64."; \
     else \
-        cp /tmp/openvino-build/libopenvino_semantic_router.so /app/openvino-binding/build/ 2>/dev/null && \
+        cp -a /tmp/openvino-build/libopenvino_semantic_router.so* /app/openvino-binding/build/ 2>/dev/null && \
         echo "=== OpenVINO library staged ===" && \
-        ls -la /app/openvino-binding/build/libopenvino_semantic_router.so || \
+        ls -la /app/openvino-binding/build/libopenvino_semantic_router.so* || \
         echo "Warning: OpenVINO library not found (build may have been skipped)"; \
     fi && \
     rm -rf /tmp/openvino-build
 
 # Set environment variables for CGO to find the libraries
 ENV CGO_ENABLED=1
-ENV LD_LIBRARY_PATH=/app/candle-binding/target/release:/app/onnx-binding/target/release:/app/ml-binding/target/release:/app/nlp-binding/target/release:/app/openvino-binding/build
+ENV LD_LIBRARY_PATH=/app/candle-binding/target/release:/app/onnx-binding/target/release:/app/ml-binding/target/release:/app/nlp-binding/target/release:/app/openvino-binding/build:/app/openvino-runtime
 ENV GOOS=linux
 ENV GOFLAGS=-buildvcs=false
 
@@ -453,12 +471,13 @@ RUN mkdir -p /app/lib && \
     cp /app/ml-binding/target/release/libml_semantic_router.so /app/lib/ && \
     cp /app/nlp-binding/target/release/libnlp_binding.so /app/lib/ && \
     if [ "$TARGETARCH" = "arm64" ]; then \
-        echo "Skipping ONNX runtime library staging on arm64."; \
+        echo "Skipping ONNX and OpenVINO runtime library staging on arm64."; \
     else \
         cp /app/onnx-binding/target/release/libonnx_semantic_router.so /app/lib/ && \
-        (cp /app/onnx-binding/target/release/libonnxruntime*.so* /app/lib/ 2>/dev/null || true); \
+        (cp /app/onnx-binding/target/release/libonnxruntime*.so* /app/lib/ 2>/dev/null || true) && \
+        cp -a /app/openvino-binding/build/libopenvino_semantic_router.so* /app/lib/ && \
+        cp -a /app/openvino-runtime/. /app/lib/; \
     fi && \
-    (cp /app/openvino-binding/build/libopenvino_semantic_router.so /app/lib/ 2>/dev/null || echo "OpenVINO library not staged (arm64 or build skipped)") && \
     echo "=== Libraries staged ===" && ls -la /app/lib/
 
 # Build the onnx router binary (uses go.onnx.mod which replaces candle-binding => onnx-binding)
@@ -472,10 +491,20 @@ RUN cd src/semantic-router && \
         go build -modfile=go.onnx.mod -tags=onnx -ldflags="-w -s" -o ../../bin/router-onnx ./cmd; \
     fi
 
+# Build the OpenVINO router binary with the real CGO implementation enabled.
+RUN cd src/semantic-router && \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+        echo "Skipping OpenVINO router build on arm64."; \
+    else \
+        echo "Building OpenVINO binary for AMD64..." && \
+        CGO_LDFLAGS="-L/app/openvino-binding/build -L/app/openvino-runtime -L/app/candle-binding/target/release -L/app/ml-binding/target/release -L/app/nlp-binding/target/release -Wl,-rpath-link,/app/openvino-runtime -lopenvino_semantic_router -lcandle_semantic_router -lml_semantic_router -lnlp_binding -lstdc++ -lm" \
+        go build -tags=openvino -ldflags="-w -s" -o ../../bin/router-openvino ./cmd; \
+    fi
+
 # ============================================================================
 # Final stage: runtime image (candle on all platforms, onnx + openvino on amd64 only)
 # ============================================================================
-FROM quay.io/centos/centos:stream10
+FROM quay.io/centos/centos:stream10-development@sha256:556c6f559c63a24e52843778ed7ee0887be572f7df4219a971d2b2820bbb6675
 
 # Install runtime dependencies including OpenSSL, Python and HuggingFace CLI
 RUN dnf update -y && \
@@ -499,6 +528,22 @@ COPY config/config.yaml /app/config/
 COPY config/knowledge_bases/ /app/config/knowledge_bases/
 
 ENV LD_LIBRARY_PATH=/app/lib
+ENV OPENVINO_TOKENIZERS_LIB=/app/lib/libopenvino_tokenizers.so
+
+ARG TARGETARCH
+
+# Keep the advertised amd64 OpenVINO backend honest: image validation must fail
+# if its binary or dynamically loaded CPU runtime is incomplete.
+RUN if [ "$TARGETARCH" != "arm64" ]; then \
+        test -x /app/router-openvino && \
+        test -e /app/lib/libopenvino_semantic_router.so.0 && \
+        test -f /app/lib/libopenvino_intel_cpu_plugin.so && \
+        test -f /app/lib/libopenvino_ir_frontend.so.2510 && \
+        test -f "$OPENVINO_TOKENIZERS_LIB" && \
+        test -z "$(ldd /app/router-openvino | grep 'not found' || true)" && \
+        test -z "$(ldd /app/lib/libopenvino_semantic_router.so | grep 'not found' || true)"; \
+    fi
+
 # Default to candle binding; set AI_BINDING=onnx or openvino for alternative backends
 ENV AI_BINDING=candle
 

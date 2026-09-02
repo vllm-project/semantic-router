@@ -2,6 +2,8 @@
 
 use super::bert::*;
 use crate::test_fixtures::{fixtures::*, test_utils::*};
+use candle_core::{Device, Tensor};
+use candle_nn::{Linear, Module};
 use rstest::*;
 
 /// Test TraditionalBertClassifier creation with real model
@@ -225,4 +227,21 @@ fn test_bert_classify_text_with_probabilities_matches_top1(traditional_model_pat
         (probabilities[probs_class] - probs_confidence).abs() < 1e-6,
         "probability at predicted class must equal reported confidence"
     );
+}
+
+#[test]
+fn test_bert_pooler_uses_huggingface_weight_layout() -> anyhow::Result<()> {
+    let device = Device::Cpu;
+    let pooler = Linear::new(
+        Tensor::new(&[[1f32, 2.], [3., 4.]], &device)?,
+        Some(Tensor::new(&[0f32, 0.], &device)?),
+    );
+
+    let input = Tensor::new(&[[5f32, 6.]], &device)?;
+    let output = pooler.forward(&input)?.to_vec2::<f32>()?;
+
+    // HuggingFace stores W as [out_features, in_features], and Linear
+    // performs x @ W^T. A pre-transposed W would produce [23, 34].
+    assert_eq!(output, vec![vec![17f32, 39f32]]);
+    Ok(())
 }

@@ -80,3 +80,10 @@ func (c *sequenceLabelClassifier) Classify(
 	}
 	return labelClassification{Scores: scores}, nil
 }
+
+func (c *sequenceLabelClassifier) Close() error {
+	if c == nil {
+		return nil
+	}
+	return c.backend.Close()
+}
