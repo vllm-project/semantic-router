@@ -37,23 +37,27 @@ def test_eval_probe_returns_decision_error_payload():
 
 def test_eval_probe_raises_typed_error_for_non_json_body():
     client = RouterClient()
-    with mock.patch(
-        "tuning.client.request.urlopen",
-        side_effect=_http_error(502, b"<html>bad gateway</html>"),
+    with (
+        mock.patch(
+            "tuning.client.request.urlopen",
+            side_effect=_http_error(502, b"<html>bad gateway</html>"),
+        ),
+        pytest.raises(RuntimeError, match="HTTP 502"),
     ):
-        with pytest.raises(RuntimeError, match="HTTP 502"):
-            client.eval_probe("hello")
+        client.eval_probe("hello")
 
 
 def test_eval_probe_keeps_legacy_error_envelope_as_typed_error():
     envelope = {"error": {"code": "CLASSIFICATION_ERROR", "message": "boom"}}
     client = RouterClient()
-    with mock.patch(
-        "tuning.client.request.urlopen",
-        side_effect=_http_error(503, json.dumps(envelope).encode()),
+    with (
+        mock.patch(
+            "tuning.client.request.urlopen",
+            side_effect=_http_error(503, json.dumps(envelope).encode()),
+        ),
+        pytest.raises(RuntimeError, match="HTTP 503"),
     ):
-        with pytest.raises(RuntimeError, match="HTTP 503"):
-            client.eval_probe("hello")
+        client.eval_probe("hello")
 
 
 def test_run_probes_keeps_error_row_for_legacy_503():
