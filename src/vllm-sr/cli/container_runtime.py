@@ -77,9 +77,11 @@ def _persisted_runtime_env_path() -> str:
 def _load_persisted_runtime(env_path: str) -> str | None:
     """Read the ``CONTAINER_RUNTIME`` choice persisted by ``install.sh``.
 
-    The file is a hint rather than a hard contract: a missing, unreadable, or
-    malformed file yields ``None`` and callers fall back to auto-detection.
-    Returns ``None`` when no value is present.
+    The file is a hint rather than a hard contract: a missing or malformed
+    file yields ``None`` and callers fall back to auto-detection. A file
+    that exists but cannot be read logs a warning so a silently ignored
+    persisted selection stays diagnosable. Returns ``None`` when no value
+    is present.
     """
     try:
         with open(env_path, encoding="utf-8") as env_file:
@@ -90,8 +92,13 @@ def _load_persisted_runtime(env_path: str) -> str | None:
                 key, _, value = line.partition("=")
                 if key.strip().upper() == CONTAINER_RUNTIME_ENV:
                     return value.strip().lower() or None
-    except OSError:
-        return None
+    except FileNotFoundError:
+        pass
+    except OSError as exc:
+        log.warning(
+            f"Could not read persisted {CONTAINER_RUNTIME_ENV} from "
+            f"{env_path}: {exc}. Falling back to auto-detection."
+        )
     return None
 
 
