@@ -185,9 +185,9 @@ def _case_records(
     case: CaseVisible,
     labels: CaseGrading,
     evidence: FixtureCaseEvidence,
-    track_ids: tuple[str, ...],
 ) -> list[ExecutionRecord]:
     attempt = f"attempt-{case.id}"
+    track_ids = case.track_ids
     records: list[ExecutionRecord] = []
     if "routing" in track_ids:
         records.append(_routing_record(case, labels, evidence, attempt))
@@ -219,7 +219,7 @@ def execute_fixture(
     records: list[ExecutionRecord] = []
     for evidence in fixture.cases:
         case = visible_by_id[evidence.case_id]
-        records.extend(
-            _case_records(case, grading_by_id[evidence.case_id], evidence, track_ids)
-        )
+        if not set(case.track_ids).issubset(track_ids):
+            raise ValueError("fixture case plan exceeds the selected run tracks")
+        records.extend(_case_records(case, grading_by_id[evidence.case_id], evidence))
     return records
