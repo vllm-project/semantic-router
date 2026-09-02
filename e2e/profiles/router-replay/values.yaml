@@ -15,6 +15,16 @@ config:
           - name: test-endpoint
             endpoint: mock-vllm.default.svc.cluster.local:8000
             weight: 1
+      - name: openai/shadow-candidate
+        backend_refs:
+          - name: shadow-endpoint
+            endpoint: mock-vllm.default.svc.cluster.local:8000
+            weight: 1
+      - name: openai/shadow-unreachable
+        backend_refs:
+          - name: shadow-unreachable-endpoint
+            endpoint: 127.0.0.1:9
+            weight: 1
   routing:
     decisions:
       - name: default_decision
@@ -37,11 +47,17 @@ config:
     signals: {}
     modelCards:
       - name: openai/gpt-oss-20b
+      - name: openai/shadow-candidate
+      - name: openai/shadow-unreachable
   entrypoints:
     - model_names: ["vllm-sr/replay-first"]
       recipe: replay-first
     - model_names: ["vllm-sr/replay-second"]
       recipe: replay-second
+    - model_names: ["vllm-sr/shadow-ok"]
+      recipe: shadow-ok
+    - model_names: ["vllm-sr/shadow-down"]
+      recipe: shadow-down
   recipes:
     - name: replay-first
       routing:
@@ -85,6 +101,70 @@ config:
                   capture_request_body: true
                   capture_response_body: true
                   max_body_bytes: 65536
+    - name: shadow-ok
+      routing:
+        strategy: priority
+        signals: {}
+        decisions:
+          - name: shadow_decision
+            priority: 1
+            rules:
+              operator: AND
+              conditions: []
+            modelRefs:
+              - model: openai/gpt-oss-20b
+                use_reasoning: false
+            plugins:
+              - type: router_replay
+                configuration:
+                  enabled: true
+                  max_records: 1000
+                  capture_request_body: false
+                  capture_response_body: true
+                  max_body_bytes: 65536
+              - type: shadow_dispatch
+                configuration:
+                  enabled: true
+                  model: openai/shadow-candidate
+                  sample_rate: 1.0
+                  max_concurrency: 2
+                  max_queue_depth: 8
+                  timeout_seconds: 20
+                  max_response_bytes: 1048576
+                  max_retries: 0
+                  capture_response_body: false
+    - name: shadow-down
+      routing:
+        strategy: priority
+        signals: {}
+        decisions:
+          - name: shadow_decision
+            priority: 1
+            rules:
+              operator: AND
+              conditions: []
+            modelRefs:
+              - model: openai/gpt-oss-20b
+                use_reasoning: false
+            plugins:
+              - type: router_replay
+                configuration:
+                  enabled: true
+                  max_records: 1000
+                  capture_request_body: false
+                  capture_response_body: true
+                  max_body_bytes: 65536
+              - type: shadow_dispatch
+                configuration:
+                  enabled: true
+                  model: openai/shadow-unreachable
+                  sample_rate: 1.0
+                  max_concurrency: 2
+                  max_queue_depth: 8
+                  timeout_seconds: 5
+                  max_response_bytes: 1048576
+                  max_retries: 0
+                  capture_response_body: false
   global:
     router:
       strategy: priority

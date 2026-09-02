@@ -1718,6 +1718,18 @@ func TestCompileAllPluginTypes(t *testing.T) {
 			verifyType: "router_replay",
 		},
 		{
+			name:       "shadow_dispatch",
+			pluginType: "shadow_dispatch",
+			body:       `enabled: true model: "candidate" sample_rate: 0.1 max_concurrency: 2 timeout_seconds: 20`,
+			verifyType: "shadow_dispatch",
+		},
+		{
+			name:       "shadow_dispatch_hyphen_alias",
+			pluginType: "shadow-dispatch",
+			body:       `enabled: true model: "candidate"`,
+			verifyType: "shadow_dispatch",
+		},
+		{
 			name:       "request_params",
 			pluginType: "request_params",
 			body:       `blocked_params: ["logprobs", "top_logprobs"] max_tokens_limit: 500 max_n: 1 strip_unknown: true`,

@@ -15,6 +15,7 @@ from cli.models import (
     HeaderMutationPluginConfig,
     HallucinationPluginConfig,
     RouterReplayPluginConfig,
+    ShadowDispatchPluginConfig,
     MemoryPluginConfig,
     RAGPluginConfig,
 )
@@ -414,6 +415,7 @@ def validate_plugin_configurations(config: UserConfig) -> List[ValidationError]:
         PluginType.HEADER_MUTATION.value: HeaderMutationPluginConfig,
         PluginType.HALLUCINATION.value: HallucinationPluginConfig,
         PluginType.ROUTER_REPLAY.value: RouterReplayPluginConfig,
+        PluginType.SHADOW_DISPATCH.value: ShadowDispatchPluginConfig,
         PluginType.MEMORY.value: MemoryPluginConfig,
         PluginType.RAG.value: RAGPluginConfig,
         PluginType.TOOLS.value: ToolsPluginConfig,

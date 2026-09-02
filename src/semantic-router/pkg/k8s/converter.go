@@ -389,6 +389,7 @@ var pluginConfigurationValidators = map[string]func([]byte) error{
 	"system_prompt":   validateSystemPromptPluginConfig,
 	"header_mutation": validateHeaderMutationPluginConfig,
 	"router_replay":   validateRouterReplayPluginConfig,
+	"shadow_dispatch": validateShadowDispatchPluginConfig,
 	"tool_selection":  validateToolSelectionPluginConfigRaw,
 }
 
@@ -447,6 +448,17 @@ func validateHeaderMutationEntries(operation string, headers []config.HeaderPair
 		if header.Name == "" {
 			return fmt.Errorf("header_mutation %s: header name cannot be empty", operation)
 		}
+	}
+	return nil
+}
+
+func validateShadowDispatchPluginConfig(rawConfig []byte) error {
+	var cfg config.ShadowDispatchPluginConfig
+	if err := decodePluginConfiguration(rawConfig, &cfg); err != nil {
+		return fmt.Errorf("failed to unmarshal shadow_dispatch config: %w", err)
+	}
+	if err := cfg.Validate(); err != nil {
+		return fmt.Errorf("shadow_dispatch %w", err)
 	}
 	return nil
 }

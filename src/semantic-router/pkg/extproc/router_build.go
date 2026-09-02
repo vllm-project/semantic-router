@@ -40,6 +40,7 @@ type routerComponents struct {
 	replayRecorder       *routerreplay.Recorder
 	replayStoreShared    bool
 	replayRecorders      map[string]*routerreplay.Recorder
+	shadowDispatcher     *shadowDispatcher
 	modelSelector        *selection.Registry
 	recipeModelSelectors map[config.RecipeName]*selection.Registry
 	lookupTable          lookuptable.LookupTable
@@ -209,6 +210,8 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 	components.resources.add(func() error {
 		return closeReplayRecorders(components.replayRecorder, components.replayRecorders, components.replayStoreShared)
 	})
+	components.shadowDispatcher = newShadowDispatcher()
+	components.resources.add(components.shadowDispatcher.Close)
 	var replayReaderForLookup store.Reader
 	if components.replayRecorder != nil {
 		replayReaderForLookup = components.replayRecorder.Reader()
@@ -336,6 +339,7 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 		RecipeModelSelectors:    components.recipeModelSelectors,
 		LookupTable:             components.lookupTable,
 		ReplayRecorders:         components.replayRecorders,
+		ShadowDispatcher:        components.shadowDispatcher,
 		MemoryStore:             components.memoryStore,
 		MemoryExtractor:         components.memoryExtractor,
 		ProtocolCodecs:          components.protocolCodecs,

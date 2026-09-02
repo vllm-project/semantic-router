@@ -725,6 +725,7 @@ class PluginType(str, Enum):
     TOOLS = "tools"
     TOOL_SELECTION = "tool_selection"
     CONTEXT_COMPRESSION = "context_compression"
+    SHADOW_DISPATCH = "shadow_dispatch"
 
 
 class ResponseCacheSemanticConfig(BaseModel):
@@ -1121,6 +1122,39 @@ class RouterReplayPluginConfig(BaseModel):
         gt=0,
         description="Max bytes to capture per body (must be > 0, default: 4096)",
     )
+
+
+class ShadowDispatchPluginConfig(BaseModel):
+    """Configuration for shadow_dispatch plugin.
+
+    Sends a bounded, sampled copy of the approved request to a secondary
+    configured model after the primary dispatch is finalized. The primary
+    response never waits on or changes because of the shadow call.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    # Required, matching the Go decoder: an omitted flag must not silently
+    # validate as enabled here and decode as disabled in the router.
+    enabled: bool
+    model: Optional[str] = Field(
+        default=None, description="Configured logical model receiving the shadow copy"
+    )
+    sample_rate: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    max_concurrency: int = Field(default=2, ge=0)
+    max_queue_depth: int = Field(default=8, ge=0)
+    timeout_seconds: int = Field(default=30, ge=0)
+    max_response_bytes: int = Field(default=1048576, ge=0)
+    max_retries: int = Field(default=0, ge=0, le=3)
+    capture_response_body: bool = False
+    max_capture_bytes: int = Field(default=4096, ge=0)
+    tls_skip_verify: bool = False
+
+    @model_validator(mode="after")
+    def require_model_when_enabled(self):
+        if self.enabled and not (self.model or "").strip():
+            raise ValueError("shadow_dispatch model is required when enabled")
+        return self
 
 
 class MemoryPluginConfig(BaseModel):

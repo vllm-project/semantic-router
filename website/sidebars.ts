@@ -189,6 +189,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/plugin/memory',
                 'tutorials/plugin/rag',
                 'tutorials/plugin/router-replay',
+                'tutorials/plugin/shadow-dispatch',
                 'tutorials/plugin/response-cache',
               ],
             },

@@ -83,6 +83,20 @@ export function getCapabilityPluginFieldSchema(pluginType: string): FieldSchema[
           ],
         },
       ]
+    case 'shadow_dispatch':
+      return [
+        { key: 'enabled', label: 'Enabled', type: 'boolean' },
+        { key: 'model', label: 'Shadow Model', type: 'string', placeholder: 'candidate-model' },
+        { key: 'sample_rate', label: 'Sample Rate', type: 'number', placeholder: '0.05' },
+        { key: 'max_concurrency', label: 'Max Concurrency', type: 'number', placeholder: '2' },
+        { key: 'max_queue_depth', label: 'Max Queue Depth', type: 'number', placeholder: '8' },
+        { key: 'timeout_seconds', label: 'Timeout Seconds', type: 'number', placeholder: '30' },
+        { key: 'max_response_bytes', label: 'Max Response Bytes', type: 'number', placeholder: '1048576' },
+        { key: 'max_retries', label: 'Max Retries', type: 'number', placeholder: '0' },
+        { key: 'capture_response_body', label: 'Capture Response Body', type: 'boolean' },
+        { key: 'max_capture_bytes', label: 'Max Capture Bytes', type: 'number', placeholder: '4096' },
+        { key: 'tls_skip_verify', label: 'Skip TLS Verification', type: 'boolean' },
+      ]
     case 'context_compression':
       return [
         { key: 'enabled', label: 'Enabled', type: 'boolean' },

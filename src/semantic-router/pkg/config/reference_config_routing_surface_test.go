@@ -125,6 +125,7 @@ func assertReferenceCorePluginCoverage(t testingT, pluginsByType map[string][]ma
 	assertPluginConfigCoverage(t, pluginsByType["hallucination"], reflect.TypeOf(HallucinationPluginConfig{}), "hallucination")
 	assertPluginConfigCoverage(t, pluginsByType["response_jailbreak"], reflect.TypeOf(ResponseJailbreakPluginConfig{}), "response_jailbreak")
 	assertPluginConfigCoverage(t, pluginsByType["router_replay"], reflect.TypeOf(RouterReplayPluginConfig{}), "router_replay")
+	assertPluginConfigCoverage(t, pluginsByType["shadow_dispatch"], reflect.TypeOf(ShadowDispatchPluginConfig{}), "shadow_dispatch")
 	assertPluginConfigCoverage(t, pluginsByType["request_params"], reflect.TypeOf(RequestParamsPluginConfig{}), "request_params")
 	assertPluginConfigCoverage(t, pluginsByType["tool_selection"], reflect.TypeOf(ToolSelectionPluginConfig{}), "tool_selection")
 }

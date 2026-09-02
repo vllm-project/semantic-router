@@ -252,6 +252,43 @@ type RouterReplayPluginConfig struct {
 	MaxToolTraceSteps int `json:"max_tool_trace_steps,omitempty" yaml:"max_tool_trace_steps,omitempty"`
 }
 
+// ShadowDispatchPluginConfig represents configuration for the shadow_dispatch
+// plugin. A shadow dispatch sends a bounded, sampled copy of the approved
+// provider-bound request to a secondary configured model after the primary
+// dispatch has been finalized. The primary response never waits on, or
+// changes because of, the shadow call.
+type ShadowDispatchPluginConfig struct {
+	Enabled bool `json:"enabled" yaml:"enabled"`
+	// Model is the configured logical model that receives the shadow copy.
+	Model string `json:"model" yaml:"model"`
+	// SampleRate is the fraction of eligible requests that are shadowed, in
+	// [0, 1]. nil means every eligible request; 0 disables dispatch while
+	// keeping the plugin declared.
+	SampleRate *float64 `json:"sample_rate,omitempty" yaml:"sample_rate,omitempty"`
+	// MaxConcurrency bounds in-flight shadow calls for this decision.
+	MaxConcurrency int `json:"max_concurrency,omitempty" yaml:"max_concurrency,omitempty"`
+	// MaxQueueDepth bounds shadow calls waiting for an in-flight slot. Calls
+	// beyond the depth are dropped with a queue_full reason.
+	MaxQueueDepth int `json:"max_queue_depth,omitempty" yaml:"max_queue_depth,omitempty"`
+	// TimeoutSeconds bounds queue wait plus execution for one shadow call.
+	TimeoutSeconds int `json:"timeout_seconds,omitempty" yaml:"timeout_seconds,omitempty"`
+	// MaxResponseBytes bounds the shadow response body read from the backend.
+	MaxResponseBytes int `json:"max_response_bytes,omitempty" yaml:"max_response_bytes,omitempty"`
+	// MaxRetries bounds additional attempts on transport errors or retryable
+	// upstream statuses. All attempts share the same deadline.
+	MaxRetries int `json:"max_retries,omitempty" yaml:"max_retries,omitempty"`
+	// CaptureResponseBody stores a bounded excerpt of the shadow output text
+	// in the replay outcome. Off by default: only hashes and sizes are kept.
+	CaptureResponseBody bool `json:"capture_response_body,omitempty" yaml:"capture_response_body,omitempty"`
+	// MaxCaptureBytes bounds the stored excerpt when CaptureResponseBody is on.
+	MaxCaptureBytes int `json:"max_capture_bytes,omitempty" yaml:"max_capture_bytes,omitempty"`
+	// TLSSkipVerify disables certificate verification for an https shadow
+	// backend. The primary path reaches backends through Envoy, which does not
+	// verify upstream certificates, so this matches that posture for internal
+	// CAs. Off by default.
+	TLSSkipVerify bool `json:"tls_skip_verify,omitempty" yaml:"tls_skip_verify,omitempty"`
+}
+
 // GetPlugin returns the plugin entry for a specific plugin type.
 func (d *Decision) GetPlugin(pluginType string) *DecisionPlugin {
 	normalizedTarget := NormalizeDecisionPluginType(pluginType)
@@ -322,6 +359,12 @@ func (d *Decision) GetResponseJailbreakConfig() *ResponseJailbreakPluginConfig {
 func (d *Decision) GetRouterReplayConfig() *RouterReplayPluginConfig {
 	result := &RouterReplayPluginConfig{}
 	return decodeDecisionPlugin(d, "router_replay", result)
+}
+
+// GetShadowDispatchConfig returns the shadow_dispatch plugin configuration.
+func (d *Decision) GetShadowDispatchConfig() *ShadowDispatchPluginConfig {
+	result := &ShadowDispatchPluginConfig{}
+	return decodeDecisionPlugin(d, DecisionPluginShadowDispatch, result)
 }
 
 // GetMemoryConfig returns the memory plugin config, or nil to use global config.

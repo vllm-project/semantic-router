@@ -1,0 +1,25 @@
+plugin:
+  type: shadow_dispatch
+  configuration:
+    enabled: true
+    # A configured logical model that receives the shadow copy. It must have a
+    # backend in providers.models; client credentials never travel with it.
+    model: candidate-model
+    # Fraction of eligible requests to shadow. Omit for 1.0; 0 disables.
+    sample_rate: 0.05
+    # Resource bounds. Calls beyond max_concurrency wait up to max_queue_depth
+    # deep; anything beyond that is dropped with reason queue_full.
+    max_concurrency: 2
+    max_queue_depth: 8
+    # Queue wait plus execution share this deadline.
+    timeout_seconds: 30
+    max_response_bytes: 1048576
+    # Retries share the same deadline and are capped at 3.
+    max_retries: 0
+    # Off by default: only sizes, tokens, and a SHA-256 of the shadow text are
+    # recorded. Turn on to store a bounded excerpt in the replay outcome.
+    capture_response_body: false
+    max_capture_bytes: 4096
+    # Only for https backends signed by an internal CA. Matches the primary
+    # path, which reaches backends through Envoy without upstream verification.
+    tls_skip_verify: false

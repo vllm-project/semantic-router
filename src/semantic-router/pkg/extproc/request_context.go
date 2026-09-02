@@ -234,6 +234,10 @@ type RequestContext struct {
 	RouterReplayPluginConfig *config.RouterReplayPluginConfig // Per-decision plugin configuration for router replay
 	RouterReplayRecorder     *routerreplay.Recorder           // The recorder instance for this decision
 
+	// ShadowDispatchPluginConfig is the per-decision shadow_dispatch plugin
+	// configuration, or nil when the selected decision declares none.
+	ShadowDispatchPluginConfig *config.ShadowDispatchPluginConfig
+
 	// Looper context
 	LooperRequest   bool // True only for token-authenticated in-process looper requests
 	LooperIteration int  // The iteration number if this is a looper request

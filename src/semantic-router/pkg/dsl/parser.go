@@ -454,6 +454,7 @@ var knownInlinePluginAliases = map[string]string{
 	"system-prompt":       "system_prompt",
 	"header-mutation":     "header_mutation",
 	"router-replay":       "router_replay",
+	"shadow-dispatch":     "shadow_dispatch",
 	"fast-response":       "fast_response",
 	"request-params":      "request_params",
 	"response-jailbreak":  "response_jailbreak",

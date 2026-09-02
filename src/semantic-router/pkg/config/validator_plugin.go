@@ -19,6 +19,7 @@ var decisionPluginPayloadFactories = map[string]func() interface{}{
 	DecisionPluginTools:              func() interface{} { return &ToolsPluginConfig{} },
 	DecisionPluginToolSelection:      func() interface{} { return &ToolSelectionPluginConfig{} },
 	DecisionPluginContextCompression: func() interface{} { return &ContextCompressionPluginConfig{} },
+	DecisionPluginShadowDispatch:     func() interface{} { return &ShadowDispatchPluginConfig{} },
 }
 
 func validateDecisionPluginPayload(
@@ -68,7 +69,8 @@ func validateDecisionPluginPayload(
 	var err error
 	if normalizedType == DecisionPluginResponseCache ||
 		normalizedType == DecisionPluginResponseJailbreak ||
-		normalizedType == DecisionPluginContextCompression {
+		normalizedType == DecisionPluginContextCompression ||
+		normalizedType == DecisionPluginShadowDispatch {
 		err = plugin.Configuration.DecodeIntoStrict(target)
 	} else {
 		err = plugin.Configuration.DecodeInto(target)
@@ -105,6 +107,8 @@ func validateDecodedPluginContract(
 		return validateResponseJailbreakPlugin(decisionName, index, pluginType, typed)
 	case *ContextCompressionPluginConfig:
 		return validateContextCompressionPlugin(decisionName, index, pluginType, typed)
+	case *ShadowDispatchPluginConfig:
+		return validateShadowDispatchPlugin(decisionName, index, pluginType, typed)
 	}
 	return nil
 }

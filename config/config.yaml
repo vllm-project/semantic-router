@@ -665,6 +665,21 @@ routing:
       algorithm:
         type: static
       plugins:
+        # Shadow a candidate model on a small sample of this route's traffic.
+        # The primary response never waits on or changes because of the shadow.
+        - type: shadow_dispatch
+          configuration:
+            enabled: true
+            model: qwen3-32b
+            sample_rate: 0.05
+            max_concurrency: 2
+            max_queue_depth: 8
+            timeout_seconds: 30
+            max_response_bytes: 1048576
+            max_retries: 0
+            capture_response_body: false
+            max_capture_bytes: 4096
+            tls_skip_verify: false
         - type: system_prompt
           configuration:
             enabled: true

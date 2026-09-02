@@ -62,6 +62,7 @@ routing:
 | `memory` | Retrieve and optionally store conversational memory | `global.stores.memory` | [Memory](./memory) |
 | `rag` | Retrieve documents before generation | Configured RAG/vector backend | [RAG](./rag) |
 | `router_replay` | Override replay capture for one route | `global.services.router_replay` | [Router Replay](./router-replay) |
+| `shadow_dispatch` | Observe a secondary model on sampled traffic without touching the live response | Replay record for outcome capture (`router_replay`) | [Shadow Dispatch](./shadow-dispatch) |
 | `hallucination` | Inspect factual support in a response | Hallucination/NLI modules as configured | [Hallucination](./hallucination) |
 | `response_jailbreak` | Screen a generated response for jailbreak content | Prompt-guard runtime | [Response Jailbreak](./response-jailbreak) |
 
