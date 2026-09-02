@@ -1,0 +1,16 @@
+{
+  "operation": "request",
+  "base": {
+    "model": "client-model",
+    "max_tokens": 64,
+    "messages": [{"role": "user", "content": "hello"}]
+  },
+  "cases": [
+    {"name": "temperature_minimum", "patch": {"temperature": 0}},
+    {"name": "temperature_maximum", "patch": {"temperature": 1}},
+    {"name": "top_p_minimum", "patch": {"top_p": 0}},
+    {"name": "top_p_maximum", "patch": {"top_p": 1}},
+    {"name": "top_k_minimum", "patch": {"top_k": 0}},
+    {"name": "single_output_token", "patch": {"max_tokens": 1}}
+  ]
+}

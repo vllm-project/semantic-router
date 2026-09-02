@@ -32,7 +32,8 @@ global: {}
 
 - `listeners` exposes inference and management endpoints.
 - `providers.defaults` defines shared provider behavior;
-  `providers.models[]` binds model names to concrete backends.
+  `providers.models[]` binds model names to concrete backends and owns their
+  deployment pricing metadata.
 - `routing` owns model cards, signals, projections, decisions, and the routing
   strategy for the default profile.
 - `entrypoints` maps request-facing model names to isolated `recipes`. Each
@@ -60,7 +61,8 @@ deployments and may rely on model or service definitions from a base config.
   Heuristic and learned signal guides live under
   `tutorials/signal/heuristic/` and `tutorials/signal/learned/`.
 - `config/fragments/decision/`: `single`, `and`, `or`, `not`, and nested
-  boolean rule shapes.
+  boolean rule shapes. Classifier-backed rules may resolve a terminal
+  `Unknown` result with `on_unknown: no_match|match|fail_request`.
 - `config/fragments/algorithm/`: per-decision model selection and bounded
   multi-model execution policies.
 - `config/fragments/plugin/`: route-local request or response processing such
@@ -94,12 +96,19 @@ runtime dependency; they do not define routing behavior by themselves.
 
 - Model backend credentials belong in environment references, not literal YAML
   values.
-- `routing.modelCards` describes semantic capabilities; concrete URLs and
-  credentials belong in `providers.models`.
+- `routing.modelCards` describes semantic capabilities; concrete URLs,
+  credentials, and pricing belong in `providers.models`.
+- Protocol controls such as `tool_choice` enter routing as conversation facts;
+  projections combine those facts with text-derived intent before decisions
+  apply policy.
 - `routing.projections` derives named routing outputs from signals. Decisions
   consume those outputs instead of embedding free-form computation.
 - Candidate iteration is bounded policy metadata, not a general scripting
   runtime.
+- `routing.decisions[].algorithm.minimum_candidates` keeps a model-free Recipe
+  portable while making its candidate-pool cardinality executable as soon as
+  an Entrypoint assigns Models. Request-time context filtering cannot silently
+  reduce the eligible pool below that contract.
 - Router Learning lives under `global.router.learning`; it is separate from a
   decision's request-time base algorithm.
 - Router replay is disabled by default and can capture request or response
@@ -108,6 +117,15 @@ runtime dependency; they do not define routing behavior by themselves.
   authenticated upstream component owns the bypass header.
 - Knowledge bases are declared under `global.model_catalog.kbs[]`; routing
   signals bind to those shared assets by name.
+- Built-in category/domain classification uses the local `variant` selector by
+  default. A named remote classifier may instead be attached with
+  `global.model_catalog.modules.classifier.domain.backend`; its `model` must
+  name an entry in `global.model_catalog.external[]` with
+  `model_role: classification`. The shared backend contract uses
+  `protocol`, `contract`, `model`, and optional `deadline_ms`.
+- External LLM classifiers use `max_response_bytes` on their
+  `global.model_catalog.external[]` entry. The MCP classifier uses the same key
+  under `global.model_catalog.modules.classifier.mcp`.
 
 ## Keep examples in sync
 

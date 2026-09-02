@@ -300,8 +300,8 @@ func fleetSimPermission(method, path string) (string, bool) {
 
 func featurePermission(method, path string) (string, bool) {
 	switch {
-	case strings.HasPrefix(path, "/api/evaluation"):
-		if path == "/api/evaluation/run" || strings.HasPrefix(path, "/api/evaluation/cancel/") {
+	case path == "/api/evaluation/v1" || strings.HasPrefix(path, "/api/evaluation/v1/"):
+		if isEvaluationRunAction(path) {
 			return PermEvalRun, true
 		}
 		if method == http.MethodPost || method == http.MethodDelete {
@@ -315,6 +315,13 @@ func featurePermission(method, path string) (string, bool) {
 	default:
 		return "", false
 	}
+}
+
+func isEvaluationRunAction(path string) bool {
+	path = strings.TrimRight(path, "/")
+	rest := strings.TrimPrefix(path, "/api/evaluation/v1/runs/")
+	parts := strings.Split(rest, "/")
+	return len(parts) == 2 && parts[0] != "" && (parts[1] == "start" || parts[1] == "cancel")
 }
 
 func openclawPermission(method, path string) (string, bool) {
@@ -435,9 +442,12 @@ const (
 	tokenSourceNone accessTokenSource = iota
 	tokenSourceHeader
 	tokenSourceCookie
-	tokenSourceQuery // removed in the follow-up PR
 )
 
+// The query-string transport is deliberately absent: a credential in a URL is written down
+// by proxy access logs, browser history and the Referer header. Browser transports use the
+// HttpOnly vsr_session cookie the browser attaches for them; non-browser clients use
+// Authorization: Bearer. See #2465.
 func extractAccessTokenWithSource(r *http.Request) (string, accessTokenSource) {
 	if token := extractBearer(r.Header.Get("Authorization")); token != "" {
 		return token, tokenSourceHeader
@@ -449,14 +459,6 @@ func extractAccessTokenWithSource(r *http.Request) (string, accessTokenSource) {
 		}
 	}
 
-	if token := normalizeAccessToken(r.URL.Query().Get("authToken")); token != "" {
-		// Log that it happened so an operator can find the stale bookmark, never the value.
-		// %q because this runs before ParseToken, so the path is still attacker-controlled
-		// and arrives percent-decoded, newlines included.
-		log.Printf("WARNING: request to %q authenticated with the deprecated ?authToken= "+
-			"query parameter; use the session cookie or an Authorization: Bearer header", r.URL.Path)
-		return token, tokenSourceQuery
-	}
 	return "", tokenSourceNone
 }
 

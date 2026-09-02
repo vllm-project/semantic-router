@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
@@ -16,7 +18,6 @@ import (
 type contextRecoveryCall struct {
 	ID  string
 	Key string
-	Raw map[string]interface{}
 }
 
 func (r *OpenAIRouter) handleContextRecoveryFollowup(
@@ -31,7 +32,19 @@ func (r *OpenAIRouter) handleContextRecoveryFollowup(
 	if plugin == nil {
 		return responseBody, nil
 	}
-	calls, assistant, err := parseContextRecoveryCalls(responseBody)
+	engine, err := r.protocolEngine()
+	if err != nil {
+		return responseBody, err
+	}
+	format := requestCtx.SourceFormat
+	if format == "" {
+		format = llmprotocol.OpenAIChatV1
+	}
+	decoded, err := engine.TranslateResponse(format, format, responseBody, nil)
+	if err != nil {
+		return responseBody, fmt.Errorf("decode context recovery response: %w", err)
+	}
+	calls, assistant, err := parseContextRecoveryCalls(decoded.Response)
 	if err != nil || len(calls) == 0 {
 		return responseBody, err
 	}
@@ -52,11 +65,12 @@ func (r *OpenAIRouter) handleContextRecoveryFollowup(
 		requestCtx,
 		assistant,
 		toolMessages,
+		decoded.Response,
 	)
 	if err != nil {
 		return responseBody, err
 	}
-	return mergeContextRecoveryUsage(responseBody, followup), nil
+	return followup, nil
 }
 
 func activeContextRecoveryPlugin(
@@ -89,7 +103,7 @@ func (r *OpenAIRouter) loadContextRecoveryToolMessages(
 	requestCtx *RequestContext,
 	plugin *config.ContextCompressionPluginConfig,
 	calls []contextRecoveryCall,
-) ([]interface{}, error) {
+) ([]llmprotocol.Message, error) {
 	store := r.contextCompressionRecoveryStore(plugin)
 	scope := r.contextCompressionScope(requestCtx)
 	if store == nil || scope == "" {
@@ -99,7 +113,7 @@ func (r *OpenAIRouter) loadContextRecoveryToolMessages(
 		metrics.RecordContextCompressionRecovery("scope_unavailable", 0, 0)
 		return nil, fmt.Errorf("context recovery store or trusted scope is unavailable")
 	}
-	toolMessages := make([]interface{}, 0, len(calls))
+	toolMessages := make([]llmprotocol.Message, 0, len(calls))
 	allowed := stringSet(requestCtx.ContextCompressionRecoveryKeys)
 	for _, call := range calls {
 		if _, ok := allowed[call.Key]; !ok {
@@ -114,10 +128,15 @@ func (r *OpenAIRouter) loadContextRecoveryToolMessages(
 			return nil, fmt.Errorf("retrieve compressed context: %w", getErr)
 		}
 		r.recordContextRecoveryRead(entry)
-		toolMessages = append(toolMessages, map[string]interface{}{
-			"role":         "tool",
-			"tool_call_id": call.ID,
-			"content":      entry.Content,
+		toolMessages = append(toolMessages, llmprotocol.Message{
+			Role: llmprotocol.RoleTool,
+			Content: []llmprotocol.Content{{
+				Kind: llmprotocol.ContentToolResult,
+				ToolResult: &llmprotocol.ToolResult{
+					CallID:  call.ID,
+					Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: entry.Content}},
+				},
+			}},
 		})
 	}
 	return toolMessages, nil
@@ -140,40 +159,74 @@ func (r *OpenAIRouter) recordContextRecoveryRead(
 func (r *OpenAIRouter) executeContextRecoveryFollowup(
 	ctx context.Context,
 	requestCtx *RequestContext,
-	assistant map[string]interface{},
-	toolMessages []interface{},
+	assistant []llmprotocol.Message,
+	toolMessages []llmprotocol.Message,
+	initial llmprotocol.Response,
 ) ([]byte, error) {
-	followupBody, err := buildContextRecoveryFollowupBody(
-		requestCtx.workingRequestBody(),
-		assistant,
-		toolMessages,
-	)
-	if err != nil {
-		return nil, err
+	if requestCtx == nil || requestCtx.SemanticRequest == nil {
+		return nil, fmt.Errorf("neutral context recovery request is unavailable")
 	}
-	followupRequest, err := parseOpenAIRequest(followupBody)
-	if err != nil {
-		return nil, fmt.Errorf("parse context recovery followup: %w", err)
-	}
+	followupRequest := *requestCtx.SemanticRequest
+	followupRequest.Messages = append([]llmprotocol.Message(nil), requestCtx.SemanticRequest.Messages...)
+	followupRequest.Messages = append(followupRequest.Messages, assistant...)
+	followupRequest.Messages = append(followupRequest.Messages, toolMessages...)
+	followupRequest.Stream = false
+	followupRequest.Generation++
 	model := strings.TrimSpace(requestCtx.VSRSelectedModel)
 	if model == "" {
 		model = strings.TrimSpace(requestCtx.RequestModel)
+	}
+	engine, err := r.protocolEngine()
+	if err != nil {
+		return nil, err
+	}
+	encodedRequest, err := engine.EncodeRequest(
+		llmprotocol.OpenAIChatV1,
+		followupRequest,
+		llmprotocol.Envelope{},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("encode context recovery followup: %w", err)
+	}
+	openAIRequest, err := parseOpenAIRequest(encodedRequest.Body)
+	if err != nil {
+		return nil, fmt.Errorf("prepare context recovery followup: %w", err)
 	}
 	client := looper.NewClient(&r.Config.Looper)
 	client.SetDecisionName(requestCtx.VSRSelectedDecisionName)
 	followup, err := client.CallModel(
 		ctx,
-		followupRequest,
+		openAIRequest,
 		model,
 		false,
 		1,
 		nil,
-		r.getModelAccessKey(model),
+		r.Config.GetModelAccessKey(model),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("context recovery followup failed: %w", err)
 	}
-	return followup.Raw, nil
+	decoded, err := engine.TranslateResponse(
+		llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, followup.Raw, nil,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("decode context recovery followup: %w", err)
+	}
+	decoded.Response.Usage, err = mergeContextRecoveryUsage(initial.Usage, decoded.Response.Usage)
+	if err != nil {
+		return nil, err
+	}
+	decoded.Response.Model = requestCtx.RequestModel
+	decoded.Response.Generation++
+	format := requestCtx.SourceFormat
+	if format == "" {
+		format = llmprotocol.OpenAIChatV1
+	}
+	encoded, err := engine.EncodeResponse(format, decoded.Response, llmprotocol.Envelope{})
+	if err != nil {
+		return nil, fmt.Errorf("encode context recovery followup: %w", err)
+	}
+	return encoded.Body, nil
 }
 
 func stringSet(values []string) map[string]struct{} {
@@ -185,48 +238,36 @@ func stringSet(values []string) map[string]struct{} {
 }
 
 func parseContextRecoveryCalls(
-	body []byte,
-) ([]contextRecoveryCall, map[string]interface{}, error) {
-	var response map[string]interface{}
-	if err := json.Unmarshal(body, &response); err != nil {
-		return nil, nil, nil
-	}
-	choices, _ := response["choices"].([]interface{})
-	if len(choices) == 0 {
-		return nil, nil, nil
-	}
-	choice, _ := choices[0].(map[string]interface{})
-	message, _ := choice["message"].(map[string]interface{})
-	rawCalls, _ := message["tool_calls"].([]interface{})
+	response llmprotocol.Response,
+) ([]contextRecoveryCall, []llmprotocol.Message, error) {
 	calls := make([]contextRecoveryCall, 0)
-	assistantCalls := make([]interface{}, 0)
-	for _, rawCall := range rawCalls {
-		call, ok := rawCall.(map[string]interface{})
-		if !ok {
-			continue
+	assistant := make([]llmprotocol.Message, 0, len(response.Output))
+	for _, item := range response.Output {
+		message := llmprotocol.Message{ID: item.ID, Role: item.Role}
+		for _, content := range item.Content {
+			if content.Kind != llmprotocol.ContentToolCall || content.ToolCall == nil ||
+				content.ToolCall.Name != contextcompression.RetrieveToolName {
+				continue
+			}
+			key, err := contextRecoveryKey(content.ToolCall.Arguments)
+			if err != nil {
+				return nil, nil, err
+			}
+			if content.ToolCall.ID == "" || key == "" {
+				return nil, nil, fmt.Errorf("context recovery tool call is incomplete")
+			}
+			calls = append(calls, contextRecoveryCall{ID: content.ToolCall.ID, Key: key})
+			message.Content = append(message.Content, content)
 		}
-		function, _ := call["function"].(map[string]interface{})
-		if function["name"] != contextcompression.RetrieveToolName {
-			continue
+		if len(message.Content) > 0 {
+			if message.Role == "" {
+				message.Role = llmprotocol.RoleAssistant
+			}
+			assistant = append(assistant, message)
 		}
-		id, _ := call["id"].(string)
-		key, err := contextRecoveryKey(function["arguments"])
-		if err != nil {
-			return nil, nil, err
-		}
-		if id == "" || key == "" {
-			return nil, nil, fmt.Errorf("context recovery tool call is incomplete")
-		}
-		calls = append(calls, contextRecoveryCall{ID: id, Key: key, Raw: call})
-		assistantCalls = append(assistantCalls, call)
 	}
 	if len(calls) == 0 {
 		return nil, nil, nil
-	}
-	assistant := map[string]interface{}{
-		"role":       "assistant",
-		"content":    message["content"],
-		"tool_calls": assistantCalls,
 	}
 	return calls, assistant, nil
 }
@@ -240,123 +281,102 @@ func contextRecoveryKey(arguments interface{}) (string, error) {
 		}
 		key, _ := decoded["key"].(string)
 		return key, nil
-	case map[string]interface{}:
-		key, _ := typed["key"].(string)
-		return key, nil
 	default:
 		return "", fmt.Errorf("invalid context recovery arguments")
 	}
 }
 
-func buildContextRecoveryFollowupBody(
-	workingBody []byte,
-	assistant map[string]interface{},
-	toolMessages []interface{},
-) ([]byte, error) {
-	var request map[string]interface{}
-	if err := json.Unmarshal(workingBody, &request); err != nil {
-		return nil, fmt.Errorf("parse working body for context recovery: %w", err)
-	}
-	messages, _ := request["messages"].([]interface{})
-	messages = append(messages, assistant)
-	messages = append(messages, toolMessages...)
-	request["messages"] = messages
-	request["stream"] = false
-	return json.Marshal(request)
-}
-
 func mergeContextRecoveryUsage(
-	initialBody []byte,
-	followupBody []byte,
-) []byte {
-	var initial map[string]interface{}
-	var followup map[string]interface{}
-	if json.Unmarshal(initialBody, &initial) != nil ||
-		json.Unmarshal(followupBody, &followup) != nil {
-		return followupBody
+	initial llmprotocol.Usage,
+	followup llmprotocol.Usage,
+) (llmprotocol.Usage, error) {
+	if initial.State != llmprotocol.UsageAvailable || followup.State != llmprotocol.UsageAvailable {
+		return llmprotocol.Usage{State: llmprotocol.UsageUnavailable}, nil
 	}
-	initialUsage, _ := initial["usage"].(map[string]interface{})
-	followupUsage, _ := followup["usage"].(map[string]interface{})
-	if len(initialUsage) == 0 {
-		return followupBody
+	result := llmprotocol.Usage{State: llmprotocol.UsageAvailable}
+	pairs := []struct {
+		left, right llmprotocol.TokenCount
+		target      *llmprotocol.TokenCount
+	}{
+		{initial.InputUncached, followup.InputUncached, &result.InputUncached},
+		{initial.InputCacheRead, followup.InputCacheRead, &result.InputCacheRead},
+		{initial.InputCacheWrite, followup.InputCacheWrite, &result.InputCacheWrite},
+		{initial.OutputReasoning, followup.OutputReasoning, &result.OutputReasoning},
+		{initial.OutputOther, followup.OutputOther, &result.OutputOther},
+		{initial.InputTotal, followup.InputTotal, &result.InputTotal},
+		{initial.OutputTotal, followup.OutputTotal, &result.OutputTotal},
+		{initial.Total, followup.Total, &result.Total},
 	}
-	if followupUsage == nil {
-		followupUsage = make(map[string]interface{})
-		followup["usage"] = followupUsage
-	}
-	for _, field := range []string{
-		"prompt_tokens",
-		"completion_tokens",
-		"total_tokens",
-		"input_tokens",
-		"output_tokens",
-	} {
-		initialValue, initialOK := numericUsageValue(initialUsage[field])
-		if !initialOK {
-			continue
+	for _, pair := range pairs {
+		merged, err := mergeContextRecoveryTokenCount(pair.left, pair.right)
+		if err != nil {
+			return llmprotocol.Usage{}, err
 		}
-		followupValue, _ := numericUsageValue(followupUsage[field])
-		followupUsage[field] = initialValue + followupValue
+		*pair.target = merged
 	}
-	merged, err := json.Marshal(followup)
-	if err != nil {
-		return followupBody
-	}
-	return merged
+	return result, nil
 }
 
-func numericUsageValue(value interface{}) (float64, bool) {
-	switch typed := value.(type) {
-	case float64:
-		return typed, true
-	case json.Number:
-		parsed, err := typed.Float64()
-		return parsed, err == nil
-	default:
-		return 0, false
+func mergeContextRecoveryTokenCount(left, right llmprotocol.TokenCount) (llmprotocol.TokenCount, error) {
+	if left.Value == nil || right.Value == nil {
+		return llmprotocol.TokenCount{Provenance: llmprotocol.UsageUnknown}, nil
 	}
+	if *left.Value > math.MaxInt64-*right.Value {
+		return llmprotocol.TokenCount{}, fmt.Errorf("context recovery usage overflow")
+	}
+	value := *left.Value + *right.Value
+	provenance := llmprotocol.UsageDerived
+	if left.Provenance == llmprotocol.UsageAuthoritative && right.Provenance == llmprotocol.UsageAuthoritative {
+		provenance = llmprotocol.UsageAuthoritative
+	}
+	return llmprotocol.TokenCount{Value: &value, Provenance: provenance}, nil
 }
 
-func redactContextRecoveryToolCalls(responseBody []byte) []byte {
-	var response map[string]interface{}
-	if json.Unmarshal(responseBody, &response) != nil {
+//nolint:cyclop // Redaction walks every neutral output and nested tool result fail-closed.
+func (r *OpenAIRouter) redactContextRecoveryToolCalls(responseBody []byte, ctx *RequestContext) []byte {
+	if ctx == nil {
 		return responseBody
 	}
-	choices, _ := response["choices"].([]interface{})
+	engine, err := r.protocolEngine()
+	if err != nil {
+		return responseBody
+	}
+	format := ctx.SourceFormat
+	if format == "" {
+		format = llmprotocol.OpenAIChatV1
+	}
+	decoded, err := engine.TranslateResponse(format, format, responseBody, nil)
+	if err != nil {
+		return responseBody
+	}
 	changed := false
-	for _, rawChoice := range choices {
-		choice, _ := rawChoice.(map[string]interface{})
-		message, _ := choice["message"].(map[string]interface{})
-		rawCalls, _ := message["tool_calls"].([]interface{})
-		if len(rawCalls) == 0 {
-			continue
-		}
-		kept := make([]interface{}, 0, len(rawCalls))
-		for _, rawCall := range rawCalls {
-			call, _ := rawCall.(map[string]interface{})
-			function, _ := call["function"].(map[string]interface{})
-			if function["name"] == contextcompression.RetrieveToolName {
+	for itemIndex := range decoded.Response.Output {
+		item := &decoded.Response.Output[itemIndex]
+		kept := item.Content[:0]
+		for _, content := range item.Content {
+			if content.Kind == llmprotocol.ContentToolCall && content.ToolCall != nil &&
+				content.ToolCall.Name == contextcompression.RetrieveToolName {
 				changed = true
 				continue
 			}
-			kept = append(kept, rawCall)
+			kept = append(kept, content)
 		}
-		if len(kept) > 0 {
-			message["tool_calls"] = kept
-			continue
+		item.Content = kept
+		if len(item.Content) == 0 {
+			item.Content = []llmprotocol.Content{{
+				Kind: llmprotocol.ContentText,
+				Text: "Additional compressed context could not be retrieved.",
+			}}
 		}
-		delete(message, "tool_calls")
-		if content, _ := message["content"].(string); strings.TrimSpace(content) == "" {
-			message["content"] = "Additional compressed context could not be retrieved."
-		}
-		choice["finish_reason"] = "stop"
 	}
 	if !changed {
 		return responseBody
 	}
-	redacted, err := json.Marshal(response)
+	decoded.Response.StopReason = llmprotocol.StopEndTurn
+	decoded.Response.Generation++
+	encoded, err := engine.EncodeResponse(format, decoded.Response, llmprotocol.Envelope{})
 	if err != nil {
 		return responseBody
 	}
-	return redacted
+	return encoded.Body
 }

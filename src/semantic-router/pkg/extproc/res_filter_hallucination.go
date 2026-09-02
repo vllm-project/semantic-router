@@ -1,7 +1,6 @@
 package extproc
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -10,20 +9,26 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
-// performHallucinationDetection checks the response for hallucinations
-// Returns nil to allow the response to continue (warning handled in processor_res_body.go)
-func (r *OpenAIRouter) performHallucinationDetection(ctx *RequestContext, responseBody []byte) *ext_proc.ProcessingResponse {
+func (r *OpenAIRouter) performSemanticHallucinationDetection(
+	ctx *RequestContext,
+	response *llmprotocol.Response,
+) *ext_proc.ProcessingResponse {
+	return r.performHallucinationDetectionText(ctx, semanticAssistantContent(response))
+}
+
+func (r *OpenAIRouter) performHallucinationDetectionText(
+	ctx *RequestContext,
+	assistantContent string,
+) *ext_proc.ProcessingResponse {
 	// Only run if conditions are met
 	if !r.shouldPerformHallucinationDetection(ctx) {
 		return nil
 	}
-
-	// Extract assistant content from response
-	assistantContent := extractAssistantContentFromResponse(responseBody)
 	if assistantContent == "" {
 		logging.Debugf("No assistant content to check for hallucination")
 		return nil
@@ -164,24 +169,24 @@ func (r *OpenAIRouter) isNLIEnabledForDecision(decision *config.Decision) bool {
 	return halConfig.UseNLI
 }
 
-// applyHallucinationWarning applies the configured hallucination action: it
-// prepends a body warning ("body"), surfaces the "hallucination" response-warnings
-// code ("header"/default), or does nothing ("none"). Returns the (possibly
-// rewritten) body and the warning code to merge into x-vsr-response-warnings, if
-// any. The span detail stays in the replay record (#2204).
-func (r *OpenAIRouter) applyHallucinationWarning(ctx *RequestContext, responseBody []byte) ([]byte, string) {
+func (r *OpenAIRouter) applySemanticHallucinationWarning(
+	ctx *RequestContext,
+	response *llmprotocol.Response,
+) (bool, string) {
 	if !ctx.HallucinationDetected {
-		return responseBody, ""
+		return false, ""
 	}
-
 	switch r.getHallucinationActionForDecision(ctx.VSRSelectedDecision) {
 	case "body":
-		includeDetails := r.shouldIncludeHallucinationDetails(ctx.VSRSelectedDecision)
-		return r.prependHallucinationWarningToBody(responseBody, ctx, includeDetails), ""
+		warning := r.buildHallucinationWarningText(
+			ctx,
+			r.shouldIncludeHallucinationDetails(ctx.VSRSelectedDecision),
+		)
+		return prependSemanticAssistantText(response, warning), ""
 	case "none":
-		return responseBody, ""
-	default: // "header"
-		return responseBody, headers.ResponseWarningHallucination
+		return false, ""
+	default:
+		return false, headers.ResponseWarningHallucination
 	}
 }
 
@@ -197,51 +202,6 @@ func (r *OpenAIRouter) shouldIncludeHallucinationDetails(decision *config.Decisi
 	}
 
 	return halConfig.IncludeHallucinationDetails
-}
-
-// prependHallucinationWarningToBody prepends warning text to the response content
-func (r *OpenAIRouter) prependHallucinationWarningToBody(responseBody []byte, ctx *RequestContext, includeDetails bool) []byte {
-	// Build warning text
-	warningText := r.buildHallucinationWarningText(ctx, includeDetails)
-
-	// Parse response
-	var completion map[string]interface{}
-	if err := json.Unmarshal(responseBody, &completion); err != nil {
-		logging.Errorf("Failed to parse response for hallucination body warning: %v", err)
-		return responseBody
-	}
-
-	// Modify content in choices
-	choices, ok := completion["choices"].([]interface{})
-	if !ok || len(choices) == 0 {
-		return responseBody
-	}
-
-	for _, choice := range choices {
-		choiceMap, ok := choice.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		message, ok := choiceMap["message"].(map[string]interface{})
-		if !ok {
-			continue
-		}
-		content, ok := message["content"].(string)
-		if !ok {
-			continue
-		}
-		// Prepend warning to content
-		message["content"] = warningText + "\n\n" + content
-	}
-
-	// Marshal back
-	modifiedBody, err := json.Marshal(completion)
-	if err != nil {
-		logging.Errorf("Failed to marshal response with hallucination body warning: %v", err)
-		return responseBody
-	}
-
-	return modifiedBody
 }
 
 // buildHallucinationWarningText builds the warning text for body prepending
@@ -319,66 +279,22 @@ func (r *OpenAIRouter) checkUnverifiedFactualResponse(ctx *RequestContext) {
 		ctx.FactCheckConfidence)
 }
 
-// applyUnverifiedFactualWarning applies the configured action for an unverified
-// factual response: prepends a body warning ("body"), surfaces the
-// "unverified_factual" response-warnings code ("header"/default), or does nothing
-// ("none"). Returns the (possibly rewritten) body and the warning code to merge,
-// if any. The fact-check verification context stays in the replay record (#2204).
-func (r *OpenAIRouter) applyUnverifiedFactualWarning(ctx *RequestContext, responseBody []byte) ([]byte, string) {
+func (r *OpenAIRouter) applySemanticUnverifiedFactualWarning(
+	ctx *RequestContext,
+	response *llmprotocol.Response,
+) (bool, string) {
 	if !ctx.UnverifiedFactualResponse {
-		return responseBody, ""
+		return false, ""
 	}
-
 	switch r.getUnverifiedFactualActionForDecision(ctx.VSRSelectedDecision) {
 	case "body":
-		return r.prependUnverifiedFactualWarningToBody(responseBody), ""
+		return prependSemanticAssistantText(
+			response,
+			"[Unverified Response] This response contains factual claims that could not be verified due to missing context.",
+		), ""
 	case "none":
-		return responseBody, ""
-	default: // "header"
-		return responseBody, headers.ResponseWarningUnverifiedFactual
+		return false, ""
+	default:
+		return false, headers.ResponseWarningUnverifiedFactual
 	}
-}
-
-// prependUnverifiedFactualWarningToBody prepends unverified factual warning text to the response content
-func (r *OpenAIRouter) prependUnverifiedFactualWarningToBody(responseBody []byte) []byte {
-	warningText := "[Unverified Response] This response contains factual claims that could not be verified due to missing context."
-
-	// Parse response
-	var completion map[string]interface{}
-	if err := json.Unmarshal(responseBody, &completion); err != nil {
-		logging.Errorf("Failed to parse response for unverified factual body warning: %v", err)
-		return responseBody
-	}
-
-	// Modify content in choices
-	choices, ok := completion["choices"].([]interface{})
-	if !ok || len(choices) == 0 {
-		return responseBody
-	}
-
-	for _, choice := range choices {
-		choiceMap, ok := choice.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		message, ok := choiceMap["message"].(map[string]interface{})
-		if !ok {
-			continue
-		}
-		content, ok := message["content"].(string)
-		if !ok {
-			continue
-		}
-		// Prepend warning to content
-		message["content"] = warningText + "\n\n" + content
-	}
-
-	// Marshal back
-	modifiedBody, err := json.Marshal(completion)
-	if err != nil {
-		logging.Errorf("Failed to marshal response with unverified factual body warning: %v", err)
-		return responseBody
-	}
-
-	return modifiedBody
 }

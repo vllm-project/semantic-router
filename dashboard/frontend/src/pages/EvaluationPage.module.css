@@ -1,181 +1,71 @@
 .container {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
-  padding: 2.75rem 3rem 4rem;
-  max-width: 1400px;
-  margin: 0 auto;
+  gap: 1.15rem;
   width: 100%;
+  max-width: 1500px;
+  margin: 0 auto;
+  padding: 2.75rem 3rem 4rem;
 }
-
+.readonlyBanner,
 .errorBanner {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  align-items: center;
-  padding: var(--spacing-sm, 0.5rem) var(--spacing-md, 1rem);
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: var(--radius-md, 0.375rem);
-  color: var(--color-danger, #ef4444);
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 9px;
+  background: #101012;
+  color: rgba(255, 255, 255, 0.56);
+  font-size: 0.78rem;
 }
-
-.errorBanner button {
-  padding: var(--spacing-xs, 0.25rem) var(--spacing-sm, 0.5rem);
+.errorBanner {
+  border-color: rgba(248, 113, 113, 0.3);
+  background: rgba(239, 68, 68, 0.08);
+  color: #fca5a5;
+}
+.errorBanner button,
+.loadError button {
+  min-height: 36px;
+  padding: 0.45rem 0.75rem;
+  border: 1px solid currentColor;
+  border-radius: 7px;
   background: transparent;
-  border: 1px solid rgba(239, 68, 68, 0.5);
-  border-radius: var(--radius-sm, 0.25rem);
-  color: var(--color-danger, #ef4444);
+  color: inherit;
   cursor: pointer;
-  font-size: var(--text-sm, 0.875rem);
 }
-
-.errorBanner button:hover {
-  background: rgba(239, 68, 68, 0.1);
-}
-
-.readonlyBanner {
-  padding: var(--spacing-sm, 0.5rem) var(--spacing-md, 1rem);
-  border: 1px solid var(--color-border, #333);
-  border-radius: var(--radius-md, 0.375rem);
-  background: var(--color-bg-secondary, #242424);
-  color: var(--color-text-secondary, #999);
-}
-
-.progressView {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-md, 1rem);
-}
-
-.asyncState {
-  display: flex;
-  min-height: 280px;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
+.loading,
+.loadError {
+  display: grid;
+  min-height: 320px;
+  place-items: center;
+  align-content: center;
+  gap: 0.65rem;
   padding: 2rem;
-  border: 1px solid var(--color-border, #333);
-  border-radius: var(--radius-lg, 0.5rem);
-  background: var(--color-bg-secondary, #242424);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 14px;
+  background: #101012;
   text-align: center;
 }
-
-.asyncState h2 {
-  margin: 0 0 0.45rem;
-  font-size: 1.15rem;
+.loadError {
+  border-color: rgba(248, 113, 113, 0.28);
 }
-
-.asyncState p {
-  max-width: 560px;
+.loadError h2 {
   margin: 0;
-  color: var(--color-text-secondary, #999);
+  color: #fca5a5;
 }
-
-.asyncState button {
-  margin-top: 1rem;
-  padding: 0.5rem 1rem;
-  border: 1px solid currentColor;
-  border-radius: var(--radius-md, 0.375rem);
-  background: transparent;
-  color: var(--color-text, #e8e8e8);
-  cursor: pointer;
+.loadError p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.55);
 }
-
-.asyncStateError {
-  border-color: rgba(239, 68, 68, 0.35);
-}
-
-.asyncStateError h2,
-.asyncStateError button {
-  color: var(--color-danger, #ef4444);
-}
-
-.backButton {
-  align-self: flex-start;
-  padding: var(--spacing-sm, 0.5rem) var(--spacing-md, 1rem);
-  background: transparent;
-  border: 1px solid var(--color-border, #333);
-  border-radius: var(--radius-md, 0.375rem);
-  color: var(--color-text-secondary, #999);
-  cursor: pointer;
-  transition: all var(--transition-fast, 150ms);
-}
-
-.backButton:hover {
-  border-color: var(--color-primary, #8f949c);
-  color: var(--color-text, #e8e8e8);
-}
-
-.tabs {
-  display: flex;
-  gap: 0.25rem;
-  padding: 0.25rem;
-  background: rgba(17, 17, 19, 0.94);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-}
-
-.tab {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  min-height: 38px;
-  padding: 0.5rem 1rem;
-  background: transparent;
-  border: none;
-  border-radius: 7px;
-  color: var(--color-text-secondary, #999);
-  cursor: pointer;
-  font-size: var(--text-sm, 0.875rem);
-  font-weight: 500;
-  transition: all var(--transition-fast, 150ms);
-}
-
-.tab:hover {
-  color: var(--color-text, #e8e8e8);
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.tab.activeTab {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.09);
-}
-
-.tabIcon {
-  width: 15px;
-  height: 15px;
-}
-
-.tabLabel {
-  font-weight: 500;
-}
-
-.tabContent {
-  flex: 1;
-  min-height: 380px;
-  padding: 1.25rem;
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 12px;
-  background: rgba(15, 15, 17, 0.9);
-}
-
 @media (max-width: 760px) {
   .container {
     padding: 1.25rem 1rem 3rem;
   }
-
-  .tabs {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .tab {
-    justify-content: center;
-    padding-inline: 0.6rem;
-  }
-
-  .tabContent {
-    min-height: 320px;
-    padding: 1rem;
+  .readonlyBanner,
+  .errorBanner {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }

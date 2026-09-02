@@ -18,6 +18,9 @@ func BuildClassifier(
 	piiMapping *PIIMapping,
 	jailbreakMapping *JailbreakMapping,
 ) (*Classifier, error) {
+	if err := config.ValidateCategoryModelBackend(cfg); err != nil {
+		return nil, err
+	}
 	jailbreakInitializer, jailbreakInference, err := buildJailbreakDependencies(cfg, jailbreakMapping)
 	if err != nil {
 		return nil, err
@@ -88,6 +91,11 @@ func (c *Classifier) executeRuntimeTasks(tasks []modelruntime.Task) error {
 		OnEvent:        logRuntimeInitializationEvent,
 	})
 	if err != nil {
+		if closeErr := c.Close(); closeErr != nil {
+			logging.ComponentWarnEvent("classifier", "runtime_initialization_rollback_failed", map[string]interface{}{
+				"error": closeErr.Error(),
+			})
+		}
 		return err
 	}
 
@@ -119,6 +127,14 @@ func (c *Classifier) defaultAPIRuntimeTasks() []modelruntime.Task {
 	appendTask("classifier.hallucination", c.Config.NeedsHallucinationDetectorForDefaultRuntime(), c.initializeHallucinationDetector)
 	appendTask("classifier.feedback", c.Config.NeedsFeedbackModelForAPI(), c.initializeFeedbackDetector)
 	return tasks
+}
+
+// Close releases the classifier's runtime resources.
+func (c *Classifier) Close() error {
+	if c == nil || c.mcpCategoryInitializer == nil {
+		return nil
+	}
+	return c.mcpCategoryInitializer.Close()
 }
 
 func (c *Classifier) runtimeTasks() []modelruntime.Task {

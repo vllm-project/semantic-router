@@ -1,0 +1,13 @@
+{
+  "status": "ok",
+  "body": {
+    "messages": [
+      {
+        "content": "Use the wider sampling range.",
+        "role": "user"
+      }
+    ],
+    "model": "routed-model",
+    "temperature": 1.5
+  }
+}

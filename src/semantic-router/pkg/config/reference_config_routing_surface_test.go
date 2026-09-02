@@ -3,26 +3,27 @@ package config
 import "reflect"
 
 var referenceSignalKeyByType = map[string]string{
-	SignalTypeAuthz:        "role_bindings",
-	SignalTypeComplexity:   "complexity",
-	SignalTypeContext:      "context",
-	SignalTypeDomain:       "domains",
-	SignalTypeEmbedding:    "embeddings",
-	SignalTypeFactCheck:    "fact_check",
-	SignalTypeJailbreak:    "jailbreak",
-	SignalTypeKeyword:      "keywords",
-	SignalTypeLanguage:     "language",
-	SignalTypeModality:     "modality",
-	SignalTypePII:          "pii",
-	SignalTypePreference:   "preferences",
-	SignalTypeReask:        "reasks",
-	SignalTypeStructure:    "structure",
-	SignalTypeConversation: "conversation",
-	SignalTypeKB:           "kb",
-	SignalTypeUserFeedback: "user_feedbacks",
-	SignalTypeEvent:        "events",
-	SignalTypeMetadata:     "metadata",
-	SignalTypeClassifier:   "classifiers",
+	SignalTypeAuthz:         "role_bindings",
+	SignalTypeComplexity:    "complexity",
+	SignalTypeContext:       "context",
+	SignalTypeDomain:        "domains",
+	SignalTypeEmbedding:     "embeddings",
+	SignalTypeFactCheck:     "fact_check",
+	SignalTypeJailbreak:     "jailbreak",
+	SignalTypeKeyword:       "keywords",
+	SignalTypeLanguage:      "language",
+	SignalTypeModality:      "modality",
+	SignalTypePII:           "pii",
+	SignalTypePreference:    "preferences",
+	SignalTypeReask:         "reasks",
+	SignalTypeStructure:     "structure",
+	SignalTypeConversation:  "conversation",
+	SignalTypeKB:            "kb",
+	SignalTypeUserFeedback:  "user_feedbacks",
+	SignalTypeEvent:         "events",
+	SignalTypeMetadata:      "metadata",
+	SignalTypeClassifier:    "classifiers",
+	SignalTypeInputModality: "input_modality",
 }
 
 func assertSupportedSignalTypesInReferenceConfig(t testingT, root map[string]interface{}) {
@@ -34,6 +35,21 @@ func assertSupportedSignalTypesInReferenceConfig(t testingT, root map[string]int
 		}
 		if len(mustSliceAt(t, signals, key)) == 0 {
 			t.Fatalf("config/config.yaml must include at least one %s signal under routing.signals.%s", signalType, key)
+		}
+	}
+
+	coveredClassifierTypes := make(map[string]bool)
+	for _, rawClassifier := range mustSliceAt(t, signals, "classifiers") {
+		classifier := mustMapValue(t, rawClassifier, "routing.signals.classifiers")
+		coveredClassifierTypes[mustStringAt(t, classifier, "type")] = true
+	}
+	for _, classifierType := range []string{
+		ClassifierSignalTypeLocal,
+		ClassifierSignalTypeLLM,
+		ClassifierSignalTypeSequenceClassifier,
+	} {
+		if !coveredClassifierTypes[classifierType] {
+			t.Fatalf("config/config.yaml must include classifier signal type %q", classifierType)
 		}
 	}
 }
@@ -139,7 +155,6 @@ func assertReferenceNestedPluginCoverage(t testingT, pluginsByType map[string][]
 	assertReferenceMemoryPluginCoverage(t, pluginsByType["memory"])
 	assertReferenceHeaderMutationCoverage(t, pluginsByType["header_mutation"])
 	assertReferenceRAGPluginCoverage(t, pluginsByType["rag"])
-	assertReferenceImageGenPluginCoverage(t, pluginsByType["image_gen"])
 }
 
 func assertReferenceMemoryPluginCoverage(t testingT, plugins []map[string]interface{}) {
@@ -179,22 +194,6 @@ func assertReferenceRAGPluginCoverage(t testingT, plugins []map[string]interface
 	assertMapCoversStructFields(t, mustMapAt(t, ragByBackend["openai"], "backend_config"), reflect.TypeOf(OpenAIRAGConfig{}), "rag.backend_config(openai)")
 	assertMapCoversStructFields(t, mustMapAt(t, ragByBackend["vectorstore"], "backend_config"), reflect.TypeOf(VectorStoreRAGConfig{}), "rag.backend_config(vectorstore)")
 	assertMapCoversStructFields(t, mustMapAt(t, ragByBackend["hybrid"], "backend_config"), reflect.TypeOf(HybridRAGConfig{}), "rag.backend_config(hybrid)")
-}
-
-func assertReferenceImageGenPluginCoverage(t testingT, plugins []map[string]interface{}) {
-	configs := collectChildMapsFromSlice(t, plugins, "configuration", "plugins(image_gen)")
-	imageGenByBackend := mapByStringField(t, configs, "backend", "image_gen")
-
-	assertSliceUnionCoversStructFields(t, configs, reflect.TypeOf(ImageGenPluginConfig{}), "routing.decisions[].plugins[type=image_gen].configuration")
-	assertMapCoversStructFields(t, mustMapAt(t, imageGenByBackend["openai"], "backend_config"), reflect.TypeOf(OpenAIImageGenConfig{}), "image_gen.backend_config(openai)")
-	assertMapCoversStructFields(t, mustMapAt(t, imageGenByBackend["vllm_omni"], "backend_config"), reflect.TypeOf(VLLMOmniImageGenConfig{}), "image_gen.backend_config(vllm_omni)")
-	assertMapCoversStructFields(t, mustMapAt(t, imageGenByBackend["openai"], "modality_detection"), reflect.TypeOf(ModalityDetectionConfig{}), "image_gen.modality_detection")
-	assertMapCoversStructFields(
-		t,
-		mustMapAt(t, imageGenByBackend["openai"], "modality_detection", "classifier"),
-		reflect.TypeOf(ModalityClassifierConfig{}),
-		"image_gen.modality_detection.classifier",
-	)
 }
 
 func assertDecisionRuleCompositionInReferenceConfig(t testingT, decisions []interface{}) {

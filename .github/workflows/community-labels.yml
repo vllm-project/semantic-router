@@ -47,7 +47,7 @@ jobs:
         run: python3 tools/ci/community_lifecycle.py sync-pr --event "$GITHUB_EVENT_PATH"
 
   pull-request-sweep:
-    name: Reconcile all open pull request labels
+    name: Reconcile pull request labels
     if: >-
       github.event_name == 'schedule'
       || github.event_name == 'workflow_dispatch'
@@ -63,7 +63,7 @@ jobs:
         with:
           ref: main
 
-      - name: Reconcile the open pull request queue
+      - name: Reconcile the pull request queue
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python3 tools/ci/community_lifecycle.py sync-prs --event "$GITHUB_EVENT_PATH"

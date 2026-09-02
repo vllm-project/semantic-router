@@ -49,6 +49,8 @@ class ConfidenceAlgorithmConfig(BaseModel):
     # Behavior on model call failure: "skip" or "fail"
     on_error: str | None = "skip"
 
+    max_response_bytes: int | None = Field(default=None, ge=0)
+
 
 class RatingsAlgorithmConfig(BaseModel):
     """Configuration for the ratings looper algorithm."""
@@ -421,6 +423,10 @@ class AlgorithmConfig(BaseModel):
     """
 
     model_config = ConfigDict(extra="forbid")
+
+    # Minimum distinct decision candidates required once a model-free Recipe
+    # is materialized by an Entrypoint.
+    minimum_candidates: int | None = Field(default=None, ge=1)
 
     # Algorithm type: looper ("confidence", "ratings", "remom", "fusion",
     # "workflows") or

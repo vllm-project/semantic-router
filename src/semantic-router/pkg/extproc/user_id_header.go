@@ -1,7 +1,6 @@
 package extproc
 
 import (
-	"encoding/json"
 	"os"
 	"strings"
 
@@ -33,19 +32,6 @@ func authHeaderUserID(ctx *RequestContext) string {
 	return headerValueCI(ctx, headers.AuthzUserID)
 }
 
-func chatCompletionUserFieldFromBody(body []byte) string {
-	if len(body) == 0 {
-		return ""
-	}
-	var req struct {
-		User string `json:"user"`
-	}
-	if err := json.Unmarshal(body, &req); err != nil {
-		return ""
-	}
-	return strings.TrimSpace(req.User)
-}
-
 // cacheScopeUserID resolves the user id used only for semantic-cache key scoping.
 // It prefers the trusted auth header, then optionally a fallback header name from
 // SEMANTIC_CACHE_FALLBACK_USER_HEADER (intended for E2E when the gateway strips
@@ -72,7 +58,10 @@ func cacheScopeUserID(ctx *RequestContext) string {
 		}
 	}
 	if strings.TrimSpace(os.Getenv("SEMANTIC_CACHE_E2E_USER_FROM_BODY")) == "true" {
-		u := chatCompletionUserFieldFromBody(ctx.OriginalRequestBody)
+		u := ""
+		if ctx.SemanticRequest != nil {
+			u = strings.TrimSpace(ctx.SemanticRequest.Metadata["user_id"])
+		}
 		if u != "" {
 			logging.ComponentDebugEvent("extproc", "cache_scope_user_resolved", map[string]interface{}{
 				"request_id": ctx.RequestID,

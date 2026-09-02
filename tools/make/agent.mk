@@ -188,7 +188,9 @@ agent-lint: $(AGENT_BOOTSTRAP_DEPS) ## Run lint and structure gates for changed 
 		exit 0; \
 	fi; \
 	FILE_ARGS="$$(printf '%s\n' "$$RAW_FILES" | paste -sd' ' -)"; \
-	CSV_FILES="$$(printf '%s\n' "$$RAW_FILES" | paste -sd',' -)"; \
+	LINT_CHANGED_FILES_PATH="$$(mktemp)"; \
+	trap 'rm -f "$$LINT_CHANGED_FILES_PATH"' EXIT; \
+	printf '%s\n' "$$RAW_FILES" > "$$LINT_CHANGED_FILES_PATH"; \
 	if printf '%s\n' "$$RAW_FILES" | grep -Eq '\.go$$'; then \
 		$(MAKE) agent-go-bootstrap; \
 	fi; \
@@ -202,13 +204,13 @@ agent-lint: $(AGENT_BOOTSTRAP_DEPS) ## Run lint and structure gates for changed 
 		SKIP="$$PRECOMMIT_SKIP" "$(AGENT_PRE_COMMIT)" run --files $$FILE_ARGS || exit $$?; \
 	fi; \
 	echo "Running Python lint..." && \
-	"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py run-python-lint --changed-files "$$CSV_FILES" && \
+	"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py run-python-lint --changed-files-path "$$LINT_CHANGED_FILES_PATH" && \
 	echo "Running Go structural lint..." && \
-	"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py run-go-lint --base-ref "$(AGENT_BASE_REF)" --changed-files "$$CSV_FILES" && \
+	"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py run-go-lint --base-ref "$(AGENT_BASE_REF)" --changed-files-path "$$LINT_CHANGED_FILES_PATH" && \
 	echo "Running reference config contract lint..." && \
-	"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py run-config-contract-lint --changed-files "$$CSV_FILES" && \
+	"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py run-config-contract-lint --changed-files-path "$$LINT_CHANGED_FILES_PATH" && \
 	echo "Running Rust lint..." && \
-	"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py run-rust-lint --changed-files "$$CSV_FILES" && \
+	"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py run-rust-lint --changed-files-path "$$LINT_CHANGED_FILES_PATH" && \
 	echo "Running structure checks..." && \
 	"$(AGENT_PYTHON)" tools/agent/scripts/structure_check.py --base-ref "$(AGENT_BASE_REF)" $$FILE_ARGS
 
@@ -283,10 +285,10 @@ agent-smoke-local: ## Validate local container, router, envoy, and dashboard hea
 	START_TIME="$$(date +%s)"; \
 	while true; do \
 		STATUS_OUTPUT="$$(VLLM_SR_STACK_NAME="$(AGENT_STACK_NAME)" VLLM_SR_PORT_OFFSET="$(AGENT_PORT_OFFSET)" vllm-sr status all 2>&1 || true)"; \
-		if echo "$$STATUS_OUTPUT" | grep -q "Container Status: Running" && \
-		   echo "$$STATUS_OUTPUT" | grep -q "Router: Running" && \
-		   echo "$$STATUS_OUTPUT" | grep -q "Envoy: Running" && \
-		   echo "$$STATUS_OUTPUT" | grep -q "Dashboard: Running"; then \
+		if echo "$$STATUS_OUTPUT" | grep -Eq "(Container Status:[[:space:]]*|State[[:space:]]+)Running" && \
+		   echo "$$STATUS_OUTPUT" | grep -Eq "Router(:[[:space:]]*|[[:space:]]+)Running" && \
+		   echo "$$STATUS_OUTPUT" | grep -Eq "Envoy(:[[:space:]]*|[[:space:]]+)Running" && \
+		   echo "$$STATUS_OUTPUT" | grep -Eq "Dashboard(:[[:space:]]*|[[:space:]]+)Running"; then \
 			echo "$$STATUS_OUTPUT"; \
 			break; \
 		fi; \

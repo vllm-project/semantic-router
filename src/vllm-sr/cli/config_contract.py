@@ -4,9 +4,18 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 CANONICAL_VERSION = "v0.3"
+
+CLASSIFIER_TYPE_LOCAL = "local"
+CLASSIFIER_TYPE_LLM = "llm"
+CLASSIFIER_TYPE_SEQUENCE = "sequence_classifier"
+ClassifierSignalType = Literal[
+    "local",
+    "llm",
+    "sequence_classifier",
+]
 
 CONDITION_TYPE_DOMAIN = "domain"
 CONDITION_TYPE_PROJECTION = "projection"
@@ -98,6 +107,9 @@ SIGNAL_FAMILY_SPECS = (
     SignalFamilySpec("events", "events", "event", "events"),
     SignalFamilySpec("metadata", "metadata", "metadata", "metadata"),
     SignalFamilySpec("classifiers", "classifiers", "classifier", "classifiers"),
+    SignalFamilySpec(
+        "input_modality", "input_modality", "input_modality", "input_modality"
+    ),
 )
 
 LEGACY_SIGNAL_KEY_TO_CANONICAL = {

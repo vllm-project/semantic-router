@@ -1,0 +1,4 @@
+{
+  "operation": "request",
+  "body_json": "{\"model\":\"provider-model\",\"messages\":[{\"role\":\"user\",\"content\":\"\\ud800\"}]}"
+}

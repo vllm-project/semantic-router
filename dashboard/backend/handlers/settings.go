@@ -3,11 +3,21 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 	"github.com/vllm-project/semantic-router/dashboard/backend/setupmode"
 )
+
+const fallbackRouterEvalEndpoint = "http://localhost:8080/api/v1/eval"
+
+func defaultRouterEvalEndpoint(routerAPIURL string) string {
+	if routerAPIURL == "" {
+		return fallbackRouterEvalEndpoint
+	}
+	return strings.TrimSuffix(routerAPIURL, "/") + "/api/v1/eval"
+}
 
 // SettingsResponse represents the dashboard settings returned to frontend
 type SettingsResponse struct {

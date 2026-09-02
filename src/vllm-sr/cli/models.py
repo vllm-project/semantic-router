@@ -17,9 +17,15 @@ from pydantic import (
 )
 
 from .algorithms import AlgorithmConfig, ModelRef
+from .config_contract import (
+    CLASSIFIER_TYPE_LLM,
+    CLASSIFIER_TYPE_LOCAL,
+    ClassifierSignalType,
+)
 
 RoutingStrategy = Literal["priority", "confidence"]
 LOCAL_CLASSIFIER_LABEL_COUNT = 2
+SEQUENCE_CLASSIFIER_MIN_LABEL_COUNT = 2
 PROMPT_MIN_CANDIDATES = 2
 MAX_DECISION_ANNOTATIONS = 32
 MAX_DECISION_ANNOTATION_BYTES = 4096
@@ -333,6 +339,7 @@ class EmbeddingEndpointConfig(BaseModel):
     api_key_env: Optional[str] = None
     timeout_seconds: Optional[int] = Field(default=None, ge=0)
     max_retries: Optional[int] = Field(default=None, ge=0)
+    max_response_bytes: Optional[int] = Field(default=None, ge=0)
     dimensions: Optional[int] = Field(default=None, ge=1)
 
 
@@ -480,6 +487,22 @@ class MetadataRule(BaseModel):
         return self
 
 
+class InputModalityRule(BaseModel):
+    """Deterministic structural input-modality presence signal."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    description: Optional[str] = None
+    modality: Literal["text", "image", "audio", "video"]
+
+    @model_validator(mode="after")
+    def validate_canonical_names(self):
+        if not self.name.strip() or self.name != self.name.strip():
+            raise ValueError("input_modality signal name must be nonempty and trimmed")
+        return self
+
+
 class ClassifierSignal(BaseModel):
     """Generic label-score classifier signal."""
 
@@ -487,7 +510,7 @@ class ClassifierSignal(BaseModel):
 
     name: str
     description: Optional[str] = None
-    type: Literal["local", "llm"]
+    type: ClassifierSignalType
     model: Optional[str] = None
     model_path: Optional[str] = None
     labels: List[str]
@@ -506,19 +529,42 @@ class ClassifierSignal(BaseModel):
             raise ValueError("labels must be trimmed and cannot contain ':'")
         if len(set(self.labels)) != len(self.labels):
             raise ValueError("labels cannot contain duplicates")
-        if self.type == "local" and not self.model_path:
-            raise ValueError("local classifiers require model_path")
-        if self.type == "local" and len(self.labels) != LOCAL_CLASSIFIER_LABEL_COUNT:
-            raise ValueError("local classifiers require exactly two labels")
-        if self.type == "local" and (self.model or self.instructions):
-            raise ValueError("local classifiers do not accept model or instructions")
-        if self.type == "llm" and not self.model:
-            raise ValueError("llm classifiers require model")
-        if self.type == "llm" and not self.instructions:
-            raise ValueError("llm classifiers require instructions")
-        if self.type == "llm" and (self.model_path or self.use_cpu):
-            raise ValueError("llm classifiers do not accept model_path or use_cpu")
+
+        if self.type == CLASSIFIER_TYPE_LOCAL:
+            self._validate_local()
+        elif self.type == CLASSIFIER_TYPE_LLM:
+            self._validate_llm()
+        else:
+            self._validate_sequence()
         return self
+
+    def _validate_local(self):
+        if not self.model_path:
+            raise ValueError("local classifiers require model_path")
+        if len(self.labels) != LOCAL_CLASSIFIER_LABEL_COUNT:
+            raise ValueError("local classifiers require exactly two labels")
+        if self.model or self.instructions:
+            raise ValueError("local classifiers do not accept model or instructions")
+
+    def _validate_llm(self):
+        if not self.model:
+            raise ValueError("llm classifiers require model")
+        if not self.instructions:
+            raise ValueError("llm classifiers require instructions")
+        if self.model_path or self.use_cpu:
+            raise ValueError("llm classifiers do not accept model_path or use_cpu")
+
+    def _validate_sequence(self):
+        if not self.model:
+            raise ValueError("sequence_classifier classifiers require model")
+        if len(self.labels) < SEQUENCE_CLASSIFIER_MIN_LABEL_COUNT:
+            raise ValueError(
+                "sequence_classifier classifiers require at least two labels"
+            )
+        if self.model_path or self.use_cpu or self.instructions:
+            raise ValueError(
+                "sequence_classifier classifiers do not accept model_path, use_cpu or instructions"
+            )
 
 
 class Signals(BaseModel):
@@ -544,6 +590,7 @@ class Signals(BaseModel):
     events: Optional[List[EventRule]] = []
     metadata: Optional[List[MetadataRule]] = []
     classifiers: Optional[List[ClassifierSignal]] = []
+    input_modality: Optional[List[InputModalityRule]] = []
 
     @model_validator(mode="after")
     def validate_rule_names(self):
@@ -552,7 +599,7 @@ class Signals(BaseModel):
             for signal in getattr(self, family) or []:
                 name = (
                     signal.name.lower()
-                    if family in {"metadata", "classifiers"}
+                    if family in {"metadata", "classifiers", "input_modality"}
                     else signal.name
                 )
                 if name in seen:
@@ -571,6 +618,7 @@ class Condition(BaseModel):
     label: Optional[str] = None
     predicate: Optional[NumericPredicate] = None
     on_error: Optional[Literal["no_match", "match"]] = None
+    on_unknown: Optional[Literal["no_match", "match", "fail_request"]] = None
     operator: Optional[str] = None
     conditions: Optional[List["Condition"]] = None
 
@@ -593,18 +641,22 @@ class Condition(BaseModel):
             )
 
         if has_operator:
-            if not self.conditions:
-                raise ValueError(
-                    "composite condition node requires non-empty conditions"
-                )
-            op = self.operator.strip().upper()
-            if op not in {"AND", "OR", "NOT"}:
-                raise ValueError("operator must be one of: AND, OR, NOT")
-            if op == "NOT" and len(self.conditions) != 1:
-                raise ValueError("NOT operator must have exactly one child condition")
-            return self
+            return self._validate_composite_node()
+        return self._validate_leaf_node()
 
-        # Leaf node validation
+    def _validate_composite_node(self):
+        if not self.conditions:
+            raise ValueError("composite condition node requires non-empty conditions")
+        op = self.operator.strip().upper()
+        if op not in {"AND", "OR", "NOT"}:
+            raise ValueError("operator must be one of: AND, OR, NOT")
+        if op == "NOT" and len(self.conditions) != 1:
+            raise ValueError("NOT operator must have exactly one child condition")
+        if self.on_unknown is not None:
+            raise ValueError("on_unknown is only valid on the root rules node")
+        return self
+
+    def _validate_leaf_node(self):
         if self.type is None or self.name is None:
             raise ValueError("leaf condition node requires both type and name")
         if self.conditions:
@@ -615,6 +667,8 @@ class Condition(BaseModel):
             raise ValueError("classifier conditions require label and predicate")
         if self.on_error is not None and self.type != "classifier":
             raise ValueError("on_error is only valid for classifier conditions")
+        if self.on_unknown is not None:
+            raise ValueError("on_unknown is only valid on the root rules node")
         return self
 
 
@@ -631,6 +685,7 @@ class Rules(BaseModel):
 
     operator: str = "AND"
     conditions: List[Condition] = Field(default_factory=list)
+    on_unknown: Optional[Literal["no_match", "match", "fail_request"]] = None
 
     @model_validator(mode="before")
     @classmethod
@@ -646,7 +701,10 @@ class Rules(BaseModel):
                 if key in data
             }
             leaf.setdefault("name", "")
-            return {"operator": "AND", "conditions": [leaf]}
+            rules = {"operator": "AND", "conditions": [leaf]}
+            if "on_unknown" in data:
+                rules["on_unknown"] = data["on_unknown"]
+            return rules
         return data
 
 
@@ -660,7 +718,6 @@ class PluginType(str, Enum):
     ROUTER_REPLAY = "router_replay"
     MEMORY = "memory"
     RAG = "rag"
-    IMAGE_GEN = "image_gen"
     FAST_RESPONSE = "fast_response"
     REQUEST_PARAMS = "request_params"
     RESPONSE_JAILBREAK = "response_jailbreak"
@@ -1219,19 +1276,6 @@ class PluginConfig(BaseModel):
         return data
 
 
-class ImageGenPluginConfig(BaseModel):
-    """Configuration for image_gen plugin."""
-
-    enabled: bool
-    backend: str
-    backend_config: Optional[Dict[str, Any]] = None
-    modality_detection: Optional[Dict[str, Any]] = None
-    default_width: Optional[int] = Field(default=None, ge=1)
-    default_height: Optional[int] = Field(default=None, ge=1)
-    max_inference_steps: Optional[int] = Field(default=None, ge=1)
-    timeout_seconds: Optional[int] = Field(default=None, ge=1)
-
-
 class DecisionLearningAdaptationConfig(BaseModel):
     """Decision-local control for Router Learning adaptation."""
 
@@ -1479,6 +1523,18 @@ class Decision(BaseModel):
 
     @model_validator(mode="after")
     def validate_prompt_candidates(self):
+        if self.algorithm and self.algorithm.minimum_candidates and self.modelRefs:
+            effective_names = {
+                (model_ref.model.strip(), (model_ref.lora_name or "").strip())
+                for model_ref in self.modelRefs
+                if model_ref.model.strip()
+            }
+            if len(effective_names) < self.algorithm.minimum_candidates:
+                raise ValueError(
+                    "algorithm.minimum_candidates="
+                    f"{self.algorithm.minimum_candidates} requires at least that many "
+                    f"unique modelRefs, got {len(effective_names)}"
+                )
         if (
             self.algorithm
             and self.algorithm.type == "prompt"
@@ -1523,11 +1579,11 @@ class ModelPricing(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    currency: Optional[str] = "USD"
-    prompt_per_1m: Optional[float] = 0.0
-    cached_input_per_1m: Optional[float] = 0.0
-    cache_write_per_1m: Optional[float] = Field(default=None, ge=0)
-    completion_per_1m: Optional[float] = 0.0
+    currency: Optional[str] = Field(default="USD", pattern=r"^[A-Z]{3}$")
+    prompt_per_1m: Optional[float] = Field(default=0.0, ge=0, allow_inf_nan=False)
+    cached_input_per_1m: Optional[float] = Field(default=0.0, ge=0, allow_inf_nan=False)
+    cache_write_per_1m: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False)
+    completion_per_1m: Optional[float] = Field(default=0.0, ge=0, allow_inf_nan=False)
 
 
 class ProviderReliability(BaseModel):

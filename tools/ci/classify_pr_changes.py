@@ -40,16 +40,7 @@ NIGHTLY_IMAGES = (
 )
 
 E2E_RULES = profile_paths("pr")
-_MANUAL_PROFILE_PATHS = profile_paths("manual")
-NON_PR_E2E_RULES = {
-    name: _MANUAL_PROFILE_PATHS[name]
-    for name in (
-        "anthropic-shim",
-        "response-api",
-        "response-api-redis",
-        "response-api-redis-cluster",
-    )
-}
+NON_PR_E2E_RULES = profile_paths("manual")
 HARNESS_EXEC_PATTERNS = (
     "tools/agent/*.yaml",
     "tools/agent/requirements.txt",

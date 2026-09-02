@@ -182,6 +182,15 @@ func TestMergeFusionRequestConfigCoversAdvancedOptions(t *testing.T) {
 	assert.Equal(t, config.FusionOnErrorFail, dst.GroundingOnError)
 }
 
+func TestFusionExecutionConfigRejectsQuorumLargerThanPanel(t *testing.T) {
+	cfg := normalizeFusionExecutionConfig(fusionExecutionConfig{
+		AnalysisModels:         []string{"panel-a", "panel-b"},
+		MinSuccessfulResponses: 3,
+	})
+	assert.Equal(t, 3, cfg.MinSuccessfulResponses)
+	require.ErrorContains(t, validateFusionExecutionConfig(cfg), "exceeds panel size 2")
+}
+
 func TestResolveFusionExecutionConfigLayersAnalysisOverridesFieldWise(t *testing.T) {
 	looper := NewFusionLooper(&config.LooperConfig{Endpoint: "http://looper"})
 	req := newFusionTestRequest()

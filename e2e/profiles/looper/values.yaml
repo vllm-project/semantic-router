@@ -1,0 +1,112 @@
+config:
+  version: v0.3
+  listeners: []
+  providers:
+    defaults:
+      default_model: ratings-model-a
+    models:
+      - name: ratings-model-a
+        provider_model_id: ratings-model-a
+        backend_refs:
+          - name: looper-fake-backend
+            endpoint: looper-fake-backend.default.svc.cluster.local:8000
+            weight: 1
+      - name: ratings-model-b
+        provider_model_id: ratings-model-b
+        backend_refs:
+          - name: looper-fake-backend
+            endpoint: looper-fake-backend.default.svc.cluster.local:8000
+            weight: 1
+  routing:
+    modelCards:
+      - name: ratings-model-a
+      - name: ratings-model-b
+    signals:
+      keywords:
+        - name: looper_ratings_probe_keywords
+          operator: OR
+          keywords:
+            - __LOOPER_RATINGS_PROBE__
+          case_sensitive: true
+    decisions:
+      - name: looper_ratings_decision
+        description: Deterministic Ratings route for issue 2859 E2E coverage
+        priority: 100
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: looper_ratings_probe_keywords
+        modelRefs:
+          - model: ratings-model-a
+            use_reasoning: false
+          - model: ratings-model-b
+            use_reasoning: false
+        algorithm:
+          type: ratings
+          ratings:
+            max_concurrent: 2
+            on_error: skip
+      - name: default-route
+        description: Fallback for unmatched profile traffic
+        priority: 10
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: ratings-model-a
+            use_reasoning: false
+  global:
+    router:
+      strategy: priority
+    services:
+      response_api:
+        enabled: false
+      router_replay:
+        enabled: false
+    stores:
+      response_cache:
+        enabled: false
+    model_catalog:
+      kbs: []
+      embeddings:
+        semantic:
+          qwen3_model_path: ""
+          gemma_model_path: ""
+          mmbert_model_path: ""
+          multimodal_model_path: ""
+          bert_model_path: ""
+          use_cpu: true
+      modules:
+        prompt_guard:
+          enabled: false
+          model_ref: ""
+          model_id: ""
+          jailbreak_mapping_path: ""
+        classifier:
+          domain:
+            model_ref: ""
+            model_id: ""
+            category_mapping_path: ""
+            use_mmbert_32k: false
+          pii:
+            model_ref: ""
+            model_id: ""
+            pii_mapping_path: ""
+            use_mmbert_32k: false
+        feedback_detector:
+          enabled: false
+          model_ref: ""
+          model_id: ""
+          use_mmbert_32k: false
+    integrations:
+      looper:
+        endpoint: http://looper-fake-backend.default.svc.cluster.local:8000/v1/chat/completions
+
+resources:
+  limits:
+    memory: 1Gi
+    cpu: "1"
+  requests:
+    memory: 256Mi
+    cpu: 100m

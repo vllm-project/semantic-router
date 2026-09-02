@@ -33,6 +33,11 @@ type Request struct {
 	// OriginalRequest is the OpenAI chat completion request from the client
 	OriginalRequest *openai.ChatCompletionNewParams
 
+	// BaseContextTokens is the Router's conservative estimate for the original
+	// request. Generated Looper stages add their own prompt growth before every
+	// backend dispatch and re-check the target model's context window.
+	BaseContextTokens int
+
 	// ModelRefs contains the list of models to potentially use, ordered by preference
 	ModelRefs []config.ModelRef
 

@@ -34,9 +34,8 @@ type anthropicMessageResponse struct {
 }
 
 // validAnthropicStopReasons enumerates the stop_reason values defined by
-// the Anthropic Messages API. The outbound emitter PR maps OpenAI finish
-// reasons into this set; any value outside it indicates the emitter
-// either bypassed the mapping or invented a new token.
+// the Anthropic Messages API. The codec maps neutral stop reasons into this
+// set; any value outside it indicates a wire-contract regression.
 var validAnthropicStopReasons = map[string]struct{}{
 	"end_turn":      {},
 	"max_tokens":    {},
@@ -46,10 +45,9 @@ var validAnthropicStopReasons = map[string]struct{}{
 	"refusal":       {},
 }
 
-// testAnthropicMessagesResponseShape asserts the outbound emitter rewrites
-// the OpenAI ChatCompletion body the router normalizes to back into the
-// Anthropic Messages wire shape, so an Anthropic-SDK client (Claude Code,
-// anthropic-sdk-go) can deserialize it without custom adapters.
+// testAnthropicMessagesResponseShape asserts that a request entering through
+// /v1/messages receives the Anthropic Messages wire shape even when the
+// selected backend uses another supported protocol.
 func testAnthropicMessagesResponseShape(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
 	if opts.Verbose {
 		fmt.Println("[Anthropic] Verifying response is in Anthropic Messages shape")
@@ -103,7 +101,7 @@ func testAnthropicMessagesResponseShape(ctx context.Context, client *kubernetes.
 }
 
 // assertAnthropicMessageShape enforces the per-field invariants the
-// outbound emitter is responsible for; kept as a helper so the test
+// response codec is responsible for; kept as a helper so the test
 // function stays under the project's cyclomatic-complexity ceiling.
 func assertAnthropicMessageShape(parsed anthropicMessageResponse) error {
 	if parsed.ID == "" {

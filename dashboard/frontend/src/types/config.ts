@@ -182,12 +182,18 @@ export interface MetadataSignal {
 export interface ClassifierSignal {
   name: string
   description?: string
-  type: 'local' | 'llm'
+  type: 'local' | 'llm' | 'sequence_classifier'
   model?: string
   model_path?: string
   labels: string[]
   instructions?: string
   use_cpu?: boolean
+}
+
+export interface InputModalitySignal {
+  name: string
+  description?: string
+  modality: 'text' | 'image' | 'audio' | 'video'
 }
 
 export interface ComplexityCandidates {
@@ -265,6 +271,7 @@ export interface Signals {
   conversation?: ConversationSignal[]
   metadata?: MetadataSignal[]
   classifiers?: ClassifierSignal[]
+  input_modality?: InputModalitySignal[]
 }
 
 // =============================================================================
@@ -292,6 +299,7 @@ export type DecisionConditionType =
   | 'event'
   | 'metadata'
   | 'classifier'
+  | 'input_modality'
   | 'projection'
 export interface DecisionCondition {
   type: DecisionConditionType
@@ -304,6 +312,7 @@ export interface DecisionCondition {
 export interface DecisionRules {
   operator: 'AND' | 'OR' | 'NOT'
   conditions: DecisionCondition[]
+  on_unknown?: 'no_match' | 'match' | 'fail_request'
 }
 
 export interface ModelRef {
@@ -324,7 +333,6 @@ export interface PluginConfig {
     | 'hallucination'
     | 'router_replay'
     | 'rag'
-    | 'image_gen'
     | 'fast_response'
     | 'tools'
     | 'request_params'

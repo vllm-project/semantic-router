@@ -57,7 +57,7 @@ type APIErrorResponse struct {
 type APIErrorDetail struct {
 	Message string `json:"message"`
 	Type    string `json:"type"`
-	Code    int    `json:"code,omitempty"`
+	Code    string `json:"code,omitempty"`
 }
 
 // ResponseAPIClient talks to the OpenAI-compatible Responses API surface.

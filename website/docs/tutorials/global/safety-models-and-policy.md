@@ -70,16 +70,62 @@ global:
 
 `http_classify` expects the Router's supported classification contract;
 `http_chat` uses a chat-completions prompt. Both send request text to the
-configured service.
+configured service. Set `max_response_bytes` on the external model entry to
+override the 1 MiB response limit.
+
+The HTTP MCP classifier uses
+`global.model_catalog.modules.classifier.mcp.max_response_bytes`. Its default
+is 16 MiB.
+
+### Remote category/domain classifier
+
+Category/domain classification uses the shared `backend` block. The explicit
+`model` is resolved by name in `global.model_catalog.external[]`; role and
+response contract are validated at startup, so an unrelated classification
+model cannot be selected accidentally. `protocol` describes the wire protocol
+and `contract` describes the semantic response product. They are separate
+axes. Category currently supports `http_classify` with
+`label_distribution.v1`, which preserves the complete configured-label score
+distribution used by domain matching and model selection. `deadline_ms` is
+an optional per-backend request deadline and defaults to 5000.
+
+```yaml
+global:
+  model_catalog:
+    external:
+      - name: domain-service
+        model_role: classification
+        llm_endpoint:
+          address: domain-classifier.default.svc
+          port: 8080
+          protocol: http
+        llm_model_name: domain-intent-v1
+    modules:
+      classifier:
+        domain:
+          category_mapping_path: models/mmbert32k-intent-classifier-merged/category_mapping.json
+          fallback_category: other
+          backend:
+            protocol: http_classify
+            contract: label_distribution.v1
+            model: domain-service
+            deadline_ms: 5000
+```
+
+Omit `backend` to retain local category inference. The deprecated
+`use_modernbert` and `use_mmbert_32k` keys remain readable for local configs;
+new canonical output uses `variant: candle`, `variant: modernbert`, or
+`variant: mmbert32k`. An agreeing canonical and legacy selector is accepted,
+while contradictory active selectors and both legacy selectors set to `true`
+are rejected deterministically. `backend` is mutually exclusive with active
+local selectors.
 
 ### On a classifier failure
 
-`on_error` controls what an unreachable or failing guardrail classifier does
-to the rule that failed to evaluate: `allow` (the default) tolerates the
-failure and treats the affected content as not matching, so other content
-still evaluates normally; `block` treats the failure itself as a positive
-detection instead, since an inference failure means the content could not be
-verified safe.
+An unreachable or invalid guardrail result is recorded as a signal error and
+enters a decision tree as `Unknown`. Set root-level `rules.on_unknown` on the
+consuming decision to resolve a terminal unknown as `no_match`, `match`, or
+`fail_request`.
 
 ```yaml
 global:
@@ -91,19 +137,28 @@ global:
         on_error: block
 ```
 
-Applies to any prompt guard backend, local or remote - not only the remote
-protocols above - and to both directions: request-side jailbreak signal rules,
-including `method: contrastive` ones, and the response-side `response_jailbreak`
-plugin, which scans LLM output with the same backend.
+When `rules.on_unknown` is omitted, request-side jailbreak decisions retain
+the existing `prompt_guard.on_error` behavior: `allow` (the default) tolerates
+the failure and maps the terminal result to no match, so other content still
+evaluates normally; `block` maps it to a match, treating the failure itself as
+a positive detection, since an inference failure means the content could not
+be verified safe.
 
-A failure is reported exactly as a real detection is. On the request side that
-means the jailbreak signal fires at confidence `1.0` with type
-`classification_error`, so `block` only closes a request if a decision actually
-consumes the jailbreak signal (`type: jailbreak`) and acts on it, typically with
-`fast_response` - without one it looks like a no-op. See the `jailbreak-onerror`
-e2e profile's `block_on_classifier_error` decision for a complete example. On
-the response side the plugin's own `action` decides: `block` returns a 403,
-`header` adds the response warning, `none` stays silent.
+The legacy `on_error` path applies to any prompt guard backend, local or
+remote - not only the remote protocols above - and to both directions:
+request-side jailbreak signal rules, including `method: contrastive` ones, and
+the response-side `response_jailbreak` plugin, which scans LLM output with the
+same backend. Response-side behavior is unchanged either way; the plugin's own
+`action` decides: `block` returns a 403, `header` adds the response warning,
+`none` stays silent.
+
+Under the legacy path a failure is reported exactly as a real detection is. On
+the request side that means the jailbreak signal fires at confidence `1.0`
+with type `classification_error`, so `block` only closes a request if a
+decision actually consumes the jailbreak signal (`type: jailbreak`) and acts
+on it, typically with `fast_response` - without one it looks like a no-op. See
+the `jailbreak-onerror` e2e profile's `block_on_classifier_error` decision for
+a complete example.
 
 :::note
 
@@ -111,7 +166,10 @@ This is not the same key as the `on_error` on a decision's classifier
 condition, which takes `no_match` or `match`. That one answers "what should this
 predicate evaluate to when the classifier fails"; `prompt_guard.on_error`
 answers "was the content verified at all", for every rule the guardrail backend
-serves. See [Classifier signals](../signal/learned/classifier.md).
+serves. Both remain backward-compatible defaults only while the consuming rule
+omits `rules.on_unknown`: setting `rules.on_unknown` disables every
+condition-level `on_error` below it. See
+[Classifier signals](../signal/learned/classifier.md).
 
 :::
 

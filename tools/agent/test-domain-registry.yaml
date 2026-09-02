@@ -184,7 +184,7 @@ domains:
       - src/semantic-router/pkg/sessiontelemetry/*memory*
       - src/semantic-router/pkg/vectorstore/*memory*
       - src/semantic-router/pkg/cache/*memory*
-      - src/vllm-sr/**/*memory*
+      - src/vllm-sr/cli/models.py
       - tools/make/milvus.mk
       - e2e/testing/09-memory-features-test.py
       - e2e/testing/run_memory_integration.sh
@@ -335,6 +335,13 @@ profiles:
     paths:
       - e2e/profiles/ai-gateway/**
       - deploy/kubernetes/ai-gateway/**
+  category-remote-backend:
+    owner: e2e
+    coverage_role: category-remote-classifier-backend
+    selection: pr
+    paths:
+      - e2e/profiles/category-remote-backend/**
+      - e2e/testcases/category_backend_routing.go
   aibrix:
     owner: e2e
     coverage_role: aibrix-control-plane-and-gateway
@@ -374,6 +381,14 @@ profiles:
     coverage_role: llm-d-inference-gateway-health
     selection: pr
     paths: [e2e/profiles/llm-d/**, deploy/kubernetes/llmd-base/**]
+  looper:
+    owner: e2e
+    coverage_role: deterministic-looper-algorithm-contracts
+    selection: pr
+    paths:
+      - e2e/profiles/looper/**
+      - e2e/testcases/looper_*.go
+      - src/semantic-router/pkg/looper/**
   routing-strategies:
     owner: e2e
     coverage_role: routing-strategy-contracts
@@ -421,25 +436,46 @@ profiles:
     paths:
       - e2e/profiles/streaming/**
       - deploy/kubernetes/streaming/**
+      - src/semantic-router/pkg/llmprotocol/**
+      - src/semantic-router/pkg/protocolcodec/**
       - src/semantic-router/pkg/extproc/processor_req_body_streamed*.go
+      - src/semantic-router/pkg/extproc/processor_res_body_pipeline.go
+      - src/semantic-router/pkg/extproc/processor_res_semantic_stream.go
   anthropic-shim:
     owner: e2e
     coverage_role: anthropic-shape-backend-translation-contracts
-    selection: manual
+    selection: pr
     image_receipts: [anthropic-shim]
     paths:
       - e2e/profiles/anthropic-shim/**
       - e2e/testing/anthropic-shim/**
+      - e2e/testcases/anthropic_*.go
+      - e2e/testcases/protocol_codec_*.go
       - deploy/kubernetes/anthropic-backend/**
-      - src/semantic-router/pkg/anthropic/outbound*.go
+      - src/semantic-router/pkg/llmprotocol/**
+      - src/semantic-router/pkg/protocolcodec/**
+      - src/semantic-router/pkg/extproc/processor_protocol_contract.go
+      - src/semantic-router/pkg/extproc/processor_res_body_pipeline.go
+      - src/semantic-router/pkg/extproc/processor_res_semantic_stream.go
+      - src/semantic-router/pkg/extproc/provider_request_adapter.go
   response-api:
     owner: e2e
     coverage_role: responses-api-memory
-    selection: manual
+    selection: pr
     paths:
       - e2e/profiles/response-api/**
+      - e2e/testcases/anthropic_response_api_streaming.go
+      - e2e/testcases/protocol_codec_*.go
       - deploy/kubernetes/response-api/gwapi-resources.yaml
       - deploy/kubernetes/response-api/mock-vllm.yaml
+      - tools/mock-vllm/**
+      - src/semantic-router/pkg/llmprotocol/**
+      - src/semantic-router/pkg/protocolcodec/**
+      - src/semantic-router/pkg/extproc/processor_protocol_contract.go
+      - src/semantic-router/pkg/extproc/processor_req_body_response_object.go
+      - src/semantic-router/pkg/extproc/processor_res_body_pipeline.go
+      - src/semantic-router/pkg/extproc/processor_res_semantic_stream.go
+      - src/semantic-router/pkg/extproc/provider_request_adapter.go
   response-api-redis:
     owner: e2e
     coverage_role: responses-api-redis-ttl

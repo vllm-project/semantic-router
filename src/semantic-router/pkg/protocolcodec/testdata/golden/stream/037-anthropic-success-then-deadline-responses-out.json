@@ -1,0 +1,150 @@
+{
+  "frames": [
+    {
+      "event": "response.created",
+      "data": {
+        "response": {
+          "created_at": 0,
+          "error": null,
+          "id": "response_deadline",
+          "incomplete_details": null,
+          "instructions": null,
+          "metadata": {},
+          "model": "public-model",
+          "object": "response",
+          "output": [],
+          "parallel_tool_calls": true,
+          "status": "in_progress",
+          "temperature": null,
+          "tool_choice": "auto",
+          "tools": [],
+          "top_p": null
+        },
+        "sequence_number": 0,
+        "type": "response.created"
+      }
+    },
+    {
+      "event": "response.in_progress",
+      "data": {
+        "response": {
+          "created_at": 0,
+          "error": null,
+          "id": "response_deadline",
+          "incomplete_details": null,
+          "instructions": null,
+          "metadata": {},
+          "model": "public-model",
+          "object": "response",
+          "output": [],
+          "parallel_tool_calls": true,
+          "status": "in_progress",
+          "temperature": null,
+          "tool_choice": "auto",
+          "tools": [],
+          "top_p": null
+        },
+        "sequence_number": 1,
+        "type": "response.in_progress"
+      }
+    },
+    {
+      "event": "response.output_item.added",
+      "data": {
+        "item": {
+          "content": [],
+          "id": "item_60ebebde98af8ae7d37793ae",
+          "role": "assistant",
+          "status": "in_progress",
+          "type": "message"
+        },
+        "output_index": 0,
+        "sequence_number": 2,
+        "type": "response.output_item.added"
+      }
+    },
+    {
+      "event": "response.content_part.added",
+      "data": {
+        "content_index": 0,
+        "item_id": "item_60ebebde98af8ae7d37793ae",
+        "output_index": 0,
+        "part": {
+          "annotations": [],
+          "text": "",
+          "type": "output_text"
+        },
+        "sequence_number": 3,
+        "type": "response.content_part.added"
+      }
+    },
+    {
+      "event": "response.output_text.delta",
+      "data": {
+        "content_index": 0,
+        "delta": "provisional",
+        "item_id": "item_60ebebde98af8ae7d37793ae",
+        "output_index": 0,
+        "sequence_number": 4,
+        "type": "response.output_text.delta"
+      }
+    },
+    {
+      "event": "response.output_text.done",
+      "data": {
+        "content_index": 0,
+        "item_id": "item_60ebebde98af8ae7d37793ae",
+        "output_index": 0,
+        "sequence_number": 5,
+        "text": "provisional",
+        "type": "response.output_text.done"
+      }
+    },
+    {
+      "event": "response.content_part.done",
+      "data": {
+        "content_index": 0,
+        "item_id": "item_60ebebde98af8ae7d37793ae",
+        "output_index": 0,
+        "part": {
+          "annotations": [],
+          "text": "provisional",
+          "type": "output_text"
+        },
+        "sequence_number": 6,
+        "type": "response.content_part.done"
+      }
+    },
+    {
+      "event": "response.output_item.done",
+      "data": {
+        "item": {
+          "content": [
+            {
+              "annotations": [],
+              "text": "provisional",
+              "type": "output_text"
+            }
+          ],
+          "id": "item_60ebebde98af8ae7d37793ae",
+          "role": "assistant",
+          "status": "completed",
+          "type": "message"
+        },
+        "output_index": 0,
+        "sequence_number": 7,
+        "type": "response.output_item.done"
+      }
+    },
+    {
+      "event": "error",
+      "data": {
+        "code": "stream_timeout",
+        "message": "stream deadline was exceeded",
+        "param": null,
+        "sequence_number": 8,
+        "type": "error"
+      }
+    }
+  ]
+}

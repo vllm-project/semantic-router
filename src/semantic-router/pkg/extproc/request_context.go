@@ -1,18 +1,17 @@
 package extproc
 
 import (
-	"bytes"
 	"context"
 	"time"
 
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/anthropic"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ir"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/projectiontrace"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 )
@@ -35,41 +34,16 @@ type EnhancedHallucinationInfo struct {
 	Spans      []EnhancedHallucinationSpan `json:"spans"`
 }
 
-// ChatCompletionMessage is role plus plain-text content from a Chat Completions request.
-type ChatCompletionMessage struct {
-	Role    string
-	Content string
-}
-
-// StreamingToolCallState accumulates tool-call deltas across streaming chunks.
-type StreamingToolCallState struct {
-	ID        string
-	Name      string
-	Arguments string
-}
-
-type StreamingChoiceState struct {
-	Content      string
-	Reasoning    string
-	Refusal      string
-	FinishReason string
-	ToolCalls    map[int]*StreamingToolCallState
-}
-
 // RequestContext holds the context for processing a request.
 type RequestContext struct {
 	Headers   map[string]string
 	RequestID string
-	// OriginalRequestBody is the immutable canonical request used by routing,
-	// cache identity, replay, and diagnostics. Response API requests store their
-	// translated Chat Completions representation here.
-	OriginalRequestBody []byte
-	// WorkingRequestBody is the provider-bound request after RAG, memory, and
-	// route-local plugin mutation. Empty means the original body is unchanged.
-	WorkingRequestBody []byte
-	RequestModel       string
-	RequestQuery       string
-	CacheRequestModel  string
+	// IngressBodyBytes records only transport size. Source bytes live in the
+	// bounded, ephemeral protocol envelope and are never general-purpose state.
+	IngressBodyBytes  int
+	RequestModel      string
+	RequestQuery      string
+	CacheRequestModel string
 	// CacheQuery is the semantic-cache lookup key (may include user scope); empty means fall back to RequestQuery.
 	CacheQuery                    string
 	CacheExactFingerprint         string
@@ -90,54 +64,20 @@ type RequestContext struct {
 	ContextCompressionSkipReason  string
 	StartTime                     time.Time
 	ProcessingStartTime           time.Time
-
 	// Streaming detection
-	ExpectStreamingResponse bool                   // set from request Accept header or stream parameter
-	IsStreamingResponse     bool                   // set from response Content-Type
-	AnthropicStream         *anthropic.StreamState // Anthropic SSE → OpenAI translation state
-
-	// PendingSSEBytes holds a trailing partial SSE frame carried over from a
-	// prior streaming response chunk. Envoy STREAMED mode delivers the
-	// response body split at arbitrary byte offsets, so an SSE frame can
-	// straddle two chunks; the streaming handlers stash the incomplete tail
-	// here and prepend it to the next chunk before parsing (issue #2316).
-	PendingSSEBytes []byte
-
-	// AnthropicPassthrough carries Anthropic-only request fields captured from
-	// the raw inbound body and incoming headers, so the request-body writer
-	// and header builder can replay them on the outbound side.
-	AnthropicPassthrough *anthropic.AnthropicPassthrough
+	ExpectStreamingResponse bool // set from request Accept header or stream parameter
+	IsStreamingResponse     bool // set from response Content-Type
 
 	// Semi-streaming body handler (non-nil when Envoy sends STREAMED body chunks)
 	StreamedBody          *StreamedBodyHandler
 	FullDuplexRequestBody bool // true when the data plane negotiated FULL_DUPLEX_STREAMED
+	SkipProcessing        bool // true only when the configured opt-out header is valid
 
-	// Streaming accumulation for caching
-	HasStreamingChunks bool                            // True when at least one SSE chunk has been received
-	StreamingContent   string                          // Accumulated content from delta.content
-	StreamingReasoning string                          // Accumulated reasoning from delta.reasoning_content
-	StreamingRefusal   string                          // Accumulated refusal text from delta.refusal
-	StreamingMetadata  map[string]interface{}          // id, model, created from first chunk
-	StreamingToolCalls map[int]*StreamingToolCallState // Accumulated delta.tool_calls keyed by tool index
-	StreamingChoices   map[int]*StreamingChoiceState
-	StreamingComplete  bool // True when [DONE] marker received
-	StreamingAborted   bool // True if stream ended abnormally (EOF, cancel, timeout)
-
-	// Response API streaming translation state. When /v1/responses is backed by
-	// an upstream Chat Completions stream, these fields track the outbound
-	// Responses API event envelope emitted to the client.
-	ResponseAPIStreamStarted              bool
-	ResponseAPIStreamMessageStarted       bool
-	ResponseAPIStreamNextOutputIndex      int
-	ResponseAPIStreamMessageOutputIndex   int
-	ResponseAPIStreamItemID               string
-	ResponseAPIStreamToolCallItemIDs      map[int]string
-	ResponseAPIStreamToolCallOutputIndex  map[int]int
-	ResponseAPIStreamReasoningItemID      string
-	ResponseAPIStreamReasoningOutputIndex int
-	ResponseAPIStreamReasoningStarted     bool
-	ResponseAPIStreamRefusalStarted       bool
-	ResponseAPIStreamCreatedAt            int64
+	StreamingComplete      bool // True after neutral stream finalization runs once.
+	StreamingAborted       bool // True if the neutral stream ended abnormally.
+	ProtocolResponseStream *protocolcodec.StreamEngine
+	PublicChatUsageFilter  *protocolcodec.ChatUsageStreamFilter
+	SemanticStreamState    *semanticResponseStreamState
 
 	// UpstreamStatusCode is the HTTP status the upstream returned, captured at
 	// the response-header phase. Zero means the status was never observed for
@@ -203,6 +143,10 @@ type RequestContext struct {
 	VSRCacheTTLSeconds              int
 	VSRInjectedSystemPrompt         bool             // Whether a system prompt was injected into the request
 	VSRSelectedDecision             *config.Decision // The decision object selected by DecisionEngine (for plugins)
+	// VSREligibleModelRefs is the selected decision's model set after applying
+	// request contracts. Loopers consume this exact set; broader Router Learning
+	// candidate sets must independently apply the same request contracts.
+	VSREligibleModelRefs []config.ModelRef
 
 	// ResponsePath records how the final response was produced, surfaced as the
 	// v0.4 keystone x-vsr-response-path header (one of the headers.ResponsePath*
@@ -239,12 +183,14 @@ type RequestContext struct {
 	VSRMatchedEvent           []string // Matched event signal names
 	VSRMatchedMetadata        []string // Matched untrusted request metadata signal names
 	VSRMatchedClassifier      []string // Matched generic classifier signal names
+	VSRMatchedInputModality   []string // Matched structural input-modality signal names
 	VSRConversationFacts      classification.ConversationFacts
 	VSRMatchedProjection      []string // Matched projection mapping outputs
 	VSRProjectionScores       map[string]float64
 	VSRSignalConfidences      map[string]float64
 	VSRSignalValues           map[string]float64
 	VSRSignalErrors           map[string]string
+	VSRAppliedUnknownPolicies map[string]string
 	VSRProjectionTrace        *projectiontrace.Trace
 
 	// Hallucination mitigation tracking
@@ -279,15 +225,9 @@ type RequestContext struct {
 	TraceContext context.Context // OpenTelemetry trace context for span propagation
 	UpstreamSpan trace.Span      // Span for tracking upstream vLLM request duration
 
-	// Response API context
-	ResponseAPICtx *ResponseAPIContext // Non-nil if this is a Response API request
-
-	// Chat Completions messages (parsed for memory and related flows)
-	ChatCompletionMessages []ChatCompletionMessage
-	// ChatCompletionRequestBody is the raw chat-completions JSON (dev: extract user from body).
-	ChatCompletionRequestBody []byte
-	// ChatCompletionUserID is populated in dev builds when parsing the chat-completions body.
-	ChatCompletionUserID string
+	// ResponseObjectState is present only when optional Responses object
+	// persistence participates in this request. Generation never depends on it.
+	ResponseObjectState *ResponseObjectState
 
 	// Router replay context
 	RouterReplayID           string                           // ID of the router replay session, if applicable
@@ -298,27 +238,17 @@ type RequestContext struct {
 	LooperRequest   bool // True only for token-authenticated in-process looper requests
 	LooperIteration int  // The iteration number if this is a looper request
 
-	// SkipProcessing indicates the client (or an upstream filter such as Envoy AI
-	// Gateway) requested a full passthrough via the x-vsr-skip-processing header.
-	// When true the extproc still receives Envoy callbacks but acts as a no-op:
-	// it does not classify, route, mutate, cache, or inspect request/response
-	// bodies, and simply returns CONTINUE for every phase.
-	SkipProcessing bool
-
-	// External API routing context (for Envoy-routed external API requests)
-	// APIFormat indicates the target API format (e.g., "anthropic", "gemini")
-	// Empty string means standard OpenAI-compatible backend (no transformation needed)
-	APIFormat string
-
-	// ClientProtocol identifies the inbound wire format (e.g., "anthropic" for /v1/messages).
-	// Empty string means OpenAI-compatible (the default).
-	ClientProtocol string
-
-	// IRExtensions carries protocol-specific fields that have no home in
-	// the OpenAI-shape IR (*openai.ChatCompletionNewParams). Inbound
-	// parsers populate it for non-OpenAI clients; outbound emitters and
-	// plugins read from it. Nil for plain OpenAI requests.
-	IRExtensions *ir.IRExtensions
+	// SourceFormat and SemanticRequest are the authoritative public protocol
+	// contract and neutral request.
+	SourceFormat             llmprotocol.WireFormat
+	TargetFormat             llmprotocol.WireFormat
+	SemanticRequest          *llmprotocol.Request
+	SemanticResponse         *llmprotocol.Response
+	ProtocolEnvelope         llmprotocol.Envelope
+	ResponseEnvelope         llmprotocol.Envelope
+	ProtocolDiagnostics      llmprotocol.Diagnostics
+	ImmediateProtocolError   *llmprotocol.ProtocolError
+	ImmediateResponseEncoded bool
 
 	// RAG (Retrieval-Augmented Generation) tracking
 	RAGRetrievedContext string  // Retrieved context from RAG plugin
@@ -349,10 +279,8 @@ type RequestContext struct {
 	ContextCompressionFallback     string
 	ContextCompressionCostSaved    float64
 
-	// Note: Per-user API keys from ext_authz / Authorino are read directly from
-	// ctx.Headers by the CredentialResolver (pkg/authz). No separate fields needed.
-
-	// Rate limit context - stored after Check() for post-response Report()
+	// RateLimitCtx is retained for the existing optional data-plane limiter.
+	// Protocol codecs never read or mutate admission state.
 	RateLimitCtx *ratelimit.Context
 
 	// EmittedRetention is a deep-clone snapshot of the retention directive
@@ -362,31 +290,13 @@ type RequestContext struct {
 	EmittedRetention *config.RetentionDirective
 }
 
-func (ctx *RequestContext) setWorkingRequestBody(body []byte) {
-	if ctx == nil {
-		return
+// embeddingContext returns the request-scoped context for outbound embedding
+// calls, so a client disconnect cancels in-flight remote embedding RPCs.
+func (ctx *RequestContext) embeddingContext() context.Context {
+	if ctx == nil || ctx.TraceContext == nil {
+		return context.Background()
 	}
-	if bytes.Equal(body, ctx.OriginalRequestBody) {
-		ctx.WorkingRequestBody = nil
-		return
-	}
-	ctx.WorkingRequestBody = body
-}
-
-func (ctx *RequestContext) workingRequestBody() []byte {
-	if ctx == nil {
-		return nil
-	}
-	if len(ctx.WorkingRequestBody) > 0 {
-		return ctx.WorkingRequestBody
-	}
-	return ctx.OriginalRequestBody
-}
-
-func (ctx *RequestContext) requestBodyMutated() bool {
-	return ctx != nil &&
-		len(ctx.WorkingRequestBody) > 0 &&
-		!bytes.Equal(ctx.WorkingRequestBody, ctx.OriginalRequestBody)
+	return ctx.TraceContext
 }
 
 // HasPersonalizedContext returns true if the request/response is tainted with user-specific

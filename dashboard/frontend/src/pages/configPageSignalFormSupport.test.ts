@@ -1,17 +1,85 @@
 import { describe, expect, it } from 'vitest'
 
-import type { ConfigData } from './configPageSupport'
+import type {
+  AddSignalFormState,
+  ConfigData,
+  RecipeRoutingConfig,
+} from './configPageSupport'
 import {
+  buildClassifierSignal,
   getSignalReferenceCount,
   getSignalReferenceCountInRoutingProfile,
   normalizeConditions,
+  normalizeConversationFeature,
+  normalizeConversationPredicate,
   normalizeStringList,
   normalizeStructureFeature,
   normalizeStructurePredicate,
   normalizeSubjects,
+  readConversationFeature,
 } from './configPageSignalFormSupport'
+import { buildSignalFormFields } from './configPageSignalFormFields'
+
+const classifierForm = (overrides: Partial<AddSignalFormState> = {}): AddSignalFormState => ({
+  type: 'Classifier',
+  name: '',
+  description: '',
+  operator: 'AND',
+  keywords: [],
+  case_sensitive: false,
+  threshold: 0.8,
+  candidates: [],
+  aggregation_method: 'mean',
+  mmlu_categories: [],
+  ...overrides,
+})
 
 describe('signal form support', () => {
+  it('builds sequence classifiers without LLM-only fields', () => {
+    expect(
+      buildClassifierSignal(
+        classifierForm({
+          classifier_type: 'sequence_classifier',
+          classifier_model: 'toxicity-endpoint',
+          classifier_labels: ['benign', 'toxic'],
+          classifier_instructions: 'must not be persisted',
+        }),
+        'toxicity',
+      ),
+    ).toEqual({
+      name: 'toxicity',
+      description: undefined,
+      type: 'sequence_classifier',
+      model: 'toxicity-endpoint',
+      labels: ['benign', 'toxic'],
+    })
+    expect(() =>
+      buildClassifierSignal(
+        classifierForm({
+          classifier_type: 'sequence_classifier',
+          classifier_model: 'toxicity-endpoint',
+          classifier_labels: ['toxic'],
+        }),
+        'toxicity',
+      ),
+    ).toThrow(/at least two labels/i)
+  })
+
+  it('shows the external model field for sequence classifiers', () => {
+    const fields = buildSignalFormFields()
+    const backend = fields.find((field) => field.name === 'classifier_type')
+    const model = fields.find((field) => field.name === 'classifier_model')
+    const instructions = fields.find((field) => field.name === 'classifier_instructions')
+
+    expect(backend?.options).toContain('sequence_classifier')
+    expect(model?.shouldHide?.(classifierForm({ classifier_type: 'sequence_classifier' }))).toBe(
+      false,
+    )
+    expect(
+      instructions?.shouldHide?.(classifierForm({ classifier_type: 'sequence_classifier' })),
+    ).toBe(true)
+  })
+
   it('normalizes typed string lists without accepting empty or duplicate values', () => {
     expect(normalizeStringList([' urgent ', 'billing'], 'Keywords', true)).toEqual([
       'urgent',
@@ -166,5 +234,69 @@ describe('signal form support', () => {
         'shared-local-name',
       ),
     ).toBe(1)
+  })
+
+  it('reads a valid default for junk conversation input and round-trips a valid rule', () => {
+    expect(readConversationFeature(null)).toEqual({
+      type: 'exists',
+      source: { type: 'image_content' },
+    })
+    expect(
+      readConversationFeature({ type: 'count', source: { type: 'message', role: 'non_user' } }),
+    ).toEqual({ type: 'count', source: { type: 'message', role: 'non_user' } })
+  })
+
+  it('normalizes conversation features and enforces the validator rules', () => {
+    expect(
+      normalizeConversationFeature({
+        type: 'count',
+        source: { type: 'message', role: 'non_user' },
+      }),
+    ).toEqual({ type: 'count', source: { type: 'message', role: 'non_user' } })
+
+    expect(() =>
+      normalizeConversationFeature({
+        type: 'count',
+        source: { type: 'tool_definition', role: 'user' },
+      }),
+    ).toThrow(/only valid when the source type is "message"/)
+
+    expect(() =>
+      normalizeConversationFeature({ type: 'exists', source: { type: 'telepathy' } }),
+    ).toThrow(/Unsupported conversation source type/)
+
+    expect(() =>
+      normalizeConversationFeature({
+        type: 'count',
+        source: { type: 'message', role: 'wizard' },
+      }),
+    ).toThrow(/Unsupported conversation role/)
+  })
+
+  it('drops the predicate for an exists feature and validates count predicates', () => {
+    const exists = normalizeConversationFeature({ type: 'exists', source: { type: 'message' } })
+    expect(normalizeConversationPredicate(exists, { gte: 2 })).toBeUndefined()
+
+    const count = normalizeConversationFeature({ type: 'count', source: { type: 'message' } })
+    expect(normalizeConversationPredicate(count, { gte: 2 })).toEqual({ gte: 2 })
+    expect(() => normalizeConversationPredicate(count, { gt: 1, gte: 2 })).toThrow(
+      /both gt and gte/,
+    )
+  })
+
+  it('counts conversation signal references in a routing profile', () => {
+    const routing: RecipeRoutingConfig = {
+      decisions: [
+        {
+          name: 'route-images',
+          description: '',
+          priority: 1,
+          rules: { operator: 'AND', conditions: [{ type: 'conversation', name: 'has_images' }] },
+          modelRefs: [],
+        },
+      ],
+    }
+
+    expect(getSignalReferenceCountInRoutingProfile(routing, 'Conversation', 'has_images')).toBe(1)
   })
 })

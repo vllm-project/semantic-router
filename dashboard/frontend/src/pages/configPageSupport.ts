@@ -215,6 +215,7 @@ export interface DecisionCondition {
 export interface DecisionRuleSet {
   operator: 'AND' | 'OR' | 'NOT'
   conditions: DecisionCondition[]
+  on_unknown?: 'no_match' | 'match' | 'fail_request'
 }
 
 export interface DecisionModelRef {
@@ -446,6 +447,7 @@ export interface EmbeddingEndpointConfig {
   api_key_env?: string
   timeout_seconds?: number
   max_retries?: number
+  max_response_bytes?: number
   dimensions?: number
 }
 
@@ -552,6 +554,7 @@ export interface VectorStoreConfig {
   embedding_model?: string
   embedding_dimension?: number
   ingestion_workers?: number
+  ingestion_drain_timeout_seconds?: number
   supported_formats?: string[]
   milvus?: VectorStoreMilvusConfig
   memory?: VectorStoreMemoryConfig
@@ -795,6 +798,7 @@ export interface ConfigSignals {
   kb?: KBSignal[]
   metadata?: MetadataSignal[]
   classifiers?: ClassifierSignal[]
+  conversation?: ConversationSignal[]
 }
 
 export interface ConfigProjections {
@@ -1018,7 +1022,7 @@ export interface MetadataSignal {
 export interface ClassifierSignal {
   name: string
   description?: string
-  type: 'local' | 'llm'
+  type: 'local' | 'llm' | 'sequence_classifier'
   model?: string
   model_path?: string
   labels: string[]
@@ -1168,6 +1172,23 @@ export interface StructureSignal {
   predicate?: NumericPredicate
 }
 
+export interface ConversationSource {
+  type: string
+  role?: string
+}
+
+export interface ConversationFeature {
+  type: string
+  source: ConversationSource
+}
+
+export interface ConversationSignal {
+  name: string
+  description?: string
+  feature: ConversationFeature
+  predicate?: NumericPredicate
+}
+
 export interface ComplexitySignal {
   name: string
   threshold: number
@@ -1271,12 +1292,14 @@ export type SignalType =
   | 'KB'
   | 'Metadata'
   | 'Classifier'
+  | 'Conversation'
 
 export interface DecisionFormState {
   name: string
   description: string
   priority: number
   operator: 'AND' | 'OR' | 'NOT'
+  on_unknown?: '' | 'no_match' | 'match' | 'fail_request'
   conditions: DecisionCondition[]
   modelRefs: DecisionModelRef[]
   plugins: { type: string; configuration: string | DecisionPluginConfiguration }[]
@@ -1297,7 +1320,10 @@ export function decisionRulesForSave(
   next: DecisionRuleSet,
 ): DecisionRuleSet {
   if (existing?.conditions.some(conditionHasNestedRules)) {
-    return JSON.parse(JSON.stringify(existing)) as DecisionRuleSet
+    const preserved = JSON.parse(JSON.stringify(existing)) as DecisionRuleSet
+    if (next.on_unknown) preserved.on_unknown = next.on_unknown
+    else delete preserved.on_unknown
+    return preserved
   }
   return next
 }
@@ -1331,6 +1357,8 @@ export interface AddSignalFormState {
   complexity_threshold?: number
   structure_feature?: StructureFeature
   structure_predicate?: NumericPredicate
+  conversation_feature?: ConversationFeature
+  conversation_predicate?: NumericPredicate
   role?: string
   subjects?: Subject[]
   hard_candidates?: string[]
@@ -1354,7 +1382,7 @@ export interface AddSignalFormState {
   metadata_equals?: string
   metadata_in?: string[]
   metadata_exists?: boolean
-  classifier_type?: 'local' | 'llm'
+  classifier_type?: 'local' | 'llm' | 'sequence_classifier'
   classifier_model?: string
   classifier_model_path?: string
   classifier_labels?: string[]

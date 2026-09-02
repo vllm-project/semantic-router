@@ -110,8 +110,9 @@ func (l *RatingsLooper) Execute(ctx context.Context, req *Request) (*Response, e
 
 			// Use idx+1 as iteration number for concurrent requests.
 			// RatingsLooper doesn't need logprobs (no confidence-based routing).
-			resp, err := l.client.CallModel(
+			resp, err := l.callModelWithContextGate(
 				ctx,
+				req,
 				toolFreeLooperRequest(req.OriginalRequest),
 				modelName,
 				req.IsStreaming,
@@ -194,7 +195,6 @@ func (l *RatingsLooper) formatRatingsJSONResponse(responses []*ModelResponse, mo
 				"content": resp.Content,
 			},
 			"finish_reason": "stop",
-			"model":         modelsUsed[i], // Include model name in each choice
 		}
 	}
 
@@ -245,7 +245,6 @@ func (l *RatingsLooper) formatRatingsStreamingResponse(responses []*ModelRespons
 					"delta": map[string]interface{}{
 						"role": "assistant",
 					},
-					"model": modelsUsed[i],
 				}
 			}
 			return choices
@@ -280,7 +279,6 @@ func (l *RatingsLooper) formatRatingsStreamingResponse(responses []*ModelRespons
 				"delta": map[string]interface{}{
 					"content": content,
 				},
-				"model": modelsUsed[i],
 			}
 		}
 
@@ -308,7 +306,6 @@ func (l *RatingsLooper) formatRatingsStreamingResponse(responses []*ModelRespons
 					"index":         i,
 					"delta":         map[string]interface{}{},
 					"finish_reason": "stop",
-					"model":         modelsUsed[i],
 				}
 			}
 			return choices

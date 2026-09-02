@@ -80,6 +80,7 @@ func canonicalSignalsFromSignals(signals Signals) CanonicalSignals {
 		EventRules:    append([]EventRule(nil), signals.EventRules...),
 		Metadata:      append([]MetadataRule(nil), signals.MetadataRules...),
 		Classifiers:   append([]ClassifierSignalRule(nil), signals.ClassifierRules...),
+		InputModality: append([]InputModalityRule(nil), signals.InputModalityRules...),
 	}
 }
 
@@ -190,6 +191,14 @@ func canonicalAutoModelNames(names []string) *[]string {
 }
 
 func canonicalModelCatalogFromRouterConfig(cfg *RouterConfig) CanonicalModelCatalog {
+	categoryModel := cfg.CategoryModel
+	if err := normalizeCanonicalCategoryVariant(&categoryModel); err != nil {
+		// Export is intentionally non-validating. Preserve an invalid runtime
+		// value so the normal configuration validator reports the actionable
+		// error instead of silently changing it during serialization.
+		categoryModel = cfg.CategoryModel
+	}
+
 	return CanonicalModelCatalog{
 		Embeddings: CanonicalEmbeddingModels{
 			Semantic: cfg.EmbeddingModels,
@@ -203,8 +212,9 @@ func canonicalModelCatalogFromRouterConfig(cfg *RouterConfig) CanonicalModelCata
 			HallucinationExplainer: cfg.HallucinationMitigation.NLIModel.ModelID,
 			FeedbackDetector:       cfg.FeedbackDetector.ModelID,
 		},
-		External: append([]ExternalModelConfig(nil), cfg.ExternalModels...),
-		KBs:      append([]KnowledgeBaseConfig(nil), cfg.KnowledgeBases...),
+		External:  append([]ExternalModelConfig(nil), cfg.ExternalModels...),
+		KBs:       append([]KnowledgeBaseConfig(nil), cfg.KnowledgeBases...),
+		Admission: cloneAdmissionMap(cfg.ModelAdmission),
 		Modules: CanonicalModelModules{
 			PromptCompression: cfg.PromptCompression,
 			PromptGuard: CanonicalPromptGuardModule{
@@ -213,7 +223,7 @@ func canonicalModelCatalogFromRouterConfig(cfg *RouterConfig) CanonicalModelCata
 			},
 			Classifier: CanonicalClassifierModule{
 				Domain: CanonicalCategoryModule{
-					CategoryModel: cfg.CategoryModel,
+					CategoryModel: categoryModel,
 					ModelRef:      "domain_classifier",
 				},
 				MCP: cfg.MCPCategoryModel,
