@@ -7,7 +7,6 @@ import (
 	"crypto/tls"
 	"encoding/hex"
 	mathrand "math/rand"
-	"net/http"
 	"strconv"
 	"strings"
 	"sync"
@@ -17,6 +16,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/connector"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
@@ -69,18 +69,17 @@ const (
 // lane exists per routing decision so a slow shadow backend on one route
 // cannot starve another route's observations.
 type shadowDispatcher struct {
-	httpClient *http.Client
-	sampler    func() float64
-	now        func() time.Time
+	sampler func() float64
+	now     func() time.Time
 
 	ctx    context.Context
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
 
-	mu             sync.Mutex
-	lanes          map[string]*shadowLane
-	insecureClient *http.Client
-	closed         bool
+	mu      sync.Mutex
+	lanes   map[string]*shadowLane
+	clients map[string]*connector.Client
+	closed  bool
 }
 
 type shadowLane struct {
@@ -133,31 +132,19 @@ type shadowResult struct {
 func newShadowDispatcher() *shadowDispatcher {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &shadowDispatcher{
-		// Per-call deadlines come from the job context, so the client itself
-		// carries no global timeout.
-		httpClient: &http.Client{},
-		sampler:    mathrand.Float64, //nolint:gosec // sampling only, not security sensitive
-		now:        time.Now,
-		ctx:        ctx,
-		cancel:     cancel,
-		lanes:      make(map[string]*shadowLane),
+		sampler: mathrand.Float64, //nolint:gosec // sampling only, not security sensitive
+		now:     time.Now,
+		ctx:     ctx,
+		cancel:  cancel,
+		lanes:   make(map[string]*shadowLane),
+		clients: make(map[string]*connector.Client),
 	}
 }
 
-// clientFor returns the HTTP client for a target. Certificate verification is
-// skipped only when the operator opted in for that decision.
-func (d *shadowDispatcher) clientFor(skipVerify bool) *http.Client {
-	if !skipVerify {
-		return d.httpClient
-	}
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	if d.insecureClient == nil {
-		transport := http.DefaultTransport.(*http.Transport).Clone()
-		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec // explicit operator opt-in matching Envoy's upstream posture
-		d.insecureClient = &http.Client{Transport: transport}
-	}
-	return d.insecureClient
+// insecureShadowTLSConfig is the explicit operator opt-in matching Envoy's
+// upstream posture for a backend without a verifiable certificate.
+func insecureShadowTLSConfig() *tls.Config {
+	return &tls.Config{InsecureSkipVerify: true} //nolint:gosec // explicit per-decision operator opt-in
 }
 
 // Close stops accepting new shadow calls, drains in-flight ones for a bounded
@@ -173,16 +160,27 @@ func (d *shadowDispatcher) Close() error {
 	}
 	d.closed = true
 	d.mu.Unlock()
-	if d.waitIdle(shadowDispatchDrainTimeout) {
+	if !d.waitIdle(shadowDispatchDrainTimeout) {
+		logging.ComponentWarnEvent("extproc", "shadow_dispatch_drain_timeout", map[string]interface{}{
+			"timeout": shadowDispatchDrainTimeout.String(),
+		})
 		d.cancel()
-		return nil
+		d.waitIdle(shadowDispatchCancelGrace)
+	} else {
+		d.cancel()
 	}
-	logging.ComponentWarnEvent("extproc", "shadow_dispatch_drain_timeout", map[string]interface{}{
-		"timeout": shadowDispatchDrainTimeout.String(),
-	})
-	d.cancel()
-	d.waitIdle(shadowDispatchCancelGrace)
+	d.closeConnectors()
 	return nil
+}
+
+// closeConnectors releases idle connections held by every shadow connector.
+func (d *shadowDispatcher) closeConnectors() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for key, client := range d.clients {
+		_ = client.Close()
+		delete(d.clients, key)
+	}
 }
 
 // waitIdle blocks until every shadow worker has exited or the timeout passes.

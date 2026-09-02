@@ -1,23 +1,31 @@
 package extproc
 
 import (
-	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
-	httputil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/connector"
 )
 
-// shadowDispatchErrorBodyBytes bounds how much of a non-2xx shadow response
-// is read for diagnostics. It is never stored.
-const shadowDispatchErrorBodyBytes = 8 * 1024
+const (
+	// shadowDispatchErrorBodyBytes bounds how much of a non-2xx shadow
+	// response the connector reads for diagnostics. It is never stored.
+	shadowDispatchErrorBodyBytes = 8 * 1024
+	// shadowDispatchMaxRequestBytes bounds the encoded shadow body. The
+	// primary request already passed the router's own limits, so this only
+	// guards the connector contract.
+	shadowDispatchMaxRequestBytes = 16 << 20
+	shadowDispatchOperationName   = "shadow_dispatch"
+)
 
 type shadowTarget struct {
 	logicalModel  string
@@ -25,40 +33,54 @@ type shadowTarget struct {
 	upstreamModel string
 	profile       *config.ProviderProfile
 	format        llmprotocol.WireFormat
-	endpointURL   string
+	baseURL       string
+	path          string
 }
 
 type preparedShadowCall struct {
-	target    *shadowTarget
-	accessKey string
-	body      []byte
+	target *shadowTarget
+	client *connector.Client
+	body   []byte
 }
 
 func (d *shadowDispatcher) call(ctx context.Context, job *shadowJob) shadowResult {
 	result := shadowResult{startedAt: d.now()}
-	prepared, reason, err := prepareShadowCall(job)
+	prepared, reason, err := d.prepareShadowCall(job)
 	if err != nil {
 		return d.failShadow(result, reason, err)
 	}
 	result.shadowBackend = prepared.target.backendName
-	for attempt := 1; ; attempt++ {
-		// Every attempt reports its own status so a retry that fails
-		// differently cannot inherit a stale code from an earlier one.
-		result.attempts = attempt
-		result.statusCode = 0
-		result.responseBytes = 0
-		retryable, reason, err := d.attemptShadowCall(ctx, job, prepared, &result)
-		if err == nil {
-			result.verdict = shadowVerdictCompleted
-			result.reason = shadowReasonCompleted
-			result.finishedAt = d.now()
-			return result
-		}
-		if retryable && attempt <= job.cfg.MaxRetries && ctx.Err() == nil {
-			continue
-		}
+	operation := connector.Operation{
+		Name:      shadowDispatchOperationName,
+		Method:    http.MethodPost,
+		Path:      prepared.target.path,
+		RetrySafe: true,
+	}
+	response, err := prepared.client.DoRequest(ctx, operation, connector.Request{
+		Body:    prepared.body,
+		Headers: shadowCallHeaders(job, prepared.target),
+	})
+	if err != nil {
+		reason, attempts, status := shadowConnectorFailure(ctx, d.ctx, err)
+		result.attempts = attempts
+		result.statusCode = status
 		return d.failShadow(result, reason, err)
 	}
+	result.attempts = response.Attempts
+	result.statusCode = response.StatusCode
+	result.responseBytes = len(response.Body)
+	decoded, err := job.engine.TranslateResponse(prepared.target.format, prepared.target.format, response.Body, nil)
+	if err != nil {
+		return d.failShadow(result, shadowReasonMalformedResponse, err)
+	}
+	result.stopReason = string(decoded.Response.StopReason)
+	result.inputTokens = shadowTokenCount(decoded.Response.Usage.InputTotal)
+	result.outputTokens = shadowTokenCount(decoded.Response.Usage.OutputTotal)
+	result.text = semanticResponseText(decoded.Response)
+	result.verdict = shadowVerdictCompleted
+	result.reason = shadowReasonCompleted
+	result.finishedAt = d.now()
+	return result
 }
 
 func (d *shadowDispatcher) failShadow(result shadowResult, reason string, err error) shadowResult {
@@ -71,70 +93,105 @@ func (d *shadowDispatcher) failShadow(result shadowResult, reason string, err er
 	return result
 }
 
-// prepareShadowCall resolves the shadow backend, its static credential, and
-// the encoded body once; every attempt reuses the same approved request.
-func prepareShadowCall(job *shadowJob) (*preparedShadowCall, string, error) {
+// prepareShadowCall resolves the shadow backend, its connector, and the
+// encoded body once; the connector then owns every transport attempt.
+func (d *shadowDispatcher) prepareShadowCall(job *shadowJob) (*preparedShadowCall, string, error) {
 	target, err := resolveShadowTarget(job.routerConfig, job.cfg.Model)
 	if err != nil {
 		return nil, shadowReasonBackendUnresolved, err
 	}
-	accessKey, err := resolveShadowCredential(job.routerConfig, target.profile, job.cfg.Model)
+	client, reason, err := d.connectorFor(job, target)
 	if err != nil {
-		return nil, shadowReasonCredentialUnresolved, err
+		return nil, reason, err
 	}
 	body, err := job.encode(job.request, target)
 	if err != nil {
 		return nil, shadowReasonEncodeFailed, err
 	}
-	return &preparedShadowCall{target: target, accessKey: accessKey, body: body}, "", nil
+	return &preparedShadowCall{target: target, client: client, body: body}, "", nil
 }
 
-// attemptShadowCall performs one bounded HTTP attempt and fills result with
-// whatever it learned. retryable reports whether another attempt may help.
-func (d *shadowDispatcher) attemptShadowCall(
-	ctx context.Context,
-	job *shadowJob,
-	prepared *preparedShadowCall,
-	result *shadowResult,
-) (retryable bool, reason string, err error) {
-	resp, err := d.doShadowRequest(ctx, job, prepared)
+// connectorFor returns the shared connector for a target and decision bounds,
+// creating it on first use. The key includes the router config identity so a
+// rebuilt configuration never reuses a connector bound to the old one.
+// Certificate verification is skipped only when the operator opted in for
+// that decision.
+func (d *shadowDispatcher) connectorFor(job *shadowJob, target *shadowTarget) (*connector.Client, string, error) {
+	key := fmt.Sprintf("%p|%s|%s|%d|%d|%d|%t",
+		job.routerConfig, target.baseURL, target.logicalModel,
+		job.cfg.TimeoutSeconds, job.cfg.MaxRetries, job.cfg.MaxResponseBytes, job.cfg.TLSSkipVerify)
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if client, ok := d.clients[key]; ok {
+		return client, "", nil
+	}
+	authorize, err := shadowAuthorizer(job.routerConfig, target.profile, target.logicalModel)
 	if err != nil {
-		if reason, done := shadowContextFailure(ctx, d.ctx); done {
-			return false, reason, err
+		return nil, shadowReasonCredentialUnresolved, err
+	}
+	client, err := connector.New(target.baseURL, authorize, shadowConnectorOptions(job.cfg))
+	if err != nil {
+		return nil, shadowReasonBackendUnresolved, fmt.Errorf("shadow model %q: %w", target.logicalModel, err)
+	}
+	d.clients[key] = client
+	return client, "", nil
+}
+
+func shadowConnectorOptions(cfg config.ShadowDispatchPluginConfig) connector.Options {
+	options := connector.Options{
+		AttemptTimeout:   time.Duration(cfg.TimeoutSeconds) * time.Second,
+		MaxRetries:       cfg.MaxRetries,
+		MaxRequestBytes:  shadowDispatchMaxRequestBytes,
+		MaxResponseBytes: int64(cfg.MaxResponseBytes),
+		MaxErrorBytes:    shadowDispatchErrorBodyBytes,
+	}
+	if cfg.TLSSkipVerify {
+		options.TLSConfig = insecureShadowTLSConfig()
+	}
+	return options
+}
+
+// shadowCallHeaders carries the per-request context a shadow copy keeps:
+// trace headers, decision header mutations, provider extra headers, and its
+// own request identifier. Client headers are never forwarded.
+func shadowCallHeaders(job *shadowJob, target *shadowTarget) map[string]string {
+	result := make(map[string]string, len(job.extraHeaders)+2)
+	for key, value := range job.extraHeaders {
+		result[key] = value
+	}
+	if target.profile != nil {
+		for key, value := range target.profile.ExtraHeaders {
+			result[key] = value
 		}
-		return true, shadowReasonTransportError, err
 	}
-	defer func() { _ = resp.Body.Close() }()
-	result.statusCode = resp.StatusCode
-	if resp.StatusCode != http.StatusOK {
-		_, _ = httputil.ReadTruncatedBody(resp.Body, shadowDispatchErrorBodyBytes)
-		return shadowRetryableStatus(resp.StatusCode), shadowReasonUpstreamStatus,
-			fmt.Errorf("upstream status %d", resp.StatusCode)
-	}
-	respBody, err := httputil.ReadLimitedBody(resp.Body, int64(job.cfg.MaxResponseBytes))
-	if err != nil {
-		return false, shadowReadFailureReason(ctx, d.ctx, err), err
-	}
-	result.responseBytes = len(respBody)
-	decoded, err := job.engine.TranslateResponse(prepared.target.format, prepared.target.format, respBody, nil)
-	if err != nil {
-		return false, shadowReasonMalformedResponse, err
-	}
-	result.stopReason = string(decoded.Response.StopReason)
-	result.inputTokens = shadowTokenCount(decoded.Response.Usage.InputTotal)
-	result.outputTokens = shadowTokenCount(decoded.Response.Usage.OutputTotal)
-	result.text = semanticResponseText(decoded.Response)
-	return false, "", nil
+	result[headers.RequestID] = job.shadowRequestID
+	return result
 }
 
-func shadowReadFailureReason(callCtx, rootCtx context.Context, err error) string {
-	if strings.Contains(err.Error(), "exceeds limit") {
-		return shadowReasonResponseTooLarge
+// shadowConnectorFailure maps a connector error onto the shadow reason
+// taxonomy and reports what the connector learned before giving up.
+func shadowConnectorFailure(callCtx, rootCtx context.Context, err error) (reason string, attempts int, status int) {
+	var connectorErr *connector.Error
+	if !errors.As(err, &connectorErr) {
+		return shadowReasonTransportError, 0, 0
+	}
+	attempts = connectorErr.Attempt
+	switch connectorErr.Kind {
+	case connector.KindRequest:
+		return shadowReasonEncodeFailed, attempts, 0
+	case connector.KindAuthorization:
+		return shadowReasonCredentialUnresolved, attempts, 0
+	case connector.KindStatus:
+		return shadowReasonUpstreamStatus, attempts, connectorErr.StatusCode
+	case connector.KindResponse:
+		if errors.Is(err, connector.ErrResponseTooLarge) {
+			return shadowReasonResponseTooLarge, attempts, 0
+		}
 	}
 	if reason, done := shadowContextFailure(callCtx, rootCtx); done {
-		return reason
+		return reason, attempts, 0
 	}
-	return shadowReasonTransportError
+	return shadowReasonTransportError, attempts, 0
 }
 
 // resolveShadowTarget reuses the primary backend resolution so a shadow can
@@ -161,18 +218,9 @@ func resolveShadowTarget(cfg *config.RouterConfig, model string) (*shadowTarget,
 		upstreamModel: cfg.ResolveExternalModelID(model, backendName),
 		profile:       profile,
 		format:        format,
-		endpointURL:   shadowEndpointURL(cfg, backendName, address, profile, format),
+		baseURL:       shadowEndpointScheme(cfg, backendName, profile) + "://" + address,
+		path:          shadowEndpointPath(profile, format),
 	}, nil
-}
-
-func shadowEndpointURL(
-	cfg *config.RouterConfig,
-	backendName string,
-	address string,
-	profile *config.ProviderProfile,
-	format llmprotocol.WireFormat,
-) string {
-	return shadowEndpointScheme(cfg, backendName, profile) + "://" + address + shadowEndpointPath(profile, format)
 }
 
 func shadowEndpointScheme(cfg *config.RouterConfig, backendName string, profile *config.ProviderProfile) string {
@@ -205,58 +253,33 @@ func shadowEndpointPath(profile *config.ProviderProfile, format llmprotocol.Wire
 	return providerProtocolPath(profile.BaseURL, path)
 }
 
-// resolveShadowCredential consults only the static router configuration.
-// Client credentials never travel with a shadow copy, and a backend without a
-// configured key is simply called without one; if it needs a key the call
-// fails visibly with upstream_status instead of a per-request auth error.
-func resolveShadowCredential(
+// shadowAuthorizer consults only the static router configuration, read at
+// call time. Client credentials never travel with a shadow copy, and a backend
+// without a configured key is simply called without one; if it needs a key the
+// call fails visibly with upstream_status instead of a per-request auth error.
+func shadowAuthorizer(
 	cfg *config.RouterConfig,
 	profile *config.ProviderProfile,
 	model string,
-) (string, error) {
-	provider, _, _, err := resolveProviderAuth(profile)
-	if err != nil {
-		return "", err
-	}
-	if cfg == nil {
-		return "", nil
-	}
-	return authz.NewStaticConfigProvider(cfg).GetKey(provider, model, nil), nil
-}
-
-func (d *shadowDispatcher) doShadowRequest(
-	ctx context.Context,
-	job *shadowJob,
-	prepared *preparedShadowCall,
-) (*http.Response, error) {
-	target := prepared.target
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, target.endpointURL, bytes.NewReader(prepared.body))
+) (func(context.Context, *http.Request) error, error) {
+	provider, authHeader, authPrefix, err := resolveProviderAuth(profile)
 	if err != nil {
 		return nil, err
 	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Accept", "application/json")
-	for key, value := range job.extraHeaders {
-		httpReq.Header.Set(key, value)
+	if cfg == nil {
+		return nil, nil
 	}
-	if target.profile != nil {
-		for key, value := range target.profile.ExtraHeaders {
-			httpReq.Header.Set(key, value)
+	return func(_ context.Context, request *http.Request) error {
+		accessKey := authz.NewStaticConfigProvider(cfg).GetKey(provider, model, nil)
+		if accessKey == "" {
+			return nil
 		}
-	}
-	httpReq.Header.Set(headers.RequestID, job.shadowRequestID)
-	if prepared.accessKey != "" {
-		_, authHeader, authPrefix, err := resolveProviderAuth(target.profile)
-		if err != nil {
-			return nil, err
-		}
-		value := prepared.accessKey
 		if authPrefix != "" {
-			value = authPrefix + " " + prepared.accessKey
+			accessKey = authPrefix + " " + accessKey
 		}
-		httpReq.Header.Set(authHeader, value)
-	}
-	return d.clientFor(job.cfg.TLSSkipVerify).Do(httpReq)
+		request.Header.Set(authHeader, accessKey)
+		return nil
+	}, nil
 }
 
 func shadowContextFailure(callCtx, rootCtx context.Context) (string, bool) {
@@ -267,16 +290,6 @@ func shadowContextFailure(callCtx, rootCtx context.Context) (string, bool) {
 		return shadowReasonTimeout, true
 	}
 	return "", false
-}
-
-func shadowRetryableStatus(status int) bool {
-	switch status {
-	case http.StatusRequestTimeout, http.StatusTooManyRequests,
-		http.StatusInternalServerError, http.StatusBadGateway,
-		http.StatusServiceUnavailable, http.StatusGatewayTimeout:
-		return true
-	}
-	return false
 }
 
 func shadowTokenCount(count llmprotocol.TokenCount) int64 {

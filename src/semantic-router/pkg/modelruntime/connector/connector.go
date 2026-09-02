@@ -5,6 +5,7 @@ package connector
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"fmt"
 	"io"
 	"net/http"
@@ -24,12 +25,31 @@ type Operation struct {
 
 // Options defines bounded transport behavior. Byte limits and AttemptTimeout
 // must be positive; MaxRetries is the number of attempts after the first one.
+// TLSConfig, when set, replaces the default TLS client configuration so a
+// caller can carry an explicit operator opt-in such as skipped verification.
 type Options struct {
 	AttemptTimeout   time.Duration
 	MaxRetries       int
 	MaxRequestBytes  int64
 	MaxResponseBytes int64
 	MaxErrorBytes    int64
+	TLSConfig        *tls.Config
+}
+
+// Request carries one operation payload plus headers that belong to that
+// call alone, such as trace context or a per-request identifier. Headers are
+// applied after the connector defaults and before the authentication hook.
+type Request struct {
+	Body    []byte
+	Headers map[string]string
+}
+
+// Result reports a successful operation together with the transport facts a
+// caller may want to record about it.
+type Result struct {
+	Body       []byte
+	StatusCode int
+	Attempts   int
 }
 
 // Client binds one deployment endpoint, its authentication hook, and bounded
@@ -61,6 +81,9 @@ func New(
 	}
 
 	transport := http.DefaultTransport.(*http.Transport).Clone()
+	if options.TLSConfig != nil {
+		transport.TLSClientConfig = options.TLSConfig.Clone()
+	}
 	return &Client{
 		baseURL:   parsed,
 		authorize: authorize,
@@ -84,30 +107,41 @@ func validateOptions(options Options) error {
 
 // Do invokes an operation and returns its bounded successful response body.
 func (c *Client) Do(ctx context.Context, operation Operation, body []byte) ([]byte, error) {
-	if err := validateOperation(operation); err != nil {
-		return nil, &Error{Kind: KindRequest, Operation: operation.Name, Cause: err}
+	result, err := c.DoRequest(ctx, operation, Request{Body: body})
+	if err != nil {
+		return nil, err
 	}
-	if int64(len(body)) > c.options.MaxRequestBytes {
-		return nil, &Error{
+	return result.Body, nil
+}
+
+// DoRequest invokes an operation with per-call headers and returns the bounded
+// successful response together with its status code and attempt count.
+func (c *Client) DoRequest(ctx context.Context, operation Operation, request Request) (Result, error) {
+	if err := validateOperation(operation); err != nil {
+		return Result{}, &Error{Kind: KindRequest, Operation: operation.Name, Cause: err}
+	}
+	if int64(len(request.Body)) > c.options.MaxRequestBytes {
+		return Result{}, &Error{
 			Kind:      KindRequest,
 			Operation: operation.Name,
 			Cause: fmt.Errorf(
 				"request body is %d bytes, exceeding the limit of %d bytes",
-				len(body), c.options.MaxRequestBytes,
+				len(request.Body), c.options.MaxRequestBytes,
 			),
 		}
 	}
 
 	for attempt := 1; ; attempt++ {
-		responseBody, connectorErr := c.doAttempt(ctx, operation, body, attempt)
+		result, connectorErr := c.doAttempt(ctx, operation, request, attempt)
 		if connectorErr == nil {
-			return responseBody, nil
+			result.Attempts = attempt
+			return result, nil
 		}
 		if !connectorErr.Retryable || attempt > c.options.MaxRetries {
-			return nil, connectorErr
+			return Result{}, connectorErr
 		}
 		if err := waitBeforeRetry(ctx, attempt); err != nil {
-			return nil, &Error{
+			return Result{}, &Error{
 				Kind:      KindTransport,
 				Operation: operation.Name,
 				Attempt:   attempt,
@@ -133,22 +167,22 @@ func validateOperation(operation Operation) error {
 func (c *Client) doAttempt(
 	ctx context.Context,
 	operation Operation,
-	body []byte,
+	request Request,
 	attempt int,
-) ([]byte, *Error) {
+) (Result, *Error) {
 	if ctx == nil {
-		return nil, &Error{Kind: KindRequest, Operation: operation.Name, Attempt: attempt, Cause: fmt.Errorf("context is nil")}
+		return Result{}, &Error{Kind: KindRequest, Operation: operation.Name, Attempt: attempt, Cause: fmt.Errorf("context is nil")}
 	}
 	attemptCtx, cancel := context.WithTimeout(ctx, c.options.AttemptTimeout)
 	defer cancel()
 
-	request, connectorErr := c.newRequest(attemptCtx, operation, body, attempt)
+	httpRequest, connectorErr := c.newRequest(attemptCtx, operation, request, attempt)
 	if connectorErr != nil {
-		return nil, connectorErr
+		return Result{}, connectorErr
 	}
-	response, err := c.http.Do(request)
+	response, err := c.http.Do(httpRequest)
 	if err != nil {
-		return nil, &Error{
+		return Result{}, &Error{
 			Kind:      KindTransport,
 			Operation: operation.Name,
 			Attempt:   attempt,
@@ -163,24 +197,27 @@ func (c *Client) doAttempt(
 func (c *Client) newRequest(
 	ctx context.Context,
 	operation Operation,
-	body []byte,
+	request Request,
 	attempt int,
 ) (*http.Request, *Error) {
 	target := *c.baseURL
 	target.Path = path.Join(c.baseURL.Path, operation.Path)
 	target.RawPath = ""
-	request, err := http.NewRequestWithContext(ctx, operation.Method, target.String(), bytes.NewReader(body))
+	httpRequest, err := http.NewRequestWithContext(ctx, operation.Method, target.String(), bytes.NewReader(request.Body))
 	if err != nil {
 		return nil, &Error{Kind: KindRequest, Operation: operation.Name, Attempt: attempt, Cause: err}
 	}
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Accept", "application/json")
+	httpRequest.Header.Set("Content-Type", "application/json")
+	httpRequest.Header.Set("Accept", "application/json")
+	for key, value := range request.Headers {
+		httpRequest.Header.Set(key, value)
+	}
 	if c.authorize != nil {
-		if err := c.authorize(ctx, request); err != nil {
+		if err := c.authorize(ctx, httpRequest); err != nil {
 			return nil, &Error{Kind: KindAuthorization, Operation: operation.Name, Attempt: attempt, Cause: err}
 		}
 	}
-	return request, nil
+	return httpRequest, nil
 }
 
 func (c *Client) readResponse(
@@ -188,11 +225,11 @@ func (c *Client) readResponse(
 	operation Operation,
 	response *http.Response,
 	attempt int,
-) ([]byte, *Error) {
+) (Result, *Error) {
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
 		errorBody, truncated, readErr := readBounded(response.Body, c.options.MaxErrorBytes)
 		if readErr != nil {
-			return nil, &Error{
+			return Result{}, &Error{
 				Kind:      KindResponse,
 				Operation: operation.Name,
 				Attempt:   attempt,
@@ -200,7 +237,7 @@ func (c *Client) readResponse(
 				Cause:     readErr,
 			}
 		}
-		return nil, &Error{
+		return Result{}, &Error{
 			Kind:       KindStatus,
 			Operation:  operation.Name,
 			StatusCode: response.StatusCode,
@@ -213,7 +250,7 @@ func (c *Client) readResponse(
 
 	responseBody, exceeded, err := readBounded(response.Body, c.options.MaxResponseBytes)
 	if err != nil {
-		return nil, &Error{
+		return Result{}, &Error{
 			Kind:      KindResponse,
 			Operation: operation.Name,
 			Attempt:   attempt,
@@ -222,17 +259,14 @@ func (c *Client) readResponse(
 		}
 	}
 	if exceeded {
-		return nil, &Error{
+		return Result{}, &Error{
 			Kind:      KindResponse,
 			Operation: operation.Name,
 			Attempt:   attempt,
-			Cause: fmt.Errorf(
-				"response body exceeds limit of %d bytes",
-				c.options.MaxResponseBytes,
-			),
+			Cause:     fmt.Errorf("%w of %d bytes", ErrResponseTooLarge, c.options.MaxResponseBytes),
 		}
 	}
-	return responseBody, nil
+	return Result{Body: responseBody, StatusCode: response.StatusCode}, nil
 }
 
 func readBounded(reader io.Reader, limit int64) ([]byte, bool, error) {
