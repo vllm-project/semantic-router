@@ -51,6 +51,10 @@ type Event struct {
 	Error               *ProtocolError
 	Failure             FailureScope
 	Opaque              []byte
+	// DynamoNVExt carries one bounded provider extension emitted by a real
+	// Dynamo stream chunk. It is only valid on EventProviderOpaque and never
+	// enters neutral response semantics.
+	DynamoNVExt *DynamoResponseNVExt
 }
 
 type StreamContext struct {

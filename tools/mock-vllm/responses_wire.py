@@ -40,6 +40,7 @@ def build_chat_stream_chunk(
     delta: dict,
     finish_reason: str | None,
     usage: dict | None = None,
+    nvext: dict[str, Any] | None = None,
 ) -> str:
     payload = {
         "id": response_id,
@@ -58,6 +59,8 @@ def build_chat_stream_chunk(
     }
     if usage is not None:
         payload["usage"] = usage
+    if nvext is not None:
+        payload["nvext"] = nvext
     return "data: " + json.dumps(payload, separators=(",", ":")) + "\n\n"
 
 
