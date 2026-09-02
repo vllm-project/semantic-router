@@ -24,14 +24,12 @@ func TestCategoryHTTPBackendPreservesNamedFullDistribution(t *testing.T) {
 
 	deadline := 1500
 	backend, err := newCategoryHTTPBackend(&config.ExternalModelConfig{
-		ModelEndpoint: config.ClassifierVLLMEndpoint{Address: "127.0.0.1", Port: 8080},
+		ModelEndpoint: endpointForTestServer(t, server),
 		ModelName:     "named-category-service",
 	}, mapping, time.Duration(deadline)*time.Millisecond)
 	if err != nil {
 		t.Fatalf("newCategoryHTTPBackend: %v", err)
 	}
-	backend.(*categoryHTTPBackend).backend.(*HTTPClassifierInference).baseURL = server.URL
-
 	result, err := backend.ClassifyWithProbabilities(context.Background(), "solve this")
 	if err != nil {
 		t.Fatalf("ClassifyWithProbabilities: %v", err)
@@ -60,14 +58,12 @@ func TestCategoryHTTPBackendPreservesCallerCancellation(t *testing.T) {
 		IdxToCategory: map[string]string{"0": "math", "1": "other"},
 	}
 	backend, err := newCategoryHTTPBackend(&config.ExternalModelConfig{
-		ModelEndpoint: config.ClassifierVLLMEndpoint{Address: "127.0.0.1", Port: 8080},
+		ModelEndpoint: endpointForTestServer(t, server),
 		ModelName:     "named-category-service",
 	}, mapping, time.Second)
 	if err != nil {
 		t.Fatalf("newCategoryHTTPBackend: %v", err)
 	}
-	backend.(*categoryHTTPBackend).backend.(*HTTPClassifierInference).baseURL = server.URL
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	errCh := make(chan error, 1)
@@ -102,7 +98,7 @@ func TestCategoryHTTPBackendDoesNotUseTop1FallbackOnDistributionError(t *testing
 	}
 }
 
-func TestCategoryHTTPBackendDistributionFailureMakesOneRequest(t *testing.T) {
+func TestCategoryHTTPBackendDistributionFailureDoesNotFallbackAfterConnectorRetry(t *testing.T) {
 	var requests atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests.Add(1)
@@ -115,14 +111,12 @@ func TestCategoryHTTPBackendDistributionFailureMakesOneRequest(t *testing.T) {
 		IdxToCategory: map[string]string{"0": "math", "1": "other"},
 	}
 	backend, err := newCategoryHTTPBackend(&config.ExternalModelConfig{
-		ModelEndpoint: config.ClassifierVLLMEndpoint{Address: "127.0.0.1", Port: 8080},
+		ModelEndpoint: endpointForTestServer(t, server),
 		ModelName:     "named-category-service",
 	}, mapping, time.Second)
 	if err != nil {
 		t.Fatalf("newCategoryHTTPBackend: %v", err)
 	}
-	backend.(*categoryHTTPBackend).backend.(*HTTPClassifierInference).baseURL = server.URL
-
 	classifier := &Classifier{
 		Config: &config.RouterConfig{InlineModels: config.InlineModels{Classifier: config.Classifier{
 			CategoryModel: config.CategoryModel{},
@@ -136,8 +130,8 @@ func TestCategoryHTTPBackendDistributionFailureMakesOneRequest(t *testing.T) {
 		Metrics:           &SignalMetricsCollection{},
 	}
 	classifier.evaluateDomainSignal(context.Background(), results, &sync.Mutex{}, "one request")
-	if got := requests.Load(); got != 1 {
-		t.Fatalf("remote requests = %d, want 1", got)
+	if got := requests.Load(); got != 2 {
+		t.Fatalf("remote requests = %d, want 2 connector attempts without a second classification call", got)
 	}
 	if _, ok := results.SignalErrors[config.SignalTypeDomain]; ok {
 		t.Fatalf("category failure unexpectedly recorded signal error %q", results.SignalErrors[config.SignalTypeDomain])
