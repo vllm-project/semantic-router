@@ -68,12 +68,13 @@ func recordSessionTurn(ctx *RequestContext, usage responseUsageMetrics, pricing 
 		SkipRoutingState:            requestBypassesRouting(ctx),
 	}
 	if state := ctx.ResponseObjectState; state != nil {
-		if state.ConversationID == "" {
+		if state.SessionTrackingID == "" {
 			return
 		}
 		p.ResponseAPI = &sessiontelemetry.ResponseAPIInput{
-			ConversationID: state.ConversationID,
-			HistoryLen:     len(state.ConversationHistory),
+			ConversationID:    state.ConversationID,
+			SessionTrackingID: state.SessionTrackingID,
+			HistoryLen:        len(state.ConversationHistory),
 		}
 	} else {
 		userID := extractUserID(ctx)
