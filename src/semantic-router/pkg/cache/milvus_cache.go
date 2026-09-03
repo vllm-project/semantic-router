@@ -14,6 +14,7 @@ import (
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	milvuslifecycle "github.com/vllm-project/semantic-router/src/semantic-router/pkg/milvus"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
