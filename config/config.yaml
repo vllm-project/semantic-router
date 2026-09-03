@@ -2076,6 +2076,25 @@ global:
         conn_max_lifetime: 300
         table_name: vector_store_registry
 
+    # Session-scoped sticky tool-set selection's shared store (issue #3347).
+    # Constructed only when at least one decision's tool_selection.sticky is
+    # enabled; see website/docs/tutorials/plugin/tool-selection.md. This
+    # sample shows the redis block for field-coverage purposes only — like
+    # vector_store above, it is not itself a backend-consistent combination
+    # (backend: local forbids a present redis block); trim to one backend.
+    tool_sessions:
+      backend: local
+      ttl_seconds: 1800
+      max_sessions: 10000
+      max_sessions_per_identity: 128
+      max_state_bytes: 16384
+      timeout_ms: 50
+      redis:
+        address: ""
+        password: ""
+        database: 0
+        key_prefix: "vsr:session-tools:v1:"
+
   integrations:
     tools:
       enabled: true
