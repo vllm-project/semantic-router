@@ -34,11 +34,17 @@ func buildClassifierWithAdmission(
 	if err := config.ValidateCategoryModelBackend(cfg); err != nil {
 		return nil, err
 	}
+	if err := config.ValidatePIIModelBackend(cfg); err != nil {
+		return nil, err
+	}
 	jailbreakInitializer, jailbreakInference, err := buildJailbreakDependencies(cfg, jailbreakMapping)
 	if err != nil {
 		return nil, err
 	}
-	piiInitializer, piiInference := buildPIIDependencies(cfg)
+	piiInitializer, piiInference, err := buildPIIDependencies(cfg, piiMapping)
+	if err != nil {
+		return nil, err
+	}
 	initialOptions := []option{
 		withJailbreak(jailbreakMapping, jailbreakInitializer, jailbreakInference),
 		withPII(piiMapping, piiInitializer, piiInference),

@@ -16,12 +16,19 @@ const (
 // remote classifier, independently of the protocol used to fetch it. A
 // consumer declares which contracts it can read; the contract chosen tells the
 // runtime how to interpret the response, so the two are not interchangeable.
+// Category consumes the complete label distribution contract; PII consumes the
+// token-span contract. Each built-in signal accepts exactly one shape, so the
+// contract defaults per consumer and a wrong explicit value is a configuration
+// error rather than a silent fallback.
 const (
 	RemoteClassifierContractLabelDistribution = "label_distribution.v1"
 	// RemoteClassifierContractScore carries a single continuous score for a
 	// regression-style model, such as a query-difficulty scorer. It has no
 	// label of its own; the consumer turns the score into a verdict.
 	RemoteClassifierContractScore = "score.v1"
+	// RemoteClassifierContractTokenSpans carries entity spans with code-point
+	// offsets into the request string; PII is its first consumer.
+	RemoteClassifierContractTokenSpans = "token_spans.v1" //nolint:gosec // G101: contract name, not a credential
 )
 
 const defaultRemoteClassifierDeadlineMs = 5000
@@ -102,7 +109,7 @@ func (b *RemoteClassifierBackend) Validate() error {
 	}
 	if b.Contract != "" {
 		switch b.Contract {
-		case RemoteClassifierContractLabelDistribution, RemoteClassifierContractScore:
+		case RemoteClassifierContractLabelDistribution, RemoteClassifierContractScore, RemoteClassifierContractTokenSpans:
 		default:
 			return fmt.Errorf("backend.contract: unsupported value %q", b.Contract)
 		}
@@ -252,6 +259,35 @@ func ValidateCategoryModelBackend(cfg *RouterConfig) error {
 		RemoteClassifierContractLabelDistribution,
 	); err != nil {
 		return fmt.Errorf("classifier.domain: %w", err)
+	}
+	return nil
+}
+
+// ValidatePIIModelBackend is the PII-facing counterpart of
+// ValidateCategoryModelBackend. A remote PII backend speaks token_spans.v1 and
+// is mutually exclusive with the local mmBERT-32K selector, since the shared
+// block describes the remote path only.
+func ValidatePIIModelBackend(cfg *RouterConfig) error {
+	if cfg == nil {
+		return fmt.Errorf("PII model configuration is nil")
+	}
+	model := &cfg.PIIModel
+	if model.Backend == nil {
+		return nil
+	}
+	if model.UseMmBERT32K {
+		return fmt.Errorf("classifier.pii: backend is mutually exclusive with use_mmbert_32k")
+	}
+	if model.Backend.Protocol != RemoteClassifierProtocolHTTPClassify {
+		return fmt.Errorf("classifier.pii.backend.protocol %q is not supported by the PII consumer", model.Backend.Protocol)
+	}
+	if _, err := ResolveRemoteClassifierBackend(
+		cfg,
+		model.Backend,
+		ModelRoleClassification,
+		RemoteClassifierContractTokenSpans,
+	); err != nil {
+		return fmt.Errorf("classifier.pii: %w", err)
 	}
 	return nil
 }
