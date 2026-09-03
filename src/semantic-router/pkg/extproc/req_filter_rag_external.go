@@ -21,12 +21,10 @@ import (
 const defaultExternalRAGMaxResponseBytes int64 = 4 * 1024 * 1024
 
 var (
-	// Shared transport for external API requests with connection pooling
 	externalAPITransport     *http.Transport
 	externalAPITransportOnce sync.Once
 )
 
-// externalAPIClient returns a client with the configured timeout over the shared transport
 func externalAPIClient(timeout time.Duration) *http.Client {
 	externalAPITransportOnce.Do(func() {
 		externalAPITransport = &http.Transport{
@@ -160,7 +158,6 @@ func (r *OpenAIRouter) retrieveFromExternalAPI(traceCtx context.Context, ctx *Re
 		req.Header.Set(k, sanitizedValue)
 	}
 
-	// Use shared transport with connection pooling and the configured timeout
 	client := externalAPIClient(apiConfig.GetTimeout())
 
 	// Execute request
