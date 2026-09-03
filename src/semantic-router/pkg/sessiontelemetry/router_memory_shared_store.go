@@ -269,6 +269,7 @@ func hydrateRouterSessionSnapshot(snapshot RouterSessionSnapshot) {
 		lastDecisionReason:              snapshot.LastDecisionReason,
 		lastCacheAccountingSource:       snapshot.LastCacheAccountingSource,
 		lastPolicy:                      clonePolicyMap(snapshot.LastPolicy),
+		recentOutcomes:                  cloneTurnOutcomes(snapshot.RecentOutcomes),
 	}
 }
 

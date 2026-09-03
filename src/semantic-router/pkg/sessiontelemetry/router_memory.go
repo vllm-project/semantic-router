@@ -48,6 +48,8 @@ type RouterSessionSnapshot struct {
 	LastDecisionReason        string
 	LastCacheAccountingSource string
 	LastPolicy                map[string]interface{}
+
+	RecentOutcomes []TurnOutcome `json:"recent_outcomes,omitempty"`
 }
 
 // SessionDecisionParams records the pre-dispatch policy result for one session
@@ -106,6 +108,8 @@ type routerSessionState struct {
 	lastDecisionReason        string
 	lastCacheAccountingSource string
 	lastPolicy                map[string]interface{}
+
+	recentOutcomes []TurnOutcome
 }
 
 type routerSessionMemoryStore struct {
@@ -266,6 +270,7 @@ func GetRouterSessionSnapshot(sessionID string, now time.Time) (RouterSessionSna
 		LastDecisionReason:              st.lastDecisionReason,
 		LastCacheAccountingSource:       st.lastCacheAccountingSource,
 		LastPolicy:                      clonePolicyMap(st.lastPolicy),
+		RecentOutcomes:                  cloneTurnOutcomes(st.recentOutcomes),
 	}
 	s.mu.Unlock()
 	return snapshot, true
