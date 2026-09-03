@@ -8,9 +8,11 @@ from pathlib import Path
 import pytest
 import yaml
 from cli.commands.eval import eval
+from cli.evaluation import suite_store_install
 from cli.evaluation.canonical import canonical_json_bytes
 from cli.evaluation.constants import SCHEMA_VERSION, TRACK_IDS
 from cli.evaluation.contracts import CaseGrading, CaseVisible, VisibleCaseSet
+from cli.evaluation.errors import SuiteStoreError
 from cli.evaluation.evidence import ExecutionRecord, RoutingDiagnostic
 from cli.evaluation.evidence_source_ids import LIVE_ROUTING_EVIDENCE_SOURCE_ID
 from cli.evaluation.execution_contract import NORMALIZED_LIVE_EXECUTOR_ID
@@ -20,7 +22,7 @@ from cli.evaluation.normalized_suite_live_executor import (
 )
 from cli.evaluation.orchestrator import run_evaluation
 from cli.evaluation.store import LocalArtifactStore
-from cli.evaluation.suite_contract import BenchmarkSourceReceipt
+from cli.evaluation.suite_contract import SUITE_CONTRACT_VERSION, BenchmarkSourceReceipt
 from cli.evaluation.suite_install_contract import LICENSE_CONTRACT_VERSION
 from cli.evaluation.suite_store import NormalizedSuiteStore
 from click.testing import CliRunner
@@ -84,7 +86,7 @@ def _write_pack(
             bundle / "metadata/media.jsonl",
             (
                 {
-                    "schema_version": SCHEMA_VERSION,
+                    "schema_version": SUITE_CONTRACT_VERSION,
                     "id": "image-1",
                     "digest": "sha256:" + hashlib.sha256(image_data).hexdigest(),
                     "media_type": "image/png",
@@ -363,7 +365,7 @@ def test_benchmark_install_rejects_dirty_or_executable_packs(tmp_path: Path) -> 
         ],
     )
     assert dirty.exit_code != 0
-    assert "dirty" in dirty.output
+    assert "clean Git checkout" in dirty.output
 
     executable_pack = tmp_path / "executable-pack"
     executable_pack.mkdir()
@@ -418,6 +420,45 @@ def test_benchmark_install_rejects_ambiguous_yaml(
 
     assert result.exit_code != 0
     assert expected_error in result.output
+
+
+def test_benchmark_install_does_not_publish_invalid_manifest_after_staging(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pack = tmp_path / "pack"
+    pack.mkdir()
+    _write_pack(pack)
+    _commit_pack(pack)
+    store = NormalizedSuiteStore(tmp_path / "suite-store")
+    original_stage = suite_store_install.stage_suite_artifacts
+    staged = False
+
+    def stage_then_invalidate_manifest(*args: object, **kwargs: object):
+        nonlocal staged
+        artifacts = original_stage(*args, **kwargs)
+        staged = True
+        manifest_path = pack / "benchmark.yaml"
+        manifest_path.write_text(
+            manifest_path.read_text(encoding="utf-8") + "unexpected: true\n",
+            encoding="utf-8",
+        )
+        return artifacts
+
+    monkeypatch.setattr(
+        suite_store_install,
+        "stage_suite_artifacts",
+        stage_then_invalidate_manifest,
+    )
+
+    with pytest.raises(SuiteStoreError, match="does not match its contract"):
+        store.install_pack(pack)
+
+    assert staged
+    assert store.list_suite_manifests() == ()
+    assert tuple(store.index.iterdir()) == ()
+    assert tuple(store.manifests.iterdir()) == ()
+    assert tuple(store.objects.rglob(".install-*")) == ()
 
 
 def test_benchmark_install_rejects_unknown_bundle_files(tmp_path: Path) -> None:
