@@ -147,8 +147,6 @@ func (d *HallucinationDetector) DetectWithNLI(context, question, answer string) 
 
 	hallucinationThreshold := d.hallucinationThreshold()
 	nliThreshold := d.nliThreshold()
-	// One candle call runs both the hallucination detector and the NLI
-	// explainer, so it must hold both deployment gates.
 	candleResult, err := admitModelInference(nil, d.gate, admissionDeploymentHallucinationDetector, func() (*candle.EnhancedHallucinationDetectionResult, error) {
 		return admitModelInference(nil, d.explainerGate, admissionDeploymentHallucinationExplainer, func() (*candle.EnhancedHallucinationDetectionResult, error) {
 			return candle.DetectHallucinationsWithNLI(context, question, answer, hallucinationThreshold)

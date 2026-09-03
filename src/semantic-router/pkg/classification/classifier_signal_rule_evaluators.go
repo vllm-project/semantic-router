@@ -72,9 +72,6 @@ const (
 	piiEvaluationFailedCode          = "pii_evaluation_failed"
 )
 
-// recordSignalRuleErrors marks every named rule of a signal type as failed so
-// decision policy (on_error / on_unknown) sees the failure instead of a silent
-// no-match.
 func recordSignalRuleErrors(results *SignalResults, mu *sync.Mutex, signalType string, names []string, code string) {
 	mu.Lock()
 	defer mu.Unlock()

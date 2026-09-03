@@ -60,7 +60,6 @@ type Classifier struct {
 	// Context classifier for token count-based routing
 	contextClassifier *ContextClassifier
 
-	// Per-deployment admission gates for Router Model inference
 	admissionRegistry *admission.Registry
 	// tokenCalibrator learns provider-specific prompt token ratios for context routing.
 	tokenCalibrator *CalibratedTokenCounter

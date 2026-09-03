@@ -37,10 +37,6 @@ func buildAdmissionRegistry(cfg *config.RouterConfig) *admission.Registry {
 	return admission.NewRegistry(gates)
 }
 
-// admitModelInference runs fn under the deployment's admission gate and records
-// the gate outcome. A shed request surfaces admission.ErrQueueFull to the
-// caller, where the existing classify-error handling (on_error / on_unknown)
-// applies.
 func admitModelInference[T any](
 	ctx context.Context,
 	gate admission.Admissioner,
@@ -138,9 +134,6 @@ func (a admittedPIIInference) ClassifyTokens(ctx context.Context, text string) (
 	})
 }
 
-// withAdmissionRegistry shares one admission registry across classifiers. The
-// underlying models are process-wide singletons, so recipe classifiers must
-// share gates or every recipe multiplies the configured concurrency bound.
 func withAdmissionRegistry(registry *admission.Registry) option {
 	return func(c *Classifier) {
 		c.admissionRegistry = registry

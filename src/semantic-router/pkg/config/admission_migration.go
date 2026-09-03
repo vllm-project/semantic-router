@@ -4,12 +4,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
-// applyBatchConcurrencyMigration translates the deprecated
-// api.batch_classification.max_concurrency bound into wait-mode admission
-// defaults so configs written against the removed signal-evaluation load gate
-// keep a concurrency bound. Explicit admission entries always win, and
-// concurrency_threshold has no admission equivalent (the gate no longer
-// bypasses low load).
 func applyBatchConcurrencyMigration(cfg *RouterConfig) {
 	maxConcurrency := cfg.API.BatchClassification.MaxConcurrency
 	if maxConcurrency <= 0 {
