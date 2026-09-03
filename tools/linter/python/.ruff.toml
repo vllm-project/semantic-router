@@ -112,6 +112,10 @@ max-nested-blocks = 4
 "src/vllm-sr/tests/*.py" = ["PLR2004"]
 "e2e/testing/anthropic-shim/tests/*.py" = ["PLR2004"]
 "bench/grounded_fusion/test_*.py" = ["PLR2004"]
+"tools/mock-vllm/tests/*.py" = ["PLR2004"]
+"tools/mock-vllm/app.py" = [
+  "PLR0911",  # endpoint dispatch keeps one response path per request outcome
+]
 "src/vllm-sr/tests/test_config_template.py" = ["E402", "UP015"]
 "src/training/model_embeddings/cache_embeddings/lora_trainer.py" = [
   "N812",     # torch.nn.functional as F is the PyTorch convention
