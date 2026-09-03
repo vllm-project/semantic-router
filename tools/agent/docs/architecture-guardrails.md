@@ -27,6 +27,24 @@
   - external dependency boundaries
   - multiple implementation boundaries
 
+## Dependency Graphs and Package Health
+
+- Treat dependency direction and cycles as architectural invariants. New module
+  cycles and new imports that cross a declared boundary fail the structure gate.
+- Ratchet existing violations against the selected base revision. Touching an
+  existing violation does not fail when it is unchanged, but making it worse
+  does.
+- Report production file count, test file count, source lines, internal edges,
+  and maximum fan-out for configured architecture scopes as review evidence.
+  These package-health metrics are diagnostic and do not reject a change by
+  themselves.
+- Do not use a blanket ban on new business files or a universal per-directory
+  file-count cap as a proxy for modularity. A new file is valid when it has one
+  clear owner and respects the declared dependency graph.
+- Keep architecture rules language-neutral and configuration-driven. Product
+  names select scopes in `structure-rules.yaml`; product-specific behavior does
+  not belong in the checker implementation.
+
 ## Deep Modules and Narrow Seams
 
 - If a change needs config loading, backend discovery, metrics wiring, and runtime decision logic at once, the design is already too shallow; split the responsibilities before adding more.

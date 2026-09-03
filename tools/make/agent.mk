@@ -212,7 +212,9 @@ agent-lint: $(AGENT_BOOTSTRAP_DEPS) ## Run lint and structure gates for changed 
 	echo "Running Rust lint..." && \
 	"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py run-rust-lint --changed-files-path "$$LINT_CHANGED_FILES_PATH" && \
 	echo "Running structure checks..." && \
-	"$(AGENT_PYTHON)" tools/agent/scripts/structure_check.py --base-ref "$(AGENT_BASE_REF)" $$FILE_ARGS
+	"$(AGENT_PYTHON)" tools/agent/scripts/structure_check.py --base-ref "$(AGENT_BASE_REF)" $$FILE_ARGS && \
+	echo "Running architecture dependency checks..." && \
+	"$(AGENT_PYTHON)" tools/agent/scripts/architecture_check.py --base-ref "$(AGENT_BASE_REF)" $$FILE_ARGS
 
 agent-fast-gate: $(AGENT_BOOTSTRAP_DEPS) ## Run changed-file lint and rule-selected fast tests
 	@$(LOG_TARGET)
