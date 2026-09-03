@@ -11,7 +11,7 @@ on:
         required: true
         default: all
         type: choice
-        options: [all, board, stale, translation, leaderboard]
+        options: [all, board, stale, translation, leaderboard, unassign]
       milestone:
         description: Optional maintainer-board milestone.
         required: false
@@ -80,4 +80,17 @@ jobs:
       contents: write
       pull-requests: write
     uses: ./.github/workflows/contributor-leaderboard.yml
+    secrets: inherit
+
+  unassign:
+    name: Unassign inactive assignees
+    if: >-
+      (github.repository == 'vllm-project/semantic-router'
+        && github.event.schedule == '0 8 * * *')
+      || (github.event_name == 'workflow_dispatch'
+        && (inputs.task == 'all' || inputs.task == 'unassign'))
+    permissions:
+      contents: read
+      issues: write
+    uses: ./.github/workflows/unassign-inactive-assignees.yml
     secrets: inherit

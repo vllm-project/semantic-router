@@ -1,0 +1,62 @@
+name: Unassign Inactive Assignees
+
+# Reusable workflow called from maintenance.yml. Evaluates per-assignee
+# inactivity on accepted issues using the Timeline API. Does not use
+# pull_request_target (prohibited in this repository).
+
+on:
+  workflow_call:
+    inputs:
+      dry_run:
+        description: If true, log actions without mutating GitHub state.
+        type: boolean
+        default: false
+        required: false
+      warn_after_days:
+        description: Days of inactivity before posting a warning comment.
+        type: number
+        default: 15
+        required: false
+      unassign_after_days:
+        description: Days of inactivity before removing the assignee.
+        type: number
+        default: 30
+        required: false
+
+permissions: {}
+
+jobs:
+  unassign-inactive:
+    name: Unassign inactive assignees
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      issues: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install script dependencies
+        working-directory: .github/scripts
+        run: npm ci
+
+      - name: Run unassign-inactive-assignees
+        uses: actions/github-script@v7
+        env:
+          WARN_AFTER_DAYS: ${{ inputs.warn_after_days }}
+          UNASSIGN_AFTER_DAYS: ${{ inputs.unassign_after_days }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        with:
+          script: |
+            const { run } = require('./.github/scripts/unassign-inactive.js');
+            await run(github, context, {
+              warnAfterDays:     parseInt(process.env.WARN_AFTER_DAYS,    10) || 15,
+              unassignAfterDays: parseInt(process.env.UNASSIGN_AFTER_DAYS, 10) || 30,
+              dryRun:            process.env.DRY_RUN === 'true',
+            });

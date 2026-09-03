@@ -234,6 +234,37 @@ Use the maintainer board to decide what needs review, rebase, unblock, or
 close-candidate follow-up. Use `stale.yml` only for the automated stale/close
 lifecycle.
 
+### Assignee inactivity policy
+
+Accepted issues with at least one assignee are subject to an automatic
+two-stage inactivity check run daily by `maintenance.yml` → `unassign-inactive-assignees.yml`:
+
+- **15 days** without qualifying activity: the assignee receives a warning
+  comment and the `unassign-warned` label is applied to the issue.
+- **30 days** without qualifying activity: the assignee is removed and a
+  notification comment is posted. The issue remains open and `accepted` for
+  any contributor to pick up.
+
+"Qualifying activity" means human-authored events only: issue comments, linked
+pull requests authored by that assignee, or other real contributor timeline
+events. Bot comments, label churn, and workflow automation writes do not reset
+the inactivity clock. Each assignee is evaluated independently—an active
+co-assignee does not shield an inactive one.
+
+Maintainers can always manually re-assign or extend work by reassigning the
+contributor and posting a comment. To suppress a false-positive for a specific
+issue, remove the `unassign-warned` label and add a comment explaining the
+extension; the next daily run will pick up the fresh comment as activity.
+
+To run the check manually:
+
+```bash
+gh workflow run maintenance.yml -f task=unassign
+```
+
+The reusable workflow also accepts a `dry_run` input for auditing; invoke it
+directly via the Actions UI or CLI to preview actions without mutations.
+
 Manual trigger example:
 
 ```bash
