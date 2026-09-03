@@ -215,19 +215,68 @@ it. Kept in sync by hand if the issue's completion signal changes.
       test, not the fingerprint code, which was already correct. Whole-module
       `go build -buildvcs=false ./...` sweep: only the same pre-existing
       cgo/wasm failures as every prior task, nothing new.
-- [ ] `TASK-04` Session provenance + trusted-key resolver:
-      `extproc/sticky_tool_identity.go` (new), provenance fields on
-      `RequestContext`, populated at every `SessionID` assignment site in
-      `extproc/session_transition.go`. Opaque HMAC-derived key via the
-      `USER_SCOPE_NAMESPACE_SECRET` primitive (extend/reuse, do not add a
-      second weaker hash) — construction must require the secret and reject
-      the unkeyed fallback when any sticky decision is enabled.
-- [ ] `TASK-05` CLI mirror (`src/vllm-sr/cli/`) and dashboard schema
-      (`dashboard/frontend/src/lib/dslSchemas.ts`) for both new config blocks;
-      state-inventory row in
-      `tools/agent/docs/architecture/state-taxonomy-and-inventory.md`; a
-      disabled-by-default fragment
-      (`config/fragments/plugin/tool-selection/sticky-add-from-database.yaml`).
+- [x] `TASK-04` Session provenance + trusted-key resolver:
+      `SessionProvenance` closed enum + `AuthenticatedPrincipal` field added
+      to `RequestContext` (`request_context.go`); stamped at every
+      `SessionID` assignment site in `session_transition.go`
+      (`populateSessionTransitionFields`, `populatePinnedSessionFromHeaders`,
+      `populateSemanticSessionIDIfNeeded`) and `AuthenticatedPrincipal`
+      populated from `authHeaderUserID(ctx)` at the top of both entry
+      points (not just one — `populatePinnedSessionFromHeaders` runs on the
+      fast-extract path before full parsing, and a header-pinned trusted
+      session reaching decision evaluation needs the principal available
+      that early too, not only in the slower path). New
+      `extproc/sticky_tool_identity.go`: `ResolvedStickyIdentity`,
+      `ResolveStickyToolIdentity(ctx, recipeName, policyFingerprint)`
+      implementing the trust rules (non-empty principal;
+      `SessionProvenanceResponseAPI`/`Header` only; non-empty recipe) and
+      opaque HMAC-SHA256 storage/quota key construction. Secret requirement
+      wired into `buildOpenAIRouterFromConfig` (the task referenced this as
+      `buildRouterFromConfig`; verified the actual name before editing) via
+      a new `validateStickyToolSelectionSecret`, unconditional — not gated
+      on `ManagementAPI.RemoteExposure` like its neighbor
+      `validateResponseCacheScopeSecret`, since an unkeyed sticky
+      deployment has no acceptable degraded mode the way response-cache
+      scoping does (see the function's own doc comment for why).
+
+      **One deliberate deviation, documented inline:**
+      `stickyToolIdentitySecret` reads `USER_SCOPE_NAMESPACE_SECRET`
+      directly via `os.Getenv`, rather than going through
+      `cache.UserScopeNamespace` (the existing exported primitive the
+      blueprint says to reuse). Checked `pkg/cache/cache.go` first:
+      `UserScopeNamespace` silently falls back to an *unkeyed* SHA-256 when
+      the secret is absent — the fallback the trust rules explicitly must
+      reject — and `pkg/cache` exposes no accessor for the raw secret
+      value, only that function and the presence check
+      (`UserScopeSecretConfigured`, which this code does still call and
+      reuse directly). Reusing the *primitive* (same env var, same
+      HMAC-SHA256 construction) while implementing it locally, rather than
+      calling through a function whose behavior doesn't fit, is not "a
+      second weaker hash implementation" — it is the same one, used more
+      strictly.
+
+      **Verification, same limits as every prior extproc-touching task
+      this session:** `go build`/`go vet` clean (including all new/edited
+      test files, which vet fully type-checks). `go test` cannot link for
+      this package in this sandbox either with cgo (missing
+      `libcandle_semantic_router.so`) or without it (`valkey-glide`
+      requires cgo unconditionally — confirmed again, not just assumed,
+      matching what TASK-01 through TASK-03 already found for this same
+      package). Whole-module `go build -buildvcs=false ./...`: only the
+      same pre-existing cgo/wasm failures as every other task.
+- [ ] `TASK-05` Narrowed by earlier tasks — three of the original four items
+      are already done: CLI mirror and dashboard schema for
+      `StickyToolSelectionConfig` landed in TASK-01 (`src/vllm-sr/cli/models.py`,
+      `dslSchemas.ts`); TASK-02 established, with evidence, that
+      `ToolSessionStoreConfig` needs neither (`global.*` is an untyped
+      passthrough in the CLI, and `dslSchemas.ts` has no `global.*`
+      representation at all); the fragment
+      (`config/fragments/plugin/tool-selection/sticky-add-from-database.yaml`)
+      also landed in TASK-01. Remaining: a state-inventory row in
+      `tools/agent/docs/architecture/state-taxonomy-and-inventory.md`'s
+      "Current Inventory" section for sticky tool-set state (both the local
+      `MemoryStore` from TASK-03 and, once TASK-12 lands, the Redis
+      backend) — not yet done by any task so far.
 - [ ] `TASK-06` Phase exit: `make agent-ci-gate CHANGED_FILES="<phase-1 files>"`.
 
 ### Phase 2 — Deterministic local sticky selection
@@ -257,28 +306,33 @@ it. Kept in sync by hand if the issue's completion signal changes.
 
 ## Next Action
 
-TASK-04: session provenance + trusted-key resolver
-(`extproc/sticky_tool_identity.go`, provenance fields on `RequestContext`,
-populated at every `SessionID` assignment site in
-`extproc/session_transition.go`; opaque HMAC-derived key via the
-`USER_SCOPE_NAMESPACE_SECRET` primitive). This is the first task that
-actually constructs a `sessiontools.MemoryStore` from
-`RouterConfig.ToolSessions` — use `NewMemoryStore(cfg, nil)` (real clock)
-at router-generation build time, gated on at least one normalized recipe
-decision enabling `tool_selection.sticky` (construct no store at all
-otherwise, per PL-0042's Operating Rules). `QuotaKey` needs the resolver
-this task builds (opaque `Principal`/`Namespace`) — `sessiontools` itself
-deliberately has no opinion on how a `QuotaKey` gets constructed, only what
-it means once it exists.
+TASK-07 (Phase 2's first task): refactor `runSemanticToolSelection` /
+`runToolSelectionPluginAdd` / `runToolSelectionPluginFilter` to return
+`toolSelectionResult` and share one finalizer. That finalizer is the first
+real caller of `ResolveStickyToolIdentity` (TASK-04) and
+`sessiontools.NewMemoryStore` (TASK-03's constructor, not yet invoked
+anywhere) — construct the store once at router-generation build time,
+gated on at least one normalized recipe decision enabling
+`tool_selection.sticky` (construct no store at all otherwise, per this
+plan's Operating Rules), and call `ResolveStickyToolIdentity` per request
+to get the `QuotaKey`/`StorageKey` before touching the store. TASK-05 (the
+state-inventory doc row) and TASK-06 (phase exit gate) remain open but are
+small and can land whenever convenient relative to Phase 2's start — TASK-07
+is the one that actually needs to happen next to keep making functional
+progress.
 
-TASK-01, TASK-02, and TASK-03 are all done and verified (build/vet/test
-green; full package suites, not just targeted tests, per the lesson from
-TASK-01's own review round; TASK-03 additionally verified race-clean via
-`go test ./pkg/sessiontools/... -race`). Deviations from each task's
-literal spec — TASK-01's Go contract, TASK-02's CLI/dashboard scope,
-TASK-03's `Store.Load` signature and sampled global eviction — are all
-documented inline in their respective task entries above and in the
-touched code's own comments, not only here.
+TASK-01 through TASK-04 are all done and verified. Verification depth
+varies by what this sandbox can actually execute for each package:
+`pkg/config` (TASK-01/02) and `pkg/sessiontools`/`pkg/tools` (TASK-03) got
+real `go test` runs, `pkg/sessiontools` additionally race-clean via
+`go test ./pkg/sessiontools/... -race`; `pkg/extproc` (TASK-04, and the
+extproc-touching pieces of earlier tasks) has never been able to link a
+test binary in this sandbox — confirmed again for TASK-04, not just
+assumed — so `go build`/`go vet` (which do fully type-check test files) are
+its verification ceiling here; CI or a full local dev environment needs to
+actually run `pkg/extproc`'s tests before merge. Deviations from each
+task's literal spec are documented inline in their respective task entries
+above and in the touched code's own comments, not only here.
 
 ## Operating Rules
 
