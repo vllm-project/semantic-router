@@ -88,11 +88,49 @@ it. Kept in sync by hand if the issue's completion signal changes.
       plugin table already lists `tool_selection` (one terse row per
       plugin, linking to its guide, same as every other row) and needs no
       change for a sub-field addition within an already-listed plugin.
-- [ ] `TASK-02` `global.stores.tool_sessions` store config: new
-      `config/tool_session_store.go` (backend/TTL/cardinality/Redis
-      sub-config, defaults, validation), wired through
-      `canonical_global.go` / `canonical_export.go` / the canonical loader,
-      reference-config coverage in `reference_config_global_test.go`.
+- [x] `TASK-02` `global.stores.tool_sessions` store config:
+      `config/tool_session_store.go` (`ToolSessionStoreConfig`,
+      `ToolSessionRedisConfig`, `Effective*` helpers, backend/TTL/cardinality
+      bounds), `config/tool_session_store_validation.go` (`Validate()`:
+      backend enum, local-forbids-redis / redis-requires-address, all five
+      numeric bounds including the `max_sessions_per_identity <=
+      max_sessions` cross-field bound). All five numeric fields are `*int`
+      from the start (0 is out of every one of their valid ranges and must
+      be rejected, not defaulted) — applying TASK-01's unset-vs-explicit-zero
+      lesson up front instead of needing a follow-up fix this time. Wired
+      through `canonical_global.go` (`CanonicalStoreGlobal.ToolSessions`,
+      `applyCanonicalGlobal`) and `canonical_export.go` (`exportGlobal`,
+      plus a real deep-clone `cloneToolSessionStoreConfig` — this struct has
+      five `*int` fields and a nested `*Redis`, so the existing
+      `cloneVectorStoreConfig`'s shallow `*cfg` copy would have aliased
+      pointers across the export boundary; a dedicated test
+      (`TestToolSessionStoreCanonicalRoundTrip`) mutates the clone and
+      asserts the original is untouched). `RouterConfig.ToolSessions` added
+      in `config.go`. Reference-config coverage in
+      `reference_config_global_test.go` plus a disabled `tool_sessions:`
+      sample in `config/config.yaml` (redis sub-block shown for field
+      coverage only, matching `vector_store`'s established
+      exhaustive-not-self-consistent precedent — not itself a
+      `Validate()`-passing combination as configured, same as
+      `vector_store`'s multiple simultaneous backend blocks aren't either).
+      `Validate()` is defined but intentionally has no caller yet, matching
+      `VectorStoreConfig.Validate()`'s own precedent (called from
+      `routerruntime/vectorstore_runtime.go` at store-construction time, not
+      from a central config validator) — wiring a caller belongs to the
+      task that actually constructs the sessiontools store (TASK-03/04).
+      **CLI/dashboard mirrors deliberately not added**, contrary to the
+      original task wording: empirically confirmed (round-trip test against
+      the live `UserConfig` Pydantic model) that `global` is an untyped
+      `Optional[Dict[str, Any]]` passthrough in `src/vllm-sr/cli/models.py`
+      (`UserConfig.global_`), unlike `routing.decisions[].plugins[].configuration`
+      which is strictly typed per-plugin (that's why `StickyToolSelectionConfig`
+      needed a Python mirror in TASK-01 — Pydantic silently drops unknown
+      fields there, but not under an untyped dict). No `StoresConfig` class
+      exists anywhere in `models.py`. `dslSchemas.ts` has no `global.*`
+      representation at all — confirmed by grep, matching the task's own
+      hedge ("if global stores are registered there"). Both left untouched;
+      `global.stores.tool_sessions` already round-trips byte-for-byte
+      through the CLI without any change.
 - [ ] `TASK-03` `pkg/sessiontools` package: `state.go` (envelope + `ToolState`,
       decode validation, cloning), fingerprint helpers in `pkg/tools`
       (definition/catalog/policy/capability fingerprints, canonical JSON +
@@ -139,11 +177,20 @@ it. Kept in sync by hand if the issue's completion signal changes.
 
 ## Next Action
 
-TASK-02: add `config/tool_session_store.go` (store schema, defaults, bounds)
-and wire `global.stores.tool_sessions` through the canonical layer. TASK-01 is
-done and verified (build/vet/test green); its deviation from the blueprint's
-literal Go contract is noted inline in `tool_selection_plugin.go` — see PR
-description once opened.
+TASK-03: `pkg/sessiontools` package — `state.go` (envelope + `ToolState`,
+decode validation, cloning), fingerprint helpers in `pkg/tools`
+(definition/catalog/policy/capability fingerprints, canonical JSON +
+SHA-256), in-memory `store_memory.go` (bounded LRU/idle-expiry). This is the
+first task that will actually call `ToolSessionStoreConfig.Validate()` and
+the `Effective*` helpers from TASK-02 — wire that call in wherever the
+in-memory store gets constructed, matching `vectorstore_runtime.go`'s
+precedent.
+
+TASK-01 and TASK-02 are both done and verified (build/vet/test green; full
+`pkg/config` suite, not just targeted tests, per the lesson from TASK-01's
+own review round). TASK-01's deviation from the blueprint's literal Go
+contract, and TASK-02's CLI/dashboard scope decision, are both noted inline
+in their respective task entries above — see PR description once opened.
 
 ## Operating Rules
 
