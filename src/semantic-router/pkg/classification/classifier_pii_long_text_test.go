@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -18,7 +19,7 @@ type truncatingPIIInference struct {
 	seen        []string
 }
 
-func (t *truncatingPIIInference) ClassifyTokens(text string) (candle_binding.TokenClassificationResult, error) {
+func (t *truncatingPIIInference) ClassifyTokens(_ context.Context, text string) (candle_binding.TokenClassificationResult, error) {
 	t.seen = append(t.seen, text)
 
 	runes := []rune(text)
