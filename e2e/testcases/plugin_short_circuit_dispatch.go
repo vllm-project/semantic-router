@@ -79,16 +79,24 @@ func testPluginShortCircuitNoDispatch(ctx context.Context, client *kubernetes.Cl
 	}
 	defer backend.Close()
 
+	// The run id scopes the simulator sessions, not the prompts. It must stay
+	// out of the prompt text: this profile's pii_deny_all signal blocks every
+	// entity type, and its token classifier tags a long digit string after
+	// "id" as an ID-like entity, which turns the control into a block_pii
+	// fast_response (observed on the first CI run of this case).
 	runID := fmt.Sprintf("%d", time.Now().UnixNano())
 
 	probes := []shortCircuitProbe{
 		{
 			// Runs first: proves the session header reaches the backend, so a
-			// 404 in the blocked sub-cases is evidence of no dispatch. The run
-			// id keeps this prompt out of any semantic cache entry a previous
-			// run may have written.
+			// 404 in the blocked sub-cases is evidence of no dispatch. The
+			// prompt is chosen for the profile it runs on: no digits and no
+			// NER-shaped tokens for pii_deny_all to flag, and it classifies to
+			// biology_decision, which has no response_cache plugin
+			// (e2e/profiles/ai-gateway/values.yaml), so a repeat run against a
+			// long-lived cluster cannot be intercepted by the semantic cache.
 			name:       "control",
-			prompt:     "What is the capital of France? Request id " + runID + ".",
+			prompt:     "Explain how ribosomes assemble proteins inside a bacterial cell",
 			dispatched: true,
 		},
 		{
@@ -148,7 +156,7 @@ func runShortCircuitProbe(
 	if got := response.Headers.Get("x-vsr-schema-version"); got != "2" {
 		return nil, fmt.Errorf("%s: expected x-vsr-schema-version=2, got %q", probe.name, got)
 	}
-	if err := assertShortCircuitHeaders(probe, response); err != nil {
+	if err = assertShortCircuitHeaders(probe, response); err != nil {
 		return nil, err
 	}
 
