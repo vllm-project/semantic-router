@@ -32,6 +32,13 @@ repos:
         pass_filenames: false
         files: ^(\.pre-commit-config\.yaml$|deploy/|config/runtime/|website/docs/installation/support-matrix\.md$|tools/ci/check_deployment_support_matrix\.py$|tools/ci/tests/test_deployment_support_matrix\.py$)
 
+      - id: backend-target-compatibility
+        name: backend target compatibility coverage
+        entry: python3 tools/ci/check_backend_target_compatibility.py
+        language: system
+        pass_filenames: false
+        files: ^(\.pre-commit-config\.yaml$|config/config\.yaml$|src/vllm-sr/tests/test_config_generator\.py$|src/semantic-router/pkg/config/maintained_asset_contract_test\.go$|deploy/helm/testdata/backend-target-values\.yaml$|deploy/helm/validate-chart\.sh$|tools/make/helm\.mk$|deploy/operator/controllers/semanticrouter_controller_test\.go$|dashboard/frontend/src/pages/configPageModelFormSupport\.test\.ts$|dashboard/backend/handlers/config_update_test\.go$|website/docs/installation/backend-target-compatibility\.md$|tools/ci/check_backend_target_compatibility\.py$|tools/ci/tests/test_backend_target_compatibility\.py$)
+
   - repo: local
     hooks:
       - id: shellcheck

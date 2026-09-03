@@ -73,28 +73,7 @@ echo ""
 
 # Test 3: Canonical config override must be atomic and preserve explicit gates
 log_info "Testing atomic canonical Router config rendering..."
-cat > "$TEMP_DIR/canonical-config.yaml" <<'EOF'
-configOverride:
-  version: v0.3
-  listeners:
-    - name: http
-      address: 0.0.0.0
-      port: 8899
-  providers:
-    models:
-      - name: local/custom
-  routing:
-    decisions:
-      - name: custom-route
-  global:
-    router:
-      skip_processing:
-        enabled: true
-      learning:
-        enabled: true
-        adaptation:
-          enabled: true
-EOF
+cp deploy/helm/testdata/backend-target-values.yaml "$TEMP_DIR/canonical-config.yaml"
 
 helm template canonical-release "$CHART_PATH" \
     -f "$TEMP_DIR/canonical-config.yaml" \
@@ -108,6 +87,25 @@ if ! grep -A1 "skip_processing:" "$TEMP_DIR/canonical-template.yaml" | grep -q "
     log_error "Canonical skip_processing=true was not preserved"
     exit 1
 fi
+
+log_info "Testing backend target compatibility rendering..."
+backend_fields=(
+    "base_url: https://provider.example/v1"
+    "provider_model_id: provider/model-id"
+    "api_key_env: PROVIDER_API_KEY"
+    "X-Tenant: production"
+    "chat_path: /chat/completions"
+    "weight: 75"
+)
+for field in "${backend_fields[@]}"; do
+    if ! grep -q "$field" "$TEMP_DIR/canonical-template.yaml"; then
+        log_error "Canonical backend target fields were not preserved: $field"
+        exit 1
+    fi
+done
+
+python3 tools/ci/check_backend_target_compatibility.py \
+    --rendered-helm "$TEMP_DIR/canonical-template.yaml"
 
 helm template canonical-false-release "$CHART_PATH" \
     -f "$TEMP_DIR/canonical-config.yaml" \

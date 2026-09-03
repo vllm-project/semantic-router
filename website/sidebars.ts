@@ -35,6 +35,7 @@ const sidebars: SidebarsConfig = {
         'installation/installation',
         'installation/deployment-options',
         'installation/support-matrix',
+        'installation/backend-target-compatibility',
       ],
     },
     {
