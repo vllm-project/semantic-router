@@ -220,7 +220,18 @@ def _mock_anthropic_tool_stream(body: dict[str, Any]) -> Iterator[bytes]:
             {
                 "type": "message_delta",
                 "delta": {"stop_reason": "tool_use", "stop_sequence": None},
-                "usage": {"output_tokens": 3},
+                "usage": {
+                    "output_tokens": 3,
+                    "iterations": [
+                        {
+                            "type": "message",
+                            "input_tokens": 4,
+                            "output_tokens": 3,
+                            "cache_read_input_tokens": 0,
+                            "cache_creation_input_tokens": 0,
+                        }
+                    ],
+                },
             },
         ),
         ("message_stop", {"type": "message_stop"}),
@@ -269,7 +280,18 @@ def _mock_anthropic_text_stream(body: dict[str, Any], text: str) -> Iterator[byt
             {
                 "type": "message_delta",
                 "delta": {"stop_reason": "end_turn", "stop_sequence": None},
-                "usage": {"output_tokens": 3},
+                "usage": {
+                    "output_tokens": 3,
+                    "iterations": [
+                        {
+                            "type": "message",
+                            "input_tokens": 6,
+                            "output_tokens": 3,
+                            "cache_read_input_tokens": 0,
+                            "cache_creation_input_tokens": 0,
+                        }
+                    ],
+                },
             },
         ),
         ("message_stop", {"type": "message_stop"}),
