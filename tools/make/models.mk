@@ -11,6 +11,14 @@
 HF_ORG := llm-semantic-router
 MODELS_DIR := models
 
+# The checked-in reference suite targets
+# peft-internal-testing/tiny-random-BertForSequenceClassification at
+# 325bf1727142e5f4216ca8e3eef68752321979ac. The model remains external and
+# must be downloaded at that exact revision before running qualification.
+CANDLE_COMPAT_LABELS ?= LABEL_0,LABEL_1
+CANDLE_COMPAT_SUITE ?= pkg/modelruntime/compatibility/testdata/tiny-random-bert-cpu-suite-v1.json
+CANDLE_COMPAT_OUTPUT ?= $(CURDIR)/.agent-harness/compatibility/candle-cpu-receipt.json
+
 # mmBERT merged models (for Rust inference)
 MMBERT_MODELS := \
 	mmbert-intent-classifier-merged \
@@ -73,6 +81,22 @@ download-models: ## Download models using router's built-in download logic
 
 download-models-lora: ## Download LoRA models (same as download-models now)
 	@$(MAKE) download-models
+
+qualify-candle-cpu: rust-ci ## Generate a local CPU Candle compatibility receipt (requires CANDLE_MODEL_PATH and CANDLE_ARTIFACT_REVISION)
+	@test -n "$(CANDLE_MODEL_PATH)" || (echo "CANDLE_MODEL_PATH is required" && exit 1)
+	@test -n "$(CANDLE_ARTIFACT_REVISION)" || (echo "CANDLE_ARTIFACT_REVISION is required" && exit 1)
+	@mkdir -p "$(dir $(CANDLE_COMPAT_OUTPUT))"
+	@cd src/semantic-router && \
+		CGO_LDFLAGS="-L$(CURDIR)/candle-binding/target/release" \
+		LD_LIBRARY_PATH="$(CURDIR)/candle-binding/target/release" \
+		go run ./cmd/modelcompat qualify-candle-cpu \
+			--model-path "$(abspath $(CANDLE_MODEL_PATH))" \
+			--artifact-revision "$(CANDLE_ARTIFACT_REVISION)" \
+			--router-revision "$(shell git rev-parse HEAD)" \
+			--labels "$(CANDLE_COMPAT_LABELS)" \
+			--suite "$(CANDLE_COMPAT_SUITE)" \
+			--output "$(abspath $(CANDLE_COMPAT_OUTPUT))"
+	@echo "Candle CPU compatibility receipt: $(CANDLE_COMPAT_OUTPUT)"
 
 # Minimal model set for perf/benchmarks (CI performance tests).
 # The component benchmarks initialize classifiers/embeddings directly instead

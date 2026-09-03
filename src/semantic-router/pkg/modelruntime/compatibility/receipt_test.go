@@ -71,7 +71,7 @@ func TestCandleClassifierSubjectValidation(t *testing.T) {
 }
 
 func TestReceiptValidation(t *testing.T) {
-	valid, err := NewReceipt(testSubject(), testChecks())
+	valid, err := NewReceipt(testSubject(), testSuiteDigest(), testChecks())
 	if err != nil {
 		t.Fatalf("NewReceipt() error = %v", err)
 	}
@@ -82,6 +82,7 @@ func TestReceiptValidation(t *testing.T) {
 		wantErr string
 	}{
 		{"subject mismatch", func(receipt *Receipt) { receipt.SubjectDigest = "sha256:" + strings.Repeat("0", 64) }, "does not match"},
+		{"invalid suite digest", func(receipt *Receipt) { receipt.QualificationSuiteDigest = "synthetic" }, "qualification_suite_digest"},
 		{"empty check name", func(receipt *Receipt) { receipt.Checks = []CheckOutcome{{Passed: true}} }, "name is required"},
 		{"duplicate check name", func(receipt *Receipt) {
 			receipt.Checks = []CheckOutcome{{Name: "label_parity"}, {Name: "label_parity"}}
@@ -106,7 +107,7 @@ func TestReceiptPreservesFailedCheck(t *testing.T) {
 	checks := testChecks()
 	checks[0].Passed = false
 	checks[0].Details = "observed mismatch"
-	receipt, err := NewReceipt(testSubject(), checks)
+	receipt, err := NewReceipt(testSubject(), testSuiteDigest(), checks)
 	if err != nil {
 		t.Fatalf("NewReceipt() error = %v", err)
 	}
@@ -178,4 +179,8 @@ func testChecks() []CheckOutcome {
 		checks = append(checks, CheckOutcome{Name: name, Passed: true})
 	}
 	return checks
+}
+
+func testSuiteDigest() string {
+	return "sha256:" + strings.Repeat("b", 64)
 }

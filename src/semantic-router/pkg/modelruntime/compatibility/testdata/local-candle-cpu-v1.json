@@ -15,6 +15,7 @@
   "subject_digest": "sha256:d83320976694b44cb2639af2768fc325ec141b5975e3f92b38246b3e3adbf28b",
   "predicate_type": "semantic-router.execution",
   "predicate_version": "v1",
+  "qualification_suite_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
   "checks": [
     {"name": "label_parity", "passed": true, "details": "synthetic golden vector; not conformance evidence"},
     {"name": "input_bounds", "passed": true, "details": "synthetic golden vector; not conformance evidence"},

@@ -155,20 +155,9 @@ pub extern "C" fn classify_text_with_probabilities(
 
     if let Some(classifier) = BERT_CLASSIFIER.get() {
         let classifier = classifier.clone();
-        match classifier.classify_text(text) {
-            Ok((class_idx, confidence)) => {
-                // For now, we don't have probabilities from the new BERT implementation
-                // Return empty probabilities array
-                let prob_len = 0;
-                let prob_ptr = std::ptr::null_mut();
-
-                ClassificationResultWithProbs {
-                    predicted_class: class_idx as i32,
-                    confidence,
-                    label: std::ptr::null_mut(),
-                    probabilities: prob_ptr,
-                    num_classes: prob_len as i32,
-                }
+        match classifier.classify_text_with_probabilities(text) {
+            Ok((class_idx, confidence, probabilities)) => {
+                classification_result_with_probabilities(class_idx, confidence, &probabilities)
             }
             Err(e) => {
                 eprintln!("Error classifying text with probabilities: {e}");
@@ -178,6 +167,20 @@ pub extern "C" fn classify_text_with_probabilities(
     } else {
         eprintln!("BERT classifier not initialized");
         default_result
+    }
+}
+
+pub(crate) fn classification_result_with_probabilities(
+    class_idx: usize,
+    confidence: f32,
+    probabilities: &[f32],
+) -> ClassificationResultWithProbs {
+    ClassificationResultWithProbs {
+        predicted_class: class_idx as i32,
+        confidence,
+        label: std::ptr::null_mut(),
+        probabilities: unsafe { allocate_c_float_array(probabilities) },
+        num_classes: probabilities.len() as i32,
     }
 }
 /// Classify text for PII detection

@@ -15,6 +15,7 @@ TEST_GPU_DEVICE ?= 2
 RUST_CI_LIB_TESTS ?= \
 	core::tokenization_test::test_tokenization_config_default \
 	core::tokenization_test::test_tokenization_config_custom \
+	ffi::classify_test::test_classification_result_preserves_probabilities \
 	ffi::embedding_test::test_truncate_embedding_renormalizes_prefix \
 	model_architectures::embedding::multimodal_embedding::tests::test_siglip_vision_encoder_loads_with_head_weights \
 	model_architectures::embedding::multimodal_embedding::tests::test_siglip_vision_encoder_requires_pooling_head

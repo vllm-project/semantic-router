@@ -166,6 +166,25 @@ fn test_classify_null_pointer_safety() {
     println!("Null pointer safety test passed");
 }
 
+#[test]
+fn test_classification_result_preserves_probabilities() {
+    let probabilities = [0.2_f32, 0.8_f32];
+    let result = super::classify::classification_result_with_probabilities(
+        1,
+        probabilities[1],
+        &probabilities,
+    );
+
+    assert_eq!(result.predicted_class, 1);
+    assert_eq!(result.confidence, 0.8);
+    assert_eq!(result.num_classes, 2);
+    assert!(!result.probabilities.is_null());
+    let returned =
+        unsafe { std::slice::from_raw_parts(result.probabilities, result.num_classes as usize) };
+    assert_eq!(returned, probabilities);
+    super::memory::free_probabilities(result.probabilities, result.num_classes);
+}
+
 /// Test FFI classification workflow with real model integration
 #[rstest]
 fn test_classify_integration_workflow() {

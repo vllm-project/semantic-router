@@ -54,28 +54,34 @@ type CheckOutcome struct {
 
 // Receipt is an unsigned evidence payload intended for offline signing workflows.
 type Receipt struct {
-	SchemaVersion    string                  `json:"schema_version"`
-	Subject          CandleClassifierSubject `json:"subject"`
-	SubjectDigest    string                  `json:"subject_digest"`
-	PredicateType    string                  `json:"predicate_type"`
-	PredicateVersion string                  `json:"predicate_version"`
-	Checks           []CheckOutcome          `json:"checks"`
+	SchemaVersion            string                  `json:"schema_version"`
+	Subject                  CandleClassifierSubject `json:"subject"`
+	SubjectDigest            string                  `json:"subject_digest"`
+	PredicateType            string                  `json:"predicate_type"`
+	PredicateVersion         string                  `json:"predicate_version"`
+	QualificationSuiteDigest string                  `json:"qualification_suite_digest"`
+	Checks                   []CheckOutcome          `json:"checks"`
 }
 
 // NewReceipt constructs an evidence payload for offline conformance results.
-func NewReceipt(subject CandleClassifierSubject, checks []CheckOutcome) (Receipt, error) {
+func NewReceipt(
+	subject CandleClassifierSubject,
+	qualificationSuiteDigest string,
+	checks []CheckOutcome,
+) (Receipt, error) {
 	subject.Labels = append([]string(nil), subject.Labels...)
 	digest, err := subject.Digest()
 	if err != nil {
 		return Receipt{}, err
 	}
 	receipt := Receipt{
-		SchemaVersion:    ReceiptSchemaVersionV1,
-		Subject:          subject,
-		SubjectDigest:    digest,
-		PredicateType:    ExecutionPredicateType,
-		PredicateVersion: ExecutionPredicateVersionV1,
-		Checks:           append([]CheckOutcome(nil), checks...),
+		SchemaVersion:            ReceiptSchemaVersionV1,
+		Subject:                  subject,
+		SubjectDigest:            digest,
+		PredicateType:            ExecutionPredicateType,
+		PredicateVersion:         ExecutionPredicateVersionV1,
+		QualificationSuiteDigest: qualificationSuiteDigest,
+		Checks:                   append([]CheckOutcome(nil), checks...),
 	}
 	if err := receipt.Validate(); err != nil {
 		return Receipt{}, err
@@ -120,7 +126,7 @@ func (s CandleClassifierSubject) Validate() error {
 	if s.SchemaVersion != SubjectSchemaVersionV1 {
 		return fmt.Errorf("unsupported compatibility subject schema %q", s.SchemaVersion)
 	}
-	if err := validateSHA256("artifact_digest", s.ArtifactDigest); err != nil {
+	if err := validateSHA256("compatibility subject", "artifact_digest", s.ArtifactDigest); err != nil {
 		return err
 	}
 	if len(s.Labels) < 2 {
@@ -152,6 +158,13 @@ func (r Receipt) Validate() error {
 	}
 	if r.PredicateVersion != ExecutionPredicateVersionV1 {
 		return fmt.Errorf("unsupported compatibility predicate version %q", r.PredicateVersion)
+	}
+	if err := validateSHA256(
+		"compatibility receipt",
+		"qualification_suite_digest",
+		r.QualificationSuiteDigest,
+	); err != nil {
+		return err
 	}
 	expected, err := r.Subject.Digest()
 	if err != nil {
@@ -222,13 +235,13 @@ func (s CandleClassifierSubject) canonicalJSON() ([]byte, error) {
 	return bytes.TrimSuffix(encoded.Bytes(), []byte{'\n'}), nil
 }
 
-func validateSHA256(field string, value string) error {
+func validateSHA256(scope string, field string, value string) error {
 	encoded, ok := strings.CutPrefix(value, "sha256:")
 	if !ok || len(encoded) != sha256.Size*2 || encoded != strings.ToLower(encoded) {
-		return fmt.Errorf("compatibility subject %s must be a lowercase sha256 digest", field)
+		return fmt.Errorf("%s %s must be a lowercase sha256 digest", scope, field)
 	}
 	if _, err := hex.DecodeString(encoded); err != nil {
-		return fmt.Errorf("compatibility subject %s must be a lowercase sha256 digest", field)
+		return fmt.Errorf("%s %s must be a lowercase sha256 digest", scope, field)
 	}
 	return nil
 }
