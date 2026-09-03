@@ -50,9 +50,9 @@ func TestOfficialRequestFieldInventoriesAreClosed(t *testing.T) {
 			name: "Anthropic Messages",
 			wire: anthropicRequestWire{},
 			official: fields(
-				"cache_control", "container", "inference_geo", "max_tokens", "messages", "metadata", "model",
-				"output_config", "service_tier", "stop_sequences", "stream", "system", "temperature", "thinking",
-				"tool_choice", "tools", "top_k", "top_p",
+				"cache_control", "container", "context_management", "inference_geo", "max_tokens", "messages",
+				"metadata", "model", "output_config", "service_tier", "stop_sequences", "stream", "system",
+				"temperature", "thinking", "tool_choice", "tools", "top_k", "top_p",
 			),
 		},
 	}
@@ -76,6 +76,7 @@ func TestOfficialRequestFieldDispositionsAreClosed(t *testing.T) {
 		transport   []string
 		unsupported []string
 		extensions  []string
+		preserved   []string
 	}{
 		{
 			name: "OpenAI Chat Completions",
@@ -117,6 +118,11 @@ func TestOfficialRequestFieldDispositionsAreClosed(t *testing.T) {
 				"system", "temperature", "thinking", "tool_choice", "tools", "top_k", "top_p",
 			),
 			unsupported: fields("cache_control", "container", "inference_geo", "service_tier"),
+			// context_management is modeled and preserved rather than interpreted:
+			// it asks the upstream API to trim old thinking from the billed prompt,
+			// so it is carried verbatim to an Anthropic-format target and omitted for
+			// a cross-format target that cannot represent it.
+			preserved: fields("context_management"),
 		},
 	}
 	for _, test := range tests {
@@ -124,6 +130,7 @@ func TestOfficialRequestFieldDispositionsAreClosed(t *testing.T) {
 			assertClosedFieldDisposition(t, test.name, jsonFieldNames(reflect.TypeOf(test.wire)), map[string][]string{
 				"semantic": test.semantic, "transport": test.transport,
 				"unsupported": test.unsupported, "extension": test.extensions,
+				"preserved": test.preserved,
 			})
 		})
 	}

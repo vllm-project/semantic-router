@@ -5,6 +5,7 @@
       "official_request_fields": [
         "cache_control",
         "container",
+        "context_management",
         "inference_geo",
         "max_tokens",
         "messages",

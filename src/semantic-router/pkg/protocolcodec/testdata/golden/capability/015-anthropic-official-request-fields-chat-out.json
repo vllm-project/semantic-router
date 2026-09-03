@@ -21,6 +21,22 @@
       }
     },
     {
+      "name": "context_management",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "max_completion_tokens": 2048,
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model"
+        }
+      }
+    },
+    {
       "name": "inference_geo",
       "outcome": {
         "status": "error",

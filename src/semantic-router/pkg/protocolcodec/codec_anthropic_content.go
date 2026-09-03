@@ -493,6 +493,9 @@ func encodeAnthropicBaseRequest(request llmprotocol.Request) (anthropicRequestWi
 		Model: request.Model, Stream: request.Stream, Temperature: request.Sampling.Temperature,
 		TopP: request.Sampling.TopP, TopK: request.Sampling.TopK, StopSequences: append([]string(nil), request.Sampling.Stop...),
 	}
+	if len(request.AnthropicContextManagement) > 0 {
+		wire.ContextManagement = append(json.RawMessage(nil), request.AnthropicContextManagement...)
+	}
 	var diagnostics llmprotocol.Diagnostics
 	if request.Sampling.MaxOutputTokens == nil {
 		wire.MaxTokens = llmprotocol.Int64(defaultAnthropicMaxOutputTokens)

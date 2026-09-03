@@ -21,6 +21,29 @@
       }
     },
     {
+      "name": "context_management",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "input": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "input_text"
+                }
+              ],
+              "id": "item_6a32e29c376158d871e9638e",
+              "role": "user",
+              "type": "message"
+            }
+          ],
+          "max_output_tokens": 2048,
+          "model": "routed-model"
+        }
+      }
+    },
+    {
       "name": "inference_geo",
       "outcome": {
         "status": "error",
