@@ -36,6 +36,7 @@ var (
 		validatePromptCompressionContracts,
 		validateHallucinationContracts,
 		validateModelAdmissionContracts,
+		validateGlobalToolSessionsContracts,
 	}
 
 	routingProfileContractValidators = []configContractValidator{
