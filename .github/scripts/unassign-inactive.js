@@ -22,26 +22,6 @@ const HUMAN_EVENT_TYPES = new Set([
   "cross-referenced",
 ]);
 
-// -- Label provisioning -----------------------------------------------------
-
-/** Ensure a label exists, creating it on 404. Non-blocking on failure. */
-async function ensureLabel(octokit, owner, repo, name, color = "e4e669", description = "") {
-  try {
-    await octokit.rest.issues.getLabel({ owner, repo, name });
-  } catch (err) {
-    if (err.status !== 404) {
-      console.warn(`[ensureLabel] check failed for "${name}": ${err.message}`);
-      return;
-    }
-    try {
-      await octokit.rest.issues.createLabel({ owner, repo, name, color, description });
-      console.log(`[ensureLabel] created "${name}"`);
-    } catch (createErr) {
-      console.warn(`[ensureLabel] create failed for "${name}": ${createErr.message}`);
-    }
-  }
-}
-
 // -- Timeline API -----------------------------------------------------------
 
 /** Fetch all timeline events for an issue, paginated. Returns null on error. */
@@ -249,8 +229,10 @@ async function processAssignee(octokit, owner, repo, issue, assigneeLogin, confi
   }
 
   const daysSinceActivity = (now - lastHumanActivity) / (1000 * 60 * 60 * 24);
-  const currentLabels = (issue.labels || []).map((l) => (typeof l === "string" ? l : l.name));
-  const isWarned = currentLabels.includes(WARN_LABEL);
+  
+  const isWarned = await warningCommentExists(
+    octokit, owner, repo, issueNumber, assigneeLogin, lastHumanActivity
+  );
 
   console.log(
     `  last activity: ${lastHumanActivity.toISOString()} (${Math.floor(daysSinceActivity)}d ago), warned=${isWarned}`
@@ -258,24 +240,8 @@ async function processAssignee(octokit, owner, repo, issue, assigneeLogin, confi
 
   // 3. State machine transitions.
 
-  // A: Recent activity — clear any existing warning.
+  // A: Recent activity
   if (daysSinceActivity < warnAfterDays) {
-    if (isWarned) {
-      console.log(`  → clear-warning: activity resumed`);
-      if (!dryRun) {
-        try {
-          await octokit.rest.issues.removeLabel({
-            owner, repo, issue_number: issueNumber, name: WARN_LABEL,
-          });
-        } catch (err) {
-          if (err.status !== 404) {
-            console.warn(`  removeLabel failed: ${err.message}`);
-            return "error";
-          }
-        }
-      }
-      return "warning-cleared";
-    }
     console.log(`  → skip: active`);
     return "skipped";
   }
@@ -293,15 +259,6 @@ async function processAssignee(octokit, owner, repo, issue, assigneeLogin, confi
         return "error";
       }
 
-      // Best-effort: remove label.
-      if (isWarned) {
-        try {
-          await octokit.rest.issues.removeLabel({
-            owner, repo, issue_number: issueNumber, name: WARN_LABEL,
-          });
-        } catch (_) { /* non-blocking */ }
-      }
-
       // Best-effort: post notification (recoverable — assignee is already removed).
       try {
         await octokit.rest.issues.createComment({
@@ -317,14 +274,6 @@ async function processAssignee(octokit, owner, repo, issue, assigneeLogin, confi
 
   // C: Between warn and unassign thresholds — warn if not already warned.
   if (!isWarned) {
-    const alreadyCommented = await warningCommentExists(
-      octokit, owner, repo, issueNumber, assigneeLogin, lastHumanActivity
-    );
-    if (alreadyCommented) {
-      console.log(`  → skip: warning comment already exists`);
-      return "skipped";
-    }
-
     console.log(`  → warn: posting warning`);
     if (!dryRun) {
       try {
@@ -337,13 +286,6 @@ async function processAssignee(octokit, owner, repo, issue, assigneeLogin, confi
         return "error";
       }
 
-      try {
-        await octokit.rest.issues.addLabels({
-          owner, repo, issue_number: issueNumber, labels: [WARN_LABEL],
-        });
-      } catch (err) {
-        console.warn(`  addLabels failed: ${err.message}`);
-      }
     }
     return "warned";
   }
@@ -361,11 +303,6 @@ async function run(octokit, context, config = {}) {
   console.log(
     `[unassign-inactive] start: warn=${warnAfterDays}d, unassign=${unassignAfterDays}d, dryRun=${dryRun}`
   );
-
-  if (!dryRun) {
-    await ensureLabel(octokit, owner, repo, WARN_LABEL, "e4e669",
-      "Inactivity warning sent to assignee; unassignment pending");
-  }
 
   let issues;
   try {
@@ -399,7 +336,6 @@ async function run(octokit, context, config = {}) {
       switch (action) {
         case "warned":          stats.warned++;     break;
         case "unassigned":      stats.unassigned++; break;
-        case "warning-cleared": stats.cleared++;    break;
         case "error":           stats.errors++;     break;
         default:                stats.skipped++;    break;
       }
@@ -412,7 +348,6 @@ async function run(octokit, context, config = {}) {
 
 module.exports = {
   run,
-  ensureLabel,
   fetchTimeline,
   getLastHumanActivityDate,
   findLinkedPRActivity,

@@ -12,7 +12,6 @@ const {
   processAssignee,
   warningCommentExists,
   findLinkedPRActivity,
-  ensureLabel,
   run,
 } = require("../unassign-inactive");
 
@@ -321,22 +320,19 @@ describe("processAssignee", () => {
     const body = octokit.rest.issues.createComment.mock.calls[0][0].body;
     expect(body).toContain(WARNING_MARKER);
     expect(body).toContain("@alice");
-    expect(octokit.rest.issues.addLabels).toHaveBeenCalledWith(
-      expect.objectContaining({ labels: [WARN_LABEL] })
-    );
     expect(octokit.rest.issues.removeAssignees).not.toHaveBeenCalled();
   });
 
-  test("no double-warn when label already present", async () => {
+  test("no double-warn when warning comment already exists", async () => {
     const octokit = buildOctokitWithTimeline([]);
     octokit.rest.search.issuesAndPullRequests.mockResolvedValue({ data: { items: [] } });
     octokit.paginate.mockImplementation(async (fn) => {
       if (fn === octokit.rest.issues.listComments) {
-        return [{ body: `${WARNING_MARKER}\n@alice old warning` }];
+        return [{ body: `${WARNING_MARKER}\n@alice old warning`, created_at: daysAgo(1) }];
       }
       return [];
     });
-    const issue = makeIssue({ labels: [{ name: WARN_LABEL }], created_at: daysAgo(20) });
+    const issue = makeIssue({ created_at: daysAgo(20) });
     const action = await processAssignee(octokit, "o", "r", issue, "alice", baseConfig);
     expect(action).toBe("skipped");
     expect(octokit.rest.issues.createComment).not.toHaveBeenCalled();
@@ -345,7 +341,7 @@ describe("processAssignee", () => {
   test("unassigns after 30 days inactivity", async () => {
     const octokit = buildOctokitWithTimeline([]);
     octokit.rest.search.issuesAndPullRequests.mockResolvedValue({ data: { items: [] } });
-    const issue = makeIssue({ labels: [{ name: WARN_LABEL }], created_at: daysAgo(35) });
+    const issue = makeIssue({ created_at: daysAgo(35) });
     const action = await processAssignee(octokit, "o", "r", issue, "alice", baseConfig);
     expect(action).toBe("unassigned");
     expect(octokit.rest.issues.removeAssignees).toHaveBeenCalledWith(
@@ -358,13 +354,12 @@ describe("processAssignee", () => {
     const timeline = [
       { event: "commented", actor: { login: "alice", type: "User" }, created_at: daysAgo(2) },
     ];
-    const octokit = buildOctokitWithTimeline(timeline);
-    const issue = makeIssue({ labels: [{ name: WARN_LABEL }], created_at: daysAgo(25) });
+    // Return a warning comment older than the activity date
+    const comments = [{ body: `${WARNING_MARKER}\n@alice old warning`, created_at: daysAgo(10) }];
+    const octokit = buildOctokitWithTimeline(timeline, comments);
+    const issue = makeIssue({ created_at: daysAgo(25) });
     const action = await processAssignee(octokit, "o", "r", issue, "alice", baseConfig);
-    expect(action).toBe("warning-cleared");
-    expect(octokit.rest.issues.removeLabel).toHaveBeenCalledWith(
-      expect.objectContaining({ name: WARN_LABEL })
-    );
+    expect(action).toBe("skipped");
     expect(octokit.rest.issues.removeAssignees).not.toHaveBeenCalled();
   });
 
@@ -399,13 +394,21 @@ describe("processAssignee", () => {
     octokit.rest.search.issuesAndPullRequests.mockResolvedValue({ data: { items: [] } });
 
     const issue = makeIssue({
-      labels: [{ name: WARN_LABEL }],
       created_at: daysAgo(40),
       assignees: [{ login: "alice" }, { login: "bob" }],
     });
 
+    // Mock a warning comment for alice (older than her activity)
+    octokit.paginate.mockImplementation(async (fn) => {
+      if (fn === octokit.rest.issues.listEventsForTimeline) return timeline;
+      if (fn === octokit.rest.issues.listComments) {
+        return [{ body: `${WARNING_MARKER}\n@alice old warning`, created_at: daysAgo(10) }];
+      }
+      return [];
+    });
+
     const aliceAction = await processAssignee(octokit, "o", "r", issue, "alice", baseConfig);
-    expect(aliceAction).toBe("warning-cleared");
+    expect(aliceAction).toBe("skipped");
 
     // Reset mocks for bob: no activity.
     octokit.paginate.mockImplementation(async (fn) => {
@@ -449,38 +452,6 @@ describe("processAssignee", () => {
     expect(action).toBe("unassigned");
     expect(octokit.rest.issues.removeAssignees).not.toHaveBeenCalled();
     expect(octokit.rest.issues.createComment).not.toHaveBeenCalled();
-  });
-});
-
-// -- ensureLabel ------------------------------------------------------------
-
-describe("ensureLabel", () => {
-  test("no-op when label exists", async () => {
-    const octokit = makeOctokit();
-    await ensureLabel(octokit, "o", "r", WARN_LABEL);
-    expect(octokit.rest.issues.createLabel).not.toHaveBeenCalled();
-  });
-
-  test("creates label on 404", async () => {
-    const octokit = makeOctokit();
-    const err = new Error("Not Found");
-    err.status = 404;
-    octokit.rest.issues.getLabel.mockRejectedValue(err);
-    await ensureLabel(octokit, "o", "r", WARN_LABEL, "e4e669", "desc");
-    expect(octokit.rest.issues.createLabel).toHaveBeenCalledWith(
-      expect.objectContaining({ name: WARN_LABEL, color: "e4e669" })
-    );
-  });
-
-  test("logs and continues on non-404 error", async () => {
-    const octokit = makeOctokit();
-    const err = new Error("Server Error");
-    err.status = 500;
-    octokit.rest.issues.getLabel.mockRejectedValue(err);
-    const spy = jest.spyOn(console, "warn").mockImplementation(() => {});
-    await ensureLabel(octokit, "o", "r", WARN_LABEL);
-    expect(octokit.rest.issues.createLabel).not.toHaveBeenCalled();
-    spy.mockRestore();
   });
 });
 
