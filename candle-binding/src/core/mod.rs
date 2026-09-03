@@ -5,6 +5,7 @@ pub mod config_loader;
 pub mod device;
 pub mod similarity;
 pub mod tokenization;
+pub mod tokenization_window;
 pub mod unified_error;
 
 // Re-export main similarity functionality for backward compatibility
