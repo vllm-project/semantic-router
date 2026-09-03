@@ -264,19 +264,25 @@ it. Kept in sync by hand if the issue's completion signal changes.
       matching what TASK-01 through TASK-03 already found for this same
       package). Whole-module `go build -buildvcs=false ./...`: only the
       same pre-existing cgo/wasm failures as every other task.
-- [ ] `TASK-05` Narrowed by earlier tasks — three of the original four items
-      are already done: CLI mirror and dashboard schema for
+- [x] `TASK-05` Narrowed by earlier tasks — three of the original four items
+      were already done: CLI mirror and dashboard schema for
       `StickyToolSelectionConfig` landed in TASK-01 (`src/vllm-sr/cli/models.py`,
       `dslSchemas.ts`); TASK-02 established, with evidence, that
       `ToolSessionStoreConfig` needs neither (`global.*` is an untyped
       passthrough in the CLI, and `dslSchemas.ts` has no `global.*`
       representation at all); the fragment
       (`config/fragments/plugin/tool-selection/sticky-add-from-database.yaml`)
-      also landed in TASK-01. Remaining: a state-inventory row in
+      also landed in TASK-01. Closed the remaining item: a "Sticky tool-set
+      session state" row added to
       `tools/agent/docs/architecture/state-taxonomy-and-inventory.md`'s
-      "Current Inventory" section for sticky tool-set state (both the local
-      `MemoryStore` from TASK-03 and, once TASK-12 lands, the Redis
-      backend) — not yet done by any task so far.
+      "Current Inventory" table, plus a
+      `global.stores.tool_sessions.backend = local` entry under "Default
+      Memory-Backed Surfaces To Treat As High Risk". Corrected one factual
+      detail while writing it: the row's backend value is `local`
+      (`config.ToolSessionStoreBackendLocal`), not `memory` — verified
+      against the actual constant before writing the row, rather than
+      copying the term other memory-backed rows in that same table happen
+      to use for their own (differently-named) backends.
 - [ ] `TASK-06` Phase exit: `make agent-ci-gate CHANGED_FILES="<phase-1 files>"`.
 
 ### Phase 2 — Deterministic local sticky selection
@@ -306,22 +312,24 @@ it. Kept in sync by hand if the issue's completion signal changes.
 
 ## Next Action
 
-TASK-07 (Phase 2's first task): refactor `runSemanticToolSelection` /
-`runToolSelectionPluginAdd` / `runToolSelectionPluginFilter` to return
-`toolSelectionResult` and share one finalizer. That finalizer is the first
-real caller of `ResolveStickyToolIdentity` (TASK-04) and
-`sessiontools.NewMemoryStore` (TASK-03's constructor, not yet invoked
-anywhere) — construct the store once at router-generation build time,
-gated on at least one normalized recipe decision enabling
-`tool_selection.sticky` (construct no store at all otherwise, per this
-plan's Operating Rules), and call `ResolveStickyToolIdentity` per request
-to get the `QuotaKey`/`StorageKey` before touching the store. TASK-05 (the
-state-inventory doc row) and TASK-06 (phase exit gate) remain open but are
-small and can land whenever convenient relative to Phase 2's start — TASK-07
-is the one that actually needs to happen next to keep making functional
-progress.
+TASK-06: run the Phase 1 exit gate,
+`make agent-ci-gate CHANGED_FILES="<every phase-1 file>"`. This is the
+last item before Phase 1 is complete — TASK-01 through TASK-05 are all
+done.
 
-TASK-01 through TASK-04 are all done and verified. Verification depth
+Once TASK-06 passes, Phase 2 begins with TASK-07: refactor
+`runSemanticToolSelection` / `runToolSelectionPluginAdd` /
+`runToolSelectionPluginFilter` to return `toolSelectionResult` and share
+one finalizer. That finalizer is the first real caller of
+`ResolveStickyToolIdentity` (TASK-04) and `sessiontools.NewMemoryStore`
+(TASK-03's constructor, not yet invoked anywhere) — construct the store
+once at router-generation build time, gated on at least one normalized
+recipe decision enabling `tool_selection.sticky` (construct no store at
+all otherwise, per this plan's Operating Rules), and call
+`ResolveStickyToolIdentity` per request to get the `QuotaKey`/`StorageKey`
+before touching the store.
+
+TASK-01 through TASK-05 are all done and verified. Verification depth
 varies by what this sandbox can actually execute for each package:
 `pkg/config` (TASK-01/02) and `pkg/sessiontools`/`pkg/tools` (TASK-03) got
 real `go test` runs, `pkg/sessiontools` additionally race-clean via
