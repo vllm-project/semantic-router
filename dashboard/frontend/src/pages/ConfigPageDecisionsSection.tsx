@@ -631,7 +631,8 @@ export default function ConfigPageDecisionsSection({
         label: 'On Unknown',
         type: 'select',
         options: ['', 'no_match', 'match', 'fail_request'],
-        description: 'Resolve classifier backend failures after the complete rule tree is evaluated.',
+        description:
+          'When a signal evaluator fails: no_match skips this decision, match selects it, fail_request rejects the request with 503. Empty keeps condition on_error.',
       },
       {
         name: 'conditions',
