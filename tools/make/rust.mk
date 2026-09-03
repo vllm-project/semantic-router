@@ -17,7 +17,9 @@ RUST_CI_LIB_TESTS ?= \
 	core::tokenization_test::test_tokenization_config_custom \
 	ffi::embedding_test::test_truncate_embedding_renormalizes_prefix \
 	model_architectures::embedding::multimodal_embedding::tests::test_siglip_vision_encoder_loads_with_head_weights \
-	model_architectures::embedding::multimodal_embedding::tests::test_siglip_vision_encoder_requires_pooling_head
+	model_architectures::embedding::multimodal_embedding::tests::test_siglip_vision_encoder_requires_pooling_head \
+	model_architectures::traditional::candle_models::modernbert::tests::test_chunked_attention_matches_dense \
+	model_architectures::traditional::candle_models::modernbert::tests::test_chunked_attention_matches_dense_with_padding
 
 test-rust-ci:
 	@$(LOG_TARGET)
