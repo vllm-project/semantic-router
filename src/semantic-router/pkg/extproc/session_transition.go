@@ -18,14 +18,18 @@ func populateSessionTransitionFields(ctx *RequestContext) {
 	if ctx == nil {
 		return
 	}
+	ctx.AuthenticatedPrincipal = authHeaderUserID(ctx)
 
 	pinnedSessionID := strings.TrimSpace(headerValueCI(ctx, headers.XSessionID))
 	if state := ctx.ResponseObjectState; state != nil {
 		// The client session correlates routing and Replay across protocols;
 		// retained-object lineage remains the fallback when it is not supplied.
 		ctx.SessionID = pinnedSessionID
-		if ctx.SessionID == "" {
+		if ctx.SessionID != "" {
+			ctx.SessionProvenance = SessionProvenanceHeader
+		} else {
 			ctx.SessionID = state.SessionTrackingID
+			ctx.SessionProvenance = SessionProvenanceResponseAPI
 		}
 		ctx.PreviousResponseID = state.PreviousResponseID
 		history := state.ConversationHistory
@@ -43,17 +47,22 @@ func populateSessionTransitionFields(ctx *RequestContext) {
 
 	if pinnedSessionID != "" {
 		ctx.SessionID = pinnedSessionID
+		ctx.SessionProvenance = SessionProvenanceHeader
 	}
 
 	if ctx.SessionID == "" {
 		if sid := deriveSessionIDFromAnthropicSignals(ctx); sid != "" {
 			ctx.SessionID = sid
+			ctx.SessionProvenance = SessionProvenanceAnthropicPromptCache
 		}
 	}
 
 	if ctx.SemanticRequest == nil || len(ctx.SemanticRequest.Messages) == 0 {
 		if ctx.SessionID == "" {
-			ctx.SessionID = deriveSessionIDFromRequestID(ctx)
+			if sid := deriveSessionIDFromRequestID(ctx); sid != "" {
+				ctx.SessionID = sid
+				ctx.SessionProvenance = SessionProvenanceRequestID
+			}
 		}
 		return
 	}
@@ -79,8 +88,10 @@ func populatePinnedSessionFromHeaders(ctx *RequestContext) {
 	if ctx == nil {
 		return
 	}
+	ctx.AuthenticatedPrincipal = authHeaderUserID(ctx)
 	if sid := strings.TrimSpace(headerValueCI(ctx, headers.XSessionID)); sid != "" {
 		ctx.SessionID = sid
+		ctx.SessionProvenance = SessionProvenanceHeader
 	}
 	if ctx.SessionID == "" {
 		return
@@ -150,11 +161,18 @@ func populateSemanticSessionIDIfNeeded(ctx *RequestContext) {
 	userID := extractUserID(ctx)
 	if userID != "" {
 		ctx.SessionID = deriveSessionIDFromSemanticMessages(ctx.SemanticRequest.Messages, userID)
+		ctx.SessionProvenance = SessionProvenanceMessageHash
 		return
 	}
 	ctx.SessionID = deriveSessionIDFromSemanticStructure(ctx.SemanticRequest.Messages)
+	if ctx.SessionID != "" {
+		ctx.SessionProvenance = SessionProvenanceMessageHash
+	}
 	if ctx.SessionID == "" {
-		ctx.SessionID = deriveSessionIDFromRequestID(ctx)
+		if sid := deriveSessionIDFromRequestID(ctx); sid != "" {
+			ctx.SessionID = sid
+			ctx.SessionProvenance = SessionProvenanceRequestID
+		}
 	}
 	if ctx.SessionID == "" {
 		logging.Debugf("Session: could not derive session ID for chat completion request")
