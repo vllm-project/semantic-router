@@ -124,6 +124,8 @@ func appendAnthropicResponseUsage(
 		"usage.cache_creation": usage.CacheCreation.Ephemeral1hInputTokens != 0 ||
 			usage.CacheCreation.Ephemeral5mInputTokens != 0,
 		"usage.inference_geo": usage.InferenceGeo != "",
+		"usage.iterations": len(usage.Iterations) > 0 &&
+			!bytes.Equal(bytes.TrimSpace(usage.Iterations), []byte("null")),
 		"usage.server_tool_use": usage.ServerToolUse.WebFetchRequests != 0 ||
 			usage.ServerToolUse.WebSearchRequests != 0,
 		"usage.service_tier": usage.ServiceTier != "",

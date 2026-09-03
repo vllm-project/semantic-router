@@ -51,7 +51,7 @@ func TestAnthropicResponseUsageIterationsAreAcceptedAndIgnored(t *testing.T) {
 	body := []byte(`{"id":"msg_1","type":"message","role":"assistant","model":"provider-model",` +
 		`"content":[{"type":"text","text":"done"}],"stop_reason":"end_turn","stop_sequence":null,` +
 		`"usage":{"input_tokens":5,"output_tokens":7,` + usageIterations + `}}`)
-	response, _, _, err := engine.DecodeResponse(llmprotocol.AnthropicMessagesV1, body)
+	response, _, diagnostics, err := engine.DecodeResponse(llmprotocol.AnthropicMessagesV1, body)
 	if err != nil {
 		t.Fatalf("non-streaming usage carrying iterations was rejected: %v", err)
 	}
@@ -59,5 +59,14 @@ func TestAnthropicResponseUsageIterationsAreAcceptedAndIgnored(t *testing.T) {
 		tokenValue(response.Usage.InputTotal) != 5 ||
 		tokenValue(response.Usage.OutputTotal) != 7 {
 		t.Fatalf("top-level usage counters did not decode: %+v", response.Usage)
+	}
+	dropped := false
+	for _, diagnostic := range diagnostics {
+		if diagnostic.Field == "usage.iterations" && diagnostic.Action == llmprotocol.DiagnosticDropped {
+			dropped = true
+		}
+	}
+	if !dropped {
+		t.Fatalf("dropped per-attempt accounting was not diagnosed: %+v", diagnostics)
 	}
 }
