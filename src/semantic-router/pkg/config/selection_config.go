@@ -296,13 +296,12 @@ type LatencyAwareAlgorithmConfig struct {
 
 // MLModelSelectionConfig configures the ML-based algorithm used from per-decision policies.
 type MLModelSelectionConfig struct {
-	Type             string             `yaml:"type"`
-	ModelsPath       string             `yaml:"models_path,omitempty"`
-	K                int                `yaml:"k,omitempty"`
-	NumClusters      int                `yaml:"num_clusters,omitempty"`
-	Kernel           string             `yaml:"kernel,omitempty"`
-	Gamma            float64            `yaml:"gamma,omitempty"`
-	EfficiencyWeight *float64           `yaml:"efficiency_weight,omitempty"`
-	Device           string             `yaml:"device,omitempty"`
-	FeatureWeights   map[string]float64 `yaml:"feature_weights,omitempty"`
+	Type             string   `yaml:"type"`
+	ModelsPath       string   `yaml:"models_path,omitempty"`
+	K                int      `yaml:"k,omitempty"`
+	NumClusters      int      `yaml:"num_clusters,omitempty"`
+	Kernel           string   `yaml:"kernel,omitempty"`
+	Gamma            float64  `yaml:"gamma,omitempty"`
+	EfficiencyWeight *float64 `yaml:"efficiency_weight,omitempty"`
+	Device           string   `yaml:"device,omitempty"`
 }
