@@ -244,6 +244,11 @@ export const workGroups: WorkGroup[] = [
         avatar: 'https://github.com/pranavthakur0-0.png',
         profile: 'https://github.com/pranavthakur0-0',
       },
+      {
+        name: 'kzos',
+        avatar: 'https://github.com/kzos.png',
+        profile: 'https://github.com/kzos',
+      },
     ],
   },
   {
