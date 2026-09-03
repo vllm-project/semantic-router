@@ -24,6 +24,8 @@ var BaselineRouterContract = []string{
 	"pii-detection",
 	// PII entity positions are code-point offsets (issue #3146)
 	"pii-entity-offsets",
+	// PII past the classifier's sequence limit is still detected (issue #3364)
+	"pii-long-text",
 	"jailbreak-detection",
 	"decision-priority-selection",
 	"plugin-chain-execution",
