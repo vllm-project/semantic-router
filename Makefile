@@ -32,6 +32,7 @@ _run:
 		-f tools/make/recipe-conformance.mk \
 		-f tools/make/e2e.mk \
 		-f tools/make/performance.mk \
+		-f tools/make/soak.mk \
 		$(MAKECMDGOALS)
 
 .PHONY: _run
