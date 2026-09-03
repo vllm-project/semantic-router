@@ -680,7 +680,6 @@ config:
             - critical
           action_codes:
             - TXN_DECLINE
-          temporal: true
       domains:
         - name: business
           description: Business, corporate strategy, management, finance, marketing
