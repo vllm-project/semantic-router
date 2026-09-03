@@ -56,16 +56,20 @@ func TestTelemetryStoreSizeCap(t *testing.T) {
 	}()
 
 	for i := 0; i < 6; i++ {
+		conversationID := "conv-" + strconv.Itoa(i)
 		RecordTurn(TurnParams{
 			RequestID:    "r" + strconv.Itoa(i),
 			Model:        "model-a",
 			PromptTokens: 10,
-			ResponseAPI:  &ResponseAPIInput{ConversationID: "conv-" + strconv.Itoa(i)},
+			ResponseAPI: &ResponseAPIInput{
+				ConversationID:    conversationID,
+				SessionTrackingID: "respapi:conversation:" + conversationID,
+			},
 		})
 	}
 
-	if got := telemetrySessionCount(); got > maxTelemetrySessions {
-		t.Fatalf("telemetry session count %d exceeds cap %d", got, maxTelemetrySessions)
+	if got := telemetrySessionCount(); got != maxTelemetrySessions {
+		t.Fatalf("telemetry session count %d, want cap %d after over-cap inserts", got, maxTelemetrySessions)
 	}
 }
 
