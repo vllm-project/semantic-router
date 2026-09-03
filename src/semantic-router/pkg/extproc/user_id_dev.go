@@ -3,8 +3,6 @@
 package extproc
 
 import (
-	"encoding/json"
-
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
@@ -34,9 +32,9 @@ func extractUserID(ctx *RequestContext) string {
 	}
 
 	// DEV-ONLY: Fallback to metadata["user_id"] (untrusted, for development/testing)
-	if ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.OriginalRequest != nil {
-		if ctx.ResponseAPICtx.OriginalRequest.Metadata != nil {
-			if userID, ok := ctx.ResponseAPICtx.OriginalRequest.Metadata["user_id"]; ok && userID != "" {
+	if ctx.SemanticRequest != nil {
+		if ctx.SemanticRequest.Metadata != nil {
+			if userID, ok := ctx.SemanticRequest.Metadata["user_id"]; ok && userID != "" {
 				logging.ComponentWarnEvent("extproc", "memory_user_id_untrusted_fallback", map[string]interface{}{
 					"request_id": ctx.RequestID,
 					"source":     "response_api_metadata",
@@ -46,45 +44,5 @@ func extractUserID(ctx *RequestContext) string {
 		}
 	}
 
-	// DEV-ONLY: Fallback to Chat Completions metadata["user_id"] or "user" field (untrusted)
-	if len(ctx.ChatCompletionRequestBody) > 0 {
-		// Extract on-demand in dev builds only
-		if ctx.ChatCompletionUserID == "" {
-			ctx.ChatCompletionUserID = extractChatCompletionUserIDFromBody(ctx.ChatCompletionRequestBody)
-		}
-		if ctx.ChatCompletionUserID != "" {
-			logging.ComponentWarnEvent("extproc", "memory_user_id_untrusted_fallback", map[string]interface{}{
-				"request_id": ctx.RequestID,
-				"source":     "chat_completions_body",
-			})
-			return ctx.ChatCompletionUserID
-		}
-	}
-
 	return ""
-}
-
-// extractChatCompletionUserIDFromBody extracts user ID from Chat Completions request body.
-// Priority: metadata["user_id"] > "user" field (deprecated).
-//
-// DEV BUILD ONLY: This function only exists in dev builds and extracts UNTRUSTED
-// client-provided data as a fallback for development/testing.
-func extractChatCompletionUserIDFromBody(requestBody []byte) string {
-	var req struct {
-		Metadata map[string]string `json:"metadata"`
-		User     string            `json:"user"`
-	}
-	if err := json.Unmarshal(requestBody, &req); err != nil {
-		return ""
-	}
-
-	// Priority 1: metadata["user_id"] (consistent with Response API)
-	if req.Metadata != nil {
-		if userID, ok := req.Metadata["user_id"]; ok && userID != "" {
-			return userID
-		}
-	}
-
-	// Priority 2: "user" field (deprecated by OpenAI, for backward compatibility)
-	return req.User
 }

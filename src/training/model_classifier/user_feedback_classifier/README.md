@@ -1,156 +1,58 @@
-# mmBERT Feedback Detector
+# User Feedback Classifier
 
-Fine-tuning pipeline for training a **4-class user satisfaction classifier** using mmBERT.
+This pipeline trains a four-class classifier for a user's follow-up message:
 
-Compatible with: [llm-semantic-router/feedback-detector](https://huggingface.co/llm-semantic-router/feedback-detector)
+| Label | Meaning |
+|---|---|
+| `SAT` | expresses satisfaction |
+| `NEED_CLARIFICATION` | asks for clarification or more explanation |
+| `WRONG_ANSWER` | says the previous answer is incorrect |
+| `WANT_DIFFERENT` | requests another option or approach |
 
-## Key Insight
+The model consumes the follow-up text only. That keeps inference simple, but it
+also means ambiguous replies such as “yes” or “not that one” may require
+conversation context outside this classifier.
 
-**Follow-up messages alone contain sufficient signal for classification.** No conversation context needed—just pass the user's response directly.
-
-## Labels
-
-| Label | Description | Example |
-|-------|-------------|---------|
-| `SAT` | User is satisfied | "Thanks!", "Perfect", "Great!" |
-| `NEED_CLARIFICATION` | User needs more explanation | "What do you mean?", "Can you explain?" |
-| `WRONG_ANSWER` | System provided incorrect info | "No, that's wrong", "That's not right" |
-| `WANT_DIFFERENT` | User wants alternatives | "Show me others", "What else?" |
-
-## Base Model: mmBERT
-
-**mmBERT** (Multilingual ModernBERT) provides:
-
-- **1800+ languages** with 256k vocabulary
-- **8192 max context** (RoPE embeddings)
-- **Cross-lingual transfer**: train on English, works globally
-
-## Quick Start
-
-### Install
+## Install and Train
 
 ```bash
 pip install -r requirements.txt
-```
 
-### Train (Full Fine-tuning)
-
-```bash
 python train_feedback_detector.py \
-    --model_name jhu-clsp/mmBERT-base \
-    --output_dir models/mmbert_feedback_detector \
-    --epochs 5 \
-    --batch_size 16
+  --model_name llm-semantic-router/mmbert-32k-yarn \
+  --data_source llm-semantic-router/feedback-detector-dataset \
+  --output_dir models/feedback-detector \
+  --max_samples 2000 \
+  --epochs 1
 ```
 
-### Train with LoRA
+Use the short run to verify data loading and output. Remove the sample cap and
+tune on validation data for a full run. `--use_lora`, `--lora_rank`,
+`--lora_alpha`, and `--merge_lora` control adapter training and export; see
+`python train_feedback_detector.py --help` for current defaults.
 
-```bash
-python train_feedback_detector.py \
-    --model_name jhu-clsp/mmBERT-base \
-    --output_dir models/mmbert_feedback_detector \
-    --use_lora \
-    --lora_rank 16 \
-    --lora_alpha 32 \
-    --merge_lora \
-    --epochs 5
-```
-
-### Inference
+## Inference
 
 ```python
 from inference_feedback import FeedbackDetector
 
-detector = FeedbackDetector("models/mmbert_feedback_detector")
-
-# Just pass the follow-up message!
-result = detector.classify("That's wrong, the answer is 42.")
-print(result)  # WRONG_ANSWER (92.3%)
-
-# Batch classification
-results = detector.classify_batch([
-    "Thanks, that's helpful!",
-    "What do you mean?",
-    "Show me other options.",
-])
+detector = FeedbackDetector("models/feedback-detector")
+result = detector.classify("Could you explain that another way?")
+print(result.label, result.confidence, result.all_scores)
 ```
 
-## Output Models
+`classify_batch()` accepts a list of follow-up messages. Treat confidence as a
+model score, not a calibrated probability, unless calibration has been measured
+on the deployment distribution.
 
-```
-models/
-├── mmbert_feedback_detector/           # Full fine-tuned
-│   ├── config.json
-│   ├── model.safetensors
-│   └── tokenizer.json
-│
-├── mmbert_feedback_detector_lora/      # LoRA adapter only
-│   ├── adapter_config.json
-│   └── adapter_model.safetensors
-│
-└── mmbert_feedback_detector_merged/    # LoRA merged (for deployment)
-    ├── config.json
-    ├── model.safetensors
-    └── tokenizer.json
-```
+## Evaluation and Use
 
-## Directory Structure
+Before connecting feedback labels to routing or online learning, measure the
+confusion matrix and per-class precision/recall on held-out conversations.
+Inspect short, multilingual, sarcastic, and context-dependent replies. Routing
+policy should define the consequence of each label and should not update model
+experience from a low-confidence prediction without safeguards.
 
-```
-modernbert_dissat_pipeline/
-├── configs/
-│   └── config.py               # Configuration
-├── data_processing/            # Dataset processors
-├── train_feedback_detector.py  # Training (full + LoRA)
-├── inference_feedback.py       # Inference
-├── requirements.txt
-└── README.md
-```
-
-## Integration with Semantic Router
-
-```python
-from inference_feedback import FeedbackDetector
-
-detector = FeedbackDetector("models/mmbert_feedback_detector")
-
-def handle_user_response(followup: str, model_used: str):
-    result = detector.classify(followup)
-    
-    if result.label == "WRONG_ANSWER":
-        # Strong signal: penalize this model
-        apply_heavy_penalty(model_used)
-    elif result.label == "NEED_CLARIFICATION":
-        # Try more detailed model
-        prefer_verbose_model()
-    elif result.label == "WANT_DIFFERENT":
-        # Try alternative approach
-        try_alternative_model()
-    else:  # SAT
-        # Reinforce this model choice
-        reward_model(model_used)
-```
-
-## Pre-trained Models
-
-| Model | Description | Link |
-|-------|-------------|------|
-| **mmbert-feedback-detector-merged** | Ready for inference | [🤗 Hub](https://huggingface.co/llm-semantic-router/mmbert-feedback-detector-merged) |
-| **mmbert-feedback-detector-lora** | LoRA adapter | [🤗 Hub](https://huggingface.co/llm-semantic-router/mmbert-feedback-detector-lora) |
-
-### Use Pre-trained Model
-
-```python
-from transformers import pipeline
-
-classifier = pipeline("text-classification", model="llm-semantic-router/mmbert-feedback-detector-merged")
-result = classifier("Thanks, that's helpful!")
-print(result)  # [{'label': 'SAT', 'score': 0.999...}]
-```
-
-## References
-
-- [mmBERT Base Model](https://huggingface.co/jhu-clsp/mmBERT-base)
-- [feedback-detector-dataset](https://huggingface.co/datasets/llm-semantic-router/feedback-detector-dataset)
-- [mmbert-feedback-detector-merged](https://huggingface.co/llm-semantic-router/mmbert-feedback-detector-merged)
-- [mmbert-feedback-detector-lora](https://huggingface.co/llm-semantic-router/mmbert-feedback-detector-lora)
+Published checkpoints and datasets should have their own model or dataset card
+with revisions, split policy, base model, metrics, and limitations. Links in a
+README are not a substitute for that evidence.

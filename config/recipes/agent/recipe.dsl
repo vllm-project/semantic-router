@@ -202,6 +202,11 @@ SIGNAL structure constraint_dense {
   predicate: { gt: 0.08 }
 }
 
+SIGNAL conversation agent_has_images {
+  description: "Request contains at least one image content part."
+  feature: { source: { type: "image_content" }, type: "exists" }
+}
+
 SIGNAL conversation multi_turn_user {
   feature: { source: { role: "user", type: "message" }, type: "count" }
   predicate: { gte: 2 }
@@ -334,6 +339,11 @@ MODEL google/gemini-3.1-pro {
   modality: "text"
 }
 
+MODEL local/omni {
+  capabilities: ["chat", "image_understanding", "multimodal", "omni", "text", "vision"]
+  modality: "omni"
+}
+
 MODEL openai/gpt5.4 {
   context_window_size: 262144
   description: "Simulated frontier reasoning lane for hard non-private planning and long-horizon agent sessions."
@@ -367,6 +377,22 @@ ROUTE local_security_containment (description = "Keep prompt-injection or jailbr
   TIER 1
   WHEN projection("policy_security_local_only")
   MODEL "qwen/qwen3.6-rocm" (reasoning = false)
+  PLUGIN router_replay {
+    enabled: true
+    max_records: 10000
+    capture_request_body: true
+    capture_response_body: true
+    max_body_bytes: 2048
+    max_tool_trace_steps: 100
+  }
+}
+
+ROUTE omni (description = "Understand image-bearing requests locally without bypassing security containment.") {
+  PRIORITY 330
+  TIER 1
+  WHEN conversation("agent_has_images")
+  MODEL "local/omni" (reasoning = false)
+  ALGORITHM static
   PLUGIN router_replay {
     enabled: true
     max_records: 10000

@@ -1,54 +1,101 @@
 # Documentation Guide
 
-This guide covers how to contribute to the vLLM Semantic Router documentation.
+Public documentation lives under `website/`. Write for a reader trying to
+understand or operate the system, not as a record of how a change was
+implemented.
 
-## Directory Structure
+## Choose the right location
 
-The documentation is built using Docusaurus.
+| Content | Location |
+|---------|----------|
+| Concepts, use cases, and architecture | `website/docs/overview/` |
+| First run, configuration, deployment, and operations | The matching section in `website/sidebars.ts` |
+| Signals, projections, decisions, algorithms, and plugins | `website/docs/tutorials/` |
+| Stable HTTP or Kubernetes field reference | `website/docs/api/` |
+| Contributor workflow | `website/docs/community/` or canonical repository contributor docs |
 
-- `website/docs/`: Main English documentation (Markdown).
-- `website/i18n/`: Localized documentation (e.g., `zh-Hans` for Chinese).
-- `website/docusaurus.config.ts`: Site configuration.
-- `website/sidebars.ts`: Sidebar navigation.
+Avoid creating a second source of truth for generated schemas, config
+inventories, or commands already owned by code. Link to the authoritative
+reference or update its generator instead.
 
-## Editing Documentation
+## Write for the task
 
-1. **Locate the file:** Find the Markdown file in `website/docs/`.
-2. **Make changes:** Edit the content using Markdown syntax.
-3. **Preview locally:**
+A capability page should answer, in this order:
 
-   ```bash
-   cd website
-   npm run start
-   ```
+1. What problem does this solve?
+2. When should a reader use it?
+3. What is the smallest valid configuration or command?
+4. What are its important limits, security implications, and dependencies?
 
-4. **Verify links:** Ensure all relative links work correctly.
-5. **Lint check:** Run `make markdown-lint` to check for syntax issues.
+Prefer one realistic example over several near-duplicates. Do not paste local
+terminal transcripts, one-off test output, unqualified benchmark numbers, or
+implementation scorecards into long-lived user documentation.
 
-## Internationalization (i18n)
+Use sentence-case headings, specify a language on fenced code blocks, and use
+relative links for other docs pages. Put website images under
+`website/static/img/`.
 
-We support multiple languages (e.g., English, Chinese). The default language is English.
+## Preview and validate
 
-### Adding a New Page
+```bash
+cd website
+npm ci
+npm run start
+```
 
-1. **Create the English file** in `website/docs/`.
-2. **Create the corresponding translated file** in `website/i18n/{locale}/docusaurus-plugin-content-docs/current/`.
-   - Example for Chinese: `website/i18n/zh-Hans/docusaurus-plugin-content-docs/current/`.
-3. **Ensure the filename and directory structure match exactly.**
+Before submitting:
 
-### Adding a New Language
+```bash
+cd website
+npm test
+npm run build:en
+```
 
-1. **Configure the new locale** in `website/docusaurus.config.ts`.
-2. **Run** `npm run write-translations -- --locale <new-locale>` to generate JSON translation files.
-3. **Copy the `docs` folder structure** to `website/i18n/<new-locale>/...` and translate the Markdown files.
+From the repository root, the docs-only CI path is:
 
-### Updating Translations
+```bash
+make agent-docs-ci-gate AGENT_BASE_REF=origin/main
+```
 
-When you update an English document, please also update the Chinese translation if possible. If you cannot translate it, please open an issue to request help.
+The build treats broken internal links as errors. Check external links that are
+important to a procedure, especially downloads, charts, and upstream versioned
+guides.
 
-## Style Guide
+## Generated references
 
-- **Headings:** Use sentence case.
-- **Code Blocks:** Specify the language (e.g., \`\`\`bash).
-- **Links:** Use relative paths for internal links.
-- **Images:** Place images in `website/static/img/` and reference them as `/img/...`.
+The configuration catalog is derived from `config/fragments/` and the first
+sentence of each matching capability guide's **Overview**. Regenerate and check
+it from the repository root:
+
+```bash
+make docs-config
+make docs-config-check
+```
+
+The Operator field reference is generated from the current Go API types:
+
+```bash
+make docs-crd
+make docs-crd-check
+```
+
+Edit the source fragment, capability guide, or Operator API comment rather than
+editing a generated block by hand.
+
+## Localization
+
+English source pages live in `website/docs/`. Chinese translations live in:
+
+```text
+website/i18n/zh-Hans/docusaurus-plugin-content-docs/current/
+```
+
+Keep translated paths aligned with their English source path. If a translation
+cannot be updated in the same pull request, remove its current-version override
+so Docusaurus serves the current English page. Keep historical `version-v*`
+translations unchanged. `make docs-check-translations` treats that fallback as
+coverage information while still failing on stale or invalid overrides.
+
+For a new locale, add it to `website/docusaurus.config.ts`, generate the locale
+catalog with `npm run write-translations -- --locale <locale>`, and validate a
+locale-specific build.

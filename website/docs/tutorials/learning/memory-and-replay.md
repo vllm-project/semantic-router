@@ -2,23 +2,26 @@
 
 ## Overview
 
-Router Learning uses in-process online state on the hot path and Router Replay
-as the durable event log. Request routing does not depend on synchronous
-external storage reads.
+Router Learning uses in-process online state on the hot path. Router Replay can
+record events when enabled; persistence across restarts requires a durable
+backend. Request routing does not depend on synchronous replay-store reads.
 
 ## Key Advantages
 
 - Keeps hot-path learning reads local and bounded.
-- Preserves Router Replay as the durable audit and eval source of truth.
+- Can preserve replay evidence for audit and evaluation when a durable backend
+  is configured.
 - Separates mutable protection state from long-lived replay evidence.
-- Gives offline recipe learning the data it needs without slowing requests.
+- Gives offline recipe learning replay data without adding replay-store reads
+  to request routing.
 
 ## What Problem Does It Solve?
 
 Learning needs history, but request routing cannot scan storage or replay logs
 on every call. The router keeps compact in-process state for protection and
-adaptation, then writes durable replay records for audit, debugging, outcomes,
-and offline recipe experiments.
+adaptation. When replay is enabled, it also writes records for audit,
+debugging, outcomes, and offline recipe experiments; their durability depends
+on the selected backend.
 
 ## When to Use
 
@@ -26,7 +29,8 @@ and offline recipe experiments.
 - You want evals or agents to inspect routing evidence after the request.
 - You want outcomes to update online experience while remaining linked to a
   replay record.
-- You plan to run offline recipe learning from production or test replay data.
+- You plan to enable replay and run offline recipe learning from production or
+  test data.
 
 ## Layers
 
@@ -34,7 +38,7 @@ and offline recipe experiments.
 | --- | --- | --- |
 | Protection state | Yes | Current protected model, identity scope, turn count, cache/tool-loop evidence, and switch history. |
 | Model experience | Yes | Quality, overuse, reliability, latency, cache, and cost evidence for adaptation. |
-| Router Replay | No | Durable route, response, outcome, and learning diagnostics. |
+| Router Replay | No | Optional route, response, outcome, and learning diagnostics; durability depends on the backend. |
 | Offline recipe learning | No | Evals, findings, candidate recipes, recipe patches, and experience seed packs. |
 
 ## Configuration
@@ -48,6 +52,9 @@ global:
       enabled: true
       store_backend: postgres
 ```
+
+This example uses Postgres for persistence. The default `memory` backend is
+process-local and loses records on restart.
 
 Learning diagnostics are written into replay records when replay is enabled:
 

@@ -1,0 +1,68 @@
+.summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  cursor: pointer;
+  list-style: none;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.summary::-webkit-details-marker {
+  display: none;
+}
+
+.indicatorChevron::after {
+  width: var(--evaluation-disclosure-indicator-size, 0.45rem);
+  height: var(--evaluation-disclosure-indicator-size, 0.45rem);
+  flex: 0 0 auto;
+  border-right: 1.5px solid var(--evaluation-disclosure-indicator-color, currentColor);
+  border-bottom: 1.5px solid var(--evaluation-disclosure-indicator-color, currentColor);
+  content: '';
+  transform: rotate(45deg) translate(-0.1rem, -0.1rem);
+  transition: transform var(--transition-fast);
+}
+
+.summary:hover {
+  background: var(--evaluation-disclosure-hover-background, transparent);
+  color: var(--evaluation-disclosure-hover-color, inherit);
+}
+
+.summary:focus-visible {
+  color: var(--evaluation-disclosure-focus-color, inherit);
+}
+
+.disclosure[open] > .summary {
+  color: var(--evaluation-disclosure-open-color, inherit);
+}
+
+.disclosure[open] > .indicatorChevron::after {
+  transform: rotate(225deg) translate(-0.05rem, -0.05rem);
+}
+
+.indicatorLabel::after {
+  align-self: center;
+  color: var(--text-muted);
+  content: 'Show details';
+  font-size: 0.68rem;
+  white-space: nowrap;
+}
+
+.disclosure[open] > .indicatorLabel::after {
+  content: 'Hide details';
+}
+
+.focusInset:focus-visible,
+.focusOutside:focus-visible {
+  outline: 2px solid var(--focus-ring);
+}
+
+.focusInset:focus-visible {
+  outline-offset: -3px;
+}
+
+.focusOutside:focus-visible {
+  outline-offset: var(--evaluation-disclosure-focus-offset, 3px);
+}

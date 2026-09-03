@@ -1,55 +1,57 @@
-# Milvus Installation Validation Script
+# Milvus installation validation
 
-Validates commands in `website/docs/installation/milvus.md`.
+`test-milvus-deployment.sh` exercises the Kubernetes commands documented in
+the public Milvus installation guide. It creates or reuses a Kind cluster,
+installs the Milvus Helm chart, checks the service, applies test-only client
+and network resources, and optionally removes the Helm release.
 
-## Features
+This is a deployment smoke test, not a production Milvus topology or load
+test.
 
-1. Prerequisites check (kubectl, kind, helm)
-2. Create Kind cluster (`make create-cluster`)
-3. Deploy Milvus (Standalone or Cluster mode)
-4. Verify deployment
-5. Apply client config & network policies
-6. Connection tests
+## Prerequisites
 
-## Deployment Modes
+- `kubectl`, Kind, Helm, and Make
+- enough local container capacity for the selected chart topology
+- network access to the Milvus Helm repository and container images
 
-| Mode           | Use Case            |
-| -------------- | ------------------- |
-| **Standalone** | Development/testing |
-| **Cluster**    | Production (HA)     |
+## Run
 
-## Usage
-
-**Interactive:**
+Interactive mode prompts for deployment topology, cluster reuse, and cleanup:
 
 ```bash
 ./tools/milvus/test-milvus-deployment.sh
 ```
 
-**Non-Interactive (CI/CD):**
+For a non-interactive standalone smoke that leaves resources available for
+inspection:
 
 ```bash
-MILVUS_MODE=standalone RECREATE_CLUSTER=false CLEANUP=false ./tools/milvus/test-milvus-deployment.sh
+MILVUS_MODE=standalone \
+RECREATE_CLUSTER=false \
+CLEANUP=false \
+./tools/milvus/test-milvus-deployment.sh
 ```
 
-### Environment Variables
+| Variable | Values | Effect |
+| --- | --- | --- |
+| `MILVUS_MODE` | `standalone`, `cluster` | Selects the Milvus chart topology. |
+| `RECREATE_CLUSTER` | `true`, `false` | Recreates the existing `semantic-router-cluster` Kind cluster when true. |
+| `CLEANUP` | `true`, `false` | Uninstalls the Milvus release and removes test resources when true. |
 
-| Variable           | Values                  | Description                     |
-| ------------------ | ----------------------- | ------------------------------- |
-| `MILVUS_MODE`      | `standalone`, `cluster` | Deployment mode                 |
-| `RECREATE_CLUSTER` | `true`, `false`         | Recreate Kind cluster if exists |
-| `CLEANUP`          | `true`, `false`         | Cleanup after test              |
+Cluster mode deploys additional etcd, object-storage, and messaging
+components and needs substantially more local capacity. `CLEANUP=true` does
+not delete the Kind cluster itself.
 
-## Troubleshooting
+## Diagnose a failure
 
-**ServiceMonitor CRD Not Found:**
+The script prints pod, service, PVC, storage-class, NetworkPolicy, and recent
+Milvus log state before cleanup. If the Helm install fails earlier, inspect the
+same namespace directly:
 
 ```bash
-# Add: --set metrics.serviceMonitor.enabled=false
+kubectl get pods,svc,pvc -n vllm-semantic-router-system
+kubectl get events -n vllm-semantic-router-system --sort-by=.lastTimestamp
 ```
 
-**Both Pulsar versions running:**
-
-```bash
-# Add: --set pulsar.enabled=false --set pulsarv3.enabled=true
-```
+The script disables `ServiceMonitor` creation so it does not require the
+Prometheus Operator, and cluster mode selects Pulsar v3 explicitly.

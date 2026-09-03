@@ -21,6 +21,20 @@ import (
 	"encoding/json"
 )
 
+// sseDataPayload parses an SSE data field. The single space after the colon is
+// optional in the SSE grammar, and OpenAI-compatible backends emit both forms.
+func sseDataPayload(line []byte) ([]byte, bool) {
+	line = bytes.TrimSuffix(line, []byte("\r"))
+	if !bytes.HasPrefix(line, []byte("data:")) {
+		return nil, false
+	}
+	payload := line[len("data:"):]
+	if len(payload) > 0 && payload[0] == ' ' {
+		payload = payload[1:]
+	}
+	return payload, true
+}
+
 // parseStreamingUsage extracts token usage from an SSE stream. OpenAI-compatible
 // backends report usage in a trailing chunk (only when the request set
 // stream_options.include_usage), so the last non-null usage block wins. Returns
@@ -28,19 +42,19 @@ import (
 func parseStreamingUsage(body []byte) TokenUsage {
 	var usage TokenUsage
 	for _, line := range bytes.Split(body, []byte("\n")) {
-		lineStr := string(line)
-		if len(lineStr) <= 6 || lineStr[:6] != "data: " {
+		data, ok := sseDataPayload(line)
+		if !ok {
 			continue
 		}
-		data := lineStr[6:]
-		if data == "[DONE]" {
+		data = bytes.TrimSpace(data)
+		if bytes.Equal(data, []byte("[DONE]")) {
 			continue
 		}
 
 		var chunk struct {
 			Usage *TokenUsage `json:"usage"`
 		}
-		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+		if err := json.Unmarshal(data, &chunk); err != nil {
 			continue
 		}
 		if chunk.Usage != nil {

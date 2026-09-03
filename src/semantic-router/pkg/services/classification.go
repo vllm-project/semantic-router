@@ -26,6 +26,25 @@ type ClassificationService struct {
 	unifiedClassifier *classification.UnifiedClassifier // New unified classifier
 	config            *config.RouterConfig
 	configMutex       sync.RWMutex // Protects config access
+	evalSelector      EvalModelSelector
+}
+
+func (s *ClassificationService) SetEvalModelSelector(selector EvalModelSelector) {
+	if s == nil {
+		return
+	}
+	s.configMutex.Lock()
+	s.evalSelector = selector
+	s.configMutex.Unlock()
+}
+
+func (s *ClassificationService) evalModelSelectorSnapshot() EvalModelSelector {
+	if s == nil {
+		return nil
+	}
+	s.configMutex.RLock()
+	defer s.configMutex.RUnlock()
+	return s.evalSelector
 }
 
 // NewRecipeClassificationService creates a model-aware service backed by
@@ -194,10 +213,8 @@ func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentRespon
 	if classifier.Config != nil && len(classifier.Config.Decisions) > 0 {
 		decisionResult, err = classifier.EvaluateDecisionWithEngine(signals)
 		if err != nil {
-			// Log error but continue with classification
-			// Note: "no decisions configured" error is expected when decisions list is empty
 			if !strings.Contains(err.Error(), "no decisions configured") {
-				logging.Warnf("Decision evaluation failed, continuing with classification: %v", err)
+				return nil, err
 			}
 		}
 	}

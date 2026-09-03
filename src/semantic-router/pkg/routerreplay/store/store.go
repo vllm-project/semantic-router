@@ -12,26 +12,27 @@ import (
 
 // Signal represents various routing signals captured during a request.
 type Signal struct {
-	Keyword      []string `json:"keyword,omitempty"`
-	Embedding    []string `json:"embedding,omitempty"`
-	Domain       []string `json:"domain,omitempty"`
-	FactCheck    []string `json:"fact_check,omitempty"`
-	UserFeedback []string `json:"user_feedback,omitempty"`
-	Reask        []string `json:"reask,omitempty"`
-	Preference   []string `json:"preference,omitempty"`
-	Language     []string `json:"language,omitempty"`
-	Context      []string `json:"context,omitempty"`
-	Structure    []string `json:"structure,omitempty"`
-	Complexity   []string `json:"complexity,omitempty"`
-	Modality     []string `json:"modality,omitempty"`
-	Authz        []string `json:"authz,omitempty"`
-	Jailbreak    []string `json:"jailbreak,omitempty"`
-	PII          []string `json:"pii,omitempty"`
-	KB           []string `json:"kb,omitempty"`
-	Conversation []string `json:"conversation,omitempty"`
-	Event        []string `json:"event,omitempty"`
-	Metadata     []string `json:"metadata,omitempty"`
-	Classifier   []string `json:"classifier,omitempty"`
+	Keyword       []string `json:"keyword,omitempty"`
+	Embedding     []string `json:"embedding,omitempty"`
+	Domain        []string `json:"domain,omitempty"`
+	FactCheck     []string `json:"fact_check,omitempty"`
+	UserFeedback  []string `json:"user_feedback,omitempty"`
+	Reask         []string `json:"reask,omitempty"`
+	Preference    []string `json:"preference,omitempty"`
+	Language      []string `json:"language,omitempty"`
+	Context       []string `json:"context,omitempty"`
+	Structure     []string `json:"structure,omitempty"`
+	Complexity    []string `json:"complexity,omitempty"`
+	Modality      []string `json:"modality,omitempty"`
+	Authz         []string `json:"authz,omitempty"`
+	Jailbreak     []string `json:"jailbreak,omitempty"`
+	PII           []string `json:"pii,omitempty"`
+	KB            []string `json:"kb,omitempty"`
+	Conversation  []string `json:"conversation,omitempty"`
+	Event         []string `json:"event,omitempty"`
+	Metadata      []string `json:"metadata,omitempty"`
+	Classifier    []string `json:"classifier,omitempty"`
+	InputModality []string `json:"input_modality,omitempty"`
 }
 
 // UsageCost captures token usage and pricing-derived cost details for a record.
@@ -59,6 +60,14 @@ type Outcome struct {
 	Score     float64           `json:"score,omitempty"`
 	Metadata  map[string]string `json:"metadata,omitempty"`
 }
+
+const (
+	LifecycleUnknown    = "unknown"
+	LifecycleInProgress = "in_progress"
+	LifecycleCompleted  = "completed"
+	LifecycleAborted    = "aborted"
+	LifecycleFailed     = "failed"
+)
 
 // ToolTrace captures the request-local assistant/tool exchange timeline.
 type ToolTrace struct {
@@ -150,6 +159,7 @@ type RouteDiagnostics struct {
 	ContextCompressionCostSaved    float64                `json:"context_compression_cost_saved,omitempty"`
 	Annotations                    map[string]interface{} `json:"annotations,omitempty"`
 	SignalErrors                   map[string]string      `json:"signal_errors,omitempty"`
+	AppliedUnknownPolicies         map[string]string      `json:"applied_unknown_policies,omitempty"`
 }
 
 // HallucinationSpan is a single unsupported span with its NLI explanation,
@@ -198,6 +208,10 @@ type Record struct {
 	RequestBody           string                 `json:"request_body,omitempty"`
 	ResponseBody          string                 `json:"response_body,omitempty"`
 	ResponseStatus        int                    `json:"response_status,omitempty"`
+	LifecycleState        string                 `json:"lifecycle_state"`
+	EndedAt               *time.Time             `json:"ended_at,omitempty"`
+	DurationMS            int64                  `json:"duration_ms,omitempty"`
+	TerminalReason        string                 `json:"terminal_reason,omitempty"`
 	FromCache             bool                   `json:"from_cache,omitempty"`
 	Streaming             bool                   `json:"streaming,omitempty"`
 	RequestBodyTruncated  bool                   `json:"request_body_truncated,omitempty"`
@@ -278,22 +292,40 @@ type Record struct {
 	BaselineModel      *string  `json:"baseline_model,omitempty"`
 }
 
-// Writer mutates router replay records.
-type Writer interface {
+// RecordWriter creates records and advances their routing lifecycle.
+type RecordWriter interface {
 	// Add inserts a new record. Returns the record ID.
 	Add(ctx context.Context, record Record) (string, error)
 
 	// UpdateStatus updates the response status and flags for an existing record.
 	UpdateStatus(ctx context.Context, id string, status int, fromCache bool, streaming bool) error
 
+	// UpdateLifecycle records terminal completion independently of response
+	// headers. A 2xx status is not considered successful until this transition
+	// reaches LifecycleCompleted.
+	UpdateLifecycle(ctx context.Context, id string, state string, endedAt time.Time, durationMS int64, reason string) error
+}
+
+// BodyWriter attaches bounded request and response bodies to replay records.
+type BodyWriter interface {
 	// AttachRequest updates the request body for an existing record.
 	AttachRequest(ctx context.Context, id string, body string, truncated bool) error
 
 	// AttachResponse updates the response body for an existing record.
 	AttachResponse(ctx context.Context, id string, body string, truncated bool) error
+}
 
+// OutcomeWriter appends post-route feedback to replay records.
+type OutcomeWriter interface {
 	// AppendOutcome links post-route feedback to an existing replay record.
 	AppendOutcome(ctx context.Context, id string, outcome Outcome) error
+}
+
+// Writer groups the mutation capabilities required by the replay recorder.
+type Writer interface {
+	RecordWriter
+	BodyWriter
+	OutcomeWriter
 }
 
 // Reader retrieves router replay records.
@@ -410,26 +442,27 @@ func cloneToolTrace(trace *ToolTrace) *ToolTrace {
 
 func cloneSignal(signal Signal) Signal {
 	return Signal{
-		Keyword:      cloneStringSlice(signal.Keyword),
-		Embedding:    cloneStringSlice(signal.Embedding),
-		Domain:       cloneStringSlice(signal.Domain),
-		FactCheck:    cloneStringSlice(signal.FactCheck),
-		UserFeedback: cloneStringSlice(signal.UserFeedback),
-		Reask:        cloneStringSlice(signal.Reask),
-		Preference:   cloneStringSlice(signal.Preference),
-		Language:     cloneStringSlice(signal.Language),
-		Context:      cloneStringSlice(signal.Context),
-		Structure:    cloneStringSlice(signal.Structure),
-		Complexity:   cloneStringSlice(signal.Complexity),
-		Modality:     cloneStringSlice(signal.Modality),
-		Authz:        cloneStringSlice(signal.Authz),
-		Jailbreak:    cloneStringSlice(signal.Jailbreak),
-		PII:          cloneStringSlice(signal.PII),
-		KB:           cloneStringSlice(signal.KB),
-		Conversation: cloneStringSlice(signal.Conversation),
-		Event:        cloneStringSlice(signal.Event),
-		Metadata:     cloneStringSlice(signal.Metadata),
-		Classifier:   cloneStringSlice(signal.Classifier),
+		Keyword:       cloneStringSlice(signal.Keyword),
+		Embedding:     cloneStringSlice(signal.Embedding),
+		Domain:        cloneStringSlice(signal.Domain),
+		FactCheck:     cloneStringSlice(signal.FactCheck),
+		UserFeedback:  cloneStringSlice(signal.UserFeedback),
+		Reask:         cloneStringSlice(signal.Reask),
+		Preference:    cloneStringSlice(signal.Preference),
+		Language:      cloneStringSlice(signal.Language),
+		Context:       cloneStringSlice(signal.Context),
+		Structure:     cloneStringSlice(signal.Structure),
+		Complexity:    cloneStringSlice(signal.Complexity),
+		Modality:      cloneStringSlice(signal.Modality),
+		Authz:         cloneStringSlice(signal.Authz),
+		Jailbreak:     cloneStringSlice(signal.Jailbreak),
+		PII:           cloneStringSlice(signal.PII),
+		KB:            cloneStringSlice(signal.KB),
+		Conversation:  cloneStringSlice(signal.Conversation),
+		Event:         cloneStringSlice(signal.Event),
+		Metadata:      cloneStringSlice(signal.Metadata),
+		Classifier:    cloneStringSlice(signal.Classifier),
+		InputModality: cloneStringSlice(signal.InputModality),
 	}
 }
 
@@ -459,6 +492,7 @@ func cloneRecord(record Record) Record {
 	cloned.CostSavings = cloneFloat64Ptr(record.CostSavings)
 	cloned.Currency = cloneStringPtr(record.Currency)
 	cloned.BaselineModel = cloneStringPtr(record.BaselineModel)
+	cloned.EndedAt = cloneTimePtr(record.EndedAt)
 	return cloned
 }
 
@@ -502,6 +536,7 @@ func cloneRouteDiagnostics(value *RouteDiagnostics) *RouteDiagnostics {
 	cloned := *value
 	cloned.Annotations = cloneInterfaceMap(value.Annotations)
 	cloned.SignalErrors = cloneStringMap(value.SignalErrors)
+	cloned.AppliedUnknownPolicies = cloneStringMap(value.AppliedUnknownPolicies)
 	return &cloned
 }
 
@@ -514,6 +549,14 @@ func cloneIntPtr(value *int) *int {
 }
 
 func cloneFloat64Ptr(value *float64) *float64 {
+	if value == nil {
+		return nil
+	}
+	cloned := *value
+	return &cloned
+}
+
+func cloneTimePtr(value *time.Time) *time.Time {
 	if value == nil {
 		return nil
 	}

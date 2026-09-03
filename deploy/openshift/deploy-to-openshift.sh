@@ -645,12 +645,10 @@ if [[ "$DEPLOY_OBSERVABILITY" == "true" ]]; then
         cd "$SCRIPT_DIR/../.."
         oc new-build --name=dashboard-custom --binary --strategy=docker --to=dashboard-custom:latest -n "$NAMESPACE"
     fi
-    # Build context is repo root, so we must point the BuildConfig at dashboard/Dockerfile.
-    # Ensure dockerfilePath is set whether it already exists (replace) or not (add).
-    oc patch buildconfig/dashboard-custom -n "$NAMESPACE" --type='json' \
-        -p='[{"op":"test","path":"/spec/strategy/dockerStrategy/dockerfilePath","value":"dashboard/Dockerfile"},{"op":"replace","path":"/spec/strategy/dockerStrategy/dockerfilePath","value":"dashboard/Dockerfile"}]' \
-        2>/dev/null || oc patch buildconfig/dashboard-custom -n "$NAMESPACE" --type='json' \
-        -p='[{"op":"add","path":"/spec/strategy/dockerStrategy/dockerfilePath","value":"dashboard/Dockerfile"}]'
+    # Build context is repo root. OpenShift and published images intentionally
+    # share the canonical Dashboard runtime, including the installed vllm-sr CLI.
+    oc patch buildconfig/dashboard-custom -n "$NAMESPACE" --type='merge' \
+        -p='{"spec":{"strategy":{"dockerStrategy":{"dockerfilePath":"dashboard/backend/Dockerfile"}}}}'
 
     # Start the build from repo root so the dashboard build can access src/semantic-router
     log "Building dashboard image from source..."

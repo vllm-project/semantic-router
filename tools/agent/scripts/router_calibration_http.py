@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import json
+import os
 from typing import Any
 from urllib import error, request
 
 HTTP_OK_MIN = 200
 HTTP_REDIRECT_MIN = 300
+MANAGEMENT_TOKEN_ENV = "VSR_MGMT_TOKEN"
 
 
 def normalize_router_url(router_url: str) -> str:
@@ -23,6 +25,9 @@ def http_json(
 ) -> tuple[int, dict[str, Any] | list[Any] | str]:
     body = None
     headers = {"Accept": "application/json"}
+    token = os.getenv(MANAGEMENT_TOKEN_ENV, "").strip()
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
     if payload is not None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         headers["Content-Type"] = "application/json"

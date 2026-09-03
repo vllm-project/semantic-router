@@ -25,6 +25,18 @@ routing:
             type: tool_definition
         predicate:
           gte: 3
+      - name: requires_tool_execution
+        description: Request protocol requires at least one tool call.
+        feature:
+          type: exists
+          source:
+            type: tool_choice_required
+      - name: forbids_tool_execution
+        description: Request protocol explicitly forbids tool calls.
+        feature:
+          type: exists
+          source:
+            type: tool_choice_none
       - name: active_tool_use
         description: At least one assistant tool call has been made.
         feature:
@@ -47,3 +59,9 @@ routing:
           type: exists
           source:
             type: active_tool_loop
+      - name: resumable_flow_state
+        description: The request ends with a Router Flow tool result that carries continuation state.
+        feature:
+          type: exists
+          source:
+            type: flow_tool_state

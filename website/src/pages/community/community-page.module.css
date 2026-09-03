@@ -12,7 +12,7 @@
 
 .section h2 {
   margin: 0;
-  font-size: clamp(1.7rem, 4vw, 2.6rem);
+  font-size: var(--text-2xl);
   line-height: 1;
 }
 
@@ -53,8 +53,8 @@
 
 .enforcementItem {
   padding: 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--site-border);
+  background: var(--site-surface-soft);
 }
 
 .enforcementItem h4 {
@@ -77,7 +77,7 @@
   grid-template-columns: auto minmax(0, 1fr);
   gap: 0.9rem;
   padding: 1rem 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid var(--site-border);
 }
 
 .step > :last-child,
@@ -98,7 +98,7 @@
   width: 2rem;
   height: 2rem;
   border: 1px solid var(--site-border-strong);
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   color: var(--site-text);
   font-size: 0.78rem;
 }
@@ -112,7 +112,7 @@
   overflow: hidden;
   max-width: 100%;
   border: 1px solid var(--site-border);
-  background: #0c0c0c;
+  background: var(--site-code-bg);
 }
 
 .codeHeader {
@@ -131,7 +131,7 @@
 .controlButton {
   width: 0.7rem;
   height: 0.7rem;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background: rgba(255, 255, 255, 0.22);
 }
 
@@ -170,7 +170,7 @@
   min-height: 2.35rem;
   padding: 0.5rem 0.85rem;
   border: 1px solid var(--site-border);
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   color: var(--site-text);
   font-size: 0.74rem;
   text-transform: uppercase;
@@ -185,8 +185,8 @@
 .stepsList code,
 .card code {
   padding: 0.12rem 0.32rem;
-  border-radius: 0.35rem;
-  background: rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-md);
+  background: var(--site-badge-bg);
   overflow-wrap: anywhere;
   word-break: break-word;
 }

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import copy
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
@@ -16,26 +18,38 @@ from router_calibration_probe import (
     TOP_LEVEL_FIELDS,
     VARIANT_FIELDS,
     Probe,
+    ProbeGeneratedText,
+    ProbeImageFixture,
     ProbePadding,
+    ProbePlaygroundPolicy,
     load_grouped_probes,
+    normalize_image_fixtures,
     reject_unknown_fields,
 )
 from router_calibration_schema import validate_probe_manifest_schema
+from yaml.nodes import MappingNode, Node, SequenceNode
+from yaml.tokens import AliasToken, AnchorToken, TagToken
 
 __all__ = [
     "DECISION_FIELDS",
     "TOP_LEVEL_FIELDS",
     "VARIANT_FIELDS",
     "Probe",
+    "ProbeGeneratedText",
+    "ProbeImageFixture",
     "ProbePadding",
+    "ProbePlaygroundPolicy",
     "load_probe_manifest",
+    "report_safe_probe_manifest",
 ]
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def load_probe_manifest(path: Path) -> tuple[dict[str, Any], list[Probe]]:
-    manifest = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    document = path.read_text(encoding="utf-8")
+    reject_yaml_indirection(document, path)
+    manifest = yaml.safe_load(document) or {}
     if not isinstance(manifest, dict):
         raise TypeError(f"{path} must contain a mapping")
     validate_probe_manifest_schema(manifest, path)
@@ -48,11 +62,54 @@ def load_probe_manifest(path: Path) -> tuple[dict[str, Any], list[Probe]]:
     if not str(manifest.get("name") or "").strip():
         raise ValueError(f"{path} must declare a non-empty name")
     _validate_manifest_settings(path, manifest)
+    image_fixtures = normalize_image_fixtures(manifest.get("fixtures"), path)
     raw_decisions = manifest.get("decisions")
     if isinstance(raw_decisions, list) and raw_decisions:
-        return manifest, load_grouped_probes(raw_decisions, path)
+        return manifest, load_grouped_probes(raw_decisions, path, image_fixtures)
 
     raise ValueError(f"{path} must contain a non-empty 'decisions' list")
+
+
+def reject_yaml_indirection(document: str, path: Path) -> None:
+    """Reject YAML features that can hide or multiply untrusted probe data."""
+    for token in yaml.scan(document):
+        if isinstance(token, AnchorToken):
+            raise ValueError(f"{path} must not contain YAML anchors")
+        if isinstance(token, AliasToken):
+            raise ValueError(f"{path} must not contain YAML aliases")
+        if isinstance(token, TagToken):
+            raise ValueError(f"{path} must not contain explicit YAML tags")
+    root = yaml.compose(document)
+    if root is not None and _contains_yaml_merge(root):
+        raise ValueError(f"{path} must not contain YAML merge keys")
+
+
+def _contains_yaml_merge(node: Node) -> bool:
+    if isinstance(node, MappingNode):
+        for key, value in node.value:
+            if key.tag == "tag:yaml.org,2002:merge":
+                return True
+            if _contains_yaml_merge(key) or _contains_yaml_merge(value):
+                return True
+    elif isinstance(node, SequenceNode):
+        return any(_contains_yaml_merge(item) for item in node.value)
+    return False
+
+
+def report_safe_probe_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
+    """Keep fixture identity and integrity metadata while omitting binary payloads."""
+    safe_manifest = copy.deepcopy(manifest)
+    fixtures = safe_manifest.get("fixtures")
+    images = fixtures.get("images") if isinstance(fixtures, dict) else None
+    if not isinstance(images, dict):
+        return safe_manifest
+    for fixture in images.values():
+        if not isinstance(fixture, dict):
+            continue
+        data_base64 = fixture.pop("data_base64", "")
+        compact = "".join(str(data_base64).split())
+        fixture["bytes"] = len(base64.b64decode(compact, validate=True))
+    return safe_manifest
 
 
 def _validate_manifest_settings(path: Path, manifest: dict[str, Any]) -> None:

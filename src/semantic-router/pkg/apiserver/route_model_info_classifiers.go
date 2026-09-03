@@ -75,7 +75,7 @@ func buildRoutingClassifierModels(
 			Categories: configuredCategoryNames(cfg),
 			Metadata: map[string]string{
 				"mapping_path": categoryModel.CategoryMappingPath,
-				"model_type":   resolveInlineModelType(categoryModel.UseMmBERT32K, categoryModel.UseModernBERT, false),
+				"model_type":   categoryModelInfoType(categoryModel),
 				"threshold":    fmt.Sprintf("%.2f", categoryModel.Threshold),
 			},
 		})
@@ -98,6 +98,13 @@ func buildRoutingClassifierModels(
 
 	promptGuard := cfg.PromptGuard
 	if cfg.IsPromptGuardEnabled() {
+		backend := promptGuard.Protocol
+		if backend == "" {
+			backend = promptGuard.Variant
+		}
+		if backend == "" {
+			backend = routerconfig.PromptGuardVariantCandle
+		}
 		models = append(models, ModelInfo{
 			Name:      "jailbreak_classifier",
 			Type:      "security_detection",
@@ -106,12 +113,24 @@ func buildRoutingClassifierModels(
 			Metadata: map[string]string{
 				"enabled":                "true",
 				"jailbreak_mapping_path": promptGuard.JailbreakMappingPath,
-				"model_type":             resolveInlineModelType(promptGuard.UseMmBERT32K, promptGuard.UseModernBERT, false),
+				"backend":                backend,
 			},
 		})
 	}
 
 	return models
+}
+
+func categoryModelInfoType(model routerconfig.CategoryModel) string {
+	if model.Backend != nil {
+		// Match the existing prompt_guard convention: a remote classifier reports
+		// its effective transport rather than pretending to be a local model.
+		return model.Backend.Protocol
+	}
+	if variant, err := model.EffectiveVariant(); err == nil && variant != "" {
+		return variant
+	}
+	return resolveInlineModelType(model.UseMmBERT32K, model.UseModernBERT, false)
 }
 
 func buildHallucinationModels(
@@ -170,7 +189,8 @@ func buildHallucinationModels(
 
 	nliModel := cfg.HallucinationMitigation.NLIModel
 	if cfg.NeedsLocalHallucinationNLIForAPI() ||
-		cfg.NeedsLocalHallucinationNLIForRouting() {
+		cfg.NeedsLocalHallucinationNLIForRouting() ||
+		cfg.NeedsLocalNLIForSemanticCache() {
 		models = append(models, ModelInfo{
 			Name:      "hallucination_explainer",
 			Type:      "nli_explainer",

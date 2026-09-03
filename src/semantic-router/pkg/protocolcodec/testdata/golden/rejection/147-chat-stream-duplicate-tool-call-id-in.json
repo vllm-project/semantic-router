@@ -1,0 +1,8 @@
+{
+  "operation": "stream",
+  "public_model": "public-model",
+  "provider_model": "provider-model",
+  "chunks": [
+    "data: {\"id\":\"chat_duplicate_calls\",\"object\":\"chat.completion.chunk\",\"model\":\"provider-model\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"tool_calls\":[{\"index\":0,\"id\":\"call_same\",\"type\":\"function\",\"function\":{\"name\":\"first\",\"arguments\":\"{}\"}},{\"index\":1,\"id\":\"call_same\",\"type\":\"function\",\"function\":{\"name\":\"second\",\"arguments\":\"{}\"}}]},\"finish_reason\":null}]}\n\n"
+  ]
+}

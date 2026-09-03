@@ -1,16 +1,17 @@
 package extproc
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
-	"github.com/openai/openai-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
 )
 
@@ -32,11 +33,8 @@ routing:
   decisions:
     - name: default_route
       priority: 1
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: known-model
+      rules: {operator: AND, conditions: []}
+      modelRefs: [{model: known-model}]
 `
 
 func newModelResolutionTestRouter(t *testing.T) (*OpenAIRouter, *config.RouterConfig) {
@@ -50,12 +48,26 @@ func newModelResolutionTestRouter(t *testing.T) (*OpenAIRouter, *config.RouterCo
 	return router, cfg
 }
 
-func newModelResolutionTestContext() *RequestContext {
+func newModelResolutionTestContext(t *testing.T) *RequestContext {
+	t.Helper()
 	return &RequestContext{
 		RequestID:           "test-req",
 		Headers:             map[string]string{},
+		TraceContext:        context.Background(),
+		SourceFormat:        llmprotocol.OpenAIChatV1,
 		ProcessingStartTime: time.Now(),
-		OriginalRequestBody: []byte(`{"model":"x","messages":[{"role":"user","content":"hi"}]}`),
+		SemanticRequest:     modelResolutionRequest("x"),
+	}
+}
+
+func modelResolutionRequest(model string) *llmprotocol.Request {
+	return &llmprotocol.Request{
+		Generation: 1,
+		Model:      model,
+		Messages: []llmprotocol.Message{{
+			Role:    llmprotocol.RoleUser,
+			Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "hi"}},
+		}},
 	}
 }
 
@@ -77,8 +89,9 @@ func selectedModelHeader(resp *ext_proc.ProcessingResponse) (string, bool) {
 // misleading upstream "401 No api key" because no credential is resolvable).
 func TestSpecifiedUnknownModelReturns400(t *testing.T) {
 	router, _ := newModelResolutionTestRouter(t)
-	ctx := newModelResolutionTestContext()
-	req := &openai.ChatCompletionNewParams{Model: "no-such-model"}
+	ctx := newModelResolutionTestContext(t)
+	req := modelResolutionRequest("no-such-model")
+	ctx.SemanticRequest = req
 
 	resp, err := router.handleSpecifiedModelRouting(req, "no-such-model", "", ctx)
 	require.NoError(t, err)
@@ -89,10 +102,11 @@ func TestSpecifiedUnknownModelReturns400(t *testing.T) {
 // B1: a known, configured model must still route normally.
 func TestSpecifiedKnownModelRoutes(t *testing.T) {
 	router, _ := newModelResolutionTestRouter(t)
-	ctx := newModelResolutionTestContext()
-	req := &openai.ChatCompletionNewParams{Model: "known-model"}
+	ctx := newModelResolutionTestContext(t)
+	req := modelResolutionRequest("known-model")
+	ctx.SemanticRequest = req
 
-	resp, err := router.handleSpecifiedModelRouting(req, "known-model", "", ctx)
+	resp, err := router.handleModelRouting(req, "known-model", "", entropy.ReasoningDecision{}, "", ctx)
 	require.NoError(t, err)
 	assert.Nil(t, resp.GetImmediateResponse(), "known model should not be rejected")
 	model, ok := selectedModelHeader(resp)
@@ -100,50 +114,33 @@ func TestSpecifiedKnownModelRoutes(t *testing.T) {
 	assert.Equal(t, "known-model", model)
 }
 
-// B2: an auto model that yields no selection (e.g. empty/contentless messages)
-// must fall back to the configured default model instead of forwarding the
-// unresolved auto-model name without credentials.
-func TestAutoModelNoSelectionFallsBackToDefault(t *testing.T) {
+// B2: an Entrypoint that yields no selection fails closed. A global default
+// Model cannot bypass the Entrypoint's Recipe and assignment contract.
+func TestEntrypointNoSelectionReturns400(t *testing.T) {
 	router, _ := newModelResolutionTestRouter(t)
-	ctx := newModelResolutionTestContext()
-	req := &openai.ChatCompletionNewParams{Model: "MoM"}
+	ctx := newModelResolutionTestContext(t)
+	req := modelResolutionRequest("router/default")
+	ctx.SemanticRequest = req
 
-	resp, err := router.handleModelRouting(req, "MoM", "", entropy.ReasoningDecision{}, "", ctx)
+	resp, err := router.handleModelRouting(req, "router/default", "", entropy.ReasoningDecision{}, "", ctx)
 	require.NoError(t, err)
-	assert.Nil(t, resp.GetImmediateResponse(), "auto model with a configured default should route, not error")
-	model, ok := selectedModelHeader(resp)
-	require.True(t, ok, "fallback should route to the default model and set x-selected-model")
-	assert.Equal(t, "known-model", model)
-}
-
-// B2: when auto routing yields no selection AND no default model is configured,
-// the request must be rejected with a clear 400 rather than silently forwarded.
-func TestAutoModelNoSelectionNoDefaultReturns400(t *testing.T) {
-	router, cfg := newModelResolutionTestRouter(t)
-	cfg.DefaultModel = ""
-	ctx := newModelResolutionTestContext()
-	req := &openai.ChatCompletionNewParams{Model: "MoM"}
-
-	resp, err := router.handleModelRouting(req, "MoM", "", entropy.ReasoningDecision{}, "", ctx)
-	require.NoError(t, err)
-	require.NotNil(t, resp.GetImmediateResponse(), "no selection and no default should produce an immediate error response")
+	require.NotNil(t, resp.GetImmediateResponse(), "no selection should produce an immediate error response")
 	assert.Equal(t, 400, int(resp.GetImmediateResponse().GetStatus().GetCode()))
 }
 
-// The auto-routing branch that dispatches to the looper (algorithm.type
+// The Entrypoint branch that dispatches to the looper (algorithm.type
 // confidence/ratings matched by normal decision evaluation, as opposed to a
 // client requesting the "fusion"/"remom"/"workflows" pseudo-model directly)
 // must set ctx.VSRSelectedDecisionName before calling handleLooperExecution,
-// the same way handleAutoModelRouting's trackVSRDecision call does for
-// non-looper decisions and handleDirectFusionExecution/handleDirectReMoMExecution/
-// handleDirectFlowExecution already do for their algorithm types. Without it,
+// the same way handleEntrypointModelRouting's trackVSRDecision call does for
+// non-looper decisions. Without it,
 // x-vsr-selected-decision comes back empty for any looper decision reached via
 // normal auto-matching (caught by the #2694 e2e test, which is the first e2e
 // coverage to exercise a confidence-algorithm decision through this path).
-func TestLooperAutoRoutingSetsSelectedDecisionName(t *testing.T) {
+func TestLooperEntrypointRoutingSetsSelectedDecisionName(t *testing.T) {
 	router, cfg := newModelResolutionTestRouter(t)
 	cfg.Looper.Endpoint = "http://127.0.0.1:0/v1/chat/completions" // unreachable; only ctx state before dispatch is under test
-	ctx := newModelResolutionTestContext()
+	ctx := newModelResolutionTestContext(t)
 	decision := &config.Decision{
 		Name: "looper_test_decision",
 		Algorithm: &config.AlgorithmConfig{
@@ -156,9 +153,11 @@ func TestLooperAutoRoutingSetsSelectedDecisionName(t *testing.T) {
 		},
 	}
 	ctx.VSRSelectedDecision = decision
-	req := &openai.ChatCompletionNewParams{Model: "MoM"}
+	ctx.Routing.SelectRecipe(&config.RoutingRecipe{Name: config.DefaultRecipeName})
+	req := modelResolutionRequest("router/default")
+	ctx.SemanticRequest = req
 
-	_, err := router.handleModelRouting(req, "MoM", decision.Name, entropy.ReasoningDecision{}, "known-model", ctx)
+	_, err := router.handleModelRouting(req, "router/default", decision.Name, entropy.ReasoningDecision{}, "known-model", ctx)
 	require.NoError(t, err)
 	assert.Equal(t, "looper_test_decision", ctx.VSRSelectedDecisionName)
 }

@@ -204,6 +204,55 @@ def test_llm_classifier_requires_classification_external_model(
     assert any(expected in error.message for error in validate_user_config(config))
 
 
+@pytest.mark.parametrize(
+    ("external", "expected"),
+    [
+        ([], "unknown external model"),
+        (
+            [{"name": "judge", "model_role": "generation"}],
+            "model_role=classification",
+        ),
+        (
+            [
+                {
+                    "name": "judge",
+                    "model_role": "classification",
+                    "llm_endpoint": {
+                        "address": "classifier.example.com",
+                        "port": 8080,
+                        "protocol": "grpc",
+                    },
+                }
+            ],
+            "protocol must be http or https",
+        ),
+    ],
+)
+def test_sequence_classifier_requires_valid_classification_external_model(
+    external,
+    expected,
+):
+    config = UserConfig.model_validate(
+        {
+            "version": "v0.3",
+            "routing": {
+                "signals": {
+                    "classifiers": [
+                        {
+                            "name": "risk",
+                            "type": "sequence_classifier",
+                            "model": "judge",
+                            "labels": ["SAFE", "RISKY"],
+                        }
+                    ]
+                }
+            },
+            "global": {"model_catalog": {"external": external}},
+        }
+    )
+    assert any(expected in error.message for error in validate_user_config(config))
+
+
 def test_classifier_decision_rejects_unknown_label_and_local_threshold():
     config = UserConfig.model_validate(
         {

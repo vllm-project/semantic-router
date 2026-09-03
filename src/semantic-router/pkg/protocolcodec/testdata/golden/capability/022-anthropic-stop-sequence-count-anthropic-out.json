@@ -1,0 +1,25 @@
+{
+  "status": "ok",
+  "body": {
+    "max_tokens": 64,
+    "messages": [
+      {
+        "content": [
+          {
+            "text": "Stop on one of several markers.",
+            "type": "text"
+          }
+        ],
+        "role": "user"
+      }
+    ],
+    "model": "routed-model",
+    "stop_sequences": [
+      "ONE",
+      "TWO",
+      "THREE",
+      "FOUR",
+      "FIVE"
+    ]
+  }
+}

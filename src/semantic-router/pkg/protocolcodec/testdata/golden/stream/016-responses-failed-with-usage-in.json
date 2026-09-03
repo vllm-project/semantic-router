@@ -1,0 +1,8 @@
+{
+  "public_model": "public-model",
+  "provider_model": "provider-model",
+  "chunks": [
+    "event: response.created\ndata: {\"type\":\"response.created\",\"sequence_number\":0,\"response\":{\"id\":\"resp_failed\",\"object\":\"response\",\"created_at\":100,\"model\":\"provider-model\",\"status\":\"in_progress\",\"output\":[]}}\n\n",
+    "event: response.failed\ndata: {\"type\":\"response.failed\",\"sequence_number\":1,\"response\":{\"id\":\"resp_failed\",\"object\":\"response\",\"created_at\":100,\"model\":\"provider-model\",\"status\":\"failed\",\"error\":{\"code\":\"provider_error\",\"message\":\"failed after generation\"},\"output\":[],\"usage\":{\"input_tokens\":4,\"input_tokens_details\":{\"cached_tokens\":1,\"cache_write_tokens\":0},\"output_tokens\":2,\"output_tokens_details\":{\"reasoning_tokens\":1},\"total_tokens\":6}}}\n\n"
+  ]
+}

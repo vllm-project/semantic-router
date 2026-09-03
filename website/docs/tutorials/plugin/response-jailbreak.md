@@ -4,8 +4,6 @@
 
 `response_jailbreak` is a route-local plugin for screening the model response before it is returned.
 
-It aligns to `config/fragments/plugin/response-jailbreak/strict.yaml`.
-
 ## Key Advantages
 
 - Adds a final response-side jailbreak check for sensitive routes.
@@ -24,13 +22,19 @@ Even if the request routed correctly, the generated answer may still need a fina
 
 ## Configuration
 
-Use this fragment under `routing.decisions[].plugins`:
+Add the plugin under `routing.decisions[].plugins`:
 
 ```yaml
-plugin:
-  type: response_jailbreak
-  configuration:
-    enabled: true
-    threshold: 0.85
-    action: block
+plugins:
+  - type: response_jailbreak
+    configuration:
+      enabled: true
+      threshold: 0.85
+      action: block
 ```
+
+This plugin processes generated response text with the configured prompt-guard
+runtime. It adds latency and can produce false positives, so calibrate the
+threshold and choose `block` versus header-only handling according to policy.
+See a complete example:
+[`config/fragments/plugin/response-jailbreak/strict.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/response-jailbreak/strict.yaml).

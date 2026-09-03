@@ -130,6 +130,22 @@ export const researchPapers = [
     sortOrder: 57,
   },
   {
+    id: 'beyond-document-grounding',
+    type: 'paper',
+    categoryLabel: 'RAG VERIFICATION',
+    title: 'Beyond Document Grounding: Span-Level Hallucination Detection over Code, Tool Output, and Documents',
+    authors: 'Ádám Kovács, Bowei He, Xue Liu, István Boros, Szilveszter Tóth, Gábor Recski',
+    venue: 'EMNLP 2026 - GroundLM Workshop',
+    year: '2026',
+    abstract: 'We introduce a unified benchmark for span-level hallucination detection over code, tool output, structured documents, and existing natural-language RAG datasets, built by injecting localized hallucinations with exact character labels into grounded correct answers. Our fine-tuned Qwen3.5-2B detector reaches 0.689 span-F1 on the unified test set and 0.60 on the code-agent source, substantially outperforming LettuceDetect-large and the strongest zero-shot LLM judges evaluated.',
+    links: [
+      { type: 'paper', url: 'https://arxiv.org/abs/2607.00895', label: 'Paper' },
+      { type: 'event', url: 'https://groundlm.github.io/grouplm_emnlp2026/', label: 'Workshop' },
+    ],
+    featured: true,
+    sortOrder: 57.5,
+  },
+  {
     id: 'conflict-free-policy-languages',
     type: 'paper',
     title: 'Conflict-Free Policy Languages for Probabilistic ML Predicates: A Framework and Case Study with the Semantic Router DSL',

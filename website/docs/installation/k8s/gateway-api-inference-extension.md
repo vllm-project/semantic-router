@@ -1,476 +1,188 @@
-import Tabs from '@theme/Tabs';
-import TabItem from '@theme/TabItem';
+---
+title: Gateway API Inference Extension
+description: Combine semantic model-pool selection with endpoint selection inside a Kubernetes InferencePool.
+---
 
-# Install with Gateway API Inference Extension
+# Gateway API Inference Extension
 
-This guide provides step-by-step instructions for integrating vLLM Semantic Router (vSR) with a Gateway API Inference Extension (GIE) conformant inference gateway. GIE lets you manage self-hosted, OpenAI-compatible models with Kubernetes-native APIs such as `InferencePool`, while vSR adds prompt-aware model routing through the gateway's ExtProc integration.
+Gateway API Inference Extension (GAIE) and Semantic Router solve different
+parts of routing:
 
-## Architecture Overview
+- **Semantic Router** chooses a logical model or pool from the request's
+  meaning, policy, and recipe state.
+- **GAIE** represents that pool as an `InferencePool` and lets an endpoint
+  picker choose a ready replica.
 
-The deployment consists of three main components:
+Use them together when one public model ID can select among several model
+pools, and each pool contains multiple interchangeable serving replicas. If
+every model maps directly to one Kubernetes Service, use a simpler gateway
+integration such as [Istio](istio) instead.
 
-- **vLLM Semantic Router**: Classifies incoming requests and selects the target model.
-- **GIE-conformant inference gateway**: Provides the Kubernetes Gateway API data plane. This guide includes tabs for Istio and agentgateway.
-- **Gateway API Inference Extension (GIE)**: Provides Kubernetes-native inference APIs such as `InferencePool` for load-aware backend selection.
-
-## Benefits of Integration
-
-Integrating vSR with GIE provides a robust, Kubernetes-native solution for serving LLMs with several key benefits:
-
-### 1. **Kubernetes-Native LLM Management**
-
-Manage your models, routing, and scaling policies directly through `kubectl` using familiar Custom Resource Definitions (CRDs).
-
-### 2. **Intelligent Model and Replica Routing**
-
-Combine vSR's prompt-based model routing with GIE's smart, load-aware replica selection. This ensures requests are sent not only to the right model but also to the healthiest replica, all in a single, efficient hop.
-
-### 3. **Protect Your Models from Overload**
-
-The built-in scheduler tracks backend load and request queues, automatically shedding traffic to prevent your model servers from crashing under high demand.
-
-### 4. **Deep Observability**
-
-Gain insights from both high-level Gateway metrics and detailed vSR performance data (like token usage and classification accuracy) to monitor and troubleshoot your entire AI stack.
-
-### 5. **Secure Multi-Tenancy**
-
-Isolate tenant workloads using standard Kubernetes namespaces and `HTTPRoutes`. Apply rate limits and other policies while sharing a common, secure gateway infrastructure.
-
-## Supported Backend Models and APIs
-
-The demo models in this guide use the llm-d inference simulator to emulate Llama3 and Phi-4 through an **OpenAI-compatible API**. The simulator keeps the walkthrough runnable on a local kind cluster without GPUs or model downloads. You can replace it with your own model servers as long as the Semantic Router configuration, gateway routing resources, and GIE backend configuration agree on the request format and backend target.
-
-OpenAI-compatible APIs are not the only supported option. agentgateway custom providers can declare provider-native formats such as OpenAI chat completions, Anthropic messages, responses, embeddings, token counting, and realtime APIs, and can route those providers to a host, Kubernetes `Service`, or `InferencePool`. GIE endpoint picker implementations can also support additional request formats through parser configuration; for example, the llm-d EPP parser framework includes OpenAI, Anthropic, vLLM HTTP, vLLM gRPC, Vertex AI, and passthrough parsers.
-
-For details, see the agentgateway [custom providers](https://agentgateway.dev/docs/kubernetes/main/llm/providers/custom/) guide and the llm-d EPP [request parser documentation](https://github.com/llm-d/llm-d-router/blob/main/pkg/epp/framework/plugins/requesthandling/parsers/README.md).
-
-## Prerequisites
-
-Before starting, ensure you have the following tools installed:
-
-- [Docker](https://docs.docker.com/get-docker/) or another container runtime.
-- [kind](https://kind.sigs.k8s.io/) v0.22+ or any Kubernetes 1.29+ cluster.
-- [kubectl](https://kubernetes.io/docs/tasks/tools/) v1.30+.
-- [Helm](https://helm.sh/) v3.14+.
-- [istioctl](https://istio.io/latest/docs/ops/diagnostic-tools/istioctl/) v1.28+ if you choose the Istio tab.
-
-You can validate your toolchain versions with the following commands:
-
-```bash
-kind version
-kubectl version --client --short
-helm version --short
-istioctl version --remote=false
+```text
+client
+  -> Gateway
+  -> Semantic Router ExtProc
+  -> HTTPRoute chosen by x-selected-model
+  -> InferencePool
+  -> endpoint picker
+  -> model replica
 ```
 
-## Step 1: Create a Kind Cluster (Optional)
+## Choose and install the gateway stack
 
-If you don't have a Kubernetes cluster, create a local one for testing:
+Install and verify GAIE with a gateway implementation supported by your
+platform. Use one compatibility set from the upstream projects; do not combine
+CRDs, charts, and examples copied from different releases.
 
-```bash
-kind create cluster --name vsr-gie
+- [GAIE documentation](https://gateway-api-inference-extension.sigs.k8s.io/)
+- [Supported gateway implementations](https://gateway-api-inference-extension.sigs.k8s.io/implementations/gateways/)
+- [GAIE releases](https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases)
+- [llm-d gateway providers](https://llm-d.ai/docs/infrastructure/gateway)
 
-# Verify the cluster is ready
-kubectl wait --for=condition=Ready nodes --all --timeout=300s
+Before adding Semantic Router, verify that:
+
+1. the `Gateway` reports `Programmed=True`;
+2. each `HTTPRoute` reports accepted and resolved references;
+3. each `InferencePool` has ready endpoints; and
+4. a direct request reaches the expected pool.
+
+Semantic Router does not install or own the gateway controller, GAIE CRDs,
+endpoint picker, or model servers.
+
+## Define the name contract
+
+The provider model selected by Semantic Router becomes the request header used
+by the Gateway API route. The exact value must agree across all three objects:
+
+```yaml
+# Router config fragment
+providers:
+  defaults:
+    default_model: local/general
+  models:
+    - name: local/general
+      provider_model_id: served-general
+      api_format: openai
+      backend_refs:
+        - name: general-pool
+          endpoint: general-pool.inference.svc.cluster.local:8000
+          protocol: http
+          weight: 100
 ```
 
-## Step 2: Install Gateway API and GIE CRDs
-
-Install the shared CRDs for Gateway API and GIE before installing a gateway implementation:
-
-```bash
-export GATEWAY_API_VERSION=v1.5.0
-export GIE_VERSION=v1.5.0
-
-# Install Gateway API CRDs
-kubectl apply --server-side --force-conflicts \
-  -f "https://github.com/kubernetes-sigs/gateway-api/releases/download/${GATEWAY_API_VERSION}/standard-install.yaml"
-
-# Install Gateway API Inference Extension CRDs
-kubectl apply -f "https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GIE_VERSION}/manifests.yaml"
-
-# Verify CRDs are installed
-kubectl get crd | grep 'gateway.networking.k8s.io'
-kubectl get crd | grep 'inference.networking.k8s.io'
-```
-
-## Step 3: Install an Inference Gateway
-
-Choose the inference gateway you want to use. Each tab only contains gateway-specific installation steps.
-
-<Tabs groupId="gie-gateway" defaultValue="istio" values={[
-  {label: 'Istio', value: 'istio'},
-  {label: 'agentgateway', value: 'agentgateway'},
-]}>
-<TabItem value="istio">
-
-Install Istio with support for Gateway API and external processing:
-
-```bash
-# Download and install Istio
-export ISTIO_VERSION=1.29.0
-curl -L https://istio.io/downloadIstio | ISTIO_VERSION=$ISTIO_VERSION sh -
-export PATH="$PWD/istio-$ISTIO_VERSION/bin:$PATH"
-istioctl install -y --set profile=minimal --set values.pilot.env.ENABLE_GATEWAY_API=true
-
-# Verify Istio is ready
-kubectl wait --for=condition=Available deployment/istiod \
-  -n istio-system \
-  --timeout=300s
-```
-
-</TabItem>
-<TabItem value="agentgateway">
-
-Install agentgateway with inference extension support enabled:
-
-```bash
-export AGENTGATEWAY_VERSION=v1.3.0-alpha.1
-
-# Install agentgateway CRDs
-helm upgrade -i --create-namespace \
-  --namespace agentgateway-system \
-  --version "${AGENTGATEWAY_VERSION}" \
-  agentgateway-crds oci://cr.agentgateway.dev/charts/agentgateway-crds
-
-# Install agentgateway with inference extension support
-helm upgrade -i -n agentgateway-system \
-  agentgateway oci://cr.agentgateway.dev/charts/agentgateway \
-  --version "${AGENTGATEWAY_VERSION}" \
-  --set inferenceExtension.enabled=true
-
-# Verify agentgateway is ready
-kubectl get pods -n agentgateway-system
-```
-
-This guide uses agentgateway `v1.3.0-alpha.1` or newer so the ExtProc policy can set `processingOptions` and `allowModeOverride`.
-
-</TabItem>
-</Tabs>
-
-## Step 4: Deploy Demo LLM Servers
-
-Deploy two lightweight inference simulator instances, Llama3 and Phi-4, to act as backends. These simulator deployments do not require GPUs or a Hugging Face token, and their labels match the `InferencePool` selectors used later in this guide.
-
-```bash
-# Deploy the simulator model servers
-kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/kubernetes/llmd-base/inference-sim.yaml
-
-# Wait for simulator models to be ready
-kubectl wait --for=condition=Available deployment/vllm-llama3-8b-instruct --timeout=300s
-kubectl wait --for=condition=Available deployment/phi4-mini --timeout=300s
-```
-
-The demo manifest runs in the `default` namespace and exposes services named `vllm-llama3-8b-instruct` and `phi4-mini`.
-
-## Step 5: Deploy vLLM Semantic Router
-
-Deploy the vLLM Semantic Router using its official Helm chart. This component runs as an ExtProc server that the selected gateway calls for routing decisions.
-
-```bash
-helm upgrade -i semantic-router oci://ghcr.io/vllm-project/charts/semantic-router \
-  --version v0.0.0-latest \
-  --namespace vllm-semantic-router-system \
-  --create-namespace \
-  -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/kubernetes/istio/semantic-router-values/values.yaml
-
-# Wait for the router to be ready
-kubectl -n vllm-semantic-router-system wait \
-  --for=condition=Available deploy/semantic-router \
-  --timeout=10m
-```
-
-The values file configures vSR to select `llama3-8b` for general prompts and `phi4-mini` for math prompts.
-
-## Step 6: Deploy Gateway and Routing Logic
-
-Apply the gateway-specific resources that create the public-facing `Gateway`, attach vSR as an ExtProc service, and route selected models to GIE `InferencePools`.
-
-<Tabs groupId="gie-gateway" defaultValue="istio" values={[
-  {label: 'Istio', value: 'istio'},
-  {label: 'agentgateway', value: 'agentgateway'},
-]}>
-<TabItem value="istio">
-
-Apply the existing Istio gateway, `InferencePool`, `HTTPRoute`, `DestinationRule`, and `EnvoyFilter` resources:
-
-```bash
-# Apply all routing and gateway resources
-kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/kubernetes/istio/gateway.yaml
-kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/kubernetes/llmd-base/inferencepool-llama.yaml
-kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/kubernetes/llmd-base/inferencepool-phi4.yaml
-kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/kubernetes/llmd-base/httproute-llama-pool.yaml
-kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/kubernetes/llmd-base/httproute-phi4-pool.yaml
-kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/kubernetes/istio/destinationrule.yaml
-kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/kubernetes/istio/envoyfilter.yaml
-
-# Verify the Gateway is programmed by Istio
-kubectl wait --for=condition=Programmed gateway/inference-gateway --timeout=120s
-kubectl wait --for=condition=Available deployment/llm-d-inference-scheduler-llama3-8b --timeout=300s
-kubectl wait --for=condition=Available deployment/llm-d-inference-scheduler-phi4-mini --timeout=300s
-```
-
-The Istio-specific `EnvoyFilter` inserts the ExtProc filter that calls the `semantic-router` service.
-
-</TabItem>
-<TabItem value="agentgateway">
-
-Create an agentgateway-backed `Gateway`, apply the shared GIE `InferencePool` and `HTTPRoute` resources, and attach vSR with an `AgentgatewayPolicy`:
-
-```bash
-# Create an agentgateway inference Gateway
-kubectl apply -f- <<'EOF'
+```yaml
+# Gateway API fragment
 apiVersion: gateway.networking.k8s.io/v1
-kind: Gateway
+kind: HTTPRoute
 metadata:
-  name: inference-gateway
-  namespace: default
+  name: general-pool
+  namespace: inference
 spec:
-  gatewayClassName: agentgateway
-  listeners:
-  - name: http
-    protocol: HTTP
-    port: 80
-    allowedRoutes:
-      namespaces:
-        from: All
-EOF
-
-# Apply shared GIE routing resources
-kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/kubernetes/llmd-base/inferencepool-llama.yaml
-kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/kubernetes/llmd-base/inferencepool-phi4.yaml
-kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/kubernetes/llmd-base/httproute-llama-pool.yaml
-kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/kubernetes/llmd-base/httproute-phi4-pool.yaml
-
-# Attach Semantic Router as the gateway ExtProc service
-kubectl apply -f- <<'EOF'
-apiVersion: agentgateway.dev/v1alpha1
-kind: AgentgatewayPolicy
-metadata:
-  name: semantic-router-extproc
-  namespace: default
-spec:
-  targetRefs:
-  - group: gateway.networking.k8s.io
-    kind: Gateway
-    name: inference-gateway
-  traffic:
-    phase: PreRouting
-    extProc:
-      backendRef:
-        name: semantic-router
-        namespace: vllm-semantic-router-system
-        port: 50051
-      processingOptions:
-        requestHeaderMode: Send
-        requestBodyMode: Buffered
-        responseHeaderMode: Send
-        responseBodyMode: Buffered
-        allowModeOverride: true
-EOF
-
-# Verify the Gateway is programmed by agentgateway
-kubectl wait --for=condition=Programmed gateway/inference-gateway --timeout=120s
-kubectl wait --for=condition=Available deployment/llm-d-inference-scheduler-llama3-8b --timeout=300s
-kubectl wait --for=condition=Available deployment/llm-d-inference-scheduler-phi4-mini --timeout=300s
+  parentRefs:
+    - name: inference-gateway
+  rules:
+    - matches:
+        - headers:
+            - type: Exact
+              name: x-selected-model
+              value: local/general
+      backendRefs:
+        - group: inference.networking.k8s.io
+          kind: InferencePool
+          name: general-pool
+          port: 8000
 ```
 
-agentgateway uses `AgentgatewayPolicy` for ExtProc configuration, so it does not need Istio `DestinationRule` or `EnvoyFilter` resources. The policy uses `phase: PreRouting` so vSR can add `x-selected-model` before agentgateway evaluates the `HTTPRoute` header matches.
+The Router writes `x-selected-model` on the request. It exposes the logical
+selection to clients as `x-vsr-selected-model` on the response. GAIE owns the
+later endpoint choice inside `general-pool`.
 
-</TabItem>
-</Tabs>
+## Deploy Semantic Router
 
-## Testing the Deployment
-
-### Port Forwarding
-
-Set up port forwarding to access the selected gateway from your local machine.
-
-<Tabs groupId="gie-gateway" defaultValue="istio" values={[
-  {label: 'Istio', value: 'istio'},
-  {label: 'agentgateway', value: 'agentgateway'},
-]}>
-<TabItem value="istio">
+Create and validate a complete config before applying it:
 
 ```bash
-# The Gateway service is named inference-gateway-istio
-kubectl port-forward svc/inference-gateway-istio 8080:80
+vllm-sr validate --config config.yaml
 ```
 
-</TabItem>
-<TabItem value="agentgateway">
+Then deploy with the [Helm or Operator workflow](../configuration-workflows).
+For direct Helm, pass the full canonical document through `configOverride`;
+that replaces the chart sample config before the chart applies its
+Kubernetes-owned rewrites.
 
-```bash
-# agentgateway creates a service for the Gateway
-kubectl port-forward svc/inference-gateway 8080:80
+## Re-evaluate the route after ExtProc
+
+The gateway must call Semantic Router in the downstream request path and then
+re-evaluate the route after `x-selected-model` is written. Keep this Router
+setting enabled in the canonical config:
+
+```yaml
+global:
+  router:
+    clear_route_cache: true
 ```
 
-</TabItem>
-</Tabs>
+This asks Envoy to discard the route selected before ExtProc and evaluate the
+`HTTPRoute` header match again. Make sure the gateway's ExtProc policy preserves
+that response flag. Place route-dependent authorization and other filters only
+after the re-evaluated route, or verify their ordering explicitly.
 
-### Send Test Requests
+- **Istio:** use an ExtProc `EnvoyFilter` and its service `DestinationRule`.
+  The [Istio guide](istio) shows the direct-Service version of this attachment.
+- **agentgateway:** attach an `AgentgatewayPolicy` in its pre-routing phase.
+  See [agentgateway](agentgateway).
+- **Envoy AI Gateway / Envoy Gateway:** use the gateway's supported ExtProc
+  policy surface. See [Envoy AI Gateway](ai-gateway).
 
-Once port forwarding is active, send OpenAI-compatible requests to `localhost:8080`.
+Do not apply attachment resources from one gateway implementation to another;
+their policy APIs and processing modes are not interchangeable.
 
-**Test 1: Explicitly request a model**
+For chunked request bodies or immediate streamed responses, also configure the
+body mode described in [Streamed ExtProc](streamed-extproc).
 
-This request should be served by the Llama simulator. Add `-i` to the command if you want to inspect response headers such as `x-inference-pod` and `x-vsr-selected-model`.
+## Verify the combined path
+
+Send a request using a virtual model exposed by your active config:
 
 ```bash
-curl -sS http://localhost:8080/v1/chat/completions \
+curl -i "$GATEWAY_URL/v1/chat/completions" \
   -H 'Content-Type: application/json' \
   -d '{
-    "model": "llama3-8b",
-    "messages": [{"role": "user", "content": "Summarize the Kubernetes Gateway API in three sentences."}]
+    "model": "vllm-sr/auto",
+    "messages": [{"role": "user", "content": "Explain this API error."}]
   }'
 ```
 
-**Test 2: Let the Semantic Router choose the model**
-
-By setting `"model": "auto"`, you ask vSR to classify the prompt. It will identify this as a math query and add the `x-selected-model: phi4-mini` header, which `HTTPRoute` uses to route the request to the Phi-4 `InferencePool`. In the agentgateway tab, the `AgentgatewayPolicy` runs in the `PreRouting` phase so the header is present before route matching.
+Check each layer:
 
 ```bash
-curl -sS http://localhost:8080/v1/chat/completions \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "model": "auto",
-    "messages": [{"role": "user", "content": "What is 2+2 * (5-1)?"}],
-    "max_tokens": 64
-  }'
+kubectl get gateway,httproute -A
+kubectl get inferencepools -A
+kubectl get httproute general-pool -n inference \
+  -o jsonpath='{.status.parents[*].conditions[*].type}{" "}{.status.parents[*].conditions[*].status}{"\n"}'
 ```
 
-## Troubleshooting
+The response's `x-vsr-selected-model` should match the route's
+`x-selected-model` value, and the endpoint picker should report a ready endpoint
+from that pool. An HTTP 200 alone does not prove that semantic selection and
+endpoint selection both ran.
 
-**Problem: CRDs are missing**
+## Troubleshooting by ownership
 
-If you see errors like `no matches for kind "InferencePool"`, check that the CRDs are installed.
+| Symptom | Start here |
+| --- | --- |
+| No `x-vsr-selected-model` response header | Semantic Router recipe selection and ExtProc attachment |
+| Header is present but the route is not selected | `HTTPRoute` header value, route status, and gateway processing order |
+| `ResolvedRefs=False` | `InferencePool` name, group, port, namespace, and reference permissions |
+| Pool is selected but no backend responds | Endpoint-picker status, pool selector, and model-server readiness |
+| Only streamed or large requests fail | ExtProc request-body mode, body limits, and timeouts |
 
-```bash
-# Check for GIE CRDs
-kubectl get crd | grep inference.networking.k8s.io
-```
+## Production checklist
 
-**Problem: Gateway is not ready**
-
-If `kubectl port-forward` fails or requests time out, check the Gateway status.
-
-```bash
-# The Programmed condition should be True
-kubectl get gateway inference-gateway -o yaml
-```
-
-<Tabs groupId="gie-gateway" defaultValue="istio" values={[
-  {label: 'Istio', value: 'istio'},
-  {label: 'agentgateway', value: 'agentgateway'},
-]}>
-<TabItem value="istio">
-
-**Problem: vSR is not being called**
-
-If requests work but routing seems incorrect, check the Istio proxy logs for `ext_proc` errors.
-
-```bash
-# Get the Istio gateway pod name
-export ISTIO_GW_POD=$(kubectl get pod -l istio=ingressgateway -o jsonpath='{.items[0].metadata.name}')
-
-# Check its logs
-kubectl logs $ISTIO_GW_POD -c istio-proxy | grep ext_proc
-```
-
-</TabItem>
-<TabItem value="agentgateway">
-
-**Problem: agentgateway or the ExtProc policy is not ready**
-
-Check the agentgateway controller, generated Gateway workload, and `AgentgatewayPolicy`.
-
-```bash
-kubectl get pods -n agentgateway-system
-kubectl get deployment inference-gateway
-kubectl logs -n agentgateway-system deployment/agentgateway
-kubectl describe agentgatewaypolicy semantic-router-extproc
-```
-
-</TabItem>
-</Tabs>
-
-**Problem: Requests are failing**
-
-Check the logs for vSR and the backend models.
-
-```bash
-# Check vSR logs
-kubectl logs deploy/semantic-router -n vllm-semantic-router-system
-
-# Check backend logs
-kubectl logs deployment/vllm-llama3-8b-instruct
-kubectl logs deployment/phi4-mini
-```
-
-## Cleanup
-
-To remove all resources created in this guide, run the cleanup commands for the gateway tab you used.
-
-<Tabs groupId="gie-gateway" defaultValue="istio" values={[
-  {label: 'Istio', value: 'istio'},
-  {label: 'agentgateway', value: 'agentgateway'},
-]}>
-<TabItem value="istio">
-
-```bash
-# Delete routing and gateway resources
-kubectl delete -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/kubernetes/istio/envoyfilter.yaml
-kubectl delete -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/kubernetes/istio/destinationrule.yaml
-kubectl delete -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/kubernetes/llmd-base/httproute-phi4-pool.yaml
-kubectl delete -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/kubernetes/llmd-base/httproute-llama-pool.yaml
-kubectl delete -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/kubernetes/llmd-base/inferencepool-phi4.yaml
-kubectl delete -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/kubernetes/llmd-base/inferencepool-llama.yaml
-kubectl delete -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/kubernetes/istio/gateway.yaml
-
-# Delete demo models
-kubectl delete -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/kubernetes/llmd-base/inference-sim.yaml
-
-# Uninstall Helm releases and Istio
-helm uninstall semantic-router -n vllm-semantic-router-system
-istioctl uninstall -y --purge
-
-# Delete the kind cluster, if you created it
-kind delete cluster --name vsr-gie
-```
-
-</TabItem>
-<TabItem value="agentgateway">
-
-```bash
-# Delete gateway-specific resources
-kubectl delete agentgatewaypolicy semantic-router-extproc --ignore-not-found
-kubectl delete gateway inference-gateway --ignore-not-found
-
-# Delete shared GIE routing resources
-kubectl delete -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/kubernetes/llmd-base/httproute-phi4-pool.yaml
-kubectl delete -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/kubernetes/llmd-base/httproute-llama-pool.yaml
-kubectl delete -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/kubernetes/llmd-base/inferencepool-phi4.yaml
-kubectl delete -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/kubernetes/llmd-base/inferencepool-llama.yaml
-
-# Delete demo models
-kubectl delete -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/kubernetes/llmd-base/inference-sim.yaml
-
-# Uninstall Helm releases
-helm uninstall semantic-router -n vllm-semantic-router-system
-helm uninstall agentgateway -n agentgateway-system
-helm uninstall agentgateway-crds -n agentgateway-system
-
-# Delete the kind cluster, if you created it
-kind delete cluster --name vsr-gie
-```
-
-</TabItem>
-</Tabs>
-
-## Next Steps
-
-- **Customize Routing**: Modify the `values.yaml` file for the `semantic-router` Helm chart to define your own routing categories and rules.
-- **Add Your Own Models**: Replace the demo Llama3 and Phi-4 deployments with your own OpenAI-compatible model servers.
-- **Explore Advanced GIE Features**: Look into using `InferenceObjective` for more advanced autoscaling and scheduling policies.
-- **Monitor Performance**: Integrate your Gateway and vSR with Prometheus and Grafana to build monitoring dashboards.
+- Pin a tested set of Gateway API, GAIE, gateway, endpoint-picker, Router, and
+  model-server releases.
+- Decide whether ExtProc failure is fail-open or fail-closed for each route.
+- Keep provider credentials and gateway TLS material in their owning Secret
+  workflows, not in Router YAML.
+- Test direct pool access, semantic pool selection, and endpoint scheduling as
+  separate failure domains before enabling the combined path.

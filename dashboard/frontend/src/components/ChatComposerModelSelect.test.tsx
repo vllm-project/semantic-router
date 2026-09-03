@@ -7,12 +7,12 @@ import ChatComposerModelSelect from './ChatComposerModelSelect'
 
 const models = [
   {
-    id: 'vllm-sr/mom-balanced-v1',
+    id: 'vllm-sr/mom-v1-blend',
     description: 'Balanced Mixture-of-Models profile',
     recipe: 'balanced',
   },
   {
-    id: 'vllm-sr/mom-flash-v1',
+    id: 'vllm-sr/mom-v1-flash',
     description: 'Latency-first Mixture-of-Models profile',
     recipe: 'speed-first',
   },
@@ -30,11 +30,11 @@ describe('ChatComposerModelSelect', () => {
 
     expect(markup).toContain('data-testid="playground-composer-model-select"')
     expect(markup).toContain('aria-haspopup="listbox"')
-    expect(markup).toContain('aria-label="Model: vllm-sr/mom-balanced-v1"')
+    expect(markup).toContain('aria-label="Model: vllm-sr/mom-v1-blend"')
     expect(markup).toContain('aria-expanded="false"')
     expect(markup).not.toContain('>MoM<')
     expect(markup).not.toContain('AMD')
-    expect(markup).toContain('vllm-sr/mom-balanced-v1')
+    expect(markup).toContain('vllm-sr/mom-v1-blend')
   })
 
   it('disables selection while model discovery is unavailable', () => {
@@ -43,7 +43,7 @@ describe('ChatComposerModelSelect', () => {
         disabled: true,
         models: [],
         onChange: vi.fn(),
-        value: 'vllm-sr/mom-balanced-v1',
+        value: 'vllm-sr/mom-v1-blend',
       }),
     )
 

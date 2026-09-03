@@ -1,0 +1,10 @@
+{
+  "operation": "request",
+  "body": {
+    "model": "client-model",
+    "input": "Continue.",
+    "previous_response_id": "resp_previous",
+    "conversation": {"id": "conv_1"},
+    "truncation": "auto"
+  }
+}

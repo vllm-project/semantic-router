@@ -1,0 +1,7 @@
+{
+  "status": "error",
+  "error": {
+    "category": "unsupported_feature",
+    "code": "unsupported_anthropic_reasoning_budget"
+  }
+}

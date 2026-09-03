@@ -1,0 +1,60 @@
+{
+  "operation": "response",
+  "cases": [
+    {
+      "name": "signed_thinking",
+      "body": {
+        "id": "msg_1",
+        "type": "message",
+        "role": "assistant",
+        "model": "provider-model",
+        "content": [
+          {
+            "type": "thinking",
+            "thinking": "inspect the evidence",
+            "signature": "signed-reasoning"
+          },
+          {
+            "type": "text",
+            "text": "done",
+            "citations": []
+          }
+        ],
+        "stop_reason": "end_turn",
+        "stop_sequence": null,
+        "usage": {
+          "input_tokens": 2,
+          "output_tokens": 5
+        }
+      }
+    },
+    {
+      "name": "server_tool_use",
+      "body": {
+        "id": "msg_2",
+        "type": "message",
+        "role": "assistant",
+        "model": "provider-model",
+        "content": [
+          {
+            "type": "server_tool_use",
+            "id": "srvtool_1",
+            "name": "web_search",
+            "input": {},
+            "caller": "model",
+            "context": {
+              "source": "conversation"
+            },
+            "toolset_name": "web"
+          }
+        ],
+        "stop_reason": "tool_use",
+        "stop_sequence": null,
+        "usage": {
+          "input_tokens": 2,
+          "output_tokens": 1
+        }
+      }
+    }
+  ]
+}

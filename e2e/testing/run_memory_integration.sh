@@ -22,6 +22,7 @@ SERVE_LOG="${TEST_DIR}/serve.log"
 CONFIG_FILE="${TEST_DIR}/config.yaml"
 KEEP_TEST_DIR="${KEEP_MEMORY_TEST_DIR:-0}"
 ROUTER_API_HEALTH_URL="${ROUTER_API_HEALTH_URL:-http://localhost:8080/ready}"
+LLM_KATAN_HOST_PORT="${LLM_KATAN_HOST_PORT:-8000}"
 MODEL_DIR="${MEMORY_TEST_MODEL_DIR:-${TEST_DIR}/models}"
 if [[ "${MODEL_DIR}" != /* ]]; then
     MODEL_DIR="${REPO_ROOT}/${MODEL_DIR}"
@@ -242,12 +243,12 @@ echo "Milvus connected to ${VLLM_SR_NETWORK} as vllm-sr-milvus"
 "${CONTAINER_RUNTIME}" run -d --name llm-katan \
     --network "${VLLM_SR_NETWORK}" \
     --network-alias llm-katan \
-    -p 8000:8000 \
+    -p "${LLM_KATAN_HOST_PORT}:8000" \
     "${DOCKER_REGISTRY}/llm-katan:${DOCKER_TAG}" \
     llm-katan --model dummy --host 0.0.0.0 --port 8000 --served-model-name qwen3 --backend echo >/dev/null
 
 for _ in $(seq 1 30); do
-    if curl -s http://localhost:8000/health >/dev/null 2>&1; then
+    if curl -s "http://localhost:${LLM_KATAN_HOST_PORT}/health" >/dev/null 2>&1; then
         echo "llm-katan ready"
         break
     fi
@@ -261,7 +262,7 @@ for _ in $(seq 1 30); do
     sleep 1
 done
 
-if ! curl -s http://localhost:8000/health >/dev/null 2>&1; then
+if ! curl -s "http://localhost:${LLM_KATAN_HOST_PORT}/health" >/dev/null 2>&1; then
     echo "llm-katan did not become healthy"
     "${CONTAINER_RUNTIME}" logs llm-katan || true
     exit 1

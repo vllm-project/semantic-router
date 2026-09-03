@@ -11,6 +11,10 @@ on:
         description: Stable tag with a leading v.
         required: true
         type: string
+      catalog_snapshot:
+        description: Immutable built-in catalog snapshot derived from the release minor.
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       version:
@@ -19,6 +23,11 @@ on:
         type: string
       tag:
         description: Optional source tag label.
+        required: false
+        default: ""
+        type: string
+      catalog_snapshot:
+        description: Optional built-in snapshot; defaults to v<major>.<minor>.
         required: false
         default: ""
         type: string
@@ -38,10 +47,12 @@ jobs:
           python-version: "3.11"
 
       - name: Validate package version
+        id: contract
         working-directory: src/vllm-sr
         env:
           RELEASE_VERSION: ${{ inputs.version }}
           RELEASE_TAG: ${{ inputs.tag }}
+          INPUT_CATALOG_SNAPSHOT: ${{ inputs.catalog_snapshot }}
         run: |
           PACKAGE_VERSION="$(
             sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml | head -n1
@@ -55,12 +66,30 @@ jobs:
             echo "::error::Release tag '$RELEASE_TAG' does not match package version"
             exit 1
           fi
+          IFS=. read -r VERSION_MAJOR VERSION_MINOR _ <<< "$RELEASE_VERSION"
+          EXPECTED_CATALOG_SNAPSHOT="v${VERSION_MAJOR}.${VERSION_MINOR}"
+          CATALOG_SNAPSHOT="${INPUT_CATALOG_SNAPSHOT:-$EXPECTED_CATALOG_SNAPSHOT}"
+          if [[ "$CATALOG_SNAPSHOT" != "$EXPECTED_CATALOG_SNAPSHOT" ]]; then
+            echo "::error::Catalog snapshot '$CATALOG_SNAPSHOT' does not match '$EXPECTED_CATALOG_SNAPSHOT'"
+            exit 1
+          fi
+          if [[ ! -d "../../config/recipes/built-in/$CATALOG_SNAPSHOT" ]]; then
+            echo "::error::Missing release catalog snapshot 'config/recipes/built-in/$CATALOG_SNAPSHOT'"
+            exit 1
+          fi
+          echo "catalog_snapshot=$CATALOG_SNAPSHOT" >> "$GITHUB_OUTPUT"
 
       - name: Build and verify package
         working-directory: src/vllm-sr
+        env:
+          CATALOG_SNAPSHOT: ${{ steps.contract.outputs.catalog_snapshot }}
+          RELEASE_VERSION: ${{ inputs.version }}
         run: |
           python -m pip install --upgrade pip
           pip install build twine
+          python ../../tools/release/snapshot_model_catalog.py \
+            --check --version "$RELEASE_VERSION"
+          python ../../tools/release/sync_model_catalog.py --check
           python -m build
           twine check dist/*
           REQUIRED_FILES=(
@@ -70,8 +99,34 @@ jobs:
             "cli/templates/grafana.serve.ini"
             "cli/templates/prometheus.serve.yaml"
           )
+          WHEEL_PATH="$(find dist -maxdepth 1 -type f -name '*.whl' -print -quit)"
+          if [[ -z "$WHEEL_PATH" ]]; then
+            echo "::error::Package build produced no wheel"
+            exit 1
+          fi
+          mkdir wheel-unpacked
+          unzip -q "$WHEEL_PATH" -d wheel-unpacked
+          for catalog_version in latest "$CATALOG_SNAPSHOT"; do
+            SNAPSHOT_DIR="../../config/recipes/built-in/$catalog_version"
+            mapfile -t SNAPSHOT_FILES < <(
+              find "$SNAPSHOT_DIR" -type f -printf '%P\n' | sort
+            )
+            if [[ "${#SNAPSHOT_FILES[@]}" -eq 0 ]]; then
+              echo "::error::Catalog snapshot '$catalog_version' contains no packaged resources"
+              exit 1
+            fi
+            for file in "${SNAPSHOT_FILES[@]}"; do
+              package_file="cli/model_assets/$catalog_version/$file"
+              REQUIRED_FILES+=("$package_file")
+              cmp -s "$SNAPSHOT_DIR/$file" "wheel-unpacked/$package_file" || {
+                echo "::error::Packaged model resource drifted: '$package_file'"
+                exit 1
+              }
+            done
+          done
+          unzip -Z1 "$WHEEL_PATH" > wheel-files.txt
           for file in "${REQUIRED_FILES[@]}"; do
-            unzip -l dist/*.whl | grep -q "$file" || {
+            grep -Fqx "$file" wheel-files.txt || {
               echo "::error::Missing package file '$file'"
               exit 1
             }

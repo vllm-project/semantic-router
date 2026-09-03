@@ -269,6 +269,7 @@ extern ClassificationResultWithProbs classify_text_with_probabilities(const char
 extern void free_probabilities(float* probabilities, int num_classes);
 extern ClassificationResult classify_pii_text(const char* text);
 extern ClassificationResult classify_jailbreak_text(const char* text);
+extern ModernBertClassificationResultWithProbs classify_jailbreak_text_with_probabilities(const char* text);
 extern ClassificationResult classify_bert_text(const char* text);
 extern ModernBertClassificationResult classify_modernbert_text(const char* text);
 extern ModernBertClassificationResultWithProbs classify_modernbert_text_with_probabilities(const char* text);
@@ -276,6 +277,7 @@ extern ModernBertClassificationResultWithProbs classify_mmbert_32k_jailbreak_wit
 extern void free_modernbert_probabilities(float* probabilities, int num_classes);
 extern ModernBertClassificationResult classify_modernbert_pii_text(const char* text);
 extern ModernBertClassificationResult classify_modernbert_jailbreak_text(const char* text);
+extern ModernBertClassificationResultWithProbs classify_modernbert_jailbreak_text_with_probabilities(const char* text);
 extern ClassificationResult classify_deberta_jailbreak_text(const char* text);
 extern ModernBertClassificationResult classify_fact_check_text(const char* text);
 extern ModernBertClassificationResult classify_feedback_text(const char* text);
@@ -839,6 +841,14 @@ func GetEmbeddingBatched(text string, modelType string, targetDim int) (*Embeddi
 		SequenceLength:   int(result.sequence_length),
 		ProcessingTimeMs: float32(result.processing_time_ms),
 	}, nil
+}
+
+// SupportsBatchedEmbedding reports whether the given modelType can use the
+// continuous-batching FFI (GetEmbeddingBatched / init_embedding_models_batched).
+// Only "qwen3" has a batched implementation; all other model types must use
+// the single-text path (GetEmbeddingWithModelType).
+func SupportsBatchedEmbedding(modelType string) bool {
+	return strings.ToLower(strings.TrimSpace(modelType)) == "qwen3"
 }
 
 // InitEmbeddingModels initializes Qwen3, Gemma, and/or mmBERT embedding models (standard version).
@@ -2125,6 +2135,40 @@ func ClassifyJailbreakText(text string) (ClassResult, error) {
 	}, nil
 }
 
+// ClassifyJailbreakTextWithProbs classifies text for jailbreak detection (LoRA
+// auto-detection, falling back to Traditional BERT) and returns the predicted
+// class, confidence, and full probability distribution. This allows callers to
+// read the probability of the jailbreak class itself rather than the
+// confidence of whichever class wins argmax.
+func ClassifyJailbreakTextWithProbs(text string) (ClassResultWithProbs, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	result := C.classify_jailbreak_text_with_probabilities(cText)
+
+	if result.class < 0 {
+		return ClassResultWithProbs{}, fmt.Errorf("failed to classify jailbreak text with probabilities")
+	}
+
+	// Convert C array to Go slice
+	probabilities := make([]float32, int(result.num_classes))
+	if result.probabilities != nil && result.num_classes > 0 {
+		probsSlice := (*[1 << 30]C.float)(unsafe.Pointer(result.probabilities))[:result.num_classes:result.num_classes]
+		for i, prob := range probsSlice {
+			probabilities[i] = float32(prob)
+		}
+		// Free the C-allocated memory
+		C.free_modernbert_probabilities(result.probabilities, result.num_classes)
+	}
+
+	return ClassResultWithProbs{
+		Class:         int(result.class),
+		Confidence:    float32(result.confidence),
+		Probabilities: probabilities,
+		NumClasses:    int(result.num_classes),
+	}, nil
+}
+
 // InitModernBertClassifier initializes the ModernBERT classifier with the specified model path
 // Number of classes is automatically inferred from the model weights
 func InitModernBertClassifier(modelPath string, useCPU bool) error {
@@ -3134,6 +3178,40 @@ func ClassifyModernBertJailbreakText(text string) (ClassResult, error) {
 	return ClassResult{
 		Class:      int(result.class),
 		Confidence: float32(result.confidence),
+	}, nil
+}
+
+// ClassifyModernBertJailbreakTextWithProbs classifies text for jailbreak
+// detection using ModernBERT and returns the predicted class, confidence, and
+// full probability distribution. This allows callers to read the probability
+// of the jailbreak class itself rather than the confidence of whichever class
+// wins argmax.
+func ClassifyModernBertJailbreakTextWithProbs(text string) (ClassResultWithProbs, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	result := C.classify_modernbert_jailbreak_text_with_probabilities(cText)
+
+	if result.class < 0 {
+		return ClassResultWithProbs{}, fmt.Errorf("failed to classify jailbreak text with probabilities using ModernBERT")
+	}
+
+	// Convert C array to Go slice
+	probabilities := make([]float32, int(result.num_classes))
+	if result.probabilities != nil && result.num_classes > 0 {
+		probsSlice := (*[1 << 30]C.float)(unsafe.Pointer(result.probabilities))[:result.num_classes:result.num_classes]
+		for i, prob := range probsSlice {
+			probabilities[i] = float32(prob)
+		}
+		// Free the C-allocated memory
+		C.free_modernbert_probabilities(result.probabilities, result.num_classes)
+	}
+
+	return ClassResultWithProbs{
+		Class:         int(result.class),
+		Confidence:    float32(result.confidence),
+		Probabilities: probabilities,
+		NumClasses:    int(result.num_classes),
 	}, nil
 }
 

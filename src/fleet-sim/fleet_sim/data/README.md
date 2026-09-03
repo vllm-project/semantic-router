@@ -1,31 +1,49 @@
-# data/
+# Reference workload CDFs
 
-Pre-processed workload CDF files used by the examples and CLI.
+Fleet Simulator uses an empirical cumulative distribution function (CDF) of
+total request tokens to represent a workload. Each CDF point is
+`[token_length, cumulative_fraction]`.
 
-Each file is a JSON array of `[token_length, cumulative_fraction]` pairs
-representing the empirical CDF of total token counts (input + output) for
-that trace.
+| File | Workload represented |
+| --- | --- |
+| `azure_cdf.json` | Reference distribution derived from the Azure LLM Inference Trace 2023. |
+| `lmsys_cdf.json` | Single-turn LMSYS-Chat-1M conversations. |
+| `lmsys_multiturn_cdf.json` | LMSYS-Chat-1M context accumulated across turns. |
+| `agent_heavy_cdf.json` | Seeded synthetic mix of software-agent, tool-use, and RAG-style request lengths. |
 
-| File | Source | Description |
-|---|---|---|
-| `azure_cdf.json` | Azure LLM Inference Trace 2023 | 28K prod requests; p90=4.2K tokens |
-| `lmsys_cdf.json` | LMSYS-Chat-1M | Single-turn conversations |
-| `lmsys_multiturn_cdf.json` | LMSYS-Chat-1M (multi-turn) | Accumulated context per turn |
-| `agent_heavy_cdf.json` | Synthetic agent-heavy | SWE-bench 40% + BFCL 25% + RAG 35% |
+The synthetic file records its sample count, seed, and provenance in the JSON
+object. The trace-derived files contain the CDF array directly.
 
-## Bring your own CDF
+## Use a custom workload
 
-A CDF file is a JSON array of `[token_length, cumulative_fraction]` pairs,
-sorted by token length, with cumulative fractions in `[0, 1]`.
+The loader accepts either a CDF array:
 
-```python
-import json, numpy as np
-
-# lengths = list of (input_tokens + output_tokens) per request
-lengths = sorted(lengths)
-n = len(lengths)
-cdf = [[int(lengths[i]), (i + 1) / n] for i in range(0, n, max(1, n // 200))]
-json.dump(cdf, open("data/my_workload_cdf.json", "w"))
+```json
+[
+  [128, 0.10],
+  [512, 0.70],
+  [2048, 1.00]
+]
 ```
 
-Then pass `--cdf data/my_workload_cdf.json` to any CLI command.
+or an object with the array under `cdf` and optional provenance fields:
+
+```json
+{
+  "cdf": [[128, 0.10], [512, 0.70], [2048, 1.00]],
+  "source": "internal-sample",
+  "n_samples": 10000
+}
+```
+
+Token lengths must be sorted in ascending order. Cumulative fractions must be
+nondecreasing, stay between `0` and `1`, and finish at `1`.
+
+Save the file and pass it to a CLI workflow:
+
+```bash
+vllm-sr-sim optimize --cdf data/my-workload-cdf.json
+```
+
+Run `vllm-sr-sim optimize --help` to override the default arrival rate, SLO,
+GPU profiles, context boundary, or simulation settings.

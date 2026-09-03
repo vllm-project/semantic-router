@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 
 import LayoutMegaMenu from './LayoutMegaMenu'
-import { ANALYZE_MENU_CATEGORIES } from './LayoutNavSupport'
+import { BUILD_MENU_CATEGORIES } from './LayoutNavSupport'
 
 describe('layout mega-menu accessibility contract', () => {
   it('renders a density-aware navigation popover instead of a modal dialog', () => {
@@ -13,10 +13,10 @@ describe('layout mega-menu accessibility contract', () => {
         MemoryRouter,
         null,
         createElement(LayoutMegaMenu, {
-          id: 'analyze-navigation',
-          triggerId: 'analyze-trigger',
-          label: 'Analyze',
-          categories: ANALYZE_MENU_CATEGORIES,
+          id: 'build-navigation',
+          triggerId: 'build-trigger',
+          label: 'Build',
+          categories: BUILD_MENU_CATEGORIES,
           activeCategoryKey: 'outcomes',
           isItemActive: () => false,
           onConfigSelect: vi.fn(),
@@ -27,7 +27,7 @@ describe('layout mega-menu accessibility contract', () => {
     )
 
     expect(markup).toContain('<nav')
-    expect(markup).toContain('aria-labelledby="analyze-trigger"')
+    expect(markup).toContain('aria-labelledby="build-trigger"')
     expect(markup).toContain('data-density="compact"')
     expect(markup).toContain('role="tablist"')
     expect(markup).toContain('role="tab"')

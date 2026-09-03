@@ -15,6 +15,9 @@ func validateDecisionContracts(cfg *RouterConfig) error {
 	if err := validateClassifierSignalContracts(cfg); err != nil {
 		return err
 	}
+	if err := validateInputModalityContracts(cfg); err != nil {
+		return err
+	}
 	if err := validateDecisionModelContracts(cfg); err != nil {
 		return err
 	}
@@ -26,13 +29,16 @@ func validateDecisionContracts(cfg *RouterConfig) error {
 
 func validateDecisionModelContracts(cfg *RouterConfig) error {
 	for _, decision := range cfg.AllRoutingDecisions() {
-		if err := validateDecisionRuleNode(cfg, decision.Name, &decision.Rules); err != nil {
+		if err := validateDecisionRuleNode(cfg, decision.Name, &decision.Rules, true); err != nil {
 			return err
 		}
 		if err := validateDecisionAnnotations(decision); err != nil {
 			return err
 		}
 		if err := validateDecisionModelRefs(cfg, decision); err != nil {
+			return err
+		}
+		if err := validateDecisionAction(cfg, decision); err != nil {
 			return err
 		}
 		if err := validateDecisionAlgorithmConfig(decision.Name, decision.ModelRefs, decision.Algorithm); err != nil {
@@ -54,19 +60,45 @@ func validateDecisionModelContracts(cfg *RouterConfig) error {
 	return nil
 }
 
-func validateDecisionRuleNode(cfg *RouterConfig, decisionName string, node *RuleNode) error {
+func validateDecisionRuleNode(cfg *RouterConfig, decisionName string, node *RuleNode, root bool) error {
 	if node == nil {
 		return nil
+	}
+	if node.OnUnknown != "" {
+		if !root {
+			return fmt.Errorf("decision '%s': on_unknown is only supported on the root rules node", decisionName)
+		}
+		if !node.OnUnknown.IsValid() {
+			return fmt.Errorf("decision '%s': rules on_unknown must be %s", decisionName, UnknownPolicyChoices())
+		}
+		if ruleTreeSetsOnError(node) {
+			return fmt.Errorf("decision '%s': condition on_error has no effect when rules.on_unknown is set; remove one of them", decisionName)
+		}
 	}
 	if node.IsLeaf() {
 		return validateDecisionLeafNode(cfg, decisionName, node)
 	}
 	for i := range node.Conditions {
-		if err := validateDecisionRuleNode(cfg, decisionName, &node.Conditions[i]); err != nil {
+		if err := validateDecisionRuleNode(cfg, decisionName, &node.Conditions[i], false); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func ruleTreeSetsOnError(node *RuleNode) bool {
+	if node == nil {
+		return false
+	}
+	if node.OnError != "" {
+		return true
+	}
+	for i := range node.Conditions {
+		if ruleTreeSetsOnError(&node.Conditions[i]) {
+			return true
+		}
+	}
+	return false
 }
 
 func validateDecisionLeafNode(
@@ -145,7 +177,7 @@ func validateClassifierDecisionLeaf(
 			node.Name,
 		)
 	}
-	if rule.Type == "local" {
+	if rule.Type == ClassifierSignalTypeLocal {
 		return validateLocalClassifierDecisionPredicate(decisionName, node)
 	}
 	return nil
@@ -393,11 +425,6 @@ func validateOneDecisionPluginContracts(
 			return fmt.Errorf("decision '%s': %w", decision.Name, err)
 		}
 	}
-	if imageGenCfg := decision.GetImageGenConfig(); imageGenCfg != nil {
-		if err := imageGenCfg.Validate(); err != nil {
-			return fmt.Errorf("decision '%s': %w", decision.Name, err)
-		}
-	}
 	return validateDecisionRAGAndMemoryPlugins(cfg, decision)
 }
 
@@ -494,6 +521,9 @@ func validateDecisionAlgorithmConfig(decisionName string, modelRefs []ModelRef, 
 	)
 	if err != nil {
 		return err
+	}
+	if minimumErr := validateDecisionMinimumCandidates(decisionName, modelRefs, algorithm); minimumErr != nil {
+		return minimumErr
 	}
 
 	configuredBlocks := configuredAlgorithmBlocks(algorithm)
@@ -678,32 +708,41 @@ func expectedAlgorithmBlock(normalizedType string) (string, bool) {
 
 func validateSpecializedAlgorithmConfig(decisionName string, modelRefs []ModelRef, normalizedType string, algorithm *AlgorithmConfig) error {
 	switch normalizedType {
+	case "confidence":
+		return wrapAlgorithmValidationError(decisionName, "confidence", ValidateConfidenceAlgorithmConfig(algorithm.Confidence))
 	case "latency_aware":
-		if algorithm.LatencyAware == nil {
-			return fmt.Errorf("decision '%s': algorithm.type=latency_aware requires algorithm.latency_aware configuration", decisionName)
-		}
-		if err := validateLatencyAwareAlgorithmConfig(algorithm.LatencyAware); err != nil {
-			return fmt.Errorf("decision '%s', algorithm.latency_aware: %w", decisionName, err)
-		}
+		return validateDecisionLatencyAwareAlgorithm(decisionName, algorithm.LatencyAware)
 	case "remom":
-		if err := ValidateReMoMAlgorithmConfig(algorithm.ReMoM); err != nil {
-			return fmt.Errorf("decision '%s', algorithm.remom: %w", decisionName, err)
-		}
-		if err := ValidateReMoMModelRefs(algorithm.ReMoM, modelRefs); err != nil {
-			return fmt.Errorf("decision '%s', algorithm.remom: %w", decisionName, err)
-		}
+		return validateDecisionReMoMAlgorithm(decisionName, modelRefs, algorithm.ReMoM)
 	case "fusion":
-		if err := ValidateFusionAlgorithmConfig(algorithm.Fusion); err != nil {
-			return fmt.Errorf("decision '%s', algorithm.fusion: %w", decisionName, err)
-		}
+		return validateDecisionFusionAlgorithm(decisionName, modelRefs, algorithm.Fusion)
 	case "workflows":
-		if err := ValidateWorkflowsAlgorithmConfig(algorithm.Workflows); err != nil {
-			return fmt.Errorf("decision '%s', algorithm.workflows: %w", decisionName, err)
-		}
+		return validateDecisionWorkflowsAlgorithm(decisionName, modelRefs, algorithm.Workflows)
 	case "prompt":
 		return validatePromptAlgorithmConfig(decisionName, modelRefs, algorithm)
 	}
 	return nil
+}
+
+func wrapAlgorithmValidationError(decisionName, algorithmType string, err error) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("decision '%s', algorithm.%s: %w", decisionName, algorithmType, err)
+}
+
+func validateDecisionLatencyAwareAlgorithm(decisionName string, cfg *LatencyAwareAlgorithmConfig) error {
+	if cfg == nil {
+		return fmt.Errorf("decision '%s': algorithm.type=latency_aware requires algorithm.latency_aware configuration", decisionName)
+	}
+	return wrapAlgorithmValidationError(decisionName, "latency_aware", validateLatencyAwareAlgorithmConfig(cfg))
+}
+
+func validateDecisionReMoMAlgorithm(decisionName string, modelRefs []ModelRef, cfg *ReMoMAlgorithmConfig) error {
+	if err := ValidateReMoMAlgorithmConfig(cfg); err != nil {
+		return wrapAlgorithmValidationError(decisionName, "remom", err)
+	}
+	return wrapAlgorithmValidationError(decisionName, "remom", ValidateReMoMModelRefs(cfg, modelRefs))
 }
 
 // validateLatencyAwareAlgorithmConfig validates latency_aware algorithm configuration.
@@ -750,42 +789,4 @@ func validateLatencyAwarePercentile(name string, value int, enabled bool) error 
 		return fmt.Errorf("%s must be between 1 and 100, got: %d", name, value)
 	}
 	return nil
-}
-
-// validateLoRAName checks if the specified LoRA name is defined in the
-// canonical routing model catalog for the selected model.
-func validateLoRAName(cfg *RouterConfig, modelName string, loraName string) error {
-	modelParams, exists := cfg.ModelConfig[modelName]
-	if !exists {
-		return fmt.Errorf(
-			"lora_name %q specified but model %q is not declared in routing.modelCards",
-			loraName,
-			modelName,
-		)
-	}
-
-	if len(modelParams.LoRAs) == 0 {
-		return fmt.Errorf(
-			"lora_name %q specified but model %q declares no routing.modelCards[].loras entries",
-			loraName,
-			modelName,
-		)
-	}
-
-	for _, lora := range modelParams.LoRAs {
-		if lora.Name == loraName {
-			return nil
-		}
-	}
-
-	availableLoRAs := make([]string, len(modelParams.LoRAs))
-	for i, lora := range modelParams.LoRAs {
-		availableLoRAs[i] = lora.Name
-	}
-	return fmt.Errorf(
-		"lora_name %q is not declared in routing.modelCards[%q].loras. Available LoRAs: %v",
-		loraName,
-		modelName,
-		availableLoRAs,
-	)
 }

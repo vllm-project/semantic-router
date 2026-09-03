@@ -26,13 +26,17 @@ func testRuntimeSyncPythonBinary(t *testing.T) string {
 		if err != nil {
 			continue
 		}
-		cmd := exec.Command(resolved, "-c", "import yaml, jinja2")
+		cmd := exec.Command(resolved, "-c", "import yaml, jinja2, pydantic")
 		if err := cmd.Run(); err == nil {
 			return resolved
 		}
 	}
 
-	t.Fatal("python interpreter with yaml support not found")
+	// These tests drive the vllm-sr CLI through a Python interpreter. Skip rather
+	// than fail where the CLI's dependencies are not installed, so `go test ./...`
+	// stays usable without them; CI installs `pip install -e src/vllm-sr`, so the
+	// tests do run in the Dashboard gate.
+	t.Skip("python interpreter with vllm-sr CLI dependencies (yaml, jinja2, pydantic) not found")
 	return ""
 }
 
@@ -43,6 +47,30 @@ func TestConfiguredRuntimeConfigPathUsesEnvOverride(t *testing.T) {
 
 	if got != "/app/.vllm-sr/runtime-config.yaml" {
 		t.Fatalf("expected runtime config path override, got %q", got)
+	}
+}
+
+func TestRuntimeOwnedConfigPathDoesNotResyncIntoNestedStateDirectory(t *testing.T) {
+	stateDir := filepath.Join(t.TempDir(), ".vllm-sr")
+	if err := os.MkdirAll(stateDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(stateDir, "runtime-config.stack.yaml")
+	if err := os.WriteFile(configPath, []byte("version: v0.3\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("VLLM_SR_RUNTIME_CONFIG_PATH", configPath)
+	t.Setenv("VLLM_SR_PLATFORM", "amd")
+
+	got, err := syncRuntimeConfigForCurrentRuntime(configPath)
+	if err != nil || got != configPath {
+		t.Fatalf("syncRuntimeConfigForCurrentRuntime() = %q, %v", got, err)
+	}
+	if _, err := os.Stat(filepath.Join(stateDir, ".vllm-sr")); !os.IsNotExist(err) {
+		t.Fatalf("unexpected nested runtime state directory: %v", err)
+	}
+	if !isManagedContainerConfigPath(configPath) {
+		t.Fatal("configured runtime path was not recognized as managed")
 	}
 }
 

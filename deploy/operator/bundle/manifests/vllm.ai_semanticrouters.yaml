@@ -1289,6 +1289,14 @@ spec:
                                 - type
                                 type: object
                               type: array
+                            on_unknown:
+                              description: OnUnknown resolves a terminal unknown result
+                                after the rule tree is evaluated.
+                              enum:
+                              - no_match
+                              - match
+                              - fail_request
+                              type: string
                             operator:
                               description: |-
                                 Operator specifies how to combine conditions: "AND", "OR", or "NOT". NOT is strictly unary: it takes
@@ -1362,8 +1370,9 @@ spec:
                             type: integer
                           target_layer:
                             description: |-
-                              TargetLayer is the layer for mmBERT early exit (only used when ModelType is "mmbert")
-                              Layer 3: ~7x speedup, Layer 6: ~3.6x speedup, Layer 11: ~2x speedup, Layer 22: full accuracy
+                              TargetLayer controls mmBERT early exit and is used only when ModelType is "mmbert".
+                              Lower layers reduce encoder work but may reduce quality; layer 22 uses the full encoder depth.
+                              Evaluate the latency and quality trade-off on representative deployment data.
                             enum:
                             - 3
                             - 6
@@ -1389,6 +1398,12 @@ spec:
                             description: Dimensions requests a provider-side output
                               dimension when supported.
                             minimum: 1
+                            type: integer
+                          max_response_bytes:
+                            description: MaxResponseBytes caps the size of each embedding
+                              response body.
+                            format: int64
+                            minimum: 0
                             type: integer
                           max_retries:
                             description: MaxRetries is the maximum number of retry
@@ -1490,6 +1505,35 @@ spec:
                       model_id:
                         default: models/mmbert32k-jailbreak-detector-merged
                         type: string
+                      on_error:
+                        description: |-
+                          OnError selects what a prompt-guard classifier failure does to the rule
+                          that failed to evaluate. "allow" (the default) tolerates the failure and
+                          treats the content as not matching; "block" treats it as a positive
+                          detection, because an inference failure means the content could not be
+                          verified safe. Without this field on the CRD the setting is pruned by the
+                          API server and an operator-managed deployment silently fails open.
+                        enum:
+                        - allow
+                        - block
+                        type: string
+                      positive_labels:
+                        description: |-
+                          PositiveLabels lists the jailbreak_mapping labels that count as unsafe,
+                          for a custom backend whose positive class isn't named "jailbreak"
+                          (e.g. "INJECTION", "malicious"). Defaults to ["jailbreak"] when unset.
+                        items:
+                          type: string
+                        type: array
+                      protocol:
+                        description: |-
+                          Protocol selects a remote HTTP backend's wire contract. Mutually
+                          exclusive with Variant. Requires an external model configured via a
+                          vllmEndpoints/externalModels entry with model_role="guardrail".
+                        enum:
+                        - http_chat
+                        - http_classify
+                        type: string
                       threshold:
                         default: "0.7"
                         description: Jailbreak detection threshold (0.0-1.0). Stored
@@ -1499,9 +1543,15 @@ spec:
                       use_cpu:
                         default: true
                         type: boolean
-                      use_modernbert:
-                        default: false
-                        type: boolean
+                      variant:
+                        description: |-
+                          Variant selects a local Candle-backed model variant. It is mutually
+                          exclusive with Protocol. When both fields are omitted, the operator uses
+                          mmbert32k.
+                        enum:
+                        - candle
+                        - mmbert32k
+                        type: string
                     type: object
                   reasoning_families:
                     additionalProperties:

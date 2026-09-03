@@ -195,13 +195,7 @@ RUN mkdir -p /build/out && \
 # Stage 1r: Build Rust onnx-binding (CUDA dynamic, amd64 only).
 # ============================================================================
 # CHANGE vs Dockerfile.rocm:
-#   --features rocm-dynamic  ->  --features cuda,load-dynamic
-# Rationale:
-#   onnx-binding/Cargo.toml exposes both:
-#     cuda          = ["ort/cuda"]
-#     rocm-dynamic  = ["rocm", "ort/load-dynamic"]
-#   There is no pre-existing `cuda-dynamic` feature, so we compose:
-#     cuda + ort/load-dynamic (we add it inline; equivalent shape to rocm-dynamic).
+#   --features rocm-dynamic  ->  --features cuda-dynamic
 # ============================================================================
 FROM --platform=$BUILDPLATFORM ${ONNX_RUST_RUNTIME_COMPAT_IMAGE} AS onnx-builder
 ARG TARGETARCH
@@ -223,21 +217,15 @@ COPY onnx-binding/Cargo.toml onnx-binding/Cargo.loc[k] ./
 
 # Feature design note (matches rocm-dynamic pattern):
 #   onnx-binding's `cuda` feature alone (= ["ort/cuda"]) statically links the
-#   bundled CUDA EP via ort's `download-binaries`. We want load-dynamic so the
-#   runtime image's onnxruntime-gpu wheel is used (mirrors the ROCm path).
-#   We therefore compose the feature set at the cargo invocation level:
-#     cuda             -> pulls ort/cuda (enables CUDA EP code paths)
-#     ort/load-dynamic -> tells ort to dlopen libonnxruntime.so via
-#                         ORT_DYLIB_PATH at runtime
-#   This is functionally a `cuda-dynamic` feature; upstream just hasn't named
-#   it. Filing a follow-up PR to expose `cuda-dynamic` in Cargo.toml is a
-#   reasonable next step but not required to ship.
+#   bundled CUDA EP via ort's `download-binaries`. `cuda-dynamic` adds
+#   ort/load-dynamic so the runtime image's onnxruntime-gpu wheel is dlopen'd
+#   via ORT_DYLIB_PATH instead (mirrors the ROCm path).
 RUN [ "$GIT_SSL_NO_VERIFY" = "1" ] && git config --global http.sslVerify false || true; \
     mkdir -p src && echo "pub fn _dummy() {}" > src/lib.rs && \
     OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu \
     cargo build --release \
       --no-default-features \
-      --features "cuda,ort/load-dynamic" \
+      --features cuda-dynamic \
       --target x86_64-unknown-linux-gnu && \
     rm -rf src
 
@@ -249,7 +237,7 @@ RUN find target -name "libonnx_semantic_router.so" -delete 2>/dev/null; \
     OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu \
     cargo build --release \
       --no-default-features \
-      --features "cuda,ort/load-dynamic" \
+      --features cuda-dynamic \
       --target x86_64-unknown-linux-gnu
 
 RUN mkdir -p /build/out && \

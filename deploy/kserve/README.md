@@ -1,287 +1,125 @@
-# Semantic Router Integration with OpenShift AI KServe
+# OpenShift KServe integration
 
-Deploy vLLM Semantic Router as an intelligent gateway for your OpenShift AI KServe LLMInferenceServices.
+These assets connect Semantic Router to one or more KServe
+`LLMInferenceService` backends on OpenShift. The deployment script discovers
+the predictor Service, renders Router and Envoy configuration, and exposes
+OpenShift Routes for inference and the Router API.
 
-> **Deployment Focus**: This guide is specifically for deploying semantic router on **OpenShift AI with KServe**.
->
-> **Learn about features?** See links to feature documentation throughout this guide.
+Use the simulator mode for a CPU-only integration check. Use a real
+`LLMInferenceService` only after its model-serving requirements are satisfied.
 
-## Overview
+## Requirements
 
-The semantic router acts as an intelligent API gateway that provides:
+- an OpenShift project and authenticated `oc` CLI;
+- KServe and the `LLMInferenceService` CRD installed;
+- storage and image access required by the selected manifests;
+- GPU resources for a real GPU model or `--classifier-gpu`.
 
-- **Intelligent Model Selection**: Automatically routes requests to the best model based on semantic understanding
-- **PII Detection & Protection**: Blocks or redacts sensitive information before sending to models
-- **Prompt Guard**: Detects and blocks jailbreak attempts
-- **Semantic Caching**: Reduces latency and costs through intelligent response caching
-- **Category-Specific Prompts**: Injects domain-specific system prompts for better results
-- **Tools Auto-Selection**: Automatically selects relevant tools for function calling
+The helper scripts can install development dependencies, but cluster operators
+should review those scripts and use their platform's managed operators where
+appropriate.
 
-## Prerequisites
+## Preview the generated resources
 
-Before deploying, ensure you have:
-
-1. **OpenShift Cluster** with OpenShift AI (RHOAI) installed
-2. **KServe LLMInferenceService** already deployed and running
-3. **OpenShift CLI (oc)** installed and logged in
-4. **Cluster admin or namespace admin** permissions
-
-## Quick Deployment
-
-Use the `deploy.sh` script for automated deployment. It handles validation, model downloads, and resource creation:
+Run from the repository root:
 
 ```bash
-./deploy.sh --namespace <namespace> --inferenceservice <name> --model <model>
+deploy/kserve/deploy.sh --help
+deploy/kserve/deploy.sh \
+  --namespace semantic-router-demo \
+  --simulator \
+  --dry-run
 ```
 
-**Example:**
+`--dry-run` is the safest way to inspect the selected ConfigMaps, Deployment,
+Services, Route, storage, and permissions before the script applies them.
+
+## CPU simulator
+
+The simulator creates two KServe backends with distinct model names and then
+deploys the Router path:
 
 ```bash
-./deploy.sh -n semantic -i granite32-8b -m granite32-8b
+deploy/kserve/deploy.sh \
+  --namespace semantic-router-demo \
+  --simulator
 ```
 
-The script validates prerequisites, creates a stable service for your predictor, downloads classification models (~2-3 min), and deploys all resources. Optional flags include `--embedding-model`, `--storage-class`, `--models-pvc-size`, and `--cache-pvc-size`. For manual step-by-step deployment, continue reading below.
+Use `--classifier-gpu` only when the cluster exposes a schedulable GPU for the
+Router classifier. It is independent of the simulator backend mode.
 
-## Manual Deployment
+## Existing model service
 
-### Step 1: Verify LLMInferenceService
-
-Check that your LLMInferenceService is deployed and ready:
+Confirm the `LLMInferenceService` is ready, then pass its resource name and the
+model name returned by its OpenAI-compatible API:
 
 ```bash
-NAMESPACE=<your-namespace>
-INFERENCESERVICE_NAME=<your-llminferenceservice-name>
+oc get llminferenceservices --namespace my-project
 
-# List LLMInferenceServices
-oc get llminferenceservice -n $NAMESPACE
-
-# Create stable ClusterIP service for predictor
-cat <<EOF | oc apply -f - -n $NAMESPACE
-apiVersion: v1
-kind: Service
-metadata:
-  name: ${INFERENCESERVICE_NAME}-predictor-stable
-spec:
-  type: ClusterIP
-  selector:
-    serving.kserve.io/llm-inferenceservice: ${INFERENCESERVICE_NAME}
-  ports:
-  - name: http
-    port: 8000
-    targetPort: 8000
-EOF
-
-# Get the stable ClusterIP
-PREDICTOR_SERVICE_IP=$(oc get svc "${INFERENCESERVICE_NAME}-predictor-stable" -n $NAMESPACE -o jsonpath='{.spec.clusterIP}')
-echo "Predictor service ClusterIP: $PREDICTOR_SERVICE_IP"
+deploy/kserve/deploy.sh \
+  --namespace my-project \
+  --inferenceservice granite32-8b \
+  --model granite32-8b
 ```
 
-### Step 2: Configure Router Settings
+Optional flags select the storage class, PVC sizes, embedding model, and
+classifier device. Keep the `--model` value aligned with Router model cards and
+the backend's served-model name.
 
-Edit `configmap-router-config.yaml`:
+Example KServe resources are under [`inference-examples/`](inference-examples/).
+They are hardware- and platform-sensitive; inspect image, storage, runtime,
+resource, and model-access fields before applying them.
 
-1. Update `providers.models[].backend_refs[].endpoint` with your predictor service ClusterIP and port
-2. Set `providers.defaults.default_model` and the matching `routing.modelCards[].name` entry for your served model
-3. Update `routing.signals.domains` and `routing.decisions` for your routing logic
-4. Keep runtime overrides under `global.*`
-
-Edit `configmap-envoy-config.yaml`:
-
-1. Update `kserve_backend_cluster` address to: `<llminferenceservice>-predictor.<namespace>.svc.cluster.local`
-
-### Step 3: Deploy Resources
-
-Apply manifests in order:
+## Verify
 
 ```bash
-NAMESPACE=<your-namespace>
-
-# Deploy resources
-oc apply -f serviceaccount.yaml -n $NAMESPACE
-oc apply -f pvc.yaml -n $NAMESPACE
-oc apply -f configmap-router-config.yaml -n $NAMESPACE
-oc apply -f configmap-envoy-config.yaml -n $NAMESPACE
-oc apply -f peerauthentication.yaml -n $NAMESPACE
-oc apply -f deployment.yaml -n $NAMESPACE
-oc apply -f service.yaml -n $NAMESPACE
-oc apply -f route.yaml -n $NAMESPACE
+oc get pods,services,routes --namespace my-project
+oc logs --namespace my-project \
+  -l app=semantic-router --all-containers
 ```
 
-### Step 4: Wait for Ready
-
-Monitor deployment progress:
+Obtain the route instead of copying a hostname:
 
 ```bash
-# Watch pod status
-oc get pods -l app=semantic-router -n $NAMESPACE -w
+ENVOY_HOST="$(oc get route semantic-router-kserve \
+  --namespace my-project -o jsonpath='{.spec.host}')"
 
-# Check logs
-oc logs -l app=semantic-router -c semantic-router -n $NAMESPACE -f
+curl --fail-with-body "https://$ENVOY_HOST/v1/chat/completions" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "auto",
+    "messages": [{"role": "user", "content": "What is 2 + 2?"}],
+    "max_tokens": 32
+  }'
 ```
 
-The pod will download models, then start serving traffic.
+[`test-semantic-routing.sh`](test-semantic-routing.sh) provides the
+scenario-specific smoke checks used by this example.
 
-## Accessing Services
+## Diagnose failures
 
-Get the route URL:
+- Backend not discovered: compare the `LLMInferenceService`, predictor Service,
+  and namespace selected by `deploy.sh`.
+- Router init container fails: inspect model-download logs, credentials, PVC,
+  and egress policy.
+- No Route response: inspect Route admission, Service endpoints, and Envoy logs.
+- Wrong selected model: compare the served-model name, rendered Router config,
+  and request model.
 
 ```bash
-ROUTER_URL=$(oc get route semantic-router-kserve -n $NAMESPACE -o jsonpath='{.spec.host}')
-echo "External URL: https://$ROUTER_URL"
+oc describe llminferenceservice <name> --namespace my-project
+oc get endpoints --namespace my-project
+oc logs --namespace my-project \
+  -l app=semantic-router -c model-downloader
 ```
 
-Test the deployment:
+## Remove the example
 
-```bash
-# Test models endpoint
-curl -k "https://$ROUTER_URL/v1/models"
+The script does not define a universal cleanup policy for pre-existing KServe
+models. Delete Router resources with the repository Kustomize package, and
+delete only the example model resources you created. Preserve shared
+`LLMInferenceService`, operator, storage, and namespace resources unless their
+owners approve removal.
 
-# Domain-specific auto-routing (law -> Model-B)
-curl -k -X POST "https://$ROUTER_URL/v1/chat/completions" \
-  -H "Content-Type: application/json" \
-  -d '{"model":"auto","messages":[{"role":"user","content":"Explain the elements of a contract under common law and give a simple example."}]}'
-
-# Domain-specific auto-routing (math -> Model-A)
-curl -k -X POST "https://$ROUTER_URL/v1/chat/completions" \
-  -H "Content-Type: application/json" \
-  -d '{"model":"auto","messages":[{"role":"user","content":"What is 2+2?"}]}'
-```
-
-Run validation tests:
-
-```bash
-# Auto-detect configuration
-./test-semantic-routing.sh
-
-# Or specify explicitly
-NAMESPACE=$NAMESPACE MODEL_NAME=<model> ./test-semantic-routing.sh
-```
-
-## Monitoring
-
-### Check Deployment Status
-
-```bash
-# Check pods
-oc get pods -l app=semantic-router -n $NAMESPACE
-
-# Check services
-oc get svc -n $NAMESPACE
-
-# Check routes
-oc get routes -n $NAMESPACE
-```
-
-### View Logs
-
-```bash
-# Router logs (models are downloaded automatically at startup)
-oc logs -l app=semantic-router -c semantic-router -n $NAMESPACE -f
-
-# Envoy logs
-oc logs -l app=semantic-router -c envoy-proxy -n $NAMESPACE -f
-```
-
-### Metrics
-
-```bash
-# Port-forward metrics endpoint
-POD=$(oc get pods -l app=semantic-router -n $NAMESPACE -o jsonpath='{.items[0].metadata.name}')
-oc port-forward $POD 9190:9190 -n $NAMESPACE
-
-# View metrics
-curl http://localhost:9190/metrics
-```
-
-## Cleanup
-
-Remove all deployed resources:
-
-```bash
-NAMESPACE=<your-namespace>
-
-oc delete route semantic-router-kserve -n $NAMESPACE
-oc delete service semantic-router-kserve -n $NAMESPACE
-oc delete deployment semantic-router-kserve -n $NAMESPACE
-oc delete configmap semantic-router-kserve-config semantic-router-envoy-kserve-config -n $NAMESPACE
-oc delete pvc semantic-router-models semantic-router-cache -n $NAMESPACE
-oc delete peerauthentication semantic-router-kserve-permissive -n $NAMESPACE
-oc delete serviceaccount semantic-router -n $NAMESPACE
-```
-
-**Warning**: Deleting PVCs will remove downloaded models and cache data. To preserve data, skip PVC deletion.
-
-## Troubleshooting
-
-### Pod Not Starting
-
-```bash
-# Check pod status and events
-oc get pods -l app=semantic-router -n $NAMESPACE
-oc describe pod -l app=semantic-router -n $NAMESPACE
-
-# Check init container logs (model download)
-oc logs -l app=semantic-router -c model-downloader -n $NAMESPACE
-```
-
-**Common causes:**
-
-- Network issues downloading models
-- PVC not bound - check storage class
-- Insufficient memory - increase init container resources
-
-### Router Container Crashing
-
-```bash
-# Check router logs
-oc logs -l app=semantic-router -c semantic-router -n $NAMESPACE --previous
-```
-
-**Common causes:**
-
-- Configuration error - validate YAML syntax
-- Invalid backend endpoint - use ClusterIP or IP:port in `providers.models[].backend_refs[].endpoint`
-- Missing models - verify init container completed
-
-### Cannot Connect to LLMInferenceService
-
-```bash
-# Test from router pod
-POD=$(oc get pods -l app=semantic-router -n $NAMESPACE -o jsonpath='{.items[0].metadata.name}')
-oc exec $POD -c semantic-router -n $NAMESPACE -- \
-  curl -v http://<llminferenceservice>-predictor.$NAMESPACE.svc.cluster.local:8000/v1/models
-```
-
-**Common causes:**
-
-- LLMInferenceService not ready - check `oc get llminferenceservice -n $NAMESPACE`
-- Wrong DNS name - verify format: `<llminferenceservice>-predictor.<namespace>.svc.cluster.local`
-- Network policy blocking traffic
-- mTLS mode mismatch - ensure PERMISSIVE mode in PeerAuthentication
-
-## Configuration
-
-For detailed configuration options, see the main project documentation:
-
-- **Category Classification**: Train custom models at [Category Classifier Training](../../src/training/model_classifier/classifier_model_fine_tuning_lora/)
-- **PII Detection**: Train custom models at [PII Detection Training](../../src/training/model_classifier/pii_model_fine_tuning_lora/)
-- **Prompt Guard**: Train custom models at [Prompt Guard Training](../../src/training/model_classifier/prompt_guard_fine_tuning_lora/)
-
-## Related Documentation
-
-### Within This Repository
-
-- **[Category Classifier Training](../../src/training/model_classifier/classifier_model_fine_tuning_lora/)** - Train custom category classification models
-- **[PII Detector Training](../../src/training/model_classifier/pii_model_fine_tuning_lora/)** - Train custom PII detection models
-- **[Prompt Guard Training](../../src/training/model_classifier/prompt_guard_fine_tuning_lora/)** - Train custom jailbreak detection models
-
-### Other Deployment Options
-
-- **[OpenShift Deployment](../openshift/)** - Deploy with standalone vLLM containers (not KServe)
-- *This directory* - OpenShift AI KServe deployment (you are here)
-
-### External Resources
-
-- **Main Project**: https://github.com/vllm-project/semantic-router
-- **Full Documentation**: https://vllm-sr.ai
-- **KServe Docs**: https://kserve.github.io/website/
+For production KServe topology and configuration ownership, see the
+[inference platforms guide](../../website/docs/installation/k8s/inference-platforms.md).

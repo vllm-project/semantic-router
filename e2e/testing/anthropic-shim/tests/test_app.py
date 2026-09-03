@@ -62,6 +62,65 @@ def client_with_upstream() -> tuple[httpx.AsyncClient, _UpstreamRecorder]:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("stream", [False, True])
+async def test_structured_output_mock_requires_and_echoes_schema(
+    client_with_upstream: tuple[httpx.AsyncClient, _UpstreamRecorder],
+    stream: bool,
+) -> None:
+    client, upstream = client_with_upstream
+    schema = {
+        "type": "object",
+        "properties": {"answer": {"type": "string"}},
+        "required": ["answer"],
+    }
+    response = await client.post(
+        "/v1/messages",
+        json={
+            "model": "qwen-test",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "__mock_structured_output__ Return an answer object.",
+                }
+            ],
+            "max_tokens": 16,
+            "stream": stream,
+            "output_config": {"format": {"type": "json_schema", "schema": schema}},
+        },
+    )
+
+    assert response.status_code == 200
+    assert not upstream.requests
+    if stream:
+        assert "event: message_stop" in response.text
+        assert "structured_output" in response.text
+    else:
+        text = response.json()["content"][0]["text"]
+        assert json.loads(text) == {
+            "mock": "mock-vllm",
+            "structured_output": {"type": "json_schema", "schema": schema},
+        }
+
+
+@pytest.mark.asyncio
+async def test_structured_output_marker_without_schema_reaches_upstream(
+    client_with_upstream: tuple[httpx.AsyncClient, _UpstreamRecorder],
+) -> None:
+    client, upstream = client_with_upstream
+    response = await client.post(
+        "/v1/messages",
+        json={
+            "model": "qwen-test",
+            "messages": [{"role": "user", "content": "__mock_structured_output__"}],
+            "max_tokens": 16,
+        },
+    )
+
+    assert response.status_code == 200
+    assert len(upstream.requests) == 1
+
+
+@pytest.mark.asyncio
 async def test_messages_joins_system_array_before_forwarding(
     client_with_upstream: tuple[httpx.AsyncClient, _UpstreamRecorder],
 ) -> None:
@@ -132,6 +191,65 @@ async def test_messages_translates_for_openai_upstream() -> None:
 
 
 @pytest.mark.asyncio
+async def test_messages_stream_translates_openai_sse_to_anthropic_events() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/v1/chat/completions"
+        assert request.content
+        assert httpx.Response(200, content=request.content).json()[
+            "stream_options"
+        ] == {"include_usage": True}
+        return httpx.Response(
+            200,
+            headers={"content-type": "text/event-stream"},
+            content=(
+                b'data: {"id":"chatcmpl-stream","model":"qwen-test","choices":[{"delta":{"content":"hi"},"finish_reason":null}]}\n\n'
+                b'data: {"id":"chatcmpl-stream","model":"qwen-test","choices":[{"delta":{},"finish_reason":"stop"}],"usage":{"completion_tokens":1}}\n\n'
+                b"data: [DONE]\n\n"
+            ),
+        )
+
+    app = create_app(
+        upstream_url="http://upstream.invalid",
+        openai_upstream=True,
+    )
+    app.state.client = httpx.AsyncClient(
+        transport=httpx.MockTransport(handler),
+        base_url="http://upstream.invalid",
+    )
+    client = httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://shim",
+    )
+
+    response = await client.post(
+        "/v1/messages",
+        json={
+            "model": "qwen-test",
+            "messages": [{"role": "user", "content": "hi"}],
+            "max_tokens": 8,
+            "stream": True,
+        },
+    )
+    await client.aclose()
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
+    events = [
+        line.removeprefix("event: ")
+        for line in response.text.splitlines()
+        if line.startswith("event: ")
+    ]
+    assert events == [
+        "message_start",
+        "content_block_start",
+        "content_block_delta",
+        "content_block_stop",
+        "message_delta",
+        "message_stop",
+    ]
+
+
+@pytest.mark.asyncio
 async def test_messages_joins_tool_result_array_before_forwarding(
     client_with_upstream: tuple[httpx.AsyncClient, _UpstreamRecorder],
 ) -> None:
@@ -158,6 +276,224 @@ async def test_messages_joins_tool_result_array_before_forwarding(
     await client.post("/v1/messages", json=payload)
     forwarded = upstream.requests[-1]
     assert forwarded["messages"][0]["content"][0]["content"] == "first\nsecond"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("stream", [False, True])
+async def test_protocol_matrix_probe_is_native_anthropic_and_deterministic(
+    client_with_upstream: tuple[httpx.AsyncClient, _UpstreamRecorder], stream: bool
+) -> None:
+    client, upstream = client_with_upstream
+    response = await client.post(
+        "/v1/messages",
+        json={
+            "model": "qwen-test",
+            "max_tokens": 16,
+            "stream": stream,
+            "messages": [{"role": "user", "content": "__mock_protocol_matrix__"}],
+        },
+    )
+
+    if stream:
+        assert response.headers["content-type"].startswith("text/event-stream")
+        assert (
+            '"type":"text_delta","text":"{\\"protocol\\":\\"anthropic_messages\\"}"'
+            in response.text
+        )
+        assert '"stop_reason":"end_turn"' in response.text
+        assert "event: message_stop" in response.text
+    else:
+        assert response.json()["content"] == [
+            {"type": "text", "text": '{"protocol":"anthropic_messages"}'}
+        ]
+        assert response.json()["stop_reason"] == "end_turn"
+    assert upstream.requests == []
+
+
+@pytest.mark.asyncio
+async def test_mock_tool_lifecycle_is_native_anthropic_and_deterministic(
+    client_with_upstream: tuple[httpx.AsyncClient, _UpstreamRecorder],
+) -> None:
+    client, upstream = client_with_upstream
+    first = await client.post(
+        "/v1/messages",
+        json={
+            "model": "qwen-test",
+            "max_tokens": 16,
+            "messages": [{"role": "user", "content": "__mock_tool_call__"}],
+            "tools": [{"name": "lookup", "input_schema": {"type": "object"}}],
+        },
+    )
+    tool = first.json()["content"][0]
+    assert tool == {
+        "type": "tool_use",
+        "id": "call_mock_lookup",
+        "name": "lookup",
+        "input": {"query": "weather"},
+    }
+
+    second = await client.post(
+        "/v1/messages",
+        json={
+            "model": "qwen-test",
+            "max_tokens": 16,
+            "messages": [
+                {"role": "assistant", "content": [tool]},
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": tool["id"],
+                            "content": "sunny",
+                        }
+                    ],
+                },
+            ],
+        },
+    )
+    assert second.json()["content"] == [
+        {"type": "text", "text": "tool result accepted"}
+    ]
+    assert upstream.requests == []
+
+
+@pytest.mark.asyncio
+async def test_mock_tool_lifecycle_stream_is_native_anthropic_and_deterministic(
+    client_with_upstream: tuple[httpx.AsyncClient, _UpstreamRecorder],
+) -> None:
+    client, upstream = client_with_upstream
+    response = await client.post(
+        "/v1/messages",
+        json={
+            "model": "qwen-test",
+            "max_tokens": 16,
+            "stream": True,
+            "messages": [{"role": "user", "content": "__mock_tool_call__"}],
+            "tools": [{"name": "lookup", "input_schema": {"type": "object"}}],
+        },
+    )
+
+    stream = response.text
+    assert response.headers["content-type"].startswith("text/event-stream")
+    assert "event: message_start" in stream
+    assert '"type":"tool_use","id":"call_mock_lookup","name":"lookup"' in stream
+    assert stream.count('"type":"input_json_delta"') == 2
+    assert '"stop_reason":"tool_use"' in stream
+    assert "event: message_stop" in stream
+
+    result = await client.post(
+        "/v1/messages",
+        json={
+            "model": "qwen-test",
+            "max_tokens": 16,
+            "stream": True,
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": [
+                        {
+                            "type": "tool_use",
+                            "id": "call_mock_lookup",
+                            "name": "lookup",
+                            "input": {"query": "weather"},
+                        }
+                    ],
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": "call_mock_lookup",
+                            "content": "sunny",
+                        }
+                    ],
+                },
+            ],
+        },
+    )
+    result_stream = result.text
+    assert '"type":"text_delta","text":"tool result accepted"' in result_stream
+    assert '"stop_reason":"end_turn"' in result_stream
+    assert "event: message_stop" in result_stream
+    assert upstream.requests == []
+
+
+@pytest.mark.asyncio
+async def test_mock_provider_error_is_native_anthropic_and_deterministic(
+    client_with_upstream: tuple[httpx.AsyncClient, _UpstreamRecorder],
+) -> None:
+    client, upstream = client_with_upstream
+    response = await client.post(
+        "/v1/messages",
+        json={
+            "model": "qwen-test",
+            "max_tokens": 16,
+            "messages": [{"role": "user", "content": "__mock_provider_error__"}],
+        },
+    )
+    assert response.status_code == 429
+    assert response.json() == {
+        "type": "error",
+        "error": {
+            "type": "rate_limit_error",
+            "message": "mock provider rate limit",
+        },
+        "request_id": "req_mock_rate_limit",
+    }
+    assert upstream.requests == []
+
+
+@pytest.mark.asyncio
+async def test_mock_incomplete_stream_has_no_success_terminal(
+    client_with_upstream: tuple[httpx.AsyncClient, _UpstreamRecorder],
+) -> None:
+    client, upstream = client_with_upstream
+    response = await client.post(
+        "/v1/messages",
+        json={
+            "model": "qwen-test",
+            "max_tokens": 16,
+            "stream": True,
+            "messages": [{"role": "user", "content": "__mock_incomplete_stream__"}],
+        },
+    )
+    assert response.status_code == 200
+    events = [
+        line.removeprefix("event: ")
+        for line in response.text.splitlines()
+        if line.startswith("event: ")
+    ]
+    assert events == [
+        "message_start",
+        "content_block_start",
+        "content_block_delta",
+    ]
+    assert upstream.requests == []
+
+
+@pytest.mark.asyncio
+async def test_mock_midstream_error_follows_partial_content_without_success_terminal(
+    client_with_upstream: tuple[httpx.AsyncClient, _UpstreamRecorder],
+) -> None:
+    client, upstream = client_with_upstream
+    response = await client.post(
+        "/v1/messages",
+        json={
+            "model": "qwen-test",
+            "max_tokens": 16,
+            "stream": True,
+            "messages": [{"role": "user", "content": "__mock_midstream_error__"}],
+        },
+    )
+    assert response.status_code == 200
+    assert '"text":"partial"' in response.text
+    assert "event: error" in response.text
+    assert '"type":"overloaded_error"' in response.text
+    assert "event: message_stop" not in response.text
+    assert response.text.index('"text":"partial"') < response.text.index("event: error")
+    assert upstream.requests == []
 
 
 @pytest.mark.asyncio
@@ -263,7 +599,7 @@ async def test_debug_last_request_returns_404_before_any_request(
 
 
 @pytest.mark.asyncio
-async def test_debug_last_request_returns_translated_body_after_messages_post(
+async def test_debug_last_request_returns_native_provider_body_after_messages_post(
     client_with_upstream: tuple[httpx.AsyncClient, _UpstreamRecorder],
 ) -> None:
     client, _ = client_with_upstream
@@ -287,8 +623,7 @@ async def test_debug_last_request_returns_translated_body_after_messages_post(
     )
     assert response.status_code == 200
     data = response.json()
-    # The shim joins the system array before forwarding.
-    assert data["body"]["system"] == "You are helpful.\nBe concise."
+    assert data["body"]["system"] == payload["system"]
     assert data["session_id"] == session
     assert "headers" in data
 
@@ -416,3 +751,25 @@ async def test_request_store_lru_evicts_oldest_session(
             resp.status_code == 200
         ), f"expected session {sid!r} to be present, got {resp.status_code}"
         assert resp.json()["body"]["messages"][0]["content"] == sid
+
+
+@pytest.mark.asyncio
+async def test_simulator_rejects_unknown_provider_field(
+    client_with_upstream: tuple[httpx.AsyncClient, _UpstreamRecorder],
+) -> None:
+    client, upstream = client_with_upstream
+    response = await client.post(
+        "/v1/messages",
+        json={
+            "model": "provider-model",
+            "max_tokens": 64,
+            "messages": [{"role": "user", "content": "hello"}],
+            "silently_swallowed": True,
+        },
+    )
+    assert response.status_code == 400
+    assert response.json()["error"] == {
+        "type": "invalid_request_error",
+        "message": "unknown request field: silently_swallowed",
+    }
+    assert upstream.requests == []

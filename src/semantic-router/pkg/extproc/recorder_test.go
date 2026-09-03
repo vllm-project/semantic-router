@@ -342,10 +342,9 @@ func TestBuildReplayRoutingRecord_ResponseAPIChainFields(t *testing.T) {
 		RequestID: "req-resp-1",
 		SessionID: "conv-chain",
 		TurnIndex: 2,
-		ResponseAPICtx: &ResponseAPIContext{
-			IsResponseAPIRequest: true,
-			ConversationID:       "conv-chain",
-			PreviousResponseID:   "resp_prev_1",
+		ResponseObjectState: &ResponseObjectState{
+			ConversationID:     "conv-chain",
+			PreviousResponseID: "resp_prev_1",
 		},
 	}
 	record := buildReplayRoutingRecord(ctx, "model-a", "model-b", "balance")

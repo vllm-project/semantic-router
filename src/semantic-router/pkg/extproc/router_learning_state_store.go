@@ -9,18 +9,20 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 )
 
-func configureRouterLearningStateStore(cfg *config.RouterConfig) {
+var newRouterSessionStateStore = sessiontelemetry.NewRedisRouterSessionStateStore
+
+func buildRouterLearningStateStore(cfg *config.RouterConfig) *sessiontelemetry.RouterSessionStateStoreSlot {
 	if cfg == nil {
-		return
+		return nil
 	}
 	stateConfig := cfg.RouterLearning.StateStore
 	switch strings.TrimSpace(stateConfig.Backend) {
 	case "", "local":
-		sessiontelemetry.SetRouterSessionStateStore(nil)
+		return nil
 	case "redis":
 		timeout := time.Duration(stateConfig.TimeoutMS) * time.Millisecond
 		ttl := time.Duration(stateConfig.TTLSeconds) * time.Second
-		store, err := sessiontelemetry.NewRedisRouterSessionStateStore(
+		store, err := newRouterSessionStateStore(
 			sessiontelemetry.RedisRouterSessionStoreConfig{
 				Address:   stateConfig.Redis.Address,
 				Password:  stateConfig.Redis.Password,
@@ -31,14 +33,23 @@ func configureRouterLearningStateStore(cfg *config.RouterConfig) {
 			},
 		)
 		if err != nil {
-			sessiontelemetry.SetRouterSessionStateStore(nil)
 			logging.ComponentWarnEvent("extproc", "router_learning_state_store_fail_open", map[string]interface{}{
 				"backend": "redis",
 				"error":   err.Error(),
 			})
-			return
+			return nil
 		}
-		sessiontelemetry.SetRouterSessionStateStore(store)
+		return sessiontelemetry.NewRouterSessionStateStoreSlot(store)
+	}
+	return nil
+}
+
+func publishRouterLearningStateStore(router *OpenAIRouter) {
+	if router == nil {
+		return
+	}
+	sessiontelemetry.PublishRouterSessionStateStore(router.routerSessionStateStore)
+	if router.routerSessionStateStore != nil {
 		logging.ComponentEvent("extproc", "router_learning_state_store_initialized", map[string]interface{}{
 			"backend": "redis",
 		})

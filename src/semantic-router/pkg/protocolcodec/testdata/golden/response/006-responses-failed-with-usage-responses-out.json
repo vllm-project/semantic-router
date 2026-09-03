@@ -1,0 +1,32 @@
+{
+  "created_at": 0,
+  "error": {
+    "code": "provider_error",
+    "message": "failed after generation"
+  },
+  "id": "resp_failed",
+  "incomplete_details": null,
+  "instructions": null,
+  "metadata": {},
+  "model": "routed-model",
+  "object": "response",
+  "output": [],
+  "parallel_tool_calls": true,
+  "status": "failed",
+  "temperature": null,
+  "tool_choice": "auto",
+  "tools": [],
+  "top_p": null,
+  "usage": {
+    "input_tokens": 4,
+    "input_tokens_details": {
+      "cache_write_tokens": 0,
+      "cached_tokens": 1
+    },
+    "output_tokens": 2,
+    "output_tokens_details": {
+      "reasoning_tokens": 1
+    },
+    "total_tokens": 6
+  }
+}

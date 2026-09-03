@@ -86,7 +86,7 @@ def test_parse_user_config_accepts_entrypoints_and_recipes(tmp_path: Path) -> No
     write_minimal_config(config_path)
     data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     data["entrypoints"] = [
-        {"model_names": ["vllm-sr/mom-private-v1"], "recipe": "privacy-first"}
+        {"model_names": ["vllm-sr/mom-v1-vault"], "recipe": "privacy-first"}
     ]
     data["recipes"] = [
         {
@@ -123,7 +123,7 @@ def test_parse_user_config_accepts_entrypoints_and_recipes(tmp_path: Path) -> No
 
     parsed = parse_user_config(str(config_path))
 
-    assert parsed.entrypoints[0].model_names == ["vllm-sr/mom-private-v1"]
+    assert parsed.entrypoints[0].model_names == ["vllm-sr/mom-v1-vault"]
     assert parsed.entrypoints[0].recipe == "privacy-first"
     assert parsed.recipes[0].name == "privacy-first"
     assert parsed.recipes[0].routing.decisions[0].name == "privacy-route"
@@ -171,6 +171,27 @@ def test_parse_user_config_preserves_cache_pricing(tmp_path: Path) -> None:
     assert pricing.model_dump()["cache_write_per_1m"] == 2.5
 
 
+@pytest.mark.parametrize(
+    "pricing, expected",
+    [
+        ({"currency": "usd"}, "currency"),
+        ({"prompt_per_1m": -0.01}, "prompt_per_1m"),
+        ({"completion_per_1m": float("inf")}, "completion_per_1m"),
+    ],
+)
+def test_parse_user_config_rejects_invalid_provider_pricing(
+    tmp_path: Path, pricing: dict[str, object], expected: str
+) -> None:
+    config_path = tmp_path / "config.yaml"
+    write_minimal_config(config_path)
+    data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    data["providers"]["models"][0]["pricing"] = pricing
+    config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+    with pytest.raises(ConfigParseError, match=expected):
+        parse_user_config(str(config_path))
+
+
 def test_embedding_models_config_accepts_remote_endpoint() -> None:
     config = EmbeddingModelsConfig(
         embedding_config={
@@ -184,6 +205,7 @@ def test_embedding_models_config_accepts_remote_endpoint() -> None:
             "api_key_env": "EMBEDDING_API_KEY",
             "timeout_seconds": 5,
             "max_retries": 2,
+            "max_response_bytes": 16777216,
             "dimensions": 1024,
         },
     )
@@ -193,6 +215,7 @@ def test_embedding_models_config_accepts_remote_endpoint() -> None:
     assert dumped["embedding_config"]["model_type"] == "remote"
     assert dumped["endpoint"]["base_url"] == "http://embedding-service:8000/v1"
     assert dumped["endpoint"]["api_key_env"] == "EMBEDDING_API_KEY"
+    assert dumped["endpoint"]["max_response_bytes"] == 16777216
 
 
 def test_parse_user_config_accepts_decision_learning_controls(
@@ -211,6 +234,16 @@ def test_parse_user_config_accepts_decision_learning_controls(
         "protection": {
             "enabled": True,
             "scope": "conversation",
+        },
+        "state_store": {
+            "backend": "redis",
+            "ttl_seconds": 86400,
+            "timeout_ms": 50,
+            "redis": {
+                "address": "redis:6379",
+                "database": 2,
+                "key_prefix": "vsr:router-session:v1:",
+            },
         },
     }
     data["routing"]["decisions"][0]["adaptations"] = {
@@ -237,6 +270,10 @@ def test_parse_user_config_accepts_decision_learning_controls(
     assert adaptations.protection.mode == "apply"
     assert adaptations.protection.stability_weight == 1.5
     assert adaptations.protection.switch_margin == 0.11
+    assert parsed.global_ is not None
+    state_store = parsed.global_["router"]["learning"]["state_store"]
+    assert state_store["backend"] == "redis"
+    assert state_store["redis"]["address"] == "redis:6379"
 
 
 def test_parse_user_config_rejects_unknown_decision_adaptation(tmp_path: Path) -> None:
@@ -615,10 +652,17 @@ def test_load_profile_values_returns_none_without_profile(tmp_path: Path) -> Non
     assert load_profile_values(None, str(tmp_path)) is None
 
 
-def test_load_profile_values_returns_none_when_profile_file_missing(
-    tmp_path: Path,
+def test_load_profile_values_fails_when_profile_file_missing(tmp_path: Path) -> None:
+    with pytest.raises(FileNotFoundError, match="profile values file not found"):
+        load_profile_values("dev", str(tmp_path))
+
+
+@pytest.mark.parametrize("profile", ["../prod", "dev/prod", "-prod", "prod.yaml"])
+def test_load_profile_values_rejects_non_name_profiles(
+    tmp_path: Path, profile: str
 ) -> None:
-    assert load_profile_values("dev", str(tmp_path)) is None
+    with pytest.raises(ValueError, match="profile names"):
+        load_profile_values(profile, str(tmp_path))
 
 
 def test_load_profile_values_loads_named_profile(tmp_path: Path) -> None:

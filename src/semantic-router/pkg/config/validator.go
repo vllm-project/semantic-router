@@ -19,11 +19,14 @@ var (
 	ipv6PortRegex = regexp.MustCompile(`^\[.*\]:\d+$`)
 
 	globalConfigContractValidators = []configContractValidator{
+		validateModelPricingContracts,
+		validateReasoningFamilyContracts,
 		validateGlobalSemanticCacheContracts,
 		validateGlobalMemoryContracts,
 		validateEmbeddingModelContracts,
 		validateGlobalModalityContracts,
 		validateModelSelectionConfig,
+		validateCategoryModelBackendContracts,
 		validateGlobalClassifierRuntimeContracts,
 		validateGlobalRouterLearningConfig,
 		validateReMoMContracts,
@@ -32,11 +35,14 @@ var (
 		validateAdvancedToolFilteringConfig,
 		validatePromptCompressionContracts,
 		validateHallucinationContracts,
+		validateModelAdmissionContracts,
 	}
 
 	routingProfileContractValidators = []configContractValidator{
+		validateRuleOperatorContracts,
 		validateRoutingLocalNames,
 		validateLanguageContracts,
+		validateContextContracts,
 		validateRoutingStrategy,
 		validateDecisionSignalReferences,
 		validateDomainContracts,
@@ -51,6 +57,7 @@ var (
 		validateEmbeddingSignalContracts,
 		validateRoutingModalityContracts,
 		validateComplexityContracts,
+		validateJailbreakContracts,
 		validateDecisionRouterLearningConfig,
 	}
 )
@@ -94,6 +101,15 @@ func validateRoutingStrategy(cfg *RouterConfig) error {
 	}
 	return cfg.Strategy.Validate()
 }
+
+// validPromptGuardVariants is the set of recognized PromptGuardConfig.Variant values.
+var validPromptGuardVariants = map[string]bool{
+	"":                          true, // unset defaults to PromptGuardVariantMmBERT32K under canonical resolution
+	PromptGuardVariantCandle:    true,
+	PromptGuardVariantMmBERT32K: true,
+}
+
+// prompt_guard backend validation lives in validator_prompt_guard.go.
 
 // isValidIPv4 checks if the address is a valid IPv4 address
 func isValidIPv4(address string) bool {
@@ -156,6 +172,9 @@ func runConfigContractValidators(cfg *RouterConfig, validators []configContractV
 }
 
 func validateModelSelectionConfig(cfg *RouterConfig) error {
+	if err := validatePromptGuardBackend(cfg); err != nil {
+		return err
+	}
 	if isSessionAwareSelectionConfigConfigured(cfg.ModelSelection.SessionAware) {
 		return fmt.Errorf("global.router.model_selection.session_aware is no longer supported; use global.router.learning.protection")
 	}

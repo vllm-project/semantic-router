@@ -8,8 +8,11 @@ from cli import __version__
 from cli.commands.chat import chat
 from cli.commands.completion import completion
 from cli.commands.eval import eval
-from cli.commands.general import config, model, rag, validate
+from cli.commands.general import config, rag, validate
+from cli.commands.recipe import recipe
 from cli.commands.runtime import dashboard, logs, serve, status, stop
+from cli.commands.storage import storage
+from cli.terminal import brand
 
 logo = r"""
        _ _     __  __       ____  ____
@@ -25,7 +28,6 @@ REGISTERED_COMMANDS = (
     serve,
     config,
     validate,
-    model,
     rag,
     eval,
     status,
@@ -34,6 +36,8 @@ REGISTERED_COMMANDS = (
     dashboard,
     chat,
     completion,
+    recipe,
+    storage,
 )
 
 
@@ -47,7 +51,7 @@ def main(ctx: click.Context, version: bool) -> None:
         ctx.exit()
 
     if ctx.invoked_subcommand is None:
-        click.echo(logo)
+        brand(logo)
         click.echo(ctx.get_help())
 
 

@@ -147,7 +147,7 @@ func TestUpdateConfigDoesNotWaitForRemoteClassification(t *testing.T) {
 				"id":"classification",
 				"choices":[{
 					"message":{
-						"content":"{\"label\":\"RISKY\",\"rationale\":\"test\"}"
+						"content":"{\"scores\":{\"SAFE\":0.1,\"RISKY\":0.9},\"rationale\":\"test\"}"
 					}
 				}]
 			}`)

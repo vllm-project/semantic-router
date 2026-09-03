@@ -81,18 +81,34 @@ func ensureContextTokenCount(ctx *RequestContext, signalInput signalEvaluationIn
 		return
 	}
 	text := contextTokenText(signalInput)
-	if text == "" {
+	floor := signalInput.requestFacts.ContextTokenFloor
+	ctx.VSRContextHasNonText = ctx.VSRContextHasNonText ||
+		signalInput.requestFacts.ContextHasNonText
+	if text == "" && floor <= 0 {
 		return
 	}
 	if ctx.VSRContextTextBytes <= 0 {
-		ctx.VSRContextTextBytes = len(text)
+		ctx.VSRContextTextBytes = signalInput.requestFacts.ContextTextBytes
+		if ctx.VSRContextTextBytes <= 0 {
+			ctx.VSRContextTextBytes = len(text)
+		}
 	}
-	if ctx.VSRContextTokenCount > 0 {
-		return
+	if ctx.VSRContextEquivalentBytes <= 0 {
+		ctx.VSRContextEquivalentBytes = signalInput.requestFacts.ContextEquivalentBytes
 	}
-	counter := classification.CharacterBasedTokenCounter{}
-	count, err := counter.CountTokens(text)
-	if err != nil || count <= 0 {
+	count := ctx.VSRContextTokenCount
+	if count <= 0 {
+		counter := classification.CharacterBasedTokenCounter{}
+		var err error
+		count, err = counter.CountTokens(text)
+		if err != nil {
+			return
+		}
+	}
+	if floor > count {
+		count = floor
+	}
+	if count <= 0 {
 		return
 	}
 	ctx.VSRContextTokenCount = count
@@ -130,6 +146,7 @@ func logSignalEvaluationResults(ctx *RequestContext, signalLatencyMs int64, sign
 		"event":          signals.MatchedEventRules,
 		"metadata":       signals.MatchedMetadataRules,
 		"classifier":     signals.MatchedClassifierRules,
+		"input_modality": signals.MatchedInputModalityRules,
 		"projection":     signals.MatchedProjectionRules,
 		"context_tokens": signals.TokenCount,
 	})
@@ -140,7 +157,7 @@ func (r *OpenAIRouter) runDecisionEngine(
 	ctx *RequestContext,
 	signals *classification.SignalResults,
 	candidates []config.Decision,
-) (*decision.DecisionResult, string) {
+) (*decision.DecisionResult, string, error) {
 	// llm_decision_evaluation_latency_seconds and llm_decision_match_total are
 	// emitted by decision.DecisionEngine.EvaluateDecisionsWithSignals; do not
 	// emit them here or both metrics will be double-counted.
@@ -153,7 +170,7 @@ func (r *OpenAIRouter) runDecisionEngine(
 		})
 		tracing.EndDecisionSpan(decisionSpan, 0.0, []string{}, "")
 		ctx.TraceContext = decisionCtx
-		return nil, r.defaultModelForUnmatchedDecision(originalModel)
+		return nil, r.defaultModelForUnmatchedDecision(originalModel), nil
 	}
 	strategy := classifier.Config.Strategy
 
@@ -163,12 +180,13 @@ func (r *OpenAIRouter) runDecisionEngine(
 		if len(candidates) == 0 {
 			tracing.EndDecisionSpan(decisionSpan, 0.0, []string{}, string(strategy))
 			ctx.TraceContext = decisionCtx
-			return nil, r.defaultModelForUnmatchedDecision(originalModel)
+			return nil, r.defaultModelForUnmatchedDecision(originalModel), nil
 		}
 		result, err = classifier.EvaluateDecisionWithEngineForDecisions(signals, candidates)
 	} else {
 		result, err = classifier.EvaluateDecisionWithEngine(signals)
 	}
+	ctx.VSRDecisionDiagnostics = signals.Diagnostics
 	if err != nil {
 		logging.ComponentErrorEvent("extproc", "decision_evaluation_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,
@@ -177,17 +195,17 @@ func (r *OpenAIRouter) runDecisionEngine(
 		})
 		tracing.EndDecisionSpan(decisionSpan, 0.0, []string{}, string(strategy))
 		ctx.TraceContext = decisionCtx
-		return nil, r.defaultModelForUnmatchedDecision(originalModel)
+		return nil, "", err
 	}
 	if result == nil || result.Decision == nil {
 		tracing.EndDecisionSpan(decisionSpan, 0.0, []string{}, string(strategy))
 		ctx.TraceContext = decisionCtx
-		return nil, r.defaultModelForUnmatchedDecision(originalModel)
+		return nil, r.defaultModelForUnmatchedDecision(originalModel), nil
 	}
 
 	tracing.EndDecisionSpan(decisionSpan, result.Confidence, result.MatchedRules, string(strategy))
 	ctx.TraceContext = decisionCtx
-	return result, ""
+	return result, "", nil
 }
 
 func (r *OpenAIRouter) defaultModelForUnmatchedDecision(originalModel string) string {
@@ -216,6 +234,14 @@ func (r *OpenAIRouter) finalizeDecisionEvaluation(
 		"confidence":    evaluationConfidence,
 		"matched_rules": result.MatchedRules,
 	})
+
+	destination, terminal, actionErr := r.decisionRouteActionDestination(result.Decision, ctx)
+	if actionErr != nil {
+		return decisionName, evaluationConfidence, reasoningDecision, "", actionErr
+	}
+	if terminal {
+		return decisionName, evaluationConfidence, reasoningDecision, destination, nil
+	}
 
 	if !r.requestModelActsAsAuto(originalModel) {
 		logging.ComponentDebugEvent("extproc", "explicit_model_preserved", map[string]interface{}{
@@ -271,29 +297,41 @@ func (r *OpenAIRouter) selectDecisionRuntimeModel(
 	evaluationConfidence float64,
 	ctx *RequestContext,
 ) (string, entropy.ReasoningDecision, error) {
-	if len(result.Decision.ModelRefs) == 0 {
-		selectedModel := r.Config.DefaultModel
-		ctx.VSRSelectedModel = selectedModel
-		ctx.VSRSelectionMethod = "default"
-		logging.ComponentDebugEvent("extproc", "decision_model_defaulted", map[string]interface{}{
-			"request_id":     ctx.RequestID,
-			"decision":       decisionName,
-			"selected_model": selectedModel,
-		})
-		return selectedModel, entropy.ReasoningDecision{}, nil
-	}
 	if result.Decision.GetFastResponseConfig() != nil {
-		selectedModel := firstDecisionModelName(result.Decision.ModelRefs)
-		if selectedModel == "" {
-			selectedModel = r.Config.DefaultModel
-		}
-		ctx.VSRSelectedModel = selectedModel
-		ctx.VSRSelectionMethod = "fast_response"
-		return selectedModel, entropy.ReasoningDecision{}, nil
+		return r.selectFastResponseRuntimeModel(result.Decision, ctx), entropy.ReasoningDecision{}, nil
+	}
+	if ineligible := r.contextIneligibleAlgorithmModelCount(result.Decision, ctx.VSRContextTokenCount); ineligible > 0 {
+		return "", entropy.ReasoningDecision{}, fmt.Errorf(
+			"%w: decision %q requires %d request tokens but %d explicitly configured algorithm model(s) have smaller context windows",
+			errNoContextEligibleDecisionModel,
+			decisionName,
+			ctx.VSRContextTokenCount,
+			ineligible,
+		)
+	}
+	if len(result.Decision.ModelRefs) == 0 {
+		return r.selectDecisionDefaultRuntimeModel(result.Decision, decisionName, ctx)
+	}
+
+	eligibleModelRefs, err := r.contextEligibleDecisionModelRefs(
+		result.Decision.ModelRefs,
+		decisionName,
+		ctx.VSRContextTokenCount,
+		ctx,
+	)
+	if err != nil {
+		return "", entropy.ReasoningDecision{}, err
+	}
+	if minimumErr := validateMinimumEligibleDecisionModels(
+		result.Decision,
+		eligibleModelRefs,
+		ctx.VSRContextTokenCount,
+	); minimumErr != nil {
+		return "", entropy.ReasoningDecision{}, minimumErr
 	}
 
 	selCtx := r.buildSelectionContext(
-		result.Decision.ModelRefs,
+		eligibleModelRefs,
 		decisionName,
 		userContent,
 		result.Decision.Algorithm,
@@ -338,6 +376,19 @@ func (r *OpenAIRouter) selectDecisionRuntimeModel(
 		evaluationConfidence,
 		ctx,
 	), nil
+}
+
+func (r *OpenAIRouter) selectFastResponseRuntimeModel(
+	decisionConfig *config.Decision,
+	ctx *RequestContext,
+) string {
+	selectedModel := firstDecisionModelName(decisionConfig.ModelRefs)
+	if selectedModel == "" {
+		selectedModel = r.Config.DefaultModel
+	}
+	ctx.VSRSelectedModel = selectedModel
+	ctx.VSRSelectionMethod = "fast_response"
+	return selectedModel
 }
 
 func firstDecisionModelName(modelRefs []config.ModelRef) string {

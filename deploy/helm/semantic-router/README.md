@@ -125,6 +125,7 @@ the locked chart dependencies.
 | config.global.stores.semantic_cache.max_entries | int | `1000` |  |
 | config.global.stores.semantic_cache.similarity_threshold | float | `0.8` |  |
 | config.global.stores.semantic_cache.ttl_seconds | int | `3600` |  |
+| configOverride | object | `null` | Complete canonical Router config supplied by deployment tooling. Unlike `config`, this map atomically replaces chart defaults before Kubernetes integration rewrites. |
 | dashboard.allowOpenBootstrap | bool | `false` | Allow first-admin creation via the public, unauthenticated web-form bootstrap endpoint. Off by default: a fresh, internet-reachable deployment should not be claimable by the first stranger who finds it. Production provisions the admin via the DASHBOARD_ADMIN_* env vars (which create it at startup and close the bootstrap path automatically). Set this to true only for demos where signing up the first admin through the UI is acceptable. |
 | dashboard.enabled | bool | `false` | Enable the vLLM-SR dashboard |
 | dashboard.envFrom | list | `[]` | Extra envFrom sources for the dashboard container (configMapRef / secretRef). Standard core/v1 EnvFromSource list. |

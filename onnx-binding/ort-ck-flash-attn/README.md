@@ -1,56 +1,80 @@
-# ORT CK Flash Attention
+# ONNX Runtime CK Flash Attention custom op
 
-Standalone ONNX Runtime custom-op library that replaces dense attention with AMD Composable Kernel (CK) Flash Attention on ROCm GPUs.
-
-## What it does
-
-- Compiles CK-tile FMHA forward kernels (FP16, hdim 32/64/128) for MI300X (gfx942)
-- Registers `com.ck::CKFlashAttention` as an ORT custom op via `RegisterCustomOps`
-- Provides a Python graph rewriter to replace the dense attention subgraph in mmBERT ONNX models
+This library registers `com.ck::CKFlashAttention` with ONNX Runtime and
+provides a graph rewriter for mmBERT attention blocks. It targets AMD ROCm
+GPUs and CK-tile FP16 forward kernels with head dimensions 32, 64, or 128.
 
 ## Build
 
+Requirements:
+
+- ROCm 7.0 or later and `hipcc`
+- `composablekernel-dev`
+- CMake 3.21 or later and Ninja
+- network access during the first configure step to fetch the selected ONNX
+  Runtime C API headers
+
+Run from `onnx-binding/ort-ck-flash-attn`:
+
 ```bash
 cmake -B build -G Ninja \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DGPU_TARGETS=gfx942
-cmake --build build --parallel $(nproc)
+  -DCMAKE_BUILD_TYPE=Release \
+  -DGPU_TARGETS=gfx942
+cmake --build build --parallel
+ctest --test-dir build --output-on-failure
 ```
 
-Requires: ROCm 7.0+, composablekernel-dev, CMake 3.21+, hipcc.
+Change `GPU_TARGETS` when compiling for a supported architecture other than
+the default `gfx942`. The shared library is written to
+`build/libort_ck_flash_attn.so`.
 
-ORT C API headers are downloaded automatically during configuration.
+## Rewrite a model
 
-## Usage
-
-### 1. Rewrite the ONNX model
+The rewriter requires the `numpy` and `onnx` Python packages:
 
 ```bash
-python3 scripts/rewrite_graph.py model_sdpa_fp16.onnx model_fa.onnx
+python3 -m pip install numpy onnx
+python3 scripts/rewrite_graph.py \
+  model_sdpa_fp16.onnx \
+  model_fa_fp16.onnx
 ```
 
-### 2. Load in ORT (Rust)
+Use `--hdim` and `--local-attention` only when they match the source model's
+architecture. Keep the original SDPA model for correctness comparison.
 
-```rust
-let session = Session::builder()?
-    .with_operator_library("/usr/lib/libort_ck_flash_attn.so")?
-    .with_execution_providers([ROCmExecutionProvider::default().build()])
-    .commit_from_file("model_fa.onnx")?;
+## Load the custom op
+
+The Semantic Router ONNX binding reads `ORT_CK_FLASH_ATTN_LIB`:
+
+```bash
+export ORT_CK_FLASH_ATTN_LIB="$PWD/build/libort_ck_flash_attn.so"
 ```
 
-Or set `ORT_CK_FLASH_ATTN_LIB` environment variable and the binding picks it up automatically.
-
-### 3. Load in ORT (Python)
+Python ONNX Runtime can register the same library explicitly:
 
 ```python
 import onnxruntime as ort
-so = ort.SessionOptions()
-so.register_custom_ops_library("build/libort_ck_flash_attn.so")
-session = ort.InferenceSession("model_fa.onnx", so, providers=["ROCmExecutionProvider"])
+
+options = ort.SessionOptions()
+options.register_custom_ops_library("build/libort_ck_flash_attn.so")
+session = ort.InferenceSession(
+    "model_fa_fp16.onnx",
+    options,
+    providers=["ROCmExecutionProvider"],
+)
 ```
 
-## Docker
+The rewritten model is not portable to an ONNX Runtime process that has not
+registered this custom-op library.
+
+## Container image
+
+From this directory:
 
 ```bash
-docker build -t ort-ck-flash-attn .
+docker build -t ort-ck-flash-attn:local .
 ```
+
+The image installs the library under `/usr/lib` and sets
+`ORT_CK_FLASH_ATTN_LIB` accordingly. GPU devices still need to be exposed by
+the container runtime.

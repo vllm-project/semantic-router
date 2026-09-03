@@ -88,9 +88,9 @@
 .overlay {
   position: fixed;
   inset: 0;
+  /* Cover the physical viewport, including both stable scrollbar gutters. */
+  inset-inline: calc((100vw - 100%) / -2);
   z-index: 1200;
-  width: 100vw;
-  height: 100dvh;
   background: rgba(0, 0, 0, 0.22);
 }
 

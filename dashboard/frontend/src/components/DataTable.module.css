@@ -13,7 +13,7 @@
 
 .table {
   width: 100%;
-  min-width: 600px; /* Ensure table has minimum width for proper column display */
+  min-width: 760px;
   border-collapse: collapse;
 }
 
@@ -144,9 +144,13 @@
 }
 
 .expandIcon {
-  display: inline-block;
-  font-size: 0.75rem;
+  display: inline-flex;
   transition: transform var(--transition-fast);
+}
+
+.expandIcon svg {
+  width: 16px;
+  height: 16px;
 }
 
 .expandIcon.expanded {
@@ -170,6 +174,7 @@
   z-index: 11;
   text-align: right;
   width: 220px;
+  min-width: 220px;
   background: #18181b;
   box-shadow: -12px 0 18px rgba(0, 0, 0, 0.14);
 }
@@ -180,6 +185,7 @@
   text-align: right;
   background: #101012;
   box-shadow: -12px 0 18px rgba(0, 0, 0, 0.12);
+  min-width: 220px;
 }
 
 .tr:hover .actionsCell,
@@ -195,6 +201,9 @@
 }
 
 .actionButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
   padding: 0.375rem 0.75rem;
   font-size: 0.8125rem;
   font-weight: 500;
@@ -205,6 +214,11 @@
   color: var(--color-text-secondary);
   cursor: pointer;
   white-space: nowrap;
+}
+
+.actionButton svg {
+  width: 14px;
+  height: 14px;
 }
 
 .viewButton:hover {
@@ -310,7 +324,7 @@
   }
 
   .table {
-    min-width: 700px; /* Slightly wider on mobile to accommodate all columns */
+    min-width: 760px;
   }
 
   .th,
@@ -336,8 +350,12 @@
   }
 
   .actionsColumn {
-    width: 100px;
-    min-width: 100px;
+    width: 104px;
+    min-width: 104px;
+  }
+
+  .actionsCell {
+    min-width: 104px;
   }
 
   .pagination {
@@ -357,7 +375,7 @@
 
 @media (max-width: 480px) {
   .table {
-    min-width: 600px; /* Narrower on very small screens */
+    min-width: 720px;
   }
 
   .th,
@@ -377,6 +395,10 @@
 
   .actionsColumn {
     width: 80px;
+    min-width: 80px;
+  }
+
+  .actionsCell {
     min-width: 80px;
   }
 }

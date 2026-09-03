@@ -4,7 +4,7 @@
 {{- else -}}
 {{- $routerMultiReplica = gt (int .Values.replicaCount) 1 -}}
 {{- end -}}
-{{- $config := (get .Values "config") | default (dict) -}}
+{{- $config := include "semantic-router.effectiveConfig" . | fromYaml -}}
 {{- $global := (get $config "global") | default (dict) -}}
 {{- $router := (get $global "router") | default (dict) -}}
 {{- $learning := (get $router "learning") | default (dict) -}}

@@ -10,13 +10,14 @@
     "format:check": "prettier --check . --ignore-unknown",
     "lint": "eslint .",
     "type-check": "tsc --noEmit",
-    "test:unit": "vitest run src"
+    "test:unit": "vitest run src",
+    "test:e2e:evaluation": "playwright test e2e/evaluation"
   },
   "dependencies": {
     "@dagrejs/dagre": "^1.1.8",
+    "@lobehub/icons-static-svg": "^1.94.0",
     "@monaco-editor/react": "^4.7.0",
     "framer-motion": "^11.18.2",
-    "ogl": "^1.0.11",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-markdown": "^10.1.0",
@@ -25,6 +26,7 @@
     "recharts": "^2.15.4",
     "rehype-highlight": "^7.0.2",
     "remark-gfm": "^4.0.1",
+    "thinking-orbs": "^0.3.1",
     "three": "^0.183.2",
     "zustand": "^5.0.11"
   },

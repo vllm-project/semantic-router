@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import webbrowser
 from pathlib import Path
 
@@ -9,6 +10,7 @@ import click
 
 from cli.bootstrap import (
     ensure_bootstrap_workspace,
+    is_setup_mode_config,
 )
 from cli.commands.common import exit_with_logged_error
 from cli.commands.runtime_config_mutation import (
@@ -18,13 +20,14 @@ from cli.commands.runtime_config_mutation import (
     inject_algorithm_into_config as _inject_algorithm_into_config,
 )
 from cli.commands.runtime_help import SERVE_HELP
+from cli.commands.runtime_serve_config import _prepare_effective_serve_config
 from cli.commands.runtime_support import (
     append_passthrough_env_vars,
     apply_container_runtime_override,
     apply_runtime_mode_env_vars,
+    configure_recipe_env_bindings,
     configure_runtime_override_env_vars,
     log_bootstrap_result,
-    resolve_effective_config_path,
     validate_setup_mode_flags,
 )
 from cli.consts import (
@@ -32,17 +35,19 @@ from cli.consts import (
     IMAGE_PULL_POLICY_ALWAYS,
     IMAGE_PULL_POLICY_IF_NOT_PRESENT,
     IMAGE_PULL_POLICY_NEVER,
+    PLATFORM_AMD,
+    PLATFORM_NVIDIA,
     SUPPORTED_CONTAINER_RUNTIMES,
     VLLM_SR_CONTAINER_IMAGE_DEFAULT,
 )
 from cli.deployment_backend import DEFAULT_TARGET, VALID_TARGETS, resolve_target
+from cli.terminal import fields, heading, success
 from cli.utils import get_logger
 
 log = get_logger(__name__)
 
 
 def inject_algorithm_into_config(config_path: Path, algorithm: str) -> Path:
-    """Compatibility wrapper for callers importing from cli.commands.runtime."""
     return _inject_algorithm_into_config(config_path, algorithm)
 
 
@@ -70,13 +75,102 @@ def _build_backend(target: str | None, **k8s_kwargs):
     return ContainerBackend()
 
 
+def _resolve_serve_config(
+    config: str,
+    resolved_target: str,
+) -> tuple[Path, bool]:
+    """Resolve one user-owned config or bootstrap the local Dashboard workspace."""
+
+    if resolved_target != "docker":
+        config_path = Path(config).expanduser()
+        if not config_path.is_file():
+            raise ValueError(
+                "Kubernetes deployment requires an existing complete --config; "
+                "empty-directory Dashboard setup is supported only by local Docker"
+            )
+        if is_setup_mode_config(config_path):
+            raise ValueError(
+                "Kubernetes deployment does not support Dashboard setup-mode "
+                "configs; complete the config locally or provide a canonical config"
+            )
+        return config_path, False
+    bootstrap = ensure_bootstrap_workspace(Path(config))
+    log_bootstrap_result(config, bootstrap)
+    return bootstrap.config_path, bootstrap.setup_mode
+
+
+def _validate_target_platform(resolved_target: str, platform: str | None) -> None:
+    """Reject local-only GPU shorthand before workspace or backend mutation."""
+
+    platform_hint = (
+        (platform or "").strip()
+        or os.getenv("VLLM_SR_PLATFORM", "").strip()
+        or os.getenv("DASHBOARD_PLATFORM", "").strip()
+    ).lower()
+    if resolved_target != "docker" and platform_hint in {
+        PLATFORM_AMD,
+        PLATFORM_NVIDIA,
+    }:
+        raise ValueError(
+            "--platform amd/nvidia is supported only for local Docker deployments. "
+            "For Kubernetes, configure the GPU image, resources, and device plugin "
+            "through a Helm profile or the operator."
+        )
+
+
+def _deploy_serve_backend(
+    *,
+    resolved_target: str,
+    config_path: Path,
+    effective_config_path: Path,
+    effective_config_document: dict[str, object] | None,
+    runtime_lock,
+    env_vars: dict[str, str],
+    namespace: str | None,
+    context: str | None,
+    profile: str | None,
+    chart_dir: str | None,
+    image: str | None,
+    router_image: str | None,
+    envoy_image: str | None,
+    dashboard_image: str | None,
+    image_pull_policy: str,
+    minimal: bool,
+    readonly: bool,
+) -> None:
+    """Deploy one prepared runtime."""
+
+    backend = _build_backend(
+        resolved_target,
+        namespace=namespace,
+        context=context,
+        profile=profile,
+        chart_dir=chart_dir,
+    )
+    backend.deploy(
+        config_file=str(effective_config_path.absolute()),
+        source_config_file=str(config_path.absolute()),
+        runtime_config_file=str(effective_config_path.absolute()),
+        runtime_config_lock=runtime_lock,
+        config_document=effective_config_document,
+        env_vars=env_vars,
+        image=image,
+        router_image=router_image,
+        envoy_image=envoy_image,
+        dashboard_image=dashboard_image,
+        pull_policy=image_pull_policy,
+        enable_observability=not minimal,
+        minimal=minimal,
+        readonly=readonly,
+    )
+
+
 def _execute_serve(
     config: str,
     image: str | None,
     router_image: str | None,
     envoy_image: str | None,
     dashboard_image: str | None,
-    sim_image: str | None,
     image_pull_policy: str,
     readonly: bool,
     minimal: bool,
@@ -89,63 +183,76 @@ def _execute_serve(
     profile: str | None,
     chart_dir: str | None,
     runtime: str | None,
+    recipe_env_names: tuple[str, ...] = (),
 ) -> None:
     """Bootstrap workspace, resolve config, and delegate to the deployment backend."""
+    resolved_target = resolve_target(target)
+    _validate_target_platform(resolved_target, platform)
     apply_container_runtime_override(runtime)
-    requested_config = config
-    bootstrap = ensure_bootstrap_workspace(Path(config))
-    config_path = bootstrap.config_path
-    setup_mode = bootstrap.setup_mode
-
-    log_bootstrap_result(requested_config, bootstrap)
+    config_path, source_setup_mode = _resolve_serve_config(config, resolved_target)
     log.info(f"Using config file: {config_path}")
-
-    validate_setup_mode_flags(setup_mode, minimal, readonly)
 
     env_vars: dict[str, str] = {}
     append_passthrough_env_vars(env_vars, config_path)
-    apply_runtime_mode_env_vars(
-        env_vars,
-        minimal,
-        readonly,
-        setup_mode,
-        platform,
-        algorithm,
-        log_level=log_level,
-    )
-
-    effective_config_path = resolve_effective_config_path(
-        config_path, algorithm, setup_mode, platform
-    )
-    configure_runtime_override_env_vars(env_vars, config_path, effective_config_path)
-
-    backend = _build_backend(
-        target,
-        namespace=namespace,
-        context=context,
-        profile=profile,
-        chart_dir=chart_dir,
-    )
-    backend.deploy(
-        config_file=str(effective_config_path.absolute()),
-        source_config_file=str(config_path.absolute()),
-        runtime_config_file=str(effective_config_path.absolute()),
-        env_vars=env_vars,
-        image=image,
-        router_image=router_image,
-        envoy_image=envoy_image,
-        dashboard_image=dashboard_image,
-        sim_image=sim_image,
-        pull_policy=image_pull_policy,
-        enable_observability=not minimal,
-    )
+    recipe_env_bindings = configure_recipe_env_bindings(env_vars, recipe_env_names)
+    runtime_lock = None
+    try:
+        effective_config_path, setup_mode, runtime_lock, effective_config_document = (
+            _prepare_effective_serve_config(
+                config_path,
+                resolved_target=resolved_target,
+                algorithm=algorithm,
+                source_setup_mode=source_setup_mode,
+                platform=platform,
+                recipe_env_bindings=recipe_env_bindings,
+            )
+        )
+        validate_setup_mode_flags(setup_mode, minimal, readonly)
+        apply_runtime_mode_env_vars(
+            env_vars,
+            minimal,
+            readonly,
+            setup_mode,
+            platform,
+            algorithm,
+            log_level=log_level,
+        )
+        if resolved_target == "docker":
+            configure_runtime_override_env_vars(
+                env_vars,
+                config_path,
+                effective_config_path,
+            )
+        _deploy_serve_backend(
+            resolved_target=resolved_target,
+            config_path=config_path,
+            effective_config_path=effective_config_path,
+            effective_config_document=effective_config_document,
+            runtime_lock=runtime_lock,
+            env_vars=env_vars,
+            namespace=namespace,
+            context=context,
+            profile=profile,
+            chart_dir=chart_dir,
+            image=image,
+            router_image=router_image,
+            envoy_image=envoy_image,
+            dashboard_image=dashboard_image,
+            image_pull_policy=image_pull_policy,
+            minimal=minimal,
+            readonly=readonly,
+        )
+    finally:
+        if runtime_lock is not None:
+            runtime_lock.close()
 
 
 @click.command(help=SERVE_HELP)
 @click.option(
     "--config",
     default="config.yaml",
-    help="Path to config file (default: config.yaml)",
+    show_default=True,
+    help="Path to the Router configuration.",
 )
 @click.option(
     "--image",
@@ -166,11 +273,6 @@ def _execute_serve(
     "--dashboard-image",
     default=None,
     help="Docker image for the dashboard container (Docker target only; defaults to --image or VLLM_SR_IMAGE)",
-)
-@click.option(
-    "--sim-image",
-    default=None,
-    help="Docker image for the simulator sidecar (Docker target only; defaults to VLLM_SR_SIM_IMAGE)",
 )
 @click.option(
     "--image-pull-policy",
@@ -209,12 +311,14 @@ def _execute_serve(
 @click.option(
     "--platform",
     default=None,
-    help="Platform for GPU deployments: 'amd' enables ROCm passthrough, "
+    help="Platform for local Docker GPU deployments: 'amd' enables ROCm passthrough, "
     "'nvidia' enables NVIDIA GPU passthrough (--gpus all). "
     "When set to amd or nvidia, serve defaults to the matching GPU image "
     "(ROCm / CUDA) and flips use_cpu to false for router internal models under "
     "global.model_catalog, unless --image or VLLM_SR_IMAGE is provided. "
-    "Set VLLM_SR_<PLATFORM>_PRESERVE_CPU=1 to keep CPU settings.",
+    "Set VLLM_SR_<PLATFORM>_PRESERVE_CPU=1 to keep CPU settings. "
+    "For Kubernetes, configure GPU images and resources through a Helm profile "
+    "or the operator.",
 )
 @click.option(
     "--algorithm",
@@ -245,6 +349,16 @@ def _execute_serve(
     default=None,
     help=RUNTIME_HELP,
 )
+@click.option(
+    "--recipe-env",
+    "recipe_env_names",
+    multiple=True,
+    metavar="NAME",
+    help=(
+        "Explicitly bind one host environment variable for the active Recipe. "
+        "Repeat for multiple names; NAME=value is rejected."
+    ),
+)
 @exit_with_logged_error(log, interrupt_message="\nInterrupted by user")
 def serve(
     config: str,
@@ -252,7 +366,6 @@ def serve(
     router_image: str | None,
     envoy_image: str | None,
     dashboard_image: str | None,
-    sim_image: str | None,
     image_pull_policy: str,
     readonly: bool,
     minimal: bool,
@@ -265,6 +378,7 @@ def serve(
     profile: str | None,
     chart_dir: str | None,
     runtime: str | None,
+    recipe_env_names: tuple[str, ...],
 ) -> None:
     _execute_serve(
         config,
@@ -272,7 +386,6 @@ def serve(
         router_image,
         envoy_image,
         dashboard_image,
-        sim_image,
         image_pull_policy,
         readonly,
         minimal,
@@ -285,13 +398,14 @@ def serve(
         profile,
         chart_dir,
         runtime,
+        recipe_env_names,
     )
 
 
 @click.command()
 @click.argument(
     "service",
-    type=click.Choice(["envoy", "router", "dashboard", "simulator", "all"]),
+    type=click.Choice(["envoy", "router", "dashboard", "all"]),
     default="all",
 )
 @click.option("--target", default=None, help=TARGET_HELP)
@@ -323,7 +437,6 @@ def status(
         vllm-sr status all          # Show all services
         vllm-sr status router       # Show router status
         vllm-sr status dashboard    # Show dashboard status
-        vllm-sr status simulator    # Show simulator status
         vllm-sr status --target k8s # Show Kubernetes status
     """
     apply_container_runtime_override(runtime)
@@ -332,9 +445,7 @@ def status(
 
 
 @click.command()
-@click.argument(
-    "service", type=click.Choice(["envoy", "router", "dashboard", "simulator"])
-)
+@click.argument("service", type=click.Choice(["envoy", "router", "dashboard"]))
 @click.option("--follow", "-f", is_flag=True, help="Follow log output")
 @click.option("--target", default=None, help=TARGET_HELP)
 @click.option(
@@ -365,7 +476,6 @@ def logs(
         vllm-sr logs envoy
         vllm-sr logs router
         vllm-sr logs dashboard
-        vllm-sr logs simulator
         vllm-sr logs envoy --follow
         vllm-sr logs router -f
         vllm-sr logs router --target k8s        # Kubernetes logs
@@ -447,13 +557,16 @@ def dashboard(
 
     dashboard_url = backend.get_dashboard_url()
     if dashboard_url is None:
-        log.info("Dashboard URL could not be determined")
-        return
+        raise ValueError("Dashboard URL could not be determined")
 
     if no_open:
-        log.info(f"Dashboard URL: {dashboard_url}")
+        heading("Dashboard")
+        fields((("URL", dashboard_url),))
         return
 
-    log.info(f"Opening dashboard: {dashboard_url}")
-    webbrowser.open(dashboard_url)
-    log.info("Dashboard opened in browser")
+    if not webbrowser.open(dashboard_url):
+        raise ValueError(
+            f"Could not open a browser. Open {dashboard_url} manually or use --no-open."
+        )
+    success("Dashboard opened in your browser")
+    fields((("URL", dashboard_url),))

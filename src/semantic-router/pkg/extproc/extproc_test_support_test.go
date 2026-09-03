@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	. "github.com/onsi/ginkgo/v2"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
@@ -13,8 +15,43 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 )
+
+func testNeutralRequest(model, text string) *llmprotocol.Request {
+	return &llmprotocol.Request{
+		Generation: 1,
+		Model:      model,
+		Messages: []llmprotocol.Message{{
+			Role:    llmprotocol.RoleUser,
+			Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: text}},
+		}},
+	}
+}
+
+func headerValuesByName(headers []*core.HeaderValueOption) map[string]string {
+	result := make(map[string]string, len(headers))
+	for _, header := range headers {
+		result[header.Header.Key] = string(header.Header.RawValue)
+	}
+	return result
+}
+
+func immediateHeaderValue(response *ext_proc.ProcessingResponse, key string) string {
+	if response == nil || response.GetImmediateResponse() == nil || response.GetImmediateResponse().Headers == nil {
+		return ""
+	}
+	for _, header := range response.GetImmediateResponse().Headers.SetHeaders {
+		if strings.EqualFold(header.Header.Key, key) {
+			if len(header.Header.RawValue) > 0 {
+				return string(header.Header.RawValue)
+			}
+			return header.Header.Value
+		}
+	}
+	return ""
+}
 
 var extprocTestModelWeightCandidates = []string{
 	"model.safetensors",

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sort"
 	"time"
 
 	"github.com/mark3labs/mcp-go/client"
@@ -36,23 +37,9 @@ func (c *StdioClient) Connect() error {
 		return fmt.Errorf("command is required for stdio transport")
 	}
 
-	// Prepare environment variables
-	env := os.Environ()
-	for key, value := range c.config.Env {
-		env = append(env, fmt.Sprintf("%s=%s", key, value))
+	if err := c.createMCPClient(); err != nil {
+		return err
 	}
-
-	c.log(LoggingLevelInfo, fmt.Sprintf("Starting MCP server: %s %v", c.config.Command, c.config.Args))
-	c.log(LoggingLevelDebug, fmt.Sprintf("Environment variables: %v", c.config.Env))
-
-	// Create MCP client using the correct API
-	mcpClient, err := client.NewStdioMCPClient(c.config.Command, env, c.config.Args...)
-	if err != nil {
-		c.log(LoggingLevelError, fmt.Sprintf("Failed to create MCP client: %v", err))
-		return fmt.Errorf("failed to create stdio MCP client: %w", err)
-	}
-
-	c.mcpClient = mcpClient
 
 	// Initialize the connection with proper context handling
 	ctx := context.Background()
@@ -115,6 +102,32 @@ func (c *StdioClient) Connect() error {
 	}()
 
 	return nil
+}
+
+func (c *StdioClient) createMCPClient() error {
+	environment := os.Environ()
+	for key, value := range c.config.Env {
+		environment = append(environment, fmt.Sprintf("%s=%s", key, value))
+	}
+	c.log(LoggingLevelInfo, fmt.Sprintf("Starting MCP server: %s (argument_count=%d)", c.config.Command, len(c.config.Args)))
+	c.log(LoggingLevelDebug, environmentVariableLogSummary(c.config.Env))
+
+	mcpClient, err := client.NewStdioMCPClient(c.config.Command, environment, c.config.Args...)
+	if err != nil {
+		c.log(LoggingLevelError, fmt.Sprintf("Failed to create MCP client: %v", err))
+		return fmt.Errorf("failed to create stdio MCP client: %w", err)
+	}
+	c.mcpClient = mcpClient
+	return nil
+}
+
+func environmentVariableLogSummary(environment map[string]string) string {
+	names := make([]string, 0, len(environment))
+	for name := range environment {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return fmt.Sprintf("Environment variable names (%d): %v", len(names), names)
 }
 
 // loadCapabilities loads tools, resources, and prompts from the MCP server
@@ -210,13 +223,9 @@ func (c *StdioClient) CallTool(ctx context.Context, name string, arguments map[s
 		return nil, fmt.Errorf("tool '%s' not found or not allowed", name)
 	}
 
-	// Validate that the tool hasn't been flagged as malicious
-	c.log(LoggingLevelDebug, fmt.Sprintf("Calling tool: %s with arguments: %+v", name, arguments))
-
-	// Log the type of each argument for debugging
-	for key, value := range arguments {
-		c.log(LoggingLevelDebug, fmt.Sprintf("Argument %s: type=%T, value=%+v", key, value, value))
-	}
+	// Argument values can contain credentials or user content. Keep only the
+	// cardinality needed to diagnose request-shape mismatches.
+	c.log(LoggingLevelDebug, fmt.Sprintf("Calling tool: %s (argument_count=%d)", name, len(arguments)))
 
 	// For debugging, keep the original arguments as-is for the MCP call
 	// The MCP library should handle the conversion properly
@@ -226,13 +235,8 @@ func (c *StdioClient) CallTool(ctx context.Context, name string, arguments map[s
 
 	result, err := c.mcpClient.CallTool(ctx, callReq)
 	if err != nil {
-		c.log(LoggingLevelError, fmt.Sprintf("Tool call failed for %s: %v", name, err))
-		c.log(LoggingLevelError, fmt.Sprintf("Arguments were: %+v", arguments))
-
-		// Log detailed argument types for debugging
-		for key, value := range arguments {
-			c.log(LoggingLevelError, fmt.Sprintf("Failed arg %s: type=%T, value=%+v", key, value, value))
-		}
+		c.log(LoggingLevelError, toolCallFailureLogMessage(name, err))
+		c.log(LoggingLevelError, fmt.Sprintf("Tool call failed with %d argument fields", len(arguments)))
 
 		return nil, fmt.Errorf("tool call failed: %w", err)
 	}

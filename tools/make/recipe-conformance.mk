@@ -14,10 +14,16 @@ RECIPE_CONFORMANCE_RECIPES ?=
 recipe-conformance-static: ## Validate all maintained recipe assets and probe contracts
 	@$(LOG_TARGET)
 	@$(RECIPE_CONFORMANCE_PYTHON) -m unittest \
+		tools/agent/scripts/router_calibration_fixture_test.py \
 		tools/agent/scripts/router_calibration_support_test.py \
 		tools/agent/scripts/recipe_conformance_test.py
 	@$(RECIPE_CONFORMANCE_PYTHON) tools/agent/scripts/recipe_conformance.py \
 		--output-dir "$(RECIPE_CONFORMANCE_REPORT_DIR)" \
+		static
+	@$(RECIPE_CONFORMANCE_PYTHON) tools/agent/scripts/recipe_conformance.py \
+		--recipes-root "$(CURDIR)/config/recipes/built-in/latest" \
+		--output-dir "$(RECIPE_CONFORMANCE_REPORT_DIR)/built-in/latest" \
+		--skip-catalog-readme \
 		static
 	@cd src/semantic-router && go test \
 		./pkg/config/... \

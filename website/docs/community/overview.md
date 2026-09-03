@@ -1,74 +1,72 @@
 # Contributing
 
-:::info Source of Truth
-This page is generated from [CONTRIBUTING.md](https://github.com/vllm-project/semantic-router/blob/main/CONTRIBUTING.md). The repository file is the authoritative source.
-:::
+Contributions are welcome across the Router, CLI, Dashboard, deployment assets,
+documentation, and evaluation tools. The repository's
+[CONTRIBUTING.md](https://github.com/vllm-project/semantic-router/blob/main/CONTRIBUTING.md)
+is the authoritative workflow; this page is a short path to the checks most
+contributors need.
 
-## Quick Start
+## Before you start
+
+- Search existing issues and pull requests before opening overlapping work.
+- Read the nearest `AGENTS.md` before changing a module with local rules.
+- Keep a pull request focused on one behavior or documentation outcome.
+- Add or update tests when a change affects observable behavior.
+
+## Local workflow
 
 ```bash
 git clone https://github.com/vllm-project/semantic-router.git
 cd semantic-router
-make download-models  # Download ML models from HuggingFace
-make build            # Build Rust + Go components
-make test             # Run all tests
+
+make agent-bootstrap
+make agent-report ENV=cpu CHANGED_FILES="path/to/changed-file"
 ```
 
-## Workflow
+`agent-report` identifies the smallest relevant validation commands for the
+changed paths. Use `ENV=amd` only for ROCm-specific behavior.
 
-### Create a Branch
+For the default local image workflow:
 
 ```bash
-git checkout -b feature/your-feature-name
+make vllm-sr-dev
+vllm-sr serve --image-pull-policy never
 ```
 
-### Build & Test Locally
+See the [Development Guide](./development) for targeted tests and runtime
+commands.
+
+## Before opening a pull request
+
+Run the checks reported for your change. These repository-wide entrypoints are
+useful when their scope matches your work:
 
 ```bash
-make clean && make build && make test
+make precommit-check
+make agent-ci-gate CHANGED_FILES="path/to/changed-file"
+make test-and-build-local
 ```
 
-### Run E2E Tests
+Documentation-only changes can use:
 
 ```bash
-make run-envoy &
-make run-router &
-python e2e/testing/run_all_tests.py
+make agent-docs-ci-gate AGENT_BASE_REF=origin/main
 ```
 
-### Run Pre-commit Checks
+Every commit in a pull request must include a Developer Certificate of Origin
+sign-off:
 
 ```bash
-pre-commit run --all-files
+git commit -s -m "describe the change"
 ```
 
-If not installed: `pip install pre-commit && pre-commit install`
+In the pull request, explain the problem, the user-visible result, and the
+validation you ran. Include screenshots only when they help reviewers evaluate
+a visual change.
 
-### Commit with DCO
+## Contributor guides
 
-All commits **must** be signed off (DCO required). Without `-s`, CI will **reject** your PR.
-
-```bash
-git commit -s -m "feat: add something"
-```
-
-### Submit PR
-
-- Target branch: `main`
-- Include: description + related issue links + test results
-- `make test` and E2E tests must pass
-
-## Debugging
-
-| Component | How to Debug |
-|-----------|--------------|
-| Envoy | Check `make run-envoy` terminal for request/response logs |
-| Router | Check `make run-router` terminal for routing decisions |
-| Rust | `RUST_LOG=debug` (levels: trace/debug/info/warn/error) |
-| Go | `SR_LOG_LEVEL=debug` |
-
-## Related Guides
-
-- **[Development Guide](./development)**: Prerequisites, building, running tests
-- **[Documentation Guide](./documentation)**: How to write and translate docs
-- **[Code Style](./code-style)**: Formatting, linting, pre-commit hooks
+- [Development Guide](./development)
+- [Documentation Guide](./documentation)
+- [Code Style and Quality](./code-style)
+- [Architecture overview](/docs/overview/semantic-router-overview)

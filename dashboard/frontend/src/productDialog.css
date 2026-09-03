@@ -1,0 +1,94 @@
+/* Shared material and interaction contract for every product dialog. */
+:root {
+  --product-dialog-content-width: 980px;
+  --product-dialog-border: rgba(255, 255, 255, 0.72);
+  --product-dialog-overlay: rgba(3, 3, 4, 0.48);
+  --product-dialog-surface:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.018)),
+    rgba(11, 12, 15, 0.74);
+  --product-dialog-shadow:
+    0 36px 110px rgba(0, 0, 0, 0.62), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+:where([role='dialog'], [role='alertdialog'])[aria-modal='true'] {
+  max-width: calc(100vw - 2rem);
+  max-height: calc(100dvh - 2rem);
+  box-sizing: border-box;
+  border: 2px solid var(--product-dialog-border) !important;
+  border-radius: 18px !important;
+  outline: none;
+  background: var(--product-dialog-surface) !important;
+  box-shadow: var(--product-dialog-shadow) !important;
+  backdrop-filter: blur(28px) saturate(140%);
+  -webkit-backdrop-filter: blur(28px) saturate(140%);
+}
+
+:where(div, section):has(> :where([role='dialog'], [role='alertdialog'])[aria-modal='true']) {
+  background-color: var(--product-dialog-overlay) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+:where([role='dialog'], [role='alertdialog'])[aria-modal='true']
+  :where(button[aria-label^='Close'], button[aria-label='Close']) {
+  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.035);
+  color: rgba(255, 255, 255, 0.66);
+}
+
+:where([role='dialog'], [role='alertdialog'])[aria-modal='true']
+  :where(button[aria-label^='Close'], button[aria-label='Close']):hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.075);
+  color: #fff;
+}
+
+:where([role='dialog'], [role='alertdialog'])[aria-modal='true']
+  :where(input:not([type='checkbox'], [type='radio']), select, textarea) {
+  border-color: rgba(255, 255, 255, 0.11);
+  border-radius: 9px;
+  background-color: rgba(9, 10, 12, 0.82);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+:where([role='dialog'], [role='alertdialog'])[aria-modal='true']
+  :where(input:not([type='checkbox'], [type='radio']), select, textarea):focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.34);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.07);
+}
+
+:where([role='dialog'], [role='alertdialog'])[aria-modal='true'] * {
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+  scrollbar-width: thin;
+}
+
+@media (max-width: 640px) {
+  :where([role='dialog'], [role='alertdialog'])[aria-modal='true'] {
+    width: calc(100vw - 0.75rem);
+    max-width: calc(100vw - 0.75rem);
+    max-height: calc(100dvh - 0.75rem);
+    border-radius: 14px !important;
+  }
+
+  :where([role='dialog'], [role='alertdialog'])[aria-modal='true']
+    :where(input:not([type='checkbox'], [type='radio']), select, textarea) {
+    font-size: 1rem !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :where([role='dialog'], [role='alertdialog'])[aria-modal='true'],
+  :where([role='dialog'], [role='alertdialog'])[aria-modal='true'] * {
+    animation: none !important;
+    transition-duration: 0.01ms !important;
+  }
+}

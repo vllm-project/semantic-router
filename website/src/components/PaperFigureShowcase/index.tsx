@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import Translate, { translate } from '@docusaurus/Translate'
 import { motion, useInView } from 'motion/react'
+import { SectionLabel } from '@site/src/components/site/Chrome'
 import styles from './index.module.css'
 
 type FigureKey = 'figure1' | 'figure2' | 'figure3' | 'figure4' | 'figure14' | 'figure9'
@@ -54,7 +55,7 @@ const FIGURES: FigureMeta[] = [
     title: <Translate id="homepage.paperFigures.figure4.title">Signal Taxonomy</Translate>,
     summary: (
       <Translate id="homepage.paperFigures.figure4.summary">
-        All 14 signals are grouped into heuristic and learned paths, then merged into S(r).
+        Fourteen signals from the original research taxonomy are grouped into heuristic and learned paths, then merged into S(r).
       </Translate>
     ),
   },
@@ -671,7 +672,7 @@ const Figure4Panel: React.FC = () => {
       <p className={styles.taxonomyNote}>
         {translate({
           id: 'homepage.paperFigures.figure4.summaryText',
-          message: '14 total signals. Active signal: {signal}. {groupNote}',
+          message: 'This research snapshot shows 14 signals. Active signal: {signal}. {groupNote}',
           values: {
             signal: activeSignal,
             groupNote: FIGURE4_GROUPS[activeGroup].note,
@@ -930,12 +931,12 @@ const PaperFigureShowcase: React.FC = () => {
   return (
     <section className={styles.paperFigureSection}>
       <div className="site-shell-container">
-        <div className={styles.paperHeader}>
-          <p className={styles.paperLabel}>
+        <div className={`site-section-intro ${styles.paperHeader}`}>
+          <SectionLabel>
             <Translate id="homepage.paperFigures.label">Routing Blueprint</Translate>
-          </p>
+          </SectionLabel>
           <h2 className={styles.paperTitle}>
-            <Translate id="homepage.paperFigures.title">From signal to model path.</Translate>
+            <Translate id="homepage.paperFigures.title">From signal to model path</Translate>
           </h2>
           <p className={styles.paperDescription}>
             <Translate id="homepage.paperFigures.description">

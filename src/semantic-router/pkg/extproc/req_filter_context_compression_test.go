@@ -1,349 +1,182 @@
 package extproc
 
 import (
-	"encoding/json"
 	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
-func TestApplyContextCompressionCompressesOnlyLargeToolOutput(t *testing.T) {
-	decision := &config.Decision{
-		Name: "compressed-route",
-		Plugins: []config.DecisionPlugin{{
-			Type: "context_compression",
-			Configuration: config.MustStructuredPayload(map[string]interface{}{
-				"enabled": true,
-				"targets": map[string]interface{}{
-					"tool_outputs": map[string]interface{}{
-						"mode":          "extractive",
-						"min_tokens":    100,
-						"target_tokens": 45,
-					},
-				},
-			}),
-		}},
-	}
+func TestApplySemanticContextCompressionCompressesToolResult(t *testing.T) {
 	largeTool := strings.Join([]string{
 		"source header",
-		strings.Repeat("irrelevant inventory values ", 120),
+		strings.Repeat("irrelevant inventory values ", 180),
 		"authentication token validator failed",
-		strings.Repeat("irrelevant billing values ", 120),
+		strings.Repeat("irrelevant billing values ", 180),
 		"source footer",
 	}, "\n")
-	request := map[string]interface{}{
-		"model": "auto",
-		"messages": []map[string]interface{}{
-			{"role": "user", "content": "fix authentication token validation"},
-			{"role": "tool", "content": largeTool, "tool_call_id": "call-1"},
-		},
-	}
-	body, err := json.Marshal(request)
-	if err != nil {
-		t.Fatalf("marshal request: %v", err)
-	}
+	request := semanticCompressionRequest(largeTool)
 	ctx := &RequestContext{
 		RequestID:           "req-compress",
-		UserContent:         "fix authentication token validation",
-		VSRSelectedDecision: decision,
+		VSRSelectedDecision: contextCompressionTestDecision(false),
 	}
-	router := &OpenAIRouter{}
 
-	compressed := router.applyContextCompression(ctx, body)
-
-	if string(compressed) == string(body) {
-		t.Fatal("large tool output was not compressed")
+	if err := (&OpenAIRouter{}).applySemanticContextCompression(ctx, request); err != nil {
+		t.Fatalf("apply semantic context compression: %v", err)
+	}
+	got := request.Messages[2].Content[0].ToolResult.Content[0].Text
+	if got == largeTool || len(got) >= len(largeTool) {
+		t.Fatal("large neutral tool result was not compressed")
+	}
+	if !strings.Contains(got, "authentication token validator") {
+		t.Fatalf("query-relevant tool content was removed: %s", got)
 	}
 	if !ctx.ContextCompressionApplied || ctx.ContextCompressionMessages != 1 {
 		t.Fatalf("compression diagnostics missing: %#v", ctx)
 	}
-	if ctx.ContextCompressionAfter >= ctx.ContextCompressionBefore {
-		t.Fatalf("token count did not decrease: before=%d after=%d", ctx.ContextCompressionBefore, ctx.ContextCompressionAfter)
-	}
-	if !strings.Contains(string(compressed), "authentication token validator") {
-		t.Fatalf("query-relevant tool content was removed: %s", compressed)
-	}
-	if !strings.Contains(string(compressed), `"role":"user"`) {
-		t.Fatalf("user message shape changed: %s", compressed)
+	if ctx.ContextCompressionAfter >= ctx.ContextCompressionBefore || request.Generation != 2 {
+		t.Fatalf("semantic mutation was not versioned: generation=%d before=%d after=%d", request.Generation, ctx.ContextCompressionBefore, ctx.ContextCompressionAfter)
 	}
 }
 
-func TestApplyContextCompressionHonorsRequestControl(t *testing.T) {
-	decision := &config.Decision{
-		Name: "compressed-route",
-		Plugins: []config.DecisionPlugin{{
-			Type: "context_compression",
-			Configuration: config.MustStructuredPayload(map[string]interface{}{
-				"enabled": true,
-				"targets": map[string]interface{}{
-					"tool_outputs": map[string]interface{}{
-						"mode":          "extractive",
-						"min_tokens":    10,
-						"target_tokens": 5,
-					},
-				},
-				"request_controls": map[string]interface{}{
-					"enabled": true,
-					"header":  "x-compression-control",
-					"allowed": []string{"bypass"},
-				},
-			}),
-		}},
-	}
-	body := []byte(`{"model":"auto","messages":[{"role":"tool","content":"one two three four five six seven eight nine ten eleven twelve"}]}`)
+func TestApplySemanticContextCompressionHonorsRequestControl(t *testing.T) {
+	request := semanticCompressionRequest(strings.Repeat("large output ", 300))
 	ctx := &RequestContext{
-		Headers:             map[string]string{"x-compression-control": "bypass"},
-		VSRSelectedDecision: decision,
+		Headers: map[string]string{"x-compression-control": "bypass"},
+		VSRSelectedDecision: contextCompressionDecision(map[string]interface{}{
+			"request_controls": map[string]interface{}{
+				"enabled": true,
+				"header":  "x-compression-control",
+				"allowed": []string{"bypass"},
+			},
+		}),
 	}
-	router := &OpenAIRouter{}
+	original := request.Messages[2].Content[0].ToolResult.Content[0].Text
 
-	if got := router.applyContextCompression(ctx, body); string(got) != string(body) {
-		t.Fatalf("bypassed request changed: %s", got)
+	if err := (&OpenAIRouter{}).applySemanticContextCompression(ctx, request); err != nil {
+		t.Fatalf("bypassed compression returned error: %v", err)
 	}
-	if ctx.ContextCompressionApplied {
-		t.Fatal("bypassed request recorded compression")
+	if got := request.Messages[2].Content[0].ToolResult.Content[0].Text; got != original {
+		t.Fatalf("bypassed semantic request changed: %q", got)
+	}
+	if ctx.ContextCompressionApplied || ctx.ContextCompressionSkipReason != "bypassed" {
+		t.Fatalf("unexpected bypass diagnostics: %#v", ctx)
 	}
 }
 
-func TestApplyContextCompressionPreservesJSONAndArrayBlocks(t *testing.T) {
-	decision := contextCompressionTestDecision(false)
-	jsonTool := `{"status":"authentication validator failed","logs":"` +
-		strings.Repeat("x", 5000) +
-		`","nested":{"code":500}}`
-	request := map[string]interface{}{
-		"model": "auto",
-		"messages": []interface{}{
-			map[string]interface{}{"role": "user", "content": "fix authentication validator"},
-			map[string]interface{}{
-				"role": "tool",
-				"content": []interface{}{
-					map[string]interface{}{"type": "text", "text": jsonTool},
-					map[string]interface{}{"type": "image_url", "image_url": map[string]interface{}{"url": "https://example.com/a.png"}},
-				},
-			},
-		},
-	}
-	body, err := json.Marshal(request)
-	if err != nil {
-		t.Fatalf("marshal request: %v", err)
-	}
-	ctx := &RequestContext{VSRSelectedDecision: decision}
+func TestApplySemanticContextCompressionPreservesOrderedNonTextBlocks(t *testing.T) {
+	jsonTool := `{"status":"authentication validator failed","logs":"` + strings.Repeat("x", 5000) + `"}`
+	request := semanticCompressionRequest(jsonTool)
+	result := request.Messages[2].Content[0].ToolResult
+	result.Content = append(result.Content, llmprotocol.Content{
+		Kind: llmprotocol.ContentImage, URL: "https://example.com/a.png", MediaType: "image/png",
+	})
+	ctx := &RequestContext{VSRSelectedDecision: contextCompressionTestDecision(false)}
 
-	compressed := (&OpenAIRouter{}).applyContextCompression(ctx, body)
-
-	var decoded map[string]interface{}
-	if err := json.Unmarshal(compressed, &decoded); err != nil {
-		t.Fatalf("compressed request is invalid JSON: %v", err)
+	if err := (&OpenAIRouter{}).applySemanticContextCompression(ctx, request); err != nil {
+		t.Fatalf("compress JSON tool result: %v", err)
 	}
-	messages := decoded["messages"].([]interface{})
-	tool := messages[1].(map[string]interface{})
-	blocks := tool["content"].([]interface{})
-	text := blocks[0].(map[string]interface{})["text"].(string)
-	if !json.Valid([]byte(text)) {
-		t.Fatalf("JSON tool text was corrupted: %s", text)
-	}
-	if blocks[1].(map[string]interface{})["type"] != "image_url" {
-		t.Fatalf("non-text content block changed: %#v", blocks[1])
+	if len(result.Content) != 2 || result.Content[1].Kind != llmprotocol.ContentImage || result.Content[1].URL != "https://example.com/a.png" {
+		t.Fatalf("ordered non-text content changed: %#v", result.Content)
 	}
 	if ctx.ContextCompressionFormat != "json" {
-		t.Fatalf("expected JSON diagnostics, got %q", ctx.ContextCompressionFormat)
+		t.Fatalf("compression format = %q", ctx.ContextCompressionFormat)
 	}
 }
 
-func TestApplyContextCompressionHandlesAnthropicToolResultArray(t *testing.T) {
-	decision := contextCompressionTestDecision(false)
-	largeTool := strings.Repeat("irrelevant logs ", 300) +
-		"authentication validator failed " +
-		strings.Repeat("billing records ", 300)
-	body := []byte(`{
-		"model":"claude",
-		"messages":[{
-			"role":"user",
-			"content":[
-				{"type":"text","text":"fix authentication validator"},
-				{"type":"tool_result","tool_use_id":"call_1","is_error":true,"content":[
-					{"type":"text","text":` + mustJSONString(t, largeTool) + `},
-					{"type":"image","source":{"type":"base64","media_type":"image/png","data":"abc"}}
-				]}
-			]
-		}]
-	}`)
-	ctx := &RequestContext{
-		ClientProtocol:      config.ClientProtocolAnthropic,
-		VSRSelectedDecision: decision,
-	}
-
-	compressed := (&OpenAIRouter{}).applyContextCompression(ctx, body)
-
-	var decoded map[string]interface{}
-	if err := json.Unmarshal(compressed, &decoded); err != nil {
-		t.Fatalf("compressed Anthropic request is invalid: %v", err)
-	}
-	messages := decoded["messages"].([]interface{})
-	content := messages[0].(map[string]interface{})["content"].([]interface{})
-	toolResult := content[1].(map[string]interface{})
-	if toolResult["is_error"] != true || toolResult["tool_use_id"] != "call_1" {
-		t.Fatalf("Anthropic tool-result metadata changed: %#v", toolResult)
-	}
-	resultBlocks := toolResult["content"].([]interface{})
-	if resultBlocks[1].(map[string]interface{})["type"] != "image" {
-		t.Fatalf("Anthropic image block changed: %#v", resultBlocks[1])
-	}
-	compressedText := resultBlocks[0].(map[string]interface{})["text"].(string)
-	if len(compressedText) >= len(largeTool) {
-		t.Fatal("Anthropic text block was not compressed")
-	}
-}
-
-func TestApplyContextCompressionProtectsRAGUnlessOptedIn(t *testing.T) {
+func TestApplySemanticContextCompressionProtectsRAGUnlessOptedIn(t *testing.T) {
 	largeTool := strings.Repeat("retrieved authentication context ", 300)
-	request := map[string]interface{}{
-		"model": "auto",
-		"messages": []interface{}{
-			map[string]interface{}{"role": "user", "content": "authentication"},
-			map[string]interface{}{
-				"role":         "tool",
-				"tool_call_id": "rag_req_1",
-				"content":      largeTool,
-			},
-		},
+	protected := semanticCompressionRequest(largeTool)
+	protectedCtx := &RequestContext{
+		RAGToolCallIDs:      map[string]struct{}{"call_1": {}},
+		VSRSelectedDecision: contextCompressionTestDecision(false),
 	}
-	body, err := json.Marshal(request)
-	if err != nil {
-		t.Fatalf("marshal request: %v", err)
+	if err := (&OpenAIRouter{}).applySemanticContextCompression(protectedCtx, protected); err != nil {
+		t.Fatalf("protected RAG compression: %v", err)
 	}
-
-	protectedCtx := &RequestContext{VSRSelectedDecision: contextCompressionTestDecision(false)}
-	if got := (&OpenAIRouter{}).applyContextCompression(protectedCtx, body); string(got) != string(body) {
+	if got := protected.Messages[2].Content[0].ToolResult.Content[0].Text; got != largeTool {
 		t.Fatal("RAG tool result changed without explicit opt-in")
 	}
-	if protectedCtx.ContextCompressionSkipReason != "rag_protected" {
-		t.Fatalf("missing RAG protection diagnostic: %#v", protectedCtx)
-	}
 
-	optedInCtx := &RequestContext{VSRSelectedDecision: contextCompressionTestDecision(true)}
-	if got := (&OpenAIRouter{}).applyContextCompression(optedInCtx, body); string(got) == string(body) {
+	optedIn := semanticCompressionRequest(largeTool)
+	optedInCtx := &RequestContext{
+		RAGToolCallIDs:      map[string]struct{}{"call_1": {}},
+		VSRSelectedDecision: contextCompressionTestDecision(true),
+	}
+	if err := (&OpenAIRouter{}).applySemanticContextCompression(optedInCtx, optedIn); err != nil {
+		t.Fatalf("opted-in RAG compression: %v", err)
+	}
+	if got := optedIn.Messages[2].Content[0].ToolResult.Content[0].Text; got == largeTool {
 		t.Fatal("RAG tool result was not compressed after opt-in")
 	}
 }
 
-func TestPrepareRequestForModelRoutingReparsesCompressedWorkingBody(t *testing.T) {
-	decision := contextCompressionTestDecision(false)
+func TestPrepareRequestForModelRoutingMutatesNeutralRequestOnly(t *testing.T) {
 	largeTool := strings.Repeat("irrelevant inventory ", 300) +
-		"authentication validator failed " +
-		strings.Repeat("irrelevant billing ", 300)
-	body := []byte(`{"model":"auto","messages":[` +
-		`{"role":"user","content":"fix authentication validator"},` +
-		`{"role":"tool","tool_call_id":"call_1","content":` + mustJSONString(t, largeTool) + `}]}`)
-	original := append([]byte(nil), body...)
+		"authentication validator failed " + strings.Repeat("irrelevant billing ", 300)
+	request := semanticCompressionRequest(largeTool)
 	ctx := &RequestContext{
 		Headers:             map[string]string{},
-		OriginalRequestBody: original,
-		VSRSelectedDecision: decision,
+		SemanticRequest:     request,
+		VSRSelectedDecision: contextCompressionTestDecision(false),
 	}
-	router := &OpenAIRouter{Config: &config.RouterConfig{}}
 
-	parsed, early, err := router.prepareRequestForModelRouting(body, "fix authentication validator", ctx)
-
+	parsed, early, err := (&OpenAIRouter{Config: &config.RouterConfig{}}).prepareRequestForModelRouting(
+		request, "fix authentication validator", ctx,
+	)
 	if err != nil || early != nil {
 		t.Fatalf("prepare request failed: early=%v err=%v", early, err)
 	}
-	if string(ctx.OriginalRequestBody) != string(original) {
-		t.Fatal("immutable original request body changed")
+	if parsed != request || ctx.SemanticRequest != request {
+		t.Fatal("prepare request replaced the request-scoped neutral IR")
 	}
-	if !ctx.requestBodyMutated() {
-		t.Fatal("working request body did not record compression")
-	}
-	serialized, err := serializeOpenAIRequestWithStream(parsed, false)
-	if err != nil {
-		t.Fatalf("serialize parsed request: %v", err)
-	}
-	if strings.Contains(string(serialized), strings.Repeat("irrelevant inventory ", 30)) {
-		t.Fatal("provider IR was not reparsed from compressed working body")
+	if strings.Contains(request.Messages[2].Content[0].ToolResult.Content[0].Text, strings.Repeat("irrelevant inventory ", 30)) {
+		t.Fatal("provider-neutral request was not compressed")
 	}
 }
 
-func TestApplyContextCompressionMalformedBodyFailsOpen(t *testing.T) {
-	body := []byte(`{"messages":[`)
-	ctx := &RequestContext{VSRSelectedDecision: contextCompressionTestDecision(false)}
-
-	got := (&OpenAIRouter{}).applyContextCompression(ctx, body)
-
-	if string(got) != string(body) {
-		t.Fatalf("malformed body changed: %q", got)
-	}
-	if ctx.ContextCompressionSkipReason != "parse_error_fail_open" {
-		t.Fatalf("missing fail-open diagnostic: %#v", ctx)
-	}
-}
-
-func TestContextCompressionPreservesRecoverableTargetsForStreaming(t *testing.T) {
-	decision := &config.Decision{
-		Name: "streaming-recovery",
-		Plugins: []config.DecisionPlugin{{
-			Type: config.DecisionPluginContextCompression,
-			Configuration: config.MustStructuredPayload(map[string]interface{}{
-				"enabled": true,
-				"mode":    "always",
-				"targets": map[string]interface{}{
-					"tool_outputs": map[string]interface{}{
-						"mode":          "recoverable",
-						"min_tokens":    10,
-						"target_tokens": 5,
-					},
-				},
-				"recovery": map[string]interface{}{
-					"enabled": true,
-					"store":   "redis",
-				},
-			}),
-		}},
-	}
-	body := []byte(`{"messages":[{"role":"user","content":"question"},{"role":"tool","content":"` +
-		strings.Repeat("large output ", 50) + `"}]}`)
-	ctx := &RequestContext{
-		VSRSelectedDecision:     decision,
-		ExpectStreamingResponse: true,
-	}
-	got := (&OpenAIRouter{}).applyContextCompression(ctx, body)
-	if string(got) != string(body) {
-		t.Fatal("streaming request exposed recoverable compression")
-	}
-}
-
-func TestContextCompressionFailClosedReturnsError(t *testing.T) {
+func TestSemanticContextCompressionFailClosedReturnsError(t *testing.T) {
 	decision := &config.Decision{
 		Name: "fail-closed",
 		Plugins: []config.DecisionPlugin{{
 			Type: config.DecisionPluginContextCompression,
 			Configuration: config.MustStructuredPayload(map[string]interface{}{
-				"enabled":      true,
-				"failure_mode": "fail_closed",
+				"enabled": true, "failure_mode": "fail_closed",
 			}),
 		}},
 	}
-	_, err := (&OpenAIRouter{}).applyContextCompressionPolicy(
-		&RequestContext{VSRSelectedDecision: decision},
-		[]byte(`not-json`),
-	)
-	if err == nil {
-		t.Fatal("fail_closed compression accepted malformed request")
+	var unavailableRouter *OpenAIRouter
+	if err := unavailableRouter.applySemanticContextCompression(
+		&RequestContext{VSRSelectedDecision: decision}, semanticCompressionRequest("large output"),
+	); err == nil {
+		t.Fatal("fail_closed compression accepted an unavailable service")
 	}
 }
 
-func TestInjectContextRecoveryToolRejectsReservedNameConflict(t *testing.T) {
-	request := map[string]interface{}{
-		"tools": []interface{}{map[string]interface{}{
-			"type": "function",
-			"function": map[string]interface{}{
-				"name": contextcompression.RetrieveToolName,
-			},
-		}},
-	}
-	if err := injectContextRecoveryTool(request, []string{"issued-key"}); err == nil {
+func TestInjectSemanticContextRecoveryToolRejectsReservedNameConflict(t *testing.T) {
+	request := &llmprotocol.Request{Tools: []llmprotocol.Tool{{Name: contextcompression.RetrieveToolName}}}
+	if err := injectSemanticContextRecoveryTool(request, []string{"issued-key"}); err == nil {
 		t.Fatal("reserved recovery tool conflict was accepted")
+	}
+}
+
+func semanticCompressionRequest(toolOutput string) *llmprotocol.Request {
+	return &llmprotocol.Request{
+		Generation: 1,
+		Model:      "auto",
+		Messages: []llmprotocol.Message{
+			{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "collect diagnostic data"}}},
+			{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{
+				ID: "call_1", Name: "diagnostics", Arguments: `{"service":"auth"}`,
+			}}}},
+			{Role: llmprotocol.RoleTool, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolResult, ToolResult: &llmprotocol.ToolResult{
+				CallID: "call_1", Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: toolOutput}},
+			}}}},
+			{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "I reviewed the diagnostic output."}}},
+			{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "fix authentication validator"}}},
+		},
 	}
 }
 
@@ -352,32 +185,26 @@ func contextCompressionTestDecision(compressRAG bool) *config.Decision {
 	if compressRAG {
 		ragMode = "extractive"
 	}
+	return contextCompressionDecision(map[string]interface{}{
+		"targets": map[string]interface{}{
+			"tool_outputs": map[string]interface{}{
+				"mode": "extractive", "min_tokens": 200, "target_tokens": 160,
+			},
+			"rag": map[string]interface{}{"mode": ragMode},
+		},
+	})
+}
+
+func contextCompressionDecision(extra map[string]interface{}) *config.Decision {
+	configuration := map[string]interface{}{"enabled": true}
+	for key, value := range extra {
+		configuration[key] = value
+	}
 	return &config.Decision{
 		Name: "compressed-route",
 		Plugins: []config.DecisionPlugin{{
-			Type: "context_compression",
-			Configuration: config.MustStructuredPayload(map[string]interface{}{
-				"enabled": true,
-				"targets": map[string]interface{}{
-					"tool_outputs": map[string]interface{}{
-						"mode":          "extractive",
-						"min_tokens":    200,
-						"target_tokens": 160,
-					},
-					"rag": map[string]interface{}{
-						"mode": ragMode,
-					},
-				},
-			}),
+			Type:          config.DecisionPluginContextCompression,
+			Configuration: config.MustStructuredPayload(configuration),
 		}},
 	}
-}
-
-func mustJSONString(t *testing.T, value string) string {
-	t.Helper()
-	body, err := json.Marshal(value)
-	if err != nil {
-		t.Fatalf("marshal string: %v", err)
-	}
-	return string(body)
 }

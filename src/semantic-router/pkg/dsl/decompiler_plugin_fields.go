@@ -15,7 +15,6 @@ var pluginFieldsDecoders = map[string]pluginFieldsDecoder{
 	"router_replay":       pluginFieldsRouterReplay,
 	"memory":              pluginFieldsMemory,
 	"hallucination":       pluginFieldsHallucination,
-	"image_gen":           pluginFieldsImageGen,
 	"fast_response":       pluginFieldsFastResponse,
 	"request_params":      pluginFieldsRequestParams,
 	"tool_selection":      pluginFieldsToolSelection,
@@ -137,21 +136,6 @@ func pluginFieldsHallucination(p *config.DecisionPlugin) map[string]Value {
 	return fields
 }
 
-func pluginFieldsImageGen(p *config.DecisionPlugin) map[string]Value {
-	fields := make(map[string]Value)
-	cfg, ok := decodePluginConfig[config.ImageGenPluginConfig](p)
-	if !ok {
-		return fields
-	}
-	if cfg.Enabled {
-		fields["enabled"] = BoolValue{V: true}
-	}
-	if cfg.Backend != "" {
-		fields["backend"] = StringValue{V: cfg.Backend}
-	}
-	return fields
-}
-
 func pluginFieldsFastResponse(p *config.DecisionPlugin) map[string]Value {
 	fields := make(map[string]Value)
 	cfg, ok := decodePluginConfig[config.FastResponsePluginConfig](p)
@@ -245,6 +229,9 @@ func pluginFieldsTools(p *config.DecisionPlugin) map[string]Value {
 	}
 	if len(cfg.BlockTools) > 0 {
 		fields["block_tools"] = stringsToArray(cfg.BlockTools)
+	}
+	if cfg.StripToolHistory {
+		fields["strip_tool_history"] = BoolValue{V: true}
 	}
 	if cfg.DynamicRetrieval != nil {
 		fields["dynamic_retrieval"] = dynamicRetrievalObjectValue(cfg.DynamicRetrieval)

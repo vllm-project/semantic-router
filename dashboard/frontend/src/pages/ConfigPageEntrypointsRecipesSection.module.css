@@ -81,6 +81,9 @@
 }
 
 .portfolioActions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   height: 36px;
   padding: 0 13px;
   border: 1px solid rgba(255, 255, 255, 0.14);
@@ -90,6 +93,11 @@
   cursor: pointer;
   font-size: 0.73rem;
   font-weight: 700;
+}
+
+.portfolioActions button svg {
+  width: 14px;
+  height: 14px;
 }
 
 .portfolioList {
@@ -114,6 +122,16 @@
   transition: background 140ms ease;
 }
 
+.staticPortfolioItemMain {
+  grid-template-columns: minmax(230px, 1.4fr) minmax(220px, 0.8fr) auto;
+  padding-left: 56px;
+}
+
+.entrypointPortfolioItemMain {
+  grid-template-columns: minmax(260px, 1.4fr) minmax(200px, 0.8fr) auto;
+  padding-left: 22px;
+}
+
 .portfolioItemMain:hover {
   background: rgba(255, 255, 255, 0.018);
 }
@@ -129,6 +147,16 @@
   color: var(--graphite-text-muted, #9da7b3);
   cursor: pointer;
   font-size: 0.9rem;
+}
+
+.disclosureButton svg {
+  width: 14px;
+  height: 14px;
+  transition: transform 160ms ease;
+}
+
+.disclosureButton[aria-expanded='true'] svg {
+  transform: rotate(90deg);
 }
 
 .disclosureButton:hover,
@@ -182,6 +210,9 @@
 }
 
 .rowActions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   padding: 6px 8px;
   border: 0;
   border-radius: 6px;
@@ -189,6 +220,11 @@
   color: var(--graphite-text-muted, #9da7b3);
   cursor: pointer;
   font-size: 0.68rem;
+}
+
+.rowActions svg {
+  width: 13px;
+  height: 13px;
 }
 
 .rowActions button:hover {
@@ -356,6 +392,14 @@
 .poolModel small {
   color: var(--graphite-text-muted, #9da7b3);
   font-size: 0.63rem;
+}
+
+@media (max-width: 760px) {
+  .staticPortfolioItemMain,
+  .entrypointPortfolioItemMain {
+    grid-template-columns: 1fr;
+    padding-left: 14px;
+  }
 }
 
 .decisionEditor {

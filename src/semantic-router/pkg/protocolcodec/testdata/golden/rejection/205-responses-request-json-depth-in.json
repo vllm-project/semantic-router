@@ -1,0 +1,14 @@
+{
+  "operation": "request",
+  "limits": {"json_depth": 4},
+  "body": {
+    "model": "client-model",
+    "input": [
+      {
+        "type": "message",
+        "role": "user",
+        "content": [{"type": "input_text", "text": "hello"}]
+      }
+    ]
+  }
+}

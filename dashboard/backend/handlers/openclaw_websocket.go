@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+
+	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 )
 
 // WebSocket message types for ClawRoom.
@@ -67,12 +69,48 @@ type WSClient struct {
 	closeMu  sync.Mutex
 }
 
-var wsUpgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-	CheckOrigin: func(r *http.Request) bool {
-		return true // Allow all origins for now
-	},
+// trySend serializes send admission with channel closure. The second return
+// value distinguishes a full buffer from a closed client for caller logging.
+func (c *WSClient) trySend(message WSOutboundMessage) (sent bool, open bool) {
+	c.closeMu.Lock()
+	defer c.closeMu.Unlock()
+
+	if c.closed {
+		return false, false
+	}
+	select {
+	case c.send <- message:
+		return true, true
+	default:
+		return false, true
+	}
+}
+
+// closeSend transitions the client to closed and closes its send channel once.
+func (c *WSClient) closeSend() bool {
+	c.closeMu.Lock()
+	defer c.closeMu.Unlock()
+
+	if c.closed {
+		return false
+	}
+	c.closed = true
+	close(c.send)
+	return true
+}
+
+// wsUpgrader builds the upgrader for one handshake. It is a method rather than a package
+// var so the configured allowlist reaches CheckOrigin: a same-origin dashboard needs no
+// allowlist, but a split-origin frontend allowed by DASHBOARD_ALLOWED_ORIGINS would
+// otherwise be able to POST and still have its handshake rejected.
+func (h *OpenClawHandler) wsUpgrader() websocket.Upgrader {
+	return websocket.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+		// CORS does not cover handshakes, so this is the only cross-origin control. Every
+		// dashboard client builds its URL from window.location.host. See #2465.
+		CheckOrigin: auth.OriginChecker(h.allowedOrigins),
+	}
 }
 
 func wsOutboundFromLastRoomEvent(roomID string, event clawRoomStreamEvent) (WSOutboundMessage, bool) {
@@ -100,9 +138,7 @@ func (h *OpenClawHandler) replayLastRoomEventToClient(client *WSClient, roomID s
 	if !ok {
 		return
 	}
-	select {
-	case client.send <- replay:
-	default:
+	if sent, open := client.trySend(replay); !sent && open {
 		log.Printf("openclaw: WS client %s buffer full, skipping room replay", client.clientID)
 	}
 }
@@ -123,7 +159,8 @@ func (h *OpenClawHandler) handleRoomWebSocket(w http.ResponseWriter, r *http.Req
 	}
 
 	// Upgrade to WebSocket
-	conn, err := wsUpgrader.Upgrade(w, r, nil)
+	upgrader := h.wsUpgrader()
+	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("openclaw: WebSocket upgrade failed: %v", err)
 		return
@@ -145,10 +182,10 @@ func (h *OpenClawHandler) handleRoomWebSocket(w http.ResponseWriter, r *http.Req
 	log.Printf("openclaw: WebSocket client %s connected to room %s", clientID, roomID)
 
 	// Send connected message
-	client.send <- WSOutboundMessage{
+	client.trySend(WSOutboundMessage{
 		Type:   WSTypeConnected,
 		RoomID: roomID,
-	}
+	})
 	h.replayLastRoomEventToClient(client, roomID)
 
 	// Start read/write goroutines
@@ -225,7 +262,7 @@ func (c *WSClient) readPump() {
 func (c *WSClient) handleMessage(msg WSInboundMessage) {
 	switch msg.Type {
 	case WSTypePing:
-		c.send <- WSOutboundMessage{Type: WSTypePong}
+		c.trySend(WSOutboundMessage{Type: WSTypePong})
 
 	case WSTypeSendMessage:
 		c.handleSendMessage(msg)
@@ -258,7 +295,7 @@ func (c *WSClient) handleSurfaceEvent(msg WSInboundMessage) {
 		case "leader", "worker":
 			participantID = sanitizeContainerName(msg.SenderName)
 		case "system":
-			participantID = "clawos-system"
+			participantID = "openclaw-system"
 		}
 	}
 
@@ -361,29 +398,24 @@ func (h *OpenClawHandler) appendRoomMessageWS(roomID string, message ClawRoomMes
 
 // sendError sends an error message to the client
 func (c *WSClient) sendError(errMsg string) {
-	c.send <- WSOutboundMessage{
+	c.trySend(WSOutboundMessage{
 		Type:  WSTypeError,
 		Error: errMsg,
-	}
+	})
 }
 
 // close cleans up the client connection
 func (c *WSClient) close() {
-	c.closeMu.Lock()
-	defer c.closeMu.Unlock()
-
-	if c.closed {
+	if !c.closeSend() {
 		return
 	}
-	c.closed = true
 
 	// Unregister from room
 	clients := c.handler.roomWSClientMap(c.roomID)
 	clients.Delete(c.clientID)
 
-	// Close connection and channel
+	// Closing the connection unblocks whichever pump did not initiate cleanup.
 	_ = c.conn.Close()
-	close(c.send)
 
 	log.Printf("openclaw: WebSocket client %s disconnected from room %s", c.clientID, c.roomID)
 }

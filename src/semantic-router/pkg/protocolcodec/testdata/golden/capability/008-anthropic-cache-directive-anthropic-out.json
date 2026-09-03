@@ -1,0 +1,45 @@
+{
+  "status": "ok",
+  "body": {
+    "max_tokens": 32,
+    "messages": [
+      {
+        "content": [
+          {
+            "cache_control": {
+              "type": "ephemeral"
+            },
+            "text": "Hello",
+            "type": "text"
+          }
+        ],
+        "role": "user"
+      }
+    ],
+    "model": "routed-model",
+    "system": [
+      {
+        "cache_control": {
+          "ttl": "1h",
+          "type": "ephemeral"
+        },
+        "text": "Stable instructions",
+        "type": "text"
+      }
+    ],
+    "tool_choice": {
+      "type": "auto"
+    },
+    "tools": [
+      {
+        "cache_control": {
+          "type": "ephemeral"
+        },
+        "input_schema": {
+          "type": "object"
+        },
+        "name": "lookup"
+      }
+    ]
+  }
+}

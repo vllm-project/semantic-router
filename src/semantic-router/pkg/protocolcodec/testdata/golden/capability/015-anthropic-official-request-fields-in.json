@@ -1,0 +1,28 @@
+{
+  "operation": "request",
+  "base": {
+    "model": "client-model",
+    "max_tokens": 2048,
+    "messages": [{"role": "user", "content": "hello"}]
+  },
+  "cases": [
+    {"name": "cache_control", "patch": {"cache_control": {"type": "ephemeral"}}},
+    {"name": "container", "patch": {"container": "container-1"}},
+    {"name": "inference_geo", "patch": {"inference_geo": "us"}},
+    {"name": "max_tokens", "patch": {"max_tokens": 64}},
+    {"name": "messages", "patch": {"messages": [{"role": "user", "content": [{"type": "text", "text": "hello"}]}]}},
+    {"name": "metadata", "patch": {"metadata": {"user_id": "user-3"}}},
+    {"name": "model", "patch": {"model": "alternate-client-model"}},
+    {"name": "output_config", "patch": {"output_config": {"effort": "high", "format": {"type": "json_schema", "schema": {"type": "object"}}}}},
+    {"name": "service_tier", "patch": {"service_tier": "standard_only"}},
+    {"name": "stop_sequences", "patch": {"stop_sequences": ["END", "STOP"]}},
+    {"name": "stream", "patch": {"stream": true}},
+    {"name": "system", "patch": {"system": [{"type": "text", "text": "Be concise."}]}},
+    {"name": "temperature", "patch": {"temperature": 0.2}},
+    {"name": "thinking", "patch": {"thinking": {"type": "enabled", "budget_tokens": 1024}}},
+    {"name": "tool_choice", "patch": {"tool_choice": {"type": "tool", "name": "lookup", "disable_parallel_tool_use": true}, "tools": [{"name": "lookup", "input_schema": {"type": "object"}}]}},
+    {"name": "tools", "patch": {"tools": [{"name": "lookup", "input_schema": {"type": "object"}}]}},
+    {"name": "top_k", "patch": {"top_k": 40}},
+    {"name": "top_p", "patch": {"top_p": 0.9}}
+  ]
+}

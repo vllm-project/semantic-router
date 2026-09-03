@@ -1,0 +1,9 @@
+{
+  "operation": "request",
+  "body": {
+    "model": "client-model",
+    "max_tokens": 32,
+    "messages": [{"role": "user", "content": "Think when necessary."}],
+    "thinking": {"type": "adaptive"}
+  }
+}

@@ -1,116 +1,103 @@
-# CPU vs GPU / SDPA vs FA / BUFFERED vs STREAMED Benchmarks
+# Signal extraction backend benchmarks
 
-Measures signal extraction latency (jailbreak, PII, domain) for ONNX Runtime on AMD ROCm GPUs via Envoy ext_proc, using Prometheus histograms.
+These scripts compare the latency of the `jailbreak`, `pii`, and `domain`
+signals through Envoy ExtProc. They use ONNX Runtime on CPU or AMD ROCm and
+read signal latency from the Router's Prometheus histograms.
+
+Use the results to compare backends on one controlled host. Numbers from
+different machines, model revisions, prompt sets, or warmup settings are not
+directly comparable.
 
 ## Prerequisites
 
-- AMD GPU with ROCm 7.0+ (`/dev/kfd`, `/dev/dri`)
-- Docker
-- `envoyproxy/envoy:v1.33-latest` image
+- an AMD GPU with ROCm 7.0 or later for GPU runs
+- Docker with access to `/dev/kfd` and `/dev/dri`
+- Python 3 and `huggingface_hub` for model download
+- the `envoyproxy/envoy:v1.33-latest` image, or an override through
+  `ENVOY_IMAGE`
 
-## Setup
+Run all commands from the repository root.
 
-Build the router image (includes CK Flash Attention custom op):
-
-```bash
-docker build -f tools/docker/Dockerfile.extproc-rocm -t semantic-router:rocm .
-```
-
-Download models into `bench/cpu-vs-gpu/models/`:
+## Prepare the image and models
 
 ```bash
-pip install huggingface_hub
-python3 -c "
+docker build \
+  -f tools/docker/Dockerfile.extproc-rocm \
+  -t semantic-router:rocm .
+
+python3 -m pip install huggingface_hub
+python3 - <<'PY'
 from huggingface_hub import snapshot_download
-for repo in [
-    'mmbert32k-intent-classifier-merged',
-    'mmbert32k-jailbreak-detector-merged',
-    'mmbert32k-pii-detector-merged',
-]:
+
+for name in (
+    "mmbert32k-intent-classifier-merged",
+    "mmbert32k-jailbreak-detector-merged",
+    "mmbert32k-pii-detector-merged",
+):
     snapshot_download(
-        f'llm-semantic-router/{repo}',
-        local_dir=f'bench/cpu-vs-gpu/models/{repo}-onnx',
-        allow_patterns=['onnx/*', '*.json'],
-        ignore_patterns=['*.safetensors', '*.bin', '*.pt'],
+        repo_id=f"llm-semantic-router/{name}",
+        local_dir=f"bench/cpu-vs-gpu/models/{name}-onnx",
+        allow_patterns=["onnx/*", "*.json"],
+        ignore_patterns=["*.safetensors", "*.bin", "*.pt"],
     )
-"
+PY
 ```
 
-Each model dir needs `model_sdpa_fp16.onnx` (for SDPA/CPU) and `model_fa_fp16.onnx` (for FA). Generate FA models with `onnx-binding/ort-ck-flash-attn/scripts/rewrite_graph.py` if not already present.
+Each downloaded model must contain `onnx/model_sdpa_fp16.onnx`. The Flash
+Attention comparison also needs `onnx/model_fa_fp16.onnx`; generate it with
+[`rewrite_graph.py`](../../onnx-binding/ort-ck-flash-attn/scripts/rewrite_graph.py)
+when the model repository does not provide one.
 
-## Benchmarks
+## Run a benchmark
 
-### CPU vs GPU
-
-Compares ONNX CPU vs ROCm GPU across 500/2K/8K/16K token prompts:
-
-```bash
-BENCH_IMAGE=semantic-router:rocm REQUESTS_PER_SIZE=10 ./bench-long-context.sh
-```
-
-### SDPA vs Flash Attention
-
-Compares standard attention vs CK Flash Attention on GPU:
-
-```bash
-BENCH_IMAGE=semantic-router:rocm NUM_REQUESTS=20 ./bench-sdpa-vs-fa.sh
-```
-
-### ONNX GPU vs ONNX CPU vs Candle CPU
-
-Compares the same `jailbreak`, `pii`, and `domain` signals across ONNX GPU, ONNX CPU, and Candle CPU execution:
+CPU versus GPU across approximately 500, 2K, 8K, and 16K tokens:
 
 ```bash
 BENCH_IMAGE=semantic-router:rocm \
-CANDLE_IMAGE=semantic-router:candle-bench \
-REQUESTS_PER_SIZE=10 ./bench-3way.sh
+REQUESTS_PER_SIZE=10 \
+./bench/cpu-vs-gpu/bench-long-context.sh
 ```
 
-### BUFFERED vs STREAMED (E2E body mode comparison)
-
-Compares the original Envoy `BUFFERED` body mode (full `json.Unmarshal`/`Marshal`) against the new `STREAMED` mode with gjson/sjson fast-path JSON processing, semi-streaming chunked body delivery, and prompt compression.
-
-The STREAMED variant builds the patched binary from source directly inside the base container (volume-mounting the repo), so no separate Docker image is needed.
+Standard attention versus CK Flash Attention on the GPU:
 
 ```bash
-# GPU + Flash Attention (recommended — makes JSON/streaming overhead visible)
-BASE_IMAGE=semantic-router:rocm-fa USE_GPU=true \
-    REQUESTS_PER_SIZE=10 WARMUP_REQUESTS=3 ./bench-buffered-vs-streamed.sh
-
-# CPU-only (signal extraction dominates, streaming gains are proportionally smaller)
-BASE_IMAGE=semantic-router:rocm USE_GPU=false \
-    REQUESTS_PER_SIZE=10 ./bench-buffered-vs-streamed.sh
+BENCH_IMAGE=semantic-router:rocm \
+NUM_REQUESTS=20 \
+./bench/cpu-vs-gpu/bench-sdpa-vs-fa.sh
 ```
 
-The script:
+An additional developer harness, `bench-3way.sh`, compares ONNX GPU, ONNX
+CPU, and Candle CPU. It uses `config-bench-candle.yaml` and expects the three
+Candle model directories under `bench/cpu-vs-gpu/models/candle/`; model
+preparation is intentionally separate from the ONNX quick path above. Both
+benchmark templates enable `global.router.streamed_body.enabled`, so these
+runs compare inference backends rather than buffered and streamed request
+handling.
 
-1. Runs the **BUFFERED** variant using the stock base image with `request_body_mode: BUFFERED` and `global.router.streamed_body.enabled` set to `false`
-2. Runs the **STREAMED** variant by building the patched binary inside the container, using `request_body_mode: STREAMED` and `global.router.streamed_body.enabled` set to `true`
-3. Collects E2E latency (curl timing) and signal extraction latency (Prometheus histograms) at 500/2K/8K/16K token sizes
-4. Generates a markdown comparison report in `results/`
+Both scripts warm up the runtime before collecting samples. Override
+`WARMUP_REQUESTS` when needed, but keep it constant across compared runs.
+ROCm may compile kernels during the first inference, so a cold run can take
+several minutes.
 
-#### Sample results (rocm-fa, MI300X GPU)
+The scripts use the container names `sr-bench` and `envoy-bench` and remove
+existing containers with those exact names. Do not run them alongside another
+job that owns those names.
 
-| Tokens | BUFFERED (ms) | STREAMED (ms) | Reduction |
-|--------|--------------|---------------|-----------|
-| ~500   | 17           | 17            | 0%        |
-| ~2000  | 25           | 21            | 16%       |
-| ~8000  | 63           | 45            | 29%       |
-| ~16000 | 143          | 103           | 28%       |
+## Results
 
-Jailbreak signal extraction at 16K tokens drops from 127ms to 10ms (prompt compression: 16K → 512 tokens).
+Timestamped reports and raw metrics are written under
+`bench/cpu-vs-gpu/results/`. Keep the generated report with the hardware,
+image digest, model revisions, and environment overrides used for the run;
+the repository does not treat a sample from one host as a performance
+guarantee.
 
-Reports are written to `results/`.
+## Maintained files
 
-## Scripts
-
-| File | Description |
-|------|-------------|
-| `bench-3way.sh` | ONNX GPU vs ONNX CPU vs Candle CPU latency comparison |
-| `bench-long-context.sh` | CPU vs GPU, multi token-size, Prometheus metrics |
-| `bench-sdpa-vs-fa.sh` | SDPA vs FA on GPU, Prometheus metrics |
-| `bench-buffered-vs-streamed.sh` | BUFFERED vs STREAMED body mode, builds patched binary inside container |
-| `config-bench.yaml` | Canonical v0.3 router config template for ONNX benchmarks |
-| `config-bench-candle.yaml` | Canonical v0.3 router config template for Candle CPU benchmarks |
-| `envoy-bench.yaml` | Envoy ext_proc proxy config (STREAMED mode) |
-| `envoy-bench-fa.yaml` | Envoy ext_proc proxy config for FA benchmarks |
+| File | Purpose |
+| --- | --- |
+| `bench-long-context.sh` | Compare ONNX CPU and ROCm GPU by prompt length. |
+| `bench-sdpa-vs-fa.sh` | Compare SDPA and CK Flash Attention on ROCm. |
+| `bench-3way.sh` | Add Candle CPU to the ONNX CPU/GPU comparison. |
+| `config-bench.yaml` | Canonical v0.3 Router config template. |
+| `config-bench-candle.yaml` | Candle variant used only by the 3-way harness. |
+| `envoy-bench.yaml` | Envoy ExtProc and metrics listener config. |

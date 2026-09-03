@@ -9,7 +9,7 @@ permissions:
 jobs:
   dashboard-test:
     runs-on: ubuntu-latest
-    name: Dashboard Lint and Type Check
+    name: Dashboard Checks and Tests
 
     steps:
       - name: Check out the repo
@@ -24,6 +24,11 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: "1.25"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
       - name: Cache Node.js dependencies
         uses: actions/cache@v4
@@ -44,6 +49,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-dashboard-
 
+      # The dashboard backend shells out to the vllm-sr CLI to regenerate Envoy
+      # config, so its Go tests need the CLI's Python dependencies importable.
+      - name: Install vllm-sr CLI
+        run: pip install -e src/vllm-sr
+
       - name: Set up golangci-lint
         uses: golangci/golangci-lint-action@v7
         with:
@@ -54,8 +64,22 @@ jobs:
       - name: Run dashboard checks
         run: make dashboard-check
 
+      - name: Run Evaluation browser acceptance
+        run: make dashboard-test-e2e-evaluation
+
       - name: Build dashboard
         run: make dashboard-build
+
+      - name: Upload Evaluation browser diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evaluation-browser-diagnostics
+          path: |
+            dashboard/frontend/playwright-report
+            dashboard/frontend/test-results
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Show results on failure
         if: failure()
@@ -64,6 +88,15 @@ jobs:
           echo ""
           echo "To run checks locally:"
           echo "  make dashboard-check"
+          echo ""
+          echo "To run Evaluation browser acceptance:"
+          echo "  make dashboard-test-e2e-evaluation"
+          echo ""
+          echo "To run only the backend Go tests:"
+          echo "  make dashboard-test-backend"
+          echo ""
+          echo "The backend tests need the vllm-sr CLI importable:"
+          echo "  pip install -e src/vllm-sr"
           echo ""
           echo "To auto-fix lint issues:"
           echo "  make dashboard-lint-fix"

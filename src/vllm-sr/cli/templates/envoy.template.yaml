@@ -65,11 +65,12 @@ static_resources:
                   # Rewrite Host header to match upstream server
                   host_rewrite_literal: "{{ model.endpoints[0].host_authority }}"
                   {% if model.path_prefix %}
-                  # Prepend path prefix to all requests (e.g., /compatible-mode + /v1/chat/completions = /compatible-mode/v1/chat/completions)
+                  # Prepend path prefix to /v1 requests (e.g., /compatible-mode + /v1/chat/completions = /compatible-mode/v1/chat/completions).
+                  # Match only the complete /v1 segment so route recomputation cannot rewrite /v1beta/... again.
                   regex_rewrite:
                     pattern:
                       google_re2: {}
-                      regex: "^/v1(.*)$"
+                      regex: "^/v1([/?].*)?$"
                     substitution: "{{ model.path_prefix }}\\1"
                   {% endif %}
               {% endfor %}
@@ -117,11 +118,12 @@ static_resources:
                   host_rewrite_literal: "{{ models[0].endpoints[0].host_authority }}"
                   {% endif %}
                   {% if models and models[0].path_prefix %}
-                  # Prepend path prefix to all requests (e.g., /compatible-mode + /v1/chat/completions = /compatible-mode/v1/chat/completions)
+                  # Prepend path prefix to /v1 requests (e.g., /compatible-mode + /v1/chat/completions = /compatible-mode/v1/chat/completions).
+                  # Match only the complete /v1 segment so route recomputation cannot rewrite /v1beta/... again.
                   regex_rewrite:
                     pattern:
                       google_re2: {}
-                      regex: "^/v1(.*)$"
+                      regex: "^/v1([/?].*)?$"
                     substitution: "{{ models[0].path_prefix }}\\1"
                   {% endif %}
           http_filters:

@@ -121,11 +121,11 @@ func (s *ClassificationAPIServer) handlePutRecipe(w http.ResponseWriter, r *http
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_RECIPE_NAME", "recipe name is required")
 		return
 	}
-	if !deployMu.TryLock() {
-		s.writeErrorResponse(w, http.StatusConflict, "DEPLOY_IN_PROGRESS", "Another config update operation is in progress. Please try again.")
+	guard, ok := s.acquireConfigMutationGuard(w)
+	if !ok {
 		return
 	}
-	defer deployMu.Unlock()
+	defer guard.Release()
 
 	var req recipeMutationRequest
 	if err := s.parseJSONRequest(r, &req); err != nil {
@@ -183,11 +183,11 @@ func (s *ClassificationAPIServer) handleDeleteRecipe(w http.ResponseWriter, r *h
 		s.writeErrorResponse(w, http.StatusConflict, "DEFAULT_RECIPE_REQUIRED", "The default recipe is the top-level routing profile and cannot be deleted")
 		return
 	}
-	if !deployMu.TryLock() {
-		s.writeErrorResponse(w, http.StatusConflict, "DEPLOY_IN_PROGRESS", "Another config update operation is in progress. Please try again.")
+	guard, ok := s.acquireConfigMutationGuard(w)
+	if !ok {
 		return
 	}
-	defer deployMu.Unlock()
+	defer guard.Release()
 
 	doc, existingData, ok := s.readManagedConfigDocument(w)
 	if !ok || !checkConfigPrecondition(w, r, existingData, true) {

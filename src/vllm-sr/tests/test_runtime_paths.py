@@ -8,7 +8,9 @@ from cli.commands import runtime_paths
 from cli.commands.runtime_paths import (
     _container_runtime_config_path,
     _runtime_config_output_path,
+    _runtime_config_provenance_path,
     _write_runtime_config,
+    materialize_runtime_config,
 )
 from cli.runtime_stack import normalize_stack_name
 
@@ -153,6 +155,116 @@ def test_runtime_config_output_rejects_symlinked_owned_directory(
     assert list(outside_dir.iterdir()) == []
 
 
+def test_private_runtime_state_subdirectory_rejects_symlinked_child(
+    tmp_path: Path,
+):
+    state_root = tmp_path / "state"
+    outside_dir = tmp_path / "outside"
+    runtime_dir = state_root / ".vllm-sr"
+    runtime_dir.mkdir(parents=True)
+    outside_dir.mkdir()
+    (runtime_dir / "catalog-sources").symlink_to(outside_dir, target_is_directory=True)
+
+    with pytest.raises(ValueError, match="symbolic link"):
+        runtime_paths.private_runtime_state_subdirectory(state_root, "catalog-sources")
+
+    assert list(outside_dir.iterdir()) == []
+
+
+def test_private_runtime_state_nested_directory_rejects_symlinked_child(
+    tmp_path: Path,
+):
+    state_root = tmp_path / "state"
+    outside_dir = tmp_path / "outside"
+    parent = state_root / ".vllm-sr" / "catalog-sources"
+    parent.mkdir(parents=True)
+    outside_dir.mkdir()
+    (parent / "recipe-deadbeef").symlink_to(outside_dir, target_is_directory=True)
+
+    with pytest.raises(ValueError, match="symbolic link"):
+        runtime_paths.private_runtime_state_nested_directory(
+            state_root, "catalog-sources", "recipe-deadbeef"
+        )
+
+    assert list(outside_dir.iterdir()) == []
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX permissions only")
+def test_private_runtime_state_subdirectory_hardens_existing_owned_directories(
+    tmp_path: Path,
+):
+    state_root = tmp_path / "state"
+    runtime_dir = state_root / ".vllm-sr"
+    child_dir = runtime_dir / "catalog-sources"
+    child_dir.mkdir(parents=True)
+    runtime_dir.chmod(0o755)
+    child_dir.chmod(0o777)
+
+    result = runtime_paths.private_runtime_state_subdirectory(
+        state_root, "catalog-sources"
+    )
+
+    assert result == child_dir
+    assert stat.S_IMODE(runtime_dir.stat().st_mode) == 0o700
+    assert stat.S_IMODE(child_dir.stat().st_mode) == 0o700
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX ownership only")
+def test_runtime_config_output_rejects_directory_owned_by_another_user(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    runtime_dir = tmp_path / ".vllm-sr"
+    runtime_dir.mkdir()
+    runtime_dir.chmod(0o755)
+    actual_owner = runtime_dir.stat().st_uid
+    monkeypatch.setattr(
+        runtime_paths, "_current_posix_user_id", lambda: actual_owner + 1
+    )
+
+    with pytest.raises(ValueError, match="owned by the current user"):
+        _runtime_config_output_path(tmp_path / "config.yaml")
+
+    assert stat.S_IMODE(runtime_dir.stat().st_mode) == 0o755
+
+
+def test_runtime_config_output_skips_posix_permissions_when_unsupported(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    runtime_dir = tmp_path / ".vllm-sr"
+    runtime_dir.mkdir()
+    runtime_dir.chmod(0o755)
+    monkeypatch.setattr(runtime_paths, "_current_posix_user_id", lambda: None)
+
+    def unexpected_chmod(*_args: object, **_kwargs: object) -> None:
+        pytest.fail("POSIX chmod must not run on an unsupported platform")
+
+    monkeypatch.setattr(runtime_paths.os, "chmod", unexpected_chmod)
+
+    output_path = _runtime_config_output_path(tmp_path / "config.yaml")
+
+    assert output_path.parent == runtime_dir
+
+
+def test_runtime_config_output_rejects_existing_non_directory(tmp_path: Path):
+    runtime_path = tmp_path / ".vllm-sr"
+    runtime_path.write_text("not a directory\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="must be a real directory"):
+        _runtime_config_output_path(tmp_path / "config.yaml")
+
+
+def test_private_runtime_state_subdirectory_rejects_existing_file(
+    tmp_path: Path,
+):
+    runtime_dir = tmp_path / ".vllm-sr"
+    runtime_dir.mkdir()
+    child_path = runtime_dir / "catalog-sources"
+    child_path.write_text("not a directory\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="must be a real directory"):
+        runtime_paths.private_runtime_state_subdirectory(tmp_path, "catalog-sources")
+
+
 def test_atomic_write_failure_preserves_target_and_removes_temporary_file(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
@@ -189,3 +301,78 @@ def test_replace_failure_preserves_target_and_removes_temporary_file(
 
     assert runtime_path.read_text(encoding="utf-8") == "version: old\n"
     assert list(runtime_path.parent.glob(f".{runtime_path.name}.*.tmp")) == []
+
+
+def test_materialize_runtime_config_creates_active_and_provenance_atomically(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    source = tmp_path / "config.yaml"
+    source.write_text("version: source\n", encoding="utf-8")
+    effective = b"version: effective\n"
+    replacements: list[tuple[Path, Path]] = []
+    real_replace = os.replace
+
+    def record_replace(source_path, target_path):
+        replacements.append((Path(source_path), Path(target_path)))
+        real_replace(source_path, target_path)
+
+    monkeypatch.setattr(runtime_paths.os, "replace", record_replace)
+
+    active = materialize_runtime_config(source, effective)
+    provenance = _runtime_config_provenance_path(active)
+
+    assert active == tmp_path / ".vllm-sr" / "runtime-config.yaml"
+    assert active.read_bytes() == effective
+    assert provenance.is_file()
+    assert [target for _, target in replacements] == [active, provenance]
+    assert all(
+        source_path.parent == target.parent for source_path, target in replacements
+    )
+    assert not list(active.parent.glob(".*.tmp"))
+
+
+def test_materialize_refreshes_unchanged_active_when_source_changes(tmp_path: Path):
+    source = tmp_path / "config.yaml"
+    source.write_text("version: first\n", encoding="utf-8")
+    active = materialize_runtime_config(source, b"version: first-effective\n")
+
+    source.write_text("version: second\n", encoding="utf-8")
+    refreshed = materialize_runtime_config(source, b"version: second-effective\n")
+
+    assert refreshed == active
+    assert active.read_bytes() == b"version: second-effective\n"
+
+
+def test_materialize_preserves_dashboard_change_when_source_changes(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+):
+    source = tmp_path / "config.yaml"
+    source.write_text("version: first\n", encoding="utf-8")
+    active = materialize_runtime_config(source, b"version: first-effective\n")
+    active.write_text("version: dashboard-edit\n", encoding="utf-8")
+    source.write_text("version: second\n", encoding="utf-8")
+
+    preserved = materialize_runtime_config(source, b"version: second-effective\n")
+
+    assert preserved == active
+    assert active.read_text(encoding="utf-8") == "version: dashboard-edit\n"
+    assert "Preserving Dashboard or package changes" in caplog.text
+
+
+def test_materialize_uses_custom_host_state_without_container_path_leak(
+    tmp_path: Path,
+):
+    source = tmp_path / "source" / "config.yaml"
+    source.parent.mkdir()
+    source.write_text("version: v0.3\n", encoding="utf-8")
+    state_root = tmp_path / "host-state"
+
+    active = materialize_runtime_config(
+        source,
+        source.read_bytes(),
+        state_root_dir=state_root,
+        stack_name="audit-a",
+    )
+
+    assert active == state_root / ".vllm-sr" / "runtime-config.audit-a.yaml"
+    assert not (source.parent / ".vllm-sr").exists()

@@ -5,7 +5,7 @@ import EditModal, { type EditFormData, FieldConfig } from '../components/EditMod
 import ViewModal, { ViewSection } from '../components/ViewModal'
 import { useReadonly } from '../contexts/ReadonlyContext'
 import { useAuth } from '../contexts/AuthContext'
-import { canWriteConfig } from '../utils/accessControl'
+import { canRunEvaluation, canWriteConfig } from '../utils/accessControl'
 import ConfigPageRouterConfigSection from './ConfigPageRouterConfigSection'
 import ConfigPageModelsSection from './ConfigPageModelsSection'
 import ConfigPageSignalsSection from './ConfigPageSignalsSection'
@@ -13,6 +13,7 @@ import ConfigPageProjectionsSection from './ConfigPageProjectionsSection'
 import ConfigPageDecisionsSection from './ConfigPageDecisionsSection'
 import ConfigPageEntrypointsRecipesSection from './ConfigPageEntrypointsRecipesSection'
 import ConfigPageMCPSection from './ConfigPageMCPSection'
+import ProductLoadingState from '../components/ProductLoadingState'
 import {
   canonicalizeConfigForManagerSave,
   projectCanonicalConfigForManager,
@@ -44,6 +45,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
   const [loading, setLoading] = useState(!isMCPSection)
   const [error, setError] = useState<string | null>(null)
   const [configFormat, setConfigFormat] = useState<ConfigFormat>('python-cli')
+  const configEditorReadonly = configReadonly
 
   // Effective global runtime config resolved from router defaults + config.yaml overrides
   const [routerDefaults, setRouterDefaults] = useState<CanonicalGlobalConfig | null>(null)
@@ -86,8 +88,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
       return
     }
 
-    fetchConfig()
-    fetchRouterDefaults()
+    void fetchConfig()
+    void fetchRouterDefaults()
   }, [isMCPSection])
 
   // Fetch tools database when config is loaded
@@ -109,8 +111,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
     isMCPSection,
   ])
 
-  const fetchConfig = async () => {
-    setLoading(true)
+  const fetchConfig = async (showLoading = true): Promise<boolean> => {
+    if (showLoading) setLoading(true)
     setError(null)
     try {
       const response = await fetch('/api/router/config/all')
@@ -126,11 +128,13 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
       if (format === 'legacy') {
         console.warn('Legacy config format detected. Consider migrating to Python CLI format.')
       }
+      return true
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch config')
       setConfig(null)
+      return false
     } finally {
-      setLoading(false)
+      if (showLoading) setLoading(false)
     }
   }
 
@@ -192,7 +196,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
           try {
             const errorJson = JSON.parse(errorText)
             if (errorJson.error || errorJson.message) {
-              errorMessage = errorJson.error || errorJson.message
+              errorMessage = errorJson.message || errorJson.error
             } else {
               errorMessage = errorText
             }
@@ -306,10 +310,17 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
         cfg.signals.kb = (cfg.signals.kb || []).filter((s) => s.name !== targetName)
         break
       case 'Metadata':
-        cfg.signals.metadata = (cfg.signals.metadata || []).filter(s => s.name !== targetName)
+        cfg.signals.metadata = (cfg.signals.metadata || []).filter((s) => s.name !== targetName)
         break
       case 'Classifier':
-        cfg.signals.classifiers = (cfg.signals.classifiers || []).filter(s => s.name !== targetName)
+        cfg.signals.classifiers = (cfg.signals.classifiers || []).filter(
+          (s) => s.name !== targetName,
+        )
+        break
+      case 'Conversation':
+        cfg.signals.conversation = (cfg.signals.conversation || []).filter(
+          (s) => s.name !== targetName,
+        )
         break
       default:
         break
@@ -345,7 +356,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
     <ConfigPageSignalsSection
       config={config}
       isPythonCLI={isPythonCLI}
-      isReadonly={configReadonly}
+      isReadonly={configEditorReadonly}
       signalsSearch={signalsSearch}
       onSignalsSearchChange={setSignalsSearch}
       saveConfig={saveConfig}
@@ -360,7 +371,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
     <ConfigPageDecisionsSection
       config={config}
       isPythonCLI={isPythonCLI}
-      isReadonly={configReadonly}
+      isReadonly={configEditorReadonly}
       decisionsSearch={decisionsSearch}
       onDecisionsSearchChange={setDecisionsSearch}
       saveConfig={saveConfig}
@@ -374,7 +385,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
   const renderProjectionsSection = () => (
     <ConfigPageProjectionsSection
       config={config}
-      isReadonly={configReadonly}
+      isReadonly={configEditorReadonly}
       saveConfig={saveConfig}
       openEditModal={openEditModal}
       openViewModal={openViewModal}
@@ -385,7 +396,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
     <ConfigPageModelsSection
       config={config}
       isPythonCLI={isPythonCLI}
-      isReadonly={configReadonly}
+      isReadonly={configEditorReadonly}
+      canVerifyModels={canRunEvaluation(user)}
       models={models}
       defaultModel={defaultModel}
       reasoningFamilies={reasoningFamilies}
@@ -404,7 +416,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
     config ? (
       <ConfigPageEntrypointsRecipesSection
         config={config}
-        isReadonly={configReadonly}
+        isReadonly={configEditorReadonly}
         models={models}
         saveConfig={saveConfig}
         openEditModal={openEditModal}
@@ -419,10 +431,12 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
       toolsData={toolsData}
       toolsLoading={toolsLoading}
       toolsError={toolsError}
-      isReadonly={configReadonly}
+      isReadonly={configEditorReadonly}
       openEditModal={openEditModal}
       saveConfig={saveConfig}
-      refreshConfig={fetchConfig}
+      refreshConfig={async () => {
+        await fetchConfig()
+      }}
       showLegacyCategories={!isPythonCLI}
     />
   )
@@ -448,17 +462,14 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
     }
   }
 
+  const pageLoading = loading
+
   return (
     <div className={styles.container}>
       <div className={styles.content}>
-        {!isMCPSection && loading && (
-          <div className={styles.loading}>
-            <div className={styles.spinner}></div>
-            <p>Loading configuration...</p>
-          </div>
-        )}
+        {!isMCPSection && pageLoading && <ProductLoadingState label="Loading configuration" />}
 
-        {!isMCPSection && error && !loading && (
+        {!isMCPSection && error && !pageLoading && (
           <div className={styles.error}>
             <span className={styles.errorIcon}></span>
             <div>
@@ -474,7 +485,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
           </div>
         )}
 
-        {!isMCPSection && config && !loading && !error && (
+        {!isMCPSection && config && !pageLoading && !error && (
           <div className={styles.contentArea}>{renderActiveSection()}</div>
         )}
       </div>
@@ -494,7 +505,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
       <ViewModal
         isOpen={viewModalOpen}
         onClose={handleCloseViewModal}
-        onEdit={configReadonly ? undefined : viewModalEditCallback || undefined}
+        onEdit={configEditorReadonly ? undefined : viewModalEditCallback || undefined}
         title={viewModalTitle}
         sections={viewModalSections}
       />

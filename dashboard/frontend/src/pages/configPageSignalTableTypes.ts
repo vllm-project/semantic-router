@@ -2,6 +2,7 @@ import type {
   ClassifierSignal,
   ComplexitySignal,
   ContextSignal,
+  ConversationSignal,
   DomainSignal,
   EmbeddingSignal,
   FactCheckSignal,
@@ -38,7 +39,8 @@ type UnifiedSignalData = Partial<
     PIISignal &
     KBSignal &
     MetadataSignal &
-    ClassifierSignal
+    ClassifierSignal &
+    ConversationSignal
 >
 
 export interface UnifiedSignal {

@@ -71,6 +71,13 @@ class TestAlgorithmConfigTypes:
         config = AlgorithmConfig(type="static", on_error="fail")
         assert config.on_error == "fail"
 
+    def test_minimum_candidates_must_be_positive(self):
+        config = AlgorithmConfig(type="static", minimum_candidates=2)
+        assert config.minimum_candidates == 2
+
+        with pytest.raises(PydanticValidationError):
+            AlgorithmConfig(type="static", minimum_candidates=0)
+
 
 class TestPromptSelectionConfig:
     """Test prompt-driven selection configuration."""
@@ -287,12 +294,21 @@ class TestFusionAlgorithmConfig:
         config = FusionAlgorithmConfig(
             model="judge-model",
             analysis_models=["panel-a", "panel-b"],
+            analysis_overrides=[
+                {
+                    "model": "panel-a",
+                    "temperature": 0.2,
+                    "max_completion_tokens": 384,
+                }
+            ],
             max_concurrent=2,
             max_completion_tokens=512,
             temperature=0.2,
         )
         assert config.model == "judge-model"
         assert config.analysis_models == ["panel-a", "panel-b"]
+        assert config.analysis_overrides is not None
+        assert config.analysis_overrides[0].model == "panel-a"
         assert config.max_concurrent == 2
         assert config.max_completion_tokens == 512
         assert config.temperature == 0.2
@@ -309,6 +325,23 @@ class TestFusionAlgorithmConfig:
 
         with pytest.raises(PydanticValidationError):
             FusionAlgorithmConfig(min_successful_responses=0)
+
+        with pytest.raises(PydanticValidationError):
+            FusionAlgorithmConfig(
+                analysis_overrides=[{"model": "panel-a", "max_completion_tokens": 0}]
+            )
+
+    def test_analysis_override_models_are_unique_and_non_empty(self):
+        with pytest.raises(PydanticValidationError):
+            FusionAlgorithmConfig(analysis_overrides=[{"model": "  "}])
+
+        with pytest.raises(PydanticValidationError):
+            FusionAlgorithmConfig(
+                analysis_overrides=[
+                    {"model": "panel-a"},
+                    {"model": " panel-a "},
+                ]
+            )
 
     def test_quorum_and_timeout_controls(self):
         config = FusionAlgorithmConfig(

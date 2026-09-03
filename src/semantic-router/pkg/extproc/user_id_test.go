@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 func TestCacheScopeUserID_PrefersAuthHeaderOverFallback(t *testing.T) {
@@ -32,8 +33,10 @@ func TestCacheScopeUserID_UsesFallbackWhenAuthMissing(t *testing.T) {
 func TestCacheScopeUserID_UsesOpenAIUserFieldWhenEnvBody(t *testing.T) {
 	t.Setenv("SEMANTIC_CACHE_E2E_USER_FROM_BODY", "true")
 	ctx := &RequestContext{
-		Headers:             map[string]string{},
-		OriginalRequestBody: []byte(`{"model":"MoM","messages":[{"role":"user","content":"hi"}],"user":"body-user"}`),
+		Headers: map[string]string{},
+		SemanticRequest: &llmprotocol.Request{Metadata: map[string]string{
+			"user_id": "body-user",
+		}},
 	}
 	assert.Equal(t, "body-user", cacheScopeUserID(ctx))
 }
@@ -44,7 +47,9 @@ func TestCacheScopeUserID_AuthHeaderWinsOverBody(t *testing.T) {
 		Headers: map[string]string{
 			headers.AuthzUserID: "hdr-user",
 		},
-		OriginalRequestBody: []byte(`{"user":"body-user"}`),
+		SemanticRequest: &llmprotocol.Request{Metadata: map[string]string{
+			"user_id": "body-user",
+		}},
 	}
 	assert.Equal(t, "hdr-user", cacheScopeUserID(ctx))
 }

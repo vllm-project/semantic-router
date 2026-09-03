@@ -1,49 +1,33 @@
-# Architecture Scorecard
+# Architecture Status
 
-This scorecard is a maintainer dashboard, not a historical log.
+This page is a compact index of current architecture risk. It intentionally
+avoids subjective numeric scores and completed-work receipts; the linked debt
+entries carry the evidence and exit criteria.
 
-## Current Score
+## Current Posture
 
-| Area | Score | Owner |
-|---|---:|---|
-| Release readiness | 70 | PL0033 |
-| Session-aware agentic routing | 65 | PL0033 |
-| Non-release architecture debt | 70 | PL0032 |
+| Area | Current gap | Source |
+|---|---|---|
+| Repository modularity | Active files still require structure exceptions | [TD006](tech-debt/td-006-structural-rule-exceptions.md) |
+| Fleet Simulator | Lint, structure, optimizer, and export boundaries differ from the shared target | [TD016](tech-debt/td-016-fleet-sim-shared-ruff-contract-gap.md), [TD017](tech-debt/td-017-fleet-sim-structure-gate-migration-gap.md), [TD027](tech-debt/td-027-fleet-sim-optimizer-and-public-surface-boundary-collapse.md) |
+| Classification | Construction and request-time responsibilities remain concentrated | [TD020](tech-debt/td-020-classification-subsystem-boundary-collapse.md) |
+| Native bindings | Broad Rust structure and Go complexity exceptions reduce regression signal | [TD042](tech-debt/td-042-ffi-embedding-structure-debt.md), [TD043](tech-debt/td-043-semantic-router-go-cyclop-debt.md) |
+| Router Flow state | Redis-backed tool state lacks integration and deployment validation | [TD044](tech-debt/td-044-flow-tool-state-durability-gap.md) |
+| Community automation | Content moderation has no reviewed implementation | [TD045](tech-debt/td-045-reviewed-content-moderation.md) |
+| ONNX validation | ONNX-only changes lack mandatory runtime coverage | [TD046](tech-debt/td-046-onnx-binding-ci-coverage-gap.md) |
 
-Overall posture: `70/100`.
+There is no active release-readiness row. Release risks belong in the active
+release plan when a milestone is opened.
 
-## Current Release Risks
+## Update Rules
 
-- The v0.3.0 release contract currently fails because a published Docker image
-  is not represented in release notes and upgrade or rollback docs.
-- Supported install, docs-site, Helm, and `vllm-sr serve` smoke paths still need
-  release-blocker triage against current open bug reports.
-- Session-aware agentic routing is the only explicitly retained feature
-  direction for v0.3 and still needs a scoped ship-or-defer decision.
+- Add or change a row only when current source or a validation gate changes.
+- Put the detailed evidence and testable exit criteria in one debt entry.
+- Remove a closed entry from this page and the debt index in the same change.
+- Do not use plans, pull requests, or benchmark logs as substitutes for current
+  source evidence.
 
-## Current Debt Risks
+## Owners
 
-- TD006 remains the broad structural ratchet for current structural exceptions.
-- TD016 and TD017 keep fleet-sim from fully sharing the repo lint and structure
-  contract.
-- TD020 keeps classifier boundaries from being fully clean.
-- TD027 keeps fleet-sim optimizer ownership broader than desired.
-
-## Score Movement Rule
-
-Move scores only when current-source evidence changes:
-
-- code landed
-- tests or gates passed
-- a TD was retired or narrowed
-- a release risk was accepted explicitly in PL0033
-- a non-release debt item was moved out of current scope with rationale
-
-Do not move scores because a historical plan says work was intended.
-
-## Current Sources
-
-- [PL0033 v0.3 Themis Release Closure](plans/pl-0033-v0-3-themis-release-closure.md)
-- [PL0032 Architecture Debt Consolidation](plans/pl-0032-architecture-scorecard-ratchet.md)
-- [Tech Debt README](tech-debt/README.md)
-- [Maintainer Ops](maintainer-ops.md)
+- [PL-0032: Architecture Debt Consolidation](plans/pl-0032-architecture-scorecard-ratchet.md)
+- [Technical Debt Index](tech-debt/README.md)

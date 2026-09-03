@@ -103,16 +103,25 @@ type ModelResponse struct {
 	// Range: positive values, higher = more confident
 	AverageMargin float64
 
+	// MarginEvidenceComplete is true only when every generated token has at
+	// least two top-logprob entries, so AverageMargin was computed from real
+	// alternatives rather than an invented fallback margin.
+	MarginEvidenceComplete bool
+
 	// Tokens contains the text of each generated token (for token filtering)
 	Tokens []string
 
 	// FilteredAverageLogprob is the average logprob computed only over semantic tokens
 	// (e.g., argument values in tool calls, excluding JSON boilerplate)
-	// Zero means no filtering was applied.
 	FilteredAverageLogprob float64
 
 	// FilteredAverageMargin is the average margin computed only over semantic tokens
 	FilteredAverageMargin float64
+
+	// FilteredTokenCount records how many semantic tokens contributed to the
+	// filtered averages. Presence cannot be inferred from either average because
+	// zero is valid evidence for both logprob and margin.
+	FilteredTokenCount int
 
 	// HasToolCalls indicates the response contained tool_calls (not just content)
 	HasToolCalls bool
@@ -263,6 +272,7 @@ func (c *Client) parseNonStreamingResponse(body []byte, modelName string) (*Mode
 		result.AverageLogprob = analysis.AverageLogprob
 		result.TopLogprobMargins = analysis.Margins
 		result.AverageMargin = analysis.AverageMargin
+		result.MarginEvidenceComplete = analysis.MarginEvidenceComplete
 	}
 
 	// Extract reasoning content from vLLM extra fields
@@ -316,12 +326,11 @@ func parseSSEContent(body []byte) (string, string, []string) {
 
 	lines := bytes.Split(body, []byte("\n"))
 	for _, line := range lines {
-		lineStr := strings.TrimSuffix(string(line), "\r")
-		if !strings.HasPrefix(lineStr, "data:") {
+		payload, ok := sseDataPayload(line)
+		if !ok {
 			continue
 		}
-		data := strings.TrimPrefix(lineStr, "data:")
-		data = strings.TrimPrefix(data, " ")
+		data := string(payload)
 		chunks = append(chunks, data)
 
 		if data == "[DONE]" {
@@ -376,6 +385,9 @@ type LogprobAnalysis struct {
 	// AverageMargin is the average margin across all tokens
 	// Range: positive, higher = more confident
 	AverageMargin float64
+	// MarginEvidenceComplete reports whether every token had a real
+	// alternative from which its margin could be calculated.
+	MarginEvidenceComplete bool
 }
 
 // extractLogprobs extracts logprobs and margins from a ChatCompletion response
@@ -395,22 +407,27 @@ func extractLogprobs(completion *openai.ChatCompletion) *LogprobAnalysis {
 
 	var logprobSum float64
 	var marginSum float64
+	result.MarginEvidenceComplete = true
 
 	for _, tokenLogprob := range choice.Logprobs.Content {
 		result.Tokens = append(result.Tokens, tokenLogprob.Token)
 		result.Logprobs = append(result.Logprobs, tokenLogprob.Logprob)
 		logprobSum += tokenLogprob.Logprob
 
-		margin := calculateMargin(tokenLogprob.Logprob, tokenLogprob.TopLogprobs)
+		margin, hasAlternative := calculateMargin(tokenLogprob.TopLogprobs)
 		result.Margins = append(result.Margins, margin)
-		marginSum += margin
+		if hasAlternative {
+			marginSum += margin
+		} else {
+			result.MarginEvidenceComplete = false
+		}
 	}
 
 	// Calculate averages
 	if len(result.Logprobs) > 0 {
 		result.AverageLogprob = logprobSum / float64(len(result.Logprobs))
 	}
-	if len(result.Margins) > 0 {
+	if result.MarginEvidenceComplete && len(result.Margins) > 0 {
 		result.AverageMargin = marginSum / float64(len(result.Margins))
 	}
 
@@ -420,11 +437,12 @@ func extractLogprobs(completion *openai.ChatCompletion) *LogprobAnalysis {
 // calculateMargin calculates the margin between the chosen token and the next best alternative
 // A large margin indicates the model was very confident in its choice
 // A small margin indicates the model was uncertain between multiple options
-func calculateMargin(chosenLogprob float64, topLogprobs []openai.ChatCompletionTokenLogprobTopLogprob) float64 {
+func calculateMargin(topLogprobs []openai.ChatCompletionTokenLogprobTopLogprob) (float64, bool) {
 	if len(topLogprobs) < 2 {
-		// No alternative token available, assume high confidence
-		// Use a reasonable default margin
-		return 2.0
+		// A chosen-token logprob alone contains no evidence about the nearest
+		// alternative. Returning zero keeps token/margin indexes aligned; the
+		// completeness flag prevents callers from treating it as confidence.
+		return 0, false
 	}
 
 	// topLogprobs[0] is the chosen token (should match chosenLogprob)
@@ -437,7 +455,7 @@ func calculateMargin(chosenLogprob float64, topLogprobs []openai.ChatCompletionT
 	// Margin: how much better is top1 than top2
 	// Example: top1=-0.1, top2=-2.0 => margin=1.9 (high confidence)
 	// Example: top1=-0.5, top2=-0.6 => margin=0.1 (low confidence, model is uncertain)
-	return top1 - top2
+	return top1 - top2, true
 }
 
 // ApplyTokenFilter computes filtered logprob/margin averages on a ModelResponse
@@ -487,6 +505,7 @@ func filterToolCallArgTokens(resp *ModelResponse) {
 	if len(filteredLP) == 0 {
 		return
 	}
+	resp.FilteredTokenCount = len(filteredLP)
 
 	var lpSum float64
 	for _, v := range filteredLP {

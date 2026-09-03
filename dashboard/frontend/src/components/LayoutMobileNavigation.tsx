@@ -9,6 +9,12 @@ import {
   type LayoutMenuItem,
 } from './LayoutNavSupport'
 import { preloadDashboardRoute } from '../app/routeLoaders'
+import ProductIcon, { type ProductIconName } from './ProductIcon'
+
+const SECTION_ICONS: Record<LayoutDropdownKey, ProductIconName> = {
+  build: 'mixture',
+  operate: 'status',
+}
 
 interface LayoutMobileNavigationSection {
   key: LayoutDropdownKey
@@ -100,7 +106,8 @@ export default function LayoutMobileNavigation({
           onPointerDown={() => void preloadDashboardRoute(`/config/${item.configSection}`)}
           onClick={() => onConfigSelect(item)}
         >
-          {item.label}
+          <ProductIcon name={item.icon} className={styles.mobileNavIcon} />
+          <span>{item.label}</span>
         </button>
       )
     }
@@ -115,7 +122,8 @@ export default function LayoutMobileNavigation({
         onPointerDown={() => void preloadDashboardRoute(item.to)}
         onClick={onNavigate}
       >
-        {item.label}
+        <ProductIcon name={item.icon} className={styles.mobileNavIcon} />
+        <span>{item.label}</span>
       </NavLink>
     )
   }
@@ -143,7 +151,8 @@ export default function LayoutMobileNavigation({
           onPointerDown={() => void preloadDashboardRoute(link.to)}
           onClick={onNavigate}
         >
-          {link.label}
+          <ProductIcon name={link.icon} className={styles.mobileNavIcon} />
+          <span>{link.label}</span>
         </NavLink>
       ))}
 
@@ -169,12 +178,18 @@ export default function LayoutMobileNavigation({
               onClick={() => onSectionToggle(section.key)}
             >
               <span className={styles.mobileNavSectionLabel}>
-                {section.label}
+                <span className={styles.mobileNavSectionTitle}>
+                  <ProductIcon name={SECTION_ICONS[section.key]} className={styles.mobileNavIcon} />
+                  {section.label}
+                </span>
                 {sectionActive ? (
                   <span className={styles.mobileNavActiveMarker}>Current</span>
                 ) : null}
               </span>
-              <span aria-hidden="true">{expanded ? '−' : '+'}</span>
+              <ProductIcon
+                name={expanded ? 'chevron-down' : 'chevron-right'}
+                className={styles.mobileNavChevron}
+              />
             </button>
 
             {expanded ? (

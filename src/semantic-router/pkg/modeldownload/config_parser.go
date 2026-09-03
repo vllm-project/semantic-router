@@ -176,27 +176,56 @@ func extractProvisioningModelPaths(cfg *config.RouterConfig) []string {
 // the safetensors/tokenizer download is never triggered, leaving embedding_ready=false (#2172).
 var embeddingModelWeightFiles = []string{"model.safetensors", "tokenizer.json"}
 
-// addEmbeddingModelRequiredFiles marks the configured semantic embedding model as requiring
-// its safetensors weights and tokenizer so a partial (ONNX-only) directory is detected as
-// incomplete and the full snapshot is re-downloaded.
+// gemmaDenseWeightFiles are the dense-bottleneck weights the gemma embedding model
+// additionally hard-loads at startup (candle-binding dense_layers: 2_Dense + 3_Dense).
+var gemmaDenseWeightFiles = []string{
+	"2_Dense/model.safetensors",
+	"3_Dense/model.safetensors",
+}
+
+// candleEmbeddingModelRequiredFiles returns, per configured candle embedding model path,
+// the files the runtime hard-loads at startup. The qwen3, gemma, and multimodal paths
+// share the non-healing completeness defect fixed for mmbert in #2195 (#2531).
+func candleEmbeddingModelRequiredFiles(cfg *config.RouterConfig) map[string][]string {
+	required := make(map[string][]string)
+	add := func(path string, files []string) {
+		for _, fileName := range files {
+			if !slices.Contains(required[path], fileName) {
+				required[path] = append(required[path], fileName)
+			}
+		}
+	}
+
+	add(cfg.MmBertModelPath, embeddingModelWeightFiles)
+	add(cfg.Qwen3ModelPath, embeddingModelWeightFiles)
+	add(cfg.GemmaModelPath, embeddingModelWeightFiles)
+	add(cfg.GemmaModelPath, gemmaDenseWeightFiles)
+	add(cfg.MultiModalModelPath, embeddingModelWeightFiles)
+	return required
+}
+
+// addEmbeddingModelRequiredFiles marks every configured candle embedding model as
+// requiring the files its runtime hard-loads, so a partial directory (for example
+// ONNX-only, or gemma without its dense-bottleneck weights) is detected as incomplete
+// and the full snapshot is re-downloaded.
 func addEmbeddingModelRequiredFiles(cfg *config.RouterConfig, requiredFilesByModel map[string][]string) {
 	if cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() {
 		return
 	}
 
-	// MmBertModelPath holds the configured semantic embedding model directory.
-	path := cfg.MmBertModelPath
-	if path == "" || !strings.HasPrefix(path, "models/") {
-		return
-	}
-
-	existing := requiredFilesByModel[path]
-	for _, fileName := range embeddingModelWeightFiles {
-		if !slices.Contains(existing, fileName) {
-			existing = append(existing, fileName)
+	for path, files := range candleEmbeddingModelRequiredFiles(cfg) {
+		if path == "" || !strings.HasPrefix(path, "models/") {
+			continue
 		}
+
+		existing := requiredFilesByModel[path]
+		for _, fileName := range files {
+			if !slices.Contains(existing, fileName) {
+				existing = append(existing, fileName)
+			}
+		}
+		requiredFilesByModel[path] = existing
 	}
-	requiredFilesByModel[path] = existing
 }
 
 // ExtractRequiredFilesByModel derives per-model completeness requirements from

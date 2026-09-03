@@ -7,7 +7,11 @@ import {
   type ParsedChatCompletion,
   type ParsedToolCallChunk,
 } from './chatResponseParsing'
-import type { OutboundChatMessage } from './chatRequestSupport'
+import {
+  buildPlaygroundRequestHeaders,
+  PLAYGROUND_DEFAULT_MAX_COMPLETION_TOKENS,
+  type OutboundChatMessage,
+} from './chatRequestSupport'
 import { createFrameSyncController } from './chatStreamingFrameSync'
 import type { Message, PlaygroundTask } from './ChatComponentTypes'
 import {
@@ -65,14 +69,13 @@ export const runToolLoop = async ({
   toolCallsMap,
   updateConversationMessages,
 }: RunToolLoopOptions): Promise<string> => {
-  const MAX_TOOL_ITERATIONS = 30
   let iteration = 0
   let allToolCalls = Array.from(toolCallsMap.values())
   let allToolResults: ToolResult[] = []
   let finalContent = ''
   let currentMessages: OutboundChatMessage[] = [...initialMessages]
 
-  while (iteration < MAX_TOOL_ITERATIONS) {
+  while (toolCallsMap.size > 0) {
     iteration += 1
     const currentToolCalls = iteration === 1 ? allToolCalls : Array.from(toolCallsMap.values())
     if (currentToolCalls.length === 0) break
@@ -137,20 +140,18 @@ export const runToolLoop = async ({
       ...toolResults.map((toolResult) => ({
         role: 'tool',
         tool_call_id: toolResult.callId,
-        content: serializeToolResultForModel(toolResult),
+        content: serializeToolResultForModel(toolResult, 6_000),
       })),
     ]
 
     const followUpResponse = await fetch(endpoint, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-vsr-debug': 'true',
-      },
+      headers: buildPlaygroundRequestHeaders(task.conversationId),
       body: JSON.stringify({
         model: task.requestOptions.model,
         messages: currentMessages,
         stream: true,
+        max_completion_tokens: PLAYGROUND_DEFAULT_MAX_COMPLETION_TOKENS,
         tools: activeTools,
         tool_choice: 'auto',
       }),

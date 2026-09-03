@@ -1,5 +1,4 @@
 import type {
-  ConfigSignals,
   ConfigData,
   DecisionConfig,
   EntrypointConfig,
@@ -20,8 +19,6 @@ export interface RecipeFormState {
   name: string
   description: string
   strategy: RoutingStrategy
-  signals: ConfigSignals
-  decisions: DecisionConfig[]
 }
 
 export function normalizeRecipeStrategy(value: unknown): RoutingStrategy {
@@ -40,6 +37,12 @@ export function getRecipeNames(config: ConfigData | null): string[] {
       ...(config?.recipes ?? []).map((recipe) => recipe.name).filter(Boolean),
     ]),
   ]
+}
+
+export function getPublishableRecipeNames(config: ConfigData | null): string[] {
+  return getRecipeNames(config).filter(
+    (name) => (getRecipeByName(config, name)?.routing.decisions?.length ?? 0) > 0,
+  )
 }
 
 export function getRecipeByName(
@@ -65,6 +68,19 @@ export function getRecipeByName(
     }
   }
   return (config?.recipes ?? []).find((recipe) => recipe.name === recipeName) ?? null
+}
+
+export function listRecipeProfiles(config: ConfigData | null): RecipeConfig[] {
+  return getRecipeNames(config)
+    .map((name) => getRecipeByName(config, name))
+    .filter((recipe): recipe is RecipeConfig => recipe !== null)
+}
+
+export function isSyntheticDefaultRecipe(config: ConfigData, recipe: RecipeConfig): boolean {
+  return (
+    recipe.name === DEFAULT_RECIPE_NAME &&
+    !(config.recipes ?? []).some((candidate) => candidate.name === DEFAULT_RECIPE_NAME)
+  )
 }
 
 export function collectRecipeTargetModels(recipe: RecipeConfig | null): string[] {
@@ -181,7 +197,7 @@ export function validateEntrypointForm(
 export function validateRecipeForm(
   form: RecipeFormState,
   config: ConfigData,
-  models: NormalizedModel[],
+  _models: NormalizedModel[],
   originalName: string | null,
 ): RecipeConfig {
   const name = form.name.trim()
@@ -198,43 +214,9 @@ export function validateRecipeForm(
     throw new Error(`Recipe "${name}" already exists.`)
   }
 
-  const knownModels = new Set(
-    models.flatMap((model) => [model.name, ...(model.loras ?? []).map((adapter) => adapter.name)]),
-  )
-  const decisionNames = new Set<string>()
-
-  const decisions = (form.decisions ?? []).map((decision, index) => {
-    const decisionName = decision.name?.trim()
-    if (!decisionName) throw new Error(`Decision #${index + 1} needs a name.`)
-    if (decisionNames.has(decisionName)) {
-      throw new Error(`Decision name "${decisionName}" is duplicated within this recipe.`)
-    }
-    decisionNames.add(decisionName)
-
-    const modelRefs = (decision.modelRefs ?? []).map((reference, refIndex) => {
-      const model = reference.model?.trim()
-      if (!model) {
-        throw new Error(`Decision "${decisionName}" model reference #${refIndex + 1} is empty.`)
-      }
-      if (!knownModels.has(model)) {
-        throw new Error(`Decision "${decisionName}" references unknown model "${model}".`)
-      }
-      return { ...reference, model }
-    })
-    return {
-      ...decision,
-      name: decisionName,
-      description: decision.description?.trim() ?? '',
-      priority: Number.isFinite(decision.priority) ? decision.priority : 0,
-      rules: decision.rules ?? { operator: 'AND', conditions: [] },
-      modelRefs,
-    }
-  })
-
   const existingRouting = (config.recipes ?? []).find(
     (recipe) => recipe.name === originalName,
   )?.routing
-  const signals = validateRecipeSignals(form.signals)
 
   return {
     name,
@@ -242,62 +224,11 @@ export function validateRecipeForm(
     routing: {
       ...existingRouting,
       strategy: form.strategy,
-      signals,
-      decisions,
+      signals: existingRouting?.signals ?? {},
+      projections: existingRouting?.projections ?? {},
+      decisions: existingRouting?.decisions ?? [],
     },
   }
-}
-
-function validateRecipeSignals(signals: ConfigSignals): ConfigSignals {
-  const metadataNames = new Set<string>()
-  for (const [index, signal] of (signals.metadata ?? []).entries()) {
-    const name = signal.name.trim()
-    const key = signal.key.trim()
-    if (!name || !key) {
-      throw new Error(`Metadata signal #${index + 1} needs both a name and key.`)
-    }
-    const normalizedName = name.toLowerCase()
-    if (metadataNames.has(normalizedName)) {
-      throw new Error(`Metadata signal name "${name}" is duplicated within this recipe.`)
-    }
-    metadataNames.add(normalizedName)
-    const predicateCount = [
-      signal.predicate.equals !== undefined,
-      signal.predicate.in !== undefined,
-      signal.predicate.exists !== undefined,
-    ].filter(Boolean).length
-    if (predicateCount !== 1) {
-      throw new Error(`Metadata signal "${name}" needs exactly one predicate.`)
-    }
-    if (signal.predicate.in !== undefined && signal.predicate.in.length === 0) {
-      throw new Error(`Metadata signal "${name}" needs at least one value.`)
-    }
-  }
-
-  const classifierNames = new Set<string>()
-  for (const [index, signal] of (signals.classifiers ?? []).entries()) {
-    const name = signal.name.trim()
-    if (!name) throw new Error(`Classifier signal #${index + 1} needs a name.`)
-    const normalizedName = name.toLowerCase()
-    if (classifierNames.has(normalizedName)) {
-      throw new Error(`Classifier signal name "${name}" is duplicated within this recipe.`)
-    }
-    classifierNames.add(normalizedName)
-    if (signal.labels.length === 0) {
-      throw new Error(`Classifier signal "${name}" needs at least one label.`)
-    }
-    if (signal.type === 'local') {
-      if (!signal.model_path?.trim()) {
-        throw new Error(`Local classifier signal "${name}" needs a model path.`)
-      }
-      if (signal.labels.length !== 2) {
-        throw new Error(`Local classifier signal "${name}" needs exactly two labels.`)
-      }
-    } else if (!signal.model?.trim() || !signal.instructions?.trim()) {
-      throw new Error(`LLM classifier signal "${name}" needs a model and instructions.`)
-    }
-  }
-  return signals
 }
 
 export function getRecipeDeleteBlocker(config: ConfigData, recipeName: string): string | null {

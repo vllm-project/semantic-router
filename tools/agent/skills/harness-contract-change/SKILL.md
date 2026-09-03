@@ -30,8 +30,8 @@ description: Modifies the repository's agent contract including AGENTS.md, docs 
 
 1. Read agent README, governance docs, and execution-plan guidance for current contract state
 2. Modify agent contract docs, manifests, validation scripts, or contributor wrappers
-3. Run `make agent-validate` to check alignment between docs and manifests
-4. Run `make agent-ci-gate CHANGED_FILES="..."` to verify all surfaces pass
+3. Use `make agent-validate` as the focused iteration check for docs and manifests
+4. Run `make agent-ci-gate CHANGED_FILES="..."` as the final gate; it includes the rule-selected harness validation once
 5. Record any durable code/spec divergence as indexed debt entries
 
 ## Gotchas

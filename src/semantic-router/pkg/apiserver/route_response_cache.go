@@ -36,7 +36,8 @@ func (s *ClassificationAPIServer) handleResponseCacheCapabilities(
 	w http.ResponseWriter,
 	_ *http.Request,
 ) {
-	service := s.currentResponseCache()
+	service, release := s.currentResponseCache()
+	defer release()
 	if service == nil {
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "CACHE_UNAVAILABLE", "Response cache is unavailable")
 		return
@@ -48,7 +49,8 @@ func (s *ClassificationAPIServer) handleResponseCacheHealth(
 	w http.ResponseWriter,
 	r *http.Request,
 ) {
-	service := s.currentResponseCache()
+	service, release := s.currentResponseCache()
+	defer release()
 	if service == nil {
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "CACHE_UNAVAILABLE", "Response cache is unavailable")
 		return
@@ -67,7 +69,8 @@ func (s *ClassificationAPIServer) handleResponseCacheStats(
 	w http.ResponseWriter,
 	r *http.Request,
 ) {
-	service := s.currentResponseCache()
+	service, release := s.currentResponseCache()
+	defer release()
 	if service == nil {
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "CACHE_UNAVAILABLE", "Response cache is unavailable")
 		return
@@ -100,7 +103,7 @@ func (s *ClassificationAPIServer) handleResponseCacheTest(
 		return
 	}
 	defer func() { _ = backend.Close() }()
-	healthErr := backend.CheckConnection()
+	healthErr := backend.CheckConnection(r.Context())
 	response := responseCacheTestResponse{
 		Valid:        true,
 		Healthy:      healthErr == nil,
@@ -122,7 +125,8 @@ func (s *ClassificationAPIServer) handleResponseCacheInvalidate(
 		s.writeJSONRequestError(w, err)
 		return
 	}
-	service := s.currentResponseCache()
+	service, release := s.currentResponseCache()
+	defer release()
 	if service == nil {
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "CACHE_UNAVAILABLE", "Response cache is unavailable")
 		return
@@ -152,7 +156,8 @@ func (s *ClassificationAPIServer) handleResponseCacheFlush(
 		s.writeErrorResponse(w, http.StatusBadRequest, "CONFIRMATION_REQUIRED", "confirm must equal \"flush response cache\"")
 		return
 	}
-	service := s.currentResponseCache()
+	service, release := s.currentResponseCache()
+	defer release()
 	if service == nil {
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "CACHE_UNAVAILABLE", "Response cache is unavailable")
 		return

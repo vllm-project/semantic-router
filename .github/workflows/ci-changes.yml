@@ -97,8 +97,6 @@ on:
         value: ${{ jobs.classify.outputs.e2e_authz_rbac }}
       e2e_streaming:
         value: ${{ jobs.classify.outputs.e2e_streaming }}
-      e2e_anthropic_shim:
-        value: ${{ jobs.classify.outputs.e2e_anthropic_shim }}
       e2e_common:
         value: ${{ jobs.classify.outputs.e2e_common }}
 
@@ -157,7 +155,6 @@ jobs:
       e2e_multi_endpoint: ${{ steps.matrix.outputs.e2e_multi_endpoint }}
       e2e_authz_rbac: ${{ steps.matrix.outputs.e2e_authz_rbac }}
       e2e_streaming: ${{ steps.matrix.outputs.e2e_streaming }}
-      e2e_anthropic_shim: ${{ steps.matrix.outputs.e2e_anthropic_shim }}
       e2e_common: ${{ steps.matrix.outputs.e2e_common }}
     steps:
       - uses: actions/checkout@v4

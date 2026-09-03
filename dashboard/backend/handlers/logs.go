@@ -1,188 +1,221 @@
 package handlers
 
 import (
-	"bufio"
 	"encoding/json"
+	"errors"
 	"net/http"
-	"os/exec"
+	"os"
 	"strconv"
 	"strings"
-	"time"
 )
 
-// LogEntry represents a single log entry
+const (
+	logSpoolRootEnv       = "VLLM_SR_LOG_SPOOL_DIR"
+	defaultLogTailLines   = 100
+	maxLogTailLines       = 1000
+	maxLogsResponseBytes  = 1 << 20
+	logsResponseHeadroom  = 4 << 10
+	logsUnsupportedNotice = "Runtime logs are unsupported for this deployment because the bounded shared log spool is not mounted."
+)
+
+var logSpoolComponents = []string{"router", "envoy", "dashboard"}
+
+// LogEntry represents one centrally redacted line from a fixed runtime spool.
 type LogEntry struct {
 	Line    string `json:"line"`
 	Service string `json:"service,omitempty"`
 }
 
-// LogsResponse represents the logs response
+// LogsResponse is the bounded Dashboard log API contract.
 type LogsResponse struct {
 	DeploymentType string     `json:"deployment_type"`
 	Service        string     `json:"service"`
+	Supported      bool       `json:"supported"`
 	Logs           []LogEntry `json:"logs"`
 	Count          int        `json:"count"`
 	Error          string     `json:"error,omitempty"`
 	Message        string     `json:"message,omitempty"`
 }
 
-// LogsHandler returns logs from vLLM-SR services
-// Aligns with the vllm-sr Python CLI by using the same Docker-based approach
-func LogsHandler(routerAPIURL string) http.HandlerFunc {
+// LogsHandler retains the historical constructor shape while deliberately
+// ignoring the Router URL. Logs are read only from the bounded shared spool;
+// this handler never invokes a container runtime or mounts its control socket.
+func LogsHandler(_ string) http.HandlerFunc {
+	return newLogsHandler(os.Getenv(logSpoolRootEnv))
+}
+
+func newLogsHandler(spoolRoot string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-store")
 		if r.Method != http.MethodGet {
-			http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
+			w.Header().Set("Allow", http.MethodGet)
+			writeLogsError(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only GET is supported.")
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-
-		// Parse query parameters
-		component := r.URL.Query().Get("component")
+		component := strings.TrimSpace(r.URL.Query().Get("component"))
 		if component == "" {
 			component = "router"
 		}
-
-		linesStr := r.URL.Query().Get("lines")
-		lines := 100
-		if linesStr != "" {
-			if n, err := strconv.Atoi(linesStr); err == nil && n > 0 && n <= 1000 {
-				lines = n
-			}
+		if !validLogSpoolComponent(component) {
+			writeLogsError(w, http.StatusBadRequest, "invalid_component", "Component must be router, envoy, dashboard, or all.")
+			return
 		}
-
+		lines := requestedLogTailLines(r.URL.Query().Get("lines"))
 		response := LogsResponse{
-			DeploymentType: "none",
+			DeploymentType: "local-spool",
 			Service:        component,
+			Supported:      true,
 			Logs:           []LogEntry{},
 		}
 
-		if isRunningInContainer() {
-			populateRunningContainerLogs(&response, component, lines)
-		} else {
-			populateExternalLogs(&response, component, lines, routerAPIURL)
-		}
-
-		response.Count = len(response.Logs)
-
-		if err := json.NewEncoder(w).Encode(response); err != nil {
-			http.Error(w, `{"error":"Failed to encode response"}`, http.StatusInternalServerError)
+		reader, err := openLogSpoolReader(spoolRoot)
+		if errors.Is(err, errLogSpoolUnsupported) {
+			response.DeploymentType = "unsupported"
+			response.Supported = false
+			response.Message = logsUnsupportedNotice
+			writeLogsResponse(w, response)
 			return
 		}
+		if err != nil {
+			response.Error = "The bounded log spool is unavailable or unsafe."
+			writeLogsResponse(w, response)
+			return
+		}
+		defer reader.Close()
+
+		entries, readErr := readRequestedLogEntries(reader, component, lines)
+		if readErr != nil {
+			response.Error = "The bounded log spool could not be read safely."
+			writeLogsResponse(w, response)
+			return
+		}
+		response.Logs = limitLogEntriesByJSONBytes(
+			entries,
+			maxLogsResponseBytes-logsResponseHeadroom,
+		)
+		response.Count = len(response.Logs)
+		if response.Count == 0 {
+			response.Message = "No recent log entries are available for this service."
+		}
+		writeLogsResponse(w, response)
 	}
 }
 
-func populateRunningContainerLogs(
-	response *LogsResponse, component string, lines int,
-) {
-	response.DeploymentType = "docker"
-	populateFetchedLogs(response, component, lines)
-}
-
-func populateExternalLogs(
-	response *LogsResponse, component string, lines int, routerAPIURL string,
-) {
-	switch containerStatus := runtimeContainerStatusForLogs(); containerStatus {
-	case "running", "exited":
-		response.DeploymentType = "docker"
-		populateFetchedLogs(response, component, lines)
-	case "not found":
-		populateDirectRuntimeMessage(response, routerAPIURL)
-	default:
-		response.DeploymentType = "docker"
-		response.Error = "Container status: " + containerStatus
+func validLogSpoolComponent(component string) bool {
+	if component == "all" {
+		return true
 	}
+	for _, candidate := range logSpoolComponents {
+		if component == candidate {
+			return true
+		}
+	}
+	return false
 }
 
-func populateFetchedLogs(response *LogsResponse, component string, lines int) {
-	logs, err := fetchContainerLogs(component, lines)
+func requestedLogTailLines(raw string) int {
+	if raw == "" {
+		return defaultLogTailLines
+	}
+	lines, err := strconv.Atoi(raw)
+	if err != nil || lines < 1 || lines > maxLogTailLines {
+		return defaultLogTailLines
+	}
+	return lines
+}
+
+func readRequestedLogEntries(reader *logSpoolReader, component string, lines int) ([]LogEntry, error) {
+	if component != "all" {
+		return readComponentLogEntries(reader, component, lines, false)
+	}
+
+	entries := make([]LogEntry, 0, lines)
+	base := lines / len(logSpoolComponents)
+	remainder := lines % len(logSpoolComponents)
+	for index, candidate := range logSpoolComponents {
+		allocation := base
+		if index < remainder {
+			allocation++
+		}
+		if allocation == 0 {
+			continue
+		}
+		componentEntries, err := readComponentLogEntries(reader, candidate, allocation, true)
+		if err != nil {
+			return nil, err
+		}
+		entries = append(entries, componentEntries...)
+	}
+	return entries, nil
+}
+
+func readComponentLogEntries(
+	reader *logSpoolReader,
+	component string,
+	lines int,
+	prefixService bool,
+) ([]LogEntry, error) {
+	rawLines, err := reader.Tail(component, lines)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
 	if err != nil {
-		response.Error = err.Error()
-		return
+		return nil, err
 	}
-	response.Logs = append(response.Logs, buildLogEntries(component, logs)...)
-}
-
-func buildLogEntries(component string, logs []string) []LogEntry {
-	entries := make([]LogEntry, 0, len(logs))
-	for _, line := range logs {
+	redacted := redactRuntimeLogLines(rawLines)
+	entries := make([]LogEntry, 0, len(redacted))
+	for _, line := range redacted {
 		if line == "" {
 			continue
 		}
-		entries = append(entries, LogEntry{
-			Line:    line,
-			Service: component,
-		})
+		if prefixService {
+			line = "[" + component + "] " + line
+		}
+		entries = append(entries, LogEntry{Line: line, Service: component})
 	}
-	return entries
+	return entries, nil
 }
 
-func populateDirectRuntimeMessage(response *LogsResponse, routerAPIURL string) {
-	if routerAPIURL != "" && checkRouterHealth(routerAPIURL) {
-		response.DeploymentType = "local (direct)"
-		response.Message = "Logs are available for Docker deployments started with 'vllm-sr serve'. " +
-			"For the current deployment, logs are written to the process stdout/stderr."
+func limitLogEntriesByJSONBytes(entries []LogEntry, budget int) []LogEntry {
+	if budget <= 0 {
+		return []LogEntry{}
+	}
+	selected := make([]LogEntry, 0, len(entries))
+	used := 0
+	for index := len(entries) - 1; index >= 0; index-- {
+		encoded, err := json.Marshal(entries[index])
+		if err != nil {
+			continue
+		}
+		if used+len(encoded)+1 > budget {
+			break
+		}
+		used += len(encoded) + 1
+		selected = append(selected, entries[index])
+	}
+	for left, right := 0, len(selected)-1; left < right; left, right = left+1, right-1 {
+		selected[left], selected[right] = selected[right], selected[left]
+	}
+	return selected
+}
+
+func writeLogsResponse(w http.ResponseWriter, response LogsResponse) {
+	response.Count = len(response.Logs)
+	data, err := json.Marshal(response)
+	if err != nil || len(data)+1 > maxLogsResponseBytes {
+		writeLogsError(w, http.StatusInternalServerError, "encoding_failed", "The log response could not be encoded safely.")
 		return
 	}
-	response.Error = "No running deployment detected. Start with: vllm-sr serve"
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(append(data, '\n'))
 }
 
-func runtimeContainerStatusForLogs() string {
-	return managedRuntimeContainerStatus()
-}
-
-func fetchContainerLogs(component string, lines int) ([]string, error) {
-	return fetchLogsFromManagedDocker(component, lines)
-}
-
-func fetchLogsFromManagedDocker(component string, lines int) ([]string, error) {
-	var result []string
-
-	for _, containerName := range managedContainerNamesForComponent(component) {
-		// #nosec G204 -- containerName is repository-managed and lines is converted from int.
-		cmd := exec.Command("docker", "logs", "--tail", strconv.Itoa(lines), containerName)
-		output, err := cmd.CombinedOutput()
-		if err != nil && len(output) == 0 {
-			continue
-		}
-
-		logLines := splitLogLines(string(output))
-		service := managedServiceForContainerName(containerName)
-		if component == "all" && service != "" {
-			for _, line := range logLines {
-				result = append(result, "["+service+"] "+line)
-			}
-			continue
-		}
-		result = append(result, logLines...)
-	}
-
-	if len(result) > lines {
-		return result[len(result)-lines:], nil
-	}
-	return result, nil
-}
-
-// checkRouterHealth checks if router is accessible via HTTP
-func checkRouterHealth(url string) bool {
-	client := &http.Client{Timeout: 2 * time.Second}
-	resp, err := client.Get(url + "/health")
-	if err != nil {
-		return false
-	}
-	defer resp.Body.Close()
-	return resp.StatusCode >= 200 && resp.StatusCode < 300
-}
-
-// splitLogLines splits output into lines, removing empty ones
-func splitLogLines(output string) []string {
-	var result []string
-	scanner := bufio.NewScanner(strings.NewReader(output))
-	for scanner.Scan() {
-		line := scanner.Text()
-		if line != "" {
-			result = append(result, line)
-		}
-	}
-	return result
+func writeLogsError(w http.ResponseWriter, status int, code, message string) {
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"error":   code,
+		"message": message,
+	})
 }

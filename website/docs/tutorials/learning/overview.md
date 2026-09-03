@@ -12,7 +12,8 @@ The public concepts are:
 - `global.router.learning.protection`: session and conversation stability.
 - `routing.decisions[].adaptations`: per-decision apply, observe, or bypass
   controls.
-- Router Replay: durable diagnostics and outcomes for offline recipe learning.
+- Router Replay: optional diagnostics and outcomes for offline recipe learning;
+  persistence requires a durable replay backend.
 
 Use Router Learning when a decision should remain semantic, but repeated
 requests should consider current model, tool-loop state, prefix-cache evidence,
@@ -24,9 +25,10 @@ handoff cost, switch history, or runtime outcomes.
 - Gives online model-choice learning and stability protection one shared
   runtime pipeline.
 - Lets hard policy decisions bypass learning without changing route rules.
-- Records compact response headers and detailed Router Replay diagnostics.
-- Feeds offline agent loops that can find routing problems and propose recipe
-  patches.
+- Records compact response headers and, when replay is enabled, detailed
+  Router Replay diagnostics.
+- Supports offline analysis that can identify routing problems and evaluate
+  recipe changes before deployment.
 
 ## What Problem Does It Solve?
 
@@ -43,7 +45,8 @@ control.
 - Agent sessions need stability across tool loops, prefix cache, or provider
   state.
 - Sensitive decisions need an explicit bypass from online learning.
-- You want replay and outcomes to power offline recipe experiments.
+- You want explicitly configured replay and outcomes to power offline recipe
+  experiments.
 
 ## Configuration
 
@@ -125,9 +128,10 @@ x-vsr-learning-scopes: protection=conversation
 x-vsr-learning-reasons: adaptation=sampled_win,protection=switch_allowed
 ```
 
-Detailed fields such as base model, proposal model, final model, cache warmth,
-switch cost, candidate scores, sampling values, and hashed identity diagnostics
-belong in Router Replay, keyed by `x-vsr-replay-id`.
+When Router Replay is enabled, detailed fields such as base model, proposal
+model, final model, cache warmth, switch cost, candidate scores, sampling
+values, and hashed identity diagnostics are stored there and keyed by
+`x-vsr-replay-id`.
 
 ## Related Pages
 
@@ -137,12 +141,12 @@ belong in Router Replay, keyed by `x-vsr-replay-id`.
   controls.
 - [Memory And Replay](./memory-and-replay) explains diagnostics and outcomes.
 
-## Offline Recipe Learning
+## Evaluate Recipe Changes Offline
 
 Router Learning does not rewrite deployed recipes on the request path. Use the
 offline recipe-learning command to turn replay and outcomes into findings,
-metrics, candidate recipe variants, experiment estimates, recipe patch
-suggestions, and experience seed packs:
+metrics, candidate variants, experiment estimates, suggested changes, and
+experience seed packs:
 
 ```bash
 vllm-sr eval recipe-learning \
@@ -150,6 +154,9 @@ vllm-sr eval recipe-learning \
   --recipe-file config.yaml \
   --output-dir ./router-learning-report
 ```
+
+`--endpoint` targets the Router management API, never the public inference
+listener. Export `VSR_MGMT_TOKEN` first when management bearer auth is enabled.
 
 For air-gapped or CI workflows, export replay JSON first and pass it with
 `--replay-file`. Add `--cases-file` when eval cases include expected decisions

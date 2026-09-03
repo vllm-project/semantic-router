@@ -98,15 +98,19 @@ type ContextRule struct {
 	// +kubebuilder:validation:MaxLength=100
 	Name string `json:"name" yaml:"name"`
 
-	// MinTokens is the minimum token count (supports K/M suffixes)
-	// +kubebuilder:validation:Required
+	// MinTokens is the inclusive minimum token count (supports K/M suffixes).
+	// Omit it to start the band at 0. At least one of MinTokens and MaxTokens
+	// must be set.
+	// +optional
 	// +kubebuilder:validation:Pattern=`^[0-9]+(\.[0-9]+)?[KMkm]?$`
-	MinTokens string `json:"minTokens" yaml:"min_tokens"`
+	MinTokens string `json:"minTokens,omitempty" yaml:"min_tokens,omitempty"`
 
-	// MaxTokens is the maximum token count (supports K/M suffixes)
-	// +kubebuilder:validation:Required
+	// MaxTokens is the inclusive maximum token count (supports K/M suffixes).
+	// Omit it to make the band open-ended so every request at or above
+	// MinTokens matches. Equal MinTokens and MaxTokens match exactly one count.
+	// +optional
 	// +kubebuilder:validation:Pattern=`^[0-9]+(\.[0-9]+)?[KMkm]?$`
-	MaxTokens string `json:"maxTokens" yaml:"max_tokens"`
+	MaxTokens string `json:"maxTokens,omitempty" yaml:"max_tokens,omitempty"`
 
 	// Description provides human-readable explanation
 	// +optional
@@ -305,6 +309,11 @@ type SignalCombination struct {
 	// +kubebuilder:validation:Enum=AND;OR;NOT
 	Operator string `json:"operator" yaml:"operator"`
 
+	// OnUnknown resolves a terminal unknown result after the signal tree is evaluated.
+	// +optional
+	// +kubebuilder:validation:Enum=no_match;match;fail_request
+	OnUnknown string `json:"on_unknown,omitempty" yaml:"on_unknown,omitempty"`
+
 	// Conditions defines the list of signal conditions
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinItems=1
@@ -361,7 +370,7 @@ type DecisionPlugin struct {
 	// Type is the plugin type. response_cache is canonical; semantic-cache,
 	// semantic_cache, and response-cache are deprecated aliases.
 	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Enum=context_compression;fast_response;hallucination;header_mutation;image_gen;memory;rag;request_params;response_jailbreak;router_replay;response_cache;response-cache;semantic_cache;semantic-cache;system_prompt;tools
+	// +kubebuilder:validation:Enum=context_compression;fast_response;hallucination;header_mutation;memory;rag;request_params;response_jailbreak;router_replay;response_cache;response-cache;semantic_cache;semantic-cache;system_prompt;tools
 	Type string `json:"type" yaml:"type"`
 
 	// Configuration is the plugin-specific configuration as a raw JSON object

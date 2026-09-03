@@ -1,0 +1,36 @@
+{
+  "operation": "response",
+  "base": {
+    "id": "chatcmpl_1",
+    "object": "chat.completion",
+    "created": 100,
+    "model": "provider-model",
+    "choices": [{"index": 0, "message": {"role": "assistant", "content": "done"}, "finish_reason": "stop"}],
+    "usage": {"prompt_tokens": 2, "completion_tokens": 1, "total_tokens": 3}
+  },
+  "cases": [
+    {"name": "choices", "patch": {"choices": [{"index": 0, "message": {"role": "assistant", "content": "alternate"}, "finish_reason": "stop"}]}},
+    {"name": "created", "patch": {"created": 101}},
+    {"name": "do_remote_decode", "patch": {"do_remote_decode": false}},
+    {"name": "do_remote_prefill", "patch": {"do_remote_prefill": false}},
+    {"name": "ec_transfer_params", "patch": {"ec_transfer_params": null}},
+    {"name": "error", "patch": {"error": {"message": "provider failed", "type": "server_error", "code": "provider_error"}}},
+    {"name": "id", "patch": {"id": "chatcmpl_2"}},
+    {"name": "kv_transfer_params", "patch": {"kv_transfer_params": {}}},
+    {"name": "metadata", "patch": {"metadata": {"trace": "field-matrix"}}},
+    {"name": "metrics", "patch": {"metrics": null}},
+    {"name": "model", "patch": {"model": "alternate-provider-model"}},
+    {"name": "moderation", "patch": {"moderation": {"status": "passed"}}},
+    {"name": "object", "patch": {"object": "chat.completion"}},
+    {"name": "prompt_logprobs", "patch": {"prompt_logprobs": null}},
+    {"name": "prompt_text", "patch": {"prompt_text": null}},
+    {"name": "prompt_token_ids", "patch": {"prompt_token_ids": [1, 2, 3]}},
+    {"name": "remote_block_ids", "patch": {"remote_block_ids": [11, 12]}},
+    {"name": "remote_engine_id", "patch": {"remote_engine_id": "engine-1"}},
+    {"name": "remote_host", "patch": {"remote_host": "provider.internal"}},
+    {"name": "remote_port", "patch": {"remote_port": 8000}},
+    {"name": "service_tier", "patch": {"service_tier": "default"}},
+    {"name": "system_fingerprint", "patch": {"system_fingerprint": "fp_1"}},
+    {"name": "usage", "patch": {"usage": {"prompt_tokens": 8, "completion_tokens": 5, "total_tokens": 13, "prompt_tokens_details": {"cached_tokens": 2, "cache_write_tokens": 1}, "completion_tokens_details": {"reasoning_tokens": 3}}}}
+  ]
+}

@@ -2,8 +2,13 @@ import { KeyValueEditor } from '../components/KeyValueEditor'
 import { ObjectListEditor, type ObjectEditorField } from '../components/ObjectListEditor'
 import { StringListEditor } from '../components/StringListEditor'
 import { normalizeStringList } from '../components/structuredFieldEditorSupport'
-import type { BackendRefEntry, LoRAAdapter, ModelPricing } from './configPageSupport'
-import { normalizeModelBackendRefs } from './configPageModelFormSupport'
+import type {
+  BackendRefEntry,
+  LoRAAdapter,
+  ModelPricing,
+  ProviderReliability,
+} from './configPageSupport'
+import { normalizeModelBackendRefs, normalizeModelReliability } from './configPageModelFormSupport'
 
 interface StructuredModelFieldProps {
   value: unknown
@@ -95,6 +100,67 @@ const pricingFields: ObjectEditorField<ModelPricing>[] = [
     min: 0,
     step: 0.0001,
     placeholder: '1.50',
+  },
+]
+
+const reliabilityFields: ObjectEditorField<ProviderReliability>[] = [
+  {
+    key: 'lb_policy',
+    label: 'Load balancing',
+    type: 'select',
+    options: ['ROUND_ROBIN', 'LEAST_REQUEST', 'RING_HASH', 'MAGLEV'],
+  },
+  {
+    key: 'retry_count',
+    label: 'Max retries',
+    type: 'number',
+    min: 0,
+    max: 5,
+    step: 1,
+    placeholder: '0',
+  },
+  {
+    key: 'retry_on',
+    label: 'Retry conditions',
+    placeholder: '5xx,reset,connect-failure',
+    fullWidth: true,
+  },
+  {
+    key: 'health_check_path',
+    label: 'Health check path',
+    placeholder: '/health',
+  },
+  {
+    key: 'health_check_interval',
+    label: 'Health check interval',
+    placeholder: '10s',
+  },
+  {
+    key: 'health_check_timeout',
+    label: 'Health check timeout',
+    placeholder: '2s',
+  },
+  {
+    key: 'consecutive_5xx',
+    label: 'Errors before ejection',
+    type: 'number',
+    min: 0,
+    step: 1,
+    placeholder: '5',
+  },
+  {
+    key: 'base_ejection_time',
+    label: 'Base ejection time',
+    placeholder: '30s',
+  },
+  {
+    key: 'max_ejection_percent',
+    label: 'Max ejection percent',
+    type: 'number',
+    min: 0,
+    max: 100,
+    step: 1,
+    placeholder: '50',
   },
 ]
 
@@ -246,6 +312,32 @@ export function ModelPricingEditor({
       createItem={() => ({ currency: 'USD' })}
       itemLabel={() => 'Token pricing'}
       itemDescription={(item) => `${item.currency || 'USD'} per one million tokens`}
+      minItems={1}
+      maxItems={1}
+      disabled={disabled}
+      readOnly={readOnly}
+    />
+  )
+}
+
+export function ModelReliabilityEditor({
+  value,
+  onChange,
+  disabled,
+  readOnly,
+}: StructuredModelFieldProps) {
+  const reliability: ProviderReliability = normalizeModelReliability(value) || {}
+
+  return (
+    <ObjectListEditor<ProviderReliability>
+      value={[reliability]}
+      onChange={(nextValue) => onChange?.(nextValue[0] || {})}
+      fields={reliabilityFields}
+      createItem={() => ({})}
+      itemLabel={() => 'Delivery policy'}
+      itemDescription={(item) =>
+        item.retry_count ? `${item.retry_count} retries` : 'Use platform defaults'
+      }
       minItems={1}
       maxItems={1}
       disabled={disabled}

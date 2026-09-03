@@ -17,7 +17,6 @@ if str(TOOLS_CI_DIR) not in sys.path:
 from classify_pr_changes import classify as classify_pr_changes  # noqa: E402
 from test_domain_registry import (  # noqa: E402
     domain_records,
-    local_full_ci_paths,
     profile_records,
     suite_domains,
 )
@@ -114,10 +113,11 @@ def targeted_profiles_for_rules(
 
 
 def resolve_e2e_profiles(
-    changed_files: list[str], e2e_map: dict, local_rule_path_set: set[str]
+    changed_files: list[str],
+    test_domain_registry: dict,
+    local_rule_path_set: set[str],
 ) -> tuple[list[str], list[str], list[str], str]:
-    del e2e_map
-    profiles = profile_records()
+    profiles = profile_records(test_domain_registry)
     standard_profile_rules = {
         name: data for name, data in profiles.items() if data.get("selection") == "pr"
     }
@@ -127,12 +127,9 @@ def resolve_e2e_profiles(
         if data.get("selection") == "manual"
     }
     workflow_suite_rules = {
-        suite_name: domain for suite_name, (_, domain) in suite_domains().items()
+        suite_name: domain
+        for suite_name, (_, domain) in suite_domains(test_domain_registry).items()
     }
-    full_ci = any(
-        matches_with_local_rule_policy(path, local_full_ci_paths(), local_rule_path_set)
-        for path in changed_files
-    )
     targeted_profiles = targeted_profiles_for_rules(
         standard_profile_rules, changed_files, local_rule_path_set
     )
@@ -143,17 +140,7 @@ def resolve_e2e_profiles(
         workflow_suite_rules, changed_files, local_rule_path_set
     )
     hosted_profiles = list(classify_pr_changes(changed_files).profiles)
-    default_local_profiles = [
-        name for name, data in profiles.items() if data.get("default_local")
-    ]
-    full_ci_profiles = [name for name, data in profiles.items() if data.get("full_ci")]
-
-    if full_ci:
-        local_profiles = [*(targeted_profiles or default_local_profiles)]
-        local_profiles.extend(targeted_manual_profiles)
-        ci_profiles = full_ci_profiles
-        ci_mode = "all"
-    elif targeted_profiles or targeted_manual_profiles or hosted_profiles:
+    if targeted_profiles or targeted_manual_profiles or hosted_profiles:
         local_profiles = [
             *(targeted_profiles or hosted_profiles),
             *targeted_manual_profiles,
@@ -201,13 +188,17 @@ def resolve_execution_plan_policy(matched_rules: list[dict]) -> str:
 
 
 def resolve_context(changed_files: list[str]) -> ResolvedContext:
-    repo_manifest, task_matrix, e2e_map, _, _ = load_manifests()
+    repo_manifest, task_matrix, test_domain_registry, _, _ = load_manifests()
     local_rule_path_set = local_agent_rule_paths(repo_manifest)
     matched_rules, fast_tests, feature_tests, requires_local_smoke = (
         match_task_matrix_rules(task_matrix, changed_files, local_rule_path_set)
     )
     local_profiles, ci_profiles, targeted_workflow_suites, ci_mode = (
-        resolve_e2e_profiles(changed_files, e2e_map, local_rule_path_set)
+        resolve_e2e_profiles(
+            changed_files,
+            test_domain_registry,
+            local_rule_path_set,
+        )
     )
     doc_only = is_doc_only_rule_set(matched_rules)
     loop_mode = resolve_loop_mode(matched_rules)

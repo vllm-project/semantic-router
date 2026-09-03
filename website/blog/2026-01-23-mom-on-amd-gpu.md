@@ -23,7 +23,7 @@ The core questions we're addressing:
 
 With **vLLM Semantic Router (vLLM-SR) v0.1**, we've deployed a live MoM system on AMD **MI300X/MI355X** GPUs that demonstrates these capabilities in action—routing queries across 6 specialized models using 8 signal types and 11 decision rules with the performance boost.
 
-**🎮 Try it live: [https://play.vllm-semantic-router.com](https://play.vllm-semantic-router.com)**
+**🎮 Try it live: [https://app.vllm-sr.ai](https://app.vllm-sr.ai)**
 
 ## Table of Contents
 
@@ -109,7 +109,7 @@ MoM treats AI deployment like building a **team of specialists** with a smart di
 
 We've deployed a live demo system powered by **AMD MI300X GPUs** that showcases the full MoM architecture:
 
-**🎮 [https://play.vllm-semantic-router.com](https://play.vllm-semantic-router.com)**
+**🎮 [https://app.vllm-sr.ai](https://app.vllm-sr.ai)**
 
 ![Live Demo on AMD GPUs](/img/blog/vllm/semantic-router/mom-4.png)
 
@@ -169,7 +169,7 @@ After each response, the UI displays:
 
 **Thinking Topology Visualization**
 
-One highlight worth emphasizing: we've implemented a [topology visualization](https://play.vllm-semantic-router.com/topology) capability. Beyond displaying static signal-decision relations, it reveals **real-time thinking chains** triggered by different queries—like watching a giant neural network built from semantics come alive. Each question illuminates different pathways through the model constellation, making the MoM routing logic intuitive and debuggable.
+One highlight worth emphasizing: we've implemented a [topology visualization](https://app.vllm-sr.ai/topology) capability. Beyond displaying static signal-decision relations, it reveals **real-time thinking chains** triggered by different queries—like watching a giant neural network built from semantics come alive. Each question illuminates different pathways through the model constellation, making the MoM routing logic intuitive and debuggable.
 
 ![Building Mixture-of-Models on AMD GPUs with vLLM-SR: Mom 7](/img/blog/vllm/semantic-router/mom-7.png)
 
@@ -368,9 +368,9 @@ The live demo shows what's possible with MoM architecture. Key findings from our
 
 ## Resources
 
-- **Live Demo**: [https://play.vllm-semantic-router.com](https://play.vllm-semantic-router.com)
+- **Live Demo**: [https://app.vllm-sr.ai](https://app.vllm-sr.ai)
 - **GitHub**: [vllm-project/semantic-router](https://github.com/vllm-project/semantic-router)
-- **Documentation**: [vllm-semantic-router.com](https://vllm-semantic-router.com)
+- **Documentation**: [vllm-sr.ai](https://vllm-sr.ai)
 - **AMD ROCm**: [amd.com/rocm](https://www.amd.com/en/products/software/rocm.html)
 
 ## Acknowledgements

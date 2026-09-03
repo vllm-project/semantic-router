@@ -2,10 +2,8 @@
 
 ## Overview
 
-`workflows` is a **looper** algorithm for Router Flow: a single model name can
-run a bounded micro-agent workflow behind the OpenAI-compatible API.
-
-It aligns to `config/fragments/algorithm/looper/workflows.yaml`.
+`workflows` runs a bounded, multi-step Router Flow behind one
+OpenAI-compatible model name.
 
 The runtime also supports a direct Flow model slug through
 `global.integrations.looper.flow.model_names`. The built-in default is
@@ -27,7 +25,7 @@ routes.
 Some requests need orchestration rather than a one-step route decision: split the
 task, ask multiple workers for targeted work, verify or reconcile the outputs,
 and return one final answer through the same chat completions API. `workflows`
-makes that orchestration a router-owned policy while keeping the public model
+makes that orchestration part of Router policy while keeping the public model
 surface as small as `vllm-sr/flow`.
 
 ## When to Use
@@ -64,6 +62,8 @@ Configure a dynamic Flow decision:
 routing:
   decisions:
     - name: coding_flow
+      description: Coordinate coding work through planned worker steps.
+      priority: 100
       output_contract: Preserve any explicit output format exactly.
       modelRefs:
         - model: openrouter/gemini-pro
@@ -103,6 +103,8 @@ decision's `modelRefs`.
 routing:
   decisions:
     - name: static_flow
+      description: Coordinate a fixed sequence of worker roles.
+      priority: 100
       modelRefs:
         - model: qwen-worker
         - model: deepseek-worker
@@ -139,6 +141,7 @@ routing:
 | `final.prompt` | string | built-in synthesis prompt | Optional static final synthesis instruction |
 | `planner.model` | string | required for dynamic | Control-plane model used to generate the workflow plan |
 | `planner.max_completion_tokens` | int | `2048` | Max completion tokens for the planner JSON plan only |
+| `minimum_candidates` | int | unset | Minimum distinct decision `modelRefs` required after Recipe materialization and context eligibility filtering |
 | `max_steps` | int | `3` | Maximum workflow steps accepted from the planner |
 | `max_parallel` | int | `2` | Maximum worker models per step |
 | `max_completion_tokens` | int | request default | Max completion tokens for worker and final synthesis calls |
@@ -147,6 +150,10 @@ routing:
 | `temperature` | float | request default | Temperature for planner, worker, and synthesis calls |
 | `include_intermediate_responses` | bool | `true` | Include Flow plan and worker outputs in the response trace |
 | `on_error` | string | `fail` | `fail` on worker error or `skip` failed workers when at least one worker succeeds |
+
+Every static role and every planner-generated step must contain at least
+`min_successful_responses` Models. A plan that cannot satisfy its configured
+quorum is rejected instead of running with a silently reduced quorum.
 
 ## Tool And Function Calling
 
@@ -194,3 +201,9 @@ claimed by whichever router instance receives it.
 Router Flow intentionally keeps the user-facing API small. The decision's
 `modelRefs` are the worker pool. `algorithm.workflows` describes how to
 orchestrate that pool, not a second model catalog.
+
+Planner and worker models receive request-derived content according to the
+workflow plan. Tool-call state can be persisted in memory, files, or Redis;
+choose a backend, TTL, authentication, and encryption appropriate for that
+content. See a complete example:
+[`config/fragments/algorithm/looper/workflows.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/workflows.yaml).

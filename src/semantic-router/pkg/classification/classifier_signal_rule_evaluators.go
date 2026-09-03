@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -55,13 +56,22 @@ func (c *Classifier) evaluateKeywordSignal(results *SignalResults, mu *sync.Mute
 	}
 }
 
-func (c *Classifier) evaluateDomainSignal(results *SignalResults, mu *sync.Mutex, text string) {
+type categoryProbabilityFallbackPolicy interface {
+	fallbackToTop1OnProbabilityError() bool
+}
+
+func categoryProbabilityFallbackAllowed(inference CategoryInference) bool {
+	policy, ok := inference.(categoryProbabilityFallbackPolicy)
+	return !ok || policy.fallbackToTop1OnProbabilityError()
+}
+
+func (c *Classifier) evaluateDomainSignal(ctx context.Context, results *SignalResults, mu *sync.Mutex, text string) {
 	start := time.Now()
-	domainResult, err := c.categoryInference.ClassifyWithProbabilities(text)
-	if err != nil {
+	domainResult, err := c.categoryInference.ClassifyWithProbabilities(ctx, text)
+	if err != nil && categoryProbabilityFallbackAllowed(c.categoryInference) {
 		// Fall back to Classify() (top-1 only) when ClassifyWithProbabilities is unavailable.
 		logging.Debugf("[Signal Computation] ClassifyWithProbabilities unavailable, falling back to Classify: %v", err)
-		basicResult, basicErr := c.categoryInference.Classify(text)
+		basicResult, basicErr := c.categoryInference.Classify(ctx, text)
 		if basicErr != nil {
 			err = basicErr
 		} else {
@@ -222,9 +232,17 @@ func (c *Classifier) evaluateReaskSignal(results *SignalResults, mu *sync.Mutex,
 	mu.Unlock()
 }
 
-func (c *Classifier) evaluateContextSignal(results *SignalResults, mu *sync.Mutex, contextText string) {
+func (c *Classifier) evaluateContextSignal(
+	results *SignalResults,
+	mu *sync.Mutex,
+	contextText string,
+	contextTokenFloor int,
+) {
 	start := time.Now()
-	matchedRules, count, err := c.contextClassifier.Classify(contextText)
+	matchedRules, count, err := c.contextClassifier.ClassifyWithTokenFloor(
+		contextText,
+		contextTokenFloor,
+	)
 	elapsed := time.Since(start)
 
 	// Record metrics (use microseconds for better precision)

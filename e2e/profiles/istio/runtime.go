@@ -373,7 +373,7 @@ func (p *Profile) verifyServiceHealth(ctx context.Context, opts *framework.Setup
 		"get", "pods",
 		"-n", semanticRouterNamespace,
 		"-l", "app.kubernetes.io/name=semantic-router",
-		"-o", "jsonpath={.items[*].status.containerStatuses[*].ready}")
+		"-o", "jsonpath={.items[*].status.containerStatuses[?(@.name==\"semantic-router\")].ready} {.items[*].status.containerStatuses[?(@.name==\"istio-proxy\")].ready} {.items[*].status.initContainerStatuses[?(@.name==\"istio-proxy\")].ready}")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to check pod readiness: %w (output: %s)", err, string(output))
@@ -399,7 +399,7 @@ func (p *Profile) verifySidecarInjection(ctx context.Context, opts *framework.Se
 		"get", "pods",
 		"-n", semanticRouterNamespace,
 		"-l", "app.kubernetes.io/name=semantic-router",
-		"-o", "jsonpath={.items[0].spec.containers[*].name}")
+		"-o", "jsonpath={.items[0].spec.containers[*].name} {.items[0].spec.initContainers[*].name}")
 	output, err := cmd.Output()
 	if err != nil {
 		return fmt.Errorf("failed to get pod containers: %w", err)

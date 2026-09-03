@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/vllm-project/semantic-router/dashboard/backend/routerauth"
 )
 
 // TestQueryMode represents the test query mode
@@ -66,7 +68,7 @@ type TestQueryResult struct {
 // TopologyTestQueryHandler handles test query requests for topology visualization
 // routerAPIURL: the Router API URL for dry-run mode (real classification)
 // configPath: path to config.yaml for simulate mode (local simulation)
-func TopologyTestQueryHandler(configPath, routerAPIURL string) http.HandlerFunc {
+func TopologyTestQueryHandler(configPath, routerAPIURL string, credentialProvider ...routerauth.CredentialProvider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -96,7 +98,7 @@ func TopologyTestQueryHandler(configPath, routerAPIURL string) http.HandlerFunc 
 
 		if req.Mode == TestQueryModeDryRun && routerAPIURL != "" {
 			// Dry-run mode: call real Router API for actual classification
-			result = callRouterAPI(req, routerAPIURL, configPath)
+			result = callRouterAPI(req, routerAPIURL, configPath, credentialProvider...)
 		} else {
 			// Simulate mode is no longer supported
 			result = &TestQueryResult{
@@ -166,7 +168,7 @@ type RouterEvalResponse struct {
 }
 
 // callRouterAPI calls the real Router API for classification
-func callRouterAPI(req TestQueryRequest, routerAPIURL, configPath string) *TestQueryResult {
+func callRouterAPI(req TestQueryRequest, routerAPIURL, configPath string, credentialProvider ...routerauth.CredentialProvider) *TestQueryResult {
 	// Prepare request to Router API
 	intentReq := RouterIntentRequest{
 		Text:  req.Query,
@@ -198,6 +200,19 @@ func callRouterAPI(req TestQueryRequest, routerAPIURL, configPath string) *TestQ
 		}
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
+	var provider routerauth.CredentialProvider
+	if len(credentialProvider) > 0 {
+		provider = credentialProvider[0]
+	}
+	if authErr := routerauth.RewriteAuthorization(httpReq, provider); authErr != nil {
+		return &TestQueryResult{
+			Query:           req.Query,
+			Mode:            req.Mode,
+			HighlightedPath: []string{"client"},
+			Warning:         "Router management credential is unavailable",
+			IsAccurate:      false,
+		}
+	}
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(httpReq)

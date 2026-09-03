@@ -644,7 +644,7 @@ func workflowRoundContext(ctx context.Context, cfg workflowsExecutionConfig) (co
 }
 
 func workflowRoundMinSuccessful(numCalls int, configured int) int {
-	if configured > 0 && configured < numCalls {
+	if configured > 0 {
 		return configured
 	}
 	return numCalls
@@ -740,5 +740,5 @@ func (l *WorkflowsLooper) callWorkflowModel(
 	if modelName == cfg.PlannerModel && cfg.PlannerMaxCompletionTokens > 0 {
 		callReq.MaxCompletionTokens = openai.Int(int64(cfg.PlannerMaxCompletionTokens))
 	}
-	return l.client.CallModel(ctx, callReq, modelName, false, iteration, nil, accessKeyForModel(baseReq, modelName))
+	return l.callModelWithContextGate(ctx, baseReq, callReq, modelName, false, iteration, nil, accessKeyForModel(baseReq, modelName))
 }

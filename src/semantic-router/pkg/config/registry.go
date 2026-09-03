@@ -150,6 +150,19 @@ var DefaultModelRegistry = []ModelSpec{
 		Tags:             []string{"hallucination", "modernbert", "verification"},
 	},
 
+	// Hallucination Detection - Detector (multilingual)
+	{
+		LocalPath:        "models/lettucedect-v2-mmbert-base",
+		RepoID:           "KRLabsOrg/lettucedect-v2-mmbert-base",
+		Aliases:          []string{"hallucination-detector-multilingual", "lettucedect-v2-mmbert"},
+		Purpose:          PurposeHallucinationDetector,
+		Description:      "Multilingual mmBERT hallucination detector covering prose, code, tool output and structured documents",
+		ParameterSize:    "307M",
+		EmbeddingDim:     768,
+		MaxContextLength: 8192,
+		Tags:             []string{"hallucination", "mmbert", "multilingual", "verification"},
+	},
+
 	// Hallucination Detection - Explainer
 	{
 		LocalPath:        "models/mom-halugate-explainer",

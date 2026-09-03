@@ -1,0 +1,9 @@
+{
+  "operation": "request",
+  "body": {
+    "model": "provider-model",
+    "max_tokens": 64,
+    "messages": [{"role": "user", "content": "hello"}],
+    "thinking": {"type": "disabled", "display": "omitted"}
+  }
+}

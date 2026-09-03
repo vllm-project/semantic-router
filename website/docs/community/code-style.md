@@ -1,54 +1,63 @@
-# Code Style & Quality
+# Code Style and Quality
 
-To maintain a high-quality codebase, we adhere to specific style guides and use automated tools to enforce them.
+Formatting and static checks are enforced by repository configuration. Use the
+checked-in tools instead of maintaining separate editor-specific rules.
 
-## Mandatory Quality Checks
+## Run the shared checks
 
-We use `pre-commit` hooks to ensure consistency. **These checks must pass before submitting a PR.**
+Install the repository-managed hooks and run them across tracked files:
 
-### Setup Pre-commit
+```bash
+make precommit-install
+make precommit-check
+```
 
-1. **Install pre-commit:**
+To reproduce the containerized pre-commit workflow:
 
-   ```bash
-   pip install pre-commit
-   # OR
-   brew install pre-commit
-   ```
+```bash
+make precommit-local
+```
 
-2. **Install hooks:**
+The changed-file validation report may require additional language or domain
+checks:
 
-   ```bash
-   pre-commit install
-   ```
+```bash
+make agent-report ENV=cpu CHANGED_FILES="path/one,path/two"
+```
 
-3. **Run checks manually:**
+## Language conventions
 
-   ```bash
-   pre-commit run --all-files
-   # OR
-   make precommit-local
-   ```
-
-## Language-Specific Guidelines
-
-### Go Code
+### Go
 
 - Format with `gofmt`.
-- **Naming:** Use meaningful variable and function names.
-- **Comments:** Document exported functions and types.
-- **Modules:** Run `make check-go-mod-tidy` to verify all modules are tidy.
-- **Lint:** Run `make go-lint` to check for issues, or `make go-lint-fix` to auto-fix.
+- Keep packages and files focused on one responsibility.
+- Document exported APIs where their purpose is not self-evident.
+- Verify module metadata with `make check-go-mod-tidy`.
+- Use `make go-lint` for the repository lint configuration.
 
-### Rust Code
+### Rust
 
 - Format with `cargo fmt`.
-- Lint with `cargo clippy`.
-- Use `Result` types for error handling.
-- Document public APIs.
+- Run `cargo clippy` through the repository's reported validation path.
+- Return typed errors rather than panicking in normal failure paths.
+- Keep unsafe and FFI boundaries small and documented.
 
-### Python Code
+### Python
 
-- Follow **PEP 8** style guidelines.
-- Use type hints.
-- Write docstrings for classes and functions.
+- Support the Python version declared by the package you are changing.
+- Use type hints on public and non-trivial interfaces.
+- Keep command orchestration separate from reusable logic.
+- Run the component's tests through its Make target when one exists.
+
+### TypeScript and React
+
+- Follow the Dashboard ESLint and TypeScript configuration.
+- Keep data fetching and transformation out of presentational components when
+  a helper or hook owns that responsibility.
+- Add focused component or E2E coverage for user-visible behavior.
+
+## Generated files
+
+Do not hand-edit generated API references, schemas, or catalog blocks. Change
+their source and run the owning generator, then include both source and output
+in the same pull request.

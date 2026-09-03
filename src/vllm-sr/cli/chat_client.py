@@ -53,8 +53,12 @@ def resolve_chat_base_url(
     *,
     config_path: str,
     target: str | None,
+    base_url: str | None = None,
 ) -> str:
     """Resolve the HTTP base URL for chat completions (no trailing slash)."""
+    if base_url:
+        return normalize_base_url(base_url)
+
     resolved_target = resolve_target(target)
     if resolved_target != DEFAULT_TARGET:
         raise ValueError(

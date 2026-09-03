@@ -221,7 +221,6 @@ prompt_guard:
   model_id: "test-jailbreak-model"
   threshold: 0.5
   use_cpu: false
-  use_modernbert: true
   jailbreak_mapping_path: "/path/to/jailbreak.json"
 
 vllm_endpoints:
@@ -290,7 +289,6 @@ tools:
 				// Verify prompt guard
 				Expect(cfg.PromptGuard.Enabled).To(BeTrue())
 				Expect(cfg.PromptGuard.ModelID).To(Equal("test-jailbreak-model"))
-				Expect(cfg.PromptGuard.UseModernBERT).To(BeTrue())
 
 				// Verify model config
 				Expect(cfg.ModelConfig).To(HaveKey("model-a"))
@@ -3649,6 +3647,27 @@ model_config:
 				path, err = (&ProviderProfile{Type: "minimax", BaseURL: "https://api.minimax.io"}).ResolveChatPath()
 				Expect(err).NotTo(HaveOccurred())
 				Expect(path).To(Equal("/v1/chat/completions"))
+			})
+
+			It("should not double the version segment for a versioned base_url", func() {
+				for _, tc := range []struct {
+					providerType string
+					baseURL      string
+					expected     string
+				}{
+					{"anthropic", "https://api.anthropic.com/v1", "/v1/messages"},
+					{"anthropic", "https://api.anthropic.com", "/v1/messages"},
+					{"minimax", "https://api.minimax.io/v1", "/v1/chat/completions"},
+					{"minimax", "https://api.minimax.io", "/v1/chat/completions"},
+					{"openai", "https://api.openai.com/v1", "/v1/chat/completions"},
+					{"anthropic", "https://gateway.example.com/openai/v1", "/openai/v1/messages"},
+					{"anthropic", "https://gateway.example.com/v1beta", "/v1beta/v1/messages"},
+					{"anthropic", "https://api.anthropic.com/v1/", "/v1/messages"},
+				} {
+					path, err := (&ProviderProfile{Type: tc.providerType, BaseURL: tc.baseURL}).ResolveChatPath()
+					Expect(err).NotTo(HaveOccurred(), "%s %s", tc.providerType, tc.baseURL)
+					Expect(path).To(Equal(tc.expected), "%s %s", tc.providerType, tc.baseURL)
+				}
 			})
 
 			It("should append api-version for azure-openai", func() {

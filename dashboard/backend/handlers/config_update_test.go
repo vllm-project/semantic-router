@@ -86,7 +86,7 @@ func TestUpdateConfigHandler_PreservesEntrypointsAndRecipes(t *testing.T) {
 	body := canonicalConfigBody("127.0.0.1:8000")
 	body["entrypoints"] = []map[string]interface{}{
 		{
-			"model_names": []string{"vllm-sr/mom-private-v1"},
+			"model_names": []string{"vllm-sr/mom-v1-vault"},
 			"recipe":      "privacy-first",
 		},
 	}

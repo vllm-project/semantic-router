@@ -51,10 +51,12 @@ languages:
       - nlp-binding/src/**/*.rs
       - onnx-binding/src/**/*.rs
   typescript:
-    parser: none
+    parser: typescript
+    ratchet_existing_violations: true
     globs:
       - dashboard/frontend/src/**/*.ts
       - dashboard/frontend/src/**/*.tsx
+      - dashboard/frontend/e2e/evaluation/**/*.ts
 
 ignore_globs:
   - website/**
@@ -74,6 +76,9 @@ structure_exceptions:
       - candle-binding/src/model_architectures/lora/bert_lora.rs
   - paths:
       - dashboard/frontend/src/pages/ConfigPage.tsx
+    file_checks: relaxed
+  - paths:
+      - candle-binding/src/ffi/init.rs
     file_checks: relaxed
   - paths:
       - dashboard/backend/handlers/deploy.go
@@ -131,14 +136,12 @@ structure_exceptions:
       - deploy/operator/api/v1alpha1/sample_validation_test.go
       - deploy/operator/api/v1alpha1/semanticrouter_types_test.go
       - deploy/operator/api/v1alpha1/semanticrouter_webhook_test.go
-      - src/semantic-router/pkg/config/image_gen_plugin_test.go
       - src/semantic-router/pkg/extproc/req_filter_rag_external.go
       - src/semantic-router/pkg/extproc/req_filter_rag_hybrid.go
       - src/semantic-router/pkg/extproc/req_filter_rag_mcp.go
       - src/semantic-router/pkg/extproc/req_filter_rag_milvus.go
       - src/semantic-router/pkg/extproc/res_filter_jailbreak_test.go
       - src/semantic-router/pkg/extproc/server.go
-      - src/semantic-router/pkg/imagegen/backend_vllm_omni.go
     function_checks: relaxed
   - paths:
       - src/semantic-router/pkg/cache/cache_interface.go
@@ -216,7 +219,6 @@ structure_exceptions:
   - paths:
       - src/semantic-router/pkg/extproc/req_filter_looper.go
       - src/semantic-router/pkg/looper/ratings.go
-      - src/semantic-router/pkg/looper/rl_driven.go
       - src/semantic-router/pkg/selection/factory.go
       - src/semantic-router/pkg/tools/tools.go
     function_checks: relaxed
@@ -289,3 +291,76 @@ dependency_rules:
       - dashboard/backend/**/*.go
     forbidden_literals:
       - dashboard/frontend/src/
+  - name: evaluation-backend-must-not-depend-on-http-handlers
+    policy: no-new
+    applies_to:
+      - dashboard/backend/evaluationplane/*.go
+      - dashboard/backend/evaluationplane/**/*.go
+    forbidden_literals:
+      - github.com/vllm-project/semantic-router/dashboard/backend/handlers
+
+architecture:
+  dependency_graphs:
+    - name: evaluation-python
+      language: python
+      root: src/vllm-sr/cli
+      module_root: src/vllm-sr
+      include:
+        - src/vllm-sr/cli/*.py
+        - src/vllm-sr/cli/**/*.py
+      focus:
+        - src/vllm-sr/cli/evaluation/*.py
+        - src/vllm-sr/cli/evaluation/**/*.py
+      test_patterns:
+        - '**/test_*.py'
+        - '**/*_test.py'
+      cycle_policy: no-new
+      forbidden_edges:
+        - name: evaluation-python-must-not-depend-on-command-entrypoints
+          policy: no-new
+          from:
+            - src/vllm-sr/cli/evaluation/*.py
+            - src/vllm-sr/cli/evaluation/**/*.py
+          to:
+            - src/vllm-sr/cli/commands/*.py
+            - src/vllm-sr/cli/commands/**/*.py
+    - name: evaluation-frontend
+      language: typescript
+      root: dashboard/frontend/src
+      include:
+        - dashboard/frontend/src/*.ts
+        - dashboard/frontend/src/*.tsx
+        - dashboard/frontend/src/**/*.ts
+        - dashboard/frontend/src/**/*.tsx
+      focus:
+        - dashboard/frontend/src/components/evaluation-plane/*.ts
+        - dashboard/frontend/src/components/evaluation-plane/*.tsx
+        - dashboard/frontend/src/components/evaluation-plane/**/*.ts
+        - dashboard/frontend/src/components/evaluation-plane/**/*.tsx
+      test_patterns:
+        - '**/*.test.ts'
+        - '**/*.test.tsx'
+      aliases:
+        '@/': dashboard/frontend/src/
+      cycle_policy: no-new
+      forbidden_edges:
+        - name: evaluation-frontend-must-not-depend-on-page-routing
+          policy: no-new
+          from:
+            - dashboard/frontend/src/components/evaluation-plane/*.ts
+            - dashboard/frontend/src/components/evaluation-plane/*.tsx
+            - dashboard/frontend/src/components/evaluation-plane/**/*.ts
+            - dashboard/frontend/src/components/evaluation-plane/**/*.tsx
+          to:
+            - dashboard/frontend/src/pages/*.ts
+            - dashboard/frontend/src/pages/*.tsx
+            - dashboard/frontend/src/pages/**/*.ts
+            - dashboard/frontend/src/pages/**/*.tsx
+  health_scopes:
+    - name: evaluation-go
+      root: dashboard/backend/evaluationplane
+      include:
+        - dashboard/backend/evaluationplane/*.go
+        - dashboard/backend/evaluationplane/**/*.go
+      test_patterns:
+        - '**/*_test.go'

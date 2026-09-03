@@ -14,6 +14,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 	"github.com/vllm-project/semantic-router/dashboard/backend/mcp"
+	"github.com/vllm-project/semantic-router/dashboard/backend/setupmode"
 )
 
 type loginResponse struct {
@@ -77,39 +78,22 @@ func TestBuiltInOpenClawMCPConnectsThroughInternalLoopbackRoute(t *testing.T) {
 	baseURL := startDashboardServer(t)
 	token := loginAsBootstrapAdmin(t, baseURL)
 	client := &http.Client{Timeout: 10 * time.Second}
-
-	serversReq, err := http.NewRequest(http.MethodGet, baseURL+"/api/mcp/servers", nil)
-	if err != nil {
-		t.Fatalf("new servers request: %v", err)
-	}
-	serversReq.Header.Set("Authorization", "Bearer "+token)
-
-	serversResp, err := client.Do(serversReq)
-	if err != nil {
-		t.Fatalf("list servers request failed: %v", err)
-	}
-	defer serversResp.Body.Close()
-
-	if serversResp.StatusCode != http.StatusOK {
-		t.Fatalf("list servers status = %d, want %d", serversResp.StatusCode, http.StatusOK)
-	}
-
-	var serversPayload mcpServersResponse
-	decodeErr := json.NewDecoder(serversResp.Body).Decode(&serversPayload)
-	if decodeErr != nil {
-		t.Fatalf("decode servers response: %v", decodeErr)
-	}
+	serversPayload := listMCPServers(t, client, baseURL, token)
 
 	if len(serversPayload.Servers) == 0 {
 		t.Fatalf("expected built-in MCP server to be registered")
 	}
 
-	expectedURL := baseURL + internalOpenClawMCPPath
+	expectedPublicURL := baseURL + "/" + mcp.RedactedValue
 	if serversPayload.Servers[0].Config.ID != mcp.BuiltinOpenClawServerID {
 		t.Fatalf("server id = %q, want %q", serversPayload.Servers[0].Config.ID, mcp.BuiltinOpenClawServerID)
 	}
-	if serversPayload.Servers[0].Config.Connection.URL != expectedURL {
-		t.Fatalf("server url = %q, want %q", serversPayload.Servers[0].Config.Connection.URL, expectedURL)
+	if serversPayload.Servers[0].Config.Connection.URL != expectedPublicURL {
+		t.Fatalf(
+			"public server url = %q, want redacted view %q",
+			serversPayload.Servers[0].Config.Connection.URL,
+			expectedPublicURL,
+		)
 	}
 
 	connectReq, err := http.NewRequest(
@@ -169,6 +153,32 @@ func TestBuiltInOpenClawMCPConnectsThroughInternalLoopbackRoute(t *testing.T) {
 	}
 }
 
+func listMCPServers(t *testing.T, client *http.Client, baseURL, token string) mcpServersResponse {
+	t.Helper()
+
+	req, err := http.NewRequest(http.MethodGet, baseURL+"/api/mcp/servers", nil)
+	if err != nil {
+		t.Fatalf("new servers request: %v", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("list servers request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("list servers status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+
+	var payload mcpServersResponse
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode servers response: %v", err)
+	}
+	return payload
+}
+
 func startDashboardServer(t *testing.T) string {
 	t.Helper()
 
@@ -215,7 +225,7 @@ func startDashboardServer(t *testing.T) string {
 		MLPipelineEnabled:      false,
 	}
 
-	dashboard := Setup(cfg)
+	dashboard := Setup(cfg, setupmode.New(cfg.AbsConfigPath, cfg.SetupMode))
 	server := &http.Server{
 		Handler:           dashboard.Handler,
 		ReadHeaderTimeout: 5 * time.Second,

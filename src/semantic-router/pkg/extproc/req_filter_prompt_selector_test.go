@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openai/openai-go"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -315,20 +314,5 @@ func TestPromptHelperTelemetryPersistsInReplayDiagnostics(t *testing.T) {
 		diagnostics.PromptHelperTotalTokens != 14 ||
 		diagnostics.PromptHelperLatencyMs != 25 {
 		t.Fatalf("prompt helper diagnostics = %#v", diagnostics)
-	}
-}
-
-func TestPromptHelperDisablesQwenThinking(t *testing.T) {
-	request := &openai.ChatCompletionNewParams{}
-	disablePromptHelperReasoning(request, "qwen3-8b")
-	body, err := json.Marshal(request)
-	if err != nil {
-		t.Fatalf("marshal request: %v", err)
-	}
-	if !strings.Contains(
-		string(body),
-		`"chat_template_kwargs":{"enable_thinking":false}`,
-	) {
-		t.Fatalf("request body = %s", body)
 	}
 }

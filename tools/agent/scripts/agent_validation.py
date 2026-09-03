@@ -66,12 +66,6 @@ def validate_subsystems(repo_manifest: dict, errors: list[str]) -> None:
                 errors.append(f"Missing subsystem entrypoint: {entrypoint}")
 
 
-def validate_e2e_map(e2e_map: dict, errors: list[str]) -> None:
-    for profile, data in e2e_map["profile_rules"].items():
-        if not data["paths"]:
-            errors.append(f"E2E profile '{profile}' has no path patterns")
-
-
 def validate_task_matrix(
     task_matrix: dict, make_targets: set[str], errors: list[str]
 ) -> None:
@@ -106,14 +100,18 @@ def validate_task_matrix(
 def validate_manifest_globs(
     repo_manifest: dict,
     task_matrix: dict,
-    e2e_map: dict,
+    test_domain_registry: dict,
     structure_rules: dict,
     skill_registry: dict,
     errors: list[str],
 ) -> None:
     patterns = dict.fromkeys(
         collect_manifest_globs(
-            repo_manifest, task_matrix, e2e_map, structure_rules, skill_registry
+            repo_manifest,
+            task_matrix,
+            test_domain_registry,
+            structure_rules,
+            skill_registry,
         )
     )
     for pattern in patterns:
@@ -162,44 +160,35 @@ def validate_routing_fixtures(errors: list[str]) -> None:
             )
 
 
-def validate_discovery_bridge(errors: list[str]) -> None:
-    bridge_path = REPO_ROOT / ".agents" / "skills" / "harness" / "SKILL.md"
-    if not bridge_path.exists():
-        errors.append(
-            "Missing native-discovery bridge: .agents/skills/harness/SKILL.md"
-        )
-        return
-
-    bridge_text = bridge_path.read_text(encoding="utf-8")
-    required_refs = [
-        "AGENTS.md",
-        "tools/agent/docs/README.md",
-        "make agent-report",
-        "tools/agent/skills/",
-    ]
-    for ref in required_refs:
-        if ref not in bridge_text:
-            errors.append(
-                f"Discovery bridge skill must reference '{ref}' in {bridge_path.relative_to(REPO_ROOT)}"
-            )
-
-
 def collect_validation_errors() -> list[str]:
-    repo_manifest, task_matrix, e2e_map, structure_rules, skill_registry = (
-        load_manifests()
-    )
+    (
+        repo_manifest,
+        task_matrix,
+        test_domain_registry,
+        structure_rules,
+        skill_registry,
+    ) = load_manifests()
     context_map = load_context_map()
     make_targets = collect_make_targets()
     errors: list[str] = []
 
     validate_supported_envs(repo_manifest, skill_registry, make_targets, errors)
     validate_subsystems(repo_manifest, errors)
-    validate_e2e_map(e2e_map, errors)
     validate_task_matrix(task_matrix, make_targets, errors)
     validate_manifest_globs(
-        repo_manifest, task_matrix, e2e_map, structure_rules, skill_registry, errors
+        repo_manifest,
+        task_matrix,
+        test_domain_registry,
+        structure_rules,
+        skill_registry,
+        errors,
     )
-    validate_ci_changes_filters(repo_manifest, task_matrix, e2e_map, errors)
+    validate_ci_changes_filters(
+        repo_manifest,
+        task_matrix,
+        test_domain_registry,
+        errors,
+    )
     validate_support_files(repo_manifest, errors)
     validate_agent_harness_layers(repo_manifest, task_matrix, skill_registry, errors)
     validate_context_map(
@@ -207,7 +196,6 @@ def collect_validation_errors() -> list[str]:
     )
     validate_skill_registry(repo_manifest, task_matrix, skill_registry, errors)
     validate_routing_fixtures(errors)
-    validate_discovery_bridge(errors)
     return errors
 
 

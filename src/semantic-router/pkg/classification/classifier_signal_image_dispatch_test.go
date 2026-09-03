@@ -116,11 +116,11 @@ func TestEvaluateEmbeddingSignal_ImageProvidedActivatesImageRules(t *testing.T) 
 // of that early-return, which would silently drop a valid image-rule match.
 func TestEvaluateEmbeddingSignal_TextErrorDoesNotSkipImagePass(t *testing.T) {
 	// Stub the text-embedding FFI to error.
-	originalText := getEmbeddingWithModelType
-	getEmbeddingWithModelType = func(text string, modelType string, targetDim int) (*candle_binding.EmbeddingOutput, error) {
+	originalText := getEmbedding2DMatryoshka
+	getEmbedding2DMatryoshka = func(text string, modelType string, targetLayer int, targetDim int) (*candle_binding.EmbeddingOutput, error) {
 		return nil, errors.New("synthetic text-FFI failure")
 	}
-	t.Cleanup(func() { getEmbeddingWithModelType = originalText })
+	t.Cleanup(func() { getEmbedding2DMatryoshka = originalText })
 
 	// Stub the image-embedding FFI to succeed.
 	stubMultiModalImageLookup(t, map[string][]float32{
@@ -160,12 +160,12 @@ func TestEvaluateEmbeddingSignal_TextErrorDoesNotSkipImagePass(t *testing.T) {
 // content arrays containing only image_url parts.
 func TestEvaluateEmbeddingSignal_ImageOnlyContent_SkipsTextFFI(t *testing.T) {
 	var textCalls int32
-	originalText := getEmbeddingWithModelType
-	getEmbeddingWithModelType = func(text string, modelType string, targetDim int) (*candle_binding.EmbeddingOutput, error) {
+	originalText := getEmbedding2DMatryoshka
+	getEmbedding2DMatryoshka = func(text string, modelType string, targetLayer int, targetDim int) (*candle_binding.EmbeddingOutput, error) {
 		atomic.AddInt32(&textCalls, 1)
 		return &candle_binding.EmbeddingOutput{Embedding: makeEmbedding(0.0, 0.0, 0.0)}, nil
 	}
-	t.Cleanup(func() { getEmbeddingWithModelType = originalText })
+	t.Cleanup(func() { getEmbedding2DMatryoshka = originalText })
 
 	stubMultiModalImageLookup(t, map[string][]float32{
 		"data:image/png;base64,FAKE_WAFER_BYTES": makeEmbedding(0.92, 0.0, 0.0),

@@ -1,180 +1,107 @@
-# Install with vLLM AIBrix
+---
+title: Integrate with AIBrix
+description: Combine Semantic Router model-pool selection with AIBrix model deployment and replica routing.
+---
 
-This guide provides step-by-step instructions for integrating the vLLM AIBrix.
+# Integrate with AIBrix
 
-## About vLLM AIBrix
+Use this topology when AIBrix owns model deployment, scaling, and replica-level
+routing, while Semantic Router should select a model pool from request meaning
+and policy.
 
-[vLLM AIBrix](https://github.com/vllm-project/aibrix) is an open-source initiative designed to provide essential building blocks to construct scalable GenAI inference infrastructure. AIBrix delivers a cloud-native solution optimized for deploying, managing, and scaling large language model (LLM) inference, tailored specifically to enterprise needs.
+AIBrix releases independently from Semantic Router. Install it with the
+[current AIBrix installation guide](https://aibrix.readthedocs.io/latest/getting_started/installation/installation.html)
+and use its maintained
+[Semantic Router sample](https://github.com/vllm-project/aibrix/tree/main/samples/semantic-router)
+for release-specific manifests. This page explains how the two control layers
+fit together.
 
-### Key Features
+## Responsibility split
 
-- **High-Density LoRA Management**: Streamlined support for lightweight, low-rank adaptations of models
-- **LLM Gateway and Routing**: Efficiently manage and direct traffic across multiple models and replicas
-- **LLM App-Tailored Autoscaler**: Dynamically scale inference resources based on real-time demand
-- **Unified AI Runtime**: A versatile sidecar enabling metric standardization, model downloading, and management
-- **Distributed Inference**: Scalable architecture to handle large workloads across multiple nodes
-- **Distributed KV Cache**: Enables high-capacity, cross-engine KV reuse
-- **Cost-efficient Heterogeneous Serving**: Enables mixed GPU inference to reduce costs with SLO guarantees
-- **GPU Hardware Failure Detection**: Proactive detection of GPU hardware issues
+| Component | Owns |
+| --- | --- |
+| Semantic Router | Signals, decisions, model-pool selection, and recipe-scoped plugins. |
+| AIBrix | Model workloads, autoscaling, service discovery, and replica-level routing. |
+| Gateway API | Client traffic and the ExtProc call to Semantic Router. |
 
-### Integration Benefits
+Semantic Router selects the logical model. AIBrix then chooses a healthy
+replica serving that model. Keep autoscaling and replica load policy in AIBrix;
+do not duplicate it in semantic decisions.
 
-Integrating vLLM Semantic Router with AIBrix provides several advantages:
+## Before you begin
 
-1. **Intelligent Request Routing**: Semantic Router analyzes incoming requests and routes them to the most appropriate model based on content understanding, while AIBrix's gateway efficiently manages traffic distribution across model replicas
+You need:
 
-2. **Enhanced Scalability**: AIBrix's autoscaler works seamlessly with Semantic Router to dynamically adjust resources based on routing patterns and real-time demand
+- a Kubernetes cluster supported by the AIBrix release you selected;
+- Gateway API and the gateway required by that release;
+- `kubectl`, Helm, model credentials, and sufficient inference capacity; and
+- at least two model names if you want to observe semantic model selection.
 
-3. **Cost Optimization**: By combining Semantic Router's intelligent routing with AIBrix's heterogeneous serving capabilities, you can optimize GPU utilization and reduce infrastructure costs while maintaining SLO guarantees
+Pin the AIBrix release and inspect its release notes before applying manifests.
+Do not copy a historical release URL from this page or assume a development tag
+is suitable for production.
 
-4. **Production-Ready Infrastructure**: AIBrix provides enterprise-grade features like distributed KV cache, GPU failure detection, and unified runtime management, making it easier to deploy Semantic Router in production environments
+## 1. Deploy and verify AIBrix
 
-5. **Simplified Operations**: The integration leverages Kubernetes-native patterns and Gateway API resources, providing a familiar operational model for DevOps teams
-
-## Prerequisites
-
-Before starting, ensure you have the following tools installed:
-
-- [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation) - Kubernetes in Docker (Optional)
-- [kubectl](https://kubernetes.io/docs/tasks/tools/) - Kubernetes CLI
-- [Helm](https://helm.sh/docs/intro/install/) - Package manager for Kubernetes
-
-## Step 1: Create Kind Cluster (Optional)
-
-Create a local Kubernetes cluster optimized for the semantic router workload:
-
-```bash
-kind create cluster --name semantic-router-cluster
-
-# Verify cluster is ready
-kubectl wait --for=condition=Ready nodes --all --timeout=300s
-```
-
-## Step 2: Deploy vLLM Semantic Router
-
-Deploy the semantic router service with all required components using Helm:
+Follow the upstream installation guide and deploy the model services. Before
+adding Semantic Router, verify each served model through the AIBrix gateway:
 
 ```bash
-# Install with custom values from GHCR OCI registry
-# (Optional) If you use a registry mirror/proxy, append: --set global.imageRegistry=<your-registry>
-helm install semantic-router oci://ghcr.io/vllm-project/charts/semantic-router \
-  --version v0.0.0-latest \
-  --namespace vllm-semantic-router-system \
-  --create-namespace \
-  -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/aibrix/semantic-router-values/values.yaml
-
-# Wait for deployment to be ready (this may take several minutes for model downloads)
-kubectl wait --for=condition=Available deployment/semantic-router -n vllm-semantic-router-system --timeout=600s
-
-# Verify deployment status
-kubectl get pods -n vllm-semantic-router-system
+kubectl get pods -A
+kubectl get services -A
 ```
 
-**Note**: The values file contains the configuration for the semantic router, including model settings, categories, and routing rules. You can download and customize it from [values.yaml](https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/aibrix/semantic-router-values/values.yaml).
+Send a direct Chat Completions request for every model name you plan to expose.
+This confirms model access, capacity, and gateway routing independently of the
+semantic policy.
 
-## Step 3: Install vLLM AIBrix
+## 2. Align model identities
 
-Install the core vLLM AIBrix components:
+For each AIBrix model, create a Semantic Router provider model whose
+`provider_model_id` is the name accepted by the AIBrix endpoint. Bind the
+backend to the stable Gateway or Service DNS name, not to a `ClusterIP`.
+
+Then reference those provider names from model cards and decisions. The same
+identity must agree in four places:
+
+1. the request-facing virtual model or entrypoint;
+2. the Semantic Router provider model;
+3. the AIBrix/Gateway routing resource; and
+4. the model server's served model name.
+
+Validate the complete Router document before deployment:
 
 ```bash
-# Install vLLM AIBrix
-kubectl create -f https://github.com/vllm-project/aibrix/releases/download/v0.4.1/aibrix-dependency-v0.4.1.yaml
-
-kubectl create -f https://github.com/vllm-project/aibrix/releases/download/v0.4.1/aibrix-core-v0.4.1.yaml
-
-# wait for deployment to be ready
-kubectl wait --timeout=2m -n aibrix-system deployment/aibrix-gateway-plugins --for=condition=Available
-kubectl wait --timeout=2m -n aibrix-system deployment/aibrix-metadata-service --for=condition=Available
-kubectl wait --timeout=2m -n aibrix-system deployment/aibrix-controller-manager --for=condition=Available
+vllm-sr validate --config config.yaml
 ```
 
-## Step 4: Deploy Demo LLM
+## 3. Deploy Semantic Router and the Gateway policy
 
-Create a demo LLM to serve as the backend for the semantic router:
+The upstream sample contains a complete integration for its current AIBrix
+release. If you adapt it instead of using the sample unchanged:
 
-```bash
-# Deploy demo LLM
-kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/aibrix/aigw-resources/base-model.yaml
+- deploy the Router config with `configOverride` as described in
+  [Configuration Workflows](../configuration-workflows#helm);
+- keep provider credentials in Kubernetes Secrets;
+- preserve the ExtProc processing mode expected by the gateway; and
+- update Router providers and Gateway backends together.
 
-kubectl wait --timeout=2m -n default deployment/vllm-llama3-8b-instruct --for=condition=Available
-```
+For large request bodies or immediate streamed responses, review
+[Streamed ExtProc](streamed-extproc) before changing the processing mode.
 
-## Step 5: Create Gateway API Resources
+## 4. Verify the integration
 
-Create the necessary Gateway API resources for the envoy gateway:
+1. Send a direct request to each AIBrix model.
+2. Send requests through a Semantic Router virtual model.
+3. Inspect the Router selection headers.
+4. Confirm the selected AIBrix model and serving replica.
 
-```bash
-kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/aibrix/aigw-resources/gwapi-resources.yaml
-```
-
-## Testing the Deployment
-
-### Method 1: Port Forwarding (Recommended for Local Testing)
-
-Set up port forwarding to access the gateway locally:
-
-```bash
-# Get the Envoy service name
-export ENVOY_SERVICE=$(kubectl get svc -n envoy-gateway-system \
-  --selector=gateway.envoyproxy.io/owning-gateway-namespace=aibrix-system,gateway.envoyproxy.io/owning-gateway-name=aibrix-eg \
-  -o jsonpath='{.items[0].metadata.name}')
-
-kubectl port-forward -n envoy-gateway-system svc/$ENVOY_SERVICE 8080:80
-```
-
-### Send Test Requests
-
-Once the gateway is accessible, test the inference endpoint:
-
-```bash
-# Test math domain chat completions endpoint
-curl -i -X POST http://localhost:8080/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "MoM",
-    "messages": [
-      {"role": "user", "content": "What is the derivative of f(x) = x^3?"}
-    ]
-  }'
-```
-
-You will see the response from the demo LLM, and additional headers injected by the semantic router.
-
-```bash
-HTTP/1.1 200 OK
-server: fasthttp
-date: Thu, 06 Nov 2025 06:38:08 GMT
-content-type: application/json
-x-inference-pod: vllm-llama3-8b-instruct-984659dbb-gp5l9
-x-went-into-req-headers: true
-request-id: b46b6f7b-5645-470f-9868-0dd8b99a7163
-x-vsr-selected-category: math
-x-vsr-selected-reasoning: on
-x-vsr-selected-model: vllm-llama3-8b-instruct
-x-vsr-injected-system-prompt: true
-transfer-encoding: chunked
-
-{"id":"chatcmpl-f390a0c6-b38f-4a73-b019-9374a3c5d69b","created":1762411088,"model":"vllm-llama3-8b-instruct","usage":{"prompt_tokens":42,"completion_tokens":48,"total_tokens":90},"object":"chat.completion","do_remote_decode":false,"do_remote_prefill":false,"remote_block_ids":null,"remote_engine_id":"","remote_host":"","remote_port":0,"choices":[{"index":0,"finish_reason":"stop","message":{"role":"assistant","content":"I am your AI assistant, how can I help you today? To be or not to be that is the question. Alas, poor Yorick! I knew him, Horatio: A fellow of infinite jest Testing, testing 1,2,3"}}]}
-```
+Use [Test a Kubernetes Gateway Deployment](gateway-testing) for the common
+checks. A correct route decision and a successful generation are separate
+signals; test both.
 
 ## Cleanup
 
-To remove the entire deployment:
-
-```bash
-# Remove Gateway API resources and Demo LLM
-kubectl delete -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/aibrix/aigw-resources/gwapi-resources.yaml
-kubectl delete -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/aibrix/aigw-resources/base-model.yaml
-
-# Remove semantic router
-helm uninstall semantic-router -n vllm-semantic-router-system
-
-# Delete kind cluster (optional)
-kind delete cluster --name semantic-router-cluster
-```
-
-## Next Steps
-
-- Set up monitoring and observability
-- Implement authentication and authorization
-- Scale the semantic router deployment for production workloads
+Remove the Router and gateway resources with the release names you installed.
+Remove AIBrix using its versioned uninstall procedure. Model volumes and caches
+may outlive Deployments, so inspect them before deleting persistent data.

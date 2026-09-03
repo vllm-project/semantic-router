@@ -102,3 +102,21 @@ func TestResolvedManagementAPIAppliesCLIOverrides(t *testing.T) {
 		t.Fatalf("listen address = %q", resolved.ListenAddress())
 	}
 }
+
+func TestResolvedManagementAPIRejectsOutOfRangeConfiguredPort(t *testing.T) {
+	for _, port := range []int{-1, 65536} {
+		cfg := DefaultManagementAPIConfig()
+		cfg.Port = port
+		if _, err := cfg.ResolvedManagementAPI(ManagementAPIRuntimeOptions{}); err == nil {
+			t.Fatalf("port %d should be rejected", port)
+		}
+	}
+}
+
+func TestResolvedManagementAPIRejectsUnsupportedAuthMode(t *testing.T) {
+	cfg := DefaultManagementAPIConfig()
+	cfg.Auth.Mode = "mtls"
+	if _, err := cfg.ResolvedManagementAPI(ManagementAPIRuntimeOptions{}); err == nil {
+		t.Fatal("unsupported management auth mode should be rejected")
+	}
+}

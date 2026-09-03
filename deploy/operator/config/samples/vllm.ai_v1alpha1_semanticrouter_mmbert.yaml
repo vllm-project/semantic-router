@@ -47,11 +47,9 @@ spec:
         # Use mmBERT model
         model_type: "mmbert"
 
-        # Layer early exit: balance between speed and accuracy
-        # Layer 3: ~7x speedup (good for high-volume, simple queries)
-        # Layer 6: ~3.6x speedup (balanced - recommended for most use cases)
-        # Layer 11: ~2x speedup (higher accuracy)
-        # Layer 22: full model (maximum accuracy)
+        # Lower early-exit layers reduce encoder work but may reduce quality.
+        # Layer 22 uses the full encoder depth. Evaluate the trade-off on
+        # representative deployment data.
         target_layer: 6
 
         # Dimension reduction: lower dimensions = faster similarity search

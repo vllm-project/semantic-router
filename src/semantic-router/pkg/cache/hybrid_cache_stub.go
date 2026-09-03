@@ -61,6 +61,7 @@ func (h *HybridCache) UpdateWithResponse(
 
 // AddEntry stores a complete request-response pair
 func (h *HybridCache) AddEntry(
+	_ context.Context,
 	requestID string,
 	model string,
 	query string,
@@ -87,17 +88,17 @@ func (h *HybridCache) FindSimilarWithThreshold(model string, query string, thres
 }
 
 // LookupSimilarWithThreshold returns a request-scoped miss in stub builds.
-func (h *HybridCache) LookupSimilarWithThreshold(model string, query string, threshold float32) (LookupResult, error) {
+func (h *HybridCache) LookupSimilarWithThreshold(_ context.Context, model string, query string, threshold float32) (LookupResult, error) {
 	return LookupResult{}, nil
 }
 
 // FindExact is unavailable when CGO support is disabled.
-func (h *HybridCache) FindExact(string, string) (LookupResult, error) {
+func (h *HybridCache) FindExact(context.Context, string, string) (LookupResult, error) {
 	return LookupResult{}, nil
 }
 
 // AddExact is unavailable when CGO support is disabled.
-func (h *HybridCache) AddExact(string, string, []byte, int) error {
+func (h *HybridCache) AddExact(context.Context, string, string, []byte, int) error {
 	return nil
 }
 
@@ -122,6 +123,6 @@ func (h *HybridCache) GetStats() CacheStats {
 }
 
 // CheckConnection checks if the cache backend is reachable
-func (h *HybridCache) CheckConnection() error {
+func (h *HybridCache) CheckConnection(_ context.Context) error {
 	return nil
 }

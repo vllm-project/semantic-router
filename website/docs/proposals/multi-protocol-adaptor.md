@@ -1,705 +1,228 @@
-# Design Doc: Multi-Protocol Adapter Architecture
+---
+title: Protocol-Neutral Codec Matrix
+description: Defines the protocol-neutral request, response, error, and streaming boundary used by the Router data plane.
+created: 2026-02-18
+status: Implemented
+---
 
-**Author:** vLLM Semantic Router Team  
-**Status:** To be Implemented  
-**Created:** February 2026  
-**Last Updated:** February 2026
+> **Status:** Implemented · **Created:** 2026-02-18
 
-## Overview
+## Outcome
 
-This document describes the design and implementation of the multi-protocol adapter architecture for vLLM Semantic Router, which abstracts the API layer to support multiple front-end protocols beyond Envoy ExtProc.
+The Router evaluates one protocol-neutral semantic request regardless of the client
+or selected backend wire format. Wire JSON is decoded once at ingress and encoded
+once at the provider boundary. Response bodies and streaming events take the inverse
+path before returning to the client.
 
-## Background
+Envoy remains the production transport. It owns listeners, upstream clusters,
+connection lifecycle, retries, and request forwarding. The ExtProc service owns
+semantic model selection and request or response policy. The codec layer only maps
+between wire contracts and the Router's neutral types.
 
-The Semantic Router was tightly coupled to Envoy's External Processor (ExtProc) protocol via gRPC. While this provides powerful integration with Envoy, it created barriers for users who:
-
-- Want to use the router without deploying Envoy
-- Prefer direct HTTP/REST API integration
-- Use Nginx or other reverse proxies
-- Need simpler deployment architectures for development or testing
-
-### Motivation
-
-- **Flexibility:** Users need direct HTTP API access without requiring Envoy infrastructure
-- **Testing:** Developers need lightweight testing without full Envoy deployment
-- **Extensibility:** Support for nginx, native gRPC, and custom protocols
-- **Reusability:** Single routing engine shared across all protocols
-- **Deployment Options:** Enable serverless, edge, and simplified deployment scenarios
-
-## Goals
-
-### Primary Goals
-
-1. **Protocol Abstraction:** Separate routing logic from protocol-specific code
-2. **Multi-Protocol Support:** Enable simultaneous operation of multiple protocols
-3. **Backward Compatibility:** Preserve existing ExtProc functionality
-4. **Shared State:** Single source of truth for cache, replay, and routing decisions
-5. **Easy Extension:** Simple pattern for adding new protocol adapters
-
-### Non-Goals
-
-1. Replace or deprecate Envoy ExtProc support
-2. Change routing decision algorithms or classification logic
-3. Modify configuration format beyond adapter section
-4. Support protocol-specific features that break abstraction
-
-## Design Principles
-
-### 1. Single Routing Pipeline
-
-**CRITICAL:** All routing logic MUST flow through `RouterEngine.Route()`. No exceptions.
-
-- ✅ Adapters translate protocol → `RouteRequest` → call `RouterEngine.Route()`
-- ✅ `RouterEngine.Route()` returns `RouteResponse` → adapters translate → protocol
-- ❌ Adapters MUST NOT duplicate classification, security, cache, replay logic
-- ❌ Adapters MUST NOT directly call classifiers, cache, or replay recorders
-
-### 2. Thin Adapter Layer
-
-Adapters are **protocol translation only**:
-
-- Parse protocol-specific request format
-- Convert to `RouteRequest`
-- Call `RouterEngine.Route()`
-- Convert `RouteResponse` to protocol format
-- Return to client
-
-### 3. RouterEngine Owns All Routing
-
-`RouterEngine.Route()` is the ONLY place where:
-
-- Classification happens
-- PII/jailbreak detection runs
-- Cache is checked/updated
-- Tools are selected
-- Replay is recorded
-- Backend selection occurs
-- Proxying happens (or proxy info is returned)
-
-## Design
-
-### Architecture Overview
-
-```
-┌────────────────────────────────────────────────────────────┐
-│                    Application Layer                       │
-│                                                            │
-│  ┌───────────────────────────────────────────────────┐     │
-│  │                Adapter Manager                    │     │
-│  │  - Reads adapter config                           │     │
-│  │  - Creates protocol adapters                      │     │
-│  │  - Manages lifecycle                              │     │
-│  └──────┬────────┬────────┬───────────┬──────────────┘     │
-│         │        │        │           │                    │
-│  ┌──────▼──┐ ┌───▼─── ┐ ┌─▼──────┐ ┌──▼─────┐              │
-│  │ ExtProc │ │ HTTP   │ │ gRPC   │ │ Nginx  │              │
-│  │ Adapter │ │Adapter │ │Adapter │ │Adapter │              │
-│  │ ┌─────┐ │ │ ┌─────┐│ │ ┌─────┐│ │ ┌─────┐│              │
-│  │ │Parse│ │ │ │Parse││ │ │Parse││ │ │Parse││              │
-│  │ │ExtP │ │ │ │HTTP ││ │ │gRPC ││ │ │NJS  ││              │
-│  │ └──┬──┘ │ │ └─┬───┘│ │ └─┬───┘│ │ └──┬──┘│              │
-│  │    │Conv│ │   │Con │ │   │Con │ │    │Con│              │
-│  │    ▼    │ │   ▼    │ │   ▼    │ │    ▼   │              │
-│  │ ┌─────┐ │ │ ┌────┐ │ │ ┌────┐ │ │ ┌─────┐│              │
-│  │ │Req  │ │ │ │Req │ │ │ │Req │ │ │ │Req  ││              │
-│  │ └──┬──┘ │ │ └─┬──┘ │ │ └─┬──┘ │ │ └──┬──┘│              │
-│  └────┼────┘ └───┼────┘ └───┼────┘ └────┼───┘              │
-│       │          │          │          │                   │
-│       └──────────┴──────────┴──────────┘                   │
-│                    Single Entry Point                      │
-│                             │                              │
-│                             ▼                              │
-│        ┌──────────────────────────────────────────┐        │
-│        │           RouterEngine.Route()           │        │
-│        │  1. Classify request                     │        │
-│        │  2. Check PII / jailbreak                │        │
-│        │  3. Check cache                          │        │
-│        │  4. Select tools                         │        │
-│        │  5. Select model/backend                 │        │
-│        │  6. Record replay                        │        │
-│        │  7. Proxy to backend (via Backend Layer) │        │
-│        │  8. Update cache                         │        │
-│        └──────────────┬───────────────────────────┘        │
-│                       │                                    │
-│                       ▼                                    │
-│                  RouteResponse                             │
-│                       │                                    │
-│        ┌──────────────┼──────────────┬───────────┐         │
-│        │              │              │           │         │
-│  ┌─────▼─────┐ ┌──────▼────┐ ┌───────▼───┐ ┌─────▼─────┐   │
-│  │ ExtProc   │ │ HTTP      │ │ gRPC      │ │ Nginx     │   │
-│  │ Adapter   │ │ Adapter   │ │ Adapter   │ │ Adapter   │   │
-│  │ ┌───────┐ │ │ ┌───────┐ │ │ ┌───────┐ │ │ ┌───────┐ │   │
-│  │ │Convert│ │ │ │Convert│ │ │ │Convert│ │ │ │Convert│ │   │
-│  │ │to gRPC│ │ │ │to HTTP│ │ │ │gRPC   │ │ │ │to NJS │ │   │
-│  │ └───────┘ │ │ └───────┘ │ │ └───────┘ │ │ └───────┘ │   │
-│  └─────┬─────┘ └─────┬─────┘ └─────┬─────┘ └─────┬─────┘   │
-│        │             │             │             │         │
-└────────┼─────────────┼─────────────┼─────────────┼─────────┘
-         │             │             │             │
-         └─────────────┴─────────────┴─────────────┘
-                            │
-                            ▼
-         ┌─────────────────────────────────────────┐
-         │      Backend Abstraction Layer          │
-         └──────┬──────────────────┬───────────────┘
-                │                  │
-       ┌────────▼────────┐  ┌──────▼──────────┐
-       │ Envoy Proxy     │  │ Direct Proxy    │
-       │ (ExtProc mode)  │  │ (HTTP/gRPC)     │
-       │ - Dynamic fwd   │  │ - HTTP client   │
-       │ - Headers only  │  │ - Full response │
-       └────────┬────────┘  └──────┬──────────┘
-                │                  │
-                └──────────┬───────┘
-                           ▼
-             ┌────────────────────────────┐
-             │      Inference Backends    │
-             │  ┌────────┐  ┌────────┐    │
-             │  │ vLLM   │  │Ollama  │    │
-             │  │Server  │  │Server  │    │
-             │  └────────┘  └────────┘    │
-             └────────────────────────────┘
+```mermaid
+flowchart LR
+  Client["Client wire format"] --> Ingress["Ingress codec"]
+  Ingress --> Request["Neutral request"]
+  Request --> Router["Signals, decisions, algorithms, plugins"]
+  Router --> Provider["Provider codec"]
+  Provider --> Envoy["Envoy upstream transport"]
+  Envoy --> ProviderResponse["Provider response codec"]
+  ProviderResponse --> Response["Neutral response or event stream"]
+  Response --> ClientResponse["Client response codec"]
 ```
 
-**Key Insight:** Adapters are **thin translation layers**. All intelligence lives in RouterEngine.
+## Neutral contract
 
-### Component Design
+`pkg/llmprotocol` is the only semantic contract shared by codecs and Router policy.
+It represents:
 
-#### 1. RouterEngine (Core)
+- ordered instructions, messages, and multimodal content blocks;
+- tool definitions, tool calls, tool results, hosted image-generation controls,
+  and tool choice;
+- sampling and structured-output constraints;
+- reasoning controls and reasoning content;
+- response alternatives and stop reasons;
+- provider request identity and typed transport errors;
+- token usage with provenance for standard input, cache reads, cache writes,
+  reasoning output, other output, and totals; and
+- trusted transport metadata that codecs cannot populate from client input.
 
-**Location:** `pkg/router/engine/`
+Raw wire objects do not enter semantic routing. An envelope may retain bounded
+same-format representation details, but it is not routing state and cannot be used
+to bypass validation.
 
-**Responsibilities:**
+## Codec contracts
 
-- Protocol-agnostic routing logic
-- Request classification and decision evaluation
-- Semantic cache operations
-- Tool selection and embedding
-- Router replay recording
-- PII and jailbreak detection
-- Model selection
+Each registered codec is stateless and safe for concurrent use. It declares its wire
+format and capabilities and implements four buffered operations:
 
-**Key Methods:**
+1. decode a request into the neutral request;
+2. encode a neutral request for a backend;
+3. decode a response into the neutral response; and
+4. encode a neutral response for a client.
 
-```go
-type RouterEngine struct {
-    Config               *config.RouterConfig
-    Classifier           *classification.Classifier
-    PIIChecker           *pii.PolicyChecker
-    Cache                cache.CacheBackend
-    ToolsDatabase        *tools.ToolsDatabase
-    ModelSelector        *selection.Registry
-    ReplayRecorders      map[string]*routerreplay.Recorder
-}
+Transport errors use a separate typed contract because an HTTP error is not a failed
+model response resource. Streaming codecs create request-scoped decoders and
+encoders that exchange neutral events. No mutable stream state is stored in the
+registry.
 
-func (e *RouterEngine) Route(ctx context.Context, req *RouteRequest) (*RouteResponse, error)
-func (e *RouterEngine) ClassifyRequest(ctx context.Context, messages []Message) (*ClassificationResult, error)
-func (e *RouterEngine) CheckCache(ctx context.Context, model, query, decisionName string) (string, bool, error)
-func (e *RouterEngine) UpdateCache(ctx context.Context, model, query, response, decisionName string) error
-func (e *RouterEngine) SelectTools(ctx context.Context, query string, topK int) ([]openai.ChatCompletionToolParam, error)
-func (e *RouterEngine) RecordReplay(ctx context.Context, decisionName string, record *routerreplay.RoutingRecord) error
+The registry is immutable after construction. Adding a wire format requires one
+buffered codec, one streaming codec, declared capabilities, and matrix tests. Router
+policy does not gain protocol branches when a codec is added.
+
+## Supported matrix
+
+| Wire format | Buffered request | Buffered response | Streaming | Tools | Images | Structured output | Usage |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| OpenAI Chat Completions | Decode and encode | Decode and encode | SSE decode and encode | Yes | Input | JSON object and schema | Authoritative when present |
+| OpenAI Responses | Decode and encode | Decode and encode | Event decode and encode | Yes | Input plus hosted image-generation lifecycle | JSON schema | Authoritative when present |
+| Anthropic Messages | Decode and encode | Decode and encode | Event decode and encode | Yes | Input | Supported schema subset | Authoritative when present |
+
+The complete pairwise request, response, transport-error, and streaming matrix is
+tested. A request may enter in any supported client format and leave in the format
+declared by the selected provider model. The response returns in the original client
+format.
+
+Top-level request and response inventories are also closed against the published
+OpenAI OpenAPI schemas and generated Anthropic Messages types. A newly published
+field cannot pass through an untyped JSON bucket: it must map to the neutral contract,
+fail as an explicit unsupported feature, or be recorded as bounded provider metadata
+that is intentionally omitted from the client representation.
+
+## Verification contract
+
+The schema contract is pinned to published upstream revisions. Tests close every
+top-level field, nested object field, and published union discriminator against an
+explicit semantic, transport-only, extension, or unsupported disposition. The
+current pins are OpenAI OpenAPI `690521b1753dce0c6d6b275f583d22537679cff9`
+and Anthropic SDK `d19dea9ed85bbb5fdb2d6f20fb6f903920ed23fa`.
+
+The E2E provider simulators are part of the same contract. Their native Chat,
+Responses, and Messages boundaries use revision-pinned closed inventories, reject
+unknown top-level fields with provider-native errors, and retain nested wire objects
+without an untyped normalization step. A Go conformance test compares those
+simulator manifests directly with the codec request, response, and usage wire
+inventories. Simulator tests replay every published top-level request field, while
+the codec goldens close nested fields and union discriminators. This prevents a
+permissive mock from hiding a field that ExtProc dropped or invented.
+
+Human-readable fixtures use a stable input/output convention:
+
+```text
+NNN-{client-protocol}-{case}-in.json
+NNN-{client-protocol}-{case}-{backend-protocol}-out.json
 ```
 
-**Design Decisions:**
+Every request, response, transport error, stream, capability boundary, and typed
+rejection input has exactly one expected output for each built-in target protocol.
+Stream fixtures preserve the exact SSE transcript and are replayed again one byte at
+a time to prove that transport chunk boundaries do not change semantics. The corpus
+includes malformed and truncated JSON, duplicate fields, invalid unions and enums,
+ordered multimodal content, tools and tool results, structured output, reasoning,
+usage, cancellation, timeouts, incomplete streams, midstream failures, identity
+changes, sequence violations, hosted image generation, and resource limits. Image
+generation fixtures preserve every published option, distinguish a `null` result
+from an empty payload, and cover ordered progress, contiguous partial-image indexes,
+terminal success or failure, malformed base64, and target capability rejection.
 
-- Single instance shared across all adapters
-- Stateful (maintains cache, replay recorders)
-- No protocol-specific logic
-- Returns protocol-agnostic data structures
+Deployment-level coverage is a required 18-cell matrix:
 
-#### 2. Adapter Interface
-
-**Location:** `pkg/adapter/manager.go`
-
-```go
-type Adapter interface {
-    Start() error                      // Start the adapter (blocks)
-    Stop() error                       // Graceful shutdown
-    GetEngine() *engine.RouterEngine  // Access to shared engine
-}
+```text
+3 client protocols x 3 native backend protocols x 2 modes = 18 E2E cells
 ```
 
-**Design Decisions:**
+Each cell traverses Envoy and ExtProc, validates the client-native buffered envelope
+or SSE lifecycle, requires a deterministic backend marker in the translated output,
+and rejects leaked backend wire shapes. Additional E2E contracts cover structured
+output, buffered provider errors, tool-call continuation, incomplete streams, and
+errors after partial output for every backend protocol.
 
-- Minimal interface for maximum flexibility
-- Each adapter owns its lifecycle
-- No protocol-specific methods in interface
-- Adapters run in separate goroutines
+## Translation rules
 
-#### 3. Adapter Manager
+Translation is semantic, not field-by-field copying:
 
-**Location:** `pkg/adapter/manager.go`
+- fields with an equivalent neutral meaning are preserved;
+- fields unsupported by the target fail with a typed `unsupported_feature` error;
+- unknown fields may only survive an unmodified same-format buffered round trip;
+- cross-format translation and semantic mutation reject unknown fields rather than
+  silently dropping them;
+- request and response generations advance after semantic mutation;
+- diagnostics are bounded and returned through the existing Router observability
+  contract; and
+- codecs never fetch URLs, resolve files, authenticate callers, or invoke providers.
 
-**Responsibilities:**
+Capability checks happen before encoding. This makes unsupported tools, media,
+multiple candidates, strict schemas, reasoning, or streaming behavior explicit and
+testable.
 
-- Parse adapter configuration
-- Instantiate adapters based on config
-- Start adapters in separate goroutines
-- Coordinate graceful shutdown
+## Streaming
 
-**Key Methods:**
+Every provider event is decoded into a neutral event before policy or client
+encoding. The stream engine enforces ordering, terminal-state uniqueness, bounded
+diagnostics, and final usage settlement. Split network frames are buffered by the
+wire decoder; Router policy never parses partial JSON or SSE records.
 
-```go
-func (m *Manager) CreateAdapters(cfg *config.RouterConfig, eng *engine.RouterEngine, configPath string) error
-func (m *Manager) StartAll() error
-func (m *Manager) StopAll() error
-func (m *Manager) Wait()
-```
+Hosted image generation follows the same stream engine. An output item starts in
+`in_progress`, progress may advance through `generating` and ordered partial images,
+and the item finishes exactly once as `completed` or `failed`. Backward transitions,
+sparse partial indexes, conflicting terminal state, and result data on a progress
+event fail before a client success terminal can be published.
 
-#### 4. ExtProc Adapter
+Router-produced responses use a neutral event encoder directly. They do not create
+an intermediate provider-shaped stream. Cancellation and backpressure stay with
+Envoy and ExtProc's request lifecycle.
 
-**Location:** `pkg/adapter/extproc/`
+## Usage and cost
 
-**Responsibilities:**
+Token counts retain provenance so accounting can distinguish authoritative provider
+usage from derived, estimated, or unavailable values. Final provider usage replaces
+intermediate estimates when the stream terminates.
 
-- Wrap existing Envoy ExtProc implementation
-- Maintain backward compatibility
-- Handle gRPC/Envoy protocol specifics
-- Support TLS configuration
-
-**Key Features:**
-
-- Uses existing `extproc.OpenAIRouter` internally
-- Translates Envoy requests to RouterEngine calls
-- Preserves all existing ExtProc functionality
-- Configurable TLS support
-
-#### 5. HTTP Adapter
-
-**Location:** `pkg/adapter/http/`
-
-**Responsibilities:**
-
-- Provide OpenAI-compatible REST API
-- Direct access without Envoy
-- Handle HTTP-specific concerns (CORS, headers, etc.)
-
-**Endpoints:**
-
-- `POST /v1/chat/completions` - Chat completions
-- `POST /v1/completions` - Text completions (future)
-- `GET /v1/models` - List available models
-- `POST /v1/classify` - Classification endpoint
-- `POST /v1/route` - Routing decision endpoint
-- `GET /v1/router_replay` - List replay records
-- `GET /v1/router_replay/{id}` - Get replay record
-- `GET /health` - Health check
-- `GET /ready` - Readiness check
-
-#### 6. gRPC Adapter
-
-**Location:** `pkg/adapter/grpc/`
-
-**Responsibilities:**
-
-- Provide native gRPC API for routing
-- More efficient than ExtProc for direct gRPC clients
-- Custom service definition optimized for routing
-- Support for streaming and unary RPCs
-
-**Key Features:**
-
-- Custom `.proto` service definition
-- Optimized for low-latency routing decisions
-- Supports both synchronous and asynchronous routing
-- Built-in load balancing and connection pooling
-- Compatible with gRPC ecosystem (grpc-gateway, etc.)
-
-**Service Definition:**
-
-```protobuf
-service SemanticRouter {
-  rpc Route(RouteRequest) returns (RouteResponse);
-  rpc Classify(ClassifyRequest) returns (ClassifyResponse);
-  rpc StreamRoute(stream RouteRequest) returns (stream RouteResponse);
-}
-```
-
-#### 7. Nginx Adapter
-
-**Location:** `pkg/adapter/nginx/`
-
-**Responsibilities:**
-
-- Integration with Nginx via NJS (JavaScript) module
-- Lua script support for OpenResty
-- Header-based routing similar to ExtProc
-- Direct Nginx upstream configuration
-
-**Key Features:**
-
-- NJS module for request/response processing
-- Communicates with RouterEngine via HTTP or gRPC
-- Sets upstream selection based on routing decision
-- Minimal overhead compared to ExtProc
-- Native Nginx performance characteristics
-
-**Integration Methods:**
-
-1. **NJS Module:** JavaScript-based request processing
-2. **Lua/OpenResty:** For OpenResty deployments
-3. **HTTP Subrequest:** Calls HTTP adapter internally
-4. **Shared Memory:** Direct IPC with RouterEngine process
-
-### Configuration Design
-
-#### Adapter Configuration
+Pricing is deployment metadata and remains on each provider model:
 
 ```yaml
-adapters:
-  - type: "envoy" # ExtProc adapter
-    enabled: true
-    port: 50051
-    tls:
-      enabled: true
-      cert_file: "/path/to/cert.pem"
-      key_file: "/path/to/key.pem"
-
-  - type: "http" # HTTP REST API
-    enabled: true
-    port: 9000
-
-  - type: "grpc" # Native gRPC API
-    enabled: true
-    port: 50052
-    tls:
-      enabled: true
-      cert_file: "/path/to/cert.pem"
-      key_file: "/path/to/key.pem"
-
-  - type: "nginx" # Nginx integration
-    enabled: true
-    port: 9001
-    mode: "njs" # Options: njs, lua, http
-    config:
-      upstream_variable: "backend_upstream"
-      header_prefix: "x-vsr-"
+providers:
+  models:
+    - name: local/fast
+      pricing:
+        currency: USD
+        prompt_per_1m: 0.20
+        cached_input_per_1m: 0.02
+        cache_write_per_1m: 0.25
+        completion_per_1m: 0.80
 ```
 
-**Design Decisions:**
-
-- Array allows multiple adapters of same type (future: multiple HTTP on different ports)
-- Per-adapter TLS configuration
-- Simple enable/disable without removing config
-- Port configuration at adapter level
-
-### Data Flow
-
-#### Request Flow (HTTP Adapter Example)
-
-```
-1. Client Request
-   ↓
-2. HTTP Adapter receives POST /v1/chat/completions
-   ↓
-3. Parse OpenAI request format
-   ↓
-4. Call RouterEngine.Route(RouteRequest)
-   ↓
-5. RouterEngine performs:
-   - Classification (which decision matches?)
-   - Cache check (semantic similarity)
-   - Tool selection (if enabled)
-   - Replay recording (if configured)
-   ↓
-6. RouterEngine returns RouteResponse
-   ↓
-7. HTTP Adapter proxies to selected backend
-   ↓
-8. Return response to client
-```
-
-#### Shared State Flow
-
-```
-HTTP Request A → HTTP Adapter
-                     ↓
-                RouterEngine → Cache (hit/miss)
-                     ↑
-ExtProc Request B → ExtProc Adapter
-```
-
-Both adapters share:
-
-- Same cache entries
-- Same replay recorders
-- Same classification decisions
-- Same model selection state
-
-## Implementation Details
-
-### Initialization Sequence
-
-```go
-// main.go
-1. Load configuration
-2. Initialize embedding models
-3. Create RouterEngine (NewRouterEngine)
-   - Initialize classifier
-   - Create semantic cache
-   - Setup tools database
-   - Initialize replay recorders per decision
-   - Setup model selector
-4. Create Adapter Manager
-5. Manager creates adapters (CreateAdapters)
-   - Each adapter gets reference to RouterEngine
-   - Per-adapter configuration (port, TLS)
-6. Manager starts all adapters (StartAll)
-   - Each adapter in separate goroutine
-7. Main blocks on Manager.Wait()
-```
-
-### Error Handling
-
-- **Adapter Creation Failure:** Fatal error, application exits
-- **Adapter Start Failure:** Fatal error, application exits
-- **Runtime Errors:** Logged, adapter continues if possible
-- **RouterEngine Errors:** Returned to adapter for protocol-specific handling
-
-### Concurrency Model
-
-- **RouterEngine:** Thread-safe, multiple adapters can call concurrently
-- **Cache:** Backend handles concurrency (Redis, Milvus, etc.)
-- **Replay Recorders:** Thread-safe map with per-decision locks
-- **Adapters:** Independent goroutines, no shared adapter state
-
-## Trade-offs and Alternatives
-
-### Design Decisions
-
-#### 1. Single Shared RouterEngine vs. Per-Adapter Engines
-
-**Chosen:** Single shared RouterEngine
-
-**Rationale:**
-
-- Consistent routing decisions across protocols
-- Shared cache improves hit rate
-- Single source of truth for replay records
-- Reduced memory footprint
-
-**Trade-off:** Potential contention point (mitigated by thread-safe design)
-
-#### 2. Adapter Interface Design
-
-**Alternatives Considered:**
-
-A. **Rich Interface:**
-
-```go
-type Adapter interface {
-    Start() error
-    Stop() error
-    HandleRequest(req *Request) (*Response, error)
-    GetMetrics() *Metrics
-    Configure(cfg *Config) error
-}
-```
-
-B. **Minimal Interface (Chosen):**
-
-```go
-type Adapter interface {
-    Start() error
-    Stop() error
-    GetEngine() *engine.RouterEngine
-}
-```
-
-**Rationale:** Minimal interface allows maximum protocol flexibility. Different protocols have vastly different request/response models.
-
-#### 3. Configuration Approach
-
-**Alternatives:**
-
-A. Separate files per adapter
-B. Environment variables
-C. Single config with adapters section (Chosen)
-
-**Rationale:** Single config file keeps all configuration in one place, easier to manage and version control.
-
-#### 4. Backward Compatibility
-
-**Approach:** Wrap existing ExtProc implementation rather than rewrite
-
-**Rationale:**
-
-- No breaking changes
-- Gradual migration path
-- Proven, tested code remains in use
-- Reduced risk
-
-### Known Limitations
-
-1. **No Protocol-Specific Optimization:** Abstraction prevents protocol-specific optimizations
-2. **Adapter Isolation:** Adapters can't directly communicate (by design)
-3. **Shared State Challenges:** Race conditions if RouterEngine not thread-safe
-4. **Configuration Complexity:** More options for users to configure
-
-## Testing Strategy
-
-### Unit Tests
-
-- RouterEngine methods with mock adapters
-- Individual adapter logic
-- Configuration parsing
-
-### Integration Tests
-
-- Multiple adapters running simultaneously
-- Shared state consistency (cache hits across adapters)
-- Replay recording from both protocols
-
-### E2E Tests
-
-- ExtProc via Envoy on port 8801
-- HTTP direct on port 9000
-- Verify identical routing decisions
-- Verify replay records visible from both
-
-## Future Work
-
-### Short Term
-
-1. **Graceful Shutdown**
-   - Drain in-flight requests
-   - Close connections cleanly
-   - Flush replay records
-
-2. **Adapter Metrics**
-   - Per-adapter request counters
-   - Latency histograms
-   - Error rates
-
-3. **Enhanced Nginx Integration**
-   - OpenResty Lua module
-   - Nginx Plus dynamic upstream API
-   - Shared memory IPC for zero-copy
-
-### Long Term
-
-1. **gRPC Streaming Enhancements**
-   - Bi-directional streaming support
-   - Server-side streaming for batch requests
-   - Client-side streaming for large inputs
-
-2. **WebSocket Adapter**
-   - Real-time streaming
-   - Bi-directional communication
-
-3. **Plugin System**
-   - Dynamic adapter loading
-   - Third-party adapters
-
-4. **Per-Adapter Configuration**
-   - Rate limiting
-   - Authentication
-   - Custom middleware
-
-## Migration Guide
-
-### From Old ExtProc-Only to Adapter Architecture
-
-**Before:**
-
-```go
-server := extproc.NewServer(configPath, port, secure, certPath)
-server.Start()
-```
-
-**After:**
-
-```go
-engine := engine.NewRouterEngine(configPath)
-manager := adapter.NewManager()
-manager.CreateAdapters(cfg, engine, configPath)
-manager.StartAll()
-manager.Wait()
-```
-
-**Configuration:**
-
-```yaml
-# Add this to config.yaml
-adapters:
-  - type: "envoy"
-    enabled: true
-    port: 50051
-```
-
-### Adding New Adapter
-
-1. Create package `pkg/adapter/myprotocol/`
-2. Implement `Adapter` interface:
-
-```go
-type MyAdapter struct {
-    engine *engine.RouterEngine
-    port   int
-}
-
-func NewAdapter(eng *engine.RouterEngine, port int) (*MyAdapter, error) {
-    return &MyAdapter{engine: eng, port: port}, nil
-}
-
-func (a *MyAdapter) Start() error {
-    // Protocol-specific server setup
-    // Call a.engine.Route() for routing logic
-}
-
-func (a *MyAdapter) Stop() error {
-    // Graceful shutdown
-}
-
-func (a *MyAdapter) GetEngine() *engine.RouterEngine {
-    return a.engine
-}
-```
-
-3. Register in manager:
-
-```go
-// pkg/adapter/manager.go
-case "myprotocol":
-    adapter, err = myprotocol.NewAdapter(eng, adapterCfg.Port)
-```
-
-4. Add configuration support:
-
-```yaml
-adapters:
-  - type: "myprotocol"
-    enabled: true
-    port: 9001
-```
+`routing.modelCards` describes semantic capabilities; it does not own connection or
+pricing data. Currency is optional and resolves to USD for accounting when omitted.
+Configured rates must be finite and non-negative, and an explicit zero represents a
+free rate.
+
+## Security boundary
+
+Client-controlled headers and body metadata are untrusted. Only the ExtProc boundary
+may populate trusted identity, session, task, and correlation fields after the
+transport has established them. Codecs cannot promote wire metadata into trusted
+metadata.
+
+Public inference listeners and the management listener remain separate. This design
+does not add a direct Router HTTP proxy, an agent service, a product management
+plane, or a second upstream transport.
+
+## Extension checklist
+
+A new codec is complete only when it provides:
+
+- a stable wire-format identifier;
+- an explicit capability declaration;
+- strict buffered request, response, and transport-error codecs;
+- request-scoped stream decoding and encoding;
+- malformed-input and unsupported-feature tests;
+- pairwise matrix coverage against every built-in format;
+- authoritative usage and terminal-event tests; and
+- ExtProc regression coverage proving that routing behavior is unchanged.
 
 ## References
 
-- [OpenAI API Specification](https://platform.openai.com/docs/api-reference)
-- [Envoy ExtProc Documentation](https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_filters/ext_proc_filter)
-- [vLLM Semantic Router Documentation](https://vllm-sr.ai)
-
-## Appendix
-
-### Performance Considerations
-
-- **RouterEngine:** Single instance reduces memory, but could be bottleneck
-- **Cache:** Backend choice critical (Redis/Milvus for production)
-- **Replay Recording:** Async writes recommended for high throughput
-- **Adapter Overhead:** Minimal, mostly network/protocol serialization
-
-### Security Considerations
-
-- **TLS Support:** Per-adapter TLS configuration
-- **Authentication:** Handled at adapter level (future work: external authz abstraction)
-- **Authorization:** Future work to abstract external authz providers (OPA, custom)
-- **PII Detection:** Shared across all adapters
-- **Jailbreak Detection:** Shared across all adapters
-
-### Monitoring and Observability
-
-- **Metrics:** Per-adapter and RouterEngine metrics
-- **Tracing:** Distributed tracing spans adapters
-- **Logging:** Structured logs with adapter context
-- **Health Checks:** Per-adapter health endpoints
+- [Router API](../api/router)
+- [Semantic Router system overview](../overview/semantic-router-overview)
+- [Gateway deployment options](../installation/k8s/gateways)

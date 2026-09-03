@@ -10,6 +10,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
@@ -17,6 +18,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection/lookuptable"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 )
 
@@ -34,6 +36,7 @@ type routerComponents struct {
 	classificationSvc    *services.ClassificationService
 	semanticCache        cache.CacheBackend
 	toolsDatabase        *tools.ToolsDatabase
+	toolEmbedder         *cachedToolEmbedder
 	responseAPIFilter    *ResponseAPIFilter
 	replayRecorder       *routerreplay.Recorder
 	replayStoreShared    bool
@@ -43,10 +46,13 @@ type routerComponents struct {
 	lookupTable          lookuptable.LookupTable
 	memoryStore          memory.Store
 	memoryExtractor      *memory.MemoryExtractor
+	protocolCodecs       *protocolcodec.Registry
 	credentialResolver   *authz.CredentialResolver
 	rateLimiter          *ratelimit.RateLimitResolver
 	lookupTableCancel    func()
+	routerSessionStore   *sessiontelemetry.RouterSessionStateStoreSlot
 	workflowStateService *looper.WorkflowStateService
+	resources            *resourceScope
 }
 
 // NewOpenAIRouter creates a new OpenAI API router instance.
@@ -62,6 +68,7 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	}
 
 	config.Replace(cfg)
+	publishRouterLearningStateStore(router)
 	logLoadedRouterConfig(configPath, cfg)
 	return router, nil
 }
@@ -172,111 +179,210 @@ func logLoadedRouterConfig(configPath string, cfg *config.RouterConfig) {
 }
 
 func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) {
-	configureRouterLearningStateStore(cfg)
+	components := &routerComponents{
+		cfg:                cfg,
+		resources:          newResourceScope(),
+		routerSessionStore: buildRouterLearningStateStore(cfg),
+		protocolCodecs:     protocolcodec.NewBuiltinRegistry(),
+	}
+	registerRouterSessionStore(components.resources, components.routerSessionStore)
 	mappings, err := loadClassifierMappings(cfg)
 	if err != nil {
-		return nil, err
+		return nil, rollbackResources(components.resources, err)
 	}
 
-	categoryDescriptions := cfg.GetCategoryDescriptions()
+	components.categoryDescriptions = cfg.GetCategoryDescriptions()
 	logging.ComponentDebugEvent("extproc", "category_descriptions_loaded", map[string]interface{}{
-		"count":        len(categoryDescriptions),
-		"descriptions": categoryDescriptions,
+		"count":        len(components.categoryDescriptions),
+		"descriptions": components.categoryDescriptions,
 	})
 
-	semanticCache, err := createSemanticCache(cfg)
-	if err != nil {
+	if err := components.buildEarlyResources(mappings); err != nil {
 		return nil, err
 	}
 
-	toolsDatabase, err := createToolsDatabase(cfg)
-	if err != nil {
-		return nil, err
-	}
-	recipeClassifiers, classifier, classificationSvc, err := createRouterClassifier(cfg, mappings)
-	if err != nil {
-		return nil, err
-	}
+	components.responseAPIFilter = createResponseAPIFilter(cfg)
+	components.resources.add(components.responseAPIFilter.Close)
 
-	responseAPIFilter := createResponseAPIFilter(cfg)
-	replayRecorders, replayRecorder, replayStoreShared := createReplayRuntime(cfg)
+	components.replayRecorders, components.replayRecorder, components.replayStoreShared, err = createReplayRuntime(cfg)
+	if err != nil {
+		return nil, rollbackResources(components.resources, err)
+	}
+	components.resources.add(func() error {
+		return closeReplayRecorders(components.replayRecorder, components.replayRecorders, components.replayStoreShared)
+	})
 	var replayReaderForLookup store.Reader
-	if replayRecorder != nil {
-		replayReaderForLookup = replayRecorder.Reader()
+	if components.replayRecorder != nil {
+		replayReaderForLookup = components.replayRecorder.Reader()
 	}
-	recipeModelSelectors, modelSelector, lookupTable, lookupTableCancel := createModelSelectorRegistries(cfg, replayReaderForLookup)
-	memoryStore, memoryExtractor := createMemoryRuntime(cfg)
-	credentialResolver := buildCredentialResolver(cfg)
-	rateLimiter := buildRateLimitResolver(cfg)
+	components.recipeModelSelectors, components.modelSelector, components.lookupTable, components.lookupTableCancel = createModelSelectorRegistries(cfg, replayReaderForLookup)
+	registerModelSelectorResources(components.resources, components.recipeModelSelectors, components.lookupTableCancel)
 
-	if credentialResolver != nil {
+	components.memoryStore, components.memoryExtractor = createMemoryRuntime(cfg)
+	if components.memoryStore != nil {
+		components.resources.add(components.memoryStore.Close)
+	}
+
+	components.credentialResolver = buildCredentialResolver(cfg)
+	components.rateLimiter = buildRateLimitResolver(cfg)
+	components.resources.add(components.rateLimiter.Close)
+
+	if components.credentialResolver != nil {
 		logging.ComponentEvent("extproc", "credential_resolver_initialized", map[string]interface{}{
-			"providers": credentialResolver.ProviderNames(),
+			"providers": components.credentialResolver.ProviderNames(),
 		})
 	}
-	if rateLimiter != nil {
+	if components.rateLimiter != nil {
 		logging.ComponentEvent("extproc", "rate_limit_resolver_initialized", map[string]interface{}{
-			"providers": rateLimiter.ProviderNames(),
+			"providers": components.rateLimiter.ProviderNames(),
 		})
 	}
 
-	var workflowsEnabled bool
-	for _, decision := range cfg.Decisions {
-		if decision.Algorithm != nil && decision.Algorithm.Type == "workflows" {
-			workflowsEnabled = true
-			break
-		}
-	}
-	var workflowStateService *looper.WorkflowStateService
-	if workflowsEnabled {
-		workflowStateService = looper.NewWorkflowStateService(&cfg.Looper)
+	components.workflowStateService = newWorkflowStateServiceIfEnabled(cfg)
+	if components.workflowStateService != nil {
+		components.resources.add(components.workflowStateService.Close)
 	}
 
-	return &routerComponents{
-		cfg:                  cfg,
-		categoryDescriptions: categoryDescriptions,
-		classifier:           classifier,
-		recipeClassifiers:    recipeClassifiers,
-		classificationSvc:    classificationSvc,
-		semanticCache:        semanticCache,
-		toolsDatabase:        toolsDatabase,
-		responseAPIFilter:    responseAPIFilter,
-		replayRecorder:       replayRecorder,
-		replayStoreShared:    replayStoreShared,
-		replayRecorders:      replayRecorders,
-		modelSelector:        modelSelector,
-		recipeModelSelectors: recipeModelSelectors,
-		lookupTable:          lookupTable,
-		memoryStore:          memoryStore,
-		memoryExtractor:      memoryExtractor,
-		credentialResolver:   credentialResolver,
-		rateLimiter:          rateLimiter,
-		lookupTableCancel:    lookupTableCancel,
-		workflowStateService: workflowStateService,
-	}, nil
+	return components, nil
+}
+
+func (components *routerComponents) buildEarlyResources(mappings *classifierMappings) error {
+	var err error
+	components.semanticCache, err = createSemanticCache(components.cfg)
+	if err != nil {
+		return rollbackResources(components.resources, err)
+	}
+	if components.semanticCache != nil {
+		components.resources.add(components.semanticCache.Close)
+	}
+
+	components.toolsDatabase, components.toolEmbedder, err = buildToolsRuntime(components.cfg)
+	if err != nil {
+		return rollbackResources(components.resources, err)
+	}
+
+	components.recipeClassifiers, components.classifier, components.classificationSvc, err = createRouterClassifier(components.cfg, mappings)
+	if err != nil {
+		return rollbackResources(components.resources, err)
+	}
+	components.resources.add(components.recipeClassifiers.Close)
+	return nil
+}
+
+func registerRouterSessionStore(
+	resources *resourceScope,
+	store *sessiontelemetry.RouterSessionStateStoreSlot,
+) {
+	if store == nil {
+		return
+	}
+	resources.add(func() error {
+		sessiontelemetry.UnpublishRouterSessionStateStore(store)
+		return store.RetireAndClose()
+	})
+}
+
+func registerModelSelectorResources(
+	resources *resourceScope,
+	registries map[config.RecipeName]*selection.Registry,
+	lookupTableCancel func(),
+) {
+	resources.add(func() error {
+		return closeRecipeModelSelectors(registries)
+	})
+	if lookupTableCancel == nil {
+		return
+	}
+	resources.add(func() error {
+		lookupTableCancel()
+		return nil
+	})
+}
+
+func rollbackResources(resources *resourceScope, cause error) error {
+	if err := resources.close(); err != nil {
+		logging.ComponentWarnEvent("extproc", "router_build_rollback_failed", map[string]interface{}{
+			"error": err.Error(),
+		})
+	}
+	return cause
+}
+
+func buildToolsRuntime(cfg *config.RouterConfig) (*tools.ToolsDatabase, *cachedToolEmbedder, error) {
+	// One provider serves both the tools database and the tool embedder, so a
+	// remote endpoint gets a single HTTP client/connection pool.
+	provider, providerErr := toolsEmbeddingProvider(cfg)
+	if providerErr != nil && cfg.Tools.Enabled {
+		return nil, nil, providerErr
+	}
+	database, err := createToolsDatabase(cfg, provider)
+	if err != nil {
+		return nil, nil, err
+	}
+	if providerErr != nil {
+		logging.Warnf("tool_selection: embedding provider unavailable, filter mode will use its fallback: %v", providerErr)
+		return database, nil, nil
+	}
+	return database, newToolEmbedderForConfig(cfg, provider), nil
 }
 
 func (components *routerComponents) buildRouter() *OpenAIRouter {
-	return &OpenAIRouter{
-		Config:                components.cfg,
-		CategoryDescriptions:  components.categoryDescriptions,
-		Classifier:            components.classifier,
-		RecipeClassifiers:     components.recipeClassifiers,
-		ClassificationService: components.classificationSvc,
-		Cache:                 components.semanticCache,
-		ToolsDatabase:         components.toolsDatabase,
-		ResponseAPIFilter:     components.responseAPIFilter,
-		ReplayRecorder:        components.replayRecorder,
-		ReplayStoreShared:     components.replayStoreShared,
-		ModelSelector:         components.modelSelector,
-		RecipeModelSelectors:  components.recipeModelSelectors,
-		LookupTable:           components.lookupTable,
-		ReplayRecorders:       components.replayRecorders,
-		MemoryStore:           components.memoryStore,
-		MemoryExtractor:       components.memoryExtractor,
-		CredentialResolver:    components.credentialResolver,
-		RateLimiter:           components.rateLimiter,
-		lookupTableCancel:     components.lookupTableCancel,
-		WorkflowStateService:  components.workflowStateService,
+	router := &OpenAIRouter{
+		Config:                  components.cfg,
+		CategoryDescriptions:    components.categoryDescriptions,
+		Classifier:              components.classifier,
+		RecipeClassifiers:       components.recipeClassifiers,
+		ClassificationService:   components.classificationSvc,
+		Cache:                   components.semanticCache,
+		ToolsDatabase:           components.toolsDatabase,
+		toolEmbedder:            components.toolEmbedder,
+		ResponseAPIFilter:       components.responseAPIFilter,
+		ReplayRecorder:          components.replayRecorder,
+		ReplayStoreShared:       components.replayStoreShared,
+		ModelSelector:           components.modelSelector,
+		RecipeModelSelectors:    components.recipeModelSelectors,
+		LookupTable:             components.lookupTable,
+		ReplayRecorders:         components.replayRecorders,
+		MemoryStore:             components.memoryStore,
+		MemoryExtractor:         components.memoryExtractor,
+		ProtocolCodecs:          components.protocolCodecs,
+		CredentialResolver:      components.credentialResolver,
+		RateLimiter:             components.rateLimiter,
+		lookupTableCancel:       components.lookupTableCancel,
+		routerSessionStateStore: components.routerSessionStore,
+		WorkflowStateService:    components.workflowStateService,
+		resources:               components.resources,
 	}
+	if components.classificationSvc != nil {
+		components.classificationSvc.SetEvalModelSelector(router)
+	}
+
+	components.resources.add(func() error {
+		if router.CompressionRecovery != nil {
+			return router.CompressionRecovery.Close()
+		}
+		return nil
+	})
+
+	components.resources.add(func() error {
+		router.routerLearningMu.Lock()
+		learningRuntime := router.routerLearningRuntime
+		router.routerLearningMu.Unlock()
+		if learningRuntime != nil {
+			learningRuntime.RetireAndWait()
+		}
+		return nil
+	})
+
+	return router
+}
+
+// newWorkflowStateServiceIfEnabled owns one workflow tool-state store for the
+// router generation when any routing profile uses algorithm.type=workflows,
+// including recipe-only configs whose decisions are not on the flat list.
+func newWorkflowStateServiceIfEnabled(cfg *config.RouterConfig) *looper.WorkflowStateService {
+	if cfg == nil || !cfg.HasFlowDecision() {
+		return nil
+	}
+	return looper.NewWorkflowStateService(&cfg.Looper)
 }

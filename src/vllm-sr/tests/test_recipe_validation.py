@@ -1,5 +1,11 @@
 import pytest
-from cli.algorithms import AlgorithmConfig, ReMoMAlgorithmConfig
+from cli.algorithms import (
+    AlgorithmConfig,
+    FusionAlgorithmConfig,
+    ReMoMAlgorithmConfig,
+    WorkflowPlannerConfig,
+    WorkflowsAlgorithmConfig,
+)
 from cli.models import (
     Condition,
     DecisionAdaptationsConfig,
@@ -139,6 +145,35 @@ def test_recipe_remom_synthesis_model_must_be_in_model_refs():
     errors = validate_user_config(config)
 
     assert any("synthesis_model 'missing-model'" in error.message for error in errors)
+
+
+def test_recipe_fusion_rejects_quorum_above_panel_size():
+    config = recipe_config()
+    config.recipes[0].routing.decisions[0].algorithm = AlgorithmConfig(
+        type="fusion",
+        fusion=FusionAlgorithmConfig(min_successful_responses=2),
+    )
+
+    errors = validate_user_config(config)
+
+    assert any("exceeds panel size 1" in error.message for error in errors)
+
+
+def test_recipe_workflow_rejects_quorum_above_parallelism():
+    config = recipe_config()
+    config.recipes[0].routing.decisions[0].algorithm = AlgorithmConfig(
+        type="workflows",
+        workflows=WorkflowsAlgorithmConfig(
+            mode="dynamic",
+            planner=WorkflowPlannerConfig(model="model-a"),
+            max_parallel=1,
+            min_successful_responses=2,
+        ),
+    )
+
+    errors = validate_user_config(config)
+
+    assert any("exceeds max_parallel=1" in error.message for error in errors)
 
 
 def test_entrypoint_identifiers_are_trimmed_and_deduplicated():

@@ -8,6 +8,7 @@ from pathlib import Path
 import click
 
 from cli.commands.common import exit_with_logged_error
+from cli.terminal import echo, success
 from cli.utils import get_logger
 
 log = get_logger(__name__)
@@ -179,13 +180,11 @@ def completion_install(shell: str | None) -> None:
     already = rc_path is not None and _rc_already_configured(rc_path)
 
     if already:
-        click.echo(
-            f"✓ Shell completions for {resolved} are already configured " f"in {target}"
-        )
+        success(f"Shell completions for {resolved} are already configured in {target}")
     else:
-        click.echo(f"✓ Shell completions for {resolved} installed to {target}")
+        success(f"Shell completions for {resolved} installed to {target}")
 
     if resolved == "fish":
-        click.echo("  Restart your fish shell to activate completions.")
+        echo("  Restart your fish shell to activate completions.")
     else:
-        click.echo(f"  Restart your shell or run: source {target}")
+        echo(f"  Restart your shell or run: source {target}")

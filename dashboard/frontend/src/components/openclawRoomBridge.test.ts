@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   buildRoomBridgeEnvelope,
   buildRoomSurfaceWSMessage,
-  CLAWOS_ROOM_BRIDGE_SOURCE,
+  OPENCLAW_ROOM_BRIDGE_SOURCE,
   isRoomBridgeEnvelope,
   postRoomEventToFrame,
 } from './openclawRoomBridge'
@@ -13,7 +13,9 @@ describe('openclawRoomBridge', () => {
       event: { type: 'new_message', message: { id: 'm1' } as never },
     })
     expect(isRoomBridgeEnvelope(envelope)).toBe(true)
-    expect(isRoomBridgeEnvelope({ source: 'other', type: 'room_event', roomId: 'room-alpha' })).toBe(false)
+    expect(
+      isRoomBridgeEnvelope({ source: 'other', type: 'room_event', roomId: 'room-alpha' }),
+    ).toBe(false)
   })
 
   it('builds parent to iframe room_event payloads', () => {
@@ -26,7 +28,7 @@ describe('openclawRoomBridge', () => {
     })
 
     expect(envelope).toEqual({
-      source: CLAWOS_ROOM_BRIDGE_SOURCE,
+      source: OPENCLAW_ROOM_BRIDGE_SOURCE,
       type: 'room_event',
       roomId: 'room-alpha',
       event: {
@@ -58,19 +60,21 @@ describe('openclawRoomBridge', () => {
 
     expect(postMessage).toHaveBeenCalledWith(
       expect.objectContaining({
-        source: CLAWOS_ROOM_BRIDGE_SOURCE,
+        source: OPENCLAW_ROOM_BRIDGE_SOURCE,
         type: 'room_event',
         roomId: 'room-alpha',
       }),
-      '*'
+      '*',
     )
   })
 
   it('builds websocket surface_event payloads with worker identity', () => {
-    expect(buildRoomSurfaceWSMessage(
-      { kind: 'tool_call', name: 'search' },
-      { senderType: 'worker', senderId: 'worker-a', senderName: 'worker-a' }
-    )).toEqual({
+    expect(
+      buildRoomSurfaceWSMessage(
+        { kind: 'tool_call', name: 'search' },
+        { senderType: 'worker', senderId: 'worker-a', senderName: 'worker-a' },
+      ),
+    ).toEqual({
       type: 'surface_event',
       payload: { kind: 'tool_call', name: 'search' },
       senderType: 'worker',
@@ -85,7 +89,7 @@ describe('openclawRoomBridge', () => {
     })
 
     expect(envelope).toEqual({
-      source: CLAWOS_ROOM_BRIDGE_SOURCE,
+      source: OPENCLAW_ROOM_BRIDGE_SOURCE,
       type: 'surface_event',
       roomId: 'room-alpha',
       payload: { kind: 'status', value: 'running' },

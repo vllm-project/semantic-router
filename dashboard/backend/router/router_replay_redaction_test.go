@@ -3,12 +3,70 @@ package router
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 )
+
+func requireReplayObject(t *testing.T, value any, label string) map[string]any {
+	t.Helper()
+	object, ok := value.(map[string]any)
+	if !ok {
+		t.Fatalf("%s missing or invalid: %#v", label, value)
+	}
+	return object
+}
+
+func requireReplayArray(t *testing.T, value any, label string, length int) []any {
+	t.Helper()
+	items, ok := value.([]any)
+	if !ok || len(items) != length {
+		t.Fatalf("%s = %#v, want %d items", label, value, length)
+	}
+	return items
+}
+
+func assertEmptyReplayFields(t *testing.T, object map[string]any, fields ...string) {
+	t.Helper()
+	for _, field := range fields {
+		if got := object[field]; got != "" {
+			t.Fatalf("%s = %#v, want empty string", field, got)
+		}
+	}
+}
+
+func assertRedactedTraceStep(t *testing.T, rawStep any, index int) map[string]any {
+	t.Helper()
+	step := requireReplayObject(t, rawStep, fmt.Sprintf("step %d", index))
+	for _, field := range []string{"text", "arguments", "raw_arguments", "raw_output", "output"} {
+		if got, ok := step[field]; ok && got != "" {
+			t.Fatalf("step %d %s = %#v, want empty string", index, field, got)
+		}
+	}
+	if got := step["content_redacted"]; got != true {
+		t.Fatalf("step %d content_redacted = %#v, want true", index, got)
+	}
+	return step
+}
+
+func assertRedactedToolTrace(t *testing.T, payload map[string]any) {
+	t.Helper()
+	toolTrace := requireReplayObject(t, payload["tool_trace"], "tool_trace")
+	if got := toolTrace["flow"]; got != "User Query -> Tool Calling -> Tool Execute -> LLM Answer" {
+		t.Fatalf("tool_trace.flow = %#v, want preserved flow", got)
+	}
+	steps := requireReplayArray(t, toolTrace["steps"], "tool_trace.steps", 4)
+	for index, rawStep := range steps {
+		assertRedactedTraceStep(t, rawStep, index)
+	}
+	toolResult := requireReplayObject(t, steps[2], "step 2")
+	if got := toolResult["status"]; got != redactedToolResultStatusSucceeded {
+		t.Fatalf("client_tool_result status = %#v, want %q", got, redactedToolResultStatusSucceeded)
+	}
+}
 
 func TestRedactReplayResponseBodyRemovesSensitiveFields(t *testing.T) {
 	t.Parallel()
@@ -17,6 +75,8 @@ func TestRedactReplayResponseBodyRemovesSensitiveFields(t *testing.T) {
 		"id":"replay-1",
 		"request_body":"secret request",
 		"response_body":"secret response",
+		"prompt":"secret prompt extracted before body truncation",
+		"tool_definitions":"[{\"name\":\"private_tool\"}]",
 		"tool_trace":{
 			"flow":"User Query -> Tool Calling -> Tool Execute -> LLM Answer",
 			"stage":"assistant_final_response",
@@ -24,7 +84,7 @@ func TestRedactReplayResponseBodyRemovesSensitiveFields(t *testing.T) {
 			"steps":[
 				{"type":"user_input","text":"sensitive user prompt"},
 				{"type":"assistant_tool_call","tool_name":"lookup_price","arguments":"{\"ticker\":\"NVDA\"}","raw_arguments":"{\"ticker\":\"NVDA\"}"},
-				{"type":"client_tool_result","tool_name":"lookup_price","text":"sensitive tool result","raw_output":"{\"price\":950.25}"},
+				{"type":"client_tool_result","tool_name":"lookup_price","text":"sensitive tool result","output":"{\"price\":950.25}","raw_output":"{\"price\":950.25}"},
 				{"type":"assistant_final_response","text":"sensitive final answer"}
 			]
 		}
@@ -43,60 +103,8 @@ func TestRedactReplayResponseBodyRemovesSensitiveFields(t *testing.T) {
 		t.Fatalf("json.Unmarshal() error = %v", err)
 	}
 
-	if got := payload["request_body"]; got != "" {
-		t.Fatalf("request_body = %#v, want empty string", got)
-	}
-	if got := payload["response_body"]; got != "" {
-		t.Fatalf("response_body = %#v, want empty string", got)
-	}
-
-	toolTrace, ok := payload["tool_trace"].(map[string]any)
-	if !ok {
-		t.Fatalf("tool_trace missing or invalid: %#v", payload["tool_trace"])
-	}
-	if got := toolTrace["flow"]; got != "User Query -> Tool Calling -> Tool Execute -> LLM Answer" {
-		t.Fatalf("tool_trace.flow = %#v, want preserved flow", got)
-	}
-
-	steps, ok := toolTrace["steps"].([]any)
-	if !ok || len(steps) != 4 {
-		t.Fatalf("tool_trace.steps = %#v, want 4 steps", toolTrace["steps"])
-	}
-
-	for index, rawStep := range steps {
-		step, ok := rawStep.(map[string]any)
-		if !ok {
-			t.Fatalf("step %d invalid: %#v", index, rawStep)
-		}
-		if got, ok := step["text"]; ok && got != "" {
-			t.Fatalf("step %d text = %#v, want empty string", index, got)
-		}
-		if got, ok := step["arguments"]; ok && got != "" {
-			t.Fatalf("step %d arguments = %#v, want empty string", index, got)
-		}
-		if got, ok := step["raw_arguments"]; ok && got != "" {
-			t.Fatalf("step %d raw_arguments = %#v, want empty string", index, got)
-		}
-		if got, ok := step["raw_output"]; ok && got != "" {
-			t.Fatalf("step %d raw_output = %#v, want empty string", index, got)
-		}
-	}
-
-	if got := steps[0].(map[string]any)["content_redacted"]; got != true {
-		t.Fatalf("user_input content_redacted = %#v, want true", got)
-	}
-	if got := steps[1].(map[string]any)["content_redacted"]; got != true {
-		t.Fatalf("assistant_tool_call content_redacted = %#v, want true", got)
-	}
-	if got := steps[2].(map[string]any)["content_redacted"]; got != true {
-		t.Fatalf("client_tool_result content_redacted = %#v, want true", got)
-	}
-	if got := steps[2].(map[string]any)["status"]; got != redactedToolResultStatusSucceeded {
-		t.Fatalf("client_tool_result status = %#v, want %q", got, redactedToolResultStatusSucceeded)
-	}
-	if got := steps[3].(map[string]any)["content_redacted"]; got != true {
-		t.Fatalf("assistant_final_response content_redacted = %#v, want true", got)
-	}
+	assertEmptyReplayFields(t, payload, "request_body", "response_body", "prompt", "tool_definitions")
+	assertRedactedToolTrace(t, payload)
 }
 
 func TestRedactReplayResponseBodyRedactsListPayload(t *testing.T) {
@@ -179,6 +187,84 @@ func TestRedactRouterReplayResponseSkipsWriteCapableUsers(t *testing.T) {
 	}
 	if string(actualBody) != string(originalBody) {
 		t.Fatalf("response body changed for write-capable user: got %s want %s", actualBody, originalBody)
+	}
+}
+
+func TestRedactRouterReplayResponseFailsClosedForInvalidJSON(t *testing.T) {
+	t.Parallel()
+
+	body := []byte(`{"request_body":`)
+	req, err := http.NewRequest(http.MethodGet, "http://dashboard.local/v1/router_replay/replay-1", nil)
+	if err != nil {
+		t.Fatalf("http.NewRequest() error = %v", err)
+	}
+	req = req.WithContext(auth.WithAuthContext(req.Context(), auth.AuthContext{
+		Role:  auth.RoleRead,
+		Perms: map[string]bool{auth.PermReplayRead: true},
+	}))
+	resp := &http.Response{
+		StatusCode:    http.StatusOK,
+		Header:        http.Header{"Content-Type": []string{"application/json"}},
+		Body:          io.NopCloser(bytes.NewReader(body)),
+		ContentLength: int64(len(body)),
+		Request:       req,
+	}
+
+	if redactErr := redactRouterReplayResponse(resp); redactErr == nil {
+		t.Fatal("redactRouterReplayResponse() error = nil, want fail-closed error")
+	}
+}
+
+func TestRedactRouterReplayResponseDoesNotTrustContentType(t *testing.T) {
+	t.Parallel()
+
+	for _, contentType := range []string{"", "text/plain"} {
+		t.Run(contentType, func(t *testing.T) {
+			t.Parallel()
+			body := []byte(`{"id":"replay-1","request_body":"private-canary"}`)
+			req, err := http.NewRequest(http.MethodGet, "http://dashboard.local/v1/router_replay/replay-1", nil)
+			if err != nil {
+				t.Fatalf("http.NewRequest() error = %v", err)
+			}
+			req = req.WithContext(auth.WithAuthContext(req.Context(), auth.AuthContext{
+				Role:  auth.RoleRead,
+				Perms: map[string]bool{auth.PermReplayRead: true},
+			}))
+			resp := &http.Response{
+				StatusCode:    http.StatusOK,
+				Header:        make(http.Header),
+				Body:          io.NopCloser(bytes.NewReader(body)),
+				ContentLength: int64(len(body)),
+				Request:       req,
+			}
+			if contentType != "" {
+				resp.Header.Set("Content-Type", contentType)
+			}
+
+			if redactErr := redactRouterReplayResponse(resp); redactErr != nil {
+				t.Fatalf("redactRouterReplayResponse() error = %v", redactErr)
+			}
+			redacted, err := io.ReadAll(resp.Body)
+			if err != nil {
+				t.Fatalf("io.ReadAll() error = %v", err)
+			}
+			if bytes.Contains(redacted, []byte("private-canary")) {
+				t.Fatalf("Replay response leaked private content for Content-Type %q: %s", contentType, redacted)
+			}
+		})
+	}
+}
+
+func TestShouldRedactRouterReplayResponseRejectsLookalikePrefix(t *testing.T) {
+	t.Parallel()
+
+	req, err := http.NewRequest(http.MethodGet, "http://dashboard.local/v1/router_replayevil", nil)
+	if err != nil {
+		t.Fatalf("http.NewRequest() error = %v", err)
+	}
+	resp := &http.Response{StatusCode: http.StatusOK, Request: req}
+	if shouldRedactRouterReplayResponse(resp) {
+		t.Fatal("lookalike Router Replay prefix must not enter the replay redaction contract")
 	}
 }
 

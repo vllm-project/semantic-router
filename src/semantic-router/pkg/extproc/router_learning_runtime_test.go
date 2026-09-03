@@ -2,6 +2,9 @@ package extproc
 
 import (
 	"context"
+	"errors"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -157,6 +160,217 @@ func TestRouterLearningRuntimeDedupsIdempotencyKey(t *testing.T) {
 	if exact.GoodFitCount != 1 {
 		t.Fatalf("duplicate must not double-count experience, got %#v", exact)
 	}
+}
+
+func TestRouterLearningRuntimeClaimsIdempotencyKeyBeforeConcurrentAppend(t *testing.T) {
+	base := store.NewMemoryStore(10, 0)
+	storage := &controlledOutcomeStore{
+		Storage:       base,
+		appendStarted: make(chan struct{}),
+		releaseAppend: make(chan struct{}),
+	}
+	recorder := routerreplay.NewRecorder(storage)
+	rt := newRouterLearningRuntime(nil, recorder, nil)
+	if _, err := recorder.AddRecord(routerreplay.RoutingRecord{
+		ID:            "replay-concurrent",
+		SelectedModel: "model-a",
+		Decision:      "domain-code",
+		DecisionTier:  4,
+	}); err != nil {
+		t.Fatalf("add replay record: %v", err)
+	}
+
+	results := make(chan routerruntime.RouterOutcomeResult, 2)
+	update := func() { results <- updateConcurrentRouterOutcome(rt) }
+	go update()
+	waitForOutcomeAppend(t, storage.appendStarted)
+	go update()
+	time.Sleep(25 * time.Millisecond)
+	if got := storage.appendCalls.Load(); got != 1 {
+		t.Fatalf("concurrent duplicate reached storage %d times before release, want 1", got)
+	}
+	close(storage.releaseAppend)
+
+	first := <-results
+	second := <-results
+	assertConcurrentOutcomeResults(t, first, second)
+	assertSingleConcurrentOutcome(t, recorder, rt)
+}
+
+func updateConcurrentRouterOutcome(rt *routerLearningRuntime) routerruntime.RouterOutcomeResult {
+	return rt.UpdateOutcome(context.Background(), &routerruntime.RouterOutcome{
+		ReplayID:       "replay-concurrent",
+		Source:         routerruntime.RouterOutcomeSourceOperator,
+		Target:         routerruntime.RouterOutcomeTargetModel,
+		Verdict:        routerruntime.RouterOutcomeVerdictGoodFit,
+		Score:          1,
+		IdempotencyKey: "idem-concurrent",
+	})
+}
+
+func waitForOutcomeAppend(t *testing.T, appendStarted <-chan struct{}) {
+	t.Helper()
+	select {
+	case <-appendStarted:
+	case <-time.After(time.Second):
+		t.Fatal("first append did not start")
+	}
+}
+
+func assertConcurrentOutcomeResults(t *testing.T, first, second routerruntime.RouterOutcomeResult) {
+	t.Helper()
+	successes := 0
+	duplicates := 0
+	for _, result := range []routerruntime.RouterOutcomeResult{first, second} {
+		if result.Updated == 1 && result.Recorded {
+			successes++
+		}
+		if result.Code == routerruntime.RouterOutcomeCodeDuplicate {
+			duplicates++
+		}
+	}
+	if successes != 1 || duplicates != 1 {
+		t.Fatalf("concurrent idempotency results = %#v / %#v, want one success and one duplicate", first, second)
+	}
+}
+
+func assertSingleConcurrentOutcome(t *testing.T, recorder *routerreplay.Recorder, rt *routerLearningRuntime) {
+	t.Helper()
+	record, found := recorder.GetRecord("replay-concurrent")
+	if !found || len(record.Outcomes) != 1 {
+		t.Fatalf("stored outcomes = %#v, want exactly one", record.Outcomes)
+	}
+	if got := rt.experienceSnapshot("domain-code", 4, "model-a").GoodFitCount; got != 1 {
+		t.Fatalf("experience count = %d, want 1", got)
+	}
+}
+
+func TestRouterLearningRuntimeReleasesFailedIdempotencyClaimForRetry(t *testing.T) {
+	base := store.NewMemoryStore(10, 0)
+	storage := &controlledOutcomeStore{Storage: base}
+	storage.failNext.Store(true)
+	recorder := routerreplay.NewRecorder(storage)
+	rt := newRouterLearningRuntime(nil, recorder, nil)
+	if _, err := recorder.AddRecord(routerreplay.RoutingRecord{
+		ID:            "replay-retry",
+		SelectedModel: "model-a",
+	}); err != nil {
+		t.Fatalf("add replay record: %v", err)
+	}
+	outcome := func() *routerruntime.RouterOutcome {
+		return &routerruntime.RouterOutcome{
+			ReplayID:       "replay-retry",
+			Source:         routerruntime.RouterOutcomeSourceOperator,
+			Target:         routerruntime.RouterOutcomeTargetModel,
+			Verdict:        routerruntime.RouterOutcomeVerdictGoodFit,
+			IdempotencyKey: "idem-retry",
+		}
+	}
+
+	first := rt.UpdateOutcome(context.Background(), outcome())
+	if first.Code != routerruntime.RouterOutcomeCodeReplayNotFound {
+		t.Fatalf("first result = %#v, want failed append", first)
+	}
+	second := rt.UpdateOutcome(context.Background(), outcome())
+	if second.Code != routerruntime.RouterOutcomeCodeOK || second.Updated != 1 || !second.Recorded {
+		t.Fatalf("retry result = %#v, want success", second)
+	}
+	if got := storage.appendCalls.Load(); got != 2 {
+		t.Fatalf("append calls = %d, want 2", got)
+	}
+}
+
+func TestRouterLearningRuntimePreservesIdempotencyAcrossHotReload(t *testing.T) {
+	base := store.NewMemoryStore(10, 0)
+	storage := &controlledOutcomeStore{
+		Storage:       base,
+		appendStarted: make(chan struct{}),
+		releaseAppend: make(chan struct{}),
+	}
+	recorder := routerreplay.NewRecorder(storage)
+	if _, err := recorder.AddRecord(routerreplay.RoutingRecord{
+		ID:            "replay-reload",
+		SelectedModel: "model-a",
+		Decision:      "domain-code",
+		DecisionTier:  4,
+	}); err != nil {
+		t.Fatalf("add replay record: %v", err)
+	}
+	oldRouter := &OpenAIRouter{ReplayRecorder: recorder}
+	newRouter := &OpenAIRouter{ReplayRecorder: recorder}
+	oldRuntime := oldRouter.routerLearningRuntimeState()
+
+	results := make(chan routerruntime.RouterOutcomeResult, 2)
+	update := func(rt *routerLearningRuntime) {
+		results <- rt.UpdateOutcome(context.Background(), &routerruntime.RouterOutcome{
+			ReplayID:       "replay-reload",
+			Source:         routerruntime.RouterOutcomeSourceOperator,
+			Target:         routerruntime.RouterOutcomeTargetModel,
+			Verdict:        routerruntime.RouterOutcomeVerdictGoodFit,
+			Score:          1,
+			IdempotencyKey: "idem-reload",
+		})
+	}
+	go update(oldRuntime)
+	select {
+	case <-storage.appendStarted:
+	case <-time.After(time.Second):
+		t.Fatal("old generation append did not start")
+	}
+	inheritRouterLearningState(oldRouter, newRouter)
+	newRuntime := newRouter.routerLearningRuntimeState()
+	go update(newRuntime)
+	time.Sleep(25 * time.Millisecond)
+	if got := storage.appendCalls.Load(); got != 1 {
+		t.Fatalf("reloaded generation bypassed idempotency claim: append calls = %d", got)
+	}
+	close(storage.releaseAppend)
+
+	first := <-results
+	second := <-results
+	successes := 0
+	duplicates := 0
+	for _, result := range []routerruntime.RouterOutcomeResult{first, second} {
+		if result.Updated == 1 && result.Recorded {
+			successes++
+		}
+		if result.Code == routerruntime.RouterOutcomeCodeDuplicate {
+			duplicates++
+		}
+	}
+	if successes != 1 || duplicates != 1 {
+		t.Fatalf("reload idempotency results = %#v / %#v", first, second)
+	}
+	if got := newRuntime.experienceSnapshot("domain-code", 4, "model-a").GoodFitCount; got != 1 {
+		t.Fatalf("shared experience count = %d, want 1", got)
+	}
+}
+
+type controlledOutcomeStore struct {
+	store.Storage
+	appendStarted chan struct{}
+	releaseAppend chan struct{}
+	startOnce     sync.Once
+	appendCalls   atomic.Int32
+	failNext      atomic.Bool
+}
+
+func (s *controlledOutcomeStore) AppendOutcome(ctx context.Context, id string, outcome store.Outcome) error {
+	s.appendCalls.Add(1)
+	if s.appendStarted != nil {
+		s.startOnce.Do(func() { close(s.appendStarted) })
+	}
+	if s.releaseAppend != nil {
+		select {
+		case <-s.releaseAppend:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	if s.failNext.Swap(false) {
+		return errors.New("injected append failure")
+	}
+	return s.Storage.AppendOutcome(ctx, id, outcome)
 }
 
 func TestRouterLearningRuntimeRecordsReplayOutcome(t *testing.T) {

@@ -34,6 +34,7 @@ func (c *Classifier) buildPolicySignalDispatchers(
 			config.SignalTypeJailbreak, "Jailbreak",
 			func() {
 				c.evaluateJailbreakSignal(
+					requestFacts.Context,
 					results,
 					mu,
 					textForSignal(config.SignalTypeJailbreak),
@@ -74,6 +75,10 @@ func (c *Classifier) buildPolicySignalDispatchers(
 		{
 			config.SignalTypeMetadata, "Metadata",
 			func() { c.evaluateMetadataSignal(results, mu, requestFacts, usedSignals) },
+		},
+		{
+			config.SignalTypeInputModality, "InputModality",
+			func() { c.evaluateInputModalitySignal(results, mu, requestFacts, usedSignals) },
 		},
 		{
 			config.SignalTypeClassifier, "Classifier",

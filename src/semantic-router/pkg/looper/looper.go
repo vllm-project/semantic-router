@@ -21,18 +21,23 @@ package looper
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
 
 // Request contains the input for looper execution
 type Request struct {
 	// OriginalRequest is the OpenAI chat completion request from the client
 	OriginalRequest *openai.ChatCompletionNewParams
+
+	// BaseContextTokens is the Router's conservative estimate for the original
+	// request. Generated Looper stages add their own prompt growth before every
+	// backend dispatch and re-check the target model's context window.
+	BaseContextTokens int
 
 	// ModelRefs contains the list of models to potentially use, ordered by preference
 	ModelRefs []config.ModelRef
@@ -121,9 +126,9 @@ type Looper interface {
 }
 
 // WorkflowStateService is an opaque handle to a shared workflow tool-state
-// store. Create one at startup with NewWorkflowStateService and pass it to
-// FactoryWithSelectionRegistry so that all workflow loopers share a single
-// store instance across requests. Safe for concurrent use.
+// store. Create one per router generation with NewWorkflowStateService and pass
+// it to FactoryWithWorkflowState so independent HTTP turns share pause/resume
+// state. Safe for concurrent use.
 type WorkflowStateService struct {
 	store  workflowToolStateStore
 	wg     sync.WaitGroup
@@ -168,7 +173,7 @@ func (s *WorkflowStateService) Store() workflowToolStateStore {
 
 // NewWorkflowStateService creates a shared workflow state store from the
 // looper configuration. The returned service should be stored on the router
-// and passed into every FactoryWithSelectionRegistry call.
+// and passed into every FactoryWithWorkflowState call.
 func NewWorkflowStateService(cfg *config.LooperConfig) *WorkflowStateService {
 	if cfg == nil {
 		return nil
@@ -191,41 +196,64 @@ func (s *WorkflowStateService) Close() error {
 	s.closed = true
 	s.mu.Unlock()
 
-	s.wg.Wait() // Drain all in-flight read leases
+	s.wg.Wait()
 	if s.store != nil {
 		return s.store.Close()
 	}
 	return nil
 }
 
-// Factory creates a Looper instance based on the algorithm type
-func Factory(cfg *config.LooperConfig, algorithmType string) Looper {
-	return FactoryWithSelectionRegistry(cfg, algorithmType, nil, nil)
+// UnsupportedAlgorithmError reports an algorithm that cannot be constructed
+// by the Looper runtime.
+type UnsupportedAlgorithmError struct {
+	AlgorithmType string
 }
 
-// FactoryWithSelectionRegistry creates a Looper using runtime-owned model
-// selectors when an algorithm needs selector state.
-func FactoryWithSelectionRegistry(
+func (e *UnsupportedAlgorithmError) Error() string {
+	return fmt.Sprintf("unsupported Looper algorithm %q", e.AlgorithmType)
+}
+
+type algorithmConstructor func(*config.LooperConfig) Looper
+
+var algorithmConstructors = map[string]algorithmConstructor{
+	config.DecisionAlgorithmConfidence: func(cfg *config.LooperConfig) Looper {
+		return NewConfidenceLooper(cfg)
+	},
+	config.DecisionAlgorithmFusion: func(cfg *config.LooperConfig) Looper {
+		return NewFusionLooper(cfg)
+	},
+	config.DecisionAlgorithmRatings: func(cfg *config.LooperConfig) Looper {
+		return NewRatingsLooper(cfg)
+	},
+	config.DecisionAlgorithmReMoM: func(cfg *config.LooperConfig) Looper {
+		return NewReMoMLooper(cfg)
+	},
+	config.DecisionAlgorithmWorkflows: func(cfg *config.LooperConfig) Looper {
+		return NewWorkflowsLooper(cfg)
+	},
+}
+
+// Factory creates a Looper instance based on the authoritative config catalog.
+func Factory(cfg *config.LooperConfig, algorithmType string) (Looper, error) {
+	return FactoryWithWorkflowState(cfg, algorithmType, nil)
+}
+
+// FactoryWithWorkflowState creates a Looper and, for workflows, shares the
+// generation-owned tool-state store across independent requests.
+func FactoryWithWorkflowState(
 	cfg *config.LooperConfig,
 	algorithmType string,
-	selectorRegistry *selection.Registry,
 	stateService *WorkflowStateService,
-) Looper {
-	switch algorithmType {
-	case "confidence":
-		return NewConfidenceLooper(cfg)
-	case "ratings":
-		return NewRatingsLooper(cfg)
-	case "remom":
-		return NewReMoMLooper(cfg)
-	case "fusion":
-		return NewFusionLooper(cfg)
-	case "workflows":
-		return newWorkflowsLooperWithService(cfg, stateService)
-	case "rl_driven":
-		return NewRLDrivenLooperWithSelectionRegistry(cfg, selectorRegistry)
-	default:
-		// Default to simple looper that just calls models sequentially
-		return NewBaseLooper(cfg)
+) (Looper, error) {
+	if !config.IsLooperAlgorithmType(algorithmType) {
+		return nil, &UnsupportedAlgorithmError{AlgorithmType: algorithmType}
 	}
+	if algorithmType == config.DecisionAlgorithmWorkflows {
+		return newWorkflowsLooperWithService(cfg, stateService), nil
+	}
+	constructor, ok := algorithmConstructors[algorithmType]
+	if !ok {
+		return nil, &UnsupportedAlgorithmError{AlgorithmType: algorithmType}
+	}
+	return constructor(cfg), nil
 }

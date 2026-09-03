@@ -218,6 +218,17 @@ func (c *RouterConfig) NeedsLocalHallucinationNLIForRouting() bool {
 	return false
 }
 
+// NeedsLocalNLIForSemanticCache reports whether the enabled semantic cache runs
+// the NLI polarity tier, which binds the hallucination explainer model. The
+// native binding holds a single NLI model shared by every consumer, so this is
+// the only model the tier can use.
+func (c *RouterConfig) NeedsLocalNLIForSemanticCache() bool {
+	return c != nil &&
+		c.SemanticCache.Enabled &&
+		c.SemanticCache.PolarityGuard.UsesNLI() &&
+		c.HallucinationMitigation.NLIModel.ModelID != ""
+}
+
 func (c *RouterConfig) routingConsumerDecisions() []Decision {
 	if c == nil {
 		return nil

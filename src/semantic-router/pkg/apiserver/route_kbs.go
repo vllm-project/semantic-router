@@ -49,6 +49,12 @@ func (s *ClassificationAPIServer) handleGetKnowledgeBase(w http.ResponseWriter, 
 }
 
 func (s *ClassificationAPIServer) handleCreateKnowledgeBase(w http.ResponseWriter, r *http.Request) {
+	guard, ok := s.acquireConfigMutationGuard(w)
+	if !ok {
+		return
+	}
+	defer guard.Release()
+
 	cfg, ok := s.writableKnowledgeBaseConfig(w)
 	if !ok {
 		return
@@ -87,6 +93,12 @@ func (s *ClassificationAPIServer) handleCreateKnowledgeBase(w http.ResponseWrite
 }
 
 func (s *ClassificationAPIServer) handleUpdateKnowledgeBase(w http.ResponseWriter, r *http.Request) {
+	guard, ok := s.acquireConfigMutationGuard(w)
+	if !ok {
+		return
+	}
+	defer guard.Release()
+
 	cfg, ok := s.writableKnowledgeBaseConfig(w)
 	if !ok {
 		return
@@ -139,19 +151,20 @@ func (s *ClassificationAPIServer) handleUpdateKnowledgeBase(w http.ResponseWrite
 }
 
 func (s *ClassificationAPIServer) handleDeleteKnowledgeBase(w http.ResponseWriter, r *http.Request) {
+	guard, ok := s.acquireConfigMutationGuard(w)
+	if !ok {
+		return
+	}
+	defer guard.Release()
+
 	cfg, ok := s.writableKnowledgeBaseConfig(w)
 	if !ok {
 		return
 	}
 
 	name := strings.TrimSpace(r.PathValue("name"))
-	existingKB, ok := knowledgeBaseByName(cfg.KnowledgeBases, name)
+	existingKB, ok := s.deletableKnowledgeBase(w, cfg, name)
 	if !ok {
-		s.writeErrorResponse(w, http.StatusNotFound, "KB_NOT_FOUND", fmt.Sprintf("knowledge base %q was not found", name))
-		return
-	}
-	if !existingKnowledgeBaseEditable(existingKB) {
-		s.writeErrorResponse(w, http.StatusForbidden, "KB_READ_ONLY", fmt.Sprintf("knowledge base %q is router-managed and cannot be deleted", name))
 		return
 	}
 
@@ -195,6 +208,23 @@ func (s *ClassificationAPIServer) handleDeleteKnowledgeBase(w http.ResponseWrite
 		Status: "deleted",
 		Name:   name,
 	})
+}
+
+func (s *ClassificationAPIServer) deletableKnowledgeBase(
+	w http.ResponseWriter,
+	cfg *config.RouterConfig,
+	name string,
+) (config.KnowledgeBaseConfig, bool) {
+	existingKB, ok := knowledgeBaseByName(cfg.KnowledgeBases, name)
+	if !ok {
+		s.writeErrorResponse(w, http.StatusNotFound, "KB_NOT_FOUND", fmt.Sprintf("knowledge base %q was not found", name))
+		return config.KnowledgeBaseConfig{}, false
+	}
+	if !existingKnowledgeBaseEditable(existingKB) {
+		s.writeErrorResponse(w, http.StatusForbidden, "KB_READ_ONLY", fmt.Sprintf("knowledge base %q is router-managed and cannot be deleted", name))
+		return config.KnowledgeBaseConfig{}, false
+	}
+	return existingKB, true
 }
 
 func rollbackManagedKnowledgeBaseRemoval(txn *managedKnowledgeBaseAssetsTxn, committed *bool) {

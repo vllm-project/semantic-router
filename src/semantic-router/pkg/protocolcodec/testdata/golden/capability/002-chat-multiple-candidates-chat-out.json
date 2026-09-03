@@ -1,0 +1,13 @@
+{
+  "status": "ok",
+  "body": {
+    "messages": [
+      {
+        "content": "Give two answers.",
+        "role": "user"
+      }
+    ],
+    "model": "routed-model",
+    "n": 2
+  }
+}

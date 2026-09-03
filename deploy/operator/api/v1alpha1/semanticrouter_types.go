@@ -1160,8 +1160,9 @@ type HNSWEmbeddingConfig struct {
 	// +optional
 	TargetDimension int `json:"target_dimension,omitempty"`
 
-	// TargetLayer is the layer for mmBERT early exit (only used when ModelType is "mmbert")
-	// Layer 3: ~7x speedup, Layer 6: ~3.6x speedup, Layer 11: ~2x speedup, Layer 22: full accuracy
+	// TargetLayer controls mmBERT early exit and is used only when ModelType is "mmbert".
+	// Lower layers reduce encoder work but may reduce quality; layer 22 uses the full encoder depth.
+	// Evaluate the latency and quality trade-off on representative deployment data.
 	// +kubebuilder:validation:Enum=3;6;11;22
 	// +optional
 	TargetLayer int `json:"target_layer,omitempty"`
@@ -1201,6 +1202,11 @@ type EmbeddingEndpointConfig struct {
 	// +kubebuilder:validation:Minimum=0
 	// +optional
 	MaxRetries int `json:"max_retries,omitempty"`
+
+	// MaxResponseBytes caps the size of each embedding response body.
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	MaxResponseBytes int64 `json:"max_response_bytes,omitempty"`
 
 	// Dimensions requests a provider-side output dimension when supported.
 	// +kubebuilder:validation:Minimum=1
@@ -1303,6 +1309,11 @@ type RuleCombinationConfig struct {
 	// +kubebuilder:validation:Enum=AND;OR;NOT
 	Operator string `json:"operator" yaml:"operator"`
 
+	// OnUnknown resolves a terminal unknown result after the rule tree is evaluated.
+	// +optional
+	// +kubebuilder:validation:Enum=no_match;match;fail_request
+	OnUnknown string `json:"on_unknown,omitempty" yaml:"on_unknown,omitempty"`
+
 	// Conditions is the list of rule references to evaluate
 	Conditions []RuleConditionConfig `json:"conditions" yaml:"conditions"`
 }
@@ -1361,9 +1372,18 @@ type PromptGuardConfig struct {
 	// +kubebuilder:default=true
 	// +optional
 	Enabled bool `json:"enabled,omitempty"`
-	// +kubebuilder:default=false
+	// Variant selects a local Candle-backed model variant. It is mutually
+	// exclusive with Protocol. When both fields are omitted, the operator uses
+	// mmbert32k.
+	// +kubebuilder:validation:Enum=candle;mmbert32k
 	// +optional
-	UseModernBERT bool `json:"use_modernbert,omitempty"`
+	Variant string `json:"variant,omitempty"`
+	// Protocol selects a remote HTTP backend's wire contract. Mutually
+	// exclusive with Variant. Requires an external model configured via a
+	// vllmEndpoints/externalModels entry with model_role="guardrail".
+	// +kubebuilder:validation:Enum=http_chat;http_classify
+	// +optional
+	Protocol string `json:"protocol,omitempty"`
 	// +kubebuilder:default="models/mmbert32k-jailbreak-detector-merged"
 	// +optional
 	ModelID string `json:"model_id,omitempty"`
@@ -1377,6 +1397,20 @@ type PromptGuardConfig struct {
 	UseCPU bool `json:"use_cpu,omitempty"`
 	// +optional
 	JailbreakMappingPath string `json:"jailbreak_mapping_path,omitempty"`
+	// PositiveLabels lists the jailbreak_mapping labels that count as unsafe,
+	// for a custom backend whose positive class isn't named "jailbreak"
+	// (e.g. "INJECTION", "malicious"). Defaults to ["jailbreak"] when unset.
+	// +optional
+	PositiveLabels []string `json:"positive_labels,omitempty"`
+	// OnError selects what a prompt-guard classifier failure does to the rule
+	// that failed to evaluate. "allow" (the default) tolerates the failure and
+	// treats the content as not matching; "block" treats it as a positive
+	// detection, because an inference failure means the content could not be
+	// verified safe. Without this field on the CRD the setting is pruned by the
+	// API server and an operator-managed deployment silently fails open.
+	// +kubebuilder:validation:Enum=allow;block
+	// +optional
+	OnError string `json:"on_error,omitempty"`
 }
 
 // ClassifierConfig defines classifier configuration

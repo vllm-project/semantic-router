@@ -41,10 +41,10 @@ spec:
       #     sizeLimit: "2Gi"
       containers:
       - name: phi4-mini
-        image: vllm/vllm-openai:latest
+        image: vllm/vllm-openai:v0.17.0
         command: ["/bin/sh", "-c"]
         args: [
-          "vllm serve microsoft/Phi-4-mini-instruct --served-model-name phi4-mini microsoft/Phi-4-mini-instruct  --trust-remote-code --enable-chunked-prefill"
+          "vllm serve microsoft/Phi-4-mini-instruct --served-model-name phi4-mini microsoft/Phi-4-mini-instruct --enable-chunked-prefill"
         ]
         env:
         - name: HUGGING_FACE_HUB_TOKEN
@@ -97,4 +97,3 @@ spec:
     app: phi4-mini
   sessionAffinity: None
   type: ClusterIP
-

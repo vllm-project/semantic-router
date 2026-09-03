@@ -15,6 +15,41 @@ func TestDecisionAlgorithmCatalog_AllTypesHaveTier(t *testing.T) {
 		if entry.Tier != "supported" && entry.Tier != "experimental" {
 			t.Errorf("Catalog entry %q has invalid Tier %q", entry.Type, entry.Tier)
 		}
+		if entry.Execution != AlgorithmExecutionSelector && entry.Execution != AlgorithmExecutionLooper {
+			t.Errorf("Catalog entry %q has invalid Execution %q", entry.Type, entry.Execution)
+		}
+	}
+}
+
+func TestSupportedLooperAlgorithmTypes(t *testing.T) {
+	want := []string{
+		DecisionAlgorithmConfidence,
+		DecisionAlgorithmFusion,
+		DecisionAlgorithmRatings,
+		DecisionAlgorithmReMoM,
+		DecisionAlgorithmWorkflows,
+	}
+	got := SupportedLooperAlgorithmTypes()
+
+	if len(got) != len(want) {
+		t.Fatalf("SupportedLooperAlgorithmTypes() = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("SupportedLooperAlgorithmTypes() = %v, want %v", got, want)
+		}
+		if !IsLooperAlgorithmType(got[i]) {
+			t.Errorf("IsLooperAlgorithmType(%q) = false, want true", got[i])
+		}
+		if !IsSupportedDecisionAlgorithmType(got[i]) {
+			t.Errorf("Looper algorithm %q is missing from the public decision catalog", got[i])
+		}
+	}
+
+	for _, algorithmType := range []string{DecisionAlgorithmStatic, "rl_driven", "unknown"} {
+		if IsLooperAlgorithmType(algorithmType) {
+			t.Errorf("IsLooperAlgorithmType(%q) = true, want false", algorithmType)
+		}
 	}
 }
 

@@ -1,0 +1,17 @@
+{
+  "operation": "response",
+  "body": {
+    "id": "msg_1",
+    "type": "message",
+    "role": "assistant",
+    "model": "provider-model",
+    "content": [{"type": "text", "text": "done"}],
+    "stop_reason": "end_turn",
+    "stop_sequence": null,
+    "usage": {
+      "input_tokens": 9223372036854775807,
+      "cache_read_input_tokens": 1,
+      "output_tokens": 0
+    }
+  }
+}

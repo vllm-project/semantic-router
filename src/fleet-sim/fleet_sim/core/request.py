@@ -60,6 +60,7 @@ class Request:
 
     # reliability
     preempted: bool = False
+    admission_epoch: int = 0  # bumped on (re-)admission and on preemption
 
     # state
     state: RequestState = field(default=RequestState.PENDING, init=False)

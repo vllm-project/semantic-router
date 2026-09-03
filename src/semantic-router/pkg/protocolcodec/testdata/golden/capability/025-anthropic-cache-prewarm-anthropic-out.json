@@ -1,0 +1,18 @@
+{
+  "status": "ok",
+  "body": {
+    "max_tokens": 0,
+    "messages": [
+      {
+        "content": [
+          {
+            "text": "Warm this prompt cache.",
+            "type": "text"
+          }
+        ],
+        "role": "user"
+      }
+    ],
+    "model": "routed-model"
+  }
+}

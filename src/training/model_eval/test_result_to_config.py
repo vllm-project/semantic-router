@@ -75,7 +75,7 @@ def test_generate_config_yaml_emits_canonical_v03_layout():
     assert config["routing"]["decisions"] == []
 
     assert (
-        config["global"]["stores"]["semantic_cache"]["similarity_threshold"]
+        config["global"]["stores"]["response_cache"]["similarity_threshold"]
         == EXPECTED_SIMILARITY_THRESHOLD
     )
     assert (

@@ -1,12 +1,15 @@
 package services
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 )
 
 func TestClassificationServiceEvaluatesRequestEnvelopeFacts(t *testing.T) {
@@ -98,6 +101,78 @@ func TestClassificationServiceEvaluatesRequestEnvelopeFacts(t *testing.T) {
 	)
 }
 
+func TestClassificationServiceContextSignalUsesFullRequestTokenFloor(t *testing.T) {
+	cfg := &config.RouterConfig{
+		IntelligentRouting: config.IntelligentRouting{
+			Signals: config.Signals{
+				ContextRules: []config.ContextRule{
+					{
+						Name:      "short-request-context",
+						MinTokens: config.TokenCount("0"),
+						MaxTokens: config.TokenCount("10K"),
+					},
+					{
+						Name:      "large-request-context",
+						MinTokens: config.TokenCount("10K"),
+						MaxTokens: config.TokenCount("128K"),
+					},
+				},
+			},
+			Decisions: []config.Decision{
+				requestFactDecision(
+					"large-context-route",
+					config.SignalTypeContext,
+					"large-request-context",
+					10,
+				),
+			},
+		},
+	}
+	classifier, err := classification.NewClassifier(cfg, nil, nil, nil)
+	require.NoError(t, err)
+	service := NewClassificationService(classifier, cfg)
+
+	response, err := service.ClassifyIntentForEval(IntentRequest{
+		Messages: []IntentMessage{
+			{Role: "user", Content: mustMessageContent(t, strings.Repeat("p", 8_000))},
+			{
+				Role:       "tool",
+				ToolCallID: "call-1",
+				Content: mustMessageContent(
+					t,
+					strings.Repeat(`{"row":9007199254740993123456789}`, 100),
+				),
+			},
+			{
+				Role: "user",
+				Content: mustMessageContent(t, []map[string]any{
+					{"type": "text", "text": "ok"},
+					{
+						"type": "image_url",
+						"image_url": map[string]string{
+							"url": "data:image/png;base64,PRIVATE",
+						},
+					},
+				}),
+			},
+		},
+		Tools: []json.RawMessage{mustMessageContent(t, map[string]any{
+			"type": "function",
+			"function": map[string]any{
+				"name":        "lookup",
+				"description": strings.Repeat("schema", 500),
+				"parameters":  map[string]any{"type": "object"},
+			},
+		})},
+		MaxCompletionTokens: json.RawMessage(`4096`),
+	})
+	require.NoError(t, err)
+	require.NotNil(t, response.DecisionResult)
+	require.Equal(t, "large-context-route", response.DecisionResult.DecisionName)
+	require.NotNil(t, response.DecisionResult.MatchedSignals)
+	require.Contains(t, response.DecisionResult.MatchedSignals.Context, "large-request-context")
+}
+
 func requestFactDecision(
 	name string,
 	signalType string,
@@ -111,6 +186,60 @@ func requestFactDecision(
 			Type: signalType,
 			Name: signalName,
 		},
+	}
+}
+
+func TestClassifyIntentForEvalReturnsDiagnosticsWhenFailRequest(t *testing.T) {
+	threshold := 0.5
+	cfg := &config.RouterConfig{
+		ExternalModels: []config.ExternalModelConfig{{
+			Name:           "risk-judge",
+			ModelRole:      config.ModelRoleClassification,
+			ModelName:      "risk-judge",
+			TimeoutSeconds: 1,
+			ModelEndpoint: config.ClassifierVLLMEndpoint{
+				Address:  "127.0.0.1",
+				Port:     1,
+				Protocol: "http",
+			},
+		}},
+		IntelligentRouting: config.IntelligentRouting{
+			Signals: config.Signals{
+				ClassifierRules: []config.ClassifierSignalRule{{
+					Name:         "risk",
+					Type:         "llm",
+					Model:        "risk-judge",
+					Labels:       []string{"SAFE", "RISKY"},
+					Instructions: "Classify.",
+				}},
+			},
+			Decisions: []config.Decision{{
+				Name: "guarded",
+				Rules: config.RuleNode{
+					Type:      config.SignalTypeClassifier,
+					Name:      "risk",
+					Label:     "RISKY",
+					Predicate: &config.NumericPredicate{GTE: &threshold},
+					OnUnknown: config.RuleOnUnknownFailRequest,
+				},
+			}},
+		},
+	}
+	classifier, err := classification.NewClassifier(cfg, nil, nil, nil)
+	require.NoError(t, err)
+	service := NewClassificationService(classifier, cfg)
+
+	for name, trace := range map[string]bool{"without trace": false, "with trace": true} {
+		t.Run(name, func(t *testing.T) {
+			response, evalErr := service.ClassifyIntentForEval(IntentRequest{
+				Text:    "hello",
+				Options: &IntentOptions{Trace: trace},
+			})
+			require.ErrorIs(t, evalErr, decision.ErrDecisionUnresolved)
+			require.NotNil(t, response)
+			require.NotEmpty(t, response.DecisionError)
+			require.Equal(t, trace, len(response.EvalTrace) > 0)
+		})
 	}
 }
 

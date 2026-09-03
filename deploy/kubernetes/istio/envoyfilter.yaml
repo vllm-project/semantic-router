@@ -4,9 +4,13 @@ metadata:
   name: semantic-router
   namespace: default
 spec:
+  workloadSelector:
+    labels:
+      gateway.networking.k8s.io/gateway-name: inference-gateway
   configPatches:
   - applyTo: HTTP_FILTER
     match:
+      context: GATEWAY
       listener:
         filterChain:
           filter:

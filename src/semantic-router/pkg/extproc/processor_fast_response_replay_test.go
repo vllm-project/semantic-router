@@ -57,3 +57,31 @@ func TestFastResponseReplayAttachesBody(t *testing.T) {
 		t.Fatalf("response body = %q", record.ResponseBody)
 	}
 }
+
+func TestFastResponseReplayUsesObservedUpstreamErrorForLifecycle(t *testing.T) {
+	storage := store.NewMemoryStore(10, 0)
+	recorder := routerreplay.NewRecorder(storage)
+	const replayID = "fast-replay-upstream-error"
+	if _, err := recorder.AddRecord(routerreplay.RoutingRecord{ID: replayID}); err != nil {
+		t.Fatalf("add replay record: %v", err)
+	}
+	ctx := &RequestContext{
+		RouterReplayID:       replayID,
+		RouterReplayRecorder: recorder,
+		UpstreamStatusCode:   503,
+	}
+
+	(&OpenAIRouter{ReplayRecorder: recorder}).attachRouterReplayResponse(
+		ctx,
+		[]byte(`{"error":{"message":"backend unavailable"}}`),
+		true,
+	)
+
+	record, ok := recorder.GetRecord(replayID)
+	if !ok {
+		t.Fatal("replay record not found")
+	}
+	if record.LifecycleState != routerreplay.LifecycleFailed || record.TerminalReason != "upstream_error_response" {
+		t.Fatalf("lifecycle = %q / %q, want failed upstream error", record.LifecycleState, record.TerminalReason)
+	}
+}

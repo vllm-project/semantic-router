@@ -158,6 +158,61 @@ func TestDecisionCandidatesForRequest(t *testing.T) {
 	}
 }
 
+func TestDirectLooperAliasesResolveOnlyTheirAlgorithm(t *testing.T) {
+	decisions := []config.Decision{
+		{
+			Name:      "remom_route",
+			ModelRefs: []config.ModelRef{{Model: "model-a"}},
+			Algorithm: &config.AlgorithmConfig{Type: config.DecisionAlgorithmReMoM},
+		},
+		{
+			Name:      "fusion_route",
+			ModelRefs: []config.ModelRef{{Model: "model-a"}},
+			Algorithm: &config.AlgorithmConfig{Type: config.DecisionAlgorithmFusion},
+		},
+		{
+			Name:      "flow_route",
+			ModelRefs: []config.ModelRef{{Model: "model-a"}},
+			Algorithm: &config.AlgorithmConfig{Type: config.DecisionAlgorithmWorkflows},
+		},
+	}
+	router := &OpenAIRouter{Config: &config.RouterConfig{
+		IntelligentRouting: config.IntelligentRouting{Decisions: decisions},
+		Looper: config.LooperConfig{
+			Endpoint: "http://router.test/v1/chat/completions",
+			ReMoM:    config.ReMoMRuntimeConfig{ModelNames: []string{"router/remom"}},
+			Fusion:   config.FusionRuntimeConfig{ModelNames: []string{"router/fusion"}},
+			Flow:     config.FlowRuntimeConfig{ModelNames: []string{"router/flow"}},
+		},
+	}}
+
+	testCases := []struct {
+		alias        string
+		wantDecision string
+	}{
+		{alias: "router/remom", wantDecision: "remom_route"},
+		{alias: "router/fusion", wantDecision: "fusion_route"},
+		{alias: "router/flow", wantDecision: "flow_route"},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.alias, func(t *testing.T) {
+			ctx := &RequestContext{}
+			router.resolveEntrypointForRequest(testCase.alias, ctx)
+			if ctx.Routing.SelectedRecipe() == nil || ctx.Routing.SelectedRecipe().Name != config.DefaultRecipeName {
+				t.Fatalf("direct alias %q did not resolve the default recipe", testCase.alias)
+			}
+			candidates := router.decisionCandidatesForRequest(testCase.alias, ctx)
+			if len(candidates) != 1 || candidates[0].Name != testCase.wantDecision {
+				t.Fatalf("direct alias %q candidates = %+v, want %q", testCase.alias, candidates, testCase.wantDecision)
+			}
+			ctx.VSRSelectedDecision = &candidates[0]
+			if !router.routeExecutesLooper(ctx) {
+				t.Fatalf("direct alias %q did not enter the unified Looper path", testCase.alias)
+			}
+		})
+	}
+}
+
 // newEntrypointFlowRouter builds a router with a real classifier so decision
 // evaluation runs the full signal → decision → model-selection chain. The
 // fixture only uses keyword signals, which need no local model artifacts.

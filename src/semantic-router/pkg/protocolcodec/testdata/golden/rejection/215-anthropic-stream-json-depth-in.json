@@ -1,0 +1,9 @@
+{
+  "operation": "stream",
+  "limits": {"json_depth": 2},
+  "public_model": "public-model",
+  "provider_model": "provider-model",
+  "chunks": [
+    "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_depth\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"provider-model\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":1,\"output_tokens\":0}}}\n\n"
+  ]
+}

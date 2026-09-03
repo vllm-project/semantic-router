@@ -44,7 +44,7 @@ func normalizeFusionExecutionConfig(cfg fusionExecutionConfig) fusionExecutionCo
 	if cfg.MaxConcurrent <= 0 || cfg.MaxConcurrent > len(cfg.AnalysisModels) {
 		cfg.MaxConcurrent = len(cfg.AnalysisModels)
 	}
-	if cfg.MinSuccessfulResponses <= 0 || cfg.MinSuccessfulResponses > len(cfg.AnalysisModels) {
+	if cfg.MinSuccessfulResponses <= 0 {
 		cfg.MinSuccessfulResponses = len(cfg.AnalysisModels)
 	}
 	applyGroundingDefaults(&cfg)
@@ -78,6 +78,13 @@ func applyGroundingDefaults(cfg *fusionExecutionConfig) {
 }
 
 func validateFusionExecutionConfig(cfg fusionExecutionConfig) error {
+	if cfg.MinSuccessfulResponses > len(cfg.AnalysisModels) {
+		return fmt.Errorf(
+			"fusion min_successful_responses=%d exceeds panel size %d",
+			cfg.MinSuccessfulResponses,
+			len(cfg.AnalysisModels),
+		)
+	}
 	switch cfg.OnError {
 	case config.FusionOnErrorSkip, config.FusionOnErrorFail:
 		return nil

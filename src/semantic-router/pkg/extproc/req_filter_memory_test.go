@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 )
@@ -495,80 +494,6 @@ func TestIsGreeting_EdgePatterns(t *testing.T) {
 }
 
 // =============================================================================
-// ExtractConversationHistory Tests
-// =============================================================================
-
-func TestExtractConversationHistory(t *testing.T) {
-	messagesJSON := `[
-		{"role": "system", "content": "You are a helpful assistant"},
-		{"role": "user", "content": "Hello"},
-		{"role": "assistant", "content": "Hi there!"},
-		{"role": "user", "content": "What's the weather?"}
-	]`
-
-	history, err := ExtractConversationHistory([]byte(messagesJSON))
-	require.NoError(t, err)
-
-	// Should skip system message
-	assert.Len(t, history, 3)
-	assert.Equal(t, "user", history[0].Role)
-	assert.Equal(t, "Hello", history[0].Content)
-	assert.Equal(t, "assistant", history[1].Role)
-	assert.Equal(t, "Hi there!", history[1].Content)
-	assert.Equal(t, "user", history[2].Role)
-	assert.Equal(t, "What's the weather?", history[2].Content)
-}
-
-func TestExtractConversationHistory_EmptyContent(t *testing.T) {
-	messagesJSON := `[
-		{"role": "user", "content": "Hello"},
-		{"role": "assistant", "content": ""},
-		{"role": "user", "content": "Test"}
-	]`
-
-	history, err := ExtractConversationHistory([]byte(messagesJSON))
-	require.NoError(t, err)
-
-	// Should skip empty content
-	assert.Len(t, history, 2)
-	assert.Equal(t, "Hello", history[0].Content)
-	assert.Equal(t, "Test", history[1].Content)
-}
-
-func TestExtractConversationHistory_OnlySystemMessages(t *testing.T) {
-	messagesJSON := `[
-		{"role": "system", "content": "You are a helpful assistant"}
-	]`
-
-	history, err := ExtractConversationHistory([]byte(messagesJSON))
-	require.NoError(t, err)
-	assert.Empty(t, history, "should return empty for system-only messages")
-}
-
-func TestExtractConversationHistory_InvalidJSON(t *testing.T) {
-	_, err := ExtractConversationHistory([]byte("invalid json"))
-	assert.Error(t, err)
-}
-
-func TestExtractConversationHistory_EmptyArray(t *testing.T) {
-	history, err := ExtractConversationHistory([]byte("[]"))
-	require.NoError(t, err)
-	assert.Empty(t, history)
-}
-
-func TestExtractConversationHistory_MissingRole(t *testing.T) {
-	messagesJSON := `[
-		{"content": "No role here"},
-		{"role": "user", "content": "With role"}
-	]`
-
-	history, err := ExtractConversationHistory([]byte(messagesJSON))
-	require.NoError(t, err)
-	assert.Len(t, history, 1)
-	assert.Equal(t, "With role", history[0].Content)
-}
-
-// =============================================================================
 // FormatHistoryForPrompt Tests
 // =============================================================================
 
@@ -618,17 +543,6 @@ func TestFormatHistoryForPrompt_LimitToLast5(t *testing.T) {
 	assert.Contains(t, result, "Message 3")
 	assert.Contains(t, result, "Response 3")
 	assert.Contains(t, result, "Message 4")
-}
-
-// =============================================================================
-// TruncateForLog Tests
-// =============================================================================
-
-func TestTruncateForLog(t *testing.T) {
-	assert.Equal(t, "short", truncateForLog("short", 10))
-	assert.Equal(t, "this is a ...", truncateForLog("this is a long string", 10))
-	assert.Empty(t, truncateForLog("", 10))
-	assert.Equal(t, "exactly10!", truncateForLog("exactly10!", 10))
 }
 
 // =============================================================================

@@ -101,6 +101,8 @@ export interface InsightsRecord {
   id: string
   timestamp: string
   request_id?: string
+  session_id?: string
+  turn_index: number
   recipe?: string
   decision?: string
   decision_tier: number
@@ -121,6 +123,11 @@ export interface InsightsRecord {
   request_body?: string
   response_body?: string
   response_status?: number
+  /** A response header alone is not terminal; only completed records are successful. */
+  lifecycle_state?: 'unknown' | 'in_progress' | 'completed' | 'aborted' | 'failed'
+  ended_at?: string
+  duration_ms?: number
+  terminal_reason?: string
   from_cache?: boolean
   streaming?: boolean
   request_body_truncated?: boolean
@@ -157,6 +164,34 @@ export interface InsightsRecord {
   cost_savings?: number
   currency?: string
   baseline_model?: string
+}
+
+export interface InsightsTrajectoryToolCall {
+  id: string
+  type: string
+  function: {
+    name: string
+    arguments: string
+  }
+}
+
+export interface InsightsTrajectoryMessage {
+  role: 'user' | 'assistant' | 'tool'
+  content?: string
+  tool_calls?: InsightsTrajectoryToolCall[]
+  tool_call_id?: string
+  tool_name?: string
+  status?: 'succeeded' | 'failed'
+  content_redacted?: boolean
+  turn_index: number
+}
+
+export interface InsightsTrajectory {
+  object: 'router_replay.trajectory'
+  session_id: string
+  record_count: number
+  turn_count: number
+  messages: InsightsTrajectoryMessage[]
 }
 
 export interface InsightsListResponse {
@@ -217,6 +252,13 @@ export interface InsightsAggregateTokenBreakdown {
 export interface InsightsAggregateResponse {
   object: string
   record_count: number
+  lifecycle: {
+    completed: number
+    failed: number
+    aborted: number
+    in_progress: number
+    unknown: number
+  }
   summary: InsightsAggregateSummary
   model_selection: InsightsAggregateValue[]
   decision_distribution: InsightsAggregateValue[]

@@ -16,7 +16,6 @@ var typedPluginConfigEmitters = map[string]typedPluginConfigEmitter{
 	"router_replay":       emitRouterReplayPluginConfig,
 	"memory":              emitMemoryPluginConfig,
 	"hallucination":       emitHallucinationPluginConfig,
-	"image_gen":           emitImageGenPluginConfig,
 	"fast_response":       emitFastResponsePluginConfig,
 	"request_params":      emitRequestParamsPluginConfig,
 	"tool_selection":      emitToolSelectionPluginConfig,
@@ -141,19 +140,6 @@ func emitHallucinationPluginConfig(sb *strings.Builder, p *config.DecisionPlugin
 	}
 }
 
-func emitImageGenPluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {
-	cfg, ok := decodePluginConfig[config.ImageGenPluginConfig](p)
-	if !ok {
-		return
-	}
-	if cfg.Enabled {
-		fmt.Fprintf(sb, "    enabled: true\n")
-	}
-	if cfg.Backend != "" {
-		fmt.Fprintf(sb, "    backend: %q\n", cfg.Backend)
-	}
-}
-
 func emitFastResponsePluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {
 	cfg, ok := decodePluginConfig[config.FastResponsePluginConfig](p)
 	if !ok {
@@ -239,6 +225,9 @@ func emitToolsPluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {
 	}
 	if len(cfg.BlockTools) > 0 {
 		fmt.Fprintf(sb, "    block_tools: %s\n", formatStringArray(cfg.BlockTools))
+	}
+	if cfg.StripToolHistory {
+		fmt.Fprintf(sb, "    strip_tool_history: true\n")
 	}
 	if cfg.DynamicRetrieval != nil {
 		fmt.Fprintf(sb, "    dynamic_retrieval: %s\n", formatPluginConfigValue(dynamicRetrievalConfigMap(cfg.DynamicRetrieval)))

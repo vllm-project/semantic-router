@@ -1,0 +1,74 @@
+{
+  "frames": [
+    {
+      "event": "",
+      "data": {
+        "choices": [
+          {
+            "delta": {
+              "role": "assistant"
+            },
+            "finish_reason": null,
+            "index": 0
+          }
+        ],
+        "id": "response_1",
+        "model": "public-model",
+        "obfuscation": "\u003crandom\u003e",
+        "object": "chat.completion.chunk"
+      }
+    },
+    {
+      "event": "",
+      "data": {
+        "choices": [
+          {
+            "delta": {
+              "content": "hello"
+            },
+            "finish_reason": null,
+            "index": 0
+          }
+        ],
+        "id": "response_1",
+        "model": "public-model",
+        "obfuscation": "\u003crandom\u003e",
+        "object": "chat.completion.chunk"
+      }
+    },
+    {
+      "event": "",
+      "data": {
+        "choices": [
+          {
+            "delta": {},
+            "finish_reason": "stop",
+            "index": 0
+          }
+        ],
+        "id": "response_1",
+        "model": "public-model",
+        "obfuscation": "\u003crandom\u003e",
+        "object": "chat.completion.chunk"
+      }
+    },
+    {
+      "event": "",
+      "data": {
+        "id": "response_1",
+        "model": "public-model",
+        "obfuscation": "\u003crandom\u003e",
+        "object": "chat.completion.chunk",
+        "usage": {
+          "completion_tokens": 2,
+          "prompt_tokens": 3,
+          "total_tokens": 5
+        }
+      }
+    },
+    {
+      "event": "",
+      "data": "[DONE]"
+    }
+  ]
+}

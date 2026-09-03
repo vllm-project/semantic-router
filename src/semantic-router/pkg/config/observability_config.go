@@ -5,13 +5,31 @@ type APIConfig struct {
 }
 
 type ObservabilityConfig struct {
-	Tracing TracingConfig `yaml:"tracing"`
-	Metrics MetricsConfig `yaml:"metrics"`
+	Tracing   TracingConfig   `yaml:"tracing"`
+	Metrics   MetricsConfig   `yaml:"metrics"`
+	Profiling ProfilingConfig `yaml:"profiling"`
 }
 
 type MetricsConfig struct {
 	Enabled         *bool                 `yaml:"enabled,omitempty"`
 	WindowedMetrics WindowedMetricsConfig `yaml:"windowed_metrics"`
+}
+
+const (
+	// DefaultProfilingPort is the port the pprof listener uses when profiling is
+	// enabled without an explicit port.
+	DefaultProfilingPort = 6060
+	// DefaultProfilingBind keeps pprof on loopback unless deliberately widened.
+	DefaultProfilingBind = "127.0.0.1"
+)
+
+// ProfilingConfig controls the optional in-process pprof HTTP listener. It is
+// disabled by default and binds to loopback so profiles are never exposed on a
+// routable interface without an explicit operator decision.
+type ProfilingConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	Port    int    `yaml:"port,omitempty"`
+	Bind    string `yaml:"bind,omitempty"`
 }
 
 type WindowedMetricsConfig struct {

@@ -1,0 +1,10 @@
+{
+  "operation": "request",
+  "body": {
+    "model": "client-model",
+    "input": "Explain the result.",
+    "reasoning": {
+      "effort": "hiGh"
+    }
+  }
+}

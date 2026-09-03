@@ -1,0 +1,91 @@
+//go:build !windows && cgo
+
+package cache
+
+import (
+	"context"
+	"errors"
+
+	"github.com/milvus-io/milvus-sdk-go/v2/client"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"github.com/qdrant/go-client/qdrant"
+	"github.com/redis/go-redis/v9"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+)
+
+// Every remote backend must turn a search failure that happened under a
+// cancelled request into the request's context error, while an ordinary backend
+// outage stays a fail-open miss.
+//
+// The bare-error assertion pins the call site: this error comes from
+// contextErrorOnFailure after the search, whereas an embedding-path
+// short-circuit would surface it wrapped as "failed to generate embedding: ...".
+var _ = DescribeTable("backend search cancellation wiring",
+	func(findSimilar func(context.Context) (LookupResult, error)) {
+		ctx := &cancelAfterEmbedCtx{Context: context.Background(), errAfter: errAfterPostEmbedGuard}
+
+		result, err := findSimilar(ctx)
+
+		Expect(err).To(Equal(context.Canceled),
+			"backend search failure must surface the request cancellation, got %v", err)
+		Expect(result).To(Equal(LookupResult{}))
+
+		result, err = findSimilar(context.Background())
+		Expect(err).NotTo(HaveOccurred(), "ordinary backend errors must remain fail-open misses")
+		Expect(result).To(Equal(LookupResult{}))
+	},
+	Entry("Milvus", func(ctx context.Context) (LookupResult, error) {
+		cfg := &config.MilvusConfig{}
+		cfg.Collection.VectorField.Dimension = 384
+		cache := &MilvusCache{
+			enabled:        true,
+			config:         cfg,
+			embeddingModel: "bert",
+			searchFn: func(context.Context, string, []float32) ([]client.SearchResult, error) {
+				return nil, errors.New("milvus unavailable")
+			},
+		}
+		return cache.LookupSimilarWithThreshold(ctx, "model", "query", 0.8)
+	}),
+	Entry("Qdrant", func(ctx context.Context) (LookupResult, error) {
+		cache := &QdrantCache{
+			enabled:        true,
+			cfg:            &config.QdrantConfig{},
+			embeddingModel: "bert",
+			searchFn: func(context.Context, *qdrant.QueryPoints) ([]*qdrant.ScoredPoint, error) {
+				return nil, errors.New("qdrant unavailable")
+			},
+		}
+		return cache.LookupSimilarWithThreshold(ctx, "model", "query", 0.8)
+	}),
+	Entry("Redis", func(ctx context.Context) (LookupResult, error) {
+		cfg := &config.RedisConfig{}
+		cfg.Index.VectorField.Name = "embedding"
+		cfg.Search.TopK = 1
+		cache := &RedisCache{
+			enabled:        true,
+			config:         cfg,
+			embeddingModel: "bert",
+			searchFn: func(context.Context, string, string, *redis.FTSearchOptions) (redis.FTSearchResult, error) {
+				return redis.FTSearchResult{}, errors.New("redis unavailable")
+			},
+		}
+		return cache.LookupSimilarWithThreshold(ctx, "model", "query", 0.8)
+	}),
+	Entry("Valkey", func(ctx context.Context) (LookupResult, error) {
+		cfg := &config.ValkeyConfig{}
+		cfg.Index.VectorField.Name = "embedding"
+		cfg.Search.TopK = 1
+		cache := &ValkeyCache{
+			enabled:        true,
+			config:         cfg,
+			embeddingModel: "bert",
+			searchFn: func(context.Context, []string) (any, error) {
+				return nil, errors.New("valkey unavailable")
+			},
+		}
+		return cache.LookupSimilarWithThreshold(ctx, "model", "query", 0.8)
+	}),
+)

@@ -10,12 +10,15 @@ description: Step-by-step guide to serve a local model with Ollama and connect i
 This guide walks through:
 
 1. Installing Ollama and pulling a model on your host
-2. Verifying the Ollama API
+2. Making the Ollama API reachable from Docker
 3. Registering the model in the Semantic Router setup dashboard
 4. Activating the config and sending a test request
 
 :::tip
-Semantic Router runs in Docker during `vllm-sr serve`. Point the router at `host.docker.internal:11434`, not `localhost:11434`, so the container can reach Ollama on your host.
+Semantic Router runs in Docker during `vllm-sr serve`. The name
+`host.docker.internal` resolves the host from the container, but it does not
+make a loopback-only Ollama server reachable. Complete the bind-address step
+below before starting Semantic Router.
 :::
 
 ## Prerequisites
@@ -38,9 +41,56 @@ On Linux you can also use the install script:
 curl -fsSL https://ollama.com/install.sh | sh
 ```
 
-Ollama starts a background service automatically. It listens on `http://127.0.0.1:11434` by default.
+Ollama starts a background service automatically. It listens on
+`http://127.0.0.1:11434` by default, which is reachable from the host but not
+from a Docker container.
 
-## 2. Pull a model
+## 2. Make Ollama reachable from Docker
+
+Set `OLLAMA_HOST=0.0.0.0:11434`, then restart Ollama. The exact way to set the
+environment variable depends on how Ollama is installed.
+
+On Linux with the standard systemd service:
+
+```bash
+sudo systemctl edit ollama.service
+```
+
+Add the following override, save it, and restart the service:
+
+```ini
+[Service]
+Environment="OLLAMA_HOST=0.0.0.0:11434"
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart ollama
+```
+
+On macOS, quit the Ollama application, set the launch environment, and reopen
+the application:
+
+```bash
+launchctl setenv OLLAMA_HOST "0.0.0.0:11434"
+```
+
+On Windows, quit Ollama, add the user environment variable `OLLAMA_HOST` with
+the value `0.0.0.0:11434`, and restart Ollama from the Start menu. The
+[Ollama server FAQ](https://docs.ollama.com/faq#how-do-i-configure-ollama-server)
+has the current platform-specific steps.
+
+For WSL, follow the Windows steps when Ollama is the Windows application, or
+the Linux steps when the server itself runs inside the WSL distribution.
+
+:::warning
+Ollama's local API does not require authentication. Binding to `0.0.0.0` can
+give other hosts access to model listing and generation. Restrict TCP port
+`11434` to the container bridge, host gateway, or other trusted local sources,
+and never publish it to an untrusted network.
+:::
+
+## 3. Pull a model
 
 Pull a model tag from the [Ollama library](https://ollama.com/library). This example uses `llama3.2:3b`, a small general-purpose model that works well for local testing:
 
@@ -60,7 +110,7 @@ ollama list
 Use the **exact Ollama tag** (for example `llama3.2:3b`, `qwen2.5-coder:7b`) as the model name in Semantic Router. The router forwards that name to Ollama unchanged.
 :::
 
-## 3. Verify Ollama is serving
+## 4. Verify Ollama is serving
 
 Before opening the Semantic Router dashboard, confirm Ollama responds on the host:
 
@@ -83,7 +133,19 @@ curl http://localhost:11434/v1/chat/completions \
 
 If either command fails, fix Ollama on the host before continuing. Semantic Router cannot reach a backend that is not already serving on port `11434`.
 
-## 4. Configure the model in the setup dashboard
+Then verify the address that the Router container will use:
+
+```bash
+docker run --rm \
+  --add-host=host.docker.internal:host-gateway \
+  curlimages/curl:8.12.1 \
+  http://host.docker.internal:11434/v1/models
+```
+
+If the host check succeeds but the container check fails, recheck
+`OLLAMA_HOST` and the host firewall before continuing.
+
+## 5. Configure the model in the setup dashboard
 
 Start Semantic Router (or use the instance already started by the installer):
 
@@ -108,13 +170,16 @@ On **Step 1 — Connect model**, register your Ollama model:
 Why **Local vLLM** and not **OpenAI-compatible API**?
 
 - Ollama serves an OpenAI-compatible surface at `/v1/chat/completions`.
-- The **Local vLLM** provider type matches how other local backends are configured in `vllm-sr serve` and resolves to `host.docker.internal:11434` inside the generated `config.yaml`.
+- **Local vLLM** writes the host and protocol you enter as an `endpoint`
+  backend reference, so enter `host.docker.internal:11434` explicitly.
 
-Alternative: you can choose **OpenAI-compatible API** and set the base URL to `http://host.docker.internal:11434/v1`. Both paths work; pick one and stay consistent when adding more models.
+Alternatively, choose **OpenAI-compatible API** and enter
+`http://host.docker.internal:11434/v1`; that provider type writes a `base_url`.
+Both paths use Ollama's OpenAI-compatible API.
 
 Click **Continue** when the model card validates.
 
-## 5. Choose routing and activate
+## 6. Choose routing and activate
 
 On **Step 2 — Choose routing**, keep the **Single-model baseline** if you only registered one Ollama model. You can import a preset or remote config later when you add more backends.
 
@@ -122,14 +187,14 @@ On **Step 3 — Review & activate**, confirm the model summary, then click **Act
 
 ![Review the generated config and activate setup](/img/installation/ollama/setup-wizard-ollama-activate.png)
 
-Activation writes `config.yaml` to the current directory and exits setup mode. Envoy starts on port `8888` and routes requests through Semantic Router to your Ollama backend.
+Activation writes `config.yaml` to the current directory and exits setup mode. Envoy starts on port `8899` and routes requests through Semantic Router to your Ollama backend.
 
-## 6. Test through Semantic Router
+## 7. Test through Semantic Router
 
 Send a request through the router proxy:
 
 ```bash
-curl http://localhost:8888/v1/chat/completions \
+curl http://localhost:8899/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "llama3.2:3b",
@@ -140,10 +205,10 @@ curl http://localhost:8888/v1/chat/completions \
 If you kept the default single-model baseline, you can also use the auto-routing alias:
 
 ```bash
-curl http://localhost:8888/v1/chat/completions \
+curl http://localhost:8899/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "MoM",
+    "model": "vllm-sr/auto",
     "messages": [{"role": "user", "content": "Hello from Semantic Router!"}]
   }'
 ```
@@ -188,7 +253,7 @@ routing:
 Validate and serve:
 
 ```bash
-vllm-sr validate config.yaml
+vllm-sr validate --config config.yaml
 vllm-sr serve --config config.yaml
 ```
 
@@ -197,7 +262,13 @@ vllm-sr serve --config config.yaml
 ### Router cannot reach Ollama
 
 - Use `host.docker.internal:11434` in config, not `localhost:11434`. Inside the router container, `localhost` refers to the container itself.
-- On Linux, `vllm-sr serve` adds `--add-host=host.docker.internal:host-gateway` automatically. If connectivity still fails, see [Container connectivity](../troubleshooting/container-connectivity).
+- Confirm Ollama is listening on a container-reachable address. The default
+  `127.0.0.1:11434` binding is not sufficient; configure `OLLAMA_HOST` as shown
+  above and restart Ollama.
+- The local runtime adds a `host.docker.internal:host-gateway` mapping for
+  Docker or Podman. This provides name resolution and routing, not a proxy for
+  the host loopback interface. If connectivity still fails, see
+  [Container connectivity](../troubleshooting/container-connectivity).
 - Confirm Ollama responds on the host: `curl http://localhost:11434/v1/models`.
 
 ### Model not found or 404 from Ollama

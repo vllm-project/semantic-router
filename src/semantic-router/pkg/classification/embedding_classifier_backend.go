@@ -15,7 +15,11 @@ import (
 
 // getEmbeddingWithModelType is a package-level variable for computing single embeddings.
 // It exists so tests can override it.
-var getEmbeddingWithModelType = candle_binding.GetEmbeddingWithModelType
+var (
+	getEmbeddingWithModelType = candle_binding.GetEmbeddingWithModelType
+	// getEmbedding2DMatryoshka is the 2D Matryoshka seam used when a target layer is configured.
+	getEmbedding2DMatryoshka = candle_binding.GetEmbedding2DMatryoshka
+)
 
 // getMultiModalTextEmbedding computes a text embedding via the multimodal model.
 // Package-level var so tests can override it.
@@ -186,7 +190,7 @@ func (c *EmbeddingClassifier) computeEmbedding(text string, modelType string, ph
 		embedding, err = getOpenVINOEmbedding(modelType, text, c.optimizationConfig.TargetDimension)
 	case "candle":
 		var output *candle_binding.EmbeddingOutput
-		output, err = getEmbeddingWithModelType(text, modelType, c.optimizationConfig.TargetDimension)
+		output, err = getEmbedding2DMatryoshka(text, modelType, c.optimizationConfig.TargetLayer, c.optimizationConfig.TargetDimension)
 		if err == nil {
 			embedding = output.Embedding
 		}

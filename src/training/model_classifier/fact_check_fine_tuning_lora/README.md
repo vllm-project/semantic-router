@@ -1,80 +1,56 @@
 # Fact-Check Classifier Training
 
-Fine-tune a ModernBERT/BERT model with LoRA to classify prompts as `FACT_CHECK_NEEDED` or `NO_FACT_CHECK_NEEDED`.
+This script fine-tunes a sequence classifier to predict whether a user prompt
+needs factual verification:
 
-## Quick Start on Training
+- `FACT_CHECK_NEEDED`
+- `NO_FACT_CHECK_NEEDED`
 
-### Prerequisites
+The label describes the prompt's verification need. It does not verify an
+answer or replace a fact-checking system.
+
+## Setup
+
+Create an isolated environment and install PyTorch, Transformers, Datasets,
+PEFT, Accelerate, scikit-learn, and the other imports required by the script.
+`setup_datasets.sh` can pre-populate a local dataset cache:
 
 ```bash
-# Install dependencies
-pip install transformers datasets peft torch accelerate scikit-learn
-```
-
-### Optional: Pre-download datasets
-
-```bash
-# Pre-download script-based datasets for faster training
 ./setup_datasets.sh ./datasets_cache
 ```
 
-### Training Command
+Review the source datasets and their licenses before training. The loader
+combines information-seeking, QA, creative-writing, instruction, and coding
+datasets into the two labels; inspect the generated balance and examples rather
+than treating source dataset names as ground truth.
+
+## Train
+
+Start with a limited sample:
 
 ```bash
-# Train with full dataset (50k samples, ~10 min on GPU)
 python fact_check_bert_finetuning_lora.py \
-    --mode train \
-    --model modernbert-base \
-    --max-samples 50000 \
-    --epochs 3 \
-    --batch-size 32 \
-    --data-dir ./datasets_cache
+  --mode train \
+  --model mmbert-32k \
+  --max-samples 2000 \
+  --epochs 1 \
+  --data-dir ./datasets_cache \
+  --output-dir ./models/fact-check-smoke
 ```
 
-## Training Options
+Increase the sample size and epochs only after checking label distribution,
+validation behavior, and available memory. Run `python
+fact_check_bert_finetuning_lora.py --help` for current model and LoRA options.
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--model` | bert-base-uncased | Model: `modernbert-base`, `bert-base-uncased`, `roberta-base` |
-| `--max-samples` | 2000 | Total samples (50000 for full training) |
-| `--epochs` | 5 | Training epochs (3 is usually sufficient) |
-| `--batch-size` | 16 | Batch size (32 for faster training with enough VRAM) |
-| `--lora-rank` | 16 | LoRA rank |
-| `--data-dir` | None | Path to cached datasets from `setup_datasets.sh` |
-
-## Testing
-
-### Test Command
+## Test an Export
 
 ```bash
-# Test the trained model
 python fact_check_bert_finetuning_lora.py \
-    --mode test \
-    --model-path lora_fact_check_classifier_modernbert-base_r16_model_rust
+  --mode test \
+  --model-path ./models/fact-check-smoke
 ```
 
-## Datasets Used
-
-### FACT_CHECK_NEEDED
-
-- **NISQ-ISQ** - Information-Seeking Questions (Gold standard dataset, ACL LREC 2024)
-- **HaluEval** - QA questions from hallucination benchmark (ACL EMNLP 2023)
-- **FaithDial** - Information-seeking dialogue questions (TACL 2022)
-- **FactCHD** - Fact-conflicting hallucination queries (Chen et al., 2024)
-- **RAG** - Questions for retrieval-augmented generation (neural-bridge/rag-dataset-12000)
-- **SQuAD** - Stanford Question Answering Dataset (100k+ Wikipedia fact questions)
-- **TriviaQA** - Factual trivia questions (650k question-answer-evidence triples)
-- **TruthfulQA** - High-risk factual queries about common misconceptions
-- **HotpotQA** - Multi-hop factual reasoning questions
-- **CoQA** - Conversational factual questions (127k questions across domains)
-- **QASPER** - Information-seeking questions over research papers (NAACL 2021)
-- **ELI5** - Explain Like I'm 5 - factual explanation questions
-- **Natural Questions** - Google Natural Questions (real user queries)
-
-### NO_FACT_CHECK_NEEDED
-
-- **NISQ-NonISQ** - Non-Information-Seeking Questions (Gold standard dataset)
-- **Dolly** - Creative writing, brainstorming, opinion (helps with edge cases)
-- **WritingPrompts** - Creative writing prompts from Reddit (300k prompts)
-- **Alpaca** - Non-factual instructions (coding, creative, math, opinion)
-- **CodeSearchNet** - Programming/technical requests (code documentation)
+Before publishing, evaluate a held-out set that reflects the prompts expected
+in deployment. Report per-class precision and recall, the decision threshold,
+dataset revisions, split policy, base model, and known false-positive and
+false-negative cases.

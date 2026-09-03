@@ -8,7 +8,11 @@ import json
 import sys
 from pathlib import Path
 
-from router_calibration_manifest import load_probe_manifest, resolve_manifest_assets
+from router_calibration_manifest import (
+    load_probe_manifest,
+    report_safe_probe_manifest,
+    resolve_manifest_assets,
+)
 from router_calibration_report import render_markdown_summary
 from router_calibration_support import (
     default_report_dir,
@@ -33,9 +37,14 @@ def cmd_snapshot(args: argparse.Namespace) -> int:
 
 def cmd_eval(args: argparse.Namespace) -> int:
     manifest, probes = load_probe_manifest(Path(args.probes))
-    evaluation = evaluate_probes(args.router_url, probes, manifest)
+    evaluation = evaluate_probes(
+        args.router_url,
+        probes,
+        manifest,
+        selected_probe_ids=getattr(args, "probe_ids", None),
+    )
     report = {
-        "manifest": manifest,
+        "manifest": report_safe_probe_manifest(manifest),
         "evaluation": evaluation,
     }
     if args.output:
@@ -198,6 +207,15 @@ def add_eval_subparser(subparsers: argparse._SubParsersAction) -> None:
         help="Router base URL, for example http://host:8080",
     )
     eval_parser.add_argument("--probes", required=True, help="YAML probe manifest path")
+    eval_parser.add_argument(
+        "--id",
+        dest="probe_ids",
+        action="append",
+        help=(
+            "Evaluate only this exact decision:variant probe ID. Repeat the flag "
+            "to run an ordered subset while validating traces against the complete recipe."
+        ),
+    )
     eval_parser.add_argument("--output", help="Optional JSON output path")
     eval_parser.set_defaults(func=cmd_eval)
 

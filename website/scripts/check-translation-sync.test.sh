@@ -42,7 +42,7 @@ git init -q
 git config user.name "Translation Sync Test"
 git config user.email "translation-sync@example.com"
 
-for name in definitely-outdated definitely-current verify-false verify-true; do
+for name in definitely-outdated definitely-current verify-false verify-true fallback-only; do
     cat > "website/docs/cases/$name.md" <<EOF
 # $name
 
@@ -101,6 +101,8 @@ assert_contains "$audit_output" "Metadata needs verification (Chinese is not old
 assert_contains "$audit_output" "cases/verify-false.md"
 assert_contains "$audit_output" "cases/verify-true.md"
 assert_contains "$audit_output" "cases/definitely-current.md"
+assert_contains "$audit_output" "English fallback:"
+assert_contains "$audit_output" "1 English fallback"
 
 set +e
 fix_output="$(website/scripts/check-translation-sync.sh --locale zh-Hans --fix-status 2>&1)"
@@ -138,5 +140,14 @@ before="$(git diff | cksum)"
 website/scripts/check-translation-sync.sh --locale zh-Hans --fix-status >/dev/null || true
 after="$(git diff | cksum)"
 [[ "$before" == "$after" ]] || fail "fix mode is not idempotent"
+
+mkdir -p website/i18n/fr/docusaurus-plugin-content-docs/current
+set +e
+fallback_output="$(website/scripts/check-translation-sync.sh --locale fr 2>&1)"
+fallback_status=$?
+set -e
+
+[[ $fallback_status -eq 0 ]] || fail "English fallback without stale overrides should pass"
+assert_contains "$fallback_output" "5 English fallback"
 
 echo "Translation sync behavior test passed."

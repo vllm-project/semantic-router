@@ -2,15 +2,12 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"net/http"
 	"os"
-	"os/signal"
-	"syscall"
 	"time"
-
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/apiserver"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -18,6 +15,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/profiling"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
@@ -43,7 +41,7 @@ func parseRuntimeOptions() runtimeOptions {
 	var (
 		configPath             = flag.String("config", "config/config.yaml", "Path to the configuration file")
 		port                   = flag.Int("port", 50051, "Port to listen on for gRPC ExtProc")
-		apiPort                = flag.Int("api-port", 8080, "Port to listen on for the router apiserver")
+		apiPort                = flag.Int("api-port", 0, "Port to listen on for the router apiserver (default from config: 8080)")
 		apiBind                = flag.String("api-bind", "", "Bind address for the router apiserver (default from config: 127.0.0.1)")
 		managementAuthMode     = flag.String("management-auth-mode", "", "Management API auth mode: bearer or disabled")
 		managementRemoteExpose = flag.Bool("management-remote-exposure", false, "Allow remote exposure of the management API (requires bearer auth tokens in config)")
@@ -72,6 +70,32 @@ func parseRuntimeOptions() runtimeOptions {
 		secure:                 *secure,
 		downloadOnly:           *downloadOnly,
 	}
+}
+
+func resolveRuntimeManagementOptions(opts runtimeOptions, cfg *config.RouterConfig) (runtimeOptions, error) {
+	if !opts.enableAPI {
+		return opts, nil
+	}
+	if cfg == nil {
+		return runtimeOptions{}, errors.New("management API configuration is unavailable")
+	}
+	resolved, err := cfg.ManagementAPI.ResolvedManagementAPI(config.ManagementAPIRuntimeOptions{
+		Port:           opts.apiPort,
+		BindAddress:    opts.apiBind,
+		RemoteExposure: opts.managementRemoteExpose,
+		AuthMode:       opts.managementAuthMode,
+	})
+	if err != nil {
+		return runtimeOptions{}, fmt.Errorf("invalid management API configuration: %w", err)
+	}
+	if resolved.Port == opts.port || resolved.Port == opts.metricsPort {
+		return runtimeOptions{}, errors.New("management API port conflicts with another Router service port")
+	}
+	opts.apiPort = resolved.Port
+	opts.apiBind = resolved.BindAddress
+	opts.managementAuthMode = resolved.Auth.Mode
+	opts.managementRemoteExpose = &resolved.RemoteExposure
+	return opts, nil
 }
 
 // boolFlagOverride returns a pointer to value only when the named flag was
@@ -250,32 +274,30 @@ func initializeWindowedMetricsIfEnabled(cfg *config.RouterConfig) {
 	})
 }
 
-func registerSignalHandler(shutdownHooks *[]func()) {
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+func runShutdownHooks(shutdownHooks *[]func()) {
+	if shutdownHooks == nil {
+		return
+	}
+	for _, hook := range *shutdownHooks {
+		hook()
+	}
+}
 
-	go func() {
-		sig := <-sigChan
-		logging.ComponentEvent("router", "shutdown_signal_received", map[string]interface{}{
-			"signal": sig.String(),
-		})
-		for _, hook := range *shutdownHooks {
-			hook()
-		}
-		shutdownTracing()
-		os.Exit(0)
-	}()
+// metricsServerEnabled reports whether the Prometheus listener will be started
+// for this config and port, so callers that reason about the metrics port
+// (startup, profiling port reservation) share one decision.
+func metricsServerEnabled(cfg *config.RouterConfig, metricsPort int) bool {
+	if metricsPort <= 0 {
+		return false
+	}
+	if cfg.Observability.Metrics.Enabled != nil {
+		return *cfg.Observability.Metrics.Enabled
+	}
+	return true
 }
 
 func startMetricsServerIfEnabled(cfg *config.RouterConfig, metricsPort int) {
-	metricsEnabled := true
-	if cfg.Observability.Metrics.Enabled != nil {
-		metricsEnabled = *cfg.Observability.Metrics.Enabled
-	}
-	if metricsPort <= 0 {
-		metricsEnabled = false
-	}
-	if !metricsEnabled {
+	if !metricsServerEnabled(cfg, metricsPort) {
 		logging.ComponentEvent("router", "metrics_server_disabled", map[string]interface{}{
 			"metrics_port": metricsPort,
 		})
@@ -283,18 +305,66 @@ func startMetricsServerIfEnabled(cfg *config.RouterConfig, metricsPort int) {
 	}
 
 	go func() {
-		http.Handle("/metrics", promhttp.Handler())
 		metricsAddr := fmt.Sprintf(":%d", metricsPort)
 		logging.ComponentEvent("router", "metrics_server_starting", map[string]interface{}{
 			"address": metricsAddr,
 		})
-		if err := http.ListenAndServe(metricsAddr, nil); err != nil {
+		if err := http.ListenAndServe(metricsAddr, metrics.NewServeMux()); err != nil {
 			logging.ComponentErrorEvent("router", "metrics_server_failed", map[string]interface{}{
 				"address": metricsAddr,
 				"error":   err.Error(),
 			})
 		}
 	}()
+}
+
+// startProfilingServerIfEnabled brings up the pprof listener when the operator
+// opted in. Profiling is a debugging aid, so a misconfigured port or a failed
+// bind is logged and skipped rather than aborting router startup.
+func startProfilingServerIfEnabled(cfg *config.RouterConfig, opts runtimeOptions, shutdownHooks *[]func()) {
+	profilingCfg := cfg.Observability.Profiling
+	if !profilingCfg.Enabled {
+		logging.ComponentDebugEvent("router", "profiling_server_disabled", nil)
+		return
+	}
+
+	reserved := []int{opts.port}
+	if metricsServerEnabled(cfg, opts.metricsPort) {
+		reserved = append(reserved, opts.metricsPort)
+	}
+	if opts.enableAPI {
+		reserved = append(reserved, opts.apiPort)
+	}
+	if err := profiling.ValidatePort(profilingCfg.Port, reserved...); err != nil {
+		logging.ComponentErrorEvent("router", "profiling_server_port_invalid", map[string]interface{}{
+			"port":  profilingCfg.Port,
+			"error": err.Error(),
+		})
+		return
+	}
+	if err := profiling.ValidateBind(profilingCfg.Bind); err != nil {
+		logging.ComponentErrorEvent("router", "profiling_server_bind_invalid", map[string]interface{}{
+			"bind":  profilingCfg.Bind,
+			"error": err.Error(),
+		})
+		return
+	}
+
+	server, err := profiling.Start(profilingCfg)
+	if err != nil {
+		logging.ComponentErrorEvent("router", "profiling_server_failed", map[string]interface{}{
+			"bind":  profilingCfg.Bind,
+			"port":  profilingCfg.Port,
+			"error": err.Error(),
+		})
+		return
+	}
+	if shutdownHooks != nil {
+		*shutdownHooks = append(*shutdownHooks, func() { _ = server.Close() })
+	}
+	logging.ComponentEvent("router", "profiling_server_starting", map[string]interface{}{
+		"address": server.Addr(),
+	})
 }
 
 func initializeRuntimeDependencies(
@@ -461,10 +531,18 @@ func warmupRouterRuntime(server *extproc.Server, embeddingState modelruntime.Emb
 	})
 }
 
-func startAPIServerIfEnabled(opts runtimeOptions, runtimeRegistry *routerruntime.Registry) {
+func startAPIServerIfEnabled(opts runtimeOptions, runtimeRegistry *routerruntime.Registry) error {
 	if !opts.enableAPI {
-		return
+		return nil
 	}
+	if runtimeRegistry == nil || runtimeRegistry.CurrentConfig() == nil {
+		return errors.New("management API configuration is unavailable")
+	}
+	resolvedOpts, err := resolveRuntimeManagementOptions(opts, runtimeRegistry.CurrentConfig())
+	if err != nil {
+		return err
+	}
+	opts = resolvedOpts
 
 	go func() {
 		logging.ComponentEvent("router", "api_server_starting", map[string]interface{}{
@@ -487,6 +565,7 @@ func startAPIServerIfEnabled(opts runtimeOptions, runtimeRegistry *routerruntime
 			})
 		}
 	}()
+	return nil
 }
 
 func markRouterReady(writer startupstatus.StatusWriter, embeddingProvider *startupstatus.EmbeddingProviderStatus) {

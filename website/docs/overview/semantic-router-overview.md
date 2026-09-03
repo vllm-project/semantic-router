@@ -1,188 +1,110 @@
 ---
 sidebar_position: 2
-description: Overview of Semantic Router, explaining how multi-signal model selection improves cost, quality, safety, and flexibility in LLM systems.
+title: System Overview
+description: The data plane, control plane, configuration model, and request lifecycle of vLLM Semantic Router.
 ---
 
-# What is Semantic Router?
+# System Overview
 
-**Semantic Router** is an intelligent routing layer that dynamically selects the most suitable language model for each query based on multiple signals extracted from the request.
+vLLM Semantic Router is a decision layer between AI clients and model
+backends. It evaluates each request against an explicit routing policy, then
+forwards the request to one model or coordinates a bounded multi-model path.
 
-## The Problem
+The project separates the high-throughput request path from the tools used to
+configure and operate it.
 
-Traditional LLM deployments use a single model for all tasks:
+## Architecture
 
-```text
-User Query → Single LLM → Response
+```mermaid
+flowchart LR
+    Client["Applications and agents"] --> Envoy["Envoy data plane"]
+    Envoy <-->|"ExtProc"| Router["Semantic Router"]
+    Envoy --> Pool["Model and provider pool"]
+
+    CLI["vllm-sr CLI"] --> Config["Canonical config and recipes"]
+    Dashboard["Dashboard"] --> Config
+    Operator["Helm / Operator"] --> Config
+    Config --> Router
+
+    Router --> Telemetry["Metrics, replay, evaluation"]
+    Pool --> Telemetry
 ```
 
-**Problems**:
+### Data plane
 
-- High cost for simple queries
-- Suboptimal performance for specialized tasks
-- No security or compliance controls
-- Poor resource utilization
+- **Envoy** accepts client traffic, invokes the Router through the External
+  Processing protocol, and forwards the resulting request upstream.
+- **Semantic Router** extracts signals, evaluates policy, applies route-specific
+  behavior, and selects or coordinates model candidates.
+- **Backends** are OpenAI-compatible model services or provider endpoints. The
+  Router does not load their model weights.
 
-## The Solution
+### Control plane
 
-Semantic Router uses **signal-driven decision making** to route queries intelligently:
+- **Canonical YAML** is the portable source of routing behavior.
+- **Entrypoints** map one or more public model aliases to a recipe.
+- **Recipes** are complete policy and runtime-state isolation boundaries. One
+  or more entrypoints can select the same recipe.
+- **CLI and Dashboard** support local setup, validation, model discovery,
+  configuration, and operation.
+- **Helm and the Operator** deploy the Router into Kubernetes environments.
+- **Evaluation and observability** expose route outcomes so operators can test
+  and improve policy.
 
-```text
-User Query → Signal Extraction → Projection Coordination → Decision Engine → Plugins + Model Dispatch → Response
-```
+## Core objects
 
-**Benefits**:
+| Object | Purpose |
+| --- | --- |
+| **Entrypoint** | A mapping from one or more public model aliases to a recipe. |
+| **Recipe** | A complete routing-policy and runtime-state isolation boundary. |
+| **Signal** | A named fact about the request, identity, conversation, or content. |
+| **Projection** | A reusable score, partition, or band derived from signals. |
+| **Decision** | A policy rule that chooses an eligible route and candidate set. |
+| **Plugin** | Route-specific processing such as request controls, memory, retrieval, or response handling. |
+| **Algorithm** | The method used to select or coordinate candidate models. |
+| **Provider model** | A physical inference endpoint available to one or more recipes. |
 
-- Cost-effective routing (use smaller models for simple tasks)
-- Better quality (use specialized models for their strengths)
-- Built-in security (jailbreak detection, PII filtering)
-- Flexible and extensible (projection + plugin architecture)
+This separation matters. Detection can be reused across policies, policy can
+change without rewriting model selection, and the physical pool can evolve
+without changing a public entrypoint.
 
-## How It Works
+## Request lifecycle
 
-### 1. Signal Extraction
+1. A client sends a request to an OpenAI- or Anthropic-compatible endpoint.
+2. Envoy presents the request to the Router.
+3. The requested model resolves to an entrypoint and its recipe.
+4. The Router extracts relevant signals and computes projections.
+5. Decisions enforce constraints and choose an eligible candidate set.
+6. The route's algorithm selects one model or executes a bounded multi-model
+   strategy.
+7. Route plugins run at their configured request, execution, or response hook.
+8. Envoy sends the provider-shaped request to the selected backend and returns
+   the normalized response.
 
-The router extracts 16 maintained signal families from each request:
+Explicit physical model names can still be exposed when an operator wants
+direct selection. Those requests pass through without recipe signals,
+decisions, route plugins, cache, learning, or session routing. Virtual model
+names are useful when clients should choose an objective while the Router owns
+the physical route. If no decision matches inside the selected recipe, the
+configured default provider model is used.
 
-| Signal family group | Families                                                                                                         | Example role                                         |
-| ------------------- | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| **Heuristic**       | `authz`, `context`, `keyword`, `language`, `structure`                                                           | Cheap policy, request-shape, and locale gating       |
-| **Learned**         | `complexity`, `domain`, `embedding`, `kb`, `modality`, `fact-check`, `jailbreak`, `pii`, `preference`, `reask`, `user-feedback` | Semantic, safety, follow-up, and response-quality understanding |
+## Protocol and deployment boundaries
 
-### 2. Projection Coordination
+Semantic Router can sit behind a direct Envoy listener or integrate with
+Kubernetes gateway and inference-platform deployments. The same routing model
+applies in local Docker, Kubernetes, and hybrid environments, but model
+provisioning and capacity management remain the responsibility of the chosen
+backend platform.
 
-Projections coordinate raw signal matches into reusable routing facts:
+The Router can consider request semantics and configured runtime observations;
+it does not replace a backend scheduler. A deployment may therefore use
+Semantic Router to choose a model class and another component to choose a
+healthy replica of that model.
 
-```yaml
-routing:
-  projections:
-    partitions:
-      - name: support_intents
-        semantics: exclusive
-        members: [technical_support, account_management]
-        default: technical_support
-    scores:
-      - name: request_difficulty
-        method: weighted_sum
-        inputs:
-          - type: complexity
-            name: hard
-            weight: 0.4
-    mappings:
-      - name: difficulty_band
-        source: request_difficulty
-        method: threshold_bands
-        outputs:
-          - name: balance_reasoning
-            gte: 0.6
-```
+## Next
 
-### 3. Decision Making
-
-Signals and projection outputs are combined using logical rules to make routing
-decisions:
-
-```yaml
-decisions:
-  - name: math_routing
-    rules:
-      operator: "AND"
-      conditions:
-        - type: "domain"
-          name: "mathematics"
-        - type: "projection"
-          name: "balance_reasoning"
-    modelRefs:
-      - model: qwen-math
-        weight: 1.0
-```
-
-**How it works**: If the query is classified as mathematics **and** the
-projection layer marks it as reasoning-heavy, route to the math model.
-
-### 4. Model Selection
-
-Based on the decision, the router selects the best model:
-
-- **Math queries** → Math-specialized model (e.g., Qwen-Math)
-- **Code queries** → Code-specialized model (e.g., DeepSeek-Coder)
-- **Creative queries** → Creative model (e.g., Claude)
-- **Simple queries** → Lightweight model (e.g., Llama-3-8B)
-
-### 5. Plugin Chain
-
-Before and after model execution, plugins process the request/response:
-
-```yaml
-routing:
-  decisions:
-    - name: "guarded-route"
-      plugins:
-        - type: "response_cache" # Check cache first
-        - type: "response_jailbreak" # Screen risky responses
-        - type: "system_prompt" # Add context
-        - type: "hallucination" # Verify facts
-```
-
-## Key Concepts
-
-### Mixture of Models (MoM)
-
-Unlike Mixture of Experts (MoE) which operates within a single model, Mixture of Models operates at the **system level**:
-
-| Aspect          | Mixture of Experts (MoE) | Mixture of Models (MoM)  |
-| --------------- | ------------------------ | ------------------------ |
-| **Scope**       | Within a single model    | Across multiple models   |
-| **Routing**     | Internal gating network  | External semantic router |
-| **Models**      | Shared architecture      | Independent models       |
-| **Flexibility** | Fixed at training time   | Dynamic at runtime       |
-| **Use Case**    | Model efficiency         | System intelligence      |
-
-### Signal-Driven Decisions
-
-Traditional routing uses simple rules:
-
-```yaml
-# Traditional: Simple keyword matching
-if "math" in query: route_to_math_model()
-```
-
-Signal-driven routing uses multiple signals:
-
-```yaml
-# Signal-driven: Multiple signals combined
-if (has_math_keywords AND is_math_domain) OR has_high_math_embedding: route_to_math_model()
-```
-
-**Benefits**:
-
-- More accurate routing
-- Handles edge cases better
-- Adapts to context
-- Reduces false positives
-
-## Real-World Example
-
-**User Query**: "Prove that the square root of 2 is irrational"
-
-**Signal Extraction**:
-
-- keyword: ["prove", "square root", "irrational"] ✓
-- embedding: 0.89 similarity to math queries ✓
-- domain: "mathematics" ✓
-
-**Decision**: Route to `qwen-math` (all math signals agree)
-
-**Plugins Applied**:
-
-- response_cache: Cache miss, proceed
-- response_jailbreak: Output screening remains active
-- system_prompt: Added "Provide rigorous mathematical proof"
-- hallucination: Enabled for verification
-
-**Result**: High-quality mathematical proof from specialized model
-
-## Next Steps
-
-- [What is Collective Intelligence?](collective-intelligence) - How signals create system intelligence
-- [What is Signal-Driven Decision?](signal-driven-decisions) - Deep dive into the decision engine
-- [Configuration Guide](../installation/configuration) - Set up your semantic router
+- [Use Cases](use-cases) for practical deployment patterns.
+- [Routing Pipeline](signal-driven-decisions) for the policy layers.
+- [Mixture of Models](mom-model-family) for virtual models and multi-model
+  execution.
+- [Quickstart](/docs/installation) to run the local stack.

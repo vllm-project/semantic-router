@@ -22,8 +22,8 @@ lint routing.
 `src/fleet-sim` is now a maintained subtree under `src/`, so the shared harness
 detects it during changed-file validation. The subtree still does not satisfy
 the repository-wide Ruff policy. Until that is fixed, fleet-sim changes can
-report a large pre-existing style backlog instead of the regressions introduced
-by the current branch.
+report a large pre-existing style backlog instead of regressions in the changed
+files.
 
 ## Evidence
 
@@ -34,7 +34,7 @@ by the current branch.
 
 ## Why It Matters
 
-- Branch-level validation loses signal when integration fixes are blocked by a
+- Changed-file validation loses signal when integration fixes are blocked by a
   style backlog outside the change.
 - Reviewers need to tell new regressions apart from existing fleet-sim cleanup
   work.

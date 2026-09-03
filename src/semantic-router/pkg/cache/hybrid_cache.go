@@ -232,12 +232,12 @@ func milvusCacheOptionsFromHybridOptions(options HybridCacheOptions) MilvusCache
 	return milvusOptions
 }
 
-func (h *HybridCache) generateEmbedding(text string) ([]float32, error) {
+func (h *HybridCache) generateEmbedding(ctx context.Context, text string) ([]float32, error) {
 	if h.milvusCache == nil {
 		return nil, fmt.Errorf("milvus cache is not initialized")
 	}
 
-	return h.milvusCache.getEmbedding(text)
+	return h.milvusCache.getEmbedding(ctx, text)
 }
 
 // IsEnabled returns whether the cache is active
@@ -247,7 +247,7 @@ func (h *HybridCache) IsEnabled() bool {
 
 // CheckConnection verifies the cache backend connection is healthy
 // For hybrid cache, this checks the Milvus connection
-func (h *HybridCache) CheckConnection() error {
+func (h *HybridCache) CheckConnection(ctx context.Context) error {
 	if !h.enabled {
 		return nil
 	}
@@ -257,7 +257,7 @@ func (h *HybridCache) CheckConnection() error {
 	}
 
 	// Delegate to Milvus cache connection check
-	return h.milvusCache.CheckConnection()
+	return h.milvusCache.CheckConnection(ctx)
 }
 
 // RebuildFromMilvus rebuilds the in-memory HNSW index from persistent Milvus storage
@@ -363,6 +363,7 @@ func (h *HybridCache) RebuildFromMilvus(ctx context.Context) error {
 
 // AddPendingRequest stores a request awaiting its response
 func (h *HybridCache) AddPendingRequest(requestID string, model string, query string, requestBody []byte, ttlSeconds int) error {
+	ctx := context.Background()
 	start := time.Now()
 
 	if !h.enabled {
@@ -376,7 +377,7 @@ func (h *HybridCache) AddPendingRequest(requestID string, model string, query st
 	}
 
 	// Generate embedding
-	embedding, err := h.generateEmbedding(query)
+	embedding, err := h.generateEmbedding(ctx, query)
 	if err != nil {
 		metrics.RecordCacheOperation("hybrid", "add_pending", "error", time.Since(start).Seconds())
 		return fmt.Errorf("failed to generate embedding: %w", err)
@@ -435,7 +436,7 @@ func (h *HybridCache) UpdateWithResponse(requestID string, responseBody []byte, 
 }
 
 // AddEntry stores a complete request-response pair
-func (h *HybridCache) AddEntry(requestID string, model string, query string, requestBody, responseBody []byte, ttlSeconds int) error {
+func (h *HybridCache) AddEntry(ctx context.Context, requestID string, model string, query string, requestBody, responseBody []byte, ttlSeconds int) error {
 	start := time.Now()
 
 	if !h.enabled {
@@ -449,14 +450,14 @@ func (h *HybridCache) AddEntry(requestID string, model string, query string, req
 	}
 
 	// Generate embedding
-	embedding, err := h.generateEmbedding(query)
+	embedding, err := h.generateEmbedding(ctx, query)
 	if err != nil {
 		metrics.RecordCacheOperation("hybrid", "add_entry", "error", time.Since(start).Seconds())
 		return fmt.Errorf("failed to generate embedding: %w", err)
 	}
 
 	// Store in Milvus (write-through)
-	if err := h.milvusCache.AddEntry(requestID, model, query, requestBody, responseBody, ttlSeconds); err != nil {
+	if err := h.milvusCache.AddEntry(ctx, requestID, model, query, requestBody, responseBody, ttlSeconds); err != nil {
 		metrics.RecordCacheOperation("hybrid", "add_entry", "error", time.Since(start).Seconds())
 		return fmt.Errorf("milvus add entry failed: %w", err)
 	}
@@ -506,9 +507,10 @@ func (h *HybridCache) AddEntriesBatch(entries []CacheEntry) error {
 	logging.Debugf("HybridCache.AddEntriesBatch: adding %d entries in batch", len(entries))
 
 	// Generate all embeddings first
+	ctx := context.Background()
 	embeddings := make([][]float32, len(entries))
 	for i, entry := range entries {
-		embedding, err := h.generateEmbedding(entry.Query)
+		embedding, err := h.generateEmbedding(ctx, entry.Query)
 		if err != nil {
 			metrics.RecordCacheOperation("hybrid", "add_entries_batch", "error", time.Since(start).Seconds())
 			return fmt.Errorf("failed to generate embedding for entry %d: %w", i, err)

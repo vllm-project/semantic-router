@@ -8,10 +8,6 @@ permissions:
   contents: read
   pull-requests: read
 
-concurrency:
-  group: main-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   changes:
     uses: ./.github/workflows/ci-changes.yml

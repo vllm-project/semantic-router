@@ -3,7 +3,12 @@ import type { MCPServerConfig, MCPTransportType } from '../tools/mcp'
 import useAccessibleDialog from '../hooks/useAccessibleDialog'
 import styles from './MCPConfigPanel.module.css'
 import { KeyValueEditor } from './KeyValueEditor'
-import { buildServerConfig, buildTestServerConfig } from './mcpConfigPanelUtils'
+import {
+  buildServerConfig,
+  buildTestServerConfig,
+  hiddenArgumentsBlockCommandChange,
+  MCP_REDACTED_ARGUMENTS,
+} from './mcpConfigPanelUtils'
 import { StringListEditor } from './StringListEditor'
 
 interface MCPServerDialogProps {
@@ -34,7 +39,12 @@ export const MCPServerDialog: React.FC<MCPServerDialogProps> = ({
   const [transport, setTransport] = useState<MCPTransportType>(server?.transport || 'stdio')
   const [enabled, setEnabled] = useState(server?.enabled ?? true)
   const [command, setCommand] = useState(server?.connection?.command || '')
-  const [args, setArgs] = useState<string[]>(() => [...(server?.connection?.args || [])])
+  const hasHiddenArguments =
+    server?.connection?.args?.length === 1 && server.connection.args[0] === MCP_REDACTED_ARGUMENTS
+  const [preserveArguments, setPreserveArguments] = useState(Boolean(hasHiddenArguments))
+  const [args, setArgs] = useState<string[]>(() =>
+    hasHiddenArguments ? [] : [...(server?.connection?.args || [])],
+  )
   const [url, setUrl] = useState(server?.connection?.url || '')
   const [headers, setHeaders] = useState<Record<string, string>>(() => ({
     ...(server?.connection?.headers || {}),
@@ -59,12 +69,21 @@ export const MCPServerDialog: React.FC<MCPServerDialogProps> = ({
     enabled,
     command,
     args,
+    preserveArguments,
     url,
     headers,
     timeout,
     autoReconnect,
   }
-  const isInvalid = !name.trim() || (transport === 'stdio' ? !command.trim() : !url.trim())
+  const hiddenArgumentsNeedResolution = hiddenArgumentsBlockCommandChange(
+    server,
+    command,
+    preserveArguments,
+  )
+  const isInvalid =
+    !name.trim() ||
+    (transport === 'stdio' ? !command.trim() : !url.trim()) ||
+    hiddenArgumentsNeedResolution
 
   const handleSave = async () => {
     setSaving(true)
@@ -157,6 +176,7 @@ export const MCPServerDialog: React.FC<MCPServerDialogProps> = ({
                   value="stdio"
                   checked={transport === 'stdio'}
                   onChange={() => setTransport('stdio')}
+                  disabled={Boolean(server) || !dismissible}
                 />
                 <div>
                   <span>Stdio</span>
@@ -170,6 +190,7 @@ export const MCPServerDialog: React.FC<MCPServerDialogProps> = ({
                   value="streamable-http"
                   checked={transport === 'streamable-http'}
                   onChange={() => setTransport('streamable-http')}
+                  disabled={Boolean(server) || !dismissible}
                 />
                 <div>
                   <span>Streamable HTTP</span>
@@ -177,6 +198,11 @@ export const MCPServerDialog: React.FC<MCPServerDialogProps> = ({
                 </div>
               </label>
             </div>
+            {server ? (
+              <small>
+                Transport cannot be changed after creation. Create a new server instead.
+              </small>
+            ) : null}
           </div>
 
           {transport === 'stdio' ? (
@@ -193,15 +219,38 @@ export const MCPServerDialog: React.FC<MCPServerDialogProps> = ({
               </div>
               <div className={styles.formGroup} role="group" aria-labelledby={argsLabelId}>
                 <span id={argsLabelId}>Arguments</span>
-                <StringListEditor
-                  value={args}
-                  onChange={setArgs}
-                  addLabel="Add argument"
-                  emptyLabel="No command arguments configured."
-                  itemLabel="Argument"
-                  placeholder="--flag or value"
-                  disabled={!dismissible}
-                />
+                {preserveArguments ? (
+                  <>
+                    <p>Configured arguments are hidden and will be preserved.</p>
+                    {hiddenArgumentsNeedResolution ? (
+                      <p role="alert">
+                        Replace or clear the hidden arguments before changing the command.
+                      </p>
+                    ) : null}
+                    <button
+                      type="button"
+                      className={styles.testBtn}
+                      onClick={() => setPreserveArguments(false)}
+                      disabled={!dismissible}
+                    >
+                      Replace or clear arguments
+                    </button>
+                  </>
+                ) : (
+                  <StringListEditor
+                    value={args}
+                    onChange={setArgs}
+                    addLabel="Add argument"
+                    emptyLabel={
+                      server
+                        ? 'No command arguments configured. Saving now clears stored arguments.'
+                        : 'No command arguments configured.'
+                    }
+                    itemLabel="Argument"
+                    placeholder="--flag or value"
+                    disabled={!dismissible}
+                  />
+                )}
               </div>
             </>
           ) : (

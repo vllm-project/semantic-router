@@ -1,5 +1,17 @@
 # Environments
 
+## Harness Tooling Across Worktrees
+
+Linked Git worktrees share the primary worktree's `.venv-agent` by default.
+`make agent-bootstrap` creates the environment once and adds an ignored
+`.venv-agent` symlink in each linked worktree so Make targets and pre-commit
+hooks use the same pinned tools. Set `AGENT_VENV=<path>` only when an isolated
+tool environment is required.
+
+If a linked worktree already contains a real `.venv-agent` directory, move or
+remove that generated directory before bootstrapping so the harness can create
+the shared-environment symlink without overwriting local files.
+
 ## `cpu-local`
 
 - Build with `make vllm-sr-dev`

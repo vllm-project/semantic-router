@@ -45,11 +45,11 @@ func (s *ClassificationAPIServer) handleConfigMutation(
 		s.writeErrorResponse(w, http.StatusInternalServerError, "NO_CONFIG_PATH", "Router configPath not set")
 		return
 	}
-	if !deployMu.TryLock() {
-		s.writeErrorResponse(w, http.StatusConflict, "DEPLOY_IN_PROGRESS", "Another config update operation is in progress. Please try again.")
+	guard, ok := s.acquireConfigMutationGuard(w)
+	if !ok {
 		return
 	}
-	defer deployMu.Unlock()
+	defer guard.Release()
 
 	req, patchDoc, ok := s.parseRouterConfigUpdateRequest(w, r)
 	if !ok {
@@ -282,7 +282,7 @@ func cloneYAMLValue(value any) any {
 }
 
 func (s *ClassificationAPIServer) recordRouterConfigArtifacts(sourceConfigPath string, existingData []byte, dsl string) (string, string) {
-	configDir := filepath.Dir(sourceConfigPath)
+	configDir := configPersistenceBaseDir(sourceConfigPath)
 	backupDir := filepath.Join(configDir, ".vllm-sr", "config-backups")
 	if err := os.MkdirAll(backupDir, 0o755); err != nil {
 		logging.Warnf("Failed to create backup directory: %v", err)

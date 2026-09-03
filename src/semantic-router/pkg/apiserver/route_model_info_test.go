@@ -65,7 +65,7 @@ func buildAuxiliaryModelsConfig() *config.RouterConfig {
 			PromptGuard: config.PromptGuardConfig{
 				Enabled:              true,
 				ModelID:              "models/mmbert32k-jailbreak-detector-merged",
-				UseMmBERT32K:         true,
+				Variant:              config.PromptGuardVariantMmBERT32K,
 				JailbreakMappingPath: "models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json",
 			},
 			HallucinationMitigation: config.HallucinationMitigationConfig{
@@ -126,6 +126,24 @@ func buildAuxiliaryModelsConfig() *config.RouterConfig {
 				}},
 			}},
 		},
+	}
+}
+
+func TestCategoryModelInfoReportsEffectiveVariant(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		model    config.CategoryModel
+		wantType string
+	}{
+		{name: "mmbert32k", model: config.CategoryModel{Variant: config.CategoryVariantMmBERT32K}, wantType: config.CategoryVariantMmBERT32K},
+		{name: "modernbert", model: config.CategoryModel{Variant: config.CategoryVariantModernBERT}, wantType: config.CategoryVariantModernBERT},
+		{name: "remote protocol", model: config.CategoryModel{Backend: &config.RemoteClassifierBackend{Protocol: config.RemoteClassifierProtocolHTTPClassify}}, wantType: config.RemoteClassifierProtocolHTTPClassify},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := categoryModelInfoType(test.model); got != test.wantType {
+				t.Fatalf("category model type = %q, want %q", got, test.wantType)
+			}
+		})
 	}
 }
 

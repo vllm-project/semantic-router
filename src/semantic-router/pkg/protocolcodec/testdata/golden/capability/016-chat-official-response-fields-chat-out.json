@@ -1,0 +1,663 @@
+{
+  "cases": [
+    {
+      "name": "choices",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "alternate",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 100,
+          "id": "chatcmpl_1",
+          "model": "routed-model",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 1,
+            "prompt_tokens": 2,
+            "total_tokens": 3
+          }
+        }
+      }
+    },
+    {
+      "name": "created",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "done",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 101,
+          "id": "chatcmpl_1",
+          "model": "routed-model",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 1,
+            "prompt_tokens": 2,
+            "total_tokens": 3
+          }
+        }
+      }
+    },
+    {
+      "name": "do_remote_decode",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "done",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 100,
+          "id": "chatcmpl_1",
+          "model": "routed-model",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 1,
+            "prompt_tokens": 2,
+            "total_tokens": 3
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "kv_transfer",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
+      "name": "do_remote_prefill",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "done",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 100,
+          "id": "chatcmpl_1",
+          "model": "routed-model",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 1,
+            "prompt_tokens": 2,
+            "total_tokens": 3
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "kv_transfer",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ec_transfer_params",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "done",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 100,
+          "id": "chatcmpl_1",
+          "model": "routed-model",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 1,
+            "prompt_tokens": 2,
+            "total_tokens": 3
+          }
+        }
+      }
+    },
+    {
+      "name": "error",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "upstream_unavailable",
+          "code": "invalid_error_response"
+        }
+      }
+    },
+    {
+      "name": "id",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "done",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 100,
+          "id": "chatcmpl_2",
+          "model": "routed-model",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 1,
+            "prompt_tokens": 2,
+            "total_tokens": 3
+          }
+        }
+      }
+    },
+    {
+      "name": "kv_transfer_params",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "done",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 100,
+          "id": "chatcmpl_1",
+          "model": "routed-model",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 1,
+            "prompt_tokens": 2,
+            "total_tokens": 3
+          }
+        }
+      }
+    },
+    {
+      "name": "metadata",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "done",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 100,
+          "id": "chatcmpl_1",
+          "model": "routed-model",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 1,
+            "prompt_tokens": 2,
+            "total_tokens": 3
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "metadata",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
+      "name": "metrics",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "done",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 100,
+          "id": "chatcmpl_1",
+          "model": "routed-model",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 1,
+            "prompt_tokens": 2,
+            "total_tokens": 3
+          }
+        }
+      }
+    },
+    {
+      "name": "model",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "done",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 100,
+          "id": "chatcmpl_1",
+          "model": "routed-model",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 1,
+            "prompt_tokens": 2,
+            "total_tokens": 3
+          }
+        }
+      }
+    },
+    {
+      "name": "moderation",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "done",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 100,
+          "id": "chatcmpl_1",
+          "model": "routed-model",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 1,
+            "prompt_tokens": 2,
+            "total_tokens": 3
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "moderation",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
+      "name": "object",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "done",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 100,
+          "id": "chatcmpl_1",
+          "model": "routed-model",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 1,
+            "prompt_tokens": 2,
+            "total_tokens": 3
+          }
+        }
+      }
+    },
+    {
+      "name": "prompt_logprobs",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "done",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 100,
+          "id": "chatcmpl_1",
+          "model": "routed-model",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 1,
+            "prompt_tokens": 2,
+            "total_tokens": 3
+          }
+        }
+      }
+    },
+    {
+      "name": "prompt_text",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "done",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 100,
+          "id": "chatcmpl_1",
+          "model": "routed-model",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 1,
+            "prompt_tokens": 2,
+            "total_tokens": 3
+          }
+        }
+      }
+    },
+    {
+      "name": "prompt_token_ids",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "done",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 100,
+          "id": "chatcmpl_1",
+          "model": "routed-model",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 1,
+            "prompt_tokens": 2,
+            "total_tokens": 3
+          }
+        }
+      }
+    },
+    {
+      "name": "remote_block_ids",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "done",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 100,
+          "id": "chatcmpl_1",
+          "model": "routed-model",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 1,
+            "prompt_tokens": 2,
+            "total_tokens": 3
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "kv_transfer",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
+      "name": "remote_engine_id",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "done",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 100,
+          "id": "chatcmpl_1",
+          "model": "routed-model",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 1,
+            "prompt_tokens": 2,
+            "total_tokens": 3
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "kv_transfer",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
+      "name": "remote_host",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "done",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 100,
+          "id": "chatcmpl_1",
+          "model": "routed-model",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 1,
+            "prompt_tokens": 2,
+            "total_tokens": 3
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "kv_transfer",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
+      "name": "remote_port",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "done",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 100,
+          "id": "chatcmpl_1",
+          "model": "routed-model",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 1,
+            "prompt_tokens": 2,
+            "total_tokens": 3
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "kv_transfer",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
+      "name": "service_tier",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "done",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 100,
+          "id": "chatcmpl_1",
+          "model": "routed-model",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 1,
+            "prompt_tokens": 2,
+            "total_tokens": 3
+          }
+        }
+      }
+    },
+    {
+      "name": "system_fingerprint",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "done",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 100,
+          "id": "chatcmpl_1",
+          "model": "routed-model",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 1,
+            "prompt_tokens": 2,
+            "total_tokens": 3
+          }
+        }
+      }
+    },
+    {
+      "name": "usage",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "done",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 100,
+          "id": "chatcmpl_1",
+          "model": "routed-model",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 5,
+            "completion_tokens_details": {
+              "reasoning_tokens": 3
+            },
+            "prompt_tokens": 8,
+            "prompt_tokens_details": {
+              "cache_write_tokens": 1,
+              "cached_tokens": 2
+            },
+            "total_tokens": 13
+          }
+        }
+      }
+    }
+  ]
+}

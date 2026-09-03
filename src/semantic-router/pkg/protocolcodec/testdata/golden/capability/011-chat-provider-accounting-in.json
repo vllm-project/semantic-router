@@ -1,0 +1,22 @@
+{
+  "operation": "response",
+  "body": {
+    "id": "chatcmpl_usage_1",
+    "object": "chat.completion",
+    "created": 100,
+    "model": "provider-model",
+    "choices": [
+      {"index": 0, "message": {"role": "assistant", "content": "done"}, "finish_reason": "stop"}
+    ],
+    "metadata": {"trace": "provider-only"},
+    "moderation": {"status": "passed"},
+    "usage": {
+      "prompt_tokens": 10,
+      "prompt_tokens_details": {"cached_tokens": 3, "cache_write_tokens": 2, "audio_tokens": 1, "image_tokens": 2, "text_tokens": 7},
+      "completion_tokens": 7,
+      "completion_tokens_details": {"reasoning_tokens": 4, "audio_tokens": 1, "accepted_prediction_tokens": 1, "rejected_prediction_tokens": 1, "text_tokens": 2},
+      "total_tokens": 17,
+      "compute_units": 4
+    }
+  }
+}

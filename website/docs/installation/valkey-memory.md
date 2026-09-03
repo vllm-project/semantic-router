@@ -17,15 +17,18 @@ Valkey is optional. The default memory backend is Milvus. Use Valkey when you wa
 | Deployment complexity | Single binary with Search module | Requires etcd, MinIO/S3, optional Pulsar |
 | Horizontal scaling | Cluster mode (manual sharding) | Native distributed architecture |
 | Memory model | In-memory with optional persistence | Disk-based with memory-mapped indexes |
-| Best for | Small-to-medium workloads, dev/test, existing Redis/Valkey infra | Large-scale production, billions of vectors |
+| Best for | Small-to-medium workloads, dev/test, existing Redis/Valkey infra | Larger or distributed vector workloads |
 | Vector index | HNSW via FT.CREATE | HNSW, IVF_FLAT, IVF_SQ8, and more |
 
 ## Prerequisites
 
-- Valkey 8.0+ **with the Search module** enabled
-- Text support for vector search was added in **Search module version 1.2.0**
-- The `valkey/valkey-bundle` Docker image includes Search out of the box. Search module 1.2.0 is available in the `unstable` and `9.1.0-rc1` valkey-bundle versions
-- If your Valkey deployment does not include the Search module, you can [add it manually](https://github.com/valkey-io/valkey-search/blob/main/README.md)
+- A Valkey release with the Search module enabled. The
+  `valkey/valkey-bundle` image includes the module.
+- A Valkey and Search-module version pair supported by the release you deploy.
+  Pin that release in production rather than following `latest` or an RC tag.
+- If your Valkey distribution does not bundle Search, follow the upstream
+  [Valkey Search quick start](https://github.com/valkey-io/valkey-search/blob/main/QUICK_START.md)
+  and review its release notes before loading the module.
 - For Kubernetes: Helm 3.x and `kubectl` configured
 
 :::info Trouble with the Search module?
@@ -37,8 +40,11 @@ If you run into issues loading or using the Search module, please [open an issue
 ### Quick Start
 
 ```bash
+docker network inspect vllm-sr-network >/dev/null 2>&1 || \
+  docker network create vllm-sr-network
+
 docker run -d --name valkey-memory \
-  -p 6379:6379 \
+  --network vllm-sr-network \
   valkey/valkey-bundle:latest
 ```
 
@@ -52,11 +58,16 @@ docker exec valkey-memory valkey-cli MODULE LIST | grep search
 
 ```bash
 docker run -d --name valkey-memory \
-  -p 6379:6379 \
+  --network vllm-sr-network \
   -v valkey-data:/data \
   valkey/valkey-bundle:latest \
   valkey-server --appendonly yes
 ```
+
+The hostname `valkey-memory` in the configuration below is Docker DNS on
+`vllm-sr-network`. If you start the Router with a custom stack name, for example
+`VLLM_SR_STACK_NAME=team-a vllm-sr serve`, attach Valkey to
+`team-a-vllm-sr-network` and use the matching reachable hostname.
 
 ## Deploy in Kubernetes
 
@@ -85,8 +96,6 @@ spec:
           ports:
             - containerPort: 6379
           args: ["valkey-server", "--appendonly", "yes"]
-          # For production, add --requirepass or mount a Secret:
-          # args: ["valkey-server", "--appendonly", "yes", "--requirepass", "$(VALKEY_PASSWORD)"]
           volumeMounts:
             - name: data
               mountPath: /data
@@ -119,6 +128,12 @@ spec:
       targetPort: 6379
   clusterIP: None
 ```
+
+This manifest is an unauthenticated development example. For production, use
+your Valkey operator or chart's Secret integration and network policy rather
+than placing a password in the Pod command line. Set the same credential in the
+Router's `global.stores.memory.valkey.password` through your secret-management
+workflow.
 
 ## Configure the Router
 
@@ -161,10 +176,31 @@ global:
 | `timeout` | `10` | Connection timeout in seconds |
 | `collection_prefix` | `mem:` | Key prefix for HASH documents |
 | `index_name` | `mem_idx` | FT.CREATE index name |
-| `dimension` | `384` | Embedding vector dimension |
+| `dimension` | derived | Embedding vector dimension; when omitted, `mmbert` uses 256 and current other memory embedding models use 384 |
 | `metric_type` | `COSINE` | Distance metric: `COSINE`, `L2`, or `IP` |
 | `index_m` | `16` | HNSW M parameter (links per node) |
 | `index_ef_construction` | `256` | HNSW build-time search width |
+| `tls_enabled` | `false` | Connect to Valkey with TLS |
+| `tls_ca_path` | _(empty)_ | PEM-encoded CA file mounted in the Router; an empty value uses the system trust store |
+| `tls_insecure_skip_verify` | `false` | Skip certificate verification; keep `false` outside isolated development |
+
+For a production TLS endpoint, mount the CA certificate into the Router and
+keep the password in an environment-backed secret:
+
+```yaml
+global:
+  stores:
+    memory:
+      enabled: true
+      backend: valkey
+      valkey:
+        host: valkey.example.internal
+        port: 6380
+        password: ${VALKEY_PASSWORD}
+        tls_enabled: true
+        tls_ca_path: /etc/valkey/certs/ca.pem
+        tls_insecure_skip_verify: false
+```
 
 ### Optional Redis Hot Cache
 
@@ -202,22 +238,28 @@ See the [Memory plugin tutorial](/docs/tutorials/plugin/memory) for details.
 
 ### HNSW Index Parameters
 
-- **`index_m`** (default 16): Higher values improve recall at the cost of memory. Use 32-64 for production workloads requiring high accuracy.
-- **`index_ef_construction`** (default 256): Higher values improve index quality at the cost of slower builds. Use 512+ for production.
+- **`index_m`** (default 16): Higher values can improve recall at the cost of
+  more memory and index work.
+- **`index_ef_construction`** (default 256): Higher values can improve index
+  quality at the cost of slower construction.
+
+Tune both parameters with representative data and measure recall, latency,
+build time, and memory together. There is no production-safe value that applies
+to every corpus or capacity target.
 
 ### Memory Sizing
 
-Each memory entry uses approximately:
+The raw float32 embedding alone uses `dimension * 4` bytes per entry. Actual
+memory is higher and depends on:
 
-- HASH fields: ~500-2000 bytes (content, metadata, timestamps)
-- Embedding vector: `dimension * 4` bytes (e.g., 384 * 4 = 1.5 KB for BERT)
-- HNSW index overhead: ~`dimension * index_m * 4` bytes per entry
+- serialized content, metadata, and timestamps;
+- the Search module and Valkey versions;
+- HNSW graph structure and index parameters; and
+- allocator fragmentation and Valkey base overhead.
 
-For 100K memories with 384-dimensional embeddings and M=16:
-
-- Data: ~300 MB
-- Index: ~240 MB
-- **Total: ~540 MB** plus Valkey base overhead
+Do not size production capacity from a fixed per-entry multiplier. Load a
+representative dataset, inspect `INFO memory` and `FT.INFO <index>`, and reserve
+headroom for index construction, replication, and traffic growth.
 
 ### Persistence
 
@@ -266,15 +308,21 @@ The router checks for existing indexes on startup and skips creation if one exis
 valkey-cli FT.DROPINDEX mem_idx
 ```
 
-The router will recreate it on the next request.
+Restart the Router (or otherwise reinitialize the memory store) after dropping
+the index. Index creation runs when the Valkey store starts, not on the next
+request. Test the rebuild against a copy of production data before using this
+procedure on a live store.
 
 ### Out of Memory
 
 Valkey stores all data in memory. If you hit the memory limit:
 
-1. Set `maxmemory` and `maxmemory-policy` in Valkey config
-2. Use `quality_scoring.max_memories_per_user` to cap per-user storage
-3. Enable memory consolidation to merge similar memories
+1. Inspect `INFO memory` and `FT.INFO <index>` to distinguish document, index,
+   and allocator growth.
+2. Remove expired or unwanted memories through the application workflow, or
+   shorten the retention policy that creates them.
+3. Add capacity or shard the dataset before changing `maxmemory-policy`;
+   eviction can remove memories that the application expects to retain.
 
 ## Migration from Milvus
 

@@ -12,13 +12,21 @@ import subprocess
 import time
 import unittest
 from contextlib import contextmanager
+from pathlib import Path
+from unittest import mock
 from urllib import error as urllib_error
 from urllib import request as urllib_request
 
 from cli_test_base import CLITestBase
+from serve_session import ServeSessionMixin
+
+DEFAULT_MOCK_OPENAI_IMAGE = "ghcr.io/vllm-project/semantic-router/vllm-sr:latest"
+MOCK_OPENAI_IMAGE_ENV = "VLLM_SR_TEST_UPSTREAM_IMAGE"
+MOCK_OPENAI_SERVER_PORT = 18080
+MOCK_OPENAI_SERVER_PATH = Path(__file__).with_name("mock_openai_upstream.py").resolve()
 
 
-class TestServeIntegration(CLITestBase):
+class TestServeIntegration(ServeSessionMixin, CLITestBase):
     """Integration tests for the complete serve workflow."""
 
     # Timeout for waiting for container to be running
@@ -27,78 +35,192 @@ class TestServeIntegration(CLITestBase):
     def _create_minimal_config(self, port: int = 8888) -> str:
         return self.write_minimal_canonical_config(port=port)
 
-    def _start_serve_background(
-        self, env: dict[str, str] | None = None
-    ) -> subprocess.Popen:
-        """Start vllm-sr serve in background (non-blocking)."""
-        cmd = ["vllm-sr", "serve", "--image-pull-policy", "ifnotpresent"]
-        print(f"\nStarting in background: {' '.join(cmd)}")
+    def test_wait_for_serve_success_does_not_terminate_a_successful_process(self):
+        process = mock.Mock(spec=subprocess.Popen)
+        process.communicate.return_value = ("ready", "")
+        process.returncode = 0
 
-        process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            cwd=self.test_dir,
-            env=env,
-        )
-        return process
+        self._wait_for_serve_success(process)
 
-    def _stop_serve_process(self, serve_process: subprocess.Popen | None):
-        """Terminate a background serve process if it is still running."""
-        if serve_process and serve_process.poll() is None:
-            serve_process.terminate()
-            try:
-                serve_process.wait(timeout=10)
-            except subprocess.TimeoutExpired:
-                serve_process.kill()
+        process.communicate.assert_called_once_with(timeout=self.HEALTH_CHECK_TIMEOUT)
+        process.terminate.assert_not_called()
+        process.kill.assert_not_called()
 
-    def _wait_for_running_container(self, serve_process: subprocess.Popen):
-        """Ensure serve stayed alive long enough to launch the container."""
-        time.sleep(5)
+    def test_wait_for_serve_success_rejects_a_failed_process(self):
+        process = mock.Mock(spec=subprocess.Popen)
+        process.communicate.return_value = ("", "startup failed")
+        process.returncode = 1
 
-        if serve_process.poll() is not None:
-            stdout, stderr = serve_process.communicate()
-            if self.wait_for_container_running(timeout=self.CONTAINER_STARTUP_TIMEOUT):
-                print("  ✓ Serve command completed after launching the runtime")
-                return
-            self.fail(
-                "Serve exited before the runtime was ready: "
-                f"{stderr[:500] or stdout[:500]}"
-            )
+        with self.assertRaisesRegex(AssertionError, "startup failed"):
+            self._wait_for_serve_success(process)
 
-        print(
-            f"  Waiting for container (timeout: {self.CONTAINER_STARTUP_TIMEOUT}s)..."
-        )
-        if not self.wait_for_container_running(timeout=self.CONTAINER_STARTUP_TIMEOUT):
-            self._stop_serve_process(serve_process)
-            stdout, stderr = serve_process.communicate(timeout=10)
-            self.fail(f"Container did not start: {stderr[:500] or stdout[:500]}")
+        process.terminate.assert_not_called()
+        process.kill.assert_not_called()
 
-        print("  ✓ Container is running")
+    def test_wait_for_serve_success_terminates_and_drains_a_timeout(self):
+        process = mock.Mock(spec=subprocess.Popen)
+        process.communicate.side_effect = [
+            subprocess.TimeoutExpired("vllm-sr serve", self.HEALTH_CHECK_TIMEOUT),
+            ("", "stopped after timeout"),
+        ]
+
+        with self.assertRaisesRegex(AssertionError, "before the timeout"):
+            self._wait_for_serve_success(process)
+
+        process.terminate.assert_called_once_with()
+        process.kill.assert_not_called()
+        self.assertEqual(process.communicate.call_count, 2)
 
     @contextmanager
-    def _running_serve(
+    def _running_mock_upstream(
+        self, container_name: str, *, expected_authorization: str | None = None
+    ):
+        """Run the mock OpenAI upstream on the active stack network."""
+        image = os.getenv(MOCK_OPENAI_IMAGE_ENV, DEFAULT_MOCK_OPENAI_IMAGE)
+        expected_authorization_env = (
+            ["-e", f"MOCK_EXPECT_AUTHORIZATION={expected_authorization}"]
+            if expected_authorization is not None
+            else []
+        )
+        result = self._run_subprocess(
+            [
+                self.container_runtime,
+                "run",
+                "-d",
+                "--name",
+                container_name,
+                "--network",
+                self.runtime_stack.network_name,
+                "-v",
+                f"{MOCK_OPENAI_SERVER_PATH}:/mock_openai_upstream.py:ro",
+                *expected_authorization_env,
+                "--entrypoint",
+                "python3",
+                image,
+                "-u",
+                "/mock_openai_upstream.py",
+            ],
+            timeout=30,
+        )
+        self.assertEqual(
+            result.returncode,
+            0,
+            f"failed to start mock upstream: {result.stderr}",
+        )
+        self.assertTrue(
+            self.wait_for_container_running(
+                timeout=30,
+                container_name=container_name,
+            ),
+            "mock upstream did not reach running state",
+        )
+        try:
+            yield
+        finally:
+            self._run_subprocess(
+                [self.container_runtime, "rm", "-f", container_name],
+                timeout=30,
+            )
+
+    def _container_log_diagnostics(self, container_names: tuple[str, ...]) -> str:
+        """Collect bounded logs for a failed mock request."""
+        diagnostics = []
+        for container_name in container_names:
+            logs = self._run_subprocess(
+                [
+                    self.container_runtime,
+                    "logs",
+                    "--tail",
+                    "80",
+                    container_name,
+                ],
+                timeout=10,
+            )
+            diagnostics.append(
+                f"{container_name}:\n{(logs.stdout + logs.stderr)[-4000:]}"
+            )
+        return "\n".join(diagnostics)
+
+    def _send_mock_chat_completion(
+        self, mock_container: str, *, redact_values: tuple[str, ...] = ()
+    ):
+        """Send a chat request, retrying until the local stack is ready."""
+        listener_port = 8888 + self.runtime_stack.port_offset
+        request = urllib_request.Request(
+            f"http://localhost:{listener_port}/v1/chat/completions",
+            data=(
+                b'{"model":"test-model","messages":[{"role":"user","content":"ping"}]}'
+            ),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        deadline = time.time() + 60
+        last_error: Exception | None = None
+        while time.time() < deadline:
+            try:
+                with urllib_request.urlopen(request, timeout=10) as response:
+                    self.assertEqual(response.status, 200)
+                    response.read()
+                return
+            except urllib_error.HTTPError as exc:
+                body = exc.read().decode("utf-8", errors="replace")
+                last_error = RuntimeError(f"HTTP {exc.code}: {body}")
+                time.sleep(2)
+            except (
+                urllib_error.URLError,
+                ConnectionError,
+                TimeoutError,
+            ) as exc:
+                last_error = exc
+                time.sleep(2)
+
+        diagnostics = self._container_log_diagnostics(
+            (
+                mock_container,
+                self.ROUTER_CONTAINER_NAME,
+                self.ENVOY_CONTAINER_NAME,
+            )
+        )
+        for value in redact_values:
+            diagnostics = diagnostics.replace(value, "[redacted]")
+        self.fail(f"request did not reach mock upstream: {last_error}\n{diagnostics}")
+
+    def _mock_upstream_paths(self, mock_container: str) -> set[str]:
+        """Read request paths recorded by the mock upstream."""
+        logs = self._run_subprocess(
+            [self.container_runtime, "logs", mock_container],
+            timeout=10,
+        )
+        self.assertEqual(logs.returncode, 0, logs.stderr)
+        return {
+            line.strip() for line in logs.stdout.splitlines() if line.startswith("/")
+        }
+
+    def _request_paths_for_mock_openai_base_path(
         self,
         *,
-        env: dict[str, str] | None = None,
-        ensure_models_dir: bool = False,
-    ):
-        """Start one background serve session and clean it up automatically."""
-        self.write_minimal_canonical_config()
-        if ensure_models_dir:
-            os.makedirs(os.path.join(self.test_dir, "models"), exist_ok=True)
+        container_suffix: str,
+        base_path: str,
+    ) -> set[str]:
+        """Route one chat request to a path-recording OpenAI mock upstream."""
+        mock_container = f"{self.runtime_stack.stack_name}-{container_suffix}"
+        base_url = f"http://{mock_container}:{MOCK_OPENAI_SERVER_PORT}{base_path}"
 
-        full_env = os.environ.copy()
-        if env:
-            full_env.update(env)
-
-        serve_process = self._start_serve_background(env=full_env)
-        try:
-            self._wait_for_running_container(serve_process)
-            yield serve_process
-        finally:
-            self._stop_serve_process(serve_process)
+        with self._running_serve(
+            base_url=base_url,
+            provider="openai",
+            api_only=True,
+        ):
+            self.assertTrue(
+                self.wait_for_health(
+                    port=self.runtime_stack.api_port,
+                    timeout=self.CONTAINER_STARTUP_TIMEOUT,
+                ),
+                "router API did not become healthy",
+            )
+            with self._running_mock_upstream(mock_container):
+                self._send_mock_chat_completion(mock_container)
+                return self._mock_upstream_paths(mock_container)
 
     @unittest.skipUnless(
         os.environ.get("RUN_INTEGRATION_TESTS", "").lower() == "true",
@@ -118,6 +240,58 @@ class TestServeIntegration(CLITestBase):
             self._assert_logs_command()
 
         self.print_test_result(True, "Running container contracts verified")
+
+    @unittest.skipUnless(
+        os.environ.get("RUN_INTEGRATION_TESTS", "").lower() == "true",
+        "Integration tests disabled. Set RUN_INTEGRATION_TESTS=true to enable.",
+    )
+    def test_base_url_path_rewrite_is_idempotent(self):
+        """Verify route cache recomputation does not apply a base path twice."""
+        self.print_test_header(
+            "Idempotent Base URL Rewrite Integration Test",
+            "Routes /v1/chat/completions once to a /v1beta/openai mock upstream",
+        )
+
+        upstream_paths = self._request_paths_for_mock_openai_base_path(
+            container_suffix="path-rewrite-upstream",
+            base_path="/v1beta/openai",
+        )
+        self.assertIn(
+            "/v1beta/openai/chat/completions",
+            upstream_paths,
+        )
+        self.assertNotIn(
+            "/v1beta/openaibeta/openai/chat/completions",
+            upstream_paths,
+        )
+
+        self.print_test_result(True, "Base URL path was applied exactly once")
+
+    @unittest.skip(
+        "TODO(issue-2885): fix root-cause rewrite idempotency for backend base "
+        "paths that still begin with the /v1 segment after rewriting."
+    )
+    @unittest.skipUnless(
+        os.environ.get("RUN_INTEGRATION_TESTS", "").lower() == "true",
+        "Integration tests disabled. Set RUN_INTEGRATION_TESTS=true to enable.",
+    )
+    def test_base_url_path_rewrite_idempotency_todo_for_v1_segment_prefix(self):
+        """Document the known gap for /v1/chat -> /v1/provider/chat rewrites."""
+        self.print_test_header(
+            "Future Base URL Rewrite Integration Test",
+            "Routes /v1/chat/completions once to a /v1/provider mock upstream",
+        )
+
+        upstream_paths = self._request_paths_for_mock_openai_base_path(
+            container_suffix="provider-rewrite-upstream",
+            base_path="/v1/provider",
+        )
+        self.assertEqual(
+            {"/v1/provider/chat/completions"},
+            upstream_paths,
+        )
+
+        self.print_test_result(True, "Future /v1 segment base URL was applied once")
 
     def _check_health_endpoint(self):
         """Check health endpoint (informational, doesn't fail test)."""
@@ -175,7 +349,7 @@ class TestServeIntegration(CLITestBase):
         """Verify the logs command returns container output for one service."""
         time.sleep(5)
         service_failures: list[str] = []
-        for service in ("router", "envoy", "dashboard", "simulator"):
+        for service in ("router", "envoy", "dashboard"):
             return_code, stdout, stderr = self.run_cli(["logs", service])
             output = stdout + stderr
             if return_code == 0 and output.strip():
@@ -222,48 +396,59 @@ class TestServeIntegration(CLITestBase):
         os.environ.get("RUN_INTEGRATION_TESTS", "").lower() == "true",
         "Integration tests disabled. Set RUN_INTEGRATION_TESTS=true to enable.",
     )
-    def test_fleet_sim_sidecar_contracts(self):
-        """Test that serve starts the simulator sidecar and exposes its health."""
-        self.print_test_header(
-            "Fleet Sim Sidecar Integration Test",
-            "Verifies serve starts vllm-sr-sim, wires TARGET_FLEET_SIM_URL, and exposes /healthz",
-        )
+    def test_envoy_log_level_is_safe_and_provider_key_is_not_logged(self):
+        """Use a synthetic provider key to exercise the safe Envoy default."""
+        canary = "synthetic-provider-key-canary"
+        with self._running_serve(
+            env={"PROVIDER_KEY_CANARY": canary},
+            base_url=(
+                f"http://{self.runtime_stack.stack_name}-envoy-log-upstream:"
+                f"{MOCK_OPENAI_SERVER_PORT}"
+            ),
+            provider="openai",
+            api_key_env="PROVIDER_KEY_CANARY",
+            api_only=True,
+        ):
+            return_code, command, stderr = self.inspect_container(
+                "{{json .Config.Cmd}}",
+                container_name=self.ENVOY_CONTAINER_NAME,
+            )
+            self.assertEqual(return_code, 0, stderr)
+            self.assertIn("--log-level", command)
+            self.assertIn('"info"', command)
 
-        with self._running_serve():
-            if not self.wait_for_container_running(
-                timeout=60, container_name=self.SIM_CONTAINER_NAME
+            mock_container = f"{self.runtime_stack.stack_name}-envoy-log-upstream"
+            with self._running_mock_upstream(
+                mock_container, expected_authorization=canary
             ):
-                self.fail("Fleet simulator sidecar did not reach running state")
+                self._send_mock_chat_completion(mock_container, redact_values=(canary,))
+                upstream_logs = self._run_subprocess(
+                    [self.container_runtime, "logs", mock_container],
+                    timeout=10,
+                )
+                self.assertEqual(upstream_logs.returncode, 0, upstream_logs.stderr)
+                self.assertIn(
+                    "authorization-canary-received",
+                    upstream_logs.stdout + upstream_logs.stderr,
+                )
 
-            return_code, stdout, stderr = self.inspect_container(
-                "{{.Config.Env}}",
-                container_name=self.resolve_runtime_inspect_container_name(),
+            logs = self._run_subprocess(
+                [self.container_runtime, "logs", self.ENVOY_CONTAINER_NAME],
+                timeout=10,
             )
-            if return_code != 0:
-                self.fail(f"router container inspect failed: {stderr}")
-            self.assertIn(
-                (
-                    "TARGET_FLEET_SIM_URL=http://"
-                    f"{self.runtime_stack.fleet_sim_container_name}:8000"
-                ),
-                stdout,
+            self.assertEqual(logs.returncode, 0, logs.stderr)
+            combined_logs = logs.stdout + logs.stderr
+            canary_absent = canary not in combined_logs
+            redacted_logs = combined_logs.replace(canary, "<redacted-canary>")
+            self.assertTrue(canary_absent, msg=redacted_logs)
+
+        with self._running_serve(env={"VLLM_SR_ENVOY_LOG_LEVEL": "DeBuG"}):
+            return_code, command, stderr = self.inspect_container(
+                "{{json .Config.Cmd}}",
+                container_name=self.ENVOY_CONTAINER_NAME,
             )
-
-            with urllib_request.urlopen(
-                f"{self.runtime_stack.fleet_sim_url}/healthz", timeout=10
-            ) as response:
-                body = response.read().decode("utf-8")
-                self.assertEqual(response.status, 200)
-                self.assertIn('"service":"vllm-sr-sim"', body.replace(" ", ""))
-
-            print("  ✓ Simulator sidecar is running")
-            print("  ✓ Router container received TARGET_FLEET_SIM_URL")
-            print(
-                "  ✓ Simulator health endpoint responded on "
-                f"localhost:{self.runtime_stack.fleet_sim_port}"
-            )
-
-        self.print_test_result(True, "Fleet simulator sidecar contracts verified")
+            self.assertEqual(return_code, 0, stderr)
+            self.assertIn('"debug"', command)
 
     @unittest.skipUnless(
         os.environ.get("RUN_INTEGRATION_TESTS", "").lower() == "true",
@@ -279,14 +464,31 @@ class TestServeIntegration(CLITestBase):
         with self._running_serve():
             print("  ✓ Container is running")
 
-            return_code, _stdout, _stderr = self.run_cli(["stop"])
+            for container_name in self._runtime_container_names():
+                if not self.wait_for_container_running(
+                    timeout=self.CONTAINER_STARTUP_TIMEOUT,
+                    container_name=container_name,
+                ):
+                    self.fail(f"Runtime container did not start: {container_name}")
+
+            return_code, stdout, stderr = self.run_cli(["stop"])
             print(f"  Stop command returned: {return_code}")
+            self.assertEqual(return_code, 0, stderr or stdout)
 
-            time.sleep(3)  # Give it time to stop
-
-            status = self.container_status()
-            if status == "running":
-                self.fail(f"Container still running after stop. Status: {status}")
+            managed_names = (
+                *self._runtime_container_names(),
+                *self.AUXILIARY_CONTAINER_NAMES,
+            )
+            remaining = {
+                name
+                for name in managed_names
+                if self.container_status(container_name=name) != "not found"
+            }
+            if remaining:
+                self.fail(
+                    "Managed containers remain after stop: "
+                    + ", ".join(sorted(remaining))
+                )
             print("  ✓ Container is stopped")
 
         self.print_test_result(True, "Stop command terminates container")

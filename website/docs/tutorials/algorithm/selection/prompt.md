@@ -32,6 +32,8 @@ privacy, and other deterministic gates in signals and decisions.
 routing:
   decisions:
     - name: adaptive-model-choice
+      description: Let a helper model choose the best eligible candidate.
+      priority: 100
       rules:
         operator: AND
         conditions: []
@@ -64,3 +66,10 @@ address the router's OpenAI-compatible chat endpoint.
 Model-generated rationale text is not logged or persisted verbatim. Replay
 stores bounded result/fallback reason codes, and metrics expose selector
 duration plus fallback counts without request content.
+
+The helper model receives the current user turn and candidate descriptions, so
+its provider must be allowed by the route's data policy. Its choice is bounded
+to declared candidates but remains model-generated; deterministic privacy,
+authorization, and safety gates belong in signals and decisions. See a
+complete example:
+[`config/fragments/algorithm/selection/prompt.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/prompt.yaml).

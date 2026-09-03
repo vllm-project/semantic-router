@@ -10,14 +10,14 @@ const lightCodeTheme = themes.github
 const darkCodeTheme = themes.vsDark
 const siteUrl = 'https://vllm-sr.ai'
 const siteDefaultDescription
-  = 'We believe Mixture-of-Models is the next-generation model architecture for heterogeneous LLM inference. vLLM Semantic Router makes it executable.'
+  = 'Mixture-of-Models is a serving-system architecture for heterogeneous LLM inference. vLLM Semantic Router makes it executable.'
 const siteSocialTitle
   = 'Mixture-of-Models for Heterogeneous LLM Inference | vLLM Semantic Router'
 const siteSocialPreviewImageUrl = `${siteUrl}/${SITE_SOCIAL_PREVIEW_IMAGE}`
 
 const config: Config = {
   title: 'vLLM Semantic Router',
-  tagline: 'Building Mixture-of-Models: The Next-Generation Model Architecture for Heterogeneous LLM Inference',
+  tagline: 'Building a Mixture-of-Models Serving Architecture for Heterogeneous LLM Inference',
   favicon: 'img/vllm.png',
 
   // Set the production url of your site here
@@ -169,6 +169,10 @@ const config: Config = {
             to: '/docs/installation/',
           },
           {
+            from: '/docs/installation/models-and-recipes',
+            to: '/docs/tutorials/global/models-entrypoints-serving',
+          },
+          {
             from: '/docs/cli/troubleshooting',
             to: '/docs/troubleshooting/common-errors',
           },
@@ -183,6 +187,18 @@ const config: Config = {
           {
             from: '/docs/tutorials/plugin/semantic-cache',
             to: '/docs/tutorials/plugin/response-cache',
+          },
+          {
+            from: '/docs/tutorials/signal/learned/embedding-design-principles',
+            to: '/docs/tutorials/signal/learned/embedding',
+          },
+          {
+            from: '/docs/overview/collective-intelligence',
+            to: '/docs/overview/mom-model-family',
+          },
+          {
+            from: '/blog/multi-objective-mom-on-amd-developer-cloud',
+            to: '/docs/overview/mom-model-family',
           },
         ],
       },
@@ -225,9 +241,12 @@ const config: Config = {
       { name: 'ICBM', content: '37.7749, -122.4194' },
     ],
     navbar: {
+      // No `style` — the navbar follows the reader's color mode. The homepage
+      // opts back into dark chrome in shell.css, where its palette is pinned.
       logo: {
         alt: 'vLLM Semantic Router Logo',
-        src: 'img/vllm-sr-logo.white.png',
+        // Logo follows color mode; homepage keeps dark chrome via theme/Navbar/Logo swizzle.
+        src: 'img/vllm-sr-logo.light.png',
         srcDark: 'img/vllm-sr-logo.white.png',
       },
       items: [
@@ -266,11 +285,31 @@ const config: Config = {
           className: 'nav-primary',
           position: 'left',
         },
+        // Secondary destinations live in one overflow menu so the bar fits on a
+        // 1024px laptop instead of collapsing to a hamburger at 1340px.
         {
-          label: 'GitHub',
-          href: 'https://github.com/vllm-project/semantic-router',
+          type: 'dropdown',
+          label: 'More',
           className: 'nav-utility',
           position: 'right',
+          items: [
+            {
+              label: 'GitHub',
+              href: 'https://github.com/vllm-project/semantic-router',
+            },
+            {
+              label: 'Hugging Face',
+              href: 'https://huggingface.co/LLM-Semantic-Router',
+            },
+            {
+              label: 'Discussions',
+              href: 'https://github.com/vllm-project/semantic-router/discussions',
+            },
+            {
+              label: 'Leaderboard',
+              to: '/community/contributors',
+            },
+          ],
         },
         {
           label: 'Dashboard',
@@ -287,11 +326,11 @@ const config: Config = {
           title: 'Documentation',
           items: [
             {
-              label: 'Quick Start',
+              label: 'Introduction',
               to: '/docs/intro',
             },
             {
-              label: 'Installation',
+              label: 'Quick Start',
               to: '/docs/installation',
             },
             {
@@ -360,12 +399,39 @@ const config: Config = {
       additionalLanguages: ['bash', 'json', 'yaml', 'go', 'rust', 'python'],
     },
     colorMode: {
+      // Only applies when the OS states no preference.
       defaultMode: 'light',
-      disableSwitch: true,
-      respectPrefersColorScheme: false,
+      disableSwitch: false,
+      // Sets the default from the OS. Upstream also uses this flag to make the
+      // navbar button a three-way cycle; the swizzle in
+      // `src/theme/Navbar/ColorModeToggle` keeps it at two states.
+      respectPrefersColorScheme: true,
+    },
+    mermaid: {
+      theme: {
+        light: 'neutral',
+        dark: 'dark',
+      },
     },
   } satisfies Preset.ThemeConfig,
   headTags: [
+    // Inter + JetBrains Mono. Preconnect first so the font CSS and the font
+    // files resolve in parallel rather than in a serial @import waterfall.
+    {
+      tagName: 'link',
+      attributes: { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
+    },
+    {
+      tagName: 'link',
+      attributes: { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: 'anonymous' },
+    },
+    {
+      tagName: 'link',
+      attributes: {
+        rel: 'stylesheet',
+        href: 'https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..700&family=JetBrains+Mono:wght@400;500;600&display=swap',
+      },
+    },
     {
       tagName: 'script',
       attributes: { type: 'application/ld+json' },

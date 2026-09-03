@@ -1,207 +1,117 @@
-# Install with vLLM Production Stack
-
-This tutorial is adapted from [vLLM production stack tutorials](https://github.com/vllm-project/production-stack/blob/main/tutorials/24-semantic-router-integration.md)
-
-## What is vLLM Semantic Router?
-
-The vLLM Semantic Router is an intelligent Mixture-of-Models (MoM) router that operates as an Envoy External Processor to semantically route OpenAI API–compatible requests to the most suitable backend model. Using BERT-based classification, it improves both quality and cost efficiency by matching requests (e.g., math, code, creative, general) to specialized models.
-
-- **Auto-selection of models**: Routes math, creative writing, code, and general queries to the best-fit models.
-- **Security & privacy**: PII detection, prompt guard, and safe routing for sensitive prompts.
-- **Performance optimizations**: Semantic cache and better tool selection to cut latency and tokens.
-- **Architecture**: Tight Envoy ExtProc integration; dual Go and Python implementations; production-ready and scalable.
-- **Monitoring**: Grafana dashboards, Prometheus metrics, and tracing for full visibility.
-
-Learn more: [vLLM Semantic Router](https://vllm-sr.ai/docs/intro)
-
-## What are the benefits of integration?
-
-The vLLM Production Stack provides several deployment ways that spin up vLLM servers which can direct traffic to different models, perform service discovery and fault tolerance through the Kubernetes API, and support round‑robin, session‑based, prefix‑aware, KV-aware and disaggregated-prefill routing with LMCache native support. The Semantic Router adds a system‑intelligence layer that classifies each user request, selects the most suitable model from a pool, injects domain‑specific system prompts, performs semantic caching and enforces enterprise‑grade security checks such as PII and jailbreak detection.
-
-By combining these two systems we obtain a unified inference stack. Semantic routing ensures that each request is answered by the best possible model. Production‑Stack routing maximizes infrastructure and inference efficiency, and exposes rich metrics.
-
+---
+title: Integrate with vLLM Production Stack
+description: Connect Semantic Router model-pool selection to model services managed by vLLM Production Stack.
 ---
 
-This tutorial will guide you:
+# Integrate with vLLM Production Stack
 
-- Deploy a minimal vLLM Production Stack
-- Deploy vLLM Semantic Router and point it to your vLLM router Service
-- Test the endpoint via the Envoy AI Gateway
+Use this topology when vLLM Production Stack already owns model deployment,
+service discovery, and replica scheduling, while Semantic Router should choose
+the model pool from request meaning and policy.
 
-## Prerequisites
+This page describes the integration contract. Production Stack releases and
+Helm values change independently, so install it with the current
+[Production Stack documentation](https://github.com/vllm-project/production-stack)
+instead of copying a frozen chart configuration from this guide.
 
-- kubectl
-- Helm
-- A Kubernetes cluster (kind, minikube, GKE, etc.)
+## Responsibility split
 
----
+| Component | Owns |
+| --- | --- |
+| Semantic Router | Signals, decisions, model-pool selection, and recipe-scoped plugins. |
+| vLLM Production Stack | Model servers, service discovery, replica scheduling, and inference lifecycle. |
+| Gateway | Client traffic and the ExtProc connection to Semantic Router. |
 
-## Step 1: Deploy the vLLM Production Stack using your Helm values
+Semantic Router selects an eligible model. Production Stack then chooses a
+replica serving that model. PII, jailbreak, or other signals affect traffic
+only when your decisions and plugins enforce a policy; detection alone does
+not block a request.
 
-Use your chart and the provided values file at `tutorials/assets/values-23-SR.yaml`.
+## Before you begin
+
+You need:
+
+- a working Production Stack deployment with at least one OpenAI-compatible
+  model endpoint;
+- stable Kubernetes service names for those endpoints;
+- a Gateway that can call Semantic Router through ExtProc; and
+- `kubectl`, Helm, model credentials, and enough inference capacity.
+
+Do not bind a Router provider to a Service `ClusterIP`. Use Kubernetes DNS so
+the configuration survives Service recreation.
+
+## 1. Verify the model service
+
+Follow the upstream installation guide, then record the model name, namespace,
+Service name, and port:
 
 ```bash
-helm repo add vllm-production-stack https://vllm-project.github.io/production-stack
-helm install vllm-stack vllm-production-stack/vllm-stack -f ./tutorials/assets/values-23-SR.yaml
+kubectl get services -A
+kubectl get pods -A
 ```
 
-For reference, the following is the sample value file:
+Send a direct Chat Completions request to the Production Stack endpoint before
+adding Semantic Router. This separates backend or scheduler failures from
+semantic-routing failures.
+
+## 2. Bind the model in canonical configuration
+
+Create one Semantic Router provider model for each model pool you want policy
+to select. A Kubernetes backend reference uses this shape:
 
 ```yaml
-servingEngineSpec:
-  runtimeClassName: ""
-  strategy:
-    type: Recreate
-  modelSpec:
-  - name: "qwen3"
-    repository: "lmcache/vllm-openai"
-    tag: "v0.3.7"
-    modelURL: "Qwen/Qwen3-8B"
-    pvcStorage: "50Gi"
-    vllmConfig:
-      # maxModelLen: 131072
-      extraArgs: ["--served-model-name", "Qwen/Qwen3-8B", "qwen3"]
-
-    replicaCount: 2
-
-    requestCPU: 8
-    requestMemory: "16Gi"
-    requestGPU: 1
-
-routerSpec:
-  repository: lmcache/lmstack-router
-  tag: "latest"
-  resources:
-    requests:
-      cpu: "1"
-      memory: "2G"
-    limits:
-      cpu: "1"
-      memory: "2G"
-  routingLogic: "roundrobin"
-  sessionKey: "x-user-id"
+providers:
+  defaults:
+    default_model: production/qwen3
+  models:
+    - name: production/qwen3
+      provider_model_id: Qwen/Qwen3-8B
+      backend_refs:
+        - name: production-stack
+          endpoint: vllm-router-service.default.svc.cluster.local:80
+          protocol: http
+          weight: 100
 ```
 
-Identify the ClusterIP and port of your router Service created by the chart (name may vary):
+Replace the endpoint and model identifier with values from your deployment.
+If Production Stack exposes different services per model, create a binding for
+each service. If it exposes one multi-model service, keep distinct provider
+models and use the backend's served model identifiers.
+
+Add model cards, decisions, and entrypoints that reference these provider
+names, then validate the complete document:
 
 ```bash
-kubectl get svc vllm-router-service
-# Note the router service ClusterIP and port (e.g., 10.97.254.122:80)
+vllm-sr validate --config config.yaml
 ```
 
----
+## 3. Deploy Semantic Router
 
-## Step 2: Deploy vLLM Semantic Router and point it at your vLLM router Service
+Use [Configuration Workflows](../configuration-workflows#helm) to deploy the
+validated config with `configOverride`, then attach one of the supported
+[Kubernetes gateways](ai-gateway). Pin chart and image versions for production;
+the development `0.0.0-latest` chart is for testing current main.
 
-Follow the official guide from the official website with **the updated config file as the following**: [Install in Kubernetes](https://vllm-sr.ai/docs/installation/k8s/ai-gateway).
+The upstream
+[Semantic Router integration tutorial](https://github.com/vllm-project/production-stack/blob/main/tutorials/24-semantic-router-integration.md)
+can provide additional context, but review its image tags and values against
+the current Production Stack release before applying them.
 
-Deploy using Helm with custom values:
+## 4. Verify both routing layers
 
-```bash
-   # Deploy vLLM Semantic Router with custom values from GHCR OCI registry
-   # (Optional) If you use a registry mirror/proxy, append: --set global.imageRegistry=<your-registry>
-   helm install semantic-router oci://ghcr.io/vllm-project/charts/semantic-router \
-     --version v0.0.0-latest \
-     --namespace vllm-semantic-router-system \
-     --create-namespace \
-     -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/ai-gateway/semantic-router-values/values.yaml
+1. Send a direct request to each model service.
+2. Send the same request through the Gateway using a configured virtual model.
+3. Inspect the Semantic Router selection headers.
+4. Confirm Production Stack sent the request to a replica for the selected
+   model pool.
 
-   kubectl wait --for=condition=Available deployment/semantic-router \
-     -n vllm-semantic-router-system --timeout=600s
-
-   # Install Envoy Gateway
-   helm upgrade -i eg oci://docker.io/envoyproxy/gateway-helm \
-     --version v0.0.0-latest \
-     --namespace envoy-gateway-system \
-     --create-namespace \
-     -f https://raw.githubusercontent.com/envoyproxy/ai-gateway/main/manifests/envoy-gateway-values.yaml
-
-   # Install Envoy AI Gateway
-   helm upgrade -i aieg oci://docker.io/envoyproxy/ai-gateway-helm \
-     --version v0.0.0-latest \
-     --namespace envoy-ai-gateway-system \
-     --create-namespace
-
-   # Install Envoy AI Gateway CRDs
-   helm upgrade -i aieg-crd oci://docker.io/envoyproxy/ai-gateway-crds-helm \
-     --version v0.0.0-latest \
-     --namespace envoy-ai-gateway-system
-
-   kubectl wait --timeout=300s -n envoy-ai-gateway-system \
-     deployment/ai-gateway-controller --for=condition=Available
-```
-
-**Note**: The values file contains the configuration for the semantic router. You can download and customize it from [values.yaml](https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/ai-gateway/semantic-router-values/values.yaml) to match your vLLM Production Stack setup.
-
-Create LLM Demo Backends and AI Gateway Routes:
-
-```bash
-   # Apply LLM demo backends
-   kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/ai-gateway/aigw-resources/base-model.yaml
-   # Apply AI Gateway routes
-   kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/ai-gateway/aigw-resources/gwapi-resources.yaml
-```
-
----
-
-## Step 3: Test the deployment
-
-Port-forward to the Envoy service and send a test request, following the guide:
-
-```bash
-  export ENVOY_SERVICE=$(kubectl get svc -n envoy-gateway-system \
-    --selector=gateway.envoyproxy.io/owning-gateway-namespace=default,gateway.envoyproxy.io/owning-gateway-name=semantic-router \
-    -o jsonpath='{.items[0].metadata.name}')
-
-  kubectl port-forward -n envoy-gateway-system svc/$ENVOY_SERVICE 8080:80
-```
-
-Send a chat completions request:
-
-```bash
-  curl -i -X POST http://localhost:8080/v1/chat/completions \
-    -H "Content-Type: application/json" \
-    -d '{
-      "model": "MoM",
-      "messages": [
-        {"role": "user", "content": "What is the derivative of f(x) = x^3?"}
-      ]
-    }'
-```
-
----
+Use [Test a Kubernetes Gateway Deployment](gateway-testing) for the common
+Gateway checks. A successful semantic decision does not prove that the selected
+model is ready, so retain both direct and routed generation tests.
 
 ## Cleanup
 
-To remove the entire deployment:
-
-```bash
-# Remove Gateway API resources and Demo LLM
-kubectl delete -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/ai-gateway/aigw-resources/gwapi-resources.yaml
-kubectl delete -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/ai-gateway/aigw-resources/base-model.yaml
-
-# Remove semantic router
-helm uninstall semantic-router -n vllm-semantic-router-system
-
-# Remove AI gateway
-helm uninstall aieg -n envoy-ai-gateway-system
-helm uninstall aieg-crd -n envoy-ai-gateway-system
-
-# Remove Envoy gateway
-helm uninstall eg -n envoy-gateway-system
-
-# Remove vLLM Production Stack
-helm uninstall vllm-stack
-
-# Delete kind cluster (optional)
-kind delete cluster --name semantic-router-cluster
-```
-
----
-
-## Troubleshooting
-
-- If the gateway is not accessible, check the Gateway and Envoy service per the guide.
-- If the inference pool is not ready, `kubectl describe` the `InferencePool` and check controller logs.
-- If the semantic router is not responding, check its pod status and logs.
-- If it is returning error code, check the production stack router log.
+Remove Semantic Router and Gateway resources with the commands from their
+respective guides. Remove Production Stack with the release name and namespace
+you selected during its installation; do not copy a cleanup command that was
+written for a different release.

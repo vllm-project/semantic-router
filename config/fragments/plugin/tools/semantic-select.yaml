@@ -9,3 +9,5 @@ plugin:
       - tickets.lookup
     block_tools:
       - admin.delete
+    # Privacy routes should instead use mode: none together with
+    # strip_tool_history: true so prior calls/results are not provider-bound.

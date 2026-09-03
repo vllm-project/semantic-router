@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import Translate, { translate } from '@docusaurus/Translate'
 import Layout from '@theme/Layout'
 import Head from '@docusaurus/Head'
@@ -61,6 +61,7 @@ function PaperViewerContent({ pdfUrl }: PaperViewerContentProps): JSX.Element {
   const [isSpread, setIsSpread] = useState<boolean>(true)
   const [loading, setLoading] = useState<boolean>(true)
   const [error, setError] = useState<boolean>(false)
+  const viewerAreaRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const updateSize = () => {
@@ -70,8 +71,9 @@ function PaperViewerContent({ pdfUrl }: PaperViewerContentProps): JSX.Element {
       setIsMobile(mobile)
 
       if (mobile) {
+        const viewerWidth = viewerAreaRef.current?.clientWidth ?? vw
         setIsSpread(false)
-        setPageWidth(Math.max(320, vw - 2))
+        setPageWidth(Math.max(1, Math.floor(viewerWidth)))
         return
       }
 
@@ -124,10 +126,20 @@ function PaperViewerContent({ pdfUrl }: PaperViewerContentProps): JSX.Element {
   const step = isMobile || !isSpread
     ? 1
     : 2
-  const goToPrev = useCallback(() => setPageNumber(p => Math.max(1, p - step)), [step])
+  const scrollMobilePageIntoView = useCallback(() => {
+    if (!isMobile)
+      return
+
+    requestAnimationFrame(() => viewerAreaRef.current?.scrollIntoView({ block: 'start' }))
+  }, [isMobile])
+  const goToPrev = useCallback(() => {
+    setPageNumber(p => Math.max(1, p - step))
+    scrollMobilePageIntoView()
+  }, [scrollMobilePageIntoView, step])
   const goToNext = useCallback(() => {
     setPageNumber(p => Math.min(Math.max(1, numPages), p + step))
-  }, [numPages, step])
+    scrollMobilePageIntoView()
+  }, [numPages, scrollMobilePageIntoView, step])
 
   const rightPage = pageNumber + 1
   const hasRight = isSpread && rightPage <= numPages
@@ -166,7 +178,7 @@ function PaperViewerContent({ pdfUrl }: PaperViewerContentProps): JSX.Element {
       tabIndex={-1}
       aria-keyshortcuts="ArrowLeft ArrowRight"
     >
-      <div className={styles.viewerArea}>
+      <div ref={viewerAreaRef} className={styles.viewerArea}>
         {error
           ? (
               <div className={styles.fallback}>
@@ -194,45 +206,9 @@ function PaperViewerContent({ pdfUrl }: PaperViewerContentProps): JSX.Element {
                 )}
                 className={documentClassName}
               >
-                {isMobile
+                {isSpread
                   ? (
-                      <div className={styles.mobileStack}>
-                        {Array.from({ length: numPages }, (_, i) => (
-                          <div key={i + 1} className={styles.pageWrapper}>
-                            <Page
-                              pageNumber={i + 1}
-                              width={pageWidth}
-                              renderTextLayer={true}
-                              renderAnnotationLayer={true}
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    )
-                  : isSpread
-                    ? (
-                        <div className={styles.pagesRow}>
-                          <div className={styles.pageWrapper}>
-                            <Page
-                              pageNumber={pageNumber}
-                              width={pageWidth}
-                              renderTextLayer={true}
-                              renderAnnotationLayer={true}
-                            />
-                          </div>
-                          {hasRight && (
-                            <div className={styles.pageWrapper}>
-                              <Page
-                                pageNumber={rightPage}
-                                width={pageWidth}
-                                renderTextLayer={true}
-                                renderAnnotationLayer={true}
-                              />
-                            </div>
-                          )}
-                        </div>
-                      )
-                    : (
+                      <div className={styles.pagesRow}>
                         <div className={styles.pageWrapper}>
                           <Page
                             pageNumber={pageNumber}
@@ -241,12 +217,33 @@ function PaperViewerContent({ pdfUrl }: PaperViewerContentProps): JSX.Element {
                             renderAnnotationLayer={true}
                           />
                         </div>
-                      )}
+                        {hasRight && (
+                          <div className={styles.pageWrapper}>
+                            <Page
+                              pageNumber={rightPage}
+                              width={pageWidth}
+                              renderTextLayer={true}
+                              renderAnnotationLayer={true}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )
+                  : (
+                      <div className={styles.pageWrapper}>
+                        <Page
+                          pageNumber={pageNumber}
+                          width={pageWidth}
+                          renderTextLayer={true}
+                          renderAnnotationLayer={true}
+                        />
+                      </div>
+                    )}
               </Document>
             )}
       </div>
 
-      {!error && !loading && !isMobile && (
+      {!error && !loading && (
         <div className={styles.pagination}>
           <div />
           <div className={styles.paginationCenter}>

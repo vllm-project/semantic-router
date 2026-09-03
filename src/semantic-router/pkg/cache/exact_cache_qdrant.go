@@ -10,8 +10,34 @@ import (
 
 var _ ExactCacheBackend = (*QdrantCache)(nil)
 
+// parseQdrantPayloadTiming extracts storedAt and expiresAt from a Qdrant point payload.
+func parseQdrantPayloadTiming(payload map[string]*qdrant.Value) (time.Time, time.Time) {
+	var storedAt, expiresAt time.Time
+	if tsVal, ok := payload["timestamp"]; ok {
+		if ts := tsVal.GetIntegerValue(); ts > 0 {
+			storedAt = time.Unix(ts, 0)
+		}
+	}
+	if expVal, ok := payload["expires_at"]; ok {
+		if exp := expVal.GetIntegerValue(); exp > 0 {
+			expiresAt = time.Unix(exp, 0)
+		}
+	}
+	return storedAt, expiresAt
+}
+
+func isQdrantExactPayloadValid(payload map[string]*qdrant.Value, partition string) bool {
+	if payload["model"].GetStringValue() != partition ||
+		payload["query"].GetStringValue() != exactCacheQueryMarker {
+		return false
+	}
+	expiresAt := payload["expires_at"].GetIntegerValue()
+	return expiresAt == 0 || expiresAt > time.Now().Unix()
+}
+
 // FindExact returns a deterministic Qdrant exact-response entry.
 func (c *QdrantCache) FindExact(
+	ctx context.Context,
 	partition string,
 	fingerprint string,
 ) (LookupResult, error) {
@@ -19,7 +45,7 @@ func (c *QdrantCache) FindExact(
 		return LookupResult{}, nil
 	}
 	recordID := exactCacheRecordID(partition, fingerprint)
-	points, err := c.client.Get(context.Background(), &qdrant.GetPoints{
+	points, err := c.client.Get(ctx, &qdrant.GetPoints{
 		CollectionName: c.collectionName,
 		Ids: []*qdrant.PointId{
 			arbitraryIDToUUID(recordID),
@@ -33,27 +59,20 @@ func (c *QdrantCache) FindExact(
 		return LookupResult{}, nil
 	}
 	payload := points[0].Payload
-	if payload["model"].GetStringValue() != partition ||
-		payload["query"].GetStringValue() != exactCacheQueryMarker {
-		return LookupResult{}, nil
-	}
-	expiresAt := payload["expires_at"].GetIntegerValue()
-	if expiresAt > 0 && expiresAt <= time.Now().Unix() {
+	if !isQdrantExactPayloadValid(payload, partition) {
 		return LookupResult{}, nil
 	}
 	responseBody := payload["response_body"].GetStringValue()
 	if responseBody == "" {
 		return LookupResult{}, nil
 	}
-	return LookupResult{
-		ResponseBody: []byte(responseBody),
-		Found:        true,
-		Similarity:   1,
-	}, nil
+	storedAt, expiresAt := parseQdrantPayloadTiming(payload)
+	return lookupResultFromTimestamps([]byte(responseBody), 1, storedAt, expiresAt), nil
 }
 
 // AddExact writes a deterministic Qdrant exact-response entry.
 func (c *QdrantCache) AddExact(
+	ctx context.Context,
 	partition string,
 	fingerprint string,
 	responseBody []byte,
@@ -64,7 +83,7 @@ func (c *QdrantCache) AddExact(
 	}
 	recordID := exactCacheRecordID(partition, fingerprint)
 	wait := true
-	_, err := c.client.Upsert(context.Background(), &qdrant.UpsertPoints{
+	_, err := c.client.Upsert(ctx, &qdrant.UpsertPoints{
 		CollectionName: c.collectionName,
 		Wait:           &wait,
 		Points: []*qdrant.PointStruct{{

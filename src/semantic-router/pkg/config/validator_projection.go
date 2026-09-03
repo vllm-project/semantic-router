@@ -386,6 +386,7 @@ func isProjectionInputTypeSupported(signalType string) bool {
 		SignalTypeKB,
 		SignalTypeConversation,
 		SignalTypeEvent,
+		SignalTypeInputModality,
 		ProjectionInputKBMetric,
 		SignalTypeProjection:
 		return true
@@ -396,26 +397,27 @@ func isProjectionInputTypeSupported(signalType string) bool {
 
 func projectionDeclaredSignals(cfg *RouterConfig) map[string]map[string]struct{} {
 	declared := map[string]map[string]struct{}{
-		SignalTypeKeyword:      collectKeywordRuleNames(cfg.KeywordRules),
-		SignalTypeEmbedding:    collectEmbeddingRuleNames(cfg.EmbeddingRules),
-		SignalTypeDomain:       collectDomainNames(cfg.Categories),
-		SignalTypeFactCheck:    collectFactCheckRuleNames(cfg.FactCheckRules),
-		SignalTypeUserFeedback: collectUserFeedbackRuleNames(cfg.UserFeedbackRules),
-		SignalTypeReask:        collectReaskRuleNames(cfg.ReaskRules),
-		SignalTypePreference:   collectPreferenceRuleNames(cfg.PreferenceRules),
-		SignalTypeLanguage:     collectLanguageRuleNames(cfg.LanguageRules),
-		SignalTypeContext:      collectContextRuleNames(cfg.ContextRules),
-		SignalTypeStructure:    collectStructureRuleNames(cfg.StructureRules),
-		SignalTypeComplexity:   collectComplexityRuleNames(cfg.ComplexityRules),
-		SignalTypeModality:     collectModalityRuleNames(cfg.ModalityRules),
-		SignalTypeAuthz:        collectRoleBindingNames(cfg.GetRoleBindings()),
-		SignalTypeJailbreak:    collectJailbreakRuleNames(cfg.JailbreakRules),
-		SignalTypePII:          collectPIIRuleNames(cfg.PIIRules),
-		SignalTypeKB:           collectKBRuleNames(cfg.KBRules),
-		SignalTypeConversation: collectConversationRuleNames(cfg.ConversationRules),
-		SignalTypeEvent:        collectEventRuleNames(cfg.EventRules),
-		SignalTypeMetadata:     collectMetadataRuleNames(cfg.MetadataRules),
-		SignalTypeClassifier:   collectClassifierRuleNames(cfg.ClassifierRules),
+		SignalTypeKeyword:       collectKeywordRuleNames(cfg.KeywordRules),
+		SignalTypeEmbedding:     collectEmbeddingRuleNames(cfg.EmbeddingRules),
+		SignalTypeDomain:        collectDomainNames(cfg.Categories),
+		SignalTypeFactCheck:     collectFactCheckRuleNames(cfg.FactCheckRules),
+		SignalTypeUserFeedback:  collectUserFeedbackRuleNames(cfg.UserFeedbackRules),
+		SignalTypeReask:         collectReaskRuleNames(cfg.ReaskRules),
+		SignalTypePreference:    collectPreferenceRuleNames(cfg.PreferenceRules),
+		SignalTypeLanguage:      collectLanguageRuleNames(cfg.LanguageRules),
+		SignalTypeContext:       collectContextRuleNames(cfg.ContextRules),
+		SignalTypeStructure:     collectStructureRuleNames(cfg.StructureRules),
+		SignalTypeComplexity:    collectComplexityRuleNames(cfg.ComplexityRules),
+		SignalTypeModality:      collectModalityRuleNames(cfg.ModalityRules),
+		SignalTypeAuthz:         collectRoleBindingNames(cfg.GetRoleBindings()),
+		SignalTypeJailbreak:     collectJailbreakRuleNames(cfg.JailbreakRules),
+		SignalTypePII:           collectPIIRuleNames(cfg.PIIRules),
+		SignalTypeKB:            collectKBRuleNames(cfg.KBRules),
+		SignalTypeConversation:  collectConversationRuleNames(cfg.ConversationRules),
+		SignalTypeEvent:         collectEventRuleNames(cfg.EventRules),
+		SignalTypeMetadata:      collectMetadataRuleNames(cfg.MetadataRules),
+		SignalTypeClassifier:    collectClassifierRuleNames(cfg.ClassifierRules),
+		SignalTypeInputModality: collectInputModalityRuleNames(cfg.InputModalityRules),
 	}
 	return declared
 }
@@ -547,173 +549,6 @@ func validateProjectionOutputThresholds(mappingName string, output ProjectionMap
 		return fmt.Errorf("routing.projections.mappings[%q].outputs[%q]: cannot set both lt and lte", mappingName, output.Name)
 	}
 	return nil
-}
-
-func collectKeywordRuleNames(rules []KeywordRule) map[string]struct{} {
-	names := make(map[string]struct{}, len(rules))
-	for _, rule := range rules {
-		names[rule.Name] = struct{}{}
-	}
-	return names
-}
-
-func collectEmbeddingRuleNames(rules []EmbeddingRule) map[string]struct{} {
-	names := make(map[string]struct{}, len(rules))
-	for _, rule := range rules {
-		names[rule.Name] = struct{}{}
-	}
-	return names
-}
-
-func collectDomainNames(categories []Category) map[string]struct{} {
-	names := make(map[string]struct{}, len(categories))
-	for _, category := range categories {
-		names[category.Name] = struct{}{}
-	}
-	return names
-}
-
-func collectFactCheckRuleNames(rules []FactCheckRule) map[string]struct{} {
-	names := make(map[string]struct{}, len(rules))
-	for _, rule := range rules {
-		names[rule.Name] = struct{}{}
-	}
-	return names
-}
-
-func collectUserFeedbackRuleNames(rules []UserFeedbackRule) map[string]struct{} {
-	names := make(map[string]struct{}, len(rules))
-	for _, rule := range rules {
-		names[rule.Name] = struct{}{}
-	}
-	return names
-}
-
-func collectReaskRuleNames(rules []ReaskRule) map[string]struct{} {
-	names := make(map[string]struct{}, len(rules))
-	for _, rule := range rules {
-		names[rule.Name] = struct{}{}
-	}
-	return names
-}
-
-func collectPreferenceRuleNames(rules []PreferenceRule) map[string]struct{} {
-	names := make(map[string]struct{}, len(rules))
-	for _, rule := range rules {
-		names[rule.Name] = struct{}{}
-	}
-	return names
-}
-
-func collectLanguageRuleNames(rules []LanguageRule) map[string]struct{} {
-	names := make(map[string]struct{}, len(rules))
-	for _, rule := range rules {
-		names[rule.Name] = struct{}{}
-	}
-	return names
-}
-
-func collectContextRuleNames(rules []ContextRule) map[string]struct{} {
-	names := make(map[string]struct{}, len(rules))
-	for _, rule := range rules {
-		names[rule.Name] = struct{}{}
-	}
-	return names
-}
-
-func collectStructureRuleNames(rules []StructureRule) map[string]struct{} {
-	names := make(map[string]struct{}, len(rules))
-	for _, rule := range rules {
-		names[rule.Name] = struct{}{}
-	}
-	return names
-}
-
-func collectComplexityRuleNames(rules []ComplexityRule) map[string]struct{} {
-	names := make(map[string]struct{}, len(rules))
-	for _, rule := range rules {
-		names[rule.Name] = struct{}{}
-	}
-	return names
-}
-
-func collectModalityRuleNames(rules []ModalityRule) map[string]struct{} {
-	names := make(map[string]struct{}, len(rules))
-	for _, rule := range rules {
-		names[rule.Name] = struct{}{}
-	}
-	return names
-}
-
-func collectRoleBindingNames(rules []RoleBinding) map[string]struct{} {
-	names := make(map[string]struct{}, len(rules)*2)
-	for _, rule := range rules {
-		if rule.Name != "" {
-			names[rule.Name] = struct{}{}
-		}
-		if rule.Role != "" {
-			names[rule.Role] = struct{}{}
-		}
-	}
-	return names
-}
-
-func collectJailbreakRuleNames(rules []JailbreakRule) map[string]struct{} {
-	names := make(map[string]struct{}, len(rules))
-	for _, rule := range rules {
-		names[rule.Name] = struct{}{}
-	}
-	return names
-}
-
-func collectPIIRuleNames(rules []PIIRule) map[string]struct{} {
-	names := make(map[string]struct{}, len(rules))
-	for _, rule := range rules {
-		names[rule.Name] = struct{}{}
-	}
-	return names
-}
-
-func collectKBRuleNames(rules []KBSignalRule) map[string]struct{} {
-	names := make(map[string]struct{}, len(rules))
-	for _, rule := range rules {
-		names[rule.Name] = struct{}{}
-	}
-	return names
-}
-
-func collectConversationRuleNames(rules []ConversationRule) map[string]struct{} {
-	names := make(map[string]struct{}, len(rules))
-	for _, rule := range rules {
-		names[rule.Name] = struct{}{}
-	}
-	return names
-}
-
-func collectEventRuleNames(rules []EventRule) map[string]struct{} {
-	names := make(map[string]struct{}, len(rules))
-	for _, rule := range rules {
-		names[rule.Name] = struct{}{}
-	}
-	return names
-}
-
-func collectMetadataRuleNames(rules []MetadataRule) map[string]struct{} {
-	names := make(map[string]struct{}, len(rules))
-	for _, rule := range rules {
-		names[rule.Name] = struct{}{}
-	}
-	return names
-}
-
-func collectClassifierRuleNames(
-	rules []ClassifierSignalRule,
-) map[string]struct{} {
-	names := make(map[string]struct{}, len(rules))
-	for _, rule := range rules {
-		names[rule.Name] = struct{}{}
-	}
-	return names
 }
 
 func validateKBMetricProjectionInput(

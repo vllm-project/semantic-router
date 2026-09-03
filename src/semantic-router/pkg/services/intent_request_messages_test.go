@@ -7,6 +7,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 )
 
 func mustMessageContent(t *testing.T, value interface{}) json.RawMessage {
@@ -88,6 +90,223 @@ func TestIntentRequestResolveSignalInput_ExtractsConversationAndToolFacts(t *tes
 	assert.Equal(t, 1, facts.ToolResultCount)
 	assert.Equal(t, "user", facts.LastMessageRole)
 	assert.True(t, facts.LastUserAfterToolResult)
+}
+
+func TestIntentRequestResolveSignalInput_LastUserAfterToolResultRequiresAdjacency(t *testing.T) {
+	req := IntentRequest{
+		Messages: []IntentMessage{
+			{Role: "user", Content: mustMessageContent(t, "run the tool")},
+			{
+				Role:      "assistant",
+				Content:   mustMessageContent(t, nil),
+				ToolCalls: []json.RawMessage{json.RawMessage(`{"id":"call-1"}`)},
+			},
+			{Role: "tool", ToolCallID: "call-1", Content: mustMessageContent(t, "done")},
+			{Role: "user", Content: mustMessageContent(t, "continue")},
+			{Role: "assistant", Content: mustMessageContent(t, "intermediate reply")},
+			{Role: "user", Content: mustMessageContent(t, "new turn")},
+		},
+	}
+
+	input, err := req.resolveSignalInput()
+	require.NoError(t, err)
+
+	facts := input.conversationFacts
+	assert.Equal(t, "user", facts.LastMessageRole)
+	assert.False(t, facts.LastMessageToolResult)
+	assert.False(t, facts.LastUserAfterToolResult,
+		"an older tool result must not mark a non-adjacent user turn")
+}
+
+func TestIntentRequestResolveSignalInput_PendingAssistantToolCallIsNotToolResult(t *testing.T) {
+	req := IntentRequest{
+		Messages: []IntentMessage{
+			{Role: "user", Content: mustMessageContent(t, "look this up")},
+			{
+				Role:    "assistant",
+				Content: mustMessageContent(t, nil),
+				ToolCalls: []json.RawMessage{json.RawMessage(
+					`{"id":"call-1","type":"function","function":{"name":"lookup","arguments":"{}"}}`,
+				)},
+			},
+		},
+	}
+
+	input, err := req.resolveSignalInput()
+	require.NoError(t, err)
+
+	facts := input.conversationFacts
+	assert.Equal(t, 1, facts.AssistantToolCallCount)
+	assert.Zero(t, facts.ToolResultCount)
+	assert.Equal(t, "assistant", facts.LastMessageRole)
+	assert.False(t, facts.LastMessageToolResult)
+	assert.True(t, facts.LastAssistantToolCall)
+	assert.False(t, facts.LastUserAfterToolResult)
+}
+
+func TestIntentRequestResolveSignalInput_HistoricalUnmatchedToolCallDoesNotStayActive(t *testing.T) {
+	req := IntentRequest{
+		Messages: []IntentMessage{
+			{
+				Role:      "assistant",
+				Content:   mustMessageContent(t, nil),
+				ToolCalls: []json.RawMessage{json.RawMessage(`{"id":"old-call"}`)},
+			},
+			{Role: "user", Content: mustMessageContent(t, "start a separate task")},
+			{Role: "assistant", Content: mustMessageContent(t, "done")},
+			{Role: "user", Content: mustMessageContent(t, "ordinary follow-up")},
+		},
+	}
+
+	input, err := req.resolveSignalInput()
+	require.NoError(t, err)
+
+	facts := input.conversationFacts
+	assert.Equal(t, 1, facts.AssistantToolCallCount)
+	assert.Zero(t, facts.ToolResultCount)
+	assert.False(t, facts.LastAssistantToolCall)
+	assert.False(t, facts.LastMessageToolResult)
+	assert.False(t, facts.LastUserAfterToolResult)
+}
+
+func TestIntentRequestResolveSignalInput_FlowToolStateRequiresTrailingResult(t *testing.T) {
+	req := IntentRequest{Messages: []IntentMessage{
+		{Role: "tool", ToolCallID: "flowtool_deadbeef__call_1", Content: mustMessageContent(t, "done")},
+	}}
+	input, err := req.resolveSignalInput()
+	require.NoError(t, err)
+	assert.True(t, input.conversationFacts.LastMessageFlowToolResult)
+
+	req.Messages = append(req.Messages,
+		IntentMessage{Role: "assistant", Content: mustMessageContent(t, "workflow complete")},
+		IntentMessage{Role: "user", Content: mustMessageContent(t, "new request")},
+	)
+	input, err = req.resolveSignalInput()
+	require.NoError(t, err)
+	assert.False(t, input.conversationFacts.LastMessageFlowToolResult)
+}
+
+func TestIntentRequestResolveSignalInput_RequestContextEstimateMatchesDataPlaneContract(t *testing.T) {
+	priorUser := strings.Repeat("prior", 2_000)
+	toolResult := strings.Repeat("result", 2_000)
+	schema := strings.Repeat("schema", 2_000)
+	req := IntentRequest{
+		Messages: []IntentMessage{
+			{Role: "user", Content: mustMessageContent(t, priorUser)},
+			{
+				Role:             "assistant",
+				Content:          mustMessageContent(t, nil),
+				ReasoningContent: json.RawMessage(`"checked exact integer arguments"`),
+				ToolCalls: []json.RawMessage{mustMessageContent(t, map[string]any{
+					"id":   "call-1",
+					"type": "function",
+					"function": map[string]any{
+						"name": "lookup",
+						"arguments": json.RawMessage(
+							`{"id":9007199254740993123456789}`,
+						),
+					},
+				})},
+			},
+			{
+				Role:       "tool",
+				ToolCallID: "call-1",
+				Content:    mustMessageContent(t, toolResult),
+			},
+			{
+				Role: "user",
+				Content: mustMessageContent(t, []map[string]any{
+					{"type": "text", "text": "ok"},
+					{
+						"type": "image_url",
+						"image_url": map[string]string{
+							"url": "data:image/png;base64,PRIVATE",
+						},
+					},
+				}),
+			},
+		},
+		Tools: []json.RawMessage{mustMessageContent(t, map[string]any{
+			"type": "function",
+			"function": map[string]any{
+				"name":        "lookup",
+				"description": schema,
+				"parameters":  map[string]any{"type": "object"},
+			},
+		})},
+		Functions: []json.RawMessage{mustMessageContent(t, map[string]any{
+			"name":       "legacy_lookup",
+			"parameters": map[string]any{"type": "object"},
+		})},
+		ToolChoice:          json.RawMessage(`{"type":"function","function":{"name":"lookup"}}`),
+		FunctionCall:        json.RawMessage(`{"name":"legacy_lookup"}`),
+		ResponseFormat:      json.RawMessage(`{"type":"json_object"}`),
+		MaxTokens:           json.RawMessage(`8192`),
+		MaxCompletionTokens: json.RawMessage(`4096`),
+	}
+
+	input, err := req.resolveSignalInput()
+	require.NoError(t, err)
+	envelope, err := json.Marshal(req)
+	require.NoError(t, err)
+	want := classification.EstimateOpenAIRequestContext(envelope)
+
+	assert.Equal(t, "ok", input.evaluationText,
+		"semantic signals must still receive only the current user text")
+	assert.Equal(t, want.TokenFloor, input.requestFacts.ContextTokenFloor)
+	assert.Equal(t, want.TextBytes, input.requestFacts.ContextTextBytes)
+	assert.Equal(t, want.EquivalentBytes, input.requestFacts.ContextEquivalentBytes)
+	assert.Equal(t, want.HasNonText, input.requestFacts.ContextHasNonText)
+	assert.Greater(t, input.requestFacts.ContextTokenFloor, 16_000)
+	assert.Equal(t, 2, input.conversationFacts.ToolDefinitionCount)
+}
+
+func TestIntentRequestResolveSignalInput_DoesNotDoubleCountTopLevelTextWithCurrentUser(t *testing.T) {
+	req := IntentRequest{
+		Text: "same current user turn",
+		Messages: []IntentMessage{{
+			Role:    "user",
+			Content: mustMessageContent(t, "same current user turn"),
+		}},
+	}
+
+	input, err := req.resolveSignalInput()
+	require.NoError(t, err)
+	envelope, err := json.Marshal(req)
+	require.NoError(t, err)
+	want := classification.EstimateOpenAIRequestContext(envelope)
+
+	assert.Equal(t, want.TokenFloor, input.requestFacts.ContextTokenFloor)
+	assert.Equal(t, want.TextBytes, input.requestFacts.ContextTextBytes)
+}
+
+func TestIntentRequestResolveSignalInput_ToolChoiceFacts(t *testing.T) {
+	tests := []struct {
+		name         string
+		toolChoice   json.RawMessage
+		functionCall json.RawMessage
+		wantRequired bool
+		wantNone     bool
+	}{
+		{name: "required", toolChoice: json.RawMessage(`"required"`), wantRequired: true},
+		{name: "named", toolChoice: json.RawMessage(`{"type":"function","function":{"name":"lookup"}}`), wantRequired: true},
+		{name: "none", toolChoice: json.RawMessage(`"none"`), wantNone: true},
+		{name: "legacy none", functionCall: json.RawMessage(`"none"`), wantNone: true},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			req := IntentRequest{
+				Text:         "hello",
+				ToolChoice:   test.toolChoice,
+				FunctionCall: test.functionCall,
+			}
+			input, err := req.resolveSignalInput()
+			require.NoError(t, err)
+			assert.Equal(t, test.wantRequired, input.conversationFacts.ToolChoiceRequired)
+			assert.Equal(t, test.wantNone, input.conversationFacts.ToolChoiceNone)
+		})
+	}
 }
 
 func TestIntentRequestResolveSignalInput_FallsBackToText(t *testing.T) {

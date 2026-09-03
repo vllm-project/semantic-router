@@ -6,7 +6,7 @@ Open.
 
 ## Owner Plan
 
-[PL-0039 Domain CI Architecture](../plans/pl-0039-domain-ci-architecture.md)
+[PL-0032: Architecture Debt Consolidation](../plans/pl-0032-architecture-scorecard-ratchet.md)
 
 ## Release Relevance
 

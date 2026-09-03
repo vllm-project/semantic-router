@@ -32,21 +32,30 @@ func (r *OpenAIRouter) prepareSignalEvaluationInput(history signalConversationHi
 		priorUserMessages: append([]string(nil), history.priorUserMessages...),
 		hasAssistantReply: history.hasAssistantReply,
 		conversationFacts: classification.ConversationFacts{
-			HasDeveloperMessage:     history.hasDeveloperMessage,
-			UserMessageCount:        history.userMessageCount,
-			AssistantMessageCount:   history.assistantMessageCount,
-			SystemMessageCount:      history.systemMessageCount,
-			ToolMessageCount:        history.toolMessageCount,
-			ToolDefinitionCount:     history.toolDefinitionCount,
-			AssistantToolCallCount:  history.assistantToolCallCount,
-			ToolResultCount:         history.toolResultCount,
-			ImageContentCount:       history.imageContentCount,
-			LastMessageRole:         history.lastMessageRole,
-			LastMessageToolResult:   history.lastMessageToolResult,
-			LastUserAfterToolResult: history.lastUserAfterToolResult,
+			HasDeveloperMessage:       history.hasDeveloperMessage,
+			UserMessageCount:          history.userMessageCount,
+			AssistantMessageCount:     history.assistantMessageCount,
+			SystemMessageCount:        history.systemMessageCount,
+			ToolMessageCount:          history.toolMessageCount,
+			ToolDefinitionCount:       history.toolDefinitionCount,
+			ToolChoiceRequired:        history.toolChoiceRequired,
+			ToolChoiceNone:            history.toolChoiceNone,
+			AssistantToolCallCount:    history.assistantToolCallCount,
+			ToolResultCount:           history.toolResultCount,
+			ImageContentCount:         history.imageContentCount,
+			LastMessageRole:           history.lastMessageRole,
+			LastMessageToolResult:     history.lastMessageToolResult,
+			LastMessageFlowToolResult: history.lastMessageFlowToolResult,
+			LastAssistantToolCall:     history.lastAssistantToolCall,
+			LastUserAfterToolResult:   history.lastUserAfterToolResult,
 		},
 		requestFacts: classification.RequestFacts{
-			Metadata: cloneRoutingMetadata(history.metadata),
+			Metadata:               cloneRoutingMetadata(history.metadata),
+			ContextTokenFloor:      history.contextTokenFloor,
+			ContextTextBytes:       history.contextTextBytes,
+			ContextEquivalentBytes: history.contextEquivalentBytes,
+			ContextHasNonText:      history.contextHasNonText,
+			InputModality:          history.inputModality,
 		},
 	}
 
@@ -118,6 +127,7 @@ func (r *OpenAIRouter) applySignalResultsToContext(ctx *RequestContext, signals 
 	ctx.VSRMatchedEvent = signals.MatchedEventRules
 	ctx.VSRMatchedMetadata = signals.MatchedMetadataRules
 	ctx.VSRMatchedClassifier = signals.MatchedClassifierRules
+	ctx.VSRMatchedInputModality = signals.MatchedInputModalityRules
 	ctx.VSRMatchedProjection = signals.MatchedProjectionRules
 	ctx.VSRProjectionScores = cloneReplayFloat64Map(signals.ProjectionScores)
 	ctx.VSRSignalConfidences = cloneReplayFloat64Map(signals.SignalConfidences)
@@ -200,6 +210,7 @@ func collectMatchedSignalRules(signals *classification.SignalResults) []string {
 	allMatchedRules = append(allMatchedRules, signals.MatchedEventRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedMetadataRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedClassifierRules...)
+	allMatchedRules = append(allMatchedRules, signals.MatchedInputModalityRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedProjectionRules...)
 	return allMatchedRules
 }

@@ -2,7 +2,9 @@
 
 ## Overview
 
-`user-feedback` detects correction, dissatisfaction, or escalation feedback from the conversation. It maps to `config/fragments/signal/user-feedback/` and is declared under `routing.signals.user_feedbacks`.
+`user-feedback` detects correction, dissatisfaction, or escalation feedback
+from the conversation. Define its labels under
+`routing.signals.user_feedbacks`.
 
 This family is learned: it relies on the feedback detector configured under `global.model_catalog.modules.feedback_detector`.
 
@@ -30,8 +32,6 @@ Use `user-feedback` when:
 
 ## Configuration
 
-Source fragment family: `config/fragments/signal/user-feedback/`
-
 ```yaml
 routing:
   signals:
@@ -43,3 +43,10 @@ routing:
 ```
 
 Define the feedback labels your decisions will consume, then let the learned detector decide which one matches each turn.
+
+## Dependencies and Limitations
+
+The feedback detector processes conversational text and can confuse quoted or
+hypothetical complaints with real feedback. Evaluate it on follow-up traffic
+and keep a normal fallback path. See a complete example:
+[`config/fragments/signal/user-feedback/escalation.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/user-feedback/escalation.yaml).

@@ -103,10 +103,10 @@ func TestRuntimeRegistrySuppressesLegacyVectorGlobalsUntilPublished(t *testing.T
 
 func TestRuntimeRegistrySuppressesLegacySelectionGlobalUntilPublished(t *testing.T) {
 	globalRegistry := selection.NewRegistry()
-	originalRegistry := selection.GlobalRegistry
-	selection.GlobalRegistry = globalRegistry
+	originalRegistry := selection.GetGlobalRegistry()
+	selection.SetGlobalRegistry(globalRegistry)
 	t.Cleanup(func() {
-		selection.GlobalRegistry = originalRegistry
+		selection.SetGlobalRegistry(originalRegistry)
 	})
 
 	registry := routerruntime.NewRegistry(nil)

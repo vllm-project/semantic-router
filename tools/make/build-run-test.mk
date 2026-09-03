@@ -427,19 +427,6 @@ test-image-gen:
 	@echo "Testing image generation with vLLM-Omni..."
 	@./tools/smoke/test-image-gen.sh
 
-# Run image generation integration tests (Go)
-test-image-gen-integration: ## Run Go integration tests for image generation
-test-image-gen-integration:
-	@echo "Running image generation integration tests..."
-	@cd src/semantic-router && go test -tags=integration -v ./pkg/imagegen/integration_test.go -timeout 300s
-
-# Run router with image generation config
-run-router-image-gen: ## Run router with image generation config
-run-router-image-gen: build-router
-	@echo "Running router with image generation config..."
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
-		./bin/router -config=e2e/config/config.image-gen.yaml
-
 # ============== Modality Routing Tests ==============
 
 # Run router with modality routing config

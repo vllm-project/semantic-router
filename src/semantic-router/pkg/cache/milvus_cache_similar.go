@@ -28,30 +28,25 @@ func milvusActiveEntryFilterExpr(model string) string {
 	)
 }
 
-func milvusResponseBodyFieldIndex(hit *client.SearchResult) int {
-	if hit == nil || len(hit.Fields) <= 1 {
-		return 0
-	}
-	testCol, ok := hit.Fields[0].(*entity.ColumnVarChar)
-	if !ok || testCol.Len() == 0 {
-		return 0
-	}
-	testVal := testCol.Data()[0]
-	if len(testVal) == 32 && isHexString(testVal) {
-		return 1
-	}
-	return 0
-}
-
-func milvusFirstVarCharBytes(hit *client.SearchResult, fieldIdx int) []byte {
-	if hit == nil || fieldIdx < 0 || fieldIdx >= len(hit.Fields) {
+func extractMilvusResponseBody(hit *client.SearchResult) []byte {
+	if hit == nil {
 		return nil
 	}
-	col, ok := hit.Fields[fieldIdx].(*entity.ColumnVarChar)
-	if !ok || col.Len() == 0 {
-		return nil
+	for _, field := range hit.Fields {
+		if col, ok := field.(*entity.ColumnVarChar); ok && col.Name() == "response_body" && col.Len() > 0 {
+			return []byte(col.Data()[0])
+		}
 	}
-	return []byte(col.Data()[0])
+	for _, field := range hit.Fields {
+		if col, ok := field.(*entity.ColumnVarChar); ok && col.Len() > 0 {
+			val := col.Data()[0]
+			if len(val) == 32 && isHexString(val) {
+				continue
+			}
+			return []byte(val)
+		}
+	}
+	return nil
 }
 
 func (c *MilvusCache) milvusSearchSimilarVectors(
@@ -59,6 +54,9 @@ func (c *MilvusCache) milvusSearchSimilarVectors(
 	model string,
 	queryEmbedding []float32,
 ) ([]client.SearchResult, error) {
+	if c.searchFn != nil {
+		return c.searchFn(ctx, model, queryEmbedding)
+	}
 	searchParam, err := entity.NewIndexHNSWSearchParam(c.config.Search.Params.Ef)
 	if err != nil {
 		return nil, err
@@ -68,12 +66,13 @@ func (c *MilvusCache) milvusSearchSimilarVectors(
 		c.collectionName,
 		[]string{},
 		milvusActiveEntryFilterExpr(model),
-		[]string{"response_body"},
+		[]string{"response_body", "timestamp", "expires_at"},
 		[]entity.Vector{entity.FloatVector(queryEmbedding)},
 		c.config.Collection.VectorField.Name,
 		entity.MetricType(c.config.Collection.VectorField.MetricType),
 		c.config.Search.TopK,
 		searchParam,
+		c.searchQueryOptions()...,
 	)
 }
 
@@ -83,37 +82,43 @@ func (c *MilvusCache) FindSimilar(model string, query string) ([]byte, bool, err
 }
 
 // FindSimilarWithThreshold searches for semantically similar cached requests using a specific threshold
-//
-//nolint:cyclop,funlen
 func (c *MilvusCache) FindSimilarWithThreshold(model string, query string, threshold float32) ([]byte, bool, error) {
-	result, err := c.LookupSimilarWithThreshold(model, query, threshold)
+	result, err := c.LookupSimilarWithThreshold(context.Background(), model, query, threshold)
 	return result.ResponseBody, result.Found, err
 }
 
 // LookupSimilarWithThreshold returns response data and similarity atomically.
 //
 //nolint:cyclop,funlen
-func (c *MilvusCache) LookupSimilarWithThreshold(model string, query string, threshold float32) (LookupResult, error) {
+func (c *MilvusCache) LookupSimilarWithThreshold(ctx context.Context, model string, query string, threshold float32) (LookupResult, error) {
 	start := time.Now()
 
 	if !c.enabled {
 		logging.Debugf("MilvusCache.FindSimilarWithThreshold: cache disabled")
 		return LookupResult{}, nil
 	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	logging.Debugf("MilvusCache.FindSimilarWithThreshold: searching for model='%s', query=%s, threshold=%.4f",
 		model, logging.ContentDescriptor(query), threshold)
 
-	queryEmbedding, err := c.getEmbedding(query)
+	queryEmbedding, err := c.getEmbedding(ctx, query)
 	if err != nil {
 		metrics.RecordCacheOperation("milvus", "find_similar", "error", time.Since(start).Seconds())
 		return LookupResult{}, fmt.Errorf("failed to generate embedding: %w", err)
 	}
 
-	searchResult, err := c.milvusSearchSimilarVectors(context.Background(), model, queryEmbedding)
+	searchResult, err := c.milvusSearchSimilarVectors(ctx, model, queryEmbedding)
 	if err != nil {
 		logging.Debugf("MilvusCache.FindSimilarWithThreshold: search failed: %v", err)
 		atomic.AddInt64(&c.missCount, 1)
 		metrics.RecordCacheOperation("milvus", "find_similar", "error", time.Since(start).Seconds())
+		// A canceled or expired request is surfaced as an error; every other
+		// search failure keeps the existing fail-open miss (#2473).
+		if contextErr := contextErrorOnFailure(ctx, err); contextErr != nil {
+			return LookupResult{}, contextErr
+		}
 		return LookupResult{}, nil
 	}
 
@@ -148,11 +153,12 @@ func (c *MilvusCache) LookupSimilarWithThreshold(model string, query string, thr
 			"collection":      c.collectionName,
 		})
 		metrics.RecordCacheOperation("milvus", "find_similar", "miss", time.Since(start).Seconds())
+		// The rejected candidate's score belongs to this lookup; see the
+		// in-memory backend for the full rationale.
 		return LookupResult{Similarity: bestSimilarity}, nil
 	}
 
-	idx := milvusResponseBodyFieldIndex(hit)
-	responseBody := milvusFirstVarCharBytes(hit, idx)
+	responseBody := extractMilvusResponseBody(hit)
 	if responseBody == nil {
 		logging.Debugf("MilvusCache.FindSimilarWithThreshold: cache hit but response_body is missing or not a string")
 		atomic.AddInt64(&c.missCount, 1)
@@ -172,11 +178,23 @@ func (c *MilvusCache) LookupSimilarWithThreshold(model string, query string, thr
 		"collection": c.collectionName,
 	})
 	metrics.RecordCacheOperation("milvus", "find_similar", "hit", time.Since(start).Seconds())
-	return LookupResult{
-		ResponseBody: responseBody,
-		Found:        true,
-		Similarity:   bestSimilarity,
-	}, nil
+	storedAt, expiresAt := parseMilvusHitTiming(hit)
+	return lookupResultFromTimestamps(responseBody, bestSimilarity, storedAt, expiresAt), nil
+}
+
+func parseMilvusHitTiming(hit *client.SearchResult) (time.Time, time.Time) {
+	var storedAt, expiresAt time.Time
+	for _, field := range hit.Fields {
+		if col, ok := field.(*entity.ColumnInt64); ok && col.Len() > 0 {
+			val, _ := col.ValueByIdx(0)
+			if col.Name() == "timestamp" && val > 0 {
+				storedAt = time.Unix(val, 0)
+			} else if col.Name() == "expires_at" && val > 0 {
+				expiresAt = time.Unix(val, 0)
+			}
+		}
+	}
+	return storedAt, expiresAt
 }
 
 // isHexString checks if a string contains only hexadecimal characters

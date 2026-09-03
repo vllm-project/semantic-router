@@ -2,9 +2,11 @@
 
 ## Overview
 
-`pii` detects sensitive personal data in requests. It maps to `config/fragments/signal/pii/` and is declared under `routing.signals.pii`.
+`pii` detects sensitive personal data in requests. Define PII rules under
+`routing.signals.pii`.
 
-This family is learned: it uses the router-owned PII detection path configured through `global.model_catalog.system.pii_classifier`.
+It uses the PII detector configured through
+`global.model_catalog.system.pii_classifier`.
 
 ## Key Advantages
 
@@ -30,8 +32,6 @@ Use `pii` when:
 
 ## Configuration
 
-Source fragment family: `config/fragments/signal/pii/`
-
 ```yaml
 routing:
   signals:
@@ -45,3 +45,10 @@ routing:
 ```
 
 When `pii_types_allowed` is empty, any detected PII can cause the signal to match.
+
+## Dependencies and Limitations
+
+The PII classifier processes the prompt and optional history. It is a routing
+control, not a substitute for redaction, encryption, access control, or data
+loss prevention. Calibrate thresholds by entity type. See a complete example:
+[`config/fragments/signal/pii/strict.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/pii/strict.yaml).

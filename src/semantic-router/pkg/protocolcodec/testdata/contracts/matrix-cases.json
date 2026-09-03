@@ -1,0 +1,158 @@
+{
+  "protocols": ["chat", "responses", "anthropic"],
+  "scenarios": [
+    {
+      "name": "basic request",
+      "kind": "request",
+      "inputs": {
+        "chat": "001-chat-basic-in.json",
+        "responses": "002-responses-basic-in.json",
+        "anthropic": "003-anthropic-basic-in.json"
+      }
+    },
+    {
+      "name": "tool request and result history",
+      "kind": "request",
+      "inputs": {
+        "chat": "004-chat-tool-lifecycle-in.json",
+        "responses": "005-responses-tool-lifecycle-in.json",
+        "anthropic": "006-anthropic-tool-lifecycle-in.json"
+      }
+    },
+    {
+      "name": "ordered multimodal request",
+      "kind": "request",
+      "inputs": {
+        "chat": "007-chat-ordered-multimodal-in.json",
+        "responses": "008-responses-ordered-multimodal-in.json",
+        "anthropic": "009-anthropic-ordered-multimodal-in.json"
+      }
+    },
+    {
+      "name": "structured output request",
+      "kind": "request",
+      "inputs": {
+        "chat": "010-chat-structured-output-in.json",
+        "responses": "011-responses-structured-output-in.json",
+        "anthropic": "012-anthropic-structured-output-in.json"
+      }
+    },
+    {
+      "name": "basic response",
+      "kind": "response",
+      "inputs": {
+        "chat": "001-chat-basic-in.json",
+        "responses": "002-responses-basic-in.json",
+        "anthropic": "003-anthropic-basic-in.json"
+      }
+    },
+    {
+      "name": "tool-call response",
+      "kind": "response",
+      "inputs": {
+        "chat": "004-chat-tool-call-in.json",
+        "responses": "007-responses-tool-call-in.json",
+        "anthropic": "008-anthropic-tool-call-in.json"
+      }
+    },
+    {
+      "name": "transport error",
+      "kind": "error",
+      "inputs": {
+        "chat": "001-chat-rate-limit-in.json",
+        "responses": "002-responses-authentication-in.json",
+        "anthropic": "003-anthropic-overloaded-in.json"
+      }
+    },
+    {
+      "name": "text stream",
+      "kind": "stream",
+      "inputs": {
+        "chat": "001-chat-text-in.json",
+        "responses": "002-responses-text-in.json",
+        "anthropic": "003-anthropic-text-in.json"
+      }
+    },
+    {
+      "name": "tool-call stream",
+      "kind": "stream",
+      "inputs": {
+        "chat": "004-chat-tool-call-in.json",
+        "responses": "005-responses-tool-call-in.json",
+        "anthropic": "006-anthropic-tool-call-in.json"
+      }
+    },
+    {
+      "name": "incomplete stream",
+      "kind": "stream",
+      "inputs": {
+        "chat": "007-chat-incomplete-in.json",
+        "responses": "008-responses-incomplete-in.json",
+        "anthropic": "009-anthropic-incomplete-in.json"
+      }
+    },
+    {
+      "name": "midstream provider error",
+      "kind": "stream",
+      "inputs": {
+        "chat": "010-chat-midstream-error-in.json",
+        "responses": "011-responses-midstream-error-in.json",
+        "anthropic": "012-anthropic-midstream-error-in.json"
+      }
+    },
+    {
+      "name": "parallel tool-call stream",
+      "kind": "stream",
+      "inputs": {
+        "chat": "017-chat-parallel-tool-calls-in.json",
+        "responses": "018-responses-parallel-tool-calls-in.json",
+        "anthropic": "019-anthropic-parallel-tool-calls-in.json"
+      }
+    },
+    {
+      "name": "ordered reasoning, tool-call, and final-text stream",
+      "kind": "stream",
+      "inputs": {
+        "chat": "021-chat-reasoning-tool-text-in.json",
+        "responses": "020-responses-reasoning-tool-text-in.json",
+        "anthropic": "022-anthropic-reasoning-tool-text-in.json"
+      }
+    },
+    {
+      "name": "multilingual Unicode stream",
+      "kind": "stream",
+      "inputs": {
+        "chat": "023-chat-unicode-text-in.json",
+        "responses": "024-responses-unicode-text-in.json",
+        "anthropic": "025-anthropic-unicode-text-in.json"
+      }
+    },
+    {
+      "name": "BOM-prefixed CRLF stream with keepalive comments",
+      "kind": "stream",
+      "inputs": {
+        "chat": "026-chat-crlf-keepalive-in.json",
+        "responses": "027-responses-crlf-keepalive-in.json",
+        "anthropic": "028-anthropic-crlf-keepalive-in.json"
+      }
+    },
+    {
+      "name": "transport cancellation after provisional provider success",
+      "kind": "stream",
+      "inputs": {
+        "chat": "032-chat-success-then-canceled-in.json",
+        "responses": "033-responses-success-then-canceled-in.json",
+        "anthropic": "034-anthropic-success-then-canceled-in.json"
+      }
+    },
+    {
+      "name": "transport deadline after provisional provider success",
+      "kind": "stream",
+      "inputs": {
+        "chat": "035-chat-success-then-deadline-in.json",
+        "responses": "036-responses-success-then-deadline-in.json",
+        "anthropic": "037-anthropic-success-then-deadline-in.json"
+      }
+    }
+  ]
+}

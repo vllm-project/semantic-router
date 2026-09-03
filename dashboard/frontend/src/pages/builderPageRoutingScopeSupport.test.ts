@@ -110,7 +110,7 @@ describe('Builder routing scope navigation', () => {
     models: [{ name: 'shared-model', fields: {}, pos: { Line: 1, Column: 1 } }],
     entrypoints: [
       {
-        modelNames: ['vllm-sr/mom-balanced-v1'],
+        modelNames: ['vllm-sr/mom-v1-blend'],
         recipe: 'balanced',
         pos: { Line: 2, Column: 1 },
       },
@@ -146,7 +146,7 @@ describe('Builder routing scope navigation', () => {
         id: 'recipe:balanced',
         label: 'balanced',
         recipeName: 'balanced',
-        modelNames: ['vllm-sr/mom-balanced-v1'],
+        modelNames: ['vllm-sr/mom-v1-blend'],
       },
     ])
     expect(resolveBuilderRoutingScope(scopedAst, 'recipe:balanced')).toMatchObject({

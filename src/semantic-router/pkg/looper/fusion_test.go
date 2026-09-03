@@ -18,9 +18,14 @@ import (
 )
 
 func TestFusionLooperExecutesPanelJudgeAndFinal(t *testing.T) {
-	var seenModels []string
+	var (
+		seenModelsMu sync.Mutex
+		seenModels   []string
+	)
 	server := newFusionStubServer(t, func(model, prompt string) (string, int) {
+		seenModelsMu.Lock()
 		seenModels = append(seenModels, model)
+		seenModelsMu.Unlock()
 		switch model {
 		case "panel-a":
 			return "panel a answer", http.StatusOK
@@ -54,7 +59,10 @@ func TestFusionLooperExecutesPanelJudgeAndFinal(t *testing.T) {
 	assert.Equal(t, "judge", resp.Model)
 	assert.Equal(t, []string{"panel-a", "panel-b", "judge"}, resp.ModelsUsed)
 	assert.Equal(t, 4, resp.Iterations)
-	assert.ElementsMatch(t, []string{"panel-a", "panel-b", "judge", "judge"}, seenModels)
+	seenModelsMu.Lock()
+	seenModelsSnapshot := append([]string(nil), seenModels...)
+	seenModelsMu.Unlock()
+	assert.ElementsMatch(t, []string{"panel-a", "panel-b", "judge", "judge"}, seenModelsSnapshot)
 	expectedUsage := TokenUsage{PromptTokens: 90, CompletionTokens: 13, TotalTokens: 103}
 	assert.Equal(t, expectedUsage, resp.Usage)
 
@@ -172,6 +180,15 @@ func TestMergeFusionRequestConfigCoversAdvancedOptions(t *testing.T) {
 	assert.Equal(t, 2, dst.GroundingMinKeep)
 	assert.Equal(t, 0.7, dst.GroundingNLIContradictionPenalty)
 	assert.Equal(t, config.FusionOnErrorFail, dst.GroundingOnError)
+}
+
+func TestFusionExecutionConfigRejectsQuorumLargerThanPanel(t *testing.T) {
+	cfg := normalizeFusionExecutionConfig(fusionExecutionConfig{
+		AnalysisModels:         []string{"panel-a", "panel-b"},
+		MinSuccessfulResponses: 3,
+	})
+	assert.Equal(t, 3, cfg.MinSuccessfulResponses)
+	require.ErrorContains(t, validateFusionExecutionConfig(cfg), "exceeds panel size 2")
 }
 
 func TestResolveFusionExecutionConfigLayersAnalysisOverridesFieldWise(t *testing.T) {

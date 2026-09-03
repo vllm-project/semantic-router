@@ -1,12 +1,8 @@
-import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 
-import {
-  McpArgumentsEditor,
-  McpEnvironmentEditor,
-} from './configPageClassifierStructuredEditors'
+import { McpArgumentsEditor, McpEnvironmentEditor } from './configPageClassifierStructuredEditors'
 import {
   normalizeMcpArguments,
   normalizeMcpCategoryModel,
@@ -55,13 +51,5 @@ describe('classifier structured fields', () => {
     expect(markup).toContain('API_KEY')
     expect(markup).not.toContain('textarea')
     expect(markup).not.toContain('JSON')
-  })
-
-  it('wires the structured controls into the classifier modal', () => {
-    const source = readFileSync(new URL('./ConfigPageClassifierSection.tsx', import.meta.url), 'utf8')
-    expect(source).toContain('<McpArgumentsEditor')
-    expect(source).toContain('<McpEnvironmentEditor')
-    expect(source).toContain('normalizeMcpCategoryModel(data)')
-    expect(source).not.toMatch(/Arguments \(JSON\)|Environment Variables \(JSON\)/)
   })
 })

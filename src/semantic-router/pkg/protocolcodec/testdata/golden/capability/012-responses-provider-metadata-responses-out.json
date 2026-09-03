@@ -1,0 +1,7 @@
+{
+  "status": "error",
+  "error": {
+    "category": "upstream_unavailable",
+    "code": "invalid_response_item"
+  }
+}

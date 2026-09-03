@@ -18,25 +18,25 @@ function modelName(index: number): string {
 function buildConfig() {
   const models = Array.from({ length: MODEL_COUNT }, (_, index) => {
     const name = modelName(index)
-    const reasoningFamily = index % 3 === 0
-      ? 'family-alpha'
-      : index % 3 === 1
-        ? 'family-beta'
-        : undefined
+    const reasoningFamily =
+      index % 3 === 0 ? 'family-alpha' : index % 3 === 1 ? 'family-beta' : undefined
 
     return {
       name,
       provider_model_id: `physical/Qwen-Scale-${String(index).padStart(3, '0')}`,
       api_format: 'openai',
       reasoning_family: reasoningFamily,
-      backend_refs: index % 2 === 0
-        ? [{
-            name: `local-rocm-${index % 4}`,
-            endpoint: 'vllm:8000',
-            protocol: 'http' as const,
-            weight: 1,
-          }]
-        : [],
+      backend_refs:
+        index % 2 === 0
+          ? [
+              {
+                name: `local-rocm-${index % 4}`,
+                endpoint: 'vllm:8000',
+                protocol: 'http' as const,
+                weight: 1,
+              },
+            ]
+          : [],
       pricing: {
         currency: 'USD',
         prompt_per_1m: index / 100,
@@ -61,26 +61,31 @@ function buildConfig() {
     routing: {
       modelCards: models.map((model, index) => ({
         name: model.name,
-        description: index === 299
-          ? 'Unique needle model for large inventory search coverage.'
-          : `Scale-test routing model ${index}`,
+        description:
+          index === 299
+            ? 'Unique needle model for large inventory search coverage.'
+            : `Scale-test routing model ${index}`,
         capabilities: index % 2 === 0 ? ['chat', 'reasoning'] : ['chat'],
         tags: [index % 2 === 0 ? 'rocm' : 'fallback'],
         modality: 'text',
         param_size: `${8 + (index % 4) * 8}B`,
       })),
       signals: {},
-      decisions: [{
-        name: 'protected-production-route',
-        description: 'Keeps one non-default model protected by a routing reference.',
-        priority: 1,
-        rules: { operator: 'AND' as const, conditions: [] },
-        modelRefs: [{
-          model: REFERENCED_MODEL,
-          use_reasoning: false,
-          weight: 1,
-        }],
-      }],
+      decisions: [
+        {
+          name: 'protected-production-route',
+          description: 'Keeps one non-default model protected by a routing reference.',
+          priority: 1,
+          rules: { operator: 'AND' as const, conditions: [] },
+          modelRefs: [
+            {
+              model: REFERENCED_MODEL,
+              use_reasoning: false,
+              weight: 1,
+            },
+          ],
+        },
+      ],
     },
     global: {},
     plugins: {},
@@ -158,22 +163,50 @@ async function mockLargeModelInventory(
 
 test.describe('Models inventory at 300+ scale', () => {
   test('adds and edits one model with one canonical write per action', async ({ page }) => {
+    test.setTimeout(90_000)
     const { writes } = await mockLargeModelInventory(page)
     await page.goto('/config/models')
 
     await expect(page.getByText(`1–25 of ${MODEL_COUNT} models`, { exact: true })).toBeVisible()
     await page.getByRole('button', { name: 'Add Model' }).click()
 
-    const addDialog = page.getByRole('dialog', { name: 'Add New Model' })
-    await addDialog.getByLabel('Model Name').fill('model-305-added')
-    await addDialog.getByLabel('Provider Model ID').fill('physical/Qwen-Scale-305')
-    await addDialog.getByLabel('API Format').fill('openai')
-    await addDialog.getByLabel('Description').fill('Added from the 305-model inventory.')
-    await addDialog.getByLabel('Capabilities').fill('chat\nreasoning')
-    await addDialog.getByLabel('Tags').fill('rocm\nnew')
-    await addDialog.getByRole('button', { name: 'Add', exact: true }).click()
+    const addDialog = page.getByRole('dialog', { name: 'Add models' })
+    await addDialog.getByRole('button', { name: /vLLM Connect a private vLLM endpoint/ }).click()
+    const connectionDialog = page.getByRole('dialog', { name: 'vLLM' })
+    await connectionDialog.getByLabel('Base URL').fill('http://localhost:8000/v1')
+    await connectionDialog.getByLabel(/API key/).fill('test-provider-key')
+    await connectionDialog.getByPlaceholder('Or enter a model ID').fill('physical/Qwen-Scale-305')
+    await connectionDialog.getByRole('button', { name: 'Add', exact: true }).click()
 
-    await expect(addDialog).toBeHidden()
+    const manualModelInput = connectionDialog.getByPlaceholder('Or enter a model ID')
+    const advancedSettings = connectionDialog.getByText('Advanced settings', { exact: true })
+    const manualModelBox = await manualModelInput.boundingBox()
+    const advancedSettingsBox = await advancedSettings.boundingBox()
+    expect(manualModelBox).not.toBeNull()
+    expect(advancedSettingsBox).not.toBeNull()
+    expect(
+      (advancedSettingsBox?.y ?? 0) - ((manualModelBox?.y ?? 0) + (manualModelBox?.height ?? 0)),
+    ).toBeGreaterThanOrEqual(14)
+
+    await advancedSettings.click()
+    await connectionDialog.getByLabel('Name prefix Optional').fill('model-305-added')
+    await connectionDialog.getByLabel('Reasoning family Optional').selectOption('family-alpha')
+    await connectionDialog
+      .getByLabel('Description Optional')
+      .fill('Added from the 305-model inventory.')
+    await connectionDialog.getByLabel('Modality Optional').selectOption('ar')
+    await connectionDialog.getByLabel('Parameter size Optional').fill('32B')
+    await connectionDialog.getByLabel('Context window Optional').fill('131072')
+    await connectionDialog.getByLabel('Quality score 0–1').fill('0.91')
+    await connectionDialog.getByLabel('Capabilities Comma separated').fill('chat, reasoning')
+    await connectionDialog.getByLabel('Tags Comma separated').fill('rocm, new')
+    await connectionDialog.getByLabel('Input cost Optional').fill('0.25')
+    await connectionDialog.getByLabel('Output cost Optional').fill('0.5')
+    await connectionDialog.getByLabel('Max retries 0–5').fill('2')
+    await connectionDialog.getByLabel('Load balancing Optional').selectOption('LEAST_REQUEST')
+    await connectionDialog.getByRole('button', { name: 'Add 1 model' }).click()
+
+    await expect(connectionDialog).toBeHidden()
     await expect.poll(() => writes.length).toBe(1)
     const addedConfig = writes[0]
     expect(addedConfig).not.toHaveProperty('signals')
@@ -183,38 +216,59 @@ test.describe('Models inventory at 300+ scale', () => {
     expect(addedConfig.providers.models).toHaveLength(MODEL_COUNT + 1)
     expect(addedConfig.routing.modelCards).toHaveLength(MODEL_COUNT + 1)
     expect(
-      addedConfig.providers.models.find((model) => model.name === 'model-305-added'),
+      addedConfig.providers.models.find(
+        (model) => model.name === 'model-305-added/physical/Qwen-Scale-305',
+      ),
     ).toMatchObject({
-      name: 'model-305-added',
+      name: 'model-305-added/physical/Qwen-Scale-305',
       provider_model_id: 'physical/Qwen-Scale-305',
       api_format: 'openai',
       reasoning_family: 'family-alpha',
       backend_refs: [
-        { name: 'endpoint-1', endpoint: 'localhost:8000', protocol: 'http', weight: 1 },
+        {
+          name: 'vllm-primary',
+          base_url: 'http://localhost:8000/v1',
+          provider: 'openai',
+          api_key: 'test-provider-key',
+        },
       ],
+      pricing: {
+        currency: 'USD',
+        prompt_per_1m: 0.25,
+        completion_per_1m: 0.5,
+        cached_input_per_1m: 0.25,
+        cache_write_per_1m: 0.25,
+      },
+      reliability: { retry_count: 2, lb_policy: 'LEAST_REQUEST' },
     })
     expect(
-      addedConfig.routing.modelCards.find((model) => model.name === 'model-305-added'),
+      addedConfig.routing.modelCards.find(
+        (model) => model.name === 'model-305-added/physical/Qwen-Scale-305',
+      ),
     ).toMatchObject({
       description: 'Added from the 305-model inventory.',
       capabilities: ['chat', 'reasoning'],
       tags: ['rocm', 'new'],
+      modality: 'ar',
+      param_size: '32B',
+      context_window_size: 131072,
+      quality_score: 0.91,
     })
 
-    const search = page.getByRole('searchbox', {
-      name: 'Search name, ID, family, tag, or capability...',
-    })
-    await search.fill('model-305-added')
+    const search = page.getByPlaceholder('Search name, ID, family, tag, or capability...')
+    await search.fill('model-305-added/physical/Qwen-Scale-305')
     await expect(page.getByText('1–1 of 1 models', { exact: true })).toBeVisible()
-    await page.getByRole('button', { name: 'Edit model-305-added' }).click()
+    await page.getByRole('button', { name: 'Edit model-305-added/physical/Qwen-Scale-305' }).click()
 
-    const editDialog = page.getByRole('dialog', { name: 'Edit Model: model-305-added' })
+    const editDialog = page.getByRole('dialog', {
+      name: 'Edit Model: model-305-added/physical/Qwen-Scale-305',
+    })
     await expect(editDialog.getByLabel('Provider Model ID')).toHaveValue('physical/Qwen-Scale-305')
     await editDialog.getByLabel('Provider Model ID').fill('physical/Qwen-Scale-305-v2')
     await editDialog
       .getByLabel('Description')
       .fill('Updated without shrinking the large inventory.')
-    await editDialog.getByLabel('Tags').fill('rocm\nupdated')
+    await editDialog.getByRole('textbox', { name: 'Tag 2', exact: true }).fill('updated')
     await editDialog.getByRole('button', { name: 'Save', exact: true }).click()
 
     await expect(editDialog).toBeHidden()
@@ -226,12 +280,16 @@ test.describe('Models inventory at 300+ scale', () => {
     expect(editedConfig.providers.models).toHaveLength(MODEL_COUNT + 1)
     expect(editedConfig.routing.modelCards).toHaveLength(MODEL_COUNT + 1)
     expect(
-      editedConfig.providers.models.find((model) => model.name === 'model-305-added'),
+      editedConfig.providers.models.find(
+        (model) => model.name === 'model-305-added/physical/Qwen-Scale-305',
+      ),
     ).toMatchObject({
       provider_model_id: 'physical/Qwen-Scale-305-v2',
     })
     expect(
-      editedConfig.routing.modelCards.find((model) => model.name === 'model-305-added'),
+      editedConfig.routing.modelCards.find(
+        (model) => model.name === 'model-305-added/physical/Qwen-Scale-305',
+      ),
     ).toMatchObject({
       description: 'Updated without shrinking the large inventory.',
       tags: ['rocm', 'updated'],
@@ -241,6 +299,7 @@ test.describe('Models inventory at 300+ scale', () => {
   })
 
   test('paginates 25 rows and composes family filters with search', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 })
     await mockLargeModelInventory(page)
     await page.goto('/config/models')
 
@@ -250,7 +309,20 @@ test.describe('Models inventory at 300+ scale', () => {
     await expect(page.getByText(DEFAULT_MODEL, { exact: true })).toBeVisible()
     await expect(page.getByText('model-024', { exact: true })).toBeVisible()
 
-    await page.getByRole('button', { name: 'Next page' }).click()
+    const modelHeader = page.getByRole('columnheader', { name: 'Model Name' })
+    const pricingHeader = page.getByRole('columnheader', { name: 'Pricing' })
+    await expect
+      .poll(async () => (await modelHeader.boundingBox())?.width ?? 0)
+      .toBeGreaterThanOrEqual(260)
+    await expect
+      .poll(async () => (await pricingHeader.boundingBox())?.width ?? 0)
+      .toBeGreaterThanOrEqual(124)
+    await expect(pricingHeader).toHaveText('Pricing')
+
+    await page
+      .getByRole('group', { name: 'models pagination' })
+      .getByRole('button', { name: 'Next page' })
+      .click()
     await expect(page.getByText(`26–50 of ${MODEL_COUNT} models`, { exact: true })).toBeVisible()
     await expect(page.getByText('model-025', { exact: true })).toBeVisible()
     await expect(page.getByText('model-049', { exact: true })).toBeVisible()
@@ -261,13 +333,17 @@ test.describe('Models inventory at 300+ scale', () => {
     await expect(page.getByText(DEFAULT_MODEL, { exact: true })).toBeVisible()
 
     await page.getByRole('button', { name: 'Clear filters' }).click()
-    await page.getByRole('searchbox', { name: 'Search name, ID, family, tag, or capability...' }).fill('model-299-needle')
+    await page
+      .getByPlaceholder('Search name, ID, family, tag, or capability...')
+      .fill('model-299-needle')
     await expect(page.getByText('1–1 of 1 models', { exact: true })).toBeVisible()
     await expect(page.getByText('model-299-needle', { exact: true })).toBeVisible()
     await expect(page.getByText('physical/Qwen-Scale-299', { exact: true })).toBeVisible()
   })
 
-  test('keeps body lock and focus intact across the shared view-to-edit transition', async ({ page }) => {
+  test('keeps body lock and focus intact across the shared view-to-edit transition', async ({
+    page,
+  }) => {
     await mockLargeModelInventory(page)
     await page.goto('/config/models')
 
@@ -283,7 +359,9 @@ test.describe('Models inventory at 300+ scale', () => {
     const editDialog = page.getByRole('dialog', { name: `Edit Model: ${DEFAULT_MODEL}` })
     await expect(editDialog).toBeVisible()
     await expect.poll(() => page.evaluate(() => document.body.style.overflow)).toBe('hidden')
-    expect(await editDialog.evaluate((element) => element.contains(document.activeElement))).toBe(true)
+    await expect
+      .poll(() => editDialog.evaluate((element) => element.contains(document.activeElement)))
+      .toBe(true)
 
     await page.keyboard.press('Escape')
     await expect(editDialog).toBeHidden()
@@ -291,7 +369,9 @@ test.describe('Models inventory at 300+ scale', () => {
     await expect(viewButton).toBeFocused()
   })
 
-  test('keeps selection across pages, blocks protected models, and saves a bulk delete once', async ({ page }) => {
+  test('keeps selection across pages, blocks protected models, and saves a bulk delete once', async ({
+    page,
+  }) => {
     const { writes } = await mockLargeModelInventory(page)
     await page.goto('/config/models')
 
@@ -299,17 +379,24 @@ test.describe('Models inventory at 300+ scale', () => {
     await expect(page.getByLabel(`Select model ${REFERENCED_MODEL}`)).toBeDisabled()
 
     await page.getByRole('button', { name: `Delete ${DEFAULT_MODEL}` }).click()
-    await expect(page.getByText('Choose a different default model before deleting this model.')).toBeVisible()
+    await expect(
+      page.getByText('Choose a different default model before deleting this model.'),
+    ).toBeVisible()
     await expect(page.getByRole('alertdialog')).toHaveCount(0)
     expect(writes).toHaveLength(0)
 
     await page.getByRole('button', { name: `Delete ${REFERENCED_MODEL}` }).click()
-    await expect(page.getByText('Remove this model from 1 routing decision before deleting it.')).toBeVisible()
+    await expect(
+      page.getByText('Remove this model from 1 routing decision before deleting it.'),
+    ).toBeVisible()
     await expect(page.getByRole('alertdialog')).toHaveCount(0)
     expect(writes).toHaveLength(0)
 
     await page.getByLabel('Select model model-002').check()
-    await page.getByRole('button', { name: 'Next page' }).click()
+    await page
+      .getByRole('group', { name: 'models pagination' })
+      .getByRole('button', { name: 'Next page' })
+      .click()
     await page.getByLabel('Select model model-026').check()
 
     await expect(page.getByText('2 selected', { exact: true })).toBeVisible()

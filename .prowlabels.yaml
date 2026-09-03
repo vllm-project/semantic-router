@@ -1,38 +1,16 @@
-area:
-  - core
-  - research
-  - observability
-  - networking
-  - bench
-  - environment
-  - user-experience
-  - docs
-  - test-and-release
-
 priority:
   - P0
   - P1
   - P2
 
-lifecycle:
-  - needs-triage
-  - needs-info
-  - backlog
-  - milestone-candidate
-  - release-blocker
-  - stale
+wg:
+  - mom-routing
+  - router-models-inference-runtime
+  - data-plane-networking
+  - enterprise-environment
+  - agentic-context
+  - developer-experience-ecosystem
+  - evaluation-quality
 
-track:
-  - contracts
-  - ops
-  - performance
-  - research-to-product
-  - hardening
-  - security
-
-pr-state:
-  - needs-review
-  - needs-rebase
-  - blocked
-  - close-candidate
-  - ci/full
+owner:
+  - maintainers

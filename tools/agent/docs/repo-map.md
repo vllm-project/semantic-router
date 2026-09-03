@@ -34,10 +34,14 @@ the changed-file structure gate rejects unowned additions.
   - Go router, Envoy extproc server, config loading, Kubernetes controller, routing logic
 - `src/semantic-router/pkg/milvus/`
   - Shared Milvus dial, collection ensure/load, and retry helpers for memory, cache, vectorstore, replay, and extproc memory wiring (see issue #1601)
+- `src/semantic-router/pkg/looper/`, `modelruntime/`, `routerruntime/`
+  - Multi-model execution plus model and router runtime lifecycle
+- `src/semantic-router/pkg/contextcompression/`, `sessiontelemetry/`
+  - Long-context processing and session-aware routing state
 - `src/vllm-sr/`
   - Python CLI, config generation, Docker orchestration, local bootstrap flow
 - `src/fleet-sim/`
-  - Fleet simulator package, HTTP service, data sets, examples, and service image used by the dashboard sidecar
+  - Standalone fleet simulator package, HTTP service, data sets, examples, and service image
 - `candle-binding/`, `ml-binding/`, `nlp-binding/`
   - Rust-backed inference and ML bindings used by the router
 - `dashboard/`
@@ -105,7 +109,7 @@ the changed-file structure gate rejects unowned additions.
 - `src/vllm-sr/**`
   - affects local developer experience and local image startup
 - `src/fleet-sim/**`
-  - affects simulator packaging, dashboard fleet-planning workflows, and local sidecar startup
+  - affects the standalone simulator package, service, and release workflow
 - `deploy/operator/**`
   - affects CRD schema, generated manifests, and controller-side config translation
 - `src/semantic-router/**`
@@ -129,4 +133,4 @@ the changed-file structure gate rejects unowned additions.
 - [tools/agent/docs/feature-complete-checklist.md](feature-complete-checklist.md)
 - [tools/agent/skill-registry.yaml](../../../tools/agent/skill-registry.yaml)
 - [tools/agent/task-matrix.yaml](../../../tools/agent/task-matrix.yaml)
-- [tools/agent/e2e-profile-map.yaml](../../../tools/agent/e2e-profile-map.yaml)
+- [tools/agent/test-domain-registry.yaml](../../../tools/agent/test-domain-registry.yaml)

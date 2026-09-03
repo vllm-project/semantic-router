@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 )
@@ -23,7 +24,7 @@ func (s *ClassificationService) buildPIIResponse(text string, detections []class
 
 	response := &PIIResponse{
 		HasPII:   len(detections) > 0,
-		Entities: buildPIIEntities(detections, returnPositions, maskEntities, revealEntityText, placeholders),
+		Entities: buildPIIEntities(text, detections, returnPositions, maskEntities, revealEntityText, placeholders),
 	}
 
 	if maskEntities && len(detections) > 0 {
@@ -70,7 +71,23 @@ func buildPIIMaskPlaceholders(detections []classification.PIIDetection) map[stri
 	return placeholders
 }
 
+// byteOffsetToRuneOffset converts a byte offset into text to a code-point offset.
+//
+// The classifier reports byte offsets, which is what buildMaskedPIIText needs
+// because it slices a Go string. Clients index by code point, so the API
+// converts on the way out.
+func byteOffsetToRuneOffset(text string, byteOffset int) int {
+	if byteOffset <= 0 {
+		return 0
+	}
+	if byteOffset >= len(text) {
+		return utf8.RuneCountInString(text)
+	}
+	return utf8.RuneCountInString(text[:byteOffset])
+}
+
 func buildPIIEntities(
+	text string,
 	detections []classification.PIIDetection,
 	returnPositions bool,
 	maskEntities bool,
@@ -85,8 +102,10 @@ func buildPIIEntities(
 			Confidence: float64(detection.Confidence),
 		}
 		if returnPositions {
-			entity.StartPos = detection.Start
-			entity.EndPos = detection.End
+			startPos := byteOffsetToRuneOffset(text, detection.Start)
+			endPos := byteOffsetToRuneOffset(text, detection.End)
+			entity.StartPos = &startPos
+			entity.EndPos = &endPos
 		}
 		if maskEntities {
 			entity.MaskedValue = placeholders[detection.EntityType+"\x00"+detection.Text]

@@ -16,9 +16,12 @@ This guide covers deploying [Qdrant](https://qdrant.tech/) as a backend for the 
 ### Quick Start
 
 ```bash
+docker network inspect vllm-sr-network >/dev/null 2>&1 || \
+  docker network create vllm-sr-network
+
 docker run -d --name qdrant \
-  -p 6333:6333 \
-  -p 6334:6334 \
+  --network vllm-sr-network \
+  -p 127.0.0.1:6333:6333 \
   qdrant/qdrant:latest
 ```
 
@@ -32,8 +35,8 @@ curl http://localhost:6333/healthz
 
 ```bash
 docker run -d --name qdrant \
-  -p 6333:6333 \
-  -p 6334:6334 \
+  --network vllm-sr-network \
+  -p 127.0.0.1:6333:6333 \
   -v qdrant-data:/qdrant/storage \
   qdrant/qdrant:latest
 ```
@@ -41,13 +44,36 @@ docker run -d --name qdrant \
 ### With API Key Authentication
 
 ```bash
+export QDRANT_API_KEY="$(openssl rand -hex 32)"
+
 docker run -d --name qdrant \
-  -p 6333:6333 \
-  -p 6334:6334 \
+  --network vllm-sr-network \
+  -p 127.0.0.1:6333:6333 \
   -v qdrant-data:/qdrant/storage \
-  -e QDRANT__SERVICE__API_KEY=your-secret-key \
+  -e QDRANT__SERVICE__API_KEY="$QDRANT_API_KEY" \
   qdrant/qdrant:latest
 ```
+
+When authentication is enabled, add the same environment reference to each
+Qdrant block that the Router uses:
+
+```yaml
+api_key: ${QDRANT_API_KEY}
+```
+
+Keep the value in the process environment or a Kubernetes Secret; do not put a
+literal API key in the Router config. Omit `api_key` when the Qdrant server does
+not require authentication.
+
+The host mapping exposes only the HTTP health/API port on loopback. The Router
+uses Qdrant's gRPC port directly over the shared Docker network, so it does not
+need to be published on the host. The hostname `qdrant` in the configuration below is Docker DNS on
+`vllm-sr-network`. If you start the Router with a custom stack name, for example
+`VLLM_SR_STACK_NAME=team-a vllm-sr serve`, attach Qdrant to
+`team-a-vllm-sr-network` and use the matching reachable hostname.
+
+The Docker examples use `latest` for short-lived evaluation. Pin a published
+Qdrant version or image digest for a shared or production deployment.
 
 ## Deploy in Kubernetes
 
@@ -124,6 +150,12 @@ spec:
   clusterIP: None
 ```
 
+The StatefulSet is an unauthenticated evaluation example. For a shared or
+production cluster, pin a chart or image version, configure an API key through
+a Kubernetes Secret, enable TLS in both Qdrant and the Router's `api_key` /
+`use_tls` bindings, restrict access with NetworkPolicy, and define backup and
+restore procedures for the persistent volume.
+
 ## Configure the Router
 
 ### Semantic Cache
@@ -131,7 +163,7 @@ spec:
 ```yaml
 global:
   stores:
-    semantic_cache:
+    response_cache:
       enabled: true
       backend_type: qdrant
       similarity_threshold: 0.90
@@ -140,7 +172,6 @@ global:
       qdrant:
         host: qdrant                   # Service name or hostname
         port: 6334
-        api_key: ""
         use_tls: false
         collection_name: semantic_cache
         connect_timeout: 10
@@ -157,7 +188,6 @@ global:
       qdrant:
         host: qdrant
         port: 6334
-        api_key: ""
         collection: agentic_memory
         dimension: 384               # Must match your embedding model
       embedding_model: bert
@@ -165,27 +195,60 @@ global:
       default_similarity_threshold: 0.70
 ```
 
+### Uploaded document vector store
+
+```yaml
+global:
+  stores:
+    vector_store:
+      enabled: true
+      backend_type: qdrant
+      file_storage_dir: /var/lib/vsr/data
+      embedding_model: multimodal
+      embedding_dimension: 384
+      qdrant:
+        host: qdrant
+        port: 6334
+        use_tls: false
+        connect_timeout: 10
+        collection_prefix: "vsr_vs_"
+      metadata_store: memory
+```
+
+Use durable shared metadata instead of `memory` when several Router replicas
+must see the same uploaded-file registry. The embedding dimension must match
+the configured embedding model.
+
 ### Router Replay Store
 
 ```yaml
 global:
   services:
     router_replay:
+      enabled: true
       store_backend: qdrant
       qdrant:
         host: qdrant
         port: 6334
-        api_key: ""
         collection_name: router_replay
 ```
 
-### Configuration Reference
+This enables the router-wide replay policy. Add a route-local `router_replay`
+plugin only when a decision needs to override capture or retention behavior;
+see the [Router Replay plugin](../tutorials/plugin/router-replay).
 
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `host` | `localhost` | Qdrant server hostname |
-| `port` | `6334` | Qdrant gRPC port |
-| `api_key` | _(empty)_ | API key for authentication |
-| `use_tls` | `false` | Enable TLS for the gRPC connection |
-| `collection_name` | varies | Collection to use (auto-created if absent) |
-| `connect_timeout` | `10` | Connection timeout in seconds |
+### Configuration reference
+
+All four Qdrant bindings accept `host`, `port`, optional `api_key`, and
+`use_tls`. Their collection fields are deliberately different:
+
+| Capability | Collection field | Other Qdrant-specific fields |
+| --- | --- | --- |
+| Response cache | `collection_name` | `connect_timeout` |
+| Agentic memory | `collection` | `dimension`, `connect_timeout` |
+| Uploaded document vector store | `collection_prefix` | `connect_timeout` |
+| Router Replay | `collection_name` | No connection-timeout field in the replay schema |
+
+Use an environment reference such as `${QDRANT_API_KEY}` for `api_key` when
+authentication is enabled. Validate the complete config rather than copying a
+field from one capability into another.

@@ -75,3 +75,27 @@ func (r *OpenAIRouter) decisionCandidatesForRequest(originalModel string, ctx *R
 	}
 	return []config.Decision{}
 }
+
+func (r *OpenAIRouter) decisionCandidatesForRequestModel(modelName string) []config.Decision {
+	if r == nil || r.Config == nil {
+		return nil
+	}
+	algorithm := ""
+	switch {
+	case r.Config.IsReMoMModelName(modelName):
+		algorithm = config.DecisionAlgorithmReMoM
+	case r.Config.IsFusionModelName(modelName):
+		algorithm = config.DecisionAlgorithmFusion
+	case r.Config.IsFlowModelName(modelName):
+		algorithm = config.DecisionAlgorithmWorkflows
+	default:
+		return nil
+	}
+	candidates := make([]config.Decision, 0)
+	for _, decision := range r.Config.Decisions {
+		if decision.Algorithm != nil && decision.Algorithm.Type == algorithm {
+			candidates = append(candidates, decision)
+		}
+	}
+	return candidates
+}

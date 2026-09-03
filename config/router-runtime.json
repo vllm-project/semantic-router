@@ -1,0 +1,8 @@
+{
+  "phase": "initializing_models",
+  "ready": false,
+  "message": "Required router models downloaded. Continuing startup...",
+  "ready_models": 12,
+  "total_models": 12,
+  "updated_at": "2026-08-31T15:43:19Z"
+}

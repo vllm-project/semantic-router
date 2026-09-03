@@ -2,9 +2,8 @@
 
 ## Overview
 
-`fusion` is a **looper** algorithm for multi-model deliberation. It fans a prompt out to an analysis panel, asks a judge model for structured analysis, and then asks the judge/calling model to produce the final answer.
-
-It aligns to `config/fragments/algorithm/looper/fusion.yaml`.
+`fusion` asks several models to analyze a request and a judge model to
+synthesize one final answer.
 
 The same runtime also supports a direct Fusion model slug through `global.integrations.looper.fusion.model_names`. The built-in default is `vllm-sr/fusion`; add `openrouter/fusion` there only when you intentionally want an OpenRouter-compatible alias. Direct Fusion is still signal-driven: vLLM-SR evaluates the request against Fusion-capable decisions and then executes the matched decision's judge and panel policy.
 
@@ -55,7 +54,7 @@ flowchart TD
 
 ## What Problem Does It Solve?
 
-Some prompts benefit from multiple independent attempts and a judge pass rather than a single route decision. `fusion` makes that orchestration a router-owned policy, so clients can use it through the same chat completions endpoint. Unlike a fixed provider-side Fusion endpoint, `vllm-sr/fusion` first uses vLLM-SR signals and decision priority to pick the right Fusion route for the request.
+Some prompts benefit from multiple independent attempts and a judge pass rather than a single route decision. `fusion` keeps that orchestration in Router policy, so clients can use it through the same chat completions endpoint. Unlike a fixed provider-side Fusion endpoint, `vllm-sr/fusion` first uses vLLM-SR signals and decision priority to pick the right Fusion route for the request.
 
 ## When to Use
 
@@ -68,7 +67,7 @@ Some prompts benefit from multiple independent attempts and a judge pass rather 
 
 - Fusion costs multiple model calls per request.
 - Streaming is emitted after panel and judge phases complete.
-- The first implementation does not include OpenRouter web search/fetch parity.
+- The current Fusion path does not include OpenRouter web search or fetch.
 - Final quality depends on the configured judge/calling model.
 
 ## Configuration
@@ -79,6 +78,8 @@ Decision-level Fusion:
 routing:
   decisions:
     - name: deliberation
+      description: Compare candidate answers and synthesize one response.
+      priority: 100
       output_contract: Preserve any explicit output format exactly.
       modelRefs:
         - model: qwen3-32b
@@ -108,7 +109,7 @@ or reference dereferencing. Extraction defaults to exact `content` matching;
 use `extract.sources` or `extract.mode: json_object` only when the decision
 explicitly permits a wider parser.
 
-Algorithm-only fragment:
+Minimal algorithm configuration:
 
 ```yaml
 algorithm:
@@ -216,6 +217,7 @@ Request-level override:
 | `model_names` | list[string] | `["vllm-sr/fusion"]` | Direct request model slugs that trigger Fusion execution |
 | `model` | string | first analysis model | Judge/calling model used for analysis and final synthesis |
 | `analysis_models` | list[string] | `modelRefs` | Panel models for parallel analysis |
+| `minimum_candidates` | int | unset | Minimum distinct decision `modelRefs` required after Recipe materialization and context eligibility filtering |
 | `analysis_overrides` | list[object] | none | Per-panel-model `temperature` and `max_completion_tokens`, keyed by `model`. Request-level entries merge field-wise onto the decision entry for the same model, so setting one field keeps the decision value for the other |
 | `max_concurrent` | int | panel size | Maximum concurrent panel calls |
 | `max_completion_tokens` | int | request default | Max completion tokens applied to Fusion subrequests |
@@ -235,6 +237,8 @@ Best practice:
 - Keep `analysis_models` stable per decision, and use `analysis_overrides` for model-specific tuning.
 - Use decision-level overrides for your baseline and request-level overrides only for one-off experiments.
 - Prefer sparse request overrides (set only the field you need) to preserve decision defaults through field-wise merge.
+- Keep `min_successful_responses` at or below the effective panel size. Invalid
+  quorums are rejected; the Router does not lower them automatically.
 
 ## Grounding-Aware Synthesis
 
@@ -285,3 +289,8 @@ When enabled, the Fusion response `trace.grounding` records the reference mode, 
 | `min_keep` | int | `1` | `filter` policy only: keep at least this many top-scoring responses |
 | `nli_contradiction_penalty` | float | `1.0` | Weight of a peer contradiction in the `panel` reference |
 | `on_error` | string | `skip` | `skip` (fall back to plain Fusion) or `fail` |
+
+Panel responses and the original request are sent to the judge model. Treat all
+panel and judge providers as one data boundary, and disable intermediate traces
+when they would expose sensitive content. See a complete example:
+[`config/fragments/algorithm/looper/fusion.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/fusion.yaml).

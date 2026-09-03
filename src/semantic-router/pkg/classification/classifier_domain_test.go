@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"errors"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -17,11 +18,11 @@ type MockCategoryInference struct {
 	classifyWithProbsError  error
 }
 
-func (m *MockCategoryInference) Classify(_ string) (candle_binding.ClassResult, error) {
+func (m *MockCategoryInference) Classify(_ context.Context, _ string) (candle_binding.ClassResult, error) {
 	return m.classifyResult, m.classifyError
 }
 
-func (m *MockCategoryInference) ClassifyWithProbabilities(_ string) (candle_binding.ClassResultWithProbs, error) {
+func (m *MockCategoryInference) ClassifyWithProbabilities(_ context.Context, _ string) (candle_binding.ClassResultWithProbs, error) {
 	return m.classifyWithProbsResult, m.classifyWithProbsError
 }
 

@@ -7,7 +7,7 @@ tool/function outputs before the selected provider receives the request. It is
 separate from router signal compression: routing evaluates the original
 request, then this plugin performs the upstream body mutation.
 
-The implementation is local, extractive, query-aware, and fail-open. It uses
+Compression is local, extractive, query-aware, and fail-open. It uses
 bounded BM25-style ranking, keeps leading and trailing context, and never
 changes system, user, or assistant text.
 
@@ -33,44 +33,43 @@ routes that require byte-identical tool payloads.
 
 ## Configuration
 
+Add the plugin under `routing.decisions[].plugins`:
+
 ```yaml
-routing:
-  decisions:
-    - name: tool-heavy-route
-      plugins:
-        - type: context_compression
-          configuration:
-            enabled: true
-            mode: auto
-            budget:
-              trigger_tokens: auto
-              target_tokens: auto
-              reserve_output_tokens: auto
-            targets:
-              tool_outputs:
-                mode: extractive
-                min_tokens: 2000
-                target_tokens: 1000
-              history:
-                mode: preserve
-              rag:
-                mode: preserve
-              memory:
-                mode: preserve
-            scoring:
-              method: bm25
-            recovery:
-              enabled: false
-              ttl_seconds: 900
-              max_bytes_per_request: 10485760
-              max_total_bytes: 268435456
-              max_retrievals: 8
-            request_controls:
-              enabled: false
-              header: x-vsr-compression-control
-              allowed: [bypass, target]
-              max_target_tokens: 16000
-            failure_mode: fail_open
+plugins:
+  - type: context_compression
+    configuration:
+      enabled: true
+      mode: auto
+      budget:
+        trigger_tokens: auto
+        target_tokens: auto
+        reserve_output_tokens: auto
+      targets:
+        tool_outputs:
+          mode: extractive
+          min_tokens: 2000
+          target_tokens: 1000
+        history:
+          mode: preserve
+        rag:
+          mode: preserve
+        memory:
+          mode: preserve
+      scoring:
+        method: bm25
+      recovery:
+        enabled: false
+        ttl_seconds: 900
+        max_bytes_per_request: 10485760
+        max_total_bytes: 268435456
+        max_retrievals: 8
+      request_controls:
+        enabled: false
+        header: x-vsr-compression-control
+        allowed: [bypass, target]
+        max_target_tokens: 16000
+      failure_mode: fail_open
 ```
 
 `targets.tool_outputs.target_tokens` must be lower than `min_tokens`.
@@ -148,3 +147,10 @@ model, strategy, request/item budget, token-counter source, trigger reason,
 tokens before/after/saved, content format, compressed message count, omitted
 chunk count, recovery count, and fail-open or skip reason. Raw omitted content
 and recovery keys are not recorded.
+
+See a complete example:
+[`config/fragments/plugin/context-compression/tool-output.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/context-compression/tool-output.yaml).
+Compression changes provider-bound context and can remove details needed for a
+correct answer. Keep fail-open behavior until the route has task-specific
+quality tests; enable recoverable mode only with an authenticated shared store
+and trusted user identity.

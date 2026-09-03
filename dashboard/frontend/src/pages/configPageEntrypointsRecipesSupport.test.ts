@@ -3,7 +3,10 @@ import { describe, expect, it } from 'vitest'
 import {
   collectRecipeTargetModels,
   getRecipeByName,
+  getPublishableRecipeNames,
   getRecipeDeleteBlocker,
+  isSyntheticDefaultRecipe,
+  listRecipeProfiles,
   normalizeEntrypointModelNames,
   validateEntrypointForm,
   validateRecipeForm,
@@ -28,7 +31,7 @@ const baseConfig = (): ConfigData => ({
       },
     ],
   },
-  entrypoints: [{ model_names: ['vllm-sr/mom-balanced-v1'], recipe: 'default' }],
+  entrypoints: [{ model_names: ['vllm-sr/mom-v1-blend'], recipe: 'default' }],
   recipes: [
     {
       name: 'frontier',
@@ -63,16 +66,16 @@ describe('entrypoints and recipes support', () => {
   it('normalizes public model IDs from newline and comma input', () => {
     expect(
       normalizeEntrypointModelNames(
-        ' vllm-sr/mom-flash-v1,\nvllm-sr/mom-flash-v1\nvllm-sr/mom-private-v1 ',
+        ' vllm-sr/mom-v1-flash,\nvllm-sr/mom-v1-flash\nvllm-sr/mom-v1-vault ',
       ),
-    ).toEqual(['vllm-sr/mom-flash-v1', 'vllm-sr/mom-private-v1'])
+    ).toEqual(['vllm-sr/mom-v1-flash', 'vllm-sr/mom-v1-vault'])
   })
 
   it('rejects duplicate and reserved entrypoint model IDs', () => {
     const config = baseConfig()
     expect(() =>
       validateEntrypointForm(
-        { modelNames: 'vllm-sr/mom-balanced-v1', recipe: 'default' },
+        { modelNames: 'vllm-sr/mom-v1-blend', recipe: 'default' },
         config,
         models,
         null,
@@ -153,30 +156,13 @@ describe('entrypoints and recipes support', () => {
     ).toThrow(/collides/)
   })
 
-  it('preserves recipe signals while updating complete model references', () => {
+  it('preserves recipe contents while updating its identity and strategy', () => {
     const config = baseConfig()
     const updated = validateRecipeForm(
       {
         name: 'frontier-v2',
         description: 'updated',
         strategy: 'confidence',
-        signals: config.recipes?.[0].routing.signals ?? {},
-        decisions: [
-          {
-            name: 'frontier_route',
-            description: 'frontier',
-            priority: 200,
-            rules: { operator: 'AND', conditions: [] },
-            modelRefs: [
-              {
-                model: models[1].name,
-                use_reasoning: true,
-                reasoning_effort: 'high',
-                weight: 0.8,
-              },
-            ],
-          },
-        ],
       },
       config,
       models,
@@ -185,75 +171,13 @@ describe('entrypoints and recipes support', () => {
 
     expect(updated.routing.signals).toEqual(config.recipes?.[0].routing.signals)
     expect(updated.routing.strategy).toBe('confidence')
-    expect(updated.routing.decisions?.[0].modelRefs[0]).toMatchObject({
-      model: models[1].name,
-      use_reasoning: true,
-      reasoning_effort: 'high',
-      weight: 0.8,
-    })
-  })
-
-  it('authors metadata and classifier policy inside one recipe', () => {
-    const config = baseConfig()
-    const updated = validateRecipeForm(
-      {
-        name: 'frontier',
-        description: 'policy',
-        strategy: 'priority',
-        signals: {
-          metadata: [
-            {
-              name: 'premium',
-              key: 'tier',
-              predicate: { in: ['gold', 'platinum'] },
-            },
-          ],
-          classifiers: [
-            {
-              name: 'risk',
-              type: 'local',
-              model_path: 'models/risk',
-              labels: ['SAFE', 'RISKY'],
-              use_cpu: true,
-            },
-          ],
-        },
-        decisions: [
-          {
-            name: 'frontier_route',
-            description: 'frontier',
-            priority: 100,
-            rules: {
-              operator: 'AND',
-              conditions: [
-                { type: 'metadata', name: 'premium' },
-                {
-                  type: 'classifier',
-                  name: 'risk',
-                  label: 'RISKY',
-                  predicate: { gte: 0.5 },
-                  on_error: 'no_match',
-                },
-              ],
-            },
-            modelRefs: [{ model: models[1].name, use_reasoning: true }],
-          },
-        ],
-      },
-      config,
-      models,
-      'frontier',
-    )
-
-    expect(updated.routing.signals?.metadata?.[0].name).toBe('premium')
-    expect(updated.routing.signals?.classifiers?.[0].name).toBe('risk')
-    expect(updated.routing.decisions?.[0].rules.conditions).toHaveLength(2)
+    expect(updated.routing.decisions).toEqual(config.recipes?.[0].routing.decisions)
   })
 
   it('collects physical targets and blocks deletion of referenced recipes', () => {
     const config = baseConfig()
     config.entrypoints?.push({
-      model_names: ['vllm-sr/mom-frontier-v1'],
+      model_names: ['vllm-sr/mom-v1-ultra'],
       recipe: 'frontier',
     })
     const recipe = config.recipes?.[0] as RecipeConfig
@@ -290,8 +214,6 @@ describe('entrypoints and recipes support', () => {
           name: 'default',
           description: 'Updated default',
           strategy: 'priority',
-          signals: explicitDefault.routing.signals ?? {},
-          decisions: explicitDefault.routing.decisions ?? [],
         },
         config,
         models,
@@ -304,8 +226,6 @@ describe('entrypoints and recipes support', () => {
           name: 'renamed-default',
           description: 'Invalid rename',
           strategy: 'priority',
-          signals: explicitDefault.routing.signals ?? {},
-          decisions: explicitDefault.routing.decisions ?? [],
         },
         config,
         models,
@@ -315,44 +235,19 @@ describe('entrypoints and recipes support', () => {
     expect(getRecipeDeleteBlocker(config, 'default')).toMatch(/cannot be deleted/)
   })
 
-  it('allows decision names to repeat across recipes but not within one recipe', () => {
+  it('lists the top-level default recipe without manufacturing an editable stored recipe', () => {
     const config = baseConfig()
-    const sharedDecision = {
-      name: 'default_route',
-      description: 'recipe-local route',
-      priority: 1,
-      rules: { operator: 'AND' as const, conditions: [] },
-      modelRefs: [{ model: models[1].name, use_reasoning: false }],
-    }
+    const recipes = listRecipeProfiles(config)
 
-    expect(() =>
-      validateRecipeForm(
-        {
-          name: 'frontier',
-          description: 'updated',
-          strategy: 'priority',
-          signals: config.recipes?.[0].routing.signals ?? {},
-          decisions: [sharedDecision],
-        },
-        config,
-        models,
-        'frontier',
-      ),
-    ).not.toThrow()
+    expect(recipes.map((recipe) => recipe.name)).toEqual(['default', 'frontier'])
+    expect(isSyntheticDefaultRecipe(config, recipes[0])).toBe(true)
+    expect(config.recipes?.map((recipe) => recipe.name)).toEqual(['frontier'])
+  })
 
-    expect(() =>
-      validateRecipeForm(
-        {
-          name: 'frontier',
-          description: 'updated',
-          strategy: 'priority',
-          signals: config.recipes?.[0].routing.signals ?? {},
-          decisions: [sharedDecision, sharedDecision],
-        },
-        config,
-        models,
-        'frontier',
-      ),
-    ).toThrow(/within this recipe/)
+  it('offers only recipes that can be published as a model', () => {
+    const config = baseConfig()
+    config.routing = { modelCards: config.routing?.modelCards, decisions: [] }
+
+    expect(getPublishableRecipeNames(config)).toEqual(['frontier'])
   })
 })

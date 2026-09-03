@@ -1,20 +1,26 @@
 package classification
 
 import (
+	"context"
 	"fmt"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 // IsCategoryEnabled checks if category classification is properly configured.
 func (c *Classifier) IsCategoryEnabled() bool {
-	return c.Config.CategoryModel.Active() && c.Config.CategoryModel.ModelID != "" && c.Config.CategoryMappingPath != "" && c.CategoryMapping != nil
+	modelConfigured := c.Config.CategoryModel.ModelID != "" || c.Config.CategoryModel.Backend != nil
+	return c.Config.CategoryModel.Active() && modelConfigured && c.Config.CategoryMappingPath != "" && c.CategoryMapping != nil
 }
 
 // initializeCategoryClassifier initializes the category classification model.
 func (c *Classifier) initializeCategoryClassifier() error {
+	if c.Config.CategoryModel.Backend != nil {
+		// Remote inference is fully constructed during classifier assembly and has
+		// no local model lifecycle to execute.
+		return nil
+	}
 	if !c.IsCategoryEnabled() || c.categoryInitializer == nil {
 		return fmt.Errorf("category classification is not properly configured")
 	}
@@ -39,7 +45,7 @@ func (c *Classifier) IsJailbreakEnabled() bool {
 		return false
 	}
 
-	if c.Config.PromptGuard.UseVLLM {
+	if c.Config.PromptGuard.Protocol != "" {
 		externalCfg := c.Config.FindExternalModelByRole(config.ModelRoleGuardrail)
 		hasExternalConfig := externalCfg != nil &&
 			externalCfg.ModelEndpoint.Address != "" &&
@@ -57,10 +63,14 @@ func (c *Classifier) initializeJailbreakClassifier() error {
 		return fmt.Errorf("jailbreak detection is not properly configured")
 	}
 
-	if c.Config.PromptGuard.UseVLLM {
+	if err := validateJailbreakPositiveLabels(c.Config.PromptGuard.PositiveLabels, c.JailbreakMapping); err != nil {
+		return err
+	}
+
+	if c.Config.PromptGuard.Protocol != "" {
 		externalCfg := c.Config.FindExternalModelByRole(config.ModelRoleGuardrail)
 		logging.ComponentEvent("classifier", "jailbreak_detector_init_started", map[string]interface{}{
-			"mode":      "vllm",
+			"mode":      c.Config.PromptGuard.Protocol,
 			"model_ref": externalCfg.ModelName,
 		})
 		return nil
@@ -86,12 +96,12 @@ func (c *Classifier) initializeJailbreakClassifier() error {
 }
 
 // CheckForJailbreak analyzes the given text for jailbreak attempts.
-func (c *Classifier) CheckForJailbreak(text string) (bool, string, float32, error) {
-	return c.CheckForJailbreakWithThreshold(text, c.Config.PromptGuard.Threshold)
+func (c *Classifier) CheckForJailbreak(ctx context.Context, text string) (bool, string, float32, error) {
+	return c.CheckForJailbreakWithThreshold(ctx, text, c.Config.PromptGuard.Threshold)
 }
 
 // CheckForJailbreakWithThreshold analyzes the given text for jailbreak attempts with a custom threshold.
-func (c *Classifier) CheckForJailbreakWithThreshold(text string, threshold float32) (bool, string, float32, error) {
+func (c *Classifier) CheckForJailbreakWithThreshold(ctx context.Context, text string, threshold float32) (bool, string, float32, error) {
 	if !c.IsJailbreakEnabled() {
 		return false, "", 0.0, fmt.Errorf("jailbreak detection is not enabled or properly configured")
 	}
@@ -100,36 +110,41 @@ func (c *Classifier) CheckForJailbreakWithThreshold(text string, threshold float
 		return false, "", 0.0, nil
 	}
 
-	var result candle_binding.ClassResult
-	var err error
-
-	result, err = c.jailbreakInference.Classify(text)
-	if err != nil {
-		return false, "", 0.0, fmt.Errorf("jailbreak classification failed: %w", err)
+	// Scans in chunks so a long text is not judged on its first 512 tokens.
+	// The verdict stays argmax-based here: this call reports the predicted
+	// class and that class's confidence. A caller that has to threshold
+	// P(jailbreak) independently of argmax wants CheckForJailbreakRiskWithThreshold.
+	result, scanned, lastErr := c.scanJailbreakChunks(ctx, text)
+	if !scanned {
+		if lastErr != nil {
+			return false, "", 0.0, fmt.Errorf("jailbreak classification failed: %w", lastErr)
+		}
+		return false, "", 0.0, nil
 	}
 	logging.Debugf("Jailbreak classification result: %v", result)
 
-	jailbreakType, ok := c.JailbreakMapping.GetJailbreakTypeFromIndex(result.Class)
+	class, confidence := deriveArgmax(result.Probabilities)
+	jailbreakType, ok := c.JailbreakMapping.GetJailbreakTypeFromIndex(class)
 	if !ok {
-		return false, "", 0.0, fmt.Errorf("unknown jailbreak class index: %d", result.Class)
+		return false, "", 0.0, fmt.Errorf("unknown jailbreak class index: %d", class)
 	}
 
-	isJailbreak := result.Confidence >= threshold && jailbreakType == "jailbreak"
+	isJailbreak := confidence >= threshold && isPositiveJailbreakLabel(c.Config.PromptGuard.PositiveLabels, jailbreakType)
 	if isJailbreak {
 		logging.Warnf("JAILBREAK DETECTED: '%s' (confidence: %.3f, threshold: %.3f)",
-			jailbreakType, result.Confidence, threshold)
+			jailbreakType, confidence, threshold)
 	}
 
-	return isJailbreak, jailbreakType, result.Confidence, nil
+	return isJailbreak, jailbreakType, confidence, nil
 }
 
 // AnalyzeContentForJailbreak analyzes multiple content pieces for jailbreak attempts.
-func (c *Classifier) AnalyzeContentForJailbreak(contentList []string) (bool, []JailbreakDetection, error) {
-	return c.AnalyzeContentForJailbreakWithThreshold(contentList, c.Config.PromptGuard.Threshold)
+func (c *Classifier) AnalyzeContentForJailbreak(ctx context.Context, contentList []string) (bool, []JailbreakDetection, error) {
+	return c.AnalyzeContentForJailbreakWithThreshold(ctx, contentList, c.Config.PromptGuard.Threshold)
 }
 
 // AnalyzeContentForJailbreakWithThreshold analyzes multiple content pieces for jailbreak attempts with a custom threshold.
-func (c *Classifier) AnalyzeContentForJailbreakWithThreshold(contentList []string, threshold float32) (bool, []JailbreakDetection, error) {
+func (c *Classifier) AnalyzeContentForJailbreakWithThreshold(ctx context.Context, contentList []string, threshold float32) (bool, []JailbreakDetection, error) {
 	if !c.IsJailbreakEnabled() {
 		return false, nil, fmt.Errorf("jailbreak detection is not enabled or properly configured")
 	}
@@ -144,7 +159,7 @@ func (c *Classifier) AnalyzeContentForJailbreakWithThreshold(contentList []strin
 			continue
 		}
 
-		isJailbreak, jailbreakType, confidence, err := c.CheckForJailbreakWithThreshold(content, threshold)
+		isJailbreak, jailbreakType, confidence, err := c.CheckForJailbreakWithThreshold(ctx, content, threshold)
 		if err != nil {
 			logging.Errorf("Error analyzing content %d: %v", i, err)
 			failedCount++

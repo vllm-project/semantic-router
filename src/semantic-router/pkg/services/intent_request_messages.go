@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/imageurl"
 )
 
@@ -16,10 +18,14 @@ const (
 )
 
 type IntentMessage struct {
-	Role       string            `json:"role"`
-	Content    json.RawMessage   `json:"content"`
-	ToolCalls  []json.RawMessage `json:"tool_calls,omitempty"`
-	ToolCallID string            `json:"tool_call_id,omitempty"`
+	Role             string            `json:"role"`
+	Name             string            `json:"name,omitempty"`
+	Content          json.RawMessage   `json:"content"`
+	ToolCalls        []json.RawMessage `json:"tool_calls,omitempty"`
+	ToolCallID       string            `json:"tool_call_id,omitempty"`
+	FunctionCall     json.RawMessage   `json:"function_call,omitempty"`
+	Refusal          json.RawMessage   `json:"refusal,omitempty"`
+	ReasoningContent json.RawMessage   `json:"reasoning_content,omitempty"`
 }
 
 type intentSignalInput struct {
@@ -42,6 +48,7 @@ type intentConversationHistory struct {
 	nonUserMessages     []string
 	hasAssistantReply   bool
 	conversationFacts   classification.ConversationFacts
+	inputModality       classification.InputModalityFacts
 }
 
 type intentMessageImageURL struct {
@@ -80,9 +87,32 @@ func (req IntentRequest) resolveSignalInput() (intentSignalInput, error) {
 	rawText := req.Text
 	text := strings.TrimSpace(rawText)
 
-	if input, ok := resolveIntentSignalInputFromMessages(req.Messages, len(req.Tools)); ok {
+	toolDefinitionCount := len(req.Tools) + len(req.Functions)
+	toolChoiceFacts := classification.ResolveOpenAIToolChoiceFacts(req.ToolChoice, req.FunctionCall)
+	if input, ok := resolveIntentSignalInputFromMessages(req.Messages, toolDefinitionCount); ok {
+		input.conversationFacts.ToolChoiceRequired = toolChoiceFacts.Required
+		input.conversationFacts.ToolChoiceNone = toolChoiceFacts.None
+		useTopLevelTextFallback := rawText != "" && strings.TrimSpace(input.evaluationText) == ""
 		input = applyTopLevelTextFallback(input, rawText)
-		input.requestFacts.Metadata = cloneIntentMetadata(req.Metadata)
+		contextEstimate, err := estimateIntentRequestContext(
+			req,
+			fallbackText(rawText, useTopLevelTextFallback),
+		)
+		if err != nil {
+			return intentSignalInput{}, err
+		}
+		inputModality := input.requestFacts.InputModality
+		input.requestFacts = requestFactsForIntent(
+			req.Metadata,
+			contextEstimate,
+		)
+		input.requestFacts.InputModality = inputModality
+		if useTopLevelTextFallback && text != "" && input.requestFacts.InputModality.TextContentCount == 0 {
+			// req.Text supplied user text the message walk could not see.
+			// Promoted system/assistant text must not count: it is not user
+			// input, and counting it would diverge from the data-plane path.
+			input.requestFacts.InputModality.TextContentCount = 1
+		}
 		return input, nil
 	}
 
@@ -90,19 +120,99 @@ func (req IntentRequest) resolveSignalInput() (intentSignalInput, error) {
 		return intentSignalInput{}, ErrEmptyText
 	}
 
-	return intentSignalInput{
+	contextEstimate, err := estimateIntentRequestContext(
+		req,
+		rawText,
+	)
+	if err != nil {
+		return intentSignalInput{}, err
+	}
+
+	fallbackInput := intentSignalInput{
 		evaluationText:  text,
 		contextText:     text,
 		currentUserText: rawText,
 		conversationFacts: classification.ConversationFacts{
 			UserMessageCount:    1,
-			ToolDefinitionCount: len(req.Tools),
+			ToolDefinitionCount: toolDefinitionCount,
+			ToolChoiceRequired:  toolChoiceFacts.Required,
+			ToolChoiceNone:      toolChoiceFacts.None,
 			LastMessageRole:     "user",
 		},
-		requestFacts: classification.RequestFacts{
-			Metadata: cloneIntentMetadata(req.Metadata),
-		},
-	}, nil
+		requestFacts: requestFactsForIntent(req.Metadata, contextEstimate),
+	}
+	if text != "" {
+		fallbackInput.requestFacts.InputModality.TextContentCount = 1
+	}
+	return fallbackInput, nil
+}
+
+func fallbackText(text string, enabled bool) string {
+	if !enabled {
+		return ""
+	}
+	return text
+}
+
+func requestFactsForIntent(
+	metadata map[string]string,
+	estimate classification.RequestContextEstimate,
+) classification.RequestFacts {
+	return classification.RequestFacts{
+		Metadata:               cloneIntentMetadata(metadata),
+		ContextTokenFloor:      estimate.TokenFloor,
+		ContextTextBytes:       estimate.TextBytes,
+		ContextEquivalentBytes: estimate.EquivalentBytes,
+		ContextHasNonText:      estimate.HasNonText,
+	}
+}
+
+// estimateIntentRequestContext serializes only the prompt-bearing subset of
+// the eval/classify request and delegates to the exact same OpenAI envelope
+// estimator used by ExtProc. json.RawMessage preserves structured numbers
+// lexically; no request content is logged or retained after this call.
+func estimateIntentRequestContext(
+	req IntentRequest,
+	additionalUserText string,
+) (classification.RequestContextEstimate, error) {
+	estimateMessages := append([]IntentMessage(nil), req.Messages...)
+	if additionalUserText != "" {
+		content, err := json.Marshal(additionalUserText)
+		if err != nil {
+			return classification.RequestContextEstimate{}, err
+		}
+		estimateMessages = append(estimateMessages, IntentMessage{
+			Role:    "user",
+			Content: content,
+		})
+	}
+
+	envelope, err := json.Marshal(struct {
+		Messages            []IntentMessage   `json:"messages"`
+		Tools               []json.RawMessage `json:"tools,omitempty"`
+		Functions           []json.RawMessage `json:"functions,omitempty"`
+		ToolChoice          json.RawMessage   `json:"tool_choice,omitempty"`
+		FunctionCall        json.RawMessage   `json:"function_call,omitempty"`
+		ResponseFormat      json.RawMessage   `json:"response_format,omitempty"`
+		MaxTokens           json.RawMessage   `json:"max_tokens,omitempty"`
+		MaxCompletionTokens json.RawMessage   `json:"max_completion_tokens,omitempty"`
+	}{
+		Messages:            estimateMessages,
+		Tools:               req.Tools,
+		Functions:           req.Functions,
+		ToolChoice:          req.ToolChoice,
+		FunctionCall:        req.FunctionCall,
+		ResponseFormat:      req.ResponseFormat,
+		MaxTokens:           req.MaxTokens,
+		MaxCompletionTokens: req.MaxCompletionTokens,
+	})
+	if err != nil {
+		return classification.RequestContextEstimate{}, fmt.Errorf(
+			"estimate intent request context: %w",
+			err,
+		)
+	}
+	return classification.EstimateOpenAIRequestContext(envelope), nil
 }
 
 // applyTopLevelTextFallback fills empty text slots from req.Text when the
@@ -138,6 +248,7 @@ func resolveIntentSignalInputFromMessages(messages []IntentMessage, toolDefiniti
 		hasAssistantReply: history.hasAssistantReply,
 		imageURL:          history.currentUserImageURL,
 		conversationFacts: history.conversationFacts,
+		requestFacts:      classification.RequestFacts{InputModality: history.inputModality},
 	}
 
 	// Promote system/assistant text only with no user text AND no image; the
@@ -174,6 +285,8 @@ func hasIntentConversationFacts(facts classification.ConversationFacts) bool {
 		facts.ToolMessageCount > 0 ||
 		facts.ImageContentCount > 0 ||
 		facts.ToolDefinitionCount > 0 ||
+		facts.ToolChoiceRequired ||
+		facts.ToolChoiceNone ||
 		facts.AssistantToolCallCount > 0 ||
 		facts.ToolResultCount > 0 ||
 		facts.HasDeveloperMessage
@@ -185,7 +298,7 @@ func extractIntentConversationHistory(messages []IntentMessage, toolDefinitionCo
 			ToolDefinitionCount: toolDefinitionCount,
 		},
 	}
-	sawToolResult := false
+	previousWasToolResult := false
 
 	for _, msg := range messages {
 		role := strings.ToLower(strings.TrimSpace(msg.Role))
@@ -195,13 +308,21 @@ func extractIntentConversationHistory(messages []IntentMessage, toolDefinitionCo
 			if rawText != "" {
 				history.currentUserRawText = rawText
 			}
-			history.conversationFacts.ImageContentCount += countIntentMessageImages(msg.Content)
+			counts := countIntentMessageModalities(msg.Content)
+			history.conversationFacts.ImageContentCount += counts.ImageContentCount
+			history.inputModality.ImageContentCount += counts.ImageContentCount
+			history.inputModality.AudioContentCount += counts.AudioContentCount
+			history.inputModality.VideoContentCount += counts.VideoContentCount
+			if text != "" {
+				history.inputModality.TextContentCount++
+			}
 		}
-		sawToolResult = observeIntentConversationMessage(
+		previousWasToolResult = observeIntentConversationMessage(
 			&history.conversationFacts,
 			role,
 			len(msg.ToolCalls),
-			sawToolResult,
+			msg.ToolCallID,
+			previousWasToolResult,
 		)
 		if recordIntentUserMessage(&history, role, text, msg.Content) {
 			continue
@@ -216,20 +337,22 @@ func observeIntentConversationMessage(
 	facts *classification.ConversationFacts,
 	role string,
 	toolCallCount int,
-	sawToolResult bool,
+	toolCallID string,
+	previousWasToolResult bool,
 ) bool {
-	if role == "" {
-		return sawToolResult
-	}
 	facts.LastMessageRole = role
-	facts.LastMessageToolResult = role == "tool"
+	facts.LastMessageToolResult = false
+	facts.LastMessageFlowToolResult = false
+	facts.LastAssistantToolCall = false
+	facts.LastUserAfterToolResult = false
 	switch role {
 	case "user":
 		facts.UserMessageCount++
-		facts.LastUserAfterToolResult = sawToolResult
+		facts.LastUserAfterToolResult = previousWasToolResult
 	case "assistant":
 		facts.AssistantMessageCount++
 		facts.AssistantToolCallCount += toolCallCount
+		facts.LastAssistantToolCall = toolCallCount > 0
 	case "system":
 		facts.SystemMessageCount++
 	case "developer":
@@ -237,9 +360,10 @@ func observeIntentConversationMessage(
 	case "tool":
 		facts.ToolMessageCount++
 		facts.ToolResultCount++
-		return true
+		facts.LastMessageToolResult = true
+		facts.LastMessageFlowToolResult = looper.IsWorkflowToolCallID(toolCallID)
 	}
-	return sawToolResult
+	return facts.LastMessageToolResult
 }
 
 func recordIntentUserMessage(
@@ -319,27 +443,37 @@ func firstSafeImageURL(parts []intentMessageContentPart) string {
 	return ""
 }
 
-func countIntentMessageImages(raw json.RawMessage) int {
+// countIntentMessageModalities counts image, audio, and video content parts in
+// a message using the shared part-type table in
+// config.InputModalityForContentPartType. Text presence is tracked by the
+// caller from extracted text so plain string content counts too;
+// TextContentCount is never set here.
+func countIntentMessageModalities(raw json.RawMessage) classification.InputModalityFacts {
+	var counts classification.InputModalityFacts
 	raw = bytesTrimSpace(raw)
 	if len(raw) == 0 || string(raw) == "null" {
-		return 0
+		return counts
 	}
 	var parts []intentMessageContentPart
 	if err := json.Unmarshal(raw, &parts); err != nil {
 		var part intentMessageContentPart
 		if err := json.Unmarshal(raw, &part); err != nil {
-			return 0
+			return counts
 		}
 		parts = []intentMessageContentPart{part}
 	}
-	count := 0
 	for _, part := range parts {
-		switch strings.ToLower(strings.TrimSpace(part.Type)) {
-		case "image_url", "input_image":
-			count++
+		modality, _ := config.InputModalityForContentPartType(part.Type)
+		switch modality {
+		case config.InputModalityImage:
+			counts.ImageContentCount++
+		case config.InputModalityAudio:
+			counts.AudioContentCount++
+		case config.InputModalityVideo:
+			counts.VideoContentCount++
 		}
 	}
-	return count
+	return counts
 }
 
 func extractIntentMessageRawText(raw json.RawMessage) string {

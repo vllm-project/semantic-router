@@ -32,7 +32,7 @@ fn test_p0_real_modernbert_concurrent_classification_10_threads() {
     let model_path_cstr = CString::new(model_path.clone()).unwrap();
 
     println!("Loading model from: {}", model_path);
-    let init_result = init_modernbert_classifier(model_path_cstr.as_ptr(), true);
+    let init_result = unsafe { init_modernbert_classifier(model_path_cstr.as_ptr(), true) };
 
     if !init_result {
         println!("⚠️  Model not found or failed to load: {}", model_path);
@@ -43,7 +43,7 @@ fn test_p0_real_modernbert_concurrent_classification_10_threads() {
     println!("Model loaded successfully!");
 
     // Test texts
-    let test_texts = vec![
+    let test_texts = [
         "What is the best strategy for corporate mergers?",
         "Hello, how are you today?",
         "I want to book a flight to New York",
@@ -107,7 +107,7 @@ fn test_p0_real_pii_concurrent_classification_8_threads() {
     let model_path_cstr = CString::new(model_path.clone()).unwrap();
 
     println!("Loading PII model from: {}", model_path);
-    let init_result = init_modernbert_pii_classifier(model_path_cstr.as_ptr(), true);
+    let init_result = unsafe { init_modernbert_pii_classifier(model_path_cstr.as_ptr(), true) };
 
     if !init_result {
         println!("⚠️  PII model not found or failed to load");
@@ -164,7 +164,8 @@ fn test_p0_real_jailbreak_concurrent_classification_10_threads() {
     let model_path_cstr = CString::new(model_path.clone()).unwrap();
 
     println!("Loading Jailbreak model from: {}", model_path);
-    let init_result = init_modernbert_jailbreak_classifier(model_path_cstr.as_ptr(), true);
+    let init_result =
+        unsafe { init_modernbert_jailbreak_classifier(model_path_cstr.as_ptr(), true) };
 
     if !init_result {
         println!("⚠️  Jailbreak model not found or failed to load");
@@ -228,7 +229,7 @@ fn test_p1_real_model_sequential_vs_parallel_performance() {
         let model_path_cstr = CString::new(model_path.clone()).unwrap();
 
         println!("Loading model from: {}", model_path);
-        let init_result = init_modernbert_classifier(model_path_cstr.as_ptr(), true);
+        let init_result = unsafe { init_modernbert_classifier(model_path_cstr.as_ptr(), true) };
 
         if !init_result {
             println!("⚠️  Model not available, skipping test");

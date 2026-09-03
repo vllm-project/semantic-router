@@ -49,9 +49,6 @@ func testResponseAPIErrorMissingInput(ctx context.Context, client *kubernetes.Cl
 	apiClient := fixtures.NewResponseAPIClient(session, 30*time.Second)
 	raw, err := apiClient.CreateRaw(ctx, map[string]interface{}{
 		"model": "openai/gpt-oss-20b",
-		"messages": []map[string]string{
-			{"role": "user", "content": "Hello"},
-		},
 	})
 	if err != nil {
 		return err
@@ -102,27 +99,13 @@ func testResponseAPIErrorNonexistentPreviousResponseID(ctx context.Context, clie
 	}
 
 	switch raw.StatusCode {
-	case 200:
-		var apiResp fixtures.ResponseAPIResponse
-		if err := raw.DecodeJSON(&apiResp); err != nil {
-			return err
-		}
-		if opts.SetDetails != nil {
-			opts.SetDetails(map[string]interface{}{
-				"behavior":    "graceful_degradation",
-				"status_code": raw.StatusCode,
-				"response_id": apiResp.ID,
-			})
-		}
-		return nil
-	case 400, 404:
+	case 404:
 		var apiError fixtures.APIErrorResponse
 		if err := raw.DecodeJSON(&apiError); err != nil {
 			return err
 		}
 		if opts.SetDetails != nil {
 			opts.SetDetails(map[string]interface{}{
-				"behavior":      "strict_validation",
 				"status_code":   raw.StatusCode,
 				"error_message": apiError.Error.Message,
 			})

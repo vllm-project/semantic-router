@@ -28,6 +28,7 @@ SIGNAL_RESPONSE_TYPES = {
     "events": "event",
     "metadata": "metadata",
     "classifiers": "classifier",
+    "input_modality": "input_modality",
 }
 TAG_CATEGORIES = (
     "language",

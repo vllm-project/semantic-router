@@ -4,14 +4,29 @@ import { DataTable, type Column } from '../components/DataTable'
 import TableHeader from '../components/TableHeader'
 import configStyles from './ConfigPage.module.css'
 import styles from './ConfigPageModelsSection.module.css'
+import ConfigPageModelLiveVerification from './ConfigPageModelLiveVerification'
+import ModelProviderLogo from './ModelProviderLogo'
+import type { NormalizedModel } from './configPageSupport'
+import type { ModelEndpointFilter, ModelRoleFilter } from './configPageModelInventory'
 import {
-  TABLE_COLUMN_WIDTH,
-  type NormalizedModel,
-} from './configPageSupport'
-import type {
-  ModelEndpointFilter,
-  ModelRoleFilter,
-} from './configPageModelInventory'
+  modelLiveVerificationState,
+  type ModelLiveVerificationState,
+} from './useModelLiveVerification'
+import { findModelProviderPreset } from './modelProviderCatalog'
+
+function ModelProviderMark({ model }: { model: NormalizedModel }) {
+  const backend = model.backend_refs?.[0]
+  const preset = findModelProviderPreset({
+    backendName: backend?.name,
+    baseUrl: backend?.base_url,
+    apiFormat: model.api_format ?? backend?.provider,
+  })
+  return (
+    <span className={styles.modelProviderMark} aria-hidden="true">
+      <ModelProviderLogo provider={preset} size="small" />
+    </span>
+  )
+}
 
 interface ConfigPageModelInventoryPanelProps {
   models: NormalizedModel[]
@@ -44,6 +59,9 @@ interface ConfigPageModelInventoryPanelProps {
   onToggleExpand: (model: NormalizedModel) => void
   renderExpandedRow: (model: NormalizedModel) => ReactNode
   getDeleteBlocker: (modelName: string) => string | null
+  liveVerificationStates: ReadonlyMap<string, ModelLiveVerificationState>
+  onVerifyModel: (modelName: string) => void
+  canVerifyModels: boolean
 }
 
 export default function ConfigPageModelInventoryPanel({
@@ -77,28 +95,41 @@ export default function ConfigPageModelInventoryPanel({
   onToggleExpand,
   renderExpandedRow,
   getDeleteBlocker,
+  liveVerificationStates,
+  onVerifyModel,
+  canVerifyModels,
 }: ConfigPageModelInventoryPanelProps) {
   const columns: Column<NormalizedModel>[] = [
     {
       key: 'name',
       header: 'Model Name',
+      width: '300px',
+      minWidth: '260px',
       sortable: true,
       render: (row) => (
         <div className={styles.modelIdentity}>
-          <div className={styles.modelIdentityPrimary}>
-            <span className={styles.modelName} title={row.name}>{row.name}</span>
-            {row.name === defaultModel ? <span className={styles.defaultBadge}>Default</span> : null}
+          <ModelProviderMark model={row} />
+          <div className={styles.modelIdentityCopy}>
+            <div className={styles.modelIdentityPrimary}>
+              <span className={styles.modelName} title={row.name}>
+                {row.name}
+              </span>
+              {row.name === defaultModel ? (
+                <span className={styles.defaultBadge}>Default</span>
+              ) : null}
+            </div>
+            <span className={styles.modelPhysicalId} title={row.provider_model_id || row.name}>
+              {row.provider_model_id || row.name}
+            </span>
           </div>
-          <span className={styles.modelPhysicalId} title={row.provider_model_id || row.name}>
-            {row.provider_model_id || row.name}
-          </span>
         </div>
       ),
     },
     {
       key: 'references',
       header: 'Routing Use',
-      width: TABLE_COLUMN_WIDTH.compact,
+      width: '120px',
+      minWidth: '112px',
       align: 'center',
       render: (row) => {
         const references = modelReferenceCounts.get(row.name) ?? 0
@@ -106,22 +137,29 @@ export default function ConfigPageModelInventoryPanel({
           <span className={styles.referenceBadge}>
             {references} {references === 1 ? 'decision' : 'decisions'}
           </span>
-        ) : <span className={styles.unusedLabel}>Unused</span>
+        ) : (
+          <span className={styles.unusedLabel}>Unused</span>
+        )
       },
     },
     {
       key: 'reasoning_family',
       header: 'Reasoning Family',
-      width: TABLE_COLUMN_WIDTH.medium,
+      width: '150px',
+      minWidth: '136px',
       sortable: true,
-      render: (row) => row.reasoning_family ? (
-        <span className={configStyles.tableMetaBadge}>{row.reasoning_family}</span>
-      ) : <span style={{ color: 'var(--color-text-secondary)' }}>N/A</span>,
+      render: (row) =>
+        row.reasoning_family ? (
+          <span className={configStyles.tableMetaBadge}>{row.reasoning_family}</span>
+        ) : (
+          <span style={{ color: 'var(--color-text-secondary)' }}>N/A</span>
+        ),
     },
     {
       key: 'endpoints',
       header: 'Endpoints',
-      width: TABLE_COLUMN_WIDTH.compact,
+      width: '112px',
+      minWidth: '104px',
       align: 'center',
       render: (row) => {
         const count = row.endpoints?.length || 0
@@ -133,21 +171,48 @@ export default function ConfigPageModelInventoryPanel({
       },
     },
     {
+      key: 'live_verification',
+      header: 'Live',
+      width: '164px',
+      minWidth: '156px',
+      render: (row) => (
+        <ConfigPageModelLiveVerification
+          model={row.name}
+          hasBackend={Boolean(row.endpoints?.some((endpoint) => endpoint.endpoint.trim()))}
+          allowed={canVerifyModels}
+          state={modelLiveVerificationState(liveVerificationStates, row.name)}
+          onVerify={() => onVerifyModel(row.name)}
+        />
+      ),
+    },
+    {
       key: 'pricing',
       header: 'Pricing',
-      width: TABLE_COLUMN_WIDTH.medium,
+      width: '132px',
+      minWidth: '124px',
       render: (row) => {
         if (!row.pricing) return <span style={{ color: 'var(--color-text-secondary)' }}>N/A</span>
         const currency = row.pricing.currency || 'USD'
         const prompt = row.pricing.prompt_per_1m?.toFixed(2) || '0.00'
         return (
-          <span style={{ fontSize: '0.875rem', fontFamily: 'var(--font-mono)' }}>
-            {prompt} {currency}/1M
+          <span
+            title={`${prompt} ${currency} per 1M input tokens`}
+            style={{
+              fontSize: '0.8125rem',
+              fontFamily: 'var(--font-mono)',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {currency === 'USD' ? '$' : `${currency} `}
+            {prompt} / 1M
           </span>
         )
       },
     },
   ]
+  const visibleColumns = canVerifyModels
+    ? columns
+    : columns.filter((column) => column.key !== 'live_verification')
 
   return (
     <>
@@ -166,15 +231,25 @@ export default function ConfigPageModelInventoryPanel({
       <div className={styles.inventoryToolbar} aria-label="Model inventory filters">
         <label className={styles.filterControl}>
           <span>Reasoning family</span>
-          <select value={reasoningFamilyFilter} onChange={(event) => onReasoningFamilyFilterChange(event.target.value)}>
+          <select
+            value={reasoningFamilyFilter}
+            onChange={(event) => onReasoningFamilyFilterChange(event.target.value)}
+          >
             <option value="all">All families</option>
             <option value="__unassigned__">Unassigned</option>
-            {reasoningFamilyOptions.map((family) => <option key={family} value={family}>{family}</option>)}
+            {reasoningFamilyOptions.map((family) => (
+              <option key={family} value={family}>
+                {family}
+              </option>
+            ))}
           </select>
         </label>
         <label className={styles.filterControl}>
           <span>Endpoint state</span>
-          <select value={endpointFilter} onChange={(event) => onEndpointFilterChange(event.target.value as ModelEndpointFilter)}>
+          <select
+            value={endpointFilter}
+            onChange={(event) => onEndpointFilterChange(event.target.value as ModelEndpointFilter)}
+          >
             <option value="all">All endpoints</option>
             <option value="configured">Configured</option>
             <option value="missing">Missing</option>
@@ -182,7 +257,10 @@ export default function ConfigPageModelInventoryPanel({
         </label>
         <label className={styles.filterControl}>
           <span>Routing role</span>
-          <select value={roleFilter} onChange={(event) => onRoleFilterChange(event.target.value as ModelRoleFilter)}>
+          <select
+            value={roleFilter}
+            onChange={(event) => onRoleFilterChange(event.target.value as ModelRoleFilter)}
+          >
             <option value="all">All roles</option>
             <option value="default">Default model</option>
             <option value="standard">Standard model</option>
@@ -206,7 +284,11 @@ export default function ConfigPageModelInventoryPanel({
             <span>Selection is preserved while paging and filtering.</span>
           </div>
           <div className={styles.bulkActions}>
-            <button type="button" className={styles.clearSelectionButton} onClick={onClearSelection}>
+            <button
+              type="button"
+              className={styles.clearSelectionButton}
+              onClick={onClearSelection}
+            >
               Clear selection
             </button>
             <button type="button" className={styles.bulkDeleteButton} onClick={onDeleteSelected}>
@@ -219,12 +301,18 @@ export default function ConfigPageModelInventoryPanel({
       {operationError ? (
         <div className={styles.operationError} role="alert">
           <span>{operationError}</span>
-          <button type="button" onClick={onDismissOperationError} aria-label="Dismiss model operation error">Dismiss</button>
+          <button
+            type="button"
+            onClick={onDismissOperationError}
+            aria-label="Dismiss model operation error"
+          >
+            Dismiss
+          </button>
         </div>
       ) : null}
 
       <DataTable
-        columns={columns}
+        columns={visibleColumns}
         data={filteredModels}
         keyExtractor={(row) => row.name}
         onView={onViewModel}
@@ -234,7 +322,9 @@ export default function ConfigPageModelInventoryPanel({
         renderExpandedRow={renderExpandedRow}
         isRowExpanded={(row) => expandedModels.has(row.name)}
         onToggleExpand={onToggleExpand}
-        emptyMessage={filtersActive ? 'No models match the current search and filters' : 'No models configured'}
+        emptyMessage={
+          filtersActive ? 'No models match the current search and filters' : 'No models configured'
+        }
         className={configStyles.managerTable}
         readonly={isReadonly}
         pagination={{
@@ -243,12 +333,16 @@ export default function ConfigPageModelInventoryPanel({
           itemLabel: 'models',
           resetKey: `${modelsSearch}|${reasoningFamilyFilter}|${endpointFilter}|${roleFilter}`,
         }}
-        selection={isReadonly ? undefined : {
-          selectedKeys: selectedModelKeys,
-          onChange: onSelectedModelKeysChange,
-          isRowDisabled: (row) => Boolean(getDeleteBlocker(row.name)),
-          label: 'model',
-        }}
+        selection={
+          isReadonly
+            ? undefined
+            : {
+                selectedKeys: selectedModelKeys,
+                onChange: onSelectedModelKeysChange,
+                isRowDisabled: (row) => Boolean(getDeleteBlocker(row.name)),
+                label: 'model',
+              }
+        }
       />
     </>
   )
