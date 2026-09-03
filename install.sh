@@ -185,7 +185,7 @@ print_install_plan() {
 
 usage() {
   cat <<'EOF'
-Usage: install.sh [--mode cli|serve] [--runtime auto|docker|skip]
+Usage: install.sh [--mode cli|serve] [--runtime auto|docker|podman|skip]
                   [--install-root PATH] [--bin-dir PATH]
                   [--channel stable|dev] [--pip-spec SPEC]
                   [--python PATH] [--platform PLATFORM] [--no-launch]
@@ -196,10 +196,11 @@ links a launcher into ~/.local/bin by default.
 Options:
   --mode cli|serve         Install the CLI only, or prepare a local runtime for
                            `vllm-sr serve` as well. Default: serve
-  --runtime auto|docker|skip
+  --runtime auto|docker|podman|skip
                            Runtime strategy for serve mode. Default: auto
                            macOS auto -> docker via colima
                            Linux auto -> docker
+                           podman -> use Podman, skip Docker detection
   --install-root PATH      Installation root. Default:
                            ~/.local/share/vllm-sr
   --bin-dir PATH           Launcher directory. Default: ~/.local/bin
@@ -790,6 +791,17 @@ ensure_runtime() {
     return
   fi
 
+  if [ "$REQUESTED_RUNTIME" = "podman" ]; then
+    if podman_ready; then
+      SELECTED_RUNTIME="podman"
+      write_runtime_env "podman"
+      done_step "Using existing Podman runtime"
+      return
+    else
+      die "Podman was requested but is not reachable. Install Podman or use --runtime auto."
+    fi
+  fi
+
   if docker_ready; then
     SELECTED_RUNTIME="docker"
     write_runtime_env
@@ -1022,10 +1034,10 @@ validate_args() {
   esac
 
   case "$REQUESTED_RUNTIME" in
-    auto|docker|skip)
+    auto|docker|podman|skip)
       ;;
     *)
-      die "--runtime must be one of: auto, docker, skip"
+      die "--runtime must be one of: auto, docker, podman, skip"
       ;;
   esac
 

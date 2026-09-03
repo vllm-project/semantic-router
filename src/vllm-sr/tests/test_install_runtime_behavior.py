@@ -61,6 +61,16 @@ def test_explicit_docker_does_not_drift_to_podman() -> None:
     assert "CONTAINER_RUNTIME=docker" in out
 
 
+def test_explicit_podman_skips_docker_detection() -> None:
+    """--runtime podman must select Podman even when Docker is also
+    available, skipping Docker detection entirely."""
+    out = _run_harness("explicit-podman-both-ready")
+
+    assert "SELECTED_RUNTIME=podman" in out
+    assert "RUNTIME_ENV_FILE=present" in out
+    assert "CONTAINER_RUNTIME=podman" in out
+
+
 def test_skip_writes_no_runtime_env() -> None:
     """--runtime skip clears the selection and must not persist a file."""
     out = _run_harness("skip")
