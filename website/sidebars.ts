@@ -34,6 +34,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'installation/installation',
         'installation/deployment-options',
+        'installation/support-matrix',
       ],
     },
     {
