@@ -63,16 +63,7 @@ func normalizeEmbeddingModelType(modelType string) string {
 // model. The dimensions are read from the native ONNX model instance.
 func GetEmbeddingDimensionContract(modelType string) (EmbeddingDimensionContract, error) {
 	normalizedModelType := normalizeEmbeddingModelType(modelType)
-	var result C.EmbeddingDimensionContractResult
-	var status C.int
-
-	if normalizedModelType == "multimodal" {
-		status = C.get_multimodal_embedding_dimension_contract(&result)
-	} else {
-		cModelType := C.CString(normalizedModelType)
-		defer C.free(unsafe.Pointer(cModelType))
-		status = C.get_embedding_dimension_contract(cModelType, &result)
-	}
+	result, status := loadEmbeddingDimensionContract(normalizedModelType)
 	defer C.free_embedding_dimension_contract(&result)
 
 	if status != 0 || bool(result.error) {
@@ -83,16 +74,34 @@ func GetEmbeddingDimensionContract(modelType string) (EmbeddingDimensionContract
 		)
 	}
 
+	return parseEmbeddingDimensionContract(normalizedModelType, &result)
+}
+
+func loadEmbeddingDimensionContract(modelType string) (C.EmbeddingDimensionContractResult, C.int) {
+	var result C.EmbeddingDimensionContractResult
+
+	if modelType == "multimodal" {
+		status := C.get_multimodal_embedding_dimension_contract(&result)
+		return result, status
+	}
+
+	cModelType := C.CString(modelType)
+	defer C.free(unsafe.Pointer(cModelType))
+	status := C.get_embedding_dimension_contract(cModelType, &result)
+	return result, status
+}
+
+func parseEmbeddingDimensionContract(modelType string, result *C.EmbeddingDimensionContractResult) (EmbeddingDimensionContract, error) {
 	nativeDimension := int(result.native_dimension)
 	if nativeDimension <= 0 {
 		return EmbeddingDimensionContract{}, fmt.Errorf(
 			"embedding model %q returned invalid native dimension %d",
-			normalizedModelType,
+			modelType,
 			nativeDimension,
 		)
 	}
 
-	contractModel := normalizedModelType
+	contractModel := modelType
 	if result.model_name != nil {
 		if loadedModel := C.GoString(result.model_name); loadedModel != "" {
 			contractModel = loadedModel
@@ -103,7 +112,7 @@ func GetEmbeddingDimensionContract(modelType string) (EmbeddingDimensionContract
 	if numSupportedDimensions < 0 {
 		return EmbeddingDimensionContract{}, fmt.Errorf(
 			"embedding model %q returned invalid supported dimension count %d",
-			normalizedModelType,
+			modelType,
 			numSupportedDimensions,
 		)
 	}
@@ -113,7 +122,7 @@ func GetEmbeddingDimensionContract(modelType string) (EmbeddingDimensionContract
 		if result.supported_dimensions == nil {
 			return EmbeddingDimensionContract{}, fmt.Errorf(
 				"embedding model %q returned a nil supported dimension list",
-				normalizedModelType,
+				modelType,
 			)
 		}
 		dimensions := (*[1 << 30]C.int)(unsafe.Pointer(result.supported_dimensions))[:numSupportedDimensions:numSupportedDimensions]
