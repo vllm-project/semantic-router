@@ -173,6 +173,12 @@ func assertReferenceConfigStoreGlobalCoverage(t testingT, stores map[string]inte
 	assertReferenceConfigSemanticCacheCoverage(t, mustMapAt(t, stores, "response_cache"))
 	assertReferenceConfigMemoryCoverage(t, mustMapAt(t, stores, "memory"))
 	assertReferenceConfigVectorStoreCoverage(t, mustMapAt(t, stores, "vector_store"))
+	assertReferenceConfigToolSessionsCoverage(t, mustMapAt(t, stores, "tool_sessions"))
+}
+
+func assertReferenceConfigToolSessionsCoverage(t testingT, toolSessions map[string]interface{}) {
+	assertMapCoversStructFields(t, toolSessions, reflect.TypeOf(ToolSessionStoreConfig{}), "global.stores.tool_sessions")
+	assertMapCoversStructFields(t, mustMapAt(t, toolSessions, "redis"), reflect.TypeOf(ToolSessionRedisConfig{}), "global.stores.tool_sessions.redis")
 }
 
 func assertReferenceConfigSemanticCacheCoverage(t testingT, semanticCache map[string]interface{}) {
