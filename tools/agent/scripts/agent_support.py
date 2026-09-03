@@ -125,6 +125,15 @@ def collect_manifest_globs(
         manifest_globs.extend(language["globs"])
     for dep_rule in structure_rules["dependency_rules"]:
         manifest_globs.extend(dep_rule["applies_to"])
+    architecture_rules = structure_rules.get("architecture", {})
+    for graph in architecture_rules.get("dependency_graphs", []):
+        manifest_globs.extend(graph["include"])
+        manifest_globs.extend(graph.get("focus", []))
+        for boundary in graph.get("forbidden_edges", []):
+            manifest_globs.extend(boundary["from"])
+            manifest_globs.extend(boundary["to"])
+    for scope in architecture_rules.get("health_scopes", []):
+        manifest_globs.extend(scope["include"])
 
     for surface in skill_registry["surfaces"].values():
         manifest_globs.extend(surface["paths"])
