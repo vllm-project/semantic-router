@@ -150,32 +150,35 @@ fn test_get_embedding_smart_priority_combinations(
 }
 
 /// The multimodal text encoder holds a fixed number of position embeddings, so
-/// a longer sequence has to be clamped before it reaches the position lookup.
+/// a longer sequence has to be rejected before it reaches the position lookup.
 /// Regression for a long input failing with
 /// "index-select invalid index 512 with dim size 512".
 #[rstest]
-#[case(0, 512, 0)]
-#[case(1, 512, 1)]
-#[case(511, 512, 511)]
-#[case(512, 512, 512)]
-#[case(513, 512, 512)]
-#[case(4096, 512, 512)]
-fn test_clamp_to_position_limit(
-    #[case] input_len: usize,
+#[case(0, 512)]
+#[case(1, 512)]
+#[case(511, 512)]
+#[case(512, 512)]
+fn test_check_position_limit_accepts_up_to_limit(
+    #[case] seq_len: usize,
     #[case] max_position: usize,
-    #[case] want_len: usize,
 ) {
-    let mut ids: Vec<u32> = (0..input_len as u32).collect();
-    let mut mask: Vec<u32> = vec![1; input_len];
+    assert!(check_position_limit(seq_len, max_position).is_ok());
+}
 
-    clamp_to_position_limit(&mut ids, &mut mask, max_position);
-
-    assert_eq!(ids.len(), want_len, "clamped ids length");
-    assert_eq!(
-        mask.len(),
-        want_len,
-        "mask must stay the same length as ids"
+#[rstest]
+#[case(513, 512)]
+#[case(4096, 512)]
+fn test_check_position_limit_names_length_and_limit(
+    #[case] seq_len: usize,
+    #[case] max_position: usize,
+) {
+    let err = check_position_limit(seq_len, max_position).unwrap_err();
+    assert!(
+        err.contains(&seq_len.to_string()),
+        "error must name the input length: {err}"
     );
-    // The kept tokens are the start of the sequence, not an arbitrary window.
-    assert!(ids.iter().enumerate().all(|(i, id)| *id == i as u32));
+    assert!(
+        err.contains(&max_position.to_string()),
+        "error must name the limit: {err}"
+    );
 }
