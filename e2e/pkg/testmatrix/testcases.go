@@ -59,6 +59,8 @@ var DashboardContract = []string{
 	"dashboard-deploy-preview",
 	"dashboard-config-versions",
 	"dashboard-deploy-invalid-yaml",
+	// A semantically invalid deploy must leave the active config serving (issue #3233)
+	"dashboard-deploy-safe-failure",
 	// Evaluation Plane lifecycle, evidence, report, comparison, and cancellation.
 	"dashboard-evaluation-plane",
 	// Workflow persistence survives dashboard pod restart (requires dashboard PVC)
