@@ -55,6 +55,11 @@ type CanonicalStoreGlobal struct {
 	ResponseCache ResponseCacheStoreConfig `yaml:"response_cache"`
 	Memory        MemoryConfig             `yaml:"memory"`
 	VectorStore   *VectorStoreConfig       `yaml:"vector_store,omitempty"`
+
+	// ToolSessions configures session-scoped sticky tool-set selection's
+	// shared store (issue #3347). Optional and pointer-shaped like
+	// VectorStore: most deployments won't enable sticky selection at all.
+	ToolSessions *ToolSessionStoreConfig `yaml:"tool_sessions,omitempty"`
 }
 
 // CanonicalIntegrationGlobal groups external helper services used by the router.
@@ -344,6 +349,7 @@ func applyCanonicalStoreGlobal(cfg *RouterConfig, stores CanonicalStoreGlobal) {
 	cfg.SemanticCache = stores.ResponseCache
 	cfg.Memory = stores.Memory
 	cfg.VectorStore = stores.VectorStore
+	cfg.ToolSessions = stores.ToolSessions
 }
 
 func applyCanonicalIntegrationGlobal(cfg *RouterConfig, integrations CanonicalIntegrationGlobal) {
