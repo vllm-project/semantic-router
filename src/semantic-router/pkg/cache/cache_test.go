@@ -146,7 +146,7 @@ collection:
   description: "Test semantic cache collection"
   vector_field:
     name: "embedding"
-     dimension: 384
+    dimension: 384
     metric_type: "IP"
   index:
     type: "HNSW"
@@ -238,7 +238,7 @@ collection:
   description: "Test semantic cache collection"
   vector_field:
     name: "embedding"
-     dimension: 384
+    dimension: 384
     metric_type: "IP"
   index:
     type: "HNSW"
