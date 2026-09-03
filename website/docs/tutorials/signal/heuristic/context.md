@@ -59,8 +59,8 @@ Each rule is an inclusive token band: it matches when
   are allowed and both names appear in `x-vsr-matched-context`.
 - Gaps and overlaps between bands are logged as warnings when the config
   loads. Requests inside a gap match no context rule.
-- Validation rejects a rule with neither limit, unparsable or negative
-  values, and `min_tokens` above `max_tokens`. The Router, the `vllm-sr`
+- Validation rejects a rule with neither limit, unparsable, negative, or
+  oversized values, and `min_tokens` above `max_tokens`. The Router, the `vllm-sr`
   CLI, and the Dashboard apply the same rules, so a band that passes
   `vllm-sr validate` also loads in the Router.
 

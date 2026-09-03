@@ -72,6 +72,17 @@ def test_unparsable_or_negative_max_tokens_is_rejected(value):
         ContextRule(name="bad", min_tokens="0", max_tokens=value)
 
 
+@pytest.mark.parametrize(
+    "value", ["1e100", "9223372036854775807", "9223372036854775808K", "1e19M"]
+)
+def test_oversized_token_count_is_rejected_like_router(value):
+    """TokenCount.Value() rejects scaled values at math.MaxInt; so must the CLI."""
+    with pytest.raises(ValidationError, match="min_tokens: token count is too large"):
+        ContextRule(name="bad", min_tokens=value)
+    with pytest.raises(ValidationError, match="max_tokens: token count is too large"):
+        ContextRule(name="bad", min_tokens="0", max_tokens=value)
+
+
 def test_boolean_token_count_is_rejected():
     with pytest.raises(ValidationError, match="min_tokens must be a token count"):
         ContextRule(name="bad", min_tokens=True)
@@ -88,10 +99,17 @@ def test_boolean_token_count_is_rejected():
         ("1.5K", 1500),
         ("0.5M", 500000),
         (" 64K ", 64000),
+        ("9e18", 9_000_000_000_000_000_000),
     ],
 )
 def test_parse_token_count_matches_router(value, expected):
     assert parse_token_count(value) == expected
+
+
+@pytest.mark.parametrize("value", ["1e100", "9223372036854775807", "9.3e18"])
+def test_parse_token_count_overflow_matches_router(value):
+    with pytest.raises(ValueError, match="token count is too large"):
+        parse_token_count(value)
 
 
 def test_user_config_loads_open_ended_final_band():

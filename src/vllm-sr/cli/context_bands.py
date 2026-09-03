@@ -9,6 +9,11 @@ import math
 
 TOKEN_COUNT_MULTIPLIERS = {"K": 1_000, "M": 1_000_000}
 
+# The Router rejects a scaled count at or above math.MaxInt, which is 2**63 - 1
+# on the 64-bit platforms it ships for. Compared as a float, as the Router does,
+# so "9223372036854775807" rounds up to 2**63 and is rejected on both sides.
+ROUTER_MAX_TOKEN_COUNT = float(2**63 - 1)
+
 
 def normalize_token_count(value: object, field: str) -> str | None:
     """Return the string form of a YAML token count, or None when omitted.
@@ -53,7 +58,10 @@ def parse_token_count(value: str | None) -> int:
         raise ValueError(f"invalid token count format: {value}")
     if number < 0:
         raise ValueError(f"token count must not be negative: {value}")
-    return int(number * multiplier)
+    scaled = number * multiplier
+    if scaled >= ROUTER_MAX_TOKEN_COUNT:
+        raise ValueError(f"token count is too large: {value}")
+    return int(scaled)
 
 
 def validate_context_band(min_tokens: str | None, max_tokens: str | None) -> None:
