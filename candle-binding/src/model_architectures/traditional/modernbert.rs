@@ -1221,6 +1221,10 @@ impl TraditionalModernBertClassifier {
         self.classify_internal(text)
     }
 
+    pub fn fit_prefix_to_window(&self, prefix: &str, suffix: &str) -> Result<String> {
+        crate::core::tokenization::fit_prefix_to_window(self.tokenizer.as_ref(), prefix, suffix)
+    }
+
     /// Get class labels mapping
     pub fn get_class_labels(&self) -> Option<&HashMap<String, String>> {
         self.config
@@ -1501,6 +1505,10 @@ impl TraditionalModernBertTokenClassifier {
     /// Classify tokens in text
     pub fn classify_tokens(&self, text: &str) -> Result<Vec<TokenEntityTuple>> {
         run_on_inference_pool(&self.device, || self.classify_tokens_on_device(text))
+    }
+
+    pub fn fit_prefix_to_window(&self, prefix: &str, suffix: &str) -> Result<String> {
+        crate::core::tokenization::fit_prefix_to_window(self.tokenizer.as_ref(), prefix, suffix)
     }
 
     fn classify_tokens_on_device(&self, text: &str) -> Result<Vec<TokenEntityTuple>> {
