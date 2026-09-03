@@ -103,8 +103,6 @@ def _prompt_to_messages(prompt: str) -> list[dict[str, Any]]:
 
 
 def _format_decision_error(status_code: int, body: dict) -> str:
-    """Render the eval endpoint's decision-unresolved shape, which returns the
-    full evaluation payload with decision_error instead of the error envelope."""
     message = f"Router returned {status_code}: {body['decision_error']}"
     policies = body.get("applied_unknown_policies")
     if isinstance(policies, dict) and policies:
