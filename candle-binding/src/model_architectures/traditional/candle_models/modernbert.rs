@@ -122,6 +122,28 @@ impl ModernBertAttention {
         })
     }
 
+    /// Project hidden states into `(b, heads, seq, head_dim)` q/k/v with RoPE applied.
+    ///
+    /// RoPE runs on the full q/k (cheap, O(seq*d)) before any chunking, so sliced
+    /// query blocks keep position-correct rotations.
+    fn project_qkv(&self, hidden_states: &Tensor) -> Result<(Tensor, Tensor, Tensor)> {
+        let (b, seq_len, _) = hidden_states.dims3()?;
+        let qkv = hidden_states
+            .apply(&self.qkv)?
+            .reshape((
+                b,
+                seq_len,
+                3,
+                self.num_attention_heads,
+                self.attention_head_size,
+            ))?
+            .permute((2, 0, 3, 1, 4))?;
+        let (q, k) = self
+            .rotary_emb
+            .apply_rotary_emb_qkv(&qkv.get(0)?, &qkv.get(1)?)?;
+        Ok((q, k, qkv.get(2)?))
+    }
+
     /// Bidirectional attention over `(b, seq, hidden)` hidden states.
     ///
     /// `pad_mask` is the `(b, 1, 1, seq)` additive padding mask (`0` for real tokens,
@@ -136,26 +158,8 @@ impl ModernBertAttention {
         window: usize,
         block_size: usize,
     ) -> Result<Tensor> {
-        let xs = hidden_states.clone();
-        let (b, seq_len, d) = xs.dims3()?;
-        let qkv = xs
-            .apply(&self.qkv)?
-            .reshape((
-                b,
-                seq_len,
-                3,
-                self.num_attention_heads,
-                self.attention_head_size,
-            ))?
-            .permute((2, 0, 3, 1, 4))?;
-
-        let q = qkv.get(0)?;
-        let k = qkv.get(1)?;
-        let v = qkv.get(2)?;
-
-        // Apply RoPE on the full q/k (cheap, O(seq*d)) before chunking, so sliced
-        // blocks keep position-correct rotations.
-        let (q, k) = self.rotary_emb.apply_rotary_emb_qkv(&q, &k)?;
+        let (b, seq_len, d) = hidden_states.dims3()?;
+        let (q, k, v) = self.project_qkv(hidden_states)?;
 
         let scale = (self.attention_head_size as f64).powf(-0.5);
 
