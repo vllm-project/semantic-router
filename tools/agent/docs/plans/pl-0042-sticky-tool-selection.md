@@ -55,11 +55,10 @@ Issue #3347 may be closed only when:
 - any deliberately deferred architecture gap is recorded in the indexed
   tech-debt register, not only in PR text.
 
-This is committed here verbatim (not only referenced) because
-`.ai/issue3347/2_blueprint_gpt_5.md` is untracked working material, not part
-of the repository — a reviewer checking out this branch would not see it.
-Originates from that blueprint's section 13; kept in sync by hand if the
-issue's completion signal changes.
+This is committed here verbatim, not only referenced, because the original
+design material it comes from was authored as local working notes outside
+the tracked repository — a reviewer checking out this branch would not see
+it. Kept in sync by hand if the issue's completion signal changes.
 
 ## Task List
 
@@ -153,5 +152,8 @@ description once opened.
 - Issue: <https://github.com/vllm-project/semantic-router/issues/3347>
 - Four-phase collaborator breakdown: <https://github.com/vllm-project/semantic-router/issues/3347#issuecomment-5512922218>
 - Related capability/authorization contract: <https://github.com/vllm-project/semantic-router/issues/2361>
-- Blueprint: `.ai/issue3347/2_blueprint_gpt_5.md`
-- Reconnaissance: `.ai/issue3347/1_handoff_gemini_38_flash.md`
+
+The original blueprint and reconnaissance documents this plan was built from
+are local working notes, not part of the tracked repository, and are not
+linked here for that reason — this plan's Goal/Scope/Non-Goals/Exit Criteria
+sections are the durable, self-contained record of that material.
