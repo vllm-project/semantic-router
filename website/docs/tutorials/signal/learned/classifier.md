@@ -61,6 +61,8 @@ LLM classifiers reference a named `global.model_catalog.external` entry and
 add `instructions`. The runtime fixes temperature, output schema,
 exact-label validation, and a 1 MiB default response limit. Set
 `max_response_bytes` on the external model entry to override that limit.
+Because the runtime owns the output schema, `parser_type` on that entry
+must be `json` or unset; other values are rejected at config load.
 The model must report a score for every declared
 label; each score must be between `0` and `1`, and the complete distribution
 must sum to approximately `1.0`. These are model-reported confidence scores,

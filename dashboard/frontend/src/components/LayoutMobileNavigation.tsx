@@ -13,7 +13,6 @@ import ProductIcon, { type ProductIconName } from './ProductIcon'
 
 const SECTION_ICONS: Record<LayoutDropdownKey, ProductIconName> = {
   build: 'mixture',
-  analyze: 'chart',
   operate: 'status',
 }
 

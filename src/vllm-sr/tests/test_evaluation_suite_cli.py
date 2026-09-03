@@ -36,6 +36,7 @@ def _write_bundle(root: Path) -> None:
         (
             CaseVisible(
                 id="case-0",
+                track_ids=("routing", "model_pool", "joint"),
                 messages=({"role": "user", "content": "PRIVATE PROMPT"},),
             ).model_dump(mode="json"),
         ),
@@ -97,7 +98,7 @@ def _request(root: Path) -> BenchmarkSuiteInstallRequest:
         decision_unit=descriptor.decision_unit,
         action_space=descriptor.action_space,
         track_ids=("routing", "model_pool", "joint"),
-        evidence_level_ceiling="E3",
+        normalization_origin="user_provided_import",
         split_protocol="frozen CLI fixture split",
         case_count=1,
         arm_ids=("private-arm",),
@@ -131,7 +132,7 @@ def test_suite_install_list_and_show_keep_output_boundaries(
     request = _request(bundle)
     _write_request(request_path, request)
     monkeypatch.setattr(
-        "cli.evaluation.suite_store.require_verified_benchmark_source",
+        "cli.evaluation.suite_store_install.require_verified_benchmark_source",
         lambda _descriptor, _root: request.source_receipt,
     )
 
@@ -172,6 +173,25 @@ def test_suite_install_list_and_show_keep_output_boundaries(
     assert "private-arm" not in encoded_list
     assert "private-route" not in encoded_list
     assert "PRIVATE PROMPT" not in encoded_list
+
+    catalog_result = runner.invoke(eval, ["catalog", "--suite-store", str(store_path)])
+    assert catalog_result.exit_code == 0, catalog_result.output
+    catalog = json.loads(catalog_result.output)
+    installed_catalog = next(
+        suite for suite in catalog["suites"] if suite["id"] == installed["id"]
+    )
+    assert installed_catalog["revision"] == installed["revision"]
+    assert installed_catalog["modes"] == ["replay"]
+    assert installed_catalog["evidence_level"] == "E0"
+    assert installed_catalog["executors"] == {
+        "replay": "normalized-suite-replay.v1",
+    }
+    assert all(
+        method["status"] == "configured" and not method["qualified_gate_ids"]
+        for method in installed_catalog["methods"]
+    )
+    assert "artifacts" not in catalog_result.output
+    assert "PRIVATE PROMPT" not in catalog_result.output
 
     shown_result = runner.invoke(
         eval,

@@ -84,7 +84,7 @@ def _parse_messages_json(messages_json: str) -> list[dict[str, Any]]:
         raise ValueError(f"Invalid --messages JSON: {exc}") from exc
 
     if not isinstance(value, list):
-        raise TypeError("--messages must be a JSON array of message objects")
+        raise ValueError("--messages must be a JSON array of message objects")
 
     for idx, item in enumerate(value):
         if not isinstance(item, dict):

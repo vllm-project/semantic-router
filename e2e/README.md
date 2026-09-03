@@ -121,6 +121,7 @@ until the selected cases are known to be isolated.
 - **dynamic-config**: CRD-driven routing and embedding signals.
 - **multimodal-routing**: image-modality embedding routing.
 - **remote-embedding**: OpenAI-compatible remote embedding providers.
+- **category-remote-backend**: shared remote category `http_classify` backend.
 - **llm-d**: llm-d inference-gateway health and router smoke coverage.
 - **looper**: deterministic Looper algorithm contracts.
 - **istio**: sidecar, mTLS, and tracing behavior.
@@ -132,6 +133,7 @@ until the selected cases are known to be isolated.
 - **streaming**: streamed request bodies and cache round trips.
 - **anthropic-shim**: affected-change Anthropic backend and cross-protocol matrix coverage.
 - **response-api**: affected-change memory-backed Responses API and cross-protocol matrix coverage.
+- **route-action**: decision route action for detected prompt attacks and benign traffic.
 - **response-api-redis**: manual Redis persistence and TTL coverage.
 - **response-api-redis-cluster**: manual Redis Cluster persistence and TTL coverage.
 - **router-replay**: manual management-boundary and restart-recovery coverage.
@@ -140,6 +142,7 @@ until the selected cases are known to be isolated.
 - **rag-hybrid-search**: manual Llama Stack hybrid-search coverage.
 - **hallucination**: manual fact-check gating and warning behavior.
 - **jailbreak-onerror**: manual PromptGuardConfig.OnError coverage against an unreachable classifier endpoint.
+- **response-jailbreak**: manual response_jailbreak coverage for LLM output carrying jailbreak content past the classifier's sequence window.
 
 ### Coverage Ownership Matrix
 

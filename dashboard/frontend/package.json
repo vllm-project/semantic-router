@@ -10,7 +10,8 @@
     "format:check": "prettier --check . --ignore-unknown",
     "lint": "eslint .",
     "type-check": "tsc --noEmit",
-    "test:unit": "vitest run src"
+    "test:unit": "vitest run src",
+    "test:e2e:evaluation": "playwright test e2e/evaluation"
   },
   "dependencies": {
     "@dagrejs/dagre": "^1.1.8",

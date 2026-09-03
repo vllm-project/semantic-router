@@ -10,11 +10,17 @@ import (
 
 // IsCategoryEnabled checks if category classification is properly configured.
 func (c *Classifier) IsCategoryEnabled() bool {
-	return c.Config.CategoryModel.Active() && c.Config.CategoryModel.ModelID != "" && c.Config.CategoryMappingPath != "" && c.CategoryMapping != nil
+	modelConfigured := c.Config.CategoryModel.ModelID != "" || c.Config.CategoryModel.Backend != nil
+	return c.Config.CategoryModel.Active() && modelConfigured && c.Config.CategoryMappingPath != "" && c.CategoryMapping != nil
 }
 
 // initializeCategoryClassifier initializes the category classification model.
 func (c *Classifier) initializeCategoryClassifier() error {
+	if c.Config.CategoryModel.Backend != nil {
+		// Remote inference is fully constructed during classifier assembly and has
+		// no local model lifecycle to execute.
+		return nil
+	}
 	if !c.IsCategoryEnabled() || c.categoryInitializer == nil {
 		return fmt.Errorf("category classification is not properly configured")
 	}
@@ -104,9 +110,16 @@ func (c *Classifier) CheckForJailbreakWithThreshold(ctx context.Context, text st
 		return false, "", 0.0, nil
 	}
 
-	result, err := c.jailbreakInference.Classify(ctx, text)
-	if err != nil {
-		return false, "", 0.0, fmt.Errorf("jailbreak classification failed: %w", err)
+	// Scans in chunks so a long text is not judged on its first 512 tokens.
+	// The verdict stays argmax-based here: this call reports the predicted
+	// class and that class's confidence. A caller that has to threshold
+	// P(jailbreak) independently of argmax wants CheckForJailbreakRiskWithThreshold.
+	result, scanned, lastErr := c.scanJailbreakChunks(ctx, text)
+	if !scanned {
+		if lastErr != nil {
+			return false, "", 0.0, fmt.Errorf("jailbreak classification failed: %w", lastErr)
+		}
+		return false, "", 0.0, nil
 	}
 	logging.Debugf("Jailbreak classification result: %v", result)
 

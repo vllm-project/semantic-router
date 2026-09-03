@@ -104,6 +104,10 @@ See [environments.md](environments.md) for the concrete commands.
 
 ## Behavior and Coverage Rules
 
+- Main-branch validation runs are per-commit: do not add branch-wide workflow
+  concurrency that cancels or coalesces push runs, because the change
+  classifier receives each push's immediate predecessor and cannot recover
+  domains or publication targets from a skipped commit.
 - Behavior-visible routing, startup, config, Docker, CLI, or API changes require updated or new E2E coverage unless the change is a pure refactor.
 - Documentation-only changes should not trigger local smoke or heavy E2E unless the task matrix escalates them.
 - Repository ownership metadata (`OWNER` files and `.github/CODEOWNERS`) stays
@@ -118,7 +122,7 @@ See [environments.md](environments.md) for the concrete commands.
   add the core test receipt.
 - Core changes receive one Kubernetes smoke. Standalone image validation
   subtracts images already built by active suites: Kubernetes E2E supplies
-  `extproc`; CLI supplies `extproc`, `vllm-sr`, `dashboard`, and `vllm-sr-sim`;
+  `extproc`; CLI supplies `extproc`, `vllm-sr`, and `dashboard`;
   Memory adds `llm-katan`; Operator supplies `extproc`, `operator`, and
   `operator-bundle`; Recipe Conformance supplies `vllm-sr`.
 - Performance runs only for `perf/**` (plus its explicit manual/nightly

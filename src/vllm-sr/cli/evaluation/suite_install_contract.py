@@ -8,16 +8,20 @@ media type.  Raw source checkouts are never installed into the suite store.
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
+from types import MappingProxyType
 from typing import Literal
 
 from pydantic import Field, field_validator, model_validator
 
-from cli.evaluation.contracts import StrictModel
-from cli.evaluation.reporting import EvidenceLevel, TrackID
+from cli.evaluation.constants import TRACK_IDS
+from cli.evaluation.contract_primitives import StrictModel
+from cli.evaluation.reporting import TrackID
 from cli.evaluation.suite_contract import (
     SUITE_CONTRACT_VERSION,
     BenchmarkSourceReceipt,
 )
+from cli.evaluation.suite_qualification import NormalizationOrigin
 
 SUITE_INSTALL_CONTRACT_VERSION = "evaluation-suite-install.v1"
 LICENSE_CONTRACT_VERSION = "evaluation-suite-license.v1"
@@ -43,73 +47,77 @@ ArtifactDomain = Literal["visible", "grading", "metadata"]
 # The layout is deliberately closed.  In particular, an install request cannot
 # smuggle an absolute path, executable, archive, or alternate media type into
 # the private store.
-ARTIFACT_ROLE_LAYOUT: dict[SuiteArtifactRole, tuple[str, str, ArtifactDomain]] = {
-    "visible_cases": (
-        "visible/cases.jsonl",
-        "application/x-ndjson",
-        "visible",
-    ),
-    "grading_cases": (
-        "grading/cases.jsonl",
-        "application/x-ndjson",
-        "grading",
-    ),
-    "outcomes": (
-        "grading/outcomes.jsonl",
-        "application/x-ndjson",
-        "grading",
-    ),
-    "decisions": (
-        "grading/decisions.jsonl",
-        "application/x-ndjson",
-        "grading",
-    ),
-    "preferences": (
-        "grading/preferences.jsonl",
-        "application/x-ndjson",
-        "grading",
-    ),
-    "trajectories": (
-        "grading/trajectories.jsonl",
-        "application/x-ndjson",
-        "grading",
-    ),
-    "perturbations": (
-        "grading/perturbations.jsonl",
-        "application/x-ndjson",
-        "grading",
-    ),
-    "faults": (
-        "grading/faults.jsonl",
-        "application/x-ndjson",
-        "grading",
-    ),
-    "multimodal_observations": (
-        "grading/multimodal-observations.jsonl",
-        "application/x-ndjson",
-        "grading",
-    ),
-    "safety_observations": (
-        "grading/safety-observations.jsonl",
-        "application/x-ndjson",
-        "grading",
-    ),
-    "capacity_observations": (
-        "grading/capacity-observations.jsonl",
-        "application/x-ndjson",
-        "grading",
-    ),
-    "media_manifest": (
-        "metadata/media.jsonl",
-        "application/x-ndjson",
-        "metadata",
-    ),
-    "license_manifest": (
-        "metadata/licenses.json",
-        "application/json",
-        "metadata",
-    ),
-}
+ARTIFACT_ROLE_LAYOUT: Mapping[SuiteArtifactRole, tuple[str, str, ArtifactDomain]] = (
+    MappingProxyType(
+        {
+            "visible_cases": (
+                "visible/cases.jsonl",
+                "application/x-ndjson",
+                "visible",
+            ),
+            "grading_cases": (
+                "grading/cases.jsonl",
+                "application/x-ndjson",
+                "grading",
+            ),
+            "outcomes": (
+                "grading/outcomes.jsonl",
+                "application/x-ndjson",
+                "grading",
+            ),
+            "decisions": (
+                "grading/decisions.jsonl",
+                "application/x-ndjson",
+                "grading",
+            ),
+            "preferences": (
+                "grading/preferences.jsonl",
+                "application/x-ndjson",
+                "grading",
+            ),
+            "trajectories": (
+                "grading/trajectories.jsonl",
+                "application/x-ndjson",
+                "grading",
+            ),
+            "perturbations": (
+                "grading/perturbations.jsonl",
+                "application/x-ndjson",
+                "grading",
+            ),
+            "faults": (
+                "grading/faults.jsonl",
+                "application/x-ndjson",
+                "grading",
+            ),
+            "multimodal_observations": (
+                "grading/multimodal-observations.jsonl",
+                "application/x-ndjson",
+                "grading",
+            ),
+            "safety_observations": (
+                "grading/safety-observations.jsonl",
+                "application/x-ndjson",
+                "grading",
+            ),
+            "capacity_observations": (
+                "grading/capacity-observations.jsonl",
+                "application/x-ndjson",
+                "grading",
+            ),
+            "media_manifest": (
+                "metadata/media.jsonl",
+                "application/x-ndjson",
+                "metadata",
+            ),
+            "license_manifest": (
+                "metadata/licenses.json",
+                "application/json",
+                "metadata",
+            ),
+        }
+    )
+)
 
 REQUIRED_ARTIFACT_ROLES = frozenset(
     {"visible_cases", "grading_cases", "license_manifest"}
@@ -155,7 +163,7 @@ class BenchmarkSuiteInstallRequest(StrictModel):
     decision_unit: str = Field(min_length=1, max_length=256)
     action_space: str = Field(min_length=1, max_length=256)
     track_ids: tuple[TrackID, ...] = Field(min_length=1)
-    evidence_level_ceiling: EvidenceLevel
+    normalization_origin: NormalizationOrigin
     split_protocol: str = Field(min_length=1, max_length=1024)
     case_count: int = Field(gt=0, strict=True)
     arm_ids: tuple[str, ...] = ()
@@ -186,6 +194,11 @@ class BenchmarkSuiteInstallRequest(StrictModel):
             raise ValueError("source receipt belongs to a different adapter")
         if len(self.track_ids) != len(set(self.track_ids)):
             raise ValueError("track ids must be unique")
+        canonical_tracks = tuple(
+            track_id for track_id in TRACK_IDS if track_id in self.track_ids
+        )
+        if self.track_ids != canonical_tracks:
+            raise ValueError("track ids must use canonical catalog order")
         roles = [artifact.role for artifact in self.artifacts]
         if len(roles) != len(set(roles)):
             raise ValueError("artifact roles must be unique")

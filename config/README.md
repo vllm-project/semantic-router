@@ -117,6 +117,12 @@ runtime dependency; they do not define routing behavior by themselves.
   authenticated upstream component owns the bypass header.
 - Knowledge bases are declared under `global.model_catalog.kbs[]`; routing
   signals bind to those shared assets by name.
+- Built-in category/domain classification uses the local `variant` selector by
+  default. A named remote classifier may instead be attached with
+  `global.model_catalog.modules.classifier.domain.backend`; its `model` must
+  name an entry in `global.model_catalog.external[]` with
+  `model_role: classification`. The shared backend contract uses
+  `protocol`, `contract`, `model`, and optional `deadline_ms`.
 - External LLM classifiers use `max_response_bytes` on their
   `global.model_catalog.external[]` entry. The MCP classifier uses the same key
   under `global.model_catalog.modules.classifier.mcp`.

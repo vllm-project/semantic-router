@@ -30,7 +30,7 @@ vllm-sr serve --image-pull-policy never
 ```
 
 The build installs the editable `vllm-sr` CLI and creates local Router,
-Dashboard, Envoy, and Fleet Sim images. `--image-pull-policy never` ensures the
+Dashboard, and Envoy images. `--image-pull-policy never` ensures the
 run uses those local images.
 
 Useful lifecycle commands:

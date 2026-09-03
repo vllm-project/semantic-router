@@ -22,6 +22,7 @@ from .config_contract import (
     CLASSIFIER_TYPE_LLM,
     CLASSIFIER_TYPE_LOCAL,
     ClassifierSignalType,
+    UnknownPolicy,
 )
 
 RoutingStrategy = Literal["priority", "confidence"]
@@ -619,7 +620,7 @@ class Condition(BaseModel):
     label: Optional[str] = None
     predicate: Optional[NumericPredicate] = None
     on_error: Optional[Literal["no_match", "match"]] = None
-    on_unknown: Optional[Literal["no_match", "match", "fail_request"]] = None
+    on_unknown: Optional[UnknownPolicy] = None
     operator: Optional[str] = None
     conditions: Optional[List["Condition"]] = None
 
@@ -686,7 +687,7 @@ class Rules(BaseModel):
 
     operator: str = "AND"
     conditions: List[Condition] = Field(default_factory=list)
-    on_unknown: Optional[Literal["no_match", "match", "fail_request"]] = None
+    on_unknown: Optional[UnknownPolicy] = None
 
     @model_validator(mode="before")
     @classmethod
@@ -1502,6 +1503,30 @@ class OutputContractSpec(BaseModel):
     postprocess: Optional[List[OutputContractPostprocess]] = None
 
 
+def _conditions_reference_signal(conditions, signal_type):
+    for condition in conditions or []:
+        if (condition.type or "").lower() == signal_type:
+            return True
+        if _conditions_reference_signal(condition.conditions, signal_type):
+            return True
+    return False
+
+
+class DecisionAction(BaseModel):
+    """Explicit action a matched decision applies instead of candidate ranking."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["route"]
+    destination: str
+
+    @model_validator(mode="after")
+    def validate_destination(self):
+        if not self.destination.strip():
+            raise ValueError("action.destination is required")
+        return self
+
+
 class Decision(BaseModel):
     """Routing decision configuration."""
 
@@ -1514,6 +1539,7 @@ class Decision(BaseModel):
     # A decision without an explicit rule is the canonical match-all fallback.
     # This mirrors the Go runtime and the DSL `ROUTE` form without `WHEN`.
     rules: Rules = Field(default_factory=Rules)
+    action: Optional[DecisionAction] = None
     output_contract: Optional[str] = None
     output_contract_spec: Optional[OutputContractSpec] = None
     modelRefs: List[ModelRef] = Field(alias="modelRefs")
@@ -1521,6 +1547,16 @@ class Decision(BaseModel):
     adaptations: Optional[DecisionAdaptationsConfig] = None
     plugins: Optional[List[PluginConfig]] = []
     annotations: Optional[Dict[str, Any]] = None
+
+    @model_validator(mode="after")
+    def validate_action(self):
+        if self.action is None:
+            return self
+        if not _conditions_reference_signal(self.rules.conditions, "jailbreak"):
+            raise ValueError(
+                "a route action requires an explicit jailbreak condition in rules"
+            )
+        return self
 
     @model_validator(mode="after")
     def validate_prompt_candidates(self):

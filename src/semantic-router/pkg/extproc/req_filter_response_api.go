@@ -57,13 +57,22 @@ type ResponseObjectState struct {
 	// ConversationHistory fetched from store
 	ConversationHistory []*responseapi.StoredResponse
 
-	// ConversationID is the determined ConversationID for this request.
-	// Set during neutral request preparation to ensure consistent tracking.
-	// Sources (in priority order):
-	//   1. Request's conversation_id field
-	//   2. First response in conversation chain (via previous_response_id)
-	//   3. Newly generated (for new conversations)
+	// ConversationID is the client-visible OpenAI Conversations object this
+	// response belongs to. Strict external membership: populated only when
+	// the request explicitly supplies conversation_id. A previous_response_id
+	// chain never implies membership: conversation and lineage are two
+	// separate, non-inheriting mechanisms (see issue #2999). Persisted
+	// verbatim on StoredResponse and echoed in the Response API JSON body;
+	// never inferred.
 	ConversationID string
+
+	// SessionTrackingID is the Router-internal correlation key for session
+	// telemetry, cache-warmth estimation, and model-transition detection.
+	// Always non-empty and namespaced by source so it can never be mistaken
+	// for a real conversation_id or response_id downstream; see
+	// determineSessionTrackingID. Never serialized to the client and never
+	// written to StoredResponse.
+	SessionTrackingID string
 
 	// Input, Instructions, and Metadata are immutable ingress snapshots used for
 	// retention. Later routing and plugin mutations must not alter stored input.
@@ -127,7 +136,10 @@ func (f *ResponseAPIFilter) PrepareObjectState(
 		}
 		state.ConversationHistory = history
 	}
-	state.ConversationID = determineConversationID(request.ConversationID, state.ConversationHistory)
+	state.ConversationID = request.ConversationID
+	state.SessionTrackingID = determineSessionTrackingID(
+		request.ConversationID, state.ConversationHistory, state.GeneratedResponseID,
+	)
 	return state, nil
 }
 
@@ -352,28 +364,38 @@ func (f *ResponseAPIFilter) storedToResponseAPIResponse(stored *responseapi.Stor
 	}
 }
 
-// determineConversationID determines the ConversationID for this request.
-// Priority order:
-//  1. Request's conversation_id field (explicit)
-//  2. First response in conversation chain (continuation via previous_response_id)
-//  3. Newly generated (new conversation)
-func determineConversationID(explicit string, history []*responseapi.StoredResponse) string {
-	// Priority 1: Request explicitly provides conversation_id
+// Namespace prefixes for SessionTrackingID. Kept distinct from the
+// responseapi ID prefixes (resp_, conv_) so an internal tracking key can
+// never be confused for a store-addressable object ID downstream.
+const (
+	sessionTrackingConversationPrefix = "respapi:conversation:"
+	sessionTrackingLineagePrefix      = "respapi:lineage:"
+	sessionTrackingStandalonePrefix   = "respapi:standalone:"
+)
+
+// determineSessionTrackingID computes the Router-internal correlation key
+// used for session telemetry, cache-warmth estimation, and model-transition
+// detection. Kept deliberately separate from ConversationID, which is strict
+// OpenAI-spec external membership (see ResponseObjectState) and must never
+// be inferred from lineage.
+//
+// The lineage case (previous_response_id only, no explicit conversation_id)
+// keys on the chain root's response ID. This is best-effort: two independent
+// previous_response_id-only continuations of the same parent (a lineage
+// fork) share this key today, which can borrow cache-warmth/model state
+// across branches that don't actually share generation history. Full branch
+// isolation needs a lineage ID propagated parent-to-child on StoredResponse
+// - tracked as a follow-up, not built here, since this fix's scope is
+// closing the external conversation_id leak. This key is never less precise
+// than the single shared key every response used before this change.
+func determineSessionTrackingID(explicit string, history []*responseapi.StoredResponse, generatedResponseID string) string {
 	if explicit != "" {
-		return explicit
+		return sessionTrackingConversationPrefix + explicit
 	}
-
-	// Priority 2: Get from conversation history (continuation)
-	if len(history) > 0 {
-		// Find ConversationID from the first response in the chain
-		firstResponse := history[0]
-		if firstResponse.ConversationID != "" {
-			return firstResponse.ConversationID
-		}
+	if len(history) > 0 && history[0] != nil && history[0].ID != "" {
+		return sessionTrackingLineagePrefix + history[0].ID
 	}
-
-	// Priority 3: Generate new ConversationID (new conversation)
-	return responseapi.GenerateConversationID()
+	return sessionTrackingStandalonePrefix + generatedResponseID
 }
 
 // createResponseAPIError creates an error response in OpenAI format.

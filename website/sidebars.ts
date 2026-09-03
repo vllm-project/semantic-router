@@ -34,6 +34,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'installation/installation',
         'installation/deployment-options',
+        'installation/support-matrix',
       ],
     },
     {
@@ -345,7 +346,6 @@ const sidebars: SidebarsConfig = {
       items: [
         'fleet-sim/overview',
         'fleet-sim/getting-started',
-        'fleet-sim/dashboard-integration',
         'fleet-sim/use-cases',
         'fleet-sim/sim-algorithms',
         'fleet-sim/power-model',
@@ -375,6 +375,7 @@ const sidebars: SidebarsConfig = {
           label: 'Workflows, Memory & Tools',
           items: [
             'proposals/router-flow-workflows',
+            'proposals/agent-based-routing',
             'proposals/deliberation-algorithms',
             'proposals/agentic-memory',
             'proposals/agentic-rag',

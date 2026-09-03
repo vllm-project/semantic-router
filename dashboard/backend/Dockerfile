@@ -124,7 +124,7 @@ RUN set -eux; \
       done; \
       return 1; \
     }; \
-    apt_get_install_with_retry ca-certificates curl docker.io gosu wget
+    apt_get_install_with_retry ca-certificates curl docker.io gosu libseccomp2 wget
 WORKDIR /app
 COPY --from=backend-builder /app/dashboard-backend /app/dashboard-backend
 COPY --from=backend-builder /app/dashboard-backend /usr/local/bin/dashboard-backend
@@ -148,6 +148,10 @@ RUN python3 -m venv "${VIRTUAL_ENV}" && \
 RUN groupadd --gid 65532 nonroot && \
     useradd --uid 65532 --gid 65532 --create-home --shell /usr/sbin/nologin nonroot && \
     install -d -o nonroot -g root -m 0770 /app/data && \
+    chown -R root:root /app/cli && \
+    find /app/cli -type d -exec chmod 0555 {} + && \
+    find /app/cli -type f -exec chmod 0444 {} + && \
+    chmod 0555 /app/cli/evaluation/sandbox_worker.py && \
     chown root:root \
       /app/entrypoint.sh \
       /app/entrypoint_permissions.py \
