@@ -78,8 +78,6 @@ func (c *Classifier) evaluatePIISignal(ctx context.Context, results *SignalResul
 	logging.Debugf("[Signal Computation] PII signal evaluation completed in %v", elapsed)
 }
 
-// piiRuleHasInferenceError reports whether any chunk this rule depends on
-// failed inference, so the rule fails visibly instead of matching as "no PII".
 func piiRuleHasInferenceError(ruleContents []string, piiCache map[string][]cachedPIIResult) bool {
 	for _, content := range ruleContents {
 		for _, cached := range piiCache[content] {

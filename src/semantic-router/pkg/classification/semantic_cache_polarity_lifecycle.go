@@ -48,11 +48,6 @@ func (c *Classifier) initializeSemanticCacheNLI() error {
 	return nil
 }
 
-// admittedPolarityVerifier scores the contradiction between a cached query
-// (NLI premise) and the incoming query (hypothesis) under the shared
-// hallucination-explainer admission gate. Only fields of the result are
-// accessed: the cgo binding returns a pointer while the compile-only stub
-// returns a value, and this file must build under both.
 func (c *Classifier) admittedPolarityVerifier() func(context.Context, string, string) (float32, error) {
 	gate := c.admissionRegistry.For(admissionDeploymentHallucinationExplainer)
 	return func(ctx context.Context, cachedQuery, incomingQuery string) (float32, error) {
