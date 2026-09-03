@@ -34,6 +34,16 @@ type anthropicUsageWire struct {
 	Iterations               json.RawMessage                 `json:"iterations,omitempty"`
 }
 
+type anthropicMessageDeltaUsageWire struct {
+	CacheCreationInputTokens int64                           `json:"cache_creation_input_tokens"`
+	CacheReadInputTokens     int64                           `json:"cache_read_input_tokens"`
+	InputTokens              int64                           `json:"input_tokens"`
+	OutputTokens             int64                           `json:"output_tokens"`
+	OutputTokensDetails      anthropicOutputUsageDetailsWire `json:"output_tokens_details"`
+	ServerToolUse            anthropicServerToolUsageWire    `json:"server_tool_use"`
+	Iterations               json.RawMessage                 `json:"iterations,omitempty"`
+}
+
 type anthropicCacheCreationUsageWire struct {
 	Ephemeral1hInputTokens int64 `json:"ephemeral_1h_input_tokens"`
 	Ephemeral5mInputTokens int64 `json:"ephemeral_5m_input_tokens"`
