@@ -61,7 +61,10 @@ flowchart TD
     F -- No --> J[Return no eligible Fusion decision error]
     H --> M[Run analysis panel concurrently]
     M --> N{Usable responses meet quorum?}
-    N -- No --> O[Return typed Fusion quorum error]
+    N -- No --> O{quorum_failure_policy}
+    O -- fail --> O1[Return typed Fusion quorum error]
+    O -- fallback --> O2[Call quorum_fallback_target once]
+    O2 --> O3[Return its ordinary response, no judge or grounding]
     N -- Yes --> P[Apply optional grounding]
     P --> Q{analysis_mode}
     Q -- separate --> R[Tool-free structured analysis]
@@ -159,6 +162,7 @@ algorithm:
     include_analysis: true
     include_intermediate_responses: true
     on_error: skip
+    quorum_failure_policy: fail
     judge_prompt_version: fusion-v1
 ```
 
@@ -229,6 +233,8 @@ global:
 | `include_analysis` | bool | `true` | Recipe-owned visibility for an available structured judge analysis; this does not control execution |
 | `include_intermediate_responses` | bool | `true` | Recipe-owned visibility for raw panel responses |
 | `on_error` | string | `skip` | Recipe-owned handling: `skip` individual failed or unusable panel responses while enforcing quorum, or `fail` on the first such response |
+| `quorum_failure_policy` | string | `fail` | Panel-level behavior when usable responses fall below `min_successful_responses`: `fail` returns a typed quorum failure, `fallback` routes the request to `quorum_fallback_target`. Recipe-owned; requests cannot override it |
+| `quorum_fallback_target` | string | none | Concrete provider model to route to when `quorum_failure_policy: fallback`. Required by, and only valid with, that policy |
 | `analysis_template` | string | built-in | Recipe-owned separate-analysis prompt with `{{original}}` and `{{responses}}`; rejected outside `separate` |
 | `synthesis_template` | string | built-in | Recipe-owned terminal prompt for every mode, with `{{original}}`, `{{responses}}`, and `{{analysis}}`; analysis is empty outside `separate` |
 | `judge_prompt_version` | string | `fusion-v1` | Recipe-owned version marker included in Fusion response trace |
@@ -244,8 +250,134 @@ Best practice:
 - Keep `min_successful_responses` at or below the effective panel size. Invalid
   quorums are rejected; the Router does not lower them automatically.
 - A partial panel continues only when its usable responses still satisfy
-  `min_successful_responses`; otherwise Fusion returns an error without running
-  grounding or either judge call.
+  `min_successful_responses`; otherwise Fusion applies its configured
+  `quorum_failure_policy` without running grounding or any judge call.
+- Keep the two error contracts distinct. `on_error` decides whether collection
+  continues after *one* panel attempt fails; `quorum_failure_policy` decides what
+  the *panel as a whole* does when it ends below quorum.
+- **`on_error: fail` takes precedence.** It aborts the panel on the first failed
+  or unusable attempt, before `quorum_failure_policy` is evaluated: no fallback
+  call is made, no judge call is made, and no quorum disposition is recorded.
+  The request fails with the underlying attempt error.
+- With the default `on_error: skip`, a failed or unusable attempt is recorded as
+  evidence while collection continues. If the panel then ends below quorum, the
+  quorum policy decides that outcome. This is the branch a `fallback` target is
+  for.
+- An internal round timeout can also produce a below-quorum outcome that the
+  quorum policy handles, under either `on_error` value. Caller cancellation and
+  an exhausted caller deadline never dispatch a fallback: the request the answer
+  would serve no longer exists, so spending another call on it is pointless.
+- `quorum_failure_policy` selects what happens instead of that error. It defaults
+  to `fail`, preserving the behavior above. Note that `min_successful_responses`
+  itself defaults to the full panel size, so a Fusion decision that sets neither
+  field requires every panel model to produce a usable response. Set
+  `min_successful_responses` explicitly, or configure a `fallback` target, to
+  tolerate partial panel failure.
+
+### Below-quorum fallback
+
+When the panel ends below `min_successful_responses`, `quorum_failure_policy`
+decides the outcome:
+
+```yaml
+algorithm:
+  type: fusion
+  fusion:
+    model: qwen3-32b
+    analysis_models: [qwen3-8b, qwen3-32b, mistral-7b]
+    min_successful_responses: 2
+    quorum_failure_policy: fallback
+    quorum_fallback_target: large-primary
+```
+
+`fallback` issues one recovery call to `quorum_fallback_target` and returns that
+answer instead of synthesizing from an under-strength panel. The judge and
+grounding stages are skipped: there is no panel to deliberate over.
+
+The target is validated when the configuration loads. It must be declared in
+`routing.modelCards`, use an OpenAI-compatible API format, be chat-capable text
+modality, have a provider backend, and not be one of the decision's own
+`analysis_models`. It must also be a concrete provider model: `vllm-sr/auto`,
+an entrypoint name, or a Fusion, Flow, or ReMoM slug is rejected, because
+falling back into a composite path would re-enter the same panel.
+
+The capability check is fail-closed. When the effective panel declares
+capabilities, the target must declare its own and cover every one of them, so a
+fallback cannot silently drop a capability the panel was chosen for. A target
+that declares nothing is rejected rather than assumed capable: absent metadata
+does not establish compatibility, and accepting it would let any target pass
+validation by omitting its declaration.
+
+When the panel declares no capabilities there is no requirement to meet, so a
+target declaring none is accepted. The rule constrains what the panel needs, not
+metadata completeness in general.
+
+At request time the fallback reuses the standard stage gate, so it is refused
+when the request no longer fits the target's context window.
+
+A successfully recovered quorum failure returns the fallback target's ordinary
+protocol response. The caller does not receive a new response field: the trace
+extension is omitted, because the fallback bypasses the judge and there is no
+deliberation to report. The evidence is operator-facing and reaches Router
+Replay, metrics, and structured logs instead.
+
+When Router Replay is enabled for the matched decision, the bounded outcome is
+recorded there with the required quorum, usable count, per-attempt failure
+classes, the selected policy, the fallback target, and a terminal disposition.
+Metrics and the structured log events are emitted regardless. Two log events
+carry the outcome, one per layer:
+
+| Event | Emitted when |
+| --- | --- |
+| `fusion_panel_quorum_failed` | The algorithm decided what to do with the below-quorum panel. Diagnostic only; it carries no metric |
+| `fusion_quorum_terminal_outcome` | The response boundary settled the outcome. This is where every quorum metric is emitted |
+
+| Disposition | Meaning |
+| --- | --- |
+| `quorum_failed` | Policy was `fail`; a typed quorum error was returned |
+| `fallback_served` | Fallback answered and protocol encoding succeeded, so the response was returned to Envoy. The Router sees no delivery acknowledgement, so this does not assert what the client received |
+| `fallback_failed` | Fallback was attempted and failed |
+| `fallback_response_failed` | Fallback answered but its response could not be built |
+| `response_encode_failed` | The response was built but protocol translation rejected it, so an error was returned instead |
+| `budget_exhausted` | Fallback did not fit the target's context window |
+| `cancelled` | The caller cancelled or timed out; no fallback was attempted |
+
+Exactly one disposition is recorded per below-quorum panel, and one layer
+records it. The algorithm decides which disposition applies, but the response
+boundary is the only place a quorum sample is emitted, because it is the only
+layer that knows whether protocol encoding succeeded. A fallback that answers
+and then fails to encode is therefore recorded as `response_encode_failed`
+rather than as a success. `fallback_ready` is the internal handoff state
+carrying an answered fallback to that boundary, and never appears as a
+disposition in metrics or Replay.
+
+Accounting includes every panel attempt that was paid for plus the fallback
+call, each exactly once, including when the fallback itself fails.
+
+Each below-quorum panel emits one bounded set of metrics, so the full outcome is
+alertable without log parsing:
+
+| Metric | Labels | Records |
+| --- | --- | --- |
+| `llm_fusion_quorum_failure_total` | `decision`, `policy`, `disposition` | one sample per below-quorum panel |
+| `llm_fusion_quorum_fallback_total` | `decision`, `target`, `disposition` | fallback routing outcomes |
+| `llm_fusion_quorum_required_responses` | `decision` | the quorum that was required |
+| `llm_fusion_quorum_usable_responses` | `decision` | how many usable responses arrived |
+| `llm_fusion_panel_attempt_total` | `decision`, `state` | per-attempt failure classes |
+
+All label values are closed enumerations or configuration-derived names, so
+cardinality is bounded by the recipe rather than by traffic.
+
+Because a below-quorum panel is a recipe-owned quality boundary, these fields
+are not part of the request-level `plugins[].id = fusion` surface. A client
+cannot select the policy or redirect the fallback target, and cannot restate
+`min_successful_responses` to make the panel easier to satisfy: a Fusion recipe
+owns every execution control, leaving requests only the trace-visibility
+choices.
+
+The fallback answers the client directly, so unlike a panel member it keeps the
+request's tool contract: tools stay enabled and a tool-only reply is a valid
+fallback answer.
 
 ## Mode Contracts
 
