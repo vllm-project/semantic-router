@@ -1,6 +1,7 @@
 //! Tests for core tokenization module
 
 use super::tokenization::*;
+use super::tokenization_window::fit_prefix_to_window;
 use candle_core::Device;
 use rayon::prelude::*;
 use rstest::*;
