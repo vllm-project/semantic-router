@@ -32,7 +32,7 @@ jobs:
           push: false
           tags: semantic-router/precommit:pr
           cache-from: type=gha,scope=precommit-linux-amd64
-          cache-to: type=gha,mode=max,scope=precommit-linux-amd64,ignore-error=true
+          cache-to: type=gha,scope=precommit-linux-amd64,ignore-error=true
 
   publish:
     name: Publish pre-commit image
@@ -65,4 +65,4 @@ jobs:
           push: true
           tags: ghcr.io/${{ env.owner }}/semantic-router/precommit:latest
           cache-from: type=gha,scope=precommit-publish
-          cache-to: type=gha,mode=max,scope=precommit-publish,ignore-error=true
+          cache-to: type=gha,scope=precommit-publish,ignore-error=true
