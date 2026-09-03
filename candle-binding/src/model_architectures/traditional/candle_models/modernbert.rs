@@ -14,6 +14,10 @@ use core::f32;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::model_architectures::attention::chunked_sdpa::{
+    chunked_sdpa, prepare_padding_mask, ChunkedSdpaConfig, ATTN_QUERY_BLOCK,
+};
+
 // Flash Attention support (optional, requires flash-attn feature)
 #[cfg(feature = "flash-attn")]
 use candle_flash_attn::flash_attn;
@@ -118,7 +122,20 @@ impl ModernBertAttention {
         })
     }
 
-    fn forward(&self, hidden_states: &Tensor, attention_mask: &Tensor) -> Result<Tensor> {
+    /// Bidirectional attention over `(b, seq, hidden)` hidden states.
+    ///
+    /// `pad_mask` is the `(b, 1, 1, seq)` additive padding mask (`0` for real tokens,
+    /// large negative for padding), broadcast over query positions. A local layer
+    /// attends within `±window` of each query, a global layer to every key.
+    /// `block_size` is the query-block size handed to the shared kernel.
+    fn forward(
+        &self,
+        hidden_states: &Tensor,
+        pad_mask: &Tensor,
+        uses_local_attention: bool,
+        window: usize,
+        block_size: usize,
+    ) -> Result<Tensor> {
         let xs = hidden_states.clone();
         let (b, seq_len, d) = xs.dims3()?;
         let qkv = xs
@@ -136,12 +153,28 @@ impl ModernBertAttention {
         let k = qkv.get(1)?;
         let v = qkv.get(2)?;
 
+        // Apply RoPE on the full q/k (cheap, O(seq*d)) before chunking, so sliced
+        // blocks keep position-correct rotations.
         let (q, k) = self.rotary_emb.apply_rotary_emb_qkv(&q, &k)?;
 
         let scale = (self.attention_head_size as f64).powf(-0.5);
-        let q = (q * scale)?;
 
-        // Use Flash Attention if enabled, otherwise use standard attention
+        // Memory-bounded attention: the shared kernel walks the query dimension in
+        // blocks, so the full (b, heads, seq, seq) score matrix is never materialized.
+        // A local layer maps to a sliding window; a global layer attends to every key.
+        // The softmax scale is folded into the kernel.
+        let cfg = ChunkedSdpaConfig {
+            block_size,
+            window: if uses_local_attention {
+                Some(window)
+            } else {
+                None
+            },
+            causal: false,
+            scale,
+        };
+
+        // Use Flash Attention if enabled, otherwise use the shared chunked kernel
         let xs = if self.use_flash_attn {
             #[cfg(feature = "flash-attn")]
             {
@@ -149,7 +182,11 @@ impl ModernBertAttention {
                 // Flash Attention expects: [batch, seq_len, num_heads, head_dim]
                 // Flash Attention requires f16/bf16, but we have F32
                 // Convert to f16, run Flash Attention, then convert back to F32
-                let q_flash = q.transpose(1, 2)?; // [batch, num_heads, seq_len, head_dim] -> [batch, seq_len, num_heads, head_dim]
+                // Flash applies `softmax_scale` itself; the chunked fallback below
+                // folds the scale into the kernel, so keep the scaled copy local to
+                // this path and leave `q` unscaled.
+                let q_scaled = (&q * scale)?;
+                let q_flash = q_scaled.transpose(1, 2)?; // [batch, num_heads, seq_len, head_dim] -> [batch, seq_len, num_heads, head_dim]
                 let k_flash = k.transpose(1, 2)?;
                 let v_flash = v.transpose(1, 2)?;
 
@@ -177,18 +214,17 @@ impl ModernBertAttention {
                             "⚠️  Flash Attention failed, falling back to standard attention: {}",
                             e
                         );
-                        self.compute_standard_attention(&q, &k, &v, attention_mask)?
+                        chunked_sdpa(&q, &k, &v, Some(pad_mask), &cfg)?
                     }
                 }
             }
             #[cfg(not(feature = "flash-attn"))]
             {
-                // flash-attn feature not enabled, use standard attention
-                self.compute_standard_attention(&q, &k, &v, attention_mask)?
+                // flash-attn feature not enabled, use the chunked kernel
+                chunked_sdpa(&q, &k, &v, Some(pad_mask), &cfg)?
             }
         } else {
-            // Standard attention path
-            self.compute_standard_attention(&q, &k, &v, attention_mask)?
+            chunked_sdpa(&q, &k, &v, Some(pad_mask), &cfg)?
         };
 
         let xs = xs.transpose(1, 2)?.reshape((b, seq_len, d))?;
@@ -196,20 +232,6 @@ impl ModernBertAttention {
         let xs = xs.reshape((b, seq_len, d))?;
 
         Ok(xs)
-    }
-
-    /// Compute standard scaled dot-product attention (fallback when Flash Attention is not available)
-    fn compute_standard_attention(
-        &self,
-        q: &Tensor,
-        k: &Tensor,
-        v: &Tensor,
-        attention_mask: &Tensor,
-    ) -> Result<Tensor> {
-        let att = q.matmul(&k.transpose(D::Minus2, D::Minus1)?)?;
-        let att = att.broadcast_add(attention_mask)?;
-        let att = softmax(&att, D::Minus1)?;
-        att.matmul(v)
     }
 }
 
@@ -283,8 +305,9 @@ impl ModernBertLayer {
     fn forward(
         &self,
         xs: &Tensor,
-        global_attention_mask: &Tensor,
-        local_attention_mask: &Tensor,
+        pad_mask: &Tensor,
+        window: usize,
+        block_size: usize,
     ) -> Result<Tensor> {
         let residual = xs.clone();
         let mut xs = xs.clone();
@@ -292,12 +315,9 @@ impl ModernBertLayer {
             xs = xs.apply(norm)?;
         }
 
-        let attention_mask = if self.uses_local_attention {
-            &global_attention_mask.broadcast_add(local_attention_mask)?
-        } else {
-            global_attention_mask
-        };
-        let xs = self.attn.forward(&xs, attention_mask)?;
+        let xs = self
+            .attn
+            .forward(&xs, pad_mask, self.uses_local_attention, window, block_size)?;
         let xs = (xs + residual)?;
         let mlp_out = xs.apply(&self.mlp_norm)?.apply(&self.mlp)?;
         let xs = (xs + mlp_out)?;
@@ -349,47 +369,6 @@ impl Module for ModernBertDecoder {
         let xs = xs.apply(&self.decoder)?;
         Ok(xs)
     }
-}
-
-// Global attention mask calculated from padded token inputs
-fn prepare_4d_attention_mask(
-    mask: &Tensor,
-    dtype: DType,
-    tgt_len: Option<usize>,
-) -> Result<Tensor> {
-    let bsz = mask.dim(0)?;
-    let src_len = mask.dim(1)?;
-    let tgt_len = tgt_len.unwrap_or(src_len);
-
-    let expanded_mask = mask
-        .unsqueeze(1)?
-        .unsqueeze(2)?
-        .expand((bsz, 1, tgt_len, src_len))?
-        .to_dtype(dtype)?;
-
-    let inverted_mask = (1.0 - expanded_mask)?;
-
-    (inverted_mask * f32::MIN as f64)?.to_dtype(dtype)
-}
-
-// Attention mask caused by the sliding window
-fn get_local_attention_mask(
-    seq_len: usize,
-    max_distance: usize,
-    device: &Device,
-) -> Result<Tensor> {
-    let mask: Vec<_> = (0..seq_len)
-        .flat_map(|i| {
-            (0..seq_len).map(move |j| {
-                if (j as i32 - i as i32).abs() > max_distance as i32 {
-                    f32::NEG_INFINITY
-                } else {
-                    0.
-                }
-            })
-        })
-        .collect();
-    Tensor::from_slice(&mask, (seq_len, seq_len), device)
 }
 
 // ModernBERT backbone
@@ -458,14 +437,14 @@ impl ModernBert {
     }
 
     pub fn forward(&self, xs: &Tensor, mask: &Tensor) -> Result<Tensor> {
-        let seq_len = xs.shape().dims()[1];
-        let global_attention_mask =
-            prepare_4d_attention_mask(mask, DType::F32, None)?.to_device(xs.device())?;
-        let local_attention_mask =
-            get_local_attention_mask(seq_len, self.local_attention_size / 2, xs.device())?;
+        // (b, 1, 1, seq) additive padding mask, broadcast over query positions. The
+        // previous (b, 1, seq, seq) expansion and the (seq, seq) sliding-window band
+        // were both O(seq^2); the window is now applied inside the kernel per block.
+        let pad_mask = prepare_padding_mask(mask, DType::F32)?.to_device(xs.device())?;
+        let window = self.local_attention_size / 2;
         let mut xs = xs.apply(&self.word_embeddings)?.apply(&self.norm)?;
         for layer in self.layers.iter() {
-            xs = layer.forward(&xs, &global_attention_mask, &local_attention_mask)?;
+            xs = layer.forward(&xs, &pad_mask, window, ATTN_QUERY_BLOCK)?;
         }
         let xs = xs.apply(&self.final_norm)?;
         Ok(xs)
@@ -570,5 +549,224 @@ impl ModernBertForSequenceClassification {
             .forward(&last_hidden_state)?
             .apply(&self.classifier)?;
         Ok(xs)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Tiny ModernBERT config: enough heads and layers to exercise the attention
+    /// block, small enough to run on CPU without model assets.
+    fn tiny_config() -> Config {
+        Config {
+            vocab_size: 100,
+            hidden_size: 32,
+            num_hidden_layers: 1,
+            num_attention_heads: 4,
+            intermediate_size: 64,
+            max_position_embeddings: 256,
+            layer_norm_eps: 1e-5,
+            pad_token_id: 0,
+            global_attn_every_n_layers: 3,
+            global_rope_theta: 160000.0,
+            local_attention: 8, // window = 4 each side
+            local_rope_theta: 160000.0,
+            classifier_config: None,
+        }
+    }
+
+    /// Build an attention block with deterministic random weights.
+    fn make_test_attention(config: &Config, device: &Device) -> ModernBertAttention {
+        let hidden = config.hidden_size;
+        let wqkv = Tensor::randn(0f32, 0.2f32, (hidden * 3, hidden), device).unwrap();
+        let wo = Tensor::randn(0f32, 0.2f32, (hidden, hidden), device).unwrap();
+        let rotary = Arc::new(
+            RotaryEmbedding::new(DType::F32, config, config.global_rope_theta, device).unwrap(),
+        );
+        ModernBertAttention {
+            qkv: Linear::new(wqkv, None),
+            proj: Linear::new(wo, None),
+            num_attention_heads: config.num_attention_heads,
+            attention_head_size: hidden / config.num_attention_heads,
+            rotary_emb: rotary,
+            use_flash_attn: false,
+        }
+    }
+
+    /// The dense attention this module used before the chunked kernel: a
+    /// `(b, 1, seq, seq)` padding mask expansion plus a materialized `(seq, seq)`
+    /// sliding-window band, added to the full `(b, heads, seq, seq)` score matrix.
+    fn dense_reference_attention(
+        attn: &ModernBertAttention,
+        hidden_states: &Tensor,
+        raw_mask: &Tensor,
+        uses_local_attention: bool,
+        window: usize,
+    ) -> Tensor {
+        let (b, seq_len, d) = hidden_states.dims3().unwrap();
+        let device = hidden_states.device();
+
+        // prepare_4d_attention_mask: (b, seq) -> (b, 1, seq, seq)
+        let expanded = raw_mask
+            .unsqueeze(1)
+            .unwrap()
+            .unsqueeze(2)
+            .unwrap()
+            .expand((b, 1, seq_len, seq_len))
+            .unwrap()
+            .to_dtype(DType::F32)
+            .unwrap();
+        let global_mask = ((1.0 - expanded).unwrap() * f32::MIN as f64).unwrap();
+
+        // get_local_attention_mask: (seq, seq) band, -inf outside |i - j| <= window
+        let attention_mask = if uses_local_attention {
+            let band: Vec<f32> = (0..seq_len)
+                .flat_map(|i| {
+                    (0..seq_len).map(move |j| {
+                        if (j as i32 - i as i32).abs() > window as i32 {
+                            f32::NEG_INFINITY
+                        } else {
+                            0.0
+                        }
+                    })
+                })
+                .collect();
+            let band = Tensor::from_slice(&band, (seq_len, seq_len), device).unwrap();
+            global_mask.broadcast_add(&band).unwrap()
+        } else {
+            global_mask
+        };
+
+        let qkv = hidden_states
+            .apply(&attn.qkv)
+            .unwrap()
+            .reshape((
+                b,
+                seq_len,
+                3,
+                attn.num_attention_heads,
+                attn.attention_head_size,
+            ))
+            .unwrap()
+            .permute((2, 0, 3, 1, 4))
+            .unwrap();
+        let q = qkv.get(0).unwrap();
+        let k = qkv.get(1).unwrap();
+        let v = qkv.get(2).unwrap();
+        let (q, k) = attn.rotary_emb.apply_rotary_emb_qkv(&q, &k).unwrap();
+
+        let scale = (attn.attention_head_size as f64).powf(-0.5);
+        let q = (q * scale).unwrap();
+
+        // compute_standard_attention
+        let att = q
+            .matmul(
+                &k.transpose(D::Minus2, D::Minus1)
+                    .unwrap()
+                    .contiguous()
+                    .unwrap(),
+            )
+            .unwrap();
+        let att = att.broadcast_add(&attention_mask).unwrap();
+        let att = softmax(&att, D::Minus1).unwrap();
+        let xs = att.matmul(&v.contiguous().unwrap()).unwrap();
+
+        let xs = xs
+            .transpose(1, 2)
+            .unwrap()
+            .reshape((b, seq_len, d))
+            .unwrap();
+        xs.apply(&attn.proj).unwrap()
+    }
+
+    fn max_abs_diff(a: &Tensor, b: &Tensor) -> f32 {
+        (a - b)
+            .unwrap()
+            .abs()
+            .unwrap()
+            .flatten_all()
+            .unwrap()
+            .max(0)
+            .unwrap()
+            .to_scalar::<f32>()
+            .unwrap()
+    }
+
+    /// All-real padding mask in the raw `(b, seq)` form the backbone receives.
+    fn all_real_mask(b: usize, seq_len: usize, device: &Device) -> Tensor {
+        Tensor::ones((b, seq_len), DType::F32, device).unwrap()
+    }
+
+    #[test]
+    fn test_chunked_attention_matches_dense() {
+        let device = Device::Cpu;
+        let config = tiny_config();
+        let attn = make_test_attention(&config, &device);
+        let window = config.local_attention / 2;
+
+        // Cover global + local layers over several block sizes: a divisor of the
+        // sequence, a non-divisor, a single block, and a block smaller than the window.
+        for &uses_local in &[false, true] {
+            for &seq_len in &[1usize, 5, 16, 40] {
+                let hidden =
+                    Tensor::randn(0f32, 1f32, (1, seq_len, config.hidden_size), &device).unwrap();
+                let raw_mask = all_real_mask(1, seq_len, &device);
+                let pad_mask = prepare_padding_mask(&raw_mask, DType::F32).unwrap();
+                let reference =
+                    dense_reference_attention(&attn, &hidden, &raw_mask, uses_local, window);
+
+                for &block in &[1usize, 3, 8, 16, ATTN_QUERY_BLOCK] {
+                    let chunked = attn
+                        .forward(&hidden, &pad_mask, uses_local, window, block)
+                        .unwrap();
+                    let diff = max_abs_diff(&chunked, &reference);
+                    assert!(
+                        diff < 1e-4,
+                        "local={} seq={} block={}: max|Δ|={}",
+                        uses_local,
+                        seq_len,
+                        block,
+                        diff
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_chunked_attention_matches_dense_with_padding() {
+        let device = Device::Cpu;
+        let config = tiny_config();
+        let attn = make_test_attention(&config, &device);
+        let window = config.local_attention / 2;
+        let seq_len = 24;
+
+        // Last 7 positions are padding.
+        let mut mask_vec = vec![1f32; seq_len];
+        for m in mask_vec.iter_mut().skip(seq_len - 7) {
+            *m = 0.0;
+        }
+        let raw_mask = Tensor::from_vec(mask_vec, (1, seq_len), &device).unwrap();
+        let pad_mask = prepare_padding_mask(&raw_mask, DType::F32).unwrap();
+        let hidden = Tensor::randn(0f32, 1f32, (1, seq_len, config.hidden_size), &device).unwrap();
+
+        for &uses_local in &[false, true] {
+            let reference =
+                dense_reference_attention(&attn, &hidden, &raw_mask, uses_local, window);
+            for &block in &[3usize, 8, ATTN_QUERY_BLOCK] {
+                let chunked = attn
+                    .forward(&hidden, &pad_mask, uses_local, window, block)
+                    .unwrap();
+                let diff = max_abs_diff(&chunked, &reference);
+                assert!(
+                    diff < 1e-4,
+                    "padding local={} block={}: max|Δ|={}",
+                    uses_local,
+                    block,
+                    diff
+                );
+            }
+        }
     }
 }
