@@ -26,6 +26,7 @@ import (
 	responseapi "github.com/vllm-project/semantic-router/e2e/profiles/response-api"
 	responseapiredis "github.com/vllm-project/semantic-router/e2e/profiles/response-api-redis"
 	responseapirediscluster "github.com/vllm-project/semantic-router/e2e/profiles/response-api-redis-cluster"
+	responsejailbreak "github.com/vllm-project/semantic-router/e2e/profiles/response-jailbreak"
 	routeaction "github.com/vllm-project/semantic-router/e2e/profiles/route-action"
 	routerreplay "github.com/vllm-project/semantic-router/e2e/profiles/router-replay"
 	routingstrategies "github.com/vllm-project/semantic-router/e2e/profiles/routing-strategies"
@@ -112,6 +113,11 @@ func init() {
 	register(
 		"response-api-redis-cluster",
 		func() framework.Profile { return responseapirediscluster.NewProfile() },
+		framework.ProfileCapabilities{LocalImages: mockVLLMLocalImages},
+	)
+	register(
+		"response-jailbreak",
+		func() framework.Profile { return responsejailbreak.NewProfile() },
 		framework.ProfileCapabilities{LocalImages: mockVLLMLocalImages},
 	)
 	register("remote-embedding", func() framework.Profile { return remoteembedding.NewProfile() }, framework.ProfileCapabilities{})

@@ -559,3 +559,11 @@ profiles:
       - e2e/profiles/jailbreak-onerror/**
       - e2e/testcases/jailbreak_onerror_block.go
       - deploy/kubernetes/jailbreak-onerror/**
+  response-jailbreak:
+    owner: e2e
+    coverage_role: response-jailbreak-window
+    selection: manual
+    paths:
+      - e2e/profiles/response-jailbreak/**
+      - e2e/testcases/response_jailbreak_window.go
+      - deploy/kubernetes/response-jailbreak/**

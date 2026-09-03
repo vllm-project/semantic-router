@@ -115,9 +115,16 @@ func (c *Classifier) CheckForJailbreakWithThreshold(ctx context.Context, text st
 		return false, "", 0.0, nil
 	}
 
-	result, err := c.jailbreakInference.Classify(ctx, text)
-	if err != nil {
-		return false, "", 0.0, fmt.Errorf("jailbreak classification failed: %w", err)
+	// Scans in chunks so a long text is not judged on its first 512 tokens.
+	// The verdict stays argmax-based here: this call reports the predicted
+	// class and that class's confidence. A caller that has to threshold
+	// P(jailbreak) independently of argmax wants CheckForJailbreakRiskWithThreshold.
+	result, scanned, lastErr := c.scanJailbreakChunks(ctx, text)
+	if !scanned {
+		if lastErr != nil {
+			return false, "", 0.0, fmt.Errorf("jailbreak classification failed: %w", lastErr)
+		}
+		return false, "", 0.0, nil
 	}
 	logging.Debugf("Jailbreak classification result: %v", result)
 
