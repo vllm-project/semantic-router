@@ -74,6 +74,25 @@ func (set CapabilitySet) Intersect(other CapabilitySet) CapabilitySet {
 }
 func (set CapabilitySet) Empty() bool { return set.bits == 0 }
 
+// taskCapabilityMask is the subset of capabilities that describe model
+// task/modality behavior (content in/out and hosted generation). Text is
+// assumed for every model and transport/accounting fidelity
+// (tools/streaming/reasoning/caching) is protocol concern rather than a task
+// modality, so model capability declarations are compared against this mask.
+var taskCapabilityMask = Capability(
+	CapabilityImageInput | CapabilityImageOutput | CapabilityImageGeneration |
+		CapabilityAudioInput | CapabilityAudioOutput |
+		CapabilityVideoInput | CapabilityVideoOutput |
+		CapabilityFileInput | CapabilityFileOutput,
+)
+
+// TaskCapabilities returns the task/modality subset of a capability set,
+// dropping transport and accounting fidelity. Used to compare model capability
+// declarations against request requirements.
+func (set CapabilitySet) TaskCapabilities() CapabilitySet {
+	return CapabilitySet{bits: set.bits & taskCapabilityMask}
+}
+
 func (set CapabilitySet) Names() []string {
 	known := []struct {
 		capability Capability

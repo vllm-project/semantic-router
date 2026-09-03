@@ -64,8 +64,14 @@ func (r *OpenAIRouter) prepareProviderDispatch(
 	if changed {
 		request.Generation++
 	}
+	required := llmprotocol.RequiredCapabilities(*request)
 	if protocolErr := r.rejectDispatchCapabilityMismatch(request, dispatch.targetFormat, ctx); protocolErr != nil {
-		return nil, protocolErr
+		rerouted, ok := r.rerouteToQualifiedDecisionModel(request, dispatch, required, ctx)
+		if !ok {
+			return nil, protocolErr
+		}
+		dispatch = rerouted
+		ctx.ImmediateProtocolError = nil
 	}
 	ctx.TargetFormat = dispatch.targetFormat
 	ctx.SemanticRequest = request
@@ -110,6 +116,104 @@ func (r *OpenAIRouter) rejectDispatchCapabilityMismatch(
 		return err
 	}
 	return nil
+}
+
+// declaredModelCapabilities parses a model's configured capability
+// declarations. A model with no declaration (or an unparsable one) is treated
+// as unannotated and stays eligible on wire expressibility alone; the declared
+// filter only steers among annotated candidates.
+func (r *OpenAIRouter) declaredModelCapabilities(model string) (llmprotocol.CapabilitySet, bool) {
+	if r == nil || r.Config == nil {
+		return llmprotocol.CapabilitySet{}, false
+	}
+	params, ok := r.Config.ModelConfig[model]
+	if !ok || len(params.Capabilities) == 0 {
+		return llmprotocol.CapabilitySet{}, false
+	}
+	declared, err := llmprotocol.ParseCapabilities(params.Capabilities)
+	if err != nil {
+		return llmprotocol.CapabilitySet{}, false
+	}
+	return declared, true
+}
+
+// rerouteToQualifiedDecisionModel tries to satisfy the required capabilities
+// by dispatching to another modelRef offered by the selected decision, when
+// the originally selected model's wire format cannot express them. It returns
+// the re-resolved dispatch and whether a qualified candidate was found.
+//
+// Candidates are considered in modelRef order; the first whose wire format can
+// express every required capability wins. This is capability-driven selection
+// at the dispatch seam: routing prefers a qualified backend over a clean
+// rejection, and only rejects when no candidate qualifies.
+func (r *OpenAIRouter) rerouteToQualifiedDecisionModel(
+	request *llmprotocol.Request,
+	selected *providerDispatch,
+	required llmprotocol.CapabilitySet,
+	ctx *RequestContext,
+) (*providerDispatch, bool) {
+	if r == nil || r.Config == nil || request == nil || selected == nil || ctx == nil {
+		return nil, false
+	}
+	decision := ctx.VSRSelectedDecision
+	if decision == nil || decision.Name == "" {
+		return nil, false
+	}
+	model := r.findQualifiedRerouteModel(decision, selected, required)
+	if model == "" {
+		return nil, false
+	}
+	candidate, err := r.resolveProviderDispatch(model, decision.Name, selected.useReasoning)
+	if err != nil {
+		return nil, false
+	}
+	request.Model = candidate.upstreamModel
+	ctx.TargetFormat = candidate.targetFormat
+	logging.ComponentDebugEvent("extproc", "provider_dispatch_rerouted", map[string]interface{}{
+		"request_id":  ctx.RequestID,
+		"from":        selected.logicalModel,
+		"to":          model,
+		"wire_format": candidate.targetFormat,
+	})
+	return candidate, true
+}
+
+// findQualifiedRerouteModel returns the first decision modelRef, in declared
+// order, that can express every required capability and is not the currently
+// selected model; "" when no sibling qualifies.
+func (r *OpenAIRouter) findQualifiedRerouteModel(
+	decision *config.Decision,
+	selected *providerDispatch,
+	required llmprotocol.CapabilitySet,
+) string {
+	for _, modelRef := range decision.ModelRefs {
+		model := modelRef.Model
+		if model == "" || model == selected.logicalModel {
+			continue
+		}
+		if r.qualifiedRerouteCandidate(model, required) != "" {
+			return model
+		}
+	}
+	return ""
+}
+
+// qualifiedRerouteCandidate reports the model's wire format when the model can
+// express every required capability, or "" when it cannot serve the request.
+// Expressibility is judged on the wire format's codec capability set first,
+// then narrowed by the model's own declared capabilities when annotated.
+func (r *OpenAIRouter) qualifiedRerouteCandidate(model string, required llmprotocol.CapabilitySet) llmprotocol.WireFormat {
+	format, err := wireFormatForModel(r.Config.GetModelAPIFormat(model))
+	if err != nil {
+		return ""
+	}
+	if set, ok := r.codecCapabilitiesForFormat(format); !ok || !set.Contains(required) {
+		return ""
+	}
+	if declared, ok := r.declaredModelCapabilities(model); ok && !declared.Contains(required.TaskCapabilities()) {
+		return ""
+	}
+	return format
 }
 
 func (r *OpenAIRouter) resolveProviderDispatch(
@@ -206,6 +310,8 @@ func wireFormatForModel(apiFormat string) (llmprotocol.WireFormat, error) {
 		return llmprotocol.AnthropicMessagesV1, nil
 	case config.APIFormatResponses, "openai.responses", string(llmprotocol.OpenAIResponsesV1):
 		return llmprotocol.OpenAIResponsesV1, nil
+	case config.APIFormatImages, "openai.images", string(llmprotocol.OpenAIImagesV1):
+		return llmprotocol.OpenAIImagesV1, nil
 	default:
 		return "", fmt.Errorf("unsupported API format %q", apiFormat)
 	}

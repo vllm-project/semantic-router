@@ -85,6 +85,10 @@ const (
 	APIFormatOpenAI    = "openai"
 	APIFormatResponses = "responses"
 	APIFormatAnthropic = "anthropic"
+	// APIFormatImages selects the DALL-E-compatible image-generation dialect
+	// (/v1/images/generations), used to sink responses hosted image_generation
+	// requests to diffusion backends.
+	APIFormatImages = "images"
 )
 
 // ClientProtocol* identifies the inbound wire format; distinct from APIFormat (upstream backend).
