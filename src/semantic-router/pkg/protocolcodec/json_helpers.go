@@ -513,15 +513,19 @@ func rejectUnsupportedRequestFields(fields map[string]json.RawMessage) error {
 	return rejectUnsupportedRequestField(names[0], fields[names[0]])
 }
 
+func appendDroppedDiagnostic(diagnostics *llmprotocol.Diagnostics, policy llmprotocol.Policy, source, target llmprotocol.WireFormat, field, reason string) {
+	*diagnostics = appendDiagnostics(*diagnostics, llmprotocol.Diagnostics{{
+		Source: source, Target: target, Field: field,
+		Action: llmprotocol.DiagnosticDropped, Reason: reason,
+	}}, policy.Limits.Diagnostics)
+}
+
 // appendAccountingOmission records a representation-only omission. Semantic
 // usage remains available to settlement even when a client format has no field
 // for a detailed accounting bucket, so this never converts a successful
 // backend response into a protocol failure.
 func appendAccountingOmission(diagnostics *llmprotocol.Diagnostics, policy llmprotocol.Policy, source, target llmprotocol.WireFormat, field, reason string) {
-	*diagnostics = appendDiagnostics(*diagnostics, llmprotocol.Diagnostics{{
-		Source: source, Target: target, Field: field,
-		Action: llmprotocol.DiagnosticDropped, Reason: reason,
-	}}, policy.Limits.Diagnostics)
+	appendDroppedDiagnostic(diagnostics, policy, source, target, field, reason)
 }
 
 func appendProviderFieldOmission(

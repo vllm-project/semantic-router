@@ -61,14 +61,22 @@ func (OpenAIChatCodec) EncodeRequest(request llmprotocol.Request, envelope llmpr
 
 func chatRequestDiagnostics(request llmprotocol.Request, policy llmprotocol.Policy) (llmprotocol.Diagnostics, error) {
 	var diagnostics llmprotocol.Diagnostics
-	if request.PreviousResponseID == "" && request.ConversationID == "" && request.Truncation == "" {
-		return diagnostics, nil
+	if request.PreviousResponseID != "" || request.ConversationID != "" || request.Truncation != "" {
+		err := appendLossy(
+			&diagnostics, policy, request.Trusted.SourceFormat, llmprotocol.OpenAIChatV1,
+			"conversation_state", "Chat Completions has no stateful response reference",
+		)
+		if err != nil {
+			return diagnostics, err
+		}
 	}
-	err := appendLossy(
-		&diagnostics, policy, request.Trusted.SourceFormat, llmprotocol.OpenAIChatV1,
-		"conversation_state", "Chat Completions has no stateful response reference",
-	)
-	return diagnostics, err
+	if len(request.AnthropicContextManagement) > 0 {
+		appendDroppedDiagnostic(
+			&diagnostics, policy, request.Trusted.SourceFormat, llmprotocol.OpenAIChatV1,
+			"context_management", "Chat Completions cannot carry the Anthropic context management directive",
+		)
+	}
+	return diagnostics, nil
 }
 
 func encodeChatBaseRequest(request llmprotocol.Request) chatRequestWire {

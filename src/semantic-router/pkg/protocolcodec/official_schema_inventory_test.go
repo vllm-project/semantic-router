@@ -118,10 +118,8 @@ func TestOfficialRequestFieldDispositionsAreClosed(t *testing.T) {
 				"system", "temperature", "thinking", "tool_choice", "tools", "top_k", "top_p",
 			),
 			unsupported: fields("cache_control", "container", "inference_geo", "service_tier"),
-			// context_management is modeled and preserved rather than interpreted:
-			// it asks the upstream API to trim old thinking from the billed prompt,
-			// so it is carried verbatim to an Anthropic-format target and omitted for
-			// a cross-format target that cannot represent it.
+			// context_management is modeled and preserved rather than interpreted.
+			// Cross-format targets omit it with an explicit diagnostic.
 			preserved: fields("context_management"),
 		},
 	}

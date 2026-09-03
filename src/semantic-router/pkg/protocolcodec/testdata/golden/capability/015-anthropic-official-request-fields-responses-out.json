@@ -40,7 +40,13 @@
           ],
           "max_output_tokens": 2048,
           "model": "routed-model"
-        }
+        },
+        "diagnostics": [
+          {
+            "field": "context_management",
+            "action": "dropped"
+          }
+        ]
       }
     },
     {

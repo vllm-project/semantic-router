@@ -10,21 +10,23 @@ import (
 // Claude Code sends a top-level context_management field on every /v1/messages
 // request. It asks the upstream Anthropic API to trim stale thinking from the
 // billed prompt, so it changes what the provider charges for the turn and must
-// survive to an Anthropic-format target. No OpenAI wire represents it, so a
-// cross-format target must omit it. The neutral contract therefore carries the
-// field opaquely rather than rejecting it under strict unknown-field decode.
+// survive to an Anthropic-format target. No OpenAI wire can carry it, so
+// cross-format translation omits it with an explicit diagnostic.
 
 // contextManagement is the field under test: the server-side prompt-trimming
 // directive that must round-trip to an Anthropic target unchanged.
 const contextManagement = `"context_management":{"edits":[{"type":"clear_thinking_20251015","keep":"all"}]}`
 
+func anthropicRequestBodyWithContextManagement() []byte {
+	return []byte(`{"model":"source-model","max_tokens":64,` +
+		`"messages":[{"role":"user","content":"hello"}],` + contextManagement + `}`)
+}
+
 func TestAnthropicRequestContextManagementRoundTripsToAnthropicTarget(t *testing.T) {
 	engine := NewBuiltinEngine()
-	// A minimal Anthropic Messages request with the directive embedded in the body.
-	body := []byte(`{"model":"source-model","max_tokens":64,` +
-		`"messages":[{"role":"user","content":"hello"}],` + contextManagement + `}`)
-
-	request, envelope, _, err := engine.DecodeRequest(llmprotocol.AnthropicMessagesV1, body)
+	request, envelope, _, err := engine.DecodeRequest(
+		llmprotocol.AnthropicMessagesV1, anthropicRequestBodyWithContextManagement(),
+	)
 	if err != nil {
 		t.Fatalf("request carrying context_management was rejected: %v", err)
 	}
@@ -47,25 +49,27 @@ func TestAnthropicRequestContextManagementRoundTripsToAnthropicTarget(t *testing
 	}
 }
 
-func TestAnthropicRequestContextManagementIsOmittedForChatTarget(t *testing.T) {
+func TestAnthropicRequestContextManagementOmissionIsDiagnosedForOpenAITargets(t *testing.T) {
 	engine := NewBuiltinEngine()
-	body := []byte(`{"model":"source-model","max_tokens":64,` +
-		`"messages":[{"role":"user","content":"hello"}],` + contextManagement + `}`)
-
-	translated, err := engine.TranslateRequest(
-		llmprotocol.AnthropicMessagesV1,
-		llmprotocol.OpenAIChatV1,
-		body,
-		func(request *llmprotocol.Request) error { request.Model = "routed-model"; return nil },
-	)
-	if err != nil {
-		t.Fatalf("translating a request carrying context_management to Chat failed: %v", err)
-	}
-	var object map[string]json.RawMessage
-	if err := json.Unmarshal(translated.Body, &object); err != nil {
-		t.Fatalf("translated Chat body is not a JSON object: %v\n%s", err, translated.Body)
-	}
-	if _, present := object["context_management"]; present {
-		t.Fatalf("context_management leaked into the Chat target: %s", translated.Body)
+	for _, target := range []llmprotocol.WireFormat{llmprotocol.OpenAIChatV1, llmprotocol.OpenAIResponsesV1} {
+		t.Run(string(target), func(t *testing.T) {
+			translated, err := engine.TranslateRequest(
+				llmprotocol.AnthropicMessagesV1,
+				target,
+				anthropicRequestBodyWithContextManagement(),
+				func(request *llmprotocol.Request) error { request.Model = "routed-model"; return nil },
+			)
+			if err != nil {
+				t.Fatalf("translating a request carrying context_management to %s failed: %v", target, err)
+			}
+			var object map[string]json.RawMessage
+			if err := json.Unmarshal(translated.Body, &object); err != nil {
+				t.Fatalf("translated %s body is not a JSON object: %v\n%s", target, err, translated.Body)
+			}
+			if _, present := object["context_management"]; present {
+				t.Fatalf("context_management leaked into the %s target: %s", target, translated.Body)
+			}
+			assertDiagnosticFields(t, translated.Diagnostics, "context_management")
+		})
 	}
 }

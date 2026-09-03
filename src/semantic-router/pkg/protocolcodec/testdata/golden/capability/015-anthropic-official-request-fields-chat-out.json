@@ -33,7 +33,13 @@
             }
           ],
           "model": "routed-model"
-        }
+        },
+        "diagnostics": [
+          {
+            "field": "context_management",
+            "action": "dropped"
+          }
+        ]
       }
     },
     {

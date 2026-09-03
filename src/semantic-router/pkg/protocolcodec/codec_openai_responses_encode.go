@@ -14,12 +14,31 @@ func (OpenAIResponsesCodec) EncodeRequest(request llmprotocol.Request, envelope 
 	if err := validateResponsesEncodableRequest(request); err != nil {
 		return nil, nil, err
 	}
+	diagnostics, diagnosticsErr := responsesRequestDiagnostics(request, policy)
+	if diagnosticsErr != nil {
+		return nil, diagnostics, diagnosticsErr
+	}
 	wire, err := encodeResponsesRequestWire(request)
 	if err != nil {
-		return nil, nil, err
+		return nil, diagnostics, err
 	}
 	body, err := marshalWire(wire)
-	return body, nil, err
+	return body, diagnostics, err
+}
+
+// responsesRequestDiagnostics surfaces neutral request state the Responses wire
+// cannot carry. The Responses contract has its own context_management field,
+// but re-emitting the Anthropic directive there would invent semantics.
+func responsesRequestDiagnostics(request llmprotocol.Request, policy llmprotocol.Policy) (llmprotocol.Diagnostics, error) {
+	var diagnostics llmprotocol.Diagnostics
+	if len(request.AnthropicContextManagement) == 0 {
+		return diagnostics, nil
+	}
+	appendDroppedDiagnostic(
+		&diagnostics, policy, request.Trusted.SourceFormat, llmprotocol.OpenAIResponsesV1,
+		"context_management", "Responses cannot carry the Anthropic context management directive",
+	)
+	return diagnostics, nil
 }
 
 func validateResponsesEncodableRequest(request llmprotocol.Request) error {
