@@ -186,11 +186,11 @@ impl ModernBertAttention {
                 // Flash Attention expects: [batch, seq_len, num_heads, head_dim]
                 // Flash Attention requires f16/bf16, but we have F32
                 // Convert to f16, run Flash Attention, then convert back to F32
-                // Flash applies `softmax_scale` itself; the chunked fallback below
-                // folds the scale into the kernel, so keep the scaled copy local to
-                // this path and leave `q` unscaled.
-                let q_scaled = (&q * scale)?;
-                let q_flash = q_scaled.transpose(1, 2)?; // [batch, num_heads, seq_len, head_dim] -> [batch, seq_len, num_heads, head_dim]
+                // `flash_attn` computes softmax(Q @ K^T . softmax_scale) @ V, so it
+                // applies the scale itself and takes `q` unscaled. The upstream
+                // candle-transformers model pre-scales `q` for its dense path only;
+                // carrying that over here scaled twice, landing at 1/d.
+                let q_flash = q.transpose(1, 2)?; // [batch, num_heads, seq_len, head_dim] -> [batch, seq_len, num_heads, head_dim]
                 let k_flash = k.transpose(1, 2)?;
                 let v_flash = v.transpose(1, 2)?;
 
