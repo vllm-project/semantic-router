@@ -2,6 +2,7 @@ package classification
 
 import (
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
@@ -72,34 +73,73 @@ func piiSignalChunks(text string) []string {
 	)
 }
 
+// piiSignalChunkSpans is piiSignalChunks with offsets, for callers that report
+// entity positions. It does not de-duplicate: two identical chunks are at
+// different offsets, and both of those positions are real.
+func piiSignalChunkSpans(text string) []signalChunkSpan {
+	return securitySignalChunkSpans(text, piiSignalChunkBudget, piiSignalChunkOverlapRunes)
+}
+
 func jailbreakSignalChunks(text string) []string {
 	return uniqueSignalChunks(
 		securitySignalChunks(text, jailbreakSignalChunkBudget, jailbreakSignalOverlapRunes),
 	)
 }
 
+// signalChunkSpan is one chunk together with its byte offset in the text it was
+// cut from. Callers that report positions back to a client need the offset to
+// map a chunk-relative entity onto the original text.
+type signalChunkSpan struct {
+	Text      string
+	StartByte int
+}
+
 // securitySignalChunks scans the entire input in bounded, overlapping pieces.
 // Unlike semantic intent signals, security detection cannot safely discard the
 // middle of a long prompt.
 func securitySignalChunks(text string, budget, overlapRunes int) []string {
+	spans := securitySignalChunkSpans(text, budget, overlapRunes)
+	if spans == nil {
+		return nil
+	}
+	chunks := make([]string, len(spans))
+	for i, span := range spans {
+		chunks[i] = span.Text
+	}
+	return chunks
+}
+
+// securitySignalChunkSpans is securitySignalChunks with each chunk's byte
+// offset in text. An entity found at offset e in span s sits at
+// s.StartByte + e in the original text.
+func securitySignalChunkSpans(text string, budget, overlapRunes int) []signalChunkSpan {
 	runes := []rune(text)
 	if len(runes) == 0 {
 		return nil
 	}
 	if securitySignalChunkUnits(runes) <= budget {
-		return []string{text}
+		return []signalChunkSpan{{Text: text, StartByte: 0}}
 	}
 
-	chunks := make([]string, 0, (len(runes)/1024)+1)
+	spans := make([]signalChunkSpan, 0, (len(runes)/1024)+1)
+	// Chunk starts only ever move forward, so one cursor converts them to byte
+	// offsets without a per-rune index.
+	startByte, counted := 0, 0
 	for start := 0; start < len(runes); {
+		for ; counted < start; counted++ {
+			startByte += utf8.RuneLen(runes[counted])
+		}
 		end := securitySignalChunkEnd(runes, start, budget)
-		chunks = append(chunks, string(runes[start:end]))
+		spans = append(spans, signalChunkSpan{
+			Text:      string(runes[start:end]),
+			StartByte: startByte,
+		})
 		if end == len(runes) {
 			break
 		}
 		start = max(start+1, end-overlapRunes)
 	}
-	return chunks
+	return spans
 }
 
 func securitySignalChunkEnd(runes []rune, start, budget int) int {
