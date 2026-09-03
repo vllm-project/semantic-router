@@ -15,7 +15,7 @@ MILVUS_LABEL_ARGS = $(if $(MILVUS_STACK_NAME),--label com.vllm.semantic-router.m
 # Milvus container management
 start-milvus: ## Start Milvus container for testing
 	@$(LOG_TARGET)
-	@mkdir -p $(MILVUS_DATA_DIR)
+	@mkdir -p "$(MILVUS_DATA_DIR)"
 	@$(CONTAINER_RUNTIME) run -d \
 		--name $(MILVUS_CONTAINER_NAME) \
 		$(MILVUS_LABEL_ARGS) \
@@ -27,7 +27,7 @@ start-milvus: ## Start Milvus container for testing
 		-e CLUSTER_ENABLED=false \
 		-p 127.0.0.1:$(MILVUS_PORT):19530 \
 		-p 127.0.0.1:$(MILVUS_HEALTH_PORT):9091 \
-		-v $(MILVUS_DATA_DIR):/var/lib/milvus:z \
+		-v "$(MILVUS_DATA_DIR):/var/lib/milvus:z" \
 		milvusdb/milvus:v2.3.3 \
 		milvus run standalone
 	@echo "Waiting for Milvus to be ready (up to 120s)..."
@@ -66,7 +66,7 @@ stop-milvus: ## Stop and remove Milvus container
 		$(CONTAINER_RUNTIME) stop $(MILVUS_CONTAINER_NAME) || true; \
 		$(CONTAINER_RUNTIME) rm $(MILVUS_CONTAINER_NAME) || true; \
 	fi
-	@rm -rf $(MILVUS_DATA_DIR) 2>/dev/null || sudo -n rm -rf $(MILVUS_DATA_DIR) || true
+	@rm -rf "$(MILVUS_DATA_DIR)" 2>/dev/null || sudo -n rm -rf "$(MILVUS_DATA_DIR)" || true
 	@echo "Milvus container stopped and removed"
 
 restart-milvus: stop-milvus start-milvus ## Restart Milvus container

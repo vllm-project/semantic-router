@@ -83,6 +83,14 @@ def test_memory_cleanup_attests_fixture_ownership_before_deletion() -> None:
     assert "com.vllm.semantic-router.run" in stop_target
 
 
+def test_milvus_data_path_is_safe_when_workspace_contains_spaces() -> None:
+    content = MILVUS_MK_PATH.read_text(encoding="utf-8")
+
+    assert 'mkdir -p "$(MILVUS_DATA_DIR)"' in content
+    assert '-v "$(MILVUS_DATA_DIR):/var/lib/milvus:z"' in content
+    assert 'rm -rf "$(MILVUS_DATA_DIR)"' in content
+
+
 def test_cli_integration_uses_an_isolated_runtime_stack() -> None:
     content = DOCKER_MK_PATH.read_text(encoding="utf-8")
     target = content.split("vllm-sr-test-integration:", 1)[1].split(
