@@ -542,6 +542,8 @@ func (v *Validator) checkRouteConstraints(r *RouteDecl) {
 		)
 	}
 
+	v.checkRouteAction(r, context)
+
 	// Check algorithm constraints
 	if r.Algorithm != nil {
 		v.checkAlgorithmConstraints(r.Algorithm, context)

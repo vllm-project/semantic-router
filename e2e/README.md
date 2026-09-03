@@ -133,6 +133,7 @@ until the selected cases are known to be isolated.
 - **streaming**: streamed request bodies and cache round trips.
 - **anthropic-shim**: affected-change Anthropic backend and cross-protocol matrix coverage.
 - **response-api**: affected-change memory-backed Responses API and cross-protocol matrix coverage.
+- **route-action**: decision route action for detected prompt attacks and benign traffic.
 - **response-api-redis**: manual Redis persistence and TTL coverage.
 - **response-api-redis-cluster**: manual Redis Cluster persistence and TTL coverage.
 - **router-replay**: manual management-boundary and restart-recovery coverage.
