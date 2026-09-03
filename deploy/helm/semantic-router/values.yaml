@@ -556,8 +556,8 @@ dashboard:
   image:
     # -- Dashboard image repository
     repository: ghcr.io/vllm-project/semantic-router/dashboard
-    # -- Dashboard image tag
-    tag: "latest"
+    # -- Dashboard image tag (defaults to the chart appVersion)
+    tag: ""
     # -- Dashboard image pull policy
     pullPolicy: IfNotPresent
   # -- Run dashboard in read-only mode
@@ -604,6 +604,12 @@ dashboard:
   # Override if you build a custom dashboard image with a different non-root UID.
   podSecurityContext:
     fsGroup: 65532
+    seccompProfile:
+      type: RuntimeDefault
+  # -- Container security context. The maintained image still starts as root to
+  # prepare writable mounts before dropping to UID/GID 65532 with gosu.
+  securityContext:
+    allowPrivilegeEscalation: false
   service:
     # -- Dashboard service type
     type: ClusterIP

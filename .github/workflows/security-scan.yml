@@ -96,19 +96,65 @@ jobs:
       - name: Set up Helm
         uses: azure/setup-helm@v4
 
-      - name: Render maintained router deployments
+      - name: Render maintained first-party Helm resources
+        shell: bash
         run: |
           mkdir -p .agent-harness/security/iac
           make helm-ci-setup HELM_REPO_UPDATE=true
+
+          # Keep this repository's SARIF scoped to the resources maintained in
+          # this chart. Enabled dependency charts retain their own upstream
+          # security policy and would otherwise dominate the production render.
+          render_first_party() {
+            local excluded_source="${1:-}"
+            awk -v excluded_source="$excluded_source" '
+              function emit_document() {
+                if (keep && source != excluded_source) {
+                  printf "%s", document
+                }
+              }
+              /^---$/ {
+                emit_document()
+                document = $0 ORS
+                keep = 0
+                source = ""
+                next
+              }
+              {
+                document = document $0 ORS
+                if ($0 ~ /^# Source: semantic-router\/templates\//) {
+                  source = $0
+                  sub(/^# Source: semantic-router\/templates\//, "", source)
+                  keep = 1
+                }
+              }
+              END {
+                emit_document()
+              }
+            '
+          }
+
           helm template security-default deploy/helm/semantic-router \
             --namespace vllm-semantic-router-system \
-            --show-only templates/deployment.yaml \
+            | render_first_party \
             > .agent-harness/security/iac/router-default.yaml
           helm template security-production deploy/helm/semantic-router \
             -f deploy/helm/semantic-router/values-prod.yaml \
             --namespace vllm-semantic-router-system \
-            --show-only templates/deployment.yaml \
+            | render_first_party dashboard-deployment.yaml \
             > .agent-harness/security/iac/router-production.yaml
+          helm template security-production deploy/helm/semantic-router \
+            -f deploy/helm/semantic-router/values-prod.yaml \
+            --namespace vllm-semantic-router-system \
+            --show-only templates/dashboard-deployment.yaml \
+            > .agent-harness/security/iac/dashboard-production.yaml
+
+          grep -q '# Source: semantic-router/templates/deployment.yaml' \
+            .agent-harness/security/iac/router-default.yaml
+          grep -q '# Source: semantic-router/templates/deployment.yaml' \
+            .agent-harness/security/iac/router-production.yaml
+          grep -q '# Source: semantic-router/templates/dashboard-deployment.yaml' \
+            .agent-harness/security/iac/dashboard-production.yaml
 
       - name: Generate Trivy SARIF
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
@@ -120,14 +166,14 @@ jobs:
           output: trivy-results.sarif
           severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
           exit-code: "0"
-          trivyignores: tools/security/trivy-iac.ignore
+          trivyignores: tools/security/trivy-iac.yaml
 
       - name: Enforce high and critical IaC findings
         run: |
           trivy config \
             --exit-code 1 \
             --severity HIGH,CRITICAL \
-            --ignorefile tools/security/trivy-iac.ignore \
+            --ignorefile tools/security/trivy-iac.yaml \
             .agent-harness/security/iac
 
       - name: Upload Trivy results
