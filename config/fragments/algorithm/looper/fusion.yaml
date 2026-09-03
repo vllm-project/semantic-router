@@ -14,4 +14,8 @@ algorithm:
     include_analysis: true
     include_intermediate_responses: true
     on_error: skip
+    # Panel-level policy when usable responses fall below
+    # min_successful_responses. fail | fallback | best_available.
+    # Independent of on_error, which governs a single failed panel attempt.
+    quorum_failure_policy: fail
     judge_prompt_version: fusion-v1

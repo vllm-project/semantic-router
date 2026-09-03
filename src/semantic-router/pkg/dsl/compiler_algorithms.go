@@ -261,6 +261,12 @@ func fillFusionRuntimeFields(cfg *config.FusionAlgorithmConfig, fields map[strin
 	if v, ok := getStringField(fields, "on_error"); ok {
 		cfg.OnError = v
 	}
+	if v, ok := getStringField(fields, "quorum_failure_policy"); ok {
+		cfg.QuorumFailurePolicy = config.FusionQuorumFailurePolicy(v)
+	}
+	if v, ok := getStringField(fields, "quorum_fallback_target"); ok {
+		cfg.QuorumFallbackTarget = v
+	}
 }
 
 func fillFusionResponseFields(cfg *config.FusionAlgorithmConfig, fields map[string]Value) {

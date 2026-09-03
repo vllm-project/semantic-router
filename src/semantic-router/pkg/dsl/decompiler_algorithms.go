@@ -150,6 +150,8 @@ func fusionAlgorithmToFields(f *config.FusionAlgorithmConfig, fields map[string]
 		fields["include_analysis"] = BoolValue{V: *f.IncludeAnalysis}
 	}
 	setStringValue(fields, "on_error", f.OnError)
+	setStringValue(fields, "quorum_failure_policy", string(f.QuorumFailurePolicy))
+	setStringValue(fields, "quorum_fallback_target", f.QuorumFallbackTarget)
 	setStringValue(fields, "analysis_template", f.AnalysisTemplate)
 	setStringValue(fields, "synthesis_template", f.SynthesisTemplate)
 	setStringValue(fields, "judge_prompt_version", f.JudgePromptVersion)
