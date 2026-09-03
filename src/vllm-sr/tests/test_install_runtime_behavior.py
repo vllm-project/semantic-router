@@ -69,6 +69,9 @@ def test_explicit_podman_skips_docker_detection() -> None:
     assert "SELECTED_RUNTIME=podman" in out
     assert "RUNTIME_ENV_FILE=present" in out
     assert "CONTAINER_RUNTIME=podman" in out
+    # The docker stub must not have been invoked at all.
+    assert "CALLS=podman" in out
+    assert "docker" not in out.split("CALLS=")[1].split("\n")[0]
 
 
 def test_skip_writes_no_runtime_env() -> None:

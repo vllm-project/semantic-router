@@ -798,6 +798,7 @@ ensure_runtime() {
       done_step "Using existing Podman runtime"
       return
     else
+      write_runtime_env ""
       die "Podman was requested but is not reachable. Install Podman or use --runtime auto."
     fi
   fi
@@ -851,8 +852,15 @@ launch_first_session() {
   LAUNCH_PLATFORM="$(resolve_launch_platform)"
   launch_dir="$(resolve_launch_dir)"
 
+  local serve_args=()
   if [ -n "$LAUNCH_PLATFORM" ]; then
-    info "First-run serve command: vllm-sr serve --platform $LAUNCH_PLATFORM"
+    serve_args+=(--platform "$LAUNCH_PLATFORM")
+  fi
+  if [ -n "$SELECTED_RUNTIME" ]; then
+    serve_args+=(--runtime "$SELECTED_RUNTIME")
+  fi
+  if [ ${#serve_args[@]} -gt 0 ]; then
+    info "First-run serve command: vllm-sr serve ${serve_args[*]}"
   else
     info "First-run serve command: vllm-sr serve"
   fi
@@ -863,11 +871,7 @@ launch_first_session() {
   serve_log_file="$(make_temp_log)"
   if (
     cd "$launch_dir"
-    if [ -n "$LAUNCH_PLATFORM" ]; then
-      "$BIN_DIR/vllm-sr" serve --platform "$LAUNCH_PLATFORM"
-    else
-      "$BIN_DIR/vllm-sr" serve
-    fi
+    "$BIN_DIR/vllm-sr" serve "${serve_args[@]}"
   ) >"$serve_log_file" 2>&1; then
     rm -f "$serve_log_file"
     AUTO_LAUNCH_RAN="1"

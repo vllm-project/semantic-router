@@ -41,15 +41,17 @@ cleanup() {
 trap cleanup EXIT
 
 # Emit a stub binary that either reports a healthy daemon (ready) or a
-# broken/missing one (absent). Only `info` is consulted by install.sh.
+# broken/missing one (absent). Each invocation is logged to a call-trace
+# file so the Python side can assert which runtime was (or was not) probed.
+CALL_TRACE="$INSTALL_ROOT_TMP/calls.log"
 write_stub() {
   local name="$1"
   local state="$2"
   local path="$STUB_BIN/$name"
   if [ "$state" = "ready" ]; then
-    printf '#!/usr/bin/env bash\nexit 0\n' > "$path"
+    printf '#!/usr/bin/env bash\nprintf "%%s\\n" "%s" >> "%s"\nexit 0\n' "$name" "$CALL_TRACE" > "$path"
   else
-    printf '#!/usr/bin/env bash\nexit 1\n' > "$path"
+    printf '#!/usr/bin/env bash\nprintf "%%s\\n" "%s" >> "%s"\nexit 1\n' "$name" "$CALL_TRACE" > "$path"
   fi
   chmod +x "$path"
 }
@@ -115,6 +117,13 @@ ensure_runtime
 # Report the selected runtime and the exact runtime.env contents so the
 # Python side can assert both behavior and persisted state.
 printf 'SELECTED_RUNTIME=%s\n' "$SELECTED_RUNTIME"
+# Replay the call trace so the Python side can assert which runtime probes
+# were (or were not) invoked.
+if [ -f "$CALL_TRACE" ]; then
+  printf 'CALLS=%s\n' "$(tr '\n' ',' < "$CALL_TRACE" | sed 's/,$//')"
+else
+  printf 'CALLS=\n'
+fi
 if [ -f "$INSTALL_ROOT_TMP/runtime.env" ]; then
   printf 'RUNTIME_ENV_FILE=present\n'
   cat "$INSTALL_ROOT_TMP/runtime.env"
