@@ -45,7 +45,10 @@ func (r *OpenAIRouter) performResponseJailbreakDetectionText(
 
 	start := time.Now()
 	classifier := r.classifierForRequest(ctx)
-	isJailbreak, jailbreakType, confidence, err := classifier.CheckForJailbreakWithThreshold(selectionRequestContext(ctx), assistantContent, threshold)
+	// Scans the whole response in chunks and thresholds P(jailbreak) rather than
+	// the winning class's confidence, so this surface answers the same question
+	// as the routing signal and the classification API on the same text.
+	isJailbreak, jailbreakType, _, riskScore, err := classifier.CheckForJailbreakRiskWithThreshold(selectionRequestContext(ctx), assistantContent, threshold)
 	latency := time.Since(start).Seconds()
 
 	decisionName := requestDecisionStateKey(ctx)
@@ -59,10 +62,10 @@ func (r *OpenAIRouter) performResponseJailbreakDetectionText(
 	if isJailbreak {
 		ctx.ResponseJailbreakDetected = true
 		ctx.ResponseJailbreakType = jailbreakType
-		ctx.ResponseJailbreakConfidence = confidence
+		ctx.ResponseJailbreakConfidence = riskScore
 
 		metrics.RecordPluginExecution("response_jailbreak", decisionName, "detected", latency)
-		logging.Warnf("Response jailbreak detected: type=%s, confidence=%.3f", jailbreakType, confidence)
+		logging.Warnf("Response jailbreak detected: type=%s, risk=%.3f", jailbreakType, riskScore)
 
 		action := r.getResponseJailbreakAction(ctx.VSRSelectedDecision)
 		if action == "block" {
@@ -72,7 +75,7 @@ func (r *OpenAIRouter) performResponseJailbreakDetectionText(
 		logging.Infof("Response jailbreak detected, action is '%s'", action)
 	} else {
 		metrics.RecordPluginExecution("response_jailbreak", decisionName, "not_detected", latency)
-		logging.Debugf("No jailbreak detected in response: confidence=%.3f", confidence)
+		logging.Debugf("No jailbreak detected in response: risk=%.3f", riskScore)
 	}
 
 	return nil

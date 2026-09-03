@@ -7,6 +7,7 @@ from typing import Any
 
 import uvicorn
 from chat_request import ChatRequest, build_chat_content
+from classify import router as classify_router
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from provider_boundary import (
@@ -21,6 +22,7 @@ from pydantic import ValidationError
 app = FastAPI()
 app.state.request_store = RequestStore()
 app.include_router(router)
+app.include_router(classify_router)
 
 
 def estimate_tokens(text: str) -> int:
