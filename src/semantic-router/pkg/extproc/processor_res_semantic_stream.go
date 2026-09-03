@@ -398,7 +398,11 @@ func (r *OpenAIRouter) reportSemanticStreamingUsage(
 	completionLatency time.Duration,
 	usage responseUsageMetrics,
 ) {
-	if ctx == nil || usage.invalid {
+	if ctx == nil {
+		return
+	}
+	recordProviderPromptCacheUsage(ctx.RequestModel, usage)
+	if usage.invalid {
 		return
 	}
 	totalTokens := responseUsageTotal(usage)
