@@ -1030,6 +1030,42 @@ func TestMilvusStore_Schema_UserIDPartitionKey(t *testing.T) {
 	assert.True(t, userIDField.IsPartitionKey, "user_id field should have IsPartitionKey=true for efficient per-user queries")
 }
 
+func TestMilvusStore_LegacyAndOmittedDimensionsKeepSameResult(t *testing.T) {
+	baseConfig := DefaultMemoryConfig()
+	baseConfig.EmbeddingModel = string(EmbeddingModelBERT)
+	baseConfig.Milvus.Dimension = 384
+
+	newStore := func(name string, milvusDimension, embeddingDimension int) *MilvusStore {
+		t.Helper()
+		storeConfig := baseConfig
+		storeConfig.Milvus.Dimension = milvusDimension
+		client := &MockMilvusClient{
+			HasCollectionFunc: func(context.Context, string) (bool, error) {
+				return false, nil
+			},
+		}
+		store, err := NewMilvusStore(MilvusStoreOptions{
+			Client:         client,
+			CollectionName: name,
+			Config:         storeConfig,
+			Enabled:        true,
+			EmbeddingConfig: &EmbeddingConfig{
+				Model:     EmbeddingModelBERT,
+				Dimension: embeddingDimension,
+			},
+		})
+		require.NoError(t, err)
+		return store
+	}
+
+	legacyStore := newStore("legacy_dimension", 384, 384)
+	omittedStore := newStore("omitted_dimension", 512, 0)
+
+	assert.Equal(t, legacyStore.effectiveDimension, omittedStore.effectiveDimension)
+	assert.Equal(t, legacyStore.embeddingConfig.Dimension, omittedStore.embeddingConfig.Dimension)
+	assert.Equal(t, legacyStore.config.Milvus.Dimension, omittedStore.config.Milvus.Dimension)
+}
+
 func TestMilvusStore_ExistingCollectionDimensionMismatch(t *testing.T) {
 	mockClient := &MockMilvusClient{
 		HasCollectionFunc: func(context.Context, string) (bool, error) {

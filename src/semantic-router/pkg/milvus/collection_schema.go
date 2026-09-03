@@ -37,8 +37,45 @@ func ValidateVectorDimension(
 	if err != nil {
 		return fmt.Errorf("failed to describe collection %s: %w", collectionName, err)
 	}
+	field, err := findVectorField(collection, collectionName, vectorFieldName)
+	if err != nil {
+		return err
+	}
+
+	rawDimension, ok := field.TypeParams["dim"]
+	if !ok {
+		return fmt.Errorf(
+			"collection %s vector field %s has no dimension",
+			collectionName,
+			vectorFieldName,
+		)
+	}
+
+	storedDimension, err := strconv.Atoi(rawDimension)
+	if err != nil {
+		return fmt.Errorf(
+			"collection %s vector field %s has invalid dimension %q",
+			collectionName,
+			vectorFieldName,
+			rawDimension,
+		)
+	}
+
+	if storedDimension != expectedDimension {
+		return fmt.Errorf(
+			"collection %s vector dimension mismatch: stored=%d expected=%d",
+			collectionName,
+			storedDimension,
+			expectedDimension,
+		)
+	}
+
+	return nil
+}
+
+func findVectorField(collection *entity.Collection, collectionName, vectorFieldName string) (*entity.Field, error) {
 	if collection == nil || collection.Schema == nil {
-		return fmt.Errorf("collection %s has no schema", collectionName)
+		return nil, fmt.Errorf("collection %s has no schema", collectionName)
 	}
 
 	for _, field := range collection.Schema.Fields {
@@ -46,46 +83,17 @@ func ValidateVectorDimension(
 			continue
 		}
 		if field.DataType != entity.FieldTypeFloatVector {
-			return fmt.Errorf(
+			return nil, fmt.Errorf(
 				"collection %s field %s has type %v, expected float vector",
 				collectionName,
 				vectorFieldName,
 				field.DataType,
 			)
 		}
-
-		rawDimension, ok := field.TypeParams["dim"]
-		if !ok {
-			return fmt.Errorf(
-				"collection %s vector field %s has no dimension",
-				collectionName,
-				vectorFieldName,
-			)
-		}
-
-		storedDimension, err := strconv.Atoi(rawDimension)
-		if err != nil {
-			return fmt.Errorf(
-				"collection %s vector field %s has invalid dimension %q",
-				collectionName,
-				vectorFieldName,
-				rawDimension,
-			)
-		}
-
-		if storedDimension != expectedDimension {
-			return fmt.Errorf(
-				"collection %s vector dimension mismatch: stored=%d expected=%d",
-				collectionName,
-				storedDimension,
-				expectedDimension,
-			)
-		}
-
-		return nil
+		return field, nil
 	}
 
-	return fmt.Errorf(
+	return nil, fmt.Errorf(
 		"collection %s vector field %s not found",
 		collectionName,
 		vectorFieldName,

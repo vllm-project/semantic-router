@@ -1898,11 +1898,11 @@ func GetEmbeddingModelsInfo() (*ModelsInfoOutput, error) {
 	}, nil
 }
 
-// GetEmbeddingDimensionContract returns the dimension contract of a loaded
-// embedding model. The contract is produced by the native binding from the
-// model that was actually loaded, so callers do not need a second model-
-// specific dimension table.
-func GetEmbeddingDimensionContract(modelType string) (EmbeddingDimensionContract, error) {
+// getEmbeddingDimensionContract returns the dimension contract of a
+// loaded embedding model. The contract is produced by the native binding from
+// the model that was actually loaded, so callers do not need a second
+// model-specific dimension table.
+func getEmbeddingDimensionContract(modelType string) (EmbeddingDimensionContract, error) {
 	normalizedModelType := normalizeEmbeddingModelType(modelType)
 	cModelType := C.CString(normalizedModelType)
 	defer C.free(unsafe.Pointer(cModelType))

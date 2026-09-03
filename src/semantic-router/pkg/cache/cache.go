@@ -183,6 +183,14 @@ func normalizeEmbeddingModel(model string) string {
 }
 
 func semanticCacheEmbeddingDimension(configured int, embeddingModel string) int {
+	// Preserve explicit dimensions from existing cache configurations. The
+	// Milvus constructor validates explicit dimensions before it can use them;
+	// this legacy helper has no error return and is also shared by other cache
+	// backends.
+	if configured > 0 {
+		return configured
+	}
+
 	dimension, err := candle_binding.ResolveEmbeddingDimension(
 		normalizeEmbeddingModel(embeddingModel),
 		configured,

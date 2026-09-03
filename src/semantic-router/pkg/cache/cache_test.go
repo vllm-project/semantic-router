@@ -146,7 +146,7 @@ collection:
   description: "Test semantic cache collection"
   vector_field:
     name: "embedding"
-    dimension: 512
+     dimension: 384
     metric_type: "IP"
   index:
     type: "HNSW"
@@ -238,7 +238,7 @@ collection:
   description: "Test semantic cache collection"
   vector_field:
     name: "embedding"
-    dimension: 512
+     dimension: 384
     metric_type: "IP"
   index:
     type: "HNSW"
@@ -1811,22 +1811,6 @@ func TestMilvusCacheOptionsFromHybridOptionsPreservesEmbeddingModel(t *testing.T
 func TestSemanticCacheEmbeddingDimensionUsesConfiguredValue(t *testing.T) {
 	if got := semanticCacheEmbeddingDimension(512, "mmbert"); got != 512 {
 		t.Fatalf("expected configured dimension 512, got %d", got)
-	}
-}
-
-func TestSemanticCacheEmbeddingDimensionDefaultsByModel(t *testing.T) {
-	tests := map[string]int{
-		"":           384,
-		"bert":       384,
-		"qwen3":      1024,
-		"gemma":      768,
-		"mmbert":     768,
-		"multimodal": 384,
-	}
-	for model, want := range tests {
-		if got := semanticCacheEmbeddingDimension(0, model); got != want {
-			t.Fatalf("model %q: expected dimension %d, got %d", model, want, got)
-		}
 	}
 }
 

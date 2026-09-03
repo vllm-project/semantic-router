@@ -95,13 +95,9 @@ func NewMilvusStore(options MilvusStoreOptions) (*MilvusStore, error) {
 		}
 	}
 
-	requestedDimension := embeddingCfg.Dimension
-	if requestedDimension <= 0 {
-		requestedDimension = cfg.Milvus.Dimension
-	}
 	effectiveDimension, err := candle_binding.ResolveEmbeddingDimension(
 		string(embeddingCfg.Model),
-		requestedDimension,
+		embeddingCfg.Dimension,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve memory embedding dimension: %w", err)

@@ -19,12 +19,26 @@ type EmbeddingDimensionContract struct {
 	SupportedDimensions []int
 }
 
+// getEmbeddingDimensionContract is replaced by the native binding during
+// package initialization. The default keeps compile-only builds fail-closed
+// without pretending that a model contract is available.
+var getEmbeddingDimensionContract = func(string) (EmbeddingDimensionContract, error) {
+	return EmbeddingDimensionContract{}, ErrBackendUnavailable
+}
+
 func normalizeEmbeddingModelType(modelType string) string {
 	modelType = strings.ToLower(strings.TrimSpace(modelType))
 	if modelType == "" {
 		return "bert"
 	}
 	return modelType
+}
+
+// GetEmbeddingDimensionContract returns the contract for a loaded embedding
+// model. Native builds obtain it from the binding; builds without the native
+// backend return ErrBackendUnavailable.
+func GetEmbeddingDimensionContract(modelType string) (EmbeddingDimensionContract, error) {
+	return getEmbeddingDimensionContract(normalizeEmbeddingModelType(modelType))
 }
 
 // ResolveEmbeddingDimension resolves and validates the dimension used by an
