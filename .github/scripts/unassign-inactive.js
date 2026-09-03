@@ -76,18 +76,31 @@ function getLastHumanActivityDate(timeline, assigneeLogin) {
       continue;
     }
 
-    if (actor.login !== assigneeLogin) {
+    let isQualifying = false;
+
+    if (actor.login === assigneeLogin) {
+      if (HUMAN_EVENT_TYPES.has(event.event)) {
+        isQualifying = true;
+      }
+    } else {
       // Cross-referenced events: match when the source PR is authored by the assignee.
       if (event.event === "cross-referenced") {
         const source = event.source && event.source.issue;
-        if (!source || !source.pull_request) continue;
-        if (!source.user || source.user.login !== assigneeLogin) continue;
-      } else {
-        continue;
+        if (source && source.pull_request && source.user && source.user.login === assigneeLogin) {
+          isQualifying = true;
+        }
       }
     }
 
-    if (!HUMAN_EVENT_TYPES.has(event.event)) continue;
+    // Manual maintainer overrides: reassignment or removing the warning label resets the clock
+    if (event.event === "assigned" && event.assignee && event.assignee.login === assigneeLogin) {
+      isQualifying = true;
+    }
+    if (event.event === "unlabeled" && event.label && event.label.name === WARN_LABEL) {
+      isQualifying = true;
+    }
+
+    if (!isQualifying) continue;
 
     const ts = event.created_at || event.submitted_at || event.committed_at;
     if (!ts) continue;
@@ -143,8 +156,8 @@ async function findLinkedPRActivity(octokit, owner, repo, issueNumber, assigneeL
 
 // -- Warning comment helpers ------------------------------------------------
 
-/** Check if a warning comment already exists for this assignee. */
-async function warningCommentExists(octokit, owner, repo, issueNumber, assigneeLogin) {
+/** Check if a warning comment already exists for this assignee since their last activity. */
+async function warningCommentExists(octokit, owner, repo, issueNumber, assigneeLogin, lastHumanActivity) {
   try {
     const comments = await octokit.paginate(octokit.rest.issues.listComments, {
       owner,
@@ -152,9 +165,17 @@ async function warningCommentExists(octokit, owner, repo, issueNumber, assigneeL
       issue_number: issueNumber,
       per_page: 100,
     });
-    return comments.some(
-      (c) => c.body && c.body.includes(WARNING_MARKER) && c.body.includes(`@${assigneeLogin}`)
-    );
+    return comments.some((c) => {
+      if (!c.body || !c.body.includes(WARNING_MARKER) || !c.body.includes(`@${assigneeLogin}`)) {
+        return false;
+      }
+      if (lastHumanActivity && c.created_at) {
+        if (new Date(c.created_at) < lastHumanActivity) {
+          return false;
+        }
+      }
+      return true;
+    });
   } catch (err) {
     console.warn(`[warningCommentExists] #${issueNumber}: ${err.message}`);
     return false;
@@ -222,19 +243,9 @@ async function processAssignee(octokit, owner, repo, issue, assigneeLogin, confi
     }
   }
 
-  // Fallback: use the most recent "assigned" event for this user, or issue creation.
+  // Fallback: use issue creation.
   if (!lastHumanActivity) {
-    for (const event of timeline) {
-      if (
-        event.event === "assigned" &&
-        event.assignee &&
-        event.assignee.login === assigneeLogin
-      ) {
-        const d = new Date(event.created_at);
-        if (!lastHumanActivity || d > lastHumanActivity) lastHumanActivity = d;
-      }
-    }
-    if (!lastHumanActivity) lastHumanActivity = new Date(issue.created_at);
+    lastHumanActivity = new Date(issue.created_at);
   }
 
   const daysSinceActivity = (now - lastHumanActivity) / (1000 * 60 * 60 * 24);
@@ -307,7 +318,7 @@ async function processAssignee(octokit, owner, repo, issue, assigneeLogin, confi
   // C: Between warn and unassign thresholds — warn if not already warned.
   if (!isWarned) {
     const alreadyCommented = await warningCommentExists(
-      octokit, owner, repo, issueNumber, assigneeLogin
+      octokit, owner, repo, issueNumber, assigneeLogin, lastHumanActivity
     );
     if (alreadyCommented) {
       console.log(`  → skip: warning comment already exists`);

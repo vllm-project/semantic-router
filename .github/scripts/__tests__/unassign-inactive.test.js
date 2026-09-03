@@ -138,6 +138,24 @@ describe("getLastHumanActivityDate", () => {
     const result = getLastHumanActivityDate(timeline, "alice");
     expect(result.toISOString()).toBe(new Date(newer).toISOString());
   });
+
+  test("picks up reassignment by maintainer", () => {
+    const ts = daysAgo(2);
+    const timeline = [
+      { event: "assigned", actor: { login: "maintainer", type: "User" }, assignee: { login: "alice" }, created_at: ts },
+    ];
+    const result = getLastHumanActivityDate(timeline, "alice");
+    expect(result.toISOString()).toBe(new Date(ts).toISOString());
+  });
+
+  test("picks up warning label removal by maintainer", () => {
+    const ts = daysAgo(1);
+    const timeline = [
+      { event: "unlabeled", actor: { login: "maintainer", type: "User" }, label: { name: WARN_LABEL }, created_at: ts },
+    ];
+    const result = getLastHumanActivityDate(timeline, "alice");
+    expect(result.toISOString()).toBe(new Date(ts).toISOString());
+  });
 });
 
 // -- Comment builders -------------------------------------------------------
@@ -163,12 +181,22 @@ describe("buildUnassignComment", () => {
 // -- warningCommentExists ---------------------------------------------------
 
 describe("warningCommentExists", () => {
-  test("true when matching comment exists", async () => {
+  test("true when matching comment exists and is newer than last activity", async () => {
     const octokit = makeOctokit();
     octokit.paginate.mockResolvedValue([
-      { body: `${WARNING_MARKER}\n@alice some warning text` },
+      { body: `${WARNING_MARKER}\n@alice some warning text`, created_at: daysAgo(5) },
     ]);
-    expect(await warningCommentExists(octokit, "o", "r", 42, "alice")).toBe(true);
+    const lastActivity = new Date(daysAgo(10));
+    expect(await warningCommentExists(octokit, "o", "r", 42, "alice", lastActivity)).toBe(true);
+  });
+
+  test("false when matching comment exists but is older than last activity", async () => {
+    const octokit = makeOctokit();
+    octokit.paginate.mockResolvedValue([
+      { body: `${WARNING_MARKER}\n@alice some warning text`, created_at: daysAgo(15) },
+    ]);
+    const lastActivity = new Date(daysAgo(10));
+    expect(await warningCommentExists(octokit, "o", "r", 42, "alice", lastActivity)).toBe(false);
   });
 
   test("false when no matching comment", async () => {
