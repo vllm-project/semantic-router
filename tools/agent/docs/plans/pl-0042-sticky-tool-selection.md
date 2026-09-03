@@ -35,9 +35,31 @@ anonymous session identity for sticky behavior.
 
 ## Exit Criteria
 
-Matches blueprint section 13 (Definition of done) verbatim — see
-`.ai/issue3347/2_blueprint_gpt_5.md#13-definition-of-done`. Not restated here
-to avoid drift between two copies; that file is the durable design source.
+Issue #3347 may be closed only when:
+
+- configuration is disabled by default and bounded in every representation;
+- stored state is identity-only and hard-partitioned by recipe and
+  authenticated principal/session;
+- repeated sequential turns retain an identical ordered prefix;
+- growth and pinning obey the fixed bound and deterministic merge rules;
+- current authorization/availability/capability/schema/catalog are
+  re-evaluated on every use;
+- local and Redis concurrency semantics are documented and enforced by
+  tests;
+- restart, reload, expiry, missing store, corruption, and partial deployment
+  fail safely;
+- receipts are bounded and content-minimized;
+- maintained E2E covers the full completion signal using actual
+  provider-bound tool arrays;
+- the final repo-reported fast, feature, smoke, and affected E2E gates pass;
+- any deliberately deferred architecture gap is recorded in the indexed
+  tech-debt register, not only in PR text.
+
+This is committed here verbatim (not only referenced) because
+`.ai/issue3347/2_blueprint_gpt_5.md` is untracked working material, not part
+of the repository — a reviewer checking out this branch would not see it.
+Originates from that blueprint's section 13; kept in sync by hand if the
+issue's completion signal changes.
 
 ## Task List
 
