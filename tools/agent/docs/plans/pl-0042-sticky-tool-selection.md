@@ -72,6 +72,22 @@ it. Kept in sync by hand if the issue's completion signal changes.
       disabled `sticky:` block on the `tool_selection`/`add`-mode sample in
       `config/config.yaml` — every `ToolSelectionPluginConfig` field must
       appear somewhere in the reference config or that test fails.
+      Public docs per `pkg/config/AGENTS.md`'s "Config-contract changes must
+      update the relevant public docs" rule: updated
+      `website/docs/tutorials/plugin/tool-selection.md` (new subsection) and
+      added `config/fragments/plugin/tool-selection/sticky-add-from-database.yaml`.
+      Evaluated and deliberately did *not* touch `config/README.md` or
+      `website/docs/proposals/unified-config-contract-v0-3.md` for this
+      task: both are purely structural/architectural docs with no
+      per-plugin or per-sub-field content anywhere (neither mentions
+      `tool_selection` at all), and precedent confirms this — neither the
+      PR that introduced the entire `tool_selection` plugin (`e0e7df56`,
+      touched only the tutorial page) nor the PR that added its
+      `advanced_filtering` sub-config (`5f14781c`, touched none of the
+      three) updated them either. `website/docs/installation/configuration.md`'s
+      plugin table already lists `tool_selection` (one terse row per
+      plugin, linking to its guide, same as every other row) and needs no
+      change for a sub-field addition within an already-listed plugin.
 - [ ] `TASK-02` `global.stores.tool_sessions` store config: new
       `config/tool_session_store.go` (backend/TTL/cardinality/Redis
       sub-config, defaults, validation), wired through
