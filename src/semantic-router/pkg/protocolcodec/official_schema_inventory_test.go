@@ -172,8 +172,8 @@ func TestOfficialResponseFieldInventoriesAreClosed(t *testing.T) {
 			name: "Anthropic Messages",
 			wire: anthropicResponseWire{},
 			official: fields(
-				"container", "content", "id", "model", "role", "stop_details", "stop_reason",
-				"stop_sequence", "type", "usage",
+				"container", "content", "context_management", "id", "model", "role", "stop_details",
+				"stop_reason", "stop_sequence", "type", "usage",
 			),
 			extensions: fields("error"),
 		},

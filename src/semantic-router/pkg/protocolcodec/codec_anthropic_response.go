@@ -19,6 +19,10 @@ type anthropicResponseWire struct {
 	Error        *anthropicErrorWire `json:"error,omitempty"`
 	Container    json.RawMessage     `json:"container"`
 	StopDetails  json.RawMessage     `json:"stop_details"`
+	// ContextManagement reports the context edits the upstream applied to the
+	// billed prompt. It only appears when the request carried the directive, so
+	// unlike container and stop_details it is omitted rather than null-valued.
+	ContextManagement json.RawMessage `json:"context_management,omitempty"`
 }
 
 type anthropicUsageWire struct {
@@ -82,6 +86,9 @@ func anthropicResponseMetadataDiagnostics(wire anthropicResponseWire, policy llm
 	}
 	if len(wire.StopDetails) > 0 && !bytes.Equal(bytes.TrimSpace(wire.StopDetails), []byte("null")) {
 		appendProviderFieldOmission(&diagnostics, policy, llmprotocol.AnthropicMessagesV1, "stop_details", "structured refusal detail has no neutral representation")
+	}
+	if len(wire.ContextManagement) > 0 && !bytes.Equal(bytes.TrimSpace(wire.ContextManagement), []byte("null")) {
+		appendProviderFieldOmission(&diagnostics, policy, llmprotocol.AnthropicMessagesV1, "context_management", "applied context edits describe upstream prompt trimming and have no neutral representation")
 	}
 	return diagnostics
 }

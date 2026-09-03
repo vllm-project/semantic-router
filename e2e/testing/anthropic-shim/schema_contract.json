@@ -28,6 +28,7 @@
       "official_response_fields": [
         "container",
         "content",
+        "context_management",
         "id",
         "model",
         "role",
