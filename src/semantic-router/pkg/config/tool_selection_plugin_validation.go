@@ -70,11 +70,13 @@ func (c *ToolSelectionPluginConfig) validateSticky() error {
 	if c.Sticky == nil || !c.Sticky.Enabled {
 		return nil
 	}
-	if c.Sticky.MaxTools < 0 || c.Sticky.MaxTools > StickyToolSelectionMaxToolsUpperBound {
-		return fmt.Errorf(
-			"tool_selection plugin: sticky.max_tools must be between 1 and %d",
-			StickyToolSelectionMaxToolsUpperBound,
-		)
+	if c.Sticky.MaxTools != nil {
+		if v := *c.Sticky.MaxTools; v <= 0 || v > StickyToolSelectionMaxToolsUpperBound {
+			return fmt.Errorf(
+				"tool_selection plugin: sticky.max_tools must be between 1 and %d",
+				StickyToolSelectionMaxToolsUpperBound,
+			)
+		}
 	}
 	if c.Sticky.MaxNewToolsPerTurn == nil {
 		return nil

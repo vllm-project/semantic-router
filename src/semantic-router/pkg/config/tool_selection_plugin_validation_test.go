@@ -76,15 +76,36 @@ func TestToolSelectionPluginValidate_StickyEnabledWithDefaults_OK(t *testing.T) 
 }
 
 func TestToolSelectionPluginValidate_StickyMaxToolsOutOfRange_Err(t *testing.T) {
-	for _, maxTools := range []int{-1, 129} {
+	for _, maxTools := range []int{-1, 0, 129} {
 		c := ToolSelectionPluginConfig{
 			Enabled: true,
 			Mode:    ToolSelectionModeAdd,
-			Sticky:  &StickyToolSelectionConfig{Enabled: true, MaxTools: maxTools},
+			Sticky:  &StickyToolSelectionConfig{Enabled: true, MaxTools: intPtr(maxTools)},
 		}
 		if err := c.Validate(); err == nil {
 			t.Fatalf("max_tools=%d: expected error", maxTools)
 		}
+	}
+}
+
+func TestToolSelectionPluginValidate_StickyMaxToolsExplicitZero_Err(t *testing.T) {
+	// max_tools: 0 is explicitly out of the valid 1..128 range and must be
+	// rejected, not silently treated as "unset -> default 16". This is the
+	// same class of unset-vs-explicit-zero ambiguity MaxNewToolsPerTurn
+	// already guards against, just for the field whose valid range excludes
+	// zero entirely rather than including it.
+	c := ToolSelectionPluginConfig{
+		Enabled: true,
+		Mode:    ToolSelectionModeAdd,
+		Sticky:  &StickyToolSelectionConfig{Enabled: true, MaxTools: intPtr(0)},
+	}
+	err := c.Validate()
+	if err == nil {
+		t.Fatal("expected error: sticky.max_tools: 0 is out of the valid 1..128 range")
+	}
+	const want = "tool_selection plugin: sticky.max_tools must be between 1 and 128"
+	if err.Error() != want {
+		t.Fatalf("error = %q, want %q", err.Error(), want)
 	}
 }
 
@@ -110,7 +131,7 @@ func TestToolSelectionPluginValidate_StickyMaxNewToolsPerTurnExceedsMaxTools_Err
 		Mode:    ToolSelectionModeAdd,
 		Sticky: &StickyToolSelectionConfig{
 			Enabled:            true,
-			MaxTools:           4,
+			MaxTools:           intPtr(4),
 			MaxNewToolsPerTurn: intPtr(5),
 		},
 	}
@@ -139,7 +160,7 @@ func TestToolSelectionPluginValidate_StickyDisabledIgnoresBounds(t *testing.T) {
 	c := ToolSelectionPluginConfig{
 		Enabled: true,
 		Mode:    ToolSelectionModeAdd,
-		Sticky:  &StickyToolSelectionConfig{Enabled: false, MaxTools: 999},
+		Sticky:  &StickyToolSelectionConfig{Enabled: false, MaxTools: intPtr(999)},
 	}
 	if err := c.Validate(); err != nil {
 		t.Fatal(err)
