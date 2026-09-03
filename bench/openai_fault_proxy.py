@@ -23,7 +23,7 @@ HTTP_UNAVAILABLE = 503
 SESSION_HEADER = "x-session-id"
 # HTTP/1.1 chunked-transfer framing uses CRLF and a final zero-sized chunk.
 HTTP_LINE_ENDING = b"\r\n"
-HTTP_CHUNKED_BODY_END = b"0" + HTTP_LINE_ENDING * 2
+HTTP_CHUNKED_BODY_END = b"0\r\n\r\n"
 HOP_BY_HOP_HEADERS = {
     "connection",
     "content-length",
