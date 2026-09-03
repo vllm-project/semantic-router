@@ -2,6 +2,9 @@ name: Core Security
 
 on:
   workflow_call:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 4 * * 1"
 
 permissions:
   contents: read
@@ -9,6 +12,7 @@ permissions:
 jobs:
   ast-security-scan:
     name: AST supply chain security scan
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - name: Check out trusted scanner
@@ -78,3 +82,62 @@ jobs:
         run: |
           python3 base/tools/security/scan_malicious_code.py \
             pr-code --fail-on HIGH
+
+  iac-security-scan:
+    name: Helm IaC security scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Render maintained router deployments
+        run: |
+          mkdir -p .agent-harness/security/iac
+          make helm-ci-setup HELM_REPO_UPDATE=true
+          helm template security-default deploy/helm/semantic-router \
+            --namespace vllm-semantic-router-system \
+            --show-only templates/deployment.yaml \
+            > .agent-harness/security/iac/router-default.yaml
+          helm template security-production deploy/helm/semantic-router \
+            -f deploy/helm/semantic-router/values-prod.yaml \
+            --namespace vllm-semantic-router-system \
+            --show-only templates/deployment.yaml \
+            > .agent-harness/security/iac/router-production.yaml
+
+      - name: Generate Trivy SARIF
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.74.0
+          scan-type: config
+          scan-ref: .agent-harness/security/iac
+          format: sarif
+          output: trivy-results.sarif
+          severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+          exit-code: "0"
+          trivyignores: tools/security/trivy-iac.ignore
+
+      - name: Enforce high and critical IaC findings
+        run: |
+          trivy config \
+            --exit-code 1 \
+            --severity HIGH,CRITICAL \
+            --ignorefile tools/security/trivy-iac.ignore \
+            .agent-harness/security/iac
+
+      - name: Upload Trivy results
+        if: >-
+          always()
+          && hashFiles('trivy-results.sarif') != ''
+          && (github.event_name != 'pull_request'
+            || (github.event.pull_request.head.repo.full_name == github.repository
+              && github.actor != 'dependabot[bot]'))
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy/helm-router

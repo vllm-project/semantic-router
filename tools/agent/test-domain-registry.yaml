@@ -42,12 +42,12 @@ domains:
 
   security:
     owner: security
-    contract: Changed source does not introduce blocked supply-chain patterns.
+    contract: Changed source does not introduce blocked supply-chain patterns, and maintained Router Helm renders remain hardened.
     layer: static
     selector: security
     pr_job: security
     workflow: .github/workflows/security-scan.yml
-    cadence: [pr]
+    cadence: [pr, main, weekly]
     resource_class: light
     local: {fast: [], feature: []}
     image_receipts: []

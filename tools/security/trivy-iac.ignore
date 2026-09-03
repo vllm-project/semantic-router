@@ -1,0 +1,5 @@
+# The IaC workflow scans only maintained Router images published in the
+# vllm-project/semantic-router GHCR namespace. Trivy's generic trusted-registry
+# check does not recognize that first-party registry, so trust it explicitly
+# while retaining every other Kubernetes policy check.
+KSV-0125
