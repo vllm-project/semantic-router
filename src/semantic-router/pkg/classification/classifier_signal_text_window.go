@@ -7,21 +7,14 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-// semanticSignalRuneLimit bounds one embedding/classifier forward pass. The
+// semanticSignalUnitLimit bounds one embedding/classifier forward pass. The
 // request's full text still reaches exact-match, structure, and context signals;
 // semantic signals receive representative head, middle, and tail views so a
 // model with a large context window cannot force internal routing models to
-// allocate against that same unbounded window.
-const semanticSignalRuneLimit = 2 * 1024
-
-// Classification tokenizers currently cap PII and jailbreak inference at 512
-// tokens even when the underlying mmBERT model supports a longer context. PII
-// is local token classification and loses entity confidence in long windows;
-// jailbreak detection benefits from broader semantic context. Keep separate
-// budgets instead of forcing both security signals through one compromise.
-// Units are quarter-token estimates: ordinary runes cost one, word starts add
-// one, and CJK runes cost six in total (about 1.5 tokens).
+// allocate against that same unbounded window. Units are quarter-token
+// estimates calibrated on the mmBERT tokenizer.
 const (
+	semanticSignalUnitLimit     = 440 * 4
 	piiSignalChunkBudget        = 128 * 4
 	piiSignalChunkOverlapRunes  = 64
 	jailbreakSignalChunkBudget  = 384 * 4
@@ -48,23 +41,26 @@ func textForRoutingSignal(signalType, text string) string {
 	if _, bounded := boundedSemanticSignalTypes[signalType]; !bounded {
 		return text
 	}
-	return representativeSignalText(text, semanticSignalRuneLimit)
+	return representativeSignalText(text, semanticSignalUnitLimit)
 }
 
-func representativeSignalText(text string, maxRunes int) string {
+func representativeSignalText(text string, maxUnits int) string {
 	runes := []rune(text)
-	if maxRunes <= 0 || len(runes) <= maxRunes {
+	prefix := signalUnitPrefix(runes)
+	if maxUnits <= 0 || prefix[len(runes)] <= maxUnits {
 		return text
 	}
-	headRunes := maxRunes / 3
-	middleRunes := maxRunes / 3
-	tailRunes := maxRunes - headRunes - middleRunes
-	middleStart := (len(runes) - middleRunes) / 2
-	return string(runes[:headRunes]) +
+	part := maxUnits / 3
+	headEnd := signalUnitsForward(prefix, 0, part)
+	tailStart := signalUnitsBackward(prefix, len(runes), part)
+	center := len(runes) / 2
+	middleStart := max(signalUnitsBackward(prefix, center, part/2), headEnd)
+	middleEnd := min(signalUnitsForward(prefix, center, part-part/2), tailStart)
+	return string(runes[:headEnd]) +
 		signalWindowOmissionMarker +
-		string(runes[middleStart:middleStart+middleRunes]) +
+		string(runes[middleStart:middleEnd]) +
 		signalWindowOmissionMarker +
-		string(runes[len(runes)-tailRunes:])
+		string(runes[tailStart:])
 }
 
 func piiSignalChunks(text string) []string {
@@ -117,7 +113,8 @@ func securitySignalChunkSpans(text string, budget, overlapRunes int) []signalChu
 	if len(runes) == 0 {
 		return nil
 	}
-	if securitySignalChunkUnits(runes) <= budget {
+	prefix := signalUnitPrefix(runes)
+	if prefix[len(runes)] <= budget {
 		return []signalChunkSpan{{Text: text, StartByte: 0}}
 	}
 
@@ -129,7 +126,7 @@ func securitySignalChunkSpans(text string, budget, overlapRunes int) []signalChu
 		for ; counted < start; counted++ {
 			startByte += utf8.RuneLen(runes[counted])
 		}
-		end := securitySignalChunkEnd(runes, start, budget)
+		end := securitySignalChunkEnd(runes, prefix, start, budget)
 		spans = append(spans, signalChunkSpan{
 			Text:      string(runes[start:end]),
 			StartByte: startByte,
@@ -142,44 +139,75 @@ func securitySignalChunkSpans(text string, budget, overlapRunes int) []signalChu
 	return spans
 }
 
-func securitySignalChunkEnd(runes []rune, start, budget int) int {
-	units := 0
-	inWord := false
-	end := start
-	for end < len(runes) {
-		nextUnits, nextInWord := securitySignalRuneUnits(runes[end], inWord)
-		if end > start && units+nextUnits > budget {
-			break
+func securitySignalChunkEnd(runes []rune, prefix []int, start, budget int) int {
+	end := max(signalUnitsForward(prefix, start, budget-1), start+1)
+	if end >= len(runes) || unicode.IsSpace(runes[end]) {
+		return end
+	}
+	for i := end; i > start+1 && i > end-64; i-- {
+		if unicode.IsSpace(runes[i-1]) {
+			return i
 		}
-		units += nextUnits
-		inWord = nextInWord
-		end++
 	}
 	return end
 }
 
 func securitySignalChunkUnits(runes []rune) int {
-	units := 0
-	inWord := false
-	for _, r := range runes {
-		var runeUnits int
-		runeUnits, inWord = securitySignalRuneUnits(r, inWord)
-		units += runeUnits
-	}
-	return units
+	return signalUnitPrefix(runes)[len(runes)]
 }
 
-func securitySignalRuneUnits(r rune, inWord bool) (int, bool) {
-	if isCJK(r) {
-		return 6, false
+func signalUnitPrefix(runes []rune) []int {
+	prefix := make([]int, len(runes)+1)
+	inWord, wordHasDigit := false, false
+	for i, r := range runes {
+		var units int
+		units, inWord, wordHasDigit = signalRuneUnits(r, inWord, wordHasDigit)
+		prefix[i+1] = prefix[i] + units
 	}
-	if unicode.IsLetter(r) || unicode.IsDigit(r) {
-		if !inWord {
-			return 2, true
+	return prefix
+}
+
+func signalRuneUnits(r rune, inWord, wordHasDigit bool) (int, bool, bool) {
+	switch {
+	case unicode.IsSpace(r):
+		return 0, false, false
+	case isCJK(r):
+		return 4, false, false
+	case unicode.IsDigit(r):
+		return 5, true, true
+	case unicode.IsLetter(r):
+		if inWord && wordHasDigit {
+			return 4, true, true
 		}
-		return 1, true
+		units := 1
+		if !unicode.Is(unicode.Latin, r) {
+			units = 2
+		}
+		if !inWord {
+			units++
+		}
+		return units, true, false
+	case unicode.IsSymbol(r):
+		return 5, false, false
+	default:
+		return 4, false, false
 	}
-	return 1, false
+}
+
+func signalUnitsForward(prefix []int, start, budget int) int {
+	end := start
+	for end < len(prefix)-1 && prefix[end+1]-prefix[start] <= budget {
+		end++
+	}
+	return end
+}
+
+func signalUnitsBackward(prefix []int, end, budget int) int {
+	start := end
+	for start > 0 && prefix[end]-prefix[start-1] <= budget {
+		start--
+	}
+	return start
 }
 
 // uniqueSignalChunks removes exact duplicate inference work while preserving
