@@ -51,15 +51,18 @@ type ToolSelectionPluginConfig struct {
 // descriptions, JSON Schemas, arguments, results, prompts, authorization
 // decisions, credentials, or raw session/principal identifiers.
 type StickyToolSelectionConfig struct {
-	Enabled  bool `json:"enabled" yaml:"enabled"`
-	MaxTools int  `json:"max_tools,omitempty" yaml:"max_tools,omitempty"`
+	Enabled bool `json:"enabled" yaml:"enabled"`
 
-	// MaxNewToolsPerTurn is a pointer, not a plain int like the blueprint's
-	// original Go contract: 0 is a valid, meaningful configured value (no
-	// relevance-driven growth — reuse and call-pinning only), so it must be
-	// distinguishable from "unset" (defaults to
-	// StickyToolSelectionDefaultMaxNewToolsPerTurn). A plain int cannot carry
-	// that distinction. See PL-0042 task notes.
+	// MaxTools and MaxNewToolsPerTurn are pointers, not plain ints like the
+	// blueprint's original Go contract: for both, an explicit 0 is a
+	// distinct, meaningful configured value from "unset" — max_tools: 0 must
+	// be rejected by validation (valid range is 1..128), while
+	// max_new_tools_per_turn: 0 is valid and means "no relevance-driven
+	// growth, reuse and call-pinning only". A plain int's zero value cannot
+	// carry either distinction from "the field was omitted". See PL-0042
+	// task notes and the code-review record in
+	// .ai/issue3347/3_implementation_record_sonnet_5.md.
+	MaxTools           *int  `json:"max_tools,omitempty" yaml:"max_tools,omitempty"`
 	MaxNewToolsPerTurn *int  `json:"max_new_tools_per_turn,omitempty" yaml:"max_new_tools_per_turn,omitempty"`
 	PinCalledTools     *bool `json:"pin_called_tools,omitempty" yaml:"pin_called_tools,omitempty"`
 }
@@ -67,10 +70,10 @@ type StickyToolSelectionConfig struct {
 // EffectiveMaxTools returns the configured max_tools, or
 // StickyToolSelectionDefaultMaxTools when unset.
 func (s *StickyToolSelectionConfig) EffectiveMaxTools() int {
-	if s == nil || s.MaxTools == 0 {
+	if s == nil || s.MaxTools == nil {
 		return StickyToolSelectionDefaultMaxTools
 	}
-	return s.MaxTools
+	return *s.MaxTools
 }
 
 // EffectiveMaxNewToolsPerTurn returns the configured max_new_tools_per_turn,
