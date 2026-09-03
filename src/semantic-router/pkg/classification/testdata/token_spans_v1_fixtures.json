@@ -1,0 +1,328 @@
+{
+ "contract": "token_spans.v1",
+ "offset_unit": "unicode code points into the exact request string",
+ "generated_by": "python3, len(str) for code points, len(str.encode()) for bytes",
+ "cases": [
+  {
+   "name": "ascii_baseline",
+   "text": "John Smith called yesterday.",
+   "text_code_points": 28,
+   "text_bytes": 28,
+   "spans": [
+    {
+     "label": "PERSON",
+     "score": 0.98,
+     "text": "John Smith",
+     "start": 0,
+     "end": 10,
+     "_byte_start": 0,
+     "_byte_end": 10
+    }
+   ],
+   "expect": "accept",
+   "note": "Bytes and code points agree. A provider that gets this right and nothing else has proven nothing."
+  },
+  {
+   "name": "cjk_bytes_disagree",
+   "text": "こんにちは、私は John Smith です。電話は 415-555-0134",
+   "text_code_points": 39,
+   "text_bytes": 67,
+   "spans": [
+    {
+     "label": "PERSON",
+     "score": 0.98,
+     "text": "John Smith",
+     "start": 9,
+     "end": 19,
+     "_byte_start": 25,
+     "_byte_end": 35
+    },
+    {
+     "label": "PHONE_NUMBER",
+     "score": 0.98,
+     "text": "415-555-0134",
+     "start": 27,
+     "end": 39,
+     "_byte_start": 55,
+     "_byte_end": 67
+    }
+   ],
+   "expect": "accept",
+   "note": "The #3146 string: 39 code points, 67 bytes. Byte offsets for PHONE_NUMBER are [55,67), past the end of a code-point string."
+  },
+  {
+   "name": "astral_plane_emoji",
+   "text": "Call 📞 +1 415 555 0134 before 5pm.",
+   "text_code_points": 34,
+   "text_bytes": 37,
+   "spans": [
+    {
+     "label": "PHONE_NUMBER",
+     "score": 0.98,
+     "text": "+1 415 555 0134",
+     "start": 7,
+     "end": 22,
+     "_byte_start": 10,
+     "_byte_end": 25
+    }
+   ],
+   "expect": "accept",
+   "note": "U+1F4DE is one code point, two UTF-16 code units, four UTF-8 bytes. A JavaScript or Java provider using string length will report start one too high."
+  },
+  {
+   "name": "combining_mark_grapheme_ne_codepoint",
+   "text": "Contact José Alvarez at the front desk.",
+   "text_code_points": 40,
+   "text_bytes": 41,
+   "spans": [
+    {
+     "label": "PERSON",
+     "score": 0.98,
+     "text": "José Alvarez",
+     "start": 8,
+     "end": 21,
+     "_byte_start": 8,
+     "_byte_end": 22
+    }
+   ],
+   "expect": "accept",
+   "note": "'é' as e + U+0301 is one grapheme, two code points. Grapheme-counting providers report end one too low. Unit is code points, not graphemes."
+  },
+  {
+   "name": "span_at_offset_zero",
+   "text": "Jane Doe is the contact.",
+   "text_code_points": 24,
+   "text_bytes": 24,
+   "spans": [
+    {
+     "label": "PERSON",
+     "score": 0.98,
+     "text": "Jane Doe",
+     "start": 0,
+     "end": 8,
+     "_byte_start": 0,
+     "_byte_end": 8
+    }
+   ],
+   "expect": "accept",
+   "note": "start == 0 must round-trip. omitempty on a plain int dropped this before #3147."
+  },
+  {
+   "name": "span_at_end_of_text",
+   "text": "Please email jane@example.org",
+   "text_code_points": 29,
+   "text_bytes": 29,
+   "spans": [
+    {
+     "label": "EMAIL_ADDRESS",
+     "score": 0.98,
+     "text": "jane@example.org",
+     "start": 13,
+     "end": 29,
+     "_byte_start": 13,
+     "_byte_end": 29
+    }
+   ],
+   "expect": "accept",
+   "note": "end == len(text) is valid; end == len(text)+1 is not."
+  },
+  {
+   "name": "overlap_different_types",
+   "text": "Reach me at mailto:jane@example.org for details.",
+   "text_code_points": 48,
+   "text_bytes": 48,
+   "spans": [
+    {
+     "label": "URL",
+     "score": 0.98,
+     "text": "mailto:jane@example.org",
+     "start": 12,
+     "end": 35,
+     "_byte_start": 12,
+     "_byte_end": 35
+    },
+    {
+     "label": "EMAIL_ADDRESS",
+     "score": 0.98,
+     "text": "jane@example.org",
+     "start": 19,
+     "end": 35,
+     "_byte_start": 19,
+     "_byte_end": 35
+    }
+   ],
+   "expect": "accept",
+   "note": "Overlap of different types is permitted. Masking must cover the union, not the first match."
+  },
+  {
+   "name": "nested_same_direction",
+   "text": "Send it to John Smith, 12 Baker Street, London.",
+   "text_code_points": 47,
+   "text_bytes": 47,
+   "spans": [
+    {
+     "label": "ADDRESS",
+     "score": 0.98,
+     "text": "John Smith, 12 Baker Street, London",
+     "start": 11,
+     "end": 46,
+     "_byte_start": 11,
+     "_byte_end": 46
+    },
+    {
+     "label": "PERSON",
+     "score": 0.98,
+     "text": "John Smith",
+     "start": 11,
+     "end": 21,
+     "_byte_start": 11,
+     "_byte_end": 21
+    }
+   ],
+   "expect": "accept",
+   "note": "PERSON strictly inside ADDRESS. Both reported; neither merged into the other."
+  },
+  {
+   "name": "duplicate_span_rejected",
+   "text": "John Smith called.",
+   "text_code_points": 18,
+   "text_bytes": 18,
+   "spans": [
+    {
+     "label": "PERSON",
+     "score": 0.98,
+     "text": "John Smith",
+     "start": 0,
+     "end": 10,
+     "_byte_start": 0,
+     "_byte_end": 10
+    },
+    {
+     "label": "PERSON",
+     "score": 0.98,
+     "text": "John Smith",
+     "start": 0,
+     "end": 10,
+     "_byte_start": 0,
+     "_byte_end": 10
+    }
+   ],
+   "expect": "reject",
+   "note": "Identical (label,start,end) twice. Reject, do not dedupe silently."
+  },
+  {
+   "name": "text_mismatch_rejected",
+   "text": "John Smith called.",
+   "text_code_points": 18,
+   "text_bytes": 18,
+   "spans": [
+    {
+     "label": "PERSON",
+     "score": 0.98,
+     "text": "John Smit",
+     "start": 0,
+     "end": 10,
+     "_byte_start": 0,
+     "_byte_end": 10
+    }
+   ],
+   "expect": "reject",
+   "note": "text must equal the code-point slice [start,end). The mismatch is how an off-by-one in the unit shows up."
+  },
+  {
+   "name": "end_past_text_rejected",
+   "text": "John Smith called.",
+   "text_code_points": 18,
+   "text_bytes": 18,
+   "spans": [
+    {
+     "label": "PERSON",
+     "score": 0.98,
+     "text": "John Smith",
+     "start": 0,
+     "end": 21,
+     "_byte_start": 0,
+     "_byte_end": 10
+    }
+   ],
+   "expect": "reject",
+   "note": "end > len(text) in code points."
+  },
+  {
+   "name": "inverted_span_rejected",
+   "text": "John Smith called.",
+   "text_code_points": 18,
+   "text_bytes": 18,
+   "spans": [
+    {
+     "label": "PERSON",
+     "score": 0.98,
+     "text": "John Smith",
+     "start": 10,
+     "end": 0,
+     "_byte_start": 0,
+     "_byte_end": 10
+    }
+   ],
+   "expect": "reject",
+   "note": "start >= end."
+  },
+  {
+   "name": "score_out_of_range_rejected",
+   "text": "John Smith called.",
+   "text_code_points": 18,
+   "text_bytes": 18,
+   "spans": [
+    {
+     "label": "PERSON",
+     "score": 1.2,
+     "text": "John Smith",
+     "start": 0,
+     "end": 10,
+     "_byte_start": 0,
+     "_byte_end": 10
+    }
+   ],
+   "expect": "reject",
+   "note": "score outside [0,1]."
+  },
+  {
+   "name": "unknown_label_rejected",
+   "text": "John Smith called.",
+   "text_code_points": 18,
+   "text_bytes": 18,
+   "spans": [
+    {
+     "label": "HUMAN_NAME",
+     "score": 0.98,
+     "text": "John Smith",
+     "start": 0,
+     "end": 10,
+     "_byte_start": 0,
+     "_byte_end": 10
+    }
+   ],
+   "expect": "reject",
+   "note": "Label not in the configured PII mapping. Reject, as label_distribution.v1 does; a provider's taxonomy is not silently trusted."
+  },
+  {
+   "name": "entity_past_512_tokens",
+   "text": "Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. Sailors used the stars, then the compass, then radio beacons. My card is 4111 1111 1111 1111.",
+   "text_code_points": 3751,
+   "text_bytes": 3751,
+   "spans": [
+    {
+     "label": "CREDIT_CARD",
+     "score": 0.98,
+     "text": "4111 1111 1111 1111",
+     "start": 3731,
+     "end": 3750,
+     "_byte_start": 3731,
+     "_byte_end": 3750
+    }
+   ],
+   "expect": "accept_or_truncated_at",
+   "note": "Well past a 512-token window. Provider must either return this span or return truncated_at < start. Returning neither is a silent miss and is a contract violation."
+  }
+ ]
+}
