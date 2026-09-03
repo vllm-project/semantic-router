@@ -342,9 +342,6 @@ func (v *Validator) walkBoolExpr(expr BoolExpr) {
 	}
 }
 
-// checkOnUnknownOnErrorConflict flags condition-level on_error under a route
-// whose on_unknown already resolves terminal unknowns; the config loader
-// rejects the same combination at startup.
 func (v *Validator) checkOnUnknownOnErrorConflict(expr BoolExpr, context string) {
 	switch e := expr.(type) {
 	case *BoolAnd:
