@@ -7,11 +7,42 @@ metrics on `:9190` and pprof on `:6060`, and Envoy on `:8801`.
 
 ## Usage
 
-- `make soak-local` — full baseline run
+- `make soak-local` — full buffered-response baseline run
+- `make soak-local SOAK_STREAMING=1` — full SSE/streaming-response baseline run
 - `make soak-help` — harness flags and the Make knobs
 - `SOAK_ARGS="..."` — extra flags forwarded to `bin/soak`
   (`SOAK_ARGS="-quick"` for a ~9-minute smoke run)
 - `make soak-test` — vet and unit-test the harness (no running stack required)
+
+## Response modes
+
+Both modes run the same calibration, warmup, fixed-concurrency rounds, quiet
+gaps, and high-cardinality round. They differ only in the response path driven
+through Envoy and the Router.
+
+| Mode | Launch | Backend response shape |
+| --- | --- | --- |
+| Buffered | `make soak-local` | One complete Chat Completions JSON response after `SOAK_DELAY_MS` plus jitter. |
+| Streaming | `make soak-local SOAK_STREAMING=1` | An SSE response with a controllable first-frame delay, inter-frame interval, and content-frame count. |
+
+Streaming defaults to a 500 ms time to first frame, 50 ms between frames, and
+64 content frames before the terminal event and `[DONE]`. Override them with
+`SOAK_STREAM_TTFT_MS`, `SOAK_STREAM_TTFT_JITTER_MS`,
+`SOAK_STREAM_INTERVAL_MS`, and `SOAK_STREAM_FRAMES`. For example:
+
+```bash
+make soak-local SOAK_STREAMING=1 \
+  SOAK_STREAM_TTFT_MS=750 \
+  SOAK_STREAM_INTERVAL_MS=40 \
+  SOAK_STREAM_FRAMES=96
+```
+
+The fault proxy reads the mock backend's valid SSE transcript, repeats its
+content events to the requested count, and emits each complete frame as a
+separate flushed HTTP chunk. The soak client sends `"stream": true`, requires
+`text/event-stream`, and consumes the response through `[DONE]`. This keeps the
+Router on its real `response_body_mode: STREAMED` path for the lifetime of each
+response without adding a checked-in Router or Envoy configuration.
 
 ## Derived router config
 
@@ -50,7 +81,6 @@ Each run writes to `SOAK_OUT_DIR`:
 - `profiles/` — heap profiles
 - `router-config.yaml`, `envoy-config.yaml`, `run-env.txt` — for reproduction
 
-## Known blind spot
-
-The stack terminates at a buffered mock backend, so SSE/streaming response
-handling is not covered.
+`summary.json`, `summary.bench`, and `run-env.txt` record `buffered` or
+`streaming` as the response mode. Compare like-for-like modes across commits;
+the two modes intentionally exercise different Router lifecycles.

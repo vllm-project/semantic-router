@@ -30,6 +30,7 @@ type Config struct {
 	QuietGap       time.Duration `json:"quiet_gap"`
 	SampleInterval time.Duration `json:"sample_interval"`
 	HighCardIDs    int           `json:"high_card_ids"`
+	Streaming      bool          `json:"streaming"`
 }
 
 // Plan is Config with every derived duration resolved, so the summary records
@@ -142,7 +143,7 @@ func NewRunner(plan Plan) (*Runner, error) {
 	return &Runner{
 		plan:    plan,
 		sampler: sampler,
-		client:  NewClient(plan.GatewayURL, plan.Model, plan.peakConcurrency(), plan.HighCardIDs),
+		client:  NewClient(plan.GatewayURL, plan.Model, plan.peakConcurrency(), plan.HighCardIDs, plan.Streaming),
 		summary: &Summary{StartedAt: time.Now().UTC(), Plan: plan},
 	}, nil
 }
@@ -357,10 +358,11 @@ func (r *Runner) finalize() error {
 		rows = append(rows, benchRowFor("Soak/round=highcard", r.summary.HighCard))
 	}
 	config := map[string]string{
-		"goos":        runtime.GOOS,
-		"goarch":      runtime.GOARCH,
-		"concurrency": fmt.Sprintf("%d", r.plan.Concurrency),
-		"mode":        modeName(r.plan.Quick),
+		"goos":          runtime.GOOS,
+		"goarch":        runtime.GOARCH,
+		"concurrency":   fmt.Sprintf("%d", r.plan.Concurrency),
+		"mode":          modeName(r.plan.Quick),
+		"response-mode": responseModeName(r.plan.Streaming),
 	}
 	return os.WriteFile(filepath.Join(r.plan.OutDir, "summary.bench"), []byte(FormatBench(config, rows)), 0o644)
 }
@@ -382,6 +384,13 @@ func modeName(quick bool) string {
 		return "quick"
 	}
 	return "full"
+}
+
+func responseModeName(streaming bool) string {
+	if streaming {
+		return "streaming"
+	}
+	return "buffered"
 }
 
 func writeJSON(path string, v any) error {
