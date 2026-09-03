@@ -18,6 +18,8 @@ const (
 	timeoutSemanticRouterDeploy = 20 * time.Minute
 	timeoutGatewayReady         = 5 * time.Minute
 	timeoutStabilization        = 60 * time.Second
+	sidecarReadinessJSONPath    = `{.items[*].status.containerStatuses[?(@.name=="semantic-router")].ready} {.items[*].status.containerStatuses[?(@.name=="istio-proxy")].ready} {.items[*].status.initContainerStatuses[?(@.name=="istio-proxy")].ready}`
+	sidecarContainerJSONPath    = `{.items[0].spec.containers[*].name} {.items[0].spec.initContainers[*].name}`
 )
 
 func (p *Profile) failSetup(ctx context.Context, opts *framework.SetupOptions, state *setupState, err error) error {
@@ -373,7 +375,7 @@ func (p *Profile) verifyServiceHealth(ctx context.Context, opts *framework.Setup
 		"get", "pods",
 		"-n", semanticRouterNamespace,
 		"-l", "app.kubernetes.io/name=semantic-router",
-		"-o", "jsonpath={.items[*].status.containerStatuses[?(@.name==\"semantic-router\")].ready} {.items[*].status.containerStatuses[?(@.name==\"istio-proxy\")].ready} {.items[*].status.initContainerStatuses[?(@.name==\"istio-proxy\")].ready}")
+		"-o", "jsonpath="+sidecarReadinessJSONPath)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to check pod readiness: %w (output: %s)", err, string(output))
@@ -399,7 +401,7 @@ func (p *Profile) verifySidecarInjection(ctx context.Context, opts *framework.Se
 		"get", "pods",
 		"-n", semanticRouterNamespace,
 		"-l", "app.kubernetes.io/name=semantic-router",
-		"-o", "jsonpath={.items[0].spec.containers[*].name} {.items[0].spec.initContainers[*].name}")
+		"-o", "jsonpath="+sidecarContainerJSONPath)
 	output, err := cmd.Output()
 	if err != nil {
 		return fmt.Errorf("failed to get pod containers: %w", err)
