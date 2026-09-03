@@ -814,7 +814,6 @@ function getCuratedPluginFieldSchema(pluginType: string): FieldSchema[] {
           key: 'sticky',
           label: 'Session-Scoped Sticky Selection',
           type: 'object',
-          description: 'Opt-in, bounded session tool-set stickiness (issue #3347)',
           fields: [
             { key: 'enabled', label: 'Enabled', type: 'boolean' },
             { key: 'max_tools', label: 'Max Tools', type: 'number', placeholder: '16' },
