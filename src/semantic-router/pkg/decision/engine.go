@@ -230,6 +230,9 @@ func (e *DecisionEngine) evaluateDecisions(
 		resolved, err := e.evaluateConfiguredDecision(decision, signals, withTrace)
 		if resolved.policy != "" {
 			output.diagnostics.AppliedUnknownPolicies[decision.Name] = string(resolved.policy)
+			if !withTrace {
+				metrics.RecordDecisionUnknown(config.RoutingDecisionKey(e.routingScope, decision.Name), string(resolved.policy))
+			}
 		}
 		if withTrace {
 			output.traces = append(output.traces, newDecisionTrace(

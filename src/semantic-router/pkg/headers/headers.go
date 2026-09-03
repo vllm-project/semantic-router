@@ -72,6 +72,11 @@ const (
 	// Example values: "math_decision", "business_decision", "thinking_decision"
 	VSRSelectedDecision = "x-vsr-selected-decision"
 
+	// VSRAppliedUnknownPolicy lists decisions whose terminal unknown result was
+	// resolved by rules.on_unknown, as comma-separated decision=policy pairs.
+	// Example value: "guarded=no_match,strict=fail_request"
+	VSRAppliedUnknownPolicy = "x-vsr-applied-unknown-policy"
+
 	// VSRSelectedConfidence indicates the confidence score of the selected decision.
 	// Value: decimal between 0.0 and 1.0 (e.g., "0.75")
 	VSRSelectedConfidence = "x-vsr-selected-confidence"

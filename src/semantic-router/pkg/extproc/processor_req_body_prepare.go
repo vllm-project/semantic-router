@@ -10,6 +10,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/inflight"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -122,6 +123,7 @@ func (r *OpenAIRouter) respondDecisionUnresolved(
 	// terminal 503; aborted is reserved for streams that end early.
 	r.finalizeRouterReplay(ctx, routerreplay.LifecycleFailed, "decision_unresolved")
 	addRouterReplayHeaderToImmediateResponse(resp, ctx.RouterReplayID)
+	addImmediateResponseHeader(resp, headers.VSRAppliedUnknownPolicy, appliedUnknownPolicyHeader(ctx))
 	return resp
 }
 

@@ -32,6 +32,7 @@ func validateDecisionModelContracts(cfg *RouterConfig) error {
 		if err := validateDecisionRuleNode(cfg, decision.Name, &decision.Rules, true); err != nil {
 			return err
 		}
+		warnUnguardedClassifierConditions(decision)
 		if err := validateDecisionAnnotations(decision); err != nil {
 			return err
 		}

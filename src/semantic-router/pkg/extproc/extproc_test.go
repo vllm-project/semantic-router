@@ -27,6 +27,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responsestore"
 )
@@ -1924,6 +1925,9 @@ func TestVSRHeadersAddedOnSuccessfulNonCachedResponse(t *testing.T) {
 		VSRSelectedModel:              "deepseek-v31",
 		VSRCacheHit:                   false, // Not a cache hit
 		VSRInjectedSystemPrompt:       true,  // System prompt was injected
+		VSRDecisionDiagnostics: decision.EvaluationDiagnostics{
+			AppliedUnknownPolicies: map[string]string{"guarded": "no_match"},
+		},
 	}
 
 	// Create response headers with successful status (200)
@@ -1964,6 +1968,7 @@ func TestVSRHeadersAddedOnSuccessfulNonCachedResponse(t *testing.T) {
 	assert.Equal(t, "math_decision", headerMap["x-vsr-selected-decision"])
 	assert.Equal(t, "0.9100", headerMap["x-vsr-selected-confidence"])
 	assert.Equal(t, "deepseek-v31", headerMap["x-vsr-selected-model"])
+	assert.Equal(t, "guarded=no_match", headerMap["x-vsr-applied-unknown-policy"])
 
 	// Intermediate details and matched signals are demoted to the debug
 	// surface (#2205); same-protocol omits the protocol markers (#2206).

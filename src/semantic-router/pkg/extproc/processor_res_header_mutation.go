@@ -2,6 +2,8 @@ package extproc
 
 import (
 	"fmt"
+	"maps"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -342,7 +344,20 @@ func addFinalDecisionHeaders(builder *responseHeaderMutationBuilder, ctx *Reques
 	}
 	builder.addString(headers.VSRSelectedAlgorithm, ctx.VSRSelectionMethod)
 	builder.addString(headers.VSRSelectedModel, ctx.VSRSelectedModel)
+	builder.addString(headers.VSRAppliedUnknownPolicy, appliedUnknownPolicyHeader(ctx))
 	builder.addString(headers.RouterReplayID, ctx.RouterReplayID)
+}
+
+func appliedUnknownPolicyHeader(ctx *RequestContext) string {
+	if ctx == nil || len(ctx.VSRDecisionDiagnostics.AppliedUnknownPolicies) == 0 {
+		return ""
+	}
+	policies := ctx.VSRDecisionDiagnostics.AppliedUnknownPolicies
+	pairs := make([]string, 0, len(policies))
+	for _, name := range slices.Sorted(maps.Keys(policies)) {
+		pairs = append(pairs, sanitizeWarningField(name)+"="+sanitizeWarningField(policies[name]))
+	}
+	return strings.Join(pairs, ",")
 }
 
 // addDecisionDetailHeaders adds the intermediate decision/classification details

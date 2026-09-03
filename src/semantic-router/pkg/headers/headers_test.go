@@ -87,6 +87,7 @@ func TestVSRRoutingHeadersAreDocumented(t *testing.T) {
 		VSRSelectedRecipe,
 		VSRSelectedDecision,
 		VSRSelectedConfidence,
+		VSRAppliedUnknownPolicy,
 		VSRSelectedReasoning,
 		VSRSelectedModality,
 		VSRSelectedModel,

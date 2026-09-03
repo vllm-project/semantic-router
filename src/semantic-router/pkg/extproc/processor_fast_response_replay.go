@@ -11,7 +11,11 @@ func addRouterReplayHeaderToImmediateResponse(
 	response *ext_proc.ProcessingResponse,
 	replayID string,
 ) {
-	if response == nil || replayID == "" {
+	addImmediateResponseHeader(response, headers.RouterReplayID, replayID)
+}
+
+func addImmediateResponseHeader(response *ext_proc.ProcessingResponse, key, value string) {
+	if response == nil || value == "" {
 		return
 	}
 	immediate := response.GetImmediateResponse()
@@ -25,8 +29,8 @@ func addRouterReplayHeaderToImmediateResponse(
 		immediate.Headers.SetHeaders,
 		&core.HeaderValueOption{
 			Header: &core.HeaderValue{
-				Key:      headers.RouterReplayID,
-				RawValue: []byte(replayID),
+				Key:      key,
+				RawValue: []byte(value),
 			},
 		},
 	)
