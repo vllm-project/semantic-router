@@ -171,7 +171,11 @@ fn test_clamp_to_position_limit(
     clamp_to_position_limit(&mut ids, &mut mask, max_position);
 
     assert_eq!(ids.len(), want_len, "clamped ids length");
-    assert_eq!(mask.len(), want_len, "mask must stay the same length as ids");
+    assert_eq!(
+        mask.len(),
+        want_len,
+        "mask must stay the same length as ids"
+    );
     // The kept tokens are the start of the sequence, not an arbitrary window.
     assert!(ids.iter().enumerate().all(|(i, id)| *id == i as u32));
 }

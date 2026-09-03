@@ -2287,6 +2287,22 @@ pub extern "C" fn init_multimodal_embedding_model(
     }
 }
 
+/// Clamp a tokenized sequence to the text encoder's position-embedding limit.
+///
+/// The encoder holds a fixed number of position embeddings, so a longer sequence
+/// fails in the position lookup instead of being scored on its start. The batch
+/// path applies the same limit in `encode_text_batch_with_matryoshka`.
+pub(crate) fn clamp_to_position_limit(
+    ids: &mut Vec<u32>,
+    mask: &mut Vec<u32>,
+    max_position: usize,
+) {
+    if ids.len() > max_position {
+        ids.truncate(max_position);
+        mask.truncate(max_position);
+    }
+}
+
 /// Encode text using the multi-modal embedding model
 ///
 /// # Parameters
@@ -2294,18 +2310,6 @@ pub extern "C" fn init_multimodal_embedding_model(
 /// - `target_dim`: Target dimension (0 for default 384, or 32/64/128/256)
 /// - `result`: Output pointer for embedding result
 ///
-/// Clamp a tokenized sequence to the text encoder's position-embedding limit.
-///
-/// The encoder holds a fixed number of position embeddings, so a longer sequence
-/// fails in the position lookup instead of being scored on its start. The batch
-/// path applies the same limit in `encode_text_batch_with_matryoshka`.
-pub(crate) fn clamp_to_position_limit(ids: &mut Vec<u32>, mask: &mut Vec<u32>, max_position: usize) {
-    if ids.len() > max_position {
-        ids.truncate(max_position);
-        mask.truncate(max_position);
-    }
-}
-
 /// # Returns
 /// 0 on success, -1 on error
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
