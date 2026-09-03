@@ -3,7 +3,7 @@
 //! Provides FFI functions for multi-modal embedding (text, image, audio)
 //! matching the candle-binding multimodal API.
 
-use crate::ffi::embedding::write_embedding_dimension_contract;
+use crate::ffi::embedding_contract::write_embedding_dimension_contract;
 use crate::ffi::types::{EmbeddingDimensionContractResult, MultiModalEmbeddingResult};
 use crate::model_architectures::embedding::multimodal_embedding::MultiModalEmbeddingModel;
 use std::ffi::{c_char, CStr};

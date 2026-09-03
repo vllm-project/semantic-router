@@ -8,11 +8,11 @@
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 
 use crate::ffi::types::{
-    BatchSimilarityResult, EmbeddingDimensionContractResult, EmbeddingModelInfo,
-    EmbeddingModelsInfoResult, EmbeddingResult, EmbeddingSimilarityResult, MatryoshkaInfo,
-    SimilarityMatch,
+    BatchSimilarityResult, EmbeddingModelInfo, EmbeddingModelsInfoResult, EmbeddingResult,
+    EmbeddingSimilarityResult, MatryoshkaInfo, SimilarityMatch,
 };
 use crate::model_architectures::embedding::mmbert_embedding::MmBertEmbeddingModel;
+use ndarray::Array2;
 use parking_lot::Mutex;
 use std::ffi::{c_char, CStr, CString};
 use std::sync::OnceLock;
@@ -429,6 +429,69 @@ pub extern "C" fn calculate_embedding_similarity(
     0
 }
 
+unsafe fn parse_candidates<'a>(
+    candidates: *const *const c_char,
+    num_candidates: usize,
+) -> Option<Vec<&'a str>> {
+    let mut candidate_strs = Vec::with_capacity(num_candidates);
+    for index in 0..num_candidates {
+        let candidate_ptr = unsafe { *candidates.add(index) };
+        if candidate_ptr.is_null() {
+            eprintln!("Error: null candidate at index {index}");
+            return None;
+        }
+        let candidate = unsafe { CStr::from_ptr(candidate_ptr) };
+        match candidate.to_str() {
+            Ok(value) => candidate_strs.push(value),
+            Err(error) => {
+                eprintln!("Error: invalid UTF-8 in candidate {index}: {error}");
+                return None;
+            }
+        }
+    }
+    Some(candidate_strs)
+}
+
+fn rank_similarities(embeddings: &Array2<f32>, top_k: i32) -> Vec<SimilarityMatch> {
+    let query_embedding = embeddings.row(0);
+    let mut similarities = Vec::with_capacity(embeddings.nrows().saturating_sub(1));
+    for (index, candidate_embedding) in embeddings.outer_iter().skip(1).enumerate() {
+        let dot_product: f32 = query_embedding
+            .iter()
+            .zip(candidate_embedding.iter())
+            .map(|(a, b)| a * b)
+            .sum();
+        let norm_query = query_embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
+        let norm_candidate = candidate_embedding
+            .iter()
+            .map(|x| x * x)
+            .sum::<f32>()
+            .sqrt();
+        let similarity = if norm_query > 0.0 && norm_candidate > 0.0 {
+            dot_product / (norm_query * norm_candidate)
+        } else {
+            0.0
+        };
+        similarities.push((index, similarity));
+    }
+    similarities.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+
+    let candidate_count = similarities.len();
+    let result_count = if top_k <= 0 || top_k as usize > candidate_count {
+        candidate_count
+    } else {
+        top_k as usize
+    };
+    similarities
+        .into_iter()
+        .take(result_count)
+        .map(|(index, similarity)| SimilarityMatch {
+            index: index as i32,
+            similarity,
+        })
+        .collect()
+}
+
 /// Calculate batch similarity: find top-k most similar candidates for a query
 ///
 /// # Parameters
@@ -471,30 +534,13 @@ pub extern "C" fn calculate_similarity_batch(
         }
     };
 
-    // Parse candidates
-    let mut candidate_strs = Vec::with_capacity(num_candidates as usize);
-    for i in 0..num_candidates {
-        let candidate_ptr = unsafe { *candidates.offset(i as isize) };
-        if candidate_ptr.is_null() {
-            eprintln!("Error: null candidate at index {}", i);
-            unsafe {
-                *result = BatchSimilarityResult::default();
-            }
+    let candidate_strs = match unsafe { parse_candidates(candidates, num_candidates as usize) } {
+        Some(values) => values,
+        None => {
+            unsafe { *result = BatchSimilarityResult::default() };
             return -1;
         }
-
-        let candidate_str = unsafe {
-            match CStr::from_ptr(candidate_ptr).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    eprintln!("Error: invalid UTF-8 in candidate {}: {}", i, e);
-                    *result = BatchSimilarityResult::default();
-                    return -1;
-                }
-            }
-        };
-        candidate_strs.push(candidate_str);
-    }
+    };
 
     // Get model
     let model_lock = match GLOBAL_MMBERT_MODEL.get() {
@@ -539,54 +585,7 @@ pub extern "C" fn calculate_similarity_batch(
         }
     };
 
-    // Extract query embedding (first one)
-    let query_embedding = embeddings.row(0);
-
-    // Calculate similarities with all candidates
-    let mut similarities = Vec::with_capacity(num_candidates as usize);
-    for i in 0..num_candidates as usize {
-        let candidate_embedding = embeddings.row(i + 1);
-
-        // Cosine similarity
-        let dot_product: f32 = query_embedding
-            .iter()
-            .zip(candidate_embedding.iter())
-            .map(|(a, b)| a * b)
-            .sum();
-        let norm_query: f32 = query_embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
-        let norm_candidate: f32 = candidate_embedding
-            .iter()
-            .map(|x| x * x)
-            .sum::<f32>()
-            .sqrt();
-
-        let similarity = if norm_query > 0.0 && norm_candidate > 0.0 {
-            dot_product / (norm_query * norm_candidate)
-        } else {
-            0.0
-        };
-
-        similarities.push((i, similarity));
-    }
-
-    // Sort by similarity (descending)
-    similarities.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-
-    // Take top-k
-    let k = if top_k <= 0 || top_k > num_candidates {
-        num_candidates as usize
-    } else {
-        top_k as usize
-    };
-
-    let top_matches: Vec<SimilarityMatch> = similarities
-        .iter()
-        .take(k)
-        .map(|(idx, sim)| SimilarityMatch {
-            index: *idx as i32,
-            similarity: *sim,
-        })
-        .collect();
+    let top_matches = rank_similarities(&embeddings, top_k);
 
     let num_matches = top_matches.len() as i32;
     let matches_ptr = Box::into_raw(top_matches.into_boxed_slice()) as *mut SimilarityMatch;
@@ -610,136 +609,10 @@ pub extern "C" fn calculate_similarity_batch(
 // Information Functions
 // ============================================================================
 
-fn append_supported_dimension(dimensions: &mut Vec<i32>, dimension: usize) {
-    if dimension > 0 && dimension <= i32::MAX as usize {
-        let dimension = dimension as i32;
-        if !dimensions.contains(&dimension) {
-            dimensions.push(dimension);
-        }
-    }
-}
-
-pub(crate) fn write_embedding_dimension_contract(
-    result: *mut EmbeddingDimensionContractResult,
-    model_name: &str,
-    native_dimension: usize,
-    declared_dimensions: &[usize],
-) -> i32 {
-    if result.is_null()
-        || native_dimension == 0
-        || native_dimension > i32::MAX as usize
-        || declared_dimensions
-            .iter()
-            .any(|dimension| *dimension == 0 || *dimension > i32::MAX as usize)
-    {
-        if !result.is_null() {
-            unsafe {
-                *result = EmbeddingDimensionContractResult::default();
-            }
-        }
-        return -1;
-    }
-
-    let mut supported_dimensions = Vec::with_capacity(declared_dimensions.len() + 1);
-    append_supported_dimension(&mut supported_dimensions, native_dimension);
-    for dimension in declared_dimensions {
-        append_supported_dimension(&mut supported_dimensions, *dimension);
-    }
-
-    let model_name = match CString::new(model_name) {
-        Ok(value) => value.into_raw(),
-        Err(_) => {
-            unsafe {
-                *result = EmbeddingDimensionContractResult::default();
-            }
-            return -1;
-        }
-    };
-    let num_supported_dimensions = supported_dimensions.len() as i32;
-    let supported_dimensions = Box::into_raw(supported_dimensions.into_boxed_slice()) as *mut i32;
-
-    unsafe {
-        *result = EmbeddingDimensionContractResult {
-            model_name,
-            native_dimension: native_dimension as i32,
-            supported_dimensions,
-            num_supported_dimensions,
-            error: false,
-        };
-    }
-
-    0
-}
-
-/// Return the dimension contract of the loaded mmBERT model.
-#[allow(clippy::not_unsafe_ptr_arg_deref)]
-#[no_mangle]
-pub extern "C" fn get_embedding_dimension_contract(
-    model_type: *const c_char,
-    result: *mut EmbeddingDimensionContractResult,
-) -> i32 {
-    if model_type.is_null() || result.is_null() {
-        return -1;
-    }
-
-    let model_type = unsafe {
-        match CStr::from_ptr(model_type).to_str() {
-            Ok(value) => {
-                let normalized = value.trim().to_ascii_lowercase();
-                match normalized.as_str() {
-                    "" | "bert" | "mmbert" => "mmbert".to_string(),
-                    other => {
-                        eprintln!("ERROR: unsupported ONNX embedding model type: {other}");
-                        *result = EmbeddingDimensionContractResult::default();
-                        return -1;
-                    }
-                }
-            }
-            Err(_) => {
-                *result = EmbeddingDimensionContractResult::default();
-                return -1;
-            }
-        }
-    };
-
-    let model_lock = match GLOBAL_MMBERT_MODEL.get() {
-        Some(model) => model,
-        None => {
-            eprintln!("ERROR: mmBERT embedding model is not loaded");
-            unsafe {
-                *result = EmbeddingDimensionContractResult::default();
-            }
-            return -1;
-        }
-    };
+pub(crate) fn loaded_embedding_dimension_contract() -> Option<(usize, Vec<usize>)> {
+    let model_lock = GLOBAL_MMBERT_MODEL.get()?;
     let model = model_lock.lock();
-    let native_dimension = model.embedding_dimension();
-    let supported_dimensions = model.matryoshka_dimensions();
-
-    write_embedding_dimension_contract(result, &model_type, native_dimension, &supported_dimensions)
-}
-
-/// Free a dimension contract returned by `get_embedding_dimension_contract`.
-#[allow(clippy::not_unsafe_ptr_arg_deref)]
-#[no_mangle]
-pub extern "C" fn free_embedding_dimension_contract(result: *mut EmbeddingDimensionContractResult) {
-    if result.is_null() {
-        return;
-    }
-
-    unsafe {
-        let contract = &mut *result;
-        if !contract.model_name.is_null() {
-            let _ = CString::from_raw(contract.model_name);
-        }
-        if !contract.supported_dimensions.is_null() && contract.num_supported_dimensions > 0 {
-            let _ = Box::from_raw(std::ptr::slice_from_raw_parts_mut(
-                contract.supported_dimensions,
-                contract.num_supported_dimensions as usize,
-            ));
-        }
-        *contract = EmbeddingDimensionContractResult::default();
-    }
+    Some((model.embedding_dimension(), model.matryoshka_dimensions()))
 }
 
 /// Get information about the loaded mmBERT model
