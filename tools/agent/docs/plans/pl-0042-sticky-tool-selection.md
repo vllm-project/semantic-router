@@ -107,17 +107,48 @@ it. Kept in sync by hand if the issue's completion signal changes.
       (`TestToolSessionStoreCanonicalRoundTrip`) mutates the clone and
       asserts the original is untouched). `RouterConfig.ToolSessions` added
       in `config.go`. Reference-config coverage in
-      `reference_config_global_test.go` plus a disabled `tool_sessions:`
-      sample in `config/config.yaml` (redis sub-block shown for field
-      coverage only, matching `vector_store`'s established
-      exhaustive-not-self-consistent precedent — not itself a
-      `Validate()`-passing combination as configured, same as
-      `vector_store`'s multiple simultaneous backend blocks aren't either).
-      `Validate()` is defined but intentionally has no caller yet, matching
-      `VectorStoreConfig.Validate()`'s own precedent (called from
-      `routerruntime/vectorstore_runtime.go` at store-construction time, not
-      from a central config validator) — wiring a caller belongs to the
-      task that actually constructs the sessiontools store (TASK-03/04).
+      `reference_config_global_test.go` plus a `tool_sessions:` sample in
+      `config/config.yaml`.
+
+      **Review round 2, both landed together because the first makes the
+      second load-bearing, not optional:**
+      1. `validateGlobalToolSessionsContracts` added to
+         `globalConfigContractValidators` in `validator.go`, so an invalid
+         `global.stores.tool_sessions` now fails at config admission
+         (`ParseYAMLBytes`), not only at a later direct `.Validate()` call.
+         Correcting what this entry said before landing this: it is *not*
+         matching `VectorStoreConfig.Validate()`'s precedent —
+         `VectorStoreConfig` has no entry in `globalConfigContractValidators`
+         at all (confirmed by grep) and is called only from
+         `routerruntime/vectorstore_runtime.go` at store-construction time.
+         This instead matches the more common shape most other entries in
+         that list already use (e.g. `validateAdvancedToolFilteringConfig`)
+         — admission-time, fail-fast. `VectorStoreConfig` is the outlier,
+         not the pattern.
+      2. The `config/config.yaml` sample changed from `backend: local` with
+         a present-but-inert `redis:` block to a self-consistent
+         `backend: redis` (matching `response_api`'s real
+         `store_backend: redis` sample, not `vector_store`'s
+         multiple-simultaneous-backends shape — `local` has no
+         backend-specific sub-block of its own needing separate coverage,
+         so unlike `vector_store` there was never a field-coverage reason
+         for the old shape). This wasn't just style: once (1) landed,
+         `TestReferenceConfigUsesStrictCanonicalSchema` — which calls
+         `ParseYAMLBytes` on the real `config/config.yaml` — would have
+         started failing against the old sample. Verified by running the
+         full `pkg/config` suite, not just the new/targeted tests, after
+         both changes landed together.
+      3. Hardened `validateBackendRedisContract` (whitespace-only
+         `redis.address` now rejected via `strings.TrimSpace`) and added a
+         `redis.database < 0` rejection.
+
+      Net effect on the TASK-03/04 note below: since admission now
+      guarantees any parsed `RouterConfig.ToolSessions` is already valid,
+      TASK-03/04 constructing the sessiontools store does *not* need its own
+      `Validate()` call the way `vectorstore_runtime.go` does for
+      `VectorStoreConfig` — that construction-time call exists there
+      specifically because nothing validates it earlier.
+
       **CLI/dashboard mirrors deliberately not added**, contrary to the
       original task wording: empirically confirmed (round-trip test against
       the live `UserConfig` Pydantic model) that `global` is an untyped
@@ -180,11 +211,14 @@ it. Kept in sync by hand if the issue's completion signal changes.
 TASK-03: `pkg/sessiontools` package — `state.go` (envelope + `ToolState`,
 decode validation, cloning), fingerprint helpers in `pkg/tools`
 (definition/catalog/policy/capability fingerprints, canonical JSON +
-SHA-256), in-memory `store_memory.go` (bounded LRU/idle-expiry). This is the
-first task that will actually call `ToolSessionStoreConfig.Validate()` and
-the `Effective*` helpers from TASK-02 — wire that call in wherever the
-in-memory store gets constructed, matching `vectorstore_runtime.go`'s
-precedent.
+SHA-256), in-memory `store_memory.go` (bounded LRU/idle-expiry). Update from
+TASK-02's review round: `ToolSessionStoreConfig.Validate()` is now wired
+into `globalConfigContractValidators`, so admission already guarantees any
+`RouterConfig.ToolSessions` reaching this task is valid — TASK-03 should
+consume the `Effective*` helpers when constructing the in-memory store, but
+does *not* need its own `Validate()` call the way `vectorstore_runtime.go`
+does for `VectorStoreConfig` (that exists specifically because nothing
+validates `VectorStoreConfig` earlier).
 
 TASK-01 and TASK-02 are both done and verified (build/vet/test green; full
 `pkg/config` suite, not just targeted tests, per the lesson from TASK-01's
