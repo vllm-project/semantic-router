@@ -120,6 +120,9 @@ export function normalizeModelReliability(value: unknown): ProviderReliability |
     'health_check_path',
     'health_check_interval',
     'health_check_timeout',
+    'request_timeout',
+    'stream_idle_timeout',
+    'connect_timeout',
   ] as const
   const numberFields = ['retry_count', 'consecutive_5xx', 'max_ejection_percent'] as const
 

@@ -35,6 +35,9 @@ providers:
         health_check_path: /health
         health_check_interval: 10s
         health_check_timeout: 2s
+        request_timeout: 120s
+        stream_idle_timeout: 30s
+        connect_timeout: 5s
       pricing:
         currency: USD
         prompt_per_1m: 0.18

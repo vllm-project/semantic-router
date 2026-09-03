@@ -2,6 +2,7 @@
 
 import json
 import math
+import re
 import warnings
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional
@@ -1586,6 +1587,35 @@ class ModelPricing(BaseModel):
     completion_per_1m: Optional[float] = Field(default=0.0, ge=0, allow_inf_nan=False)
 
 
+_DURATION_PATTERN = re.compile(r"^([0-9]+(?:\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$")
+
+
+def _parse_duration_seconds(duration_str: str) -> float:
+    if not isinstance(duration_str, str) or not duration_str.strip():
+        raise ValueError("duration string cannot be empty")
+    s = duration_str.strip()
+    if s in ("0", "0s", "0m", "0h", "0ms", "0us", "0ns"):
+        return 0.0
+    if not _DURATION_PATTERN.match(s):
+        raise ValueError(f"invalid duration format: {duration_str!r}")
+    total_seconds = 0.0
+    for match in re.finditer(r"([0-9]+(?:\.[0-9]+)?)(ns|us|µs|ms|s|m|h)", s):
+        val, unit = float(match.group(1)), match.group(2)
+        if unit == "ns":
+            total_seconds += val * 1e-9
+        elif unit in ("us", "µs"):
+            total_seconds += val * 1e-6
+        elif unit == "ms":
+            total_seconds += val * 1e-3
+        elif unit == "s":
+            total_seconds += val
+        elif unit == "m":
+            total_seconds += val * 60
+        elif unit == "h":
+            total_seconds += val * 3600
+    return total_seconds
+
+
 class ProviderReliability(BaseModel):
     """Generated Envoy reliability policy for one provider model."""
 
@@ -1600,6 +1630,33 @@ class ProviderReliability(BaseModel):
     health_check_path: Optional[str] = None
     health_check_interval: str = "10s"
     health_check_timeout: str = "2s"
+    request_timeout: Optional[str] = None
+    stream_idle_timeout: Optional[str] = None
+    connect_timeout: Optional[str] = None
+
+    @model_validator(mode="after")
+    def validate_timeouts(self) -> "ProviderReliability":
+        stream_idle_dur: Optional[float] = None
+        if self.stream_idle_timeout is not None:
+            stream_idle_dur = _parse_duration_seconds(self.stream_idle_timeout)
+            if stream_idle_dur < 0:
+                raise ValueError("stream_idle_timeout cannot be negative")
+
+        if self.request_timeout is not None:
+            req_dur = _parse_duration_seconds(self.request_timeout)
+            if req_dur < 0:
+                raise ValueError("request_timeout cannot be negative")
+            if req_dur == 0.0 and (stream_idle_dur is None or stream_idle_dur <= 0):
+                raise ValueError(
+                    "request_timeout cannot be 0 without a positive stream_idle_timeout"
+                )
+
+        if self.connect_timeout is not None:
+            conn_dur = _parse_duration_seconds(self.connect_timeout)
+            if conn_dur <= 0:
+                raise ValueError("connect_timeout must be greater than 0")
+
+        return self
 
 
 class Model(BaseModel):

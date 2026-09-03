@@ -375,7 +375,9 @@ func immediateProtocolError(status int) *llmprotocol.ProtocolError {
 		category, code, message = llmprotocol.ErrorRateLimited, "rate_limited", "rate limit exceeded"
 	case 499:
 		category, code, message = llmprotocol.ErrorInternal, "request_canceled", "request canceled"
-	case 502, 503, 504:
+	case 408, 504:
+		category, code, message = llmprotocol.ErrorUpstreamTimeout, "upstream_timeout", "model service timed out"
+	case 502, 503:
 		category, code, message = llmprotocol.ErrorUpstreamUnavailable, "upstream_unavailable", "model service unavailable"
 	}
 	return llmprotocol.NewError(category, code, message, nil)

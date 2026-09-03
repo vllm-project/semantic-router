@@ -27,7 +27,7 @@ type CanonicalProviderModel struct {
 	ExternalModelIDs map[string]string     `yaml:"external_model_ids,omitempty"`
 }
 
-// ProviderReliability controls generated data-plane load balancing and retry behavior.
+// ProviderReliability controls generated data-plane load balancing, retry, and timeout behavior.
 type ProviderReliability struct {
 	LBPolicy            string `yaml:"lb_policy,omitempty"`
 	RetryCount          int    `yaml:"retry_count,omitempty"`
@@ -38,6 +38,9 @@ type ProviderReliability struct {
 	HealthCheckPath     string `yaml:"health_check_path,omitempty"`
 	HealthCheckInterval string `yaml:"health_check_interval,omitempty"`
 	HealthCheckTimeout  string `yaml:"health_check_timeout,omitempty"`
+	RequestTimeout      string `yaml:"request_timeout,omitempty"`
+	StreamIdleTimeout   string `yaml:"stream_idle_timeout,omitempty"`
+	ConnectTimeout      string `yaml:"connect_timeout,omitempty"`
 }
 
 // CanonicalBackendRef defines one physical backend target for a provider model.

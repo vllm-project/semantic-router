@@ -2740,6 +2740,34 @@ func TestUpstreamStatusIncrements4xx5xxCounters(t *testing.T) {
 	if !(after4xx > before4xx) {
 		t.Fatalf("expected upstream_4xx to increase for model m: before=%v after=%v", before4xx, after4xx)
 	}
+
+	// 504 -> timeout (typed outcome instead of unlabeled upstream_5xx)
+	hdrs504 := &ext_proc.ProcessingRequest_ResponseHeaders{
+		ResponseHeaders: &ext_proc.HttpHeaders{
+			Headers: &core.HeaderMap{Headers: []*core.HeaderValue{{Key: ":status", Value: "504"}}},
+		},
+	}
+
+	beforeTimeout := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "m"})
+	_, _ = r.HandleResponseHeaders(hdrs504, ctx)
+	afterTimeout := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "m"})
+	if !(afterTimeout > beforeTimeout) {
+		t.Fatalf("expected timeout to increase for model m on 504: before=%v after=%v", beforeTimeout, afterTimeout)
+	}
+
+	// 408 -> timeout
+	hdrs408 := &ext_proc.ProcessingRequest_ResponseHeaders{
+		ResponseHeaders: &ext_proc.HttpHeaders{
+			Headers: &core.HeaderMap{Headers: []*core.HeaderValue{{Key: ":status", Value: "408"}}},
+		},
+	}
+
+	beforeTimeout408 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "m"})
+	_, _ = r.HandleResponseHeaders(hdrs408, ctx)
+	afterTimeout408 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "m"})
+	if !(afterTimeout408 > beforeTimeout408) {
+		t.Fatalf("expected timeout to increase for model m on 408: before=%v after=%v", beforeTimeout408, afterTimeout408)
+	}
 }
 
 type MockResponseStore struct {

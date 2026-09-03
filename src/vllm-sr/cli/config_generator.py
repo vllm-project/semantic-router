@@ -129,7 +129,16 @@ def generate_envoy_config_from_user_config(
             if model.api_format == "anthropic" and _uses_shared_anthropic_cluster(
                 model
             ):
-                anthropic_models.append({"name": model.name})
+                anthropic_models.append(
+                    {
+                        "name": model.name,
+                        "reliability": (
+                            model.reliability.model_dump()
+                            if model.reliability is not None
+                            else {}
+                        ),
+                    }
+                )
                 if log_summary:
                     log.info(
                         f"  Anthropic model: {model.name} "
