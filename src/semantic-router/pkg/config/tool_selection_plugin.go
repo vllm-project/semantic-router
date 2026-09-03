@@ -60,8 +60,7 @@ type StickyToolSelectionConfig struct {
 	// max_new_tools_per_turn: 0 is valid and means "no relevance-driven
 	// growth, reuse and call-pinning only". A plain int's zero value cannot
 	// carry either distinction from "the field was omitted". See PL-0042
-	// task notes and the code-review record in
-	// .ai/issue3347/3_implementation_record_sonnet_5.md.
+	// task notes (tools/agent/docs/plans/pl-0042-sticky-tool-selection.md).
 	MaxTools           *int  `json:"max_tools,omitempty" yaml:"max_tools,omitempty"`
 	MaxNewToolsPerTurn *int  `json:"max_new_tools_per_turn,omitempty" yaml:"max_new_tools_per_turn,omitempty"`
 	PinCalledTools     *bool `json:"pin_called_tools,omitempty" yaml:"pin_called_tools,omitempty"`
