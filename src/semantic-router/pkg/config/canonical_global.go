@@ -203,26 +203,7 @@ func resolveCanonicalGlobal(override *CanonicalGlobal, rawOverride *StructuredPa
 		return CanonicalGlobal{}, fmt.Errorf("failed to merge global override: %w", err)
 	}
 	categoryModel := &resolved.ModelCatalog.Modules.Classifier.Domain.CategoryModel
-	if rawDomain := rawCanonicalCategoryOverride(rawOverride); rawDomain != nil {
-		if hasRawKey(rawDomain, "backend") && !hasActiveRawCategoryLocalSelector(rawDomain) {
-			// The canonical default is a local mmBERT variant. A remote backend
-			// supplied by a sparse override must replace that inherited local
-			// selector, otherwise the merged value is rejected as a mixed local /
-			// remote configuration. Do this only when backend is present in the
-			// raw override: an unrelated sparse module override must preserve the
-			// inherited local default.
-			categoryModel.Variant = ""
-			categoryModel.UseModernBERT = false
-			categoryModel.UseMmBERT32K = false
-		}
-		if !hasRawKey(rawDomain, "variant") &&
-			(hasRawKey(rawDomain, "use_modernbert") || hasRawKey(rawDomain, "use_mmbert_32k")) {
-			// A sparse legacy override must be able to replace the canonical
-			// default variant, including the explicit false/false form used to
-			// clear it.
-			categoryModel.Variant = ""
-		}
-	}
+	applyLegacyCategoryOverride(categoryModel, rawCanonicalCategoryOverride(rawOverride))
 	if err := normalizeCanonicalCategoryVariant(categoryModel); err != nil {
 		return CanonicalGlobal{}, err
 	}
@@ -230,6 +211,35 @@ func resolveCanonicalGlobal(override *CanonicalGlobal, rawOverride *StructuredPa
 		return CanonicalGlobal{}, err
 	}
 	return resolved, nil
+}
+
+// applyLegacyCategoryOverride clears an inherited canonical category-model
+// selector when a sparse raw override supplies a legacy key that must
+// replace it. Extracted out of resolveCanonicalGlobal (unchanged behavior)
+// to keep that function within the repository's cyclomatic-complexity
+// budget (agent-lint cyclop); rawDomain may be nil.
+func applyLegacyCategoryOverride(categoryModel *CategoryModel, rawDomain map[string]interface{}) {
+	if rawDomain == nil {
+		return
+	}
+	if hasRawKey(rawDomain, "backend") && !hasActiveRawCategoryLocalSelector(rawDomain) {
+		// The canonical default is a local mmBERT variant. A remote backend
+		// supplied by a sparse override must replace that inherited local
+		// selector, otherwise the merged value is rejected as a mixed local /
+		// remote configuration. Do this only when backend is present in the
+		// raw override: an unrelated sparse module override must preserve the
+		// inherited local default.
+		categoryModel.Variant = ""
+		categoryModel.UseModernBERT = false
+		categoryModel.UseMmBERT32K = false
+	}
+	if !hasRawKey(rawDomain, "variant") &&
+		(hasRawKey(rawDomain, "use_modernbert") || hasRawKey(rawDomain, "use_mmbert_32k")) {
+		// A sparse legacy override must be able to replace the canonical
+		// default variant, including the explicit false/false form used to
+		// clear it.
+		categoryModel.Variant = ""
+	}
 }
 
 // normalizeCanonicalCategoryVariant resolves legacy selectors after a sparse
@@ -290,7 +300,23 @@ func applyCanonicalGlobal(cfg *RouterConfig, global *CanonicalGlobal) error {
 	if global == nil {
 		return nil
 	}
+	applyCanonicalGlobalRouter(cfg, global)
+	applyCanonicalGlobalServices(cfg, global)
+	applyCanonicalGlobalStores(cfg, global)
+	applyCanonicalGlobalIntegrations(cfg, global)
+	applyCanonicalGlobalModelCatalog(cfg, global)
+	return nil
+}
 
+// applyCanonicalGlobalRouter, applyCanonicalGlobalServices,
+// applyCanonicalGlobalStores, applyCanonicalGlobalIntegrations, and
+// applyCanonicalGlobalModelCatalog are extracted out of applyCanonicalGlobal
+// (unchanged behavior) along the same Router/Services/Stores/Integrations/
+// ModelCatalog axis CanonicalGlobal is itself composed of, to keep
+// applyCanonicalGlobal within the repository's function-length budget
+// (agent-lint funlen).
+
+func applyCanonicalGlobalRouter(cfg *RouterConfig, global *CanonicalGlobal) {
 	cfg.ConfigSource = global.Router.ConfigSource
 	cfg.Strategy = global.Router.Strategy
 	cfg.AutoModelName = global.Router.AutoModelName
@@ -306,7 +332,9 @@ func applyCanonicalGlobal(cfg *RouterConfig, global *CanonicalGlobal) error {
 	cfg.SkipProcessing = global.Router.SkipProcessing
 	cfg.ModelSelection = global.Router.ModelSelection
 	cfg.RouterLearning = global.Router.Learning
+}
 
+func applyCanonicalGlobalServices(cfg *RouterConfig, global *CanonicalGlobal) {
 	cfg.API = global.Services.API
 	cfg.ResponseAPI = global.Services.ResponseAPI
 	cfg.Observability = global.Services.Observability
@@ -315,15 +343,21 @@ func applyCanonicalGlobal(cfg *RouterConfig, global *CanonicalGlobal) error {
 	cfg.ManagementAPI = global.Services.ManagementAPI
 	cfg.RouterReplay = global.Services.RouterReplay
 	cfg.StartupStatus = global.Services.StartupStatus
+}
 
+func applyCanonicalGlobalStores(cfg *RouterConfig, global *CanonicalGlobal) {
 	cfg.SemanticCache = global.Stores.ResponseCache
 	cfg.Memory = global.Stores.Memory
 	cfg.VectorStore = global.Stores.VectorStore
 	cfg.ToolSessions = global.Stores.ToolSessions
+}
 
+func applyCanonicalGlobalIntegrations(cfg *RouterConfig, global *CanonicalGlobal) {
 	cfg.Tools = global.Integrations.Tools
 	cfg.Looper = global.Integrations.Looper
+}
 
+func applyCanonicalGlobalModelCatalog(cfg *RouterConfig, global *CanonicalGlobal) {
 	cfg.ExternalModels = append([]ExternalModelConfig(nil), global.ModelCatalog.External...)
 	cfg.EmbeddingModels = global.ModelCatalog.Embeddings.Semantic
 	cfg.KnowledgeBases = append([]KnowledgeBaseConfig(nil), global.ModelCatalog.KBs...)
@@ -336,8 +370,6 @@ func applyCanonicalGlobal(cfg *RouterConfig, global *CanonicalGlobal) error {
 	cfg.FeedbackDetector = global.ModelCatalog.Modules.FeedbackDetector.FeedbackDetectorConfig
 	cfg.ModalityDetector = global.ModelCatalog.Modules.ModalityDetector
 	cfg.ModelAdmission = cloneAdmissionMap(global.ModelCatalog.Admission)
-
-	return nil
 }
 
 func cloneAdmissionMap(admission map[string]AdmissionConfig) map[string]AdmissionConfig {

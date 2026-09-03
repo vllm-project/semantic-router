@@ -283,7 +283,53 @@ it. Kept in sync by hand if the issue's completion signal changes.
       against the actual constant before writing the row, rather than
       copying the term other memory-backed rows in that same table happen
       to use for their own (differently-named) backends.
-- [ ] `TASK-06` Phase exit: `make agent-ci-gate CHANGED_FILES="<phase-1 files>"`.
+- [x] `TASK-06` Phase exit: ran the real `make agent-ci-gate
+      CHANGED_FILES="<phase-1 files>"` (not a hand-assembled equivalent),
+      via Docker-proxying `go`/`gofmt`/`golangci-lint` wrapper scripts on
+      `PATH` since this sandbox has no local Go toolchain. Found and fixed
+      three genuine `golangci-lint` findings this branch introduced or
+      exposed (`cyclop`/`funlen` over budget in `canonical_global.go` and
+      `session_transition.go` — all fixed with behavior-preserving
+      extract-function refactors) and two genuine structure-check findings
+      (a stray `tools/agent/docs/...` path in a `tool_selection_plugin.go`
+      doc comment — the same class of mistake corrected earlier this
+      session for `.ai/` paths, recurring in a spot that pass hadn't
+      touched; and `dslSchemas.ts` landing 1 line over the repo's 800-line
+      cap, fixed by dropping one non-essential field and reflowing, landing
+      at exactly 800 — a non-blocking `WARN`, not an `ERROR`). All of the
+      above are real, verified, fixed.
+
+      `agent-lint`, the reference-config contract lint, `agent-validate`
+      (145 tests), `vllm-sr-test` (40 tests, 0 failures), and
+      `recipe-conformance-static` (50 tests) all pass clean.
+
+      **One gate step cannot complete in this sandbox, for a reason
+      structurally unrelated to this branch:** `make test-semantic-router`
+      runs `go test ./...` across the whole module. ~16 packages spanning
+      totally unrelated subsystems (`cmd`, `apiserver`, `cache`,
+      `classification`, `looper`, `memory`, `modelruntime`,
+      `routerruntime`, `services`, plus `extproc`/`tools`/`vectorstore`)
+      all fail identically at binary-load time with
+      `libcandle_semantic_router.so: cannot open shared object file` —
+      zero tests execute in any of them. `candle-binding` is a Rust crate
+      needing `cargo build --release`; this bare `golang:1.25` Docker
+      sandbox has no Rust toolchain and never built one (every prior
+      task's verification section this session documents the same
+      missing-native-artifact class of gap for
+      `pkg/extproc`/`pkg/tools`/`cmd/*`). This would fail identically on a
+      clean `main` checkout — it is not a regression.
+      Confirmed the packages this branch actually touches that *can*
+      execute did: `pkg/config` and `pkg/sessiontools` both report `ok`;
+      `pkg/extproc` and `pkg/tools` are in the failure list only because
+      the missing `.so` stops their test binary before a single test runs,
+      not because of any assertion failure.
+
+      Per explicit user decision (asked directly, since this determines
+      whether Phase 1's exit gate is considered satisfied): recorded as
+      done with this caveat rather than left open. A real CI run or a full
+      local dev environment (with `candle-binding`/`ml-binding`/
+      `nlp-binding` built) should confirm `make test-semantic-router`
+      before this is taken as a substitute for that signal.
 
 ### Phase 2 — Deterministic local sticky selection
 
@@ -312,32 +358,36 @@ it. Kept in sync by hand if the issue's completion signal changes.
 
 ## Next Action
 
-TASK-06: run the Phase 1 exit gate,
-`make agent-ci-gate CHANGED_FILES="<every phase-1 file>"`. This is the
-last item before Phase 1 is complete — TASK-01 through TASK-05 are all
-done.
+Phase 1 is complete — TASK-01 through TASK-06 are all done (see TASK-06's
+own entry above for the exit-gate run, what it found and fixed, and the
+one sandbox-only caveat it left: `make test-semantic-router` couldn't
+complete end-to-end here because ~16 unrelated packages module-wide fail
+to even link a test binary without a `candle-binding` native artifact this
+Docker sandbox has no Rust toolchain to build — not a regression from this
+branch, and confirmed the packages this branch actually touches that
+*could* execute their tests did pass).
 
-Once TASK-06 passes, Phase 2 begins with TASK-07: refactor
-`runSemanticToolSelection` / `runToolSelectionPluginAdd` /
-`runToolSelectionPluginFilter` to return `toolSelectionResult` and share
-one finalizer. That finalizer is the first real caller of
-`ResolveStickyToolIdentity` (TASK-04) and `sessiontools.NewMemoryStore`
-(TASK-03's constructor, not yet invoked anywhere) — construct the store
-once at router-generation build time, gated on at least one normalized
-recipe decision enabling `tool_selection.sticky` (construct no store at
-all otherwise, per this plan's Operating Rules), and call
-`ResolveStickyToolIdentity` per request to get the `QuotaKey`/`StorageKey`
-before touching the store.
+Phase 2 begins with **TASK-07**: refactor `runSemanticToolSelection` /
+`runToolSelectionPluginAdd` / `runToolSelectionPluginFilter` to return
+`toolSelectionResult` and share one finalizer. That finalizer is the first
+real caller of `ResolveStickyToolIdentity` (TASK-04) and
+`sessiontools.NewMemoryStore` (TASK-03's constructor, not yet invoked
+anywhere) — construct the store once at router-generation build time,
+gated on at least one normalized recipe decision enabling
+`tool_selection.sticky` (construct no store at all otherwise, per this
+plan's Operating Rules), and call `ResolveStickyToolIdentity` per request
+to get the `QuotaKey`/`StorageKey` before touching the store.
 
-TASK-01 through TASK-05 are all done and verified. Verification depth
-varies by what this sandbox can actually execute for each package:
-`pkg/config` (TASK-01/02) and `pkg/sessiontools`/`pkg/tools` (TASK-03) got
-real `go test` runs, `pkg/sessiontools` additionally race-clean via
+Verification depth across Phase 1 varied by what this sandbox can actually
+execute for each package: `pkg/config` (TASK-01/02) and
+`pkg/sessiontools`/`pkg/tools` (TASK-03) got real `go test` runs,
+`pkg/sessiontools` additionally race-clean via
 `go test ./pkg/sessiontools/... -race`; `pkg/extproc` (TASK-04, and the
 extproc-touching pieces of earlier tasks) has never been able to link a
-test binary in this sandbox — confirmed again for TASK-04, not just
-assumed — so `go build`/`go vet` (which do fully type-check test files) are
-its verification ceiling here; CI or a full local dev environment needs to
+test binary in this sandbox — confirmed again for TASK-04 and again for
+TASK-06's real `make test-semantic-router` run, not just assumed — so
+`go build`/`go vet` (which do fully type-check test files) are its
+verification ceiling here; CI or a full local dev environment needs to
 actually run `pkg/extproc`'s tests before merge. Deviations from each
 task's literal spec are documented inline in their respective task entries
 above and in the touched code's own comments, not only here.

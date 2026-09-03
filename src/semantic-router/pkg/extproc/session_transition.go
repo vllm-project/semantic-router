@@ -51,10 +51,7 @@ func populateSessionTransitionFields(ctx *RequestContext) {
 
 	if ctx.SemanticRequest == nil || len(ctx.SemanticRequest.Messages) == 0 {
 		if ctx.SessionID == "" {
-			if sid := deriveSessionIDFromRequestID(ctx); sid != "" {
-				ctx.SessionID = sid
-				ctx.SessionProvenance = SessionProvenanceRequestID
-			}
+			setSessionIDFromRequestIDFallback(ctx)
 		}
 		return
 	}
@@ -161,13 +158,23 @@ func populateSemanticSessionIDIfNeeded(ctx *RequestContext) {
 		ctx.SessionProvenance = SessionProvenanceMessageHash
 	}
 	if ctx.SessionID == "" {
-		if sid := deriveSessionIDFromRequestID(ctx); sid != "" {
-			ctx.SessionID = sid
-			ctx.SessionProvenance = SessionProvenanceRequestID
-		}
+		setSessionIDFromRequestIDFallback(ctx)
 	}
 	if ctx.SessionID == "" {
 		logging.Debugf("Session: could not derive session ID for chat completion request")
+	}
+}
+
+// setSessionIDFromRequestIDFallback assigns ctx.SessionID and its
+// SessionProvenanceRequestID provenance from the neutral request ID when a
+// derived ID is available; a no-op otherwise. Extracted out of its two call
+// sites above (unchanged behavior) so the request-ID fallback's branch is
+// paid for once, keeping populateSessionTransitionFields within the
+// repository's cyclomatic-complexity budget (agent-lint cyclop).
+func setSessionIDFromRequestIDFallback(ctx *RequestContext) {
+	if sid := deriveSessionIDFromRequestID(ctx); sid != "" {
+		ctx.SessionID = sid
+		ctx.SessionProvenance = SessionProvenanceRequestID
 	}
 }
 
