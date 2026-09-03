@@ -91,6 +91,16 @@ def test_milvus_data_path_is_safe_when_workspace_contains_spaces() -> None:
     assert 'rm -rf "$(MILVUS_DATA_DIR)"' in content
 
 
+def test_memory_harness_keeps_loopback_binding_out_of_legacy_milvus_defaults() -> None:
+    milvus_make = MILVUS_MK_PATH.read_text(encoding="utf-8")
+    script = MEMORY_INTEGRATION_PATH.read_text(encoding="utf-8")
+
+    assert "MILVUS_BIND_HOST ?=" in milvus_make
+    assert "MILVUS_PUBLISH_HOST = $(if $(MILVUS_BIND_HOST)," in milvus_make
+    assert "-p 127.0.0.1:$(MILVUS_PORT):19530" not in milvus_make
+    assert 'MILVUS_BIND_HOST="127.0.0.1"' in script
+
+
 def test_cli_integration_uses_an_isolated_runtime_stack() -> None:
     content = DOCKER_MK_PATH.read_text(encoding="utf-8")
     target = content.split("vllm-sr-test-integration:", 1)[1].split(

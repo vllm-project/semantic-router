@@ -256,6 +256,7 @@ else
 fi
 make -C "${REPO_ROOT}" start-milvus \
     MILVUS_CONTAINER_NAME="${MILVUS_CONTAINER_NAME}" \
+    MILVUS_BIND_HOST="127.0.0.1" \
     MILVUS_PORT="${MILVUS_PORT}" \
     MILVUS_HEALTH_PORT="${MILVUS_HEALTH_PORT}" \
     MILVUS_DATA_DIR="${TEST_DIR}/milvus-data" \

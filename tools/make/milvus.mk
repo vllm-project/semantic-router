@@ -5,12 +5,14 @@
 ##@ Milvus
 
 MILVUS_CONTAINER_NAME ?= milvus-semantic-cache
+MILVUS_BIND_HOST ?=
 MILVUS_PORT ?= 19530
 MILVUS_HEALTH_PORT ?= 9091
 MILVUS_DATA_DIR ?= /tmp/milvus-data
 MILVUS_STACK_NAME ?=
 MILVUS_RUN_ID ?=
 MILVUS_LABEL_ARGS = $(if $(MILVUS_STACK_NAME),--label com.vllm.semantic-router.managed=true --label com.vllm.semantic-router.stack=$(MILVUS_STACK_NAME) $(if $(MILVUS_RUN_ID),--label com.vllm.semantic-router.run=$(MILVUS_RUN_ID),),)
+MILVUS_PUBLISH_HOST = $(if $(MILVUS_BIND_HOST),$(MILVUS_BIND_HOST):,)
 
 # Milvus container management
 start-milvus: ## Start Milvus container for testing
@@ -25,8 +27,8 @@ start-milvus: ## Start Milvus container for testing
 		-e ETCD_CONFIG_PATH=/milvus/configs/advanced/etcd.yaml \
 		-e COMMON_STORAGETYPE=local \
 		-e CLUSTER_ENABLED=false \
-		-p 127.0.0.1:$(MILVUS_PORT):19530 \
-		-p 127.0.0.1:$(MILVUS_HEALTH_PORT):9091 \
+		-p $(MILVUS_PUBLISH_HOST)$(MILVUS_PORT):19530 \
+		-p $(MILVUS_PUBLISH_HOST)$(MILVUS_HEALTH_PORT):9091 \
 		-v "$(MILVUS_DATA_DIR):/var/lib/milvus:z" \
 		milvusdb/milvus:v2.3.3 \
 		milvus run standalone
