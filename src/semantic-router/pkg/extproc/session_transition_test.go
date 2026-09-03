@@ -13,6 +13,7 @@ import (
 func TestPopulateSessionTransitionFieldsUsesRetainedObjectHistory(t *testing.T) {
 	ctx := &RequestContext{ResponseObjectState: &ResponseObjectState{
 		ConversationID:     "conv-123",
+		SessionTrackingID:  "respapi:conversation:conv-123",
 		PreviousResponseID: "resp-abc",
 		ConversationHistory: []*responseapi.StoredResponse{
 			{Model: "model-a", Usage: &responseapi.Usage{InputTokens: 100, OutputTokens: 50}},
@@ -20,9 +21,26 @@ func TestPopulateSessionTransitionFieldsUsesRetainedObjectHistory(t *testing.T) 
 		},
 	}}
 	populateSessionTransitionFields(ctx)
-	if ctx.SessionID != "conv-123" || ctx.PreviousResponseID != "resp-abc" ||
+	if ctx.SessionID != "respapi:conversation:conv-123" || ctx.PreviousResponseID != "resp-abc" ||
 		ctx.PreviousModel != "model-b" || ctx.TurnIndex != 2 || ctx.HistoryTokenCount != 180 {
 		t.Fatalf("object session state = %+v", ctx)
+	}
+}
+
+// TestPopulateSessionTransitionFieldsUsesTrackingIDWhenConversationEmpty
+// covers a previous_response_id-only continuation: ConversationID is empty
+// (strict external membership), but ctx.SessionID must still come from the
+// non-empty internal SessionTrackingID rather than going blank.
+func TestPopulateSessionTransitionFieldsUsesTrackingIDWhenConversationEmpty(t *testing.T) {
+	ctx := &RequestContext{ResponseObjectState: &ResponseObjectState{
+		ConversationID:      "",
+		SessionTrackingID:   "respapi:lineage:resp-root",
+		PreviousResponseID:  "resp-abc",
+		ConversationHistory: []*responseapi.StoredResponse{{Model: "model-a"}},
+	}}
+	populateSessionTransitionFields(ctx)
+	if ctx.SessionID != "respapi:lineage:resp-root" {
+		t.Fatalf("session id = %q, want internal tracking id despite empty ConversationID", ctx.SessionID)
 	}
 }
 
