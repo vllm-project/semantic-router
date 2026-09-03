@@ -96,8 +96,8 @@ func testEventRouting(ctx context.Context, client *kubernetes.Clientset, opts pk
 			correctTests, totalTests, accuracy)
 	}
 
-	if correctTests == 0 {
-		return fmt.Errorf("event routing test failed: 0%% accuracy (0/%d correct)", totalTests)
+	if correctTests != totalTests {
+		return fmt.Errorf("event routing test failed: %d/%d correct", correctTests, totalTests)
 	}
 
 	return nil
