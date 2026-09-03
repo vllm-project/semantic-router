@@ -20,7 +20,7 @@ const (
 	// time, which carries no response plugin. Only the response-stage decision
 	// composed of the same keyword AND the response-direction jailbreak rule
 	// has a block action, so a 403 proves the composition drove it.
-	responseJailbreakComposeProbe    = "vsr-response-compose-probe"
+	responseJailbreakComposeProbe    = "__response_compose_probe__"
 	responseJailbreakComposeDecision = "response_jailbreak_compose_block"
 )
 
