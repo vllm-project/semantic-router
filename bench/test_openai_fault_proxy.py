@@ -277,6 +277,13 @@ def test_fault_proxy_phase_inference_targets_tool_loops():
     assert fault.phase_from_text("This follows an idle pause") == "idle_boundary"
 
 
+def test_encode_http_chunk_uses_hex_size_and_crlf_delimiters():
+    fault = load_fault_proxy_module()
+    payload = b"data: ok\n\n"
+
+    assert fault.encode_http_chunk(payload) == b"a\r\ndata: ok\n\n\r\n"
+
+
 def test_fault_proxy_paces_and_shapes_sse_frames():
     fault = load_fault_proxy_module()
     upstream, upstream_thread = start_server(UpstreamSSEHandler)

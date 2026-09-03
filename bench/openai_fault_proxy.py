@@ -21,6 +21,9 @@ HTTP_OK = 200
 HTTP_BAD_GATEWAY = 502
 HTTP_UNAVAILABLE = 503
 SESSION_HEADER = "x-session-id"
+# HTTP/1.1 chunked-transfer framing uses CRLF and a final zero-sized chunk.
+HTTP_LINE_ENDING = b"\r\n"
+HTTP_CHUNKED_BODY_END = b"0" + HTTP_LINE_ENDING * 2
 HOP_BY_HOP_HEADERS = {
     "connection",
     "content-length",
@@ -222,13 +225,11 @@ class FaultProxyHandler(BaseHTTPRequestHandler):
             if index > 0 and interval > 0:
                 time.sleep(interval)
             self.write_chunk(frame)
-        self.wfile.write(b"0\r\n\r\n")
+        self.wfile.write(HTTP_CHUNKED_BODY_END)
         self.wfile.flush()
 
     def write_chunk(self, payload: bytes) -> None:
-        self.wfile.write(f"{len(payload):x}\r\n".encode("ascii"))
-        self.wfile.write(payload)
-        self.wfile.write(b"\r\n")
+        self.wfile.write(encode_http_chunk(payload))
         self.wfile.flush()
 
     def send_json(
@@ -292,6 +293,12 @@ def filtered_headers(headers: Any) -> dict[str, str]:
 
 def is_sse_response(headers: Any) -> bool:
     return "text/event-stream" in headers.get("Content-Type", "").lower()
+
+
+def encode_http_chunk(payload: bytes) -> bytes:
+    """Frame one payload for HTTP/1.1 chunked transfer encoding."""
+    size = f"{len(payload):x}".encode("ascii")
+    return b"".join((size, HTTP_LINE_ENDING, payload, HTTP_LINE_ENDING))
 
 
 def split_sse_frames(payload: bytes) -> list[bytes]:
