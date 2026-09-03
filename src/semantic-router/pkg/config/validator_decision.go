@@ -28,40 +28,6 @@ func validateDecisionContracts(cfg *RouterConfig) error {
 	return validateDecisionPluginContracts(cfg)
 }
 
-func validateDecisionModelContracts(cfg *RouterConfig) error {
-	for _, decision := range cfg.AllRoutingDecisions() {
-		if err := validateDecisionRuleNode(cfg, decision.Name, &decision.Rules, true); err != nil {
-			return err
-		}
-		warnUnguardedClassifierConditions(decision)
-		if err := validateDecisionAnnotations(decision); err != nil {
-			return err
-		}
-		if err := validateDecisionModelRefs(cfg, decision); err != nil {
-			return err
-		}
-		if err := validateDecisionAction(cfg, decision); err != nil {
-			return err
-		}
-		if err := validateDecisionAlgorithmConfig(decision.Name, decision.ModelRefs, decision.Algorithm); err != nil {
-			return err
-		}
-		if err := validateDecisionPromptModel(cfg, decision); err != nil {
-			return err
-		}
-		if err := validateDecisionWorkflowModelRefs(decision); err != nil {
-			return err
-		}
-		if err := validateDecisionCandidateIterations(decision); err != nil {
-			return err
-		}
-		if err := validateDecisionOutputContractSpec(decision); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func validateDecisionRuleNode(cfg *RouterConfig, decisionName string, node *RuleNode, root bool) error {
 	if node == nil {
 		return nil

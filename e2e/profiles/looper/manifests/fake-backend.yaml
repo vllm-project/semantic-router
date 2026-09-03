@@ -6,7 +6,27 @@ metadata:
 data:
   server.py: |
     import json
+    import threading
+    import time
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    # ThreadingHTTPServer dispatches each request on its own thread, so the
+    # counter needs a lock: the panel calls several models concurrently and an
+    # unprotected dict would drop increments exactly when a test needs them.
+    DISPATCH_LOCK = threading.Lock()
+    DISPATCH_COUNTS = {}
+
+    def record_dispatch(model):
+        with DISPATCH_LOCK:
+            DISPATCH_COUNTS[model] = DISPATCH_COUNTS.get(model, 0) + 1
+
+    def dispatch_snapshot():
+        with DISPATCH_LOCK:
+            return dict(DISPATCH_COUNTS)
+
+    def reset_dispatch():
+        with DISPATCH_LOCK:
+            DISPATCH_COUNTS.clear()
 
     RESPONSES = {
         "ratings-model-a": ("answer-from-ratings-model-a", 3, 2),
@@ -14,6 +34,10 @@ data:
         "confidence-model-low": ("private-low-confidence-candidate", 5, 2),
         "confidence-model-high": ("selected-high-confidence-answer", 7, 3),
         "fusion-panel-valid": ("usable-fusion-panel-answer", 11, 3),
+        "fusion-fallback-target": ("fusion-quorum-fallback-answer", 13, 5),
+        # Succeeds on purpose. The budget gate must refuse this target before it
+        # is ever dispatched, so seeing this string proves the gate regressed.
+        "fusion-fallback-tiny-window": ("fusion-tiny-window-dispatched", 13, 5),
     }
 
     FUSION_SYNTHESIZED_ANSWER = "unexpected-fusion-synthesized-answer"
@@ -37,9 +61,20 @@ data:
             if self.path == "/health":
                 self.send_json(200, {"status": "ok"})
                 return
+            # Test-only introspection. This is the acceptance oracle for whether
+            # a model was actually called, which no response body can establish:
+            # a regression that invokes the judge and discards its output is
+            # invisible from the client side but visible here.
+            if self.path == "/test/calls":
+                self.send_json(200, {"calls": dispatch_snapshot()})
+                return
             self.send_json(404, {"error": {"message": "not found"}})
 
         def do_POST(self):
+            if self.path == "/test/reset":
+                reset_dispatch()
+                self.send_json(200, {"status": "reset"})
+                return
             if self.path != "/v1/chat/completions":
                 self.send_json(404, {"error": {"message": "not found"}})
                 return
@@ -54,6 +89,9 @@ data:
                 return
 
             model = payload.get("model")
+            # Count the dispatch before any branch can sleep, fail, or return, so
+            # a slow or erroring model is still recorded as having been called.
+            record_dispatch(model)
             if model == "fusion-panel-empty":
                 self.send_json(200, {
                     "id": "chatcmpl-looper-e2e-fusion-panel-empty",
@@ -70,6 +108,26 @@ data:
                 return
             if model == "fusion-panel-fail":
                 self.send_json(502, {"error": {"message": "synthetic panel failure"}})
+                return
+            if model == "fusion-fallback-broken":
+                self.send_json(502, {"error": {"message": "synthetic fallback failure"}})
+                return
+            if model == "fusion-panel-slow":
+                # Outlives the decision's round_timeout_seconds so the panel
+                # deadline fires deterministically.
+                time.sleep(6)
+                self.send_json(200, {
+                    "id": "chatcmpl-looper-e2e-fusion-panel-slow",
+                    "object": "chat.completion",
+                    "created": 1,
+                    "model": model,
+                    "choices": [{
+                        "index": 0,
+                        "message": {"role": "assistant", "content": "too late"},
+                        "finish_reason": "stop",
+                    }],
+                    "usage": {"prompt_tokens": 9, "completion_tokens": 2, "total_tokens": 11},
+                })
                 return
             if model == "fusion-judge":
                 messages = payload.get("messages", [])

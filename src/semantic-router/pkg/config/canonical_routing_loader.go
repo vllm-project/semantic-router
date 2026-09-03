@@ -28,6 +28,7 @@ func ParseRoutingYAMLBytes(data []byte) (*RouterConfig, error) {
 	}
 
 	cfg := DefaultGlobalConfig()
+	cfg.RoutingFragmentOnly = true
 	cfg.Decisions = copyDecisions(doc.Routing.Decisions)
 	ensureModelRefDefaults(cfg.Decisions)
 	cfg.Signals = normalizeSignals(doc.Routing.Signals, cfg.Decisions)

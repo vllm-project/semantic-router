@@ -131,6 +131,15 @@ func (r *OpenAIRouter) handleLooperExecution(
 		return errorResponse, nil
 	}
 
+	// The looper's final model must land on the request context before the
+	// response headers are built. Runtime model selection has already put a
+	// preliminary panel candidate in VSRSelectedModel, and appendLooperRoutingFacts
+	// prefers that value, so building headers first would advertise a panel model
+	// as the responder even when a fallback target produced the answer.
+	reqCtx.RequestModel = resp.Model
+	reqCtx.VSRSelectedModel = resp.Model
+	reqCtx.VSRSelectionMethod = resp.AlgorithmType
+
 	response, semanticResponse, clientBody, err := r.prepareLooperResponse(resp, reqCtx)
 	if err != nil {
 		logging.ComponentErrorEvent("extproc", "looper_response_encode_failed", map[string]interface{}{
@@ -138,11 +147,33 @@ func (r *OpenAIRouter) handleLooperExecution(
 			"format":     reqCtx.SourceFormat,
 			"error":      err.Error(),
 		})
-		return r.createErrorResponse(502, "Looper returned an invalid response"), nil
+		// Encoding failed, so an error response is returned instead of the
+		// recovered fallback.
+		// Promote the terminal disposition first, then route through the shared
+		// failure recorder. That helper is what actually creates the Replay
+		// record: the usage, status, body, and quorum writers all no-op while
+		// RouterReplayID is empty, so recording evidence without starting Replay
+		// would persist nothing and return no Replay ID header.
+		finalizeLooperQuorumOutcome(reqCtx, resp.QuorumOutcome, decision, false)
+		return r.recordLooperFailure(
+			reqCtx, request.Model, decision, 502,
+			"Looper returned an invalid response", "looper_response_encode_failed",
+			looperFailureEvidence{
+				algorithm:    resp.AlgorithmType,
+				modelsUsed:   resp.ModelsUsed,
+				iterations:   resp.Iterations,
+				usage:        resp.Usage,
+				fusionQuorum: resp.QuorumOutcome,
+			},
+		), nil
 	}
 	r.recordSuccessfulLooperExecution(
 		resp, request.Model, decision, reqCtx, semanticResponse, clientBody,
 	)
+	// Replay starts inside the recorder, so its ID only exists now. Attach it to
+	// the already-built immediate response, as the failure path does, otherwise a
+	// successful looper response omits the header for the record just created.
+	addRouterReplayHeaderToImmediateResponse(response, reqCtx.RouterReplayID)
 	return response, nil
 }
 
@@ -241,10 +272,10 @@ func (r *OpenAIRouter) recordSuccessfulLooperExecution(
 	semanticResponse *llmprotocol.Response,
 	clientBody []byte,
 ) {
-	// Update context with looper results
-	reqCtx.RequestModel = resp.Model
-	reqCtx.VSRSelectedModel = resp.Model
-	reqCtx.VSRSelectionMethod = resp.AlgorithmType
+	// Protocol encoding succeeded and the immediate response is about to be
+	// returned to Envoy, so promote a ready fallback to its terminal disposition
+	// and emit the single quorum metric.
+	finalizeLooperQuorumOutcome(reqCtx, resp.QuorumOutcome, decision, true)
 
 	// Capture router replay information if enabled. Detailed attempts remain in
 	// Replay; the public response surface keeps only aggregate Looper headers.
