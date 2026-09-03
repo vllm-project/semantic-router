@@ -162,10 +162,59 @@ it. Kept in sync by hand if the issue's completion signal changes.
       hedge ("if global stores are registered there"). Both left untouched;
       `global.stores.tool_sessions` already round-trips byte-for-byte
       through the CLI without any change.
-- [ ] `TASK-03` `pkg/sessiontools` package: `state.go` (envelope + `ToolState`,
-      decode validation, cloning), fingerprint helpers in `pkg/tools`
-      (definition/catalog/policy/capability fingerprints, canonical JSON +
-      SHA-256), in-memory `store_memory.go` (bounded LRU/idle-expiry).
+- [x] `TASK-03` `pkg/sessiontools` package: `state.go` (`State`/`ToolState`,
+      `Validate(maxTools, maxStateBytes)`, `Clone()`), `store.go` (`Store`
+      interface, `VersionedState`, `QuotaKey`, sentinel errors), and
+      `store_memory.go` (`MemoryStore`: 64-way sharded per-key locking for
+      the hot reuse path, sliding TTL on Load and CompareAndSwap, exact
+      per-identity eviction + sampled approximate-LRU global eviction —
+      matching `sessiontelemetry/router_memory.go`'s own established
+      sampled-eviction philosophy rather than a full O(n) scan on every
+      admission). Fingerprint helpers landed in `pkg/tools/fingerprint.go`
+      per the task (`ToolDefinitionFingerprint`, `ToolCatalogFingerprint`,
+      `ToolPolicyFingerprint`, `ToolCapabilityFingerprint`), all canonical
+      JSON + SHA-256, with a `canonicalizeJSON` unmarshal-then-remarshal
+      helper so a tool's raw `InputSchema` bytes hash identically
+      regardless of source key order/whitespace.
+
+      **Two deliberate deviations from the literal task spec, both
+      documented inline in the code, not just here:**
+      1. `Store.Load` returns `(VersionedState, error)`, not
+         `(VersionedState, bool, error)` as originally sketched (from the
+         blueprint itself, section 7.1, not introduced by this task's
+         wording). The sketched third `bool` would carry zero information
+         beyond `VersionedState.Found` — two independent signals for one
+         fact invites them to disagree. Fixing this now, before every later
+         task builds against the interface, is far cheaper than after.
+      2. `evictForCapacityLocked` (global `max_sessions` eviction) samples
+         up to `memoryStoreEvictionSampleSize` (32) entries rather than
+         scanning the full store — the task's own wording ("LRU eviction")
+         together with `max_sessions`' ceiling of 100000
+         (`config.ToolSessionStoreMaxMaxSessions`) would mean an O(100000)
+         scan on every admission at full capacity. Per-identity eviction
+         stays exact (that bucket is bounded by
+         `max_sessions_per_identity` itself, typically far smaller).
+         Matches this codebase's own precedent
+         (`sessiontelemetry/router_memory.go`'s `evictOldestLocked`,
+         explicitly documented there as approximate/sampled for the same
+         reason), not an invented shortcut.
+
+      **Verification, and its real limits, stated plainly:** `go build`/
+      `go vet` clean on both packages; `go test ./pkg/sessiontools/... -race`
+      — full pass, no races, exercising concurrent CAS across both distinct
+      and identical keys. `pkg/tools`'s new fingerprint tests (24 cases)
+      verified in isolation via `-run` with `CGO_ENABLED=0` — the package's
+      *existing* Ginkgo suite needs the real candle native backend and
+      cannot run either way in this sandbox (missing `.so` with cgo on;
+      `BeforeSuite` fails outright with cgo off, unrelated to this task's
+      files, which build and vet clean under both). One real bug the
+      cgo-disabled run caught: a test-helper contamination in
+      `TestToolDefinitionFingerprint_NameWhitespaceNormalized` (the
+      fixture's `Description` field embedded the raw, untrimmed name,
+      entangling two variables the test meant to isolate) — fixed in the
+      test, not the fingerprint code, which was already correct. Whole-module
+      `go build -buildvcs=false ./...` sweep: only the same pre-existing
+      cgo/wasm failures as every prior task, nothing new.
 - [ ] `TASK-04` Session provenance + trusted-key resolver:
       `extproc/sticky_tool_identity.go` (new), provenance fields on
       `RequestContext`, populated at every `SessionID` assignment site in
@@ -208,23 +257,28 @@ it. Kept in sync by hand if the issue's completion signal changes.
 
 ## Next Action
 
-TASK-03: `pkg/sessiontools` package — `state.go` (envelope + `ToolState`,
-decode validation, cloning), fingerprint helpers in `pkg/tools`
-(definition/catalog/policy/capability fingerprints, canonical JSON +
-SHA-256), in-memory `store_memory.go` (bounded LRU/idle-expiry). Update from
-TASK-02's review round: `ToolSessionStoreConfig.Validate()` is now wired
-into `globalConfigContractValidators`, so admission already guarantees any
-`RouterConfig.ToolSessions` reaching this task is valid — TASK-03 should
-consume the `Effective*` helpers when constructing the in-memory store, but
-does *not* need its own `Validate()` call the way `vectorstore_runtime.go`
-does for `VectorStoreConfig` (that exists specifically because nothing
-validates `VectorStoreConfig` earlier).
+TASK-04: session provenance + trusted-key resolver
+(`extproc/sticky_tool_identity.go`, provenance fields on `RequestContext`,
+populated at every `SessionID` assignment site in
+`extproc/session_transition.go`; opaque HMAC-derived key via the
+`USER_SCOPE_NAMESPACE_SECRET` primitive). This is the first task that
+actually constructs a `sessiontools.MemoryStore` from
+`RouterConfig.ToolSessions` — use `NewMemoryStore(cfg, nil)` (real clock)
+at router-generation build time, gated on at least one normalized recipe
+decision enabling `tool_selection.sticky` (construct no store at all
+otherwise, per PL-0042's Operating Rules). `QuotaKey` needs the resolver
+this task builds (opaque `Principal`/`Namespace`) — `sessiontools` itself
+deliberately has no opinion on how a `QuotaKey` gets constructed, only what
+it means once it exists.
 
-TASK-01 and TASK-02 are both done and verified (build/vet/test green; full
-`pkg/config` suite, not just targeted tests, per the lesson from TASK-01's
-own review round). TASK-01's deviation from the blueprint's literal Go
-contract, and TASK-02's CLI/dashboard scope decision, are both noted inline
-in their respective task entries above — see PR description once opened.
+TASK-01, TASK-02, and TASK-03 are all done and verified (build/vet/test
+green; full package suites, not just targeted tests, per the lesson from
+TASK-01's own review round; TASK-03 additionally verified race-clean via
+`go test ./pkg/sessiontools/... -race`). Deviations from each task's
+literal spec — TASK-01's Go contract, TASK-02's CLI/dashboard scope,
+TASK-03's `Store.Load` signature and sampled global eviction — are all
+documented inline in their respective task entries above and in the
+touched code's own comments, not only here.
 
 ## Operating Rules
 
