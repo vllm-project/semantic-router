@@ -58,6 +58,7 @@ func (r *OpenAIRouter) retrieveFromOpenAI(traceCtx context.Context, ctx *Request
 		baseURL,
 		openaiConfig.APIKey,
 		openaiConfig.MaxResponseBytes,
+		openaiConfig.GetTimeout(),
 	)
 
 	// Determine search parameters
