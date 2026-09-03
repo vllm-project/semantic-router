@@ -1,6 +1,24 @@
 package config
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
+
+// validateGlobalToolSessionsContracts is the globalConfigContractValidators
+// admission-time entry for global.stores.tool_sessions. Config parsing
+// (ParseYAMLBytes) fails closed on an invalid block, rather than only
+// failing later when TASK-03+'s sessiontools store actually gets
+// constructed — most entries in globalConfigContractValidators are
+// admission-time; VectorStoreConfig.Validate() is the outlier that's
+// called only at store-construction time
+// (routerruntime/vectorstore_runtime.go), not from this list.
+func validateGlobalToolSessionsContracts(cfg *RouterConfig) error {
+	if cfg == nil || cfg.ToolSessions == nil {
+		return nil
+	}
+	return cfg.ToolSessions.Validate()
+}
 
 // Validate enforces global.stores.tool_sessions's bounds and backend
 // contract. A nil receiver (the block omitted entirely) is valid — the
@@ -45,7 +63,7 @@ func (s *ToolSessionStoreConfig) validateBackendRedisContract(backend string) er
 		return nil
 	}
 	// backend == ToolSessionStoreBackendRedis
-	if s.Redis == nil || s.Redis.Address == "" {
+	if s.Redis == nil || strings.TrimSpace(s.Redis.Address) == "" {
 		return fmt.Errorf("tool_sessions store: redis.address is required when backend is %q", ToolSessionStoreBackendRedis)
 	}
 	return nil
@@ -73,9 +91,24 @@ func (s *ToolSessionStoreConfig) validateBounds() error {
 	); err != nil {
 		return err
 	}
-	return validateToolSessionStoreIntBound(
+	if err := validateToolSessionStoreIntBound(
 		s.TimeoutMs, "timeout_ms", ToolSessionStoreMinTimeoutMs, ToolSessionStoreMaxTimeoutMs,
-	)
+	); err != nil {
+		return err
+	}
+	return s.validateRedisDatabase()
+}
+
+// validateRedisDatabase rejects a negative redis.database. Unlike the
+// pointer-typed fields above, Database is a plain int with no explicit-vs-
+// unset ambiguity to guard against: 0 is both the zero value and Redis's
+// own default database, so there is no distinct "unset" state to default
+// away from — only a lower bound (no configured upper bound) to enforce.
+func (s *ToolSessionStoreConfig) validateRedisDatabase() error {
+	if s.Redis != nil && s.Redis.Database < 0 {
+		return fmt.Errorf("tool_sessions store: redis.database must be greater than or equal to 0")
+	}
+	return nil
 }
 
 // validateToolSessionStoreIntBound rejects an explicitly configured value

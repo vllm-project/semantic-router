@@ -1,6 +1,9 @@
 package config
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestToolSessionStoreEffectiveDefaults_NilAndOmitted(t *testing.T) {
 	var nilCfg *ToolSessionStoreConfig
@@ -147,6 +150,43 @@ func TestToolSessionStoreValidate_NumericBoundsRejectOutOfRange_Err(t *testing.T
 	}
 }
 
+func TestToolSessionStoreValidate_RedisAddressWhitespaceOnly_Err(t *testing.T) {
+	cfg := &ToolSessionStoreConfig{
+		Backend: ToolSessionStoreBackendRedis,
+		Redis:   &ToolSessionRedisConfig{Address: "   "},
+	}
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected error: whitespace-only redis.address must be rejected, not treated as present")
+	}
+}
+
+func TestToolSessionStoreValidate_RedisDatabaseNegative_Err(t *testing.T) {
+	cfg := &ToolSessionStoreConfig{
+		Backend: ToolSessionStoreBackendRedis,
+		Redis:   &ToolSessionRedisConfig{Address: "redis:6379", Database: -1},
+	}
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("expected error: negative redis.database")
+	}
+	const want = "tool_sessions store: redis.database must be greater than or equal to 0"
+	if err.Error() != want {
+		t.Fatalf("error = %q, want %q", err.Error(), want)
+	}
+}
+
+func TestToolSessionStoreValidate_RedisDatabaseZeroAndPositive_OK(t *testing.T) {
+	for _, db := range []int{0, 1, 15} {
+		cfg := &ToolSessionStoreConfig{
+			Backend: ToolSessionStoreBackendRedis,
+			Redis:   &ToolSessionRedisConfig{Address: "redis:6379", Database: db},
+		}
+		if err := cfg.Validate(); err != nil {
+			t.Fatalf("database=%d: %v", db, err)
+		}
+	}
+}
+
 // TestToolSessionStoreValidate_MaxSessionsByIdentityBoundedByMaxSessions
 // covers the cross-field bound: max_sessions_per_identity must not exceed
 // the *effective* max_sessions (explicit or defaulted), the same pattern
@@ -223,4 +263,49 @@ func TestToolSessionStoreCanonicalRoundTrip(t *testing.T) {
 	if got := cloneToolSessionStoreConfig(nil); got != nil {
 		t.Fatalf("cloning nil must return nil, got %+v", got)
 	}
+}
+
+// TestToolSessionStoreAdmission_InvalidConfigFailsConfigContracts covers
+// Finding 1: an invalid global.stores.tool_sessions must fail admission,
+// not only a direct call to ToolSessionStoreConfig.Validate(). Exercises
+// validateConfigContracts(cfg) directly (the same package-level unit-test
+// pattern config_test.go already uses for other contract validators)
+// rather than round-tripping through a full ParseYAMLBytes document: traced
+// the call chain (ParseYAMLBytes -> finalizeParsedConfig ->
+// validateConfigStructure -> validateConfigContracts ->
+// runConfigContractValidators(cfg, globalConfigContractValidators)) to
+// confirm this is the exact function ParseYAMLBytes itself calls, so
+// exercising it directly is equivalent without needing a large, fragile
+// fully-parseable YAML fixture just to reach one nested field.
+func TestToolSessionStoreAdmission_InvalidConfigFailsConfigContracts(t *testing.T) {
+	t.Run("invalid tool_sessions fails admission", func(t *testing.T) {
+		cfg := &RouterConfig{
+			ToolSessions: &ToolSessionStoreConfig{Backend: "postgres"},
+		}
+		err := validateConfigContracts(cfg)
+		if err == nil {
+			t.Fatal("expected admission to fail for an invalid tool_sessions backend")
+		}
+		if !strings.Contains(err.Error(), "tool_sessions store") {
+			t.Fatalf("error = %q, want it to name tool_sessions store", err.Error())
+		}
+	})
+
+	t.Run("valid tool_sessions passes admission", func(t *testing.T) {
+		cfg := &RouterConfig{
+			ToolSessions: &ToolSessionStoreConfig{
+				Backend: ToolSessionStoreBackendRedis,
+				Redis:   &ToolSessionRedisConfig{Address: "redis:6379"},
+			},
+		}
+		if err := validateConfigContracts(cfg); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	t.Run("omitted tool_sessions passes admission", func(t *testing.T) {
+		if err := validateConfigContracts(&RouterConfig{}); err != nil {
+			t.Fatal(err)
+		}
+	})
 }
