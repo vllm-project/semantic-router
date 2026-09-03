@@ -19,7 +19,7 @@ typedef struct {
     size_t num_supported_dimensions;
 } EmbeddingCapabilitiesV1;
 
-extern int32_t embedding_capabilities_v1(
+extern int32_t candle_embedding_capabilities_v1(
     const uint8_t* model_type,
     size_t model_type_len,
     EmbeddingCapabilitiesV1* result
@@ -42,7 +42,7 @@ func EmbeddingCapabilitiesFor(modelType string) (EmbeddingCapabilities, error) {
 	}
 
 	var result C.EmbeddingCapabilitiesV1
-	status := int(C.embedding_capabilities_v1(
+	status := int(C.candle_embedding_capabilities_v1(
 		(*C.uint8_t)(cModelType),
 		C.size_t(len(modelTypeBytes)),
 		&result,

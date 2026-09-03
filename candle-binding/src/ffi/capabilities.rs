@@ -105,7 +105,7 @@ fn descriptor_for(model_type: &str) -> Option<(u32, bool, u32)> {
 /// - `result` must reference writable memory for `EmbeddingCapabilitiesV1`.
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
-pub extern "C" fn embedding_capabilities_v1(
+pub extern "C" fn candle_embedding_capabilities_v1(
     model_type: *const u8,
     model_type_len: usize,
     result: *mut EmbeddingCapabilitiesV1,
@@ -150,7 +150,7 @@ mod tests {
 
     fn query(value: &[u8]) -> (i32, EmbeddingCapabilitiesV1) {
         let mut result = EmbeddingCapabilitiesV1::default();
-        let status = embedding_capabilities_v1(value.as_ptr(), value.len(), &mut result);
+        let status = candle_embedding_capabilities_v1(value.as_ptr(), value.len(), &mut result);
         (status, result)
     }
 
@@ -191,7 +191,7 @@ mod tests {
         let (status, _) = query(&[0xff]);
         assert_eq!(status, CAPABILITY_STATUS_INVALID_INPUT);
 
-        let status = embedding_capabilities_v1(b"qwen3".as_ptr(), 5, std::ptr::null_mut());
+        let status = candle_embedding_capabilities_v1(b"qwen3".as_ptr(), 5, std::ptr::null_mut());
         assert_eq!(status, CAPABILITY_STATUS_INVALID_INPUT);
     }
 }

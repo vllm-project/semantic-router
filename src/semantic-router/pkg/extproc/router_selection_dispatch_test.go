@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
@@ -150,7 +151,7 @@ func TestSelectionEmbeddingModelTypeDefersNormalization(t *testing.T) {
 		{"mixed case", "Qwen3", "Qwen3"},
 		{"padded whitespace", "  qwen3  ", "  qwen3  "},
 		{"already normalized", "mmbert", "mmbert"},
-		{"empty falls back to default", "", config.EmbeddingModelTypeQwen3},
+		{"empty falls back to binding default", "", string(candle_binding.DefaultEmbeddingModelType)},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

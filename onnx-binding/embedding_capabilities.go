@@ -50,7 +50,7 @@ type EmbeddingCapabilities struct {
 }
 
 var (
-	ErrBackendUnavailable    = errors.New("onnx: native backend unavailable (built without cgo)")
+	ErrBackendUnavailable    = errors.New("onnx: native backend unavailable for this build")
 	ErrUnsupportedModelType  = errors.New("unsupported embedding model type")
 	ErrMalformedCapabilities = errors.New("malformed embedding capabilities")
 )
