@@ -136,11 +136,40 @@ func buildOpenAIRouterFromConfig(cfg *config.RouterConfig) (*OpenAIRouter, error
 	if err := validateResponseCacheScopeSecret(cfg); err != nil {
 		return nil, err
 	}
+	if err := validateStickyToolSelectionSecret(cfg); err != nil {
+		return nil, err
+	}
 	components, err := buildRouterComponents(cfg)
 	if err != nil {
 		return nil, err
 	}
 	return components.buildRouter(), nil
+}
+
+// validateStickyToolSelectionSecret requires USER_SCOPE_NAMESPACE_SECRET
+// whenever any decision enables tool_selection.sticky.enabled (issue #3347,
+// PL-0042 section 2.4). Unlike validateResponseCacheScopeSecret just above,
+// this is unconditional — not gated on cfg.ManagementAPI.RemoteExposure.
+// Response-cache scoping without the secret degrades to a documented,
+// bounded fallback (a plain hash) that is merely weaker, not silently
+// wrong; sticky tool-set identity has no such acceptable degraded mode —
+// ResolveStickyToolIdentity (sticky_tool_identity.go) fails closed with no
+// fallback path at all when the secret is absent, so an unkeyed deployment
+// with sticky enabled would otherwise construct successfully and then
+// simply never activate sticky selection for any request, silently. Fail
+// at construction time instead, with an actionable error.
+func validateStickyToolSelectionSecret(cfg *config.RouterConfig) error {
+	if cfg == nil || cache.UserScopeSecretConfigured() {
+		return nil
+	}
+	for _, decision := range cfg.AllRoutingDecisions() {
+		plugin := decision.GetToolSelectionConfig()
+		if plugin == nil || plugin.Sticky == nil || !plugin.Sticky.Enabled {
+			continue
+		}
+		return fmt.Errorf("USER_SCOPE_NAMESPACE_SECRET is required when tool_selection sticky selection is enabled")
+	}
+	return nil
 }
 
 func validateResponseCacheScopeSecret(cfg *config.RouterConfig) error {

@@ -35,6 +35,39 @@ type EnhancedHallucinationInfo struct {
 	Spans      []EnhancedHallucinationSpan `json:"spans"`
 }
 
+// SessionProvenance identifies how RequestContext.SessionID was derived. A
+// closed enum: only the values declared below are valid, and callers must
+// not construct or compare against any other string. See
+// sticky_tool_identity.go for the trust boundary this exists to support.
+type SessionProvenance string
+
+const (
+	// SessionProvenanceNone means no session ID has been derived yet (the
+	// zero value).
+	SessionProvenanceNone SessionProvenance = ""
+	// SessionProvenanceResponseAPI: SessionID came from server-retained
+	// Response API state (ResponseObjectState.SessionTrackingID) — trusted.
+	SessionProvenanceResponseAPI SessionProvenance = "response_api"
+	// SessionProvenanceHeader: SessionID came from the client-supplied
+	// x-session-id header — trusted only because it is scoped inside
+	// AuthenticatedPrincipal's hard namespace by callers that need
+	// trust (a header alone is never authentication).
+	SessionProvenanceHeader SessionProvenance = "header"
+	// SessionProvenanceAnthropicPromptCache: SessionID came from Anthropic
+	// transport/body signals (x-claude-code-session-id or
+	// metadata.user_id) — client-influenced, not trusted for sticky state.
+	SessionProvenanceAnthropicPromptCache SessionProvenance = "anthropic_prompt_cache"
+	// SessionProvenanceMessageHash: SessionID is a derived fingerprint of
+	// message content/structure — a heuristic grouping signal, not an
+	// explicit session declaration; not trusted for sticky state.
+	SessionProvenanceMessageHash SessionProvenance = "message_hash"
+	// SessionProvenanceRequestID: SessionID is a per-request pseudo-session
+	// derived from the request ID — by construction never repeats across
+	// requests, so it cannot carry cross-turn state; not trusted for
+	// sticky state.
+	SessionProvenanceRequestID SessionProvenance = "request_id"
+)
+
 // RequestContext holds the context for processing a request.
 type RequestContext struct {
 	Headers   map[string]string
@@ -97,12 +130,26 @@ type RequestContext struct {
 	InflightToken uint64
 
 	// Session-aware transition metadata
-	SessionID           string  // Derived from ConversationID (Response API) or message hash (Chat Completions)
-	TurnIndex           int     // Number of prior turns in this session (0 = first turn)
-	PreviousModel       string  // Model used in the immediately preceding turn; empty on first turn
-	CacheWarmthEstimate float64 // [0,1] from EstimateCacheProbability; 0.5 = unknown
-	SessionIdleSeconds  float64 // Seconds since the last locally observed turn for this session
-	SessionIdleKnown    bool    // True when SessionIdleSeconds came from local session observation
+	SessionID string // Derived from ConversationID (Response API) or message hash (Chat Completions)
+	// SessionProvenance records how SessionID was derived. Only
+	// SessionProvenanceResponseAPI and SessionProvenanceHeader are trusted
+	// enough for session-scoped sticky tool-set selection (issue #3347) to
+	// bind state to — the others are heuristic/derived signals a caller
+	// could influence or collide, not an explicit session declaration. See
+	// ResolveStickyToolIdentity in sticky_tool_identity.go.
+	SessionProvenance SessionProvenance
+	// AuthenticatedPrincipal is the trusted gateway-authenticated user ID
+	// (from the configured authz header, via authHeaderUserID) — never a
+	// client-supplied or derived value. Empty when the request carries no
+	// trusted authentication. A header's mere presence is not
+	// authentication; this field must only ever be populated from the
+	// configured auth gateway header, never from request-body content.
+	AuthenticatedPrincipal string
+	TurnIndex              int     // Number of prior turns in this session (0 = first turn)
+	PreviousModel          string  // Model used in the immediately preceding turn; empty on first turn
+	CacheWarmthEstimate    float64 // [0,1] from EstimateCacheProbability; 0.5 = unknown
+	SessionIdleSeconds     float64 // Seconds since the last locally observed turn for this session
+	SessionIdleKnown       bool    // True when SessionIdleSeconds came from local session observation
 
 	// HistoryTokenCount is the estimated token count of conversation history,
 	// excluding the current turn. Source priority: provider usage accumulation
