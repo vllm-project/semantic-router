@@ -119,7 +119,7 @@ def _dashboard_management_extra_env(
 
 
 class K8sBackend:
-    """DeploymentBackend implementation for Kubernetes via Helm."""
+    """Kubernetes deployment backend implemented through Helm."""
 
     def __init__(
         self,
@@ -136,7 +136,7 @@ class K8sBackend:
         self.profile = profile
         self.chart_dir = chart_dir or self._find_chart_dir()
 
-    # -- DeploymentBackend interface ------------------------------------------
+    # -- Deployment operations ------------------------------------------------
 
     def deploy(
         self,

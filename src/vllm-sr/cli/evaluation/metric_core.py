@@ -45,11 +45,6 @@ def mean_with_count(values: Iterable[float]) -> tuple[float | None, int]:
     return sum(rows) / len(rows), len(rows)
 
 
-def _sum_available(values: Iterable[float | None]) -> float | None:
-    rows = [value for value in values if value is not None]
-    return canonical_ordered_float_sum(rows) if rows else None
-
-
 def complete_sum(values: Iterable[float | None]) -> float | None:
     """Sum a ledger only when every observation carries an explicit value."""
 

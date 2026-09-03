@@ -7,7 +7,6 @@ from typing import Any
 from cli.evaluation.contract_validation import derived_portable_id
 from cli.evaluation.contracts import CaseGrading, CaseVisible
 from cli.evaluation.http_client import EvaluationHTTPClient, HTTPResult
-from cli.evaluation.target_arm_resolution import resolve_target_arm
 from cli.evaluation.target_contracts import EvaluationTargetArm
 
 
@@ -113,14 +112,3 @@ def arm_accounting(
         + output_tokens * arm.output_cost_per_million_tokens_usd
     ) / 1_000_000
     return input_tokens, output_tokens, runtime_cost
-
-
-def result_accounting(
-    result: HTTPResult,
-    arms: tuple[EvaluationTargetArm, ...],
-) -> tuple[int | None, int | None, float | None]:
-    arm = resolve_target_arm(result.headers.get("x-vsr-selected-model"), arms)
-    if arm is None:
-        input_tokens, output_tokens = token_usage(result.payload)
-        return input_tokens, output_tokens, None
-    return arm_accounting(arm, result)

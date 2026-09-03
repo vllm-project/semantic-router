@@ -265,27 +265,6 @@ def write_candidate_recipes(artifact: dict[str, Any], output_dir: Path) -> None:
         )
 
 
-def summarize_recipe_learning_artifact(artifact: dict[str, Any]) -> str:
-    metrics = artifact["metrics"]["overall"]
-    findings = artifact["findings"]
-    lines = [
-        "Router Learning recipe analysis",
-        f"records: {artifact['metrics']['records']}",
-        f"learning coverage: {metrics['learning_coverage']:.2f}",
-        f"outcome coverage: {metrics['outcome_coverage']:.2f}",
-        f"switch rate: {metrics['switch_rate']:.2f}",
-        f"cache preservation: {metrics['cache_preservation']:.2f}",
-        f"cost savings: {metrics['cost_savings']:.6f}",
-        f"findings: {len(findings)}",
-        f"candidate recipes: {len(artifact['candidate_recipes'])}",
-    ]
-    for item in findings[:5]:
-        lines.append(
-            f"- [{item['severity']}] {item['decision']}: {item['type']} - {item['message']}"
-        )
-    return "\n".join(lines)
-
-
 @click.command("recipe-learning")
 @click.option(
     "--replay-file",

@@ -2,13 +2,9 @@
 
 import logging
 import os
-import time
-from http import HTTPStatus
-from importlib import import_module
 
 import yaml
 
-from cli.consts import DEFAULT_ENVOY_PORT
 from cli.terminal import TerminalLogHandler
 
 
@@ -58,89 +54,3 @@ def load_config(config_file):
     """Load and parse YAML config file."""
     with open(config_file) as f:
         return yaml.safe_load(f)
-
-
-def health_check_endpoint(url, timeout=5):
-    """
-    Check if an endpoint is healthy.
-
-    Args:
-        url: URL to check
-        timeout: Request timeout in seconds
-
-    Returns:
-        True if healthy, False otherwise
-    """
-    try:
-        requests = import_module("requests")
-        response = requests.get(url, timeout=timeout)
-        return response.status_code == HTTPStatus.OK
-    except Exception:
-        return False
-
-
-def wait_for_healthy(url, timeout=120, interval=2, logger=None):
-    """
-    Wait for an endpoint to become healthy.
-
-    Args:
-        url: URL to check
-        timeout: Maximum time to wait in seconds
-        interval: Check interval in seconds
-        logger: Logger instance
-
-    Returns:
-        True if healthy, False if timeout
-    """
-    if logger is None:
-        logger = get_logger(__name__)
-
-    start_time = time.time()
-    while time.time() - start_time < timeout:
-        if health_check_endpoint(url):
-            logger.info(f"Endpoint {url} is healthy")
-            return True
-        time.sleep(interval)
-
-    logger.error(f"✗ Endpoint {url} failed to become healthy after {timeout}s")
-    return False
-
-
-def stream_logs_from_file(log_file, follow=False):
-    """
-    Stream logs from a file.
-
-    Args:
-        log_file: Path to log file
-        follow: Whether to follow the file (tail -f behavior)
-    """
-    if not os.path.exists(log_file):
-        return
-
-    with open(log_file) as f:
-        # Read existing content
-        for line in f:
-            print(line, end="")
-
-        # Follow mode
-        if follow:
-            while True:
-                line = f.readline()
-                if line:
-                    print(line, end="")
-                else:
-                    time.sleep(0.1)
-
-
-def get_envoy_port(config):
-    """Get Envoy listen port from config or use default."""
-    # Try to read from listeners configuration
-    listeners = config.get("listeners", [])
-    if listeners and len(listeners) > 0:
-        # Get port from first listener
-        port = listeners[0].get("port")
-        if port:
-            return port
-
-    # Fall back to default
-    return DEFAULT_ENVOY_PORT

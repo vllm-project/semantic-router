@@ -37,17 +37,6 @@ class HTTPServiceEndpoint(StrictModel):
         return validate_http_origin(value, label="endpoint URL")
 
 
-class ModelArm(StrictModel):
-    schema_version: Literal[SCHEMA_VERSION] = SCHEMA_VERSION
-    id: str
-    model: str = Field(min_length=1)
-    endpoint: HTTPServiceEndpoint | None = None
-    input_cost_per_million_tokens_usd: float = Field(default=0, ge=0)
-    output_cost_per_million_tokens_usd: float = Field(default=0, ge=0)
-
-    _id = field_validator("id")(validate_portable_id)
-
-
 class PoolDefinition(StrictModel):
     schema_version: Literal[SCHEMA_VERSION] = SCHEMA_VERSION
     id: str

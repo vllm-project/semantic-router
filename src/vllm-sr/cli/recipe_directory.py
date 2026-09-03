@@ -6,12 +6,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 RECIPE_CONFIG_FILENAME = "config.yaml"
-RECIPE_SIBLING_FILENAMES = (
-    "metadata.yaml",
-    "probes.yaml",
-    "recipe.dsl",
-    "README.md",
-)
 
 
 class RecipeDirectoryError(ValueError):
