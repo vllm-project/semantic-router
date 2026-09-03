@@ -13,6 +13,8 @@
 #                                -> Podman fallback must kick in.
 #   explicit-docker-both-ready   Docker + Podman present, --runtime docker
 #                                -> Docker wins, Podman branch must not run.
+#   explicit-podman-both-ready   Docker + Podman present, --runtime podman
+#                                -> Podman wins, Docker detection must not run.
 #   skip                         --runtime skip -> no runtime.env written.
 
 set -u
@@ -71,6 +73,11 @@ case "$SCENARIO" in
     write_stub docker ready
     write_stub podman ready
     export VLLM_SR_RUNTIME="docker"
+    ;;
+  explicit-podman-both-ready)
+    write_stub docker ready
+    write_stub podman ready
+    export VLLM_SR_RUNTIME="podman"
     ;;
   skip)
     write_stub docker ready
