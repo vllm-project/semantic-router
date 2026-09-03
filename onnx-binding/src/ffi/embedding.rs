@@ -3,6 +3,10 @@
 //! This module provides Foreign Function Interface (FFI) functions for
 //! mmBERT embedding generation with 2D Matryoshka support using ONNX Runtime.
 
+// These exported C ABI functions validate raw pointers before dereferencing
+// them. Keep their signatures safe for existing cgo callers.
+#![allow(clippy::not_unsafe_ptr_arg_deref)]
+
 use crate::ffi::types::{
     BatchSimilarityResult, EmbeddingDimensionContractResult, EmbeddingModelInfo,
     EmbeddingModelsInfoResult, EmbeddingResult, EmbeddingSimilarityResult, MatryoshkaInfo,
@@ -307,21 +311,24 @@ pub extern "C" fn get_embeddings_batch(
             let processing_time_ms = start_time.elapsed().as_secs_f32() * 1000.0;
             let per_text_time = processing_time_ms / num_texts as f32;
 
-            for i in 0..num_texts as usize {
-                let embedding = embeddings.row(i).to_vec();
+            let results = unsafe { std::slice::from_raw_parts_mut(results, num_texts as usize) };
+            for ((text, embedding), result) in text_strs
+                .iter()
+                .zip(embeddings.outer_iter())
+                .zip(results.iter_mut())
+            {
+                let embedding = embedding.to_vec();
                 let length = embedding.len() as i32;
                 let data = Box::into_raw(embedding.into_boxed_slice()) as *mut f32;
 
-                unsafe {
-                    *results.offset(i as isize) = EmbeddingResult {
-                        data,
-                        length,
-                        error: false,
-                        model_type: 0, // mmbert
-                        sequence_length: text_strs[i].split_whitespace().count() as i32,
-                        processing_time_ms: per_text_time,
-                    };
-                }
+                *result = EmbeddingResult {
+                    data,
+                    length,
+                    error: false,
+                    model_type: 0, // mmbert
+                    sequence_length: text.split_whitespace().count() as i32,
+                    processing_time_ms: per_text_time,
+                };
             }
 
             0
@@ -329,10 +336,9 @@ pub extern "C" fn get_embeddings_batch(
         Err(e) => {
             eprintln!("Error: batch embedding generation failed: {:?}", e);
             // Set error for all results
-            for i in 0..num_texts as usize {
-                unsafe {
-                    *results.offset(i as isize) = create_error_result();
-                }
+            let results = unsafe { std::slice::from_raw_parts_mut(results, num_texts as usize) };
+            for result in results {
+                *result = create_error_result();
             }
             -1
         }
