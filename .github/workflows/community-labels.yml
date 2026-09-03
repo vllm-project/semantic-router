@@ -19,12 +19,13 @@ jobs:
   pull-request-state:
     name: Synchronize pull request state
     if: >-
-      (github.event_name == 'workflow_run'
+      github.repository == 'vllm-project/semantic-router'
+      && ((github.event_name == 'workflow_run'
       && (github.event.workflow_run.event == 'pull_request'
       || github.event.workflow_run.event == 'pull_request_review')
       && github.event.workflow_run.pull_requests[0] != null)
       || (github.event_name == 'check_suite'
-      && github.event.check_suite.pull_requests[0] != null)
+      && github.event.check_suite.pull_requests[0] != null))
     # Serialize duplicate lifecycle events for one PR without blocking other PRs
     # or the scheduled queue reconciliation job.
     concurrency:
@@ -50,7 +51,8 @@ jobs:
   pull-request-sweep:
     name: Reconcile pull request labels
     if: >-
-      github.event_name == 'schedule'
+      (github.repository == 'vllm-project/semantic-router'
+      && github.event_name == 'schedule')
       || github.event_name == 'workflow_dispatch'
     concurrency:
       group: community-label-sync-sweep
