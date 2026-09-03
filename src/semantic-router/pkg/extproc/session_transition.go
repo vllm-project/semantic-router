@@ -20,7 +20,7 @@ func populateSessionTransitionFields(ctx *RequestContext) {
 	}
 
 	if state := ctx.ResponseObjectState; state != nil {
-		ctx.SessionID = state.ConversationID
+		ctx.SessionID = state.SessionTrackingID
 		ctx.PreviousResponseID = state.PreviousResponseID
 		history := state.ConversationHistory
 		ctx.TurnIndex = len(history)

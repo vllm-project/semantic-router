@@ -25,6 +25,15 @@ repos:
 
   - repo: local
     hooks:
+      - id: deployment-support-matrix
+        name: deployment support matrix coverage
+        entry: python3 tools/ci/check_deployment_support_matrix.py
+        language: system
+        pass_filenames: false
+        files: ^(\.pre-commit-config\.yaml$|deploy/|config/runtime/|website/docs/installation/support-matrix\.md$|tools/ci/check_deployment_support_matrix\.py$|tools/ci/tests/test_deployment_support_matrix\.py$)
+
+  - repo: local
+    hooks:
       - id: shellcheck
         name: shellcheck
         entry: make shellcheck

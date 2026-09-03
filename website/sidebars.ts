@@ -34,6 +34,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'installation/installation',
         'installation/deployment-options',
+        'installation/support-matrix',
       ],
     },
     {
@@ -374,6 +375,7 @@ const sidebars: SidebarsConfig = {
           label: 'Workflows, Memory & Tools',
           items: [
             'proposals/router-flow-workflows',
+            'proposals/agent-based-routing',
             'proposals/deliberation-algorithms',
             'proposals/agentic-memory',
             'proposals/agentic-rag',
