@@ -10,6 +10,9 @@
 //!
 //! Based on: huggingface/candle @ candle-transformers/src/models/qwen3.rs
 
+use crate::model_architectures::attention::chunked_sdpa::{
+    chunked_sdpa, ChunkedSdpaConfig, ATTN_QUERY_BLOCK,
+};
 use crate::model_architectures::lora::LoRAAdapter;
 use candle_core::{DType, Device, Module, Result, Tensor};
 use candle_nn::{
@@ -209,7 +212,7 @@ impl Qwen3Attention {
         })
     }
 
-    fn forward(&mut self, x: &Tensor, attn_mask: Option<&Tensor>, offset: usize) -> Result<Tensor> {
+    fn forward(&mut self, x: &Tensor, offset: usize) -> Result<Tensor> {
         let (b, l, _) = x.dims3()?;
 
         // 1. Projections with LoRA
@@ -260,14 +263,18 @@ impl Qwen3Attention {
         let k = repeat_kv(k, self.num_kv_groups)?;
         let v = repeat_kv(v, self.num_kv_groups)?;
 
-        // 7. Attention score
-        let scale = 1.0 / (self.head_dim as f64).sqrt();
-        let mut scores = (q.matmul(&k.transpose(2, 3)?)? * scale)?;
-        if let Some(m) = attn_mask {
-            scores = scores.broadcast_add(m)?;
-        }
-        let probs = candle_nn::ops::softmax_last_dim(&scores)?;
-        let ctx = probs.matmul(&v)?;
+        // 7. Attention. The kernel walks the queries in blocks and masks causally
+        // against absolute positions, so a prefill and a decode step (`offset`
+        // cached keys ahead of `l` new queries) take the same path and the
+        // `(b, heads, l, offset + l)` score matrix is never materialized.
+        let cfg = ChunkedSdpaConfig {
+            block_size: ATTN_QUERY_BLOCK,
+            window: None,
+            causal: true,
+            scale: 1.0 / (self.head_dim as f64).sqrt(),
+            q_offset: offset,
+        };
+        let ctx = chunked_sdpa(&q, &k, &v, None, &cfg)?;
 
         // 8. Output projection with LoRA
         let reshaped = ctx.transpose(1, 2)?.reshape((b, l, self.hidden_size))?;
@@ -311,9 +318,9 @@ impl DecoderLayer {
         })
     }
 
-    fn forward(&mut self, x: &Tensor, mask: Option<&Tensor>, offset: usize) -> Result<Tensor> {
+    fn forward(&mut self, x: &Tensor, offset: usize) -> Result<Tensor> {
         let h = self.ln1.forward(x)?;
-        let h = self.self_attn.forward(&h, mask, offset)?;
+        let h = self.self_attn.forward(&h, offset)?;
         let x = (x + h)?;
         let h2 = self.ln2.forward(&x)?;
         let h2 = h2.apply(&self.mlp)?;
@@ -392,45 +399,13 @@ impl Model {
         Ok(prefix_len)
     }
 
-    fn causal_mask(
-        &self,
-        b: usize,
-        tgt: usize,
-        offset: usize,
-        sw: Option<usize>,
-    ) -> Result<Tensor> {
-        let minf = f32::NEG_INFINITY;
-        let mask: Vec<_> = (0..tgt)
-            .flat_map(|i| {
-                (0..(tgt + offset)).map(move |j| {
-                    let past_ok = j <= i + offset;
-                    let sw_ok = match sw {
-                        Some(w) => (i + offset) as i64 - j as i64 <= w as i64,
-                        None => true,
-                    };
-                    if past_ok && sw_ok {
-                        0.
-                    } else {
-                        minf
-                    }
-                })
-            })
-            .collect();
-        Tensor::from_slice(&mask, (b, 1, tgt, tgt + offset), &self.device)?.to_dtype(self.dtype)
-    }
-
     pub fn forward(&mut self, input: &Tensor, offset: usize) -> Result<Tensor> {
-        let (b, l) = input.dims2()?;
         let mut h = self.embed_tokens.forward(input)?;
 
-        let causal = if l == 1 {
-            None
-        } else {
-            Some(self.causal_mask(b, l, offset, None)?)
-        };
-
+        // Causal masking happens per query block inside each attention layer,
+        // against absolute positions, so no `(b, 1, l, offset + l)` mask is built.
         for layer in &mut self.layers {
-            h = layer.forward(&h, causal.as_ref(), offset)?;
+            h = layer.forward(&h, offset)?;
         }
         self.norm.forward(&h)
     }
@@ -523,5 +498,183 @@ impl ModelForCausalLM {
     /// Inject LoRA adapters into the base model
     pub fn inject_lora_adapters(&mut self, adapters: HashMap<String, Arc<LoRAAdapter>>) {
         self.base.inject_lora_adapters(adapters);
+    }
+}
+
+#[cfg(test)]
+mod chunked_attention_tests {
+    //! The kernel must reproduce the dense attention it replaced (issue #3382):
+    //! `(Q @ K^T) * scale` over the cached keys, `-inf` where `j > i + offset`,
+    //! softmax, `@ V`. A prefill in one call and the same tokens fed as a prefill
+    //! plus a decode step must agree with that reference.
+    use super::*;
+    use candle_core::IndexOp;
+
+    fn tiny_config() -> Config {
+        Config {
+            vocab_size: 32,
+            hidden_size: 16,
+            intermediate_size: 32,
+            num_hidden_layers: 1,
+            num_attention_heads: 4,
+            head_dim: 8,
+            attention_bias: false,
+            num_key_value_heads: 2,
+            max_position_embeddings: 1024,
+            sliding_window: None,
+            max_window_layers: 0,
+            tie_word_embeddings: false,
+            rope_theta: 10_000.0,
+            rms_norm_eps: 1e-6,
+            use_sliding_window: false,
+            hidden_act: Activation::Silu,
+        }
+    }
+
+    fn make_attention(cfg: &Config, device: &Device) -> Qwen3Attention {
+        let mut tensors: HashMap<String, Tensor> = HashMap::new();
+        let mut put = |name: &str, shape: (usize, usize)| {
+            tensors.insert(
+                name.to_string(),
+                Tensor::randn(0f32, 0.2f32, shape, device).unwrap(),
+            );
+        };
+        let (h, hd) = (cfg.hidden_size, cfg.head_dim);
+        put("q_proj.weight", (cfg.num_attention_heads * hd, h));
+        put("k_proj.weight", (cfg.num_key_value_heads * hd, h));
+        put("v_proj.weight", (cfg.num_key_value_heads * hd, h));
+        put("o_proj.weight", (h, cfg.num_attention_heads * hd));
+        for name in ["q_norm.weight", "k_norm.weight"] {
+            tensors.insert(
+                name.to_string(),
+                Tensor::randn(1f32, 0.1f32, hd, device).unwrap(),
+            );
+        }
+        let vb = VarBuilder::from_tensors(tensors, DType::F32, device);
+        let rotary = Arc::new(Qwen3RotaryEmbedding::new(DType::F32, cfg, device).unwrap());
+        Qwen3Attention::new(cfg, rotary, vb).unwrap()
+    }
+
+    /// The pre-migration forward for a full sequence at offset 0: projections,
+    /// per-head RMSNorm, RoPE, GQA repeat, then dense causal attention.
+    fn dense_reference(attn: &Qwen3Attention, xs: &Tensor) -> Tensor {
+        let (b, l, _) = xs.dims3().unwrap();
+        let (heads, kv, hd) = (attn.num_heads, attn.num_kv_heads, attn.head_dim);
+        let q = attn
+            .q_proj
+            .forward(xs)
+            .unwrap()
+            .reshape((b, l, heads, hd))
+            .unwrap()
+            .transpose(1, 2)
+            .unwrap();
+        let k = attn
+            .k_proj
+            .forward(xs)
+            .unwrap()
+            .reshape((b, l, kv, hd))
+            .unwrap()
+            .transpose(1, 2)
+            .unwrap();
+        let v = attn
+            .v_proj
+            .forward(xs)
+            .unwrap()
+            .reshape((b, l, kv, hd))
+            .unwrap()
+            .transpose(1, 2)
+            .unwrap();
+        let q = attn
+            .q_norm
+            .forward(&q.flatten(0, 2).unwrap())
+            .unwrap()
+            .reshape((b, heads, l, hd))
+            .unwrap();
+        let k = attn
+            .k_norm
+            .forward(&k.flatten(0, 2).unwrap())
+            .unwrap()
+            .reshape((b, kv, l, hd))
+            .unwrap();
+        let (q, k) = attn.rotary_emb.apply(&q, &k, 0).unwrap();
+        let k = repeat_kv(k.contiguous().unwrap(), attn.num_kv_groups).unwrap();
+        let v = repeat_kv(v.contiguous().unwrap(), attn.num_kv_groups).unwrap();
+        let scale = 1.0 / (hd as f64).sqrt();
+        let scores = (q.matmul(&k.transpose(2, 3).unwrap()).unwrap() * scale).unwrap();
+        let mut m = vec![0f32; l * l];
+        for i in 0..l {
+            for j in (i + 1)..l {
+                m[i * l + j] = f32::NEG_INFINITY;
+            }
+        }
+        let m = Tensor::from_vec(m, (1, 1, l, l), xs.device()).unwrap();
+        let probs = candle_nn::ops::softmax_last_dim(&scores.broadcast_add(&m).unwrap()).unwrap();
+        let ctx = probs
+            .matmul(&v)
+            .unwrap()
+            .transpose(1, 2)
+            .unwrap()
+            .reshape((b, l, attn.hidden_size))
+            .unwrap();
+        attn.o_proj.forward(&ctx).unwrap()
+    }
+
+    fn max_abs_diff(a: &Tensor, b: &Tensor) -> f32 {
+        (a - b)
+            .unwrap()
+            .abs()
+            .unwrap()
+            .flatten_all()
+            .unwrap()
+            .max(0)
+            .unwrap()
+            .to_scalar::<f32>()
+            .unwrap()
+    }
+
+    #[test]
+    fn test_prefill_and_decode_match_dense() {
+        let device = Device::Cpu;
+        let cfg = tiny_config();
+        let mut attn = make_attention(&cfg, &device);
+        for &(l, split) in &[(12usize, 7usize), (40, 33), (ATTN_QUERY_BLOCK + 88, 530)] {
+            let xs = Tensor::randn(0f32, 1f32, (1, l, cfg.hidden_size), &device).unwrap();
+            let want = dense_reference(&attn, &xs);
+
+            attn.clear_kv_cache();
+            let whole = attn.forward(&xs, 0).unwrap();
+            let diff = max_abs_diff(&whole, &want);
+            assert!(diff < 1e-4, "prefill l={}: max|Δ|={}", l, diff);
+
+            // The same tokens as a prefill of `split` and a decode step of the rest,
+            // the queries of which trail `split` cached keys.
+            attn.clear_kv_cache();
+            let head = attn.forward(&xs.i((.., ..split)).unwrap(), 0).unwrap();
+            let tail = attn.forward(&xs.i((.., split..)).unwrap(), split).unwrap();
+            let pieced = Tensor::cat(&[head, tail], 1).unwrap();
+            let diff = max_abs_diff(&pieced, &want);
+            assert!(
+                diff < 1e-4,
+                "prefill {}+decode {}: max|Δ|={}",
+                split,
+                l - split,
+                diff
+            );
+
+            // One token at a time past the cache, the way generation runs.
+            attn.clear_kv_cache();
+            let mut rows = vec![attn.forward(&xs.i((.., ..split)).unwrap(), 0).unwrap()];
+            for t in split..l {
+                rows.push(attn.forward(&xs.i((.., t..t + 1)).unwrap(), t).unwrap());
+            }
+            let stepped = Tensor::cat(&rows, 1).unwrap();
+            let diff = max_abs_diff(&stepped, &want);
+            assert!(
+                diff < 1e-4,
+                "token-by-token decode l={}: max|Δ|={}",
+                l,
+                diff
+            );
+        }
     }
 }

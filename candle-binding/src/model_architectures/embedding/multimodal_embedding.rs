@@ -21,6 +21,9 @@
 //! - `audio_encoder.encoder.*` → Whisper encoder weights
 
 use crate::core::{config_errors, from_candle_error, UnifiedError, UnifiedResult};
+use crate::model_architectures::attention::chunked_sdpa::{
+    chunked_sdpa, ChunkedSdpaConfig, ATTN_QUERY_BLOCK,
+};
 use crate::model_architectures::embedding::pooling::mean_pool;
 use crate::model_architectures::traits::{
     EmbeddingPathSpecialization, LongContextEmbeddingCapable, ModelType, PoolingMethod,
@@ -259,14 +262,17 @@ impl BertSelfAttention {
             .reshape((b, seq_len, self.num_heads, self.head_dim))?
             .transpose(1, 2)?;
 
-        let scale = (self.head_dim as f64).powf(-0.5);
-        let scores = (q
-            .contiguous()?
-            .matmul(&k.transpose(D::Minus2, D::Minus1)?.contiguous()?)?
-            * scale)?;
-        let scores = scores.broadcast_add(attention_mask)?;
-        let attn = candle_nn::ops::softmax(&scores, D::Minus1)?;
-        let out = attn.matmul(&v.contiguous()?)?;
+        // `attention_mask` is already the `(b, 1, 1, seq)` additive padding mask the
+        // shared kernel expects; the query dimension is walked in blocks so the
+        // `(b, heads, seq, seq)` score matrix is never materialized.
+        let cfg = ChunkedSdpaConfig {
+            block_size: ATTN_QUERY_BLOCK,
+            window: None,
+            causal: false,
+            scale: (self.head_dim as f64).powf(-0.5),
+            q_offset: 0,
+        };
+        let out = chunked_sdpa(&q, &k, &v, Some(attention_mask), &cfg)?;
         out.transpose(1, 2)?
             .reshape((b, seq_len, self.num_heads * self.head_dim))
     }
@@ -527,13 +533,14 @@ impl SigLIPSelfAttention {
             .reshape((b, n, self.num_heads, self.head_dim))?
             .transpose(1, 2)?;
 
-        let scale = (self.head_dim as f64).powf(-0.5);
-        let attn = (q
-            .contiguous()?
-            .matmul(&k.transpose(D::Minus2, D::Minus1)?.contiguous()?)?
-            * scale)?;
-        let attn = candle_nn::ops::softmax(&attn, D::Minus1)?;
-        let out = attn.matmul(&v.contiguous()?)?;
+        let cfg = ChunkedSdpaConfig {
+            block_size: ATTN_QUERY_BLOCK,
+            window: None,
+            causal: false,
+            scale: (self.head_dim as f64).powf(-0.5),
+            q_offset: 0,
+        };
+        let out = chunked_sdpa(&q, &k, &v, None, &cfg)?;
         out.transpose(1, 2)?
             .reshape((b, n, self.num_heads * self.head_dim))?
             .apply(&self.out_proj)
@@ -667,11 +674,17 @@ impl SigLIPHeadAttention {
         let k = self.separate_heads(&k)?;
         let v = self.separate_heads(&v)?;
 
+        // One probe query over every patch key: `q` is `(b, heads, 1, d)`, `k`/`v`
+        // are `(b, heads, patches, d)`. The kernel takes the key length from `k`.
         let (_, _, _, c_per_head) = q.dims4()?;
-        let attn = (q.matmul(&k.t()?)? / (c_per_head as f64).sqrt())?;
-        let attn = candle_nn::ops::softmax_last_dim(&attn)?;
-
-        let out = attn.matmul(&v)?;
+        let cfg = ChunkedSdpaConfig {
+            block_size: ATTN_QUERY_BLOCK,
+            window: None,
+            causal: false,
+            scale: (c_per_head as f64).powf(-0.5),
+            q_offset: 0,
+        };
+        let out = chunked_sdpa(&q, &k, &v, None, &cfg)?;
         self.recombine_heads(&out)?.apply(&self.out_proj)
     }
 }
@@ -884,13 +897,14 @@ impl WhisperSelfAttention {
             .reshape((b, n, self.num_heads, self.head_dim))?
             .transpose(1, 2)?;
 
-        let scale = (self.head_dim as f64).powf(-0.5);
-        let attn = (q
-            .contiguous()?
-            .matmul(&k.transpose(D::Minus2, D::Minus1)?.contiguous()?)?
-            * scale)?;
-        let attn = candle_nn::ops::softmax(&attn, D::Minus1)?;
-        let out = attn.matmul(&v.contiguous()?)?;
+        let cfg = ChunkedSdpaConfig {
+            block_size: ATTN_QUERY_BLOCK,
+            window: None,
+            causal: false,
+            scale: (self.head_dim as f64).powf(-0.5),
+            q_offset: 0,
+        };
+        let out = chunked_sdpa(&q, &k, &v, None, &cfg)?;
         out.transpose(1, 2)?
             .reshape((b, n, self.num_heads * self.head_dim))?
             .apply(&self.out_proj)
@@ -1589,6 +1603,218 @@ mod tests {
                 got,
                 want
             );
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Chunked attention equivalence (issue #3382)
+    // ------------------------------------------------------------------
+
+    /// Dense reference: the pre-migration math, materializing the full
+    /// `(b, heads, q, k)` score matrix and applying the additive mask if any.
+    fn dense_attention(
+        q: &Tensor,
+        k: &Tensor,
+        v: &Tensor,
+        mask: Option<&Tensor>,
+        scale: f64,
+    ) -> Tensor {
+        let scores = (q
+            .contiguous()
+            .unwrap()
+            .matmul(
+                &k.transpose(D::Minus2, D::Minus1)
+                    .unwrap()
+                    .contiguous()
+                    .unwrap(),
+            )
+            .unwrap()
+            * scale)
+            .unwrap();
+        let scores = match mask {
+            Some(m) => scores.broadcast_add(m).unwrap(),
+            None => scores,
+        };
+        let attn = candle_nn::ops::softmax(&scores, D::Minus1).unwrap();
+        attn.matmul(&v.contiguous().unwrap()).unwrap()
+    }
+
+    fn random_linear(out: usize, inp: usize, device: &Device) -> Linear {
+        let w = Tensor::randn(0f32, 0.2f32, (out, inp), device).unwrap();
+        let b = Tensor::randn(0f32, 0.2f32, out, device).unwrap();
+        Linear::new(w, Some(b))
+    }
+
+    fn max_abs_diff(a: &Tensor, b: &Tensor) -> f32 {
+        a.broadcast_sub(b)
+            .unwrap()
+            .abs()
+            .unwrap()
+            .flatten_all()
+            .unwrap()
+            .max(0)
+            .unwrap()
+            .to_scalar::<f32>()
+            .unwrap()
+    }
+
+    fn split_heads(x: &Tensor, heads: usize, head_dim: usize) -> Tensor {
+        let (b, n, _) = x.dims3().unwrap();
+        x.reshape((b, n, heads, head_dim))
+            .unwrap()
+            .transpose(1, 2)
+            .unwrap()
+    }
+
+    /// Sequence lengths below and above `ATTN_QUERY_BLOCK`, so both the single-block
+    /// and the multi-block paths of the kernel are exercised through the model code.
+    const SEQ_LENS: [usize; 3] = [3, 40, ATTN_QUERY_BLOCK + 88];
+
+    #[test]
+    fn test_bert_self_attention_matches_dense() {
+        let device = Device::Cpu;
+        let (heads, head_dim) = (2, 8);
+        let hidden = heads * head_dim;
+        let attn = BertSelfAttention {
+            query: random_linear(hidden, hidden, &device),
+            key: random_linear(hidden, hidden, &device),
+            value: random_linear(hidden, hidden, &device),
+            num_heads: heads,
+            head_dim,
+        };
+        for &seq in &SEQ_LENS {
+            let xs = Tensor::randn(0f32, 1f32, (2, seq, hidden), &device).unwrap();
+            // Second row pads its last third away.
+            let mut mask_data = vec![1u32; 2 * seq];
+            for c in (seq - seq / 3)..seq {
+                mask_data[seq + c] = 0;
+            }
+            let mask = Tensor::from_vec(mask_data, (2, seq), &device).unwrap();
+            let ext_mask = prepare_bert_attention_mask(&mask, DType::F32).unwrap();
+
+            let got = attn.forward(&xs, &ext_mask).unwrap();
+
+            let q = split_heads(&xs.apply(&attn.query).unwrap(), heads, head_dim);
+            let k = split_heads(&xs.apply(&attn.key).unwrap(), heads, head_dim);
+            let v = split_heads(&xs.apply(&attn.value).unwrap(), heads, head_dim);
+            let want = dense_attention(&q, &k, &v, Some(&ext_mask), (head_dim as f64).powf(-0.5))
+                .transpose(1, 2)
+                .unwrap()
+                .reshape((2, seq, hidden))
+                .unwrap();
+            let diff = max_abs_diff(&got, &want);
+            assert!(diff < 1e-4, "seq={}: max|Δ|={}", seq, diff);
+        }
+    }
+
+    #[test]
+    fn test_siglip_and_whisper_self_attention_match_dense() {
+        let device = Device::Cpu;
+        let (heads, head_dim) = (2, 8);
+        let hidden = heads * head_dim;
+        let siglip = SigLIPSelfAttention {
+            q_proj: random_linear(hidden, hidden, &device),
+            k_proj: random_linear(hidden, hidden, &device),
+            v_proj: random_linear(hidden, hidden, &device),
+            out_proj: random_linear(hidden, hidden, &device),
+            num_heads: heads,
+            head_dim,
+        };
+        let whisper = WhisperSelfAttention {
+            q_proj: random_linear(hidden, hidden, &device),
+            k_proj: random_linear(hidden, hidden, &device),
+            v_proj: random_linear(hidden, hidden, &device),
+            out_proj: random_linear(hidden, hidden, &device),
+            num_heads: heads,
+            head_dim,
+        };
+        type Forward<'a> = &'a dyn Fn(&Tensor) -> Tensor;
+        let siglip_forward: Forward = &|xs| siglip.forward(xs).unwrap();
+        let whisper_forward: Forward = &|xs| whisper.forward(xs).unwrap();
+        let blocks = [
+            (
+                "siglip",
+                [
+                    &siglip.q_proj,
+                    &siglip.k_proj,
+                    &siglip.v_proj,
+                    &siglip.out_proj,
+                ],
+                siglip_forward,
+            ),
+            (
+                "whisper",
+                [
+                    &whisper.q_proj,
+                    &whisper.k_proj,
+                    &whisper.v_proj,
+                    &whisper.out_proj,
+                ],
+                whisper_forward,
+            ),
+        ];
+        for (name, [q_proj, k_proj, v_proj, out_proj], forward) in blocks {
+            for &seq in &SEQ_LENS {
+                let xs = Tensor::randn(0f32, 1f32, (1, seq, hidden), &device).unwrap();
+                let got = forward(&xs);
+                let q = split_heads(&xs.apply(q_proj).unwrap(), heads, head_dim);
+                let k = split_heads(&xs.apply(k_proj).unwrap(), heads, head_dim);
+                let v = split_heads(&xs.apply(v_proj).unwrap(), heads, head_dim);
+                let want = dense_attention(&q, &k, &v, None, (head_dim as f64).powf(-0.5))
+                    .transpose(1, 2)
+                    .unwrap()
+                    .reshape((1, seq, hidden))
+                    .unwrap()
+                    .apply(out_proj)
+                    .unwrap();
+                let diff = max_abs_diff(&got, &want);
+                assert!(diff < 1e-4, "{} seq={}: max|Δ|={}", name, seq, diff);
+            }
+        }
+    }
+
+    #[test]
+    fn test_siglip_head_attention_matches_dense() {
+        // One probe query over every patch key: the kernel must take the key length
+        // from `k`, not from the single-position query.
+        let device = Device::Cpu;
+        let (heads, head_dim) = (2, 8);
+        let hidden = heads * head_dim;
+        let attn = SigLIPHeadAttention {
+            q_proj: random_linear(hidden, hidden, &device),
+            k_proj: random_linear(hidden, hidden, &device),
+            v_proj: random_linear(hidden, hidden, &device),
+            out_proj: random_linear(hidden, hidden, &device),
+            num_heads: heads,
+        };
+        for &patches in &SEQ_LENS {
+            let probe = Tensor::randn(0f32, 1f32, (2, 1, hidden), &device).unwrap();
+            let xs = Tensor::randn(0f32, 1f32, (2, patches, hidden), &device).unwrap();
+            let got = attn.forward(&probe, &xs, &xs).unwrap();
+
+            let q = attn
+                .separate_heads(&attn.q_proj.forward(&probe).unwrap())
+                .unwrap();
+            let k = attn
+                .separate_heads(&attn.k_proj.forward(&xs).unwrap())
+                .unwrap();
+            let v = attn
+                .separate_heads(&attn.v_proj.forward(&xs).unwrap())
+                .unwrap();
+            let want = attn
+                .recombine_heads(&dense_attention(
+                    &q,
+                    &k,
+                    &v,
+                    None,
+                    (head_dim as f64).powf(-0.5),
+                ))
+                .unwrap()
+                .apply(&attn.out_proj)
+                .unwrap();
+            assert_eq!(got.dims(), &[2, 1, hidden]);
+            let diff = max_abs_diff(&got, &want);
+            assert!(diff < 1e-4, "patches={}: max|Δ|={}", patches, diff);
         }
     }
 }
