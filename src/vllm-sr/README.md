@@ -29,7 +29,7 @@ run the local container stack.
 ## Start a local stack
 
 ```bash
-# Start Router, Envoy, Dashboard, the simulator, and observability.
+# Start Router, Envoy, Dashboard, and observability.
 vllm-sr serve
 
 # Use Podman.
@@ -54,7 +54,6 @@ Useful lifecycle commands:
 vllm-sr logs router
 vllm-sr logs envoy
 vllm-sr logs dashboard
-vllm-sr logs simulator
 vllm-sr stop
 ```
 
@@ -167,6 +166,14 @@ configuration:
 vllm-sr validate --config my-models.yaml
 vllm-sr serve --config my-models.yaml
 ```
+
+To evaluate concurrently running baseline and candidate deployments from one
+Dashboard, point `EVALUATION_DEPLOYMENTS_DIR` at the strict, read-only
+`evaluation-deployments.v1` registry described in the
+[Evaluation Plane guide](../../website/docs/benchmarking/evaluation-plane.md#address-baseline-and-candidate-deployments-together),
+then use the same `vllm-sr serve` command. The CLI mounts that directory into
+Dashboard only; Router and Envoy do not inherit it. Leaving the variable unset
+preserves the current single-runtime behavior.
 
 ## Deploy to Kubernetes
 

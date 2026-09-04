@@ -42,6 +42,7 @@ var (
 		validateRuleOperatorContracts,
 		validateRoutingLocalNames,
 		validateLanguageContracts,
+		validateContextContracts,
 		validateRoutingStrategy,
 		validateDecisionSignalReferences,
 		validateDomainContracts,

@@ -17,6 +17,9 @@ ClassifierSignalType = Literal[
     "sequence_classifier",
 ]
 
+UNKNOWN_POLICY_VALUES = ("no_match", "match", "fail_request")
+UnknownPolicy = Literal["no_match", "match", "fail_request"]
+
 CONDITION_TYPE_DOMAIN = "domain"
 CONDITION_TYPE_PROJECTION = "projection"
 
@@ -142,17 +145,6 @@ def iter_condition_leaves(conditions: Any) -> Iterable[Any]:
             yield from iter_condition_leaves(children)
         else:
             yield condition
-
-
-def iter_named_signal_entries(signals: Any) -> Iterable[tuple[str, str]]:
-    """Yield canonical signal family keys and declared signal names."""
-    if not signals:
-        return
-    for spec in SIGNAL_FAMILY_SPECS:
-        for signal in getattr(signals, spec.signal_attr, None) or []:
-            name = getattr(signal, "name", None)
-            if name:
-                yield spec.canonical_key, name
 
 
 def build_signal_reference_index(signals: Any) -> dict[str, set[str]]:

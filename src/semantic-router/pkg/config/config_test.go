@@ -3067,7 +3067,6 @@ hallucination_mitigation:
     model_id: "models/hallucination_detect_modernbert"
     threshold: 0.6
     use_cpu: true
-  on_hallucination_detected: "block"
 `
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
@@ -3084,7 +3083,6 @@ hallucination_mitigation:
 				Expect(cfg.HallucinationMitigation.HallucinationModel.ModelID).To(Equal("models/hallucination_detect_modernbert"))
 				Expect(cfg.HallucinationMitigation.HallucinationModel.Threshold).To(Equal(float32(0.6)))
 				Expect(cfg.HallucinationMitigation.HallucinationModel.UseCPU).To(BeTrue())
-				Expect(cfg.HallucinationMitigation.OnHallucinationDetected).To(Equal("block"))
 			})
 		})
 
@@ -3110,7 +3108,6 @@ hallucination_mitigation:
 				Expect(cfg.HallucinationMitigation.Enabled).To(BeTrue())
 				Expect(cfg.HallucinationMitigation.FactCheckModel.Threshold).To(Equal(float32(0)))
 				Expect(cfg.HallucinationMitigation.HallucinationModel.Threshold).To(Equal(float32(0)))
-				Expect(cfg.HallucinationMitigation.OnHallucinationDetected).To(BeEmpty())
 			})
 		})
 
@@ -3340,37 +3337,6 @@ default_model: "test-model"
 			cfg.HallucinationMitigation.HallucinationModel.Threshold = 0
 
 			Expect(cfg.GetHallucinationModelThreshold()).To(Equal(float32(0.5)))
-		})
-	})
-
-	Describe("GetHallucinationAction", func() {
-		It("should return 'warn' when action is 'warn'", func() {
-			cfg := &RouterConfig{}
-			cfg.HallucinationMitigation.OnHallucinationDetected = "warn"
-
-			Expect(cfg.GetHallucinationAction()).To(Equal("warn"))
-		})
-
-		It("should return 'warn' when action is 'block' (only warn is supported for global config)", func() {
-			cfg := &RouterConfig{}
-			cfg.HallucinationMitigation.OnHallucinationDetected = "block"
-
-			// Global config only supports "warn" action
-			// Per-decision plugin config supports "header", "body", "none", "block"
-			Expect(cfg.GetHallucinationAction()).To(Equal("warn"))
-		})
-
-		It("should return default 'warn' when action is empty", func() {
-			cfg := &RouterConfig{}
-
-			Expect(cfg.GetHallucinationAction()).To(Equal("warn"))
-		})
-
-		It("should return default 'warn' when action is invalid", func() {
-			cfg := &RouterConfig{}
-			cfg.HallucinationMitigation.OnHallucinationDetected = "invalid"
-
-			Expect(cfg.GetHallucinationAction()).To(Equal("warn"))
 		})
 	})
 
@@ -3647,6 +3613,27 @@ model_config:
 				path, err = (&ProviderProfile{Type: "minimax", BaseURL: "https://api.minimax.io"}).ResolveChatPath()
 				Expect(err).NotTo(HaveOccurred())
 				Expect(path).To(Equal("/v1/chat/completions"))
+			})
+
+			It("should not double the version segment for a versioned base_url", func() {
+				for _, tc := range []struct {
+					providerType string
+					baseURL      string
+					expected     string
+				}{
+					{"anthropic", "https://api.anthropic.com/v1", "/v1/messages"},
+					{"anthropic", "https://api.anthropic.com", "/v1/messages"},
+					{"minimax", "https://api.minimax.io/v1", "/v1/chat/completions"},
+					{"minimax", "https://api.minimax.io", "/v1/chat/completions"},
+					{"openai", "https://api.openai.com/v1", "/v1/chat/completions"},
+					{"anthropic", "https://gateway.example.com/openai/v1", "/openai/v1/messages"},
+					{"anthropic", "https://gateway.example.com/v1beta", "/v1beta/v1/messages"},
+					{"anthropic", "https://api.anthropic.com/v1/", "/v1/messages"},
+				} {
+					path, err := (&ProviderProfile{Type: tc.providerType, BaseURL: tc.baseURL}).ResolveChatPath()
+					Expect(err).NotTo(HaveOccurred(), "%s %s", tc.providerType, tc.baseURL)
+					Expect(path).To(Equal(tc.expected), "%s %s", tc.providerType, tc.baseURL)
+				}
 			})
 
 			It("should append api-version for azure-openai", func() {

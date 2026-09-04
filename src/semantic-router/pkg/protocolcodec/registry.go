@@ -109,6 +109,20 @@ type Capability struct {
 	Capabilities []string
 }
 
+// CapabilitiesFor returns the capability set advertised by the codec bound to
+// a wire format, and whether that format is registered. Unknown formats return
+// false so callers can distinguish "not registered" from "no capabilities".
+func (registry *Registry) CapabilitiesFor(format llmprotocol.WireFormat) (llmprotocol.CapabilitySet, bool) {
+	if registry == nil {
+		return llmprotocol.CapabilitySet{}, false
+	}
+	pair, ok := registry.resolve(format)
+	if !ok {
+		return llmprotocol.CapabilitySet{}, false
+	}
+	return pair.buffered.Capabilities(), true
+}
+
 func (registry *Registry) Capabilities() []Capability {
 	if registry == nil {
 		return nil

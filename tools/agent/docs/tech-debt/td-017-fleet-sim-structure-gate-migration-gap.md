@@ -35,7 +35,7 @@ of `src/` without special treatment.
 
 ## Why It Matters
 
-- Simulator packaging, dashboard integration, or service fixes should not have
+- Simulator packaging, standalone API, or service fixes should not have
   to carry unrelated extraction churn to pass changed-file validation.
 - Maintainers need the exception list to point at concrete extraction targets.
 - New fleet-sim modules should inherit the standard structure policy.

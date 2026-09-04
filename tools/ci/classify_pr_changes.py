@@ -192,6 +192,12 @@ def detect_domains(changed: tuple[str, ...], *, full: bool) -> dict[str, bool]:
         and not domains["docs_only"]
         and not harness_only
     )
+    domains["local_dev_flow"] = any_matches(
+        product_changed,
+        "tools/dev/**",
+        "tools/smoke/**",
+        "deploy/local/**",
+    )
     domains["core_test"] = full or (
         not harness_only
         and (
@@ -200,6 +206,7 @@ def detect_domains(changed: tuple[str, ...], *, full: bool) -> dict[str, bool]:
             or domains["common_e2e"]
             or domains["classifier_contract"]
             or domains["api_docs_generated"]
+            or domains["local_dev_flow"]
             or (domains["make"] and not domains["docs_only"])
         )
     )

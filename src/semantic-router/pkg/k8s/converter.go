@@ -77,7 +77,7 @@ func (c *CRDConverter) convertDecision(decision v1alpha1.Decision) (config.Decis
 		Priority:    int(decision.Priority),
 		Rules: config.RuleCombination{
 			Operator:   decision.Signals.Operator,
-			OnUnknown:  decision.Signals.OnUnknown,
+			OnUnknown:  config.UnknownPolicy(decision.Signals.OnUnknown),
 			Conditions: make([]config.RuleCondition, 0),
 		},
 		ModelRefs: make([]config.ModelRef, 0),

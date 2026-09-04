@@ -12,6 +12,7 @@ import (
 
 func (v *Validator) checkConflicts() {
 	v.checkDomainSignalOverlap()
+	v.checkContextSignalBands()
 	v.checkSameSignalTypeGuard()
 	v.checkProjectionPartitions()
 	v.checkProjections()

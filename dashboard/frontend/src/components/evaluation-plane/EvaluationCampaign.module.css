@@ -1,0 +1,73 @@
+.campaign {
+  display: grid;
+  gap: 0;
+  min-width: 0;
+}
+
+.eyebrow {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.inlineError,
+.inlineNotice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 0.85rem;
+  border: 0;
+  border-left: 2px solid var(--border-strong);
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  line-height: 1.45;
+}
+
+.inlineNotice strong {
+  color: var(--text-primary);
+}
+
+.inlineNotice > div,
+.inlineError > div {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.inlineError strong {
+  color: #ffb0b3;
+}
+
+.inlineError {
+  border-color: rgba(248, 113, 113, 0.56);
+  color: #ffb0b3;
+}
+
+.inlineNotice {
+  border-color: rgba(251, 191, 36, 0.5);
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 760px) {
+  .inlineError,
+  .inlineNotice {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+    flex-direction: column;
+  }
+}

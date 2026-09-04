@@ -36,7 +36,6 @@ type WindowedMetricsConfig struct {
 	Enabled              bool     `yaml:"enabled"`
 	TimeWindows          []string `yaml:"time_windows,omitempty"`
 	UpdateInterval       string   `yaml:"update_interval,omitempty"`
-	ModelMetrics         bool     `yaml:"model_metrics"`
 	QueueDepthEstimation bool     `yaml:"queue_depth_estimation"`
 	MaxModels            int      `yaml:"max_models,omitempty"`
 }

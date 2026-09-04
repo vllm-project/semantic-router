@@ -22,7 +22,7 @@ app = FastAPI(
     description=(
         "HTTP API for the fleet-level LLM inference simulator. "
         "Supports trace management, fleet configuration, simulation jobs, "
-        "and result retrieval for dashboard integration."
+        "and result retrieval for standalone planning clients."
     ),
     version="0.1.0",
     docs_url="/api/docs",
@@ -41,7 +41,7 @@ app.add_middleware(
 
 @app.middleware("http")
 async def apply_forwarded_prefix_root_path(request: Request, call_next):
-    """Honor dashboard proxy prefixes so Swagger/OpenAPI assets resolve correctly."""
+    """Honor a reverse-proxy prefix so generated API documentation resolves."""
 
     forwarded_prefix = request.headers.get("x-forwarded-prefix", "").rstrip("/")
     if forwarded_prefix:

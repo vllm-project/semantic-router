@@ -6,6 +6,10 @@ inputs:
     description: Print disk usage before and after cleanup.
     required: false
     default: "false"
+  relocate-docker:
+    description: Move Docker's data root and temporary files to /mnt.
+    required: false
+    default: "false"
 
 runs:
   using: composite
@@ -14,14 +18,27 @@ runs:
       shell: bash
       env:
         SHOW_USAGE: ${{ inputs.show-usage }}
+        RELOCATE_DOCKER: ${{ inputs.relocate-docker }}
       run: |
         if [[ "$SHOW_USAGE" == "true" ]]; then
-          df -h /
+          df -h / /mnt 2>/dev/null || df -h /
         fi
         sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+          /usr/local/share/boost /usr/local/graalvm /usr/local/.ghcup \
+          /usr/share/swift /usr/local/lib/node_modules \
           /opt/hostedtoolcache/CodeQL 2>/dev/null || true
         sudo apt-get clean
         sudo docker system prune -af --volumes || true
+        if [[ "$RELOCATE_DOCKER" == "true" ]]; then
+          sudo systemctl stop docker
+          sudo mv /var/lib/docker /mnt/docker
+          sudo ln -s /mnt/docker /var/lib/docker
+          sudo systemctl start docker
+
+          # Keep kind's image-load tarballs on the larger runner volume.
+          sudo mkdir -p /mnt/tmp
+          sudo chmod 1777 /mnt/tmp
+        fi
         if [[ "$SHOW_USAGE" == "true" ]]; then
-          df -h /
+          df -h / /mnt 2>/dev/null || df -h /
         fi

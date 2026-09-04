@@ -43,6 +43,16 @@ REPRESENTATIVE_FIXTURES = {
         (),
         (),
     ),
+    "local dev flow": (
+        [
+            "deploy/local/envoy.yaml",
+            "tools/dev/local-up-router.sh",
+            "tools/smoke/test-local-up-router.sh",
+        ],
+        ("quality", "security", "core-tests"),
+        (),
+        (),
+    ),
     "core router": (
         ["src/semantic-router/pkg/extproc/processor.go"],
         ("quality", "security", "core-tests", "e2e", "images"),

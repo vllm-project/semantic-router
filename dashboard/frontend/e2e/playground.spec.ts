@@ -417,6 +417,20 @@ test.describe('Playground Chat Component', () => {
     await page.getByPlaceholder('Ask me anything...').fill('Do not send this request')
     await expect(page.getByRole('button', { name: 'Send message' })).toBeDisabled()
     await expect(page.getByRole('button', { name: 'Retry discovery' })).toBeVisible()
+    const errorRegion = page.getByTestId('playground-error-region')
+    const chatArea = errorRegion.locator('xpath=..')
+    const [errorBox, chatBox, composerBox] = await Promise.all([
+      errorRegion.boundingBox(),
+      chatArea.boundingBox(),
+      page.getByPlaceholder('Ask me anything...').boundingBox(),
+    ])
+    expect(errorBox).not.toBeNull()
+    expect(chatBox).not.toBeNull()
+    expect(composerBox).not.toBeNull()
+    if (errorBox && chatBox && composerBox) {
+      expect(errorBox.y - chatBox.y).toBeLessThanOrEqual(24)
+      expect(errorBox.y + errorBox.height).toBeLessThan(composerBox.y)
+    }
   })
 
   test('rejects a MoM-only discovery response and never submits the retired alias', async ({
@@ -1272,8 +1286,13 @@ test.describe('Playground Chat Component', () => {
     // User message should still appear
     await expect(page.getByTestId('chat-transcript').getByText('Test error handling')).toBeVisible()
 
-    // Error should be displayed (specific API error message)
-    await expect(page.getByText('API error:')).toBeVisible({ timeout: 5000 })
+    const errorRegion = page.getByTestId('playground-error-region')
+    await expect(errorRegion).toBeVisible({ timeout: 5000 })
+    await expect(errorRegion).toContainText('The model service is temporarily unavailable')
+    await expect(page.getByText('API error:')).toHaveCount(0)
+    const technicalDetails = errorRegion.locator('[data-playground-technical-details="true"]')
+    await expect(technicalDetails).toBeVisible()
+    await expect(technicalDetails).not.toHaveAttribute('open')
   })
 
   test('stop button appears during streaming', async ({ page }) => {

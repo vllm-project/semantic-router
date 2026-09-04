@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 import ConfirmDialog from '../components/ConfirmDialog'
 import type { FieldConfig } from '../components/EditModal'
@@ -55,6 +56,7 @@ export default function ConfigPageMoMRoutingPanel({
   openEditModal,
   openViewModal,
 }: ConfigPageMoMRoutingPanelProps) {
+  const navigate = useNavigate()
   const [entrypointPendingDelete, setEntrypointPendingDelete] =
     useState<PendingEntrypointDelete | null>(null)
   const [recipePendingDelete, setRecipePendingDelete] = useState<RecipeConfig | null>(null)
@@ -223,6 +225,11 @@ export default function ConfigPageMoMRoutingPanel({
             isReadonly={isReadonly}
             onAdd={() => setMixtureEditor({})}
             onUsage={setUsageTarget}
+            onEvaluate={(entrypoint) => {
+              const model = entrypoint.model_names[0]
+              if (!model) return
+              navigate(`/evaluation?view=new&entrypoint=${encodeURIComponent(model)}`)
+            }}
             onEdit={(entrypoint, index) => setMixtureEditor({ entrypoint, index })}
             onDelete={(entrypoint, index) => {
               setDeleteError(null)

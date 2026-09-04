@@ -1,6 +1,6 @@
 # vllm-sr-sim
 
-`vllm-sr-sim` is the maintained fleet simulator for this repository. It sizes heterogeneous GPU fleets, evaluates routing strategies, and exposes a service mode that the dashboard can call across containers.
+`vllm-sr-sim` is the maintained standalone fleet simulator for this repository. It sizes heterogeneous GPU fleets, evaluates routing strategies, and exposes an optional HTTP API for automation and custom clients.
 
 Long-form guides live on the project website:
 
@@ -45,12 +45,12 @@ vllm-sr-sim whatif \
 vllm-sr-sim serve --host 0.0.0.0 --port 8000
 ```
 
-`vllm-sr serve` also starts `vllm-sr-sim` by default as a sibling container on the shared runtime network so the dashboard can proxy it without rebuilding the router image.
+Fleet Sim is not started by `vllm-sr serve` and is not embedded in the Semantic Router dashboard. Run the CLI or HTTP service explicitly when you need a planning study.
 
 ## Layout
 
 - `fleet_sim/`: simulation engine, optimizers, routing, hardware, workload, and service package
 - `run_sim.py`: unified CLI entrypoint used by `vllm-sr-sim`
 - `tests/`: simulator and service test coverage
-- `data/`: reference workload traces used by the examples and dashboard integration
+- `data/`: reference workload traces used by the examples
 - `examples/`: sample scripts and multi-pool input files

@@ -20,8 +20,8 @@ from urllib import request as urllib_request
 from cli_test_base import CLITestBase
 from serve_session import ServeSessionMixin
 
-DEFAULT_MOCK_OPENAI_IMAGE = "ghcr.io/vllm-project/semantic-router/vllm-sr-sim:latest"
-MOCK_OPENAI_IMAGE_ENV = "VLLM_SR_SIM_IMAGE"
+DEFAULT_MOCK_OPENAI_IMAGE = "ghcr.io/vllm-project/semantic-router/vllm-sr:latest"
+MOCK_OPENAI_IMAGE_ENV = "VLLM_SR_TEST_UPSTREAM_IMAGE"
 MOCK_OPENAI_SERVER_PORT = 18080
 MOCK_OPENAI_SERVER_PATH = Path(__file__).with_name("mock_openai_upstream.py").resolve()
 
@@ -349,7 +349,7 @@ class TestServeIntegration(ServeSessionMixin, CLITestBase):
         """Verify the logs command returns container output for one service."""
         time.sleep(5)
         service_failures: list[str] = []
-        for service in ("router", "envoy", "dashboard", "simulator"):
+        for service in ("router", "envoy", "dashboard"):
             return_code, stdout, stderr = self.run_cli(["logs", service])
             output = stdout + stderr
             if return_code == 0 and output.strip():
@@ -454,53 +454,6 @@ class TestServeIntegration(ServeSessionMixin, CLITestBase):
         os.environ.get("RUN_INTEGRATION_TESTS", "").lower() == "true",
         "Integration tests disabled. Set RUN_INTEGRATION_TESTS=true to enable.",
     )
-    def test_fleet_sim_sidecar_contracts(self):
-        """Test that serve starts the simulator sidecar and exposes its health."""
-        self.print_test_header(
-            "Fleet Sim Sidecar Integration Test",
-            "Verifies serve starts vllm-sr-sim, wires TARGET_FLEET_SIM_URL, and exposes /healthz",
-        )
-
-        with self._running_serve():
-            if not self.wait_for_container_running(
-                timeout=60, container_name=self.SIM_CONTAINER_NAME
-            ):
-                self.fail("Fleet simulator sidecar did not reach running state")
-
-            return_code, stdout, stderr = self.inspect_container(
-                "{{.Config.Env}}",
-                container_name=self.resolve_runtime_inspect_container_name(),
-            )
-            if return_code != 0:
-                self.fail(f"router container inspect failed: {stderr}")
-            self.assertIn(
-                (
-                    "TARGET_FLEET_SIM_URL=http://"
-                    f"{self.runtime_stack.fleet_sim_container_name}:8000"
-                ),
-                stdout,
-            )
-
-            with urllib_request.urlopen(
-                f"{self.runtime_stack.fleet_sim_url}/healthz", timeout=10
-            ) as response:
-                body = response.read().decode("utf-8")
-                self.assertEqual(response.status, 200)
-                self.assertIn('"service":"vllm-sr-sim"', body.replace(" ", ""))
-
-            print("  ✓ Simulator sidecar is running")
-            print("  ✓ Router container received TARGET_FLEET_SIM_URL")
-            print(
-                "  ✓ Simulator health endpoint responded on "
-                f"localhost:{self.runtime_stack.fleet_sim_port}"
-            )
-
-        self.print_test_result(True, "Fleet simulator sidecar contracts verified")
-
-    @unittest.skipUnless(
-        os.environ.get("RUN_INTEGRATION_TESTS", "").lower() == "true",
-        "Integration tests disabled. Set RUN_INTEGRATION_TESTS=true to enable.",
-    )
     def test_stop_terminates_container(self):
         """Test that vllm-sr stop actually stops the container."""
         self.print_test_header(
@@ -524,7 +477,6 @@ class TestServeIntegration(ServeSessionMixin, CLITestBase):
 
             managed_names = (
                 *self._runtime_container_names(),
-                self.SIM_CONTAINER_NAME,
                 *self.AUXILIARY_CONTAINER_NAMES,
             )
             remaining = {

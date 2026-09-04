@@ -1,0 +1,188 @@
+.filters {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) repeat(2, minmax(160px, 0.3fr));
+  align-items: end;
+  gap: 1rem;
+  margin-bottom: 0.55rem;
+}
+
+.filters label {
+  display: grid;
+  gap: 0.35rem;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+
+.filters input,
+.filters select {
+  width: 100%;
+}
+
+.filterSummary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 1.1rem;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.filterSummary strong {
+  color: var(--text-secondary);
+  font-weight: 650;
+}
+
+.runLedger {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  max-height: min(72vh, 720px);
+  overflow: hidden;
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.runList {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.runRow {
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.runSummary {
+  display: grid;
+  width: 100%;
+  min-height: 94px;
+  gap: 0.4rem;
+  padding: 0.95rem 0.8rem 0.95rem 0.9rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  text-align: left;
+  transition:
+    background var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+.runSummary:hover {
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.runSummary:focus-visible {
+  /* Keep the shared focus ring inside the vertically scrolling ledger instead of clipping it. */
+  outline-offset: -2px;
+}
+
+.runSelected .runSummary {
+  background: rgba(255, 255, 255, 0.035);
+  box-shadow: inset 2px 0 0 var(--brand-amd);
+}
+
+.runRowTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.runRowTop strong {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  line-height: 1.35;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+/* Keep terminal state legible on the narrow ledger: the run name, not its state, yields first. */
+.runRowTop > [data-evaluation-tag='true'] {
+  flex: 0 0 auto;
+}
+
+.runRowMeta,
+.runRowProgress {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.runRowProgress {
+  color: var(--text-secondary);
+}
+
+.ledgerTechnicalDetails {
+  flex: 0 1 auto;
+  width: 100%;
+  padding: 0.65rem 0.75rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.ledgerTechnicalDetails[open] {
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  flex: 0 0 auto;
+  padding: 0.65rem 0;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.pagination span {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+@media (max-width: 1160px) {
+  .filters {
+    grid-template-columns: minmax(220px, 1fr) repeat(2, minmax(140px, 0.4fr));
+  }
+
+  .runLedger {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .runList {
+    overflow-y: visible;
+  }
+}
+
+@media (max-width: 760px) {
+  .filters {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .filters label:first-child,
+  .filterSummary {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 520px) {
+  .filters {
+    grid-template-columns: 1fr;
+  }
+
+  .filters label:first-child {
+    grid-column: auto;
+  }
+}

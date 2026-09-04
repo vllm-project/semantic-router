@@ -19,8 +19,16 @@ func TestDashboardContainerUsesOneCatalogCapableRuntime(t *testing.T) {
 		t,
 		filepath.Join(repositoryRoot, "dashboard", "backend", "Dockerfile"),
 	)
+	for _, platformArg := range []string{"TARGETARCH", "TARGETOS"} {
+		declaration := "ARG " + platformArg
+		if !strings.Contains(canonicalDockerfile, declaration+"\n") {
+			t.Fatalf("canonical Dashboard Dockerfile must inherit BuildKit automatic argument %s", platformArg)
+		}
+		if strings.Contains(canonicalDockerfile, declaration+"=") {
+			t.Fatalf("canonical Dashboard Dockerfile must not default BuildKit automatic argument %s", platformArg)
+		}
+	}
 	for _, required := range []string{
-		"ARG TARGETARCH=amd64",
 		"FROM ${IMAGE_REGISTRY}library/python:3.11-slim-bookworm",
 		"ENV PYTHONPATH=/app",
 		"COPY src/vllm-sr/requirements.txt /app/requirements.txt",
@@ -28,6 +36,9 @@ func TestDashboardContainerUsesOneCatalogCapableRuntime(t *testing.T) {
 		"COPY src/vllm-sr/cli/ /app/cli/",
 		`"${VIRTUAL_ENV}/bin/pip" install --no-cache-dir -r /app/requirements.txt`,
 		"install -d -o nonroot -g root -m 0770 /app/data",
+		"find /app/cli -type d -exec chmod 0555 {} +",
+		"find /app/cli -type f -exec chmod 0444 {} +",
+		"chmod 0555 /app/cli/evaluation/sandbox_worker.py",
 	} {
 		if !strings.Contains(canonicalDockerfile, required) {
 			t.Fatalf("canonical Dashboard Dockerfile omitted runtime contract %q", required)

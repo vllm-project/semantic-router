@@ -337,9 +337,16 @@ func (d *decompiler) decisionToRoute(dec *config.Decision) *RouteDecl {
 	route := &RouteDecl{
 		Name:        dec.Name,
 		Description: dec.Description,
-		OnUnknown:   dec.Rules.OnUnknown,
+		OnUnknown:   string(dec.Rules.OnUnknown),
 		Priority:    dec.Priority,
 		Tier:        dec.Tier,
+	}
+
+	if dec.Action != nil {
+		route.Action = &ActionDecl{
+			Type:        dec.Action.Type,
+			Destination: dec.Action.Destination,
+		}
 	}
 
 	// WHEN

@@ -111,8 +111,7 @@ export function canAccessDashboardPath(
     normalizedPath.startsWith('/builder') ||
     normalizedPath.startsWith('/config') ||
     normalizedPath.startsWith('/knowledge-bases') ||
-    normalizedPath.startsWith('/taxonomy') ||
-    normalizedPath.startsWith('/fleet-sim')
+    normalizedPath.startsWith('/taxonomy')
   ) {
     return canAccessWithPermission(user, CONFIG_READ_PERMISSION, READ_CAPABLE_ROLES)
   }

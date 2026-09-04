@@ -16,12 +16,7 @@ type routeSignalClause struct {
 type guardConflictSemantics struct {
 	exclusivePartitionMembers map[string]string
 	projectionOutputOwners    map[string]string
-	contextRanges             map[string]contextSignalRange
-}
-
-type contextSignalRange struct {
-	minTokens int
-	maxTokens int
+	contextRanges             map[string]config.ContextBounds
 }
 
 func (v *Validator) guardConflictSemantics() guardConflictSemantics {
@@ -32,36 +27,32 @@ func (v *Validator) guardConflictSemantics() guardConflictSemantics {
 	}
 }
 
-func (v *Validator) contextSignalRanges() map[string]contextSignalRange {
-	ranges := make(map[string]contextSignalRange)
+func (v *Validator) contextSignalRanges() map[string]config.ContextBounds {
+	ranges := make(map[string]config.ContextBounds)
 	for _, signal := range v.prog.Signals {
 		if signal.SignalType != config.SignalTypeContext {
 			continue
 		}
-
-		minTokens, ok := getStringField(signal.Fields, "min_tokens")
-		if !ok {
-			continue
-		}
-		maxTokens, ok := getStringField(signal.Fields, "max_tokens")
-		if !ok {
-			continue
-		}
-
-		minValue, err := config.TokenCount(minTokens).Value()
+		bounds, err := contextSignalBounds(signal)
 		if err != nil {
 			continue
 		}
-		maxValue, err := config.TokenCount(maxTokens).Value()
-		if err != nil {
-			continue
-		}
-		ranges[signal.Name] = contextSignalRange{
-			minTokens: minValue,
-			maxTokens: maxValue,
-		}
+		ranges[signal.Name] = bounds
 	}
 	return ranges
+}
+
+// contextSignalBounds parses a context signal's min_tokens/max_tokens with
+// the same rules the runtime config uses, so DSL and YAML cannot disagree.
+func contextSignalBounds(signal *SignalDecl) (config.ContextBounds, error) {
+	rule := config.ContextRule{Name: signal.Name}
+	if v, ok := getStringField(signal.Fields, "min_tokens"); ok {
+		rule.MinTokens = config.TokenCount(v)
+	}
+	if v, ok := getStringField(signal.Fields, "max_tokens"); ok {
+		rule.MaxTokens = config.TokenCount(v)
+	}
+	return rule.Bounds()
 }
 
 func collectRouteSignalClauses(expr BoolExpr, negated bool) []routeSignalClause {
@@ -307,7 +298,7 @@ func signalPartitionMembersShareExclusiveGroup(
 }
 
 func contextSignalsDisjoint(
-	contextRanges map[string]contextSignalRange,
+	contextRanges map[string]config.ContextBounds,
 	firstName string,
 	secondName string,
 ) bool {
@@ -316,7 +307,7 @@ func contextSignalsDisjoint(
 	if !firstOK || !secondOK {
 		return false
 	}
-	return firstRange.maxTokens < secondRange.minTokens || secondRange.maxTokens < firstRange.minTokens
+	return !firstRange.Overlaps(secondRange)
 }
 
 func signalTypeParticipatesInGuardWarning(signalType string) bool {

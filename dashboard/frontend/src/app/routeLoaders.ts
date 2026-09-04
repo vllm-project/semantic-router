@@ -7,10 +7,6 @@ export const loadBuilderPage = () => import('../pages/BuilderPage')
 export const loadConfigPage = () => import('../pages/ConfigPage')
 export const loadDashboardPage = () => import('../pages/DashboardPage')
 export const loadEvaluationPage = () => import('../pages/EvaluationPage')
-export const loadFleetSimFleetsPage = () => import('../pages/FleetSimFleetsPage')
-export const loadFleetSimOverviewPage = () => import('../pages/FleetSimOverviewPage')
-export const loadFleetSimRunsPage = () => import('../pages/FleetSimRunsPage')
-export const loadFleetSimWorkloadsPage = () => import('../pages/FleetSimWorkloadsPage')
 export const loadInsightsPage = () => import('../pages/InsightsPage')
 export const loadInsightsRecordPage = () => import('../pages/InsightsRecordPage')
 export const loadKnowledgeMapPage = () => import('../pages/KnowledgeMapPage')
@@ -50,13 +46,6 @@ const routeLoaders: Array<{ matches: (pathname: string) => boolean; load: RouteL
   { matches: (pathname) => /^\/insights\/[^/]+/.test(pathname), load: loadInsightsRecordPage },
   { matches: (pathname) => pathname.startsWith('/insights'), load: loadInsightsPage },
   { matches: (pathname) => pathname.startsWith('/evaluation'), load: loadEvaluationPage },
-  {
-    matches: (pathname) => pathname.startsWith('/fleet-sim/workloads'),
-    load: loadFleetSimWorkloadsPage,
-  },
-  { matches: (pathname) => pathname.startsWith('/fleet-sim/fleets'), load: loadFleetSimFleetsPage },
-  { matches: (pathname) => pathname.startsWith('/fleet-sim/runs'), load: loadFleetSimRunsPage },
-  { matches: (pathname) => pathname.startsWith('/fleet-sim'), load: loadFleetSimOverviewPage },
   { matches: (pathname) => pathname.startsWith('/ml-setup'), load: loadMLSetupPage },
   { matches: (pathname) => pathname.startsWith('/status'), load: loadStatusPage },
   { matches: (pathname) => pathname.startsWith('/logs'), load: loadLogsPage },

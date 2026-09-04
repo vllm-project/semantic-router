@@ -2,8 +2,10 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  flex: 1;
-  height: 100%;
+  flex: 0 0 calc(100vh - var(--app-header-height));
+  flex-basis: calc(100dvh - var(--app-header-height));
+  height: calc(100vh - var(--app-header-height));
+  height: calc(100dvh - var(--app-header-height));
   min-height: 0;
   padding: 0;
   overflow-x: hidden;

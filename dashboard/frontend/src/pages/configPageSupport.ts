@@ -470,7 +470,6 @@ export interface ObservabilityConfig {
       enabled?: boolean
       time_windows?: string[]
       update_interval?: string
-      model_metrics?: boolean
       queue_depth_estimation?: boolean
       max_models?: number
     }
@@ -592,7 +591,6 @@ export interface ModalityDetectionConfig {
 
 export interface ModalityDetectorConfig {
   enabled?: boolean
-  prompt_prefixes?: string[]
   method?: string
   classifier?: ModalityClassifierConfig
   keywords?: string[]
@@ -703,7 +701,6 @@ export interface CanonicalClassifierConfig {
 
 export interface CanonicalHallucinationModuleConfig {
   enabled?: boolean
-  on_hallucination_detected?: string
   fact_check?: FactCheckModelModuleConfig
   detector?: HallucinationDetectorModuleConfig
   explainer?: NLIExplainerModuleConfig
@@ -1140,8 +1137,10 @@ export interface LanguageSignal {
 
 export interface ContextSignal {
   name: string
-  min_tokens: string
-  max_tokens: string
+  /** Inclusive lower bound. Defaults to 0 when omitted. */
+  min_tokens?: string
+  /** Inclusive upper bound. Omit for an open-ended band (no upper limit). */
+  max_tokens?: string
   description?: string
 }
 

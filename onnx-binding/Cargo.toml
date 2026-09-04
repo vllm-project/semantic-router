@@ -44,6 +44,10 @@ tracing = "0.1"
 libc = "0.2"
 parking_lot = "0.12"
 half = "2.4"
+# Image decode+resize for multimodal preprocessing. Same version/features as
+# candle-binding's Cargo.toml so both bindings resize through identical code
+# (see multimodal_encode_image_from_bytes in src/ffi/multimodal.rs).
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 
 [dev-dependencies]
 rstest = "0.18"

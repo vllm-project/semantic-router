@@ -152,7 +152,6 @@ def test_stop_reports_noop_result_on_stdout(monkeypatch, capsys):
     removed_networks = []
     managed_names = (
         *stack_layout.runtime_container_names,
-        stack_layout.fleet_sim_container_name,
         stack_layout.grafana_container_name,
         stack_layout.prometheus_container_name,
         stack_layout.jaeger_container_name,
@@ -188,7 +187,6 @@ def test_stop_propagates_orphan_network_removal_failure(monkeypatch, capsys):
     stack_layout = runtime_stack.resolve_runtime_stack()
     managed_names = (
         *stack_layout.runtime_container_names,
-        stack_layout.fleet_sim_container_name,
         stack_layout.grafana_container_name,
         stack_layout.prometheus_container_name,
         stack_layout.jaeger_container_name,
@@ -217,18 +215,17 @@ def test_stop_propagates_orphan_network_removal_failure(monkeypatch, capsys):
     assert "network has active endpoints" in captured.err
 
 
-def test_stop_reports_success_when_only_simulator_exists(monkeypatch, capsys):
+def test_stop_reports_success_when_only_dashboard_exists(monkeypatch, capsys):
     stack_layout = runtime_stack.resolve_runtime_stack()
     managed_names = (
         *stack_layout.runtime_container_names,
-        stack_layout.fleet_sim_container_name,
         stack_layout.grafana_container_name,
         stack_layout.prometheus_container_name,
         stack_layout.jaeger_container_name,
         *stack_layout.storage_container_names,
     )
     statuses = dict.fromkeys(managed_names, "not found")
-    statuses[stack_layout.fleet_sim_container_name] = "running"
+    statuses[stack_layout.dashboard_container_name] = "running"
 
     monkeypatch.setattr(core, "resolve_runtime_stack", lambda: stack_layout)
     monkeypatch.setattr(
@@ -251,14 +248,13 @@ def test_stop_does_not_report_success_when_container_removal_fails(monkeypatch, 
     stack_layout = runtime_stack.resolve_runtime_stack()
     managed_names = (
         *stack_layout.runtime_container_names,
-        stack_layout.fleet_sim_container_name,
         stack_layout.grafana_container_name,
         stack_layout.prometheus_container_name,
         stack_layout.jaeger_container_name,
         *stack_layout.storage_container_names,
     )
     statuses = dict.fromkeys(managed_names, "not found")
-    statuses[stack_layout.fleet_sim_container_name] = "running"
+    statuses[stack_layout.dashboard_container_name] = "running"
 
     monkeypatch.setattr(core, "resolve_runtime_stack", lambda: stack_layout)
     monkeypatch.setattr(
@@ -273,7 +269,7 @@ def test_stop_does_not_report_success_when_container_removal_fails(monkeypatch, 
     try:
         core.stop_vllm_sr()
     except RuntimeError as error:
-        assert stack_layout.fleet_sim_container_name in str(error)
+        assert stack_layout.dashboard_container_name in str(error)
     else:
         raise AssertionError("stop must propagate container removal failures")
 
@@ -285,14 +281,13 @@ def test_stop_does_not_report_success_when_network_removal_fails(monkeypatch, ca
     stack_layout = runtime_stack.resolve_runtime_stack()
     managed_names = (
         *stack_layout.runtime_container_names,
-        stack_layout.fleet_sim_container_name,
         stack_layout.grafana_container_name,
         stack_layout.prometheus_container_name,
         stack_layout.jaeger_container_name,
         *stack_layout.storage_container_names,
     )
     statuses = dict.fromkeys(managed_names, "not found")
-    statuses[stack_layout.fleet_sim_container_name] = "running"
+    statuses[stack_layout.dashboard_container_name] = "running"
 
     monkeypatch.setattr(core, "resolve_runtime_stack", lambda: stack_layout)
     monkeypatch.setattr(
@@ -332,7 +327,7 @@ def test_show_logs_reports_empty_result_on_stdout(monkeypatch, capsys):
     assert captured.err == ""
 
 
-def test_simulator_logs_merge_container_stderr_into_raw_stdout(monkeypatch):
+def test_followed_router_logs_merge_container_stderr_into_raw_stdout(monkeypatch):
     stack_layout = runtime_stack.resolve_runtime_stack()
     calls = []
 
@@ -344,11 +339,11 @@ def test_simulator_logs_merge_container_stderr_into_raw_stdout(monkeypatch):
         lambda *args, **kwargs: calls.append((args, kwargs)) or True,
     )
 
-    core.show_logs("simulator", follow=True)
+    core.show_logs("router", follow=True)
 
     assert calls == [
         (
-            (stack_layout.fleet_sim_container_name,),
+            (stack_layout.router_container_name,),
             {"follow": True, "tail": 200, "merge_output": True},
         )
     ]
@@ -390,36 +385,28 @@ def test_container_logs_can_merge_raw_streams(monkeypatch):
     monkeypatch.setattr(container_services.subprocess, "run", fake_run)
 
     container_services.container_logs(
-        "simulator-container", follow=True, tail=200, merge_output=True
+        "service-container", follow=True, tail=200, merge_output=True
     )
 
     assert captured == {
-        "command": ["docker", "logs", "-f", "--tail", "200", "simulator-container"],
+        "command": ["docker", "logs", "-f", "--tail", "200", "service-container"],
         "kwargs": {"check": True, "stderr": subprocess.STDOUT},
     }
 
 
 def test_never_pull_preflight_skips_dashboard_when_disabled(monkeypatch):
     captured = {}
-    sim_checks = []
 
     def fake_get_runtime_images(**kwargs):
         captured.update(kwargs)
         return {"router": "router:test", "envoy": "envoy:test"}
 
     monkeypatch.setattr(core, "get_runtime_images", fake_get_runtime_images)
-    monkeypatch.setattr(
-        core,
-        "get_fleet_sim_container_image",
-        lambda image=None, pull_policy=None: sim_checks.append((image, pull_policy)),
-    )
-
     core.ensure_runtime_images_for_pull_policy(
         image="router:test",
         router_image=None,
         envoy_image=None,
         dashboard_image="dashboard:missing",
-        sim_image="sim:test",
         pull_policy="never",
         env_vars={"VLLM_SR_PLATFORM": "amd"},
         dashboard_disabled=True,
@@ -427,33 +414,6 @@ def test_never_pull_preflight_skips_dashboard_when_disabled(monkeypatch):
 
     assert captured["dashboard_image"] is None
     assert captured["include_dashboard"] is False
-    assert sim_checks == [("sim:test", "never")]
-
-
-def test_never_pull_preflight_skips_sim_when_disabled(monkeypatch):
-    sim_checks = []
-    monkeypatch.setattr(
-        core,
-        "get_runtime_images",
-        lambda **kwargs: {"router": "router:test", "envoy": "envoy:test"},
-    )
-    monkeypatch.setattr(
-        core,
-        "get_fleet_sim_container_image",
-        lambda image=None, pull_policy=None: sim_checks.append((image, pull_policy)),
-    )
-
-    core.ensure_runtime_images_for_pull_policy(
-        image="router:test",
-        router_image=None,
-        envoy_image=None,
-        dashboard_image=None,
-        sim_image="sim:test",
-        pull_policy="never",
-        env_vars={"VLLM_SR_SIM_ENABLED": "false"},
-    )
-
-    assert sim_checks == []
 
 
 def _stop_environment(monkeypatch, stack_layout, statuses, stopped, removed):
@@ -484,7 +444,6 @@ def _stop_environment(monkeypatch, stack_layout, statuses, stopped, removed):
 def _all_managed_names(stack_layout):
     return (
         *stack_layout.runtime_container_names,
-        stack_layout.fleet_sim_container_name,
         stack_layout.grafana_container_name,
         stack_layout.prometheus_container_name,
         stack_layout.jaeger_container_name,
@@ -574,6 +533,11 @@ def test_stop_keeps_a_storage_container_when_the_runtime_cannot_report_mounts(
     _stop_environment(monkeypatch, stack_layout, statuses, stopped, removed)
     monkeypatch.setattr(
         storage_backends, "container_mount_destinations", lambda _name: None
+    )
+    monkeypatch.setattr(
+        core,
+        "detach_preserved_storage_container",
+        lambda _networks, _name: None,
     )
 
     core.stop_vllm_sr()

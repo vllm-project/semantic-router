@@ -1,17 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react'
 
 import {
-  buildChoicesArray,
-  consumeEventStream,
-  getFirstChoice,
-  isEventStreamContentType,
-  mergeParsedChoices,
-  parseChatCompletionPayload,
-  type ChoiceAccumulator,
-  type ParsedChatCompletion,
-  type ParsedToolCallChunk,
-} from './chatResponseParsing'
-import {
   buildChatMessages,
   buildChatRequestBody,
   buildExactChatRequestBody,
@@ -24,15 +13,19 @@ import {
   buildPlaygroundUserContent,
   toPlaygroundAttachmentImages,
   toPlaygroundAttachmentSummaries,
+  type PlaygroundAttachment,
 } from './playgroundFileAttachments'
-import { createFrameSyncController } from './chatStreamingFrameSync'
-import { runToolLoop } from './chatTaskToolLoop'
 import {
-  extractTextToolCalls,
-  mergeToolCallArgumentChunk,
-  resolveAssistantContentUpdate,
-} from './chatToolCallSupport'
-import type { Choice, Message, PlaygroundTask, ReMoMRoundResponse } from './ChatComponentTypes'
+  playgroundErrorPresentation,
+  type PlaygroundErrorInput,
+} from './playgroundErrorPresentation'
+import {
+  assertPlaygroundResponseSuccess,
+  consumePlaygroundResponseBody,
+} from './chatTaskResponseSupport'
+import { ChatTaskResponseState } from './chatTaskResponseState'
+import { runToolLoop } from './chatTaskToolLoop'
+import type { Message, PlaygroundTask } from './ChatComponentTypes'
 import type { ToolCall, ToolDefinition, ToolResult } from '../tools'
 
 type UpdateConversationMessages = (
@@ -55,45 +48,83 @@ interface RunPlaygroundTaskOptions {
   generateId: () => string
   getConversationMessagesSnapshot: (conversationId: string) => Message[]
   registerAbortController: (conversationId: string, controller: AbortController | null) => void
-  setConversationError: (conversationId: string, error: string | null) => void
+  setConversationError: (conversationId: string, error: PlaygroundErrorInput) => void
   setConversationThinking: (conversationId: string, visible: boolean) => void
   setExpandedToolCards: Dispatch<SetStateAction<Set<string>>>
   task: PlaygroundTask
   updateConversationMessages: UpdateConversationMessages
 }
 
-export const runPlaygroundTask = async ({
-  buildTaskTools,
-  clawManagementDisabled,
-  clearConversationActiveTask,
-  endpoint,
-  executeTools,
-  expandedToolCardCount,
-  generateId,
-  getConversationMessagesSnapshot,
-  registerAbortController,
-  setConversationError,
-  setConversationThinking,
-  setExpandedToolCards,
-  task,
-  updateConversationMessages,
-}: RunPlaygroundTaskOptions): Promise<void> => {
+interface PreparedPlaygroundTask {
+  attachments: PlaygroundAttachment[]
+  exactMessages: OutboundChatMessage[]
+  trimmedInput: string
+}
+
+interface PlaygroundExecutionRequest {
+  activeTools: ToolDefinition[]
+  chatMessages: OutboundChatMessage[]
+  requestBody: Record<string, unknown>
+}
+
+interface PlaygroundExecutionRuntime {
+  abortController: AbortController
+  assistantMessageId: string
+  responseState: ChatTaskResponseState
+  timeoutHandle: ReturnType<typeof globalThis.setTimeout>
+}
+
+const preparePlaygroundTask = (task: PlaygroundTask): PreparedPlaygroundTask | null => {
   const trimmedInput = task.prompt.trim()
-  const taskAttachments = task.attachments ?? []
-  const taskAttachmentImages = toPlaygroundAttachmentImages(taskAttachments)
-  const displayImages = [...(task.displayMessage?.images ?? []), ...taskAttachmentImages]
+  const attachments = task.attachments ?? []
   const exactMessages = Array.isArray(task.exactRequest?.messages)
     ? (task.exactRequest.messages as OutboundChatMessage[])
     : []
-  if (!trimmedInput && taskAttachments.length === 0 && exactMessages.length === 0) return
+  if (!trimmedInput && attachments.length === 0 && exactMessages.length === 0) {
+    return null
+  }
+  return { attachments, exactMessages, trimmedInput }
+}
 
+const createUserMessage = (
+  task: PlaygroundTask,
+  preparedTask: PreparedPlaygroundTask,
+  generateId: () => string,
+): Message => {
+  const attachmentImages = toPlaygroundAttachmentImages(preparedTask.attachments)
+  const displayImages = [...(task.displayMessage?.images ?? []), ...attachmentImages]
+  const exactUserContent = [...preparedTask.exactMessages]
+    .reverse()
+    .find((message) => message.role === 'user')?.content
+
+  return {
+    id: generateId(),
+    role: 'user',
+    content: task.displayMessage?.content ?? preparedTask.trimmedInput,
+    images: displayImages.length > 0 ? displayImages : undefined,
+    attachments:
+      preparedTask.attachments.length > 0
+        ? toPlaygroundAttachmentSummaries(preparedTask.attachments)
+        : undefined,
+    playgroundAttachments:
+      preparedTask.attachments.length > 0 ? preparedTask.attachments : undefined,
+    requestContent:
+      exactUserContent ??
+      buildPlaygroundUserContent(preparedTask.trimmedInput, preparedTask.attachments),
+    timestamp: new Date(),
+  }
+}
+
+const beginTaskExecution = (
+  options: RunPlaygroundTaskOptions,
+  preparedTask: PreparedPlaygroundTask,
+): PlaygroundExecutionRuntime => {
+  const { generateId, registerAbortController, setConversationError, task } = options
   setConversationError(task.conversationId, null)
 
   const assistantMessageId = generateId()
-  const responseHeaders: Record<string, string> = {}
-  const latestThinkingProcessRef = { current: '' }
   const abortController = new AbortController()
-  const timeout = globalThis.setTimeout(() => {
+  const timeoutHandle = globalThis.setTimeout(() => {
     abortController.abort(
       new DOMException(
         `Playground request timed out after ${PLAYGROUND_REQUEST_TIMEOUT_MS / 1000} seconds.`,
@@ -101,20 +132,7 @@ export const runPlaygroundTask = async ({
       ),
     )
   }, PLAYGROUND_REQUEST_TIMEOUT_MS)
-  const exactUserContent = [...exactMessages]
-    .reverse()
-    .find((message) => message.role === 'user')?.content
-  const userMessage: Message = {
-    id: generateId(),
-    role: 'user',
-    content: task.displayMessage?.content ?? trimmedInput,
-    images: displayImages.length > 0 ? displayImages : undefined,
-    attachments:
-      taskAttachments.length > 0 ? toPlaygroundAttachmentSummaries(taskAttachments) : undefined,
-    playgroundAttachments: taskAttachments.length > 0 ? taskAttachments : undefined,
-    requestContent: exactUserContent ?? buildPlaygroundUserContent(trimmedInput, taskAttachments),
-    timestamp: new Date(),
-  }
+  const userMessage = createUserMessage(task, preparedTask, generateId)
   const assistantMessage: Message = {
     id: assistantMessageId,
     role: 'assistant',
@@ -123,289 +141,149 @@ export const runPlaygroundTask = async ({
     isStreaming: true,
   }
 
-  updateConversationMessages(task.conversationId, (prev) => [
+  options.updateConversationMessages(task.conversationId, (prev) => [
     ...prev,
     ...(task.appendPromptMessage === false ? [] : [userMessage]),
     assistantMessage,
   ])
   registerAbortController(task.conversationId, abortController)
-  setConversationThinking(task.conversationId, true)
+  options.setConversationThinking(task.conversationId, true)
 
-  let cancelStreamingChoiceSync = () => {}
-  const requestStartedAt = Date.now()
-  let firstResponseAt: number | null = null
+  return {
+    abortController,
+    assistantMessageId,
+    responseState: new ChatTaskResponseState({
+      assistantMessageId,
+      conversationId: task.conversationId,
+      requestStartedAt: Date.now(),
+      updateConversationMessages: options.updateConversationMessages,
+    }),
+    timeoutHandle,
+  }
+}
 
+const buildExecutionRequest = (
+  options: RunPlaygroundTaskOptions,
+  preparedTask: PreparedPlaygroundTask,
+): PlaygroundExecutionRequest => {
+  const { buildTaskTools, clawManagementDisabled, getConversationMessagesSnapshot, task } = options
+  const exactTools = Array.isArray(task.exactRequest?.tools)
+    ? (task.exactRequest.tools as ToolDefinition[])
+    : null
+  const activeTools = task.exactRequest ? (exactTools ?? []) : buildTaskTools(task)
+  const chatMessages = task.exactRequest
+    ? preparedTask.exactMessages
+    : buildChatMessages(
+        getConversationMessagesSnapshot(task.conversationId),
+        preparedTask.trimmedInput,
+        task.requestOptions.enableClawMode && !clawManagementDisabled,
+        preparedTask.attachments,
+      )
+  const requestBody = task.exactRequest
+    ? buildExactChatRequestBody(task.exactRequest, task.requestOptions.model)
+    : buildChatRequestBody(task.requestOptions.model, chatMessages, activeTools)
+
+  return { activeTools, chatMessages, requestBody }
+}
+
+const completeTaskToolCalls = async (
+  options: RunPlaygroundTaskOptions,
+  runtime: PlaygroundExecutionRuntime,
+  request: PlaygroundExecutionRequest,
+): Promise<void> => {
+  const { responseState } = runtime
+  if (!responseState.hasToolCalls) return
+  if (options.task.requestOptions.executeToolCalls === false) {
+    responseState.skipPendingToolCalls()
+    return
+  }
+
+  await runToolLoop({
+    activeTools: request.activeTools,
+    assistantMessageId: runtime.assistantMessageId,
+    abortSignal: runtime.abortController.signal,
+    endpoint: options.endpoint,
+    executeTools: options.executeTools,
+    expandedToolCardCount: options.expandedToolCardCount,
+    initialMessages: [...request.chatMessages],
+    latestThinkingProcessRef: responseState.latestThinkingProcessRef,
+    mergeToolCallsIntoState: (parsedToolCalls, idPrefix, status) =>
+      responseState.mergeToolCallsIntoState(parsedToolCalls, idPrefix, status),
+    setExpandedToolCards: options.setExpandedToolCards,
+    syncAssistantToolCalls: () => responseState.syncAssistantToolCalls(),
+    task: options.task,
+    toolCallsMap: responseState.toolCallsMap,
+    updateConversationMessages: options.updateConversationMessages,
+  })
+}
+
+const executePreparedTask = async (
+  options: RunPlaygroundTaskOptions,
+  preparedTask: PreparedPlaygroundTask,
+  runtime: PlaygroundExecutionRuntime,
+): Promise<void> => {
+  const request = buildExecutionRequest(options, preparedTask)
+  const response = await fetch(options.endpoint, {
+    method: 'POST',
+    headers: buildPlaygroundRequestHeaders(options.task.conversationId),
+    body: JSON.stringify(request.requestBody),
+    signal: runtime.abortController.signal,
+  })
+
+  await assertPlaygroundResponseSuccess(response)
+  if (runtime.responseState.captureResponseHeaders(collectResponseHeaders(response))) {
+    options.setConversationThinking(options.task.conversationId, false)
+  }
+  await consumePlaygroundResponseBody(response, (parsedCompletion, streaming) => {
+    runtime.responseState.applyParsedCompletion(parsedCompletion, streaming)
+  })
+  if (request.activeTools.length > 0) {
+    runtime.responseState.applyTextualToolCalls()
+  }
+
+  // Flush initial stream state before the tool loop so a scheduled empty
+  // commit cannot overwrite the model's follow-up answer.
+  runtime.responseState.drainStreamingChoiceSync()
+  await completeTaskToolCalls(options, runtime, request)
+  options.setConversationThinking(options.task.conversationId, false)
+  runtime.responseState.finalize()
+}
+
+const handleTaskExecutionFailure = (
+  options: RunPlaygroundTaskOptions,
+  runtime: PlaygroundExecutionRuntime,
+  error: unknown,
+): void => {
+  runtime.responseState.cancelStreamingChoiceSync()
+  if (error instanceof Error && error.name === 'AbortError') return
+
+  options.setConversationError(options.task.conversationId, playgroundErrorPresentation(error))
+  options.updateConversationMessages(options.task.conversationId, (prev) =>
+    prev.filter((message) => message.id !== runtime.assistantMessageId),
+  )
+}
+
+const finishTaskExecution = (
+  options: RunPlaygroundTaskOptions,
+  runtime: PlaygroundExecutionRuntime,
+): void => {
+  globalThis.clearTimeout(runtime.timeoutHandle)
+  runtime.responseState.cancelStreamingChoiceSync()
+  options.setConversationThinking(options.task.conversationId, false)
+  options.clearConversationActiveTask(options.task.conversationId, options.task.id)
+  options.registerAbortController(options.task.conversationId, null)
+}
+
+export const runPlaygroundTask = async (options: RunPlaygroundTaskOptions): Promise<void> => {
+  const preparedTask = preparePlaygroundTask(options.task)
+  if (!preparedTask) return
+
+  const runtime = beginTaskExecution(options, preparedTask)
   try {
-    const exactTools = Array.isArray(task.exactRequest?.tools)
-      ? (task.exactRequest.tools as ToolDefinition[])
-      : null
-    const activeTools = task.exactRequest ? (exactTools ?? []) : buildTaskTools(task)
-    const chatMessages = task.exactRequest
-      ? exactMessages
-      : buildChatMessages(
-          getConversationMessagesSnapshot(task.conversationId),
-          trimmedInput,
-          task.requestOptions.enableClawMode && !clawManagementDisabled,
-          taskAttachments,
-        )
-    const requestBody = task.exactRequest
-      ? buildExactChatRequestBody(task.exactRequest, task.requestOptions.model)
-      : buildChatRequestBody(task.requestOptions.model, chatMessages, activeTools)
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: buildPlaygroundRequestHeaders(task.conversationId),
-      body: JSON.stringify(requestBody),
-      signal: abortController.signal,
-    })
-
-    if (!response.ok) {
-      throw new Error(`API error: ${response.status} - ${await response.text()}`)
-    }
-
-    Object.assign(responseHeaders, collectResponseHeaders(response))
-    if (Object.keys(responseHeaders).length > 0) setConversationThinking(task.conversationId, false)
-
-    const choiceContents: Map<number, ChoiceAccumulator> = new Map()
-    const toolCallsMap: Map<number, ToolCall> = new Map()
-    let hasToolCalls = false
-    let isRatingsMode = false
-    let reasoningMomResponses: ReMoMRoundResponse[] | undefined
-
-    const syncAssistantToolCalls = () => {
-      const currentToolCalls = Array.from(toolCallsMap.values())
-      updateConversationMessages(task.conversationId, (prev) =>
-        prev.map((message) =>
-          message.id === assistantMessageId ? { ...message, toolCalls: currentToolCalls } : message,
-        ),
-      )
-    }
-
-    const mergeToolCallsIntoState = (
-      parsedToolCalls: ParsedToolCallChunk[],
-      idPrefix: string,
-      status: ToolCall['status'],
-    ): boolean => {
-      if (parsedToolCalls.length === 0) return false
-      hasToolCalls = true
-
-      parsedToolCalls.forEach((parsedToolCall) => {
-        const toolCallIndex = parsedToolCall.index
-        if (!toolCallsMap.has(toolCallIndex)) {
-          toolCallsMap.set(toolCallIndex, {
-            id: parsedToolCall.id || `${idPrefix}-${toolCallIndex}`,
-            type: 'function',
-            function: {
-              name: parsedToolCall.functionName || '',
-              arguments: '',
-            },
-            status,
-          })
-        }
-
-        const existingToolCall = toolCallsMap.get(toolCallIndex)!
-        existingToolCall.status = status
-        if (parsedToolCall.functionName) {
-          existingToolCall.function.name = parsedToolCall.functionName
-        }
-        if (parsedToolCall.functionArguments) {
-          existingToolCall.function.arguments = mergeToolCallArgumentChunk(
-            existingToolCall.function.arguments,
-            parsedToolCall.functionArguments,
-          )
-        }
-        if (parsedToolCall.id) {
-          existingToolCall.id = parsedToolCall.id
-        }
-      })
-
-      return true
-    }
-
-    const commitAssistantChoices = (streaming: boolean) => {
-      if (isRatingsMode) {
-        const choicesArray = buildChoicesArray(choiceContents)
-        const thinkingProcess =
-          getFirstChoice(choiceContents)?.reasoningContent || latestThinkingProcessRef.current
-        if (thinkingProcess) {
-          latestThinkingProcessRef.current = thinkingProcess
-        }
-
-        updateConversationMessages(task.conversationId, (prev) =>
-          prev.map((message) =>
-            message.id === assistantMessageId
-              ? {
-                  ...message,
-                  content: choicesArray[0]?.content || '',
-                  choices: choicesArray,
-                  thinkingProcess: thinkingProcess || message.thinkingProcess,
-                  isStreaming: streaming,
-                }
-              : message,
-          ),
-        )
-        return
-      }
-
-      const firstChoice = getFirstChoice(choiceContents)
-      if (!firstChoice) return
-      if (firstChoice.reasoningContent) {
-        latestThinkingProcessRef.current = firstChoice.reasoningContent
-      }
-
-      updateConversationMessages(task.conversationId, (prev) =>
-        prev.map((message) =>
-          message.id === assistantMessageId
-            ? {
-                ...message,
-                content: resolveAssistantContentUpdate(
-                  message.content,
-                  firstChoice.content,
-                  hasToolCalls,
-                ),
-                thinkingProcess: firstChoice.reasoningContent || message.thinkingProcess,
-                isStreaming: streaming,
-              }
-            : message,
-        ),
-      )
-    }
-
-    const streamingChoiceSync = createFrameSyncController(() => {
-      commitAssistantChoices(true)
-    })
-    cancelStreamingChoiceSync = () => streamingChoiceSync.cancel()
-
-    const syncAssistantChoices = (streaming: boolean) => {
-      if (streaming) {
-        streamingChoiceSync.schedule()
-        return
-      }
-
-      streamingChoiceSync.cancel()
-      commitAssistantChoices(false)
-    }
-
-    const applyParsedCompletion = (parsedCompletion: ParsedChatCompletion, streaming: boolean) => {
-      if (firstResponseAt === null && parsedCompletion.choices.length > 0) {
-        firstResponseAt = Date.now()
-        responseHeaders['x-vsr-ttft-ms'] = String(firstResponseAt - requestStartedAt)
-      }
-      if (parsedCompletion.reasoningMomResponses) {
-        reasoningMomResponses = parsedCompletion.reasoningMomResponses
-      }
-      if (parsedCompletion.choices.length > 1) {
-        isRatingsMode = true
-      }
-      mergeParsedChoices(choiceContents, parsedCompletion.choices)
-
-      let shouldSyncToolCalls = false
-      parsedCompletion.choices.forEach((parsedChoice) => {
-        if (
-          mergeToolCallsIntoState(parsedChoice.toolCalls, 'tool', streaming ? 'running' : 'pending')
-        ) {
-          shouldSyncToolCalls = true
-        }
-      })
-      if (shouldSyncToolCalls) {
-        syncAssistantToolCalls()
-      }
-      syncAssistantChoices(streaming)
-    }
-
-    if (!isEventStreamContentType(response.headers.get('content-type'))) {
-      const parsedResponse = parseChatCompletionPayload(await response.text())
-      if (!parsedResponse) throw new Error('Invalid JSON response')
-      if (parsedResponse.errorMessage) throw new Error(parsedResponse.errorMessage)
-      if (parsedResponse.choices.length === 0) throw new Error('No choices in response')
-      applyParsedCompletion(parsedResponse, false)
-    } else {
-      if (!response.body) throw new Error('No response body')
-      await consumeEventStream(response.body, (data) => {
-        const parsedChunk = parseChatCompletionPayload(data)
-        if (!parsedChunk) return
-        if (parsedChunk.errorMessage) throw new Error(parsedChunk.errorMessage)
-        applyParsedCompletion(parsedChunk, true)
-      })
-    }
-
-    const firstChoice = getFirstChoice(choiceContents)
-    if (firstChoice && activeTools.length > 0) {
-      const textualToolCalls = extractTextToolCalls(firstChoice.content)
-      if (textualToolCalls.toolCalls.length > 0) {
-        firstChoice.content = textualToolCalls.content
-        mergeToolCallsIntoState(textualToolCalls.toolCalls, 'text-tool', 'pending')
-        syncAssistantToolCalls()
-        syncAssistantChoices(false)
-      }
-    }
-
-    // A fast stream can finish before the scheduled frame commits its initial
-    // tool-call state. Flush it before the tool loop so that stale empty content
-    // cannot overwrite the model's follow-up answer after tool execution.
-    streamingChoiceSync.drain()
-
-    if (hasToolCalls && task.requestOptions.executeToolCalls !== false) {
-      await runToolLoop({
-        activeTools,
-        assistantMessageId,
-        abortSignal: abortController.signal,
-        endpoint,
-        executeTools,
-        expandedToolCardCount,
-        initialMessages: [...chatMessages],
-        latestThinkingProcessRef,
-        mergeToolCallsIntoState,
-        setExpandedToolCards,
-        syncAssistantToolCalls,
-        task,
-        toolCallsMap,
-        updateConversationMessages,
-      })
-    } else if (hasToolCalls) {
-      toolCallsMap.forEach((toolCall) => {
-        if (toolCall.status === 'pending' || toolCall.status === 'running') {
-          toolCall.status = 'skipped'
-        }
-      })
-      syncAssistantToolCalls()
-    }
-
-    const finalChoices: Choice[] | undefined = isRatingsMode
-      ? buildChoicesArray(choiceContents)
-      : undefined
-    const finalThinkingProcess =
-      latestThinkingProcessRef.current || getFirstChoice(choiceContents)?.reasoningContent || ''
-    responseHeaders['x-vsr-latency-ms'] = String(Date.now() - requestStartedAt)
-    setConversationThinking(task.conversationId, false)
-    streamingChoiceSync.drain()
-    updateConversationMessages(task.conversationId, (prev) =>
-      prev.map((message) =>
-        message.id === assistantMessageId
-          ? {
-              ...message,
-              isStreaming: false,
-              headers: Object.keys(responseHeaders).length > 0 ? responseHeaders : undefined,
-              choices: finalChoices,
-              thinkingProcess: finalThinkingProcess || message.thinkingProcess,
-              reasoning_mom_responses: reasoningMomResponses,
-            }
-          : message,
-      ),
-    )
-  } catch (err) {
-    cancelStreamingChoiceSync()
-    if (err instanceof Error && err.name === 'AbortError') {
-      return
-    }
-    setConversationError(task.conversationId, err instanceof Error ? err.message : 'Unknown error')
-    updateConversationMessages(task.conversationId, (prev) =>
-      prev.filter((message) => message.id !== assistantMessageId),
-    )
+    await executePreparedTask(options, preparedTask, runtime)
+  } catch (error) {
+    handleTaskExecutionFailure(options, runtime, error)
   } finally {
-    globalThis.clearTimeout(timeout)
-    cancelStreamingChoiceSync()
-    setConversationThinking(task.conversationId, false)
-    clearConversationActiveTask(task.conversationId, task.id)
-    registerAbortController(task.conversationId, null)
+    finishTaskExecution(options, runtime)
   }
 }

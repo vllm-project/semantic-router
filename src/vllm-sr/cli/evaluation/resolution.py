@@ -3,49 +3,81 @@
 from __future__ import annotations
 
 import random
-from dataclasses import dataclass
 
 from cli.evaluation.canonical import digest_value
+from cli.evaluation.contract_primitives import ArtifactRef
 from cli.evaluation.contracts import (
-    ArtifactRef,
-    BindingSnapshot,
-    EvaluationTargetArm,
     ExecutorMetadata,
     GradingCaseSet,
-    HTTPServiceEndpoint,
-    PolicySnapshot,
-    PoolDefinition,
     ResolvedRunSnapshot,
-    RunEnvironment,
     RunManifest,
     VisibleCaseSet,
     WorkloadSnapshot,
 )
 from cli.evaluation.evidence import ReplayFixture
-from cli.evaluation.fixtures import FixtureInputs
-from cli.evaluation.normalized_suite_executor import NormalizedSuiteInputs
+from cli.evaluation.execution_contract import EvaluationInputs
+from cli.evaluation.runtime_factors import RunFactors, runtime_factors
 
 
-@dataclass(frozen=True)
-class _RunFactors:
-    policy: PolicySnapshot
-    arms: tuple[EvaluationTargetArm, ...]
-    pool: PoolDefinition
-    binding: BindingSnapshot
-    environment: RunEnvironment
+def sample_case_sets(
+    visible: VisibleCaseSet,
+    grading: GradingCaseSet,
+    limit: int,
+    seed: int,
+) -> tuple[VisibleCaseSet, GradingCaseSet]:
+    """Sample aligned visible/hidden cases without requiring replay evidence."""
 
-
-def _stable_id(prefix: str, value: object) -> str:
-    suffix = digest_value(value).removeprefix("sha256:")[:16]
-    return f"{prefix}-{suffix}"
-
-
-def sample_fixture(inputs: FixtureInputs, limit: int, seed: int) -> FixtureInputs:
-    count = min(limit, len(inputs.visible.cases))
-    indices = list(range(len(inputs.visible.cases)))
+    visible_ids = tuple(case.id for case in visible.cases)
+    grading_ids = tuple(case.case_id for case in grading.cases)
+    if visible_ids != grading_ids:
+        raise ValueError("visible and grading cases must have identical ordering")
+    indices = list(range(len(visible_ids)))
     random.Random(seed).shuffle(indices)
-    selected = sorted(indices[:count])
-    return FixtureInputs(
+    selected = sorted(indices[: min(limit, len(indices))])
+    if not selected:
+        raise ValueError("evaluation plan sampled no cases")
+    return (
+        VisibleCaseSet(cases=tuple(visible.cases[index] for index in selected)),
+        GradingCaseSet(cases=tuple(grading.cases[index] for index in selected)),
+    )
+
+
+def sample_fixture(
+    inputs: EvaluationInputs,
+    limit: int,
+    seed: int,
+    *,
+    eligible_case_ids: frozenset[str] | None = None,
+    required_case_groups: tuple[frozenset[str], ...] = (),
+) -> EvaluationInputs:
+    if inputs.fixture is None:
+        raise ValueError("fixture sampling requires replay evidence")
+    indices = [
+        index
+        for index, case in enumerate(inputs.visible.cases)
+        if eligible_case_ids is None or case.id in eligible_case_ids
+    ]
+    if not indices:
+        raise ValueError("evaluation plan has no eligible fixture cases")
+    count = min(limit, len(indices))
+    random.Random(seed).shuffle(indices)
+    selected: list[int] = []
+    for required_ids in required_case_groups:
+        candidates = [
+            index for index in indices if inputs.visible.cases[index].id in required_ids
+        ]
+        if not candidates:
+            raise ValueError("evaluation plan has no case for a required track")
+        if any(index in selected for index in candidates):
+            continue
+        if len(selected) == count:
+            raise ValueError(
+                "sample limit cannot cover every required evaluation track"
+            )
+        selected.append(candidates[0])
+    selected.extend(index for index in indices if index not in selected)
+    selected = sorted(selected[:count])
+    return EvaluationInputs(
         visible=VisibleCaseSet(
             cases=tuple(inputs.visible.cases[index] for index in selected)
         ),
@@ -60,6 +92,10 @@ def sample_fixture(inputs: FixtureInputs, limit: int, seed: int) -> FixtureInput
         arms=inputs.arms,
         binding=inputs.binding,
         environment=inputs.environment,
+        suite_revisions=dict(inputs.suite_revisions),
+        suite_executors=dict(inputs.suite_executors),
+        executor_ids=dict(inputs.executor_ids),
+        private_identity_map=inputs.private_identity_map,
     )
 
 
@@ -69,66 +105,9 @@ def live_grading(grading: GradingCaseSet) -> GradingCaseSet:
     return grading.model_copy(deep=True)
 
 
-def _live_factors(
-    manifest: RunManifest,
-    discovered_entrypoints: tuple[str, ...],
-) -> _RunFactors:
-    recipe_digest = manifest.policy_snapshot_digest
-    entrypoint_model = (
-        discovered_entrypoints[0] if discovered_entrypoints else "vllm-sr/auto"
-    )
-    policy = PolicySnapshot(
-        id=_stable_id(
-            "policy",
-            {
-                "target_id": manifest.target.id,
-                "entrypoint_model": entrypoint_model,
-                "recipe_digest": recipe_digest,
-            },
-        ),
-        entrypoint_model=entrypoint_model,
-        recipe_digest=recipe_digest,
-    )
-    arms = manifest.target.model_arms
-    pool = PoolDefinition(
-        id=_stable_id("pool", arms), arm_ids=tuple(arm.id for arm in arms)
-    )
-    binding = BindingSnapshot(
-        id=_stable_id("binding", {"policy_id": policy.id, "pool_id": pool.id}),
-        policy_id=policy.id,
-        pool_id=pool.id,
-    )
-    environment_content = {
-        "target_id": manifest.target.id,
-        "platform": "runtime",
-        "hardware_class": "runtime-reported",
-        "route_eval": manifest.target.router_api_url,
-        "routed_chat": manifest.target.envoy_url,
-        "backend_topology_digest": manifest.target.backend_topology_digest,
-    }
-    environment = RunEnvironment(
-        id=_stable_id("environment", environment_content),
-        target_id=manifest.target.id,
-        platform="runtime",
-        hardware_class="runtime-reported",
-        backend_topology_digest=manifest.target.backend_topology_digest,
-        route_eval=(
-            HTTPServiceEndpoint(url=manifest.target.router_api_url)
-            if manifest.target.router_api_url
-            else None
-        ),
-        routed_chat=(
-            HTTPServiceEndpoint(url=manifest.target.envoy_url)
-            if manifest.target.envoy_url
-            else None
-        ),
-    )
-    return _RunFactors(policy, arms, pool, binding, environment)
-
-
 def resolve_snapshot(
     manifest: RunManifest,
-    inputs: FixtureInputs | NormalizedSuiteInputs,
+    inputs: EvaluationInputs,
     visible_ref: ArtifactRef,
     grading_ref: ArtifactRef,
     fixture_ref: ArtifactRef | None,
@@ -146,7 +125,7 @@ def resolve_snapshot(
         grading_cases=grading_ref,
     )
     if manifest.mode == "replay":
-        factors = _RunFactors(
+        factors = RunFactors(
             inputs.policy,
             inputs.arms,
             inputs.pool,
@@ -154,28 +133,32 @@ def resolve_snapshot(
             inputs.environment,
         )
     else:
-        factors = _live_factors(manifest, discovered_entrypoints)
+        factors = runtime_factors(manifest)
+        if (
+            inputs.policy != factors.policy
+            or inputs.arms != factors.arms
+            or inputs.pool != factors.pool
+            or inputs.binding != factors.binding
+            or inputs.environment != factors.environment
+        ):
+            raise ValueError(
+                "live executor inputs do not bind the resolved runtime factors"
+            )
     if manifest.policy_snapshot_digest != factors.policy.recipe_digest:
         raise ValueError(
             "manifest policy_snapshot_digest does not match the executed policy"
         )
-    executor_ids = getattr(inputs, "executor_ids", {})
+    if inputs.suite_executors != manifest.suite_executors:
+        raise ValueError("executed suite identities do not match the frozen manifest")
+    missing_executors = sorted(set(manifest.track_ids) - set(inputs.executor_ids))
+    if missing_executors:
+        raise ValueError(
+            "executor identity is missing for tracks: " + ", ".join(missing_executors)
+        )
     executors = tuple(
         ExecutorMetadata(
             track_id=track_id,
-            executor_id=executor_ids.get(
-                track_id,
-                {
-                    "routing": "route-eval.v1",
-                    "model_pool": "openai-arm-matrix.v1",
-                    "joint": "routed-chat.v1",
-                    "agentic": "trajectory-replay.v1",
-                    "multimodal": "openai-multimodal.v1",
-                    "preference": "offline-preference.v1",
-                    "safety": "safety-evidence.v1",
-                    "capacity": "bounded-load.v1",
-                }[track_id],
-            ),
+            executor_id=inputs.executor_ids[track_id],
             mode=manifest.mode,
         )
         for track_id in manifest.track_ids

@@ -41,10 +41,10 @@ The synthetic workload also assigns one of three categories:
 Arrivals follow a Poisson process at rate `lambda`. The random seed makes a
 given command reproducible, but a single seed is not a confidence interval.
 
-The dashboard converts an uploaded trace to a total-token CDF before running a
-job. Original inter-arrival times, input/output ratios, and route ordering are
-not replayed by that path. The Python library also contains `TraceWorkload` for
-programmatic timestamped replay.
+The standalone HTTP service converts an uploaded trace to a total-token CDF
+before running a job. Original inter-arrival times, input/output ratios, and
+route ordering are not replayed by that path. The Python library also contains
+`TraceWorkload` for programmatic timestamped replay.
 
 ### Planning implication
 

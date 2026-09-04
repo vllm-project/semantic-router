@@ -45,7 +45,8 @@ def test_dashboard_dockerfile_retries_runtime_apk_installs() -> None:
 
     assert "FROM ${IMAGE_REGISTRY}library/python:3.11-slim-bookworm" in content
     assert (
-        "apt_get_install_with_retry ca-certificates curl docker.io gosu wget" in content
+        "apt_get_install_with_retry ca-certificates curl docker.io gosu libseccomp2 wget"
+        in content
     )
     assert (
         "COPY dashboard/backend/entrypoint_permissions.py /app/entrypoint_permissions.py"
@@ -510,6 +511,9 @@ def test_dashboard_dockerfile_ships_evaluation_worker_without_legacy_model_eval(
     content = DASHBOARD_DOCKERFILE.read_text(encoding="utf-8")
 
     assert "COPY src/vllm-sr/cli/ /app/cli/" in content
+    assert "libseccomp2" in content
+    assert (REPO_ROOT / "src/vllm-sr/cli/evaluation/sandbox_worker.py").is_file()
+    assert (REPO_ROOT / "src/vllm-sr/cli/evaluation/sandbox.py").is_file()
     assert (
         '"${VIRTUAL_ENV}/bin/pip" install --no-cache-dir -r /app/requirements.txt'
         in content
