@@ -239,7 +239,30 @@ for expected in 'subPath: config.yaml' 'subPath: tools_db.json'; do
 done
 echo ""
 
-# Test 8: Validate Chart.yaml
+# Test 8: Validate the default router pod security contract
+log_info "Validating hardened router pod security defaults..."
+for expected in \
+    'runAsNonRoot: true' \
+    'runAsUser: 65532' \
+    'runAsGroup: 65532' \
+    'type: RuntimeDefault' \
+    'allowPrivilegeEscalation: false' \
+    'readOnlyRootFilesystem: true' \
+    'mountPath: /tmp' \
+    'mountPath: /app/models'; do
+    if ! grep -q "$expected" "$TEMP_DIR/default-template.yaml"; then
+        log_error "Missing hardened router pod setting: $expected"
+        exit 1
+    fi
+done
+if ! grep -A2 'capabilities:' "$TEMP_DIR/default-template.yaml" | grep -q 'ALL'; then
+    log_error "Router container does not drop all Linux capabilities"
+    exit 1
+fi
+log_success "Router pod defaults enforce the restricted security contract"
+echo ""
+
+# Test 9: Validate Chart.yaml
 log_info "Validating Chart.yaml..."
 if [ -f "$CHART_PATH/Chart.yaml" ]; then
     chart_name=$(grep "^name:" "$CHART_PATH/Chart.yaml" | awk '{print $2}')
@@ -255,7 +278,7 @@ else
 fi
 echo ""
 
-# Test 9: Check for common Helm best practices
+# Test 10: Check for common Helm best practices
 log_info "Checking Helm best practices..."
 best_practices_passed=true
 
@@ -289,7 +312,7 @@ if [ "$best_practices_passed" = false ]; then
 fi
 echo ""
 
-# Test 10: Dry-run install (requires cluster)
+# Test 11: Dry-run install (requires cluster)
 if kubectl cluster-info &> /dev/null; then
     log_info "Testing dry-run install..."
     if helm install test-release "$CHART_PATH" --dry-run --debug > "$TEMP_DIR/dry-run.log" 2>&1; then

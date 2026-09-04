@@ -113,6 +113,9 @@ async function createControlledPair(
       candidateSourceRunID,
     )
     session.creatingPairID.current = request.client_request_id
+    // This route identity belongs to the in-flight create request, so route
+    // reconciliation must not independently recover it from the server.
+    session.reconciledRoutePairID.current = request.client_request_id
     await session.onPairIdentityRef.current(request.client_request_id)
     if (!session.mounted.current || version !== session.requestVersion.current) return null
     const execution = await createEvaluationControlledPair(request)
@@ -238,7 +241,7 @@ export function useControlledPairRouteReconciliation(
       session.reconciledRoutePairID.current = null
       return
     }
-    if (state.status === 'creating' && session.creatingPairID.current === activePairID) return
+    if (session.creatingPairID.current === activePairID) return
     if (
       state.execution?.id === activePairID ||
       session.reconciledRoutePairID.current === activePairID
@@ -246,7 +249,7 @@ export function useControlledPairRouteReconciliation(
       return
     session.reconciledRoutePairID.current = activePairID
     void reconcile(activePairID)
-  }, [activePairID, reconcile, session, state.execution?.id, state.status])
+  }, [activePairID, reconcile, session, state.execution?.id])
 }
 
 export function useControlledPairPolling(
