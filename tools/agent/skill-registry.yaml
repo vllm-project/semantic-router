@@ -635,3 +635,13 @@ skills:
     description: Maintainer workflow for creating, updating, or deleting GitHub issues and PR metadata using repo labels, templates, and validation context.
     acceptance_criteria:
     - Issue or PR management requests use the canonical templates, label taxonomy, and repo validation context instead of ad hoc summaries.
+  - name: vllm-sr-install
+    path: tools/agent/skills/vllm-sr-install/SKILL.md
+    audience: contributor
+    description: Harness-neutral public installation skill for vLLM Semantic Router. Guides any compatible coding agent through environment discovery, supported path selection, bounded plan presentation, agent-safe installation, validation, and safety-boundary enforcement.
+    acceptance_criteria:
+    - The skill selects only supported installation paths from the public installer contract.
+    - A bounded plan is shown before any mutation.
+    - The installation is validated with vllm-sr --version.
+    - Existing installations, configurations, and deployments are not overwritten without explicit approval.
+    - No credentials, private endpoints, or secret values appear in skill output.
