@@ -654,15 +654,24 @@ func (s *RedisStore) GetConversationChain(ctx context.Context, responseID string
 }
 
 // ListResponsesByConversation lists a conversation's responses via the
-// secondary index, at a cost proportional to the conversation rather than
-// the keyspace.
+// secondary index, at a cost proportional to the requested page rather than
+// the keyspace or even the conversation's full history (see
+// listIndexedResponseIDs).
 //
-// Read path: index exists → read it. Otherwise check the empty-conversation
-// marker → nothing to do. Otherwise this may be a pre-index conversation, an
-// unknown ID, or a genuinely empty one that has never been checked before:
-// ensureConversationIndex resolves which, running the one-time O(N) legacy
-// scan at most once per conversation. See blueprint §5 Phase 3 for the full
-// state diagram this implements.
+// Read path: index exists → read the requested page from it. Otherwise
+// check the empty-conversation marker → nothing to do. Otherwise this may
+// be a pre-index conversation, an unknown ID, or a genuinely empty one that
+// has never been checked before: ensureConversationIndex resolves which,
+// running the one-time O(N) legacy scan at most once per conversation. See
+// blueprint §5 Phase 3 for the full state diagram this implements.
+//
+// Order/After/Before parity note: this implementation honors ListOptions.Order
+// (default "desc", newest first) and After/Before cursors, per the contract
+// documented on ListOptions in interface.go. MemoryStore does not — it
+// always returns insertion order regardless of these fields (see its own
+// doc comment). Bringing MemoryStore into line is out of scope for #2814;
+// callers that need a specific order from either backend today should not
+// assume Redis and MemoryStore agree on default order.
 func (s *RedisStore) ListResponsesByConversation(ctx context.Context, conversationID string, opts ListOptions) ([]*responseapi.StoredResponse, error) {
 	if !s.enabled {
 		return nil, ErrStoreDisabled
@@ -710,19 +719,20 @@ func (s *RedisStore) ListResponsesByConversation(ctx context.Context, conversati
 	return nil, nil
 }
 
-// listIndexedResponses reads a conversation's responses through its
-// already-confirmed-existing index.
+// listIndexedResponses reads one page of a conversation's responses through
+// its already-confirmed-existing index: a bounded rank-window read
+// (listIndexedResponseIDs), not a full-index scan, so cost is proportional
+// to the page requested rather than the conversation's full history.
 //
-// Phase 3 shape: reads the whole index (unbounded, same as the pre-#2814
-// behavior) and applies ApplyListOptions after fetching every payload.
-// Replaced in Phase 4 by a bounded rank-window read driven by
-// normalizeResponseListOptions, so a large conversation's listing cost stops
-// scaling with its full history instead of just the requested page.
+// Because only one page of IDs is read, pruning a stale or moved entry can
+// make this return fewer than the requested Limit even when more matching
+// responses exist further in the index. That is an accepted Phase 4
+// trade-off (blueprint §5 Phase 4): topping up short pages by re-reading
+// further windows would turn a bug fix into a pagination redesign.
 func (s *RedisStore) listIndexedResponses(ctx context.Context, conversationID string, opts ListOptions) ([]*responseapi.StoredResponse, error) {
-	// Scored by created_at, so this reads back chronologically.
-	responseIDs, err := s.client.ZRange(ctx, s.conversationIndexKey(conversationID), 0, -1).Result()
+	responseIDs, err := s.listIndexedResponseIDs(ctx, conversationID, opts)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read conversation index: %w", err)
+		return nil, err
 	}
 	if len(responseIDs) == 0 {
 		return nil, nil
@@ -741,15 +751,152 @@ func (s *RedisStore) listIndexedResponses(ctx context.Context, conversationID st
 			len(missingIDs), conversationID, err)
 	}
 
-	// Guard against an entry left behind by a response that moved conversation.
-	var responses []*responseapi.StoredResponse
+	// Guard against an entry left behind by a response that moved
+	// conversation: prune it from this conversation's index too, not just
+	// filter it from this page, since it will never legitimately belong here.
+	responses := make([]*responseapi.StoredResponse, 0, len(fetched))
 	for _, response := range fetched {
 		if response.ConversationID == conversationID {
 			responses = append(responses, response)
+			continue
+		}
+		if err := s.unindexResponse(ctx, conversationID, response.ID); err != nil {
+			logging.Warnf("RedisStore: failed to prune response %s moved out of conversation %s: %v",
+				response.ID, conversationID, err)
 		}
 	}
 
-	return ApplyListOptions(responses, opts), nil
+	return responses, nil
+}
+
+// normalizedListOptions is ListOptions after validation and defaulting:
+// Limit is always in [1, MaxListLimit], and Order is always exactly "asc"
+// or "desc".
+type normalizedListOptions struct {
+	Limit  int
+	Order  string
+	After  string
+	Before string
+}
+
+// normalizeResponseListOptions validates and defaults a caller's ListOptions
+// for indexed reads. Order defaults to "desc" (newest first), matching the
+// documented ListOptions.Order contract in interface.go and OpenAI's list
+// default — a contract neither store implementation actually honored before
+// this issue (both simply returned index/insertion order regardless of
+// Order). Rejects an unrecognized Order and rejects After and Before set
+// together, rather than silently picking one and ignoring the other.
+func normalizeResponseListOptions(opts ListOptions) (normalizedListOptions, error) {
+	if opts.After != "" && opts.Before != "" {
+		return normalizedListOptions{}, ErrInvalidInput
+	}
+
+	limit := opts.Limit
+	if limit <= 0 {
+		limit = DefaultListLimit
+	}
+	if limit > MaxListLimit {
+		limit = MaxListLimit
+	}
+
+	order := opts.Order
+	switch order {
+	case "":
+		order = "desc"
+	case "asc", "desc":
+		// already valid
+	default:
+		return normalizedListOptions{}, ErrInvalidInput
+	}
+
+	return normalizedListOptions{Limit: limit, Order: order, After: opts.After, Before: opts.Before}, nil
+}
+
+// listIndexedResponseIDs reads one bounded window of response IDs from a
+// conversation's index: at most normalizeResponseListOptions(opts).Limit
+// IDs, in the requested order, optionally positioned after/before a cursor
+// response ID — never a full ZRANGE 0 -1.
+//
+// Cursors are resolved via ZRANK (ascending order) or ZREVRANK (descending
+// order), i.e. rank in the order actually being read, and the window is
+// then read with the matching ZRANGE/ZREVRANGE. A cursor naming a response
+// ID that is not currently a member of the index (evicted, wrong
+// conversation, typo'd by the caller) yields an empty page rather than an
+// error: the same behavior as an ordinary page with nothing left to return.
+func (s *RedisStore) listIndexedResponseIDs(ctx context.Context, conversationID string, opts ListOptions) ([]string, error) {
+	normalized, err := normalizeResponseListOptions(opts)
+	if err != nil {
+		return nil, err
+	}
+
+	indexKey := s.conversationIndexKey(conversationID)
+	ascending := normalized.Order == "asc"
+
+	rank := func(member string) (int64, bool, error) {
+		var cmd *redis.IntCmd
+		if ascending {
+			cmd = s.client.ZRank(ctx, indexKey, member)
+		} else {
+			cmd = s.client.ZRevRank(ctx, indexKey, member)
+		}
+		r, err := cmd.Result()
+		if err != nil {
+			if errors.Is(err, redis.Nil) {
+				return 0, false, nil
+			}
+			return 0, false, fmt.Errorf("failed to rank conversation index cursor %s: %w", member, err)
+		}
+		return r, true, nil
+	}
+
+	limit := int64(normalized.Limit)
+	var start, end int64
+
+	switch {
+	case normalized.After != "":
+		r, found, err := rank(normalized.After)
+		if err != nil {
+			return nil, err
+		}
+		if !found {
+			return nil, nil
+		}
+		start = r + 1
+		end = start + limit - 1
+	case normalized.Before != "":
+		r, found, err := rank(normalized.Before)
+		if err != nil {
+			return nil, err
+		}
+		if !found {
+			return nil, nil
+		}
+		end = r - 1
+		start = end - limit + 1
+		if start < 0 {
+			start = 0
+		}
+	default:
+		start = 0
+		end = limit - 1
+	}
+
+	if end < start {
+		return nil, nil
+	}
+
+	var idsCmd *redis.StringSliceCmd
+	if ascending {
+		idsCmd = s.client.ZRange(ctx, indexKey, start, end)
+	} else {
+		idsCmd = s.client.ZRevRange(ctx, indexKey, start, end)
+	}
+	ids, err := idsCmd.Result()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read conversation index window: %w", err)
+	}
+
+	return ids, nil
 }
 
 // Conversation Store Methods
