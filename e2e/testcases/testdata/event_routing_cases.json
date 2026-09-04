@@ -1,0 +1,26 @@
+[
+  {
+    "name": "Event type match - payment_failed",
+    "description": "critical_payment_event matches on the payment_failed event type alone",
+    "query": "Our system just received a payment_failed webhook, please advise",
+    "expected_decision": "critical_event",
+    "expected_matched_event": "critical_payment_event",
+    "should_match": true
+  },
+  {
+    "name": "Severity + action code match",
+    "description": "critical_payment_event matches on the critical severity and TXN_DECLINE action code",
+    "query": "We have a critical TXN_DECLINE that needs review right away",
+    "expected_decision": "critical_event",
+    "expected_matched_event": "critical_payment_event",
+    "should_match": true
+  },
+  {
+    "name": "No configured criteria present",
+    "description": "A generic query with no event_type, severity, action_code, or temporal marker should not trigger critical_payment_event",
+    "query": "What's a good recipe for pasta tonight?",
+    "expected_decision": "",
+    "expected_matched_event": "",
+    "should_match": false
+  }
+]
