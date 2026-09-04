@@ -39,20 +39,28 @@ rbac:
 # Pod annotations
 podAnnotations: {}
 # Pod security context
-podSecurityContext: {}
-# fsGroup: 2000
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
 
 # Container security context
 securityContext:
   # -- Run as non-root user
-  runAsNonRoot: false
+  runAsNonRoot: true
+  # -- Numeric user used by the maintained image in Kubernetes
+  runAsUser: 65532
+  # -- Numeric group used by the maintained image in Kubernetes
+  runAsGroup: 65532
   # -- Allow privilege escalation
   allowPrivilegeEscalation: false
-  # capabilities:
-  #   drop:
-  #   - ALL
-  # readOnlyRootFilesystem: true
-  # runAsUser: 1000
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true
 # Service configuration
 service:
   # -- Service type
@@ -510,6 +518,14 @@ args:
 env:
   - name: LD_LIBRARY_PATH
     value: "/app/lib"
+  # The runtime root filesystem is read-only. Keep user and Hugging Face cache
+  # state on explicitly writable mounts.
+  - name: HOME
+    value: "/tmp"
+  - name: TMPDIR
+    value: "/tmp"
+  - name: HF_HOME
+    value: "/app/models/.cache/huggingface"
   # HF_TOKEN for downloading gated models (e.g., embeddinggemma-300m)
   # The E2E framework creates this secret if HF_TOKEN is available in the environment
   # For local deployments, create the secret manually or set HF_TOKEN directly
@@ -539,8 +555,8 @@ dashboard:
   image:
     # -- Dashboard image repository
     repository: ghcr.io/vllm-project/semantic-router/dashboard
-    # -- Dashboard image tag
-    tag: "latest"
+    # -- Dashboard image tag (defaults to the chart appVersion)
+    tag: ""
     # -- Dashboard image pull policy
     pullPolicy: IfNotPresent
   # -- Run dashboard in read-only mode
@@ -587,6 +603,12 @@ dashboard:
   # Override if you build a custom dashboard image with a different non-root UID.
   podSecurityContext:
     fsGroup: 65532
+    seccompProfile:
+      type: RuntimeDefault
+  # -- Container security context. The maintained image still starts as root to
+  # prepare writable mounts before dropping to UID/GID 65532 with gosu.
+  securityContext:
+    allowPrivilegeEscalation: false
   service:
     # -- Dashboard service type
     type: ClusterIP

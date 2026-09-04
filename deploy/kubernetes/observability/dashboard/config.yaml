@@ -169,7 +169,6 @@ global:
           enabled: true
           time_windows: [1m, 5m, 15m, 1h]
           update_interval: 30s
-          model_metrics: true
           queue_depth_estimation: true
           max_models: 50
   stores:

@@ -3059,7 +3059,6 @@ hallucination_mitigation:
     model_id: "models/hallucination_detect_modernbert"
     threshold: 0.6
     use_cpu: true
-  on_hallucination_detected: "block"
 `
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
@@ -3076,7 +3075,6 @@ hallucination_mitigation:
 				Expect(cfg.HallucinationMitigation.HallucinationModel.ModelID).To(Equal("models/hallucination_detect_modernbert"))
 				Expect(cfg.HallucinationMitigation.HallucinationModel.Threshold).To(Equal(float32(0.6)))
 				Expect(cfg.HallucinationMitigation.HallucinationModel.UseCPU).To(BeTrue())
-				Expect(cfg.HallucinationMitigation.OnHallucinationDetected).To(Equal("block"))
 			})
 		})
 
@@ -3102,7 +3100,6 @@ hallucination_mitigation:
 				Expect(cfg.HallucinationMitigation.Enabled).To(BeTrue())
 				Expect(cfg.HallucinationMitigation.FactCheckModel.Threshold).To(Equal(float32(0)))
 				Expect(cfg.HallucinationMitigation.HallucinationModel.Threshold).To(Equal(float32(0)))
-				Expect(cfg.HallucinationMitigation.OnHallucinationDetected).To(BeEmpty())
 			})
 		})
 
@@ -3332,37 +3329,6 @@ default_model: "test-model"
 			cfg.HallucinationMitigation.HallucinationModel.Threshold = 0
 
 			Expect(cfg.GetHallucinationModelThreshold()).To(Equal(float32(0.5)))
-		})
-	})
-
-	Describe("GetHallucinationAction", func() {
-		It("should return 'warn' when action is 'warn'", func() {
-			cfg := &RouterConfig{}
-			cfg.HallucinationMitigation.OnHallucinationDetected = "warn"
-
-			Expect(cfg.GetHallucinationAction()).To(Equal("warn"))
-		})
-
-		It("should return 'warn' when action is 'block' (only warn is supported for global config)", func() {
-			cfg := &RouterConfig{}
-			cfg.HallucinationMitigation.OnHallucinationDetected = "block"
-
-			// Global config only supports "warn" action
-			// Per-decision plugin config supports "header", "body", "none", "block"
-			Expect(cfg.GetHallucinationAction()).To(Equal("warn"))
-		})
-
-		It("should return default 'warn' when action is empty", func() {
-			cfg := &RouterConfig{}
-
-			Expect(cfg.GetHallucinationAction()).To(Equal("warn"))
-		})
-
-		It("should return default 'warn' when action is invalid", func() {
-			cfg := &RouterConfig{}
-			cfg.HallucinationMitigation.OnHallucinationDetected = "invalid"
-
-			Expect(cfg.GetHallucinationAction()).To(Equal("warn"))
 		})
 	})
 

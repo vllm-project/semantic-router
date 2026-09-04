@@ -138,6 +138,12 @@ class AgentMakeContractTests(unittest.TestCase):
             ".venv-agent/bin/python tools/agent/scripts/precommit_tool.py website",
         )
 
+    def test_python_hooks_with_managed_dependencies_use_agent_venv(self) -> None:
+        self.assertEqual(
+            local_hook("backend-target-compatibility")["entry"],
+            ".venv-agent/bin/python tools/ci/check_backend_target_compatibility.py",
+        )
+
     def test_security_scan_is_not_forced_for_docs_only_changes(self) -> None:
         self.assertNotIn("always_run", local_hook("supply-chain-security-scan"))
 
