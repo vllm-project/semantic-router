@@ -409,6 +409,7 @@ const sidebars: SidebarsConfig = {
           type: 'category',
           label: 'Configuration & Protocols',
           items: [
+            'proposals/unified-model-catalog-and-evaluation-index',
             'proposals/unified-config-contract-v0-3',
             'proposals/multi-protocol-adaptor',
           ],
