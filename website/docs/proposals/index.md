@@ -16,6 +16,7 @@ without taking over serving-layer scheduling.
 | --- | --- | --- | --- |
 | [Routing Scope: Per-Query and Capacity-Aware Routing](./batch-and-capacity-aware-routing) | 2026-07-14 | Decision record | Keeps semantic routing per-query and capacity handling in the serving layer. |
 | [Router Learning](./router-learning-memory-and-adaptations) | 2026-06-20 | Implemented | Online adaptation, route protection, and offline recipe improvement. |
+| [Success-Constrained Model Selection](./success-constrained-selection) | 2026-09-04 | Proposal | Calibrated success estimates and lifecycle-cost selection under Router Learning ([#3412](https://github.com/vllm-project/semantic-router/issues/3412)). |
 | [Prompt Classification Routing](./prompt-classification-routing) | 2025-10-08 | Proposal | Keyword, regex, embedding, and classifier signal fusion. |
 
 ## Workflows, Memory & Tools
