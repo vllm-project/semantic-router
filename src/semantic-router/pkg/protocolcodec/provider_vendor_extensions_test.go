@@ -1,7 +1,7 @@
 package protocolcodec
 
 import (
-	"reflect"
+	"errors"
 	"strings"
 	"testing"
 
@@ -33,17 +33,8 @@ const azureChatCompletion = `{
 }`
 
 func TestStripProviderVendorExtensionsRemovesAzureFields(t *testing.T) {
-	stripped, removed := stripProviderVendorExtensions([]byte(azureChatCompletion), llmprotocol.VendorAzure)
+	stripped := stripProviderVendorExtensions([]byte(azureChatCompletion), llmprotocol.VendorAzure)
 
-	want := []string{
-		"choices[].content_filter_results",
-		"prompt_filter_results",
-		"routing",
-		"usage.latency_checkpoint",
-	}
-	if !reflect.DeepEqual(removed, want) {
-		t.Errorf("removed = %v, want %v", removed, want)
-	}
 	for _, field := range []string{"prompt_filter_results", "\"routing\"", "content_filter_results", "latency_checkpoint"} {
 		if strings.Contains(string(stripped), field) {
 			t.Errorf("stripped body still contains %s", field)
@@ -59,11 +50,8 @@ func TestStripProviderVendorExtensionsRemovesAzureFields(t *testing.T) {
 func TestStripProviderVendorExtensionsLeavesCanonicalBodyUntouched(t *testing.T) {
 	canonical := `{"id":"chatcmpl-1","model":"gpt-4.1-mini","choices":[{"index":0}]}`
 
-	stripped, removed := stripProviderVendorExtensions([]byte(canonical), llmprotocol.VendorAzure)
+	stripped := stripProviderVendorExtensions([]byte(canonical), llmprotocol.VendorAzure)
 
-	if removed != nil {
-		t.Errorf("removed = %v, want nil", removed)
-	}
 	if string(stripped) != canonical {
 		t.Errorf("stripped = %s, want the original body unchanged", stripped)
 	}
@@ -74,13 +62,22 @@ func TestStripProviderVendorExtensionsLeavesCanonicalBodyUntouched(t *testing.T)
 func TestStripProviderVendorExtensionsIsPathScoped(t *testing.T) {
 	body := `{"choices":[{"index":0,"message":{"role":"assistant","routing":"nope"}}]}`
 
-	stripped, removed := stripProviderVendorExtensions([]byte(body), llmprotocol.VendorAzure)
+	stripped := stripProviderVendorExtensions([]byte(body), llmprotocol.VendorAzure)
 
-	if removed != nil {
-		t.Errorf("removed = %v, want nil for a non-allowlisted path", removed)
-	}
 	if !strings.Contains(string(stripped), `"routing"`) {
 		t.Error("stripped a routing field that is not at the allowlisted path")
+	}
+}
+
+func TestStripProviderVendorExtensionsIgnoresUnknownVendor(t *testing.T) {
+	for _, vendor := range []string{"", "not-a-vendor"} {
+		t.Run("vendor="+vendor, func(t *testing.T) {
+			stripped := stripProviderVendorExtensions([]byte(azureChatCompletion), vendor)
+
+			if string(stripped) != azureChatCompletion {
+				t.Error("stripped a field for a backend with no vendor allowance")
+			}
+		})
 	}
 }
 
@@ -154,9 +151,10 @@ func TestDecodeProviderWireRejectsAzureFieldsWithoutVendorAllowance(t *testing.T
 	}
 }
 
-// An unknown field must be identifiable from the error alone. Before this the
-// operator saw only "contains a non-canonical field" with no way to tell which.
-func TestDecodeProviderWireErrorNamesTheOffendingField(t *testing.T) {
+// The field name is what an operator needs and what a caller must not see.
+// ProtocolError.Message is serialized into the client error body, so the name
+// belongs in the cause and nowhere else.
+func TestDecodeProviderWireKeepsTheOffendingFieldOutOfTheClientMessage(t *testing.T) {
 	var target struct {
 		Model string `json:"model"`
 	}
@@ -165,7 +163,15 @@ func TestDecodeProviderWireErrorNamesTheOffendingField(t *testing.T) {
 	if err == nil {
 		t.Fatal("decodeProviderWire() error = nil, want a rejection")
 	}
-	if !strings.Contains(err.Error(), "surprise_field") {
-		t.Errorf("error = %v, want it to name surprise_field", err)
+	var protocolError *llmprotocol.ProtocolError
+	if !errors.As(err, &protocolError) {
+		t.Fatalf("error = %v, want a ProtocolError", err)
+	}
+	if strings.Contains(protocolError.Message, "surprise_field") {
+		t.Errorf("Message = %q, must not expose the upstream field name to the caller", protocolError.Message)
+	}
+	cause := errors.Unwrap(protocolError)
+	if cause == nil || !strings.Contains(cause.Error(), "surprise_field") {
+		t.Errorf("cause = %v, want it to name surprise_field for the operator log", cause)
 	}
 }
