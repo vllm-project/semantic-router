@@ -470,7 +470,6 @@ export interface ObservabilityConfig {
       enabled?: boolean
       time_windows?: string[]
       update_interval?: string
-      model_metrics?: boolean
       queue_depth_estimation?: boolean
       max_models?: number
     }
@@ -592,7 +591,6 @@ export interface ModalityDetectionConfig {
 
 export interface ModalityDetectorConfig {
   enabled?: boolean
-  prompt_prefixes?: string[]
   method?: string
   classifier?: ModalityClassifierConfig
   keywords?: string[]

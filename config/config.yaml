@@ -1198,7 +1198,6 @@ routing:
               collection: docs
               reuse_cache_connection: true
               content_field: content
-              metadata_field: metadata
               filter_expression: locale == "es"
 
     - name: admin_adaptive_route
@@ -1604,11 +1603,6 @@ global:
         cost_weight: 0.1
         quality_gap_threshold: 0.08
         normalize_scores: true
-      momentum:
-        enabled: false
-        attack: 0.7
-        release: 0.3
-        threshold: 0.6
       ml:
         models_path: models/model-selection
         model_type: mmbert
@@ -1719,7 +1713,6 @@ global:
           enabled: true
           time_windows: [1m, 5m, 1h]
           update_interval: 30s
-          model_metrics: true
           queue_depth_estimation: true
           max_models: 50
       profiling:
@@ -2453,10 +2446,6 @@ global:
         feedback_mapping_path: models/mmbert32k-feedback-detector-merged/feedback_mapping.json
       modality_detector:
         enabled: true
-        prompt_prefixes:
-          - generate an image of
-          - draw
-          - create a picture of
         method: hybrid
         classifier:
           model_path: models/mmbert32k-modality-router-merged
