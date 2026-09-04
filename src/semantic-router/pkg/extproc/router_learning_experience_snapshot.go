@@ -1,6 +1,10 @@
 package extproc
 
-import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
+import (
+	"sort"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
+)
 
 // ExperienceSnapshots exports the current in-process experience state as
 // versioned, typed snapshots. This is read-only and does not itself gate or
@@ -38,5 +42,24 @@ func (rt *routerLearningRuntime) ExperienceSnapshots() []routerruntime.RouterExp
 			LastUpdated:             exp.LastUpdated,
 		})
 	}
+	// Map iteration order is randomized, so identical learned state must be
+	// sorted back into a stable order here rather than relying on encoding
+	// to do it — otherwise this "versioned" artifact hashes differently
+	// across calls with no actual change in state.
+	sort.Slice(snapshots, func(i, j int) bool {
+		return experienceSnapshotLess(snapshots[i], snapshots[j])
+	})
 	return snapshots
+}
+
+// experienceSnapshotLess orders snapshots by their persisted key tuple
+// (decision, tier, model) so exported output is deterministic.
+func experienceSnapshotLess(a, b routerruntime.RouterExperienceSnapshot) bool {
+	if a.Decision != b.Decision {
+		return a.Decision < b.Decision
+	}
+	if a.Tier != b.Tier {
+		return a.Tier < b.Tier
+	}
+	return a.Model < b.Model
 }

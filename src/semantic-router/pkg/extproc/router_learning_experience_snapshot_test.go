@@ -2,6 +2,8 @@ package extproc
 
 import (
 	"context"
+	"reflect"
+	"sort"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
@@ -43,6 +45,41 @@ func TestRouterLearningRuntimeExperienceSnapshots(t *testing.T) {
 		t.Fatalf("expected exact/tier/global fallback entries, got %d: %#v", len(snapshots), snapshots)
 	}
 	assertExperienceSnapshot(t, findExperienceSnapshot(snapshots, "domain_code"))
+}
+
+func TestRouterLearningRuntimeExperienceSnapshotsAreSortedAndRepeatable(t *testing.T) {
+	rt := newRouterLearningRuntime(nil, nil, nil)
+	seeds := []struct {
+		decision string
+		tier     int
+		model    string
+	}{
+		{"domain_math", 2, "model-z"},
+		{"domain_code", 4, "model-a"},
+		{"domain_code", 4, "model-b"},
+		{"domain_code", 1, "model-a"},
+		{"domain_chat", 3, "model-a"},
+	}
+	for _, seed := range seeds {
+		rt.recordModelExperience(seed.decision, seed.tier, seed.model, routerLearningOutcomeGoodFit, 1)
+	}
+
+	first := rt.ExperienceSnapshots()
+	if len(first) == 0 {
+		t.Fatal("expected at least one snapshot")
+	}
+	if !sort.SliceIsSorted(first, func(i, j int) bool {
+		return experienceSnapshotLess(first[i], first[j])
+	}) {
+		t.Fatalf("expected snapshots sorted by (decision, tier, model), got %#v", first)
+	}
+
+	for i := 0; i < 10; i++ {
+		again := rt.ExperienceSnapshots()
+		if !reflect.DeepEqual(first, again) {
+			t.Fatalf("expected repeatable output across calls; call %d differed:\nfirst=%#v\nagain=%#v", i, first, again)
+		}
+	}
 }
 
 func findExperienceSnapshot(snapshots []routerruntime.RouterExperienceSnapshot, decision string) *routerruntime.RouterExperienceSnapshot {
