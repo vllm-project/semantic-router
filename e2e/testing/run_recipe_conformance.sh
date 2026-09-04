@@ -4,7 +4,12 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 RECIPES="${RECIPES:-}"
 ROUTER_IMAGE="${ROUTER_IMAGE:-}"
-ROUTER_URL="${ROUTER_URL:-http://127.0.0.1:8080}"
+VLLM_SR_PORT_OFFSET="${VLLM_SR_PORT_OFFSET:-0}"
+if ! [[ "${VLLM_SR_PORT_OFFSET}" =~ ^[0-9]+$ ]]; then
+  echo "VLLM_SR_PORT_OFFSET must be a non-negative integer" >&2
+  exit 2
+fi
+ROUTER_URL="${ROUTER_URL:-http://127.0.0.1:$((8080 + VLLM_SR_PORT_OFFSET))}"
 REPORT_ROOT="${REPORT_ROOT:-${ROOT_DIR}/.agent-harness/recipe-conformance}"
 READY_TIMEOUT_SECONDS="${READY_TIMEOUT_SECONDS:-300}"
 GENERATED_RECIPE_DIRS=()

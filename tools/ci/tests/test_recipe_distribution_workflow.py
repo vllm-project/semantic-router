@@ -87,6 +87,8 @@ class RecipeDistributionWorkflowTests(unittest.TestCase):
         self.assertIn('ROUTER_IMAGE="$(VLLM_SR_ROUTER_IMAGE)"', make_text)
         self.assertIn('ROUTER_IMAGE="${ROUTER_IMAGE:-}"', runner_text)
         self.assertIn('--router-image "${ROUTER_IMAGE}"', runner_text)
+        self.assertIn("8080 + $(VLLM_SR_PORT_OFFSET)", make_text)
+        self.assertIn("8080 + VLLM_SR_PORT_OFFSET", runner_text)
 
     def test_workflow_keeps_only_a_short_lived_validation_receipt(self) -> None:
         self.assertIn("built-in-model-catalog-receipt-${{ github.run_id }}", self.text)
