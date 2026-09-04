@@ -60,10 +60,6 @@ tls_insecure_skip_verify: false    # Skip server cert verification (development 
 #       hybrid_search: true
 #       hybrid_mode: rerank
 #       adaptive_threshold: true
-#       quality_scoring:
-#         initial_strength_days: 30
-#         prune_threshold: 0.15
-#         max_memories_per_user: 200
 #       reflection:
 #         enabled: true
 #         algorithm: recency_semantic

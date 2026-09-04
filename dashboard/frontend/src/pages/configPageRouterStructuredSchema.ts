@@ -62,37 +62,12 @@ const milvusSchema = (label: string): RouterStructuredSchema =>
       topk: number('Top K', { min: 1 }),
       consistency_level: text('Consistency Level'),
     }),
-    performance: object('Performance', {
-      connection_pool: object('Connection Pool', {
-        max_connections: number('Max Connections', { min: 1 }),
-        max_idle_connections: number('Max Idle Connections', { min: 0 }),
-        acquire_timeout: number('Acquire Timeout', { min: 0 }),
-      }),
-      batch: object('Batch', {
-        insert_batch_size: number('Insert Batch Size', { min: 1 }),
-        timeout: number('Timeout', { min: 0 }),
-      }),
-    }),
-    data_management: object('Data Management', {
-      ttl: object('TTL', {
-        enabled: boolean('Enabled'),
-        timestamp_field: text('Timestamp Field'),
-        cleanup_interval: number('Cleanup Interval', { min: 0 }),
-      }),
-      compaction: object('Compaction', {
-        enabled: boolean('Enabled'),
-        interval: number('Interval', { min: 0 }),
-      }),
-    }),
     logging: object('Logging', {
       level: select('Level', ['debug', 'info', 'warn', 'error']),
-      enable_query_log: boolean('Query Log'),
-      enable_metrics: boolean('Metrics'),
     }),
     development: object('Development', {
       drop_collection_on_startup: boolean('Drop Collection On Startup'),
       auto_create_collection: boolean('Auto Create Collection'),
-      verbose_errors: boolean('Verbose Errors'),
     }),
   })
 
@@ -128,12 +103,9 @@ const redisSchema = object('Redis Backend', {
   development: object('Development', {
     drop_index_on_startup: boolean('Drop Index On Startup'),
     auto_create_index: boolean('Auto Create Index'),
-    verbose_errors: boolean('Verbose Errors'),
   }),
   logging: object('Logging', {
     level: select('Level', ['debug', 'info', 'warn', 'error']),
-    enable_query_log: boolean('Query Log'),
-    enable_metrics: boolean('Metrics'),
   }),
 })
 
@@ -299,15 +271,6 @@ export const ROUTER_STRUCTURED_FIELDS: Partial<
         collection: text('Collection'),
         dimension: number('Dimension', { min: 1 }),
         num_partitions: number('Partitions', { min: 1 }),
-      }),
-    },
-    quality_scoring: {
-      label: 'Quality Scoring',
-      description: 'Memory strength, pruning, and capacity policy.',
-      schema: object('Quality Scoring', {
-        initial_strength_days: number('Initial Strength Days', { min: 0 }),
-        prune_threshold: number('Prune Threshold', { min: 0, max: 1, step: 0.01 }),
-        max_memories_per_user: number('Max Memories Per User', { min: 1 }),
       }),
     },
     reflection: {

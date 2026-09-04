@@ -81,12 +81,9 @@ type RedisConfig struct {
 	Development struct {
 		DropIndexOnStartup bool `json:"drop_index_on_startup" yaml:"drop_index_on_startup"`
 		AutoCreateIndex    bool `json:"auto_create_index" yaml:"auto_create_index"`
-		VerboseErrors      bool `json:"verbose_errors" yaml:"verbose_errors"`
 	} `json:"development" yaml:"development"`
 	Logging struct {
-		Level          string `json:"level" yaml:"level"`
-		EnableQueryLog bool   `json:"enable_query_log" yaml:"enable_query_log"`
-		EnableMetrics  bool   `json:"enable_metrics" yaml:"enable_metrics"`
+		Level string `json:"level" yaml:"level"`
 	} `json:"logging" yaml:"logging"`
 }
 
@@ -125,12 +122,9 @@ type ValkeyConfig struct {
 	Development struct {
 		DropIndexOnStartup bool `json:"drop_index_on_startup" yaml:"drop_index_on_startup"`
 		AutoCreateIndex    bool `json:"auto_create_index" yaml:"auto_create_index"`
-		VerboseErrors      bool `json:"verbose_errors" yaml:"verbose_errors"`
 	} `json:"development" yaml:"development"`
 	Logging struct {
-		Level          string `json:"level" yaml:"level"`
-		EnableQueryLog bool   `json:"enable_query_log" yaml:"enable_query_log"`
-		EnableMetrics  bool   `json:"enable_metrics" yaml:"enable_metrics"`
+		Level string `json:"level" yaml:"level"`
 	} `json:"logging" yaml:"logging"`
 }
 
@@ -176,37 +170,12 @@ type MilvusConfig struct {
 		TopK             int    `json:"topk" yaml:"topk"`
 		ConsistencyLevel string `json:"consistency_level" yaml:"consistency_level"`
 	} `json:"search" yaml:"search"`
-	Performance struct {
-		ConnectionPool struct {
-			MaxConnections     int `json:"max_connections" yaml:"max_connections"`
-			MaxIdleConnections int `json:"max_idle_connections" yaml:"max_idle_connections"`
-			AcquireTimeout     int `json:"acquire_timeout" yaml:"acquire_timeout"`
-		} `json:"connection_pool" yaml:"connection_pool"`
-		Batch struct {
-			InsertBatchSize int `json:"insert_batch_size" yaml:"insert_batch_size"`
-			Timeout         int `json:"timeout" yaml:"timeout"`
-		} `json:"batch" yaml:"batch"`
-	} `json:"performance" yaml:"performance"`
-	DataManagement struct {
-		TTL struct {
-			Enabled         bool   `json:"enabled" yaml:"enabled"`
-			TimestampField  string `json:"timestamp_field" yaml:"timestamp_field"`
-			CleanupInterval int    `json:"cleanup_interval" yaml:"cleanup_interval"`
-		} `json:"ttl" yaml:"ttl"`
-		Compaction struct {
-			Enabled  bool `json:"enabled" yaml:"enabled"`
-			Interval int  `json:"interval" yaml:"interval"`
-		} `json:"compaction" yaml:"compaction"`
-	} `json:"data_management" yaml:"data_management"`
 	Logging struct {
-		Level          string `json:"level" yaml:"level"`
-		EnableQueryLog bool   `json:"enable_query_log" yaml:"enable_query_log"`
-		EnableMetrics  bool   `json:"enable_metrics" yaml:"enable_metrics"`
+		Level string `json:"level" yaml:"level"`
 	} `json:"logging" yaml:"logging"`
 	Development struct {
 		DropCollectionOnStartup bool `json:"drop_collection_on_startup" yaml:"drop_collection_on_startup"`
 		AutoCreateCollection    bool `json:"auto_create_collection" yaml:"auto_create_collection"`
-		VerboseErrors           bool `json:"verbose_errors" yaml:"verbose_errors"`
 	} `json:"development" yaml:"development"`
 }
 
@@ -241,24 +210,23 @@ type QdrantConfig struct {
 }
 
 type MemoryConfig struct {
-	Enabled                    bool                       `yaml:"enabled,omitempty"`
-	Backend                    string                     `yaml:"backend,omitempty"`
-	AutoStore                  bool                       `yaml:"auto_store,omitempty"`
-	DisabledRoutes             []string                   `yaml:"disabled_routes,omitempty"`
-	DisabledModels             []string                   `yaml:"disabled_models,omitempty"`
-	Milvus                     MemoryMilvusConfig         `yaml:"milvus,omitempty"`
-	Valkey                     *MemoryValkeyConfig        `yaml:"valkey,omitempty"`
-	Qdrant                     *MemoryQdrantConfig        `yaml:"qdrant,omitempty"`
-	RedisCache                 *MemoryRedisCacheConfig    `yaml:"redis_cache,omitempty"`
-	EmbeddingModel             string                     `yaml:"embedding_model,omitempty"`
-	ExtractionBatchSize        int                        `yaml:"extraction_batch_size,omitempty"`
-	DefaultRetrievalLimit      int                        `yaml:"default_retrieval_limit,omitempty"`
-	DefaultSimilarityThreshold float32                    `yaml:"default_similarity_threshold,omitempty"`
-	HybridSearch               bool                       `yaml:"hybrid_search,omitempty"`
-	HybridMode                 string                     `yaml:"hybrid_mode,omitempty"`
-	AdaptiveThreshold          bool                       `yaml:"adaptive_threshold,omitempty"`
-	QualityScoring             MemoryQualityScoringConfig `yaml:"quality_scoring,omitempty"`
-	Reflection                 MemoryReflectionConfig     `yaml:"reflection,omitempty"`
+	Enabled                    bool                    `yaml:"enabled,omitempty"`
+	Backend                    string                  `yaml:"backend,omitempty"`
+	AutoStore                  bool                    `yaml:"auto_store,omitempty"`
+	DisabledRoutes             []string                `yaml:"disabled_routes,omitempty"`
+	DisabledModels             []string                `yaml:"disabled_models,omitempty"`
+	Milvus                     MemoryMilvusConfig      `yaml:"milvus,omitempty"`
+	Valkey                     *MemoryValkeyConfig     `yaml:"valkey,omitempty"`
+	Qdrant                     *MemoryQdrantConfig     `yaml:"qdrant,omitempty"`
+	RedisCache                 *MemoryRedisCacheConfig `yaml:"redis_cache,omitempty"`
+	EmbeddingModel             string                  `yaml:"embedding_model,omitempty"`
+	ExtractionBatchSize        int                     `yaml:"extraction_batch_size,omitempty"`
+	DefaultRetrievalLimit      int                     `yaml:"default_retrieval_limit,omitempty"`
+	DefaultSimilarityThreshold float32                 `yaml:"default_similarity_threshold,omitempty"`
+	HybridSearch               bool                    `yaml:"hybrid_search,omitempty"`
+	HybridMode                 string                  `yaml:"hybrid_mode,omitempty"`
+	AdaptiveThreshold          bool                    `yaml:"adaptive_threshold,omitempty"`
+	Reflection                 MemoryReflectionConfig  `yaml:"reflection,omitempty"`
 }
 
 // MemoryRedisCacheConfig configures an optional Redis hot cache in front of Milvus retrieval.
@@ -269,12 +237,6 @@ type MemoryRedisCacheConfig struct {
 	DB         int    `yaml:"db,omitempty"`
 	KeyPrefix  string `yaml:"key_prefix,omitempty"`
 	Password   string `yaml:"password,omitempty"`
-}
-
-type MemoryQualityScoringConfig struct {
-	InitialStrengthDays int     `yaml:"initial_strength_days,omitempty"`
-	PruneThreshold      float64 `yaml:"prune_threshold,omitempty"`
-	MaxMemoriesPerUser  int     `yaml:"max_memories_per_user,omitempty"`
 }
 
 type MemoryReflectionConfig struct {

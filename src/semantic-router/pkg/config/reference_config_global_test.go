@@ -200,7 +200,6 @@ func assertReferenceConfigMemoryCoverage(t testingT, memory map[string]interface
 	assertMapCoversStructFields(t, mustMapAt(t, memory, "milvus"), reflect.TypeOf(MemoryMilvusConfig{}), "global.stores.memory.milvus")
 	assertMapCoversStructFields(t, mustMapAt(t, memory, "valkey"), reflect.TypeOf(MemoryValkeyConfig{}), "global.stores.memory.valkey")
 	assertMapCoversStructFields(t, mustMapAt(t, memory, "qdrant"), reflect.TypeOf(MemoryQdrantConfig{}), "global.stores.memory.qdrant")
-	assertMapCoversStructFields(t, mustMapAt(t, memory, "quality_scoring"), reflect.TypeOf(MemoryQualityScoringConfig{}), "global.stores.memory.quality_scoring")
 	assertMapCoversStructFields(t, mustMapAt(t, memory, "reflection"), reflect.TypeOf(MemoryReflectionConfig{}), "global.stores.memory.reflection")
 }
 
