@@ -76,6 +76,18 @@ class RecipeDistributionWorkflowTests(unittest.TestCase):
         self.assertIn("python -m cli.model_catalog_export", self.text)
         self.assertNotIn("vllm-sr model ", self.text)
 
+    def test_live_conformance_runs_the_image_built_for_the_source_tree(self) -> None:
+        make_text = (REPO_ROOT / "tools" / "make" / "recipe-conformance.mk").read_text(
+            encoding="utf-8"
+        )
+        runner_text = (
+            REPO_ROOT / "e2e" / "testing" / "run_recipe_conformance.sh"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn('ROUTER_IMAGE="$(VLLM_SR_ROUTER_IMAGE)"', make_text)
+        self.assertIn('ROUTER_IMAGE="${ROUTER_IMAGE:-}"', runner_text)
+        self.assertIn('--router-image "${ROUTER_IMAGE}"', runner_text)
+
     def test_workflow_keeps_only_a_short_lived_validation_receipt(self) -> None:
         self.assertIn("built-in-model-catalog-receipt-${{ github.run_id }}", self.text)
         self.assertIn("dist/model-catalog-receipt/", self.text)

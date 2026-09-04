@@ -61,6 +61,7 @@ recipe-conformance-live-cpu: ## Build once and run live CPU probes (set RECIPE_C
 	fi
 	@$(MAKE) vllm-sr-router-build
 	@RECIPES="$(RECIPE_CONFORMANCE_RECIPES)" \
+		ROUTER_IMAGE="$(VLLM_SR_ROUTER_IMAGE)" \
 		ROUTER_URL="$(RECIPE_CONFORMANCE_ROUTER_URL)" \
 		REPORT_ROOT="$(RECIPE_CONFORMANCE_REPORT_DIR)" \
 		bash e2e/testing/run_recipe_conformance.sh
