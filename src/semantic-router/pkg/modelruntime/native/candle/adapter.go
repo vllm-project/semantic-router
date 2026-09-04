@@ -83,6 +83,7 @@ func (a *Adapter) Info() ([]native.ModelInfo, error) {
 	for _, m := range info.Models {
 		results = append(results, native.ModelInfo{
 			Backend:           native.BackendCandle,
+			Capabilities:      []native.Capability{native.CapabilityEmbedding},
 			ModelName:         m.ModelName,
 			ModelPath:         m.ModelPath,
 			IsLoaded:          m.IsLoaded,

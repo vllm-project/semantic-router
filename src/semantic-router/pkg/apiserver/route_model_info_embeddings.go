@@ -3,6 +3,7 @@
 package apiserver
 
 import (
+	"context"
 	"fmt"
 	"path"
 	"strings"
@@ -20,12 +21,19 @@ func (s *ClassificationAPIServer) getEmbeddingModelsInfo(runtimeState *startupst
 	for _, adapter := range native.Registry.List() {
 		info, err := adapter.Info()
 		if err != nil {
-			logging.Warnf(context.Background(), "Failed to discover models for backend %s: %v", adapter.Name(), err)
+			logging.Warnf("Failed to discover models for backend %s: %v", adapter.Name(), err)
 			continue
 		}
 
 		for _, model := range info {
-			if model.Capability != native.CapabilityEmbedding && model.Capability != native.CapabilityMultimodalEmbedding {
+			hasEmbedding := false
+			for _, cap := range model.Capabilities {
+				if cap == native.CapabilityEmbedding || cap == native.CapabilityMultimodalEmbedding {
+					hasEmbedding = true
+					break
+				}
+			}
+			if !hasEmbedding {
 				continue
 			}
 

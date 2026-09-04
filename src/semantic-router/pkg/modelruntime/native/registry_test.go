@@ -19,7 +19,7 @@ func (m *mockAdapter) UnloadModel(ctx context.Context, handle ModelHandle) error
 func (m *mockAdapter) Inference(ctx context.Context, handle ModelHandle, req InferenceRequest) (InferenceResponse, error) {
 	return nil, nil
 }
-func (m *mockAdapter) Info() []ModelInfo {
+func (m *mockAdapter) Info() ([]ModelInfo, error) {
 	return []ModelInfo{
 		{
 			Backend:             m.name,
@@ -43,7 +43,7 @@ func (m *mockAdapter) Info() []ModelInfo {
 			UnsupportedReasons:  map[string]string{},
 			RegistryMetadata:    map[string]string{"key": "value"},
 		},
-	}
+	}, nil
 }
 
 func TestTaxonomyConstants(t *testing.T) {
@@ -123,7 +123,8 @@ func TestRegistry_ListOrdering(t *testing.T) {
 
 func TestModelInfoDiscoveryShape(t *testing.T) {
 	adapter := &mockAdapter{name: BackendCandle}
-	info := adapter.Info()[0]
+	infoRes, _ := adapter.Info()
+	info := infoRes[0]
 
 	if info.Backend != BackendCandle {
 		t.Errorf("expected BackendCandle, got %v", info.Backend)
