@@ -297,6 +297,40 @@ def create_1d_padding_bias_nodes(graph):
     return nodes, unsqueeze_out
 
 
+def output_precision_conflict(output_path, model_is_fp16):
+    """Return a message when the output name claims a precision the graph lacks.
+
+    find_onnx_models ranks candidates by filename and puts model_fa_fp16.onnx
+    first whenever CK Flash Attention is available, so the name is a contract
+    rather than a label. The rewriter keeps the weights as it finds them and,
+    for an FP32 graph, only casts around each CKFlashAttention node. Running it
+    on model.onnx under an fp16 name is what produced the FP32
+    model_fa_fp16.onnx in five of the six published 32K heads (#3256): a valid
+    graph with twice the memory of the file its name promises.
+    """
+    name = os.path.basename(output_path).lower()
+    if "fp16" in name and not model_is_fp16:
+        return (
+            f"{output_path}: the input graph holds FP32 weights, so this file would "
+            "hold FP32 weights under an fp16 name. Name an FP32 rewrite "
+            "model_fa.onnx; an fp16 name needs an FP16 input graph."
+        )
+    return None
+
+
+def enforce_output_precision(output_path, model_is_fp16):
+    """Exit on an fp16 name over FP32 weights; warn on the reverse."""
+    conflict = output_precision_conflict(output_path, model_is_fp16)
+    if conflict:
+        print(f"error: {conflict}", file=sys.stderr)
+        sys.exit(1)
+    if model_is_fp16 and "fp16" not in os.path.basename(output_path).lower():
+        print(
+            f"warning: {output_path} will hold FP16 weights but its name does not "
+            "say so; find_onnx_models ranks FP16 candidates by name."
+        )
+
+
 def rewrite(model_path, output_path, hdim=64, local_attention=128):
     model = onnx.load(model_path)
     graph = model.graph
@@ -350,6 +384,8 @@ def rewrite(model_path, output_path, hdim=64, local_attention=128):
         print("  Model precision: FP16 (skipping input/output Cast nodes)")
     else:
         print("  Model precision: FP32 (adding fp32↔fp16 Cast nodes)")
+
+    enforce_output_precision(output_path, model_is_fp16)
 
     # Collect nodes to remove (attention subgraph)
     nodes_to_remove = set()
