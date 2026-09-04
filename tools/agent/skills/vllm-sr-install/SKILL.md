@@ -264,6 +264,7 @@ explicit user direction — those are separate workflows.
 
 - `curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --mode cli --runtime skip --no-launch`
 - `vllm-sr --version`
+- If `~/.local/bin` is not on PATH, use `~/.local/bin/vllm-sr --version`.
 
 ## Acceptance
 
