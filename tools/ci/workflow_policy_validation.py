@@ -8,6 +8,7 @@ from typing import Any, Protocol
 
 import yaml
 from classify_pr_changes import NIGHTLY_IMAGES, PRODUCTION_RELEASE_IMAGES
+from docker_image_catalog import CATALOG_PATH, load_image_catalog, platform_targets
 from test_domain_registry import (
     domain_records,
     load_test_domain_registry,
@@ -34,6 +35,126 @@ class WorkflowLike(Protocol):
     data: dict[str, Any]
     events: dict[str, Any]
     jobs: dict[str, Any]
+
+
+def validate_catalog_entries(catalog: dict[str, Any], errors: list[str]) -> None:
+    for image, definition in catalog.items():
+        context = (REPO_ROOT / definition.context).resolve()
+        dockerfile = (REPO_ROOT / definition.dockerfile).resolve()
+        if not context.is_dir():
+            errors.append(f"{CATALOG_PATH}: '{image}' context does not exist")
+        if not dockerfile.is_file():
+            errors.append(f"{CATALOG_PATH}: '{image}' Dockerfile does not exist")
+        try:
+            platform_targets(definition.platforms)
+        except ValueError:
+            errors.append(f"{CATALOG_PATH}: '{image}' has invalid platforms")
+
+
+def validate_catalog_workflow(
+    workflow_name: str,
+    workflow: WorkflowLike | None,
+    errors: list[str],
+) -> None:
+    if workflow is None:
+        errors.append(f".github/workflows/{workflow_name}: missing workflow")
+        return
+
+    job_id = {
+        "docker-validate.yml": "validate",
+        "docker-publish.yml": "publish",
+    }[workflow_name]
+    job = workflow.jobs.get(job_id)
+    if not isinstance(job, dict):
+        errors.append(
+            f".github/workflows/{workflow_name}: missing '{job_id}' image job"
+        )
+        return
+    steps = job.get("steps")
+    if not isinstance(steps, list):
+        errors.append(
+            f".github/workflows/{workflow_name}: '{job_id}' steps must be a list"
+        )
+        return
+
+    definition_steps = [
+        step
+        for step in steps
+        if isinstance(step, dict) and step.get("id") == "definition"
+    ]
+    expected_command = (
+        'python3 tools/ci/docker_image_catalog.py "$IMAGE" >> "$GITHUB_OUTPUT"'
+    )
+    if len(definition_steps) != 1 or definition_steps[0].get("run") != expected_command:
+        errors.append(
+            f".github/workflows/{workflow_name}: must resolve images from "
+            "the shared Docker image catalog"
+        )
+    else:
+        definition_env = definition_steps[0].get("env")
+        if (
+            not isinstance(definition_env, dict)
+            or definition_env.get("IMAGE") != "${{ matrix.image }}"
+        ):
+            errors.append(
+                f".github/workflows/{workflow_name}: catalog resolver must receive "
+                "the matrix image"
+            )
+
+    build_steps = [
+        step
+        for step in steps
+        if isinstance(step, dict)
+        and str(step.get("uses", "")).startswith("docker/build-push-action@")
+    ]
+    expected_inputs = {
+        "context": "${{ steps.definition.outputs.context }}",
+        "file": "${{ steps.definition.outputs.dockerfile }}",
+        "platforms": "${{ steps.definition.outputs.platforms }}",
+    }
+    if len(build_steps) != 1:
+        errors.append(
+            f".github/workflows/{workflow_name}: must contain one Docker build step"
+        )
+    else:
+        build_inputs = build_steps[0].get("with")
+        for build_input, expected_value in expected_inputs.items():
+            actual_value = (
+                build_inputs.get(build_input)
+                if isinstance(build_inputs, dict)
+                else None
+            )
+            if actual_value != expected_value:
+                errors.append(
+                    f".github/workflows/{workflow_name}: build {build_input} must "
+                    "come from the shared Docker image catalog"
+                )
+
+    if 'case "$IMAGE"' in workflow.path.read_text(encoding="utf-8"):
+        errors.append(
+            f".github/workflows/{workflow_name}: image mappings must not be "
+            "duplicated in the workflow"
+        )
+
+
+def validate_docker_image_catalog(
+    workflows: dict[str, WorkflowLike], errors: list[str]
+) -> None:
+    try:
+        catalog = load_image_catalog()
+    except (OSError, ValueError) as error:
+        errors.append(f"{CATALOG_PATH.relative_to(REPO_ROOT)}: {error}")
+        return
+
+    expected_images = set(NIGHTLY_IMAGES)
+    if set(catalog) != expected_images:
+        errors.append(
+            f"{CATALOG_PATH.relative_to(REPO_ROOT)}: image inventory must match "
+            "the nightly image inventory"
+        )
+    validate_catalog_entries(catalog, errors)
+    for workflow_name in ("docker-validate.yml", "docker-publish.yml"):
+        validate_catalog_workflow(workflow_name, workflows.get(workflow_name), errors)
 
 
 def local_target(job: dict[str, Any]) -> str | None:
@@ -409,6 +530,7 @@ def validate_mergify_contract(errors: list[str]) -> None:
 def validate_workflow_policies(
     workflows: dict[str, WorkflowLike], errors: list[str]
 ) -> None:
+    validate_docker_image_catalog(workflows, errors)
     validate_pr_contract(workflows, errors)
     validate_release_contract(workflows, errors)
     validate_security_boundary(workflows, errors)
