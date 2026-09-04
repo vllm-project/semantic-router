@@ -19,6 +19,9 @@ type anthropicResponseWire struct {
 	Error        *anthropicErrorWire `json:"error,omitempty"`
 	Container    json.RawMessage     `json:"container"`
 	StopDetails  json.RawMessage     `json:"stop_details"`
+	// Beta context-editing echo. Covers two positions, since message_start.message
+	// reuses this struct; omitempty keeps re-encoded GA output unchanged. See #3417.
+	ContextManagement json.RawMessage `json:"context_management,omitempty"`
 }
 
 type anthropicUsageWire struct {

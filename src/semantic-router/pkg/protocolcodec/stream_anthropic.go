@@ -47,6 +47,9 @@ type anthropicEventWire struct {
 	Delta        *anthropicDeltaWire             `json:"delta,omitempty"`
 	Usage        *anthropicMessageDeltaUsageWire `json:"usage,omitempty"`
 	Error        *anthropicErrorWire             `json:"error,omitempty"`
+	// Beta extension (context-management-2025-06-27): sibling of delta and usage
+	// on message_delta, not a member of usage. Accepted, never consumed. See #3417.
+	ContextManagement json.RawMessage `json:"context_management,omitempty"`
 }
 
 type anthropicMessageDeltaUsageWire struct {
@@ -69,6 +72,9 @@ type anthropicDeltaWire struct {
 	Container    json.RawMessage `json:"container,omitempty"`
 	StopDetails  json.RawMessage `json:"stop_details,omitempty"`
 	Citation     json.RawMessage `json:"citation,omitempty"`
+	// Beta thinking telemetry on every thinking_delta. Accepted and ignored;
+	// authoritative counts arrive in message_delta.usage. No diagnostic (D2).
+	EstimatedTokens *int64 `json:"estimated_tokens,omitempty"`
 }
 
 func (wire anthropicDeltaWire) MarshalJSON() ([]byte, error) {
