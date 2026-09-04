@@ -34,11 +34,11 @@ func responsesRequestDiagnostics(request llmprotocol.Request, policy llmprotocol
 	if len(request.AnthropicContextManagement) == 0 {
 		return diagnostics, nil
 	}
-	appendDroppedDiagnostic(
+	err := appendLossy(
 		&diagnostics, policy, request.Trusted.SourceFormat, llmprotocol.OpenAIResponsesV1,
 		"context_management", "Responses cannot carry the Anthropic context management directive",
 	)
-	return diagnostics, nil
+	return diagnostics, err
 }
 
 func validateResponsesEncodableRequest(request llmprotocol.Request) error {

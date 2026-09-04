@@ -71,10 +71,13 @@ func chatRequestDiagnostics(request llmprotocol.Request, policy llmprotocol.Poli
 		}
 	}
 	if len(request.AnthropicContextManagement) > 0 {
-		appendDroppedDiagnostic(
+		err := appendLossy(
 			&diagnostics, policy, request.Trusted.SourceFormat, llmprotocol.OpenAIChatV1,
 			"context_management", "Chat Completions cannot carry the Anthropic context management directive",
 		)
+		if err != nil {
+			return diagnostics, err
+		}
 	}
 	return diagnostics, nil
 }

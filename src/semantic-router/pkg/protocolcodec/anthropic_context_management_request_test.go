@@ -11,7 +11,8 @@ import (
 // request. It asks the upstream Anthropic API to trim stale thinking from the
 // billed prompt, so it changes what the provider charges for the turn and must
 // survive to an Anthropic-format target. No OpenAI wire can carry it, so
-// cross-format translation omits it with an explicit diagnostic.
+// cross-format translation is lossy: the policy decides between rejecting the
+// route and omitting the directive with an explicit diagnostic.
 
 // contextManagement is the field under test: the server-side prompt-trimming
 // directive that must round-trip to an Anthropic target unchanged.
@@ -49,8 +50,28 @@ func TestAnthropicRequestContextManagementRoundTripsToAnthropicTarget(t *testing
 	}
 }
 
-func TestAnthropicRequestContextManagementOmissionIsDiagnosedForOpenAITargets(t *testing.T) {
+func TestAnthropicRequestContextManagementRejectsOpenAITargetsUnderDefaultPolicy(t *testing.T) {
 	engine := NewBuiltinEngine()
+	for _, target := range []llmprotocol.WireFormat{llmprotocol.OpenAIChatV1, llmprotocol.OpenAIResponsesV1} {
+		t.Run(string(target), func(t *testing.T) {
+			_, err := engine.TranslateRequest(
+				llmprotocol.AnthropicMessagesV1,
+				target,
+				anthropicRequestBodyWithContextManagement(),
+				func(request *llmprotocol.Request) error { request.Model = "routed-model"; return nil },
+			)
+			assertProtocolError(t, err, llmprotocol.ErrorUnsupportedFeature, "lossy_translation")
+		})
+	}
+}
+
+func TestAnthropicRequestContextManagementOmissionIsDiagnosedUnderPermissivePolicy(t *testing.T) {
+	policy := llmprotocol.DefaultPolicy()
+	policy.LossyFeatures = llmprotocol.LossyAllowWithDiagnostic
+	engine, err := NewEngine(NewBuiltinRegistry(), policy)
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, target := range []llmprotocol.WireFormat{llmprotocol.OpenAIChatV1, llmprotocol.OpenAIResponsesV1} {
 		t.Run(string(target), func(t *testing.T) {
 			translated, err := engine.TranslateRequest(
