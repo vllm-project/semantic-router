@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectorstore"
 )
@@ -149,5 +150,28 @@ func TestHandleUploadFileRejectsDocumentsForVisionPurpose(t *testing.T) {
 	rr := uploadFile(t, apiServer, "notes.txt", []byte("not an image"), "vision")
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestHandleUploadFileHonorsVectorStoreLimits(t *testing.T) {
+	apiServer, _ := newFileUploadServer(t)
+	apiServer.config = &config.RouterConfig{VectorStore: &config.VectorStoreConfig{
+		MaxFileSizeMB:    1,
+		SupportedFormats: []string{".pdf"},
+	}}
+
+	rr := uploadFile(t, apiServer, "notes.txt", []byte("text"), "assistants")
+	if rr.Code != http.StatusBadRequest || !bytes.Contains(rr.Body.Bytes(), []byte("allowed: .pdf")) {
+		t.Fatalf("expected .txt rejected with configured formats, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	rr = uploadFile(t, apiServer, "doc.pdf", []byte("%PDF-1.4"), "assistants")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected .pdf accepted, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	rr = uploadFile(t, apiServer, "big.pdf", bytes.Repeat([]byte("x"), 1024*1024+1), "assistants")
+	if rr.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("expected 413 above max_file_size_mb, got %d: %s", rr.Code, rr.Body.String())
 	}
 }
