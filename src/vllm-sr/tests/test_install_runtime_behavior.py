@@ -82,3 +82,19 @@ def test_skip_writes_no_runtime_env() -> None:
     # `skip` should not leave a stale CONTAINER_RUNTIME behind.
     assert "RUNTIME_ENV_FILE=absent" in out
     assert "CONTAINER_RUNTIME=" not in out
+
+
+def test_printed_commands_include_runtime_flag() -> None:
+    """When --runtime podman is selected, the printed restart/start commands
+    must carry `--runtime podman` so users copy-paste the right invocation."""
+    out = _run_harness("print-command-podman")
+
+    assert "SELECTED_RUNTIME=podman" in out
+
+    restart_section = out.split("[PRINT_RESTART_COMMAND]")[1].split(
+        "[PRINT_NEXT_STEPS]"
+    )[0]
+    assert "--runtime podman" in restart_section
+
+    next_steps_section = out.split("[PRINT_NEXT_STEPS]")[1]
+    assert "--runtime podman" in next_steps_section
