@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"math"
 	"net/http"
 	"path/filepath"
 	"slices"
@@ -32,8 +33,9 @@ import (
 )
 
 const (
-	maxUploadSize        = 50 * 1024 * 1024 // 50MB
-	multipartMemoryLimit = 8 * 1024 * 1024
+	megabyte             int64 = 1024 * 1024
+	maxUploadSize              = 50 * megabyte
+	multipartMemoryLimit       = 8 * 1024 * 1024
 )
 
 // allowedExtensions defines the document types that can be uploaded for
@@ -78,18 +80,22 @@ func allowedExtensionList(purpose string, documentExtensions map[string]bool) st
 	return strings.Join(slices.Sorted(maps.Keys(documentExtensions)), ", ")
 }
 
+func uploadMaxBytes(maxFileSizeMB int) int64 {
+	if maxFileSizeMB <= 0 || int64(maxFileSizeMB) > math.MaxInt64/megabyte {
+		return maxUploadSize
+	}
+	return int64(maxFileSizeMB) * megabyte
+}
+
 func (s *ClassificationAPIServer) uploadLimits() (int64, map[string]bool) {
-	maxBytes := int64(maxUploadSize)
+	cfg := s.currentConfig()
+	if cfg == nil || cfg.VectorStore == nil {
+		return maxUploadSize, allowedExtensions
+	}
 	documentExtensions := allowedExtensions
-	if s == nil || s.config == nil || s.config.VectorStore == nil {
-		return maxBytes, documentExtensions
-	}
-	if s.config.VectorStore.MaxFileSizeMB > 0 {
-		maxBytes = int64(s.config.VectorStore.MaxFileSizeMB) * 1024 * 1024
-	}
-	if len(s.config.VectorStore.SupportedFormats) > 0 {
-		documentExtensions = make(map[string]bool, len(s.config.VectorStore.SupportedFormats))
-		for _, format := range s.config.VectorStore.SupportedFormats {
+	if len(cfg.VectorStore.SupportedFormats) > 0 {
+		documentExtensions = make(map[string]bool, len(cfg.VectorStore.SupportedFormats))
+		for _, format := range cfg.VectorStore.SupportedFormats {
 			ext := strings.ToLower(strings.TrimSpace(format))
 			if ext != "" && !strings.HasPrefix(ext, ".") {
 				ext = "." + ext
@@ -97,7 +103,7 @@ func (s *ClassificationAPIServer) uploadLimits() (int64, map[string]bool) {
 			documentExtensions[ext] = true
 		}
 	}
-	return maxBytes, documentExtensions
+	return uploadMaxBytes(cfg.VectorStore.MaxFileSizeMB), documentExtensions
 }
 
 // SetFileStore sets the global file store for the API server.
@@ -123,7 +129,7 @@ func (s *ClassificationAPIServer) handleUploadFile(w http.ResponseWriter, r *htt
 			return
 		}
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT",
-			fmt.Sprintf("failed to parse multipart form (max size: %dMB): %s", maxBytes/(1024*1024), err.Error()))
+			fmt.Sprintf("failed to parse multipart form (max size: %dMB): %s", maxBytes/megabyte, err.Error()))
 		return
 	}
 	if r.MultipartForm != nil {
