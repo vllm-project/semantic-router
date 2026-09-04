@@ -1,0 +1,17 @@
+# Docker image catalog
+#
+# Keep one tab-separated record per image:
+# image<TAB>build context<TAB>Dockerfile<TAB>platforms
+# Both docker-validate.yml and docker-publish.yml resolve their build inputs
+# through docker_image_catalog.py, so add or rename a mapping here only.
+anthropic-shim	./e2e/testing/anthropic-shim	./e2e/testing/anthropic-shim/Dockerfile	linux/amd64,linux/arm64
+dashboard	.	./dashboard/backend/Dockerfile	linux/amd64,linux/arm64
+extproc	.	./tools/docker/Dockerfile.extproc	linux/amd64,linux/arm64
+extproc-rocm	.	./tools/docker/Dockerfile.extproc-rocm	linux/amd64
+llm-katan	./e2e/testing/llm-katan	./e2e/testing/llm-katan/Dockerfile	linux/amd64,linux/arm64
+operator	.	./deploy/operator/Dockerfile	linux/amd64,linux/arm64
+operator-bundle	./deploy/operator	./deploy/operator/bundle/Dockerfile	linux/amd64,linux/arm64
+vllm-sr	.	./src/vllm-sr/Dockerfile	linux/amd64,linux/arm64
+vllm-sr-cuda	.	./src/vllm-sr/Dockerfile.cuda	linux/amd64
+vllm-sr-rocm	.	./src/vllm-sr/Dockerfile.rocm	linux/amd64
+vllm-sr-sim	.	./src/fleet-sim/Dockerfile	linux/amd64,linux/arm64
