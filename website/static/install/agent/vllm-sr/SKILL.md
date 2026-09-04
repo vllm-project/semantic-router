@@ -63,8 +63,8 @@ Before choosing an installation path, detect and report:
 | Existing `vllm-sr` | `command -v vllm-sr` and `vllm-sr --version` |
 | Docker | `command -v docker` and `docker info` |
 | Podman | `command -v podman` and `podman info` |
-| Existing config | `ls config.yaml` in the working directory |
-| Existing local runtime state | `ls ~/.local/share/vllm-sr/runtime.env` |
+| Existing config | `test -f config.yaml` in the working directory |
+| Existing local runtime state | `test -f ~/.local/share/vllm-sr/runtime.env` |
 
 Docker / Podman discovery is **informational only**. It may be useful for
 later deployment decisions, but it is not used to silently select or activate a
@@ -147,11 +147,16 @@ After installation, verify:
 vllm-sr --version
 ```
 
-A successful install prints a version string. If the command is not found, the
-launcher directory (`~/.local/bin`) may not be on `PATH` — report this to the
-user and suggest adding it.
+If `~/.local/bin` is not on `PATH` (common in non-interactive agent shells),
+validate via the launcher's absolute path instead:
 
-Do not claim success without this verification.
+```bash
+~/.local/bin/vllm-sr --version
+```
+
+A successful install prints a version string. Do not claim success without
+this verification. If neither command works, report the failure and suggest
+adding `~/.local/bin` to `PATH`.
 
 ## Existing Installation, Runtime State, Configuration, and Deployment
 
