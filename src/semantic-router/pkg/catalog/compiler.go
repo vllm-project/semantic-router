@@ -336,7 +336,7 @@ func compileCardOverlay(
 		return EffectiveModelCard{}, err
 	}
 	ensureCustomCardVerification(&effective, builtin)
-	if err := validateEffectiveCard(effective, path, builtin); err != nil {
+	if err := validateEffectiveCard(effective, path); err != nil {
 		return EffectiveModelCard{}, err
 	}
 	return effective, nil
@@ -504,7 +504,7 @@ func applyCardMetadataOverlay(effective *EffectiveModelCard, overlay ModelCardOv
 	}
 }
 
-func validateEffectiveCard(effective EffectiveModelCard, path string, builtin bool) error {
+func validateEffectiveCard(effective EffectiveModelCard, path string) error {
 	card := effective.Card
 	if strings.TrimSpace(card.DisplayName) == "" {
 		return fmt.Errorf("%s.display_name cannot be empty", path)
@@ -515,23 +515,37 @@ func validateEffectiveCard(effective EffectiveModelCard, path string, builtin bo
 	if len(card.Modalities.Input) == 0 || len(card.Modalities.Output) == 0 {
 		return fmt.Errorf("%s.modalities.input and output cannot be empty", path)
 	}
-	if effective.Provenance["presentation"] == SourceOperator &&
-		(strings.TrimSpace(card.Presentation.Logo) == "" || strings.TrimSpace(card.Presentation.Monogram) == "") {
+	if err := validateOperatorPresentation(card, effective.Provenance, path); err != nil {
+		return err
+	}
+	return validateOperatorDistribution(card, effective.Provenance, path)
+}
+
+func validateOperatorPresentation(card ModelCard, provenance FieldProvenance, path string) error {
+	if provenance["presentation"] != SourceOperator {
+		return nil
+	}
+	if strings.TrimSpace(card.Presentation.Logo) == "" || strings.TrimSpace(card.Presentation.Monogram) == "" {
 		return fmt.Errorf("%s.presentation.logo and monogram cannot be empty", path)
 	}
-	if effective.Provenance["distribution"] == SourceOperator {
-		switch card.Distribution.Type {
-		case "proprietary_api", "router_recipe":
-		case "open_weights":
-			if strings.TrimSpace(card.Distribution.License) == "" {
-				return fmt.Errorf("%s.distribution.license cannot be empty for open_weights", path)
-			}
-		default:
-			return fmt.Errorf("%s.distribution.type must be proprietary_api, open_weights, or router_recipe", path)
+	return nil
+}
+
+func validateOperatorDistribution(card ModelCard, provenance FieldProvenance, path string) error {
+	if provenance["distribution"] != SourceOperator {
+		return nil
+	}
+	switch card.Distribution.Type {
+	case "proprietary_api", "router_recipe":
+	case "open_weights":
+		if strings.TrimSpace(card.Distribution.License) == "" {
+			return fmt.Errorf("%s.distribution.license cannot be empty for open_weights", path)
 		}
-		if strings.TrimSpace(card.Distribution.Source) == "" {
-			return fmt.Errorf("%s.distribution.source cannot be empty", path)
-		}
+	default:
+		return fmt.Errorf("%s.distribution.type must be proprietary_api, open_weights, or router_recipe", path)
+	}
+	if strings.TrimSpace(card.Distribution.Source) == "" {
+		return fmt.Errorf("%s.distribution.source cannot be empty", path)
 	}
 	return nil
 }

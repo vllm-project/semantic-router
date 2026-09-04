@@ -81,24 +81,29 @@ func TestDeepSeekV4HasCompletePublishedEvaluationAndRuntimeOfferings(t *testing.
 	}
 
 	for _, modelID := range []string{"deepseek/deepseek-v4-flash", "deepseek/deepseek-v4-pro"} {
-		result, ok := registry.IndexResult(modelID, "vllm-sr/intelligence@1.0.0")
-		if !ok || result.Status != "available" || result.Score == nil || result.Coverage != 1 {
-			t.Fatalf("%s intelligence result is incomplete: %+v", modelID, result)
-		}
-		providers := map[string]bool{}
-		for _, offering := range registry.Offerings() {
-			if offering.Model == modelID {
-				providers[offering.Provider] = true
-			}
-		}
-		if !providers["deepseek"] || !providers["vllm"] {
-			t.Fatalf("%s offerings = %v, want deepseek and vllm", modelID, providers)
-		}
+		assertDeepSeekModelSupport(t, registry, modelID)
 	}
 
 	provider, ok := registry.Provider("deepseek")
 	if !ok || !containsString(provider.Protocols, "openai/responses@1") {
 		t.Fatalf("deepseek provider is missing Responses support: %+v", provider)
+	}
+}
+
+func assertDeepSeekModelSupport(t *testing.T, registry *Registry, modelID string) {
+	t.Helper()
+	result, ok := registry.IndexResult(modelID, "vllm-sr/intelligence@1.0.0")
+	if !ok || result.Status != "available" || result.Score == nil || result.Coverage != 1 {
+		t.Fatalf("%s intelligence result is incomplete: %+v", modelID, result)
+	}
+	providers := map[string]bool{}
+	for _, offering := range registry.Offerings() {
+		if offering.Model == modelID {
+			providers[offering.Provider] = true
+		}
+	}
+	if !providers["deepseek"] || !providers["vllm"] {
+		t.Fatalf("%s offerings = %v, want deepseek and vllm", modelID, providers)
 	}
 }
 
