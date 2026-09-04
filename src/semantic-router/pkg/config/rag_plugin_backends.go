@@ -27,7 +27,6 @@ type MilvusRAGConfig struct {
 	Collection           string `json:"collection" yaml:"collection"`
 	ReuseCacheConnection bool   `json:"reuse_cache_connection,omitempty" yaml:"reuse_cache_connection,omitempty"`
 	ContentField         string `json:"content_field,omitempty" yaml:"content_field,omitempty"`
-	MetadataField        string `json:"metadata_field,omitempty" yaml:"metadata_field,omitempty"`
 	FilterExpression     string `json:"filter_expression,omitempty" yaml:"filter_expression,omitempty"`
 }
 
