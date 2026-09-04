@@ -131,8 +131,12 @@ instructions to install.
 ## Workflow
 
 1. **Discover** the environment using the checks above.
-2. **Detect existing installation.** If `vllm-sr --version` succeeds, report the
-   version and stop. Do not reinstall unless the user explicitly asks.
+2. **Check for an existing launcher.** Run `command -v vllm-sr`:
+   - **Launcher found** — an existing installation is present. Attempt
+     `vllm-sr --version` for diagnostics. Whether or not version succeeds,
+     **stop and report**; do not reinstall, overwrite, or repair without
+     explicit user approval.
+   - **Launcher not found** — continue to step 3.
 3. **Present the plan** and wait for confirmation if the user has not already
    approved.
 4. **Install** using the one-line installer in agent-safe mode.
@@ -162,10 +166,15 @@ adding `~/.local/bin` to `PATH`.
 
 ### Existing CLI installation
 
-If `vllm-sr --version` succeeds:
+If `command -v vllm-sr` finds a launcher, an existing installation is present:
 
-- Report the installed version.
-- Do not reinstall.
+- Report the launcher path.
+- Attempt `vllm-sr --version` for diagnostics.
+  - If version succeeds, report the version.
+  - If version fails, report that the launcher exists but its version could
+    not be verified.
+- In **both** cases, stop and do not reinstall, overwrite, or repair without
+  explicit user approval.
 - If the user asks to upgrade, point them to the installation docs at
   <https://vllm-sr.ai/docs/installation/installation>.
 

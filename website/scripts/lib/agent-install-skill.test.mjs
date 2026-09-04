@@ -126,6 +126,54 @@ test('canonical SKILL.md declares out-of-scope items', () => {
   }
 })
 
+test('Workflow stops on command -v, not only on --version success', () => {
+  const content = readSkill(canonicalPath)
+  // Extract the ## Workflow section body (up to the next ## heading).
+  const workflowMatch = content.match(/## Workflow\n([\s\S]*?)\n## /)
+  assert.ok(workflowMatch, '## Workflow section must exist')
+  const workflow = workflowMatch[1]
+
+  // The Workflow must gate "stop" on `command -v vllm-sr` finding the launcher,
+  // not only on `vllm-sr --version` succeeding. This prevents a broken or
+  // stale launcher from being silently overwritten.
+  assert.ok(
+    workflow.includes('`command -v vllm-sr`'),
+    'Workflow must reference command -v vllm-sr as the existence gate',
+  )
+  assert.ok(
+    /command -v vllm-sr[\s\S]*stop/i.test(workflow),
+    'Workflow must stop when command -v finds the launcher',
+  )
+  assert.ok(
+    /version[\s\S]*diagnostic/i.test(workflow),
+    'Workflow must treat --version as diagnostics, not as the gate for continuing',
+  )
+
+  // The old regression: "If vllm-sr --version succeeds, report the version
+  // and stop" implied that a broken launcher allows installation to proceed.
+  // Ensure that exact phrasing is gone from Workflow.
+  assert.ok(
+    !/If `vllm-sr --version` succeeds[\s\S]*stop/.test(workflow),
+    'Workflow must not gate stop on --version success alone (the old broken-gate phrasing)',
+  )
+})
+
+test('Existing CLI installation section gates on command -v, not --version', () => {
+  const content = readSkill(canonicalPath)
+  const sectionMatch = content.match(/### Existing CLI installation\n([\s\S]*?)\n### /)
+  assert.ok(sectionMatch, '### Existing CLI installation section must exist')
+  const section = sectionMatch[1]
+
+  assert.ok(
+    section.includes('`command -v vllm-sr`'),
+    'Existing CLI installation must gate on command -v vllm-sr',
+  )
+  assert.ok(
+    /both[\s\S]*stop/i.test(section),
+    'Existing CLI installation must stop in both version-success and version-failure cases',
+  )
+})
+
 test('sync script produces a byte-for-byte identical public artifact', () => {
   // The static copy is gitignored (built at build time, same as install.sh).
   // Run the sync script to generate it, then verify parity.
