@@ -238,6 +238,102 @@ func TestMemoryStore_TTLSlidesOnLoad(t *testing.T) {
 	}
 }
 
+// TestMemoryStore_ExpiredReadmission_ABARace guards against the ABA race
+// deleteIfExpiredLocked/compareAndSwapCreate exist to prevent: a stale
+// "this entry looked expired" observation (from Load or a losing
+// CompareAndSwap(0) racer) must never delete a fresh, live entry that a
+// concurrent CompareAndSwap(0) admitted at the same key in the meantime.
+// Repeated across many attempts with real goroutine concurrency (not just
+// -race's happens-before tracking) because the race window is narrow and
+// timing-dependent.
+func TestMemoryStore_ExpiredReadmission_ABARace(t *testing.T) {
+	const attempts = 200
+	const casWorkers = 64
+	const loadWorkers = 64
+
+	ctx := context.Background()
+	quota := QuotaKey{Principal: "user-1", Namespace: "recipe-a"}
+
+	for attempt := 0; attempt < attempts; attempt++ {
+		clock := newSyntheticClock(time.Unix(int64(attempt+1), 0))
+		store := newTestStore(t, clock, 1000, 1000, 60)
+		key := fmt.Sprintf("aba-race-%d", attempt)
+
+		initial := newTestState(0)
+		initial.PolicyFingerprint = "expired"
+		if applied, err := store.CompareAndSwap(ctx, key, 0, initial, time.Second, quota); err != nil || !applied {
+			t.Fatalf("attempt %d: initial create applied=%v err=%v", attempt, applied, err)
+		}
+
+		clock.Advance(2 * time.Second)
+
+		start := make(chan struct{})
+		var wg sync.WaitGroup
+		var mu sync.Mutex
+		appliedCAS := 0
+		errs := make(chan error, casWorkers+loadWorkers)
+
+		for i := 0; i < casWorkers; i++ {
+			wg.Add(1)
+			go func(i int) {
+				defer wg.Done()
+				<-start
+
+				next := newTestState(0)
+				next.PolicyFingerprint = fmt.Sprintf("fresh-%d-%d", attempt, i)
+				ok, err := store.CompareAndSwap(ctx, key, 0, next, time.Minute, quota)
+				if err != nil && !errors.Is(err, ErrRevisionMismatch) {
+					errs <- fmt.Errorf("cas worker %d: unexpected err: %w", i, err)
+					return
+				}
+				if ok {
+					mu.Lock()
+					appliedCAS++
+					mu.Unlock()
+				}
+			}(i)
+		}
+
+		for i := 0; i < loadWorkers; i++ {
+			wg.Add(1)
+			go func(i int) {
+				defer wg.Done()
+				<-start
+
+				if _, err := store.Load(ctx, key); err != nil {
+					errs <- fmt.Errorf("load worker %d: unexpected err: %w", i, err)
+				}
+			}(i)
+		}
+
+		close(start)
+		wg.Wait()
+		close(errs)
+
+		for err := range errs {
+			t.Fatal(err)
+		}
+
+		if appliedCAS != 1 {
+			t.Fatalf("attempt %d: CAS(0) successes = %d, want exactly 1", attempt, appliedCAS)
+		}
+
+		final, err := store.Load(ctx, key)
+		if err != nil {
+			t.Fatalf("attempt %d: final load err: %v", attempt, err)
+		}
+		if !final.Found {
+			t.Fatalf("attempt %d: fresh state was pruned by expired cleanup", attempt)
+		}
+		if final.State.Revision != 1 {
+			t.Fatalf("attempt %d: final revision = %d, want 1", attempt, final.State.Revision)
+		}
+		if final.State.PolicyFingerprint == "expired" {
+			t.Fatalf("attempt %d: expired state survived readmission", attempt)
+		}
+	}
+}
+
 func TestMemoryStore_GlobalCapacityEviction(t *testing.T) {
 	ctx := context.Background()
 	clock := newSyntheticClock(time.Now())
