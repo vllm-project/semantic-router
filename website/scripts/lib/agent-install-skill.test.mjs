@@ -177,11 +177,72 @@ test('Workflow checks default absolute paths, not only PATH', () => {
   )
   assert.ok(
     /any signal/i.test(workflow),
-    'Workflow must treat any of the three signals as an existing installation',
+    'Workflow must treat any of the signals as an existing installation',
   )
 })
 
-test('Existing CLI installation section detects all three signals', () => {
+test('Workflow detects stale launchers and dangling symlinks, not only executable files', () => {
+  const content = readSkill(canonicalPath)
+  const workflowMatch = content.match(/## Workflow\n([\s\S]*?)\n## /)
+  assert.ok(workflowMatch, '## Workflow section must exist')
+  const workflow = workflowMatch[1]
+
+  // test -x misses stale non-executable files and dangling symlinks that
+  // still occupy the launcher path. The Workflow must use test -e (regular
+  // file exists) and test -L (symlink exists regardless of target).
+  assert.ok(
+    /test -e .*vllm-sr/.test(workflow),
+    'Workflow must use test -e to catch non-executable stale launcher files',
+  )
+  assert.ok(
+    /test -L .*vllm-sr/.test(workflow),
+    'Workflow must use test -L to catch dangling symlinks at the launcher path',
+  )
+  assert.ok(
+    !/test -x .*vllm-sr/.test(workflow),
+    'Workflow must not rely on test -x alone for launcher detection',
+  )
+})
+
+test('Workflow detects installer override env vars', () => {
+  const content = readSkill(canonicalPath)
+  const workflowMatch = content.match(/## Workflow\n([\s\S]*?)\n## /)
+  assert.ok(workflowMatch, '## Workflow section must exist')
+  const workflow = workflowMatch[1]
+
+  // install.sh reads VLLM_SR_INSTALL_ROOT, VLLM_SR_BIN_DIR, and
+  // VLLM_SR_PIP_SPEC from the environment. When set, discovery must check
+  // the override path too, not only the defaults.
+  assert.ok(
+    workflow.includes('VLLM_SR_BIN_DIR'),
+    'Workflow must check the VLLM_SR_BIN_DIR override path when set',
+  )
+  assert.ok(
+    workflow.includes('VLLM_SR_INSTALL_ROOT'),
+    'Workflow must check the VLLM_SR_INSTALL_ROOT override path when set',
+  )
+})
+
+test('Plan discloses shell completion setup as a side effect', () => {
+  const content = readSkill(canonicalPath)
+  const planMatch = content.match(/## Plan Before Mutation\n([\s\S]*?)\n## /)
+  assert.ok(planMatch, '## Plan Before Mutation section must exist')
+  const plan = planMatch[1]
+
+  // install.sh unconditionally runs `vllm-sr completion install`, which may
+  // edit ~/.bashrc, ~/.zshrc, or equivalent shell rc files. The plan must
+  // disclose this side effect so the user can approve it explicitly.
+  assert.ok(
+    /completion/i.test(plan),
+    'Plan must disclose that the installer sets up shell completions',
+  )
+  assert.ok(
+    /shell rc|bashrc|zshrc/i.test(plan),
+    'Plan must mention shell rc files as the thing completion edits',
+  )
+})
+
+test('Existing CLI installation section detects all default signals and override paths', () => {
   const content = readSkill(canonicalPath)
   const sectionMatch = content.match(/### Existing CLI installation\n([\s\S]*?)\n### /)
   assert.ok(sectionMatch, '### Existing CLI installation section must exist')
@@ -198,6 +259,22 @@ test('Existing CLI installation section detects all three signals', () => {
   assert.ok(
     section.includes('~/.local/share/vllm-sr'),
     'Existing CLI installation must check the default install root',
+  )
+  assert.ok(
+    /test -e .*vllm-sr/.test(section),
+    'Existing CLI installation must use test -e to catch stale launchers',
+  )
+  assert.ok(
+    /test -L .*vllm-sr/.test(section),
+    'Existing CLI installation must use test -L to catch dangling symlinks',
+  )
+  assert.ok(
+    section.includes('VLLM_SR_BIN_DIR'),
+    'Existing CLI installation must check the VLLM_SR_BIN_DIR override path',
+  )
+  assert.ok(
+    section.includes('VLLM_SR_INSTALL_ROOT'),
+    'Existing CLI installation must check the VLLM_SR_INSTALL_ROOT override path',
   )
   assert.ok(
     /all[\s\S]*stop/i.test(section),
