@@ -2,6 +2,7 @@ package store
 
 import (
 	"bytes"
+	"encoding/json"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -49,6 +50,44 @@ func TestSanitizePostgresJSONRemovesNULEscape(t *testing.T) {
 	}
 	if want := []byte(`{"k":"ab"}`); !bytes.Equal(got, want) {
 		t.Fatalf("sanitizePostgresJSON = %q, want %q", got, want)
+	}
+}
+
+// TestSanitizePostgresJSONPreservesLiteralEscape guards the case where a valid
+// replay value's text literally contains the six characters \u0000. json.Marshal
+// escapes the backslash, so the encoded bytes hold \\u0000 (an even backslash
+// run) — that match is an escaped backslash, not a NUL escape, and must be kept.
+// A blind replace would delete the second backslash, leave the first escaping
+// the closing quote, and produce JSON that PostgreSQL rejects. A real NUL byte
+// still marshals to \u0000 (an odd backslash run) and must be dropped.
+func TestSanitizePostgresJSONPreservesLiteralEscape(t *testing.T) {
+	cases := []struct {
+		name string
+		val  string
+		want string // decoded value expected back after sanitize + Unmarshal
+	}{
+		{"literal backslash-u0000 preserved", `abc\u0000def`, `abc\u0000def`},
+		{"real nul stripped", "a\x00b", "ab"},
+		{"real nul next to literal escape", "a\x00b\\u0000c", `ab\u0000c`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			encoded, err := json.Marshal(map[string]string{"k": tc.val})
+			if err != nil {
+				t.Fatalf("marshal: %v", err)
+			}
+			got := sanitizePostgresJSON(encoded)
+			var back map[string]string
+			if err := json.Unmarshal(got, &back); err != nil {
+				t.Fatalf("sanitized JSON is invalid: %v (in=%q got=%q)", err, encoded, got)
+			}
+			if back["k"] != tc.want {
+				t.Fatalf("value corrupted: got %q, want %q (sanitized=%q)", back["k"], tc.want, got)
+			}
+			if bytes.Contains(got, []byte("\\u0000\\u0000")) {
+				t.Fatalf("unexpected doubled escape: %q", got)
+			}
+		})
 	}
 }
 
