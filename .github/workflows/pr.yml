@@ -40,6 +40,9 @@ jobs:
       && (needs.changes.outputs.security == 'true'
         || needs.changes.outputs.full == 'true')
     uses: ./.github/workflows/security-scan.yml
+    permissions:
+      contents: read
+      security-events: write
 
   core-tests:
     name: Core tests
