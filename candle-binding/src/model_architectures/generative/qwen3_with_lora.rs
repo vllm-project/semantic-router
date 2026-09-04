@@ -619,6 +619,62 @@ mod chunked_attention_tests {
         attn.o_proj.forward(&ctx).unwrap()
     }
 
+    fn make_causal_lm(cfg: &Config, device: &Device) -> ModelForCausalLM {
+        let mut tensors: HashMap<String, Tensor> = HashMap::new();
+        let mut put = |name: String, shape: (usize, usize)| {
+            tensors.insert(name, Tensor::randn(0f32, 0.2f32, shape, device).unwrap());
+        };
+        let (h, hd, ff, v) = (
+            cfg.hidden_size,
+            cfg.head_dim,
+            cfg.intermediate_size,
+            cfg.vocab_size,
+        );
+        let l = "model.layers.0";
+        put("model.embed_tokens.weight".to_string(), (v, h));
+        put("lm_head.weight".to_string(), (v, h));
+        put(
+            format!("{l}.self_attn.q_proj.weight"),
+            (cfg.num_attention_heads * hd, h),
+        );
+        put(
+            format!("{l}.self_attn.k_proj.weight"),
+            (cfg.num_key_value_heads * hd, h),
+        );
+        put(
+            format!("{l}.self_attn.v_proj.weight"),
+            (cfg.num_key_value_heads * hd, h),
+        );
+        put(
+            format!("{l}.self_attn.o_proj.weight"),
+            (h, cfg.num_attention_heads * hd),
+        );
+        put(format!("{l}.mlp.gate_proj.weight"), (ff, h));
+        put(format!("{l}.mlp.up_proj.weight"), (ff, h));
+        put(format!("{l}.mlp.down_proj.weight"), (h, ff));
+        for (name, dim) in [
+            (format!("{l}.self_attn.q_norm.weight"), hd),
+            (format!("{l}.self_attn.k_norm.weight"), hd),
+            (format!("{l}.input_layernorm.weight"), h),
+            (format!("{l}.post_attention_layernorm.weight"), h),
+            ("model.norm.weight".to_string(), h),
+        ] {
+            tensors.insert(name, Tensor::randn(1f32, 0.1f32, dim, device).unwrap());
+        }
+        let vb = VarBuilder::from_tensors(tensors, DType::F32, device);
+        ModelForCausalLM::new(cfg, vb).unwrap()
+    }
+
+    fn argmax(logits: &Tensor) -> u32 {
+        logits
+            .flatten_all()
+            .unwrap()
+            .argmax(0)
+            .unwrap()
+            .to_scalar::<u32>()
+            .unwrap()
+    }
+
     fn max_abs_diff(a: &Tensor, b: &Tensor) -> f32 {
         (a - b)
             .unwrap()
@@ -675,6 +731,65 @@ mod chunked_attention_tests {
                 l,
                 diff
             );
+        }
+    }
+
+    /// `Qwen3GuardModel::generate_with_prefix_cache` prefills the fixed prefix
+    /// once, snapshots the KV cache, and per request restores it, prefills the
+    /// suffix at `prefix_len` and decodes one token at a time at `total - 1`.
+    /// Every step must produce the logits of the uncached path (one prefill of
+    /// prefix + suffix, then the same loop), which holds only while the physical
+    /// KV cache and the logical `q_offset` stay aligned: a cache one entry ahead
+    /// makes the causal range skip the token just appended.
+    #[test]
+    fn test_cached_suffix_generation_matches_uncached() {
+        let device = Device::Cpu;
+        let cfg = tiny_config();
+        let mut model = make_causal_lm(&cfg, &device);
+        let vocab = cfg.vocab_size as u32;
+        let prefix: Vec<u32> = (0..11u32).map(|i| (i * 7 + 3) % vocab).collect();
+        let suffix: Vec<u32> = (0..6u32).map(|i| (i * 5 + 1) % vocab).collect();
+        let steps = 5;
+        let row = |ids: &[u32]| Tensor::new(ids, &device).unwrap().unsqueeze(0).unwrap();
+
+        // Uncached: one prefill of the whole prompt, then decode.
+        model.clear_kv_cache();
+        let mut tokens = [prefix.as_slice(), suffix.as_slice()].concat();
+        let mut logits = model.forward(&row(&tokens), 0).unwrap();
+        let mut want = Vec::with_capacity(steps);
+        for _ in 0..steps {
+            let next = argmax(&logits);
+            want.push((logits, next));
+            tokens.push(next);
+            logits = model.forward(&row(&[next]), tokens.len() - 1).unwrap();
+        }
+
+        // Cached: the guard's sequence. The last suffix token is the first decode
+        // step, so only the tokens before it are prefilled.
+        model.clear_kv_cache();
+        let prefix_len = model.process_prefix(&prefix).unwrap();
+        let snapshot = model.kv_cache_snapshot();
+        model.clear_kv_cache();
+        model.kv_cache_restore(&snapshot);
+        model
+            .forward(&row(&suffix[..suffix.len() - 1]), prefix_len)
+            .unwrap();
+        let mut tokens = suffix.clone();
+        let mut total = prefix_len + tokens.len();
+        for (step, (want_logits, want_next)) in want.iter().enumerate() {
+            let last = *tokens.last().unwrap();
+            let logits = model.forward(&row(&[last]), total - 1).unwrap();
+            assert_eq!(
+                model.kv_cache_snapshot()[0].current_seq_len(),
+                total,
+                "step {step}: cached keys must equal the logical position"
+            );
+            let diff = max_abs_diff(&logits, want_logits);
+            assert!(diff < 1e-4, "step {step}: max|Δ|={diff}");
+            let next = argmax(&logits);
+            assert_eq!(next, *want_next, "step {step}: sampled token");
+            tokens.push(next);
+            total += 1;
         }
     }
 }

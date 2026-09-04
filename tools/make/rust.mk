@@ -31,6 +31,7 @@ RUST_CI_LIB_TESTS ?= \
 	model_architectures::embedding::multimodal_embedding::tests::test_siglip_and_whisper_self_attention_match_dense \
 	model_architectures::embedding::multimodal_embedding::tests::test_siglip_head_attention_matches_dense \
 	model_architectures::generative::qwen3_with_lora::chunked_attention_tests::test_prefill_and_decode_match_dense \
+	model_architectures::generative::qwen3_with_lora::chunked_attention_tests::test_cached_suffix_generation_matches_uncached \
 	model_architectures::traditional::base_model_test::test_self_attention_matches_dense_reference
 
 test-rust-ci:
