@@ -8,7 +8,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/apiserver"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -204,9 +203,9 @@ func failStartup(writer startupstatus.StatusWriter, format string, args ...inter
 	})
 }
 
-func initializeTracing(cfg *config.RouterConfig) func() {
+func initializeTracing(cfg *config.RouterConfig) func(context.Context) error {
 	if !cfg.Observability.Tracing.Enabled {
-		return func() {}
+		return func(context.Context) error { return nil }
 	}
 
 	tracingCfg := tracing.TracingConfig{
@@ -232,14 +231,14 @@ func initializeTracing(cfg *config.RouterConfig) func() {
 	return shutdownTracing
 }
 
-func shutdownTracing() {
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := tracing.ShutdownTracing(shutdownCtx); err != nil {
+func shutdownTracing(ctx context.Context) error {
+	if err := tracing.ShutdownTracing(ctx); err != nil {
 		logging.ComponentErrorEvent("router", "tracing_shutdown_failed", map[string]interface{}{
 			"error": err.Error(),
 		})
+		return fmt.Errorf("shutdown tracing: %w", err)
 	}
+	return nil
 }
 
 func initializeWindowedMetricsIfEnabled(cfg *config.RouterConfig) {
@@ -258,13 +257,15 @@ func initializeWindowedMetricsIfEnabled(cfg *config.RouterConfig) {
 	})
 }
 
-func runShutdownHooks(shutdownHooks *[]func()) {
+func runShutdownHooks(ctx context.Context, shutdownHooks *[]func(context.Context) error) error {
 	if shutdownHooks == nil {
-		return
+		return nil
 	}
+	var shutdownErr error
 	for _, hook := range *shutdownHooks {
-		hook()
+		shutdownErr = errors.Join(shutdownErr, hook(ctx))
 	}
+	return shutdownErr
 }
 
 // metricsServerEnabled reports whether the Prometheus listener will be started
@@ -315,7 +316,11 @@ func startMetricsServerIfEnabled(cfg *config.RouterConfig, metricsPort int) *htt
 // startProfilingServerIfEnabled brings up the pprof listener when the operator
 // opted in. Profiling is a debugging aid, so a misconfigured port or a failed
 // bind is logged and skipped rather than aborting router startup.
-func startProfilingServerIfEnabled(cfg *config.RouterConfig, opts runtimeOptions, shutdownHooks *[]func()) {
+func startProfilingServerIfEnabled(
+	cfg *config.RouterConfig,
+	opts runtimeOptions,
+	shutdownHooks *[]func(context.Context) error,
+) {
 	profilingCfg := cfg.Observability.Profiling
 	if !profilingCfg.Enabled {
 		logging.ComponentDebugEvent("router", "profiling_server_disabled", nil)
@@ -354,7 +359,7 @@ func startProfilingServerIfEnabled(cfg *config.RouterConfig, opts runtimeOptions
 		return
 	}
 	if shutdownHooks != nil {
-		*shutdownHooks = append(*shutdownHooks, func() { _ = server.Close() })
+		*shutdownHooks = append(*shutdownHooks, func(context.Context) error { return server.Close() })
 	}
 	logging.ComponentEvent("router", "profiling_server_starting", map[string]interface{}{
 		"address": server.Addr(),
@@ -365,7 +370,7 @@ func initializeRuntimeDependencies(
 	ctx context.Context,
 	cfg *config.RouterConfig,
 	writer startupstatus.StatusWriter,
-	shutdownHooks *[]func(),
+	shutdownHooks *[]func(context.Context) error,
 	runtimeRegistry *routerruntime.Registry,
 ) (modelruntime.EmbeddingRuntimeState, error) {
 	writeStartupState(writer, startupstatus.State{
@@ -446,7 +451,7 @@ func logRuntimeLifecycleEvent(event modelruntime.Event) {
 
 func initializeVectorStoreIfEnabled(
 	cfg *config.RouterConfig,
-	shutdownHooks *[]func(),
+	shutdownHooks *[]func(context.Context) error,
 	runtimeRegistry *routerruntime.Registry,
 ) error {
 	if cfg.VectorStore == nil || !cfg.VectorStore.Enabled {
@@ -472,16 +477,18 @@ func initializeVectorStoreIfEnabled(
 }
 
 func registerVectorStoreShutdownHook(
-	shutdownHooks *[]func(),
+	shutdownHooks *[]func(context.Context) error,
 	vectorStoreRuntime *routerruntime.VectorStoreRuntime,
 ) {
-	*shutdownHooks = append(*shutdownHooks, func() {
+	*shutdownHooks = append(*shutdownHooks, func(ctx context.Context) error {
 		logging.ComponentEvent("router", "vector_store_shutdown_started", map[string]interface{}{})
-		if err := vectorStoreRuntime.Shutdown(); err != nil {
+		if err := vectorStoreRuntime.ShutdownContext(ctx); err != nil {
 			logging.ComponentErrorEvent("router", "vector_store_shutdown_failed", map[string]interface{}{
 				"error": err.Error(),
 			})
+			return err
 		}
+		return nil
 	})
 }
 

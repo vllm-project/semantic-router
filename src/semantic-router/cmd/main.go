@@ -65,11 +65,14 @@ func runRouterProcess(ctx context.Context, opts runtimeOptions) (runErr error) {
 	}
 	var routerServer *extproc.Server
 	var metricsServer *http.Server
-	shutdownHooks := make([]func(), 0)
-	shutdownTracing := func() {}
+	shutdownHooks := make([]func(context.Context) error, 0)
+	shutdownTracing := func(context.Context) error { return nil }
 	// Return errors below so deferred shutdown can release started resources.
 	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), processShutdownTimeout)
+		defer cancel()
 		runErr = errors.Join(runErr, shutdownRouterProcess(
+			shutdownCtx,
 			apiServer,
 			routerServer,
 			metricsServer,
@@ -113,14 +116,13 @@ func runRouterProcess(ctx context.Context, opts runtimeOptions) (runErr error) {
 }
 
 func shutdownRouterProcess(
+	ctx context.Context,
 	apiServer *apiserver.Server,
 	routerServer *extproc.Server,
 	metricsServer *http.Server,
-	shutdownHooks *[]func(),
-	shutdownTracing func(),
+	shutdownHooks *[]func(context.Context) error,
+	shutdownTracing func(context.Context) error,
 ) error {
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), processShutdownTimeout)
-	defer cancel()
 	servers := make([]contextShutdowner, 0, 3)
 	if apiServer != nil {
 		servers = append(servers, apiServer)
@@ -131,9 +133,9 @@ func shutdownRouterProcess(
 	if metricsServer != nil {
 		servers = append(servers, metricsServer)
 	}
-	err := shutdownServers(shutdownCtx, servers...)
-	runShutdownHooks(shutdownHooks)
-	shutdownTracing()
+	err := shutdownServers(ctx, servers...)
+	err = errors.Join(err, runShutdownHooks(ctx, shutdownHooks))
+	err = errors.Join(err, shutdownTracing(ctx))
 	return err
 }
 

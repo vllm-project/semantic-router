@@ -98,6 +98,32 @@ func TestRunRouterProcessLoadedShutdownIsBoundedAndReleasesListener(t *testing.T
 	requireListenerReleased(t, "metrics", fmt.Sprintf("127.0.0.1:%d", metricsPort))
 }
 
+func TestShutdownRouterProcessBoundsSlowHookAndPreservesErrors(t *testing.T) {
+	hookErr := errors.New("hook failed")
+	tracingErr := errors.New("tracing failed")
+	hooks := []func(context.Context) error{
+		func(ctx context.Context) error {
+			<-ctx.Done()
+			return errors.Join(hookErr, ctx.Err())
+		},
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	started := time.Now()
+	err := shutdownRouterProcess(ctx, nil, nil, nil, &hooks, func(context.Context) error {
+		return tracingErr
+	})
+	if elapsed := time.Since(started); elapsed > time.Second {
+		t.Fatalf("shutdownRouterProcess() took %s, want at most 1s", elapsed)
+	}
+	for _, want := range []error{hookErr, context.DeadlineExceeded, tracingErr} {
+		if !errors.Is(err, want) {
+			t.Errorf("shutdownRouterProcess() error = %v, want errors.Is(_, %v)", err, want)
+		}
+	}
+}
+
 func waitForProcessListener(t *testing.T, done <-chan error, address string) {
 	t.Helper()
 	startupDeadline := time.Now().Add(5 * time.Second)
