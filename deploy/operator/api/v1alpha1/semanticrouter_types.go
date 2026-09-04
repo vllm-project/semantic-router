@@ -553,11 +553,6 @@ type RedisCacheDevelopment struct {
 	// +kubebuilder:default=true
 	// +optional
 	AutoCreateIndex bool `json:"auto_create_index,omitempty"`
-
-	// VerboseErrors includes detailed error messages in logs
-	// +kubebuilder:default=true
-	// +optional
-	VerboseErrors bool `json:"verbose_errors,omitempty"`
 }
 
 // ValkeyCacheConfig defines Valkey cache backend configuration.
@@ -726,11 +721,6 @@ type ValkeyCacheDevelopment struct {
 	// +kubebuilder:default=true
 	// +optional
 	AutoCreateIndex bool `json:"auto_create_index,omitempty"`
-
-	// VerboseErrors includes detailed error messages in logs
-	// +kubebuilder:default=true
-	// +optional
-	VerboseErrors bool `json:"verbose_errors,omitempty"`
 }
 
 // MilvusCacheConfig defines Milvus cache backend configuration.
@@ -747,14 +737,6 @@ type MilvusCacheConfig struct {
 	// Search settings for Milvus queries
 	// +optional
 	Search MilvusCacheSearch `json:"search,omitempty"`
-
-	// Performance tuning for Milvus
-	// +optional
-	Performance MilvusCachePerformance `json:"performance,omitempty"`
-
-	// DataManagement settings for TTL and compaction
-	// +optional
-	DataManagement MilvusCacheDataManagement `json:"data_management,omitempty"`
 
 	// Development settings for Milvus cache
 	// +optional
@@ -967,97 +949,6 @@ type MilvusCacheSearchParams struct {
 	Ef int `json:"ef,omitempty"`
 }
 
-// MilvusCachePerformance defines performance tuning.
-type MilvusCachePerformance struct {
-	// ConnectionPool settings
-	// +optional
-	ConnectionPool MilvusCacheConnectionPool `json:"connection_pool,omitempty"`
-
-	// Batch settings for operations
-	// +optional
-	Batch MilvusCacheBatch `json:"batch,omitempty"`
-}
-
-// MilvusCacheConnectionPool defines connection pool settings.
-type MilvusCacheConnectionPool struct {
-	// MaxConnections in the pool
-	// +kubebuilder:default=10
-	// +kubebuilder:validation:Minimum=1
-	// +optional
-	MaxConnections int `json:"max_connections,omitempty"`
-
-	// MaxIdleConnections to keep
-	// +kubebuilder:default=5
-	// +kubebuilder:validation:Minimum=0
-	// +optional
-	MaxIdleConnections int `json:"max_idle_connections,omitempty"`
-
-	// AcquireTimeout in seconds
-	// +kubebuilder:default=30
-	// +kubebuilder:validation:Minimum=0
-	// +optional
-	AcquireTimeout int `json:"acquire_timeout,omitempty"`
-}
-
-// MilvusCacheBatch defines batch operation settings.
-type MilvusCacheBatch struct {
-	// InsertBatchSize for bulk inserts
-	// +kubebuilder:default=100
-	// +kubebuilder:validation:Minimum=1
-	// +optional
-	InsertBatchSize int `json:"insert_batch_size,omitempty"`
-
-	// Timeout for batch operations in seconds
-	// +kubebuilder:default=60
-	// +kubebuilder:validation:Minimum=0
-	// +optional
-	Timeout int `json:"timeout,omitempty"`
-}
-
-// MilvusCacheDataManagement defines data lifecycle settings.
-type MilvusCacheDataManagement struct {
-	// TTL settings for automatic expiration
-	// +optional
-	TTL MilvusCacheTTL `json:"ttl,omitempty"`
-
-	// Compaction settings
-	// +optional
-	Compaction MilvusCacheCompaction `json:"compaction,omitempty"`
-}
-
-// MilvusCacheTTL defines time-to-live settings.
-type MilvusCacheTTL struct {
-	// Enabled controls whether TTL is active
-	// +kubebuilder:default=false
-	// +optional
-	Enabled bool `json:"enabled,omitempty"`
-
-	// TimestampField is the field used for TTL calculation
-	// +kubebuilder:default="created_at"
-	// +optional
-	TimestampField string `json:"timestamp_field,omitempty"`
-
-	// CleanupInterval in seconds between cleanup runs
-	// +kubebuilder:default=3600
-	// +kubebuilder:validation:Minimum=0
-	// +optional
-	CleanupInterval int `json:"cleanup_interval,omitempty"`
-}
-
-// MilvusCacheCompaction defines compaction settings.
-type MilvusCacheCompaction struct {
-	// Enabled controls whether auto-compaction is active
-	// +kubebuilder:default=false
-	// +optional
-	Enabled bool `json:"enabled,omitempty"`
-
-	// Interval in seconds between compaction runs
-	// +kubebuilder:default=86400
-	// +kubebuilder:validation:Minimum=0
-	// +optional
-	Interval int `json:"interval,omitempty"`
-}
-
 // MilvusCacheDevelopment defines development-mode settings.
 type MilvusCacheDevelopment struct {
 	// DropCollectionOnStartup clears the collection when router starts (for testing)
@@ -1069,11 +960,6 @@ type MilvusCacheDevelopment struct {
 	// +kubebuilder:default=true
 	// +optional
 	AutoCreateCollection bool `json:"auto_create_collection,omitempty"`
-
-	// VerboseErrors includes detailed error messages in logs
-	// +kubebuilder:default=true
-	// +optional
-	VerboseErrors bool `json:"verbose_errors,omitempty"`
 }
 
 // HNSWCacheConfig defines HNSW index configuration for hybrid/in-memory backends.
