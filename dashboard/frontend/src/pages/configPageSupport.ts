@@ -706,7 +706,6 @@ export interface CanonicalClassifierConfig {
 
 export interface CanonicalHallucinationModuleConfig {
   enabled?: boolean
-  on_hallucination_detected?: string
   fact_check?: FactCheckModelModuleConfig
   detector?: HallucinationDetectorModuleConfig
   explainer?: NLIExplainerModuleConfig

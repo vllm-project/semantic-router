@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 from cli.evaluation.broker_client import require_broker_for_authenticated_target
 from cli.evaluation.contracts import RunManifest, VisibleCaseSet
+from cli.evaluation.errors import SuiteStoreError
 from cli.evaluation.evidence import ExecutionRecord, RoutingDiagnostic
 from cli.evaluation.evidence_source_ids import (
     NORMALIZED_LIVE_MULTIMODAL_EVIDENCE_SOURCE_ID,
@@ -30,7 +31,6 @@ from cli.evaluation.normalized_suite_target_inputs import build_target_inputs
 from cli.evaluation.runtime_factors import runtime_factors
 from cli.evaluation.suite_contract import BenchmarkSuiteManifest
 from cli.evaluation.suite_store import NormalizedSuiteStore
-from cli.evaluation.suite_store_error import SuiteStoreError
 from cli.evaluation.target_arm_resolution import resolve_target_arm_id
 
 
@@ -49,13 +49,9 @@ def _grade_target_records(
     labels = {case.case_id: case for case in inputs.grading.cases}
     graded: list[ExecutionRecord] = []
     for record in records:
-        updates: dict[str, object] = {
-            "evidence_kind": (
-                record.evidence_kind
-                if record.track_id == "capacity"
-                else NORMALIZED_LIVE_MULTIMODAL_EVIDENCE_SOURCE_ID
-            )
-        }
+        updates: dict[str, object] = {}
+        if record.track_id == "multimodal":
+            updates["evidence_kind"] = NORMALIZED_LIVE_MULTIMODAL_EVIDENCE_SOURCE_ID
         label = labels[record.case_id]
         if record.track_id == "routing":
             selected_arm_id = resolve_target_arm_id(record.selected_arm_id, inputs.arms)
@@ -102,7 +98,7 @@ def execute_normalized_suite_live(
         )
         if inadmissible:
             raise SuiteStoreError(
-                f"suite {suite.id} has no first-party normalized live method for "
+                f"suite {suite.id} has no supported normalized live method for "
                 + ", ".join(inadmissible)
             )
     admitted_tracks = frozenset(
