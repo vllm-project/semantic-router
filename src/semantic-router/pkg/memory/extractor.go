@@ -200,7 +200,8 @@ func (e *MemoryExtractor) ProcessResponse(
 	userMessage string,
 	assistantResponse string,
 ) error {
-	return e.ProcessResponseWithHistory(ctx, sessionID, userID, userMessage, assistantResponse, nil)
+	_, err := e.ProcessResponseWithHistory(ctx, sessionID, userID, userMessage, assistantResponse, nil)
+	return err
 }
 
 // ProcessResponseWithHistory stores the current conversation turn directly in
@@ -214,6 +215,7 @@ func (e *MemoryExtractor) ProcessResponse(
 //
 // Low-entropy turns are skipped for per-turn storage but still counted toward
 // the session window trigger.
+// The returned count is the number of chunks successfully stored.
 func (e *MemoryExtractor) ProcessResponseWithHistory(
 	ctx context.Context,
 	_ string, // sessionID (unused, kept for interface compatibility)
@@ -221,17 +223,17 @@ func (e *MemoryExtractor) ProcessResponseWithHistory(
 	userMessage string,
 	assistantResponse string,
 	history []openai.ChatCompletionMessageParamUnion,
-) error {
+) (int, error) {
 	if e == nil || e.store == nil || !e.store.IsEnabled() {
 		logging.Infof("Memory chunk store: SKIPPED - store not enabled (store=%v)", e != nil && e.store != nil)
-		return nil
+		return 0, nil
 	}
 
 	assistantResponse = StripThinkTags(assistantResponse)
 
 	if userMessage == "" && assistantResponse == "" {
 		logging.Debugf("Memory chunk store: SKIPPED - empty turn")
-		return nil
+		return 0, nil
 	}
 
 	startTime := time.Now()
@@ -249,7 +251,7 @@ func (e *MemoryExtractor) ProcessResponseWithHistory(
 		status = "error"
 		// Negative count skips the facts-count histogram for failed extraction attempts.
 		factsCount = -1
-		return err
+		return 0, err
 	} else if stored {
 		factsCount++
 	}
@@ -260,7 +262,7 @@ func (e *MemoryExtractor) ProcessResponseWithHistory(
 		factsCount++
 	}
 
-	return nil
+	return factsCount, nil
 }
 
 func (e *MemoryExtractor) storeTurnChunk(ctx context.Context, userMessage, assistantResponse, userID string) (bool, error) {

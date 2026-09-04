@@ -133,6 +133,39 @@ When an external model with `model_role: memory_rewrite` is configured, its
 `max_response_bytes` limits each query-rewrite response. An omitted or
 non-positive value uses the 1 MiB default.
 
+#### Write path bounds
+
+Memory is written after the response is sent, so a slow store never delays an
+answer. `persistence` bounds that background work:
+
+```yaml
+global:
+  stores:
+    memory:
+      persistence:
+        timeout_seconds: 30
+        concurrency: 8
+        queue: 64
+        shutdown_grace_seconds: 5
+```
+
+| Field | Meaning | Default |
+| --- | --- | --- |
+| `timeout_seconds` | Bounds one extraction-plus-write attempt | 30 |
+| `concurrency` | Writes running at once | 8 |
+| `queue` | Writes waiting for a worker | 64 |
+| `shutdown_grace_seconds` | Time a reload or shutdown allows queued and in-flight writes to finish before cancelling them | 5 |
+
+Omit a field or set it to `0` to take the default.
+
+When every worker is busy and the queue is full, a new write is **dropped**
+rather than held or blocked, so a slow backend cannot grow unbounded state.
+Dropped writes are reported as `rejected` / `queue_full`, and writes arriving
+after a reload retired the pool as `rejected` / `shutting_down`; both are logged
+with their request ID. Track them with
+`llm_plugin_execution_total{plugin_type="memory_persistence", status="rejected"}`
+and raise `concurrency` before `queue`.
+
 ### Vector Store
 
 ```yaml

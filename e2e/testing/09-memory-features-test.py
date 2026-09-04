@@ -17,6 +17,7 @@ Test classes live in the memory_tests package:
   - MemoryStorageTest: Conversation turns stored in Milvus
   - PerDecisionMemoryDisabledTest: Decision with memory.enabled=false skips retrieval
   - PerDecisionThresholdOverrideTest: Decision-level threshold overrides global default
+  - MemoryPersistenceReceiptTest: Persistence receipts and fail-open on backend failure
 
 Prerequisites:
   - Milvus running
@@ -42,6 +43,7 @@ from memory_tests import (
     ChatCompletionsMemoryTest,
     MemoryContentIntegrityTest,
     MemoryInjectionPipelineTest,
+    MemoryPersistenceReceiptTest,
     MemoryStorageTest,
     PerDecisionMemoryDisabledTest,
     PerDecisionThresholdOverrideTest,
@@ -95,6 +97,8 @@ def run_tests():
         # P1: Per-decision plugin behavior
         PerDecisionMemoryDisabledTest,
         PerDecisionThresholdOverrideTest,
+        # P2: Persistence receipts — runs last, stops the memory backend
+        MemoryPersistenceReceiptTest,
     ]
 
     for test_class in test_classes:

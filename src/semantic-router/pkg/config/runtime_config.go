@@ -225,6 +225,15 @@ type MemoryConfig struct {
 	HybridMode                 string                  `yaml:"hybrid_mode,omitempty"`
 	AdaptiveThreshold          bool                    `yaml:"adaptive_threshold,omitempty"`
 	Reflection                 MemoryReflectionConfig  `yaml:"reflection,omitempty"`
+	Persistence                MemoryPersistenceConfig `yaml:"persistence,omitempty"`
+}
+
+// MemoryPersistenceConfig bounds asynchronous response memory writes.
+type MemoryPersistenceConfig struct {
+	TimeoutSeconds       int `yaml:"timeout_seconds,omitempty"`
+	Concurrency          int `yaml:"concurrency,omitempty"`
+	Queue                int `yaml:"queue,omitempty"`
+	ShutdownGraceSeconds int `yaml:"shutdown_grace_seconds,omitempty"`
 }
 
 // MemoryRedisCacheConfig configures an optional Redis hot cache in front of Milvus retrieval.
