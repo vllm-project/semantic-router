@@ -3,7 +3,6 @@ package protocolcodec
 import (
 	"bytes"
 	"encoding/json"
-	"sort"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
@@ -32,51 +31,45 @@ var providerVendorExtensionFields = map[string]map[string]struct{}{
 }
 
 // stripProviderVendorExtensions removes known vendor extension fields from a
-// provider response body before strict canonical validation runs. It returns
-// the rewritten body and the sorted paths it removed; when nothing matches it
-// returns the original slice so the common path stays allocation-free.
+// provider response body before strict canonical validation runs. When nothing
+// matches it returns the original slice, so the common path stays
+// allocation-free.
 //
 // The rewrite only ever deletes allowlisted keys. Values are carried through as
 // raw JSON, so numbers, escapes, and nesting survive byte-for-byte. Object key
 // order is not preserved, which is why this never runs on the byte-identical
 // source-preservation path: rejectUnknownFields is false there.
-func stripProviderVendorExtensions(body []byte, vendor string) ([]byte, []string) {
+func stripProviderVendorExtensions(body []byte, vendor string) []byte {
 	allowed, known := providerVendorExtensionFields[vendor]
 	if !known || len(allowed) == 0 {
-		return body, nil
+		return body
 	}
 	trimmed := bytes.TrimSpace(body)
 	if len(trimmed) == 0 || trimmed[0] != '{' {
-		return body, nil
+		return body
 	}
-	removed := map[string]struct{}{}
-	rewritten, changed := stripVendorExtensionValue(trimmed, "", allowed, removed)
+	rewritten, changed := stripVendorExtensionValue(trimmed, "", allowed)
 	if !changed {
-		return body, nil
+		return body
 	}
-	paths := make([]string, 0, len(removed))
-	for path := range removed {
-		paths = append(paths, path)
-	}
-	sort.Strings(paths)
-	return rewritten, paths
+	return rewritten
 }
 
-func stripVendorExtensionValue(raw json.RawMessage, path string, allowed, removed map[string]struct{}) (json.RawMessage, bool) {
+func stripVendorExtensionValue(raw json.RawMessage, path string, allowed map[string]struct{}) (json.RawMessage, bool) {
 	trimmed := bytes.TrimSpace(raw)
 	if len(trimmed) == 0 {
 		return raw, false
 	}
 	switch trimmed[0] {
 	case '{':
-		return stripVendorExtensionObject(trimmed, path, allowed, removed)
+		return stripVendorExtensionObject(trimmed, path, allowed)
 	case '[':
-		return stripVendorExtensionArray(trimmed, path, allowed, removed)
+		return stripVendorExtensionArray(trimmed, path, allowed)
 	}
 	return raw, false
 }
 
-func stripVendorExtensionObject(raw json.RawMessage, path string, allowed, removed map[string]struct{}) (json.RawMessage, bool) {
+func stripVendorExtensionObject(raw json.RawMessage, path string, allowed map[string]struct{}) (json.RawMessage, bool) {
 	var object map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &object); err != nil {
 		// Malformed JSON is not this function's error to report; leave the body
@@ -88,11 +81,10 @@ func stripVendorExtensionObject(raw json.RawMessage, path string, allowed, remov
 		child := vendorExtensionPath(path, name)
 		if _, vendor := allowed[child]; vendor {
 			delete(object, name)
-			removed[child] = struct{}{}
 			changed = true
 			continue
 		}
-		if rewritten, childChanged := stripVendorExtensionValue(value, child, allowed, removed); childChanged {
+		if rewritten, childChanged := stripVendorExtensionValue(value, child, allowed); childChanged {
 			object[name] = rewritten
 			changed = true
 		}
@@ -107,7 +99,7 @@ func stripVendorExtensionObject(raw json.RawMessage, path string, allowed, remov
 	return rewritten, true
 }
 
-func stripVendorExtensionArray(raw json.RawMessage, path string, allowed, removed map[string]struct{}) (json.RawMessage, bool) {
+func stripVendorExtensionArray(raw json.RawMessage, path string, allowed map[string]struct{}) (json.RawMessage, bool) {
 	var elements []json.RawMessage
 	if err := json.Unmarshal(raw, &elements); err != nil {
 		return raw, false
@@ -115,7 +107,7 @@ func stripVendorExtensionArray(raw json.RawMessage, path string, allowed, remove
 	changed := false
 	elementPath := path + "[]"
 	for index, element := range elements {
-		if rewritten, elementChanged := stripVendorExtensionValue(element, elementPath, allowed, removed); elementChanged {
+		if rewritten, elementChanged := stripVendorExtensionValue(element, elementPath, allowed); elementChanged {
 			elements[index] = rewritten
 			changed = true
 		}
