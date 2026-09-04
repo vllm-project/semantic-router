@@ -193,15 +193,17 @@ func (r *OpenAIRouter) executeContextRecoveryFollowup(
 		return nil, fmt.Errorf("prepare context recovery followup: %w", err)
 	}
 	client := looper.NewClient(&r.Config.Looper)
-	client.SetDecisionName(requestCtx.VSRSelectedDecisionName)
-	followup, err := client.CallModel(
+	followup, err := client.CallModelWithOptions(
 		ctx,
-		openAIRequest,
-		model,
-		false,
-		1,
-		nil,
-		r.Config.GetModelAccessKey(model),
+		*openAIRequest,
+		looper.ModelTarget{
+			Name:      model,
+			AccessKey: r.Config.GetModelAccessKey(model),
+		},
+		looper.CallOptions{
+			DecisionName: requestCtx.VSRSelectedDecisionName,
+			Iteration:    1,
+		},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("context recovery followup failed: %w", err)
