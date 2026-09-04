@@ -158,7 +158,30 @@ test('Workflow stops on command -v, not only on --version success', () => {
   )
 })
 
-test('Existing CLI installation section gates on command -v, not --version', () => {
+test('Workflow checks default absolute paths, not only PATH', () => {
+  const content = readSkill(canonicalPath)
+  const workflowMatch = content.match(/## Workflow\n([\s\S]*?)\n## /)
+  assert.ok(workflowMatch, '## Workflow section must exist')
+  const workflow = workflowMatch[1]
+
+  // Non-interactive agent shells often omit ~/.local/bin from PATH, so
+  // command -v alone is insufficient. The Workflow must also check the
+  // default absolute launcher and install root.
+  assert.ok(
+    workflow.includes('~/.local/bin/vllm-sr'),
+    'Workflow must check the default absolute launcher ~/.local/bin/vllm-sr',
+  )
+  assert.ok(
+    workflow.includes('~/.local/share/vllm-sr'),
+    'Workflow must check the default install root ~/.local/share/vllm-sr',
+  )
+  assert.ok(
+    /any signal/i.test(workflow),
+    'Workflow must treat any of the three signals as an existing installation',
+  )
+})
+
+test('Existing CLI installation section detects all three signals', () => {
   const content = readSkill(canonicalPath)
   const sectionMatch = content.match(/### Existing CLI installation\n([\s\S]*?)\n### /)
   assert.ok(sectionMatch, '### Existing CLI installation section must exist')
@@ -169,8 +192,16 @@ test('Existing CLI installation section gates on command -v, not --version', () 
     'Existing CLI installation must gate on command -v vllm-sr',
   )
   assert.ok(
-    /both[\s\S]*stop/i.test(section),
-    'Existing CLI installation must stop in both version-success and version-failure cases',
+    section.includes('~/.local/bin/vllm-sr'),
+    'Existing CLI installation must check the default absolute launcher',
+  )
+  assert.ok(
+    section.includes('~/.local/share/vllm-sr'),
+    'Existing CLI installation must check the default install root',
+  )
+  assert.ok(
+    /all[\s\S]*stop/i.test(section),
+    'Existing CLI installation must stop in all detection cases',
   )
 })
 

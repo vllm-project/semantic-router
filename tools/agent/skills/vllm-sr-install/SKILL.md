@@ -60,7 +60,8 @@ Before choosing an installation path, detect and report:
 | Operating system | `uname -s` |
 | Architecture | `uname -m` |
 | Python ≥ 3.10 | `python3 --version` or `python --version` |
-| Existing `vllm-sr` | `command -v vllm-sr` and `vllm-sr --version` |
+| Existing `vllm-sr` | `command -v vllm-sr`, `test -x ~/.local/bin/vllm-sr`, or `test -d ~/.local/share/vllm-sr` |
+| Existing `vllm-sr` version | `vllm-sr --version` or `~/.local/bin/vllm-sr --version` (diagnostic only) |
 | Docker | `command -v docker` and `docker info` |
 | Podman | `command -v podman` and `podman info` |
 | Existing config | `test -f config.yaml` in the working directory |
@@ -131,12 +132,18 @@ instructions to install.
 ## Workflow
 
 1. **Discover** the environment using the checks above.
-2. **Check for an existing launcher.** Run `command -v vllm-sr`:
-   - **Launcher found** — an existing installation is present. Attempt
-     `vllm-sr --version` for diagnostics. Whether or not version succeeds,
-     **stop and report**; do not reinstall, overwrite, or repair without
-     explicit user approval.
-   - **Launcher not found** — continue to step 3.
+2. **Check for an existing installation.** Non-interactive agent shells
+   often omit `~/.local/bin` from `PATH`, so a `command -v` miss alone is
+   not sufficient. Check **all three** signals:
+   - `command -v vllm-sr` (launcher on PATH)
+   - `test -x ~/.local/bin/vllm-sr` (default absolute launcher)
+   - `test -d ~/.local/share/vllm-sr` (default install root)
+
+   **Any signal found** — an existing installation is present. Attempt
+   `vllm-sr --version` or `~/.local/bin/vllm-sr --version` for diagnostics.
+   Whether or not version succeeds, **stop and report**; do not reinstall,
+   overwrite, or repair without explicit user approval.
+   **No signal found** — continue to step 3.
 3. **Present the plan** and wait for confirmation if the user has not already
    approved.
 4. **Install** using the one-line installer in agent-safe mode.
@@ -166,14 +173,21 @@ adding `~/.local/bin` to `PATH`.
 
 ### Existing CLI installation
 
-If `command -v vllm-sr` finds a launcher, an existing installation is present:
+An existing installation is detected by **any** of these signals:
 
-- Report the launcher path.
-- Attempt `vllm-sr --version` for diagnostics.
+- `command -v vllm-sr` finds the launcher on `PATH`.
+- `test -x ~/.local/bin/vllm-sr` finds the default absolute launcher (common
+  when `~/.local/bin` is absent from the non-interactive shell `PATH`).
+- `test -d ~/.local/share/vllm-sr` finds the default install root.
+
+If any signal is found:
+
+- Report which signal(s) were detected and the launcher path if available.
+- Attempt `vllm-sr --version` or `~/.local/bin/vllm-sr --version` for diagnostics.
   - If version succeeds, report the version.
-  - If version fails, report that the launcher exists but its version could
+  - If version fails, report that the installation exists but its version could
     not be verified.
-- In **both** cases, stop and do not reinstall, overwrite, or repair without
+- In **all** cases, stop and do not reinstall, overwrite, or repair without
   explicit user approval.
 - If the user asks to upgrade, point them to the installation docs at
   <https://vllm-sr.ai/docs/installation/installation>.
