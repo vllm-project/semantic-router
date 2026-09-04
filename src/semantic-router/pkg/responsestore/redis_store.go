@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -33,6 +34,20 @@ type RedisStore struct {
 	// isolate "payload write succeeded, index write failed" for rollback and
 	// repair tests. Never set outside _test.go files in this package.
 	indexResponseOverride func(ctx context.Context, conversationID, responseID string, createdAt int64) error
+
+	// scanInvocations counts calls to scanResponsePayloads. Unexported
+	// test-only seam proving the O(N) legacy scan runs at most once per
+	// conversation per empty-marker/index lifetime, not on every read of an
+	// empty or unknown conversation. Not read anywhere outside _test.go.
+	scanInvocations int
+
+	// lazyBackfillPreScanHook, when non-nil, runs once at the top of
+	// lazyBackfillConversationIndex before the scan starts. Unexported
+	// test-only seam for deterministically landing a concurrent indexed
+	// write in the window the blueprint calls out (§2.2 Redis concurrency):
+	// a writer's SETNX + index ZADD completing while a lazy scan for the
+	// same conversation is in flight must not be undone by the scan.
+	lazyBackfillPreScanHook func()
 }
 
 const (
@@ -74,6 +89,17 @@ const (
 	// conversationIndexMigrationLockTTL bounds how long a single reader holds
 	// the lazy-scan migration lock before it is considered abandoned.
 	conversationIndexMigrationLockTTL = 30 * time.Second
+
+	// redisScanCount is the SCAN COUNT hint used when walking the response
+	// keyspace for lazy legacy backfill. A hint, not a hard limit — Redis may
+	// return more or fewer keys per cursor step.
+	redisScanCount = 1000
+
+	// redisBackfillBatchSize bounds how many keys are GET-pipelined, and how
+	// many discovered members are ZADD-ed, per round trip during lazy legacy
+	// backfill — keeps a single conversation's backfill from building one
+	// unbounded pipeline or command.
+	redisBackfillBatchSize = 256
 )
 
 // compareDeleteScript deletes KEYS[1] only if its current value equals
@@ -439,7 +465,9 @@ func (s *RedisStore) StoreResponse(ctx context.Context, response *responseapi.St
 // compareDeleteResponsePayload deletes key only if its current value equals
 // expected. Used to roll back a response payload after its index write
 // fails, without risking a blind DEL removing a value a concurrent writer
-// stored after the original payload expired on its TTL.
+// stored after the original payload expired on its TTL; also reused by
+// ensureConversationIndex to release the migration lock without releasing
+// one it doesn't hold (e.g. one that expired and was re-acquired).
 //
 // Single-key Lua script — touches only KEYS[1] — so it stays legal in Redis
 // Cluster; a two-key script spanning the response and index keys would not.
@@ -625,11 +653,16 @@ func (s *RedisStore) GetConversationChain(ctx context.Context, responseID string
 	return chain, nil
 }
 
-// ListResponsesByConversation lists a conversation's responses via the secondary
-// index, at a cost proportional to the conversation rather than the keyspace.
+// ListResponsesByConversation lists a conversation's responses via the
+// secondary index, at a cost proportional to the conversation rather than
+// the keyspace.
 //
-// Only indexed responses are listed. Anything written before the index existed
-// stays reachable by ID and via GetConversationChain, and ages out on its TTL.
+// Read path: index exists → read it. Otherwise check the empty-conversation
+// marker → nothing to do. Otherwise this may be a pre-index conversation, an
+// unknown ID, or a genuinely empty one that has never been checked before:
+// ensureConversationIndex resolves which, running the one-time O(N) legacy
+// scan at most once per conversation. See blueprint §5 Phase 3 for the full
+// state diagram this implements.
 func (s *RedisStore) ListResponsesByConversation(ctx context.Context, conversationID string, opts ListOptions) ([]*responseapi.StoredResponse, error) {
 	if !s.enabled {
 		return nil, ErrStoreDisabled
@@ -638,6 +671,54 @@ func (s *RedisStore) ListResponsesByConversation(ctx context.Context, conversati
 		return nil, ErrInvalidInput
 	}
 
+	indexKey := s.conversationIndexKey(conversationID)
+
+	indexExists, err := s.client.Exists(ctx, indexKey).Result()
+	if err != nil {
+		return nil, fmt.Errorf("failed to check conversation index: %w", err)
+	}
+	if indexExists > 0 {
+		return s.listIndexedResponses(ctx, conversationID, opts)
+	}
+
+	emptyExists, err := s.client.Exists(ctx, s.emptyConversationIndexMarkerKey(conversationID)).Result()
+	if err != nil {
+		return nil, fmt.Errorf("failed to check conversation index empty marker: %w", err)
+	}
+	if emptyExists > 0 {
+		return nil, nil
+	}
+
+	// Neither exists: this conversation has never been resolved. Scan once
+	// (behind a migration lock, so concurrent readers of the same missing
+	// index don't all scan at once) and recheck.
+	if err := s.ensureConversationIndex(ctx, conversationID); err != nil {
+		return nil, err
+	}
+
+	indexExists, err = s.client.Exists(ctx, indexKey).Result()
+	if err != nil {
+		return nil, fmt.Errorf("failed to check conversation index: %w", err)
+	}
+	if indexExists > 0 {
+		return s.listIndexedResponses(ctx, conversationID, opts)
+	}
+
+	// The backfill (this call's own, or a concurrent one) found nothing and
+	// left the empty marker instead — or, if even that failed, the next call
+	// simply scans again. Either way there is nothing to return right now.
+	return nil, nil
+}
+
+// listIndexedResponses reads a conversation's responses through its
+// already-confirmed-existing index.
+//
+// Phase 3 shape: reads the whole index (unbounded, same as the pre-#2814
+// behavior) and applies ApplyListOptions after fetching every payload.
+// Replaced in Phase 4 by a bounded rank-window read driven by
+// normalizeResponseListOptions, so a large conversation's listing cost stops
+// scaling with its full history instead of just the requested page.
+func (s *RedisStore) listIndexedResponses(ctx context.Context, conversationID string, opts ListOptions) ([]*responseapi.StoredResponse, error) {
 	// Scored by created_at, so this reads back chronologically.
 	responseIDs, err := s.client.ZRange(ctx, s.conversationIndexKey(conversationID), 0, -1).Result()
 	if err != nil {
@@ -920,6 +1001,305 @@ func (s *RedisStore) unindexResponse(ctx context.Context, conversationID string,
 	}
 
 	return nil
+}
+
+// legacyBackfillResult reports how many responses a lazy backfill scan found
+// and indexed for a conversation, mainly for logging.
+type legacyBackfillResult struct {
+	// Found is the number of responses discovered belonging to the scanned
+	// conversation. Zero means the empty marker was set instead.
+	Found int
+}
+
+// indexOrMarkerExists reports whether a conversation's index or its empty
+// marker exists, via two single-key EXISTS calls. Deliberately not a
+// variadic Exists(ctx, indexKey, markerKey): the two keys have different
+// prefixes and are not guaranteed to share a Cluster hash slot.
+func (s *RedisStore) indexOrMarkerExists(ctx context.Context, conversationID string) (bool, error) {
+	indexExists, err := s.client.Exists(ctx, s.conversationIndexKey(conversationID)).Result()
+	if err != nil {
+		return false, fmt.Errorf("failed to check conversation index: %w", err)
+	}
+	if indexExists > 0 {
+		return true, nil
+	}
+
+	emptyExists, err := s.client.Exists(ctx, s.emptyConversationIndexMarkerKey(conversationID)).Result()
+	if err != nil {
+		return false, fmt.Errorf("failed to check conversation index empty marker: %w", err)
+	}
+
+	return emptyExists > 0, nil
+}
+
+// ensureConversationIndex guarantees that, barring a concurrent delete of
+// both immediately afterward, either the conversation's index or its empty
+// marker exists once this returns without error. It runs the O(N) legacy
+// scan (lazyBackfillConversationIndex) at most once per conversation per
+// marker/index lifetime.
+//
+// A short migration lock (SET NX PX conversationIndexMigrationLockTTL)
+// keeps concurrent readers of the same missing index from all scanning at
+// once, but holding it is an optimization, not a correctness dependency: a
+// reader that cannot acquire it backs off briefly, rechecks, and — if the
+// holder appears to have died mid-scan (pod restart, deadline) rather than
+// finished — runs the scan itself anyway. Every path converges on the same
+// additive, idempotent backfill.
+func (s *RedisStore) ensureConversationIndex(ctx context.Context, conversationID string) error {
+	lockKey := s.conversationIndexLockKey(conversationID)
+	token := []byte(fmt.Sprintf("%d:%d", time.Now().UnixNano(), os.Getpid()))
+
+	acquired, err := s.client.SetNX(ctx, lockKey, token, conversationIndexMigrationLockTTL).Result()
+	if err != nil {
+		return fmt.Errorf("failed to acquire conversation index migration lock: %w", err)
+	}
+
+	if acquired {
+		defer func() {
+			// Reused single-key compare-delete: never releases a lock this
+			// call didn't acquire (e.g. one that already expired and was
+			// re-acquired by someone else).
+			if _, releaseErr := s.compareDeleteResponsePayload(ctx, lockKey, token); releaseErr != nil {
+				logging.Debugf("RedisStore: failed to release conversation index migration lock for %s: %v",
+					conversationID, releaseErr)
+			}
+		}()
+
+		// Recheck under the lock: a writer, or a backfill that started just
+		// before this one acquired it, may have already resolved this
+		// conversation.
+		exists, existsErr := s.indexOrMarkerExists(ctx, conversationID)
+		if existsErr != nil {
+			return existsErr
+		}
+		if exists {
+			return nil
+		}
+
+		result, backfillErr := s.lazyBackfillConversationIndex(ctx, conversationID)
+		if backfillErr != nil {
+			return backfillErr
+		}
+		logging.Debugf("RedisStore: lazy-backfilled conversation %s index with %d response(s)",
+			conversationID, result.Found)
+		return nil
+	}
+
+	// Someone else holds the lock. Back off briefly and recheck; if the
+	// index/marker still hasn't appeared once the bounded wait is over, the
+	// holder may have died mid-scan — run the scan locally rather than block
+	// indefinitely. Correctness wins over avoiding duplicate work, which is
+	// the lock's only job.
+	const (
+		lockWaitAttempts = 5
+		lockWaitDelay    = 100 * time.Millisecond
+	)
+	for i := 0; i < lockWaitAttempts; i++ {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(lockWaitDelay):
+		}
+
+		exists, existsErr := s.indexOrMarkerExists(ctx, conversationID)
+		if existsErr != nil {
+			return existsErr
+		}
+		if exists {
+			return nil
+		}
+	}
+
+	result, err := s.lazyBackfillConversationIndex(ctx, conversationID)
+	if err != nil {
+		return err
+	}
+	logging.Debugf("RedisStore: lazy-backfilled conversation %s index with %d response(s) after lock wait",
+		conversationID, result.Found)
+	return nil
+}
+
+// lazyBackfillConversationIndex performs the one-time O(N) scan that makes a
+// pre-index conversation's responses discoverable: it walks every response
+// payload once, keeps the ones matching conversationID, and either indexes
+// them or — if none match — sets the empty marker so the next read does not
+// scan again.
+//
+// Idempotent and additive: it only ZADDs discovered members and never
+// deletes, so a concurrently indexed write (e.g. a StoreResponse racing this
+// scan) is never undone by it, no matter which finishes first.
+func (s *RedisStore) lazyBackfillConversationIndex(ctx context.Context, conversationID string) (legacyBackfillResult, error) {
+	if s.lazyBackfillPreScanHook != nil {
+		s.lazyBackfillPreScanHook()
+	}
+
+	type discovered struct {
+		id        string
+		createdAt int64
+	}
+	var found []discovered
+
+	err := s.scanResponsePayloads(ctx, func(batch []*responseapi.StoredResponse) error {
+		for _, response := range batch {
+			if response.ConversationID == conversationID {
+				found = append(found, discovered{id: response.ID, createdAt: response.CreatedAt})
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return legacyBackfillResult{}, fmt.Errorf("failed to backfill conversation index: %w", err)
+	}
+
+	if len(found) == 0 {
+		if err := s.client.Set(ctx, s.emptyConversationIndexMarkerKey(conversationID), "v1", s.ttl).Err(); err != nil {
+			// Correctness is preserved either way: the next read scans
+			// again rather than trusting a marker that isn't there.
+			logging.Debugf("RedisStore: failed to set empty conversation index marker for %s: %v",
+				conversationID, err)
+		}
+		return legacyBackfillResult{Found: 0}, nil
+	}
+
+	// Deterministic order: primary by created_at, tie-broken by response ID
+	// (blueprint §3.6) — never fabricate sub-second ordering from wall clock
+	// time during repair.
+	sort.Slice(found, func(i, j int) bool {
+		if found[i].createdAt != found[j].createdAt {
+			return found[i].createdAt < found[j].createdAt
+		}
+		return found[i].id < found[j].id
+	})
+
+	indexKey := s.conversationIndexKey(conversationID)
+	for start := 0; start < len(found); start += redisBackfillBatchSize {
+		end := start + redisBackfillBatchSize
+		if end > len(found) {
+			end = len(found)
+		}
+
+		members := make([]redis.Z, end-start)
+		for i, d := range found[start:end] {
+			members[i] = redis.Z{Score: float64(d.createdAt), Member: d.id}
+		}
+		if err := s.client.ZAdd(ctx, indexKey, members...).Err(); err != nil {
+			return legacyBackfillResult{}, fmt.Errorf("failed to backfill conversation index: %w", err)
+		}
+	}
+
+	if s.ttl > 0 {
+		if err := s.client.Expire(ctx, indexKey, s.ttl).Err(); err != nil {
+			logging.Warnf("RedisStore: failed to refresh TTL on backfilled conversation index %s: %v",
+				conversationID, err)
+		}
+	}
+
+	// Best-effort: the index now exists, and every read checks it before the
+	// marker, so a marker left behind here is harmless even if this DEL fails.
+	if err := s.client.Del(ctx, s.emptyConversationIndexMarkerKey(conversationID)).Err(); err != nil {
+		logging.Debugf("RedisStore: failed to clear empty conversation index marker for %s: %v",
+			conversationID, err)
+	}
+
+	return legacyBackfillResult{Found: len(found)}, nil
+}
+
+// scanResponsePayloads walks every response payload key exactly once,
+// decoding each into a StoredResponse and delivering them to visit in
+// bounded batches (redisBackfillBatchSize).
+//
+// Cluster-aware: a single Redis Cluster node's keyspace only holds the slots
+// assigned to it, so in Cluster mode this scans every master via
+// ForEachMaster. Standalone mode scans the one client directly.
+//
+// Used only by lazy legacy backfill — this is the O(N) operation the index
+// exists to avoid on the hot read path.
+func (s *RedisStore) scanResponsePayloads(ctx context.Context, visit func(batch []*responseapi.StoredResponse) error) error {
+	s.scanInvocations++
+
+	pattern := s.buildKey(ResponseKeyPrefix + "*")
+
+	scanNode := func(ctx context.Context, client redis.UniversalClient) error {
+		var keys []string
+		flush := func() error {
+			if len(keys) == 0 {
+				return nil
+			}
+			batch := s.getResponsesPipelined(ctx, client, keys)
+			keys = keys[:0]
+			if len(batch) == 0 {
+				return nil
+			}
+			return visit(batch)
+		}
+
+		iter := client.Scan(ctx, 0, pattern, redisScanCount).Iterator()
+		for iter.Next(ctx) {
+			keys = append(keys, iter.Val())
+			if len(keys) >= redisBackfillBatchSize {
+				if err := flush(); err != nil {
+					return err
+				}
+			}
+		}
+		if err := iter.Err(); err != nil {
+			return fmt.Errorf("failed to scan response keys: %w", err)
+		}
+
+		return flush()
+	}
+
+	if clusterClient, ok := s.client.(*redis.ClusterClient); ok {
+		return clusterClient.ForEachMaster(ctx, func(ctx context.Context, master *redis.Client) error {
+			return scanNode(ctx, master)
+		})
+	}
+
+	return scanNode(ctx, s.client)
+}
+
+// getResponsesPipelined GETs and decodes payloads for a batch of already-
+// prefixed keys in one round trip against the given client. Malformed or
+// missing payloads are skipped with a log line rather than failing the
+// batch: a legacy scan must make forward progress even if one record is
+// corrupt or expired mid-scan.
+func (s *RedisStore) getResponsesPipelined(ctx context.Context, client redis.UniversalClient, keys []string) []*responseapi.StoredResponse {
+	if len(keys) == 0 {
+		return nil
+	}
+
+	pipe := client.Pipeline()
+	cmds := make([]*redis.StringCmd, len(keys))
+	for i, key := range keys {
+		cmds[i] = pipe.Get(ctx, key)
+	}
+	if _, err := pipe.Exec(ctx); err != nil && !errors.Is(err, redis.Nil) {
+		logging.Debugf("RedisStore: scan pipeline execution completed with some errors: %v", err)
+	}
+
+	responses := make([]*responseapi.StoredResponse, 0, len(keys))
+	for i, cmd := range cmds {
+		data, err := cmd.Bytes()
+		if err != nil {
+			if !errors.Is(err, redis.Nil) {
+				logging.Warnf("RedisStore: failed to get response at key %s during scan: %v", keys[i], err)
+			}
+			continue
+		}
+
+		var response responseapi.StoredResponse
+		if err := json.Unmarshal(data, &response); err != nil {
+			logging.Warnf("RedisStore: failed to parse response at key %s during scan: %v", keys[i], err)
+			continue
+		}
+		if response.ID == "" {
+			continue
+		}
+
+		responses = append(responses, &response)
+	}
+
+	return responses
 }
 
 // storedConversationID reports a response's current conversation so update and

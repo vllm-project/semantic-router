@@ -886,3 +886,124 @@ func TestRedisStoreResponseDuplicateNoConversationNotRepaired(t *testing.T) {
 
 	assert.Empty(t, conversationIndexMembers(t, store, "conv_should_not_exist"))
 }
+
+// TestRedisListResponsesByConversationLazyBackfill covers the upgrade path
+// (blueprint §6.2): responses written before the index existed — simulated
+// with directSetResponsePayload, which bypasses StoreResponse's indexing —
+// must still be discoverable on first read, get backfilled into the index,
+// and must not trigger a second O(N) scan on the next read of the same
+// conversation.
+func TestRedisListResponsesByConversationLazyBackfill(t *testing.T) {
+	store := newConversationIndexStore(t)
+	ctx := context.Background()
+
+	now := time.Now().Unix()
+	legacy := []*responseapi.StoredResponse{
+		{ID: "resp_legacy_1", ConversationID: "conv_legacy", Status: "completed", CreatedAt: now},
+		{ID: "resp_legacy_2", ConversationID: "conv_legacy", Status: "completed", CreatedAt: now + 1},
+		{ID: "resp_legacy_3", ConversationID: "conv_legacy", Status: "completed", CreatedAt: now + 2},
+	}
+	for _, response := range legacy {
+		directSetResponsePayload(t, store, response)
+	}
+	require.Empty(t, conversationIndexMembers(t, store, "conv_legacy"),
+		"precondition: no index should exist yet for legacy data")
+
+	responses, err := store.ListResponsesByConversation(ctx, "conv_legacy", ListOptions{Order: "asc"})
+	require.NoError(t, err)
+	require.Len(t, responses, 3)
+	assert.Equal(t, []string{"resp_legacy_1", "resp_legacy_2", "resp_legacy_3"},
+		[]string{responses[0].ID, responses[1].ID, responses[2].ID})
+	assert.Equal(t, 1, store.scanInvocations, "first read must run exactly one legacy scan")
+
+	assert.ElementsMatch(t, []string{"resp_legacy_1", "resp_legacy_2", "resp_legacy_3"},
+		conversationIndexMembers(t, store, "conv_legacy"))
+	assert.Zero(t, exists(t, store, store.emptyConversationIndexMarkerKey("conv_legacy")))
+
+	// The index now exists, so a second read must go straight through it
+	// without scanning the keyspace again.
+	responses, err = store.ListResponsesByConversation(ctx, "conv_legacy", ListOptions{Order: "asc"})
+	require.NoError(t, err)
+	require.Len(t, responses, 3)
+	assert.Equal(t, 1, store.scanInvocations, "second read of an already-backfilled conversation must not scan again")
+}
+
+// exists reports whether a raw Redis key exists, for asserting on marker/
+// index presence directly rather than only through store methods.
+func exists(t *testing.T, store *RedisStore, key string) int64 {
+	t.Helper()
+	n, err := store.client.Exists(context.Background(), key).Result()
+	require.NoError(t, err)
+	return n
+}
+
+// TestRedisListResponsesByConversationEmptyMarker covers blueprint §2.4/§3.4:
+// a legitimately empty or unknown conversation must not force a full
+// keyspace scan on every read — only once, after which the empty marker
+// short-circuits subsequent reads.
+func TestRedisListResponsesByConversationEmptyMarker(t *testing.T) {
+	store := newConversationIndexStore(t)
+	ctx := context.Background()
+
+	// Seed unrelated data so the scan has something to walk past.
+	directSetResponsePayload(t, store, &responseapi.StoredResponse{
+		ID: "resp_unrelated", ConversationID: "conv_other", Status: "completed", CreatedAt: time.Now().Unix(),
+	})
+
+	responses, err := store.ListResponsesByConversation(ctx, "conv_never_existed", ListOptions{})
+	require.NoError(t, err)
+	assert.Empty(t, responses)
+	assert.Equal(t, 1, store.scanInvocations)
+
+	markerKey := store.emptyConversationIndexMarkerKey("conv_never_existed")
+	assert.EqualValues(t, 1, exists(t, store, markerKey))
+	ttl, err := store.client.TTL(ctx, markerKey).Result()
+	require.NoError(t, err)
+	assert.Positive(t, ttl, "empty marker must carry a positive TTL, not be immortal")
+
+	// Repeated reads of the same empty conversation must not scan again.
+	for i := 0; i < 3; i++ {
+		responses, err = store.ListResponsesByConversation(ctx, "conv_never_existed", ListOptions{})
+		require.NoError(t, err)
+		assert.Empty(t, responses)
+	}
+	assert.Equal(t, 1, store.scanInvocations, "repeated reads of an empty conversation must not force repeated scans")
+}
+
+// TestRedisLazyBackfillConcurrentWriteNotHidden covers blueprint §2.2: a
+// response indexed normally by a concurrent StoreResponse call, landing
+// while a lazy legacy scan for the same conversation is in flight, must
+// survive — the scan's own findings only ever add to the index, and
+// indexResponse always clears the empty marker, so neither ordering can make
+// the concurrent write disappear behind a "confirmed empty" marker.
+func TestRedisLazyBackfillConcurrentWriteNotHidden(t *testing.T) {
+	store := newConversationIndexStore(t)
+	ctx := context.Background()
+
+	legacy := &responseapi.StoredResponse{
+		ID: "resp_race_legacy", ConversationID: "conv_race", Status: "completed", CreatedAt: time.Now().Unix(),
+	}
+	directSetResponsePayload(t, store, legacy)
+
+	concurrent := &responseapi.StoredResponse{
+		ID: "resp_race_concurrent", ConversationID: "conv_race", Status: "completed", CreatedAt: time.Now().Unix() + 1,
+	}
+	store.lazyBackfillPreScanHook = func() {
+		// Runs once, before the scan walks the keyspace: lands a normal
+		// indexed write for the same conversation the backfill is about to
+		// scan for, so the scan observes both the legacy and the
+		// concurrently-indexed payload.
+		require.NoError(t, store.StoreResponse(ctx, concurrent))
+	}
+
+	responses, err := store.ListResponsesByConversation(ctx, "conv_race", ListOptions{Order: "asc"})
+	require.NoError(t, err)
+	require.Len(t, responses, 2)
+	assert.Equal(t, []string{"resp_race_legacy", "resp_race_concurrent"},
+		[]string{responses[0].ID, responses[1].ID})
+
+	assert.ElementsMatch(t, []string{"resp_race_legacy", "resp_race_concurrent"},
+		conversationIndexMembers(t, store, "conv_race"))
+	assert.Zero(t, exists(t, store, store.emptyConversationIndexMarkerKey("conv_race")),
+		"the concurrently indexed write must clear any empty marker, not be hidden behind one")
+}
