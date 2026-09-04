@@ -315,7 +315,7 @@ func (c *ValkeyCache) createIndex() error {
 		}
 	}
 
-	_, err := c.client.CustomCommand(ctx, createCmd)
+	_, err = c.client.CustomCommand(ctx, createCmd)
 	if err != nil {
 		return fmt.Errorf("failed to create Valkey index: %w", err)
 	}
