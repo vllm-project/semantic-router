@@ -1,0 +1,49 @@
+- id: vllm/minimax-m1-80k@1.0.0
+  provider: vllm
+  model: minimax/minimax-m1-80k
+  provider_model_id: MiniMaxAI/MiniMax-M1-80k
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/MiniMaxAI/MiniMax-M1-80k}
+- id: vllm/minimax-m1-40k@1.0.0
+  provider: vllm
+  model: minimax/minimax-m1-40k
+  provider_model_id: MiniMaxAI/MiniMax-M1-40k
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/MiniMaxAI/MiniMax-M1-40k}
+- id: vllm/minimax-m2@1.0.0
+  provider: vllm
+  model: minimax/minimax-m2
+  provider_model_id: MiniMaxAI/MiniMax-M2
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/MiniMaxAI/MiniMax-M2}
+- id: vllm/minimax-m2.1@1.0.0
+  provider: vllm
+  model: minimax/minimax-m2.1
+  provider_model_id: MiniMaxAI/MiniMax-M2.1
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/MiniMaxAI/MiniMax-M2.1}
+- id: vllm/minimax-m2.5@1.0.0
+  provider: vllm
+  model: minimax/minimax-m2.5
+  provider_model_id: MiniMaxAI/MiniMax-M2.5
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: experimental
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/MiniMaxAI/MiniMax-M2.5}
+- id: vllm/minimax-m2.7@1.0.0
+  provider: vllm
+  model: minimax/minimax-m2.7
+  provider_model_id: MiniMaxAI/MiniMax-M2.7
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: experimental
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/MiniMaxAI/MiniMax-M2.7}
+- id: vllm/minimax-m3@1.0.0
+  provider: vllm
+  model: minimax/minimax-m3
+  provider_model_id: MiniMaxAI/MiniMax-M3
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: experimental
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/MiniMaxAI/MiniMax-M3}

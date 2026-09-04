@@ -132,7 +132,13 @@ def expected_release_files(latest_dir: Path, snapshot: str) -> dict[Path, bytes]
         asset["sha256"] = digests[bundle]
         asset_ids[asset["id"]] = bundle
     for model in rendered.get("models", []):
-        if not isinstance(model, dict) or model.get("asset") not in asset_ids:
+        if not isinstance(model, dict):
+            raise ValueError("latest catalog contains an invalid model")
+        if model.get("kind") != "virtual":
+            # Physical model cards are catalog facts, not packaged recipe
+            # bundles. They remain in the release snapshot unchanged.
+            continue
+        if model.get("asset") not in asset_ids:
             raise ValueError("latest catalog model references an unknown bundle")
         verification = model.get("verification")
         if not isinstance(verification, dict):

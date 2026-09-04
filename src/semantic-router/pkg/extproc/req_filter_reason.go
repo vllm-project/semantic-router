@@ -174,6 +174,10 @@ func (r *OpenAIRouter) applyEnabledReasoningMutation(
 		applyDeepSeekOfficialReasoningMutation(mutation, true, effort)
 		return
 	}
+	if usesThinkingObjectTransport(transport) {
+		applyThinkingObjectReasoningMutation(mutation, true)
+		return
+	}
 	switch familyConfig.Type {
 	case config.ReasoningFamilyTypeChatTemplateKwargs:
 		setChatTemplateReasoningValue(mutation, familyConfig.Parameter, json.RawMessage("true"))
@@ -203,6 +207,10 @@ func (r *OpenAIRouter) applyDisabledReasoningMutation(
 	}
 	if usesDeepSeekOfficialReasoning(familyConfig, transport) {
 		applyDeepSeekOfficialReasoningMutation(mutation, false, "")
+		return
+	}
+	if usesThinkingObjectTransport(transport) {
+		applyThinkingObjectReasoningMutation(mutation, false)
 		return
 	}
 	switch familyConfig.Type {
@@ -332,13 +340,31 @@ func usesDeepSeekOfficialReasoning(
 	return familyConfig != nil && isDeepSeekThinkingTransport(transport)
 }
 
+func resetChatTemplateReasoningFields(mutation *reasoningRequestMutation) {
+	delete(mutation.requestMap, "chat_template_kwargs")
+	mutation.chatTemplateKwargs = map[string]json.RawMessage{}
+	mutation.chatTemplateKwargsDirty = false
+}
+
+func applyThinkingObjectReasoningMutation(mutation *reasoningRequestMutation, enabled bool) {
+	// Providers using this transport express reasoning as a top-level object.
+	// Remove local template controls so two incompatible wire shapes never leak
+	// into the same outbound request.
+	resetChatTemplateReasoningFields(mutation)
+	thinkingType := "disabled"
+	if enabled {
+		thinkingType = "enabled"
+	}
+	mutation.requestMap["thinking"] = json.RawMessage(`{"type":"` + thinkingType + `"}`)
+	delete(mutation.requestMap, "reasoning_effort")
+	mutation.reasoningApplied = true
+}
+
 func applyDeepSeekOfficialReasoningMutation(mutation *reasoningRequestMutation, enabled bool, effort string) {
 	// DeepSeek's official OpenAI-compatible API uses top-level thinking plus
 	// reasoning_effort. Drop template kwargs so local-template controls do not
 	// leak into the provider request alongside official fields.
-	delete(mutation.requestMap, "chat_template_kwargs")
-	mutation.chatTemplateKwargs = map[string]json.RawMessage{}
-	mutation.chatTemplateKwargsDirty = false
+	resetChatTemplateReasoningFields(mutation)
 
 	if enabled {
 		mutation.requestMap["thinking"] = json.RawMessage(`{"type":"enabled"}`)

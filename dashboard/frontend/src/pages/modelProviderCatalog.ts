@@ -1,6 +1,6 @@
 import catalog from '../generated/modelCatalog.json'
 import type { CatalogProvider } from '../types/modelCatalog'
-import { modelProviderIconAssets, monochromeModelProviderIcons } from './modelProviderIcons'
+import { monochromeModelProviderIcons, resolveModelCatalogIcon } from './modelProviderIcons'
 
 export interface ModelProviderPreset {
   id: string
@@ -29,15 +29,6 @@ const apiFormat = (protocol: string): string => {
   return 'openai'
 }
 
-const iconSource = (source: string): string => {
-  if (source.startsWith('package:')) {
-    return modelProviderIconAssets[source.slice('package:'.length)] ?? ''
-  }
-  if (source.startsWith('public:')) return source.slice('public:'.length)
-  if (source.startsWith('url:')) return source.slice('url:'.length)
-  return ''
-}
-
 export const isMonochromeModelProviderIcon = (icon: string): boolean =>
   monochromeModelProviderIcons.has(icon)
 
@@ -55,7 +46,7 @@ export const modelProviderPresetsFromCatalog = (
     baseUrl: provider.default_base_url ?? '',
     apiFormat: apiFormat(provider.default_protocol),
     authStrategy: provider.auth.strategy,
-    icon: iconSource(provider.presentation.logo),
+    icon: resolveModelCatalogIcon(provider.presentation.logo),
     monogram: provider.presentation.monogram,
     supportTier: provider.support_tier,
     protocols: [...provider.protocols],

@@ -114,6 +114,15 @@ routing:
   modelCards:
     - name: qwen3-8b
       display_name: Qwen3 8B reference model
+      publisher: Alibaba Cloud
+      presentation:
+        logo: package:qwen
+        monogram: Q
+        monochrome: false
+      distribution:
+        type: open_weights
+        source: https://huggingface.co/Qwen/Qwen3-8B
+        license: Apache-2.0
       family: qwen3
       revision: reference-v1
       released_at: 2025-04-29

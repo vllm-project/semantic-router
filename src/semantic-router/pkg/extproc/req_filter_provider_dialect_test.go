@@ -16,6 +16,7 @@ func TestResolveProviderReasoningTransport(t *testing.T) {
 		want      modelcatalog.ReasoningTransport
 		wantTop   bool
 		wantThink bool
+		wantDeep  bool
 	}{
 		{
 			name: "endpoint without profile uses template kwargs",
@@ -38,6 +39,13 @@ func TestResolveProviderReasoningTransport(t *testing.T) {
 			want:      modelcatalog.ReasoningTransportDeepSeekThinking,
 			wantTop:   true,
 			wantThink: true,
+			wantDeep:  true,
+		},
+		{
+			name:      "zai uses thinking object without effort",
+			profile:   &config.ProviderProfile{Type: "zai", BaseURL: "https://private.example/v1"},
+			want:      modelcatalog.ReasoningTransportThinkingObject,
+			wantThink: true,
 		},
 		{
 			name:    "openrouter uses top-level reasoning effort",
@@ -57,7 +65,8 @@ func TestResolveProviderReasoningTransport(t *testing.T) {
 			transport := resolveProviderReasoningTransport(tt.profile)
 			assert.Equal(t, tt.want, transport)
 			assert.Equal(t, tt.wantTop, usesTopLevelReasoningEffort(transport))
-			assert.Equal(t, tt.wantThink, isDeepSeekThinkingTransport(transport))
+			assert.Equal(t, tt.wantThink, usesThinkingObjectTransport(transport))
+			assert.Equal(t, tt.wantDeep, isDeepSeekThinkingTransport(transport))
 		})
 	}
 }

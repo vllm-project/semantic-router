@@ -1,0 +1,48 @@
+- id: openbmb/minicpm4-8b
+  display_name: MiniCPM4 8B
+  description: Efficient bilingual MiniCPM language model optimized for local and edge inference.
+  kind: physical
+  publisher: OpenBMB
+  presentation: {logo: package:openbmb, monogram: M, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/openbmb/MiniCPM4-8B, license: Apache-2.0}
+  family: minicpm4
+  parameter_size: 8B
+  lifecycle: active
+  limits: {context_window_size: 32768}
+  capabilities: [chat, tools, long_context]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: OpenBMB, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/openbmb/MiniCPM4-8B}
+  tags: [open_weights, bilingual, efficient, edge]
+- id: openbmb/minicpm-v-4.5
+  display_name: MiniCPM-V 4.5
+  description: Compact multimodal model for image, multi-image, video, OCR, and reasoning workloads.
+  kind: physical
+  publisher: OpenBMB
+  presentation: {logo: package:openbmb, monogram: M, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/openbmb/MiniCPM-V-4_5, license: Apache-2.0}
+  family: minicpm-v-4.5
+  parameter_size: 8B
+  lifecycle: active
+  limits: {context_window_size: 40960}
+  capabilities: [chat, reasoning, vision, long_context]
+  modalities: {input: [text, image, video], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: OpenBMB, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/openbmb/MiniCPM-V-4_5}
+  tags: [open_weights, multimodal, bilingual, efficient, edge]
+- id: openbmb/minicpm3-4b
+  display_name: MiniCPM3 4B
+  description: Previous-generation compact bilingual model with function calling and code interpreter support.
+  kind: physical
+  publisher: OpenBMB
+  presentation: {logo: package:openbmb, monogram: M, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/openbmb/MiniCPM3-4B, license: MiniCPM-Model-License}
+  family: minicpm3
+  parameter_size: 4B
+  lifecycle: active
+  limits: {context_window_size: 32768}
+  capabilities: [chat, tools, long_context]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: OpenBMB, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/openbmb/MiniCPM3-4B}
+  tags: [open_weights, bilingual, efficient, edge, previous_generation]

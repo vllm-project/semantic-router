@@ -131,6 +131,15 @@ func (builder *catalogInputBuilder) cardForModel(
 	cardID string,
 ) (RoutingModel, bool) {
 	card, hasCard := builder.cards[cardID]
+	if strings.TrimSpace(model.Catalog) == "" {
+		// An operator-owned model remains custom even when its request-facing
+		// name happens to match a built-in catalog identity. Materialize the
+		// sparse custom card so it cannot inherit built-in metadata or evidence.
+		if !hasCard {
+			card.Name = cardID
+		}
+		return card, true
+	}
 	_, isBuiltIn := builder.builtIn.Model(cardID)
 	if !hasCard && !isBuiltIn {
 		return RoutingModel{Name: cardID}, true
@@ -250,7 +259,8 @@ func catalogCardOverlay(
 	modelIndex int,
 	builtIn *modelcatalog.Registry,
 ) (modelcatalog.ModelCardOverlay, []modelcatalog.EvaluationRecord, error) {
-	overlay := modelcatalog.ModelCardOverlay{Name: card.Name}
+	catalogBacked := strings.TrimSpace(model.Catalog) != ""
+	overlay := modelcatalog.ModelCardOverlay{Name: card.Name, BuiltIn: &catalogBacked}
 	applyCatalogCardStrings(card, &overlay)
 	applyCatalogCardLimits(card, &overlay)
 	applyCatalogCardLists(card, &overlay)
@@ -266,6 +276,7 @@ func catalogCardOverlay(
 func applyCatalogCardStrings(card RoutingModel, overlay *modelcatalog.ModelCardOverlay) {
 	setStringPointer(card.DisplayName, &overlay.DisplayName)
 	setStringPointer(card.Description, &overlay.Description)
+	setStringPointer(card.Publisher, &overlay.Publisher)
 	setStringPointer(card.Family, &overlay.Family)
 	setStringPointer(card.ParamSize, &overlay.ParameterSize)
 	setStringPointer(card.Revision, &overlay.Revision)
@@ -286,6 +297,14 @@ func applyCatalogCardLimits(card RoutingModel, overlay *modelcatalog.ModelCardOv
 }
 
 func applyCatalogCardLists(card RoutingModel, overlay *modelcatalog.ModelCardOverlay) {
+	if card.Presentation != nil {
+		value := *card.Presentation
+		overlay.Presentation = &value
+	}
+	if card.Distribution != nil {
+		value := *card.Distribution
+		overlay.Distribution = &value
+	}
 	if card.Capabilities != nil {
 		value := append([]string(nil), card.Capabilities...)
 		overlay.Capabilities = &value

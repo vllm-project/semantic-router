@@ -12,6 +12,10 @@ func TestResolveOperationPathUsesProtocolAndProviderData(t *testing.T) {
 	if err != nil || path != "/v1/responses" {
 		t.Fatalf("responses path = %q, err = %v", path, err)
 	}
+	path, err = registry.ResolveOperationPath("openai", "openai/chat-completions@1", "create", "/v1beta/openai")
+	if err != nil || path != "/v1beta/openai/chat/completions" {
+		t.Fatalf("custom API root path = %q, err = %v", path, err)
+	}
 	path, err = registry.ResolveOperationPath("anthropic", "", "list_models", "")
 	if err != nil || path != "/v1/models" {
 		t.Fatalf("model inventory path = %q, err = %v", path, err)

@@ -1,5 +1,29 @@
 import React, { useMemo, useState } from 'react'
 import Layout from '@theme/Layout'
+import Ai2 from '@lobehub/icons/es/Ai2/components/Mono'
+import Ai21 from '@lobehub/icons/es/Ai21/components/Mono'
+import Bedrock from '@lobehub/icons/es/Bedrock/components/Mono'
+import Claude from '@lobehub/icons/es/Claude/components/Mono'
+import Cohere from '@lobehub/icons/es/Cohere/components/Mono'
+import DeepSeek from '@lobehub/icons/es/DeepSeek/components/Mono'
+import Gemini from '@lobehub/icons/es/Gemini/components/Mono'
+import Grok from '@lobehub/icons/es/Grok/components/Mono'
+import IBM from '@lobehub/icons/es/IBM/components/Mono'
+import InternLM from '@lobehub/icons/es/InternLM/components/Mono'
+import Kimi from '@lobehub/icons/es/Kimi/components/Mono'
+import Meta from '@lobehub/icons/es/Meta/components/Mono'
+import Microsoft from '@lobehub/icons/es/Microsoft/components/Mono'
+import Minimax from '@lobehub/icons/es/Minimax/components/Mono'
+import Mistral from '@lobehub/icons/es/Mistral/components/Mono'
+import Nvidia from '@lobehub/icons/es/Nvidia/components/Mono'
+import OpenAI from '@lobehub/icons/es/OpenAI/components/Mono'
+import Qwen from '@lobehub/icons/es/Qwen/components/Mono'
+import Snowflake from '@lobehub/icons/es/Snowflake/components/Mono'
+import Stepfun from '@lobehub/icons/es/Stepfun/components/Mono'
+import TII from '@lobehub/icons/es/TII/components/Mono'
+import XiaomiMiMo from '@lobehub/icons/es/XiaomiMiMo/components/Mono'
+import Yi from '@lobehub/icons/es/Yi/components/Mono'
+import Zhipu from '@lobehub/icons/es/Zhipu/components/Mono'
 import catalogDocument from '../../static/model-catalog/catalog.json'
 import styles from './models.module.css'
 
@@ -27,9 +51,13 @@ interface CatalogProvider {
   default_protocol: string
   supported_operations: string[]
   path_overrides?: Record<string, string>
-  reasoning_transport?: 'chat_template_kwargs' | 'top_level_effort' | 'deepseek_thinking'
+  reasoning_transport?:
+    | 'chat_template_kwargs'
+    | 'top_level_effort'
+    | 'thinking_object'
+    | 'deepseek_thinking'
   auth: { strategy: string }
-  presentation: { monogram: string }
+  presentation: { logo: string, monogram: string, monochrome: boolean }
   conformance: { status: string, verified_at?: string }
 }
 
@@ -38,15 +66,40 @@ interface CatalogModel {
   display_name: string
   description: string
   kind: 'physical' | 'virtual'
+  publisher: string
+  presentation: { logo: string, monogram: string, monochrome: boolean }
+  distribution: {
+    type: 'proprietary_api' | 'open_weights' | 'router_recipe'
+    source: string
+    license?: string
+  }
   family: string
   parameter_size?: string
-  lifecycle: string
+  lifecycle: 'experimental' | 'active' | 'deprecated' | 'removed'
   limits?: { context_window_size?: number, max_output_tokens?: number }
   capabilities: string[]
   modalities: { input: string[], output: string[] }
   reasoning_family?: string
   protocols: string[]
-  verification: { status: string, verified_at: string }
+  verification: { status: string, verified_at: string, source?: string }
+}
+
+interface CatalogOffering {
+  id: string
+  provider: string
+  model: string
+  provider_model_id: string
+  lifecycle: string
+}
+
+interface CatalogEvaluation {
+  id: string
+  subject: Record<string, unknown>
+  evidence: {
+    provenance: 'vendor_claimed' | 'third_party' | 'vllm_sr_reproduced' | 'operator'
+    verification: string
+    source?: string
+  }
 }
 
 interface CatalogIndex {
@@ -66,6 +119,13 @@ interface CatalogIndexResult {
   status: string
   score: number | null
   coverage: number
+  components: Array<{
+    metric?: string
+    index?: string
+    status: string
+    value?: number | null
+  }>
+  provenance: string[]
 }
 
 interface CatalogSnapshot {
@@ -73,9 +133,9 @@ interface CatalogSnapshot {
   protocols: CatalogProtocol[]
   providers: CatalogProvider[]
   models: CatalogModel[]
-  offerings: Array<{ provider: string, model: string, lifecycle?: string }>
+  offerings: CatalogOffering[]
   benchmarks: Array<{ id: string, display_name: string, domain: string }>
-  evaluations: unknown[]
+  evaluations: CatalogEvaluation[]
   indices: CatalogIndex[]
   index_results: CatalogIndexResult[]
 }
@@ -94,6 +154,62 @@ const categoryLabel: Record<CatalogProvider['category'], string> = {
   private_runtime: 'Private runtimes',
 }
 
+const distributionLabel: Record<CatalogModel['distribution']['type'], string> = {
+  open_weights: 'Open weights',
+  proprietary_api: 'Proprietary API',
+  router_recipe: 'Router recipe',
+}
+
+const packageIcons: Record<string, typeof OpenAI> = {
+  ai2: Ai2,
+  ai21: Ai21,
+  anthropic: Claude,
+  cohere: Cohere,
+  deepseek: DeepSeek,
+  gemini: Gemini,
+  internlm: InternLM,
+  meta: Meta,
+  minimax: Minimax,
+  mistral: Mistral,
+  moonshot: Kimi,
+  nvidia: Nvidia,
+  openai: OpenAI,
+  qwen: Qwen,
+  snowflake: Snowflake,
+  stepfun: Stepfun,
+  tii: TII,
+  xai: Grok,
+  yi: Yi,
+  zai: Zhipu,
+}
+
+const publisherIcons: Record<string, typeof OpenAI> = {
+  'Ai2': Ai2,
+  'AI21 Labs': Ai21,
+  'Alibaba Cloud': Qwen,
+  'Amazon': Bedrock,
+  'Anthropic': Claude,
+  'Cohere': Cohere,
+  'DeepSeek': DeepSeek,
+  'Google': Gemini,
+  'IBM': IBM,
+  'Shanghai AI Laboratory': InternLM,
+  'Meta': Meta,
+  'Microsoft': Microsoft,
+  'MiniMax': Minimax,
+  'Mistral AI': Mistral,
+  'Moonshot AI': Kimi,
+  'NVIDIA': Nvidia,
+  'OpenAI': OpenAI,
+  'StepFun': Stepfun,
+  'Snowflake': Snowflake,
+  'Technology Innovation Institute': TII,
+  'Xiaomi': XiaomiMiMo,
+  '01.AI': Yi,
+  'xAI': Grok,
+  'Z.ai': Zhipu,
+}
+
 const readable = (value: string) => value.replace(/_/g, ' ')
 
 const formatTokens = (value?: number) => {
@@ -108,23 +224,69 @@ const scoreStatus = (result?: CatalogIndexResult) => {
   return result.score.toFixed(1)
 }
 
+const benchmarkName = (
+  metric: string,
+  benchmarks: CatalogSnapshot['benchmarks'],
+) => {
+  const [benchmarkID, metricID] = metric.split('#', 2)
+  const benchmark = benchmarks.find(candidate => candidate.id === benchmarkID)
+  return benchmark ? `${benchmark.display_name} · ${metricID}` : metric
+}
+
+const benchmarkValue = (value?: number | null) => (
+  typeof value === 'number' ? `${(value * 100).toFixed(1)}%` : 'Missing'
+)
+
+const subjectSummary = (subject: Record<string, unknown>) => Object.entries(subject)
+  .filter(([key, value]) => key !== 'source_kind' && value !== null && value !== '')
+  .map(([key, value]) => `${readable(key)}: ${String(value)}`)
+  .join(' · ')
+
+function CatalogMark({
+  presentation,
+  publisher,
+  large = false,
+}: {
+  presentation: { logo: string, monogram: string, monochrome: boolean }
+  publisher?: string
+  large?: boolean
+}) {
+  const packageID = presentation.logo.startsWith('package:')
+    ? presentation.logo.slice('package:'.length)
+    : ''
+  const Icon = packageIcons[packageID] ?? (publisher ? publisherIcons[publisher] : undefined)
+  return (
+    <span className={`${styles.catalogMark} ${large ? styles.catalogMarkLarge : ''}`} aria-hidden="true">
+      {Icon ? <Icon size={large ? 30 : 21} /> : presentation.monogram}
+    </span>
+  )
+}
+
 export default function ModelsPage() {
   const [providerSearch, setProviderSearch] = useState('')
   const [providerTier, setProviderTier] = useState<'all' | SupportTier>('all')
   const [modelSearch, setModelSearch] = useState('')
-  const [modelKind, setModelKind] = useState<'all' | CatalogModel['kind']>('all')
+  const [modelKind, setModelKind] = useState<'all' | CatalogModel['kind']>('physical')
+  const [modelDistribution, setModelDistribution] = useState<
+    'all' | CatalogModel['distribution']['type']
+  >('all')
+  const [modelPublisher, setModelPublisher] = useState('all')
+  const [modelLifecycle, setModelLifecycle] = useState<
+    'supported' | 'all' | CatalogModel['lifecycle']
+  >('supported')
+  const [modelSort, setModelSort] = useState<'intelligence' | 'name'>('intelligence')
+  const [selectedModelID, setSelectedModelID] = useState<string | null>(null)
 
   const protocols = useMemo(
     () => new Map(catalog.protocols.map(protocol => [protocol.id, protocol])),
     [],
   )
-  const offeringCounts = useMemo(() => {
-    const counts = new Map<string, number>()
+  const offeringsByModel = useMemo(() => {
+    const offerings = new Map<string, CatalogOffering[]>()
     for (const offering of catalog.offerings) {
-      if (offering.lifecycle === 'removed') continue
-      counts.set(offering.model, (counts.get(offering.model) ?? 0) + 1)
+      offerings.set(offering.model, [...(offerings.get(offering.model) ?? []), offering])
     }
-    return counts
+    return offerings
   }, [])
   const defaultIndexID = catalog.catalogs.find(header => header.channel === 'latest')
     ?.default_intelligence_index
@@ -132,6 +294,19 @@ export default function ModelsPage() {
   const defaultIndex = catalog.indices.find(index => index.id === defaultIndexID)
   const results = useMemo(
     () => new Map(catalog.index_results.map(result => [`${result.index}:${result.model}`, result])),
+    [],
+  )
+  const evaluations = useMemo(
+    () => new Map(catalog.evaluations.map(evaluation => [evaluation.id, evaluation])),
+    [],
+  )
+  const providerByID = useMemo(
+    () => new Map(catalog.providers.map(provider => [provider.id, provider])),
+    [],
+  )
+  const publishers = useMemo(
+    () => [...new Set(catalog.models.map(model => model.publisher))]
+      .sort((left, right) => left.localeCompare(right)),
     [],
   )
 
@@ -151,12 +326,20 @@ export default function ModelsPage() {
     return catalog.models
       .filter((model) => {
         const matchesKind = modelKind === 'all' || model.kind === modelKind
-        const matchesQuery = !query || `${model.display_name} ${model.id} ${model.family} ${model.capabilities.join(' ')}`
+        const matchesDistribution = modelDistribution === 'all'
+          || model.distribution.type === modelDistribution
+        const matchesPublisher = modelPublisher === 'all' || model.publisher === modelPublisher
+        const matchesLifecycle = modelLifecycle === 'all'
+          || (modelLifecycle === 'supported'
+            ? model.lifecycle === 'active' || model.lifecycle === 'experimental'
+            : model.lifecycle === modelLifecycle)
+        const matchesQuery = !query || `${model.display_name} ${model.id} ${model.publisher} ${model.family} ${model.capabilities.join(' ')}`
           .toLocaleLowerCase()
           .includes(query)
-        return matchesKind && matchesQuery
+        return matchesKind && matchesDistribution && matchesPublisher && matchesLifecycle && matchesQuery
       })
       .sort((left, right) => {
+        if (modelSort === 'name') return left.display_name.localeCompare(right.display_name)
         const leftScore = results.get(`${defaultIndex?.id}:${left.id}`)?.score
         const rightScore = results.get(`${defaultIndex?.id}:${right.id}`)?.score
         if (leftScore !== null && leftScore !== undefined && rightScore !== null && rightScore !== undefined) {
@@ -166,7 +349,30 @@ export default function ModelsPage() {
         if (rightScore !== null && rightScore !== undefined) return 1
         return left.display_name.localeCompare(right.display_name)
       })
-  }, [defaultIndex?.id, modelKind, modelSearch, results])
+  }, [
+    defaultIndex?.id,
+    modelDistribution,
+    modelKind,
+    modelLifecycle,
+    modelPublisher,
+    modelSearch,
+    modelSort,
+    results,
+  ])
+  const selectedModel = models.find(model => model.id === selectedModelID) ?? models[0]
+  const selectedResult = selectedModel && defaultIndex
+    ? results.get(`${defaultIndex.id}:${selectedModel.id}`)
+    : undefined
+  const selectedOfferings = selectedModel
+    ? (offeringsByModel.get(selectedModel.id) ?? [])
+    : []
+  const physicalModels = catalog.models.filter(model => model.kind === 'physical').length
+  const virtualModels = catalog.models.length - physicalModels
+  const scoredModels = defaultIndex
+    ? catalog.index_results.filter(result => (
+      result.index === defaultIndex.id && result.status === 'available'
+    )).length
+    : 0
 
   return (
     <Layout
@@ -185,10 +391,11 @@ export default function ModelsPage() {
             </p>
           </div>
           <div className={styles.stats} aria-label="Catalog summary">
+            <Stat value={physicalModels} label="single models" />
+            <Stat value={virtualModels} label="virtual recipes" />
             <Stat value={catalog.providers.length} label="providers" />
-            <Stat value={catalog.models.length} label="built-in models" />
-            <Stat value={catalog.protocols.length} label="protocols" />
-            <Stat value={catalog.benchmarks.length} label="benchmarks" />
+            <Stat value={publishers.length} label="publishers" />
+            <Stat value={scoredModels} label="comparable scores" />
           </div>
         </header>
 
@@ -199,74 +406,239 @@ export default function ModelsPage() {
             title="Built-in models"
             description="Scores are computed from versioned benchmark records. A model remains visible when its score is unavailable."
           />
-          <div className={styles.toolbar}>
-            <input
-              type="search"
-              value={modelSearch}
-              onChange={event => setModelSearch(event.target.value)}
-              placeholder="Search models, families, or capabilities"
-              aria-label="Search built-in models"
-            />
-            <FilterButtons
+          <div className={styles.modelControls}>
+            <label className={styles.searchControl}>
+              <span>Search</span>
+              <input
+                type="search"
+                value={modelSearch}
+                onChange={event => setModelSearch(event.target.value)}
+                placeholder="Model, publisher, family, capability…"
+              />
+            </label>
+            <SelectControl
+              label="Kind"
               value={modelKind}
               options={[
-                ['all', 'All'],
-                ['physical', 'Physical'],
-                ['virtual', 'Virtual'],
+                ['physical', 'Single models'],
+                ['virtual', 'Virtual recipes'],
+                ['all', 'All kinds'],
               ]}
               onChange={value => setModelKind(value as 'all' | CatalogModel['kind'])}
             />
+            <SelectControl
+              label="Distribution"
+              value={modelDistribution}
+              options={[
+                ['all', 'All distributions'],
+                ['open_weights', 'Open weights'],
+                ['proprietary_api', 'Proprietary API'],
+                ['router_recipe', 'Router recipe'],
+              ]}
+              onChange={value => setModelDistribution(
+                value as 'all' | CatalogModel['distribution']['type'],
+              )}
+            />
+            <SelectControl
+              label="Publisher"
+              value={modelPublisher}
+              options={[
+                ['all', 'All publishers'],
+                ...publishers.map(publisher => [publisher, publisher] as [string, string]),
+              ]}
+              onChange={setModelPublisher}
+            />
+            <SelectControl
+              label="Lifecycle"
+              value={modelLifecycle}
+              options={[
+                ['supported', 'Supported'],
+                ['active', 'Active'],
+                ['experimental', 'Experimental'],
+                ['deprecated', 'Deprecated'],
+                ['removed', 'Removed'],
+                ['all', 'All lifecycle states'],
+              ]}
+              onChange={value => setModelLifecycle(
+                value as 'supported' | 'all' | CatalogModel['lifecycle'],
+              )}
+            />
+            <SelectControl
+              label="Sort"
+              value={modelSort}
+              options={[
+                ['intelligence', 'Intelligence'],
+                ['name', 'Name'],
+              ]}
+              onChange={value => setModelSort(value as 'intelligence' | 'name')}
+            />
           </div>
-          <div className={styles.tableFrame}>
-            <table>
-              <thead>
-                <tr>
-                  <th>Model</th>
-                  <th>Kind</th>
-                  <th>Context</th>
-                  <th>Capabilities</th>
-                  <th>Reasoning</th>
-                  <th>Offerings</th>
-                  <th>{defaultIndex?.display_name ?? 'Quality index'}</th>
-                </tr>
-              </thead>
-              <tbody>
+
+          <div className={styles.modelWorkspace}>
+            <div className={styles.modelCatalogPanel}>
+              <div className={styles.resultHeader}>
+                <strong>{`${models.length} models`}</strong>
+                <span>Composite scores require 60% benchmark coverage.</span>
+              </div>
+              <div className={styles.modelList} role="listbox" aria-label="Model catalog results">
                 {models.map((model) => {
                   const result = defaultIndex
                     ? results.get(`${defaultIndex.id}:${model.id}`)
                     : undefined
+                  const active = model.id === selectedModel?.id
                   return (
-                    <tr key={model.id}>
-                      <td>
-                        <strong>{model.display_name}</strong>
-                        <code>{model.id}</code>
-                        <small>{model.description}</small>
-                      </td>
-                      <td><Badge value={model.kind} /></td>
-                      <td>{formatTokens(model.limits?.context_window_size)}</td>
-                      <td><Tags values={model.capabilities} /></td>
-                      <td>{model.reasoning_family ?? '—'}</td>
-                      <td>{offeringCounts.get(model.id) ?? 0}</td>
-                      <td>
-                        <span className={result?.score == null ? styles.unavailable : styles.score}>
-                          {scoreStatus(result)}
+                    <button
+                      key={model.id}
+                      type="button"
+                      role="option"
+                      aria-selected={active}
+                      className={`${styles.modelRow} ${active ? styles.modelRowActive : ''}`}
+                      onClick={() => setSelectedModelID(model.id)}
+                    >
+                      <span className={styles.modelIdentity}>
+                        <CatalogMark presentation={model.presentation} publisher={model.publisher} />
+                        <span>
+                          <strong>{model.display_name}</strong>
+                          <small>{model.id}</small>
                         </span>
-                        {result
-                          ? (
-                              <small>
-                                {Math.round(result.coverage * 100)}
-                                % coverage
-                              </small>
-                            )
+                      </span>
+                      <span>{model.publisher}</span>
+                      <span>{distributionLabel[model.distribution.type]}</span>
+                      <span>{formatTokens(model.limits?.context_window_size)}</span>
+                      <span className={result?.score == null ? styles.unavailable : styles.score}>
+                        {scoreStatus(result)}
+                        {result?.score != null
+                          ? <small>{`${Math.round(result.coverage * 100)}% coverage`}</small>
                           : null}
-                      </td>
-                    </tr>
+                      </span>
+                    </button>
                   )
                 })}
-              </tbody>
-            </table>
+                {models.length === 0
+                  ? <p className={styles.empty}>No built-in models match these filters.</p>
+                  : null}
+              </div>
+            </div>
+
+            <aside className={styles.modelDetail} aria-live="polite">
+              {selectedModel
+                ? (
+                    <>
+                      <div className={styles.detailIdentity}>
+                        <CatalogMark
+                          presentation={selectedModel.presentation}
+                          publisher={selectedModel.publisher}
+                          large
+                        />
+                        <span>
+                          <small>{selectedModel.publisher}</small>
+                          <h3>{selectedModel.display_name}</h3>
+                          <code>{selectedModel.id}</code>
+                        </span>
+                      </div>
+                      <p>{selectedModel.description}</p>
+                      <div className={styles.detailBadges}>
+                        <Badge value={selectedModel.kind} />
+                        <Badge value={selectedModel.distribution.type} label={distributionLabel[selectedModel.distribution.type]} />
+                        <Badge value={selectedModel.lifecycle} />
+                        {selectedModel.parameter_size
+                          ? <Badge value="parameter_size" label={selectedModel.parameter_size} />
+                          : null}
+                        {selectedModel.distribution.license
+                          ? <Badge value="license" label={selectedModel.distribution.license} />
+                          : null}
+                      </div>
+
+                      <DetailSection title="Intelligence evidence" value={scoreStatus(selectedResult)}>
+                        <p>
+                          {selectedResult?.score != null
+                            ? `${Math.round(selectedResult.coverage * 100)}% of the default index is backed by published evidence.`
+                            : 'No composite is shown until three of the five default benchmarks are available.'}
+                        </p>
+                        <div className={styles.benchmarkGrid}>
+                          {selectedResult?.components.map(component => (
+                            <div key={component.metric ?? component.index}>
+                              <span>
+                                {component.metric
+                                  ? benchmarkName(component.metric, catalog.benchmarks)
+                                  : (component.index ?? 'Index component')}
+                              </span>
+                              <strong>{benchmarkValue(component.value)}</strong>
+                            </div>
+                          ))}
+                        </div>
+                        {selectedResult?.provenance.length
+                          ? (
+                              <div className={styles.evidenceLinks}>
+                                {selectedResult.provenance.map((recordID) => {
+                                  const record = evaluations.get(recordID)
+                                  return record
+                                    ? (
+                                        <div className={styles.evidenceRecord} key={recordID}>
+                                          <span>
+                                            {`${readable(record.evidence.provenance)} · ${record.evidence.verification}`}
+                                          </span>
+                                          <small>{subjectSummary(record.subject)}</small>
+                                          {record.evidence.source
+                                            ? (
+                                                <a
+                                                  href={record.evidence.source}
+                                                  target="_blank"
+                                                  rel="noreferrer"
+                                                >
+                                                  Official evidence ↗
+                                                </a>
+                                              )
+                                            : null}
+                                        </div>
+                                      )
+                                    : null
+                                })}
+                              </div>
+                            )
+                          : null}
+                      </DetailSection>
+
+                      <DetailSection title="Capabilities">
+                        <Tags values={selectedModel.capabilities} />
+                        {selectedModel.reasoning_family
+                          ? <small>{`Reasoning family: ${selectedModel.reasoning_family}`}</small>
+                          : null}
+                      </DetailSection>
+
+                      <DetailSection title="Available through">
+                        {selectedOfferings.length
+                          ? (
+                              <ul className={styles.offeringList}>
+                                {selectedOfferings.map(offering => (
+                                  <li key={offering.id}>
+                                    <span>
+                                      <strong>
+                                        {providerByID.get(offering.provider)?.display_name ?? offering.provider}
+                                      </strong>
+                                      <code>{offering.provider_model_id}</code>
+                                    </span>
+                                    <small>{offering.lifecycle}</small>
+                                  </li>
+                                ))}
+                              </ul>
+                            )
+                          : <p>Materialized from its built-in router recipe.</p>}
+                      </DetailSection>
+
+                      <a
+                        className={styles.sourceLink}
+                        href={selectedModel.distribution.source}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Open official model source ↗
+                      </a>
+                    </>
+                  )
+                : <p className={styles.empty}>Select a model to inspect it.</p>}
+            </aside>
           </div>
-          {models.length === 0 ? <p className={styles.empty}>No built-in models match these filters.</p> : null}
         </section>
 
         <section className={styles.section} aria-labelledby="providers-heading">
@@ -329,7 +701,7 @@ export default function ModelsPage() {
                   <tr key={provider.id}>
                     <td>
                       <span className={styles.providerIdentity}>
-                        <span className={styles.monogram} aria-hidden="true">{provider.presentation.monogram}</span>
+                        <CatalogMark presentation={provider.presentation} />
                         <span>
                           <strong>{provider.display_name}</strong>
                           <code>{provider.id}</code>
@@ -484,6 +856,49 @@ function FilterButtons({
         </button>
       ))}
     </div>
+  )
+}
+
+function SelectControl({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string
+  value: string
+  options: Array<[string, string]>
+  onChange: (value: string) => void
+}) {
+  return (
+    <label>
+      <span>{label}</span>
+      <select value={value} onChange={event => onChange(event.target.value)}>
+        {options.map(([optionValue, optionLabel]) => (
+          <option key={optionValue} value={optionValue}>{optionLabel}</option>
+        ))}
+      </select>
+    </label>
+  )
+}
+
+function DetailSection({
+  title,
+  value,
+  children,
+}: {
+  title: string
+  value?: string
+  children: React.ReactNode
+}) {
+  return (
+    <section className={styles.detailSection}>
+      <div className={styles.detailSectionHeading}>
+        <h4>{title}</h4>
+        {value ? <strong>{value}</strong> : null}
+      </div>
+      {children}
+    </section>
   )
 }
 

@@ -1,0 +1,35 @@
+- id: vllm/olmo-3.1-32b-instruct@1.0.0
+  provider: vllm
+  model: ai2/olmo-3.1-32b-instruct
+  provider_model_id: allenai/Olmo-3.1-32B-Instruct
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/allenai/Olmo-3.1-32B-Instruct}
+- id: vllm/olmo-3.1-32b-think@1.0.0
+  provider: vllm
+  model: ai2/olmo-3.1-32b-think
+  provider_model_id: allenai/Olmo-3.1-32B-Think
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/allenai/Olmo-3.1-32B-Think}
+- id: vllm/olmo-3-7b-instruct@1.0.0
+  provider: vllm
+  model: ai2/olmo-3-7b-instruct
+  provider_model_id: allenai/Olmo-3-7B-Instruct
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/allenai/Olmo-3-7B-Instruct}
+- id: vllm/olmo-3-7b-think@1.0.0
+  provider: vllm
+  model: ai2/olmo-3-7b-think
+  provider_model_id: allenai/Olmo-3-7B-Think
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/allenai/Olmo-3-7B-Think}
+- id: vllm/olmo-2-0325-32b-instruct@1.0.0
+  provider: vllm
+  model: ai2/olmo-2-0325-32b-instruct
+  provider_model_id: allenai/OLMo-2-0325-32B-Instruct
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/allenai/OLMo-2-0325-32B-Instruct}

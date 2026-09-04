@@ -13,6 +13,7 @@ export const loadKnowledgeMapPage = () => import('../pages/KnowledgeMapPage')
 export const loadLogsPage = () => import('../pages/LogsPage')
 export const loadMLSetupPage = () => import('../pages/MLSetupPage')
 export const loadMonitoringPage = () => import('../pages/MonitoringPage')
+export const loadModelHubPage = () => import('../pages/ModelHubPage')
 export const loadOpenClawPage = () => import('../pages/OpenClawPage')
 export const loadPlaygroundFullscreenPage = () => import('../pages/PlaygroundFullscreenPage')
 export const loadPlaygroundPage = () => import('../pages/PlaygroundPage')
@@ -35,6 +36,7 @@ const routeLoaders: Array<{ matches: (pathname: string) => boolean; load: RouteL
   },
   { matches: (pathname) => pathname.startsWith('/playground'), load: loadPlaygroundPage },
   { matches: (pathname) => pathname.startsWith('/builder'), load: loadBuilderPage },
+  { matches: (pathname) => pathname.startsWith('/models'), load: loadModelHubPage },
   { matches: (pathname) => pathname.startsWith('/config'), load: loadConfigPage },
   {
     matches: (pathname) => /^\/knowledge-bases\/[^/]+\/map\/?$/.test(pathname),

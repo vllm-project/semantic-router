@@ -1,0 +1,128 @@
+- id: meta/llama-3-8b-instruct
+  display_name: Llama 3 8B Instruct
+  description: Previous-generation compact Meta instruction model.
+  kind: physical
+  publisher: Meta
+  presentation: {logo: package:meta, monogram: M, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/meta-llama/Meta-Llama-3-8B-Instruct, license: Llama-3-Community-License}
+  family: llama-3
+  parameter_size: 8B
+  lifecycle: active
+  limits: {context_window_size: 8192}
+  capabilities: [chat, tools]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: Meta, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/meta-llama/Meta-Llama-3-8B-Instruct}
+  tags: [open_weights, efficient, previous_generation]
+- id: meta/llama-3-70b-instruct
+  display_name: Llama 3 70B Instruct
+  description: Previous-generation large Meta instruction model.
+  kind: physical
+  publisher: Meta
+  presentation: {logo: package:meta, monogram: M, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/meta-llama/Meta-Llama-3-70B-Instruct, license: Llama-3-Community-License}
+  family: llama-3
+  parameter_size: 70B
+  lifecycle: active
+  limits: {context_window_size: 8192}
+  capabilities: [chat, tools]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: Meta, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/meta-llama/Meta-Llama-3-70B-Instruct}
+  tags: [open_weights, previous_generation]
+- id: meta/llama-2-7b-chat
+  display_name: Llama 2 7B Chat
+  description: Historical compact Llama 2 chat model.
+  kind: physical
+  publisher: Meta
+  presentation: {logo: package:meta, monogram: M, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/meta-llama/Llama-2-7b-chat-hf, license: Llama-2-Community-License}
+  family: llama-2
+  parameter_size: 7B
+  lifecycle: active
+  limits: {context_window_size: 4096}
+  capabilities: [chat]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: Meta, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/meta-llama/Llama-2-7b-chat-hf}
+  tags: [open_weights, efficient, previous_generation]
+- id: meta/llama-2-13b-chat
+  display_name: Llama 2 13B Chat
+  description: Historical mid-sized Llama 2 chat model.
+  kind: physical
+  publisher: Meta
+  presentation: {logo: package:meta, monogram: M, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/meta-llama/Llama-2-13b-chat-hf, license: Llama-2-Community-License}
+  family: llama-2
+  parameter_size: 13B
+  lifecycle: active
+  limits: {context_window_size: 4096}
+  capabilities: [chat]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: Meta, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/meta-llama/Llama-2-13b-chat-hf}
+  tags: [open_weights, previous_generation]
+- id: meta/llama-2-70b-chat
+  display_name: Llama 2 70B Chat
+  description: Historical large Llama 2 chat model.
+  kind: physical
+  publisher: Meta
+  presentation: {logo: package:meta, monogram: M, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/meta-llama/Llama-2-70b-chat-hf, license: Llama-2-Community-License}
+  family: llama-2
+  parameter_size: 70B
+  lifecycle: active
+  limits: {context_window_size: 4096}
+  capabilities: [chat]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: Meta, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/meta-llama/Llama-2-70b-chat-hf}
+  tags: [open_weights, previous_generation]
+- id: meta/codellama-7b-instruct
+  display_name: Code Llama 7B Instruct
+  description: Compact Code Llama instruction model for code generation and completion.
+  kind: physical
+  publisher: Meta
+  presentation: {logo: package:meta, monogram: M, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/meta-llama/CodeLlama-7b-Instruct-hf, license: Llama-2-Community-License}
+  family: code-llama
+  parameter_size: 7B
+  lifecycle: active
+  limits: {context_window_size: 16384}
+  capabilities: [chat, coding]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: Meta, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/meta-llama/CodeLlama-7b-Instruct-hf}
+  tags: [open_weights, coding, previous_generation]
+- id: meta/codellama-34b-instruct
+  display_name: Code Llama 34B Instruct
+  description: Mid-sized Code Llama instruction model for software tasks.
+  kind: physical
+  publisher: Meta
+  presentation: {logo: package:meta, monogram: M, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/meta-llama/CodeLlama-34b-Instruct-hf, license: Llama-2-Community-License}
+  family: code-llama
+  parameter_size: 34B
+  lifecycle: active
+  limits: {context_window_size: 16384}
+  capabilities: [chat, coding]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: Meta, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/meta-llama/CodeLlama-34b-Instruct-hf}
+  tags: [open_weights, coding, previous_generation]
+- id: meta/codellama-70b-instruct
+  display_name: Code Llama 70B Instruct
+  description: Large Code Llama instruction model for software tasks.
+  kind: physical
+  publisher: Meta
+  presentation: {logo: package:meta, monogram: M, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/meta-llama/CodeLlama-70b-Instruct-hf, license: Llama-2-Community-License}
+  family: code-llama
+  parameter_size: 70B
+  lifecycle: active
+  limits: {context_window_size: 16384}
+  capabilities: [chat, coding]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: Meta, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/meta-llama/CodeLlama-70b-Instruct-hf}
+  tags: [open_weights, coding, previous_generation]

@@ -312,6 +312,12 @@ func TestSetProviderRequestPathCoversProtocolAndBaseURLMatrix(t *testing.T) {
 			want:    "/compatible/v1/chat/completions",
 		},
 		{
+			name:    "Chat OpenAI custom API root",
+			profile: config.ProviderProfile{Type: "openai", BaseURL: "https://api.example.com/v1beta/openai"},
+			format:  llmprotocol.OpenAIChatV1,
+			want:    "/v1beta/openai/chat/completions",
+		},
+		{
 			name:    "Chat explicit override",
 			profile: config.ProviderProfile{Type: "openai", BaseURL: "https://api.example.com/v1", ChatPath: "/custom/chat"},
 			format:  llmprotocol.OpenAIChatV1,

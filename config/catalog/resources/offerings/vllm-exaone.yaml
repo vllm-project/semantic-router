@@ -1,0 +1,21 @@
+- id: vllm/exaone-4.0-32b@1.0.0
+  provider: vllm
+  model: lg/exaone-4.0-32b
+  provider_model_id: LGAI-EXAONE/EXAONE-4.0-32B
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/LGAI-EXAONE/EXAONE-4.0-32B}
+- id: vllm/exaone-4.0-1.2b@1.0.0
+  provider: vllm
+  model: lg/exaone-4.0-1.2b
+  provider_model_id: LGAI-EXAONE/EXAONE-4.0-1.2B
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/LGAI-EXAONE/EXAONE-4.0-1.2B}
+- id: vllm/exaone-3.5-32b-instruct@1.0.0
+  provider: vllm
+  model: lg/exaone-3.5-32b-instruct
+  provider_model_id: LGAI-EXAONE/EXAONE-3.5-32B-Instruct
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/LGAI-EXAONE/EXAONE-3.5-32B-Instruct}

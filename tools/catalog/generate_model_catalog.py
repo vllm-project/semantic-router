@@ -179,7 +179,14 @@ def _validate_protocols(items: list[dict[str, Any]]) -> None:
         path = f"protocols[{index}]"
         _reject_unknown(
             item,
-            {"id", "display_name", "wire_format", "operations", "capabilities"},
+            {
+                "id",
+                "display_name",
+                "wire_format",
+                "default_base_path",
+                "operations",
+                "capabilities",
+            },
             path,
         )
         identity = _nonempty_string(item.get("id"), f"{path}.id")
@@ -191,6 +198,11 @@ def _validate_protocols(items: list[dict[str, Any]]) -> None:
         if wire in wire_formats:
             raise CatalogBuildError(f"duplicate protocol wire_format: {wire}")
         wire_formats.add(wire)
+        default_base_path = _nonempty_string(
+            item.get("default_base_path"), f"{path}.default_base_path"
+        ).rstrip("/")
+        if not default_base_path.startswith("/"):
+            raise CatalogBuildError(f"{path}.default_base_path must be absolute")
         operations = _sequence(item.get("operations"), f"{path}.operations")
         if not operations:
             raise CatalogBuildError(f"{path}.operations cannot be empty")
@@ -218,6 +230,14 @@ def _validate_protocols(items: list[dict[str, Any]]) -> None:
             if not operation_path.startswith("/"):
                 raise CatalogBuildError(
                     f"{path}.operations[{operation_index}].path must be absolute"
+                )
+            if default_base_path and not (
+                operation_path == default_base_path
+                or operation_path.startswith(default_base_path + "/")
+            ):
+                raise CatalogBuildError(
+                    f"{path}.operations[{operation_index}].path must start with "
+                    f"default_base_path {default_base_path}"
                 )
 
 
@@ -274,6 +294,7 @@ def _validate_provider_identity(
     if item.get("reasoning_transport", "chat_template_kwargs") not in {
         "chat_template_kwargs",
         "top_level_effort",
+        "thinking_object",
         "deepseek_thinking",
     }:
         raise CatalogBuildError(f"{path}.reasoning_transport is unsupported")
@@ -436,6 +457,9 @@ _MODEL_FIELDS = {
     "display_name",
     "description",
     "kind",
+    "publisher",
+    "presentation",
+    "distribution",
     "family",
     "generation",
     "parameter_size",
@@ -473,6 +497,18 @@ def _validate_model_identity(
     kind = item.get("kind")
     if kind not in {"physical", "virtual"}:
         raise CatalogBuildError(f"{path}.kind is unsupported")
+    _nonempty_string(item.get("publisher"), f"{path}.publisher")
+    _validate_provider_presentation(item, path)
+    distribution = _mapping(item.get("distribution"), f"{path}.distribution")
+    _reject_unknown(distribution, {"type", "source", "license"}, f"{path}.distribution")
+    if distribution.get("type") not in {
+        "proprietary_api",
+        "open_weights",
+        "router_recipe",
+    }:
+        raise CatalogBuildError(f"{path}.distribution.type is unsupported")
+    if distribution.get("type") == "open_weights" and not distribution.get("license"):
+        raise CatalogBuildError(f"{path}.distribution.license is required")
     protocols = _sequence(item.get("protocols"), f"{path}.protocols")
     if not protocols or any(protocol not in protocol_ids for protocol in protocols):
         raise CatalogBuildError(f"{path}.protocols references an unknown protocol")
@@ -485,20 +521,26 @@ def _validate_model_identity(
 def _validate_model_verification(item: dict[str, Any], path: str) -> None:
     verification = _mapping(item.get("verification"), f"{path}.verification")
     _reject_unknown(
-        verification, {"authority", "status", "verified_at"}, f"{path}.verification"
+        verification,
+        {"authority", "status", "verified_at", "source"},
+        f"{path}.verification",
     )
     if verification.get("status") not in {"claimed", "imported", "reproduced"}:
         raise CatalogBuildError(f"{path}.verification.status is unsupported")
 
 
 def _validate_virtual_model(
-    item: dict[str, Any], path: str, asset_ids: set[str]
+    item: dict[str, Any],
+    path: str,
+    asset_ids: set[str],
 ) -> None:
     if item.get("asset") not in asset_ids:
         raise CatalogBuildError(f"{path}.asset references an unknown asset")
     for required in ("entrypoint", "recipe", "roles", "generation", "policy_version"):
         if item.get(required) in (None, "", []):
             raise CatalogBuildError(f"{path}.{required} is required for virtual models")
+    if item["distribution"]["type"] != "router_recipe":
+        raise CatalogBuildError(f"{path}.distribution.type must be router_recipe")
     for role_index, raw_role in enumerate(
         _sequence(item.get("roles"), f"{path}.roles")
     ):
@@ -522,6 +564,10 @@ def _validate_physical_model(item: dict[str, Any], path: str) -> None:
     virtual_fields = ("asset", "entrypoint", "recipe", "roles")
     if any(item.get(field_name) is not None for field_name in virtual_fields):
         raise CatalogBuildError(f"{path} physical model contains virtual-only fields")
+    if item["distribution"]["type"] == "router_recipe":
+        raise CatalogBuildError(f"{path}.distribution.type is virtual-only")
+    if not item["verification"].get("source"):
+        raise CatalogBuildError(f"{path}.verification.source is required")
 
 
 def _validate_security(value: Any, path: str = "catalog") -> None:

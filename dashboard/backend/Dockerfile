@@ -83,6 +83,7 @@ RUN set -eux; \
 # Only copy the packages we actually need for dashboard backend builds - NOT pkg/cli which has extra deps
 COPY src/semantic-router/go.mod src/semantic-router/go.sum /app/src/semantic-router/
 COPY src/vllm-sr/pyproject.toml /app/src/vllm-sr/pyproject.toml
+COPY src/semantic-router/pkg/catalog/ /app/src/semantic-router/pkg/catalog/
 COPY src/semantic-router/pkg/config/ /app/src/semantic-router/pkg/config/
 COPY src/semantic-router/pkg/dsl/ /app/src/semantic-router/pkg/dsl/
 COPY src/semantic-router/pkg/modelinventory/ /app/src/semantic-router/pkg/modelinventory/

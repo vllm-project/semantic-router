@@ -1,0 +1,32 @@
+- id: tii/falcon3-7b-instruct
+  display_name: Falcon3 7B Instruct
+  description: Multilingual Falcon3 instruction model for reasoning, code, tools, and efficient serving.
+  kind: physical
+  publisher: Technology Innovation Institute
+  presentation: {logo: package:tii, monogram: F, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/tiiuae/Falcon3-7B-Instruct, license: TII-Falcon-LLM-License-2.0}
+  family: falcon3
+  parameter_size: 7B
+  lifecycle: active
+  limits: {context_window_size: 32768}
+  capabilities: [chat, tools, long_context]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: Technology Innovation Institute, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/tiiuae/Falcon3-7B-Instruct}
+  tags: [open_weights, multilingual, efficient]
+- id: tii/falcon3-10b-instruct
+  display_name: Falcon3 10B Instruct
+  description: Largest Falcon3 instruction model for multilingual reasoning, code, and tools.
+  kind: physical
+  publisher: Technology Innovation Institute
+  presentation: {logo: package:tii, monogram: F, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/tiiuae/Falcon3-10B-Instruct, license: TII-Falcon-LLM-License-2.0}
+  family: falcon3
+  parameter_size: 10B
+  lifecycle: active
+  limits: {context_window_size: 32768}
+  capabilities: [chat, tools, long_context]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: Technology Innovation Institute, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/tiiuae/Falcon3-10B-Instruct}
+  tags: [open_weights, multilingual]

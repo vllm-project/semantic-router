@@ -1,0 +1,157 @@
+- id: nvidia/nemotron-3-nano
+  display_name: NVIDIA Nemotron 3 Nano
+  description: Compact open-weight NVIDIA MoE model for efficient reasoning and agents.
+  kind: physical
+  publisher: NVIDIA
+  presentation: {logo: package:nvidia, monogram: N, monochrome: false}
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16
+    license: NVIDIA-Nemotron-Open-Model-License
+  family: nemotron-3
+  parameter_size: 30B (3B active)
+  lifecycle: active
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: NVIDIA, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16}
+  tags: [open_weights, efficient, moe, agentic]
+- id: nvidia/nemotron-3-super
+  display_name: NVIDIA Nemotron 3 Super
+  description: Open-weight NVIDIA MoE model for reasoning, coding, and agentic workflows.
+  kind: physical
+  publisher: NVIDIA
+  presentation: {logo: package:nvidia, monogram: N, monochrome: false}
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16
+    license: NVIDIA-Nemotron-Open-Model-License
+  family: nemotron-3
+  parameter_size: 120B (12B active)
+  lifecycle: active
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: NVIDIA, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16}
+  tags: [open_weights, reasoning, moe, agentic]
+- id: nvidia/nemotron-3-ultra
+  display_name: NVIDIA Nemotron 3 Ultra
+  description: NVIDIA open-weight frontier model for reasoning and complex agentic workflows.
+  kind: physical
+  publisher: NVIDIA
+  presentation: {logo: package:nvidia, monogram: N, monochrome: false}
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4
+    license: OpenMDW-1.1
+  family: nemotron-3
+  parameter_size: 550B (55B active)
+  released_at: 2026-06-04
+  knowledge_cutoff: May 2026 post-training; September 2025 pre-training
+  lifecycle: active
+  limits: {context_window_size: 1000000}
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification:
+    authority: NVIDIA
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4
+  tags: [open_weights, frontier, moe, agentic]
+- id: nvidia/nemotron-3.5-lightning
+  display_name: NVIDIA Nemotron 3.5 Lightning
+  description: Efficient open-weight NVIDIA reasoning model for fast agentic inference.
+  kind: physical
+  publisher: NVIDIA
+  presentation: {logo: package:nvidia, monogram: N, monochrome: false}
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16
+    license: OpenMDW-1.1
+  family: nemotron-3.5
+  parameter_size: 30B (3B active)
+  lifecycle: active
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: NVIDIA, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16}
+  tags: [open_weights, efficient, reasoning, moe]
+- id: nvidia/llama-3.1-nemotron-nano-8b-v1
+  display_name: Llama 3.1 Nemotron Nano 8B V1
+  description: Compact NVIDIA reasoning and chat model derived from Llama 3.1 8B.
+  kind: physical
+  publisher: NVIDIA
+  presentation: {logo: package:nvidia, monogram: N, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/nvidia/Llama-3.1-Nemotron-Nano-8B-v1, license: NVIDIA-Open-Model-License}
+  family: llama-nemotron
+  parameter_size: 8B
+  lifecycle: active
+  capabilities: [chat, reasoning, tools, long_context]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: NVIDIA, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/nvidia/Llama-3.1-Nemotron-Nano-8B-v1}
+  tags: [open_weights, reasoning, efficient]
+- id: nvidia/llama-3.3-nemotron-super-49b-v1
+  display_name: Llama 3.3 Nemotron Super 49B V1
+  description: NVIDIA reasoning and agent model derived from Llama 3.3 with an efficiency-oriented architecture.
+  kind: physical
+  publisher: NVIDIA
+  presentation: {logo: package:nvidia, monogram: N, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/nvidia/Llama-3_3-Nemotron-Super-49B-v1, license: NVIDIA-Open-Model-License}
+  family: llama-nemotron
+  parameter_size: 49B
+  lifecycle: active
+  limits: {context_window_size: 131072}
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: NVIDIA, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/nvidia/Llama-3_3-Nemotron-Super-49B-v1}
+  tags: [open_weights, reasoning, agentic]
+- id: nvidia/llama-3.1-nemotron-ultra-253b-v1
+  display_name: Llama 3.1 Nemotron Ultra 253B V1
+  description: Large NVIDIA reasoning, RAG, and tool-use model derived from Llama 3.1 405B.
+  kind: physical
+  publisher: NVIDIA
+  presentation: {logo: package:nvidia, monogram: N, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/nvidia/Llama-3_1-Nemotron-Ultra-253B-v1, license: NVIDIA-Open-Model-License}
+  family: llama-nemotron
+  parameter_size: 253B
+  lifecycle: active
+  limits: {context_window_size: 131072}
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: NVIDIA, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/nvidia/Llama-3_1-Nemotron-Ultra-253B-v1}
+  tags: [open_weights, reasoning, agentic]
+- id: nvidia/llama-3.1-nemotron-70b-instruct-hf
+  display_name: Llama 3.1 Nemotron 70B Instruct HF
+  description: NVIDIA-aligned Llama 3.1 70B model for helpful instruction following.
+  kind: physical
+  publisher: NVIDIA
+  presentation: {logo: package:nvidia, monogram: N, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/nvidia/Llama-3.1-Nemotron-70B-Instruct-HF, license: Llama-3.1-Community-License}
+  family: llama-nemotron
+  parameter_size: 70B
+  lifecycle: active
+  limits: {context_window_size: 131072}
+  capabilities: [chat, tools, long_context]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: NVIDIA, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/nvidia/Llama-3.1-Nemotron-70B-Instruct-HF}
+  tags: [open_weights, dense]
+- id: nvidia/llama-3.1-nemotron-nano-vl-8b-v1
+  display_name: Llama 3.1 Nemotron Nano VL 8B V1
+  description: Compact NVIDIA vision-language model for document and image understanding.
+  kind: physical
+  publisher: NVIDIA
+  presentation: {logo: package:nvidia, monogram: N, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/nvidia/Llama-3.1-Nemotron-Nano-VL-8B-V1, license: NVIDIA-Open-Model-License}
+  family: llama-nemotron-vl
+  parameter_size: 8B
+  lifecycle: active
+  capabilities: [chat, tools, vision]
+  modalities: {input: [text, image], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: NVIDIA, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/nvidia/Llama-3.1-Nemotron-Nano-VL-8B-V1}
+  tags: [open_weights, multimodal, efficient]

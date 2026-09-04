@@ -1,0 +1,81 @@
+- id: cohere/command-r-plus-08-2024
+  display_name: Command R+ 08-2024
+  description: Open-weight Cohere model for retrieval, tools, and multilingual enterprise tasks.
+  kind: physical
+  publisher: Cohere
+  presentation: {logo: package:cohere, monogram: C, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/CohereForAI/c4ai-command-r-plus-08-2024, license: CC-BY-NC-4.0}
+  family: command-r
+  parameter_size: 104B
+  lifecycle: active
+  limits: {context_window_size: 131072}
+  capabilities: [chat, tools, structured_output, long_context]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: Cohere, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/CohereForAI/c4ai-command-r-plus-08-2024}
+  tags: [open_weights, multilingual, enterprise]
+- id: cohere/command-a-03-2025
+  display_name: Command A 03-2025
+  description: Open-weight Cohere model for enterprise agents and multilingual tool use.
+  kind: physical
+  publisher: Cohere
+  presentation: {logo: package:cohere, monogram: C, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/CohereLabs/c4ai-command-a-03-2025, license: CC-BY-NC-4.0}
+  family: command-a
+  parameter_size: 111B
+  lifecycle: active
+  limits: {context_window_size: 262144}
+  capabilities: [chat, tools, structured_output, long_context]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: Cohere, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/CohereLabs/c4ai-command-a-03-2025}
+  tags: [open_weights, multilingual, agentic, enterprise]
+- id: cohere/command-a-vision-07-2025
+  display_name: Command A Vision 07-2025
+  description: Open-weight Cohere multimodal model for document and enterprise vision tasks.
+  kind: physical
+  publisher: Cohere
+  presentation: {logo: package:cohere, monogram: C, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/CohereLabs/command-a-vision-07-2025, license: CC-BY-NC-4.0}
+  family: command-a
+  parameter_size: 112B
+  lifecycle: active
+  capabilities: [chat, tools, structured_output, vision, long_context]
+  modalities: {input: [text, image], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: Cohere, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/CohereLabs/command-a-vision-07-2025}
+  tags: [open_weights, multimodal, enterprise]
+- id: cohere/command-a-reasoning-08-2025
+  display_name: Command A Reasoning 08-2025
+  description: Open-weight Cohere reasoning model for multilingual tools and agents.
+  kind: physical
+  publisher: Cohere
+  presentation: {logo: package:cohere, monogram: C, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/CohereLabs/command-a-reasoning-08-2025, license: CC-BY-NC-4.0}
+  family: command-a
+  parameter_size: 111B
+  lifecycle: active
+  limits: {context_window_size: 262144, max_output_tokens: 32768}
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: Cohere, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/CohereLabs/command-a-reasoning-08-2025}
+  tags: [open_weights, reasoning, multilingual, agentic]
+- id: cohere/command-a-plus-05-2026
+  display_name: Command A+ 05-2026
+  description: Open-weight multimodal Cohere MoE model for reasoning-heavy enterprise agents.
+  kind: physical
+  publisher: Cohere
+  presentation: {logo: package:cohere, monogram: C, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/CohereLabs/command-a-plus-05-2026-w4a4, license: Apache-2.0}
+  family: command-a-plus
+  parameter_size: 218B (25B active)
+  released_at: 2026-05-20
+  knowledge_cutoff: 2025-04-01
+  lifecycle: active
+  limits: {context_window_size: 128000, max_output_tokens: 64000}
+  capabilities: [chat, reasoning, tools, structured_output, vision, long_context]
+  modalities: {input: [text, image], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: Cohere, status: claimed, verified_at: 2026-09-05, source: https://docs.cohere.com/docs/command-a-plus}
+  tags: [open_weights, multimodal, reasoning, multilingual, moe, agentic]

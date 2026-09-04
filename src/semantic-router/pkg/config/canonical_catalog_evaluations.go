@@ -37,10 +37,14 @@ func catalogEvaluationRecords(card RoutingModel, modelIndex int, builtIn *modelc
 			}
 			metrics[evaluation.Benchmark+"#"+metric] = value
 		}
+		subject := modelcatalog.EvaluationSubject{}
+		if len(evaluation.Metadata) > 0 {
+			subject["parameters"] = cloneAnyMap(evaluation.Metadata)
+		}
 		records = append(records, modelcatalog.EvaluationRecord{
 			ID:    fmt.Sprintf("operator/%d/%d/%s", modelIndex, evaluationIndex, sanitizeCatalogID(card.Name)),
 			Model: card.Name, Metrics: metrics, Status: "available", MeasuredAt: evaluation.MeasuredAt,
-			Subject: modelcatalog.EvaluationSubject{Parameters: cloneAnyMap(evaluation.Metadata)},
+			Subject: subject,
 			Evidence: modelcatalog.EvaluationEvidence{
 				Provenance: "operator", Verification: "claimed", Source: evaluation.Source, Redistributable: true,
 			},

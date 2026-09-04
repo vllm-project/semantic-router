@@ -1,0 +1,12 @@
+- id: huggingface/smollm3-3b-thinking-model-card@1.0.0
+  model: huggingface/smollm3-3b
+  subject:
+    variant: SmolLM3 3B
+    harness: LightEval
+    shot_count: 0
+    thinking_mode: true
+    source_kind: official_model_card
+  metrics:
+    idavidrein/gpqa-diamond@1.0.0#accuracy: 0.417
+  status: available
+  evidence: {provenance: vendor_claimed, verification: claimed, source: https://huggingface.co/HuggingFaceTB/SmolLM3-3B, redistributable: true}

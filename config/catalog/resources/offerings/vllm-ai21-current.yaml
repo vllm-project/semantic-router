@@ -1,0 +1,42 @@
+- id: vllm/jamba-mini-1.6@1.0.0
+  provider: vllm
+  model: ai21/jamba-mini-1.6
+  provider_model_id: ai21labs/AI21-Jamba-Mini-1.6
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/ai21labs/AI21-Jamba-Mini-1.6}
+- id: vllm/jamba-large-1.6@1.0.0
+  provider: vllm
+  model: ai21/jamba-large-1.6
+  provider_model_id: ai21labs/AI21-Jamba-Large-1.6
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/ai21labs/AI21-Jamba-Large-1.6}
+- id: vllm/jamba-mini-1.7@1.0.0
+  provider: vllm
+  model: ai21/jamba-mini-1.7
+  provider_model_id: ai21labs/AI21-Jamba-Mini-1.7
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/ai21labs/AI21-Jamba-Mini-1.7}
+- id: vllm/jamba-large-1.7@1.0.0
+  provider: vllm
+  model: ai21/jamba-large-1.7
+  provider_model_id: ai21labs/AI21-Jamba-Large-1.7
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/ai21labs/AI21-Jamba-Large-1.7}
+- id: vllm/jamba2-mini@1.0.0
+  provider: vllm
+  model: ai21/jamba2-mini
+  provider_model_id: ai21labs/AI21-Jamba2-Mini
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/ai21labs/AI21-Jamba2-Mini}
+- id: vllm/jamba-reasoning-3b@1.0.0
+  provider: vllm
+  model: ai21/jamba-reasoning-3b
+  provider_model_id: ai21labs/AI21-Jamba-Reasoning-3B
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/ai21labs/AI21-Jamba-Reasoning-3B}

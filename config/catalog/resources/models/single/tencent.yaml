@@ -1,0 +1,18 @@
+- id: tencent/hunyuan-a13b-instruct
+  display_name: Hunyuan A13B Instruct
+  description: Open-weight hybrid-reasoning MoE model with 13B active parameters and 256K context.
+  kind: physical
+  publisher: Tencent
+  presentation: {logo: package:tencent, monogram: H, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/tencent/Hunyuan-A13B-Instruct, license: Tencent-Hunyuan-A13B}
+  family: hunyuan
+  parameter_size: 80B (13B active)
+  released_at: 2025-06-27
+  reasoning_family: hunyuan
+  lifecycle: active
+  limits: {context_window_size: 262144}
+  capabilities: [chat, reasoning, tools, long_context]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: Tencent Hunyuan, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/tencent/Hunyuan-A13B-Instruct}
+  tags: [open_weights, hybrid_reasoning, moe, efficient]

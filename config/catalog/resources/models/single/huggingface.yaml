@@ -1,0 +1,33 @@
+- id: huggingface/smollm3-3b
+  display_name: SmolLM3 3B
+  description: Fully open compact multilingual model with hybrid reasoning, tools, and long context.
+  kind: physical
+  publisher: Hugging Face
+  presentation: {logo: package:huggingface, monogram: S, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/HuggingFaceTB/SmolLM3-3B, license: Apache-2.0}
+  family: smollm3
+  parameter_size: 3B
+  lifecycle: active
+  limits: {context_window_size: 65536}
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities: {input: [text], output: [text]}
+  reasoning_family: smollm3
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: Hugging Face, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/HuggingFaceTB/SmolLM3-3B}
+  tags: [open_weights, fully_open, multilingual, efficient, hybrid_reasoning]
+- id: huggingface/smollm2-1.7b-instruct
+  display_name: SmolLM2 1.7B Instruct
+  description: Previous-generation compact instruction model for on-device and constrained deployments.
+  kind: physical
+  publisher: Hugging Face
+  presentation: {logo: package:huggingface, monogram: S, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/HuggingFaceTB/SmolLM2-1.7B-Instruct, license: Apache-2.0}
+  family: smollm2
+  parameter_size: 1.7B
+  lifecycle: active
+  limits: {context_window_size: 8192}
+  capabilities: [chat, tools, structured_output]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: Hugging Face, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/HuggingFaceTB/SmolLM2-1.7B-Instruct}
+  tags: [open_weights, fully_open, efficient, edge, previous_generation]

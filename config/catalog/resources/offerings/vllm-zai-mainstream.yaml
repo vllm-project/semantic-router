@@ -1,0 +1,14 @@
+- id: vllm/glm-4.5v@1.0.0
+  provider: vllm
+  model: zai/glm-4.5v
+  provider_model_id: zai-org/GLM-4.5V
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/zai-org/GLM-4.5V}
+- id: vllm/glm-4-32b-0414@1.0.0
+  provider: vllm
+  model: zai/glm-4-32b-0414
+  provider_model_id: zai-org/GLM-4-32B-0414
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/zai-org/GLM-4-32B-0414}

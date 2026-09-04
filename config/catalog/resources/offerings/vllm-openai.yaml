@@ -1,0 +1,14 @@
+- id: vllm/gpt-oss-20b@1.0.0
+  provider: vllm
+  model: openai/gpt-oss-20b
+  provider_model_id: openai/gpt-oss-20b
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/openai/gpt-oss-20b}
+- id: vllm/gpt-oss-120b@1.0.0
+  provider: vllm
+  model: openai/gpt-oss-120b
+  provider_model_id: openai/gpt-oss-120b
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/openai/gpt-oss-120b}

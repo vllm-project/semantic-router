@@ -1,0 +1,42 @@
+- id: vllm/yi-1.5-6b-chat@1.0.0
+  provider: vllm
+  model: 01ai/yi-1.5-6b-chat
+  provider_model_id: 01-ai/Yi-1.5-6B-Chat
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/01-ai/Yi-1.5-6B-Chat}
+- id: vllm/yi-1.5-9b-chat@1.0.0
+  provider: vllm
+  model: 01ai/yi-1.5-9b-chat
+  provider_model_id: 01-ai/Yi-1.5-9B-Chat
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/01-ai/Yi-1.5-9B-Chat}
+- id: vllm/yi-coder-1.5b-chat@1.0.0
+  provider: vllm
+  model: 01ai/yi-coder-1.5b-chat
+  provider_model_id: 01-ai/Yi-Coder-1.5B-Chat
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/01-ai/Yi-Coder-1.5B-Chat}
+- id: vllm/yi-coder-9b-chat@1.0.0
+  provider: vllm
+  model: 01ai/yi-coder-9b-chat
+  provider_model_id: 01-ai/Yi-Coder-9B-Chat
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/01-ai/Yi-Coder-9B-Chat}
+- id: vllm/yi-vl-6b@1.0.0
+  provider: vllm
+  model: 01ai/yi-vl-6b
+  provider_model_id: 01-ai/Yi-VL-6B
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/01-ai/Yi-VL-6B}
+- id: vllm/yi-vl-34b@1.0.0
+  provider: vllm
+  model: 01ai/yi-vl-34b
+  provider_model_id: 01-ai/Yi-VL-34B
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/01-ai/Yi-VL-34B}

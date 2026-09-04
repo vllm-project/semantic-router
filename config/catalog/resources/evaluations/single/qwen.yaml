@@ -1,0 +1,80 @@
+- id: qwen/qwen3.5-9b-model-card@1.0.0
+  model: qwen/qwen3.5-9b
+  subject:
+    variant: Qwen3.5-9B
+    source_kind: official_model_card
+  metrics:
+    tiger-ai-lab/mmlu-pro@1.0.0#accuracy: 0.825
+    idavidrein/gpqa-diamond@1.0.0#accuracy: 0.817
+  status: available
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Qwen/Qwen3.5-9B
+    redistributable: true
+- id: qwen/qwen3.5-122b-a10b-model-card@1.0.0
+  model: qwen/qwen3.5-122b-a10b
+  subject:
+    variant: Qwen3.5-122B-A10B
+    source_kind: official_model_card
+    hle_mode: chain_of_thought
+  metrics:
+    tiger-ai-lab/mmlu-pro@1.0.0#accuracy: 0.867
+    idavidrein/gpqa-diamond@1.0.0#accuracy: 0.866
+    cais/humanitys-last-exam@1.0.0#accuracy: 0.253
+    swe-bench/verified@1.0.0#resolved: 0.720
+  status: available
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Qwen/Qwen3.5-122B-A10B
+    redistributable: true
+- id: qwen/qwen3.6-27b-model-card@1.0.0
+  model: qwen/qwen3.6-27b
+  subject:
+    variant: Qwen3.6-27B
+    source_kind: official_model_card
+  metrics:
+    tiger-ai-lab/mmlu-pro@1.0.0#accuracy: 0.862
+    idavidrein/gpqa-diamond@1.0.0#accuracy: 0.878
+    cais/humanitys-last-exam@1.0.0#accuracy: 0.240
+    swe-bench/verified@1.0.0#resolved: 0.772
+  status: available
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Qwen/Qwen3.6-27B
+    redistributable: true
+- id: qwen/qwen3.6-35b-a3b-model-card@1.0.0
+  model: qwen/qwen3.6-35b-a3b
+  subject:
+    variant: Qwen3.6-35B-A3B
+    source_kind: official_model_card
+  metrics:
+    tiger-ai-lab/mmlu-pro@1.0.0#accuracy: 0.852
+    cais/humanitys-last-exam@1.0.0#accuracy: 0.214
+    swe-bench/verified@1.0.0#resolved: 0.734
+  status: available
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Qwen/Qwen3.6-35B-A3B
+    redistributable: true
+- id: qwen/qwen3.8-max-model-card@1.0.0
+  model: qwen/qwen3.8-max
+  subject:
+    variant: Qwen3.8-Max
+    reasoning_effort: xhigh
+    hle_mode: no_tools
+    terminal_harness: Claude Code
+    source_kind: official_model_card
+  metrics:
+    idavidrein/gpqa-diamond@1.0.0#accuracy: 0.926
+    cais/humanitys-last-exam@1.0.0#accuracy: 0.436
+    harbor/terminal-bench@2.1.0#resolved: 0.866
+  status: available
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Qwen/Qwen3.8-2.4T-A95B
+    redistributable: true

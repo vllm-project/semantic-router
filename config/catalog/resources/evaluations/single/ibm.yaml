@@ -1,0 +1,36 @@
+- id: ibm/granite-4.2-3b-model-card@1.0.0
+  model: ibm/granite-4.2-3b
+  subject:
+    variant: Granite-4.2-3B
+    thinking_mode: default
+    source_kind: official_model_card
+  metrics:
+    tiger-ai-lab/mmlu-pro@1.0.0#accuracy: 0.6784
+  status: available
+  evidence: {provenance: vendor_claimed, verification: claimed, source: https://huggingface.co/ibm-granite/granite-4.2-3b, redistributable: true}
+- id: ibm/granite-4.2-8b-model-card@1.0.0
+  model: ibm/granite-4.2-8b
+  subject:
+    variant: Granite-4.2-8B
+    thinking_mode: default
+    terminal_harness: NeMo Evaluator SDK
+    source_kind: official_model_card
+  metrics:
+    tiger-ai-lab/mmlu-pro@1.0.0#accuracy: 0.7404
+    swe-bench/verified@1.0.0#resolved: 0.4767
+    harbor/terminal-bench@2.1.0#resolved: 0.2056
+  status: available
+  evidence: {provenance: vendor_claimed, verification: claimed, source: https://huggingface.co/ibm-granite/granite-4.2-8b, redistributable: true}
+- id: ibm/granite-4.2-30b-model-card@1.0.0
+  model: ibm/granite-4.2-30b
+  subject:
+    variant: Granite-4.2-30B
+    thinking_mode: default
+    terminal_harness: NeMo Evaluator SDK
+    source_kind: official_model_card
+  metrics:
+    tiger-ai-lab/mmlu-pro@1.0.0#accuracy: 0.776
+    swe-bench/verified@1.0.0#resolved: 0.57
+    harbor/terminal-bench@2.1.0#resolved: 0.2924
+  status: available
+  evidence: {provenance: vendor_claimed, verification: claimed, source: https://huggingface.co/ibm-granite/granite-4.2-30b, redistributable: true}

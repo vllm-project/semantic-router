@@ -48,10 +48,61 @@ and a recommended model reference is not a complete built-in model card.
 The old Dashboard therefore contained 40 provider presets, while the Router
 had seven hard-coded runtime types and the packaged catalog had no
 general-purpose physical-model registry. The implemented catalog takes the
-union of those identities and currently compiles 43 providers, three protocol
-definitions, five virtual Model Cards, and ten benchmark definitions. Support
-tier and conformance remain explicit, so inclusion is not flattened into a
-native-support claim.
+union of those identities and compiles 43 providers, three protocol
+definitions, 363 physical Model Cards, five virtual Model Cards, 392 verified
+or claimed offerings, six benchmark definitions, and 46 source-backed
+evaluation records. Nineteen models currently satisfy the default index's
+coverage policy. Support tier, lifecycle, and conformance remain explicit, so
+inclusion is not flattened into a native-support claim.
+
+### Implemented physical-model catalog
+
+The first catalog population covers models already named by maintained recipes
+and examples, then adds a broad current-and-previous-generation set across
+major API publishers and open-weight runtimes. It is not a claim to mirror
+every model string exposed by an aggregator. A model is built-in only when it
+has a complete Model Card and at least one provider offering; GPT-6 Astra is
+intentionally absent.
+
+| Publisher | Generations and families represented | Models |
+| --- | --- | ---: |
+| Alibaba Cloud | Qwen2.5 and Qwen3 common sizes; QwQ; Qwen Coder/VL/Next; Qwen3.5–3.8 API and open-weight variants | 57 |
+| OpenAI | GPT-4.1/4o; GPT-5 through 5.6; Pro and Codex variants; o1/o3/o4-mini; GPT-OSS | 36 |
+| Google | Gemini 1.5 through 3.8; Gemma 2, 3, 3n, and 4 | 28 |
+| Mistral AI | Mistral 7B/NeMo/Small/Medium/Large; Mixtral; Ministral; Devstral; Magistral; Codestral; Pixtral | 24 |
+| DeepSeek | V2/V2.5/V3/V4; Coder V2; R1 and its Qwen/Llama distillations; Prover, VL2, and Janus | 23 |
+| Anthropic | Claude 3/3.5/3.7; Haiku/Sonnet/Opus 4–5; Fable 5/5.1; Mythos | 21 |
+| Meta | Llama 2, Llama 3–4 text/vision variants, and Code Llama | 18 |
+| NVIDIA | Llama Nemotron and Nemotron 3/3.5 Nano, Mini, Super, Ultra, Lightning, Omni, and VL variants | 15 |
+| Cohere | Command R/R+/R7B/A/A+/Vision/Reasoning and Aya 23/Expanse variants | 12 |
+| Microsoft | Phi-3/3.5 and Phi-4 text, MoE, vision, mini, multimodal, and reasoning variants | 12 |
+| Moonshot AI | Kimi K2–K3, Kimi Dev/Linear/VL, and Moonlight | 12 |
+| Z.ai | GLM-4/4.5/4.5V through 5.3, including Air and Flash variants | 12 |
+| Technology Innovation Institute | Falcon3, Falcon H1/H1R, and Falcon Mamba families | 11 |
+| MiniMax | Text/VL-01, M1, M2 through M3, and H3 | 10 |
+| OpenBMB | MiniCPM3 through 5 and MiniCPM-V/O multimodal and reasoning variants | 9 |
+| Shanghai AI Laboratory | InternLM2.5/3 and Intern-S/S2 models | 9 |
+| 01.AI | Yi, Yi 1.5, Yi Coder, and Yi VL | 8 |
+| AI21 Labs | Jamba 1.5 through 2 and Jamba Reasoning | 8 |
+| IBM | Granite 3.3, Granite 4 H, and Granite 4.2 3B/8B/30B | 6 |
+| xAI | Grok 4, 4.1, 4.3, 4.5, 4.6, and 4.20 | 6 |
+| Ai2 | OLMo 2, OLMo 3, and OLMo 3.1 Instruct/Think variants | 5 |
+| Amazon | Nova Micro, Lite, Pro, Premier, and Nova 2 Lite | 5 |
+| LG AI Research | EXAONE 3.5 and EXAONE 4.0 1.2B/32B | 3 |
+| Xiaomi | MiMo V2, V2.5, and V2.5 Pro | 3 |
+| Baidu | ERNIE 4.5 21B A3B and 300B A47B | 2 |
+| Hugging Face | SmolLM2 and SmolLM3 | 2 |
+| StepFun | Step 3.5 Flash and 3.7 Flash | 2 |
+| ByteDance Seed | Seed OSS 36B Instruct | 1 |
+| Databricks | DBRX Instruct | 1 |
+| Snowflake | Arctic Instruct | 1 |
+| Tencent | Hunyuan A13B Instruct | 1 |
+
+Every row carries publisher-owned presentation metadata, distribution source
+and license where applicable, capabilities, modalities, context when verified,
+reasoning behavior where the Router has a matching projection, lifecycle, and
+offering evidence. Evaluation coverage is independent: a model remains visible
+when no comparable public score has been located.
 
 ## Goals
 
@@ -79,8 +130,8 @@ native-support claim.
 - It does not redistribute third-party benchmark data without permission.
 - It does not require every new model to have a composite score on release day.
   Missing evidence remains explicitly unavailable.
-- This architecture change does not add a new physical model. The first
-  representative physical-model Day-0 change is intentionally a separate PR.
+- GPT-6 Astra is intentionally excluded. It is the separate representative
+  Day-0 contribution after this architecture and baseline-catalog change.
 
 ## Design principles
 
@@ -139,11 +190,11 @@ none owns an independent provider or model inventory.
 | --- | --- | --- |
 | `ProtocolDefinition` | Versioned wire-format identity, declared operations and paths, and protocol capabilities | Provider credentials, model context limits, prices |
 | `ProviderDefinition` | Canonical provider identity, auth, supported protocol-operation subset, path and non-secret header defaults, reasoning transport, support tier, conformance, display name, and logo metadata | Credentials, request-facing aliases, model intelligence |
-| `ModelCard` | Canonical model identity, family/revision, release and knowledge dates, input/output limits, modalities, capabilities, reasoning behavior reference, lifecycle | Endpoint URL, credentials, provider price |
+| `ModelCard` | Canonical model identity, publisher/presentation/distribution, family/revision, release and knowledge dates, input/output limits, modalities, capabilities, reasoning behavior reference, lifecycle | Endpoint URL, credentials, provider price |
 | `OfferingDefinition` | A provider/model pairing, provider model ID, supported protocols, parameter restrictions, lifecycle, verification, and optional dated pricing | Provider-independent model facts, endpoint credentials, routing alias |
 | `ReasoningFamilyDefinition` | Request projection type/parameter plus effort vocabulary and default | Operator credentials, quality ranking |
 | `BenchmarkDefinition` | Benchmark/version identity, domain, source, and metric direction/range/units | A model's result |
-| `EvaluationRecord` | Exact model subject, raw measurements, date, status, source/artifact, provenance, verification, and redistribution permission | Aggregation policy |
+| `EvaluationRecord` | Exact model subject, raw measurements, optional measurement date, status, source/artifact, provenance, verification, and redistribution permission | Aggregation policy |
 | `IndexDefinition` | Versioned components, weights, normalization, missing-data policy, scale | Raw benchmark output |
 | `IndexResult` | Computed score, domain subscores, coverage, per-component status/value, and source-record lineage | Mutable operator preference |
 
@@ -159,6 +210,9 @@ none owns an independent provider or model inventory.
 - A model revision, quantization, runtime, and reasoning effort are part of an
   evaluation subject. Results from materially different subjects are not
   silently pooled.
+- A virtual model role's `recommended_pool` is not a foreign-key relation. It
+  may recommend a built-in Model Card or an operator-defined model that only
+  exists in deployment configuration.
 
 ## User-facing configuration
 
@@ -265,6 +319,16 @@ providers:
 routing:
   modelCards:
     - name: private-reasoner
+      display_name: Private Reasoner AWQ
+      publisher: Example Research
+      presentation:
+        logo: https://models.example/reasoner.svg
+        monogram: R
+        monochrome: false
+      distribution:
+        type: open_weights
+        source: https://models.example/reasoner
+        license: Apache-2.0
       description: Internal AWQ deployment
       context_window_size: 131072
       capabilities: [chat, tools, structured_output, reasoning]
@@ -288,6 +352,11 @@ silently diverge by alias. The old global
 `providers.defaults.reasoning_families` registry and per-model
 `reasoning_family` scalar are removed.
 
+The publisher, presentation, and distribution blocks above are optional. They
+exist for private or newly released models whose identity and logo are not in
+the repository catalog; a minimal custom chat model still needs only the
+provider binding. These fields remain metadata and never carry credentials.
+
 A metadata-only card whose name is a LoRA declared by a bound model remains
 valid. It inherits that base model's provider bindings and is not interpreted
 as a built-in catalog override. Any other card in a complete runtime config
@@ -306,7 +375,7 @@ routing:
       evaluations:
         - benchmark: idavidrein/gpqa-diamond@1.0.0
           metrics:
-            pass_at_1: 0.72
+            accuracy: 0.72
         - benchmark: acme/support-bench@1
           metrics:
             resolution_rate: 0.82
@@ -348,7 +417,11 @@ logos, provider forms, or scattered path constants. Initial definitions cover:
 | `openai/responses@1` | `POST /v1/responses`; `GET /v1/models` | Typed input/output items, tools, reasoning, and streaming events |
 | `anthropic/messages@1` | `POST /v1/messages`; `GET /v1/models` | Messages/content blocks, tool use, usage, stop reasons |
 
-A protocol operation defines the canonical method, path, and wire contract; it
+A protocol defines its default API base path, and each operation defines the
+canonical method, full path, and wire contract. A configured provider
+`base_url` is a complete API root: its path replaces the protocol default base
+path before the operation suffix is appended. This prevents version segments
+from being duplicated for gateways such as `/v1beta/openai`. The definition
 does not claim that every provider implementing that protocol exposes every
 operation. Each provider therefore declares an explicit, fully qualified
 `supported_operations` subset such as
@@ -361,10 +434,12 @@ Code adapters remain necessary only
 for true semantic differences such as cloud signing, deployment-scoped URL
 construction, event translation, or non-compatible error behavior.
 
-`reasoning_transport` is internal catalog data, not user YAML. Its initial
-reusable modes are `chat_template_kwargs`, `top_level_effort`, and
-`deepseek_thinking`. Runtime dispatch selects these modes from the Provider ID;
-it never infers provider behavior from an endpoint hostname.
+`reasoning_transport` is internal catalog data, not user YAML. Its reusable
+modes are `chat_template_kwargs`, `top_level_effort`, `thinking_object`, and
+`deepseek_thinking`. The generic `thinking_object` mode projects a model's
+reasoning switch into `thinking.type`; `deepseek_thinking` adds the provider's
+effort field to that shape. Runtime dispatch selects these modes from the
+Provider ID; it never infers provider behavior from an endpoint hostname.
 
 This separates three questions that are currently conflated:
 
@@ -408,8 +483,10 @@ The compiler performs the following deterministic stages:
 
 1. The build generator loads repository-owned protocol, provider, model,
    offering, reasoning, benchmark, evaluation, and index resources.
-2. It validates JSON Schema plus canonical IDs, versions, references,
+2. It validates JSON Schema plus canonical IDs, versions, required references,
    uniqueness, URL safety, index weights, normalization parameters, and cycles.
+   Virtual-model pool recommendations are deliberately not resolved because
+   they may name operator-defined models.
 3. It computes built-in index results and emits byte-identical Go, CLI,
    Dashboard, and website projections guarded by a generated-diff check.
 4. The Router loads the embedded snapshot and then reads
@@ -425,9 +502,10 @@ The compiler performs the following deterministic stages:
 8. It publishes one immutable `EffectiveRegistry` to Router runtime consumers;
    generated product projections continue to use the same validated snapshot.
 
-Failures are path-specific. Unknown references, duplicate IDs, cycles, invalid
-weights/normalizations, out-of-range metrics, unsupported protocol bindings,
-and invalid built-in overrides fail generation or startup before traffic starts.
+Failures are path-specific. Unknown required references, duplicate IDs, cycles,
+invalid weights/normalizations, out-of-range metrics, unsupported protocol
+bindings, and invalid built-in overrides fail generation or startup before
+traffic starts.
 
 ## Evaluation data model
 
@@ -436,11 +514,12 @@ and invalid built-in overrides fail generation or startup before traffic starts.
 Each metric declares its unit, valid range, and direction independently:
 
 ```yaml
-- id: terminal-bench/terminal-bench@2.1.0
-  display_name: Terminal-Bench v2.1
-  domain: coding
+- id: harbor/terminal-bench@2.1.0
+  display_name: Terminal-Bench 2.1
+  domain: agentic_systems
+  source: https://github.com/harbor-framework/terminal-bench-2-1
   metrics:
-    - id: pass_at_1
+    - id: resolved
       unit: proportion
       range: [0, 1]
       direction: higher_is_better
@@ -453,7 +532,7 @@ a new benchmark version.
 ### Evaluation records
 
 An evaluation record freezes the canonical model, raw versioned metric IDs and
-values, status, measurement date, and evidence. Its typed subject can record
+values, status, an optional measurement date, and evidence. Its typed subject can record
 model revision, offering, runtime/version, quantization, precision, tensor
 parallelism, protocol, reasoning effort, and additional material parameters.
 Evidence records provenance, verification, optional source/artifact, and an
@@ -514,57 +593,57 @@ is therefore distinguishable from an unavailable score.
 
 ## Default intelligence index
 
-The default model-intelligence algorithm is
-`vllm-sr/intelligence@1.0.0`, derived from the publicly documented
-[Artificial Analysis Intelligence Index v4.1.1 methodology](https://artificialanalysis.ai/methodology/intelligence-benchmarking).
-It is a model-quality index, not an efficiency or routing-utility score.
+The default algorithm is the repository-owned, fully specified
+`vllm-sr/intelligence@1.0.0`, displayed as the **vLLM-SR Published
+Intelligence Index**. It is a model-intelligence index, not an efficiency or
+routing-utility score.
+
+The default aggregation follows the useful pattern demonstrated by
+[Artificial Analysis](https://artificialanalysis.ai/models): keep a versioned
+multi-benchmark intelligence composite separate from price, latency,
+throughput, openness, and context metadata, and always expose the component
+measurements. The normalized weighted-mean algorithm is the default, while the
+exact benchmark version, weights, and coverage threshold remain versioned and
+replaceable. It does not copy that site's private tasks or data: vLLM-SR's
+initial index is a fully open calculation over five public benchmark identities
+whose values link to an official model source, an explicit official
+cross-vendor comparison, or a vLLM-SR run.
 
 | Domain | Component | Weight | Normalization |
 | --- | --- | ---: | --- |
-| Agents | GDPval-AA v2 | 20% | `clamp((Elo - 500) / 2000, 0, 1)` |
-| Agents | τ³-Banking | 14% | Identity on a validated 0–1 result |
-| Coding | Terminal-Bench v2.1 | 16% | Identity on a validated 0–1 result |
-| Coding | SciCode | 8% | Identity on a validated 0–1 result |
-| General | AA-LCR | 6% | Identity on a validated 0–1 result |
-| General | AA-Omniscience accuracy | 8% | Identity on a validated 0–1 result |
-| General | AA-Omniscience non-hallucination rate | 4% | Identity on a validated 0–1 result |
-| Scientific reasoning | Humanity's Last Exam | 12% | Identity on a validated 0–1 result |
-| Scientific reasoning | GPQA Diamond | 6% | Identity on a validated 0–1 result |
-| Scientific reasoning | CritPt | 6% | Identity on a validated 0–1 result |
+| General reasoning | MMLU-Pro | 20% | Identity on a validated 0–1 accuracy |
+| Scientific reasoning | GPQA Diamond | 20% | Identity on a validated 0–1 accuracy |
+| Frontier reasoning | Humanity's Last Exam | 20% | Identity on a validated 0–1 accuracy |
+| Software engineering | SWE-bench Verified | 20% | Identity on a validated 0–1 resolved rate |
+| Agentic systems | Terminal-Bench 2.1 | 20% | Identity on a validated 0–1 resolved rate |
 
-The weights total 100%. The published methodology groups those components into
-Agents 34%, Coding 24%, General 18%, and Scientific Reasoning 24%; vLLM-SR
-retains the same groups for its per-domain diagnostic display:
+The benchmark set is intentionally small, recognizable, and independently
+reproducible. It balances knowledge/reasoning with real software and terminal
+work rather than hiding all capabilities behind one vendor score.
+
+The headline result uses `require_coverage` at 60%. A model therefore needs at
+least three of the five equally weighted measurements before it receives a
+score. Available weights are renormalized and the exact coverage remains next
+to the score:
 
 ```text
-intelligence = 100 * (
-    0.20 * normalize(gdpval_aa_v2_elo)
-  + 0.14 * tau3_banking
-  + 0.16 * terminal_bench_v2_1
-  + 0.08 * scicode
-  + 0.06 * aa_lcr
-  + 0.08 * aa_omniscience_accuracy
-  + 0.04 * aa_omniscience_non_hallucination
-  + 0.12 * humanitys_last_exam
-  + 0.06 * gpqa_diamond
-  + 0.06 * critpt
-)
+coverage = 0.20 * count(available components)
+intelligence = 100 * sum(0.20 * available value) / coverage
 ```
 
-The built-in default uses `require_all` for the comparable headline score.
-Models without all components display `Not yet measured`; domain and component
-availability remains explicit in the generated result. Alternative index
-definitions are repository catalog extensions rather than ordinary user-config
-knobs.
-
-An official third-party composite, when lawfully retrieved, is stored under a
-separate identity such as
-`external/artificial-analysis/intelligence@4.1.1`. A locally computed
-vLLM-SR result is not labeled as an official external score. The
-[Artificial Analysis data API documentation](https://artificialanalysis.ai/data-api/docs)
-is the integration contract for authorized imports; null values remain null,
-and attribution and redistribution terms are enforced. The open-source catalog
-must not scrape or bulk-copy restricted benchmark data.
+This first release accepts model-vendor model cards and first-party technical
+reports as `vendor_claimed` evidence, explicit comparisons published by another
+model vendor as `third_party` evidence, and vLLM-SR reproduced runs. A discovery
+site may help identify a benchmark, but its table is not a source: every stored
+number must link directly to a redistributable official result or a reproduced
+artifact. Vendor-published results are directional rather than controlled
+reproductions because prompt, tool, and agent harnesses can differ. The record
+therefore preserves the exact reported variant, reasoning effort, tool mode,
+and harness metadata and the UI labels its provenance; a reproduced record must
+use a frozen benchmark protocol and artifact digest. Models below 60% display
+`Not yet measured`; component availability and source lineage remain visible.
+Alternative index definitions are repository extensions rather than ordinary
+user-config knobs.
 
 Future multilingual and multimodal indices remain separate because their task
 and coverage definitions differ from the default text intelligence index.
@@ -593,6 +672,14 @@ factors are renormalized. An operator rating can be represented explicitly as
 evidence and does not enter the public default leaderboard.
 
 ## Dashboard experience
+
+The Dashboard gains a dedicated **Model Hub** alongside the existing model
+configuration page. Model Hub and the public website share the generated
+catalog snapshot and information hierarchy: publisher logo, model identity,
+distribution, lifecycle, capabilities, context, offerings, benchmark columns,
+headline score, coverage, and source-backed details. The Dashboard remains the
+interactive surface; the website is a static build projection, not a second
+dataset.
 
 The Add Model workflow keeps provider cards and logos. Its data source changes:
 
@@ -626,16 +713,16 @@ review rather than adding that policy to user configuration.
 
 ## Website model catalog and leaderboard
 
-Add a public **Models** page generated from a sanitized catalog snapshot. It has
-three connected views:
+Add a public **Models** page generated from the same sanitized catalog snapshot
+used by Dashboard Model Hub. It has three connected views:
 
 ### Provider support matrix
 
 Columns include provider identity, support tier, category, auth strategy,
 supported protocol operations, conformance status, and last verification date.
 Compatibility presets are labeled as such rather than presented as native
-adapters. Presentation metadata still drives the richer Dashboard cards; the
-website uses the provider monogram in its dense table.
+adapters. Presentation metadata drives both surfaces, with a catalog monogram
+as the reliable fallback when a packaged or approved remote logo cannot load.
 
 ### Built-in model table
 
@@ -653,10 +740,10 @@ missing-data policy, source methodology, component metric IDs, and weights.
 The generated snapshot additionally retains domain subscores, per-component
 values/status, and evaluation-record lineage for future presentation views.
 
-The current UI filters providers by tier and models by kind, with search on
-both tables. The generator fails on unresolved references, invalid scores or
-normalizations, unsafe URLs, stale generated output, or publication of records
-without redistribution permission.
+The UI filters providers by tier and models by kind, publisher, and
+distribution, with search on both tables. The generator fails on unresolved
+required references, invalid scores or normalizations, unsafe URLs, stale
+generated output, or publication of records without redistribution permission.
 
 The website and Dashboard consume the same generated snapshot; neither owns a
 parallel provider or model list.
@@ -760,7 +847,14 @@ existing hotspots:
 config/catalog/
   catalog.yaml      # versioned source manifest and resource file list
   schemas/          # source, resource, and generated-snapshot schemas
-  resources/        # provider, protocol, model, offering, reasoning, evaluation, index data
+  resources/
+    models/single/  # deployable proprietary and open-weight Model Cards
+    models/virtual/ # recipe-backed logical Model Cards
+    offerings/      # provider/model bindings
+    evaluations/single/  # source-backed physical-model results
+    evaluations/virtual/ # recipe evaluation results
+    providers.yaml, protocols.yaml, reasoning-families.yaml
+    benchmarks.yaml, indices.yaml
 
 src/semantic-router/pkg/catalog/
   compiler.go       # merge, binding, and field provenance
@@ -773,6 +867,8 @@ tools/catalog/
 
 dashboard/backend/handlers/
   model_catalog.go + model_catalog_contract.go
+
+dashboard/frontend/src/pages/ModelHubPage.tsx
 
 website/
   static/model-catalog/catalog.json + src/pages/models.tsx
@@ -792,13 +888,15 @@ Protocol and provider adapters remain in narrow runtime packages.
 | 5 | Dashboard catalog API/Add Model migration and website Models page | Logos/forms and public support/ranking tables consume generated data |
 | 6 | Day-0 contributor guide and repository gates | A compatible model/provider change has one authored source path |
 
-The architecture PR deliberately contains no new physical model. A separate
-follow-up adds one representative model as the reviewable Day-0 example.
+The architecture PR also establishes the initial physical-model baseline. A
+separate follow-up adds GPT-6 Astra as the focused, reviewable Day-0 example.
 
 ## Acceptance criteria
 
 - One canonical resource graph produces Router, CLI, Dashboard, and website
   views.
+- Single and virtual Model Cards, plus their evaluation records, remain in
+  separate focused directories.
 - `providers.models[].catalog` resolves to a built-in or handwritten
   `routing.modelCards[].name`; request aliases never act as built-in card
   identities.
@@ -807,6 +905,7 @@ follow-up adds one representative model as the reviewable Day-0 example.
   configuration.
 - Catalog versions and digests stay out of ordinary YAML.
 - Provider logos remain visible and are catalog-managed.
+- Dashboard Model Hub and website Models render the same generated data.
 - The public support matrix differentiates native, compatible, and runtime
   integrations.
 - The default intelligence index is versioned, reproducible, and exposes all
@@ -840,12 +939,16 @@ follow-up adds one representative model as the reviewable Day-0 example.
   appears in ordinary user YAML.
 - The website publishes built-in support and rankings from the same sanitized
   catalog snapshot used by the Dashboard.
+- Virtual recommended pools may include operator-defined models outside the
+  built-in catalog.
 
 ## References
 
-- [Artificial Analysis Intelligence Benchmarking Methodology](https://artificialanalysis.ai/methodology/intelligence-benchmarking)
-- [Artificial Analysis Models](https://artificialanalysis.ai/models)
-- [Artificial Analysis Data API](https://artificialanalysis.ai/data-api/docs)
+- [MMLU-Pro](https://github.com/TIGER-AI-Lab/MMLU-Pro)
+- [GPQA](https://arxiv.org/abs/2311.12022)
+- [Humanity's Last Exam](https://agi.safe.ai/)
+- [SWE-bench](https://github.com/SWE-bench/SWE-bench)
+- [Terminal-Bench 2.1](https://github.com/harbor-framework/terminal-bench-2-1)
 - [Unified Config Contract v0.3](./unified-config-contract-v0-3)
 - [Multi-Protocol Adapter Architecture](./multi-protocol-adaptor)
 - [Evaluation Plane](../benchmarking/evaluation-plane)

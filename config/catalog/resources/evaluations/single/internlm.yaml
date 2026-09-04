@@ -1,0 +1,13 @@
+- id: internlm/internlm3-8b-instruct-model-card@1.0.0
+  model: internlm/internlm3-8b-instruct
+  subject:
+    variant: InternLM3 8B Instruct
+    harness: OpenCompass
+    shot_count: 0
+    thinking_mode: false
+    source_kind: official_model_card
+  metrics:
+    tiger-ai-lab/mmlu-pro@1.0.0#accuracy: 0.576
+    idavidrein/gpqa-diamond@1.0.0#accuracy: 0.374
+  status: available
+  evidence: {provenance: vendor_claimed, verification: claimed, source: https://huggingface.co/internlm/internlm3-8b-instruct, redistributable: true}

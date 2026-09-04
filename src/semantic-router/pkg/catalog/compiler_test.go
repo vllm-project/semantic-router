@@ -49,6 +49,31 @@ func TestProviderLookupReturnsDefensiveDefaultHeaders(t *testing.T) {
 	}
 }
 
+func TestBuiltInEvaluationPreservesOpenSubjectMetadata(t *testing.T) {
+	registry, err := BuiltIn()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, evaluation := range registry.Evaluations() {
+		if evaluation.ID != "qwen/qwen3.8-max-model-card@1.0.0" {
+			continue
+		}
+		if evaluation.Subject["variant"] != "Qwen3.8-Max" ||
+			evaluation.Subject["terminal_harness"] != "Claude Code" {
+			t.Fatalf("benchmark-specific subject metadata was lost: %+v", evaluation.Subject)
+		}
+		evaluation.Subject["variant"] = "mutated"
+		for _, reloaded := range registry.Evaluations() {
+			if reloaded.ID == evaluation.ID && reloaded.Subject["variant"] != "Qwen3.8-Max" {
+				t.Fatalf("registry subject metadata was mutated: %+v", reloaded.Subject)
+			}
+		}
+		return
+	}
+	t.Fatal("Qwen3.8 Max evaluation is missing")
+}
+
 func TestCompileCustomRuntimeCardAndBuiltInReasoning(t *testing.T) {
 	registry, err := BuiltIn()
 	if err != nil {
@@ -121,6 +146,35 @@ func TestCompileRejectsUnverifiedCapabilityWidening(t *testing.T) {
 	}
 }
 
+func TestExplicitCustomCardMayShareBuiltInName(t *testing.T) {
+	registry, err := BuiltIn()
+	if err != nil {
+		t.Fatal(err)
+	}
+	builtIn := false
+	capabilities := []string{"chat", "operator-only-capability"}
+	effective, err := registry.Compile(CompileInput{
+		Models: []ModelAlias{{Name: "local-gpt", Catalog: "openai/gpt-5"}},
+		ModelCards: []ModelCardOverlay{{
+			Name: "openai/gpt-5", BuiltIn: &builtIn, Capabilities: &capabilities,
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	model, ok := effective.Model("local-gpt")
+	if !ok {
+		t.Fatal("custom model is missing")
+	}
+	if model.Card.Provenance["id"] != SourceOperator {
+		t.Fatalf("custom card was treated as built-in: %+v", model.Card.Provenance)
+	}
+	result := model.Indices["vllm-sr/intelligence@1.0.0"]
+	if result.Score != nil || result.Status != "missing" || len(result.Provenance) != 0 {
+		t.Fatalf("custom card inherited built-in evidence: %+v", result)
+	}
+}
+
 func TestIndexComputationPreservesMissingAndLineage(t *testing.T) {
 	registry, err := BuiltIn()
 	if err != nil {
@@ -151,6 +205,56 @@ func TestIndexComputationPreservesMissingAndLineage(t *testing.T) {
 	builtin := model.Indices["vllm-sr/intelligence@1.0.0"]
 	if builtin.Score != nil || builtin.Status != "missing" {
 		t.Fatalf("partial unrelated evidence became a headline score: %+v", builtin)
+	}
+}
+
+func TestCustomCardAcceptsOptionalPublisherPresentationAndDistribution(t *testing.T) {
+	registry, err := BuiltIn()
+	if err != nil {
+		t.Fatal(err)
+	}
+	publisher := "Acme Research"
+	presentation := ProviderPresentation{Logo: "https://models.example/acme.svg", Monogram: "A"}
+	distribution := ModelDistribution{
+		Type: "open_weights", Source: "https://models.example/acme-reasoner", License: "Apache-2.0",
+	}
+	effective, err := registry.Compile(CompileInput{
+		Models: []ModelAlias{{Name: "private", Catalog: "acme/reasoner"}},
+		ModelCards: []ModelCardOverlay{{
+			Name: "acme/reasoner", Publisher: &publisher,
+			Presentation: &presentation, Distribution: &distribution,
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	model, ok := effective.Model("private")
+	if !ok {
+		t.Fatal("compiled custom model is missing")
+	}
+	if model.Card.Card.Publisher != publisher || model.Card.Card.Presentation.Logo != presentation.Logo ||
+		model.Card.Card.Distribution.Source != distribution.Source {
+		t.Fatalf("custom card metadata was not materialized: %+v", model.Card.Card)
+	}
+	for _, field := range []string{"publisher", "presentation", "distribution"} {
+		if model.Card.Provenance[field] != SourceOperator {
+			t.Fatalf("%s provenance = %q, want operator", field, model.Card.Provenance[field])
+		}
+	}
+}
+
+func TestCustomOpenWeightsCardRequiresLicense(t *testing.T) {
+	registry, err := BuiltIn()
+	if err != nil {
+		t.Fatal(err)
+	}
+	distribution := ModelDistribution{Type: "open_weights", Source: "https://models.example/acme"}
+	_, err = registry.Compile(CompileInput{
+		Models:     []ModelAlias{{Name: "private", Catalog: "acme/private"}},
+		ModelCards: []ModelCardOverlay{{Name: "acme/private", Distribution: &distribution}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "distribution.license") {
+		t.Fatalf("expected missing license error, got %v", err)
 	}
 }
 

@@ -25,6 +25,11 @@ func usesTopLevelReasoningEffort(transport modelcatalog.ReasoningTransport) bool
 		transport == modelcatalog.ReasoningTransportDeepSeekThinking
 }
 
+func usesThinkingObjectTransport(transport modelcatalog.ReasoningTransport) bool {
+	return transport == modelcatalog.ReasoningTransportThinkingObject ||
+		transport == modelcatalog.ReasoningTransportDeepSeekThinking
+}
+
 func isDeepSeekThinkingTransport(transport modelcatalog.ReasoningTransport) bool {
 	return transport == modelcatalog.ReasoningTransportDeepSeekThinking
 }

@@ -1,0 +1,16 @@
+- id: snowflake/arctic-instruct
+  display_name: Snowflake Arctic Instruct
+  description: Enterprise-focused dense-MoE model optimized for SQL, coding, and instruction following.
+  kind: physical
+  publisher: Snowflake
+  presentation: {logo: package:snowflake, monogram: A, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/Snowflake/snowflake-arctic-instruct, license: Apache-2.0}
+  family: arctic
+  parameter_size: 480B (17B active)
+  lifecycle: active
+  limits: {context_window_size: 4096}
+  capabilities: [chat, structured_output]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: Snowflake AI Research, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/Snowflake/snowflake-arctic-instruct}
+  tags: [open_weights, enterprise, moe, coding]

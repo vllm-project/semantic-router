@@ -3527,8 +3527,10 @@ model_config:
 		})
 
 		Context("ProviderType", func() {
-			It("should return correct provider type", func() {
-				for _, t := range []string{"openai", "anthropic", "azure-openai", "bedrock", "gemini", "vertex-ai", "minimax"} {
+			It("should accept every catalog provider ID", func() {
+				providerTypes := ValidProviderTypes()
+				Expect(providerTypes).NotTo(BeEmpty())
+				for _, t := range providerTypes {
 					pt, err := (&ProviderProfile{Type: t}).ProviderType()
 					Expect(err).NotTo(HaveOccurred())
 					Expect(pt).To(Equal(t))
@@ -3556,6 +3558,13 @@ model_config:
 		})
 
 		Context("ResolveAuthHeader", func() {
+			It("should resolve auth metadata for every catalog provider ID", func() {
+				for _, providerType := range ValidProviderTypes() {
+					_, _, err := (&ProviderProfile{Type: providerType}).ResolveAuthHeader()
+					Expect(err).NotTo(HaveOccurred(), providerType)
+				}
+			})
+
 			It("should return type-specific defaults", func() {
 				h, p, err := (&ProviderProfile{Type: "openai"}).ResolveAuthHeader()
 				Expect(err).NotTo(HaveOccurred())
@@ -3612,6 +3621,10 @@ model_config:
 				Expect(err).NotTo(HaveOccurred())
 				Expect(string(transport)).To(Equal("deepseek_thinking"))
 
+				transport, err = (&ProviderProfile{Type: "zai", BaseURL: "https://private.example/v1"}).ResolveReasoningTransport()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(string(transport)).To(Equal("thinking_object"))
+
 				transport, err = (&ProviderProfile{Type: "openai-compatible", BaseURL: "https://api.openai.com/v1"}).ResolveReasoningTransport()
 				Expect(err).NotTo(HaveOccurred())
 				Expect(string(transport)).To(Equal("chat_template_kwargs"))
@@ -3654,7 +3667,8 @@ model_config:
 					{"minimax", "https://api.minimax.io", "/v1/chat/completions"},
 					{"openai", "https://api.openai.com/v1", "/v1/chat/completions"},
 					{"anthropic", "https://gateway.example.com/openai/v1", "/openai/v1/messages"},
-					{"anthropic", "https://gateway.example.com/v1beta", "/v1beta/v1/messages"},
+					{"anthropic", "https://gateway.example.com/v1beta", "/v1beta/messages"},
+					{"openai", "https://gateway.example.com/v1beta/openai", "/v1beta/openai/chat/completions"},
 					{"anthropic", "https://api.anthropic.com/v1/", "/v1/messages"},
 				} {
 					path, err := (&ProviderProfile{Type: tc.providerType, BaseURL: tc.baseURL}).ResolveCreatePath("")

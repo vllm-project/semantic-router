@@ -31,19 +31,47 @@
         "authority": {"$ref": "#/$defs/nonEmptyString"},
         "status": {"enum": ["claimed", "imported", "reproduced"]},
         "verified_at": {"type": "string", "format": "date"},
+        "source": {"type": "string", "format": "uri"},
         "asset_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
       }
+    },
+    "presentation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["logo", "monogram", "monochrome"],
+      "properties": {
+        "logo": {"$ref": "#/$defs/nonEmptyString"},
+        "monogram": {"$ref": "#/$defs/nonEmptyString"},
+        "monochrome": {"type": "boolean"}
+      }
+    },
+    "distribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "source"],
+      "properties": {
+        "type": {"enum": ["proprietary_api", "open_weights", "router_recipe"]},
+        "source": {"type": "string", "format": "uri"},
+        "license": {"$ref": "#/$defs/nonEmptyString"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"type": {"const": "open_weights"}}},
+          "then": {"required": ["license"]}
+        }
+      ]
     },
     "protocols": {
       "type": "array",
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "display_name", "wire_format", "operations", "capabilities"],
+        "required": ["id", "display_name", "wire_format", "default_base_path", "operations", "capabilities"],
         "properties": {
           "id": {"$ref": "#/$defs/protocolID"},
           "display_name": {"$ref": "#/$defs/nonEmptyString"},
           "wire_format": {"$ref": "#/$defs/nonEmptyString"},
+          "default_base_path": {"type": "string", "pattern": "^/"},
           "operations": {
             "type": "array",
             "minItems": 1,
@@ -114,7 +142,7 @@
             "additionalProperties": {"$ref": "#/$defs/nonEmptyString"}
           },
           "reasoning_transport": {
-            "enum": ["chat_template_kwargs", "top_level_effort", "deepseek_thinking"]
+            "enum": ["chat_template_kwargs", "top_level_effort", "thinking_object", "deepseek_thinking"]
           },
           "api_version_query": {"type": "boolean"},
           "auth": {
@@ -128,16 +156,7 @@
               "injected_header": {"type": "string", "minLength": 1}
             }
           },
-          "presentation": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["logo", "monogram", "monochrome"],
-            "properties": {
-              "logo": {"$ref": "#/$defs/nonEmptyString"},
-              "monogram": {"$ref": "#/$defs/nonEmptyString"},
-              "monochrome": {"type": "boolean"}
-            }
-          },
+          "presentation": {"$ref": "#/$defs/presentation"},
           "conformance": {
             "type": "object",
             "additionalProperties": false,
@@ -175,6 +194,9 @@
           "display_name",
           "description",
           "kind",
+          "publisher",
+          "presentation",
+          "distribution",
           "family",
           "lifecycle",
           "capabilities",
@@ -187,6 +209,9 @@
           "display_name": {"$ref": "#/$defs/nonEmptyString"},
           "description": {"$ref": "#/$defs/nonEmptyString"},
           "kind": {"enum": ["physical", "virtual"]},
+          "publisher": {"$ref": "#/$defs/nonEmptyString"},
+          "presentation": {"$ref": "#/$defs/presentation"},
+          "distribution": {"$ref": "#/$defs/distribution"},
           "family": {"$ref": "#/$defs/nonEmptyString"},
           "generation": {"type": "integer", "minimum": 1},
           "parameter_size": {"type": "string", "minLength": 1},
@@ -332,7 +357,7 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "model", "subject", "metrics", "status", "measured_at", "evidence"],
+        "required": ["id", "model", "subject", "metrics", "status", "evidence"],
         "properties": {
           "id": {"$ref": "#/$defs/versionedID"},
           "model": {"$ref": "#/$defs/modelID"},

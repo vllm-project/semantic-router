@@ -121,12 +121,13 @@ func TestModelCatalogHandlerRejectsMalformedCLIContract(t *testing.T) {
 	t.Parallel()
 
 	for name, payload := range map[string]string{
-		"invalid json":         `{`,
-		"empty inventory":      `{"schema_version":"vllm-sr/model-catalog/v2","catalogs":[],"protocols":[],"providers":[],"reasoning_families":[],"models":[],"offerings":[],"benchmarks":[],"evaluations":[],"indices":[],"index_results":[]}`,
-		"missing protocols":    validModelCatalogPayload(","),
-		"missing roles":        validModelCatalogPayload(","),
-		"missing authority":    validModelCatalogPayload(","),
-		"invalid asset digest": validModelCatalogPayload(","),
+		"invalid json":          `{`,
+		"empty inventory":       `{"schema_version":"vllm-sr/model-catalog/v2","catalogs":[],"protocols":[],"providers":[],"reasoning_families":[],"models":[],"offerings":[],"benchmarks":[],"evaluations":[],"indices":[],"index_results":[]}`,
+		"missing protocols":     validModelCatalogPayload(","),
+		"missing roles":         validModelCatalogPayload(","),
+		"missing authority":     validModelCatalogPayload(","),
+		"invalid asset digest":  validModelCatalogPayload(","),
+		"orphan physical model": validModelCatalogPayload(","),
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -141,6 +142,23 @@ func TestModelCatalogHandlerRejectsMalformedCLIContract(t *testing.T) {
 			}
 			if name == "invalid asset digest" {
 				payload = strings.Replace(payload, `"asset_sha256":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"`, `"asset_sha256":"sha256:not-a-digest"`, 1)
+			}
+			if name == "orphan physical model" {
+				payload = strings.Replace(payload, `"models":[{`, `"models":[{
+    "id":"example/physical",
+    "display_name":"Example Physical",
+    "description":"Physical model without an offering.",
+    "kind":"physical",
+    "publisher":"Example",
+    "presentation":{"logo":"package:example","monogram":"E","monochrome":true},
+    "distribution":{"type":"open_weights","source":"https://models.example/model","license":"Apache-2.0"},
+    "family":"example",
+    "lifecycle":"active",
+    "capabilities":["chat"],
+    "modalities":{"input":["text"],"output":["text"]},
+    "protocols":["openai/chat-completions@1"],
+    "verification":{"status":"claimed","authority":"Example","verified_at":"2026-09-05","source":"https://models.example/model"}
+  },{`, 1)
 			}
 			response := httptest.NewRecorder()
 			ModelCatalogHandler(&fakeModelCatalogSource{payload: []byte(payload)}).ServeHTTP(
@@ -231,6 +249,9 @@ func validModelCatalogPayload(extra string) string {
     "display_name":"MoM V1 Blend",
     "description":"Balanced routing.",
     "kind":"virtual",
+    "publisher":"vllm-sr.ai",
+    "presentation":{"logo":"package:vllm","monogram":"V","monochrome":true},
+    "distribution":{"type":"router_recipe","source":"https://vllm-sr.ai/models"},
     "family":"mom",
     "generation":1,
     "policy_version":"1.0.0",

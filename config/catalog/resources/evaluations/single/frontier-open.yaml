@@ -1,0 +1,47 @@
+- id: moonshot/kimi-k3-model-card@1.0.0
+  model: moonshot/kimi-k3
+  subject:
+    variant: Kimi-K3
+    reasoning_effort: max
+    hle_mode: no_tools
+    terminal_harness: Kimi Code
+    source_kind: official_model_card
+  metrics:
+    idavidrein/gpqa-diamond@1.0.0#accuracy: 0.935
+    cais/humanitys-last-exam@1.0.0#accuracy: 0.435
+    harbor/terminal-bench@2.1.0#resolved: 0.883
+  status: available
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/moonshotai/Kimi-K3
+    redistributable: true
+- id: nvidia/nemotron-3-ultra-nvfp4-model-card@1.0.0
+  model: nvidia/nemotron-3-ultra
+  subject:
+    variant: NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4
+    hle_mode: no_tools
+    source_kind: official_model_card
+  metrics:
+    cais/humanitys-last-exam@1.0.0#accuracy: 0.261
+    swe-bench/verified@1.0.0#resolved: 0.695
+    harbor/terminal-bench@2.1.0#resolved: 0.539
+  status: available
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4
+    redistributable: true
+- id: stepfun/step-3.7-flash-model-card@1.0.0
+  model: stepfun/step-3.7-flash
+  subject:
+    variant: Step-3.7-Flash
+    source_kind: official_model_card
+  metrics:
+    harbor/terminal-bench@2.1.0#resolved: 0.595
+  status: available
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/stepfun-ai/Step-3.7-Flash
+    redistributable: true

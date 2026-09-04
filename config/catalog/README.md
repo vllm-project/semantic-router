@@ -5,10 +5,10 @@ providers, model cards, provider offerings, reasoning behavior, benchmark
 definitions, evaluation records, and composite indices.
 
 The source manifest is `catalog.yaml`. Resource files live under `resources/`;
-physical model families should use one focused file under `resources/models/`
-so a model Day-0 change does not modify an unrelated inventory. Closely related
-virtual variants may share a family file. Secrets, operator endpoints, and
-request-facing aliases do not belong here.
+physical model families use one focused file under `resources/models/single/`
+so a model Day-0 change does not modify an unrelated inventory. Router recipes
+and their logical entrypoints live separately under `resources/models/virtual/`.
+Secrets, operator endpoints, and request-facing aliases do not belong here.
 
 Run:
 
@@ -24,23 +24,49 @@ index identity; those are embedded build metadata.
 
 ## Resource ownership
 
-- `protocols.yaml`: supported operations and their wire paths, including
-  inference creation and model inventory discovery.
+- `protocols.yaml`: supported operations and their wire paths, including the
+  default protocol base path used when an endpoint does not supply an API root.
+  A configured `base_url` path replaces this default base path; the operation
+  suffix is then appended exactly once.
 - `providers.yaml`: Provider IDs, protocol compatibility, auth defaults,
   non-secret request-header defaults, reasoning transport, support tier,
   conformance, and presentation metadata. Credential-bearing headers are
   forbidden here.
-- `models/`: intrinsic model or virtual-model facts, one file per family.
-- `offerings.yaml`: provider/model pairings, provider model IDs, restrictions,
-  and dated pricing.
+- `models/single/`: intrinsic facts for one deployable model family.
+- `models/virtual/`: recipe-backed logical model identities and role contracts.
+- `offerings/`: provider/model pairings, provider model IDs, restrictions, and
+  dated pricing. A model card may have many offerings without duplicating its
+  identity. Every active physical Model Card must have at least one offering;
+  virtual recipes are materialized from their packaged asset instead.
 - `reasoning-families.yaml`: reusable request projections for reasoning knobs.
 - `benchmarks.yaml`: versioned benchmark and metric definitions.
-- `evaluations.yaml`: redistributable built-in measurements and evidence.
+- `evaluations/single/`: redistributable measurements for physical models.
+- `evaluations/virtual/`: recipe-run measurements for virtual models.
 - `indices.yaml`: auditable normalization, weights, and missing-data policy.
 
 Missing evaluation evidence stays missing. Never insert a guessed zero,
 parameter-size proxy, or copied third-party result whose redistribution terms
-are unknown.
+are unknown. Two available records for the same model and versioned metric are
+rejected instead of choosing a hidden winner; revise the evaluation identity or
+resolve the conflicting evidence explicitly.
+
+A physical Model Card represents one canonical upstream model identity. Date
+snapshots, cloud aliases, quantizations, and serving-engine packaging do not
+become duplicate cards: provider-specific names belong in offerings, while
+runtime or quantization details belong in an evaluation subject. A distinct
+checkpoint only becomes a new card when the publisher treats it as a separately
+selectable model with materially different behavior.
+
+The `reasoning` capability and `reasoning_family` serve different purposes. A
+card can truthfully advertise reasoning even when vLLM Semantic Router has not
+yet verified a configurable reasoning projection for that family. Only attach a
+built-in reasoning family when its user-facing levels and wire transport are
+implemented and tested; otherwise the model remains usable without inventing a
+toggle.
+
+Virtual-model `recommended_pool` entries are suggestions, not foreign keys.
+They may name catalog-backed models or operator-defined models that only exist
+in a deployment configuration.
 
 See the [Day-0 support guide](../../website/docs/community/model-provider-day-0-support.md)
 for the end-to-end contribution workflow.

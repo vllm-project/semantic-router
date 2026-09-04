@@ -1,0 +1,7 @@
+- id: baidu/ernie-4.5-300b-a47b-model-card@1.0.0
+  model: baidu/ernie-4.5-300b-a47b
+  subject: {variant: ERNIE-4.5-300B-A47B-PT, source_kind: official_model_card}
+  metrics:
+    tiger-ai-lab/mmlu-pro@1.0.0#accuracy: 0.784
+  status: available
+  evidence: {provenance: vendor_claimed, verification: claimed, source: https://huggingface.co/baidu/ERNIE-4.5-300B-A47B-PT, redistributable: true}

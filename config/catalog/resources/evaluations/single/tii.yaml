@@ -1,0 +1,11 @@
+- id: tii/falcon3-10b-instruct-model-card@1.0.0
+  model: tii/falcon3-10b-instruct
+  subject:
+    variant: Falcon3 10B Instruct
+    harness: hugging_face_open_llm_leaderboard
+    shot_count: 5
+    source_kind: official_model_card
+  metrics:
+    tiger-ai-lab/mmlu-pro@1.0.0#accuracy: 0.381
+  status: available
+  evidence: {provenance: vendor_claimed, verification: claimed, source: https://huggingface.co/tiiuae/Falcon3-10B-Instruct, redistributable: true}

@@ -1,9 +1,27 @@
 package config
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 )
+
+func TestCanonicalProviderDefaultsAreKnownFields(t *testing.T) {
+	raw, err := parseRawConfigMap([]byte(`
+version: v0.3
+providers:
+  defaults:
+    model: private-model
+    reasoning_effort: medium
+`))
+	if err != nil {
+		t.Fatalf("parse canonical provider defaults: %v", err)
+	}
+
+	if warnings := collectUnknownFields(raw, reflect.TypeOf(CanonicalConfig{})); len(warnings) != 0 {
+		t.Fatalf("canonical provider defaults produced unknown-field warnings: %v", warnings)
+	}
+}
 
 func TestParseYAMLBytesRejectsLegacyUserConfigLayout(t *testing.T) {
 	legacyYAML := []byte(`
@@ -96,6 +114,45 @@ routing:
 	}
 	if _, ok := cfg.EffectiveModelRegistry.Model("private-model"); !ok {
 		t.Fatal("expected routing-only model in effective registry")
+	}
+}
+
+func TestParseYAMLBytesMaterializesRichCustomModelCard(t *testing.T) {
+	cfg, err := ParseYAMLBytes([]byte(`
+version: v0.3
+providers:
+  defaults:
+    model: private-model
+  models:
+    - name: private-model
+      provider_model_id: acme/reasoner-awq
+      backend_refs:
+        - provider: vllm
+          endpoint: 127.0.0.1:8000/v1
+routing:
+  modelCards:
+    - name: private-model
+      publisher: Acme Research
+      presentation:
+        logo: https://models.example/acme.svg
+        monogram: A
+        monochrome: false
+      distribution:
+        type: open_weights
+        source: https://models.example/acme-reasoner
+        license: Apache-2.0
+`))
+	if err != nil {
+		t.Fatalf("expected rich custom card to be valid: %v", err)
+	}
+	model, ok := cfg.EffectiveModelRegistry.Model("private-model")
+	if !ok {
+		t.Fatal("expected custom model in effective registry")
+	}
+	if model.Card.Card.Publisher != "Acme Research" ||
+		model.Card.Card.Distribution.License != "Apache-2.0" ||
+		model.Card.Card.Presentation.Monogram != "A" {
+		t.Fatalf("unexpected custom model card: %+v", model.Card.Card)
 	}
 }
 

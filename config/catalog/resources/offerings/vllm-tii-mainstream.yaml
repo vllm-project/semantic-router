@@ -1,0 +1,63 @@
+- id: vllm/falcon-h1-0.5b-instruct@1.0.0
+  provider: vllm
+  model: tii/falcon-h1-0.5b-instruct
+  provider_model_id: tiiuae/Falcon-H1-0.5B-Instruct
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/tiiuae/Falcon-H1-0.5B-Instruct}
+- id: vllm/falcon-h1-1.5b-instruct@1.0.0
+  provider: vllm
+  model: tii/falcon-h1-1.5b-instruct
+  provider_model_id: tiiuae/Falcon-H1-1.5B-Instruct
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/tiiuae/Falcon-H1-1.5B-Instruct}
+- id: vllm/falcon-h1-3b-instruct@1.0.0
+  provider: vllm
+  model: tii/falcon-h1-3b-instruct
+  provider_model_id: tiiuae/Falcon-H1-3B-Instruct
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/tiiuae/Falcon-H1-3B-Instruct}
+- id: vllm/falcon-h1-7b-instruct@1.0.0
+  provider: vllm
+  model: tii/falcon-h1-7b-instruct
+  provider_model_id: tiiuae/Falcon-H1-7B-Instruct
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/tiiuae/Falcon-H1-7B-Instruct}
+- id: vllm/falcon-h1-34b-instruct@1.0.0
+  provider: vllm
+  model: tii/falcon-h1-34b-instruct
+  provider_model_id: tiiuae/Falcon-H1-34B-Instruct
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/tiiuae/Falcon-H1-34B-Instruct}
+- id: vllm/falcon-h1r-7b@1.0.0
+  provider: vllm
+  model: tii/falcon-h1r-7b
+  provider_model_id: tiiuae/Falcon-H1R-7B
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/tiiuae/Falcon-H1R-7B}
+- id: vllm/falcon3-1b-instruct@1.0.0
+  provider: vllm
+  model: tii/falcon3-1b-instruct
+  provider_model_id: tiiuae/Falcon3-1B-Instruct
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/tiiuae/Falcon3-1B-Instruct}
+- id: vllm/falcon3-3b-instruct@1.0.0
+  provider: vllm
+  model: tii/falcon3-3b-instruct
+  provider_model_id: tiiuae/Falcon3-3B-Instruct
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/tiiuae/Falcon3-3B-Instruct}
+- id: vllm/falcon-mamba-7b-instruct@1.0.0
+  provider: vllm
+  model: tii/falcon-mamba-7b-instruct
+  provider_model_id: tiiuae/falcon-mamba-7b-instruct
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/tiiuae/falcon-mamba-7b-instruct}

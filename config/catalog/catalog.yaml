@@ -28,7 +28,7 @@ resources:
   providers: resources/providers.yaml
   reasoning_families: resources/reasoning-families.yaml
   models: resources/models
-  offerings: resources/offerings.yaml
+  offerings: resources/offerings
   benchmarks: resources/benchmarks.yaml
-  evaluations: resources/evaluations.yaml
+  evaluations: resources/evaluations
   indices: resources/indices.yaml

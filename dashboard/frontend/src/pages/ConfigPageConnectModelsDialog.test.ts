@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
 import { resolveConnectedModelName } from './configPageConnectModelSupport'
+import generatedCatalog from '../generated/modelCatalog.json'
+import type { BuiltInModelCatalog } from '../types/modelCatalog'
+import { providerCatalogModels } from './configPageConnectModelsDialogController'
 
 describe('connected model naming', () => {
   it('keeps the upstream model id when the public namespace is free', () => {
@@ -19,5 +22,16 @@ describe('connected model naming', () => {
     const reserved = new Set(['blend', 'vllm/blend', 'vllm/blend-2'])
 
     expect(resolveConnectedModelName('', 'vllm', 'blend', reserved)).toBe('vllm/blend-3')
+  })
+})
+
+describe('catalog-backed model matching', () => {
+  it('does not materialize removed model offerings from provider discovery', () => {
+    const models = providerCatalogModels(
+      generatedCatalog as unknown as BuiltInModelCatalog,
+      'anthropic',
+    )
+    expect(models.get('claude-sonnet-4-20250514')).toBeUndefined()
+    expect(models.get('claude-sonnet-4-6')).toBe('anthropic/claude-sonnet-4.6')
   })
 })

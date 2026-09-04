@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"gopkg.in/yaml.v2"
 )
 
@@ -144,6 +145,62 @@ func TestCatalogInputRejectsAliasNamedBuiltInOverride(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), "does not match a providers.models catalog identity") {
 		t.Fatalf("canonicalCatalogInput() error = %v", err)
+	}
+}
+
+func TestCatalogInputKeepsImplicitCustomCardSeparateFromBuiltInIdentity(t *testing.T) {
+	input, err := canonicalCatalogInput(&CanonicalConfig{
+		Providers: CanonicalProviders{Models: []CanonicalProviderModel{{
+			Name: "openai/gpt-5",
+			BackendRefs: []CanonicalBackendRef{{
+				Name: "local", Endpoint: "127.0.0.1:8000", Provider: "vllm",
+			}},
+		}}},
+	})
+	if err != nil {
+		t.Fatalf("canonicalCatalogInput() error = %v", err)
+	}
+	registry, err := modelcatalog.BuiltIn()
+	if err != nil {
+		t.Fatal(err)
+	}
+	effective, err := registry.Compile(input)
+	if err != nil {
+		t.Fatalf("Compile() error = %v", err)
+	}
+	model, ok := effective.Model("openai/gpt-5")
+	if !ok {
+		t.Fatal("custom model is missing")
+	}
+	if model.Card.Provenance["id"] != modelcatalog.SourceOperator {
+		t.Fatalf("custom card inherited built-in identity: %+v", model.Card.Provenance)
+	}
+	result := model.Indices["vllm-sr/intelligence@1.0.0"]
+	if result.Score != nil || result.Status != "missing" || len(result.Provenance) != 0 {
+		t.Fatalf("custom card inherited built-in evidence: %+v", result)
+	}
+}
+
+func TestCanonicalConfigRejectsMixedOwnershipForOneCardIdentity(t *testing.T) {
+	err := validateCanonicalContract(&CanonicalConfig{
+		Version: "v0.3",
+		Providers: CanonicalProviders{Models: []CanonicalProviderModel{
+			{
+				Name: "openai/gpt-5",
+				BackendRefs: []CanonicalBackendRef{{
+					Name: "local", Endpoint: "127.0.0.1:8000", Provider: "vllm",
+				}},
+			},
+			{
+				Name: "production-gpt", Catalog: "openai/gpt-5",
+				BackendRefs: []CanonicalBackendRef{{
+					Name: "cloud", Provider: "openai",
+				}},
+			},
+		}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "cannot represent both a catalog-backed and custom model") {
+		t.Fatalf("validateCanonicalContract() error = %v", err)
 	}
 }
 

@@ -1,9 +1,34 @@
 - id: deepseek
   type: chat_template_kwargs
   parameter: thinking
+  levels: [low, high, max]
+  default: high
+- id: qwen3
+  type: chat_template_kwargs
+  parameter: enable_thinking
   levels: [low, medium, high]
   default: medium
-- id: qwen3
+- id: qwen3.8
+  type: reasoning_effort
+  parameter: reasoning_effort
+  levels: [low, medium, xhigh]
+  default: xhigh
+- id: glm
+  type: chat_template_kwargs
+  parameter: enable_thinking
+  levels: [low, medium, high]
+  default: medium
+- id: hunyuan
+  type: chat_template_kwargs
+  parameter: enable_thinking
+  levels: [low, medium, high]
+  default: medium
+- id: exaone
+  type: chat_template_kwargs
+  parameter: enable_thinking
+  levels: [low, medium, high]
+  default: medium
+- id: smollm3
   type: chat_template_kwargs
   parameter: enable_thinking
   levels: [low, medium, high]
@@ -16,7 +41,7 @@
 - id: gpt
   type: reasoning_effort
   parameter: reasoning_effort
-  levels: [low, medium, high]
+  levels: [none, low, medium, high, xhigh, max]
   default: medium
 - id: mistral
   type: top_level_reasoning_effort

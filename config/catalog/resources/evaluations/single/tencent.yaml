@@ -1,0 +1,7 @@
+- id: tencent/hunyuan-a13b-instruct-model-card@1.0.0
+  model: tencent/hunyuan-a13b-instruct
+  subject: {variant: Hunyuan-A13B-Instruct, source_kind: official_model_card}
+  metrics:
+    tiger-ai-lab/mmlu-pro@1.0.0#accuracy: 0.6723
+  status: available
+  evidence: {provenance: vendor_claimed, verification: claimed, source: https://huggingface.co/tencent/Hunyuan-A13B-Instruct, redistributable: true}

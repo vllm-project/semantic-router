@@ -1,0 +1,22 @@
+- id: lg/exaone-4.0-32b-reasoning-model-card@1.0.0
+  model: lg/exaone-4.0-32b
+  subject:
+    variant: EXAONE 4.0 32B
+    reasoning_mode: enabled
+    source_kind: official_model_card
+  metrics:
+    tiger-ai-lab/mmlu-pro@1.0.0#accuracy: 0.818
+    idavidrein/gpqa-diamond@1.0.0#accuracy: 0.754
+  status: available
+  evidence: {provenance: vendor_claimed, verification: claimed, source: https://huggingface.co/LGAI-EXAONE/EXAONE-4.0-32B, redistributable: true}
+- id: lg/exaone-4.0-1.2b-reasoning-model-card@1.0.0
+  model: lg/exaone-4.0-1.2b
+  subject:
+    variant: EXAONE 4.0 1.2B
+    reasoning_mode: enabled
+    source_kind: official_model_card
+  metrics:
+    tiger-ai-lab/mmlu-pro@1.0.0#accuracy: 0.593
+    idavidrein/gpqa-diamond@1.0.0#accuracy: 0.520
+  status: available
+  evidence: {provenance: vendor_claimed, verification: claimed, source: https://huggingface.co/LGAI-EXAONE/EXAONE-4.0-1.2B, redistributable: true}

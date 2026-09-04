@@ -1,0 +1,35 @@
+- id: vllm/kimi-vl-a3b-instruct@1.0.0
+  provider: vllm
+  model: moonshot/kimi-vl-a3b-instruct
+  provider_model_id: moonshotai/Kimi-VL-A3B-Instruct
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/moonshotai/Kimi-VL-A3B-Instruct}
+- id: vllm/kimi-vl-a3b-thinking@1.0.0
+  provider: vllm
+  model: moonshot/kimi-vl-a3b-thinking
+  provider_model_id: moonshotai/Kimi-VL-A3B-Thinking
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/moonshotai/Kimi-VL-A3B-Thinking}
+- id: vllm/kimi-linear-48b-a3b-instruct@1.0.0
+  provider: vllm
+  model: moonshot/kimi-linear-48b-a3b-instruct
+  provider_model_id: moonshotai/Kimi-Linear-48B-A3B-Instruct
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/moonshotai/Kimi-Linear-48B-A3B-Instruct}
+- id: vllm/moonlight-16b-a3b-instruct@1.0.0
+  provider: vllm
+  model: moonshot/moonlight-16b-a3b-instruct
+  provider_model_id: moonshotai/Moonlight-16B-A3B-Instruct
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/moonshotai/Moonlight-16B-A3B-Instruct}
+- id: vllm/kimi-dev-72b@1.0.0
+  provider: vllm
+  model: moonshot/kimi-dev-72b
+  provider_model_id: moonshotai/Kimi-Dev-72B
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/moonshotai/Kimi-Dev-72B}

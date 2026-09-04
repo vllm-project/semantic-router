@@ -315,6 +315,14 @@ func compileCardOverlay(
 	}
 	seen[overlay.Name] = struct{}{}
 	effective, builtin := cards[overlay.Name]
+	if overlay.BuiltIn != nil {
+		builtin = *overlay.BuiltIn
+		if builtin {
+			if _, exists := cards[overlay.Name]; !exists {
+				return EffectiveModelCard{}, fmt.Errorf("%s.name %q does not reference a built-in model card", path, overlay.Name)
+			}
+		}
+	}
 	if !builtin {
 		effective = newCustomEffectiveCard(overlay.Name)
 	}
@@ -409,6 +417,7 @@ func applyCardScalarOverlay(effective *EffectiveModelCard, overlay ModelCardOver
 	card := &effective.Card
 	setOverlayString(effective, "display_name", overlay.DisplayName, &card.DisplayName)
 	setOverlayString(effective, "description", overlay.Description, &card.Description)
+	setOverlayString(effective, "publisher", overlay.Publisher, &card.Publisher)
 	setOverlayString(effective, "family", overlay.Family, &card.Family)
 	setOverlayString(effective, "parameter_size", overlay.ParameterSize, &card.ParameterSize)
 	setOverlayString(effective, "revision", overlay.Revision, &card.Revision)
@@ -465,6 +474,14 @@ func applyCardClaimOverlay(effective *EffectiveModelCard, overlay ModelCardOverl
 }
 
 func applyCardMetadataOverlay(effective *EffectiveModelCard, overlay ModelCardOverlay) {
+	if overlay.Presentation != nil {
+		effective.Card.Presentation = *overlay.Presentation
+		effective.Provenance["presentation"] = SourceOperator
+	}
+	if overlay.Distribution != nil {
+		effective.Card.Distribution = *overlay.Distribution
+		effective.Provenance["distribution"] = SourceOperator
+	}
 	if overlay.Tags != nil {
 		effective.Card.Tags = uniqueStrings(*overlay.Tags)
 		effective.Provenance["tags"] = SourceOperator
@@ -497,6 +514,24 @@ func validateEffectiveCard(effective EffectiveModelCard, path string, builtin bo
 	}
 	if len(card.Modalities.Input) == 0 || len(card.Modalities.Output) == 0 {
 		return fmt.Errorf("%s.modalities.input and output cannot be empty", path)
+	}
+	if effective.Provenance["presentation"] == SourceOperator &&
+		(strings.TrimSpace(card.Presentation.Logo) == "" || strings.TrimSpace(card.Presentation.Monogram) == "") {
+		return fmt.Errorf("%s.presentation.logo and monogram cannot be empty", path)
+	}
+	if effective.Provenance["distribution"] == SourceOperator {
+		switch card.Distribution.Type {
+		case "proprietary_api", "router_recipe":
+		case "open_weights":
+			if strings.TrimSpace(card.Distribution.License) == "" {
+				return fmt.Errorf("%s.distribution.license cannot be empty for open_weights", path)
+			}
+		default:
+			return fmt.Errorf("%s.distribution.type must be proprietary_api, open_weights, or router_recipe", path)
+		}
+		if strings.TrimSpace(card.Distribution.Source) == "" {
+			return fmt.Errorf("%s.distribution.source cannot be empty", path)
+		}
 	}
 	return nil
 }
@@ -542,7 +577,7 @@ func sanitizeID(value string) string {
 
 func builtinCardProvenance(card ModelCard) FieldProvenance {
 	result := FieldProvenance{}
-	for _, field := range []string{"id", "display_name", "description", "kind", "family", "parameter_size", "revision", "released_at", "knowledge_cutoff", "lifecycle", "limits.context_window_size", "limits.max_output_tokens", "capabilities", "modalities", "reasoning_family", "tags", "protocols", "verification"} {
+	for _, field := range []string{"id", "display_name", "description", "kind", "publisher", "presentation", "distribution", "family", "parameter_size", "revision", "released_at", "knowledge_cutoff", "lifecycle", "limits.context_window_size", "limits.max_output_tokens", "capabilities", "modalities", "reasoning_family", "tags", "protocols", "verification"} {
 		result[field] = SourceBuiltin
 	}
 	return result

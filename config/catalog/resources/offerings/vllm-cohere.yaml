@@ -1,0 +1,36 @@
+- id: vllm/command-r-plus-08-2024@1.0.0
+  provider: vllm
+  model: cohere/command-r-plus-08-2024
+  provider_model_id: CohereForAI/c4ai-command-r-plus-08-2024
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/CohereForAI/c4ai-command-r-plus-08-2024}
+- id: vllm/command-a-03-2025@1.0.0
+  provider: vllm
+  model: cohere/command-a-03-2025
+  provider_model_id: CohereLabs/c4ai-command-a-03-2025
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/CohereLabs/c4ai-command-a-03-2025}
+- id: vllm/command-a-vision-07-2025@1.0.0
+  provider: vllm
+  model: cohere/command-a-vision-07-2025
+  provider_model_id: CohereLabs/command-a-vision-07-2025
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: experimental
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/CohereLabs/command-a-vision-07-2025}
+- id: vllm/command-a-reasoning-08-2025@1.0.0
+  provider: vllm
+  model: cohere/command-a-reasoning-08-2025
+  provider_model_id: CohereLabs/command-a-reasoning-08-2025
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: experimental
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/CohereLabs/command-a-reasoning-08-2025}
+- id: vllm/command-a-plus-05-2026-w4a4@1.0.0
+  provider: vllm
+  model: cohere/command-a-plus-05-2026
+  provider_model_id: CohereLabs/command-a-plus-05-2026-w4a4
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  restrictions: {minimum_vllm_version: 0.25.0, quantization: W4A4}
+  lifecycle: experimental
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/CohereLabs/command-a-plus-05-2026-w4a4}

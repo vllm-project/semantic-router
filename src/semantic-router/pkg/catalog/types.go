@@ -17,11 +17,12 @@ type ProtocolOperation struct {
 }
 
 type ProtocolDefinition struct {
-	ID           string              `json:"id"`
-	DisplayName  string              `json:"display_name"`
-	WireFormat   string              `json:"wire_format"`
-	Operations   []ProtocolOperation `json:"operations"`
-	Capabilities []string            `json:"capabilities"`
+	ID              string              `json:"id"`
+	DisplayName     string              `json:"display_name"`
+	WireFormat      string              `json:"wire_format"`
+	DefaultBasePath string              `json:"default_base_path"`
+	Operations      []ProtocolOperation `json:"operations"`
+	Capabilities    []string            `json:"capabilities"`
 }
 
 type ProviderAuth struct {
@@ -32,9 +33,9 @@ type ProviderAuth struct {
 }
 
 type ProviderPresentation struct {
-	Logo       string `json:"logo"`
-	Monogram   string `json:"monogram"`
-	Monochrome bool   `json:"monochrome"`
+	Logo       string `json:"logo" yaml:"logo"`
+	Monogram   string `json:"monogram" yaml:"monogram"`
+	Monochrome bool   `json:"monochrome" yaml:"monochrome"`
 }
 
 type Conformance struct {
@@ -47,6 +48,7 @@ type ReasoningTransport string
 const (
 	ReasoningTransportChatTemplate     ReasoningTransport = "chat_template_kwargs"
 	ReasoningTransportTopLevelEffort   ReasoningTransport = "top_level_effort"
+	ReasoningTransportThinkingObject   ReasoningTransport = "thinking_object"
 	ReasoningTransportDeepSeekThinking ReasoningTransport = "deepseek_thinking"
 )
 
@@ -147,10 +149,17 @@ type LoRAAdapter struct {
 }
 
 type ModelVerification struct {
-	Authority   string `json:"authority"`
-	Status      string `json:"status"`
-	VerifiedAt  string `json:"verified_at"`
-	AssetSHA256 string `json:"asset_sha256,omitempty"`
+	Authority   string `json:"authority" yaml:"authority"`
+	Status      string `json:"status" yaml:"status"`
+	VerifiedAt  string `json:"verified_at" yaml:"verified_at,omitempty"`
+	Source      string `json:"source,omitempty" yaml:"source,omitempty"`
+	AssetSHA256 string `json:"asset_sha256,omitempty" yaml:"asset_sha256,omitempty"`
+}
+
+type ModelDistribution struct {
+	Type    string `json:"type" yaml:"type"`
+	Source  string `json:"source" yaml:"source"`
+	License string `json:"license,omitempty" yaml:"license,omitempty"`
 }
 
 type ModelRole struct {
@@ -162,38 +171,48 @@ type ModelRole struct {
 }
 
 type ModelCard struct {
-	ID              string            `json:"id"`
-	DisplayName     string            `json:"display_name"`
-	Description     string            `json:"description"`
-	Kind            string            `json:"kind"`
-	Family          string            `json:"family"`
-	ParameterSize   string            `json:"parameter_size,omitempty"`
-	Revision        string            `json:"revision,omitempty"`
-	ReleasedAt      string            `json:"released_at,omitempty"`
-	KnowledgeCutoff string            `json:"knowledge_cutoff,omitempty"`
-	Lifecycle       string            `json:"lifecycle"`
-	Limits          ModelLimits       `json:"limits,omitempty"`
-	Capabilities    []string          `json:"capabilities"`
-	Modalities      Modalities        `json:"modalities"`
-	ReasoningFamily string            `json:"reasoning_family,omitempty"`
-	Tags            []string          `json:"tags,omitempty"`
-	Generation      int               `json:"generation,omitempty"`
-	PolicyVersion   string            `json:"policy_version,omitempty"`
-	Asset           string            `json:"asset,omitempty"`
-	Entrypoint      string            `json:"entrypoint,omitempty"`
-	Recipe          string            `json:"recipe,omitempty"`
-	Protocols       []string          `json:"protocols"`
-	Traits          []string          `json:"traits,omitempty"`
-	Roles           []ModelRole       `json:"roles,omitempty"`
-	Verification    ModelVerification `json:"verification"`
+	ID              string               `json:"id"`
+	DisplayName     string               `json:"display_name"`
+	Description     string               `json:"description"`
+	Kind            string               `json:"kind"`
+	Publisher       string               `json:"publisher"`
+	Presentation    ProviderPresentation `json:"presentation"`
+	Distribution    ModelDistribution    `json:"distribution"`
+	Family          string               `json:"family"`
+	ParameterSize   string               `json:"parameter_size,omitempty"`
+	Revision        string               `json:"revision,omitempty"`
+	ReleasedAt      string               `json:"released_at,omitempty"`
+	KnowledgeCutoff string               `json:"knowledge_cutoff,omitempty"`
+	Lifecycle       string               `json:"lifecycle"`
+	Limits          ModelLimits          `json:"limits,omitempty"`
+	Capabilities    []string             `json:"capabilities"`
+	Modalities      Modalities           `json:"modalities"`
+	ReasoningFamily string               `json:"reasoning_family,omitempty"`
+	Tags            []string             `json:"tags,omitempty"`
+	Generation      int                  `json:"generation,omitempty"`
+	PolicyVersion   string               `json:"policy_version,omitempty"`
+	Asset           string               `json:"asset,omitempty"`
+	Entrypoint      string               `json:"entrypoint,omitempty"`
+	Recipe          string               `json:"recipe,omitempty"`
+	Protocols       []string             `json:"protocols"`
+	Traits          []string             `json:"traits,omitempty"`
+	Roles           []ModelRole          `json:"roles,omitempty"`
+	Verification    ModelVerification    `json:"verification"`
 }
 
 // ModelCardOverlay is a presence-aware handwritten card or built-in override.
 // Pointer fields distinguish an intentional zero/empty override from omission.
 type ModelCardOverlay struct {
-	Name              string                     `json:"name" yaml:"name"`
+	Name string `json:"name" yaml:"name"`
+	// BuiltIn is an internal presence-aware binding hint. A nil value keeps the
+	// catalog package's direct-call behavior; config adapters set it explicitly
+	// so a custom alias that happens to equal a built-in ID stays custom.
+	BuiltIn           *bool                      `json:"-" yaml:"-"`
 	DisplayName       *string                    `json:"display_name,omitempty" yaml:"display_name,omitempty"`
 	Description       *string                    `json:"description,omitempty" yaml:"description,omitempty"`
+	Publisher         *string                    `json:"publisher,omitempty" yaml:"publisher,omitempty"`
+	Presentation      *ProviderPresentation      `json:"presentation,omitempty" yaml:"presentation,omitempty"`
+	Distribution      *ModelDistribution         `json:"distribution,omitempty" yaml:"distribution,omitempty"`
 	Family            *string                    `json:"family,omitempty" yaml:"family,omitempty"`
 	ParameterSize     *string                    `json:"parameter_size,omitempty" yaml:"parameter_size,omitempty"`
 	Revision          *string                    `json:"revision,omitempty" yaml:"revision,omitempty"`
@@ -304,18 +323,10 @@ type EvaluationEvidence struct {
 	Redistributable bool   `json:"redistributable" yaml:"redistributable"`
 }
 
-type EvaluationSubject struct {
-	ModelRevision   string         `json:"model_revision,omitempty" yaml:"model_revision,omitempty"`
-	Offering        string         `json:"offering,omitempty" yaml:"offering,omitempty"`
-	Runtime         string         `json:"runtime,omitempty" yaml:"runtime,omitempty"`
-	RuntimeVersion  string         `json:"runtime_version,omitempty" yaml:"runtime_version,omitempty"`
-	Quantization    string         `json:"quantization,omitempty" yaml:"quantization,omitempty"`
-	Precision       string         `json:"precision,omitempty" yaml:"precision,omitempty"`
-	TensorParallel  int            `json:"tensor_parallel,omitempty" yaml:"tensor_parallel,omitempty"`
-	Protocol        string         `json:"protocol,omitempty" yaml:"protocol,omitempty"`
-	ReasoningEffort string         `json:"reasoning_effort,omitempty" yaml:"reasoning_effort,omitempty"`
-	Parameters      map[string]any `json:"parameters,omitempty" yaml:"parameters,omitempty"`
-}
+// EvaluationSubject records any material property of the measured subject.
+// Keys are intentionally open so benchmark-specific harness, prompt, tool,
+// runtime, and model-variant metadata survives every generated projection.
+type EvaluationSubject map[string]any
 
 type EvaluationRecord struct {
 	ID         string             `json:"id" yaml:"id"`
