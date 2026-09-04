@@ -110,6 +110,8 @@ spec:
           {{- end }}
         {{- end }}
         volumeMounts:
+        - name: runtime-tmp
+          mountPath: /tmp
         - name: config-volume
           mountPath: /app/config/config.yaml
           subPath: config.yaml
@@ -126,10 +128,8 @@ spec:
         {{- with .Values.extraVolumeMounts }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-        {{- if .Values.persistence.enabled }}
         - name: models-volume
           mountPath: /app/models
-        {{- end }}
         {{- if .Values.startupProbe.enabled }}
         # Startup probe for slow-starting containers (model loading takes ~60s with Gemma)
         startupProbe:
@@ -160,6 +160,8 @@ spec:
         resources:
           {{- toYaml .Values.resources | nindent 10 }}
       volumes:
+      - name: runtime-tmp
+        emptyDir: {}
       - name: config-volume
         configMap:
           name: {{ include "semantic-router.fullname" . }}-config
@@ -172,6 +174,9 @@ spec:
       - name: models-volume
         persistentVolumeClaim:
           claimName: {{ include "semantic-router.pvcName" . }}
+      {{- else }}
+      - name: models-volume
+        emptyDir: {}
       {{- end }}
       {{- with .Values.extraVolumes }}
       {{- toYaml . | nindent 6 }}
