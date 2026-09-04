@@ -368,6 +368,7 @@ const sidebars: SidebarsConfig = {
           items: [
             'proposals/batch-and-capacity-aware-routing',
             'proposals/router-learning-memory-and-adaptations',
+            'proposals/success-constrained-selection',
             'proposals/prompt-classification-routing',
           ],
         },
