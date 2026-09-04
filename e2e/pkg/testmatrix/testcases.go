@@ -95,6 +95,7 @@ var ProviderProtocolsContract = []string{
 	"chat-completions-request",
 	"anthropic-messages-cache-cycle",
 	"anthropic-chat-cache-control",
+	"anthropic-prompt-cache-policy",
 	"anthropic-messages-stop-sequence",
 	"anthropic-messages-streaming",
 	"anthropic-chat-completions-streaming",
