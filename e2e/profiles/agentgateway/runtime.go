@@ -13,7 +13,6 @@ import (
 
 const (
 	gatewayAPICRDsURL           = "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.0/standard-install.yaml"
-	timeoutAgentGatewayInstall  = 10 * time.Minute
 	timeoutSemanticRouterDeploy = 20 * time.Minute
 	timeoutDemoLLMDeploy        = 10 * time.Minute
 	gatewayAPIInstallAttempts   = 3

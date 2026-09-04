@@ -33,17 +33,3 @@ export const serializeToolResultForModel = (
 
   return truncateToolResultText(content, maxLength)
 }
-
-export const hasMeaningfulToolResultText = (text?: string | null): boolean => {
-  const normalized = text?.trim()
-  if (!normalized) {
-    return false
-  }
-
-  const lower = normalized.toLowerCase()
-  if (lower === 'null' || lower === 'undefined') {
-    return false
-  }
-
-  return !lower.startsWith(TOOL_EXECUTION_FAILURE_PREFIX.toLowerCase())
-}
