@@ -85,7 +85,59 @@ func TestHandleRequestHeadersSkipProcessingOptOut(t *testing.T) {
 			if response.GetRequestHeaders().Response.Status != ext_proc.CommonResponse_CONTINUE {
 				t.Fatalf("expected CONTINUE status, got %v", response.GetRequestHeaders().Response.Status)
 			}
+			mutation := response.GetRequestHeaders().Response.GetHeaderMutation()
+			if tt.expectSkipFlag {
+				if got := headerValuesByName(mutation.GetSetHeaders())[headers.VSROriginalPath]; got != "" {
+					t.Fatalf("skipped request original-path carrier = %q", got)
+				}
+				for _, header := range []string{headers.VSROriginalPath, headers.VSRUpstreamPath, headers.VSRPathNeedsPrefix} {
+					if !containsStringForTest(mutation.GetRemoveHeaders(), header) {
+						t.Fatalf("skipped request did not remove internal header %q", header)
+					}
+				}
+			} else if got := headerValuesByName(mutation.GetSetHeaders())[headers.VSROriginalPath]; got != "/v1/chat/completions" {
+				t.Fatalf("processed request original-path carrier = %q", got)
+			}
 		})
+	}
+}
+
+func TestHandleRequestHeadersReplacesSpoofedPathCarriers(t *testing.T) {
+	router := newRouterWithSkipProcessingGate(true)
+	ctx := &RequestContext{Headers: make(map[string]string)}
+	request := newSkipProcessingRequestHeaders("POST", "/v1/chat/completions", "false")
+	request.RequestHeaders.Headers.Headers = append(
+		request.RequestHeaders.Headers.Headers,
+		&core.HeaderValue{Key: headers.VSROriginalPath, Value: "/spoofed"},
+		&core.HeaderValue{Key: headers.VSRUpstreamPath, Value: "/spoofed"},
+		&core.HeaderValue{Key: headers.VSRPathNeedsPrefix, Value: "true"},
+	)
+
+	response, err := router.handleRequestHeaders(request, ctx)
+	if err != nil {
+		t.Fatalf("handleRequestHeaders failed: %v", err)
+	}
+	if got := ctx.Headers[headers.VSROriginalPath]; got != "" {
+		t.Fatalf("captured original-path carrier = %q", got)
+	}
+	if got := ctx.Headers[headers.VSRUpstreamPath]; got != "" {
+		t.Fatalf("captured upstream-path carrier = %q", got)
+	}
+	if got := ctx.Headers[headers.VSRPathNeedsPrefix]; got != "" {
+		t.Fatalf("captured path-prefix marker = %q", got)
+	}
+	setHeaders := response.GetRequestHeaders().Response.GetHeaderMutation().GetSetHeaders()
+	if got := headerValuesByName(setHeaders)[headers.VSROriginalPath]; got != "/v1/chat/completions" {
+		t.Fatalf("trusted original-path carrier = %q", got)
+	}
+	mutation := response.GetRequestHeaders().Response.GetHeaderMutation()
+	if got := headerAppendActionForTest(mutation, headers.VSROriginalPath); got != core.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD {
+		t.Fatalf("original-path carrier append action = %v", got)
+	}
+	for _, header := range []string{headers.VSRUpstreamPath, headers.VSRPathNeedsPrefix} {
+		if !containsStringForTest(mutation.GetRemoveHeaders(), header) {
+			t.Fatalf("spoofed internal header %q was not removed", header)
+		}
 	}
 }
 

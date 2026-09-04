@@ -44,6 +44,11 @@ static_resources:
                   - name: x-selected-model
                     string_match:
                       exact: "{{ model.name }}"
+                metadata:
+                  filter_metadata:
+                    # Envoy 1.34 scopes Lua handle:metadata() to this canonical namespace.
+                    envoy.filters.http.lua:
+                      path_prefix: {{ model.path_prefix | tojson }}
                 {% if model.route_request_headers %}
                 request_headers_to_add:
                 {% for header in model.route_request_headers %}
@@ -64,15 +69,6 @@ static_resources:
                   {% endif %}
                   # Rewrite Host header to match upstream server
                   host_rewrite_literal: "{{ model.endpoints[0].host_authority }}"
-                  {% if model.path_prefix %}
-                  # Prepend path prefix to /v1 requests (e.g., /compatible-mode + /v1/chat/completions = /compatible-mode/v1/chat/completions).
-                  # Match only the complete /v1 segment so route recomputation cannot rewrite /v1beta/... again.
-                  regex_rewrite:
-                    pattern:
-                      google_re2: {}
-                      regex: "^/v1([/?].*)?$"
-                    substitution: "{{ model.path_prefix }}\\1"
-                  {% endif %}
               {% endfor %}
               {% for model in anthropic_models %}
               # Route for Anthropic model: {{ model.name }}
@@ -82,6 +78,10 @@ static_resources:
                   - name: x-selected-model
                     string_match:
                       exact: "{{ model.name }}"
+                metadata:
+                  filter_metadata:
+                    envoy.filters.http.lua:
+                      path_prefix: ""
                 route:
                   cluster: anthropic_api_cluster
                   timeout: {{ listener.timeout | default('1200s') }}
@@ -91,6 +91,10 @@ static_resources:
               # Default route (no x-selected-model header)
               - match:
                   prefix: "/"
+                metadata:
+                  filter_metadata:
+                    envoy.filters.http.lua:
+                      path_prefix: {% if models %}{{ models[0].path_prefix | tojson }}{% else %}""{% endif %}
                 {% if models and models[0].route_request_headers %}
                 request_headers_to_add:
                 {% for header in models[0].route_request_headers %}
@@ -116,15 +120,6 @@ static_resources:
                   {% if models %}
                   # Rewrite Host header to match upstream server
                   host_rewrite_literal: "{{ models[0].endpoints[0].host_authority }}"
-                  {% endif %}
-                  {% if models and models[0].path_prefix %}
-                  # Prepend path prefix to /v1 requests (e.g., /compatible-mode + /v1/chat/completions = /compatible-mode/v1/chat/completions).
-                  # Match only the complete /v1 segment so route recomputation cannot rewrite /v1beta/... again.
-                  regex_rewrite:
-                    pattern:
-                      google_re2: {}
-                      regex: "^/v1([/?].*)?$"
-                    substitution: "{{ models[0].path_prefix }}\\1"
                   {% endif %}
           http_filters:
           {% if listener.api_keys %}
@@ -169,6 +164,52 @@ static_resources:
                 request_body_mode: "BUFFERED"
                 response_body_mode: "BUFFERED"
               message_timeout: {{ listener.timeout | default('1200s') }}
+          # Keep :path unchanged while ext_proc selects a route. This finalizer
+          # applies the provider path once, then removes its internal carriers.
+          - name: vllm.filters.http.path_finalizer
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
+              inline_code: |
+                local ORIGINAL_PATH_HEADER = "x-vsr-internal-original-path"
+                local UPSTREAM_PATH_HEADER = "x-vsr-internal-upstream-path"
+                local PATH_NEEDS_PREFIX_HEADER = "x-vsr-internal-path-needs-prefix"
+                local function apply_route_prefix(path, prefix)
+                  if prefix == nil or prefix == "" then
+                    return path
+                  end
+                  local path_only, query = string.match(path, "^([^?]*)(.*)$")
+                  if path_only == "/v1" then
+                    return prefix .. query
+                  end
+                  if string.sub(path_only, 1, 4) == "/v1/" then
+                    return prefix .. string.sub(path_only, 4) .. query
+                  end
+                  return path
+                end
+
+                function envoy_on_request(request_handle)
+                  local request_headers = request_handle:headers()
+                  local upstream_path = request_headers:get(UPSTREAM_PATH_HEADER)
+                  if upstream_path ~= nil and upstream_path ~= "" then
+                    if request_headers:get(PATH_NEEDS_PREFIX_HEADER) == "true" then
+                      local prefix = request_handle:metadata():get("path_prefix") or ""
+                      upstream_path = apply_route_prefix(upstream_path, prefix)
+                    end
+                    request_headers:replace(":path", upstream_path)
+                  else
+                    local original_path = request_headers:get(ORIGINAL_PATH_HEADER)
+                    if original_path ~= nil and original_path ~= "" then
+                      local prefix = request_handle:metadata():get("path_prefix") or ""
+                      request_headers:replace(
+                        ":path",
+                        apply_route_prefix(original_path, prefix)
+                      )
+                    end
+                  end
+                  request_headers:remove(ORIGINAL_PATH_HEADER)
+                  request_headers:remove(UPSTREAM_PATH_HEADER)
+                  request_headers:remove(PATH_NEEDS_PREFIX_HEADER)
+                end
           - name: envoy.filters.http.router
             typed_config:
               "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router

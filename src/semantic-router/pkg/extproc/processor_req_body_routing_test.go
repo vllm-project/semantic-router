@@ -273,9 +273,9 @@ func assertDispatchedRequest(t *testing.T, response *ext_proc.ProcessingResponse
 		t.Fatalf("dispatched request changed semantics: %+v", decoded)
 	}
 	wantPath := requestWirePath(target)
-	gotPath := headerValuesByName(common.GetHeaderMutation().GetSetHeaders())[":path"]
+	gotPath := headerValuesByName(common.GetHeaderMutation().GetSetHeaders())[headers.VSRUpstreamPath]
 	if gotPath != wantPath {
-		t.Fatalf("dispatch path = %q, want %q", gotPath, wantPath)
+		t.Fatalf("upstream path carrier = %q, want %q", gotPath, wantPath)
 	}
 }
 
@@ -299,7 +299,7 @@ func TestProviderProtocolPath(t *testing.T) {
 		protocolPath string
 		want         string
 	}{
-		{name: "root", baseURL: "https://api.example.com", protocolPath: "/v1/messages", want: "/v1/messages"},
+		{name: "empty base path", baseURL: "https://api.example.com", protocolPath: "/v1/messages", want: "/v1/messages"},
 		{name: "version root", baseURL: "https://api.example.com/v1", protocolPath: "/v1/responses", want: "/v1/responses"},
 		{name: "nested version root", baseURL: "https://api.example.com/openai/v1", protocolPath: "/v1/responses", want: "/openai/v1/responses"},
 		{name: "custom base", baseURL: "https://api.example.com/proxy", protocolPath: "/v1/messages", want: "/proxy/v1/messages"},
@@ -313,7 +313,7 @@ func TestProviderProtocolPath(t *testing.T) {
 	}
 }
 
-func TestSetProviderRequestPathCoversProtocolAndBaseURLMatrix(t *testing.T) {
+func TestSetProviderUpstreamPathCoversProtocolAndBaseURLMatrix(t *testing.T) {
 	tests := []struct {
 		name    string
 		profile config.ProviderProfile
@@ -331,6 +331,30 @@ func TestSetProviderRequestPathCoversProtocolAndBaseURLMatrix(t *testing.T) {
 			profile: config.ProviderProfile{Type: "openai", BaseURL: "https://api.example.com/compatible/v1"},
 			format:  llmprotocol.OpenAIChatV1,
 			want:    "/compatible/v1/chat/completions",
+		},
+		{
+			name:    "Chat OpenAI v1beta API root",
+			profile: config.ProviderProfile{Type: "openai", BaseURL: "https://api.example.com/v1beta/openai"},
+			format:  llmprotocol.OpenAIChatV1,
+			want:    "/v1beta/openai/chat/completions",
+		},
+		{
+			name:    "Chat OpenAI nested OpenAI API root",
+			profile: config.ProviderProfile{Type: "openai", BaseURL: "https://api.example.com/openai/v1"},
+			format:  llmprotocol.OpenAIChatV1,
+			want:    "/openai/v1/chat/completions",
+		},
+		{
+			name:    "Chat OpenAI nested API root",
+			profile: config.ProviderProfile{Type: "openai", BaseURL: "https://api.example.com/api/v1"},
+			format:  llmprotocol.OpenAIChatV1,
+			want:    "/api/v1/chat/completions",
+		},
+		{
+			name:    "Chat OpenAI ordinary prefix",
+			profile: config.ProviderProfile{Type: "openai", BaseURL: "https://api.example.com/proxy"},
+			format:  llmprotocol.OpenAIChatV1,
+			want:    "/proxy/chat/completions",
 		},
 		{
 			name:    "Chat explicit override",
@@ -366,11 +390,118 @@ func TestSetProviderRequestPathCoversProtocolAndBaseURLMatrix(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			var mutations []*core.HeaderValueOption
-			setProviderRequestPath(&mutations, &test.profile, test.format)
-			if got := headerValuesByName(mutations)[":path"]; got != test.want {
+			setProviderUpstreamPath(&mutations, &test.profile, test.format, nil)
+			if got := headerValuesByName(mutations)[headers.VSRUpstreamPath]; got != test.want {
 				t.Fatalf("provider path = %q, want %q", got, test.want)
 			}
+			if got := headerValuesByName(mutations)[":path"]; got != "" {
+				t.Fatalf("ext_proc modified :path directly: %q", got)
+			}
+			if got := headerValuesByName(mutations)[headers.VSRPathNeedsPrefix]; got != "" {
+				t.Fatalf("provider-aware path unexpectedly needs Envoy prefix: %q", got)
+			}
 		})
+	}
+}
+
+func TestAppendIngressQuery(t *testing.T) {
+	tests := []struct {
+		name        string
+		requestPath string
+		ingressPath string
+		nilContext  bool
+		want        string
+	}{
+		{name: "nil context", requestPath: "/v1/chat/completions", nilContext: true, want: "/v1/chat/completions"},
+		{name: "no query", requestPath: "/v1/chat/completions", ingressPath: "/v1/chat/completions", want: "/v1/chat/completions"},
+		{name: "empty query", requestPath: "/v1/chat/completions", ingressPath: "/v1/chat/completions?", want: "/v1/chat/completions"},
+		{name: "ingress query", requestPath: "/v1/chat/completions", ingressPath: "/v1/chat/completions?trace=true", want: "/v1/chat/completions?trace=true"},
+		{name: "existing provider query", requestPath: "/chat/completions?api-version=2024-10-21", ingressPath: "/v1/chat/completions?trace=true", want: "/chat/completions?api-version=2024-10-21&trace=true"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var ctx *RequestContext
+			if !test.nilContext {
+				ctx = &RequestContext{Headers: map[string]string{
+					headers.PseudoHeaderPath: test.ingressPath,
+				}}
+			}
+			if got := appendIngressQuery(test.requestPath, ctx); got != test.want {
+				t.Fatalf("appendIngressQuery(%q, %q) = %q, want %q", test.requestPath, test.ingressPath, got, test.want)
+			}
+		})
+	}
+}
+
+func TestSetProviderUpstreamPathUsesImmutableIngressForRepeatedOverlappingPrefix(t *testing.T) {
+	profile := config.ProviderProfile{Type: "openai", BaseURL: "https://api.example.com/v1/chat"}
+	ctx := &RequestContext{Headers: map[string]string{
+		headers.PseudoHeaderPath: "/v1/chat/completions?api-version=test",
+	}}
+
+	for pass := 1; pass <= 2; pass++ {
+		var mutations []*core.HeaderValueOption
+		setProviderUpstreamPath(&mutations, &profile, llmprotocol.OpenAIChatV1, ctx)
+		got := headerValuesByName(mutations)
+		if got[headers.VSRUpstreamPath] != "/v1/chat/chat/completions?api-version=test" {
+			t.Fatalf("pass %d provider path = %q", pass, got[headers.VSRUpstreamPath])
+		}
+		if got[":path"] != "" {
+			t.Fatalf("pass %d modified :path directly: %q", pass, got[":path"])
+		}
+	}
+}
+
+func TestSetProviderUpstreamPathMarksDirectEndpointForEnvoyPrefix(t *testing.T) {
+	ctx := &RequestContext{Headers: map[string]string{
+		headers.PseudoHeaderPath: "/v1/messages?api-version=test",
+	}}
+	var mutations []*core.HeaderValueOption
+
+	setProviderUpstreamPath(&mutations, nil, llmprotocol.OpenAIChatV1, ctx)
+
+	got := headerValuesByName(mutations)
+	if got[headers.VSRUpstreamPath] != "/v1/chat/completions?api-version=test" {
+		t.Fatalf("upstream path carrier = %q", got[headers.VSRUpstreamPath])
+	}
+	if got[headers.VSRPathNeedsPrefix] != "true" {
+		t.Fatalf("path-needs-prefix marker = %q", got[headers.VSRPathNeedsPrefix])
+	}
+}
+
+func TestDecisionHeaderMutationCannotOverridePathCarriers(t *testing.T) {
+	payload, err := config.NewStructuredPayload(config.HeaderMutationPluginConfig{
+		Add: []config.HeaderPair{
+			{Name: "x-test-header", Value: "kept"},
+			{Name: headers.VSROriginalPath, Value: "spoofed"},
+			{Name: headers.VSRUpstreamPath, Value: "spoofed"},
+			{Name: headers.VSRPathNeedsPrefix, Value: "false"},
+		},
+		Delete: []string{
+			"x-remove-me",
+			headers.VSROriginalPath,
+			headers.VSRUpstreamPath,
+			headers.VSRPathNeedsPrefix,
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewStructuredPayload: %v", err)
+	}
+	ctx := &RequestContext{VSRSelectedDecision: &config.Decision{Plugins: []config.DecisionPlugin{{
+		Type: config.DecisionPluginHeaderMutation, Configuration: payload,
+	}}}}
+	state := &routeHeaderState{}
+
+	(&OpenAIRouter{}).applyDecisionHeaderMutations(state, ctx)
+
+	got := headerValuesByName(state.setHeaders)
+	if got["x-test-header"] != "kept" || got[headers.VSROriginalPath] != "" ||
+		got[headers.VSRUpstreamPath] != "" || got[headers.VSRPathNeedsPrefix] != "" {
+		t.Fatalf("set headers = %#v", got)
+	}
+	if len(state.removeHeaders) != 1 || state.removeHeaders[0] != "x-remove-me" {
+		t.Fatalf("remove headers = %#v", state.removeHeaders)
 	}
 }
 
@@ -493,8 +624,12 @@ func TestSpecifiedModelPreservesAnthropicWireAtExtProcBoundary(t *testing.T) {
 	if string(body["stream"]) != "true" || string(body["max_tokens"]) != "256" {
 		t.Fatalf("Anthropic options were not preserved: %s", common.GetBodyMutation().GetBody())
 	}
-	if got := headerValuesByName(common.GetHeaderMutation().GetSetHeaders())[":path"]; got != "/v1/messages" {
-		t.Fatalf("ExtProc source-format path = %q", got)
+	pathHeaders := headerValuesByName(common.GetHeaderMutation().GetSetHeaders())
+	if got := pathHeaders[headers.VSRUpstreamPath]; got != "/v1/messages" {
+		t.Fatalf("ExtProc upstream path = %q", got)
+	}
+	if got := pathHeaders[":path"]; got != "" {
+		t.Fatalf("ExtProc modified :path directly: %q", got)
 	}
 }
 

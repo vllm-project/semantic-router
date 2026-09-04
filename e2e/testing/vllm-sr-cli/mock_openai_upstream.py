@@ -6,6 +6,13 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
+        internal_path_headers = (
+            "x-vsr-internal-original-path",
+            "x-vsr-internal-upstream-path",
+            "x-vsr-internal-path-needs-prefix",
+        )
+        if any(self.headers.get(name) is not None for name in internal_path_headers):
+            print("internal-path-carrier-leaked", flush=True)
         expected_authorization = os.getenv("MOCK_EXPECT_AUTHORIZATION")
         if expected_authorization is not None:
             authorization = self.headers.get("Authorization", "")

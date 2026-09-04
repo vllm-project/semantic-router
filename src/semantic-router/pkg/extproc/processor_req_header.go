@@ -43,7 +43,18 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	// also short-circuit in the no-op path.
 	if ctx.SkipProcessing {
 		detectStreamingExpectation(ctx)
-		return newContinueRequestHeadersResponse(buildLooperInternalHeaderRemovalMutation()), nil
+		mutation := buildLooperInternalHeaderRemovalMutation()
+		// Skipped requests never need path-rewrite state. Remove any values
+		// supplied by the client so internal carriers cannot reach upstream.
+		mutation.RemoveHeaders = append(
+			mutation.RemoveHeaders,
+			headers.VSROriginalPath,
+			headers.VSRUpstreamPath,
+			headers.VSRPathNeedsPrefix,
+		)
+		return newContinueRequestHeadersResponse(
+			mutation,
+		), nil
 	}
 
 	detectStreamingExpectation(ctx)
@@ -56,7 +67,9 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	if validationResp := r.validateRequestHeaders(method, path); validationResp != nil {
 		return validationResp, nil
 	}
-	return newContinueRequestHeadersResponse(buildIdentityEncodingRequestMutation()), nil
+	return newContinueRequestHeadersResponse(
+		withIngressPathCarrier(buildIdentityEncodingRequestMutation(), path),
+	), nil
 }
 
 func startRequestHeaderSpan(
@@ -183,6 +196,24 @@ func buildIdentityEncodingRequestMutation() *ext_proc.HeaderMutation {
 		}},
 		RemoveHeaders: looperInternalHeadersForRemoval(),
 	}
+}
+
+func withIngressPathCarrier(mutation *ext_proc.HeaderMutation, path string) *ext_proc.HeaderMutation {
+	if mutation == nil {
+		mutation = &ext_proc.HeaderMutation{}
+	}
+	mutation.SetHeaders = append(mutation.SetHeaders, &core.HeaderValueOption{
+		Header:       &core.HeaderValue{Key: headers.VSROriginalPath, RawValue: []byte(path)},
+		AppendAction: core.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD,
+	})
+	// Drop client-supplied derived-path state; the original-path carrier above
+	// is overwritten with the trusted ingress path.
+	mutation.RemoveHeaders = append(
+		mutation.RemoveHeaders,
+		headers.VSRUpstreamPath,
+		headers.VSRPathNeedsPrefix,
+	)
+	return mutation
 }
 
 // hopByHopDropList is the set of HTTP framing headers we strip from

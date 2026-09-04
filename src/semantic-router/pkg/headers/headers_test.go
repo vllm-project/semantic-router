@@ -18,6 +18,9 @@ func TestHeaderConstants(t *testing.T) {
 		{"SelectedModel", SelectedModel, "x-selected-model"},
 		{"VSRSkipProcessing", VSRSkipProcessing, "x-vsr-skip-processing"},
 		{"VSRInternalAuth", VSRInternalAuth, "x-vsr-internal-auth"},
+		{"VSROriginalPath", VSROriginalPath, "x-vsr-internal-original-path"},
+		{"VSRUpstreamPath", VSRUpstreamPath, "x-vsr-internal-upstream-path"},
+		{"VSRPathNeedsPrefix", VSRPathNeedsPrefix, "x-vsr-internal-path-needs-prefix"},
 		// VSR headers
 		{"VSRSelectedCategory", VSRSelectedCategory, "x-vsr-selected-category"},
 		{"VSRSelectedReasoning", VSRSelectedReasoning, "x-vsr-selected-reasoning"},
