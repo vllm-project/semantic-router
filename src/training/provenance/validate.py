@@ -181,18 +181,32 @@ def _type_errors(manifest: Manifest) -> list[str]:
     return errors
 
 
+def _well_typed(manifest: Manifest, name: str) -> bool:
+    check, _ = FIELD_CHECKS[manifest.kind][name]
+    return check(getattr(manifest, name))
+
+
+def _source_errors(sources: list[dict[str, Any]]) -> list[str]:
+    errors = []
+    for index, source in enumerate(sources):
+        for key in REQUIRED_SOURCE_KEYS:
+            value = source.get(key)
+            if _is_missing(value):
+                errors.append(f"dataset: sources[{index}] missing {key!r}")
+            elif not isinstance(value, str):
+                errors.append(f"dataset: sources[{index}].{key} must be a string")
+    return errors
+
+
 def _nested_errors(manifest: Manifest) -> list[str]:
     errors = []
-    if isinstance(manifest, DatasetManifest):
-        for index, source in enumerate(manifest.sources):
-            for key in REQUIRED_SOURCE_KEYS:
-                if _is_missing(source.get(key)):
-                    errors.append(f"dataset: sources[{index}] missing {key!r}")
-    if isinstance(manifest, RunManifest):
+    if isinstance(manifest, DatasetManifest) and _well_typed(manifest, "sources"):
+        errors.extend(_source_errors(manifest.sources))
+    if isinstance(manifest, RunManifest) and _well_typed(manifest, "base_model"):
         for key in REQUIRED_BASE_MODEL_KEYS:
             if _is_missing(manifest.base_model.get(key)):
                 errors.append(f"run: base_model missing {key!r}")
-    if isinstance(manifest, ArtifactManifest):
+    if isinstance(manifest, ArtifactManifest) and _well_typed(manifest, "files"):
         errors.extend(_artifact_path_errors(manifest))
     return errors
 
@@ -204,11 +218,7 @@ def _artifact_path_errors(manifest: ArtifactManifest) -> list[str]:
             errors.append(
                 f"artifact: file path must be relative and inside the artifact: {name!r}"
             )
-    if (
-        _is_digest_map(manifest.files)
-        and manifest.files
-        and manifest.digest != tree_digest(manifest.files)
-    ):
+    if manifest.files and manifest.digest != tree_digest(manifest.files):
         errors.append("artifact: digest does not match files")
     return errors
 
