@@ -32,7 +32,7 @@ def build_maps(graph):
     return out2node, name2node
 
 
-def find_attention_blocks(graph, out2node):
+def find_attention_blocks(graph, out2node):  # noqa: C901,PLR0912
     blocks = []
     softmaxes = [n for n in graph.node if n.op_type == "Softmax"]
 
@@ -151,7 +151,7 @@ def classify_mask(mask_tensor_name, local_mask_name=None):
     return "unknown"
 
 
-def find_mask_only_nodes(graph, out2node):
+def find_mask_only_nodes(graph, out2node):  # noqa: C901
     """Find nodes that are exclusively part of the 2-D mask computation."""
     mask_roots = set()
     for n in graph.node:
@@ -179,7 +179,6 @@ def find_mask_only_nodes(graph, out2node):
                 trace_back(inp)
     ancestors.update(mask_roots)
 
-    all_node_names = {n.name for n in graph.node}
     mask_only = set()
     for name in ancestors:
         node = next((n for n in graph.node if n.name == name), None)
@@ -331,11 +330,13 @@ def enforce_output_precision(output_path, model_is_fp16):
         )
 
 
-def rewrite(model_path, output_path, hdim=64, local_attention=128):
+def rewrite(  # noqa: C901,PLR0912,PLR0915
+    model_path, output_path, hdim=64, local_attention=128
+):
     model = onnx.load(model_path)
     graph = model.graph
 
-    out2node, name2node = build_maps(graph)
+    out2node, _name2node = build_maps(graph)
     blocks = find_attention_blocks(graph, out2node)
 
     if not blocks:
@@ -392,7 +393,6 @@ def rewrite(model_path, output_path, hdim=64, local_attention=128):
     new_nodes = []
 
     for i, blk in enumerate(blocks):
-        layer_name = blk["softmax"].name.rsplit("/", 1)[0]
         mask_type = classify_mask(blk["mask_tensor"], local_mask_name)
 
         for key in (
