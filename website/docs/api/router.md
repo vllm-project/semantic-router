@@ -23,6 +23,10 @@ queries. See [Router management API](./apiserver).
 Other `/v1/*` paths fail closed. In particular, Router Replay paths are not
 available on a public inference listener.
 
+See [Protocol Compatibility](../installation/protocol-compatibility) for the
+client-to-backend translation matrix, backend `api_format` values, and
+field-level portability boundaries.
+
 ## Send a routed request
 
 Use an auto-model or recipe entrypoint when you want the router to select a
