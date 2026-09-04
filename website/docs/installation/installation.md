@@ -35,6 +35,9 @@ unless you opt out. Under `--runtime auto` (the default) it prefers an
 existing Docker daemon and falls back to Podman on Linux when Docker is
 not reachable; the selected runtime is persisted to
 `~/.local/share/vllm-sr/runtime.env` so later CLI sessions reuse it.
+To force Podman even when Docker is also available, pass
+`--runtime podman`; to skip runtime preparation entirely, pass
+`--runtime skip`.
 The development channel resolves and pins the newest published `.dev` package
 so the Quickstart follows current project capabilities. It prints the
 Dashboard URL and, on a remote host, an SSH tunnel hint.

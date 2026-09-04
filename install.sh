@@ -418,11 +418,14 @@ print_restart_command() {
   if [ -z "$LAUNCH_PLATFORM" ]; then
     LAUNCH_PLATFORM="$(resolve_launch_platform)"
   fi
+  local cmd="vllm-sr serve"
   if [ -n "$LAUNCH_PLATFORM" ]; then
-    printf '  vllm-sr serve --platform %s\n' "$LAUNCH_PLATFORM"
-  else
-    printf '  vllm-sr serve\n'
+    cmd+=" --platform $LAUNCH_PLATFORM"
   fi
+  if [ -n "${SELECTED_RUNTIME:-}" ]; then
+    cmd+=" --runtime $SELECTED_RUNTIME"
+  fi
+  printf '  %s\n' "$cmd"
   printf '  vllm-sr dashboard\n'
 }
 
@@ -948,10 +951,14 @@ print_next_steps() {
     fi
     printf '  stop         vllm-sr stop\n'
     if [ -n "$LAUNCH_PLATFORM" ]; then
-      printf '  restart      vllm-sr serve --platform %s\n' "$LAUNCH_PLATFORM"
+      printf '  restart      vllm-sr serve --platform %s' "$LAUNCH_PLATFORM"
     else
-      printf '  restart      vllm-sr serve\n'
+      printf '  restart      vllm-sr serve'
     fi
+    if [ -n "${SELECTED_RUNTIME:-}" ]; then
+      printf ' --runtime %s' "$SELECTED_RUNTIME"
+    fi
+    printf '\n'
     if is_remote_session; then
       host_label="$(detect_host_label)"
       printf '  tunnel       ssh -L 8700:localhost:8700 %s@%s\n' "${USER:-user}" "$host_label"
@@ -960,10 +967,14 @@ print_next_steps() {
     printf '  verify       vllm-sr --version\n'
     if [ "$MODE" = "serve" ]; then
       if [ -n "$LAUNCH_PLATFORM" ]; then
-        printf '  start        vllm-sr serve --platform %s\n' "$LAUNCH_PLATFORM"
+        printf '  start        vllm-sr serve --platform %s' "$LAUNCH_PLATFORM"
       else
-        printf '  start        vllm-sr serve\n'
+        printf '  start        vllm-sr serve'
       fi
+      if [ -n "${SELECTED_RUNTIME:-}" ]; then
+        printf ' --runtime %s' "$SELECTED_RUNTIME"
+      fi
+      printf '\n'
       printf '  open         vllm-sr dashboard\n'
     fi
   fi

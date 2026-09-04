@@ -16,6 +16,9 @@
 #   explicit-podman-both-ready   Docker + Podman present, --runtime podman
 #                                -> Podman wins, Docker detection must not run.
 #   skip                         --runtime skip -> no runtime.env written.
+#   print-command-podman         --runtime podman with both stubs ready
+#                                -> asserts printed restart/start commands
+#                                   include `--runtime podman`.
 
 set -u
 
@@ -86,6 +89,11 @@ case "$SCENARIO" in
     write_stub podman ready
     export VLLM_SR_RUNTIME="skip"
     ;;
+  print-command-podman)
+    write_stub docker ready
+    write_stub podman ready
+    export VLLM_SR_RUNTIME="podman"
+    ;;
   *)
     printf 'unknown scenario: %s\n' "$SCENARIO" >&2
     exit 2
@@ -129,4 +137,16 @@ if [ -f "$INSTALL_ROOT_TMP/runtime.env" ]; then
   cat "$INSTALL_ROOT_TMP/runtime.env"
 else
   printf 'RUNTIME_ENV_FILE=absent\n'
+fi
+
+# For scenarios that need to verify printed commands, invoke the real
+# print_restart_command / print_next_steps and tag their output so the
+# Python side can assert the --runtime flag is present.
+if [ "$SCENARIO" = "print-command-podman" ]; then
+  LAUNCH_PLATFORM=""
+  printf '[PRINT_RESTART_COMMAND]\n'
+  print_restart_command
+  printf '[PRINT_NEXT_STEPS]\n'
+  AUTO_LAUNCH_RAN=0
+  print_next_steps
 fi
