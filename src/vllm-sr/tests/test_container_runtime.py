@@ -289,6 +289,9 @@ def test_detect_container_runtime_warns_on_invalid_utf8_persisted_file(
         "Could not read persisted CONTAINER_RUNTIME" in record.message
         for record in caplog.records
     )
+
+
+def test_detect_container_runtime_rejects_native_windows(monkeypatch):
     monkeypatch.setattr(container_runtime.sys, "platform", "win32")
 
     with pytest.raises(SystemExit):
