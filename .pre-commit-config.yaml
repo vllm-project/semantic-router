@@ -45,27 +45,28 @@ repos:
     hooks:
       - id: md-fmt
         name: md fmt
-        entry: bash -c "make markdown-lint"
+        entry: .venv-agent/bin/python tools/agent/scripts/precommit_tool.py markdown
         language: system
+        require_serial: true
         files: \.md$
-        exclude: ^(\node_modules/|CLAUDE\.md)
+        exclude: ^(node_modules/|website/node_modules/|dashboard/frontend/node_modules/|dashboard/wizmap/node_modules/|bench/|e2e/config/models/|models/|vsr/|website/docs/api/crd-reference\.md$|CLAUDE\.md$)
 
   # Yaml specific hooks
   - repo: local
     hooks:
       - id: yaml-and-yml-fmt
         name: yaml/yml fmt
-        entry: bash -c "make yaml-lint"
+        entry: .venv-agent/bin/yamllint --config-file=tools/linter/yaml/.yamllint
         language: system
         files: \.(yaml|yml)$
-        exclude: ^(\node_modules/)
+        exclude: ^(node_modules/)
 
   # JavaScript and TypeScript specific hooks
   - repo: local
     hooks:
       - id: js-ts-lint
         name: js/ts lint
-        entry: bash -c 'cd website && npm install 2>/dev/null || true && npm run lint'
+        entry: .venv-agent/bin/python tools/agent/scripts/precommit_tool.py website
         language: system
         files: \.(js|ts|tsx)$
         exclude: ^(\node_modules/)
@@ -105,7 +106,6 @@ repos:
         entry: bash -c 'if [ ! -x ./.venv-agent/bin/python ]; then echo "run make precommit-install" >&2; exit 1; fi; exec ./.venv-agent/bin/python tools/security/ast_security_scanner.py scan . --fail-on HIGH'
         language: system
         pass_filenames: false
-        always_run: true
         files: \.(py|go|js|ts|tsx|rs)$
 
   # Repo-native changed-file lint gate

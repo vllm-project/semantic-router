@@ -28,7 +28,7 @@ func TestEvaluateDecisionsWithTrace_BasicLeaf(t *testing.T) {
 		KeywordRules: []string{"code_help"},
 	}
 
-	result, traces := engine.EvaluateDecisionsWithTrace(signals)
+	result, traces, _, _ := engine.EvaluateDecisionsWithTraceAndDiagnostics(signals)
 	if result == nil {
 		t.Fatal("expected a decision result")
 	}
@@ -58,7 +58,7 @@ func TestEvaluateDecisionsWithTrace_OmittedRulesFallback(t *testing.T) {
 		Priority: 10,
 	}}, config.RoutingStrategyPriority)
 
-	result, traces := engine.EvaluateDecisionsWithTrace(&SignalMatches{})
+	result, traces, _, _ := engine.EvaluateDecisionsWithTraceAndDiagnostics(&SignalMatches{})
 	if result == nil || result.Decision.Name != "default-route" {
 		t.Fatalf("result = %#v, want default-route", result)
 	}
@@ -98,7 +98,7 @@ func TestEvaluateDecisionsWithTrace_ANDWithOneFailing(t *testing.T) {
 		KeywordRules: []string{"code_help"},
 	}
 
-	result, traces := engine.EvaluateDecisionsWithTrace(signals)
+	result, traces, _, _ := engine.EvaluateDecisionsWithTraceAndDiagnostics(signals)
 	if result != nil {
 		t.Error("expected no match when one AND branch fails")
 	}
@@ -156,7 +156,7 @@ func TestEvaluateDecisionsWithTrace_MultipleDecisions(t *testing.T) {
 		KeywordRules: []string{"code_help"},
 	}
 
-	result, traces := engine.EvaluateDecisionsWithTrace(signals)
+	result, traces, _, _ := engine.EvaluateDecisionsWithTraceAndDiagnostics(signals)
 	if result == nil {
 		t.Fatal("expected a result")
 	}

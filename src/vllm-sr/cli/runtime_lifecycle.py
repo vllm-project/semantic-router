@@ -67,9 +67,22 @@ def ensure_clean_runtime_container(container_name: str) -> None:
 
 def ensure_shared_network(shared_network_name: str) -> None:
     """Create the shared OpenClaw bridge network used by local stacks."""
-    return_code, _stdout, stderr = container_create_network(shared_network_name)
+    _ensure_network(shared_network_name, "shared OpenClaw")
+
+
+def ensure_data_network(data_network_name: str) -> None:
+    """Create the bridge network reserved for this stack's storage services.
+
+    It exists so that joining the application network is not enough to reach
+    Redis, Postgres, or Milvus. Only those three and Router are attached to it.
+    """
+    _ensure_network(data_network_name, "storage data")
+
+
+def _ensure_network(network_name: str, description: str) -> None:
+    return_code, _stdout, stderr = container_create_network(network_name)
     if return_code != 0:
-        log.error(f"Failed to create shared OpenClaw network: {stderr}")
+        log.error(f"Failed to create {description} network: {stderr}")
         raise SystemExit(1)
 
 

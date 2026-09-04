@@ -153,7 +153,9 @@ func decodeModelVerificationContent(body []byte, dialect string) (string, error)
 	var response struct {
 		Choices []struct {
 			Message struct {
-				Content json.RawMessage `json:"content"`
+				Content          json.RawMessage `json:"content"`
+				Reasoning        json.RawMessage `json:"reasoning"`
+				ReasoningContent json.RawMessage `json:"reasoning_content"`
 			} `json:"message"`
 			Text string `json:"text"`
 		} `json:"choices"`
@@ -167,6 +169,10 @@ func decodeModelVerificationContent(body []byte, dialect string) (string, error)
 	content := extractOpenAIChatContent(response.Choices[0].Message.Content)
 	if content == "" {
 		content = strings.TrimSpace(response.Choices[0].Text)
+	}
+	if content == "" && (extractOpenAIChatContent(response.Choices[0].Message.Reasoning) != "" ||
+		extractOpenAIChatContent(response.Choices[0].Message.ReasoningContent) != "") {
+		return "Inference responded successfully.", nil
 	}
 	return content, nil
 }

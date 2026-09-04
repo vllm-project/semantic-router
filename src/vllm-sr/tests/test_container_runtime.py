@@ -244,3 +244,50 @@ def test_resolve_container_cli_path_returns_none_for_podman_shim(monkeypatch):
     )
 
     assert container_runtime.resolve_container_cli_path("/usr/local/bin/docker") is None
+
+
+def test_container_image_exists_accepts_digest_pinned_images(monkeypatch):
+    """#3277: `images -q` does not resolve repo@sha256 references, so a
+    digest-pinned image present locally read as missing and
+    `--image-pull-policy never` refused to start it. The presence check must
+    use `image inspect`, which resolves digests, and must report presence
+    through the exit status rather than stdout."""
+    digest_ref = "ghcr.io/vllm-project/semantic-router@sha256:" + "a" * 64
+    seen = {}
+
+    def fake_run(cmd, **kwargs):
+        seen["cmd"] = cmd
+
+        class Result:
+            # `image inspect` writes the manifest to stdout on success; the old
+            # implementation keyed off stdout from `images -q`, which is empty
+            # for a digest reference even when the image is present.
+            returncode = 0
+            stdout = '[{"Id":"sha256:deadbeef"}]'
+            stderr = ""
+
+        return Result()
+
+    monkeypatch.setattr(container_runtime, "get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(container_runtime.subprocess, "run", fake_run)
+
+    assert container_runtime.container_image_exists(digest_ref) is True
+    assert seen["cmd"] == ["docker", "image", "inspect", digest_ref]
+
+
+def test_container_image_exists_reports_missing_on_nonzero_exit(monkeypatch):
+    """A genuinely absent image must still read as absent, including when the
+    runtime writes diagnostics to stdout."""
+
+    def fake_run(cmd, **kwargs):
+        class Result:
+            returncode = 1
+            stdout = "[]\n"
+            stderr = "Error: No such image"
+
+        return Result()
+
+    monkeypatch.setattr(container_runtime, "get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(container_runtime.subprocess, "run", fake_run)
+
+    assert container_runtime.container_image_exists("missing:latest") is False

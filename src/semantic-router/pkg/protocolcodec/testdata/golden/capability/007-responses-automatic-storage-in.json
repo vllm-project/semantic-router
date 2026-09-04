@@ -1,0 +1,9 @@
+{
+  "operation": "request",
+  "body": {
+    "model": "client-model",
+    "input": "Remember this turn.",
+    "store": true,
+    "auto_store": true
+  }
+}

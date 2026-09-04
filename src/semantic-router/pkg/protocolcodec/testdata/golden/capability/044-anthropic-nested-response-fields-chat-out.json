@@ -1,0 +1,24 @@
+{
+  "cases": [
+    {
+      "name": "signed_thinking",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_citations"
+        }
+      }
+    },
+    {
+      "name": "server_tool_use",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_content"
+        }
+      }
+    }
+  ]
+}

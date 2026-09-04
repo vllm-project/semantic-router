@@ -1,7 +1,31 @@
 .modelIdentity {
+  display: flex;
+  align-items: center;
+  min-width: 250px;
+  gap: 0.75rem;
+}
+
+.modelIdentityCopy {
+  min-width: 0;
   display: grid;
-  min-width: 220px;
   gap: 0.32rem;
+}
+
+.modelProviderMark {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: transparent;
+  border-radius: 8px;
+}
+
+.modelProviderMark img {
+  width: 23px;
+  height: 23px;
+  object-fit: contain;
 }
 
 .modelIdentityPrimary {
@@ -64,9 +88,10 @@
 }
 
 .liveVerification {
-  display: grid;
-  min-width: 210px;
-  gap: 0.34rem;
+  display: flex;
+  min-width: 145px;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .liveVerificationHeading {
@@ -86,9 +111,9 @@
 }
 
 .liveVerificationDotSuccess {
-  border-color: rgba(74, 222, 128, 0.7);
-  background: #22c55e;
-  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.12);
+  border-color: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.08);
 }
 
 .liveVerificationDotError {
@@ -147,6 +172,9 @@
 }
 
 .liveVerificationButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
   width: fit-content;
   min-height: 28px;
   padding: 0.28rem 0.58rem;
@@ -159,9 +187,33 @@
 }
 
 .liveVerificationButton:hover:not(:disabled) {
-  border-color: rgba(74, 222, 128, 0.42);
-  background: rgba(34, 197, 94, 0.1);
-  color: #dcfce7;
+  border-color: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.reasoningFamilyName {
+  color: #f5f5f7;
+  font-weight: 660;
+  letter-spacing: -0.01em;
+}
+
+.reasoningFamilyType {
+  display: inline-flex;
+  width: fit-content;
+  padding: 0.32rem 0.55rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.045);
+  font-size: 0.72rem;
+  font-weight: 680;
+}
+
+.reasoningFamilyParameter {
+  color: rgba(255, 255, 255, 0.5);
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
 }
 
 .liveVerificationButton:disabled {

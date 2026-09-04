@@ -61,6 +61,15 @@ providers:
         type: chat_template_kwargs
         parameter: enable_thinking
   models:
+    - name: local/omni
+      provider_model_id: local/omni
+      api_format: openai
+      backend_refs:
+        - name: local-omni
+          endpoint: vllm-omni:8000
+          protocol: http
+          type: vllm
+          weight: 1
     - name: qwen/qwen3.6-rocm
       api_format: openai
       reasoning_family: qwen3
@@ -135,6 +144,9 @@ providers:
 
 routing:
   modelCards:
+    - name: local/omni
+      capabilities: [chat, image_understanding, multimodal, omni, text, vision]
+      modality: omni
     - name: qwen/qwen3.6-rocm
       context_window_size: 262144
       description: Local AMD vLLM alias backed by Qwen3.6 for privacy-sensitive work, safety containment, simple traffic, and low-cost fallbacks.
@@ -208,6 +220,12 @@ routing:
 
   signals:
     conversation:
+      - name: agent_has_images
+        description: Request contains at least one image content part.
+        feature:
+          type: exists
+          source:
+            type: image_content
       - name: multi_turn_user
         feature:
           type: count
@@ -928,6 +946,29 @@ routing:
           use_reasoning: false
       adaptations:
         mode: bypass
+      plugins:
+        - type: router_replay
+          configuration:
+            enabled: true
+            max_records: 10000
+            capture_request_body: true
+            capture_response_body: true
+            max_body_bytes: 2048
+            max_tool_trace_steps: 100
+
+    - name: omni
+      description: Understand image-bearing requests locally without bypassing security containment.
+      priority: 330
+      tier: 1
+      rules:
+        operator: OR
+        conditions:
+          - type: conversation
+            name: agent_has_images
+      modelRefs:
+        - model: local/omni
+      algorithm:
+        type: static
       plugins:
         - type: router_replay
           configuration:

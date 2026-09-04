@@ -135,6 +135,8 @@ global:
           enabled: false
           model_metrics: false
           queue_depth_estimation: false
+      profiling:
+        enabled: false
     authz: {}
     ratelimit: {}
     management_api: {}
@@ -192,8 +194,7 @@ global:
           model_id: ""
           threshold: 0.5
           use_cpu: true
-          use_modernbert: false
-          use_mmbert_32k: true
+          variant: mmbert32k
           category_mapping_path: models/mmbert32k-intent-classifier-merged/category_mapping.json
           model_ref: domain_classifier
         mcp:

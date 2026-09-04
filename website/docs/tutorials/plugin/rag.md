@@ -37,6 +37,12 @@ Choose one backend:
 | `vectorstore` | The Router-managed vector-store service | `vector_store_id` |
 | `hybrid` | A primary backend with an optional fallback | `primary`, plus backend-specific nested configuration |
 
+For `external_api`, `max_response_bytes` caps each response body; omitted or
+`0` uses 4 MiB.
+
+For OpenAI `direct_search`, `max_response_bytes` applies the same 4 MiB default
+to each vector-store search response.
+
 The examples below show the two direct-store options. For the
 other backends, start from the field names above and validate the complete
 config before deployment.

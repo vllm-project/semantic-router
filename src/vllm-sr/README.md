@@ -153,49 +153,20 @@ export PROVIDER_API_KEY=...
 vllm-sr serve --config recipe.yaml --recipe-env PROVIDER_API_KEY
 ```
 
-## Discover virtual and provider models
+## Connect Models and build Mixture-of-Models
 
-The installed catalog is available offline:
+Run `vllm-sr serve`, then use Dashboard to connect provider Models, choose a
+built-in or custom Recipe, and assign Models to its decisions. Dashboard keeps
+provider connection details separate from reusable routing policy and exposes
+the published names through `/v1/models`.
 
-```bash
-vllm-sr model list
-vllm-sr model list --all-versions
-vllm-sr model show vllm-sr/mom-v1-blend
-```
-
-When `./config.yaml` exists, the ordinary list merges its configured models
-with compatible built-ins. Pass a file explicitly to inspect only that config:
+For source-controlled deployments, validate and serve one complete user-owned
+configuration:
 
 ```bash
-vllm-sr model list --config my-config.yaml
+vllm-sr validate --config my-models.yaml
+vllm-sr serve --config my-models.yaml
 ```
-
-The output separates **Provider models** (backend bindings) from **Model cards**
-(routing metadata). Credential values and credential variable names
-are omitted or redacted so the output can be shared in support logs. Use
-`--output json` for automation.
-
-Fork a built-in model before changing it:
-
-```bash
-vllm-sr model fork vllm-sr/mom-v1-blend mom.yaml
-vllm-sr model validate mom.yaml
-vllm-sr serve --config mom.yaml
-```
-
-For a local Docker stack, a catalog ID can also be passed directly:
-
-```bash
-vllm-sr serve vllm-sr/mom-v1-blend
-vllm-sr serve \
-  vllm-sr/mom-v1-lite \
-  vllm-sr/mom-v1-flash
-```
-
-These IDs select request-facing routing policies, not downloadable inference
-models. Configure and start their required provider backends separately. The
-catalog shorthand is local-only; materialize the YAML before Kubernetes
-deployment.
 
 ## Deploy to Kubernetes
 

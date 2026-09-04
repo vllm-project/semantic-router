@@ -19,6 +19,7 @@ from cli.consts import (
 
 STACK_NAME_ENV = "VLLM_SR_STACK_NAME"
 PORT_OFFSET_ENV = "VLLM_SR_PORT_OFFSET"
+DEFAULT_ENVOY_CONTAINER_NAME = "vllm-sr-envoy-container"
 
 DEFAULT_JAEGER_OTLP_PORT = 4318
 DEFAULT_JAEGER_UI_PORT = 16686
@@ -32,6 +33,15 @@ STACK_NAME_PATTERN = re.compile(r"[^A-Za-z0-9_.-]+")
 
 @dataclass(frozen=True)
 class RuntimeStackLayout:
+    """Every name and port one local stack owns.
+
+    A stack runs on two bridge networks. *network_name* is the application
+    network: Envoy, Dashboard, the simulator, the observability containers, and
+    any OpenClaw workload join it. *data_network_name* carries the storage
+    services alone, so nothing that merely shares the stack can reach Redis,
+    Postgres, or Milvus over the network. Router is the one container on both.
+    """
+
     stack_name: str
     port_offset: int
     router_container_name: str
@@ -39,6 +49,7 @@ class RuntimeStackLayout:
     dashboard_container_name: str
     fleet_sim_container_name: str
     network_name: str
+    data_network_name: str
     jaeger_container_name: str
     prometheus_container_name: str
     grafana_container_name: str
@@ -181,10 +192,11 @@ def resolve_runtime_stack(
 
     if resolved_stack_name == DEFAULT_STACK_NAME:
         router_container_name = "vllm-sr-router-container"
-        envoy_container_name = "vllm-sr-envoy-container"
+        envoy_container_name = DEFAULT_ENVOY_CONTAINER_NAME
         dashboard_container_name = "vllm-sr-dashboard-container"
         fleet_sim_container_name = VLLM_SR_SIM_CONTAINER_NAME
         network_name = f"{DEFAULT_STACK_NAME}-network"
+        data_network_name = f"{DEFAULT_STACK_NAME}-data-network"
         jaeger_container_name = f"{DEFAULT_STACK_NAME}-jaeger"
         prometheus_container_name = f"{DEFAULT_STACK_NAME}-prometheus"
         grafana_container_name = f"{DEFAULT_STACK_NAME}-grafana"
@@ -197,6 +209,7 @@ def resolve_runtime_stack(
         dashboard_container_name = f"{resolved_stack_name}-vllm-sr-dashboard-container"
         fleet_sim_container_name = f"{resolved_stack_name}-vllm-sr-sim"
         network_name = f"{resolved_stack_name}-vllm-sr-network"
+        data_network_name = f"{resolved_stack_name}-vllm-sr-data-network"
         jaeger_container_name = f"{resolved_stack_name}-vllm-sr-jaeger"
         prometheus_container_name = f"{resolved_stack_name}-vllm-sr-prometheus"
         grafana_container_name = f"{resolved_stack_name}-vllm-sr-grafana"
@@ -212,6 +225,7 @@ def resolve_runtime_stack(
         dashboard_container_name=dashboard_container_name,
         fleet_sim_container_name=fleet_sim_container_name,
         network_name=network_name,
+        data_network_name=data_network_name,
         jaeger_container_name=jaeger_container_name,
         prometheus_container_name=prometheus_container_name,
         grafana_container_name=grafana_container_name,

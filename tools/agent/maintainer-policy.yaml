@@ -10,6 +10,8 @@ labels:
   issue_defaults:
     feature: enhancement
     bug: bug
+  structure:
+    epic: epic
   lifecycle:
     needs_acceptance: needs-acceptance
     accepted: accepted
@@ -28,32 +30,14 @@ labels:
     merge_ready: pr/merge-ready
     close_candidate: pr/close-candidate
   workgroups:
-    - wg/mom-routing-intelligence
-    - wg/router-models-runtime-ecosystem
-    - wg/data-plane-deployment
-    - wg/platform-operations
-    - wg/quality-release
-    - wg/dev-community
-
-release_tracks:
-  contracts:
-    label: track/contracts
-    description: API, config, deployment, and control-plane contracts.
-  ops:
-    label: track/ops
-    description: Release channels, upgrades, rollback, and production operations.
-  performance:
-    label: track/performance
-    description: Native/runtime parity and performance validation.
-  research-to-product:
-    label: track/research-to-product
-    description: Research work that directly improves product behavior.
-  hardening:
-    label: track/hardening
-    description: Dashboard, eval, RAG, memory, protocol, and product hardening.
-  security:
-    label: track/security
-    description: Security, RBAC, observability, and E2E closure.
+    - wg/mom-routing
+    - wg/router-models-inference-runtime
+    - wg/data-plane-networking
+    - wg/enterprise-environment
+    - wg/agentic-context
+    - wg/developer-experience-ecosystem
+    - wg/evaluation-quality
+  maintainer_owner: owner/maintainers
 
 staleness:
   issue_stale_days: 90

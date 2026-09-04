@@ -59,6 +59,7 @@ func (d *decompiler) algorithmToFields(algo *config.AlgorithmConfig) map[string]
 	if algo == nil {
 		return fields
 	}
+	setIntValue(fields, "minimum_candidates", algo.MinimumCandidates)
 	algorithmOnErrorToFields(algo, fields)
 	if export, ok := algorithmFieldExporters[algo.Type]; ok {
 		export(algo, fields)
@@ -89,6 +90,7 @@ func confidenceAlgorithmToFields(c *config.ConfidenceAlgorithmConfig, fields map
 	setStringValue(fields, "token_filter", c.TokenFilter)
 	setStringValue(fields, "verifier_server_url", c.VerifierServerURL)
 	setIntValue(fields, "verifier_timeout_seconds", c.VerifierTimeoutSeconds)
+	setIntValue(fields, "max_response_bytes", int(c.MaxResponseBytes))
 	if c.HybridWeights != nil {
 		weights := map[string]Value{}
 		setFloatValue(weights, "logprob_weight", c.HybridWeights.LogprobWeight)

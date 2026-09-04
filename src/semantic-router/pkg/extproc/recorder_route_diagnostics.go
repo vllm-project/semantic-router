@@ -61,6 +61,7 @@ func buildReplayRouteDiagnostics(
 		ContextCompressionFallback:     ctx.ContextCompressionFallback,
 		ContextCompressionCostSaved:    ctx.ContextCompressionCostSaved,
 		SignalErrors:                   cloneReplayStringMap(ctx.VSRSignalErrors),
+		AppliedUnknownPolicies:         cloneReplayStringMap(ctx.VSRAppliedUnknownPolicies),
 	}
 	if ctx.VSRSelectedDecision != nil {
 		diagnostics.Annotations = ctx.VSRSelectedDecision.Annotations

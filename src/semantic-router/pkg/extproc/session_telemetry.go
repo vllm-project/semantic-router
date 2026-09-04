@@ -67,25 +67,25 @@ func recordSessionTurn(ctx *RequestContext, usage responseUsageMetrics, pricing 
 		RoutingScope:                ctx.Routing.RecipeName(),
 		SkipRoutingState:            requestBypassesRouting(ctx),
 	}
-	if ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.IsResponseAPIRequest {
-		if ctx.ResponseAPICtx.ConversationID == "" {
+	if state := ctx.ResponseObjectState; state != nil {
+		if state.ConversationID == "" {
 			return
 		}
 		p.ResponseAPI = &sessiontelemetry.ResponseAPIInput{
-			ConversationID: ctx.ResponseAPICtx.ConversationID,
-			HistoryLen:     len(ctx.ResponseAPICtx.ConversationHistory),
+			ConversationID: state.ConversationID,
+			HistoryLen:     len(state.ConversationHistory),
 		}
 	} else {
 		userID := extractUserID(ctx)
-		if userID == "" || len(ctx.ChatCompletionMessages) == 0 {
+		if userID == "" || ctx.SemanticRequest == nil || len(ctx.SemanticRequest.Messages) == 0 {
 			recordRouterSessionUsageFromContext(ctx, usage, pricing, accounting)
 			return
 		}
-		msgs := make([]sessiontelemetry.ChatMessage, len(ctx.ChatCompletionMessages))
-		for i := range ctx.ChatCompletionMessages {
+		msgs := make([]sessiontelemetry.ChatMessage, len(ctx.SemanticRequest.Messages))
+		for i := range ctx.SemanticRequest.Messages {
 			msgs[i] = sessiontelemetry.ChatMessage{
-				Role:    ctx.ChatCompletionMessages[i].Role,
-				Content: ctx.ChatCompletionMessages[i].Content,
+				Role:    string(ctx.SemanticRequest.Messages[i].Role),
+				Content: semanticText(ctx.SemanticRequest.Messages[i].Content),
 			}
 		}
 		p.Chat = &sessiontelemetry.ChatInput{UserID: userID, Messages: msgs}
@@ -234,11 +234,6 @@ func maybeEmitTransitionEvent(ctx *RequestContext) {
 		return
 	}
 
-	previousResponseID := ""
-	if ctx.ResponseAPICtx != nil {
-		previousResponseID = ctx.ResponseAPICtx.PreviousResponseID
-	}
-
 	evt := sessiontelemetry.ModelTransitionEvent{
 		SessionID:           ctx.SessionID,
 		TurnIndex:           ctx.TurnIndex,
@@ -246,7 +241,7 @@ func maybeEmitTransitionEvent(ctx *RequestContext) {
 		ToModel:             ctx.RequestModel,
 		TTFTMs:              ctx.TTFTSeconds * 1000,
 		CacheWarmthEstimate: ctx.CacheWarmthEstimate,
-		PreviousResponseID:  previousResponseID,
+		PreviousResponseID:  ctx.PreviousResponseID,
 		Timestamp:           time.Now(),
 	}
 	sessiontelemetry.RecordTransition(evt)

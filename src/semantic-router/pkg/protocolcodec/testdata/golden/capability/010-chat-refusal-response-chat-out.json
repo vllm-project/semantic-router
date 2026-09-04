@@ -1,0 +1,24 @@
+{
+  "status": "ok",
+  "body": {
+    "choices": [
+      {
+        "finish_reason": "content_filter",
+        "index": 0,
+        "message": {
+          "refusal": "I cannot help with that.",
+          "role": "assistant"
+        }
+      }
+    ],
+    "created": 100,
+    "id": "chatcmpl_1",
+    "model": "routed-model",
+    "object": "chat.completion",
+    "usage": {
+      "completion_tokens": 2,
+      "prompt_tokens": 4,
+      "total_tokens": 6
+    }
+  }
+}

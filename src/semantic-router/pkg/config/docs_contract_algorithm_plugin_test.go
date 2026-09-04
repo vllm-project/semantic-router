@@ -38,7 +38,6 @@ var pluginTutorialBuckets = map[string]string{
 	"fast-response":       "response-and-mutation",
 	"hallucination":       "safety-and-generation",
 	"header-mutation":     "response-and-mutation",
-	"image-gen":           "response-and-mutation",
 	"memory":              "retrieval-and-memory",
 	"rag":                 "retrieval-and-memory",
 	"request-params":      "response-and-mutation",

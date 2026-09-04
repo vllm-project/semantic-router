@@ -108,6 +108,11 @@ SIGNAL structure fenced_instruction_blob {
   feature: { source: { pattern: "(?i)(<system>|<assistant>|begin system prompt|```system|###\\s*system)", type: "regex" }, type: "exists" }
 }
 
+SIGNAL conversation privacy_has_images {
+  description: "Request contains at least one image content part."
+  feature: { source: { type: "image_content" }, type: "exists" }
+}
+
 SIGNAL complexity frontier_reasoning {
   threshold: 0.12
   description: "General reasoning boundary between local handling and frontier-cloud escalation."
@@ -200,6 +205,11 @@ MODEL cloud/frontier-reasoning {
   modality: "text"
 }
 
+MODEL local/omni {
+  capabilities: ["chat", "image_understanding", "multimodal", "omni", "text", "vision"]
+  modality: "omni"
+}
+
 MODEL local/private-qwen {
   context_window_size: 131072
   description: "Low-cost self-hosted lane for privacy-sensitive, suspicious, and standard local traffic."
@@ -229,6 +239,24 @@ ROUTE local_security_containment (description = "Keep suspicious or jailbreak-li
   PLUGIN tools {
     enabled: true
     mode: "none"
+  }
+  PLUGIN router_replay {
+    enabled: true
+    max_records: 50000
+    max_body_bytes: 2048
+  }
+}
+
+ROUTE omni (description = "Understand private image-bearing requests on the local visual-language model.") {
+  PRIORITY 275
+  TIER 2
+  WHEN conversation("privacy_has_images")
+  MODEL "local/omni" (reasoning = false)
+  ALGORITHM static
+  PLUGIN tools {
+    enabled: true
+    mode: "filtered"
+    allow_tools: ["local_search", "local_read"]
   }
   PLUGIN router_replay {
     enabled: true

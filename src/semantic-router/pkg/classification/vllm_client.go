@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"time"
 
@@ -14,18 +13,33 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	httputil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 )
 
 // VLLMClient handles communication with vLLM REST API for classifiers
 type VLLMClient struct {
-	httpClient *http.Client
-	endpoint   *config.ClassifierVLLMEndpoint
-	baseURL    string
-	accessKey  string // Optional access key for Authorization header
+	httpClient       *http.Client
+	endpoint         *config.ClassifierVLLMEndpoint
+	baseURL          string
+	accessKey        string // Optional access key for Authorization header
+	maxResponseBytes int64
 }
 
 // NewVLLMClient creates a new vLLM REST API client for classifiers
 func NewVLLMClient(endpoint *config.ClassifierVLLMEndpoint) *VLLMClient {
+	return newVLLMClient(endpoint, "", config.DefaultClassifyMaxResponseBytes)
+}
+
+// NewVLLMClientWithAuth creates a new vLLM REST API client with access key
+func NewVLLMClientWithAuth(endpoint *config.ClassifierVLLMEndpoint, accessKey string) *VLLMClient {
+	return newVLLMClient(endpoint, accessKey, config.DefaultClassifyMaxResponseBytes)
+}
+
+func newVLLMClientFromConfig(cfg *config.ExternalModelConfig) *VLLMClient {
+	return newVLLMClient(&cfg.ModelEndpoint, cfg.AccessKey, cfg.GetMaxResponseBytes())
+}
+
+func newVLLMClient(endpoint *config.ClassifierVLLMEndpoint, accessKey string, maxResponseBytes int64) *VLLMClient {
 	scheme := endpoint.Protocol
 	if scheme == "" {
 		scheme = "http"
@@ -36,16 +50,11 @@ func NewVLLMClient(endpoint *config.ClassifierVLLMEndpoint) *VLLMClient {
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
-		endpoint: endpoint,
-		baseURL:  baseURL,
+		endpoint:         endpoint,
+		baseURL:          baseURL,
+		accessKey:        accessKey,
+		maxResponseBytes: maxResponseBytes,
 	}
-}
-
-// NewVLLMClientWithAuth creates a new vLLM REST API client with access key
-func NewVLLMClientWithAuth(endpoint *config.ClassifierVLLMEndpoint, accessKey string) *VLLMClient {
-	client := NewVLLMClient(endpoint)
-	client.accessKey = accessKey
-	return client
 }
 
 // vllmChatCompletionRequest extends openai.ChatCompletionNewParams with
@@ -177,13 +186,14 @@ func (c *VLLMClient) generateWithMessages(
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, truncated := httputil.ReadTruncatedBody(resp.Body, maxClassifyErrorBodyBytes)
+		return nil, fmt.Errorf("vLLM API returned status %d: %s (truncated=%t)", resp.StatusCode, string(body), truncated)
 	}
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("vLLM API returned status %d: %s", resp.StatusCode, string(body))
+	body, err := httputil.ReadLimitedBody(resp.Body, c.maxResponseBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
 	var chatResp openai.ChatCompletion

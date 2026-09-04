@@ -305,6 +305,11 @@ type SignalCombination struct {
 	// +kubebuilder:validation:Enum=AND;OR;NOT
 	Operator string `json:"operator" yaml:"operator"`
 
+	// OnUnknown resolves a terminal unknown result after the signal tree is evaluated.
+	// +optional
+	// +kubebuilder:validation:Enum=no_match;match;fail_request
+	OnUnknown string `json:"on_unknown,omitempty" yaml:"on_unknown,omitempty"`
+
 	// Conditions defines the list of signal conditions
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinItems=1
@@ -361,7 +366,7 @@ type DecisionPlugin struct {
 	// Type is the plugin type. response_cache is canonical; semantic-cache,
 	// semantic_cache, and response-cache are deprecated aliases.
 	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Enum=context_compression;fast_response;hallucination;header_mutation;image_gen;memory;rag;request_params;response_jailbreak;router_replay;response_cache;response-cache;semantic_cache;semantic-cache;system_prompt;tools
+	// +kubebuilder:validation:Enum=context_compression;fast_response;hallucination;header_mutation;memory;rag;request_params;response_jailbreak;router_replay;response_cache;response-cache;semantic_cache;semantic-cache;system_prompt;tools
 	Type string `json:"type" yaml:"type"`
 
 	// Configuration is the plugin-specific configuration as a raw JSON object

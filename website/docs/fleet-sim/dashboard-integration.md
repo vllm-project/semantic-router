@@ -64,6 +64,21 @@ The dashboard saves simulator objects through the service API. Treat those
 objects as planning inputs, not as live router configuration; Fleet Sim does
 not deploy or resize inference workers.
 
+## Capacity-planning roadmap
+
+The current four-page workflow is an experimental planning surface. The
+[workload-driven capacity-planning Epic](https://github.com/vllm-project/semantic-router/issues/3091)
+tracks its integration with Router Replay and production telemetry, active or
+candidate routing recipes, calibrated serving profiles, and maintained
+deployment topology.
+
+The target product workflow is a Capacity Planning workspace plus study
+reports/history. Workloads and fleet definitions become reusable study inputs,
+and recommendations can be exported as reviewable Builder, Helm, or Operator
+proposals. The roadmap does not authorize Fleet Sim to apply production changes
+automatically, and it does not make uncalibrated simulator output a capacity
+commitment.
+
 ## Security boundary
 
 Dashboard authentication applies to the proxy routes. The standalone Fleet Sim

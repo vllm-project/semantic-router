@@ -70,6 +70,10 @@ func TestStubEmbeddingFailsClosed(t *testing.T) {
 
 	_, err = MultiModalEncodeImageFromURL("http://example.com/x.png", 384)
 	wantUnavailable(t, "MultiModalEncodeImageFromURL", err)
+
+	if SupportsBatchedEmbedding("qwen3") {
+		t.Fatal("SupportsBatchedEmbedding: expected false from unavailable backend")
+	}
 }
 
 // TestStubSimilarityFailsClosed covers similarity APIs, including the two that

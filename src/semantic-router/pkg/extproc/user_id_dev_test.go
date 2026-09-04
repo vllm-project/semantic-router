@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 // =============================================================================
@@ -22,12 +22,8 @@ func TestExtractUserID_AuthHeaderTakesPrecedence(t *testing.T) {
 		Headers: map[string]string{
 			headers.AuthzUserID: "user_from_auth",
 		},
-		ResponseAPICtx: &ResponseAPIContext{
-			OriginalRequest: &responseapi.ResponseAPIRequest{
-				Metadata: map[string]string{
-					"user_id": "user_from_metadata",
-				},
-			},
+		SemanticRequest: &llmprotocol.Request{
+			Metadata: map[string]string{"user_id": "user_from_metadata"},
 		},
 	}
 
@@ -39,12 +35,8 @@ func TestExtractUserID_FallbackToMetadataWhenNoAuthHeader(t *testing.T) {
 	// No auth header, falls back to metadata["user_id"]
 	ctx := &RequestContext{
 		Headers: map[string]string{},
-		ResponseAPICtx: &ResponseAPIContext{
-			OriginalRequest: &responseapi.ResponseAPIRequest{
-				Metadata: map[string]string{
-					"user_id": "user_from_metadata",
-				},
-			},
+		SemanticRequest: &llmprotocol.Request{
+			Metadata: map[string]string{"user_id": "user_from_metadata"},
 		},
 	}
 
@@ -58,12 +50,8 @@ func TestExtractUserID_EmptyAuthHeaderFallsBackToMetadata(t *testing.T) {
 		Headers: map[string]string{
 			headers.AuthzUserID: "",
 		},
-		ResponseAPICtx: &ResponseAPIContext{
-			OriginalRequest: &responseapi.ResponseAPIRequest{
-				Metadata: map[string]string{
-					"user_id": "user_from_metadata",
-				},
-			},
+		SemanticRequest: &llmprotocol.Request{
+			Metadata: map[string]string{"user_id": "user_from_metadata"},
 		},
 	}
 
@@ -80,14 +68,15 @@ func TestExtractMemoryInfo_FallbackToMetadata(t *testing.T) {
 	ctx := &RequestContext{
 		RequestID: "req_123",
 		Headers:   map[string]string{},
-		ResponseAPICtx: &ResponseAPIContext{
-			IsResponseAPIRequest: true,
-			ConversationID:       "conv_from_translate",
-			OriginalRequest: &responseapi.ResponseAPIRequest{
-				Metadata: map[string]string{
-					"user_id": "user_from_metadata",
-				},
-			},
+		SessionID: "conv_from_translate",
+		SemanticRequest: &llmprotocol.Request{
+			Metadata: map[string]string{"user_id": "user_from_metadata"},
+			Messages: []llmprotocol.Message{{
+				Role: llmprotocol.RoleUser,
+				Content: []llmprotocol.Content{{
+					Kind: llmprotocol.ContentText, Text: "hello",
+				}},
+			}},
 		},
 	}
 
@@ -96,7 +85,7 @@ func TestExtractMemoryInfo_FallbackToMetadata(t *testing.T) {
 	require.NoError(t, err, "should not return error when falling back to metadata")
 	assert.Equal(t, "conv_from_translate", sessionID)
 	assert.Equal(t, "user_from_metadata", userID, "should fall back to metadata when no auth header")
-	assert.Empty(t, history)
+	assert.Len(t, history, 1)
 }
 
 func TestExtractMemoryInfo_UserIDFromMetadataOnly(t *testing.T) {
@@ -104,14 +93,15 @@ func TestExtractMemoryInfo_UserIDFromMetadataOnly(t *testing.T) {
 	ctx := &RequestContext{
 		RequestID: "req_123",
 		Headers:   map[string]string{},
-		ResponseAPICtx: &ResponseAPIContext{
-			IsResponseAPIRequest: true,
-			ConversationID:       "conv_from_translate",
-			OriginalRequest: &responseapi.ResponseAPIRequest{
-				Metadata: map[string]string{
-					"user_id": "user_from_metadata",
-				},
-			},
+		SessionID: "conv_from_translate",
+		SemanticRequest: &llmprotocol.Request{
+			Metadata: map[string]string{"user_id": "user_from_metadata"},
+			Messages: []llmprotocol.Message{{
+				Role: llmprotocol.RoleUser,
+				Content: []llmprotocol.Content{{
+					Kind: llmprotocol.ContentText, Text: "hello",
+				}},
+			}},
 		},
 	}
 
@@ -120,5 +110,5 @@ func TestExtractMemoryInfo_UserIDFromMetadataOnly(t *testing.T) {
 	require.NoError(t, err, "should not return error when userID is provided via metadata")
 	assert.Equal(t, "conv_from_translate", sessionID)
 	assert.Equal(t, "user_from_metadata", userID)
-	assert.Empty(t, history)
+	assert.Len(t, history, 1)
 }

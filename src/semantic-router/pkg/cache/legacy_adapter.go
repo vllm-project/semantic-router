@@ -1,6 +1,9 @@
 package cache
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // LegacyBackendAdapter confines the old backend API to one migration boundary.
 // Request paths and management APIs depend on TypedCacheStore instead.
@@ -37,12 +40,16 @@ func (a *LegacyBackendAdapter) LookupExact(
 	if err != nil {
 		return CacheResult{}, err
 	}
+	age, ageKnown := resultAge(result)
 	return CacheResult{
 		ResponseBody: result.ResponseBody,
 		Found:        result.Found,
 		HitKind:      HitKindExact,
 		Source:       CacheSourceL2,
 		Similarity:   result.Similarity,
+		Age:          age,
+		AgeKnown:     ageKnown,
+		ExpiresAt:    result.ExpiresAt,
 	}, nil
 }
 
@@ -76,13 +83,24 @@ func (a *LegacyBackendAdapter) LookupSemantic(
 	if err != nil {
 		return CacheResult{}, err
 	}
+	age, ageKnown := resultAge(result)
 	return CacheResult{
 		ResponseBody: result.ResponseBody,
 		Found:        result.Found,
 		HitKind:      HitKindSemantic,
 		Source:       CacheSourceL2,
 		Similarity:   result.Similarity,
+		Age:          age,
+		AgeKnown:     ageKnown,
+		ExpiresAt:    result.ExpiresAt,
 	}, nil
+}
+
+func resultAge(result LookupResult) (time.Duration, bool) {
+	if !result.StoredAt.IsZero() {
+		return time.Since(result.StoredAt), true
+	}
+	return result.Age, result.AgeKnown
 }
 
 func (a *LegacyBackendAdapter) StoreSemantic(ctx context.Context, write CacheWrite) error {

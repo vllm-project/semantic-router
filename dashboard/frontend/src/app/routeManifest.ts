@@ -1,6 +1,5 @@
 export type ShellRoutePage =
   | 'builder'
-  | 'clawos'
   | 'dashboard'
   | 'evaluation'
   | 'fleet-sim'
@@ -11,9 +10,8 @@ export type ShellRoutePage =
   | 'insights-record'
   | 'logs'
   | 'monitoring'
+  | 'openclaw'
   | 'playground'
-  | 'plugins'
-  | 'security'
   | 'status'
   | 'topology'
   | 'tracing'
@@ -43,8 +41,6 @@ export const shellRouteDefinitions: readonly ShellRouteDefinition[] = [
   { path: '/topology', page: 'topology' },
   { path: '/tracing', page: 'tracing' },
   { path: '/status', page: 'status' },
-  { path: '/plugins', page: 'plugins' },
-  { path: '/plugins/:plugin', page: 'plugins' },
   { path: '/logs', page: 'logs' },
   { path: '/insights', page: 'insights' },
   { path: '/insights/:recordId', page: 'insights-record' },
@@ -54,17 +50,13 @@ export const shellRouteDefinitions: readonly ShellRouteDefinition[] = [
   { path: '/fleet-sim/fleets', page: 'fleet-sim-fleets' },
   { path: '/fleet-sim/runs', page: 'fleet-sim-runs' },
   { path: '/builder', page: 'builder' },
-  { path: '/clawos', page: 'clawos' },
+  { path: '/openclaw', page: 'openclaw' },
   { path: '/users', page: 'users' },
-  { path: '/security', page: 'security' },
 ]
 
 export const redirectRouteDefinitions: readonly RedirectRouteDefinition[] = [
   { path: '/knowledge-bases', to: '/knowledge-bases/bases' },
   { path: '/taxonomy', to: '/knowledge-bases/bases' },
-  { path: '/openclaw', to: '/clawos' },
-  { path: '/response-cache', to: '/plugins/response-cache' },
-  { path: '/context-compression', to: '/plugins/context-compression' },
 ]
 
 export const fallbackRouteTarget = (setupMode: boolean): string =>

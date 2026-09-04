@@ -34,7 +34,7 @@ interface ReadonlyProviderProps {
 }
 
 export const ReadonlyProvider: React.FC<ReadonlyProviderProps> = ({ children }) => {
-  const { token } = useAuth()
+  const { isAuthenticated } = useAuth()
   const [isReadonly, setIsReadonly] = useState(true)
   const [serverReadonly, setServerReadonly] = useState(true)
   const [runtimeConfigWritable, setRuntimeConfigWritable] = useState(false)
@@ -46,6 +46,15 @@ export const ReadonlyProvider: React.FC<ReadonlyProviderProps> = ({ children }) 
   const [fleetSimEnabled, setFleetSimEnabled] = useState(false)
 
   useEffect(() => {
+    if (!isAuthenticated) {
+      setIsReadonly(true)
+      setServerReadonly(true)
+      setRuntimeConfigWritable(false)
+      setRecipeStoreWritable(false)
+      setIsLoading(false)
+      return undefined
+    }
+
     const controller = new AbortController()
     const fetchSettings = async () => {
       setIsLoading(true)
@@ -102,7 +111,7 @@ export const ReadonlyProvider: React.FC<ReadonlyProviderProps> = ({ children }) 
 
     void fetchSettings()
     return () => controller.abort()
-  }, [token])
+  }, [isAuthenticated])
 
   return (
     <ReadonlyContext.Provider

@@ -379,12 +379,7 @@ func rawToRoute(r *rawRouteDecl) *RouteDecl {
 		Pos:  posFromLexer(r.Pos),
 	}
 
-	// Process options
-	for _, opt := range r.Opts {
-		if opt.Key == "description" && opt.Value != nil && opt.Value.Str != nil {
-			route.Description = unquote(*opt.Value.Str)
-		}
-	}
+	applyRouteOptions(route, r.Opts)
 
 	// Process body items
 	for _, item := range r.Body {
@@ -453,7 +448,6 @@ var knownInlinePluginAliases = map[string]string{
 	"system-prompt":       "system_prompt",
 	"header-mutation":     "header_mutation",
 	"router-replay":       "router_replay",
-	"image-gen":           "image_gen",
 	"fast-response":       "fast_response",
 	"request-params":      "request_params",
 	"response-jailbreak":  "response_jailbreak",

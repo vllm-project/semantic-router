@@ -38,11 +38,10 @@ const (
 	PermMlPipeline     = "mlpipeline.manage"
 	PermFeedbackSubmit = "feedback.submit"
 	PermReplayRead     = "replay.read"
-	PermSecurityManage = "security.manage"
 )
 
 var DefaultRolePermissions = map[string][]string{
-	RoleAdmin: {PermUsersManage, PermUsersView, PermConfigRead, PermConfigWrite, PermConfigDeploy, PermEvalRead, PermEvalWrite, PermEvalRun, PermTopologyRead, PermLogsRead, PermOpenClawRead, PermOpenClaw, PermMcpRead, PermMcpManage, PermToolsUse, PermMlPipeline, PermFeedbackSubmit, PermReplayRead, PermSecurityManage},
+	RoleAdmin: {PermUsersManage, PermUsersView, PermConfigRead, PermConfigWrite, PermConfigDeploy, PermEvalRead, PermEvalWrite, PermEvalRun, PermTopologyRead, PermLogsRead, PermOpenClawRead, PermOpenClaw, PermMcpRead, PermMcpManage, PermToolsUse, PermMlPipeline, PermFeedbackSubmit, PermReplayRead},
 	RoleWrite: {PermConfigRead, PermConfigWrite, PermConfigDeploy, PermEvalRead, PermEvalWrite, PermEvalRun, PermTopologyRead, PermLogsRead, PermOpenClawRead, PermOpenClaw, PermMcpRead, PermMcpManage, PermToolsUse, PermMlPipeline, PermFeedbackSubmit, PermReplayRead},
 	RoleRead:  {PermConfigRead, PermEvalRead, PermTopologyRead, PermOpenClawRead, PermMcpRead, PermToolsUse, PermReplayRead},
 }
@@ -60,7 +59,7 @@ var AllPermissions = []string{
 	PermUsersManage, PermUsersView, PermConfigRead, PermConfigWrite, PermConfigDeploy,
 	PermEvalRead, PermEvalWrite, PermEvalRun, PermTopologyRead, PermLogsRead, PermOpenClawRead,
 	PermOpenClaw, PermMcpRead, PermMcpManage, PermToolsUse, PermMlPipeline,
-	PermFeedbackSubmit, PermReplayRead, PermSecurityManage,
+	PermFeedbackSubmit, PermReplayRead,
 }
 
 func normalizeRole(raw string) (string, error) {
@@ -180,9 +179,29 @@ CREATE TABLE IF NOT EXISTS auth_sessions (
   FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS dashboard_invitations (
+  id TEXT PRIMARY KEY,
+  email TEXT NOT NULL,
+  name TEXT NOT NULL,
+  role TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'personal',
+  max_uses INTEGER NOT NULL DEFAULT 1,
+  used_count INTEGER NOT NULL DEFAULT 0,
+  token_digest TEXT NOT NULL UNIQUE,
+  status TEXT NOT NULL DEFAULT 'pending',
+  expires_at INTEGER NOT NULL,
+  accepted_at INTEGER,
+  revoked_at INTEGER,
+  created_at INTEGER NOT NULL,
+  created_by TEXT NOT NULL,
+  FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE RESTRICT
+);
+
 CREATE INDEX IF NOT EXISTS idx_auth_sessions_user_id ON auth_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires_at ON auth_sessions(expires_at);
 CREATE INDEX IF NOT EXISTS idx_auth_sessions_revoked_at ON auth_sessions(revoked_at);
+CREATE INDEX IF NOT EXISTS idx_dashboard_invitations_email ON dashboard_invitations(email);
+CREATE INDEX IF NOT EXISTS idx_dashboard_invitations_status_created_at ON dashboard_invitations(status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_users_status_created_at ON users(status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
 CREATE INDEX IF NOT EXISTS idx_user_audit_logs_created_at ON user_audit_logs(created_at DESC);

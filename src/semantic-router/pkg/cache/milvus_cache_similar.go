@@ -28,30 +28,25 @@ func milvusActiveEntryFilterExpr(model string) string {
 	)
 }
 
-func milvusResponseBodyFieldIndex(hit *client.SearchResult) int {
-	if hit == nil || len(hit.Fields) <= 1 {
-		return 0
-	}
-	testCol, ok := hit.Fields[0].(*entity.ColumnVarChar)
-	if !ok || testCol.Len() == 0 {
-		return 0
-	}
-	testVal := testCol.Data()[0]
-	if len(testVal) == 32 && isHexString(testVal) {
-		return 1
-	}
-	return 0
-}
-
-func milvusFirstVarCharBytes(hit *client.SearchResult, fieldIdx int) []byte {
-	if hit == nil || fieldIdx < 0 || fieldIdx >= len(hit.Fields) {
+func extractMilvusResponseBody(hit *client.SearchResult) []byte {
+	if hit == nil {
 		return nil
 	}
-	col, ok := hit.Fields[fieldIdx].(*entity.ColumnVarChar)
-	if !ok || col.Len() == 0 {
-		return nil
+	for _, field := range hit.Fields {
+		if col, ok := field.(*entity.ColumnVarChar); ok && col.Name() == "response_body" && col.Len() > 0 {
+			return []byte(col.Data()[0])
+		}
 	}
-	return []byte(col.Data()[0])
+	for _, field := range hit.Fields {
+		if col, ok := field.(*entity.ColumnVarChar); ok && col.Len() > 0 {
+			val := col.Data()[0]
+			if len(val) == 32 && isHexString(val) {
+				continue
+			}
+			return []byte(val)
+		}
+	}
+	return nil
 }
 
 func (c *MilvusCache) milvusSearchSimilarVectors(
@@ -71,7 +66,7 @@ func (c *MilvusCache) milvusSearchSimilarVectors(
 		c.collectionName,
 		[]string{},
 		milvusActiveEntryFilterExpr(model),
-		[]string{"response_body"},
+		[]string{"response_body", "timestamp", "expires_at"},
 		[]entity.Vector{entity.FloatVector(queryEmbedding)},
 		c.config.Collection.VectorField.Name,
 		entity.MetricType(c.config.Collection.VectorField.MetricType),
@@ -163,8 +158,7 @@ func (c *MilvusCache) LookupSimilarWithThreshold(ctx context.Context, model stri
 		return LookupResult{Similarity: bestSimilarity}, nil
 	}
 
-	idx := milvusResponseBodyFieldIndex(hit)
-	responseBody := milvusFirstVarCharBytes(hit, idx)
+	responseBody := extractMilvusResponseBody(hit)
 	if responseBody == nil {
 		logging.Debugf("MilvusCache.FindSimilarWithThreshold: cache hit but response_body is missing or not a string")
 		atomic.AddInt64(&c.missCount, 1)
@@ -184,11 +178,23 @@ func (c *MilvusCache) LookupSimilarWithThreshold(ctx context.Context, model stri
 		"collection": c.collectionName,
 	})
 	metrics.RecordCacheOperation("milvus", "find_similar", "hit", time.Since(start).Seconds())
-	return LookupResult{
-		ResponseBody: responseBody,
-		Found:        true,
-		Similarity:   bestSimilarity,
-	}, nil
+	storedAt, expiresAt := parseMilvusHitTiming(hit)
+	return lookupResultFromTimestamps(responseBody, bestSimilarity, storedAt, expiresAt), nil
+}
+
+func parseMilvusHitTiming(hit *client.SearchResult) (time.Time, time.Time) {
+	var storedAt, expiresAt time.Time
+	for _, field := range hit.Fields {
+		if col, ok := field.(*entity.ColumnInt64); ok && col.Len() > 0 {
+			val, _ := col.ValueByIdx(0)
+			if col.Name() == "timestamp" && val > 0 {
+				storedAt = time.Unix(val, 0)
+			} else if col.Name() == "expires_at" && val > 0 {
+				expiresAt = time.Unix(val, 0)
+			}
+		}
+	}
+	return storedAt, expiresAt
 }
 
 // isHexString checks if a string contains only hexadecimal characters

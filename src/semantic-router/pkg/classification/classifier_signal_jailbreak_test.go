@@ -100,6 +100,10 @@ func TestFindBestJailbreakMatch_OnErrorAllow_DefaultToleratesFailure(t *testing.
 	if bestType != "" {
 		t.Errorf("bestType = %q, want empty", bestType)
 	}
+	_, _, unresolved := classifier.findBestJailbreakMatchOutcome(rule, []string{"some text"}, cache)
+	if !unresolved {
+		t.Fatal("backend failure was not preserved as unresolved")
+	}
 }
 
 // TestFindBestJailbreakMatch_OnErrorBlock_TreatsFailureAsMatch verifies

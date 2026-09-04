@@ -1,0 +1,17 @@
+{
+  "model": "client-model",
+  "input": [
+    {
+      "type": "message",
+      "id": "msg_1",
+      "role": "user",
+      "content": [
+        {
+          "type": "input_text",
+          "text": "hello"
+        }
+      ]
+    }
+  ],
+  "max_output_tokens": 32
+}

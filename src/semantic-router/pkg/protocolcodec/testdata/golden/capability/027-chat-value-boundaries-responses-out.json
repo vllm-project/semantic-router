@@ -1,0 +1,188 @@
+{
+  "cases": [
+    {
+      "name": "temperature_minimum",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "input": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "input_text"
+                }
+              ],
+              "id": "item_6a32e29c376158d871e9638e",
+              "role": "user",
+              "type": "message"
+            }
+          ],
+          "model": "routed-model",
+          "temperature": 0
+        }
+      }
+    },
+    {
+      "name": "temperature_maximum",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "input": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "input_text"
+                }
+              ],
+              "id": "item_6a32e29c376158d871e9638e",
+              "role": "user",
+              "type": "message"
+            }
+          ],
+          "model": "routed-model",
+          "temperature": 2
+        }
+      }
+    },
+    {
+      "name": "top_p_minimum",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "input": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "input_text"
+                }
+              ],
+              "id": "item_6a32e29c376158d871e9638e",
+              "role": "user",
+              "type": "message"
+            }
+          ],
+          "model": "routed-model",
+          "top_p": 0
+        }
+      }
+    },
+    {
+      "name": "top_p_maximum",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "input": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "input_text"
+                }
+              ],
+              "id": "item_6a32e29c376158d871e9638e",
+              "role": "user",
+              "type": "message"
+            }
+          ],
+          "model": "routed-model",
+          "top_p": 1
+        }
+      }
+    },
+    {
+      "name": "frequency_penalty_minimum",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_capability"
+        }
+      }
+    },
+    {
+      "name": "frequency_penalty_maximum",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_capability"
+        }
+      }
+    },
+    {
+      "name": "presence_penalty_minimum",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_capability"
+        }
+      }
+    },
+    {
+      "name": "presence_penalty_maximum",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_capability"
+        }
+      }
+    },
+    {
+      "name": "candidate_minimum",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "input": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "input_text"
+                }
+              ],
+              "id": "item_6a32e29c376158d871e9638e",
+              "role": "user",
+              "type": "message"
+            }
+          ],
+          "model": "routed-model"
+        }
+      }
+    },
+    {
+      "name": "candidate_policy_maximum",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_capability"
+        }
+      }
+    },
+    {
+      "name": "zero_max_completion_tokens",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_responses_max_output_tokens"
+        }
+      }
+    },
+    {
+      "name": "four_stop_sequences",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_capability"
+        }
+      }
+    }
+  ]
+}

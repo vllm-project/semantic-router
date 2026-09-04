@@ -22,6 +22,8 @@ permissions:
 
 env:
   GO_VERSION: '1.25'
+  # Pipe falls back to direct on any proxy error; comma only on 404 and 410
+  GOPROXY: 'https://proxy.golang.org|direct'
 
 jobs:
   lint:

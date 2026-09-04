@@ -4,7 +4,7 @@
  * Manages:
  * - DSL source text, YAML/CRD output, diagnostics
  * - WASM lifecycle (init, ready state)
- * - Editor mode switching (DSL / Visual / NL)
+ * - Editor mode switching (DSL / Visual)
  * - Debounced validation on keystroke
  * - Full compile on demand
  * - Decompile router YAML → DSL-owned models, routing, entrypoints, and recipes
@@ -13,7 +13,6 @@
 
 import { create } from 'zustand'
 import { wasmBridge } from '@/lib/wasm'
-import { generateBuilderNLDraftStreaming } from '@/utils/builderNLApi'
 import {
   updateModel,
   addModel as addModelMut,
@@ -35,22 +34,9 @@ import {
   addRoute as addRouteMut,
 } from '@/lib/dslMutations'
 import type { RouteInput } from '@/lib/dslMutations'
-import type {
-  BuilderNLGenerateRequest,
-  BuilderNLStagedDraft,
-  EditorMode,
-  CompileResult,
-  ValidateResult,
-  DSLFieldObject,
-} from '@/types/dsl'
+import type { EditorMode, CompileResult, ValidateResult, DSLFieldObject } from '@/types/dsl'
 import type { DSLStore } from './dslStoreTypes'
-import {
-  appendBuilderNLProgress,
-  initialDSLState,
-  normalizeBuilderNLReview,
-  normalizeBuilderNLValidation,
-  type DeployStatusResponse,
-} from './dslStoreSupport'
+import { initialDSLState, type DeployStatusResponse } from './dslStoreSupport'
 import { renderCanonicalYaml } from './dslStoreYamlSupport'
 
 // ---------- Debounce helper ----------
@@ -690,102 +676,6 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
     } catch {
       // silently fail
     }
-  },
-
-  async generateFromNaturalLanguage(input: BuilderNLGenerateRequest) {
-    const prompt = input.prompt.trim()
-    if (!prompt) {
-      set({ nlGenerateError: 'Describe the routing behavior you want to build.' })
-      return
-    }
-
-    set({
-      nlGenerating: true,
-      nlGenerateError: null,
-      nlStagedDraft: null,
-      nlProgressEvents: [
-        {
-          phase: 'request',
-          level: 'info',
-          message: 'Sending Builder NL request to the streaming backend.',
-          timestamp: Date.now(),
-        },
-      ],
-    })
-
-    try {
-      const liveBaseYaml = get().baseConfigYaml
-      const data = await generateBuilderNLDraftStreaming(
-        {
-          ...input,
-          prompt,
-          currentDsl: input.currentDsl?.trim() || '',
-        },
-        (event) => appendBuilderNLProgress(set, event),
-      )
-      const stagedDraft: BuilderNLStagedDraft = {
-        prompt,
-        dsl: data.dsl,
-        baseYaml: liveBaseYaml.trim() ? liveBaseYaml : data.baseYaml || '',
-        summary: data.summary || '',
-        suggestedTestQuery: data.suggestedTestQuery || '',
-        review: normalizeBuilderNLReview(data.review),
-        validation: normalizeBuilderNLValidation(data.validation),
-      }
-      set({
-        nlGenerating: false,
-        nlGenerateError: null,
-        nlStagedDraft: stagedDraft,
-      })
-    } catch (err) {
-      appendBuilderNLProgress(set, {
-        phase: 'error',
-        level: 'error',
-        message: err instanceof Error ? err.message : String(err),
-        timestamp: Date.now(),
-      })
-      set({
-        nlGenerating: false,
-        nlGenerateError: err instanceof Error ? err.message : String(err),
-        nlStagedDraft: null,
-      })
-    }
-  },
-
-  applyNaturalLanguageDraft() {
-    const stagedDraft = get().nlStagedDraft
-    if (!stagedDraft) return
-    const liveBaseYaml = get().baseConfigYaml
-
-    set({
-      dslSource: stagedDraft.dsl,
-      // Keep the live deploy base intact so global/providers/listeners do not
-      // get replaced by the staged NL draft handoff payload.
-      baseConfigYaml: liveBaseYaml.trim() ? liveBaseYaml : stagedDraft.baseYaml,
-      dirty: false,
-      diagnostics: [],
-      compileError: null,
-      ast: null,
-      symbols: null,
-      renderedYamlOutput: '',
-      yamlOutput: '',
-      crdOutput: '',
-      mode: 'visual',
-      nlGenerateError: null,
-      nlStagedDraft: null,
-    })
-
-    const state = get()
-    if (state.wasmReady && stagedDraft.dsl.trim()) {
-      state.compile()
-    }
-  },
-
-  discardNaturalLanguageDraft() {
-    set({
-      nlGenerateError: null,
-      nlStagedDraft: null,
-    })
   },
 }))
 

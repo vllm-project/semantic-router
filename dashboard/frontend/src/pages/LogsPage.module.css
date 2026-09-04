@@ -13,6 +13,74 @@
   flex: 1 0 auto;
 }
 
+.streamToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  padding: 0.7rem;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.streamToolbar .serviceSelector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.streamToolbar .serviceButton {
+  min-height: 36px;
+  padding: 0.5rem 0.72rem;
+  border-radius: 9px;
+  font-size: 0.78rem;
+}
+
+.streamToolbar .controlsRight {
+  gap: 0.45rem;
+}
+
+.streamToolbar .filterField {
+  min-width: 0;
+}
+
+.streamToolbar .filterField input {
+  min-width: 12rem;
+}
+
+.streamToolbar .filterField input,
+.streamToolbar .filterField select,
+.streamToolbar .linesSelect,
+.streamToolbar .refreshButton {
+  min-height: 36px;
+}
+
+.streamToolbar .toggle {
+  min-height: 36px;
+  padding: 0.45rem 0.62rem;
+  border-radius: 9px;
+  font-size: 0.76rem;
+}
+
+.refreshButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .header {
   display: flex;
   justify-content: space-between;
@@ -465,6 +533,15 @@
   .controls {
     grid-template-columns: 1fr;
   }
+
+  .streamToolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .streamToolbar .controlsRight {
+    justify-content: flex-start;
+  }
 }
 
 @media (max-width: 768px) {
@@ -487,6 +564,16 @@
 
   .serviceSelector {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .streamToolbar .filterField,
+  .streamToolbar .filterField input,
+  .streamToolbar .filterField select,
+  .streamToolbar .linesSelector,
+  .streamToolbar .linesSelect,
+  .streamToolbar .toggle,
+  .streamToolbar .refreshButton {
+    width: 100%;
   }
 
   .logsSection {

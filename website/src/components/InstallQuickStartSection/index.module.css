@@ -1,14 +1,16 @@
 .section {
-  padding: clamp(3.25rem, 5.5vw, 4.5rem) 0;
+  padding: clamp(1.75rem, 3vw, 2.5rem) 0 clamp(3.25rem, 5.5vw, 4.5rem);
   border-bottom: 0;
   background: var(--site-bg);
 }
 
-.heading {
-  display: grid;
-  gap: 0.65rem;
-  max-width: min(100%, 42rem);
-  margin-bottom: 1.5rem;
+/* A single centred column: heading, command, links. Compound selector so this
+ * wins over the global .site-section-intro regardless of stylesheet order. */
+:global(.site-section-intro).heading {
+  justify-items: center;
+  gap: 0.5rem;
+  margin-bottom: var(--site-section-gap);
+  text-align: center;
 }
 
 .heading h2 {
@@ -20,31 +22,22 @@
   text-wrap: pretty;
 }
 
-.lede {
-  max-width: 42rem;
-  margin: 0;
-  color: var(--site-text);
-  font-size: clamp(0.92rem, 1.05vw, 1rem);
-  font-weight: var(--site-font-weight-medium);
-  line-height: 1.65;
-  text-wrap: pretty;
-}
-
-.ledeMuted {
-  color: var(--site-muted-bright);
-  font-weight: 400;
-}
-
-.frame {
-  position: relative;
+/* Carries the surface the install card used to have, so the command reads as a
+ * deliberate object rather than a bare input. */
+.commandShell {
   display: grid;
-  gap: 1.25rem;
-  padding: clamp(1.1rem, 2vw, 1.45rem);
+  width: 100%;
+  max-width: 46rem;
+  margin-inline: auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 1.05rem 0.9rem 1.05rem 1.15rem;
   border: 1px solid var(--site-border);
-  border-radius: 1.1rem;
+  border-radius: 0.95rem;
   background:
-    radial-gradient(ellipse 70% 55% at 0% 0%, rgba(48, 162, 255, 0.09), transparent 58%),
-    radial-gradient(ellipse 50% 40% at 100% 100%, rgba(48, 162, 255, 0.05), transparent 50%),
+    radial-gradient(ellipse 70% 60% at 0% 0%, rgba(48, 162, 255, 0.1), transparent 60%),
+    radial-gradient(ellipse 55% 45% at 100% 100%, rgba(48, 162, 255, 0.06), transparent 55%),
     var(--site-surface-alt);
   box-shadow: var(--site-shadow-soft);
   transition:
@@ -52,353 +45,51 @@
     box-shadow var(--site-transition-medium);
 }
 
-.frame:hover {
+.commandShell:hover {
   border-color: var(--site-hover-border);
   box-shadow: var(--site-hover-glow);
 }
 
-.pathMeta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.65rem;
-  padding-bottom: 0.15rem;
-  border-bottom: 1px solid var(--site-border);
-}
-
-.pathMetaLabel {
-  color: var(--site-muted);
+.commandPrompt {
+  color: var(--site-accent-strong);
   font-family: var(--ifm-font-family-monospace);
-  font-size: 0.64rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  font-size: 0.95rem;
+  font-weight: 600;
+  user-select: none;
 }
 
-.pathMetaChip {
-  display: inline-flex;
-  align-items: center;
-  min-height: 1.65rem;
-  padding: 0.15rem 0.55rem;
+.copyButton {
+  display: grid;
+  width: 1.95rem;
+  height: 1.95rem;
+  place-items: center;
   border: 1px solid var(--site-border);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.03);
+  border-radius: 0.45rem;
+  background: transparent;
   color: var(--site-muted-bright);
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.64rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-}
-
-.steps {
-  display: grid;
-  gap: 0;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.step {
-  display: grid;
-  grid-template-columns: 2.35rem minmax(0, 1fr);
-  gap: 0.85rem 1rem;
-  padding: 1rem 0;
-}
-
-.step:first-child {
-  padding-top: 0.15rem;
-}
-
-.step:last-child {
-  padding-bottom: 0.15rem;
-}
-
-.stepRail {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  min-height: 100%;
-}
-
-.stepMarker {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  width: 1.85rem;
-  height: 1.85rem;
-  border: 1px solid rgba(48, 162, 255, 0.35);
-  border-radius: 50%;
-  background: rgba(48, 162, 255, 0.1);
-  color: var(--site-brand-blue);
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.58rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-}
-
-.stepLine {
-  flex: 1 1 auto;
-  width: 1px;
-  min-height: 1rem;
-  margin-top: 0.45rem;
-  background: linear-gradient(180deg, rgba(48, 162, 255, 0.35), var(--site-border));
-}
-
-.stepBody {
-  display: grid;
-  gap: 0.55rem;
-  min-width: 0;
-}
-
-.stepHeader {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem 0.75rem;
-}
-
-.stepTitle {
-  margin: 0;
-  color: var(--site-text-strong);
-  font-size: clamp(0.95rem, 1.1vw, 1.05rem);
-  font-weight: 600;
-  line-height: 1.3;
-  letter-spacing: -0.015em;
-}
-
-.stepHint {
-  margin: 0;
-  color: var(--site-muted);
-  font-size: 0.84rem;
-  line-height: 1.55;
-  text-wrap: pretty;
-}
-
-.platform {
-  display: inline-flex;
-  align-items: center;
-  min-height: 1.65rem;
-  padding: 0.15rem 0.55rem;
-  border: 1px solid rgba(48, 162, 255, 0.28);
-  border-radius: 999px;
-  background: rgba(48, 162, 255, 0.08);
-  color: var(--site-brand-blue);
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.commandPair {
-  display: grid;
-  gap: 0.85rem;
-}
-
-.removeDetails {
-  margin-top: 0.15rem;
-  border-top: 1px solid var(--site-border);
-  padding-top: 0.65rem;
-}
-
-.removeSummary {
   cursor: pointer;
-  color: var(--site-muted-bright);
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.64rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  list-style: none;
-}
-
-.removeSummary::-webkit-details-marker {
-  display: none;
-}
-
-.removeDetails[open] .removeSummary {
-  margin-bottom: 0.45rem;
-  color: var(--site-text);
-}
-
-.followupToggle {
-  width: fit-content;
-  margin-top: 0.15rem;
-  padding: 0.45rem 0.8rem;
-  border: 1px solid rgba(48, 162, 255, 0.28);
-  border-radius: 999px;
-  background: rgba(48, 162, 255, 0.08);
-  color: var(--site-brand-blue);
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.68rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  cursor: pointer;
+  font-size: 0.85rem;
   transition:
     border-color var(--site-transition-fast),
     background var(--site-transition-fast),
-    box-shadow var(--site-transition-fast),
-    transform var(--site-transition-fast);
+    color var(--site-transition-fast);
 }
 
-.followupToggle:hover {
+.copyButton:hover {
   border-color: var(--site-hover-border);
-  background: rgba(48, 162, 255, 0.14);
-  box-shadow: var(--site-hover-inset);
-  transform: translateY(-1px);
+  background: rgba(48, 162, 255, 0.1);
+  color: var(--site-accent-strong);
 }
 
-.followupToggle:focus-visible {
+.copyButton:focus-visible {
   outline: 2px solid var(--site-accent);
   outline-offset: 2px;
 }
 
-.removeBlock {
-  display: grid;
-  gap: 0.35rem;
-}
-
-.removeLabel {
-  margin: 0;
-  color: var(--site-muted-bright);
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.64rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.removeHint {
-  margin: 0 0 0.45rem;
-  color: var(--site-muted);
-  font-size: 0.78rem;
-  line-height: 1.5;
-  text-wrap: pretty;
-}
-
-.commandShell {
-  overflow: hidden;
-  border: 1px solid rgba(48, 162, 255, 0.18);
-  border-radius: 0.8rem;
-  background: rgba(0, 0, 0, 0.22);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
-}
-
-.commandShellRemove {
-  border-color: rgba(255, 255, 255, 0.1);
-  background: rgba(0, 0, 0, 0.14);
-}
-
-.commandShellRemove .commandBlock::before {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0.12));
-}
-
-.commandShellRemove .command {
-  color: var(--site-muted-bright);
-  font-size: clamp(0.8rem, 1vw, 0.92rem);
-}
-
-.commandToolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.45rem 0.65rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(255, 255, 255, 0.02);
-}
-
-.terminalMeta {
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-  min-width: 0;
-}
-
-.terminalDots {
-  display: inline-flex;
-  gap: 0.28rem;
-}
-
-.terminalDot {
-  width: 0.45rem;
-  height: 0.45rem;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.14);
-}
-
-.shellLabel {
-  overflow: hidden;
-  color: var(--site-muted);
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.62rem;
-  letter-spacing: 0.04em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.copyChip {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 0.3rem;
-  min-height: 1.55rem;
-  padding: 0.15rem 0.5rem;
-  border: 1px solid var(--site-border);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--site-muted-bright);
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.62rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition:
-    border-color var(--site-transition-fast),
-    background var(--site-transition-fast),
-    color var(--site-transition-fast),
-    box-shadow var(--site-transition-fast);
-}
-
-.copyChip:hover {
-  border-color: var(--site-hover-border);
-  background: rgba(48, 162, 255, 0.1);
+.copyButtonSuccess,
+.copyButtonSuccess:hover {
+  border-color: rgba(48, 162, 255, 0.55);
   color: var(--site-brand-blue);
-}
-
-.copyChip:focus-visible {
-  outline: 2px solid var(--site-accent);
-  outline-offset: 2px;
-}
-
-.copyChipSuccess {
-  border-color: rgba(48, 162, 255, 0.45);
-  background: rgba(48, 162, 255, 0.14);
-  color: var(--site-brand-blue);
-}
-
-.copyChipIcon {
-  font-size: 0.72rem;
-  line-height: 1;
-}
-
-.commandBlock {
-  position: relative;
-  overflow: hidden;
-  padding: 0.8rem 0.9rem 0.85rem;
-}
-
-.commandBlock::before {
-  content: '';
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 3px;
-  background: var(--site-gradient-brand-bar);
 }
 
 .command {
@@ -409,87 +100,19 @@
   background: transparent;
   color: var(--site-text-strong);
   font-family: var(--ifm-font-family-monospace);
-  font-size: clamp(0.84rem, 1.1vw, 0.98rem);
+  font-size: clamp(0.9rem, 1.1vw, 1.05rem);
   line-height: 1.5;
   white-space: nowrap;
   scrollbar-width: thin;
-}
-
-.dashboardLink {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 0.45rem 0.75rem;
-  align-items: center;
-  width: fit-content;
-  max-width: 100%;
-  padding: 0.7rem 0.9rem;
-  border: 1px solid rgba(48, 162, 255, 0.22);
-  border-radius: 0.75rem;
-  background: rgba(48, 162, 255, 0.06);
-  color: var(--site-text);
-  text-decoration: none;
-  transition:
-    border-color var(--site-transition-fast),
-    background var(--site-transition-fast),
-    box-shadow var(--site-transition-fast),
-    transform var(--site-transition-fast);
-}
-
-.dashboardLink:hover,
-.dashboardLink:focus-visible {
-  border-color: var(--site-hover-border);
-  background: rgba(48, 162, 255, 0.12);
-  box-shadow: var(--site-hover-inset);
-  transform: translateY(-1px);
-  text-decoration: none;
-}
-
-.dashboardLink:focus-visible {
-  outline: 2px solid var(--site-accent);
-  outline-offset: 3px;
-}
-
-.dashboardLinkLabel {
-  color: var(--site-muted);
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.dashboardUrl {
-  color: var(--site-brand-blue);
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.92rem;
-  font-weight: 600;
-}
-
-.dashboardArrow {
-  color: var(--site-brand-blue);
-  font-size: 0.95rem;
-}
-
-.frameFooter {
-  display: grid;
-  gap: 0.85rem;
-  padding-top: 0.35rem;
-  border-top: 1px solid var(--site-border);
-}
-
-.note {
-  margin: 0;
-  color: var(--site-muted-bright);
-  font-size: 0.84rem;
-  line-height: 1.55;
-  text-wrap: pretty;
 }
 
 .actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: center;
   gap: 0.55rem;
+  margin-top: 1.25rem;
 }
 
 .guideLink:global(.pill) {
@@ -516,46 +139,13 @@
 
 @media (max-width: 768px) {
   .section {
-    padding: 3rem 0;
-  }
-
-  .frame {
-    padding: 1rem;
-  }
-
-  .step {
-    grid-template-columns: 1.85rem minmax(0, 1fr);
-    gap: 0.65rem 0.75rem;
-    padding: 0.85rem 0;
-  }
-
-  .stepMarker {
-    width: 1.65rem;
-    height: 1.65rem;
-    font-size: 0.54rem;
+    padding: 1.5rem 0 3rem;
   }
 
   .command {
     white-space: pre-wrap;
     word-break: break-all;
     font-size: 0.82rem;
-  }
-
-  .dashboardLink {
-    width: 100%;
-    grid-template-columns: 1fr auto;
-    grid-template-rows: auto auto;
-  }
-
-  .dashboardUrl {
-    grid-column: 1;
-    grid-row: 2;
-  }
-
-  .dashboardArrow {
-    grid-column: 2;
-    grid-row: 1 / span 2;
-    align-self: center;
   }
 
   .actions {
@@ -570,9 +160,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .guideLink:global(.pill):hover,
-  .dashboardLink:hover,
-  .dashboardLink:focus-visible {
+  .guideLink:global(.pill):hover {
     transform: none;
   }
 }

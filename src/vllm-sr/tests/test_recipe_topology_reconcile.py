@@ -5,6 +5,13 @@ from pathlib import Path
 
 import pytest
 from cli import recipe_topology_reconcile as topology
+from cli.runtime_stack import resolve_runtime_stack
+from cli.storage_secrets import (
+    StorageVolumes,
+    ensure_storage_secrets,
+    postgres_password_path,
+    redis_conf_path,
+)
 from recipe_topology_test_support import (
     _REDIS_NAMED_MOUNT,
     _STORAGE_CASES,
@@ -547,6 +554,99 @@ def test_start_milvus_uses_dashboard_host_state_bind_and_rechecks_isolation(
     assert captured["host_hidden_state_dir"] == "/srv/vllm-sr/state"
     assert captured["reuse_existing"] is False
     assert isolation == [topology._storage_name("milvus")]
+
+
+def _seed_storage_state(tmp_path: Path):
+    """Write a real credential state the reconciler can read back."""
+
+    layout = resolve_runtime_stack()
+    ensure_storage_secrets(
+        str(tmp_path),
+        stack_layout=layout,
+        volumes=StorageVolumes(postgres="pg-vol", redis="redis-vol"),
+    )
+    return layout
+
+
+def test_storage_credentials_report_unreadable_state_instead_of_guessing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    # An empty state root is the "Dashboard cannot read this stack's state"
+    # case; a guessed volume name would start an empty database beside data
+    # that is still on disk.
+    monkeypatch.setattr(topology, "CONTAINER_STATE_ROOT_DIR", str(tmp_path))
+    monkeypatch.setattr(
+        topology,
+        "_host_hidden_state_dir",
+        lambda: pytest.fail("the host state directory must not be needed to fail"),
+    )
+
+    with pytest.raises(topology.TopologyReconcileError) as failure:
+        topology._storage_credentials(resolve_runtime_stack())
+
+    assert "`vllm-sr serve`" in str(failure.value)
+    assert "not readable from here" in str(failure.value)
+
+
+def test_start_storage_mounts_recorded_volumes_and_host_credential_paths(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    layout = _seed_storage_state(tmp_path)
+    captured: dict[str, dict[str, object]] = {}
+    isolation: list[str] = []
+    monkeypatch.setattr(topology, "CONTAINER_STATE_ROOT_DIR", str(tmp_path))
+    monkeypatch.setattr(
+        topology, "_host_hidden_state_dir", lambda: "/srv/vllm-sr/state"
+    )
+    monkeypatch.setattr(topology, "_validate_storage_isolation", isolation.append)
+
+    def record(service):
+        def start(network, container_layout, **kwargs):
+            captured[service] = {
+                "network": network,
+                "layout": container_layout,
+                **kwargs,
+            }
+            return (0, "", "")
+
+        return start
+
+    monkeypatch.setattr(topology, "container_start_redis", record("redis"))
+    monkeypatch.setattr(topology, "container_start_postgres", record("postgres"))
+
+    for service in ("redis", "postgres"):
+        statuses = iter(("not found", "running"))
+        monkeypatch.setattr(
+            topology, "_container_status", lambda _n, s=statuses: next(s)
+        )
+        topology._start_storage(service)
+
+    host_secrets_dir = os.path.join(
+        "/srv/vllm-sr/state", topology.STORAGE_SECRETS_DIRECTORY
+    )
+    # The bind-mount source has to be the *host* path. Dashboard reads the same
+    # files through /app, and mounting that would point the runtime at a path
+    # that does not exist outside the Dashboard container.
+    assert captured["redis"]["redis_conf_file"] == os.path.join(
+        host_secrets_dir,
+        redis_conf_path(str(tmp_path), stack_layout=layout).name,
+    )
+    assert captured["postgres"]["postgres_password_file"] == os.path.join(
+        host_secrets_dir,
+        postgres_password_path(str(tmp_path), stack_layout=layout).name,
+    )
+    assert not captured["redis"]["redis_conf_file"].startswith(
+        topology.CONTAINER_STATE_ROOT_DIR
+    )
+    # The volumes come from the recorded state, never from a fresh default.
+    assert captured["redis"]["data_volume"] == "redis-vol"
+    assert captured["postgres"]["data_volume"] == "pg-vol"
+    assert captured["redis"]["reuse_existing"] is False
+    assert captured["postgres"]["reuse_existing"] is False
+    assert isolation == [
+        topology._storage_name("redis"),
+        topology._storage_name("postgres"),
+    ]
 
 
 def test_start_storage_rejects_container_appearing_after_preview(monkeypatch):

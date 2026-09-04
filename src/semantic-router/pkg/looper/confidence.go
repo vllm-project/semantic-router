@@ -328,15 +328,17 @@ type ConfidenceEvaluator struct {
 	// Empty/zero values when the method is anything else.
 	VerifierServerURL      string
 	VerifierTimeoutSeconds int
+	MaxResponseBytes       int64
 }
 
 // NewConfidenceEvaluator creates a confidence evaluator from algorithm config
 func NewConfidenceEvaluator(cfg *config.ConfidenceAlgorithmConfig) *ConfidenceEvaluator {
 	eval := &ConfidenceEvaluator{
-		Method:        "avg_logprob", // Default method
-		Threshold:     -1.0,          // Default threshold for avg_logprob
-		LogprobWeight: 0.5,
-		MarginWeight:  0.5,
+		Method:           "avg_logprob", // Default method
+		Threshold:        -1.0,          // Default threshold for avg_logprob
+		LogprobWeight:    0.5,
+		MarginWeight:     0.5,
+		MaxResponseBytes: config.DefaultMaxResponseBytes,
 	}
 
 	if cfg == nil {
@@ -383,6 +385,9 @@ func NewConfidenceEvaluator(cfg *config.ConfidenceAlgorithmConfig) *ConfidenceEv
 
 	eval.VerifierServerURL = cfg.VerifierServerURL
 	eval.VerifierTimeoutSeconds = cfg.VerifierTimeoutSeconds
+	if cfg.MaxResponseBytes > 0 {
+		eval.MaxResponseBytes = cfg.MaxResponseBytes
+	}
 
 	return eval
 }
@@ -656,8 +661,9 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 		})
 
 		attempts++
-		resp, err := l.client.CallModel(
+		resp, err := l.callModelWithContextGate(
 			ctx,
+			req,
 			req.OriginalRequest,
 			modelName,
 			confidenceModelCallStreaming(req.IsStreaming, evaluator),
@@ -898,7 +904,7 @@ func (l *ConfidenceLooper) performSelfVerification(
 	})
 
 	// Call the same model to evaluate its answer
-	verifyResp, err := l.client.CallModel(ctx, verifyRequest, modelName, false, iteration, nil, accessKey)
+	verifyResp, err := l.callModelWithContextGate(ctx, req, verifyRequest, modelName, false, iteration, nil, accessKey)
 	if err != nil {
 		return selfVerificationExecution{Attempted: true}, fmt.Errorf("verifier model call failed: %w", err)
 	}
@@ -1012,22 +1018,27 @@ func (l *ConfidenceLooper) buildSelfVerificationRequest(verificationPrompt strin
 }
 
 // automixVerifierCache memoises one selection.AutoMixVerifierClient per
-// (server_url, timeout_seconds) pair so repeated requests share a single
-// http.Client (and its underlying connection pool) instead of reconstructing
-// one per evaluation.
+// (server_url, timeout_seconds, max_response_bytes) tuple so repeated requests
+// share a single http.Client (and its underlying connection pool) instead of
+// reconstructing one per evaluation.
 var automixVerifierCache sync.Map
 
 type automixVerifierCacheKey struct {
-	url            string
-	timeoutSeconds int
+	url              string
+	timeoutSeconds   int
+	maxResponseBytes int64
 }
 
-func getAutoMixVerifierClient(serverURL string, timeoutSeconds int) *selection.AutoMixVerifierClient {
-	key := automixVerifierCacheKey{url: serverURL, timeoutSeconds: timeoutSeconds}
+func getAutoMixVerifierClient(serverURL string, timeoutSeconds int, maxResponseBytes int64) *selection.AutoMixVerifierClient {
+	if maxResponseBytes <= 0 {
+		maxResponseBytes = config.DefaultMaxResponseBytes
+	}
+	key := automixVerifierCacheKey{url: serverURL, timeoutSeconds: timeoutSeconds, maxResponseBytes: maxResponseBytes}
 	if existing, ok := automixVerifierCache.Load(key); ok {
 		return existing.(*selection.AutoMixVerifierClient)
 	}
 	client := selection.NewAutoMixVerifierClient(serverURL)
+	client.SetMaxResponseBytes(maxResponseBytes)
 	if timeoutSeconds > 0 {
 		client.SetTimeout(time.Duration(timeoutSeconds) * time.Second)
 	}
@@ -1058,7 +1069,7 @@ func (l *ConfidenceLooper) performAutoMixEntailment(
 		return 0, false, fmt.Errorf("could not extract user question from request")
 	}
 
-	client := getAutoMixVerifierClient(evaluator.VerifierServerURL, evaluator.VerifierTimeoutSeconds)
+	client := getAutoMixVerifierClient(evaluator.VerifierServerURL, evaluator.VerifierTimeoutSeconds, evaluator.MaxResponseBytes)
 
 	logging.ComponentDebugEvent("looper", "automix_entailment_started", map[string]interface{}{
 		"looper":     "confidence",

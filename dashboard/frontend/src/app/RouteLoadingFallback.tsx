@@ -1,13 +1,6 @@
 import React from 'react'
-import styles from './AppStatus.module.css'
+import ProductLoadingState from '../components/ProductLoadingState'
 
-const RouteLoadingFallback: React.FC = () => (
-  <div aria-live="polite" role="status" className={styles.routeFallback}>
-    <div className={styles.routeStatus}>
-      <span>Loading control plane</span>
-      <span className={styles.routeLine} aria-hidden="true" />
-    </div>
-  </div>
-)
+const RouteLoadingFallback: React.FC = () => <ProductLoadingState label="Opening workspace" />
 
 export default RouteLoadingFallback

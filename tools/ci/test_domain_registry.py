@@ -95,15 +95,6 @@ def pr_job_order(registry: dict[str, Any] | None = None) -> tuple[str, ...]:
     return tuple(str(job) for job in value)
 
 
-def local_full_ci_paths(
-    registry: dict[str, Any] | None = None,
-) -> tuple[str, ...]:
-    value = (registry or load_test_domain_registry()).get("local_full_ci_paths", [])
-    if not isinstance(value, list):
-        raise TypeError("test-domain registry local_full_ci_paths must be a list")
-    return tuple(str(path) for path in value)
-
-
 def registry_schema_errors(
     registry: dict[str, Any] | None = None,
 ) -> list[str]:
@@ -122,8 +113,6 @@ def registry_schema_errors(
         errors.append(
             "test-domain registry pr_job_order must contain every unique PR job"
         )
-    if not local_full_ci_paths(data):
-        errors.append("test-domain registry local_full_ci_paths must be non-empty")
     return errors
 
 

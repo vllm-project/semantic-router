@@ -22,26 +22,13 @@ func init() {
 	})
 }
 
-// testAnthropicMessagesStopSequence asserts that the outbound emitter maps
+// testAnthropicMessagesStopSequence asserts that the response codec maps
 // the upstream finish_reason to "stop_sequence" when the request carried
 // stop_sequences and the model's output triggered one.
 //
-// The system prompt directs the tiny Qwen model to emit "STOP" verbatim,
-// which — if followed — causes llama-server to set finish_reason=stop and
-// return the stop token in stop_reason. The shim passes this through; the
-// router's mapOpenAIFinishReasonToAnthropic must then label the response
-// stop_reason as "stop_sequence" (not "end_turn").
-//
-// NOTE: This test depends on the tiny Qwen2.5-0.5B model in the
-// anthropic-shim profile following the "say STOP exactly" instruction. If
-// the model does not reliably emit the sentinel in CI, prefer replacing
-// "STOP" with a sentinel the model emits unconditionally (e.g. the EOS
-// token) over adding retry loops or sleeps.
-//
-// TODO: If this test flakes due to model instruction-following variability,
-// swap the stop_sequences value for a string the model outputs in all
-// completions (e.g. a fixed suffix in the system prompt) rather than
-// introducing any retry or timing-based workaround.
+// A single space is used as the stop sequence while the model is instructed
+// to answer with several words. This exercises the real backend stop path
+// without depending on a small model reproducing an arbitrary sentinel.
 //
 // Requires the anthropic-shim profile.
 func testAnthropicMessagesStopSequence(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
@@ -58,10 +45,11 @@ func testAnthropicMessagesStopSequence(ctx context.Context, client *kubernetes.C
 	body := stopSequenceRequestBody{
 		Model:         "MoM",
 		MaxTokens:     50,
-		StopSequences: []string{"STOP"},
-		System:        "You must end every response with the word STOP in capital letters, on its own line.",
+		Temperature:   0,
+		StopSequences: []string{" "},
+		System:        "Answer directly with a short phrase of at least three words.",
 		Messages: []anthropicMessage{
-			{Role: "user", Content: "Please respond and end with STOP."},
+			{Role: "user", Content: "Name three primary colors."},
 		},
 	}
 
@@ -109,13 +97,7 @@ func testAnthropicMessagesStopSequence(ctx context.Context, client *kubernetes.C
 	}
 
 	if parsed.StopReason != "stop_sequence" {
-		return fmt.Errorf(
-			"expected stop_reason=stop_sequence, got %q — "+
-				"the model may not have emitted the sentinel; "+
-				"if this flakes in CI replace the stop string with "+
-				"a sentinel the model emits unconditionally",
-			parsed.StopReason,
-		)
+		return fmt.Errorf("expected stop_reason=stop_sequence, got %q", parsed.StopReason)
 	}
 
 	return nil
@@ -135,6 +117,7 @@ type anthropicStopResponse struct {
 type stopSequenceRequestBody struct {
 	Model         string             `json:"model"`
 	MaxTokens     int                `json:"max_tokens"`
+	Temperature   float64            `json:"temperature"`
 	StopSequences []string           `json:"stop_sequences"`
 	System        string             `json:"system,omitempty"`
 	Messages      []anthropicMessage `json:"messages"`

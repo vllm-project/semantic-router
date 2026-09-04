@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import BrandLockup from './BrandLockup'
 import styles from './PublicHeader.module.css'
 
 const DOCS_URL = 'https://vllm-sr.ai/docs/intro/'
@@ -8,10 +9,7 @@ export default function PublicHeader() {
   return (
     <header className={styles.header} data-testid="public-header">
       <div className={styles.inner} data-testid="public-header-content">
-        <Link className={styles.brand} to="/" aria-label="vLLM Semantic Router home">
-          <img className={styles.logo} src="/vllm.png" alt="" aria-hidden="true" />
-          <span className={styles.brandText}>Semantic Router</span>
-        </Link>
+        <BrandLockup className={styles.brand} />
 
         <nav className={styles.nav} aria-label="Public navigation">
           <a

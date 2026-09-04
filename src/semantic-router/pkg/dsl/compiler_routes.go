@@ -20,6 +20,7 @@ func (c *Compiler) compileRoute(r *RouteDecl) config.Decision {
 		Tier:        r.Tier,
 		Rules:       c.compileRouteRules(r),
 	}
+	decision.Rules.OnUnknown = r.OnUnknown
 
 	for _, m := range r.Models {
 		c.appendModelRef(&decision, m)

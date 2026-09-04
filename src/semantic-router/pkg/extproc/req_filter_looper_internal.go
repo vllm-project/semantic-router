@@ -3,22 +3,13 @@ package extproc
 import (
 	"fmt"
 
-	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
-	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
-
-type looperBackendRoute struct {
-	upstreamModel  string
-	backendAddress string
-	backendName    string
-	found          bool
-}
 
 // getReasoningInfoFromDecision extracts reasoning configuration from a decision for a specific model.
 func (r *OpenAIRouter) getReasoningInfoFromDecision(
@@ -69,147 +60,61 @@ func (r *OpenAIRouter) getReasoningInfoFromDecision(
 
 // modifyRequestBodyForLooper modifies the request body for looper internal requests.
 func (r *OpenAIRouter) modifyRequestBodyForLooper(
-	openAIRequest *openai.ChatCompletionNewParams,
+	request *llmprotocol.Request,
 	modelName string,
-	upstreamModel string,
 	decisionName string,
 	useReasoning bool,
 	ctx *RequestContext,
-) ([]byte, error) {
-	openAIRequest.Model = upstreamModel
-
-	// Preserve provider-specific request fields on the internal Looper hop.
-	// The OpenAI SDK parameter types intentionally discard unknown JSON fields
-	// when they are unmarshaled, so serializing openAIRequest here would lose
-	// extensions such as chat_template_kwargs, cache_control, and exact large
-	// integers. Native Anthropic requests still require the typed protocol
-	// translation path, matching ordinary auto routing.
-	var modifiedBody []byte
-	if ctx.ClientProtocol != config.ClientProtocolAnthropic {
-		modifiedBody = ctx.workingRequestBody()
+) error {
+	if request == nil {
+		return fmt.Errorf("neutral looper request is unavailable")
 	}
-	var err error
-	if len(modifiedBody) > 0 {
-		modifiedBody, err = rewriteModelInBody(modifiedBody, upstreamModel)
-		if err == nil && ctx.ExpectStreamingResponse {
-			modifiedBody = addStreamFieldsFast(modifiedBody)
+	changed := request.Model != modelName || request.Stream != ctx.ExpectStreamingResponse
+	request.Model = modelName
+	request.Stream = ctx.ExpectStreamingResponse
+
+	if decisionName != "" {
+		targetFormat, err := wireFormatForModel(r.Config.GetModelAPIFormat(modelName))
+		if err != nil {
+			return fmt.Errorf("resolve looper target format: %w", err)
 		}
-	} else {
-		modifiedBody, err = serializeOpenAIRequestWithStream(
-			openAIRequest,
-			ctx.ExpectStreamingResponse,
-		)
+		changed = r.applySemanticReasoningMode(request, modelName, targetFormat, useReasoning, ctx.VSRSelectedDecision) || changed
+		injected, err := r.addSemanticSystemPromptIfConfigured(request, decisionName, modelName, ctx)
+		if err != nil {
+			return fmt.Errorf("apply looper system instruction: %w", err)
+		}
+		changed = injected || changed
 	}
-	if err != nil {
-		logging.ComponentErrorEvent("extproc", "looper_request_serialize_failed", map[string]interface{}{
-			"request_id": ctx.RequestID,
-			"model":      upstreamModel,
-			"error":      err.Error(),
-		})
-		return nil, fmt.Errorf("error serializing modified request: %w", err)
+	if changed {
+		request.Generation++
 	}
-
-	if decisionName == "" {
-		return modifiedBody, nil
-	}
-
-	modifiedBody, err = r.setReasoningModeToRequestBody(
-		modifiedBody,
-		useReasoning,
-		ctx.VSRSelectedDecision,
-	)
-	if err != nil {
-		logging.ComponentErrorEvent("extproc", "looper_reasoning_mode_apply_failed", map[string]interface{}{
-			"request_id":        ctx.RequestID,
-			"model":             modelName,
-			"decision":          decisionName,
-			"reasoning_enabled": useReasoning,
-			"error":             err.Error(),
-		})
-		return nil, fmt.Errorf("error setting reasoning mode: %w", err)
-	}
-
-	modifiedBody, err = r.addSystemPromptIfConfigured(
-		modifiedBody,
-		decisionName,
-		modelName,
-		ctx,
-	)
-	if err != nil {
-		logging.ComponentErrorEvent("extproc", "looper_system_prompt_apply_failed", map[string]interface{}{
-			"request_id": ctx.RequestID,
-			"model":      modelName,
-			"decision":   decisionName,
-			"error":      err.Error(),
-		})
-		return nil, fmt.Errorf("error adding system prompt: %w", err)
-	}
-
-	return modifiedBody, nil
+	return nil
 }
 
-// buildHeaderMutationsForLooper builds header mutations for looper internal requests.
-func (r *OpenAIRouter) buildHeaderMutationsForLooper(
-	decision *config.Decision,
+// buildLooperBackendDispatchResponse sends internal Looper hops through the
+// same provider boundary as ordinary requests.
+func (r *OpenAIRouter) buildLooperBackendDispatchResponse(
 	modelName string,
-	route looperBackendRoute,
 	ctx *RequestContext,
-) ([]*core.HeaderValueOption, []string, *ext_proc.ProcessingResponse) {
-	setHeaders := []*core.HeaderValueOption{}
-	removeHeaders := append(
-		[]string{"content-length"},
+) (*ext_proc.ProcessingResponse, error) {
+	dispatch, err := r.prepareProviderDispatch(ctx.SemanticRequest, modelName, "", false, ctx)
+	if err != nil {
+		return nil, err
+	}
+	response := r.buildProviderDispatchResponse(dispatch, ctx)
+	common := response.GetRequestBody().GetResponse()
+	if common == nil {
+		return r.createErrorResponse(500, "Failed to build provider dispatch"), nil
+	}
+	if common.HeaderMutation == nil {
+		common.HeaderMutation = &ext_proc.HeaderMutation{}
+	}
+	common.HeaderMutation.RemoveHeaders = append(
+		common.HeaderMutation.RemoveHeaders,
 		looperInternalHeadersForRemoval()...,
 	)
-
-	if route.found {
-		routedSetHeaders, routedRemoveHeaders, errorResponse := r.buildRoutedLooperHeaders(modelName, route, ctx)
-		if errorResponse != nil {
-			return nil, nil, errorResponse
-		}
-		setHeaders = append(setHeaders, routedSetHeaders...)
-		removeHeaders = append(removeHeaders, routedRemoveHeaders...)
-	} else {
-		setHeaders = append(setHeaders, newHeaderValueOption(headers.SelectedModel, modelName))
-		if accessKey := r.getModelAccessKey(modelName); accessKey != "" {
-			setHeaders = append(
-				setHeaders,
-				newHeaderValueOption("Authorization", fmt.Sprintf("Bearer %s", accessKey)),
-			)
-			logging.ComponentDebugEvent("extproc", "looper_authorization_header_injected", map[string]interface{}{
-				"model": modelName,
-			})
-		}
-	}
-	setHeaders = append(setHeaders, newHeaderValueOption(headers.VSRSelectedModel, modelName))
-
-	if decision == nil {
-		return setHeaders, removeHeaders, nil
-	}
-
-	pluginSetHeaders, pluginRemoveHeaders := r.buildHeaderMutations(decision)
-	if len(pluginSetHeaders) > 0 {
-		setHeaders = append(setHeaders, pluginSetHeaders...)
-	}
-	if len(pluginRemoveHeaders) > 0 {
-		removeHeaders = append(removeHeaders, pluginRemoveHeaders...)
-	}
-
-	return setHeaders, removeHeaders, nil
-}
-
-func (r *OpenAIRouter) buildRoutedLooperHeaders(
-	modelName string,
-	route looperBackendRoute,
-	ctx *RequestContext,
-) ([]*core.HeaderValueOption, []string, *ext_proc.ProcessingResponse) {
-	state, errorResponse := r.buildRouteHeaderState(modelName, route.backendAddress, route.backendName, ctx, nil)
-	if errorResponse != nil {
-		return nil, nil, errorResponse
-	}
-	if _, errorResponse := r.applyRoutingPathHeader(state, route.backendName, ctx, true); errorResponse != nil {
-		return nil, nil, errorResponse
-	}
-	return state.setHeaders, state.removeHeaders, nil
+	setHeaderValue(common.HeaderMutation, headers.VSRSelectedModel, modelName)
+	return r.finalizeProviderDispatchResponse(dispatch, response, ctx)
 }
 
 // handleLooperInternalRequest handles requests from looper to extproc.
@@ -222,32 +127,14 @@ func (r *OpenAIRouter) handleLooperInternalRequest(
 		"model":      modelName,
 	})
 
-	route, err := r.resolveLooperBackendRoute(ctx, modelName)
-	if err != nil {
-		logging.ComponentErrorEvent("extproc", "looper_request_backend_resolve_failed", map[string]interface{}{
-			"request_id": ctx.RequestID,
-			"model":      modelName,
-			"error":      err.Error(),
-		})
-		return r.createErrorResponse(500, "Failed to process looper request: "+err.Error()), nil
+	if ctx.SemanticRequest == nil {
+		return r.createErrorResponse(400, "Invalid inference request"), nil
 	}
-
-	modifiedBody, err := rewriteRequestModel(ctx.OriginalRequestBody, route.upstreamModel)
-	if err != nil {
-		logging.ComponentErrorEvent("extproc", "looper_request_rewrite_failed", map[string]interface{}{
-			"request_id": ctx.RequestID,
-			"model":      modelName,
-			"upstream":   route.upstreamModel,
-			"error":      err.Error(),
-		})
-		return r.createErrorResponse(500, "Failed to process looper request: "+err.Error()), nil
-	}
-
-	setHeaders, removeHeaders, errorResponse := r.buildHeaderMutationsForLooper(nil, modelName, route, ctx)
-	if errorResponse != nil {
-		return errorResponse, nil
-	}
-	return buildLooperContinueResponse(modifiedBody, setHeaders, removeHeaders), nil
+	ctx.SemanticRequest.Model = modelName
+	ctx.SemanticRequest.Generation++
+	ctx.VSRSelectedModel = modelName
+	ctx.RequestModel = modelName
+	return r.buildLooperBackendDispatchResponse(modelName, ctx)
 }
 
 // handleLooperInternalRequestWithPlugins handles looper internal requests with plugin execution.
@@ -266,7 +153,7 @@ func (r *OpenAIRouter) handleLooperInternalRequestWithPlugins(
 	useReasoning, reasoningEffort := r.getReasoningInfoFromDecision(decision, modelName)
 	applyLooperReasoningContext(ctx, modelName, useReasoning, reasoningEffort)
 
-	openAIRequest, err := r.parseLooperRequestForPlugins(ctx)
+	request, err := r.parseLooperRequestForPlugins(ctx)
 	if err != nil {
 		return r.createErrorResponse(400, "Invalid request body"), nil
 	}
@@ -274,41 +161,16 @@ func (r *OpenAIRouter) handleLooperInternalRequestWithPlugins(
 	if response := r.runLooperInternalPlugins(ctx, decisionName); response != nil {
 		return response, nil
 	}
-	workingBody := ctx.workingRequestBody()
-	workingBody, compressionErr := r.applyContextCompressionPolicy(ctx, workingBody)
+	compressionErr := r.applySemanticContextCompression(ctx, request)
 	if compressionErr != nil {
 		return r.createErrorResponse(
 			500,
 			"Context compression failed under fail_closed policy",
 		), nil
 	}
-	ctx.setWorkingRequestBody(workingBody)
-	if ctx.requestBodyMutated() {
-		openAIRequest, err = parseOpenAIRequest(workingBody)
-		if err != nil {
-			logging.ComponentErrorEvent("extproc", "looper_mutated_request_reparse_failed", map[string]interface{}{
-				"request_id": ctx.RequestID,
-				"error":      err.Error(),
-			})
-			return r.createErrorResponse(500, "Failed to process looper request"), nil
-		}
-	}
-
-	route, err := r.resolveLooperBackendRoute(ctx, modelName)
-	if err != nil {
-		logging.ComponentErrorEvent("extproc", "looper_request_backend_resolve_failed", map[string]interface{}{
-			"request_id": ctx.RequestID,
-			"model":      modelName,
-			"decision":   decisionName,
-			"error":      err.Error(),
-		})
-		return r.createErrorResponse(500, "Failed to process looper request"), nil
-	}
-
-	modifiedBody, err := r.modifyRequestBodyForLooper(
-		openAIRequest,
+	err = r.modifyRequestBodyForLooper(
+		request,
 		modelName,
-		route.upstreamModel,
 		decisionName,
 		useReasoning,
 		ctx,
@@ -323,43 +185,8 @@ func (r *OpenAIRouter) handleLooperInternalRequestWithPlugins(
 		return r.createErrorResponse(500, "Failed to process looper request"), nil
 	}
 
-	setHeaders, removeHeaders, errorResponse := r.buildHeaderMutationsForLooper(decision, modelName, route, ctx)
-	if errorResponse != nil {
-		return errorResponse, nil
-	}
 	r.startLooperInternalReplay(ctx, modelName, decisionName)
-	return buildLooperContinueResponse(modifiedBody, setHeaders, removeHeaders), nil
-}
-
-func (r *OpenAIRouter) resolveLooperBackendRoute(
-	ctx *RequestContext,
-	modelName string,
-) (looperBackendRoute, error) {
-	route := looperBackendRoute{upstreamModel: modelName}
-	if r == nil || r.Config == nil {
-		return route, nil
-	}
-
-	backendAddress, backendName, found, err := r.Config.ResolvePrimaryBackendForModel(modelName)
-	if err != nil {
-		return route, fmt.Errorf("backend resolution for model %q: %w", modelName, err)
-	}
-	if !found {
-		return route, nil
-	}
-
-	logging.ComponentDebugEvent("extproc", "looper_backend_resolved", map[string]interface{}{
-		"request_id":      ctx.RequestID,
-		"model":           modelName,
-		"backend_address": backendAddress,
-		"backend_name":    backendName,
-	})
-	metrics.IncrementModelActiveRequests(modelName)
-	route.upstreamModel = r.resolveModelNameForBackend(modelName, backendName)
-	route.backendAddress = backendAddress
-	route.backendName = backendName
-	route.found = true
-	return route, nil
+	return r.buildLooperBackendDispatchResponse(modelName, ctx)
 }
 
 func (r *OpenAIRouter) resolveLooperDecision(
@@ -440,19 +267,21 @@ func applyLooperReasoningContext(
 
 func (r *OpenAIRouter) parseLooperRequestForPlugins(
 	ctx *RequestContext,
-) (*openai.ChatCompletionNewParams, error) {
-	openAIRequest, err := parseOpenAIRequest(ctx.workingRequestBody())
-	if err != nil {
+) (*llmprotocol.Request, error) {
+	if ctx == nil || ctx.SemanticRequest == nil {
+		err := fmt.Errorf("neutral looper request is unavailable")
+		requestID := ""
+		if ctx != nil {
+			requestID = ctx.RequestID
+		}
 		logging.ComponentErrorEvent("extproc", "looper_request_parse_failed", map[string]interface{}{
-			"request_id": ctx.RequestID,
+			"request_id": requestID,
 			"error":      err.Error(),
 		})
 		return nil, err
 	}
-
-	userContent, _ := extractUserAndNonUserContent(openAIRequest)
-	ctx.UserContent = userContent
-	return openAIRequest, nil
+	ctx.UserContent = extractSemanticRequestSignals(ctx.SemanticRequest).UserContent
+	return ctx.SemanticRequest, nil
 }
 
 func (r *OpenAIRouter) runLooperInternalPlugins(
@@ -481,28 +310,4 @@ func (r *OpenAIRouter) startLooperInternalReplay(
 ) {
 	ctx.RouterReplayID = ""
 	r.startRouterReplay(ctx, "ReMoM", modelName, decisionName)
-}
-
-func buildLooperContinueResponse(
-	modifiedBody []byte,
-	setHeaders []*core.HeaderValueOption,
-	removeHeaders []string,
-) *ext_proc.ProcessingResponse {
-	return &ext_proc.ProcessingResponse{
-		Response: &ext_proc.ProcessingResponse_RequestBody{
-			RequestBody: &ext_proc.BodyResponse{
-				Response: &ext_proc.CommonResponse{
-					Status: ext_proc.CommonResponse_CONTINUE,
-					HeaderMutation: &ext_proc.HeaderMutation{
-						SetHeaders:    setHeaders,
-						RemoveHeaders: removeHeaders,
-					},
-					BodyMutation: &ext_proc.BodyMutation{
-						Mutation: &ext_proc.BodyMutation_Body{Body: modifiedBody},
-					},
-					ClearRouteCache: true,
-				},
-			},
-		},
-	}
 }

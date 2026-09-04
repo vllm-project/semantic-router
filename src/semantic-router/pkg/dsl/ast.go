@@ -428,6 +428,7 @@ type SignalDecl struct {
 type RouteDecl struct {
 	Name                string
 	Description         string
+	OnUnknown           string
 	Priority            int
 	Tier                int
 	When                BoolExpr

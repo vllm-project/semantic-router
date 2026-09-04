@@ -7,7 +7,6 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/openai/openai-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -33,10 +32,7 @@ func TestHandleLooperExecutionRejectsUnknownAlgorithmBeforeUpstream(t *testing.T
 		},
 		Algorithm: &config.AlgorithmConfig{Type: "unregistered"},
 	}
-	request := &openai.ChatCompletionNewParams{
-		Model:    "auto",
-		Messages: []openai.ChatCompletionMessageParamUnion{openai.UserMessage("hello")},
-	}
+	request := testNeutralRequest("auto", "hello")
 
 	response, err := router.handleLooperExecution(
 		context.Background(),

@@ -1,26 +1,27 @@
 name: Bug Report
 description: Report reproducible behavior for Maintainer triage
 labels: ["bug", "needs-acceptance"]
-title: "bug: <title>"
+title: "[Bug] <title>"
 body:
   - type: markdown
     attributes:
       value: |
         Thanks for reporting a bug. The report enters `needs-acceptance` so a
-        Maintainer can confirm ownership, impact, and supported behavior before
-        implementation begins.
+        collaborator with write access can confirm ownership, impact, and supported
+        behavior before running `/accept` and beginning implementation.
   - type: dropdown
     id: workgroup
     attributes:
       label: Proposed Workgroup
       description: Select the single direction that appears to own the affected behavior.
       options:
-        - MoM & Routing Intelligence
-        - Router Models, Runtime & Ecosystem
-        - Data Plane & Deployment
-        - Platform & Operations
-        - Quality & Release
-        - Developer Experience & Community
+        - MoM & Routing
+        - Router Models & Inference Runtime
+        - Data Plane & Networking
+        - Enterprise & Environment
+        - Agentic & Context
+        - Developer Experience & Ecosystem
+        - Evaluation & Quality
         - Unsure / Maintainer triage
     validations:
       required: true

@@ -195,7 +195,10 @@ def recipe_profiles(config: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
 
 def config_auto_entrypoints(config: dict[str, Any]) -> tuple[str, ...]:
-    router = _mapping(_mapping(config.get("global")).get("router"))
+    global_config = _mapping(config.get("global"))
+    if not global_config:
+        return ()
+    router = _mapping(global_config.get("router"))
     if "auto_model_names" in router:
         raw_names = _sequence(router.get("auto_model_names"))
     else:

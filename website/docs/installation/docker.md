@@ -65,6 +65,11 @@ Dashboard available without allowing configuration changes. Pin images and
 review [Security Hardening](security-hardening) before exposing a listener
 beyond a trusted host.
 
+Envoy uses the safe `info` log level by default. To troubleshoot temporarily,
+set `VLLM_SR_ENVOY_LOG_LEVEL=debug` before starting the stack, then unset it
+when finished: debug logging can expose forwarded request headers, including
+provider `Authorization` headers, in logs.
+
 ## When to move to Kubernetes
 
 Docker does not provide multi-node scheduling, rolling deployment control, or

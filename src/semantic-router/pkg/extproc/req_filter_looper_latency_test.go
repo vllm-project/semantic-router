@@ -27,7 +27,7 @@ import (
 
 func looperResponseWithLatencyAndUsage() *looper.Response {
 	return &looper.Response{
-		Body:          []byte(`{"ok":true}`),
+		Body:          []byte(`{"id":"chatcmpl-looper","model":"model-b","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]}`),
 		ContentType:   "application/json",
 		Model:         "model-b",
 		ModelsUsed:    []string{"model-a", "model-b"},
@@ -80,7 +80,7 @@ func TestCreateLooperResponseDefaultSurfaceExcludesLatencyAndUsageHeaders(t *tes
 // from a real zero.
 func TestCreateLooperResponseOmitsUnmeasuredZeroValueHeaders(t *testing.T) {
 	resp := &looper.Response{
-		Body:          []byte(`{"ok":true}`),
+		Body:          []byte(`{"id":"chatcmpl-looper","model":"model-b","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]}`),
 		ContentType:   "application/json",
 		Model:         "model-b",
 		ModelsUsed:    []string{"model-a", "model-b"},

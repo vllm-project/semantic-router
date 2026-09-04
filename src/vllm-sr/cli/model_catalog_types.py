@@ -69,13 +69,3 @@ class ModelCatalog:
     enabled_models: tuple[str, ...]
     assets: dict[str, dict[str, str]]
     models: tuple[CatalogModel, ...]
-
-
-@dataclass(frozen=True)
-class MaterializedCatalog:
-    """One deterministic runtime-config projection of a packaged catalog."""
-
-    catalog: ModelCatalog
-    enabled_models: tuple[str, ...]
-    default_model: str
-    document: dict[str, Any]

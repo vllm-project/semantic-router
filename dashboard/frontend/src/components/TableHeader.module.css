@@ -66,8 +66,24 @@
   flex-shrink: 0;
 }
 
+.searchControl {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.searchControl > svg {
+  position: absolute;
+  left: 0.75rem;
+  width: 16px;
+  height: 16px;
+  color: var(--color-text-secondary);
+  pointer-events: none;
+}
+
 .searchInput {
   padding: 0.5rem 0.75rem;
+  padding-left: 2.25rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-bg-tertiary);
@@ -88,6 +104,9 @@
 }
 
 .addButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
   padding: 0.5rem 1.25rem;
   background: var(--color-primary);
   color: #000000;
@@ -98,6 +117,11 @@
   cursor: pointer;
   transition: all var(--transition-fast);
   white-space: nowrap;
+}
+
+.addButton svg {
+  width: 16px;
+  height: 16px;
 }
 
 .addButton:hover {
@@ -160,8 +184,15 @@
     align-items: stretch;
   }
 
-  .searchInput {
+  .searchControl {
     width: 100%;
+  }
+
+  .searchInput,
+  .embedded .searchInput {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
   }
 
   .addButton,

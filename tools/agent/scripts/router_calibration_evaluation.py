@@ -53,6 +53,8 @@ def _build_request_payload(
         payload["model"] = probe.model
     if probe.tools:
         payload["tools"] = list(probe.tools)
+    if probe.tool_choice is not None:
+        payload["tool_choice"] = copy.deepcopy(probe.tool_choice)
     request_value = payload["messages"] if probe.messages else payload["text"]
     value_limit = _request_value_byte_limit(
         probe.probe_id,
@@ -375,7 +377,7 @@ def compare_eval_selection(
     if not method:
         errors.append("selection_method is missing")
     elif method != normalized_algorithm and not (
-        normalized_algorithm == "static" and method == "single"
+        method == "single" and status == "selected"
     ):
         errors.append(f"selection_method={method!r}, want {normalized_algorithm!r}")
     if status in {"selected", "planned_final"} and not selected_model:

@@ -175,11 +175,14 @@ def _mom_materialization_receipt(probes: list[Any]) -> dict[str, Any]:
         messages = router_calibration_support.materialize_probe_messages(probe)
         payload, image_urls, image_parts = _message_payload_receipt(messages)
         _update_probe_digest(text_digest, probe.probe_id, payload)
+        semantic_envelope = {
+            "messages": _normalize_adjacent_message_text_parts(messages),
+            "tools": list(probe.tools),
+        }
+        if probe.tool_choice is not None:
+            semantic_envelope["tool_choice"] = probe.tool_choice
         semantic_request = json.dumps(
-            {
-                "messages": _normalize_adjacent_message_text_parts(messages),
-                "tools": list(probe.tools),
-            },
+            semantic_envelope,
             ensure_ascii=False,
             sort_keys=True,
             separators=(",", ":"),
@@ -582,7 +585,7 @@ fixtures:
                     document, Path("untrusted/probes.yaml")
                 )
 
-    def test_mom_materialization_preserves_legacy_semantic_receipt(self) -> None:
+    def test_mom_materialization_preserves_canonical_semantic_receipt(self) -> None:
         manifest_path = (
             SCRIPT_DIR.parents[2]
             / "config"
@@ -608,11 +611,11 @@ fixtures:
 
         _, probes = router_calibration_manifest.load_probe_manifest(manifest_path)
         receipt = _mom_materialization_receipt(probes)
-        self.assertEqual(len(probes), 222)
-        self.assertEqual(receipt["message_probes"], 82)
+        self.assertEqual(len(probes), 235)
+        self.assertEqual(receipt["message_probes"], 89)
         self.assertEqual(receipt["generated_probes"], 50)
-        self.assertEqual(receipt["image_parts"], 54)
-        self.assertEqual(receipt["text_bytes"], 26_229_486)
+        self.assertEqual(receipt["image_parts"], 57)
+        self.assertEqual(receipt["text_bytes"], 26_230_077)
         self.assertEqual(len(receipt["image_urls"]), 1)
         image_url = next(iter(receipt["image_urls"]))
         self.assertEqual(
@@ -632,11 +635,11 @@ fixtures:
         )
         self.assertEqual(
             receipt["text_sha256"],
-            "9e13c34c1497843f92ca7f8f1d681fcf8655d2c45ca2ae9530d56360f745a6e5",
+            "3f01766dddb0f84699c0e450381874b6cd22428fb3ed41a5928e2fb79c00723b",
         )
         self.assertEqual(
             receipt["semantic_sha256"],
-            "775a18c7987097efb4b53539747eeb7ee408ede125be7444ebe3e765b840137e",
+            "6de1f8f7fdb3104233e22a133b4037226c6a86112a03e1bd5c1199c8ec63ff98",
         )
 
 

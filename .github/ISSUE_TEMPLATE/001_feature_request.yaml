@@ -1,14 +1,15 @@
 name: Feature Request
 description: Propose a scoped capability for Maintainer acceptance
 labels: ["enhancement", "needs-acceptance"]
-title: "feature: <title>"
+title: "[Feature] <title>"
 body:
   - type: markdown
     attributes:
       value: |
         Thanks for proposing an improvement. New work enters `needs-acceptance`.
-        Please do not begin implementation or open a PR until a Maintainer applies
-        `accepted`; contributor-ready work is explicitly marked `ready-for-dev`.
+        Please do not begin implementation or open a PR until a collaborator with
+        write access confirms one Workgroup owner and runs `/accept`;
+        contributor-ready work is explicitly marked `ready-for-dev`.
   - type: textarea
     id: goal
     attributes:
@@ -22,12 +23,13 @@ body:
       label: Proposed Workgroup
       description: Select the single direction that should own acceptance and review.
       options:
-        - MoM & Routing Intelligence
-        - Router Models, Runtime & Ecosystem
-        - Data Plane & Deployment
-        - Platform & Operations
-        - Quality & Release
-        - Developer Experience & Community
+        - MoM & Routing
+        - Router Models & Inference Runtime
+        - Data Plane & Networking
+        - Enterprise & Environment
+        - Agentic & Context
+        - Developer Experience & Ecosystem
+        - Evaluation & Quality
         - Unsure / Maintainer triage
     validations:
       required: true

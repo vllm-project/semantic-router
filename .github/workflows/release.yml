@@ -205,15 +205,10 @@ jobs:
             in the `vllm-sr` wheel and release images. They are not published
             as separate GitHub Release assets. This release binds immutable
             catalog snapshot `${{ needs.validate.outputs.catalog_snapshot }}`.
-            Inspect or fork the installed catalog locally:
-
-            ```bash
-            vllm-sr model list
-            vllm-sr model show vllm-sr/mom-v1-blend \
-              --catalog-version ${{ needs.validate.outputs.catalog_snapshot }}
-            vllm-sr model fork vllm-sr/mom-v1-blend mom-v1.yaml \
-              --catalog-version ${{ needs.validate.outputs.catalog_snapshot }}
-            ```
+            Start `vllm-sr serve`, then use Dashboard to connect Models and
+            assign them to a built-in Recipe. Source-controlled deployments
+            can copy the packaged Recipe YAML into a user-owned config and run
+            `vllm-sr serve --config <path>`.
 
             `vllm-sr-sim` Python releases remain on the independent
             `vllm-sr-sim-v*` tag stream (current source version

@@ -7,6 +7,7 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"go.opentelemetry.io/otel/attribute"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
@@ -132,30 +133,12 @@ func shouldStartRouterReplay(ctx *RequestContext) bool {
 	return ctx.RouterReplayID == ""
 }
 
-// populateReplaySessionIfNeeded fills ChatCompletionMessages and session fields
-// when startRouterReplay runs before prepareRequestForModelRouting (e.g.
-// fast_response, semantic-cache hit, looper-internal).
+// populateReplaySessionIfNeeded derives session fields from neutral state when
+// replay starts before the regular request-preparation phase.
 func populateReplaySessionIfNeeded(ctx *RequestContext) {
-	if ctx == nil {
+	if ctx == nil || ctx.SemanticRequest == nil {
 		return
 	}
-	if ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.IsResponseAPIRequest {
-		populateSessionTransitionFields(ctx)
-		return
-	}
-	if len(ctx.ChatCompletionMessages) > 0 {
-		populateSessionTransitionFields(ctx)
-		return
-	}
-	body := ctx.OriginalRequestBody
-	if len(body) == 0 {
-		return
-	}
-	openAIRequest, err := parseOpenAIRequest(body)
-	if err != nil {
-		return
-	}
-	ctx.ChatCompletionMessages = extractChatCompletionMessages(openAIRequest)
 	populateSessionTransitionFields(ctx)
 }
 
@@ -247,21 +230,18 @@ func buildReplayRoutingRecord(
 		ContextTokenCount:    ctx.VSRContextTokenCount,
 		HallucinationEnabled: hallucinationEnabled,
 	}
-	if ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.IsResponseAPIRequest {
-		record.PreviousResponseID = ctx.ResponseAPICtx.PreviousResponseID
-		record.ConversationID = ctx.ResponseAPICtx.ConversationID
+	if state := ctx.ResponseObjectState; state != nil {
+		record.PreviousResponseID = state.PreviousResponseID
+		record.ConversationID = state.ConversationID
 	}
-	if len(ctx.OriginalRequestBody) > 0 {
-		record.RequestBody = string(ctx.OriginalRequestBody)
+	if ctx.SemanticRequest != nil {
+		if requestBody, err := cache.MarshalSemanticRequest(*ctx.SemanticRequest); err == nil {
+			record.RequestBody = string(requestBody)
+		}
 	}
 
-	// Extract structured prompt and tool-definition fields from the full
-	// request body *before* body truncation occurs in AddRecord.
-	if isResponseAPIRequest(ctx) {
-		record.Prompt, record.ToolDefinitions = extractResponseAPIPromptAndTools(ctx)
-	} else {
-		record.Prompt, record.ToolDefinitions = extractChatCompletionPromptAndTools(ctx.OriginalRequestBody)
-	}
+	// Extract structured fields from neutral IR before recorder truncation.
+	record.Prompt, record.ToolDefinitions = extractSemanticPromptAndTools(ctx.SemanticRequest)
 
 	return record
 }
@@ -286,26 +266,27 @@ func replaySelectedModel(selectedModel string) string {
 
 func replaySignalState(ctx *RequestContext) routerreplay.Signal {
 	return routerreplay.Signal{
-		Keyword:      ctx.VSRMatchedKeywords,
-		Embedding:    ctx.VSRMatchedEmbeddings,
-		Domain:       ctx.VSRMatchedDomains,
-		FactCheck:    ctx.VSRMatchedFactCheck,
-		UserFeedback: ctx.VSRMatchedUserFeedback,
-		Reask:        ctx.VSRMatchedReask,
-		Preference:   ctx.VSRMatchedPreference,
-		Language:     ctx.VSRMatchedLanguage,
-		Context:      ctx.VSRMatchedContext,
-		Structure:    ctx.VSRMatchedStructure,
-		Complexity:   ctx.VSRMatchedComplexity,
-		Modality:     ctx.VSRMatchedModality,
-		Authz:        ctx.VSRMatchedAuthz,
-		Jailbreak:    ctx.VSRMatchedJailbreak,
-		PII:          ctx.VSRMatchedPII,
-		KB:           ctx.VSRMatchedKB,
-		Conversation: ctx.VSRMatchedConversation,
-		Event:        ctx.VSRMatchedEvent,
-		Metadata:     ctx.VSRMatchedMetadata,
-		Classifier:   ctx.VSRMatchedClassifier,
+		Keyword:       ctx.VSRMatchedKeywords,
+		Embedding:     ctx.VSRMatchedEmbeddings,
+		Domain:        ctx.VSRMatchedDomains,
+		FactCheck:     ctx.VSRMatchedFactCheck,
+		UserFeedback:  ctx.VSRMatchedUserFeedback,
+		Reask:         ctx.VSRMatchedReask,
+		Preference:    ctx.VSRMatchedPreference,
+		Language:      ctx.VSRMatchedLanguage,
+		Context:       ctx.VSRMatchedContext,
+		Structure:     ctx.VSRMatchedStructure,
+		Complexity:    ctx.VSRMatchedComplexity,
+		Modality:      ctx.VSRMatchedModality,
+		Authz:         ctx.VSRMatchedAuthz,
+		Jailbreak:     ctx.VSRMatchedJailbreak,
+		PII:           ctx.VSRMatchedPII,
+		KB:            ctx.VSRMatchedKB,
+		Conversation:  ctx.VSRMatchedConversation,
+		Event:         ctx.VSRMatchedEvent,
+		Metadata:      ctx.VSRMatchedMetadata,
+		Classifier:    ctx.VSRMatchedClassifier,
+		InputModality: ctx.VSRMatchedInputModality,
 	}
 }
 

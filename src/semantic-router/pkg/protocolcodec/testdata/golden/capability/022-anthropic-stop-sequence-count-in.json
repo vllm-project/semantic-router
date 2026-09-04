@@ -1,0 +1,9 @@
+{
+  "operation": "request",
+  "body": {
+    "model": "provider-model",
+    "max_tokens": 64,
+    "messages": [{"role": "user", "content": "Stop on one of several markers."}],
+    "stop_sequences": ["ONE", "TWO", "THREE", "FOUR", "FIVE"]
+  }
+}

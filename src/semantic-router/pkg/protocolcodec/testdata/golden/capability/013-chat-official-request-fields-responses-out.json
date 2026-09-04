@@ -1,0 +1,621 @@
+{
+  "cases": [
+    {
+      "name": "audio",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_audio"
+        }
+      }
+    },
+    {
+      "name": "frequency_penalty",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_capability"
+        }
+      }
+    },
+    {
+      "name": "function_call",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_function_call"
+        }
+      }
+    },
+    {
+      "name": "functions",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_functions"
+        }
+      }
+    },
+    {
+      "name": "logit_bias",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_logit_bias"
+        }
+      }
+    },
+    {
+      "name": "logprobs",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_logprobs"
+        }
+      }
+    },
+    {
+      "name": "max_completion_tokens",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "input": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "input_text"
+                }
+              ],
+              "id": "item_6a32e29c376158d871e9638e",
+              "role": "user",
+              "type": "message"
+            }
+          ],
+          "max_output_tokens": 64,
+          "model": "routed-model"
+        }
+      }
+    },
+    {
+      "name": "max_tokens",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "input": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "input_text"
+                }
+              ],
+              "id": "item_6a32e29c376158d871e9638e",
+              "role": "user",
+              "type": "message"
+            }
+          ],
+          "max_output_tokens": 64,
+          "model": "routed-model"
+        }
+      }
+    },
+    {
+      "name": "messages",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "input": [
+            {
+              "content": [
+                {
+                  "text": "be concise",
+                  "type": "input_text"
+                }
+              ],
+              "id": "item_6a32e29c376158d871e9638e",
+              "role": "developer",
+              "type": "message"
+            },
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "input_text"
+                }
+              ],
+              "id": "item_6a32e29c376158d871e9638e",
+              "role": "user",
+              "type": "message"
+            }
+          ],
+          "model": "routed-model"
+        }
+      }
+    },
+    {
+      "name": "metadata",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "input": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "input_text"
+                }
+              ],
+              "id": "item_6a32e29c376158d871e9638e",
+              "role": "user",
+              "type": "message"
+            }
+          ],
+          "metadata": {
+            "trace": "field-matrix"
+          },
+          "model": "routed-model"
+        }
+      }
+    },
+    {
+      "name": "modalities",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_modalities"
+        }
+      }
+    },
+    {
+      "name": "model",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "input": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "input_text"
+                }
+              ],
+              "id": "item_6a32e29c376158d871e9638e",
+              "role": "user",
+              "type": "message"
+            }
+          ],
+          "model": "routed-model"
+        }
+      }
+    },
+    {
+      "name": "moderation",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_moderation"
+        }
+      }
+    },
+    {
+      "name": "n",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_capability"
+        }
+      }
+    },
+    {
+      "name": "parallel_tool_calls",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "input": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "input_text"
+                }
+              ],
+              "id": "item_6a32e29c376158d871e9638e",
+              "role": "user",
+              "type": "message"
+            }
+          ],
+          "model": "routed-model",
+          "parallel_tool_calls": false
+        }
+      }
+    },
+    {
+      "name": "prediction",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_prediction"
+        }
+      }
+    },
+    {
+      "name": "presence_penalty",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_capability"
+        }
+      }
+    },
+    {
+      "name": "prompt_cache_key",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_prompt_cache_key"
+        }
+      }
+    },
+    {
+      "name": "prompt_cache_options",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_prompt_cache_options"
+        }
+      }
+    },
+    {
+      "name": "prompt_cache_retention",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_prompt_cache_retention"
+        }
+      }
+    },
+    {
+      "name": "reasoning_budget_tokens",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_capability"
+        }
+      }
+    },
+    {
+      "name": "reasoning_effort",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "input": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "input_text"
+                }
+              ],
+              "id": "item_6a32e29c376158d871e9638e",
+              "role": "user",
+              "type": "message"
+            }
+          ],
+          "model": "routed-model",
+          "reasoning": {
+            "effort": "high"
+          }
+        }
+      }
+    },
+    {
+      "name": "response_format",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "input": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "input_text"
+                }
+              ],
+              "id": "item_6a32e29c376158d871e9638e",
+              "role": "user",
+              "type": "message"
+            }
+          ],
+          "model": "routed-model",
+          "text": {
+            "format": {
+              "type": "json_object"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "safety_identifier",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_safety_identifier"
+        }
+      }
+    },
+    {
+      "name": "seed",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_capability"
+        }
+      }
+    },
+    {
+      "name": "service_tier",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_service_tier"
+        }
+      }
+    },
+    {
+      "name": "stop",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_capability"
+        }
+      }
+    },
+    {
+      "name": "store",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "input": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "input_text"
+                }
+              ],
+              "id": "item_6a32e29c376158d871e9638e",
+              "role": "user",
+              "type": "message"
+            }
+          ],
+          "model": "routed-model",
+          "store": true
+        }
+      }
+    },
+    {
+      "name": "stream",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "input": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "input_text"
+                }
+              ],
+              "id": "item_6a32e29c376158d871e9638e",
+              "role": "user",
+              "type": "message"
+            }
+          ],
+          "model": "routed-model",
+          "stream": true
+        }
+      }
+    },
+    {
+      "name": "stream_options",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "input": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "input_text"
+                }
+              ],
+              "id": "item_6a32e29c376158d871e9638e",
+              "role": "user",
+              "type": "message"
+            }
+          ],
+          "model": "routed-model",
+          "stream": true,
+          "stream_options": {
+            "include_obfuscation": false
+          }
+        }
+      }
+    },
+    {
+      "name": "temperature",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "input": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "input_text"
+                }
+              ],
+              "id": "item_6a32e29c376158d871e9638e",
+              "role": "user",
+              "type": "message"
+            }
+          ],
+          "model": "routed-model",
+          "temperature": 0.2
+        }
+      }
+    },
+    {
+      "name": "tool_choice",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "input": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "input_text"
+                }
+              ],
+              "id": "item_6a32e29c376158d871e9638e",
+              "role": "user",
+              "type": "message"
+            }
+          ],
+          "model": "routed-model",
+          "tool_choice": "auto"
+        }
+      }
+    },
+    {
+      "name": "tools",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "input": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "input_text"
+                }
+              ],
+              "id": "item_6a32e29c376158d871e9638e",
+              "role": "user",
+              "type": "message"
+            }
+          ],
+          "model": "routed-model",
+          "tool_choice": "auto",
+          "tools": [
+            {
+              "name": "lookup",
+              "parameters": {
+                "type": "object"
+              },
+              "type": "function"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "top_logprobs",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_top_logprobs"
+        }
+      }
+    },
+    {
+      "name": "top_p",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "input": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "input_text"
+                }
+              ],
+              "id": "item_6a32e29c376158d871e9638e",
+              "role": "user",
+              "type": "message"
+            }
+          ],
+          "model": "routed-model",
+          "top_p": 0.9
+        }
+      }
+    },
+    {
+      "name": "user",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "input": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "input_text"
+                }
+              ],
+              "id": "item_6a32e29c376158d871e9638e",
+              "role": "user",
+              "type": "message"
+            }
+          ],
+          "model": "routed-model",
+          "user": "user-1"
+        }
+      }
+    },
+    {
+      "name": "verbosity",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_verbosity"
+        }
+      }
+    },
+    {
+      "name": "web_search_options",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_web_search_options"
+        }
+      }
+    }
+  ]
+}

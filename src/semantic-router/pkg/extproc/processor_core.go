@@ -222,6 +222,7 @@ func (r *OpenAIRouter) processRequestHeaders(
 		logging.Errorf("handleRequestHeaders failed: %v", err)
 		return err
 	}
+	response = r.encodeImmediateResponseForClient(response, ctx)
 	if err := sendResponse(stream, response, "request header"); err != nil {
 		logging.Errorf("sendResponse for headers failed: %v", err)
 		return err
@@ -239,6 +240,8 @@ func (r *OpenAIRouter) processRequestBody(
 		logging.Errorf("handleRequestBody failed: %v", err)
 		return err
 	}
+	response = r.encodeImmediateResponseForClient(response, ctx)
+	r.persistImmediateResponseObject(response, ctx)
 	// FULL_DUPLEX_STREAMED explicitly permits the processor to buffer any
 	// number of input chunks before sending a StreamedBodyResponse. A nil
 	// response here means this chunk was retained for the eventual EOS reply.

@@ -201,6 +201,92 @@ def _walk_directory(root_fd: int) -> Iterator[tuple[str, int, list[str], list[st
     )
 
 
+def _shared_tree_exclusions(root_path: str, exclude_paths: tuple[str, ...]) -> set[str]:
+    excluded_relative_paths: set[str] = set()
+    for excluded_path in exclude_paths:
+        excluded_absolute = os.path.abspath(excluded_path)
+        try:
+            contained = os.path.commonpath((root_path, excluded_absolute)) == root_path
+        except ValueError:
+            contained = False
+        if contained:
+            excluded_relative_paths.add(
+                os.path.normpath(os.path.relpath(excluded_absolute, root_path))
+            )
+    return excluded_relative_paths
+
+
+def _filter_shared_entries(
+    relative_prefix: str,
+    names: list[str],
+    excluded_relative_paths: set[str],
+) -> None:
+    names[:] = [
+        name
+        for name in names
+        if os.path.normpath(os.path.join(relative_prefix, name))
+        not in excluded_relative_paths
+    ]
+
+
+def _prepare_shared_directory(directory_fd: int, gid: int) -> None:
+    directory_info = os.fstat(directory_fd)
+    os.fchown(directory_fd, -1, gid)
+    os.fchmod(
+        directory_fd,
+        stat.S_IMODE(directory_info.st_mode)
+        | stat.S_IRGRP
+        | stat.S_IWGRP
+        | stat.S_IXGRP
+        | stat.S_ISGID,
+    )
+
+
+def _reject_shared_symlinks(
+    directory_fd: int,
+    directories: list[str],
+    files: list[str],
+) -> None:
+    for name in [*directories, *files]:
+        info = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+        if stat.S_ISLNK(info.st_mode):
+            raise OSError(f"shared Dashboard tree contains symlink: {name}")
+
+
+def _prepare_shared_file(
+    directory_fd: int,
+    relative_dir: str,
+    name: str,
+    gid: int,
+    credential_relative_path: str | None,
+    credential_uid: int,
+    credential_gid: int,
+) -> None:
+    descriptor = os.open(
+        name,
+        os.O_RDONLY | os.O_NONBLOCK | os.O_CLOEXEC | os.O_NOFOLLOW,
+        dir_fd=directory_fd,
+    )
+    try:
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+            raise OSError(f"shared Dashboard tree contains unsafe file: {name}")
+        relative_file = os.path.normpath(os.path.join(relative_dir, name)).removeprefix(
+            "./"
+        )
+        if credential_relative_path == relative_file:
+            os.fchown(descriptor, credential_uid, credential_gid)
+            os.fchmod(descriptor, 0o600)
+        else:
+            os.fchown(descriptor, -1, gid)
+            os.fchmod(
+                descriptor,
+                stat.S_IMODE(info.st_mode) | stat.S_IRGRP | stat.S_IWGRP,
+            )
+    finally:
+        os.close(descriptor)
+
+
 def prepare_shared_tree(
     path: str,
     gid: int,
@@ -208,47 +294,97 @@ def prepare_shared_tree(
     credential_relative_path: str | None = None,
     credential_uid: int = 65532,
     credential_gid: int = 65532,
+    exclude_paths: tuple[str, ...] = (),
 ) -> None:
+    root_path = os.path.abspath(path)
+    excluded_relative_paths = _shared_tree_exclusions(root_path, exclude_paths)
+    if "." in excluded_relative_paths:
+        return
+
     root = open_directory(path)
     try:
         for relative_dir, directories, files, directory_fd in _walk_directory(root):
-            directory_info = os.fstat(directory_fd)
-            os.fchown(directory_fd, -1, gid)
-            os.fchmod(
-                directory_fd,
-                stat.S_IMODE(directory_info.st_mode)
-                | stat.S_IRGRP
-                | stat.S_IWGRP
-                | stat.S_IXGRP
-                | stat.S_ISGID,
+            relative_prefix = (
+                "" if relative_dir == "." else relative_dir.removeprefix("./")
             )
-            for name in [*directories, *files]:
-                info = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
-                if stat.S_ISLNK(info.st_mode):
-                    raise OSError(f"shared Dashboard tree contains symlink: {name}")
+            for names in (directories, files):
+                _filter_shared_entries(relative_prefix, names, excluded_relative_paths)
+            _prepare_shared_directory(directory_fd, gid)
+            _reject_shared_symlinks(directory_fd, directories, files)
             for name in files:
-                descriptor = os.open(
+                _prepare_shared_file(
+                    directory_fd,
+                    relative_dir,
                     name,
+                    gid,
+                    credential_relative_path,
+                    credential_uid,
+                    credential_gid,
+                )
+    finally:
+        os.close(root)
+
+
+def prepare_private_tree(path: str, uid: int, gid: int) -> None:
+    """Create or normalize a store without exposing evidence to any group."""
+
+    parent_path, name = os.path.split(os.path.abspath(path))
+    if not name:
+        raise OSError("private Dashboard directory name is empty")
+    parent = open_directory(parent_path)
+    try:
+        with suppress(FileExistsError):
+            os.mkdir(name, 0o700, dir_fd=parent)
+        root = os.open(name, DIRECTORY_FLAGS, dir_fd=parent)
+    finally:
+        os.close(parent)
+
+    try:
+        for _, directories, files, directory_fd in _walk_directory(root):
+            for entry_name in [*directories, *files]:
+                entry_info = os.stat(
+                    entry_name,
+                    dir_fd=directory_fd,
+                    follow_symlinks=False,
+                )
+                if stat.S_ISLNK(entry_info.st_mode):
+                    raise OSError(
+                        f"private Dashboard tree contains symlink: {entry_name}"
+                    )
+
+            os.fchown(directory_fd, uid, gid)
+            os.fchmod(directory_fd, 0o700)
+            for file_name in files:
+                before = os.stat(
+                    file_name,
+                    dir_fd=directory_fd,
+                    follow_symlinks=False,
+                )
+                descriptor = os.open(
+                    file_name,
                     os.O_RDONLY | os.O_NONBLOCK | os.O_CLOEXEC | os.O_NOFOLLOW,
                     dir_fd=directory_fd,
                 )
                 try:
                     info = os.fstat(descriptor)
-                    if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+                    if (
+                        not stat.S_ISREG(info.st_mode)
+                        or info.st_nlink != 1
+                        or not os.path.samestat(before, info)
+                    ):
                         raise OSError(
-                            f"shared Dashboard tree contains unsafe file: {name}"
+                            f"private Dashboard tree contains unsafe file: {file_name}"
                         )
-                    relative_file = os.path.normpath(os.path.join(relative_dir, name))
-                    if relative_file.startswith("./"):
-                        relative_file = relative_file[2:]
-                    if credential_relative_path == relative_file:
-                        os.fchown(descriptor, credential_uid, credential_gid)
-                        os.fchmod(descriptor, 0o600)
-                    else:
-                        os.fchown(descriptor, -1, gid)
-                        os.fchmod(
-                            descriptor,
-                            stat.S_IMODE(info.st_mode) | stat.S_IRGRP | stat.S_IWGRP,
+                    os.fchown(descriptor, uid, gid)
+                    os.fchmod(descriptor, 0o600)
+                    after = os.stat(
+                        file_name,
+                        dir_fd=directory_fd,
+                        follow_symlinks=False,
+                    )
+                    if not os.path.samestat(info, after):
+                        raise OSError(
+                            f"private Dashboard tree entry changed while preparing: {file_name}"
                         )
                 finally:
                     os.close(descriptor)
@@ -282,6 +418,11 @@ def build_parser() -> argparse.ArgumentParser:
     tree.add_argument("--credential-relative-path")
     tree.add_argument("--credential-uid", type=int, default=65532)
     tree.add_argument("--credential-gid", type=int, default=65532)
+    tree.add_argument("--exclude-path", action="append", default=[])
+    private_tree = commands.add_parser("prepare-private-tree")
+    private_tree.add_argument("path")
+    private_tree.add_argument("uid", type=int)
+    private_tree.add_argument("gid", type=int)
     return parser
 
 
@@ -301,6 +442,8 @@ def main() -> None:
         prepare_regular_file(args.path, args.gid)
     elif args.command == "prepare-directory":
         prepare_directory(args.path, args.gid)
+    elif args.command == "prepare-private-tree":
+        prepare_private_tree(args.path, args.uid, args.gid)
     else:
         prepare_shared_tree(
             args.path,
@@ -308,6 +451,7 @@ def main() -> None:
             credential_relative_path=args.credential_relative_path,
             credential_uid=args.credential_uid,
             credential_gid=args.credential_gid,
+            exclude_paths=tuple(args.exclude_path),
         )
 
 

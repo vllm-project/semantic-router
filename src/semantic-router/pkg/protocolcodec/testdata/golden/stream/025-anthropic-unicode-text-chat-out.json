@@ -1,0 +1,57 @@
+{
+  "frames": [
+    {
+      "event": "",
+      "data": {
+        "choices": [
+          {
+            "delta": {
+              "role": "assistant"
+            },
+            "finish_reason": null,
+            "index": 0
+          }
+        ],
+        "id": "response_unicode_1",
+        "model": "public-model",
+        "object": "chat.completion.chunk"
+      }
+    },
+    {
+      "event": "",
+      "data": {
+        "choices": [
+          {
+            "delta": {
+              "content": "你好 🌍 café"
+            },
+            "finish_reason": null,
+            "index": 0
+          }
+        ],
+        "id": "response_unicode_1",
+        "model": "public-model",
+        "object": "chat.completion.chunk"
+      }
+    },
+    {
+      "event": "",
+      "data": {
+        "choices": [
+          {
+            "delta": {},
+            "finish_reason": "stop",
+            "index": 0
+          }
+        ],
+        "id": "response_unicode_1",
+        "model": "public-model",
+        "object": "chat.completion.chunk"
+      }
+    },
+    {
+      "event": "",
+      "data": "[DONE]"
+    }
+  ]
+}

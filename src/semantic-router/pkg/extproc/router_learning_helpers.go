@@ -67,13 +67,15 @@ func (r *OpenAIRouter) configuredBackendModel(model string) bool {
 	return model == r.Config.DefaultModel
 }
 
-func (r *OpenAIRouter) eligibleLearningModelRefs(refs []config.ModelRef) []config.ModelRef {
+func (r *OpenAIRouter) eligibleLearningModelRefs(refs []config.ModelRef, ctx *RequestContext) []config.ModelRef {
 	if len(refs) == 0 {
 		return nil
 	}
 	eligible := make([]config.ModelRef, 0, len(refs))
 	for _, ref := range refs {
-		if strings.TrimSpace(ref.Model) == "" || !r.configuredBackendModel(ref.Model) {
+		if strings.TrimSpace(ref.Model) == "" ||
+			!r.configuredBackendModel(ref.Model) ||
+			(ctx != nil && r.modelRefExceedsContextWindow(ref, ctx.VSRContextTokenCount)) {
 			continue
 		}
 		eligible = append(eligible, ref)

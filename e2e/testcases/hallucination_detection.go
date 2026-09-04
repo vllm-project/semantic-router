@@ -146,7 +146,7 @@ func testSingleHallucinationDetection(ctx context.Context, testCase Hallucinatio
 
 	result.SelectedDecision = response.Headers.Get("x-vsr-selected-decision")
 	result.WarningsHeader = response.Headers.Get(responseWarningsHeader)
-	result.HallucinationWarned = warningsContain(result.WarningsHeader, hallucinationWarningCode)
+	result.HallucinationWarned = headerListContains(result.WarningsHeader, hallucinationWarningCode)
 
 	if verbose {
 		if result.HallucinationWarned {
@@ -209,15 +209,6 @@ func sendHallucinationChatCompletion(
 		Headers:    resp.Header,
 		Body:       bodyBytes,
 	}, nil
-}
-
-func warningsContain(headerValue, code string) bool {
-	for _, part := range strings.Split(headerValue, ",") {
-		if strings.TrimSpace(part) == code {
-			return true
-		}
-	}
-	return false
 }
 
 func detectionRate(matched, total int) float64 {

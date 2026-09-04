@@ -1,0 +1,8 @@
+{
+  "operation": "request",
+  "body": {
+    "model": "provider-model",
+    "max_tokens": null,
+    "messages": [{"role": "user", "content": "hello"}]
+  }
+}

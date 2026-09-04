@@ -2,14 +2,14 @@
 
 ## What this profile is for
 
-This profile exercises the outbound emitter's Anthropic-shaped response
-path end-to-end by routing requests at a backend that natively speaks
+This profile exercises the Anthropic response codec end-to-end by routing
+requests at a backend that natively speaks
 the Anthropic Messages API: `llama.cpp` (`llama-server`) behind the
 `anthropic-shim` Python proxy.
 
 It is needed because the baseline `envoy-ai-gateway` profile routes Anthropic
 clients at an OpenAI-shaped backend (the mock-vLLM simulator), so the
-emitter's cache-token propagation and stop-reason mapping paths are only
+codec cache-token propagation and stop-reason mapping paths are only
 partially exercised there. Tests that assert on
 `usage.cache_creation_input_tokens` or `stop_reason == "stop_sequence"`
 must run against a backend that actually synthesises those fields.

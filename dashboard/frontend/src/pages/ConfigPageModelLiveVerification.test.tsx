@@ -15,10 +15,10 @@ describe('ConfigPageModelLiveVerification', () => {
       />,
     )
 
-    expect(markup).toContain('Sending test query')
-    expect(markup).toContain('Verifying… logical-model with a real inference query')
+    expect(markup).toContain('Checking')
+    expect(markup).toContain('Checking… logical-model with a real inference query')
     expect(markup).toContain('disabled=""')
-    expect(markup).not.toContain('Live verified')
+    expect(markup).not.toContain('Live')
   })
 
   it('labels runtime inference evidence as live verification, not catalog verification', () => {
@@ -44,10 +44,10 @@ describe('ConfigPageModelLiveVerification', () => {
       />,
     )
 
-    expect(markup).toContain('Live verified')
-    expect(markup).toContain('OK from provider')
-    expect(markup).toContain('openai · 18 ms')
-    expect(markup).toContain('Verify again logical-model with a real inference query')
+    expect(markup).toContain('Live')
+    expect(markup).toContain('Check again logical-model with a real inference query')
+    expect(markup).not.toContain('OK from provider')
+    expect(markup).not.toContain('openai · 18 ms')
     expect(markup).not.toContain('catalog verified')
   })
 
@@ -62,10 +62,10 @@ describe('ConfigPageModelLiveVerification', () => {
       />,
     )
 
-    expect(markup).toContain('Verification failed')
+    expect(markup).toContain('Unavailable')
     expect(markup).toContain('Provider inference returned HTTP 401.')
-    expect(markup).toContain('Retry logical-model with a real inference query')
-    expect(markup).not.toContain('Live verified')
+    expect(markup).toContain('Check again logical-model with a real inference query')
+    expect(markup).not.toContain('Live')
   })
 
   it('disables generation when the model has no backend or the user lacks evaluation.run', () => {

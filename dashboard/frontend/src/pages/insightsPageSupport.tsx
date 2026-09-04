@@ -2,12 +2,12 @@ import type { Column } from '../components/DataTable'
 import CollapsibleSection from '../components/CollapsibleSection'
 import { formatRoutingMetadataValue } from '../components/routingMetadataDisplay'
 import type { ViewField, ViewSection } from '../components/ViewPanel'
-import { formatDate } from '../types/evaluation'
+import { formatDateTime } from '../utils/dateTime'
 import { Link } from 'react-router-dom'
 
 import type { InsightsCostSummary, InsightsRecord, Signal } from './insightsPageTypes'
 import { buildProjectionTraceFields } from './insightsPageProjectionTrace'
-import { buildToolTraceFields, renderToolNamesCell } from './insightsPageToolTrace'
+import { renderToolNamesCell } from './insightsPageToolTrace'
 import styles from './InsightsPage.module.css'
 
 export { filterInsightsRecords } from './insightsPageFilters'
@@ -142,7 +142,7 @@ export function createInsightsTableColumns(): Column<InsightsRecord>[] {
       header: 'Created',
       width: '160px',
       sortable: true,
-      render: (row) => <span className={styles.timestamp}>{formatDate(row.timestamp)}</span>,
+      render: (row) => <span className={styles.timestamp}>{formatDateTime(row.timestamp)}</span>,
     },
     {
       key: 'recipe',
@@ -283,7 +283,7 @@ export function createInsightsTableColumns(): Column<InsightsRecord>[] {
 
 export function buildInsightsRecordSections(
   record: InsightsRecord,
-  options: { isReadonly: boolean; canViewReplayFlowDetails: boolean },
+  options: { isReadonly: boolean },
 ): ViewSection[] {
   const sections: ViewSection[] = []
 
@@ -292,7 +292,7 @@ export function buildInsightsRecordSections(
     fields: [
       { label: 'State', value: record.lifecycle_state || 'unknown' },
       { label: 'HTTP status', value: record.response_status || '-' },
-      { label: 'Ended at', value: record.ended_at ? formatDate(record.ended_at) : '-' },
+      { label: 'Ended at', value: record.ended_at ? formatDateTime(record.ended_at) : '-' },
       {
         label: 'Duration',
         value: typeof record.duration_ms === 'number' ? `${record.duration_ms} ms` : '-',
@@ -312,12 +312,6 @@ export function buildInsightsRecordSections(
       { label: 'Decision tier', value: formatDecisionNumber(record.decision_tier) },
       { label: 'Decision priority', value: formatDecisionNumber(record.decision_priority) },
       {
-        label: 'Category',
-        value: record.signals?.domain?.length
-          ? record.signals.domain.join(', ')
-          : record.category || '-',
-      },
-      {
         label: 'Confidence score',
         value:
           record.confidence_score !== undefined
@@ -336,32 +330,6 @@ export function buildInsightsRecordSections(
       { label: 'Selection method', value: record.selection_method || '-' },
     ],
   })
-
-  const routingMetadataFields = buildRoutingMetadataFields(record)
-  if (routingMetadataFields.length > 0) {
-    sections.push({
-      title: 'Routing Metadata',
-      fields: routingMetadataFields,
-    })
-  }
-
-  const projectionTraceFields = buildProjectionTraceFields(record)
-  if (projectionTraceFields.length > 0) {
-    sections.push({
-      title: 'Projection trace',
-      fields: projectionTraceFields,
-    })
-  }
-
-  const toolTraceFields = buildToolTraceFields(record, {
-    canViewFlowDetails: options.canViewReplayFlowDetails,
-  })
-  if (toolTraceFields.length > 0) {
-    sections.push({
-      title: 'Tool Trace',
-      fields: toolTraceFields,
-    })
-  }
 
   sections.push({
     title: 'Usage & Cost',
@@ -400,10 +368,26 @@ export function buildInsightsRecordSections(
     ],
   })
 
+  const routingMetadataFields = buildRoutingMetadataFields(record)
+  if (routingMetadataFields.length > 0) {
+    sections.push({
+      title: 'Routing Metadata',
+      fields: routingMetadataFields,
+    })
+  }
+
+  const projectionTraceFields = buildProjectionTraceFields(record)
+  if (projectionTraceFields.length > 0) {
+    sections.push({
+      title: 'Projection Trace',
+      fields: projectionTraceFields,
+    })
+  }
+
   const requestResponseFields = buildRequestResponseFields(record, options.isReadonly)
   if (requestResponseFields.length > 0) {
     sections.push({
-      title: 'Request/Response',
+      title: 'Request / Response',
       fields: requestResponseFields,
     })
   }

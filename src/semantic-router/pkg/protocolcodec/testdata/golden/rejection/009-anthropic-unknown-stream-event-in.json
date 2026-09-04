@@ -1,0 +1,8 @@
+{
+  "operation": "stream",
+  "public_model": "public-model",
+  "provider_model": "source-model",
+  "chunks": [
+    "event: message_future\ndata: {\"type\":\"message_future\"}\n\n"
+  ]
+}

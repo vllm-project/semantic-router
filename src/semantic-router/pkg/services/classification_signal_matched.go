@@ -8,27 +8,28 @@ import (
 )
 
 var matchedSignalResolvers = map[string]func(*MatchedSignals) *[]string{
-	config.SignalTypeKeyword:      func(target *MatchedSignals) *[]string { return &target.Keywords },
-	config.SignalTypeEmbedding:    func(target *MatchedSignals) *[]string { return &target.Embeddings },
-	config.SignalTypeDomain:       func(target *MatchedSignals) *[]string { return &target.Domains },
-	config.SignalTypeFactCheck:    func(target *MatchedSignals) *[]string { return &target.FactCheck },
-	config.SignalTypeUserFeedback: func(target *MatchedSignals) *[]string { return &target.UserFeedback },
-	config.SignalTypeReask:        func(target *MatchedSignals) *[]string { return &target.Reask },
-	config.SignalTypePreference:   func(target *MatchedSignals) *[]string { return &target.Preferences },
-	config.SignalTypeLanguage:     func(target *MatchedSignals) *[]string { return &target.Language },
-	config.SignalTypeContext:      func(target *MatchedSignals) *[]string { return &target.Context },
-	config.SignalTypeStructure:    func(target *MatchedSignals) *[]string { return &target.Structure },
-	config.SignalTypeComplexity:   func(target *MatchedSignals) *[]string { return &target.Complexity },
-	config.SignalTypeModality:     func(target *MatchedSignals) *[]string { return &target.Modality },
-	config.SignalTypeAuthz:        func(target *MatchedSignals) *[]string { return &target.Authz },
-	config.SignalTypeJailbreak:    func(target *MatchedSignals) *[]string { return &target.Jailbreak },
-	config.SignalTypePII:          func(target *MatchedSignals) *[]string { return &target.PII },
-	config.SignalTypeKB:           func(target *MatchedSignals) *[]string { return &target.KB },
-	config.SignalTypeConversation: func(target *MatchedSignals) *[]string { return &target.Conversation },
-	config.SignalTypeEvent:        func(target *MatchedSignals) *[]string { return &target.Event },
-	config.SignalTypeMetadata:     func(target *MatchedSignals) *[]string { return &target.Metadata },
-	config.SignalTypeClassifier:   func(target *MatchedSignals) *[]string { return &target.Classifier },
-	config.SignalTypeProjection:   func(target *MatchedSignals) *[]string { return &target.Projection },
+	config.SignalTypeKeyword:       func(target *MatchedSignals) *[]string { return &target.Keywords },
+	config.SignalTypeEmbedding:     func(target *MatchedSignals) *[]string { return &target.Embeddings },
+	config.SignalTypeDomain:        func(target *MatchedSignals) *[]string { return &target.Domains },
+	config.SignalTypeFactCheck:     func(target *MatchedSignals) *[]string { return &target.FactCheck },
+	config.SignalTypeUserFeedback:  func(target *MatchedSignals) *[]string { return &target.UserFeedback },
+	config.SignalTypeReask:         func(target *MatchedSignals) *[]string { return &target.Reask },
+	config.SignalTypePreference:    func(target *MatchedSignals) *[]string { return &target.Preferences },
+	config.SignalTypeLanguage:      func(target *MatchedSignals) *[]string { return &target.Language },
+	config.SignalTypeContext:       func(target *MatchedSignals) *[]string { return &target.Context },
+	config.SignalTypeStructure:     func(target *MatchedSignals) *[]string { return &target.Structure },
+	config.SignalTypeComplexity:    func(target *MatchedSignals) *[]string { return &target.Complexity },
+	config.SignalTypeModality:      func(target *MatchedSignals) *[]string { return &target.Modality },
+	config.SignalTypeAuthz:         func(target *MatchedSignals) *[]string { return &target.Authz },
+	config.SignalTypeJailbreak:     func(target *MatchedSignals) *[]string { return &target.Jailbreak },
+	config.SignalTypePII:           func(target *MatchedSignals) *[]string { return &target.PII },
+	config.SignalTypeKB:            func(target *MatchedSignals) *[]string { return &target.KB },
+	config.SignalTypeConversation:  func(target *MatchedSignals) *[]string { return &target.Conversation },
+	config.SignalTypeEvent:         func(target *MatchedSignals) *[]string { return &target.Event },
+	config.SignalTypeMetadata:      func(target *MatchedSignals) *[]string { return &target.Metadata },
+	config.SignalTypeClassifier:    func(target *MatchedSignals) *[]string { return &target.Classifier },
+	config.SignalTypeInputModality: func(target *MatchedSignals) *[]string { return &target.InputModality },
+	config.SignalTypeProjection:    func(target *MatchedSignals) *[]string { return &target.Projection },
 }
 
 func buildMatchedSignals(signals *classification.SignalResults) *MatchedSignals {
@@ -37,27 +38,28 @@ func buildMatchedSignals(signals *classification.SignalResults) *MatchedSignals 
 	}
 
 	return &MatchedSignals{
-		Keywords:     signals.MatchedKeywordRules,
-		Embeddings:   signals.MatchedEmbeddingRules,
-		Domains:      signals.MatchedDomainRules,
-		FactCheck:    signals.MatchedFactCheckRules,
-		UserFeedback: signals.MatchedUserFeedbackRules,
-		Reask:        signals.MatchedReaskRules,
-		Preferences:  signals.MatchedPreferenceRules,
-		Language:     signals.MatchedLanguageRules,
-		Context:      signals.MatchedContextRules,
-		Structure:    signals.MatchedStructureRules,
-		Complexity:   signals.MatchedComplexityRules,
-		Modality:     signals.MatchedModalityRules,
-		Authz:        signals.MatchedAuthzRules,
-		Jailbreak:    signals.MatchedJailbreakRules,
-		PII:          signals.MatchedPIIRules,
-		KB:           signals.MatchedKBRules,
-		Conversation: signals.MatchedConversationRules,
-		Event:        signals.MatchedEventRules,
-		Metadata:     signals.MatchedMetadataRules,
-		Classifier:   signals.MatchedClassifierRules,
-		Projection:   signals.MatchedProjectionRules,
+		Keywords:      signals.MatchedKeywordRules,
+		Embeddings:    signals.MatchedEmbeddingRules,
+		Domains:       signals.MatchedDomainRules,
+		FactCheck:     signals.MatchedFactCheckRules,
+		UserFeedback:  signals.MatchedUserFeedbackRules,
+		Reask:         signals.MatchedReaskRules,
+		Preferences:   signals.MatchedPreferenceRules,
+		Language:      signals.MatchedLanguageRules,
+		Context:       signals.MatchedContextRules,
+		Structure:     signals.MatchedStructureRules,
+		Complexity:    signals.MatchedComplexityRules,
+		Modality:      signals.MatchedModalityRules,
+		Authz:         signals.MatchedAuthzRules,
+		Jailbreak:     signals.MatchedJailbreakRules,
+		PII:           signals.MatchedPIIRules,
+		KB:            signals.MatchedKBRules,
+		Conversation:  signals.MatchedConversationRules,
+		Event:         signals.MatchedEventRules,
+		Metadata:      signals.MatchedMetadataRules,
+		Classifier:    signals.MatchedClassifierRules,
+		InputModality: signals.MatchedInputModalityRules,
+		Projection:    signals.MatchedProjectionRules,
 	}
 }
 
@@ -127,6 +129,7 @@ func getUnmatchedSignals(
 	collectUnmatchedProjectionOutputs(&unmatched.Projection, cfg.Projections.Mappings, signals.MatchedProjectionRules)
 	collectUnmatchedRuleNames(&unmatched.Metadata, cfg.MetadataRules, signals.MatchedMetadataRules, func(rule config.MetadataRule) string { return rule.Name })
 	collectUnmatchedClassifierRules(&unmatched.Classifier, cfg.ClassifierRules, signals.MatchedClassifierRules)
+	collectUnmatchedRuleNames(&unmatched.InputModality, cfg.InputModalityRules, signals.MatchedInputModalityRules, func(rule config.InputModalityRule) string { return rule.Name })
 
 	return unmatched
 }

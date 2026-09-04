@@ -1,0 +1,8 @@
+{
+  "operation": "stream",
+  "public_model": "public-model",
+  "provider_model": "provider-model",
+  "chunks": [
+    "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":2,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n"
+  ]
+}

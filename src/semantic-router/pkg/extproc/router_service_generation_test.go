@@ -12,14 +12,17 @@ import (
 
 func TestRouterServiceSwapPublishesBeforeRetiredGenerationDrains(t *testing.T) {
 	storage := &countingCloseStore{Storage: store.NewMemoryStore(10, 0)}
-	oldRouter := &OpenAIRouter{ReplayRecorder: routerreplay.NewRecorder(storage)}
+	recorder := routerreplay.NewRecorder(storage)
+	resources := newResourceScope()
+	resources.add(recorder.Close)
+	oldRouter := (&routerComponents{resources: resources, replayRecorder: recorder}).buildRouter()
 	service := NewRouterService(oldRouter)
 	generation := service.current.Load()
 	generation.refs.Add(1)
 
 	swapped := make(chan struct{})
 	go func() {
-		_ = service.Swap(&OpenAIRouter{}, nil)
+		_ = service.Swap((&routerComponents{resources: newResourceScope()}).buildRouter(), nil)
 		close(swapped)
 	}()
 
@@ -45,8 +48,14 @@ func TestRouterServiceSwapPublishesBeforeRetiredGenerationDrains(t *testing.T) {
 func TestRouterServiceCloseWaitsForAllRetiredGenerationsAndRejectsReload(t *testing.T) {
 	firstStore := &countingCloseStore{Storage: store.NewMemoryStore(10, 0)}
 	secondStore := &countingCloseStore{Storage: store.NewMemoryStore(10, 0)}
-	first := &OpenAIRouter{ReplayRecorder: routerreplay.NewRecorder(firstStore)}
-	second := &OpenAIRouter{ReplayRecorder: routerreplay.NewRecorder(secondStore)}
+	firstRecorder := routerreplay.NewRecorder(firstStore)
+	firstResources := newResourceScope()
+	firstResources.add(firstRecorder.Close)
+	first := (&routerComponents{resources: firstResources, replayRecorder: firstRecorder}).buildRouter()
+	secondRecorder := routerreplay.NewRecorder(secondStore)
+	secondResources := newResourceScope()
+	secondResources.add(secondRecorder.Close)
+	second := (&routerComponents{resources: secondResources, replayRecorder: secondRecorder}).buildRouter()
 	service := NewRouterService(first)
 	firstGeneration := service.current.Load()
 	firstGeneration.refs.Add(1)
@@ -66,7 +75,10 @@ func TestRouterServiceCloseWaitsForAllRetiredGenerationsAndRejectsReload(t *test
 	}
 
 	rejectedStore := &countingCloseStore{Storage: store.NewMemoryStore(10, 0)}
-	rejected := &OpenAIRouter{ReplayRecorder: routerreplay.NewRecorder(rejectedStore)}
+	rejectedRecorder := routerreplay.NewRecorder(rejectedStore)
+	rejectedResources := newResourceScope()
+	rejectedResources.add(rejectedRecorder.Close)
+	rejected := (&routerComponents{resources: rejectedResources, replayRecorder: rejectedRecorder}).buildRouter()
 	if err := service.Swap(rejected, nil); err == nil {
 		t.Fatal("Swap() accepted a router after shutdown began")
 	}
@@ -87,7 +99,10 @@ func TestRouterServiceCloseWaitsForAllRetiredGenerationsAndRejectsReload(t *test
 
 func TestRouterServiceSwapWaitsForLeasedManagementRuntimeBeforeClosingStore(t *testing.T) {
 	storage := &countingCloseStore{Storage: store.NewMemoryStore(10, 0)}
-	oldRouter := &OpenAIRouter{ReplayRecorder: routerreplay.NewRecorder(storage)}
+	recorder := routerreplay.NewRecorder(storage)
+	resources := newResourceScope()
+	resources.add(recorder.Close)
+	oldRouter := (&routerComponents{resources: resources, replayRecorder: recorder}).buildRouter()
 	oldRuntime := oldRouter.routerLearningRuntimeState()
 	registry := routerruntime.NewRegistry(nil)
 	registry.SetLearningRuntime(oldRuntime)
@@ -97,7 +112,7 @@ func TestRouterServiceSwapWaitsForLeasedManagementRuntimeBeforeClosingStore(t *t
 	if leased != oldRuntime {
 		t.Fatalf("acquired runtime = %T, want old router runtime", leased)
 	}
-	newRouter := &OpenAIRouter{}
+	newRouter := (&routerComponents{resources: newResourceScope()}).buildRouter()
 	newRuntime := newRouter.routerLearningRuntimeState()
 	if err := service.Swap(newRouter, func() {
 		registry.SetLearningRuntime(newRuntime)
@@ -138,8 +153,12 @@ func TestRouterServiceSwapRetiresPublishedSessionStoreAfterGenerationDrains(t *t
 		sessiontelemetry.ResetRouterSessionMemoryForTesting()
 	})
 
-	oldRouter := &OpenAIRouter{routerSessionStateStore: oldStoreSlot}
-	newRouter := &OpenAIRouter{routerSessionStateStore: newStoreSlot}
+	oldResources := newResourceScope()
+	registerRouterSessionStore(oldResources, oldStoreSlot)
+	oldRouter := (&routerComponents{resources: oldResources, routerSessionStore: oldStoreSlot}).buildRouter()
+	newResources := newResourceScope()
+	registerRouterSessionStore(newResources, newStoreSlot)
+	newRouter := (&routerComponents{resources: newResources, routerSessionStore: newStoreSlot}).buildRouter()
 	service := NewRouterService(oldRouter)
 	oldGeneration := service.current.Load()
 	oldGeneration.refs.Add(1)

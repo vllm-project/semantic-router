@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"id\":\"0\",\"output\":[{\"type\":\"message\",\"id\":\"0\",\"role\":\"assistant\",\"status\":\"\",\"content\":[{\"type\":\"refusal\"}]}]}")

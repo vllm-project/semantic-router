@@ -1,13 +1,18 @@
 import { ObjectListEditor, type ObjectEditorField } from '../components/ObjectListEditor'
 import { StringListEditor } from '../components/StringListEditor'
 import type {
+  ConversationSource,
   DecisionCondition,
   NumericPredicate,
   StructureFeature,
   Subject,
 } from './configPageSupport'
 import {
+  CONVERSATION_FEATURE_TYPES,
+  CONVERSATION_ROLES,
+  CONVERSATION_SOURCE_TYPES,
   readConditions,
+  readConversationFeature,
   readStringList,
   readStructureFeature,
   readStructurePredicate,
@@ -344,6 +349,90 @@ export function SignalStructurePredicateEditor({
           )}
         </label>
       ))}
+    </div>
+  )
+}
+
+export function SignalConversationFeatureEditor({
+  value,
+  onChange,
+  readOnly = false,
+}: UnknownEditorProps) {
+  const feature = readConversationFeature(value)
+  const updateSource = (nextSource: ConversationSource) =>
+    onChange({ ...feature, source: nextSource })
+
+  if (readOnly) {
+    return (
+      <div className={styles.fieldGrid}>
+        <div className={styles.field}>
+          <span className={styles.label}>Feature</span>
+          <span className={styles.readonlyValue}>{feature.type}</span>
+        </div>
+        <div className={styles.field}>
+          <span className={styles.label}>Source</span>
+          <span className={styles.readonlyValue}>{feature.source.type}</span>
+        </div>
+        {feature.source.role ? (
+          <div className={styles.field}>
+            <span className={styles.label}>Message role</span>
+            <span className={styles.readonlyValue}>{feature.source.role}</span>
+          </div>
+        ) : null}
+      </div>
+    )
+  }
+
+  return (
+    <div className={styles.fieldGrid}>
+      <label className={styles.field}>
+        <span className={styles.label}>Feature type</span>
+        <select
+          className={styles.select}
+          value={feature.type}
+          onChange={(event) => onChange({ ...feature, type: event.target.value })}
+        >
+          {CONVERSATION_FEATURE_TYPES.map((type) => (
+            <option key={type} value={type}>{type}</option>
+          ))}
+        </select>
+      </label>
+      <label className={styles.field}>
+        <span className={styles.label}>Source type</span>
+        <select
+          className={styles.select}
+          value={feature.source.type}
+          onChange={(event) => {
+            const nextType = event.target.value
+            updateSource(
+              nextType === 'message'
+                ? { type: nextType, role: feature.source.role }
+                : { type: nextType },
+            )
+          }}
+        >
+          {CONVERSATION_SOURCE_TYPES.map((type) => (
+            <option key={type} value={type}>{type}</option>
+          ))}
+        </select>
+      </label>
+      {feature.source.type === 'message' ? (
+        <label className={styles.field}>
+          <span className={styles.label}>Message role</span>
+          <select
+            className={styles.select}
+            value={feature.source.role ?? ''}
+            onChange={(event) =>
+              updateSource({ type: 'message', role: event.target.value || undefined })
+            }
+          >
+            <option value="">Any role</option>
+            {CONVERSATION_ROLES.map((role) => (
+              <option key={role} value={role}>{role}</option>
+            ))}
+          </select>
+        </label>
+      ) : null}
     </div>
   )
 }

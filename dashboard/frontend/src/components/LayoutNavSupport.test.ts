@@ -18,24 +18,24 @@ describe('layout navigation route matching', () => {
     expect(findActiveLayoutMenuCategory(BUILD_MENU_CATEGORIES, pathname, false)).toBe('knowledge')
   })
 
-  it('keeps Config Builder first and Mixture-of-Models in Design', () => {
-    const design = BUILD_MENU_CATEGORIES.find(
+  it('keeps Models and Mixture-of-Models together in the first Routing column', () => {
+    const models = BUILD_MENU_CATEGORIES.find(
       (category) => category.key === 'routing',
-    )?.sections.find((section) => section.title === 'Design')
-    const entrypoints = design?.items.find(
+    )?.sections.find((section) => section.title === 'Models')
+    const entrypoints = models?.items.find(
       (item) => item.kind === 'config' && item.configSection === 'entrypoints-recipes',
     )
 
-    expect(design?.items[0]).toMatchObject({
-      kind: 'route',
-      label: 'Config Builder',
-      to: '/builder',
+    expect(models?.items[0]).toMatchObject({
+      kind: 'config',
+      label: 'Models',
+      configSection: 'models',
     })
     expect(entrypoints).toMatchObject({
       kind: 'config',
       label: 'Mixture-of-Models',
       configSection: 'entrypoints-recipes',
     })
-    expect(design?.items.indexOf(entrypoints!)).toBe(1)
+    expect(models?.items.indexOf(entrypoints!)).toBe(1)
   })
 })

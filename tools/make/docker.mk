@@ -328,6 +328,7 @@ VLLM_SR_BUILD_ARGS += --build-arg GIT_SSL_NO_VERIFY=1
 endif
 VLLM_SR_PROJECT_VERSION := $(shell sed -n 's/^version = "\(.*\)"/\1/p' src/vllm-sr/pyproject.toml | head -n1)
 VLLM_SR_GIT_REVISION := $(shell git rev-parse --short=7 HEAD 2>/dev/null || echo local)
+VLLM_SR_SOURCE_REVISION ?= $(shell if test -z "$$(git status --porcelain --untracked-files=all 2>/dev/null)"; then git rev-parse HEAD 2>/dev/null || echo unavailable; else echo unavailable; fi)
 VLLM_SR_DASHBOARD_VERSION_SOURCE := $(origin VLLM_SR_DASHBOARD_VERSION)
 VLLM_SR_DASHBOARD_VERSION ?= $(VLLM_SR_PROJECT_VERSION)-dev.$(VLLM_SR_GIT_REVISION)
 ifeq ($(VLLM_SR_DASHBOARD_VERSION_SOURCE),undefined)
@@ -335,7 +336,7 @@ ifneq ($(shell git status --porcelain -- dashboard/backend dashboard/frontend sr
 VLLM_SR_DASHBOARD_VERSION := $(VLLM_SR_DASHBOARD_VERSION).dirty
 endif
 endif
-VLLM_SR_DASHBOARD_BUILD_ARGS := $(VLLM_SR_BUILD_ARGS) --build-arg DASHBOARD_VERSION=$(VLLM_SR_DASHBOARD_VERSION)
+VLLM_SR_DASHBOARD_BUILD_ARGS := $(VLLM_SR_BUILD_ARGS) --build-arg DASHBOARD_VERSION=$(VLLM_SR_DASHBOARD_VERSION) --build-arg VLLM_SR_SOURCE_REVISION=$(VLLM_SR_SOURCE_REVISION)
 
 vllm-sr-dev: ## Rebuild vLLM Semantic Router router image and install CLI
 vllm-sr-dev:

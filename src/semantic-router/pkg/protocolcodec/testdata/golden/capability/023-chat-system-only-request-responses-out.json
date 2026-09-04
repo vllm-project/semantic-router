@@ -1,0 +1,19 @@
+{
+  "status": "ok",
+  "body": {
+    "input": [
+      {
+        "content": [
+          {
+            "text": "Answer concisely.",
+            "type": "input_text"
+          }
+        ],
+        "id": "item_6a32e29c376158d871e9638e",
+        "role": "system",
+        "type": "message"
+      }
+    ],
+    "model": "routed-model"
+  }
+}

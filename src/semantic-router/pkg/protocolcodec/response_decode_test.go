@@ -1,0 +1,224 @@
+/*
+Copyright 2025 vLLM Semantic Router.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package protocolcodec
+
+import (
+	"bytes"
+	"testing"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+)
+
+func TestDecodeResponseStreamAccumulatesBuiltinFormats(t *testing.T) {
+	engine := NewBuiltinEngine()
+	response := llmprotocol.Response{
+		Generation: 1,
+		ID:         "response_1",
+		Model:      "public/model",
+		Output: []llmprotocol.OutputItem{{
+			ID:   "item_1",
+			Role: llmprotocol.RoleAssistant,
+			Content: []llmprotocol.Content{
+				{Kind: llmprotocol.ContentReasoning, Text: "consider"},
+				{Kind: llmprotocol.ContentText, Text: "answer"},
+			},
+		}},
+		StopReason: llmprotocol.StopEndTurn,
+		Usage:      availableStreamUsage(4, 2),
+	}
+	for _, format := range builtinFormats {
+		t.Run(string(format), func(t *testing.T) {
+			assertDecodedBuiltinResponseStream(t, engine, format, response)
+		})
+	}
+}
+
+func TestResponsesReplayPreservesContentGroupingAndReasoningNamespaces(t *testing.T) {
+	engine := NewBuiltinEngine()
+	response := llmprotocol.Response{
+		Generation: 1,
+		ID:         "response_grouped",
+		Model:      "public/model",
+		Output: []llmprotocol.OutputItem{
+			{
+				ID: "reasoning_group", Role: llmprotocol.RoleAssistant,
+				Content: []llmprotocol.Content{
+					{Kind: llmprotocol.ContentReasoning, Reasoning: llmprotocol.ReasoningScopeSummary, Text: "short"},
+					{Kind: llmprotocol.ContentReasoning, Reasoning: llmprotocol.ReasoningScopeText, Text: "full"},
+				},
+			},
+			{
+				ID: "message_group", Role: llmprotocol.RoleAssistant,
+				Content: []llmprotocol.Content{
+					{Kind: llmprotocol.ContentText, Text: "first"},
+					{Kind: llmprotocol.ContentText, Text: "second"},
+				},
+			},
+		},
+		StopReason: llmprotocol.StopEndTurn,
+		Usage:      availableStreamUsage(4, 4),
+	}
+	wire, _, err := engine.EncodeResponseStream(
+		llmprotocol.OpenAIResponsesV1,
+		response,
+		llmprotocol.StreamContext{PublicModel: response.Model},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, _, err := engine.DecodeResponseStream(
+		llmprotocol.OpenAIResponsesV1,
+		wire,
+		llmprotocol.StreamContext{PublicModel: response.Model},
+	)
+	if err != nil {
+		t.Fatalf("decode replayed Responses stream: %v\n%s", err, wire)
+	}
+	if len(decoded.Output) != 2 {
+		t.Fatalf("replayed output items = %d, want 2: %+v", len(decoded.Output), decoded.Output)
+	}
+	if len(decoded.Output[0].Content) != 2 ||
+		decoded.Output[0].Content[0].Reasoning != llmprotocol.ReasoningScopeSummary ||
+		decoded.Output[0].Content[1].Reasoning != llmprotocol.ReasoningScopeText {
+		t.Fatalf("reasoning namespaces or grouping changed: %+v", decoded.Output[0])
+	}
+	if len(decoded.Output[1].Content) != 2 ||
+		decoded.Output[1].Content[0].Text != "first" || decoded.Output[1].Content[1].Text != "second" {
+		t.Fatalf("message content grouping changed: %+v", decoded.Output[1])
+	}
+}
+
+func TestResponsesStreamPreservesContentFilterIncomplete(t *testing.T) {
+	engine := NewBuiltinEngine()
+	response := llmprotocol.Response{
+		Generation: 1,
+		ID:         "response_filtered",
+		Model:      "public/model",
+		StopReason: llmprotocol.StopContentFilter,
+		Usage:      availableStreamUsage(4, 1),
+	}
+	wire, _, err := engine.EncodeResponseStream(
+		llmprotocol.OpenAIResponsesV1,
+		response,
+		llmprotocol.StreamContext{PublicModel: response.Model},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(wire, []byte(`"type":"response.incomplete"`)) ||
+		!bytes.Contains(wire, []byte(`"reason":"content_filter"`)) {
+		t.Fatalf("Responses stream lost content-filter terminal state: %s", wire)
+	}
+	decoded, _, err := engine.DecodeResponseStream(
+		llmprotocol.OpenAIResponsesV1,
+		wire,
+		llmprotocol.StreamContext{PublicModel: response.Model},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decoded.StopReason != llmprotocol.StopContentFilter {
+		t.Fatalf("decoded stop reason = %q", decoded.StopReason)
+	}
+}
+
+func assertDecodedBuiltinResponseStream(
+	t *testing.T,
+	engine *Engine,
+	format llmprotocol.WireFormat,
+	response llmprotocol.Response,
+) {
+	t.Helper()
+	wire, _, err := engine.EncodeResponseStream(format, response, llmprotocol.StreamContext{
+		PublicModel: response.Model,
+		Options:     llmprotocol.StreamOptions{IncludeUsage: boolPointer(true)},
+	})
+	if err != nil {
+		t.Fatalf("EncodeResponseStream() error = %v", err)
+	}
+	decoded, _, err := engine.DecodeResponseStream(format, wire, llmprotocol.StreamContext{PublicModel: response.Model})
+	if err != nil {
+		t.Fatalf("DecodeResponseStream() error = %v, wire=%s", err, wire)
+	}
+	if decoded.ID != response.ID || decoded.Model != response.Model ||
+		decoded.StopReason != response.StopReason || len(decoded.Output) == 0 {
+		t.Fatalf("decoded response = %+v", decoded)
+	}
+	reasoning, text := collectDecodedText(decoded.Output)
+	if reasoning != "consider" || text != "answer" {
+		t.Fatalf("decoded content reasoning=%q text=%q", reasoning, text)
+	}
+	if decoded.Usage.Total.Value == nil || *decoded.Usage.Total.Value != 6 {
+		t.Fatalf("decoded usage = %+v", decoded.Usage)
+	}
+}
+
+func collectDecodedText(output []llmprotocol.OutputItem) (string, string) {
+	var reasoning, text string
+	for _, item := range output {
+		for _, content := range item.Content {
+			switch content.Kind {
+			case llmprotocol.ContentReasoning:
+				reasoning += content.Text
+			case llmprotocol.ContentText:
+				text += content.Text
+			}
+		}
+	}
+	return reasoning, text
+}
+
+func TestDecodeResponseStreamPreservesToolCall(t *testing.T) {
+	engine := NewBuiltinEngine()
+	response := llmprotocol.Response{
+		Generation: 1,
+		ID:         "response_tool",
+		Model:      "public/model",
+		Output: []llmprotocol.OutputItem{{
+			ID:   "item_tool",
+			Role: llmprotocol.RoleAssistant,
+			Content: []llmprotocol.Content{{
+				Kind: llmprotocol.ContentToolCall,
+				ToolCall: &llmprotocol.ToolCall{
+					ID: "call_1", Name: "lookup", Arguments: `{"query":"neutral"}`,
+				},
+			}},
+		}},
+		StopReason: llmprotocol.StopToolCall,
+		Usage:      availableStreamUsage(3, 1),
+	}
+	for _, format := range builtinFormats {
+		t.Run(string(format), func(t *testing.T) {
+			wire, _, err := engine.EncodeResponseStream(format, response, llmprotocol.StreamContext{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			decoded, _, err := engine.DecodeResponseStream(format, wire, llmprotocol.StreamContext{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(decoded.Output) != 1 || len(decoded.Output[0].Content) != 1 ||
+				decoded.Output[0].Content[0].ToolCall == nil {
+				t.Fatalf("decoded tool response = %+v", decoded)
+			}
+			call := decoded.Output[0].Content[0].ToolCall
+			if call.ID != "call_1" || call.Name != "lookup" || call.Arguments != `{"query":"neutral"}` {
+				t.Fatalf("decoded tool call = %+v", call)
+			}
+		})
+	}
+}

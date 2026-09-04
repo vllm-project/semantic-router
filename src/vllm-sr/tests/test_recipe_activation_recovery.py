@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 from cli import core
 from cli import recipe_activation_recovery as recovery
+from cli import recipe_activation_transaction as activation_transaction
 from cli import recipe_topology_reconcile as topology
 from cli.recipe_package import RECIPE_FILES, recipe_digest
 
@@ -232,6 +233,37 @@ def test_active_recipe_package_for_stack_validates_full_state(tmp_path: Path):
     (active["store_dir"] / "active.json").write_text("{}", encoding="utf-8")
     with pytest.raises(recovery.RecipeActivationRecoveryError, match="prior pointer"):
         recovery.active_recipe_package_for_stack(
+            state_root_dir=tmp_path, stack_name="vllm-sr"
+        )
+
+
+def test_active_recipe_package_config_path_resolves_the_authored_config(
+    tmp_path: Path,
+):
+    assert (
+        recovery.active_recipe_package_config_path(
+            state_root_dir=tmp_path, stack_name="vllm-sr"
+        )
+        is None
+    )
+
+    active = _write_valid_active_package(tmp_path)
+    config_path = recovery.active_recipe_package_config_path(
+        state_root_dir=tmp_path, stack_name="vllm-sr"
+    )
+
+    # The authored file, not the realized runtime config the CLI materialized.
+    assert config_path == active["object_dir"] / "config.yaml"
+    assert config_path.read_bytes() == active["files"]["config.yaml"]
+    assert config_path.read_bytes() != active["runtime_config"].read_bytes()
+
+
+def test_active_recipe_package_config_path_rejects_an_invalid_pointer(tmp_path: Path):
+    active = _write_valid_active_package(tmp_path)
+    (active["store_dir"] / "active.json").write_text("{}", encoding="utf-8")
+
+    with pytest.raises(recovery.RecipeActivationRecoveryError, match="prior pointer"):
+        recovery.active_recipe_package_config_path(
             state_root_dir=tmp_path, stack_name="vllm-sr"
         )
 
@@ -594,7 +626,7 @@ def test_committing_activation_rejects_tampered_object_before_topology_cleanup(
     journal_path.write_text(
         json.dumps(
             {
-                "schema_version": recovery.ACTIVATION_TRANSACTION_SCHEMA,
+                "schema_version": activation_transaction.ACTIVATION_TRANSACTION_SCHEMA,
                 "state": "committing",
                 "operation": "activate",
                 "topology_mode": "managed",

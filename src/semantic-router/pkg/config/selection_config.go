@@ -122,6 +122,7 @@ type ModelSwitchGateConfig struct {
 // MLSelectionConfig holds configuration for the shared ML-based selectors.
 type MLSelectionConfig struct {
 	ModelsPath   string         `yaml:"models_path,omitempty"`
+	ModelType    string         `yaml:"model_type,omitempty"`
 	EmbeddingDim int            `yaml:"embedding_dim,omitempty"`
 	KNN          MLKNNConfig    `yaml:"knn,omitempty"`
 	KMeans       MLKMeansConfig `yaml:"kmeans,omitempty"`

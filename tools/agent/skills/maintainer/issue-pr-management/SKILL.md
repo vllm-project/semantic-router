@@ -29,7 +29,7 @@ description: Manages GitHub issue and pull-request lifecycle including creation,
 - `dashboard_config_ui`
 - `dashboard_console_backend`
 - `k8s_operator`
-- `training_post_training`
+- `training_stack`
 
 ## Stop Conditions
 
@@ -47,17 +47,21 @@ description: Manages GitHub issue and pull-request lifecycle including creation,
 ## Workflow
 
 1. Resolve the repo context first.
-   - If the issue or PR is based on a code change, inspect the relevant code with `codebase-retrieval` before drafting anything.
+   - If the issue or PR is based on a code change, inspect the relevant code before drafting anything.
    - If changed paths are known or can be estimated, run `make agent-report ENV=cpu|amd CHANGED_FILES="..."` to resolve the primary skill, impacted surfaces, and expected validation.
 2. Classify the artifact before writing.
    - Issues use the canonical issue templates as the schema for title and body.
    - PRs use the canonical PR template as the schema for title, purpose, affected modules, test plan or results, and checklist expectations.
 3. Apply canonical labels and naming.
    - New issues start with the template type label and `needs-acceptance`.
-   - A Maintainer applies `accepted` only after confirming scope and exactly
-     one owning `wg/*` label from `tools/agent/maintainer-policy.yaml`.
-   - Use `.prowlabels.yaml` for command-driven `area/*` and `priority/*`
-     taxonomy; do not treat those labels as lifecycle state.
+   - Anyone with repository write permission may comment `/accept` after
+     confirming scope and exactly one owning `wg/*` label; the workflow then
+     replaces `needs-acceptance` with `accepted`.
+   - Use exactly one `wg/*` label for project ownership. `[Epic]` issues carry
+     the automatically synchronized `epic` label; do not recreate the retired
+     `area/*` or `track/*` taxonomies.
+   - Use `.prowlabels.yaml` for command-driven `priority/*` taxonomy; do not
+     treat priority as lifecycle state.
    - Use `ready-for-dev` only for accepted, unassigned work with review
      capacity. `help wanted` and `good first issue` are curated subsets.
    - Do not invent labels outside the repository taxonomy unless the maintainer explicitly asks for a new label.
@@ -68,7 +72,9 @@ description: Manages GitHub issue and pull-request lifecycle including creation,
 5. Enforce PR conventions.
    - A non-trivial PR must link an accepted issue with exactly one Workgroup
      owner before entering Maintainer review.
-   - PR titles must use the classified prefixes from `.github/PULL_REQUEST_TEMPLATE.md`, adding multiple prefixes when the change spans categories.
+   - PR titles use exactly one leading `[Type]` prefix from
+     `.github/PULL_REQUEST_TEMPLATE.md`; affected modules belong in labels and
+     the PR body, not stacked `[][]` prefixes.
    - Commits intended for PRs must use `git commit -s`.
    - Commit messages do not need to repeat the PR title prefixes unless the maintainer explicitly wants them.
 

@@ -85,6 +85,7 @@ test('previews an uploaded image and sends it through the vision route', async (
     .toBe(1)
   const assistantMessage = page.locator('[data-message-role="assistant"]').last()
   await expect(assistantMessage.getByText('local/vision-backend', { exact: true })).toBeVisible()
+  await assistantMessage.getByText('Response details', { exact: true }).click()
   await expect(assistantMessage.getByTitle('Context: Image Content')).toBeVisible()
 
   expect(requestBody).not.toBeNull()

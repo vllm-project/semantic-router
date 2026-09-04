@@ -50,6 +50,7 @@ const config = {
               conditions: [{ type: 'keyword', name: 'balanced-keyword' }],
             },
             modelRefs: [{ model: 'model-a' }],
+            algorithm: { type: 'static', minimum_candidates: 2 },
           },
         ],
       },
@@ -93,6 +94,7 @@ describe('recipe-aware topology', () => {
     )
     expect(topology.signals.map((signal) => signal.name)).not.toContain('private-pii')
     expect(topology.decisions.map((decision) => decision.name)).toEqual(['balanced-route'])
+    expect(topology.decisions[0].algorithm?.minimum_candidates).toBe(2)
     expect(topology.strategy).toBe('confidence')
   })
 

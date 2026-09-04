@@ -4,153 +4,142 @@
 
 ## Overview
 
-vLLM-SR MoM V1 is a family of five virtual models backed by a shared pool
-of specialized, OpenAI-compatible inference services. Each public model ID
-selects a different routing objective while hiding backend placement and
-checkpoint details from clients.
-
-MoM is a routing policy, not a checkpoint or a model installer. The Router,
-Envoy, and Dashboard can be started by `vllm-sr`, but the seven inference
-backends must already be running and reachable.
+MoM V1 contains five reusable routing Recipes. Each Recipe turns request
+signals into human-readable decisions while leaving Model selection to the
+Entrypoint that uses it.
 
 ## Model details
 
-| Public model ID | Best for | Main trade-off |
+| Recipe | Best for | Decisions |
 | --- | --- | --- |
-| `vllm-sr/mom-v1-blend` | General-purpose multi-objective routing across quality, latency, cost, and answer recovery. | No single metric is always minimized. |
-| `vllm-sr/mom-v1-lite` | Economical local responses with optional bounded reasoning. | Lower peak capability. |
-| `vllm-sr/mom-v1-flash` | Interactive and tool-oriented traffic where latency matters most. | Heavy work may use a slower capable lane. |
-| `vllm-sr/mom-v1-ultra` | High-accuracy answers, verification, expert comparison, and bounded orchestration. | Higher latency and compute use. |
-| `vllm-sr/mom-v1-vault` | Sensitive, private, or suspicious workloads that must remain local. | Tools are disabled and provider choice is deliberately narrow. |
+| `balance` | General traffic across quality, latency, and workload complexity | `simple`, `medium`, `complex`, `agentic`, `extended`, `omni` |
+| `speed` | Interactive applications, tools, and visual requests | `instant`, `heavy`, `omni`, `tooling`, `extended` |
+| `cost` | High-volume traffic with bounded escalation | `economy`, `reasoning`, `omni`, `extended` |
+| `accuracy` | Verification, expert synthesis, and bounded orchestration | `direct`, `verify`, `experts`, `orchestrate`, `extended`, `resume`, `omni` |
+| `vault` | Sensitive workloads with local and tool-isolation policy | `private`, `restricted_tools`, `containment`, `sensitive`, `omni` |
 
-The public IDs are stable within MoM V1. Internal recipe names and backend
-aliases may evolve with a new catalog version.
+These decision names form each Recipe's assignment contract. A published
+Entrypoint must bind every reachable decision to its declared
+`algorithm.minimum_candidates` count. Accuracy therefore preserves
+three-worker orchestration and expert panels plus a two-model confidence
+cascade; Vault preserves a two-model private pool.
 
 ## Intended use
 
-MoM V1 is a good fit when:
+MoM V1 is designed for applications that serve mixed interactive, reasoning,
+coding, multimodal, private, and long-context traffic through one API. It is
+most useful when operators want routing policy to evolve independently from
+provider connections and credentials.
 
-- one endpoint must serve several quality, cost, speed, and privacy profiles;
-- clients should choose a stable virtual model instead of a physical backend;
-- multimodal, tool-bearing, long-context, and multi-turn requests need explicit
-  capability guards; or
-- accuracy-sensitive tasks may benefit from bounded multi-model orchestration.
-
-It is not a substitute for provisioning, monitoring, or securing the
-underlying inference services. It also does not guarantee that the reference
-model pool is optimal for another workload or hardware platform.
+It does not provision Models, choose a provider, or publish a callable model
+name on its own.
 
 ## Routing behavior
 
-| Virtual model | High-level policy |
-| --- | --- |
-| MoM Blend | Protect modality and context limits first, recover after a weak answer, spend more effort on difficult or verification-heavy work, and otherwise balance quality, latency, cost, and load. |
-| MoM Lite | Keep ordinary work on the economy model and enable bounded reasoning only when the request asks for it. |
-| MoM Flash | Preserve tools and images, choose from low-latency candidates for ordinary work, and retain a capable lane for heavier requests. |
-| MoM Ultra | Keep ordinary work direct; explicit planning, expert comparison, factual verification, or multi-path exploration can use Workflow, Fusion, Confidence, or ReMoM. |
-| MoM Vault | Keep every request local, strip client tools and prior tool history, contain attacks, and use stronger local privacy handling when sensitive data is detected. |
+Balance separates simple, medium, complex, agentic, terminal-context, and
+image-bearing work. The `extended` lane isolates text beyond 240K tokens from
+semantic complexity, while image and active or required tool traffic retain
+their capability-preserving higher-priority lanes. The medium lane is strictly
+conversational; image traffic is owned only by `omni`.
+Balance and Speed treat a declared tool schema as available capability, not as
+proof that the current turn wants to execute a tool. Their tool lanes require
+explicit execution intent, a protocol-level required or named tool choice, or
+an active tool loop. An explicit `tool_choice: none` suppresses fresh textual
+tool intent while an already active loop retains continuity. Speed optimizes
+the tooling lane for first-token latency and the heavy lane for generation
+latency. Cost uses an economy lane by default; context size contributes bounded
+evidence but does not trigger reasoning escalation by itself.
 
-Capability checks run before semantic routing. Images are kept on multimodal
-backends, and long inputs move to backends with a larger configured context
-window. The selected backend remains responsible for its tokenizer-specific
-context limit.
+Accuracy activates bounded verification, expert fusion, or workflow
+orchestration only when explicit matching evidence is present. Long context,
+quoted routing phrases, and semantic difficulty alone do not fan out a request.
+An ordinary completed tool turn uses `resume`; a trailing Flow-owned tool result
+returns to `orchestrate` so the managed workflow can continue.
+
+Vault evaluates PII across the conversation, applies local containment, strips
+tool history, disables client tool execution, memory, response cache, replay,
+and learning adaptation for every decision, and emits a drop-retention policy.
+
+Every Recipe includes an `omni` decision for image-bearing requests. No
+built-in decision injects a system prompt.
 
 ## Requirements
 
-The reference pool contains seven logical provider models:
+Assign Models whose cards satisfy the capabilities implied by each decision.
+Image lanes require vision input; tool and orchestration lanes require tool-call
+support; confidence-based algorithms require token log probabilities from the
+assigned Models. Entrypoint validation rejects missing decisions and invalid
+fallback tiers before publication.
 
-| Provider alias | Reference role | Configured context limit |
-| --- | --- | ---: |
-| `local/qwen3.5-9b` | Economy and interactive traffic | 262,144 |
-| `local/qwen3.6-35b` | Fast long-context, code, tools, and images | 262,144 |
-| `local/step-3.7-flash` | Fast reasoning and multimodal analysis | 65,536 |
-| `local/qwen3.5-122b` | Image understanding and high-quality synthesis | 131,072 |
-| `local/mistral-small-4` | Diverse analysis and review | 131,072 |
-| `local/gpt-oss-120b` | Local reasoning and security containment | 131,072 |
-| `local/glm-5.2` | Text-only synthesis, judging, and very long context | 524,288 |
+The Recipes use semantic embedding, PII, jailbreak, fact-check, feedback,
+language, conversation-shape, structure, and privacy knowledge-base signals.
+Workflow and multi-model algorithms require their corresponding Router
+integrations.
 
-Every service must expose its configured alias through an OpenAI-compatible
-API. The routing policy also uses semantic embedding, domain, PII, jailbreak,
-fact-check, feedback, language, and privacy knowledge-base assets. Ultra
-orchestration requires the Looper integration; confidence escalation requires
-participating backends to return token log probabilities.
+Before model selection, the Router removes candidates whose known context
+window cannot hold the request. Models without context metadata remain eligible
+for compatibility. If every assigned candidate has a known insufficient
+window, the request is rejected instead of being sent to a backend that cannot
+serve it.
 
-The context values above are operating limits chosen for the reference
-deployment, not claims about each checkpoint's architectural maximum.
+If context filtering would reduce a decision below its declared minimum pool,
+the request is rejected rather than silently changing a panel, cascade, or
+selection policy. Looper-generated prompts are checked again before each
+planner, worker, verifier, judge, and synthesis dispatch because intermediate
+responses can grow beyond the original request size.
+
+When Router learning is enabled, ordinary single-model Accuracy decisions keep
+adaptation inside the matched decision. Multi-model decisions and Vault bypass
+adaptation. `resume` bypasses model-choice adaptation while retaining session
+stability protection, which avoids changing lanes in the middle of a client
+tool loop without pinning unrelated future decisions.
 
 ## Data handling and safety
 
-MoM Vault keeps provider traffic on the local pool, removes callable tools
-and prior tool history, and disables replay capture on every Vault route. The
-other four profiles use Redis-backed Router Replay with a seven-day retention
-period and capture up to 4 KiB each from request and response bodies. Operators
-should review replay access and retention, or disable capture when application
-content must not be stored.
+Vault expresses the strictest built-in data boundary: all of its decisions
+disable client tools, remove prior tool history, disable memory, response cache,
+replay capture, and learning adaptation, and request immediate retention drop.
+The control plane must still assign Models and connections whose placement and
+retention properties satisfy that boundary.
 
-“Local” describes the configured backend path. End-to-end privacy still
-depends on network isolation, backend ownership, logs, caches, and supporting
-stores.
+Other Recipes do not imply a placement boundary. Operators remain responsible
+for provider credentials, network isolation, logs, stores, and retention.
 
 ## Quick start
 
-Inspect the installed Model Card and backend requirements:
-
 ```bash
-vllm-sr model show vllm-sr/mom-v1-blend
+vllm-sr serve
 ```
 
-After starting or binding the required provider services, serve one or more
-virtual models:
+Connect Models in the Dashboard, open **Recipes**, choose a profile, and create
+a **Mixture of Models**. Assign configured Models to every decision, configure
+fallback only where intended, then publish the Entrypoint.
 
-```bash
-vllm-sr serve vllm-sr/mom-v1-blend
-vllm-sr serve vllm-sr/mom-v1-lite vllm-sr/mom-v1-flash
-```
-
-To change the provider pool or routing policy, create a user-owned config:
-
-```bash
-vllm-sr model fork vllm-sr/mom-v1-blend mom-v1.yaml
-vllm-sr model validate mom-v1.yaml
-vllm-sr serve --config mom-v1.yaml
-```
-
-See the
-[built-in model catalog](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/built-in/README.md)
-for catalog versions and selection behavior.
+An independent control plane can perform the same lifecycle through the Router
+Management API.
 
 ## Evaluation
 
-[`probes.yaml`](probes.yaml) covers all five virtual models and their route
-families. The scenarios include multilingual requests, negative and collision
-cases, tools, images, multi-turn history, feedback recovery, privacy signals,
-and context boundaries. They validate routing independently of backend answer
-quality.
+[`probes.yaml`](probes.yaml) covers every decision across multilingual
+paraphrases, benign negatives, priority collisions, tool and image shapes,
+multi-turn histories, privacy signals, and context boundaries. Probes validate
+routing policy independently from any physical Model assignment.
 
-The checked-in image is a small synthetic fixture used only to exercise
-multimodal request shape; probes do not grade its visual content. Large context
-fixtures are generated in memory so the Model Card and probe source remain
-readable. Contributor commands and coverage rules live in the
-[conformance guide](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/CONFORMANCE.md).
+See the [conformance guide](../../../CONFORMANCE.md) for the validation contract.
 
 ## Limitations
 
-- `vllm-sr serve` does not download or start the seven provider models.
-- Ultra orchestration can make several provider calls and therefore has higher
-  latency and compute cost than a direct route.
-- Classifier or knowledge-base errors can affect route selection.
-- Configured cost coefficients are relative routing inputs, not public prices
-  or billing guarantees.
-- Tool execution remains the client's responsibility; Workflow can pause and
-  resume around tool results but does not run client tools.
-- Model quality, context capacity, and hardware requirements must be verified
-  for each deployment.
+- A Recipe enforces pool cardinality but cannot yet prove every assigned
+  Model's provider-neutral capability traits.
+- Multi-model algorithms can add latency and compute cost.
+- Classifier and knowledge-base errors can affect selection.
+- Tool execution remains the client's responsibility.
+- Deployment-specific quality, cost, context, and privacy claims require
+  end-to-end evaluation after Models are assigned.
 
 ## References
 
 - [Recipe metadata](metadata.yaml)
-- [Runtime configuration](config.yaml)
-- [Generated routing projection](recipe.dsl)
+- [Recipe configuration](config.yaml)
+- [DSL projection](recipe.dsl)
 - [Evaluation probes](probes.yaml)
-- [Built-in model catalog](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/built-in/README.md)
-- [Recipe authoring and conformance](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/CONFORMANCE.md)

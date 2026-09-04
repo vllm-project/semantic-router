@@ -1,0 +1,111 @@
+{
+  "status": "ok",
+  "body": {
+    "frames": [
+      {
+        "data": {
+          "choices": [
+            {
+              "delta": {
+                "role": "assistant"
+              },
+              "finish_reason": null,
+              "index": 0
+            }
+          ],
+          "id": "resp_interleaved",
+          "model": "public-model",
+          "object": "chat.completion.chunk"
+        },
+        "event": ""
+      },
+      {
+        "data": {
+          "choices": [
+            {
+              "delta": {
+                "content": ""
+              },
+              "finish_reason": null,
+              "index": 0
+            }
+          ],
+          "id": "resp_interleaved",
+          "model": "public-model",
+          "object": "chat.completion.chunk"
+        },
+        "event": ""
+      },
+      {
+        "data": {
+          "choices": [
+            {
+              "delta": {
+                "content": "before "
+              },
+              "finish_reason": null,
+              "index": 0
+            }
+          ],
+          "id": "resp_interleaved",
+          "model": "public-model",
+          "object": "chat.completion.chunk"
+        },
+        "event": ""
+      },
+      {
+        "data": {
+          "choices": [
+            {
+              "delta": {
+                "reasoning_content": "thought"
+              },
+              "finish_reason": null,
+              "index": 0
+            }
+          ],
+          "id": "resp_interleaved",
+          "model": "public-model",
+          "object": "chat.completion.chunk"
+        },
+        "event": ""
+      },
+      {
+        "data": {
+          "choices": [
+            {
+              "delta": {
+                "content": "after"
+              },
+              "finish_reason": null,
+              "index": 0
+            }
+          ],
+          "id": "resp_interleaved",
+          "model": "public-model",
+          "object": "chat.completion.chunk"
+        },
+        "event": ""
+      },
+      {
+        "data": {
+          "choices": [
+            {
+              "delta": {},
+              "finish_reason": "stop",
+              "index": 0
+            }
+          ],
+          "id": "resp_interleaved",
+          "model": "public-model",
+          "object": "chat.completion.chunk"
+        },
+        "event": ""
+      },
+      {
+        "data": "[DONE]",
+        "event": ""
+      }
+    ]
+  }
+}

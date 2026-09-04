@@ -10,7 +10,8 @@ import AuthenticatedShell from './AuthenticatedShell'
 import { renderAuthenticatedAppRoutes } from './AuthenticatedAppRoutes'
 import RecoverableLazyRoute from './RecoverableLazyRoute'
 import SetupStatusPage from './SetupStatusPage'
-import { loadLandingPage, loadLoginPage } from './routeLoaders'
+import ProductLoadingState from '../components/ProductLoadingState'
+import { loadInviteAcceptPage, loadLandingPage, loadLoginPage } from './routeLoaders'
 
 const AppRouter: React.FC = () => {
   const { setupState, isLoading, error, refreshSetupState } = useSetup()
@@ -19,17 +20,7 @@ const AppRouter: React.FC = () => {
   const canUseMLSetup = canAccessMLSetup(user)
 
   if (isLoading) {
-    return (
-      <SetupStatusPage
-        title="Loading setup state"
-        description="The dashboard is checking whether this workspace is already activated or still in first-run setup mode."
-        actionLabel="Refresh"
-        variant="loading"
-        onAction={() => {
-          window.location.reload()
-        }}
-      />
-    )
+    return <ProductLoadingState label="Opening your workspace" />
   }
 
   if (error) {
@@ -57,6 +48,10 @@ const AppRouter: React.FC = () => {
         <Route
           path="/login"
           element={<RecoverableLazyRoute loader={loadLoginPage} routeLabel="Login" />}
+        />
+        <Route
+          path="/invite/:token"
+          element={<RecoverableLazyRoute loader={loadInviteAcceptPage} routeLabel="Invitation" />}
         />
         <Route path="/auth/transition" element={<AuthTransitionPage />} />
 

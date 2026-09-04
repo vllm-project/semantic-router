@@ -53,3 +53,30 @@ func TestEvaluateDecisionWithEngineForDecisionsRestrictsCandidates(t *testing.T)
 		t.Fatalf("expected filtered evaluation to pick fusion-business, got %+v", result)
 	}
 }
+
+func TestEvaluateDecisionWithEngineAppliesOnUnknown(t *testing.T) {
+	threshold := 0.5
+	classifier := &Classifier{Config: &config.RouterConfig{
+		IntelligentRouting: config.IntelligentRouting{
+			Decisions: []config.Decision{{
+				Name: "guarded",
+				Rules: config.RuleCombination{
+					Type:      config.SignalTypeClassifier,
+					Name:      "risk",
+					Label:     "RISKY",
+					Predicate: &config.NumericPredicate{GTE: &threshold},
+					OnUnknown: config.RuleOnUnknownFailRequest,
+				},
+			}},
+		},
+	}}
+	signals := &SignalResults{SignalErrors: map[string]string{"classifier:risk": "timeout"}}
+
+	_, err := classifier.EvaluateDecisionWithEngine(signals)
+	if err == nil {
+		t.Fatal("expected fail_request error")
+	}
+	if signals.AppliedUnknownPolicies["guarded"] != config.RuleOnUnknownFailRequest {
+		t.Fatalf("applied policies = %v", signals.AppliedUnknownPolicies)
+	}
+}

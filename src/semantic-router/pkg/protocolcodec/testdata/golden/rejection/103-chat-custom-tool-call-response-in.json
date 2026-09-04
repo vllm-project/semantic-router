@@ -1,0 +1,32 @@
+{
+  "operation": "response",
+  "body": {
+    "id": "chatcmpl_custom_1",
+    "object": "chat.completion",
+    "model": "provider-model",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "tool_calls": [
+            {
+              "id": "call_custom_1",
+              "type": "custom",
+              "custom": {
+                "name": "freeform",
+                "input": "plain text"
+              }
+            }
+          ]
+        },
+        "finish_reason": "tool_calls"
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 1,
+      "completion_tokens": 1,
+      "total_tokens": 2
+    }
+  }
+}

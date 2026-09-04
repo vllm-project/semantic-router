@@ -32,9 +32,12 @@ class RecipeConformanceTest(unittest.TestCase):
 
         self.assertEqual([recipe.name for recipe in inventory], ["mom-v1"])
         mom = inventory[0]
-        self.assertEqual(len(mom.entrypoints), 5)
-        self.assertEqual(len(mom.decisions), 43)
-        self.assertEqual(mom.variants, 222)
+        # Built-in packages describe reusable routing policy. Entrypoints and
+        # model assignments are composed by the Dashboard when a Mixture is
+        # created, so the package itself stays model- and deployment-neutral.
+        self.assertEqual(len(mom.entrypoints), 0)
+        self.assertEqual(len(mom.decisions), 27)
+        self.assertEqual(mom.variants, 235)
         self.assertTrue(mom.coverage["passed"])
 
     def test_default_discovery_skips_the_nested_built_in_catalog(self) -> None:

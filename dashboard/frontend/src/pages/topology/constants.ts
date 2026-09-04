@@ -80,7 +80,6 @@ export const PLUGIN_ICONS: Record<PluginType, string> = {
   hallucination: 'HAL',
   router_replay: 'RR',
   rag: 'RAG',
-  image_gen: 'IMG',
   fast_response: 'FR',
   request_params: 'RP',
   response_jailbreak: 'RJ',
@@ -98,7 +97,6 @@ export const PLUGIN_COLORS: Record<PluginType, { background: string; border: str
   hallucination: { background: '#556b7d', border: '#3d4a59' }, // Cool Gray
   router_replay: { background: '#737780', border: '#696d74' }, // Green (consistent with other plugins)
   rag: { background: '#2f855a', border: '#276749' },
-  image_gen: { background: '#7b5ea7', border: '#5b3f86' },
   fast_response: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
   request_params: { background: '#805ad5', border: '#6b46c1' },
   response_jailbreak: { background: '#c05621', border: '#9c4221' },
@@ -323,7 +321,6 @@ export const PLUGIN_TYPES: PluginType[] = [
   'hallucination',
   'router_replay',
   'rag',
-  'image_gen',
   'fast_response',
   'request_params',
   'response_jailbreak',

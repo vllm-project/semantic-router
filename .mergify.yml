@@ -54,6 +54,6 @@ pull_request_rules:
   - name: queue approved pull requests
     conditions:
       - base = main
-      - "#approved-reviews-by >= 1"
+      - "#approved-reviews-by >= 2"
     actions:
       queue:

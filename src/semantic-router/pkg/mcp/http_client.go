@@ -10,7 +10,12 @@ import (
 	"net/url"
 
 	"github.com/mark3labs/mcp-go/mcp"
+
+	httputil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 )
+
+const defaultMCPMaxResponseBytes int64 = 16 * 1024 * 1024
+const maxMCPErrorBodyBytes int64 = 8 * 1024
 
 const (
 	// MCPProtocolVersion is the MCP protocol version supported by this implementation.
@@ -26,19 +31,25 @@ const (
 // HTTPClient implements MCPClient for streamable HTTP transport
 type HTTPClient struct {
 	*BaseClient
-	httpClient *http.Client
-	baseURL    string
+	httpClient       *http.Client
+	baseURL          string
+	maxResponseBytes int64
 }
 
 // NewHTTPClient creates a new HTTP MCP client
 func NewHTTPClient(name string, config ClientConfig) *HTTPClient {
 	baseClient := NewBaseClient(name, config)
+	maxResponseBytes := config.MaxResponseBytes
+	if maxResponseBytes <= 0 {
+		maxResponseBytes = defaultMCPMaxResponseBytes
+	}
 	return &HTTPClient{
 		BaseClient: baseClient,
 		httpClient: &http.Client{
 			Timeout: config.Timeout,
 		},
-		baseURL: config.URL,
+		baseURL:          config.URL,
+		maxResponseBytes: maxResponseBytes,
 	}
 }
 
@@ -353,15 +364,14 @@ func (c *HTTPClient) sendRequest(ctx context.Context, endpoint string, payload i
 	}
 	defer resp.Body.Close()
 
-	// Read response body
-	responseBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		responseBody, truncated := httputil.ReadTruncatedBody(resp.Body, maxMCPErrorBodyBytes)
+		return nil, fmt.Errorf("HTTP request failed with status %d: %s (truncated=%t)", resp.StatusCode, string(responseBody), truncated)
 	}
 
-	// Check status code
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("HTTP request failed with status %d: %s", resp.StatusCode, string(responseBody))
+	responseBody, err := httputil.ReadLimitedBody(resp.Body, c.maxResponseBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
 
 	return responseBody, nil

@@ -3,85 +3,105 @@
   background: var(--site-bg);
 }
 
+/* Same box as .site-shell-container: gutters added to --page-max, not taken
+   out of it, so this edge lands on the navbar's and the docs canvas's. */
 .container {
-  width: min(100% - 2.5rem, var(--site-grid-max));
-  margin: 0 auto;
-  padding: 2.25rem 0 3.5rem;
-}
-
-.masthead {
-  display: grid;
-  gap: 0.6rem;
-  max-width: 46rem;
-  padding-bottom: 1.75rem;
-  border-bottom: 1px solid var(--site-border-strong);
-}
-
-.eyebrow {
-  color: var(--site-accent-strong);
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.68rem;
-  font-weight: 650;
-  text-transform: uppercase;
-  letter-spacing: 0.16em;
-}
-
-.masthead h1 {
-  margin: 0;
-  color: var(--site-text);
-  font-size: clamp(2.6rem, 6vw, 4.25rem);
-  font-weight: 430;
-  line-height: 0.95;
-  letter-spacing: -0.045em;
-}
-
-.description {
-  margin: 0;
-  color: var(--site-muted-bright);
-  font-size: 0.95rem;
-  line-height: 1.7;
+  width: 100%;
+  max-width: calc(var(--page-max) + var(--gutter) * 2);
+  margin-inline: auto;
+  padding: var(--space-8) var(--gutter) var(--space-10);
 }
 
 .body {
+  position: relative;
   display: grid;
-  grid-template-columns: minmax(13rem, 0.22fr) minmax(0, 1fr);
+  grid-template-columns: var(--rail) minmax(0, 1fr);
   align-items: start;
-  gap: 2.5rem;
-  padding-top: 1.75rem;
+  gap: var(--rail-gap);
+  padding-top: var(--space-6);
 }
 
+/*
+ * The rail divider is drawn on the grid, not on the sidebar. The sidebar is
+ * sticky, so a border on it would only be as tall as the handful of links it
+ * contains, leaving a stub. Sitting at --rail puts it where the docs
+ * sidebar's own border-right falls.
+ */
+.body::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--rail);
+  width: 1px;
+  background: var(--site-border);
+}
+
+/* The docs sidebar, rebuilt: sentence-case group labels, a rule between
+   groups, a filled pill for the current page, and the same rhythm. */
 .sidebar {
   position: sticky;
-  top: calc(var(--site-header-height) + 1.25rem);
+  top: calc(var(--site-header-height) + var(--space-5));
   display: grid;
-  gap: 0.1rem;
   align-content: start;
+  gap: var(--space-5);
+  padding-right: var(--space-5);
 }
 
+.navGroup {
+  display: grid;
+  align-content: start;
+  gap: 2px;
+}
+
+.navGroup + .navGroup {
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--site-border);
+}
+
+.navGroupLabel {
+  padding: 0.15rem var(--space-2) var(--space-2);
+  color: var(--site-text-strong);
+  font-size: var(--text-sm);
+  font-weight: var(--site-font-weight-semibold);
+  letter-spacing: -0.005em;
+}
+
+/* The 12px indent is the docs rail's nested .menu__list padding: it insets the
+   pill, and with the link's own 12px puts item text at 24px against an 8px
+   group label. Without it the rail reads flatter than the docs one. */
 .navLink {
-  padding: 0.45rem 0.7rem;
-  border-left: 2px solid transparent;
-  color: var(--site-muted-bright);
-  font-size: 0.82rem;
-  font-weight: 550;
-  line-height: 1.3;
+  display: flex;
+  align-items: center;
+  min-height: 2.1rem;
+  margin-left: var(--space-3);
+  padding: 0.42rem var(--space-3);
+  border-radius: var(--radius-md);
+  color: var(--site-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--site-font-weight-normal);
+  line-height: 1.4;
   transition:
-    background 160ms ease,
-    border-color 160ms ease,
-    color 160ms ease;
+    background var(--site-transition-fast),
+    color var(--site-transition-fast);
 }
 
 .navLink:hover {
-  background: var(--site-surface-soft);
-  color: var(--site-text);
+  background: var(--site-hover-chrome-bg);
+  color: var(--site-hover-text);
   text-decoration: none;
 }
 
 .navLinkActive,
 .navLinkActive:hover {
-  border-left-color: var(--site-accent);
   background: var(--site-accent-soft);
-  color: var(--site-text);
+  color: var(--site-accent-strong);
+  font-weight: var(--site-font-weight-medium);
+}
+
+.navLink:focus-visible {
+  outline: 2px solid var(--site-accent);
+  outline-offset: 2px;
 }
 
 .article {
@@ -91,16 +111,23 @@
 @media (max-width: 996px) {
   .body {
     grid-template-columns: 1fr;
-    gap: 1.5rem;
+    gap: var(--space-5);
   }
 
+  .body::before {
+    display: none;
+  }
+
+  /* One scrolling row of pills. The groups flatten into it rather than
+     stacking their labels above a horizontal strip. */
   .sidebar {
     position: static;
     display: flex;
     flex-wrap: nowrap;
-    gap: 0.5rem;
+    gap: var(--space-2);
     overflow-x: auto;
-    padding-bottom: 0.5rem;
+    padding: 0 0 var(--space-2);
+    border-bottom: 1px solid var(--site-border);
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
   }
@@ -109,28 +136,32 @@
     display: none;
   }
 
+  .navGroup {
+    display: contents;
+  }
+
+  .navGroupLabel {
+    display: none;
+  }
+
   .navLink {
     flex: 0 0 auto;
+    min-height: 0;
+    margin-left: 0;
+    padding-inline: var(--space-3);
     border: 1px solid var(--site-border);
-    border-left: 1px solid var(--site-border);
-    border-radius: 999px;
+    border-radius: var(--radius-full);
     white-space: nowrap;
   }
 
   .navLinkActive,
   .navLinkActive:hover {
     border-color: var(--site-accent);
-    border-left-color: var(--site-accent);
   }
 }
 
 @media (max-width: 700px) {
   .container {
-    width: min(100% - 1.4rem, var(--site-grid-max));
-    padding-top: 1.5rem;
-  }
-
-  .masthead h1 {
-    font-size: clamp(2.2rem, 12vw, 3.2rem);
+    padding-top: var(--space-5);
   }
 }

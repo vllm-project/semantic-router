@@ -1,5 +1,4 @@
-import type { BuilderNLProgressEvent, BuilderNLReview, BuilderNLValidation } from '@/types/dsl'
-import type { DSLState, DSLStore } from './dslStoreTypes'
+import type { DSLState } from './dslStoreTypes'
 
 export interface DeployStatusService {
   name?: string
@@ -36,39 +35,4 @@ export const initialDSLState: DSLState = {
   deployPreviewMerged: '',
   deployPreviewLoading: false,
   deployPreviewError: null,
-  nlGenerating: false,
-  nlGenerateError: null,
-  nlStagedDraft: null,
-  nlProgressEvents: [],
-}
-
-type DSLStoreSetter = (
-  partial: Partial<DSLStore> | ((state: DSLStore) => Partial<DSLStore>),
-) => void
-
-export function normalizeBuilderNLReview(review: BuilderNLReview | undefined): BuilderNLReview {
-  return {
-    ready: review?.ready ?? false,
-    summary: review?.summary ?? '',
-    warnings: Array.isArray(review?.warnings) ? review.warnings : [],
-    checks: Array.isArray(review?.checks) ? review.checks : [],
-  }
-}
-
-export function normalizeBuilderNLValidation(
-  validation: BuilderNLValidation | undefined,
-): BuilderNLValidation {
-  return {
-    ready: validation?.ready ?? false,
-    diagnostics: Array.isArray(validation?.diagnostics) ? validation.diagnostics : [],
-    errorCount: typeof validation?.errorCount === 'number' ? validation.errorCount : 0,
-    compileError: validation?.compileError || undefined,
-  }
-}
-
-export function appendBuilderNLProgress(set: DSLStoreSetter, event: BuilderNLProgressEvent) {
-  console.log(`[builder-nl][${event.phase}] ${event.message}`)
-  set((state) => ({
-    nlProgressEvents: [...state.nlProgressEvents.slice(-79), event],
-  }))
 }

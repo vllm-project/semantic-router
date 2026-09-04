@@ -10,6 +10,52 @@ import (
 
 var _ ExactCacheBackend = (*MilvusCache)(nil)
 
+func parseMilvusColumnVarChar(col *entity.ColumnVarChar) (string, error) {
+	if col.Name() != "response_body" || col.Len() == 0 {
+		return "", nil
+	}
+	val, err := col.ValueByIdx(0)
+	if err != nil {
+		return "", fmt.Errorf("milvus exact response decode failed: %w", err)
+	}
+	return val, nil
+}
+
+func parseMilvusColumnInt64(col *entity.ColumnInt64, storedAt, expiresAt *time.Time) {
+	if col.Len() == 0 {
+		return
+	}
+	val, _ := col.ValueByIdx(0)
+	if val <= 0 {
+		return
+	}
+	if col.Name() == "timestamp" {
+		*storedAt = time.Unix(val, 0)
+	} else if col.Name() == "expires_at" {
+		*expiresAt = time.Unix(val, 0)
+	}
+}
+
+func parseMilvusExactColumns(results []entity.Column) (string, time.Time, time.Time, error) {
+	var responseBody string
+	var storedAt, expiresAt time.Time
+	for _, result := range results {
+		switch column := result.(type) {
+		case *entity.ColumnVarChar:
+			val, err := parseMilvusColumnVarChar(column)
+			if err != nil {
+				return "", time.Time{}, time.Time{}, err
+			}
+			if val != "" {
+				responseBody = val
+			}
+		case *entity.ColumnInt64:
+			parseMilvusColumnInt64(column, &storedAt, &expiresAt)
+		}
+	}
+	return responseBody, storedAt, expiresAt, nil
+}
+
 // FindExact returns a deterministic Milvus exact-response entry.
 func (c *MilvusCache) FindExact(
 	ctx context.Context,
@@ -35,34 +81,20 @@ func (c *MilvusCache) FindExact(
 		c.collectionName,
 		nil,
 		expr,
-		[]string{"response_body"},
+		[]string{"response_body", "timestamp", "expires_at"},
 		c.searchQueryOptions()...,
 	)
 	if err != nil {
 		return LookupResult{}, fmt.Errorf("milvus exact lookup failed: %w", err)
 	}
-	for _, result := range results {
-		column, ok := result.(*entity.ColumnVarChar)
-		if !ok || column.Name() != "response_body" || column.Len() == 0 {
-			continue
-		}
-		responseBody, valueErr := column.ValueByIdx(0)
-		if valueErr != nil {
-			return LookupResult{}, fmt.Errorf(
-				"milvus exact response decode failed: %w",
-				valueErr,
-			)
-		}
-		if responseBody == "" {
-			return LookupResult{}, nil
-		}
-		return LookupResult{
-			ResponseBody: []byte(responseBody),
-			Found:        true,
-			Similarity:   1,
-		}, nil
+	responseBody, storedAt, expiresAt, err := parseMilvusExactColumns(results)
+	if err != nil {
+		return LookupResult{}, err
 	}
-	return LookupResult{}, nil
+	if responseBody == "" {
+		return LookupResult{}, nil
+	}
+	return lookupResultFromTimestamps([]byte(responseBody), 1, storedAt, expiresAt), nil
 }
 
 // AddExact writes a deterministic Milvus exact-response entry.

@@ -127,9 +127,38 @@ func (c *Classifier) CheckForJailbreakWithRisk(ctx context.Context, text string)
 		return false, "", 0.0, 0.0, nil
 	}
 
-	result, err := c.jailbreakInference.Classify(ctx, text)
-	if err != nil {
-		return false, "", 0.0, 0.0, fmt.Errorf("jailbreak classification failed: %w", err)
+	// The model truncates at its own sequence limit, so a single call only ever
+	// sees the start of a long prompt. The routing path already scans the whole
+	// text in chunks and keeps the riskiest one; do the same here so both
+	// surfaces answer the same question.
+	// A chunk that fails is left out rather than failing the whole call, the
+	// way the routing path records it as unresolved and keeps scanning. A
+	// genuine match in a later chunk still has to survive a transient failure
+	// in an earlier one, or the two paths disagree again.
+	var (
+		result   SequenceClassificationResult
+		bestRisk = float32(-1)
+		lastErr  error
+	)
+	for _, chunk := range jailbreakSignalChunks(text) {
+		chunkResult, err := c.jailbreakInference.Classify(ctx, chunk)
+		if err != nil {
+			logging.Errorf("jailbreak classification failed on one chunk: %v", err)
+			lastErr = err
+			continue
+		}
+		_, risk := isJailbreakRiskAboveThreshold(
+			c.JailbreakMapping, c.Config.PromptGuard.PositiveLabels, chunkResult, threshold)
+		if risk > bestRisk {
+			bestRisk = risk
+			result = chunkResult
+		}
+	}
+	if bestRisk < 0 {
+		if lastErr != nil {
+			return false, "", 0.0, 0.0, fmt.Errorf("jailbreak classification failed: %w", lastErr)
+		}
+		return false, "", 0.0, 0.0, nil
 	}
 
 	class, confidence := deriveArgmax(result.Probabilities)

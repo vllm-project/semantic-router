@@ -5,10 +5,8 @@ import (
 	"strings"
 
 	"github.com/tidwall/gjson"
-	"github.com/tidwall/sjson"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 const (
@@ -306,38 +304,6 @@ func extractImageURLFromContent(content gjson.Result) string {
 		return true
 	})
 	return found
-}
-
-// extractStreamParamFast extracts the "stream" boolean from raw JSON without
-// allocating a map[string]interface{}. Falls back to false for missing/invalid.
-func extractStreamParamFast(body []byte) bool {
-	return gjson.GetBytes(body, "stream").Bool()
-}
-
-// extractModelFast extracts just the "model" string from raw JSON.
-func extractModelFast(body []byte) string {
-	return gjson.GetBytes(body, "model").String()
-}
-
-// rewriteModelInBodyFast replaces the "model" field in raw JSON using sjson,
-// avoiding the unmarshal → set → marshal cycle of rewriteModelInBody.
-func rewriteModelInBodyFast(body []byte, newModel string) ([]byte, error) {
-	return sjson.SetBytes(body, "model", newModel)
-}
-
-// addStreamFieldsFast adds stream=true and stream_options.include_usage=true
-// to raw JSON bytes using sjson.
-func addStreamFieldsFast(body []byte) []byte {
-	out, err := sjson.SetBytes(body, "stream", true)
-	if err != nil {
-		return body
-	}
-	out, err = sjson.SetBytes(out, "stream_options.include_usage", true)
-	if err != nil {
-		return body
-	}
-	logging.Infof("Added stream_options.include_usage=true for streaming request")
-	return out
 }
 
 // errMissingModel is returned when the model field is absent from the JSON body.

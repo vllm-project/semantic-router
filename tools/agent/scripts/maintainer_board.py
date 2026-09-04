@@ -569,9 +569,6 @@ def create_issue_actions(
             if not item["matches"]
         ]
     labels = [policy["labels"]["lifecycle"]["needs_acceptance"]]
-    track = policy.get("release_tracks", {}).get(args.track or "")
-    if track and track.get("label"):
-        labels.append(track["label"])
     if args.labels:
         labels.extend(args.labels.split(","))
     actions = []
@@ -580,8 +577,6 @@ def create_issue_actions(
         body = (
             "## Scope\n\n"
             f"{task}\n\n"
-            "## Release Track\n\n"
-            f"{args.track or 'unclassified'}\n\n"
             "## Validation\n\n"
             "Use the release plan and affected module gates to define the final test plan.\n"
         )
@@ -721,7 +716,6 @@ def build_parser() -> argparse.ArgumentParser:
     create.add_argument("--release-plan", required=True)
     create.add_argument("--milestone", default=None)
     create.add_argument("--output-dir", default=None)
-    create.add_argument("--track", default=None)
     create.add_argument("--prefix", default="[Release]")
     create.add_argument("--labels", default=None)
     create.add_argument("--include-matched", action="store_true")

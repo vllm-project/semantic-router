@@ -70,6 +70,22 @@ func (p *Profile) GetTestCases() []string {
 		"response-api-edge-large-input",
 		"response-api-edge-special-characters",
 		"response-api-edge-concurrent-requests",
+		"response-api-image-file-id",
+		"input-modality-cross-protocol",
+		"protocol-codec-chat-backend-buffered-matrix",
+		"protocol-codec-chat-backend-streaming-matrix",
+		"protocol-codec-responses-backend-buffered-matrix",
+		"protocol-codec-responses-backend-streaming-matrix",
+		"protocol-codec-chat-backend-tool-lifecycle",
+		"protocol-codec-responses-backend-tool-lifecycle",
+		"protocol-codec-chat-backend-structured-output",
+		"protocol-codec-responses-backend-structured-output",
+		"protocol-codec-chat-backend-error-matrix",
+		"protocol-codec-responses-backend-error-matrix",
+		"protocol-codec-chat-backend-incomplete-stream-matrix",
+		"protocol-codec-incomplete-stream-terminal",
+		"protocol-codec-chat-backend-midstream-error-matrix",
+		"protocol-codec-responses-backend-midstream-error-matrix",
 	}
 }
 

@@ -32,6 +32,8 @@ This document defines how the repository's agent rules are layered and maintaine
 - Record long-horizon loop execution in [plans/README.md](plans/README.md) and the plan files it indexes.
 - Record durable operating rules in the relevant governance doc rather than in a
   separate decision-log layer.
+- Organize GitHub work through one `wg/*` owner and an `epic` structural label
+  on `[Epic]` issues. Do not add parallel `area/*` or `track/*` taxonomies.
 - Keep release execution in one plan per release. Keep unrelated architecture
   debt in the single current debt plan.
 - Keep daily issue and PR state out of git under `.agent-harness/maintainer/`.

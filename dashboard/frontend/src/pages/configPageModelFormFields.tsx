@@ -5,6 +5,7 @@ import {
   ModelExternalIdsEditor,
   ModelLorasEditor,
   ModelPricingEditor,
+  ModelReliabilityEditor,
   ModelTagsEditor,
 } from './configPageModelStructuredEditors'
 
@@ -66,6 +67,15 @@ export function getModelStructuredFormFields(): FieldConfig[] {
       type: 'custom',
       description: 'Per-million-token rates stored under providers.models[].pricing.',
       customRender: (value, onChange) => <ModelPricingEditor value={value} onChange={onChange} />,
+    },
+    {
+      name: 'reliability',
+      label: 'Delivery Policy',
+      type: 'custom',
+      description: 'Retry, health check, and load-balancing controls for this model.',
+      customRender: (value, onChange) => (
+        <ModelReliabilityEditor value={value} onChange={onChange} />
+      ),
     },
   ]
 }

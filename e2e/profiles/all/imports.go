@@ -7,6 +7,7 @@ import (
 	aibrix "github.com/vllm-project/semantic-router/e2e/profiles/aibrix"
 	anthropicshim "github.com/vllm-project/semantic-router/e2e/profiles/anthropic-shim"
 	authzrbac "github.com/vllm-project/semantic-router/e2e/profiles/authz-rbac"
+	categoryremotebackend "github.com/vllm-project/semantic-router/e2e/profiles/category-remote-backend"
 	dashboard "github.com/vllm-project/semantic-router/e2e/profiles/dashboard"
 	dynamicconfig "github.com/vllm-project/semantic-router/e2e/profiles/dynamic-config"
 	dynamo "github.com/vllm-project/semantic-router/e2e/profiles/dynamo"
@@ -14,6 +15,7 @@ import (
 	istio "github.com/vllm-project/semantic-router/e2e/profiles/istio"
 	jailbreakonerror "github.com/vllm-project/semantic-router/e2e/profiles/jailbreak-onerror"
 	llmd "github.com/vllm-project/semantic-router/e2e/profiles/llm-d"
+	looper "github.com/vllm-project/semantic-router/e2e/profiles/looper"
 	mlmodelselection "github.com/vllm-project/semantic-router/e2e/profiles/ml-model-selection"
 	multiendpoint "github.com/vllm-project/semantic-router/e2e/profiles/multi-endpoint"
 	multimodalrouting "github.com/vllm-project/semantic-router/e2e/profiles/multimodal-routing"
@@ -47,7 +49,11 @@ var dashboardLocalImages = []framework.LocalImageBuild{
 
 func init() {
 	register("agentgateway", func() framework.Profile { return agentgateway.NewProfile() }, framework.ProfileCapabilities{})
-	register("envoy-ai-gateway", func() framework.Profile { return aigateway.NewProfile() }, framework.ProfileCapabilities{})
+	register(
+		"envoy-ai-gateway",
+		func() framework.Profile { return aigateway.NewProfile() },
+		framework.ProfileCapabilities{LocalImages: mockVLLMLocalImages},
+	)
 	register("aibrix", func() framework.Profile { return aibrix.NewProfile() }, framework.ProfileCapabilities{})
 	register(
 		"anthropic-shim",
@@ -55,6 +61,7 @@ func init() {
 		framework.ProfileCapabilities{LocalImages: anthropicshim.LocalImages()},
 	)
 	register("authz-rbac", func() framework.Profile { return authzrbac.NewProfile() }, framework.ProfileCapabilities{})
+	register("category-remote-backend", func() framework.Profile { return categoryremotebackend.NewProfile() }, framework.ProfileCapabilities{LocalImages: mockVLLMLocalImages})
 	register(
 		"dashboard",
 		func() framework.Profile { return dashboard.NewProfile() },
@@ -74,6 +81,7 @@ func init() {
 		framework.ProfileCapabilities{LocalImages: mockVLLMLocalImages},
 	)
 	register("llm-d", func() framework.Profile { return llmd.NewProfile() }, framework.ProfileCapabilities{})
+	register("looper", func() framework.Profile { return looper.NewProfile() }, framework.ProfileCapabilities{})
 	register(
 		"ml-model-selection",
 		func() framework.Profile { return mlmodelselection.NewProfile() },

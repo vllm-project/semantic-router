@@ -108,8 +108,8 @@ surfaces:
     reason: Task classification and fast-test mapping.
   - path: tools/agent/skill-registry.yaml
     reason: Surface ownership and skill routing.
-  - path: tools/agent/e2e-profile-map.yaml
-    reason: E2E profile and CI fanout mapping for harness changes.
+  - path: tools/agent/test-domain-registry.yaml
+    reason: Test-domain, E2E profile, and CI fanout mapping for harness changes.
   - path: tools/agent/scripts/agent_validation.py
     reason: Validation orchestrator for the shared harness contract.
   - path: tools/agent/scripts/agent_doc_validation.py
@@ -163,7 +163,7 @@ skills:
     resume_refs:
     - path: tools/agent/docs/plans/pl-0032-architecture-scorecard-ratchet.md
       reason: Current non-release debt and harness cleanup execution plan.
-  cross-stack-bugfix:
+  project-change:
     resume_refs:
     - path: tools/agent/docs/tech-debt-register.md
-      reason: Record remaining cross-surface architecture gaps if they stay open.
+      reason: Record a real architecture gap only when the requested change cannot close it.

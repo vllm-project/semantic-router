@@ -1,7 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import FleetSimSurfaceLayout from './FleetSimSurfaceLayout'
 import styles from './FleetSimPage.module.css'
-import { FLEET_SIM_API_PREFIX, listFleets, listJobs, listTraces, listWorkloads, type FleetConfig, type FleetSimJob, type TraceInfo, type BuiltinWorkload } from '../utils/fleetSimApi'
+import {
+  listFleets,
+  listJobs,
+  listTraces,
+  listWorkloads,
+  type FleetConfig,
+  type FleetSimJob,
+  type TraceInfo,
+  type BuiltinWorkload,
+} from '../utils/fleetSimApi'
 import {
   extractJobFleetID,
   describeBuiltinWorkload,
@@ -62,7 +71,9 @@ export default function FleetSimOverviewPage() {
       setTraces(tracesData)
       setAssetsError('')
     } catch (loadError) {
-      setAssetsError(loadError instanceof Error ? loadError.message : 'Failed to load simulator assets')
+      setAssetsError(
+        loadError instanceof Error ? loadError.message : 'Failed to load simulator assets',
+      )
     }
   }, [])
 
@@ -103,9 +114,10 @@ export default function FleetSimOverviewPage() {
   const latestJob = [...jobs].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0]
   const annualSpend = fleets.reduce((sum, fleet) => sum + fleet.estimated_annual_cost_kusd, 0)
   const latestWorkload = latestJob ? extractJobWorkload(latestJob) : null
-  const latestTrace = latestWorkload?.type === 'trace'
-    ? traces.find((trace) => trace.id === latestWorkload.trace_id)
-    : null
+  const latestTrace =
+    latestWorkload?.type === 'trace'
+      ? traces.find((trace) => trace.id === latestWorkload.trace_id)
+      : null
   const latestFleet = latestJob
     ? fleets.find((fleet) => fleet.id === extractJobFleetID(latestJob))
     : null
@@ -146,39 +158,33 @@ export default function FleetSimOverviewPage() {
     <FleetSimSurfaceLayout
       title="Overview"
       description="Keep workload libraries, reusable fleets, and recent planning outcomes in one place so operators can decide what to size, replay, or compare next."
-      currentPath="/fleet-sim"
       meta={[
         { label: 'Workload library', value: formatNumber(workloads.length) },
         { label: 'Saved fleets', value: formatNumber(fleets.length) },
         { label: 'Planning runs', value: formatNumber(jobs.length) },
       ]}
-      panelFooter={
-        <div className={styles.buttonRow}>
-          <a className={styles.secondaryButton} href={`${FLEET_SIM_API_PREFIX}/docs`} target="_blank" rel="noreferrer">
-            API Docs
-          </a>
-          <a className={styles.ghostButton} href={`${FLEET_SIM_API_PREFIX}/openapi.json`} target="_blank" rel="noreferrer">
-            OpenAPI
-          </a>
-        </div>
-      }
     >
       <div className={styles.statsGrid}>
         <div className={styles.statCard}>
           <span className={styles.statLabel}>Planning library</span>
           <strong className={styles.statValue}>{formatNumber(planningAssets)}</strong>
           <span className={styles.statMeta}>
-            {formatNumber(workloads.length)} built-in profiles and {formatNumber(traces.length)} uploaded traces ready for comparison.
+            {formatNumber(workloads.length)} built-in profiles and {formatNumber(traces.length)}{' '}
+            uploaded traces ready for comparison.
           </span>
         </div>
         <div className={styles.statCard}>
           <span className={styles.statLabel}>Annual spend in review</span>
           <strong className={styles.statValue}>{formatMoneyKusd(annualSpend)}</strong>
-          <span className={styles.statMeta}>Combined estimate across {formatNumber(fleets.length)} saved fleet plans.</span>
+          <span className={styles.statMeta}>
+            Combined estimate across {formatNumber(fleets.length)} saved fleet plans.
+          </span>
         </div>
         <div className={styles.statCard}>
           <span className={styles.statLabel}>Latest activity</span>
-          <strong className={styles.statValue}>{latestJob ? formatJobType(latestJob.type) : 'Idle'}</strong>
+          <strong className={styles.statValue}>
+            {latestJob ? formatJobType(latestJob.type) : 'Idle'}
+          </strong>
           <span className={styles.statMeta}>
             {latestJob
               ? `${formatJobStatus(latestJob.status)} · ${formatDateTime(latestJob.created_at)}`
@@ -194,7 +200,10 @@ export default function FleetSimOverviewPage() {
           <div className={styles.sectionHeader}>
             <div>
               <h2 className={styles.sectionTitle}>Latest Run</h2>
-              <p className={styles.sectionDescription}>The most recent planning scenario, ready for a quick read before you drill into full history.</p>
+              <p className={styles.sectionDescription}>
+                The most recent planning scenario, ready for a quick read before you drill into full
+                history.
+              </p>
             </div>
           </div>
           {latestJob ? (
@@ -202,7 +211,8 @@ export default function FleetSimOverviewPage() {
               <div className={styles.compactListItem}>
                 <div className={styles.compactListMeta}>
                   <span className={styles.compactListTitle}>
-                    {formatJobType(latestJob.type)} · {latestWorkload?.type === 'builtin'
+                    {formatJobType(latestJob.type)} ·{' '}
+                    {latestWorkload?.type === 'builtin'
                       ? formatBuiltinWorkloadName(latestWorkload.name || 'library')
                       : latestTrace?.name || 'Uploaded trace'}
                   </span>
@@ -221,7 +231,9 @@ export default function FleetSimOverviewPage() {
               </p>
             </>
           ) : (
-            <div className={styles.emptyState}>No planning runs yet. Start with a saved fleet or a built-in workload.</div>
+            <div className={styles.emptyState}>
+              No planning runs yet. Start with a saved fleet or a built-in workload.
+            </div>
           )}
         </section>
 
@@ -229,7 +241,10 @@ export default function FleetSimOverviewPage() {
           <div className={styles.sectionHeader}>
             <div>
               <h2 className={styles.sectionTitle}>Planning Assets</h2>
-              <p className={styles.sectionDescription}>The reusable workload, trace, and fleet inputs most likely to drive the next scenario.</p>
+              <p className={styles.sectionDescription}>
+                The reusable workload, trace, and fleet inputs most likely to drive the next
+                scenario.
+              </p>
             </div>
           </div>
           <ul className={styles.compactList}>
@@ -243,7 +258,9 @@ export default function FleetSimOverviewPage() {
               </li>
             ))}
             {planningAssetItems.length === 0 ? (
-              <li className={styles.emptyState}>Upload a trace or save a fleet to build out the planning library.</li>
+              <li className={styles.emptyState}>
+                Upload a trace or save a fleet to build out the planning library.
+              </li>
             ) : null}
           </ul>
         </section>

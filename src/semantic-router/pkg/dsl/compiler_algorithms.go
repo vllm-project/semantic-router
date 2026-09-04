@@ -67,6 +67,9 @@ func (c *Compiler) compilePromptAlgo(
 
 func (c *Compiler) compileAlgorithm(spec *AlgoSpec) *config.AlgorithmConfig {
 	algo := &config.AlgorithmConfig{Type: spec.AlgoType}
+	if minimum, ok := getIntField(spec.Fields, "minimum_candidates"); ok {
+		algo.MinimumCandidates = minimum
+	}
 	c.populateAlgorithmSubConfig(algo, spec)
 	c.setAlgorithmTopLevelOnError(algo, spec.Fields)
 	if algo.ReMoM != nil {
@@ -122,6 +125,9 @@ func (c *Compiler) compileConfidenceAlgo(fields map[string]Value) *config.Confid
 	}
 	if v, ok := getIntField(fields, "verifier_timeout_seconds"); ok {
 		cfg.VerifierTimeoutSeconds = v
+	}
+	if v, ok := getIntField(fields, "max_response_bytes"); ok {
+		cfg.MaxResponseBytes = int64(v)
 	}
 	cfg.HybridWeights = parseHybridWeights(fields)
 	return cfg

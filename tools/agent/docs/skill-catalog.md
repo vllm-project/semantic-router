@@ -20,12 +20,8 @@ Default coding-agent routing:
 - `config-platform-change`
 - `routing-policy-change`
 - `startup-chain-change`
-- `dashboard-platform-change`
-- `router-service-platform-change`
-- `fleet-sim-change`
-- `k8s-platform-change`
-- `training-stack-change`
-- `cross-stack-bugfix`
+- `project-change` (lightweight fallback; boundaries come from changed-file
+  surfaces and the nearest `AGENTS.md`)
 
 ## Support Skills
 
@@ -37,6 +33,6 @@ Maintainer:
 
 ## Source of Truth
 
-- Executable registry: [../../tools/agent/skill-registry.yaml](../../../tools/agent/skill-registry.yaml)
-- Maintainer policy: [../../tools/agent/maintainer-policy.yaml](../../../tools/agent/maintainer-policy.yaml)
+- Executable registry: [skill-registry.yaml](../skill-registry.yaml)
+- Maintainer policy: [maintainer-policy.yaml](../maintainer-policy.yaml)
 - Change surfaces: [change-surfaces.md](change-surfaces.md)

@@ -10,11 +10,17 @@ import (
 
 // IsCategoryEnabled checks if category classification is properly configured.
 func (c *Classifier) IsCategoryEnabled() bool {
-	return c.Config.CategoryModel.Active() && c.Config.CategoryModel.ModelID != "" && c.Config.CategoryMappingPath != "" && c.CategoryMapping != nil
+	modelConfigured := c.Config.CategoryModel.ModelID != "" || c.Config.CategoryModel.Backend != nil
+	return c.Config.CategoryModel.Active() && modelConfigured && c.Config.CategoryMappingPath != "" && c.CategoryMapping != nil
 }
 
 // initializeCategoryClassifier initializes the category classification model.
 func (c *Classifier) initializeCategoryClassifier() error {
+	if c.Config.CategoryModel.Backend != nil {
+		// Remote inference is fully constructed during classifier assembly and has
+		// no local model lifecycle to execute.
+		return nil
+	}
 	if !c.IsCategoryEnabled() || c.categoryInitializer == nil {
 		return fmt.Errorf("category classification is not properly configured")
 	}

@@ -37,6 +37,34 @@ func TestValidateConversationRuleContract_ActiveToolLoopSource(t *testing.T) {
 	}
 }
 
+func TestValidateConversationRuleContract_FlowToolStateSource(t *testing.T) {
+	rule := ConversationRule{
+		Name: "flow_tool_state",
+		Feature: ConversationFeature{
+			Type:   "exists",
+			Source: ConversationSource{Type: "flow_tool_state"},
+		},
+	}
+	if err := ValidateConversationRuleContract(rule); err != nil {
+		t.Fatalf("expected flow_tool_state source to pass, got: %v", err)
+	}
+}
+
+func TestValidateConversationRuleContract_ToolChoiceSources(t *testing.T) {
+	for _, sourceType := range []string{"tool_choice_required", "tool_choice_none"} {
+		rule := ConversationRule{
+			Name: sourceType,
+			Feature: ConversationFeature{
+				Type:   "exists",
+				Source: ConversationSource{Type: sourceType},
+			},
+		}
+		if err := ValidateConversationRuleContract(rule); err != nil {
+			t.Fatalf("expected %s source to pass, got: %v", sourceType, err)
+		}
+	}
+}
+
 func TestValidateConversationRuleContract_EmptyName(t *testing.T) {
 	rule := validConversationRule()
 	rule.Name = ""

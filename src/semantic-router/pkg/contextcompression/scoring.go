@@ -6,7 +6,8 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math"
-	"sync"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 )
 
 type EmbeddingBatchFunc func(context.Context, []string) ([][]float32, error)
@@ -45,13 +46,15 @@ func (scorer EmbeddingScorer) Score(
 	return result, nil
 }
 
+// MemoizedEmbeddingScorer scores against a bounded memo of previously computed
+// embeddings. The memo itself is the shared embedding.Memo primitive; this type
+// owns the semantics on top of it: sha256 keys namespaced by model, storing
+// copies so the memo never aliases provider buffers, and memoizing every input
+// including the query. Returned vectors are read-only views (the sole consumer
+// computes cosine similarity and retains nothing).
 type MemoizedEmbeddingScorer struct {
 	embedBatch EmbeddingBatchFunc
-	maxEntries int
-
-	mu    sync.Mutex
-	cache map[string][]float32
-	order []string
+	memo       *embedding.Memo
 }
 
 func NewMemoizedEmbeddingScorer(
@@ -63,9 +66,7 @@ func NewMemoizedEmbeddingScorer(
 	}
 	return &MemoizedEmbeddingScorer{
 		embedBatch: embedBatch,
-		maxEntries: maxEntries,
-		cache:      make(map[string][]float32, maxEntries),
-		order:      make([]string, 0, maxEntries),
+		memo:       embedding.NewMemo(maxEntries),
 	}
 }
 
@@ -101,17 +102,15 @@ func (scorer *MemoizedEmbeddingScorer) vectors(
 	vectors := make([][]float32, len(inputs))
 	missingInputs := make([]string, 0)
 	missingIndexes := make([]int, 0)
-	scorer.mu.Lock()
 	for index, input := range inputs {
 		keys[index] = embeddingMemoKey(modelRef, input)
-		if cached, ok := scorer.cache[keys[index]]; ok {
-			vectors[index] = append([]float32(nil), cached...)
+		if cached, ok := scorer.memo.Get(keys[index]); ok {
+			vectors[index] = cached
 			continue
 		}
 		missingInputs = append(missingInputs, input)
 		missingIndexes = append(missingIndexes, index)
 	}
-	scorer.mu.Unlock()
 	if len(missingInputs) == 0 {
 		return vectors, nil
 	}
@@ -126,22 +125,13 @@ func (scorer *MemoizedEmbeddingScorer) vectors(
 			len(missingInputs),
 		)
 	}
-	scorer.mu.Lock()
-	defer scorer.mu.Unlock()
 	for missingIndex, vector := range embedded {
 		index := missingIndexes[missingIndex]
-		if cached, ok := scorer.cache[keys[index]]; ok {
-			vectors[index] = append([]float32(nil), cached...)
-			continue
-		}
-		vectors[index] = append([]float32(nil), vector...)
-		scorer.cache[keys[index]] = append([]float32(nil), vector...)
-		scorer.order = append(scorer.order, keys[index])
-		for len(scorer.order) > scorer.maxEntries {
-			oldest := scorer.order[0]
-			scorer.order = scorer.order[1:]
-			delete(scorer.cache, oldest)
-		}
+		// Store a copy so the memo never aliases the provider's slice. Racing
+		// misses on the same key may each Put (the first write wins); the copies
+		// are interchangeable because an embedding is deterministic per key.
+		scorer.memo.Put(keys[index], append([]float32(nil), vector...))
+		vectors[index] = vector
 	}
 	return vectors, nil
 }

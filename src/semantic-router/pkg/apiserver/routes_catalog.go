@@ -427,7 +427,7 @@ func apiFileRoutes() []apiRoute {
 			EndpointMetadata{Path: "/v1/files", Method: "POST", Description: "Upload a file"},
 			routePolicy{Permission: PermDataWrite, Sensitivity: SensitivityMutation, AuditAction: AuditActionDataWrite},
 			(*ClassificationAPIServer).handleUploadFile,
-			multipartBody(maxUploadSize, "Multipart upload with a file field and optional purpose field."),
+			multipartBody(maxUploadSize, "Multipart upload with a file field and optional purpose field. Documents (.txt, .md, .json, .csv, .html) by default; images (.png, .jpg, .jpeg, .gif, .webp) with purpose=vision."),
 		),
 		managedRoute(
 			EndpointMetadata{Path: "/v1/files", Method: "GET", Description: "List uploaded files"},

@@ -63,6 +63,10 @@ func createSemanticCache(cfg *config.RouterConfig) (cache.CacheBackend, error) {
 		Milvus:              semanticCacheCfg.Milvus,
 		Qdrant:              semanticCacheCfg.Qdrant,
 		EmbeddingModel:      detectSemanticCacheEmbeddingModel(cfg),
+		PolarityGuard: cache.PolarityGuardOptions{
+			UseNLI:                 semanticCacheCfg.PolarityGuard.UsesNLI(),
+			ContradictionThreshold: semanticCacheCfg.PolarityGuard.EffectiveContradictionThreshold(),
+		},
 	}
 
 	if cacheConfig.BackendType == "" {
@@ -80,6 +84,7 @@ func createSemanticCache(cfg *config.RouterConfig) (cache.CacheBackend, error) {
 			"similarity_threshold": cacheConfig.SimilarityThreshold,
 			"ttl_seconds":          cacheConfig.TTLSeconds,
 			"max_entries":          cacheConfig.MaxEntries,
+			"polarity_guard_mode":  semanticCacheCfg.PolarityGuard.NormalizedMode(),
 		})
 	} else {
 		logging.ComponentEvent("extproc", "semantic_cache_disabled", map[string]interface{}{
@@ -115,19 +120,14 @@ func detectSemanticCacheEmbeddingModel(cfg *config.RouterConfig) string {
 	}
 }
 
-func createToolsDatabase(cfg *config.RouterConfig) (*tools.ToolsDatabase, error) {
+func createToolsDatabase(cfg *config.RouterConfig, provider embedding.Provider) (*tools.ToolsDatabase, error) {
 	embeddingModels := cfg.EmbeddingModels
 	toolsThreshold := embeddingModels.MinSimilarityThreshold()
 	if cfg.Tools.SimilarityThreshold != nil {
 		toolsThreshold = *cfg.Tools.SimilarityThreshold
 	}
-	var provider embedding.Provider
-	if cfg.Tools.Enabled {
-		var err error
-		provider, err = toolsEmbeddingProvider(cfg)
-		if err != nil {
-			return nil, err
-		}
+	if !cfg.Tools.Enabled {
+		provider = nil
 	}
 
 	toolsDatabase := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{

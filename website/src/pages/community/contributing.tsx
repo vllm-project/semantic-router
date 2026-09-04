@@ -3,6 +3,7 @@ import Layout from '@theme/Layout'
 import Translate from '@docusaurus/Translate'
 import Link from '@docusaurus/Link'
 import CommunityLayout from '@site/src/components/community/CommunityLayout'
+import { workGroups } from '@site/src/data/workGroups'
 import styles from './community-page.module.css'
 
 const Contributing: React.FC = () => {
@@ -114,8 +115,13 @@ const Contributing: React.FC = () => {
                 <div className={styles.step}>
                   <span className={styles.stepNumber}>1</span>
                   <div>
-                    <h4><Translate id="contributing.process.step1.title">Create an Issue</Translate></h4>
-                    <p><Translate id="contributing.process.step1.desc">Discuss your idea or bug report with the community first.</Translate></p>
+                    <h4><Translate id="contributing.process.step1.title">Claim Accepted Work</Translate></h4>
+                    <p><Translate id="contributing.process.step1.desc">New reports move from needs-acceptance to accepted and ready-for-dev; comment to claim ready-for-dev work before implementation.</Translate></p>
+                    <p>
+                      <a href="https://github.com/vllm-project/semantic-router/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener noreferrer">CONTRIBUTING.md</a>
+                      {' · '}
+                      <Link to="/docs/community/overview"><Translate id="contributing.process.step1.docs">Community documentation</Translate></Link>
+                    </p>
                   </div>
                 </div>
 
@@ -212,7 +218,7 @@ const Contributing: React.FC = () => {
                       </p>
                       <p>
                         4. JavaScript:
-                        <code>cd website && npm lint</code>
+                        <code>cd website && npm run lint</code>
                       </p>
                       <p>
                         <Translate id="contributing.precommit.step2.shell">5. Shell: take Mac as an example, execute</Translate>
@@ -256,10 +262,10 @@ const Contributing: React.FC = () => {
                 <h4><Translate id="contributing.precommit.tips.title">Some Tips: </Translate></h4>
                 <div className={styles.stepNumberTips}>
                   <p>
-                    <Translate id="contributing.docker.tips.1">Although Docker can help avoid installing too many detection tools locally, this does not mean that it will be automatically executed during the commit process. Therefore, when committing, you can use</Translate>
-                    <code>git commit -s -m -n</code>
+                    <Translate id="contributing.docker.tips.1">Docker does not run checks automatically. Sign off your commit with</Translate>
+                    <code>git commit -s -m "describe the change"</code>
                     {' '}
-                    <Translate id="contributing.docker.tips.2">to skip the detection.</Translate>
+                    <Translate id="contributing.docker.tips.2">and let the pre-commit hooks run.</Translate>
                   </p>
                 </div>
                 <div className={styles.step}>
@@ -311,23 +317,20 @@ pre-commit install && pre-commit run --all-files`}
 
           <section className={styles.section}>
             <h2>
-              <Translate id="contributing.workGroups.title">Working Group Areas</Translate>
+              <Translate id="contributing.workGroups.title">Workgroup ownership</Translate>
             </h2>
             <p>
               <Translate id="contributing.workGroups.desc.prefix">Consider joining one of our</Translate>
               {' '}
               <Link to="/community/work-groups"><Translate id="contributing.workGroups.link">Working Groups</Translate></Link>
               {' '}
-              <Translate id="contributing.workGroups.desc.suffix">to focus your contributions:</Translate>
+              <Translate id="contributing.workGroups.desc.suffix">to find the owning direction and its current Epics:</Translate>
             </p>
             <div className={styles.tagGrid}>
-              <span className={styles.tag}>area/document</span>
-              <span className={styles.tag}>area/environment</span>
-              <span className={styles.tag}>area/core</span>
-              <span className={styles.tag}>area/networking</span>
-              <span className={styles.tag}>area/benchmark</span>
-              <span className={styles.tag}>area/tooling</span>
-              <span className={styles.tag}>area/user-experience</span>
+              {workGroups.map(group => (
+                <span key={group.label} className={styles.tag}>{group.label}</span>
+              ))}
+              <span className={styles.tag}>epic</span>
             </div>
           </section>
 

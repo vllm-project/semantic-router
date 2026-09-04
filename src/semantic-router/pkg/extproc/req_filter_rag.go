@@ -2,7 +2,6 @@ package extproc
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -11,6 +10,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
@@ -240,21 +240,9 @@ func (r *OpenAIRouter) injectRAGContext(ctx *RequestContext, retrievedContext st
 		return nil
 	}
 
-	// Parse request body
-	var requestMap map[string]interface{}
-	if err := json.Unmarshal(ctx.workingRequestBody(), &requestMap); err != nil {
-		return fmt.Errorf("failed to parse request: %w", err)
-	}
-
-	// Get messages array
-	messagesInterface, ok := requestMap["messages"]
-	if !ok {
-		return fmt.Errorf("messages array not found")
-	}
-
-	messages, ok := messagesInterface.([]interface{})
-	if !ok {
-		return fmt.Errorf("messages is not an array")
+	request := ctx.SemanticRequest
+	if request == nil {
+		return fmt.Errorf("neutral inference request is unavailable")
 	}
 
 	// Determine injection mode
@@ -276,25 +264,20 @@ func (r *OpenAIRouter) injectRAGContext(ctx *RequestContext, retrievedContext st
 
 	switch injectionMode {
 	case "tool_role":
-		return r.injectAsToolRole(messages, retrievedContext, requestMap, ctx)
+		return r.injectAsToolRole(request, retrievedContext, ctx)
 	case "system_prompt":
-		return r.injectAsSystemPrompt(messages, retrievedContext, requestMap, ctx)
+		return r.injectAsSystemPrompt(request, retrievedContext, ctx)
 	default:
 		return fmt.Errorf("unknown injection mode: %s", injectionMode)
 	}
 }
 
 // injectAsToolRole injects context as tool role messages
-func (r *OpenAIRouter) injectAsToolRole(messages []interface{}, context string, requestMap map[string]interface{}, ctx *RequestContext) error {
+func (r *OpenAIRouter) injectAsToolRole(request *llmprotocol.Request, context string, ctx *RequestContext) error {
 	// Find last user message
 	lastUserIdx := -1
-	for i := len(messages) - 1; i >= 0; i-- {
-		msg, ok := messages[i].(map[string]interface{})
-		if !ok {
-			continue
-		}
-		role, _ := msg["role"].(string)
-		if role == "user" {
+	for i := len(request.Messages) - 1; i >= 0; i-- {
+		if request.Messages[i].Role == llmprotocol.RoleUser {
 			lastUserIdx = i
 			break
 		}
@@ -314,27 +297,27 @@ func (r *OpenAIRouter) injectAsToolRole(messages []interface{}, context string, 
 		ctx.RAGToolCallIDs = make(map[string]struct{})
 	}
 	ctx.RAGToolCallIDs[toolCallID] = struct{}{}
-	toolMessage := map[string]interface{}{
-		"role":         "tool",
-		"tool_call_id": toolCallID,
-		"content":      context,
+	callMessage := llmprotocol.Message{
+		Role: llmprotocol.RoleAssistant,
+		Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{
+			ID: toolCallID, Name: "vsr_rag_context", Arguments: "{}",
+		}}},
+	}
+	toolMessage := llmprotocol.Message{
+		Role: llmprotocol.RoleTool,
+		Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolResult, ToolResult: &llmprotocol.ToolResult{
+			CallID:  toolCallID,
+			Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: context}},
+		}}},
 	}
 
 	// Insert after last user message
-	newMessages := make([]interface{}, 0, len(messages)+1)
-	newMessages = append(newMessages, messages[:lastUserIdx+1]...)
-	newMessages = append(newMessages, toolMessage)
-	newMessages = append(newMessages, messages[lastUserIdx+1:]...)
-
-	requestMap["messages"] = newMessages
-
-	// Update context
-	updatedBody, err := json.Marshal(requestMap)
-	if err != nil {
-		return fmt.Errorf("failed to marshal request: %w", err)
-	}
-
-	ctx.setWorkingRequestBody(updatedBody)
+	newMessages := make([]llmprotocol.Message, 0, len(request.Messages)+2)
+	newMessages = append(newMessages, request.Messages[:lastUserIdx+1]...)
+	newMessages = append(newMessages, callMessage, toolMessage)
+	newMessages = append(newMessages, request.Messages[lastUserIdx+1:]...)
+	request.Messages = newMessages
+	request.Generation++
 	ctx.RAGRetrievedContext = context
 	ctx.HasToolsForFactCheck = true
 	ctx.ToolResultsContext = context // Store for hallucination detection
@@ -344,56 +327,28 @@ func (r *OpenAIRouter) injectAsToolRole(messages []interface{}, context string, 
 }
 
 // injectAsSystemPrompt injects context into system prompt
-func (r *OpenAIRouter) injectAsSystemPrompt(messages []interface{}, context string, requestMap map[string]interface{}, ctx *RequestContext) error {
-	// Check if system message exists
-	hasSystemMessage := false
-	var systemContent string
-
-	if len(messages) > 0 {
-		firstMsg, ok := messages[0].(map[string]interface{})
-		if ok {
-			role, _ := firstMsg["role"].(string)
-			if role == "system" {
-				hasSystemMessage = true
-				systemContent, _ = firstMsg["content"].(string)
-			}
-		}
-	}
-
+func (r *OpenAIRouter) injectAsSystemPrompt(request *llmprotocol.Request, context string, ctx *RequestContext) error {
 	// Prepend context to system message
 	contextPrefix := fmt.Sprintf("Context from knowledge base:\n\n%s\n\n", context)
-
-	if hasSystemMessage {
-		// Clone the first system message map to avoid mutating shared state
-		origFirst, ok := messages[0].(map[string]interface{})
-		if !ok {
-			return fmt.Errorf("expected first message to be a map when hasSystemMessage is true")
+	injected := false
+	for index := range request.Instructions {
+		if request.Instructions[index].Role != llmprotocol.RoleSystem {
+			continue
 		}
-		newFirst := make(map[string]interface{}, len(origFirst)+1)
-		for k, v := range origFirst {
-			newFirst[k] = v
-		}
-		newFirst["content"] = contextPrefix + systemContent
-		newMessages := make([]interface{}, len(messages))
-		copy(newMessages, messages)
-		newMessages[0] = newFirst
-		requestMap["messages"] = newMessages
-	} else {
-		systemMessage := map[string]interface{}{
-			"role":    "system",
-			"content": contextPrefix,
-		}
-		messages = append([]interface{}{systemMessage}, messages...)
-		requestMap["messages"] = messages
+		request.Instructions[index].Content = append(
+			[]llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: contextPrefix}},
+			request.Instructions[index].Content...,
+		)
+		injected = true
+		break
 	}
-
-	// Update context
-	updatedBody, err := json.Marshal(requestMap)
-	if err != nil {
-		return fmt.Errorf("failed to marshal request: %w", err)
+	if !injected {
+		request.Instructions = append([]llmprotocol.InstructionBlock{{
+			Role:    llmprotocol.RoleSystem,
+			Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: contextPrefix}},
+		}}, request.Instructions...)
 	}
-
-	ctx.setWorkingRequestBody(updatedBody)
+	request.Generation++
 	ctx.RAGRetrievedContext = context
 	// Note: For system_prompt mode, we don't set HasToolsForFactCheck
 	// as context is in system prompt, not tool messages

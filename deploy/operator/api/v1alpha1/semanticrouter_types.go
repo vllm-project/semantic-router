@@ -1203,6 +1203,11 @@ type EmbeddingEndpointConfig struct {
 	// +optional
 	MaxRetries int `json:"max_retries,omitempty"`
 
+	// MaxResponseBytes caps the size of each embedding response body.
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	MaxResponseBytes int64 `json:"max_response_bytes,omitempty"`
+
 	// Dimensions requests a provider-side output dimension when supported.
 	// +kubebuilder:validation:Minimum=1
 	// +optional
@@ -1303,6 +1308,11 @@ type RuleCombinationConfig struct {
 	// exactly one child condition and negates its result. Compose NOR/NAND by nesting NOT around OR/AND.
 	// +kubebuilder:validation:Enum=AND;OR;NOT
 	Operator string `json:"operator" yaml:"operator"`
+
+	// OnUnknown resolves a terminal unknown result after the rule tree is evaluated.
+	// +optional
+	// +kubebuilder:validation:Enum=no_match;match;fail_request
+	OnUnknown string `json:"on_unknown,omitempty" yaml:"on_unknown,omitempty"`
 
 	// Conditions is the list of rule references to evaluate
 	Conditions []RuleConditionConfig `json:"conditions" yaml:"conditions"`

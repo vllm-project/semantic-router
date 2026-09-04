@@ -1,0 +1,648 @@
+{
+  "cases": [
+    {
+      "name": "audio",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_audio"
+        }
+      }
+    },
+    {
+      "name": "frequency_penalty",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_capability"
+        }
+      }
+    },
+    {
+      "name": "function_call",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_function_call"
+        }
+      }
+    },
+    {
+      "name": "functions",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_functions"
+        }
+      }
+    },
+    {
+      "name": "logit_bias",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_logit_bias"
+        }
+      }
+    },
+    {
+      "name": "logprobs",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_logprobs"
+        }
+      }
+    },
+    {
+      "name": "max_completion_tokens",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "max_tokens": 64,
+          "messages": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "text"
+                }
+              ],
+              "role": "user"
+            }
+          ],
+          "model": "routed-model"
+        }
+      }
+    },
+    {
+      "name": "max_tokens",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "max_tokens": 64,
+          "messages": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "text"
+                }
+              ],
+              "role": "user"
+            }
+          ],
+          "model": "routed-model"
+        }
+      }
+    },
+    {
+      "name": "messages",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "lossy_translation"
+        },
+        "diagnostics": [
+          {
+            "field": "max_tokens",
+            "action": "generated"
+          }
+        ]
+      }
+    },
+    {
+      "name": "metadata",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_capability"
+        }
+      }
+    },
+    {
+      "name": "modalities",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_modalities"
+        }
+      }
+    },
+    {
+      "name": "model",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "max_tokens": 4096,
+          "messages": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "text"
+                }
+              ],
+              "role": "user"
+            }
+          ],
+          "model": "routed-model"
+        },
+        "diagnostics": [
+          {
+            "field": "max_tokens",
+            "action": "generated"
+          }
+        ]
+      }
+    },
+    {
+      "name": "moderation",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_moderation"
+        }
+      }
+    },
+    {
+      "name": "n",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_capability"
+        }
+      }
+    },
+    {
+      "name": "parallel_tool_calls",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "max_tokens": 4096,
+          "messages": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "text"
+                }
+              ],
+              "role": "user"
+            }
+          ],
+          "model": "routed-model"
+        },
+        "diagnostics": [
+          {
+            "field": "max_tokens",
+            "action": "generated"
+          }
+        ]
+      }
+    },
+    {
+      "name": "prediction",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_prediction"
+        }
+      }
+    },
+    {
+      "name": "presence_penalty",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_capability"
+        }
+      }
+    },
+    {
+      "name": "prompt_cache_key",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_prompt_cache_key"
+        }
+      }
+    },
+    {
+      "name": "prompt_cache_options",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_prompt_cache_options"
+        }
+      }
+    },
+    {
+      "name": "prompt_cache_retention",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_prompt_cache_retention"
+        }
+      }
+    },
+    {
+      "name": "reasoning_budget_tokens",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "max_tokens": 4096,
+          "messages": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "text"
+                }
+              ],
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "thinking": {
+            "budget_tokens": 1024,
+            "type": "enabled"
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "max_tokens",
+            "action": "generated"
+          }
+        ]
+      }
+    },
+    {
+      "name": "reasoning_effort",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "max_tokens": 4096,
+          "messages": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "text"
+                }
+              ],
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "output_config": {
+            "effort": "high"
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "max_tokens",
+            "action": "generated"
+          }
+        ]
+      }
+    },
+    {
+      "name": "response_format",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_capability"
+        }
+      }
+    },
+    {
+      "name": "safety_identifier",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_safety_identifier"
+        }
+      }
+    },
+    {
+      "name": "seed",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_capability"
+        }
+      }
+    },
+    {
+      "name": "service_tier",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_service_tier"
+        }
+      }
+    },
+    {
+      "name": "stop",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "max_tokens": 4096,
+          "messages": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "text"
+                }
+              ],
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "stop_sequences": [
+            "END",
+            "STOP"
+          ]
+        },
+        "diagnostics": [
+          {
+            "field": "max_tokens",
+            "action": "generated"
+          }
+        ]
+      }
+    },
+    {
+      "name": "store",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_capability"
+        }
+      }
+    },
+    {
+      "name": "stream",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "max_tokens": 4096,
+          "messages": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "text"
+                }
+              ],
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "stream": true
+        },
+        "diagnostics": [
+          {
+            "field": "max_tokens",
+            "action": "generated"
+          }
+        ]
+      }
+    },
+    {
+      "name": "stream_options",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "max_tokens": 4096,
+          "messages": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "text"
+                }
+              ],
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "stream": true
+        },
+        "diagnostics": [
+          {
+            "field": "max_tokens",
+            "action": "generated"
+          }
+        ]
+      }
+    },
+    {
+      "name": "temperature",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "max_tokens": 4096,
+          "messages": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "text"
+                }
+              ],
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "temperature": 0.2
+        },
+        "diagnostics": [
+          {
+            "field": "max_tokens",
+            "action": "generated"
+          }
+        ]
+      }
+    },
+    {
+      "name": "tool_choice",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "max_tokens": 4096,
+          "messages": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "text"
+                }
+              ],
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "tool_choice": {
+            "type": "auto"
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "max_tokens",
+            "action": "generated"
+          }
+        ]
+      }
+    },
+    {
+      "name": "tools",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "max_tokens": 4096,
+          "messages": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "text"
+                }
+              ],
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "tool_choice": {
+            "type": "auto"
+          },
+          "tools": [
+            {
+              "input_schema": {
+                "type": "object"
+              },
+              "name": "lookup"
+            }
+          ]
+        },
+        "diagnostics": [
+          {
+            "field": "max_tokens",
+            "action": "generated"
+          }
+        ]
+      }
+    },
+    {
+      "name": "top_logprobs",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_top_logprobs"
+        }
+      }
+    },
+    {
+      "name": "top_p",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "max_tokens": 4096,
+          "messages": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "text"
+                }
+              ],
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "top_p": 0.9
+        },
+        "diagnostics": [
+          {
+            "field": "max_tokens",
+            "action": "generated"
+          }
+        ]
+      }
+    },
+    {
+      "name": "user",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "max_tokens": 4096,
+          "messages": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "text"
+                }
+              ],
+              "role": "user"
+            }
+          ],
+          "metadata": {
+            "user_id": "user-1"
+          },
+          "model": "routed-model"
+        },
+        "diagnostics": [
+          {
+            "field": "max_tokens",
+            "action": "generated"
+          }
+        ]
+      }
+    },
+    {
+      "name": "verbosity",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_verbosity"
+        }
+      }
+    },
+    {
+      "name": "web_search_options",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_web_search_options"
+        }
+      }
+    }
+  ]
+}

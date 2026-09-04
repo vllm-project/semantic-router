@@ -36,11 +36,11 @@ def test_start_vllm_sr_loads_runtime_config_for_backend_provisioning(monkeypatch
     monkeypatch.setattr(
         core,
         "provision_storage_backends",
-        lambda config, network_name, stack_layout, **_kwargs: (
+        lambda config, stack_layout, **_kwargs: (
             provisioned.update(
                 {
                     "config": config,
-                    "network_name": network_name,
+                    "network_name": stack_layout.data_network_name,
                     "stack_layout": stack_layout,
                 }
             )

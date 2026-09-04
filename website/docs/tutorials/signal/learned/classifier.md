@@ -2,9 +2,9 @@
 
 ## Overview
 
-`classifier` exposes reusable label scores from a local native sequence classifier
-or a configured external LLM. Decisions test a declared label with a required
-numeric predicate.
+`classifier` exposes reusable label scores from a local native sequence classifier,
+a remote sequence classifier, or a configured external LLM. Decisions test a
+declared label with a required numeric predicate.
 
 Specialized domain, PII, jailbreak, fact-check, KB, and preference signals
 remain the preferred interfaces for their respective domains.
@@ -45,29 +45,49 @@ routing:
       priority: 200
       rules:
         operator: AND
+        on_unknown: no_match
         conditions:
           - type: classifier
             name: phishing
             label: PHISHING
             predicate:
               gte: 0.5
-            on_error: no_match
       modelRefs:
         - model: local-small
           use_reasoning: false
 ```
 
 LLM classifiers reference a named `global.model_catalog.external` entry and
-add `instructions`. The runtime fixes temperature, output schema, token bounds,
-and exact-label validation. Classifier leaves are the only decision predicates
-that accept `on_error`; failures expose the bounded
+add `instructions`. The runtime fixes temperature, output schema,
+exact-label validation, and a 1 MiB default response limit. Set
+`max_response_bytes` on the external model entry to override that limit.
+The model must report a score for every declared
+label; each score must be between `0` and `1`, and the complete distribution
+must sum to approximately `1.0`. These are model-reported confidence scores,
+not calibrated classifier probabilities. Classifier leaves are the only
+decision predicates that accept `on_error`; failures expose the bounded
 `classifier_evaluation_failed` code in eval/replay diagnostics.
 
-This condition-level `on_error` (`no_match` or `match`) decides what the
-predicate evaluates to when the classifier fails. It is a different key from
-`prompt_guard.on_error` (`allow` or `block`), which decides whether a guardrail
-backend failure counts as unverified content for every rule that backend
-serves. See [Safety models and policy](../../global/safety-models-and-policy.md).
+On failure, the decision tree evaluates this leaf as `Unknown` until the full
+AND/OR/NOT expression is known. Root-level `rules.on_unknown` then chooses
+`no_match`, `match`, or `fail_request`. `no_match` and `match` resolve only
+their own decision; `fail_request` is global fail-closed: it rejects the whole
+request with a 503 even when another decision matches cleanly, regardless of
+priority. When `rules.on_unknown` is omitted, condition-level `on_error`
+(`no_match` or `match`) preserves the previous generic-classifier result.
+Setting `rules.on_unknown` disables every condition-level `on_error` in that
+tree, so the Router rejects a configuration that sets both.
+`prompt_guard.on_error` (`allow` or `block`) remains the compatibility
+default for jailbreak rules. Diagnostics include both the signal error and any
+terminal policy that was applied. See
+[Safety models and policy](../../global/safety-models-and-policy.md).
+
+`sequence_classifier` classifiers also reference a named external model, but
+use the shared `http_classify` contract and preserve its full label distribution.
+The response must contain exactly the declared labels, with scores that sum to
+approximately `1.0`; sigmoid multi-label outputs and label subsets are rejected.
+They require at least two labels and do not accept `instructions`, `model_path`,
+or `use_cpu`.
 
 Local classifiers use `model_path`. One binary local classifier is supported
 per Router process, and its decision predicates use `gte: 0.5` or higher on the
@@ -75,8 +95,10 @@ winning-label confidence. Restart the Router after changing the model or label
 order. A management API update that requires this restart returns
 `RESTART_REQUIRED`.
 
-The local path processes request text inside the Router. An `llm` classifier
-sends that text to its configured external model, so choose the provider and
-retention policy accordingly. Labels and thresholds must be evaluated as one
-versioned contract. See a complete example:
-[`config/fragments/signal/classifier/label-score.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/classifier/label-score.yaml).
+The local path processes request text inside the Router. Both `llm` and
+`sequence_classifier` send that text to their configured external model, so
+choose the provider and retention policy accordingly. Labels and thresholds
+must be evaluated as one versioned contract. See complete examples for
+[`llm`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/classifier/label-score.yaml)
+and
+[`sequence_classifier`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/classifier/sequence-label-score.yaml).

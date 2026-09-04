@@ -57,6 +57,7 @@ type OpenClawHandler struct {
 	dataDir          string
 	readOnly         bool
 	routerConfigPath string
+	allowedOrigins   []string
 	wf               *workflowstore.Store
 	mu               sync.RWMutex
 	roomWSClients    sync.Map
@@ -76,6 +77,13 @@ func NewOpenClawHandler(dataDir string, readOnly bool, wf *workflowstore.Store) 
 
 func (h *OpenClawHandler) SetRouterConfigPath(configPath string) {
 	h.routerConfigPath = strings.TrimSpace(configPath)
+}
+
+// SetAllowedOrigins mirrors auth.Service.SetAllowedOrigins so a split-origin frontend that
+// is allowed to POST can also open a WebSocket. Called once during route registration,
+// before the server accepts connections, so the read in wsUpgrader needs no lock. See #2465.
+func (h *OpenClawHandler) SetAllowedOrigins(origins []string) {
+	h.allowedOrigins = origins
 }
 
 func (h *OpenClawHandler) roomMessagesPath(roomID string) string {

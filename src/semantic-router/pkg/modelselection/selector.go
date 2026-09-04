@@ -569,6 +569,20 @@ func NewKNNSelector(k int) *KNNSelector {
 	}
 }
 
+func (s *KNNSelector) replaceMLKNN(next *ml_binding.KNNSelector) {
+	previous := s.mlKNN
+	s.mlKNN = next
+
+	if previous != nil && previous != next {
+		previous.Close()
+	}
+}
+
+func (s *KNNSelector) Close() error {
+	s.replaceMLKNN(nil)
+	return nil
+}
+
 func (s *KNNSelector) Name() string { return "knn" }
 
 // LoadFromJSON loads a pre-trained KNN model from JSON data
@@ -589,7 +603,7 @@ func (s *KNNSelector) LoadFromJSON(data []byte) error {
 		s.trainMLBinding()
 		return nil
 	}
-	s.mlKNN = knn
+	s.replaceMLKNN(knn)
 	return nil
 }
 
@@ -690,6 +704,20 @@ func NewKMeansSelectorWithEfficiency(numClusters int, efficiencyWeight float64) 
 	return s
 }
 
+func (s *KMeansSelector) replaceMLKMeans(next *ml_binding.KMeansSelector) {
+	previous := s.mlKMeans
+	s.mlKMeans = next
+
+	if previous != nil && previous != next {
+		previous.Close()
+	}
+}
+
+func (s *KMeansSelector) Close() error {
+	s.replaceMLKMeans(nil)
+	return nil
+}
+
 func (s *KMeansSelector) Name() string { return "kmeans" }
 
 // LoadFromJSON loads a pre-trained KMeans model from JSON data
@@ -713,7 +741,7 @@ func (s *KMeansSelector) LoadFromJSON(data []byte) error {
 		s.trainMLBinding()
 		return nil
 	}
-	s.mlKMeans = kmeans
+	s.replaceMLKMeans(kmeans)
 	return nil
 }
 
@@ -814,6 +842,20 @@ func NewSVMSelector(kernel string) *SVMSelector {
 	}
 }
 
+func (s *SVMSelector) replaceMLSVM(next *ml_binding.SVMSelector) {
+	previous := s.mlSVM
+	s.mlSVM = next
+
+	if previous != nil && previous != next {
+		previous.Close()
+	}
+}
+
+func (s *SVMSelector) Close() error {
+	s.replaceMLSVM(nil)
+	return nil
+}
+
 func (s *SVMSelector) Name() string { return "svm" }
 
 // LoadFromJSON loads a pre-trained SVM model from JSON data
@@ -834,7 +876,7 @@ func (s *SVMSelector) LoadFromJSON(data []byte) error {
 		s.trainMLBinding()
 		return nil
 	}
-	s.mlSVM = svm
+	s.replaceMLSVM(svm)
 	return nil
 }
 
@@ -935,6 +977,20 @@ func NewMLPSelectorWithDevice(deviceType candle_binding.MLPDeviceType) *MLPSelec
 	}
 }
 
+func (s *MLPSelector) replaceMLMLP(next *candle_binding.MLPSelector) {
+	previous := s.mlMLP
+	s.mlMLP = next
+
+	if previous != nil && previous != next {
+		previous.Close()
+	}
+}
+
+func (s *MLPSelector) Close() error {
+	s.replaceMLMLP(nil)
+	return nil
+}
+
 func (s *MLPSelector) Name() string { return "mlp" }
 
 // LoadFromJSON loads a pre-trained MLP model from JSON data
@@ -951,7 +1007,7 @@ func (s *MLPSelector) LoadFromJSON(data []byte) error {
 		logging.Warnf("MLP: Failed to load model: %v", err)
 		return nil
 	}
-	s.mlMLP = mlp
+	s.replaceMLMLP(mlp)
 	return nil
 }
 

@@ -64,6 +64,11 @@ func defaultCanonicalServiceGlobal() CanonicalServiceGlobal {
 			Metrics: MetricsConfig{
 				Enabled: canonicalBoolPtr(true),
 			},
+			Profiling: ProfilingConfig{
+				Enabled: false,
+				Port:    DefaultProfilingPort,
+				Bind:    DefaultProfilingBind,
+			},
 			Tracing: TracingConfig{
 				Enabled:  true,
 				Provider: "opentelemetry",
@@ -247,7 +252,7 @@ func defaultClassifierModule() CanonicalClassifierModule {
 			CategoryModel: CategoryModel{
 				Threshold:           0.5,
 				UseCPU:              true,
-				UseMmBERT32K:        true,
+				Variant:             CategoryVariantMmBERT32K,
 				CategoryMappingPath: "models/mmbert32k-intent-classifier-merged/category_mapping.json",
 			},
 		},

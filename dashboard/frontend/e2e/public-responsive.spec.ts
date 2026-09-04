@@ -51,11 +51,11 @@ test.describe('Public and transition surfaces on short screens', () => {
       '/login',
     )
 
+    await expect(page.getByRole('heading', { name: 'Build your Mixture-of-Models.' })).toBeVisible()
     await expect(
-      page.getByRole('heading', { name: 'Build your Mixture-of-Models.' }),
-    ).toBeVisible()
-    await expect(
-      page.getByRole('heading', { name: 'Every request. A personalized model path.' }),
+      page.getByRole('heading', {
+        name: 'Match every workload to the right model and hardware.',
+      }),
     ).toBeVisible()
 
     const routingHeadings = [
@@ -86,10 +86,10 @@ test.describe('Public and transition surfaces on short screens', () => {
 
   test('aligns the public and authenticated header shells', async ({ page, context }) => {
     const viewports = [
-      { width: 2048, height: 1152, brandVisible: true },
-      { width: 1024, height: 800, brandVisible: false },
-      { width: 961, height: 720, brandVisible: false },
-      { width: 390, height: 844, brandVisible: false },
+      { width: 2048, height: 1152 },
+      { width: 1024, height: 800 },
+      { width: 961, height: 720 },
+      { width: 390, height: 844 },
     ]
 
     await page.setViewportSize(viewports[0])
@@ -139,13 +139,11 @@ test.describe('Public and transition surfaces on short screens', () => {
         0,
       )
 
-      if (viewport.brandVisible) {
-        await expect(publicBrand.getByText('Semantic Router', { exact: true })).toBeVisible()
-        await expect(authenticatedBrand.getByText('Semantic Router', { exact: true })).toBeVisible()
-      } else {
-        await expect(publicBrand.getByText('Semantic Router', { exact: true })).toBeHidden()
-        await expect(authenticatedBrand.getByText('Semantic Router', { exact: true })).toBeHidden()
-      }
+      await expect(publicBrand.locator('img')).toHaveAttribute('src', '/vllm-sr-logo.white.png')
+      await expect(authenticatedBrand.locator('img')).toHaveAttribute(
+        'src',
+        '/vllm-sr-logo.white.png',
+      )
 
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
         viewport.width,
@@ -166,13 +164,9 @@ test.describe('Public and transition surfaces on short screens', () => {
     await expect(landingMotion).toBeVisible()
     await expect(landingMotion.locator('canvas')).toBeVisible()
 
+    await expect(page.getByRole('heading', { name: 'Build your Mixture-of-Models.' })).toBeVisible()
     await expect(
-      page.getByRole('heading', { name: 'Build your Mixture-of-Models.' }),
-    ).toBeVisible()
-    await expect(
-      page.getByText(
-        'System-level intelligence for heterogeneous LLM inference',
-      ),
+      page.getByText('System-level intelligence for heterogeneous LLM inference'),
     ).toBeVisible()
     const exploreDocs = page.getByRole('button', { name: 'Explore the Docs' })
     await exploreDocs.scrollIntoViewIfNeeded()

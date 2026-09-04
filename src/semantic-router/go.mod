@@ -16,7 +16,6 @@ replace (
 
 require (
 	github.com/alecthomas/participle/v2 v2.1.4
-	github.com/anthropics/anthropic-sdk-go v1.19.0
 	github.com/envoyproxy/go-control-plane/envoy v1.36.0
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/google/go-cmp v0.7.0

@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { ThinkingOrb } from 'thinking-orbs'
 
 import type { ToolCall, ToolResult } from '../tools'
 import { isOpenClawMCPToolName, parseMCPToolName } from '../tools/mcp'
@@ -130,9 +131,18 @@ export const ToolCard = ({
           <span className={styles.webSearchQuery}>{summary}</span>
         </div>
         <div className={styles.webSearchStatus}>
-          <span className={`${styles.toolStatusPill} ${TOOL_STATUS_CLASS_NAMES[toolCall.status]}`}>
-            {statusLabel}
-          </span>
+          {toolCall.status === 'running' || toolCall.status === 'pending' ? (
+            <span className={styles.toolActivity} aria-label={statusLabel}>
+              <ThinkingOrb state="working" size={20} theme="dark" />
+              {statusLabel}
+            </span>
+          ) : (
+            <span
+              className={`${styles.toolStatusPill} ${TOOL_STATUS_CLASS_NAMES[toolCall.status]}`}
+            >
+              {statusLabel}
+            </span>
+          )}
           <svg
             className={`${styles.webSearchChevron} ${isExpanded ? styles.expanded : ''}`}
             viewBox="0 0 24 24"
@@ -144,13 +154,6 @@ export const ToolCard = ({
           </svg>
         </div>
       </button>
-      {toolCall.status === 'running' || toolCall.status === 'pending' ? (
-        <div className={styles.webSearchLoading}>
-          <div
-            className={`${styles.webSearchLoadingBar} ${isClawMCPToolCall ? styles.mcpToolLoadingBar : ''}`}
-          />
-        </div>
-      ) : null}
       {isExpanded && isClawCreateToolCall ? (
         <div className={styles.clawToolHighlights}>
           {requestHighlights.length > 0 && (

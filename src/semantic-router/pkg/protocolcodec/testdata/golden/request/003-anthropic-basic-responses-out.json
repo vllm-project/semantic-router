@@ -1,0 +1,17 @@
+{
+  "input": [
+    {
+      "content": [
+        {
+          "text": "hello",
+          "type": "input_text"
+        }
+      ],
+      "id": "item_6a32e29c376158d871e9638e",
+      "role": "user",
+      "type": "message"
+    }
+  ],
+  "max_output_tokens": 32,
+  "model": "routed-model"
+}

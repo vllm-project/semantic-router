@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState, type ReactNode } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
+import BrandLockup from './BrandLockup'
 import styles from './Layout.module.css'
 import LayoutAccountControl from './LayoutAccountControl'
 import LayoutMegaMenu from './LayoutMegaMenu'
 import LayoutMobileNavigation from './LayoutMobileNavigation'
 import PlatformBranding from './PlatformBranding'
+import ProductIcon, { type ProductIconName } from './ProductIcon'
 import {
   ANALYZE_MENU_CATEGORIES,
   BUILD_MENU_CATEGORIES,
@@ -198,6 +200,7 @@ const Layout: React.FC<LayoutProps> = ({
       onFocus={() => void preloadDashboardRoute(link.to)}
       onPointerEnter={() => void preloadDashboardRoute(link.to)}
     >
+      <ProductIcon name={link.icon} className={styles.navIcon} />
       {link.label}
     </NavLink>
   )
@@ -205,6 +208,7 @@ const Layout: React.FC<LayoutProps> = ({
   const renderDesktopDropdown = (
     dropdown: LayoutDropdownKey,
     label: string,
+    icon: ProductIconName,
     categories: LayoutMenuCategory[],
     active: boolean,
     activeCategoryKey?: string,
@@ -250,19 +254,12 @@ const Layout: React.FC<LayoutProps> = ({
             }
           }}
         >
+          <ProductIcon name={icon} className={styles.navIcon} />
           {label}
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 12 12"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
+          <ProductIcon
+            name="chevron-down"
             className={`${styles.dropdownArrow} ${isOpen ? styles.dropdownArrowOpen : ''}`}
-            aria-hidden="true"
-          >
-            <path d="M3 4.5L6 7.5L9 4.5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+          />
         </button>
 
         {isOpen ? (
@@ -332,10 +329,7 @@ const Layout: React.FC<LayoutProps> = ({
     <div className={`${styles.container} ${hideHeaderOnMobile ? styles.hideHeaderMobile : ''}`}>
       <header className={`${styles.header} ${hideHeaderOnMobile ? styles.headerHideMobile : ''}`}>
         <div className={styles.headerContent} data-testid="layout-header-content">
-          <NavLink to="/" className={styles.brand}>
-            <img src="/vllm.png" alt="vLLM" className={styles.logo} />
-            <span className={styles.brandText}>Semantic Router</span>
-          </NavLink>
+          <BrandLockup className={styles.brandPlacement} />
 
           <nav className={styles.nav} aria-label="Global navigation">
             <div className={styles.navSection} role="group" aria-label="Primary navigation">
@@ -351,6 +345,7 @@ const Layout: React.FC<LayoutProps> = ({
                 {renderDesktopDropdown(
                   'build',
                   'Build',
+                  'mixture',
                   buildMenuCategories,
                   isBuildActive,
                   activeBuildCategory,
@@ -358,13 +353,15 @@ const Layout: React.FC<LayoutProps> = ({
                 {renderDesktopDropdown(
                   'analyze',
                   'Analyze',
+                  'chart',
                   analyzeMenuCategories,
                   isAnalyzeActive,
                   activeAnalyzeCategory,
                 )}
                 {renderDesktopDropdown(
                   'operate',
-                  'Operate',
+                  'System',
+                  'status',
                   operateMenuCategories,
                   isOperateActive,
                   activeOperateCategory,
@@ -486,7 +483,7 @@ const Layout: React.FC<LayoutProps> = ({
             sections={[
               { key: 'build', label: 'Build', categories: buildMenuCategories },
               { key: 'analyze', label: 'Analyze', categories: analyzeMenuCategories },
-              { key: 'operate', label: 'Operate', categories: operateMenuCategories },
+              { key: 'operate', label: 'System', categories: operateMenuCategories },
             ]}
             onConfigSelect={handleMenuItemSelect}
             onNavigate={closeMenus}

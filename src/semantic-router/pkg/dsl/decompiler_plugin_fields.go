@@ -15,7 +15,6 @@ var pluginFieldsDecoders = map[string]pluginFieldsDecoder{
 	"router_replay":       pluginFieldsRouterReplay,
 	"memory":              pluginFieldsMemory,
 	"hallucination":       pluginFieldsHallucination,
-	"image_gen":           pluginFieldsImageGen,
 	"fast_response":       pluginFieldsFastResponse,
 	"request_params":      pluginFieldsRequestParams,
 	"tool_selection":      pluginFieldsToolSelection,
@@ -133,21 +132,6 @@ func pluginFieldsHallucination(p *config.DecisionPlugin) map[string]Value {
 	}
 	if cfg.IncludeHallucinationDetails {
 		fields["include_hallucination_details"] = BoolValue{V: true}
-	}
-	return fields
-}
-
-func pluginFieldsImageGen(p *config.DecisionPlugin) map[string]Value {
-	fields := make(map[string]Value)
-	cfg, ok := decodePluginConfig[config.ImageGenPluginConfig](p)
-	if !ok {
-		return fields
-	}
-	if cfg.Enabled {
-		fields["enabled"] = BoolValue{V: true}
-	}
-	if cfg.Backend != "" {
-		fields["backend"] = StringValue{V: cfg.Backend}
 	}
 	return fields
 }

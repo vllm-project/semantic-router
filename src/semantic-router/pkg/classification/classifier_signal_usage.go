@@ -59,6 +59,7 @@ func (c *Classifier) getAllSignalTypes() map[string]bool {
 	collectSignalKeys(allSignals, config.SignalTypeEvent, c.Config.EventRules, func(r config.EventRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeMetadata, c.Config.MetadataRules, func(r config.MetadataRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeClassifier, c.Config.ClassifierRules, func(r config.ClassifierSignalRule) string { return r.Name })
+	collectSignalKeys(allSignals, config.SignalTypeInputModality, c.Config.InputModalityRules, func(r config.InputModalityRule) string { return r.Name })
 	for _, mapping := range c.Config.Projections.Mappings {
 		for _, output := range mapping.Outputs {
 			allSignals[strings.ToLower(config.SignalTypeProjection+":"+output.Name)] = true

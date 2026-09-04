@@ -1,0 +1,24 @@
+{
+  "cases": [
+    {
+      "name": "enabled summarized",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_capability"
+        }
+      }
+    },
+    {
+      "name": "adaptive omitted",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_capability"
+        }
+      }
+    }
+  ]
+}

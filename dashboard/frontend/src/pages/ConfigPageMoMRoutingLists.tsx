@@ -1,12 +1,13 @@
 import { useState } from 'react'
 
-import type { BuiltInModelCatalog } from '../types/modelCatalog'
-import ConfigPageMoMEntrypointCatalogMetadata from './ConfigPageMoMEntrypointCatalogMetadata'
+import ProductIcon from '../components/ProductIcon'
 import pageStyles from './ConfigPageEntrypointsRecipesSection.module.css'
 import {
   collectRecipeTargetModels,
   countRecipeEntrypoints,
   getRecipeByName,
+  isSyntheticDefaultRecipe,
+  listRecipeProfiles,
 } from './configPageEntrypointsRecipesSupport'
 import type { ConfigData, EntrypointConfig, RecipeConfig } from './configPageSupport'
 
@@ -14,14 +15,10 @@ interface EntrypointsListProps {
   config: ConfigData
   isReadonly: boolean
   onAdd: () => void
-  onView: (entrypoint: EntrypointConfig, index: number) => void
+  onUsage: (entrypoint: EntrypointConfig) => void
   onEdit: (entrypoint: EntrypointConfig, index: number) => void
   onDelete: (entrypoint: EntrypointConfig, index: number) => void
   onTopology: (entrypoint: EntrypointConfig, recipe: RecipeConfig) => void
-  catalog: BuiltInModelCatalog | null
-  catalogLoading: boolean
-  catalogError: string | null
-  onCatalogRetry: () => void
 }
 
 interface RecipesListProps {
@@ -37,17 +34,12 @@ export function ConfigPageMoMEntrypointsList({
   config,
   isReadonly,
   onAdd,
-  onView,
+  onUsage,
   onEdit,
   onDelete,
   onTopology,
-  catalog,
-  catalogLoading,
-  catalogError,
-  onCatalogRetry,
 }: EntrypointsListProps) {
   const [search, setSearch] = useState('')
-  const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const entrypoints = config.entrypoints ?? []
   const query = search.trim().toLowerCase()
   const filtered = entrypoints.filter(
@@ -61,21 +53,22 @@ export function ConfigPageMoMEntrypointsList({
     <section className={pageStyles.portfolioPanel}>
       <div className={pageStyles.portfolioHeader}>
         <div>
-          <span className={pageStyles.sectionEyebrow}>Request-facing models</span>
-          <h2>Unified Models</h2>
-          <p>Public model IDs mapped to isolated routing recipes.</p>
+          <span className={pageStyles.sectionEyebrow}>Ready to call</span>
+          <h2>Models</h2>
+          <p>One public model name. One complete recipe.</p>
         </div>
         <div className={pageStyles.portfolioActions}>
           <input
             type="search"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search model or recipe"
-            aria-label="Search unified models"
+            placeholder="Search"
+            aria-label="Search Mixture-of-Models"
           />
           {!isReadonly ? (
             <button type="button" onClick={onAdd}>
-              Add unified model
+              <ProductIcon name="plus" />
+              Create model
             </button>
           ) : null}
         </div>
@@ -83,29 +76,14 @@ export function ConfigPageMoMEntrypointsList({
       <div className={pageStyles.portfolioList}>
         {filtered.map((entrypoint) => {
           const key = entrypoint.model_names.join('|')
-          const isExpanded = expanded.has(key)
           const recipe = getRecipeByName(config, entrypoint.recipe)
           const targetCount = collectRecipeTargetModels(recipe).length
           const originalIndex = entrypoints.indexOf(entrypoint)
           return (
             <article key={key} className={pageStyles.portfolioItem}>
-              <div className={pageStyles.portfolioItemMain}>
-                <button
-                  type="button"
-                  className={pageStyles.disclosureButton}
-                  aria-expanded={isExpanded}
-                  aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${entrypoint.model_names.join(', ')}`}
-                  onClick={() =>
-                    setExpanded((current) => {
-                      const next = new Set(current)
-                      if (next.has(key)) next.delete(key)
-                      else next.add(key)
-                      return next
-                    })
-                  }
-                >
-                  <span aria-hidden="true">{isExpanded ? '−' : '+'}</span>
-                </button>
+              <div
+                className={`${pageStyles.portfolioItemMain} ${pageStyles.entrypointPortfolioItemMain}`}
+              >
                 <div className={pageStyles.portfolioIdentity}>
                   {entrypoint.model_names.map((name) => (
                     <code key={name}>{name}</code>
@@ -119,15 +97,18 @@ export function ConfigPageMoMEntrypointsList({
                 <div className={pageStyles.rowActions}>
                   {recipe ? (
                     <button type="button" onClick={() => onTopology(entrypoint, recipe)}>
+                      <ProductIcon name="topology" />
                       Topology
                     </button>
                   ) : null}
-                  <button type="button" onClick={() => onView(entrypoint, originalIndex)}>
-                    View
+                  <button type="button" onClick={() => onUsage(entrypoint)}>
+                    <ProductIcon name="link" />
+                    Usage
                   </button>
                   {!isReadonly ? (
                     <>
                       <button type="button" onClick={() => onEdit(entrypoint, originalIndex)}>
+                        <ProductIcon name="edit" />
                         Edit
                       </button>
                       <button
@@ -135,28 +116,23 @@ export function ConfigPageMoMEntrypointsList({
                         className={pageStyles.deleteAction}
                         onClick={() => onDelete(entrypoint, originalIndex)}
                       >
+                        <ProductIcon name="trash" />
                         Delete
                       </button>
                     </>
                   ) : null}
                 </div>
               </div>
-              {isExpanded ? (
-                <ConfigPageMoMEntrypointCatalogMetadata
-                  catalog={catalog}
-                  catalogLoading={catalogLoading}
-                  catalogError={catalogError}
-                  config={config}
-                  entrypoint={entrypoint}
-                  onCatalogRetry={onCatalogRetry}
-                />
-              ) : null}
             </article>
           )
         })}
         {filtered.length === 0 ? (
           <div className={pageStyles.emptyState}>
-            {search ? 'No unified models match your search.' : 'No unified models configured.'}
+            {search
+              ? 'No matches.'
+              : isReadonly
+                ? 'No models configured.'
+                : 'Create your first model.'}
           </div>
         ) : null}
       </div>
@@ -173,7 +149,7 @@ export function ConfigPageMoMRecipesList({
   onDelete,
 }: RecipesListProps) {
   const [search, setSearch] = useState('')
-  const recipes = config.recipes ?? []
+  const recipes = listRecipeProfiles(config)
   const query = search.trim().toLowerCase()
   const filtered = recipes.filter(
     (recipe) =>
@@ -187,27 +163,29 @@ export function ConfigPageMoMRecipesList({
     <section className={pageStyles.portfolioPanel}>
       <div className={pageStyles.portfolioHeader}>
         <div>
-          <span className={pageStyles.sectionEyebrow}>Reusable routing</span>
+          <span className={pageStyles.sectionEyebrow}>How models work together</span>
           <h2>Recipes</h2>
-          <p>Reusable decision graphs and the configured model pools behind them.</p>
+          <p>Reusable routing intelligence, ready to become a model.</p>
         </div>
         <div className={pageStyles.portfolioActions}>
           <input
             type="search"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search recipe or model"
+            placeholder="Search"
             aria-label="Search recipes"
           />
           {!isReadonly ? (
             <button type="button" onClick={onAdd}>
-              Add recipe
+              <ProductIcon name="plus" />
+              Create recipe
             </button>
           ) : null}
         </div>
       </div>
       <div className={pageStyles.portfolioList}>
         {filtered.map((recipe) => {
+          const syntheticDefault = isSyntheticDefaultRecipe(config, recipe)
           return (
             <article key={recipe.name} className={pageStyles.portfolioItem}>
               <div
@@ -223,14 +201,17 @@ export function ConfigPageMoMRecipesList({
                   </span>
                   <span>{recipe.routing.decisions?.length ?? 0} decisions</span>
                   <span>{collectRecipeTargetModels(recipe).length} models</span>
+                  {syntheticDefault ? <span>Built in</span> : null}
                 </div>
                 <div className={pageStyles.rowActions}>
                   <button type="button" onClick={() => onView(recipe)}>
+                    <ProductIcon name="eye" />
                     View
                   </button>
-                  {!isReadonly ? (
+                  {!isReadonly && !syntheticDefault ? (
                     <>
                       <button type="button" onClick={() => onEdit(recipe)}>
+                        <ProductIcon name="edit" />
                         Edit
                       </button>
                       <button
@@ -238,6 +219,7 @@ export function ConfigPageMoMRecipesList({
                         className={pageStyles.deleteAction}
                         onClick={() => onDelete(recipe)}
                       >
+                        <ProductIcon name="trash" />
                         Delete
                       </button>
                     </>
@@ -248,9 +230,7 @@ export function ConfigPageMoMRecipesList({
           )
         })}
         {filtered.length === 0 ? (
-          <div className={pageStyles.emptyState}>
-            {search ? 'No recipes match your search.' : 'No recipes configured.'}
-          </div>
+          <div className={pageStyles.emptyState}>{search ? 'No matches.' : 'No recipes yet.'}</div>
         ) : null}
       </div>
     </section>

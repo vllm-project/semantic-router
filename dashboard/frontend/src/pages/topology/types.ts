@@ -205,6 +205,7 @@ export type AlgorithmType =
 
 export interface AlgorithmConfig {
   type: AlgorithmType
+  minimum_candidates?: number
   confidence?: ConfidenceAlgorithmConfig
   concurrent?: ConcurrentAlgorithmConfig
   latency_aware?: LatencyAwareAlgorithmConfig
@@ -260,7 +261,6 @@ export type PluginType =
   | 'hallucination'
   | 'router_replay'
   | 'rag'
-  | 'image_gen'
   | 'fast_response'
   | 'request_params'
   | 'response_jailbreak'

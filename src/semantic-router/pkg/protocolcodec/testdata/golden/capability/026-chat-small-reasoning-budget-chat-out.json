@@ -1,0 +1,13 @@
+{
+  "status": "ok",
+  "body": {
+    "messages": [
+      {
+        "content": "Think briefly.",
+        "role": "user"
+      }
+    ],
+    "model": "routed-model",
+    "reasoning_budget_tokens": 512
+  }
+}

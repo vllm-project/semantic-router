@@ -29,6 +29,24 @@ export interface ServiceStatus {
   component?: string
 }
 
+export type StatusHistoryState = 'operational' | 'starting' | 'unavailable' | 'unknown'
+
+export interface StatusHistoryHour {
+  observedAt: string
+  status: StatusHistoryState
+}
+
+export interface ServiceStatusHistory {
+  name: string
+  hours: StatusHistoryHour[]
+}
+
+export interface StatusHistory {
+  windowHours: number
+  through: string
+  services: ServiceStatusHistory[]
+}
+
 export interface RouterModelRegistryInfo {
   local_path?: string
   repo_id?: string
@@ -100,6 +118,7 @@ export interface SystemStatus {
   version?: string
   router_runtime?: RouterRuntimeStatus
   models?: RouterModelsInfo
+  history?: StatusHistory
 }
 
 export type ModelStatusTone = 'ok' | 'warn' | 'down'
@@ -236,9 +255,7 @@ export function getRouterModelAnchor(model: Pick<RouterModelInfo, 'name'>): stri
   return `model-${slug || 'unknown'}`
 }
 
-export function getModelStatusSummary(
-  status?: StatusWithRouterRuntime | null,
-): ModelStatusSummary {
+export function getModelStatusSummary(status?: StatusWithRouterRuntime | null): ModelStatusSummary {
   if (!status) {
     return {
       value: 'Unknown',

@@ -47,6 +47,7 @@ func main() {
 	shutdownHooks := make([]func(), 0)
 	defer runShutdownHooks(&shutdownHooks)
 	startMetricsServerIfEnabled(cfg, opts.metricsPort)
+	startProfilingServerIfEnabled(cfg, opts, &shutdownHooks)
 
 	embeddingRuntime := initializeRuntimeDependencies(cfg, startupWriter, &shutdownHooks, runtimeRegistry)
 	server := newExtProcServerOrFatal(opts, startupWriter, runtimeRegistry)

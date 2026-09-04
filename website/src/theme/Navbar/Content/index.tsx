@@ -20,6 +20,8 @@ import React from 'react'
 import WebsiteMegaNav from '@site/src/components/site/WebsiteMegaNav'
 import styles from './styles.module.css'
 
+const CTA_CLASS_NAME = 'nav-dashboard-cta'
+
 function useNavbarItems(): NavbarItemConfig[] {
   return useThemeConfig().navbar.items as NavbarItemConfig[]
 }
@@ -77,6 +79,10 @@ export default function NavbarContent(): ReactNode {
   const [, rightItems] = splitNavbarItems(items)
   const searchBarItem = items.find(item => item.type === 'search')
 
+  /* CTA pulled to far end. Reading order: brand, sections, search, utilities, theme, action. */
+  const ctaItem = rightItems.find(item => item.className === CTA_CLASS_NAME)
+  const utilityItems = rightItems.filter(item => item !== ctaItem)
+
   return (
     <NavbarContentLayout
       left={(
@@ -88,15 +94,16 @@ export default function NavbarContent(): ReactNode {
       )}
       right={(
         <>
-          <NavbarItems items={rightItems} />
           {!searchBarItem && (
             <NavbarSearch>
               <SearchBar />
             </NavbarSearch>
           )}
+          <NavbarItems items={utilityItems} />
           <NavbarColorModeToggle
             className={clsx(styles.colorModeToggle, 'navbar-color-mode-toggle')}
           />
+          {ctaItem && <NavbarItem {...ctaItem} />}
         </>
       )}
     />

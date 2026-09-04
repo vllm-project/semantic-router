@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import tempfile
 import unittest
@@ -30,6 +31,7 @@ class DockerBuildArgumentTests(unittest.TestCase):
             RELEASE_TAG="v0.3.0",
         )
         self.assertIn("DASHBOARD_VERSION=v0.3.0", output)
+        self.assertRegex(output, r"VLLM_SR_SOURCE_REVISION=[0-9a-f]{40}\n")
 
     def test_nightly_dashboard_uses_explicit_date(self) -> None:
         output = run_resolver(
@@ -38,6 +40,22 @@ class DockerBuildArgumentTests(unittest.TestCase):
             NIGHTLY_DATE="20260806",
         )
         self.assertIn("DASHBOARD_VERSION=v0.3.0-nightly.20260806.", output)
+
+    def test_dashboard_source_revision_is_the_full_git_commit(self) -> None:
+        output = run_resolver(
+            DASHBOARD_VERSION_MODE="release",
+            RELEASE_TAG="v0.3.0",
+        )
+        expected = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        match = re.search(r"^VLLM_SR_SOURCE_REVISION=(.+)$", output, re.MULTILINE)
+        self.assertIsNotNone(match)
+        self.assertEqual(match.group(1), expected)
 
 
 if __name__ == "__main__":

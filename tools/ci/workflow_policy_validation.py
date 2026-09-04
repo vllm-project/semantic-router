@@ -24,6 +24,7 @@ REQUIRED_COMPATIBILITY_CHECKS = {
     "Verify Manifests",
     "Validate OLM Bundle",
 }
+REQUIRED_APPROVAL_CONDITION = "#approved-reviews-by >= 2"
 RELEASE_IMAGES = set(PRODUCTION_RELEASE_IMAGES)
 
 
@@ -387,6 +388,22 @@ def validate_mergify_contract(errors: list[str]) -> None:
             errors.append(
                 f".mergify.yml: {section} is missing contexts: " + ", ".join(missing)
             )
+    pull_request_rules = data.get("pull_request_rules", [])
+    queue_rules = [
+        rule
+        for rule in pull_request_rules
+        if isinstance(rule, dict)
+        and isinstance(rule.get("actions"), dict)
+        and "queue" in rule["actions"]
+    ]
+    if not any(
+        REQUIRED_APPROVAL_CONDITION in rule.get("conditions", [])
+        for rule in queue_rules
+    ):
+        errors.append(
+            ".mergify.yml: pull request queue must require at least two "
+            "approving reviews"
+        )
 
 
 def validate_workflow_policies(

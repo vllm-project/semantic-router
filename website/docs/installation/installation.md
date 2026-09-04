@@ -12,7 +12,7 @@ The Router itself runs on CPU; the model backend can be local or remote.
 ## Requirements
 
 - Python 3.10 or newer
-- Docker
+- Docker, or Podman as a fallback on Linux
 - Linux, macOS, or WSL2 on Windows
 
 Native Windows Python can run configuration and validation commands, but the
@@ -26,26 +26,49 @@ On macOS or Linux:
 
 ```bash
 curl -fsSL https://vllm-sr.ai/install.sh | \
-  bash -s -- --channel stable
+  bash -s -- --channel dev
 ```
 
 The installer creates an isolated CLI environment, adds a launcher under
-`~/.local/bin`, prepares Docker, and starts `vllm-sr serve` unless you opt out.
-It prints the Dashboard URL and, on a remote host, an SSH tunnel hint.
+`~/.local/bin`, prepares a container runtime, and starts `vllm-sr serve`
+unless you opt out. Under `--runtime auto` (the default) it prefers an
+existing Docker daemon and falls back to Podman on Linux when Docker is
+not reachable; the selected runtime is persisted to
+`~/.local/share/vllm-sr/runtime.env` so later CLI sessions reuse it.
+The development channel resolves and pins the newest published `.dev` package
+so the Quickstart follows current project capabilities. It prints the
+Dashboard URL and, on a remote host, an SSH tunnel hint.
 
 ### Install with pip
 
 ```bash
 python -m venv vsr
 source vsr/bin/activate
-pip install vllm-sr
+VLLM_SR_DEV_VERSION="$(
+  python -m pip index versions --pre vllm-sr 2>/dev/null |
+  awk -F': ' '/^Available versions:/ {
+    count = split($2, versions, ", ")
+    for (i = 1; i <= count; i++) {
+      if (versions[i] ~ /^[0-9]+([.][0-9]+)*[.]dev[0-9]+$/) {
+        print versions[i]
+        exit
+      }
+    }
+  }'
+)"
+test -n "${VLLM_SR_DEV_VERSION}" || {
+  echo "No published vllm-sr development package found" >&2
+  exit 1
+}
+python -m pip install --upgrade "vllm-sr==${VLLM_SR_DEV_VERSION}"
 vllm-sr --version
 ```
 
-To test a development build, select an explicit published development version
-or install from a reviewed source checkout. The pip `--pre` flag only permits
-prereleases; it does not guarantee that pip will prefer one over a newer stable
-release.
+The resolver selects the first published `.dev` version from pip's ordered
+version list and installs that exact package. A bare `--pre` is not sufficient
+when the stable release has a higher PEP 440 precedence than development builds
+with the same base version. For production, select and pin an explicit stable
+version after reviewing its release notes and compatibility requirements.
 
 ## Open or start the local stack
 

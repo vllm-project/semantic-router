@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react'
 import {
   createProbePlaygroundTask,
   preparePlaygroundInvocation,
+  resolveProbeRequestModel,
   toPlaygroundHistory,
   type PreparedPlaygroundInvocation,
 } from './playgroundInvocationSupport'
@@ -73,15 +74,13 @@ export const usePlaygroundInvocation = ({
     const conversationId = generateConversationId()
     activateConversation(conversationId, toPlaygroundHistory(prepared.history, generateMessageId))
 
-    const selectedModel = prepared.model
-    if (!selectedModel || !routingModels.some((candidate) => candidate.id === selectedModel)) {
+    const selectedModel = resolveProbeRequestModel(prepared, routingModels)
+    if (!selectedModel) {
       setDraft(null)
       setInputValue('')
       setConversationError(
         conversationId,
-        prepared.model
-          ? `Probe model "${prepared.model}" is not advertised by the active router configuration.`
-          : 'The Recipe run plan does not declare a request-facing model.',
+        `No active Mixture-of-Model is connected to Recipe "${prepared.recipe}".`,
       )
       onInvocationConsumed?.()
       return

@@ -1,0 +1,18 @@
+{
+  "operation": "response",
+  "body": {
+    "id": "resp_invalid_item_status",
+    "object": "response",
+    "model": "provider-model",
+    "status": "completed",
+    "output": [
+      {
+        "type": "message",
+        "id": "msg_1",
+        "role": "assistant",
+        "status": "future_status",
+        "content": [{"type": "output_text", "text": "done"}]
+      }
+    ]
+  }
+}

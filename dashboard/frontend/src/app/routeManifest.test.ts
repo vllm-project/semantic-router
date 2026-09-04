@@ -31,18 +31,6 @@ describe('dashboard route manifest', () => {
       path: '/taxonomy',
       to: '/knowledge-bases/bases',
     })
-    expect(redirectRouteDefinitions).toContainEqual({
-      path: '/openclaw',
-      to: '/clawos',
-    })
-    expect(redirectRouteDefinitions).toContainEqual({
-      path: '/response-cache',
-      to: '/plugins/response-cache',
-    })
-    expect(redirectRouteDefinitions).toContainEqual({
-      path: '/context-compression',
-      to: '/plugins/context-compression',
-    })
   })
 
   it('routes unknown paths to setup only while setup mode is active', () => {

@@ -54,14 +54,8 @@ interface RunPlaygroundTaskOptions {
   expandedToolCardCount: number
   generateId: () => string
   getConversationMessagesSnapshot: (conversationId: string) => Message[]
-  getCurrentConversationId: () => string
   registerAbortController: (conversationId: string, controller: AbortController | null) => void
   setConversationError: (conversationId: string, error: string | null) => void
-  setConversationHeaderReveal: (
-    conversationId: string,
-    headers: Record<string, string> | null,
-    visible?: boolean,
-  ) => void
   setConversationThinking: (conversationId: string, visible: boolean) => void
   setExpandedToolCards: Dispatch<SetStateAction<Set<string>>>
   task: PlaygroundTask
@@ -77,10 +71,8 @@ export const runPlaygroundTask = async ({
   expandedToolCardCount,
   generateId,
   getConversationMessagesSnapshot,
-  getCurrentConversationId,
   registerAbortController,
   setConversationError,
-  setConversationHeaderReveal,
   setConversationThinking,
   setExpandedToolCards,
   task,
@@ -137,10 +129,11 @@ export const runPlaygroundTask = async ({
     assistantMessage,
   ])
   registerAbortController(task.conversationId, abortController)
-  setConversationHeaderReveal(task.conversationId, null)
   setConversationThinking(task.conversationId, true)
 
   let cancelStreamingChoiceSync = () => {}
+  const requestStartedAt = Date.now()
+  let firstResponseAt: number | null = null
 
   try {
     const exactTools = Array.isArray(task.exactRequest?.tools)
@@ -170,14 +163,7 @@ export const runPlaygroundTask = async ({
     }
 
     Object.assign(responseHeaders, collectResponseHeaders(response))
-    if (Object.keys(responseHeaders).length > 0) {
-      setConversationHeaderReveal(
-        task.conversationId,
-        responseHeaders,
-        task.conversationId === getCurrentConversationId(),
-      )
-      setConversationThinking(task.conversationId, false)
-    }
+    if (Object.keys(responseHeaders).length > 0) setConversationThinking(task.conversationId, false)
 
     const choiceContents: Map<number, ChoiceAccumulator> = new Map()
     const toolCallsMap: Map<number, ToolCall> = new Map()
@@ -300,6 +286,10 @@ export const runPlaygroundTask = async ({
     }
 
     const applyParsedCompletion = (parsedCompletion: ParsedChatCompletion, streaming: boolean) => {
+      if (firstResponseAt === null && parsedCompletion.choices.length > 0) {
+        firstResponseAt = Date.now()
+        responseHeaders['x-vsr-ttft-ms'] = String(firstResponseAt - requestStartedAt)
+      }
       if (parsedCompletion.reasoningMomResponses) {
         reasoningMomResponses = parsedCompletion.reasoningMomResponses
       }
@@ -385,6 +375,7 @@ export const runPlaygroundTask = async ({
       : undefined
     const finalThinkingProcess =
       latestThinkingProcessRef.current || getFirstChoice(choiceContents)?.reasoningContent || ''
+    responseHeaders['x-vsr-latency-ms'] = String(Date.now() - requestStartedAt)
     setConversationThinking(task.conversationId, false)
     streamingChoiceSync.drain()
     updateConversationMessages(task.conversationId, (prev) =>

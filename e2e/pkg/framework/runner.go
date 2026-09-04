@@ -90,10 +90,15 @@ func (r *Runner) buildAndLoadImages(ctx context.Context) error {
 	}
 
 	for _, image := range r.profileCapabilities.LocalImages {
+		buildArgs, err := localImageDockerBuildArgs(image)
+		if err != nil {
+			return err
+		}
 		buildOpts := docker.BuildOptions{
 			Dockerfile:   image.Dockerfile,
 			Tag:          image.Tag,
 			BuildContext: image.BuildContext,
+			BuildArgs:    buildArgs,
 		}
 		if err := r.builder.BuildAndLoad(ctx, r.opts.ClusterName, buildOpts); err != nil {
 			return err

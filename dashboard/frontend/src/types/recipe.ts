@@ -214,6 +214,7 @@ export interface RecipeProbeDetail extends RecipeProbeSummary {
   query?: string
   messages?: RecipeProbeMessage[]
   tools?: unknown[]
+  tool_choice?: unknown
   repeat: number
   padding?: {
     text: string
@@ -296,7 +297,6 @@ export interface RecipeProbeValidationResult {
     status: 'verified' | 'unverified'
     reason?: string
     package_hash: string
-    package_config_hash: string
     before: {
       source_config_hash?: string
       generated_runtime_hash?: string
@@ -317,9 +317,11 @@ export interface RecipeProbeValidationResult {
 export interface RecipeProbeRunPlan {
   probe_id: string
   recipe_digest: string
+  recipe: string
   model?: string
   messages: RecipeProbeMessage[]
   tools?: unknown[]
+  tool_choice?: unknown
   request: Record<string, unknown>
   editable: boolean
 }

@@ -1,0 +1,89 @@
+{
+  "status": "ok",
+  "body": {
+    "created_at": 100,
+    "error": null,
+    "id": "chatcmpl_usage_1",
+    "incomplete_details": null,
+    "instructions": null,
+    "metadata": {},
+    "model": "routed-model",
+    "object": "response",
+    "output": [
+      {
+        "content": [
+          {
+            "annotations": [],
+            "text": "done",
+            "type": "output_text"
+          }
+        ],
+        "id": "item_ef99a8d26c4c37134b8f036d",
+        "role": "assistant",
+        "status": "completed",
+        "type": "message"
+      }
+    ],
+    "output_text": "done",
+    "parallel_tool_calls": true,
+    "status": "completed",
+    "temperature": null,
+    "tool_choice": "auto",
+    "tools": [],
+    "top_p": null,
+    "usage": {
+      "input_tokens": 10,
+      "input_tokens_details": {
+        "cache_write_tokens": 2,
+        "cached_tokens": 3
+      },
+      "output_tokens": 7,
+      "output_tokens_details": {
+        "reasoning_tokens": 4
+      },
+      "total_tokens": 17
+    }
+  },
+  "diagnostics": [
+    {
+      "field": "metadata",
+      "action": "dropped"
+    },
+    {
+      "field": "moderation",
+      "action": "dropped"
+    },
+    {
+      "field": "usage.completion_tokens_details.accepted_prediction_tokens",
+      "action": "dropped"
+    },
+    {
+      "field": "usage.completion_tokens_details.audio_tokens",
+      "action": "dropped"
+    },
+    {
+      "field": "usage.completion_tokens_details.rejected_prediction_tokens",
+      "action": "dropped"
+    },
+    {
+      "field": "usage.completion_tokens_details.text_tokens",
+      "action": "dropped"
+    },
+    {
+      "field": "usage.compute_units",
+      "action": "dropped"
+    },
+    {
+      "field": "usage.prompt_tokens_details.audio_tokens",
+      "action": "dropped"
+    },
+    {
+      "field": "usage.prompt_tokens_details.image_tokens",
+      "action": "dropped"
+    },
+    {
+      "field": "usage.prompt_tokens_details.text_tokens",
+      "action": "dropped"
+    }
+  ]
+}
