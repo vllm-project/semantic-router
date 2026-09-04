@@ -101,7 +101,6 @@ config:
             use_mmbert_32k: false
         hallucination_mitigation:
           enabled: true
-          on_hallucination_detected: annotate
           # Candle fact-check classifier gates when detection runs (same model
           # the reference config uses).
           fact_check:

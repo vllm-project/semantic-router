@@ -2418,7 +2418,6 @@ global:
           margin_threshold: 0.0
       hallucination_mitigation:
         enabled: true
-        on_hallucination_detected: annotate
         fact_check:
           model_ref: fact_check_classifier
           model_id: models/mmbert32k-factcheck-classifier-merged
