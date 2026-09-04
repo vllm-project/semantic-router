@@ -1,7 +1,83 @@
 import { getPolicySignalFieldSchema } from './dslPolicySignalSchemas'
-import { getCapabilityPluginFieldSchema } from './dslCapabilityPluginSchemas'
 import type { FieldSchema } from './dslSchemaTypes'
 export type { FieldSchema } from './dslSchemaTypes'
+
+// getPluginFieldSchema moved to dslPluginSchemas.ts: the combined
+// per-plugin switch it used to hold here grew past this repo's
+// function-length structure cap. Re-exported so existing importers of
+// dslSchemas don't need to change their import path.
+export { getPluginFieldSchema } from './dslPluginSchemas'
+
+const PII_SIGNAL_FIELDS: FieldSchema[] = [
+  {
+    key: 'threshold',
+    label: 'Threshold',
+    type: 'number',
+    required: true,
+    placeholder: '0.8',
+    description: 'Minimum confidence for PII detection (0.0-1.0)',
+  },
+  {
+    key: 'pii_types_allowed',
+    label: 'PII Types Allowed',
+    type: 'string[]',
+    placeholder: 'e.g. EMAIL_ADDRESS',
+    description: 'PII types to allow through (others trigger signal)',
+  },
+  {
+    key: 'include_history',
+    label: 'Include History',
+    type: 'boolean',
+    description: 'Include conversation history in detection',
+  },
+  { key: 'description', label: 'Description', type: 'string' },
+]
+
+const JAILBREAK_SIGNAL_FIELDS: FieldSchema[] = [
+  {
+    key: 'method',
+    label: 'Method',
+    type: 'select',
+    options: ['classifier', 'contrastive'],
+    description: 'Detection algorithm',
+  },
+  {
+    key: 'direction',
+    label: 'Direction',
+    type: 'select',
+    options: ['request', 'response'],
+    description: 'request (default) scores the prompt; response scores the model output',
+  },
+  {
+    key: 'threshold',
+    label: 'Threshold',
+    type: 'number',
+    required: true,
+    placeholder: '0.9',
+    description: 'Minimum score to trigger (0.0-1.0)',
+  },
+  {
+    key: 'include_history',
+    label: 'Include History',
+    type: 'boolean',
+    description: 'Include conversation history in detection',
+  },
+  { key: 'description', label: 'Description', type: 'string' },
+  {
+    key: 'jailbreak_patterns',
+    label: 'Jailbreak Patterns',
+    type: 'string[]',
+    placeholder: 'Add jailbreak example...',
+    description: 'Contrastive mode: example jailbreak prompts',
+  },
+  {
+    key: 'benign_patterns',
+    label: 'Benign Patterns',
+    type: 'string[]',
+    placeholder: 'Add benign example...',
+    description: 'Contrastive mode: example benign prompts',
+  },
+]
 
 export function getSignalFieldSchema(signalType: string): FieldSchema[] {
   const policyFields = getPolicySignalFieldSchema(signalType)
@@ -189,8 +265,39 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
           key: 'threshold',
           label: 'Threshold',
           type: 'number',
-          required: true,
           placeholder: '0.1',
+          description:
+            'Symmetric cut point for local prototype scoring: a margin above it is hard, below its negative is easy. Not used with a score.v1 backend; set a boundary pair instead.',
+        },
+        {
+          key: 'hard_above',
+          label: 'Hard Above',
+          type: 'number',
+          placeholder: '0.85',
+          description:
+            'With Easy Below: boundaries for a remote score where a higher value is harder, in the model’s own units. Mutually exclusive with Threshold and with Hard Below / Easy Above.',
+        },
+        {
+          key: 'easy_below',
+          label: 'Easy Below',
+          type: 'number',
+          placeholder: '0.6',
+          description: 'Scores below this are easy; between Easy Below and Hard Above is medium.',
+        },
+        {
+          key: 'hard_below',
+          label: 'Hard Below',
+          type: 'number',
+          placeholder: '0.2',
+          description:
+            'With Easy Above: boundaries for a remote score where a lower value is harder, such as a predicted chance of answering correctly. Requires a score.v1 backend.',
+        },
+        {
+          key: 'easy_above',
+          label: 'Easy Above',
+          type: 'number',
+          placeholder: '0.6',
+          description: 'Scores above this are easy; between Hard Below and Easy Above is medium.',
         },
         {
           key: 'hard',
@@ -263,69 +370,14 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
         { key: 'description', label: 'Description', type: 'string' },
       ]
     case 'jailbreak':
+      return JAILBREAK_SIGNAL_FIELDS
+    case 'hallucination':
       return [
-        {
-          key: 'method',
-          label: 'Method',
-          type: 'select',
-          options: ['classifier', 'contrastive'],
-          description: 'Detection algorithm',
-        },
-        {
-          key: 'threshold',
-          label: 'Threshold',
-          type: 'number',
-          required: true,
-          placeholder: '0.9',
-          description: 'Minimum score to trigger (0.0-1.0)',
-        },
-        {
-          key: 'include_history',
-          label: 'Include History',
-          type: 'boolean',
-          description: 'Include conversation history in detection',
-        },
+        { key: 'use_nli', label: 'Use NLI Explanations', type: 'boolean' },
         { key: 'description', label: 'Description', type: 'string' },
-        {
-          key: 'jailbreak_patterns',
-          label: 'Jailbreak Patterns',
-          type: 'string[]',
-          placeholder: 'Add jailbreak example...',
-          description: 'Contrastive mode: example jailbreak prompts',
-        },
-        {
-          key: 'benign_patterns',
-          label: 'Benign Patterns',
-          type: 'string[]',
-          placeholder: 'Add benign example...',
-          description: 'Contrastive mode: example benign prompts',
-        },
       ]
     case 'pii':
-      return [
-        {
-          key: 'threshold',
-          label: 'Threshold',
-          type: 'number',
-          required: true,
-          placeholder: '0.8',
-          description: 'Minimum confidence for PII detection (0.0-1.0)',
-        },
-        {
-          key: 'pii_types_allowed',
-          label: 'PII Types Allowed',
-          type: 'string[]',
-          placeholder: 'e.g. EMAIL_ADDRESS',
-          description: 'PII types to allow through (others trigger signal)',
-        },
-        {
-          key: 'include_history',
-          label: 'Include History',
-          type: 'boolean',
-          description: 'Include conversation history in detection',
-        },
-        { key: 'description', label: 'Description', type: 'string' },
-      ]
+      return PII_SIGNAL_FIELDS
     case 'kb':
       return [
         {
@@ -447,345 +499,6 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
       ]
     default:
       return [{ key: 'description', label: 'Description', type: 'string' }]
-  }
-}
-
-export function getPluginFieldSchema(pluginType: string): FieldSchema[] {
-  const capabilityFields = getCapabilityPluginFieldSchema(pluginType)
-  if (capabilityFields) return capabilityFields
-  switch (pluginType) {
-    case 'memory':
-      return [
-        { key: 'enabled', label: 'Enabled', type: 'boolean' },
-        {
-          key: 'retrieval_limit',
-          label: 'Retrieval Limit',
-          type: 'number',
-          placeholder: '5',
-          description: 'Max memories to retrieve',
-        },
-        {
-          key: 'similarity_threshold',
-          label: 'Similarity Threshold',
-          type: 'number',
-          placeholder: '0.7',
-        },
-        {
-          key: 'auto_store',
-          label: 'Auto Store',
-          type: 'boolean',
-          description: 'Automatically store conversation turns',
-        },
-      ]
-    case 'system_prompt':
-      return [
-        { key: 'enabled', label: 'Enabled', type: 'boolean' },
-        {
-          key: 'system_prompt',
-          label: 'System Prompt',
-          type: 'string',
-          required: true,
-          placeholder: 'You are a helpful assistant...',
-        },
-        {
-          key: 'mode',
-          label: 'Mode',
-          type: 'select',
-          options: ['', 'replace', 'insert'],
-          description: 'Replace or insert before existing prompt',
-        },
-      ]
-    case 'hallucination':
-      return [
-        { key: 'enabled', label: 'Enabled', type: 'boolean' },
-        {
-          key: 'use_nli',
-          label: 'Use NLI',
-          type: 'boolean',
-          description: 'Use Natural Language Inference for detection',
-        },
-        {
-          key: 'hallucination_action',
-          label: 'Action',
-          type: 'select',
-          options: ['', 'header', 'body', 'none'],
-          description: 'What to do when hallucination is detected',
-        },
-      ]
-    case 'router_replay':
-      return [
-        { key: 'enabled', label: 'Enabled', type: 'boolean' },
-        { key: 'max_records', label: 'Max Records', type: 'number', placeholder: '10000' },
-        { key: 'capture_request_body', label: 'Capture Request Body', type: 'boolean' },
-        { key: 'capture_response_body', label: 'Capture Response Body', type: 'boolean' },
-        { key: 'max_body_bytes', label: 'Max Body Bytes', type: 'number', placeholder: '4096' },
-      ]
-    case 'rag':
-      return [
-        { key: 'enabled', label: 'Enabled', type: 'boolean' },
-        {
-          key: 'backend',
-          label: 'Backend',
-          type: 'string',
-          required: true,
-          placeholder: 'my_vector_store',
-          description: 'Backend name for retrieval',
-        },
-        {
-          key: 'top_k',
-          label: 'Top K',
-          type: 'number',
-          placeholder: '5',
-          description: 'Number of documents to retrieve',
-        },
-        {
-          key: 'similarity_threshold',
-          label: 'Similarity Threshold',
-          type: 'number',
-          placeholder: '0.7',
-        },
-        {
-          key: 'injection_mode',
-          label: 'Injection Mode',
-          type: 'select',
-          options: ['', 'tool_role', 'system_prompt'],
-        },
-        {
-          key: 'on_failure',
-          label: 'On Failure',
-          type: 'select',
-          options: ['', 'skip', 'block', 'warn'],
-        },
-      ]
-    case 'header_mutation':
-      return [
-        {
-          key: 'add',
-          label: 'Add Headers',
-          type: 'object[]',
-          description: 'Headers inserted when they are not already present.',
-          addLabel: 'Add header',
-          emptyLabel: 'No headers to add.',
-          itemLabel: 'Header',
-          itemLabelKey: 'name',
-          fields: [
-            { key: 'name', label: 'Header Name', type: 'string', required: true },
-            { key: 'value', label: 'Header Value', type: 'string', required: true },
-          ],
-        },
-        {
-          key: 'update',
-          label: 'Update Headers',
-          type: 'object[]',
-          description: 'Headers overwritten before forwarding the request.',
-          addLabel: 'Add header update',
-          emptyLabel: 'No headers to update.',
-          itemLabel: 'Header',
-          itemLabelKey: 'name',
-          fields: [
-            { key: 'name', label: 'Header Name', type: 'string', required: true },
-            { key: 'value', label: 'Header Value', type: 'string', required: true },
-          ],
-        },
-        {
-          key: 'delete',
-          label: 'Delete Headers',
-          type: 'string[]',
-          placeholder: 'Header name to delete',
-        },
-      ]
-    case 'fast_response':
-      return [
-        {
-          key: 'message',
-          label: 'Message',
-          type: 'string',
-          required: true,
-          placeholder: 'I cannot help with that request.',
-          description: 'The response message returned directly to the client',
-        },
-      ]
-    case 'tools':
-      return [
-        { key: 'enabled', label: 'Enabled', type: 'boolean' },
-        {
-          key: 'mode',
-          label: 'Mode',
-          type: 'select',
-          options: ['passthrough', 'filtered', 'none'],
-          required: true,
-        },
-        {
-          key: 'semantic_selection',
-          label: 'Semantic Selection',
-          type: 'boolean',
-          description: 'Run semantic tool selection from the global tools database',
-        },
-        {
-          key: 'strip_tool_history',
-          label: 'Strip Tool History',
-          type: 'boolean',
-          description:
-            'With mode none, remove prior tool calls and results from the provider-bound body',
-        },
-        {
-          key: 'allow_tools',
-          label: 'Allow Tools',
-          type: 'string[]',
-          placeholder: 'Tool name to allow',
-        },
-        {
-          key: 'block_tools',
-          label: 'Block Tools',
-          type: 'string[]',
-          placeholder: 'Tool name to block',
-        },
-        {
-          key: 'strategy',
-          label: 'Retrieval Strategy',
-          type: 'string',
-          placeholder: 'default',
-        },
-        {
-          key: 'dynamic_retrieval',
-          label: 'Dynamic Retrieval',
-          type: 'object',
-          fields: [
-            { key: 'enabled', label: 'Enabled', type: 'boolean' },
-            {
-              key: 'strategy',
-              label: 'Strategy',
-              type: 'select',
-              options: ['semantic_only', 'hybrid_history'],
-            },
-            { key: 'history_window', label: 'History Window', type: 'number' },
-            {
-              key: 'weights',
-              label: 'Weights',
-              type: 'object',
-              fields: [
-                { key: 'semantic', label: 'Semantic', type: 'number' },
-                { key: 'history', label: 'History', type: 'number' },
-                { key: 'decision_prior', label: 'Decision Prior', type: 'number' },
-                { key: 'repetition_penalty', label: 'Repetition Penalty', type: 'number' },
-              ],
-            },
-            {
-              key: 'min_history_confidence',
-              label: 'Minimum History Confidence',
-              type: 'number',
-            },
-            {
-              key: 'fallback_on_low_confidence',
-              label: 'Fallback on Low Confidence',
-              type: 'boolean',
-            },
-          ],
-        },
-      ]
-    case 'tool_selection':
-      return [
-        { key: 'enabled', label: 'Enabled', type: 'boolean' },
-        {
-          key: 'mode',
-          label: 'Mode',
-          type: 'select',
-          options: ['', 'add', 'filter'],
-          description: 'Add tools from a catalog or filter request-provided tools',
-        },
-        {
-          key: 'tools_db_path',
-          label: 'Tools DB Path',
-          type: 'string',
-          placeholder: 'config/tools_db.json',
-        },
-        { key: 'top_k', label: 'Top K', type: 'number', placeholder: '3' },
-        {
-          key: 'similarity_threshold',
-          label: 'Similarity Threshold',
-          type: 'number',
-          placeholder: '0.7',
-        },
-        {
-          key: 'strategy',
-          label: 'Strategy',
-          type: 'select',
-          options: ['', 'default', 'weighted', 'hybrid_history'],
-        },
-        {
-          key: 'relevance_threshold',
-          label: 'Relevance Threshold',
-          type: 'number',
-          placeholder: '0.5',
-        },
-        { key: 'preserve_count', label: 'Preserve Count', type: 'number', placeholder: '0' },
-        {
-          key: 'sticky',
-          label: 'Session-Scoped Sticky Selection',
-          type: 'object',
-          fields: [
-            { key: 'enabled', label: 'Enabled', type: 'boolean' },
-            { key: 'max_tools', label: 'Max Tools', type: 'number', placeholder: '16' },
-            {
-              key: 'max_new_tools_per_turn',
-              label: 'Max New Tools Per Turn',
-              type: 'number',
-              placeholder: '2',
-            },
-            { key: 'pin_called_tools', label: 'Pin Called Tools', type: 'boolean' },
-          ],
-        },
-      ]
-    case 'request_params':
-      return [
-        {
-          key: 'blocked_params',
-          label: 'Blocked Params',
-          type: 'string[]',
-          placeholder: 'Parameter name to block',
-          description: 'Request body parameters to strip before forwarding',
-        },
-        {
-          key: 'max_tokens_limit',
-          label: 'Max Tokens Limit',
-          type: 'number',
-          placeholder: '4096',
-          description: 'Maximum allowed value for max_tokens',
-        },
-        {
-          key: 'max_n',
-          label: 'Max N',
-          type: 'number',
-          placeholder: '1',
-          description: 'Maximum allowed value for n (number of completions)',
-        },
-        {
-          key: 'strip_unknown',
-          label: 'Strip Unknown',
-          type: 'boolean',
-          description: 'Remove fields not in the OpenAI spec',
-        },
-      ]
-    case 'response_jailbreak':
-      return [
-        { key: 'enabled', label: 'Enabled', type: 'boolean' },
-        {
-          key: 'threshold',
-          label: 'Threshold',
-          type: 'number',
-          placeholder: '0.8',
-          description: 'Minimum classifier score required to flag the response',
-        },
-        {
-          key: 'action',
-          label: 'Action',
-          type: 'select',
-          options: ['', 'block', 'header', 'none'],
-          description: 'Block the response, emit warning headers, or do nothing',
-        },
-      ]
-    default:
-      return [{ key: 'enabled', label: 'Enabled', type: 'boolean' }]
   }
 }
 
