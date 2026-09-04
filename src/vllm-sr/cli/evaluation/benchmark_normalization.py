@@ -14,7 +14,7 @@ from cli.evaluation.benchmark_normalization_io import (
     safe_export_root,
 )
 from cli.evaluation.benchmark_normalization_registry import (
-    get_benchmark_normalizer_plugin,
+    get_benchmark_normalizer_definition,
 )
 from cli.evaluation.benchmark_normalization_types import (
     BenchmarkNormalizerDescriptor,
@@ -190,13 +190,13 @@ def derive_benchmark_normalization(
     not attest that upstream benchmark code generated the export.
     """
 
-    plugin = get_benchmark_normalizer_plugin(adapter_id)
-    normalizer = plugin.descriptor
+    definition = get_benchmark_normalizer_definition(adapter_id)
+    normalizer = definition.descriptor
     if not normalizer.executable:
         raise NormalizationError(
             f"benchmark adapter {adapter_id!r} is non-executable: {normalizer.blocker}"
         )
-    parser = plugin.parser
+    parser = definition.parser
     if parser is None:
         raise NormalizationError(
             "executable benchmark adapter has no registered parser"

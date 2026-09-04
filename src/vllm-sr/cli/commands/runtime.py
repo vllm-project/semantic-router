@@ -63,7 +63,7 @@ RUNTIME_HELP = (
 
 
 def _build_backend(target: str | None, **k8s_kwargs):
-    """Instantiate the right DeploymentBackend for *target*."""
+    """Instantiate the deployment backend for *target*."""
     resolved = resolve_target(target)
     if resolved == "k8s":
         from cli.k8s_backend import K8sBackend  # noqa: PLC0415
