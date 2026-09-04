@@ -229,7 +229,7 @@ async function processAssignee(octokit, owner, repo, issue, assigneeLogin, confi
   }
 
   const daysSinceActivity = (now - lastHumanActivity) / (1000 * 60 * 60 * 24);
-  
+
   const isWarned = await warningCommentExists(
     octokit, owner, repo, issueNumber, assigneeLogin, lastHumanActivity
   );
