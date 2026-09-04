@@ -20,6 +20,11 @@ ClassifierSignalType = Literal[
 UNKNOWN_POLICY_VALUES = ("no_match", "match", "fail_request")
 UnknownPolicy = Literal["no_match", "match", "fail_request"]
 
+# Fusion panel-level quorum-failure policy. Values MUST match the Go contract in
+# pkg/config/fusion_config.go (FusionQuorumFailurePolicies).
+QUORUM_FAILURE_POLICY_VALUES = ("fail", "fallback", "best_available")
+QuorumFailurePolicy = Literal["fail", "fallback", "best_available"]
+
 CONDITION_TYPE_DOMAIN = "domain"
 CONDITION_TYPE_PROJECTION = "projection"
 

@@ -144,3 +144,50 @@ func assertFusionPolicy(t *testing.T, fusion *config.FusionAlgorithmConfig) {
 		t.Fatalf("unexpected policy fields: %#v", fusion)
 	}
 }
+
+// The quorum-failure policy is a flat scalar so it survives the DSL round trip,
+// unlike the nested grounding block.
+func TestFusionQuorumFailurePolicyRoundTrip(t *testing.T) {
+	input := `
+ROUTE fusion_quorum {
+  PRIORITY 10
+  MODEL "judge-model", "panel-a", "panel-b"
+  ALGORITHM fusion {
+    model: "judge-model"
+    analysis_models: ["panel-a", "panel-b"]
+    min_successful_responses: 2
+    quorum_failure_policy: "fallback"
+    quorum_fallback_target: "backup-model"
+  }
+}`
+
+	cfg, errs := Compile(input)
+	if len(errs) > 0 {
+		t.Fatalf("compile errors: %v", errs)
+	}
+	fusion := cfg.Decisions[0].Algorithm.Fusion
+	if fusion.QuorumFailurePolicy != config.FusionQuorumFailurePolicyFallback {
+		t.Fatalf("quorum_failure_policy = %q, want %q",
+			fusion.QuorumFailurePolicy, config.FusionQuorumFailurePolicyFallback)
+	}
+	if fusion.QuorumFallbackTarget != "backup-model" {
+		t.Fatalf("quorum_fallback_target = %q, want %q", fusion.QuorumFallbackTarget, "backup-model")
+	}
+
+	fields := map[string]Value{}
+	fusionAlgorithmToFields(fusion, fields)
+	policy, ok := fields["quorum_failure_policy"]
+	if !ok {
+		t.Fatal("decompiler dropped quorum_failure_policy")
+	}
+	if got := policy.(StringValue).V; got != "fallback" {
+		t.Fatalf("decompiled policy = %q, want %q", got, "fallback")
+	}
+	target, ok := fields["quorum_fallback_target"]
+	if !ok {
+		t.Fatal("decompiler dropped quorum_fallback_target")
+	}
+	if got := target.(StringValue).V; got != "backup-model" {
+		t.Fatalf("decompiled target = %q, want %q", got, "backup-model")
+	}
+}

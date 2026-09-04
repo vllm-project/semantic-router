@@ -4,6 +4,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from .config_contract import QuorumFailurePolicy
+
 
 class ModelRef(BaseModel):
     """Model reference in decision."""
@@ -181,10 +183,29 @@ class FusionAlgorithmConfig(BaseModel):
     include_analysis: bool | None = True
     include_intermediate_responses: bool | None = True
     on_error: Literal["skip", "fail"] | None = "skip"
+    # Panel-level policy for a usable-response count below
+    # min_successful_responses. Independent of on_error, which only governs a
+    # single failed panel attempt. Bounds here MUST match the Go validator in
+    # pkg/config/fusion_config.go (validateFusionQuorumFailure).
+    quorum_failure_policy: QuorumFailurePolicy | None = None
+    quorum_fallback_target: str | None = None
     analysis_template: str | None = None
     synthesis_template: str | None = None
     judge_prompt_version: str | None = "fusion-v1"
     grounding: FusionGroundingConfig | None = None
+
+    @model_validator(mode="after")
+    def validate_quorum_failure_policy(self):
+        target = (self.quorum_fallback_target or "").strip()
+        if self.quorum_failure_policy == "fallback" and not target:
+            raise ValueError(
+                "quorum_failure_policy 'fallback' requires quorum_fallback_target"
+            )
+        if self.quorum_failure_policy != "fallback" and target:
+            raise ValueError(
+                "quorum_fallback_target requires quorum_failure_policy 'fallback'"
+            )
+        return self
 
     @model_validator(mode="after")
     def validate_analysis_override_models(self):

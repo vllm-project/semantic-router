@@ -4,7 +4,9 @@ import pytest
 from cli.algorithms import AlgorithmConfig
 from cli.config_contract import (
     LEGACY_SIGNAL_KEY_TO_CANONICAL,
+    QUORUM_FAILURE_POLICY_VALUES,
     UNKNOWN_POLICY_VALUES,
+    QuorumFailurePolicy,
     UnknownPolicy,
     build_projection_reference_index,
     build_signal_reference_index,
@@ -16,6 +18,11 @@ from cli.models import Decision, Projections, Signals
 def test_unknown_policy_literal_matches_allowed_values():
     assert get_args(UnknownPolicy) == UNKNOWN_POLICY_VALUES
     assert UNKNOWN_POLICY_VALUES == ("no_match", "match", "fail_request")
+
+
+def test_quorum_failure_policy_literal_matches_allowed_values():
+    assert get_args(QuorumFailurePolicy) == QUORUM_FAILURE_POLICY_VALUES
+    assert QUORUM_FAILURE_POLICY_VALUES == ("fail", "fallback", "best_available")
 
 
 def test_legacy_signal_inventory_covers_flat_authz_and_context_blocks():

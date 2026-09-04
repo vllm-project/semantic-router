@@ -257,6 +257,21 @@ function getAlgorithmSpecificFieldSchema(algoType: string): FieldSchema[] {
         },
         { key: 'on_error', label: 'On Error', type: 'select', options: ['', 'skip', 'fail'] },
         {
+          key: 'quorum_failure_policy',
+          label: 'Quorum Failure Policy',
+          type: 'select',
+          options: ['', 'fail', 'fallback', 'best_available'],
+          description:
+            'Panel-level behavior below Min Successful. Independent of On Error, which governs one failed attempt',
+        },
+        {
+          key: 'quorum_fallback_target',
+          label: 'Quorum Fallback Target',
+          type: 'string',
+          placeholder: 'backup-model',
+          description: 'Model to route to when Quorum Failure Policy is fallback',
+        },
+        {
           key: 'judge_prompt_version',
           label: 'Prompt Version',
           type: 'string',

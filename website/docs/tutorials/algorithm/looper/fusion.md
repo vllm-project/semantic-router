@@ -134,6 +134,7 @@ algorithm:
     include_analysis: true
     include_intermediate_responses: true
     on_error: skip
+    quorum_failure_policy: fail
     judge_prompt_version: fusion-v1
 ```
 
@@ -199,6 +200,7 @@ Request-level override:
     "max_completion_tokens": 1024,
     "round_timeout_seconds": 90,
     "min_successful_responses": 1,
+    "quorum_failure_policy": "fail",
     "include_analysis": true,
     "include_intermediate_responses": true,
     "grounding": {
@@ -227,6 +229,8 @@ Request-level override:
 | `include_analysis` | bool | `true` | Include structured judge analysis in the response trace |
 | `include_intermediate_responses` | bool | `true` | Include raw panel responses in the response trace |
 | `on_error` | string | `skip` | `skip` partial panel failures or `fail` on the first panel error |
+| `quorum_failure_policy` | string | `fail` | Panel-level behavior when usable responses fall below `min_successful_responses`: `fail` returns a typed quorum failure, `fallback` routes to `quorum_fallback_target`, `best_available` synthesizes from the responses that did arrive |
+| `quorum_fallback_target` | string | none | Model to route to when `quorum_failure_policy: fallback`. Required for, and only valid with, that policy |
 | `analysis_template` | string | built-in | Custom judge analysis prompt with `{{original}}` and `{{responses}}` |
 | `synthesis_template` | string | built-in | Custom final prompt with `{{original}}`, `{{responses}}`, and `{{analysis}}` |
 | `judge_prompt_version` | string | `fusion-v1` | Version marker included in Fusion response trace |
@@ -239,6 +243,14 @@ Best practice:
 - Prefer sparse request overrides (set only the field you need) to preserve decision defaults through field-wise merge.
 - Keep `min_successful_responses` at or below the effective panel size. Invalid
   quorums are rejected; the Router does not lower them automatically.
+- Keep the two error contracts distinct. `on_error` decides whether collection
+  continues after *one* panel attempt fails; `quorum_failure_policy` decides what
+  the *panel as a whole* does when it ends below quorum. They combine freely.
+- `quorum_failure_policy` defaults to `fail` so a panel below quorum cannot
+  degrade silently. Note that `min_successful_responses` itself defaults to the
+  full panel size, so a Fusion decision that sets neither field requires every
+  panel model to succeed. Set `min_successful_responses` explicitly, or opt into
+  `quorum_failure_policy: best_available`, to tolerate partial panel failure.
 
 ## Grounding-Aware Synthesis
 
