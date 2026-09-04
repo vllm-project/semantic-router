@@ -1,7 +1,6 @@
 """Configuration validator for vLLM Semantic Router."""
 
 from typing import Any, List
-from cli.config_contract import iter_routing_profiles
 from cli.models import (
     UserConfig,
     PluginType,
@@ -70,11 +69,6 @@ ALGORITHM_CONFIG_BLOCKS = (
     "multi_factor",
     "prompt",
 )
-
-
-def _iter_profile_decisions(config: UserConfig):
-    for _, routing in iter_routing_profiles(config):
-        yield from routing.decisions
 
 
 VALID_ALGORITHM_TYPES = {
