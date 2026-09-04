@@ -112,7 +112,7 @@
   max-width: none;
 }
 
-/* Uncapped, matching .site-section-intro and PageHeader. */
+/* Uncapped, matching .site-section-intro. */
 .pageDescription {
   max-width: none;
   margin: 0;
