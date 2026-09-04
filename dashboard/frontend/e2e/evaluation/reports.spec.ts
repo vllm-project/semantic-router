@@ -77,7 +77,11 @@ test.describe('Evaluation Plane · Reports', () => {
     await expect
       .poll(() => new URL(page.url()).searchParams.get('report'))
       .toBe(EVALUATION_RUN_IDS.candidate)
-    await expect(page.locator('#evaluation-readiness-title')).toHaveText('Candidate recipe')
+    await expect(
+      page
+        .getByRole('tabpanel', { name: 'Reports' })
+        .getByRole('heading', { name: 'Candidate recipe' }),
+    ).toBeVisible()
     await expect(
       page
         .locator('section[aria-labelledby="report-diagnostics-title"]')
