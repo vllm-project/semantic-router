@@ -60,6 +60,9 @@ global:
         max_concurrency: 8
 ```
 
+`max_batch_size` bounds `texts` per `/api/v1/classify/batch` request. Larger
+batches return `400 INVALID_INPUT`.
+
 ### Response API
 
 ```yaml

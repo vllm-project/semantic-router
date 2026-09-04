@@ -165,6 +165,34 @@ func batchClassificationConfigCases() []batchClassificationConfigCase {
 			},
 			config: batchClassificationMetricsConfig(),
 		},
+		{
+			batchClassificationHTTPCase: batchClassificationHTTPCase{
+				name:           "Batch at max_batch_size passes the bound",
+				requestBody:    marshalBatchTexts(3),
+				expectedStatus: http.StatusServiceUnavailable,
+				expectedError:  batchClassifierUnavailableMessage,
+			},
+			config: batchClassificationMaxBatchSizeConfig(3),
+		},
+		{
+			batchClassificationHTTPCase: batchClassificationHTTPCase{
+				name:           "Batch above max_batch_size is rejected",
+				requestBody:    marshalBatchTexts(4),
+				expectedStatus: http.StatusBadRequest,
+				expectedError:  "texts array exceeds max_batch_size 3",
+			},
+			config: batchClassificationMaxBatchSizeConfig(3),
+		},
+	}
+}
+
+func batchClassificationMaxBatchSizeConfig(maxBatchSize int) *config.RouterConfig {
+	return &config.RouterConfig{
+		APIServer: config.APIServer{
+			API: config.APIConfig{
+				BatchClassification: config.BatchClassificationConfig{MaxBatchSize: maxBatchSize},
+			},
+		},
 	}
 }
 
