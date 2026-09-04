@@ -79,7 +79,9 @@ More announcements are available on the **[Blog](https://vllm-sr.ai/blog/)** and
 
 ## Community
 
-For questions, feedback, or to contribute, please join the `#semantic-router` channel in vLLM Slack.
+For questions, feedback, or to contribute, please join the [`#semantic-router`](https://vllm-dev.slack.com/archives/C09CTGF8KCN) channel in vLLM Slack.
+
+To track contributors, workgroups, and weekly activity, visit [community.vllm-sr.ai](https://community.vllm-sr.ai).
 
 ### Community Meetings
 
