@@ -12,29 +12,26 @@ func validateSignalStageContracts(cfg *RouterConfig) error {
 	if cfg == nil {
 		return nil
 	}
-	if err := validateDecisionStages(cfg); err != nil {
+	if err := validateDecisionsReadRequestStageSignals(cfg); err != nil {
 		return err
 	}
 	warnResponseJailbreakPluginOverlap(cfg)
 	return nil
 }
 
-// validateDecisionStages keeps a configuration from routing nothing. A decision
-// that reads a response-stage signal is skipped while the request is still
-// being routed, because that signal does not exist yet, so a configuration made
-// only of those has no decision left to select a model with. Caught here rather
-// than as an unresolved request at runtime.
-func validateDecisionStages(cfg *RouterConfig) error {
-	decisions := cfg.AllRoutingDecisions()
-	if len(decisions) == 0 {
-		return nil
-	}
-	for _, decision := range decisions {
-		if cfg.DecisionStage(&decision.Rules) == SignalStageRequest {
-			return nil
+// validateDecisionsReadRequestStageSignals rejects a decision rule that names a
+// response-direction jailbreak rule. Decisions are selected while the request
+// is being routed and the model has not answered, so the rule could only ever
+// read as unknown there; the observation is consumed by the selected decision's
+// response_jailbreak plugin once the response exists. Caught at load rather
+// than as a decision that silently never matches.
+func validateDecisionsReadRequestStageSignals(cfg *RouterConfig) error {
+	for _, decision := range cfg.AllRoutingDecisions() {
+		if rule, ok := cfg.decisionReadsResponseSignal(&decision.Rules); ok {
+			return fmt.Errorf("decision %q reads jailbreak rule %q, which has direction: response; a response-direction rule is consumed by the selected decision's response_jailbreak plugin, not by decision rules", decision.Name, rule)
 		}
 	}
-	return fmt.Errorf("every decision reads a response-direction jailbreak rule, so no decision can select a model at request time; at least one decision must be resolvable from request-stage signals")
+	return nil
 }
 
 // warnResponseJailbreakPluginOverlap reports a decision that still carries its

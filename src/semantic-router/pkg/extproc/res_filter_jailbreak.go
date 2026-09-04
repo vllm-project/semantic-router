@@ -29,13 +29,13 @@ func (r *OpenAIRouter) performResponseJailbreakDetectionText(
 	if !r.shouldPerformResponseJailbreakDetection(ctx) {
 		return nil
 	}
-	decisionName := responseJailbreakDecisionKey(ctx)
+	decisionName := requestDecisionStateKey(ctx)
 
 	// With response-direction rules declared, detection already ran as a
 	// response-stage signal and this plugin only enforces. Without them it
 	// still owns detection, so an existing configuration keeps working
 	// unchanged.
-	if r.responseJailbreakSignalDeclared() {
+	if r.responseJailbreakSignalDeclared(ctx) {
 		return r.enforceResponseJailbreakFromSignal(ctx, decisionName)
 	}
 	return r.detectAndEnforceResponseJailbreak(ctx, assistantContent, decisionName)
@@ -69,7 +69,7 @@ func (r *OpenAIRouter) enforceResponseJailbreakFromSignal(
 	logging.Warnf("Response jailbreak detected: type=%s, risk=%.3f, rules=%v, decision=%s",
 		ctx.VSRResponseJailbreakType, ctx.VSRResponseJailbreakRisk, ctx.VSRMatchedResponseJailbreak, decisionName)
 
-	if r.getResponseJailbreakAction(responseJailbreakDecision(ctx)) == "block" {
+	if r.getResponseJailbreakAction(ctx.VSRSelectedDecision) == "block" {
 		logging.Infof("Response jailbreak action is 'block', returning error response")
 		return r.createErrorResponse(403, "Response blocked: jailbreak content detected in LLM output")
 	}
@@ -92,7 +92,7 @@ func (r *OpenAIRouter) detectAndEnforceResponseJailbreak(
 		return nil
 	}
 
-	rjCfg := responseJailbreakDecision(ctx).GetResponseJailbreakConfig()
+	rjCfg := ctx.VSRSelectedDecision.GetResponseJailbreakConfig()
 	threshold := rjCfg.Threshold
 	if threshold <= 0 && r.Config != nil {
 		threshold = r.Config.PromptGuard.Threshold
@@ -123,7 +123,7 @@ func (r *OpenAIRouter) detectAndEnforceResponseJailbreak(
 		metrics.RecordPluginExecution("response_jailbreak", decisionName, "detected", latency)
 		logging.Warnf("Response jailbreak detected: type=%s, risk=%.3f", jailbreakType, riskScore)
 
-		action := r.getResponseJailbreakAction(responseJailbreakDecision(ctx))
+		action := r.getResponseJailbreakAction(ctx.VSRSelectedDecision)
 		if action == "block" {
 			logging.Infof("Response jailbreak action is 'block', returning error response")
 			return r.createErrorResponse(403, "Response blocked: jailbreak content detected in LLM output")
@@ -174,7 +174,7 @@ func (r *OpenAIRouter) responseJailbreakOnClassifyError(ctx *RequestContext, fai
 	logging.Warnf("Response jailbreak classifier failed and prompt_guard.on_error is %q; treating the response as unverified",
 		config.OnErrorBlock)
 
-	if r.getResponseJailbreakAction(responseJailbreakDecision(ctx)) == "block" {
+	if r.getResponseJailbreakAction(ctx.VSRSelectedDecision) == "block" {
 		// Deliberately says no more than the real-detection message above:
 		// telling a caller the guardrail itself is down hands an attacker a
 		// probe for when the safety backend is offline. The cause is already in
@@ -192,7 +192,7 @@ func (r *OpenAIRouter) shouldPerformResponseJailbreakDetection(ctx *RequestConte
 		return false
 	}
 
-	decision := responseJailbreakDecision(ctx)
+	decision := ctx.VSRSelectedDecision
 	if decision == nil {
 		return false
 	}
@@ -205,32 +205,6 @@ func (r *OpenAIRouter) shouldPerformResponseJailbreakDetection(ctx *RequestConte
 	}
 
 	return true
-}
-
-// responseJailbreakDecision returns the decision whose response_jailbreak
-// plugin enforces on this response: the response-stage decision when one
-// matched and carries the plugin, otherwise the decision selected for the
-// request. This is what lets a request signal composed with the response
-// observation drive a response action.
-func responseJailbreakDecision(ctx *RequestContext) *config.Decision {
-	if ctx == nil {
-		return nil
-	}
-	if ctx.VSRResponseDecision != nil && ctx.VSRResponseDecision.GetResponseJailbreakConfig() != nil {
-		return ctx.VSRResponseDecision
-	}
-	return ctx.VSRSelectedDecision
-}
-
-// responseJailbreakDecisionKey is the metrics key of the enforcing decision.
-func responseJailbreakDecisionKey(ctx *RequestContext) string {
-	if ctx == nil {
-		return ""
-	}
-	if decision := responseJailbreakDecision(ctx); decision != nil && decision == ctx.VSRResponseDecision {
-		return config.RoutingDecisionKey(ctx.Routing.RecipeName(), decision.Name)
-	}
-	return requestDecisionStateKey(ctx)
 }
 
 // getResponseJailbreakAction returns the configured action for response jailbreak.
@@ -261,7 +235,7 @@ func (r *OpenAIRouter) responseJailbreakWarningCode(ctx *RequestContext) string 
 	if !ctx.ResponseJailbreakDetected {
 		return ""
 	}
-	if r.getResponseJailbreakAction(responseJailbreakDecision(ctx)) == "none" {
+	if r.getResponseJailbreakAction(ctx.VSRSelectedDecision) == "none" {
 		logging.Infof("Response jailbreak detected but action is 'none', skipping warning")
 		return ""
 	}
@@ -269,15 +243,16 @@ func (r *OpenAIRouter) responseJailbreakWarningCode(ctx *RequestContext) string 
 }
 
 // publishResponseJailbreakSignal records the response-stage observation where
-// every other signal is recorded, so a decision can read it as
-// {type: jailbreak, name: <rule>} alongside request-stage signals.
+// every other signal is recorded, under the same "jailbreak:<rule>" key a
+// request-direction rule uses, so Router Replay and the selected decision's
+// plugins read one shape.
 //
-// The plugin still enforces. This only publishes the evidence it acted on.
-func (r *OpenAIRouter) publishResponseJailbreakSignal(ctx *RequestContext, riskScore float32, resolved bool) {
-	if ctx == nil || r.Config == nil {
+// The plugin still enforces. This only publishes the evidence it acts on.
+func (r *OpenAIRouter) publishResponseJailbreakSignal(ctx *RequestContext, rules []config.JailbreakRule, riskScore float32, resolved bool) {
+	if ctx == nil {
 		return
 	}
-	signal := classification.EvaluateResponseJailbreakSignal(r.Config.ResponseJailbreakRules(), riskScore, resolved)
+	signal := classification.EvaluateResponseJailbreakSignal(rules, riskScore, resolved)
 	if signal == nil {
 		return
 	}

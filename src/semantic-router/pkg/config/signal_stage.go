@@ -73,56 +73,26 @@ func (c *RouterConfig) SignalStageOf(signalType, name string) SignalStage {
 	return SignalStageRequest
 }
 
-// DecisionStage reports the earliest stage at which a decision's rules can be
-// evaluated. A decision that reads any response-stage signal cannot be resolved
-// while the request is still being routed, so it is a response-stage decision.
-//
-// This is deliberately not left to on_unknown. That policy means "evaluated and
-// could not resolve", which is what SignalErrors records for a detector that
-// failed. A signal whose stage has not been reached yet has not been evaluated
-// at all, and a rule with on_unknown: match would otherwise fire at the request
-// stage on a signal that never ran.
-func (c *RouterConfig) DecisionStage(rules *RuleNode) SignalStage {
-	if rules != nil && c.ruleNodeReadsResponseSignal(rules) {
-		return SignalStageResponse
-	}
-	return SignalStageRequest
-}
-
-func (c *RouterConfig) ruleNodeReadsResponseSignal(node *RuleNode) bool {
+// decisionReadsResponseSignal reports the first response-direction rule a
+// decision's rule tree names, wherever it sits in the tree. Decisions are
+// selected while the request is being routed, before the model has answered,
+// so such a rule is not a decision input: the selected decision's response
+// plugins consume the observation instead. Config validation rejects the
+// reference rather than leaving a decision that can never match.
+func (c *RouterConfig) decisionReadsResponseSignal(node *RuleNode) (string, bool) {
 	if node == nil {
-		return false
+		return "", false
 	}
 	if node.IsLeaf() {
-		return c.SignalStageOf(node.Type, node.Name) == SignalStageResponse
+		if c.SignalStageOf(node.Type, node.Name) == SignalStageResponse {
+			return node.Name, true
+		}
+		return "", false
 	}
 	for i := range node.Conditions {
-		if c.ruleNodeReadsResponseSignal(&node.Conditions[i]) {
-			return true
+		if name, ok := c.decisionReadsResponseSignal(&node.Conditions[i]); ok {
+			return name, true
 		}
 	}
-	return false
-}
-
-// DecisionsAtStage returns the decisions evaluated at stage, in configured
-// order. A request-stage evaluation must not see a response-stage decision and
-// a response-stage evaluation must not re-select a request-stage one.
-//
-// The input slice is returned as is when every decision is at stage, which is
-// every configuration without a response-direction rule, so the decision a
-// caller gets back keeps pointing into the slice it passed in.
-func (c *RouterConfig) DecisionsAtStage(decisions []Decision, stage SignalStage) []Decision {
-	staged := make([]Decision, 0, len(decisions))
-	for i := range decisions {
-		if c.DecisionStage(&decisions[i].Rules) == stage {
-			staged = append(staged, decisions[i])
-		}
-	}
-	if len(staged) == len(decisions) {
-		return decisions
-	}
-	if len(staged) == 0 {
-		return nil
-	}
-	return staged
+	return "", false
 }

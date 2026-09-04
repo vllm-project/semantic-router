@@ -4,34 +4,52 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 var _ = Describe("Response stage jailbreak signal", func() {
-	newRouter := func(rules ...config.JailbreakRule) *OpenAIRouter {
+	// The rules are read from the recipe the request resolved to, through its
+	// classifier, so the router gets a real single-profile classifier graph
+	// and the request context a resolved default recipe. prompt_guard stays
+	// disabled: the rule is declared but no detector backs it.
+	newRouter := func(rules ...config.JailbreakRule) (*OpenAIRouter, *RequestContext) {
 		cfg := &config.RouterConfig{}
 		cfg.Signals.JailbreakRules = rules
-		return &OpenAIRouter{Config: cfg}
+		classifiers, err := classification.BuildRecipeClassifiers(cfg, nil, nil, nil)
+		Expect(err).NotTo(HaveOccurred())
+		router := &OpenAIRouter{Config: cfg, Classifier: classifiers.Default(), RecipeClassifiers: classifiers}
+		ctx := &RequestContext{} // no VSRSelectedDecision, so no plugin at all
+		ctx.Routing.SelectRecipe(&config.RoutingRecipe{Name: config.DefaultRecipeName})
+		return router, ctx
 	}
 	responseRule := config.JailbreakRule{Name: "unsafe_completion", Threshold: 0.7, Direction: config.SignalDirectionResponse}
 
 	// The signal is driven by the declared rules, not by an enforcement plugin.
-	// A decision has to be able to read it whether or not response_jailbreak is
-	// enabled anywhere, or it is plugin state wearing a signal's name.
+	// It has to be published whether or not response_jailbreak is enabled
+	// anywhere, or it is plugin state wearing a signal's name.
 	It("publishes without any plugin configured", func() {
-		router := newRouter(responseRule)
-		ctx := &RequestContext{} // no VSRSelectedDecision, so no plugin at all
+		router, ctx := newRouter(responseRule)
 
 		router.evaluateResponseJailbreakSignal(ctx, "some answer")
 
-		// No classifier is wired here, so the rule resolves as unavailable
-		// rather than silently absent, under the plain jailbreak key.
+		// No detector backs the rule, so it resolves as unavailable rather
+		// than silently absent, under the plain jailbreak key.
 		Expect(ctx.VSRSignalErrors).To(HaveKey("jailbreak:unsafe_completion"))
 		Expect(ctx.VSRMatchedResponseJailbreak).To(BeEmpty())
 	})
 
 	It("does nothing when only request-direction rules are declared", func() {
-		router := newRouter(config.JailbreakRule{Name: "prompt_injection", Threshold: 0.7})
+		router, ctx := newRouter(config.JailbreakRule{Name: "prompt_injection", Threshold: 0.7})
+
+		router.evaluateResponseJailbreakSignal(ctx, "some answer")
+
+		Expect(ctx.VSRSignalErrors).To(BeEmpty())
+		Expect(ctx.VSRSignalConfidences).To(BeEmpty())
+	})
+
+	It("does nothing for a request that resolved no recipe", func() {
+		router, _ := newRouter(responseRule)
 		ctx := &RequestContext{}
 
 		router.evaluateResponseJailbreakSignal(ctx, "some answer")
@@ -41,8 +59,7 @@ var _ = Describe("Response stage jailbreak signal", func() {
 	})
 
 	It("reports a response with no assistant text as unresolved, not clean", func() {
-		router := newRouter(responseRule)
-		ctx := &RequestContext{}
+		router, ctx := newRouter(responseRule)
 
 		router.evaluateResponseJailbreakSignal(ctx, "")
 
@@ -50,13 +67,11 @@ var _ = Describe("Response stage jailbreak signal", func() {
 	})
 
 	It("reads the outcome from the response-direction rules only", func() {
-		router := newRouter(responseRule, config.JailbreakRule{Name: "prompt_injection", Threshold: 0.7})
-		ctx := &RequestContext{
-			// A failed request-stage scan under the same type must not make
-			// the response scan look unresolved.
-			VSRSignalErrors:             map[string]string{"jailbreak:prompt_injection": "jailbreak_evaluation_failed"},
-			VSRMatchedResponseJailbreak: []string{"unsafe_completion"},
-		}
+		router, ctx := newRouter(responseRule, config.JailbreakRule{Name: "prompt_injection", Threshold: 0.7})
+		// A failed request-stage scan under the same type must not make the
+		// response scan look unresolved.
+		ctx.VSRSignalErrors = map[string]string{"jailbreak:prompt_injection": "jailbreak_evaluation_failed"}
+		ctx.VSRMatchedResponseJailbreak = []string{"unsafe_completion"}
 
 		matched, resolved := router.responseJailbreakSignalOutcome(ctx)
 		Expect(resolved).To(BeTrue())

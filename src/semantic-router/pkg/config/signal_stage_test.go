@@ -49,64 +49,32 @@ func TestRequestAndResponseJailbreakRulesSplitByDirection(t *testing.T) {
 	}
 }
 
-// A decision is response-stage wherever the response-direction rule sits in
-// its tree: composed with a request signal under OR it would otherwise be
-// selectable at request time off the request half alone.
-func TestDecisionStageReadsNestedConditions(t *testing.T) {
+// A decision rule that names a response-direction rule is rejected wherever it
+// sits in the tree: decisions are selected before the model has answered, so
+// the rule could only ever read as unknown there.
+func TestValidateRejectsDecisionReadingResponseDirectionRule(t *testing.T) {
 	cfg := stagedConfig()
-	nested := &RuleNode{
-		Operator: "OR",
-		Conditions: []RuleCondition{
-			{Type: SignalTypeDomain, Name: "business"},
-			{Operator: "AND", Conditions: []RuleCondition{
-				{Type: SignalTypeKeyword, Name: "probe"},
-				{Type: SignalTypeJailbreak, Name: "unsafe_completion"},
-			}},
-		},
-	}
-	if got := cfg.DecisionStage(nested); got != SignalStageResponse {
-		t.Errorf("nested response-direction rule: stage = %q", got)
-	}
-	requestOnly := &RuleNode{Type: SignalTypeJailbreak, Name: "prompt_injection"}
-	if got := cfg.DecisionStage(requestOnly); got != SignalStageRequest {
-		t.Errorf("request-direction rule: stage = %q", got)
-	}
-	if got := cfg.DecisionStage(nil); got != SignalStageRequest {
-		t.Errorf("nil rules: stage = %q", got)
-	}
-}
-
-func TestDecisionsAtStage(t *testing.T) {
-	cfg := stagedConfig()
-	decisions := []Decision{
+	cfg.Decisions = []Decision{
 		{Name: "route", Rules: RuleCombination{Type: SignalTypeKeyword, Name: "probe"}},
-		{Name: "guard", Rules: RuleCombination{Type: SignalTypeJailbreak, Name: "unsafe_completion"}},
+		{Name: "guard", Rules: RuleCombination{
+			Operator: "OR",
+			Conditions: []RuleCondition{
+				{Type: SignalTypeDomain, Name: "business"},
+				{Operator: "AND", Conditions: []RuleCondition{
+					{Type: SignalTypeKeyword, Name: "probe"},
+					{Type: SignalTypeJailbreak, Name: "unsafe_completion"},
+				}},
+			},
+		}},
 	}
-	if got := cfg.DecisionsAtStage(decisions, SignalStageRequest); len(got) != 1 || got[0].Name != "route" {
-		t.Errorf("request-stage decisions = %+v", got)
-	}
-	if got := cfg.DecisionsAtStage(decisions, SignalStageResponse); len(got) != 1 || got[0].Name != "guard" {
-		t.Errorf("response-stage decisions = %+v", got)
-	}
-}
-
-func TestValidateDecisionStagesRejectsResponseOnlyConfig(t *testing.T) {
-	cfg := stagedConfig()
-	cfg.Decisions = []Decision{{
-		Name:  "guard",
-		Rules: RuleCombination{Type: SignalTypeJailbreak, Name: "unsafe_completion"},
-	}}
 	err := validateSignalStageContracts(cfg)
-	if err == nil || !strings.Contains(err.Error(), "request time") {
-		t.Fatalf("expected the response-only configuration to be rejected, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), `decision "guard"`) || !strings.Contains(err.Error(), `"unsafe_completion"`) {
+		t.Fatalf("expected the nested response-direction reference to be rejected, got %v", err)
 	}
 
-	cfg.Decisions = append(cfg.Decisions, Decision{
-		Name:  "route",
-		Rules: RuleCombination{Type: SignalTypeKeyword, Name: "probe"},
-	})
+	cfg.Decisions[1].Rules = RuleCombination{Type: SignalTypeJailbreak, Name: "prompt_injection"}
 	if err := validateSignalStageContracts(cfg); err != nil {
-		t.Fatalf("one request-stage decision is enough, got %v", err)
+		t.Fatalf("a request-direction rule is a decision input, got %v", err)
 	}
 }
 

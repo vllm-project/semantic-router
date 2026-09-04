@@ -2,9 +2,8 @@
 // response-direction jailbreak signal and the response_jailbreak plugin. It
 // deploys the router with prompt_guard pointed at a window-limited
 // http_classify stand-in, then verifies that jailbreak content the model emits
-// past that window is still caught in the buffered response, reported through
-// the decision's configured action, and composable with request signals in a
-// response-stage decision.
+// past that window is still caught in the buffered response and reported
+// through the selected decision's configured action.
 package responsejailbreak
 
 import (
@@ -59,7 +58,7 @@ func (p *Profile) Name() string {
 
 // Description returns the profile description.
 func (p *Profile) Description() string {
-	return "Tests the response-direction jailbreak signal on LLM output past the classifier's sequence window and the response-stage decisions that read it"
+	return "Tests the response-direction jailbreak signal on LLM output past the classifier's sequence window and the response_jailbreak plugin that enforces on it"
 }
 
 // Setup deploys the shared gateway stack and this profile's resources.
@@ -77,7 +76,6 @@ func (p *Profile) GetTestCases() []string {
 	return []string{
 		"response-jailbreak-window-block",
 		"response-jailbreak-window-warning",
-		"response-jailbreak-compose-block",
 		"response-jailbreak-streaming-passthrough",
 	}
 }

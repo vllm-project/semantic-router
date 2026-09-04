@@ -36,36 +36,11 @@ func (c *Classifier) EvaluateDecisionWithEngineAndTraceForDecisions(
 	return c.evaluateDecisionInternal(signals, true, decisions)
 }
 
-// EvaluateResponseStageDecision evaluates the decisions that read a
-// response-stage signal, once the model has answered and those signals exist.
-// Request-stage decisions are left out: the request-time selection has already
-// executed and a response observation does not re-litigate it. It returns nil
-// without error when no decision is response-stage or none of them matched.
-func (c *Classifier) EvaluateResponseStageDecision(signals *SignalResults) (*decision.DecisionResult, error) {
-	if len(c.Config.DecisionsAtStage(c.Config.Decisions, config.SignalStageResponse)) == 0 {
-		return nil, nil
-	}
-	result, _, err := c.evaluateStagedDecisions(signals, false, nil, config.SignalStageResponse)
-	return result, err
-}
-
 func (c *Classifier) evaluateDecisionInternal(signals *SignalResults, trace bool, candidates []config.Decision) (*decision.DecisionResult, []decision.DecisionTrace, error) {
-	return c.evaluateStagedDecisions(signals, trace, candidates, config.SignalStageRequest)
-}
-
-// evaluateStagedDecisions evaluates only the decisions observable at stage.
-//
-// A response-stage decision cannot be resolved while the request is being
-// routed: the model has not answered, so the signal was never evaluated, and
-// on_unknown would otherwise decide the request on a detector that never ran.
-// Config validation keeps such a decision from being the only thing standing
-// between a request and a model.
-func (c *Classifier) evaluateStagedDecisions(signals *SignalResults, trace bool, candidates []config.Decision, stage config.SignalStage) (*decision.DecisionResult, []decision.DecisionTrace, error) {
 	decisions := c.Config.Decisions
 	if candidates != nil {
 		decisions = candidates
 	}
-	decisions = c.Config.DecisionsAtStage(decisions, stage)
 	if len(decisions) == 0 {
 		return nil, nil, fmt.Errorf("no decisions configured")
 	}
