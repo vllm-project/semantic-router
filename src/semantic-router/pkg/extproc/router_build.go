@@ -3,6 +3,7 @@ package extproc
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
@@ -54,6 +55,7 @@ type routerComponents struct {
 	lookupTable           lookuptable.LookupTable
 	memoryStore           memory.Store
 	memoryExtractor       *memory.MemoryExtractor
+	memoryPersistence     *memory.PersistenceRunner
 	protocolCodecs        *protocolcodec.Registry
 	looperClient          *looper.Client
 	credentialResolver    *authz.CredentialResolver
@@ -274,6 +276,14 @@ func buildRouterComponents(cfg *config.RouterConfig, pools ...*binding.Pool) (*r
 	if components.memoryStore != nil {
 		components.resources.add(components.memoryStore.Close)
 	}
+	// Resources close in reverse order, so retire writes before closing the store.
+	components.memoryPersistence = createMemoryPersistenceRunner(cfg)
+	if components.memoryPersistence != nil {
+		grace := memoryPersistenceGrace(cfg)
+		components.resources.add(func() error {
+			return components.memoryPersistence.RetireAndWait(grace)
+		})
+	}
 
 	components.credentialResolver = buildCredentialResolver(cfg)
 	components.rateLimiter = buildRateLimitResolver(cfg)
@@ -361,6 +371,25 @@ func registerRouterSessionStore(
 	})
 }
 
+func createMemoryPersistenceRunner(cfg *config.RouterConfig) *memory.PersistenceRunner {
+	if cfg == nil {
+		return nil
+	}
+	persistence := cfg.Memory.Persistence
+	return memory.NewPersistenceRunner(
+		time.Duration(persistence.TimeoutSeconds)*time.Second,
+		persistence.Concurrency,
+		persistence.Queue,
+	)
+}
+
+func memoryPersistenceGrace(cfg *config.RouterConfig) time.Duration {
+	if cfg == nil || cfg.Memory.Persistence.ShutdownGraceSeconds <= 0 {
+		return memory.DefaultPersistenceShutdownGrace
+	}
+	return time.Duration(cfg.Memory.Persistence.ShutdownGraceSeconds) * time.Second
+}
+
 func registerModelSelectorResources(
 	resources *resourceScope,
 	registries map[config.RecipeName]*selection.Registry,
@@ -428,6 +457,7 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 		ShadowDispatcher:        components.shadowDispatcher,
 		MemoryStore:             components.memoryStore,
 		MemoryExtractor:         components.memoryExtractor,
+		memoryPersistence:       components.memoryPersistence,
 		ProtocolCodecs:          components.protocolCodecs,
 		looperClient:            components.looperClient,
 		CredentialResolver:      components.credentialResolver,

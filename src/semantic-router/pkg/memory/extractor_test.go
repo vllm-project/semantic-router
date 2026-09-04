@@ -314,13 +314,14 @@ func TestProcessResponseWithHistory_SessionChunkAtStride(t *testing.T) {
 	}
 
 	// 3rd turn triggers session chunk (stride=3)
-	err := extractor.ProcessResponseWithHistory(
+	storedCount, err := extractor.ProcessResponseWithHistory(
 		ctx, "session1", "user1",
 		"Tell me about Go concurrency.",
 		"Go uses goroutines and channels for concurrency.",
 		history,
 	)
 	require.NoError(t, err)
+	assert.Equal(t, 2, storedCount)
 
 	results, err := store.List(ctx, ListOptions{UserID: "user1", Limit: 100})
 	require.NoError(t, err)
@@ -353,7 +354,7 @@ func TestProcessResponseWithHistory_OverlappingWindows(t *testing.T) {
 
 	var history []openai.ChatCompletionMessageParamUnion
 	for i, turn := range turns {
-		err := extractor.ProcessResponseWithHistory(
+		_, err := extractor.ProcessResponseWithHistory(
 			ctx, "s1", "user1", turn.user, turn.assistant, history,
 		)
 		require.NoError(t, err, "turn %d", i+1)
@@ -387,13 +388,14 @@ func TestProcessResponseWithHistory_NoSessionChunkBeforeStride(t *testing.T) {
 		sdkAssistantMessage("Hi there!"),
 	}
 
-	err := extractor.ProcessResponseWithHistory(
+	storedCount, err := extractor.ProcessResponseWithHistory(
 		ctx, "session1", "user1",
 		"What is Go?",
 		"Go is a programming language created by Google.",
 		history,
 	)
 	require.NoError(t, err)
+	assert.Equal(t, 1, storedCount)
 
 	results, err := store.List(ctx, ListOptions{UserID: "user1", Limit: 100})
 	require.NoError(t, err)
@@ -407,13 +409,14 @@ func TestProcessResponseWithHistory_NilHistory(t *testing.T) {
 	extractor := NewMemoryChunkStore(store)
 	ctx := context.Background()
 
-	err := extractor.ProcessResponseWithHistory(
+	storedCount, err := extractor.ProcessResponseWithHistory(
 		ctx, "session1", "user1",
 		"What is Go?",
 		"Go is a programming language.",
 		nil,
 	)
 	require.NoError(t, err)
+	assert.Equal(t, 1, storedCount)
 
 	results, err := store.List(ctx, ListOptions{UserID: "user1", Limit: 100})
 	require.NoError(t, err)
@@ -460,6 +463,12 @@ func TestProcessResponseWithHistory_RecordsStoredChunkCountMetric(t *testing.T) 
 			wantStored: 2,
 		},
 		{
+			name:       "low entropy",
+			user:       "Hi",
+			assistant:  "Hello!",
+			wantStored: 0,
+		},
+		{
 			name:       "sanitize rejected",
 			user:       "This message includes invalid UTF-8: " + string([]byte{0xff}),
 			assistant:  "This response is long enough to avoid the low entropy filter.",
@@ -486,10 +495,11 @@ func TestProcessResponseWithHistory_RecordsStoredChunkCountMetric(t *testing.T) 
 			ctx := context.Background()
 
 			beforeCount, beforeSum := snapshot(t)
-			err := extractor.ProcessResponseWithHistory(
+			storedCount, err := extractor.ProcessResponseWithHistory(
 				ctx, "session1", "user1",
 				tt.user, tt.assistant, tt.history,
 			)
+			assert.Equal(t, tt.wantStored, storedCount)
 			if tt.wantErr {
 				require.Error(t, err)
 			} else {
