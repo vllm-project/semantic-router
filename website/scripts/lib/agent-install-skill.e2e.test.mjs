@@ -15,7 +15,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { tmpdir } from 'node:os'
@@ -49,18 +49,15 @@ function createIsolatedEnv() {
 }
 
 /**
- * Snapshot the real user HOME contents that the installer would touch,
- * so we can prove the test never mutated them.
+ * Snapshot whether the real user HOME already has vLLM-SR paths,
+ * so we can prove the test never created them.
  */
 function snapshotRealHome() {
   const realHome = process.env.HOME || ''
   const realVsrRoot = resolve(realHome, '.local', 'share', 'vllm-sr')
   const realBin = resolve(realHome, '.local', 'bin')
   return {
-    realHome,
     realVsrRootExists: existsSync(realVsrRoot),
-    realVsrRootEntries: existsSync(realVsrRoot) ? readdirSync(realVsrRoot).sort() : [],
-    realBinExists: existsSync(realBin),
     realBinVsrExists: existsSync(resolve(realBin, 'vllm-sr')),
   }
 }
@@ -128,7 +125,6 @@ test('E2E: install.sh agent-safe mode installs CLI and validates version', { ski
     }
 
     // 4. The real user HOME must not have been mutated.
-    const afterSnap = snapshotRealHome()
     if (!beforeSnap.realVsrRootExists) {
       assert.ok(!existsSync(beforeSnap.realVsrRoot ?? resolve(process.env.HOME || '', '.local', 'share', 'vllm-sr')),
         'real HOME ~/.local/share/vllm-sr was created — isolation leaked')
