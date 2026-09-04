@@ -42,8 +42,8 @@ python3 scripts/rewrite_graph.py \
 Use `--hdim` and `--local-attention` only when they match the source model's
 architecture. Keep the original SDPA model for correctness comparison.
 
-The input decides the output precision. The rewriter keeps the weights as it
-finds them and, for an FP32 graph, adds fp32↔fp16 casts around each
+The input decides the output precision, read from its weight tensors. The
+rewriter keeps the weights as it finds them and, for an FP32 graph, adds fp32↔fp16 casts around each
 `CKFlashAttention` node. A rewrite of the FP32 `model.onnx` must therefore be
 named `model_fa.onnx`; `model_fa_fp16.onnx` needs an FP16 input graph. The
 script refuses an fp16 name for an FP32 graph, because `find_onnx_models`

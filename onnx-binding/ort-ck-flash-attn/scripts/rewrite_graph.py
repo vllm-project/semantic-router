@@ -296,6 +296,43 @@ def create_1d_padding_bias_nodes(graph):
     return nodes, unsqueeze_out
 
 
+def weight_precision(initializers):
+    """Return the one floating-point elem_type every weight tensor shares.
+
+    Integer initializers (shapes, gather indices) carry no precision and are
+    ignored. A graph with no floating-point weights, with more than one
+    floating-point precision, or with a precision the CK kernel does not take
+    (only FLOAT and FLOAT16 are) is refused, since neither name would describe
+    it.
+    """
+    counts = {}
+    for tensor in initializers:
+        if tensor.data_type in _FLOAT_TYPES:
+            counts[tensor.data_type] = counts.get(tensor.data_type, 0) + 1
+    if not counts:
+        raise ValueError("the graph holds no floating-point weight tensors")
+    if len(counts) > 1:
+        found = ", ".join(
+            f"{n} {TensorProto.DataType.Name(t)}" for t, n in sorted(counts.items())
+        )
+        raise ValueError(f"the graph mixes weight precisions: {found}")
+    (elem_type,) = counts
+    if elem_type not in (TensorProto.FLOAT, TensorProto.FLOAT16):
+        raise ValueError(
+            f"the graph holds {TensorProto.DataType.Name(elem_type)} weights; "
+            "CKFlashAttention takes FLOAT or FLOAT16"
+        )
+    return elem_type
+
+
+_FLOAT_TYPES = (
+    TensorProto.FLOAT,
+    TensorProto.FLOAT16,
+    TensorProto.BFLOAT16,
+    TensorProto.DOUBLE,
+)
+
+
 def output_precision_conflict(output_path, model_is_fp16):
     """Return a message when the output name claims a precision the graph lacks.
 
@@ -372,15 +409,14 @@ def rewrite(  # noqa: C901,PLR0912,PLR0915
     # Create 1-D padding bias nodes
     pad_bias_nodes, pad_bias_tensor = create_1d_padding_bias_nodes(graph)
 
-    # Build value_info type map for precision detection
-    vi_type_map = {}
-    for vi in graph.value_info:
-        if vi.type.HasField("tensor_type"):
-            vi_type_map[vi.name] = vi.type.tensor_type.elem_type
-
-    # Detect model precision from Q tensor of first block
-    first_q = blocks[0]["q_tensor"]
-    model_is_fp16 = vi_type_map.get(first_q) == TensorProto.FLOAT16
+    # Detect model precision from the weights themselves. value_info is
+    # optional and describes activations, so a valid FP16 export that carries
+    # none would read as FP32, and one activation cannot vouch for every weight.
+    try:
+        model_is_fp16 = weight_precision(graph.initializer) == TensorProto.FLOAT16
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        sys.exit(1)
     if model_is_fp16:
         print("  Model precision: FP16 (skipping input/output Cast nodes)")
     else:
