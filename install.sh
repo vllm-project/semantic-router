@@ -497,15 +497,31 @@ detect_package_manager_label() {
 }
 
 detect_existing_runtime() {
-  if docker_ready; then
-    printf 'docker\n'
-    return
-  fi
+  case "${REQUESTED_RUNTIME:-auto}" in
+    docker)
+      if docker_ready; then
+        printf 'docker\n'
+        return
+      fi
+      ;;
+    podman)
+      if podman_ready; then
+        printf 'podman\n'
+        return
+      fi
+      ;;
+    auto)
+      if docker_ready; then
+        printf 'docker\n'
+        return
+      fi
 
-  if podman_ready; then
-    printf 'podman\n'
-    return
-  fi
+      if podman_ready; then
+        printf 'podman\n'
+        return
+      fi
+      ;;
+  esac
 
   return 1
 }

@@ -86,10 +86,21 @@ def test_skip_writes_no_runtime_env() -> None:
 
 def test_printed_commands_include_runtime_flag() -> None:
     """When --runtime podman is selected, the printed restart/start commands
-    must carry `--runtime podman` so users copy-paste the right invocation."""
+    must carry `--runtime podman` so users copy-paste the right invocation.
+
+    This scenario also exercises the full installer print path
+    (print_install_plan → detect_existing_runtime) so the CALLS trace
+    proves Docker is never probed -- not just in ensure_runtime, but
+    across the entire installer surface (#3441)."""
     out = _run_harness("print-command-podman")
 
     assert "SELECTED_RUNTIME=podman" in out
+
+    # Docker must not be probed anywhere in the full installer path.
+    calls_line = [l for l in out.splitlines() if l.startswith("CALLS=")][0]
+    assert "docker" not in calls_line, (
+        f"Docker was probed despite --runtime podman: {calls_line}"
+    )
 
     restart_section = out.split("[PRINT_RESTART_COMMAND]")[1].split(
         "[PRINT_NEXT_STEPS]"
