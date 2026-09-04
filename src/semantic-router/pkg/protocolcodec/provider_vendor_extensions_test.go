@@ -274,3 +274,28 @@ func TestDecodeResponseReportsVendorExtensionsAsDiagnostics(t *testing.T) {
 		}
 	}
 }
+
+// Azure decorates error envelopes too. Decoding those strictly would replace a
+// real upstream reason (content filter block, rate limit) with a generic
+// router error, so the vendor allowance has to reach this path as well.
+func TestDecodeTransportErrorAcceptsDecoratedAzureErrorEnvelope(t *testing.T) {
+	body := `{"error":{"type":"invalid_request_error","code":"content_filter",` +
+		`"message":"blocked","param":null,"innererror":{"content_filter_result":{"hate":{"filtered":true}}}}}`
+
+	policy := llmprotocol.DefaultPolicy()
+	policy.ResponseVendor = llmprotocol.VendorAzure
+
+	transportError, _, err := OpenAIChatCodec{}.DecodeTransportError([]byte(body), policy)
+	if err != nil {
+		t.Fatalf("DecodeTransportError() error = %v, want nil", err)
+	}
+	if transportError.Error == nil || transportError.Error.Code != "content_filter" {
+		t.Errorf("Error = %+v, want the upstream content_filter code preserved", transportError.Error)
+	}
+
+	// Without the allowance the same envelope is still rejected.
+	_, _, strictErr := OpenAIChatCodec{}.DecodeTransportError([]byte(body), llmprotocol.DefaultPolicy())
+	if strictErr == nil {
+		t.Error("DecodeTransportError() error = nil without an allowance, want rejection")
+	}
+}
