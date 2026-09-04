@@ -1,360 +1,714 @@
 // SPDX-License-Identifier: Apache-2.0
-// Per-assignee inactivity state machine for accepted issues.
-// Uses the Timeline API for human-only activity detection. Bot writes,
-// label churn, and automation do NOT reset the inactivity clock.
-// All list operations are paginated. API errors fail-closed.
+// Per-assignee inactivity state machine for accepted issues. Activity is
+// attributed to one assignee at a time, removal always follows a recorded
+// warning, every read fails closed, and every write is marker-guarded so a
+// half-finished run resumes rather than repeating itself.
 
 "use strict";
 
-const WARN_LABEL = "unassign-warned";
-const ACCEPTED_LABEL = "accepted";
-const WARNING_MARKER = "<!-- unassign-inactive-warning -->";
+const fs = require("fs");
 
-// Timeline event types that signal real contributor activity.
+const ACCEPTED_LABEL = "accepted";
+const MARKER_NAMESPACE = "unassign-inactive";
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// Each linked pull request costs a paginated timeline read; the most recently
+// referenced ones dominate the activity date anyway.
+const MAX_LINKED_PULL_REQUESTS = 20;
+
+// Triage noise (labels, milestones, mentions, renames) is deliberately absent.
+// `assigned` is handled separately: its actor is the maintainer, not the assignee.
 const HUMAN_EVENT_TYPES = new Set([
   "commented",
   "committed",
   "reviewed",
   "review_requested",
   "head_ref_force_pushed",
-  "base_ref_changed",
+  "ready_for_review",
   "referenced",
   "cross-referenced",
+  "connected",
+  "reopened",
 ]);
 
-// -- Timeline API -----------------------------------------------------------
+// -- Small helpers ----------------------------------------------------------
 
-/** Fetch all timeline events for an issue, paginated. Returns null on error. */
-async function fetchTimeline(octokit, owner, repo, issueNumber) {
+function normalizeLogin(login) {
+  return typeof login === "string" ? login.trim().toLowerCase() : "";
+}
+
+function sameLogin(a, b) {
+  const left = normalizeLogin(a);
+  return left !== "" && left === normalizeLogin(b);
+}
+
+// `type` is absent on some timeline shapes, so check the login suffix too.
+function isBotActor(actor) {
+  return (
+    !actor ||
+    actor.type === "Bot" ||
+    /\[bot\]$/i.test(typeof actor.login === "string" ? actor.login : "")
+  );
+}
+
+function toDate(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function laterOf(a, b) {
+  if (!a) return b || null;
+  if (!b) return a;
+  return a > b ? a : b;
+}
+
+function daysBetween(later, earlier) {
+  return (later.getTime() - earlier.getTime()) / DAY_MS;
+}
+
+function plural(count, word) {
+  return `${count} ${word}${count === 1 ? "" : "s"}`;
+}
+
+// Reviews use submitted_at, commits use author.date.
+function eventTimestamp(event) {
+  return toDate(
+    event.created_at ||
+      event.submitted_at ||
+      event.committed_at ||
+      (event.author && event.author.date) ||
+      (event.committer && event.committer.date)
+  );
+}
+
+// Per-assignee and per-transition, so one assignee's warning is never mistaken
+// for another's and a removal notice is never counted as a warning.
+function warningMarker(login) {
+  return `<!-- ${MARKER_NAMESPACE}:warned:${normalizeLogin(login)} -->`;
+}
+
+function removalMarker(login) {
+  return `<!-- ${MARKER_NAMESPACE}:removed:${normalizeLogin(login)} -->`;
+}
+
+// -- GitHub reads (all paginated, all fail-closed) --------------------------
+
+/** Every timeline event for an issue or pull request; null on failure. */
+async function fetchTimeline(octokit, owner, repo, number) {
   try {
     return await octokit.paginate(octokit.rest.issues.listEventsForTimeline, {
       owner,
       repo,
-      issue_number: issueNumber,
+      issue_number: number,
       per_page: 100,
-      headers: { accept: "application/vnd.github.mockingbird-preview+json" },
     });
   } catch (err) {
-    console.warn(`[fetchTimeline] #${issueNumber}: ${err.message}`);
+    console.warn(`[fetchTimeline] #${number}: ${err.message}`);
     return null;
   }
 }
 
-/**
- * Return the most recent Date of human activity by assigneeLogin on the
- * given timeline, or null if none found.
- */
-function getLastHumanActivityDate(timeline, assigneeLogin) {
-  let latest = null;
-
-  for (const event of timeline) {
-    const actor =
-      event.actor || event.user || (event.author && { login: event.author.name });
-
-    // Skip bot actors.
-    if (!actor || actor.type === "Bot" || /\[bot\]$/.test(actor.login || "")) {
-      continue;
-    }
-
-    let isQualifying = false;
-
-    if (actor.login === assigneeLogin) {
-      if (HUMAN_EVENT_TYPES.has(event.event)) {
-        isQualifying = true;
-      }
-    } else {
-      // Cross-referenced events: match when the source PR is authored by the assignee.
-      if (event.event === "cross-referenced") {
-        const source = event.source && event.source.issue;
-        if (source && source.pull_request && source.user && source.user.login === assigneeLogin) {
-          isQualifying = true;
-        }
-      }
-    }
-
-    // Manual maintainer overrides: reassignment or removing the warning label resets the clock
-    if (event.event === "assigned" && event.assignee && event.assignee.login === assigneeLogin) {
-      isQualifying = true;
-    }
-    if (event.event === "unlabeled" && event.label && event.label.name === WARN_LABEL) {
-      isQualifying = true;
-    }
-
-    if (!isQualifying) continue;
-
-    const ts = event.created_at || event.submitted_at || event.committed_at;
-    if (!ts) continue;
-
-    const d = new Date(ts);
-    if (!latest || d > latest) latest = d;
-  }
-
-  return latest;
-}
-
-// -- Linked-PR detection (paginated, per-assignee, fail-closed) -------------
-
-/**
- * Search for PRs authored by assigneeLogin that reference issueNumber.
- * Returns { hasActivity, date, error? }. Fails-closed on API error.
- */
-async function findLinkedPRActivity(octokit, owner, repo, issueNumber, assigneeLogin) {
-  const query = `repo:${owner}/${repo} is:pr author:${assigneeLogin}`;
-  // Word-boundary pattern: #42 must not match #420.
-  const issuePattern = new RegExp(`#${issueNumber}(?:\\D|$)`);
-  let latest = null;
-  let page = 1;
-
+/** Every issue comment; null on failure, never an empty "no warning" result. */
+async function fetchComments(octokit, owner, repo, issueNumber) {
   try {
-    while (true) { // eslint-disable-line no-constant-condition
-      const { data } = await octokit.rest.search.issuesAndPullRequests({
-        q: query,
-        per_page: 100,
-        page,
-      });
-
-      for (const pr of data.items) {
-        if (!pr.pull_request) continue;
-        if (!issuePattern.test(pr.body || "")) continue;
-
-        const updated = new Date(pr.updated_at);
-        if (!latest || updated > latest) latest = updated;
-      }
-
-      if (data.items.length < 100) break;
-      page += 1;
-    }
-
-    return { hasActivity: latest !== null, date: latest };
-  } catch (err) {
-    console.warn(
-      `[findLinkedPRActivity] ${assigneeLogin} on #${issueNumber}: ${err.message} (fail-closed)`
-    );
-    return { hasActivity: true, date: null, error: true };
-  }
-}
-
-// -- Warning comment helpers ------------------------------------------------
-
-/** Check if a warning comment already exists for this assignee since their last activity. */
-async function warningCommentExists(octokit, owner, repo, issueNumber, assigneeLogin, lastHumanActivity) {
-  try {
-    const comments = await octokit.paginate(octokit.rest.issues.listComments, {
+    return await octokit.paginate(octokit.rest.issues.listComments, {
       owner,
       repo,
       issue_number: issueNumber,
       per_page: 100,
     });
-    return comments.some((c) => {
-      if (!c.body || !c.body.includes(WARNING_MARKER) || !c.body.includes(`@${assigneeLogin}`)) {
-        return false;
-      }
-      if (lastHumanActivity && c.created_at) {
-        if (new Date(c.created_at) < lastHumanActivity) {
-          return false;
-        }
-      }
-      return true;
-    });
   } catch (err) {
-    console.warn(`[warningCommentExists] #${issueNumber}: ${err.message}`);
-    return false;
+    console.warn(`[fetchComments] #${issueNumber}: ${err.message}`);
+    return null;
   }
 }
 
-function buildWarningComment(assigneeLogin, warnAfterDays, unassignAfterDays) {
-  const remaining = unassignAfterDays - warnAfterDays;
-  return (
-    `${WARNING_MARKER}\n` +
-    `@${assigneeLogin} — this issue has had no qualifying activity from you ` +
-    `for **${warnAfterDays} days**.\n\n` +
-    `If you are still working on this, please leave a comment or open a linked ` +
-    `pull request within the next **${remaining} day${remaining !== 1 ? "s" : ""}** ` +
-    `to retain your assignment. Otherwise, the assignment will be released so ` +
-    `another contributor can pick it up.\n\n` +
-    `_This message was posted automatically by the inactivity workflow. ` +
-    `Maintainers can always manually extend or override assignments._`
-  );
+// -- Activity attribution ---------------------------------------------------
+
+/** Reduce an issue timeline to { lastActivityAt, linkedPullRequests }. */
+function collectIssueSignals(timeline, assigneeLogin) {
+  let lastActivityAt = null;
+  const linkedPullRequests = new Map();
+
+  for (const event of timeline || []) {
+    const at = eventTimestamp(event);
+
+    // Assignment restarts this assignee's clock. Read before the bot filter,
+    // since automation may be what does the assigning.
+    if (
+      event.event === "assigned" &&
+      sameLogin(event.assignee && event.assignee.login, assigneeLogin)
+    ) {
+      lastActivityAt = laterOf(lastActivityAt, at);
+      continue;
+    }
+
+    // Collected whoever made the reference; whether the pull request is this
+    // assignee's work is decided by inspecting the pull request itself.
+    if (event.event === "cross-referenced") {
+      const source = event.source && event.source.issue;
+      if (source && source.pull_request && Number.isInteger(source.number)) {
+        const existing = linkedPullRequests.get(source.number);
+        const createdAt = toDate(source.created_at);
+        if (!existing) {
+          linkedPullRequests.set(source.number, {
+            number: source.number,
+            authorLogin: (source.user && source.user.login) || null,
+            createdAt,
+            repositoryFullName:
+              (source.repository && source.repository.full_name) || null,
+            referencedAt: at,
+          });
+        } else {
+          existing.referencedAt = laterOf(existing.referencedAt, at);
+        }
+      }
+    }
+
+    const actor = event.actor || event.user;
+    if (isBotActor(actor)) continue;
+    if (!sameLogin(actor.login, assigneeLogin)) continue;
+    if (!HUMAN_EVENT_TYPES.has(event.event)) continue;
+    if (!at) continue;
+
+    lastActivityAt = laterOf(lastActivityAt, at);
+  }
+
+  return {
+    lastActivityAt,
+    linkedPullRequests: Array.from(linkedPullRequests.values()),
+  };
 }
 
-function buildUnassignComment(assigneeLogin, unassignAfterDays) {
-  return (
-    `${WARNING_MARKER}\n` +
-    `@${assigneeLogin} — you have been unassigned from this issue after ` +
-    `**${unassignAfterDays} days** of inactivity. The issue remains open and ` +
-    `available for anyone to pick up.\n\n` +
-    `If you are still interested in working on this, feel free to comment and ` +
-    `a maintainer can reassign it to you.\n\n` +
-    `_This action was taken automatically by the inactivity workflow._`
-  );
+/**
+ * The assignee's own most recent activity inside one pull request, or
+ * { error: true }. Deliberately not the pull request's `updated_at`: that moves
+ * on anyone's comment or CI write, keeping an inactive assignee assigned.
+ */
+async function collectPullRequestActivity(
+  octokit,
+  owner,
+  repo,
+  pullRequest,
+  assigneeLogin
+) {
+  const authoredByAssignee = sameLogin(pullRequest.authorLogin, assigneeLogin);
+
+  const timeline = await fetchTimeline(octokit, owner, repo, pullRequest.number);
+  if (timeline === null) return { error: true };
+
+  // Opening the pull request is itself the assignee's work.
+  let lastActivityAt = authoredByAssignee ? pullRequest.createdAt : null;
+
+  for (const event of timeline) {
+    const at = eventTimestamp(event);
+    if (!at) continue;
+
+    // Commits carry a git identity, not a login, so they cannot be attributed
+    // by actor. Credit them only on a pull request the assignee opened.
+    if (event.event === "committed") {
+      if (authoredByAssignee) lastActivityAt = laterOf(lastActivityAt, at);
+      continue;
+    }
+
+    const actor = event.actor || event.user;
+    if (isBotActor(actor)) continue;
+    if (!sameLogin(actor.login, assigneeLogin)) continue;
+    if (!HUMAN_EVENT_TYPES.has(event.event)) continue;
+
+    lastActivityAt = laterOf(lastActivityAt, at);
+  }
+
+  return { lastActivityAt };
+}
+
+/**
+ * One assignee's last activity across the issue and its linked pull requests,
+ * or { error: true } if a read that could have proven activity failed.
+ */
+async function resolveLastActivity(
+  octokit,
+  owner,
+  repo,
+  issue,
+  assigneeLogin
+) {
+  const timeline = await fetchTimeline(octokit, owner, repo, issue.number);
+  if (timeline === null) return { error: true };
+
+  const signals = collectIssueSignals(timeline, assigneeLogin);
+  let lastActivityAt = signals.lastActivityAt;
+
+  const repositoryFullName = `${owner}/${repo}`;
+  const candidates = signals.linkedPullRequests
+    // Cross-repository sources are unreadable with this token; the reference
+    // event itself is still credited above when the assignee made it.
+    .filter(
+      (pr) =>
+        !pr.repositoryFullName || pr.repositoryFullName === repositoryFullName
+    )
+    .sort(
+      (a, b) =>
+        (b.referencedAt ? b.referencedAt.getTime() : 0) -
+        (a.referencedAt ? a.referencedAt.getTime() : 0)
+    )
+    .slice(0, MAX_LINKED_PULL_REQUESTS);
+
+  for (const pullRequest of candidates) {
+    const activity = await collectPullRequestActivity(
+      octokit,
+      owner,
+      repo,
+      pullRequest,
+      assigneeLogin
+    );
+    if (activity.error) return { error: true };
+    lastActivityAt = laterOf(lastActivityAt, activity.lastActivityAt);
+  }
+
+  return { lastActivityAt };
+}
+
+// -- Warning / removal state ------------------------------------------------
+
+/**
+ * Newest notices addressed to one assignee, as
+ * { warnedAt, supersededWarningAt, removalNoticeAt }. Only bot-authored
+ * notices count, so quoting a marker cannot move the clock; a notice predating
+ * the assignee's last activity belongs to a cycle they already cancelled.
+ */
+function readTransitionState(comments, assigneeLogin, lastActivityAt) {
+  const warnTag = warningMarker(assigneeLogin);
+  const removeTag = removalMarker(assigneeLogin);
+
+  let warnedAt = null;
+  let supersededWarningAt = null;
+  let removalNoticeAt = null;
+
+  for (const comment of comments || []) {
+    const body = comment && comment.body;
+    if (typeof body !== "string") continue;
+    if (!comment.user || !isBotActor(comment.user)) continue;
+
+    const createdAt = toDate(comment.created_at);
+    if (!createdAt) continue;
+
+    const superseded = Boolean(lastActivityAt) && createdAt < lastActivityAt;
+
+    if (body.includes(warnTag)) {
+      if (superseded) {
+        supersededWarningAt = laterOf(supersededWarningAt, createdAt);
+      } else {
+        warnedAt = laterOf(warnedAt, createdAt);
+      }
+    } else if (body.includes(removeTag) && !superseded) {
+      removalNoticeAt = laterOf(removalNoticeAt, createdAt);
+    }
+  }
+
+  return { warnedAt, supersededWarningAt, removalNoticeAt };
+}
+
+function buildWarningComment(assigneeLogin, inactiveDays, graceDays) {
+  return [
+    warningMarker(assigneeLogin),
+    `@${assigneeLogin} — this issue has had no activity from you for ` +
+      `**${plural(inactiveDays, "day")}**.`,
+    "",
+    "If you are still working on it, leave a comment or push to a linked pull " +
+      `request within the next **${plural(graceDays, "day")}** to keep the ` +
+      "assignment. Otherwise it will be released so another contributor can " +
+      "pick it up. The issue itself stays open either way.",
+    "",
+    "Comments, reviews, and commits from other people do not count here — " +
+      "only your own activity on this issue or on a pull request linked to it.",
+    "",
+    "_Posted automatically by the assignee inactivity workflow. Maintainers " +
+      "can extend or override any assignment._",
+  ].join("\n");
+}
+
+function buildRemovalComment(assigneeLogin, inactiveDays, warnedAt) {
+  const warnedLine = warnedAt
+    ? `A warning was posted on ${warnedAt.toISOString().slice(0, 10)} and the ` +
+      "grace period has now passed."
+    : "A warning was posted earlier and the grace period has now passed.";
+  return [
+    removalMarker(assigneeLogin),
+    `@${assigneeLogin} — releasing this assignment after ` +
+      `**${plural(inactiveDays, "day")}** without activity from you. ` +
+      warnedLine,
+    "",
+    "The issue stays open and `accepted`, so anyone can pick it up. If you are " +
+      "still interested, comment here and a maintainer can reassign it to you.",
+    "",
+    "_Posted automatically by the assignee inactivity workflow._",
+  ].join("\n");
 }
 
 // -- Per-assignee state machine ---------------------------------------------
 
 /**
- * Process one (issue, assignee) pair.
- * Returns: "skipped" | "warned" | "unassigned" | "warning-cleared" | "error"
+ * Evaluate and, unless dryRun, advance one (issue, assignee) pair to one of
+ * "skipped" (active, or still inside the grace window), "recovered", "warned",
+ * "unassigned", or "error" (a read or write failed; nothing was mutated).
  */
-async function processAssignee(octokit, owner, repo, issue, assigneeLogin, config) {
-  const { warnAfterDays, unassignAfterDays, dryRun } = config;
+async function evaluateAssignee(octokit, owner, repo, issue, assigneeLogin, config) {
+  const { warnAfterDays, unassignAfterDays, dryRun, now } = config;
   const issueNumber = issue.number;
-  const now = new Date();
+  const graceDays = unassignAfterDays - warnAfterDays;
 
-  console.log(`  [#${issueNumber}] evaluating @${assigneeLogin}`);
+  const record = {
+    issueNumber,
+    assignee: assigneeLogin,
+    action: "skipped",
+    reason: "",
+    lastActivityAt: null,
+    inactiveDays: 0,
+    warnedAt: null,
+  };
 
-  // 1. Fetch timeline (fail-closed).
-  const timeline = await fetchTimeline(octokit, owner, repo, issueNumber);
-  if (timeline === null) {
-    console.log(`  → skip: timeline fetch failed; assuming active`);
-    return "error";
+  const activity = await resolveLastActivity(
+    octokit,
+    owner,
+    repo,
+    issue,
+    assigneeLogin
+  );
+  if (activity.error) {
+    record.action = "error";
+    record.reason = "activity lookup failed; left assigned";
+    return record;
   }
 
-  // 2. Compute last human activity date.
-  let lastHumanActivity = getLastHumanActivityDate(timeline, assigneeLogin);
+  // Fallback only when the timeline yields nothing; normally the `assigned`
+  // event supplies a later, fairer start.
+  const lastActivityAt =
+    activity.lastActivityAt || toDate(issue.created_at) || now;
+  const inactiveDays = Math.max(0, daysBetween(now, lastActivityAt));
 
-  const prActivity = await findLinkedPRActivity(octokit, owner, repo, issueNumber, assigneeLogin);
-  if (prActivity.error) {
-    console.log(`  → skip: PR search failed; assuming active`);
-    return "error";
+  record.lastActivityAt = lastActivityAt;
+  record.inactiveDays = inactiveDays;
+
+  const comments = await fetchComments(octokit, owner, repo, issueNumber);
+  if (comments === null) {
+    record.action = "error";
+    record.reason = "warning lookup failed; left assigned";
+    return record;
   }
-  if (prActivity.hasActivity && prActivity.date) {
-    if (!lastHumanActivity || prActivity.date > lastHumanActivity) {
-      lastHumanActivity = prActivity.date;
+
+  const state = readTransitionState(comments, assigneeLogin, lastActivityAt);
+  record.warnedAt = state.warnedAt;
+
+  // A: still active.
+  if (inactiveDays < warnAfterDays) {
+    if (state.supersededWarningAt) {
+      record.action = "recovered";
+      record.reason = "activity resumed; pending warning no longer applies";
+    } else {
+      record.reason = `active ${Math.floor(inactiveDays)}d ago`;
+    }
+    return record;
+  }
+
+  // B: inactive, not yet warned. A warning always precedes removal, even for an
+  // assignee first seen long past the removal threshold.
+  if (!state.warnedAt) {
+    record.action = "warned";
+    record.reason = `inactive ${Math.floor(inactiveDays)}d; warning posted`;
+    if (dryRun) return record;
+
+    try {
+      await octokit.rest.issues.createComment({
+        owner,
+        repo,
+        issue_number: issueNumber,
+        body: buildWarningComment(
+          assigneeLogin,
+          Math.floor(inactiveDays),
+          graceDays
+        ),
+      });
+    } catch (err) {
+      console.warn(`  [#${issueNumber}] warning comment failed: ${err.message}`);
+      record.action = "error";
+      record.reason = "warning comment failed; retried on the next run";
+    }
+    return record;
+  }
+
+  // C: warned. Removal needs the inactivity threshold *and* a full grace window
+  // measured from the warning, so a warning posted today cannot remove today.
+  const daysSinceWarning = Math.max(0, daysBetween(now, state.warnedAt));
+  if (inactiveDays < unassignAfterDays || daysSinceWarning < graceDays) {
+    // Both conditions must clear, so the wait is the longer of the two.
+    const remaining = Math.max(
+      unassignAfterDays - inactiveDays,
+      graceDays - daysSinceWarning
+    );
+    record.reason =
+      `warned ${Math.floor(daysSinceWarning)}d ago; ` +
+      `${Math.max(0, Math.ceil(remaining))}d of grace left`;
+    return record;
+  }
+
+  // D: removal. Notice first, so the contributor is always told; its marker
+  // makes a resumed run skip straight to the removal it did not reach.
+  record.action = "unassigned";
+  record.reason = `inactive ${Math.floor(inactiveDays)}d; warned ${Math.floor(daysSinceWarning)}d ago`;
+  if (dryRun) return record;
+
+  if (!state.removalNoticeAt) {
+    try {
+      await octokit.rest.issues.createComment({
+        owner,
+        repo,
+        issue_number: issueNumber,
+        body: buildRemovalComment(
+          assigneeLogin,
+          Math.floor(inactiveDays),
+          state.warnedAt
+        ),
+      });
+    } catch (err) {
+      console.warn(`  [#${issueNumber}] removal notice failed: ${err.message}`);
+      record.action = "error";
+      record.reason = "removal notice failed; assignment kept until it lands";
+      return record;
     }
   }
 
-  // Fallback: use issue creation.
-  if (!lastHumanActivity) {
-    lastHumanActivity = new Date(issue.created_at);
+  try {
+    await octokit.rest.issues.removeAssignees({
+      owner,
+      repo,
+      issue_number: issueNumber,
+      assignees: [assigneeLogin],
+    });
+  } catch (err) {
+    console.warn(`  [#${issueNumber}] removeAssignees failed: ${err.message}`);
+    record.action = "error";
+    record.reason = "removal failed; the notice is on record and will be reused";
+  }
+  return record;
+}
+
+// -- Reporting --------------------------------------------------------------
+
+function formatDays(value) {
+  return `${Math.floor(value)}d`;
+}
+
+function buildRunSummary(records, stats, config) {
+  const { warnAfterDays, unassignAfterDays, dryRun, exemptLabels } = config;
+  const lines = [
+    "## Assignee inactivity sweep",
+    "",
+    `Warn after ${plural(warnAfterDays, "day")} · unassign after ` +
+      `${plural(unassignAfterDays, "day")} · ` +
+      `${dryRun ? "**dry run — nothing was mutated**" : "live"}`,
+  ];
+
+  if (exemptLabels.length > 0) {
+    lines.push("", `Exempt labels: ${exemptLabels.map((l) => `\`${l}\``).join(", ")}`);
   }
 
-  const daysSinceActivity = (now - lastHumanActivity) / (1000 * 60 * 60 * 24);
-
-  const isWarned = await warningCommentExists(
-    octokit, owner, repo, issueNumber, assigneeLogin, lastHumanActivity
+  lines.push(
+    "",
+    `Evaluated ${plural(stats.evaluated, "assignment")} across ` +
+      `${plural(stats.issues, "issue")}: ${stats.warned} warned, ` +
+      `${stats.unassigned} unassigned, ${stats.recovered} recovered, ` +
+      `${stats.skipped} unchanged, ${stats.errors} failed.`
   );
 
-  console.log(
-    `  last activity: ${lastHumanActivity.toISOString()} (${Math.floor(daysSinceActivity)}d ago), warned=${isWarned}`
-  );
-
-  // 3. State machine transitions.
-
-  // A: Recent activity
-  if (daysSinceActivity < warnAfterDays) {
-    console.log(`  → skip: active`);
-    return "skipped";
-  }
-
-  // B: Past unassign threshold — remove assignee.
-  if (daysSinceActivity >= unassignAfterDays) {
-    console.log(`  → unassign: removing @${assigneeLogin}`);
-    if (!dryRun) {
-      try {
-        await octokit.rest.issues.removeAssignees({
-          owner, repo, issue_number: issueNumber, assignees: [assigneeLogin],
-        });
-      } catch (err) {
-        console.warn(`  removeAssignees failed: ${err.message}`);
-        return "error";
-      }
-
-      // Best-effort: post notification (recoverable — assignee is already removed).
-      try {
-        await octokit.rest.issues.createComment({
-          owner, repo, issue_number: issueNumber,
-          body: buildUnassignComment(assigneeLogin, unassignAfterDays),
-        });
-      } catch (err) {
-        console.warn(`  notify comment failed: ${err.message}`);
-      }
+  const notable = records.filter((r) => r.action !== "skipped");
+  if (notable.length > 0) {
+    lines.push(
+      "",
+      "| Issue | Assignee | Action | Inactive | Why |",
+      "| --- | --- | --- | --- | --- |"
+    );
+    for (const record of notable) {
+      lines.push(
+        `| #${record.issueNumber} | @${record.assignee} | ${record.action} | ` +
+          `${formatDays(record.inactiveDays)} | ${record.reason} |`
+      );
     }
-    return "unassigned";
   }
 
-  // C: Between warn and unassign thresholds — warn if not already warned.
-  if (!isWarned) {
-    console.log(`  → warn: posting warning`);
-    if (!dryRun) {
-      try {
-        await octokit.rest.issues.createComment({
-          owner, repo, issue_number: issueNumber,
-          body: buildWarningComment(assigneeLogin, warnAfterDays, unassignAfterDays),
-        });
-      } catch (err) {
-        console.warn(`  warning comment failed: ${err.message}`);
-        return "error";
-      }
-
-    }
-    return "warned";
+  if (stats.errors > 0) {
+    lines.push(
+      "",
+      "Failed evaluations left their assignments untouched. The sweep is " +
+        "idempotent — re-running it retries only what did not complete."
+    );
   }
 
-  console.log(`  → skip: already warned; awaiting unassign threshold`);
-  return "skipped";
+  return `${lines.join("\n")}\n`;
+}
+
+function writeStepSummary(text, summaryPath) {
+  if (!summaryPath) return;
+  try {
+    fs.appendFileSync(summaryPath, text, "utf8");
+  } catch (err) {
+    console.warn(`[unassign-inactive] step summary write failed: ${err.message}`);
+  }
 }
 
 // -- Entry point ------------------------------------------------------------
 
+const ACTION_STATS = {
+  skipped: "skipped",
+  recovered: "recovered",
+  warned: "warned",
+  unassigned: "unassigned",
+  error: "errors",
+};
+
+function parseExemptLabels(value) {
+  const raw = Array.isArray(value) ? value : String(value || "").split(",");
+  return raw.map((label) => String(label).trim().toLowerCase()).filter(Boolean);
+}
+
+function issueLabelNames(issue) {
+  return (issue.labels || [])
+    .map((label) => (typeof label === "string" ? label : label && label.name))
+    .filter(Boolean)
+    .map((name) => name.toLowerCase());
+}
+
+function issueAssignees(issue) {
+  if (Array.isArray(issue.assignees) && issue.assignees.length > 0) {
+    return issue.assignees;
+  }
+  return issue.assignee ? [issue.assignee] : [];
+}
+
+/**
+ * Sweep every open `accepted` issue, advancing each assignee independently.
+ * Throws when the run cannot be trusted at all; otherwise returns
+ * { stats, records }, where a non-zero stats.errors means the caller should
+ * fail the job so the next run retries those assignments.
+ */
 async function run(octokit, context, config = {}) {
-  const { warnAfterDays = 15, unassignAfterDays = 30, dryRun = false } = config;
+  const warnAfterDays = Number(config.warnAfterDays ?? 15);
+  const unassignAfterDays = Number(config.unassignAfterDays ?? 30);
+  const dryRun = Boolean(config.dryRun);
+  const now = config.now instanceof Date ? config.now : new Date();
+  const exemptLabels = parseExemptLabels(config.exemptLabels ?? "hold");
+  const summaryPath =
+    config.summaryPath ?? process.env.GITHUB_STEP_SUMMARY ?? null;
+
+  if (!Number.isFinite(warnAfterDays) || warnAfterDays < 1) {
+    throw new Error(`warnAfterDays must be a positive number, got ${config.warnAfterDays}`);
+  }
+  if (!Number.isFinite(unassignAfterDays) || unassignAfterDays <= warnAfterDays) {
+    throw new Error(
+      `unassignAfterDays (${unassignAfterDays}) must be greater than ` +
+        `warnAfterDays (${warnAfterDays}) so a warned contributor gets a grace window`
+    );
+  }
+
   const { owner, repo } = context.repo;
 
   console.log(
-    `[unassign-inactive] start: warn=${warnAfterDays}d, unassign=${unassignAfterDays}d, dryRun=${dryRun}`
+    `[unassign-inactive] warn=${warnAfterDays}d unassign=${unassignAfterDays}d ` +
+      `dryRun=${dryRun} exempt=[${exemptLabels.join(", ")}]`
   );
 
   let issues;
   try {
     issues = await octokit.paginate(octokit.rest.issues.listForRepo, {
-      owner, repo, state: "open", labels: ACCEPTED_LABEL, per_page: 100,
+      owner,
+      repo,
+      state: "open",
+      labels: ACCEPTED_LABEL,
+      per_page: 100,
     });
   } catch (err) {
-    console.error(`[unassign-inactive] listForRepo failed: ${err.message}`);
-    process.exitCode = 1;
-    return;
+    throw new Error(`listing accepted issues failed: ${err.message}`);
   }
 
-  // Filter to actual issues (not PRs) with at least one assignee.
-  const assignedIssues = issues.filter(
-    (i) => i.assignees && i.assignees.length > 0 && !i.pull_request
-  );
+  const candidates = issues.filter((issue) => {
+    if (issue.pull_request) return false;
+    if (issueAssignees(issue).length === 0) return false;
+    // A locked issue cannot receive the warning that must precede removal.
+    if (issue.locked) {
+      console.log(`[#${issue.number}] skipped: locked`);
+      return false;
+    }
+    const labels = issueLabelNames(issue);
+    const exempt = exemptLabels.find((label) => labels.includes(label));
+    if (exempt) {
+      console.log(`[#${issue.number}] skipped: exempt label "${exempt}"`);
+      return false;
+    }
+    return true;
+  });
 
-  console.log(`[unassign-inactive] ${assignedIssues.length} assigned accepted issue(s)`);
+  console.log(`[unassign-inactive] ${candidates.length} issue(s) in scope`);
 
-  const stats = { warned: 0, unassigned: 0, cleared: 0, skipped: 0, errors: 0 };
+  const records = [];
+  const stats = {
+    issues: candidates.length,
+    evaluated: 0,
+    warned: 0,
+    unassigned: 0,
+    recovered: 0,
+    skipped: 0,
+    errors: 0,
+  };
 
-  for (const issue of assignedIssues) {
-    console.log(`\nIssue #${issue.number}: "${issue.title}"`);
-
-    for (const assignee of issue.assignees) {
-      const action = await processAssignee(
-        octokit, owner, repo, issue, assignee.login,
-        { warnAfterDays, unassignAfterDays, dryRun }
+  for (const issue of candidates) {
+    console.log(`\n#${issue.number} ${issue.title}`);
+    for (const assignee of issueAssignees(issue)) {
+      const record = await evaluateAssignee(
+        octokit,
+        owner,
+        repo,
+        issue,
+        assignee.login,
+        { warnAfterDays, unassignAfterDays, dryRun, now }
       );
-
-      switch (action) {
-        case "warned":          stats.warned++;     break;
-        case "unassigned":      stats.unassigned++; break;
-        case "error":           stats.errors++;     break;
-        default:                stats.skipped++;    break;
+      records.push(record);
+      stats.evaluated += 1;
+      stats[ACTION_STATS[record.action]] += 1;
+      console.log(`  @${record.assignee}: ${record.action} — ${record.reason}`);
+      if (record.action === "error") {
+        console.log(
+          `::warning title=Inactivity sweep::#${record.issueNumber} @${record.assignee}: ${record.reason}`
+        );
       }
     }
   }
 
-  console.log("\n[unassign-inactive] summary:", stats);
-  if (dryRun) console.log("[unassign-inactive] DRY-RUN: no GitHub state was mutated");
+  const summary = buildRunSummary(records, stats, {
+    warnAfterDays,
+    unassignAfterDays,
+    dryRun,
+    exemptLabels,
+  });
+  console.log(`\n${summary}`);
+  writeStepSummary(summary, summaryPath);
+
+  return { stats, records };
 }
 
 module.exports = {
   run,
+  evaluateAssignee,
+  resolveLastActivity,
+  collectIssueSignals,
+  collectPullRequestActivity,
+  readTransitionState,
   fetchTimeline,
-  getLastHumanActivityDate,
-  findLinkedPRActivity,
-  warningCommentExists,
+  fetchComments,
   buildWarningComment,
-  buildUnassignComment,
-  processAssignee,
-  WARNING_MARKER,
-  WARN_LABEL,
+  buildRemovalComment,
+  buildRunSummary,
+  warningMarker,
+  removalMarker,
+  MAX_LINKED_PULL_REQUESTS,
 };

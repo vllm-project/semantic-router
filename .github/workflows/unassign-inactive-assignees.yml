@@ -1,14 +1,14 @@
 name: Unassign Inactive Assignees
 
-# Reusable workflow called from maintenance.yml. Evaluates per-assignee
-# inactivity on accepted issues using the Timeline API. Does not use
-# pull_request_target (prohibited in this repository).
+# Reusable workflow called from maintenance.yml. Advances the per-assignee
+# inactivity state machine on accepted issues using the Timeline API. Does not
+# use pull_request_target (prohibited in this repository).
 
 on:
   workflow_call:
     inputs:
       dry_run:
-        description: If true, log actions without mutating GitHub state.
+        description: If true, report the transitions without mutating GitHub state.
         type: boolean
         default: false
         required: false
@@ -18,9 +18,18 @@ on:
         default: 15
         required: false
       unassign_after_days:
-        description: Days of inactivity before removing the assignee.
+        description: >-
+          Days of inactivity before removing the assignee. Must exceed
+          warn_after_days; the difference is the grace window a warned
+          contributor gets.
         type: number
         default: 30
+        required: false
+      exempt_labels:
+        description: >-
+          Comma-separated labels that pause the inactivity clock for an issue.
+        type: string
+        default: hold
         required: false
 
 permissions: {}
@@ -31,32 +40,34 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
+      contents: read # checkout, so github-script can require the helper
       issues: write
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Install script dependencies
-        working-directory: .github/scripts
-        run: npm ci
-
       - name: Run unassign-inactive-assignees
         uses: actions/github-script@v7
         env:
           WARN_AFTER_DAYS: ${{ inputs.warn_after_days }}
           UNASSIGN_AFTER_DAYS: ${{ inputs.unassign_after_days }}
+          EXEMPT_LABELS: ${{ inputs.exempt_labels }}
           DRY_RUN: ${{ inputs.dry_run }}
         with:
           script: |
             const { run } = require('./.github/scripts/unassign-inactive.js');
-            await run(github, context, {
-              warnAfterDays:     parseInt(process.env.WARN_AFTER_DAYS,    10) || 15,
-              unassignAfterDays: parseInt(process.env.UNASSIGN_AFTER_DAYS, 10) || 30,
+            const { stats } = await run(github, context, {
+              warnAfterDays:     Number(process.env.WARN_AFTER_DAYS),
+              unassignAfterDays: Number(process.env.UNASSIGN_AFTER_DAYS),
+              exemptLabels:      process.env.EXEMPT_LABELS,
               dryRun:            process.env.DRY_RUN === 'true',
             });
+            if (stats.errors > 0) {
+              // Fail loudly; the sweep is idempotent, so a re-run retries
+              // only what did not complete.
+              core.setFailed(
+                `${stats.errors} of ${stats.evaluated} assignee evaluation(s) failed; ` +
+                'no assignment was changed for them. Re-run this workflow to retry.'
+              );
+            }

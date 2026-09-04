@@ -4,7 +4,7 @@
   "private": true,
   "description": "GitHub Actions helper scripts for vllm-project/semantic-router",
   "scripts": {
-    "test": "jest --testPathPattern='__tests__'"
+    "test": "jest"
   },
   "devDependencies": {
     "jest": "^29.7.0"
