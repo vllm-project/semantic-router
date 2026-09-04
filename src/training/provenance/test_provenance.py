@@ -189,6 +189,13 @@ def test_secret_like_key_and_value_fail():
         ("run", "dataset_id", "abc", "dataset_id must be a sha256"),
         ("artifact", "digest", "md5:abc", "digest must be a sha256"),
         ("artifact", "files", {"weights.bin": "sha256:xyz"}, "files must be a map"),
+        ("artifact", "files", ["weights.bin"], "files must be a map"),
+        ("dataset", "sources", [1], "sources must be a list of objects"),
+        ("dataset", "sources", "lmsys/toxic-chat", "sources must be a list of objects"),
+        ("run", "base_model", "mmbert", "base_model must be a map"),
+        ("run", "base_model", {"name": 1}, "base_model must be a map"),
+        ("dataset", "schema_version", "1", "schema_version must be an int"),
+        ("dataset", "schema_version", 2, "unsupported schema_version 2"),
     ],
 )
 def test_type_and_format_violations_fail(tmp_path, kind, field, value, message):
@@ -197,6 +204,24 @@ def test_type_and_format_violations_fail(tmp_path, kind, field, value, message):
     setattr(manifest, field, value)
     with pytest.raises(ProvenanceError, match=message):
         validate_manifest(manifest)
+
+
+def test_source_fields_must_be_strings():
+    dataset = _dataset()
+    dataset.sources[0]["license"] = 1
+    with pytest.raises(
+        ProvenanceError, match=r"sources\[0\]\.license must be a string"
+    ):
+        validate_manifest(dataset)
+
+
+def test_serialized_schema_version_is_validated(tmp_path):
+    path = tmp_path / "dataset.json"
+    data = _dataset().to_dict()
+    data["schema_version"] = "1"
+    path.write_text(json.dumps(data))
+    with pytest.raises(ProvenanceError, match="schema_version must be an int"):
+        validate_manifest(load_manifest(path))
 
 
 def test_unknown_kind_rejected(tmp_path):
