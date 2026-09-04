@@ -60,8 +60,9 @@ Before choosing an installation path, detect and report:
 | Operating system | `uname -s` |
 | Architecture | `uname -m` |
 | Python ≥ 3.10 | `python3 --version` or `python --version` |
-| Existing `vllm-sr` | `command -v vllm-sr`, `test -x ~/.local/bin/vllm-sr`, or `test -d ~/.local/share/vllm-sr` |
+| Existing `vllm-sr` | `command -v vllm-sr`, `test -e ~/.local/bin/vllm-sr \|\| test -L ~/.local/bin/vllm-sr`, or `test -d ~/.local/share/vllm-sr` |
 | Existing `vllm-sr` version | `vllm-sr --version` or `~/.local/bin/vllm-sr --version` (diagnostic only) |
+| Installer override env | `echo "${VLLM_SR_INSTALL_ROOT:-}"`, `echo "${VLLM_SR_BIN_DIR:-}"`, `echo "${VLLM_SR_PIP_SPEC:-}"` |
 | Docker | `command -v docker` and `docker info` |
 | Podman | `command -v podman` and `podman info` |
 | Existing config | `test -f config.yaml` in the working directory |
@@ -129,15 +130,32 @@ Plan:
 Do not proceed until the user confirms, unless the user already gave explicit
 instructions to install.
 
+The installer also sets up shell completions by default, which may edit the
+user's shell rc files (for example `~/.bashrc`, `~/.zshrc`, or equivalent).
+Disclose this side effect in the plan so the user can approve it explicitly.
+If the user wants to avoid shell rc changes, they can run the installer
+interactively and skip the completion step when prompted, or set up
+completions manually later via `vllm-sr completion install`.
+
 ## Workflow
 
 1. **Discover** the environment using the checks above.
 2. **Check for an existing installation.** Non-interactive agent shells
-   often omit `~/.local/bin` from `PATH`, so a `command -v` miss alone is
-   not sufficient. Check **all three** signals:
+   often omit `~/.local/bin` from `PATH`, and a stale non-executable file or
+   a dangling symlink at the launcher path is still an occupied install
+   location. Check **all** applicable signals:
+
+   **Default paths:**
    - `command -v vllm-sr` (launcher on PATH)
-   - `test -x ~/.local/bin/vllm-sr` (default absolute launcher)
+   - `test -e ~/.local/bin/vllm-sr || test -L ~/.local/bin/vllm-sr` (default
+     absolute launcher; `test -e` catches regular files, `test -L` catches
+     dangling symlinks even when their target is gone)
    - `test -d ~/.local/share/vllm-sr` (default install root)
+
+   **Override paths (only when the corresponding env var is set):**
+   - If `VLLM_SR_BIN_DIR` is set: `test -e "$VLLM_SR_BIN_DIR/vllm-sr" ||
+     test -L "$VLLM_SR_BIN_DIR/vllm-sr"`
+   - If `VLLM_SR_INSTALL_ROOT` is set: `test -d "$VLLM_SR_INSTALL_ROOT"`
 
    **Any signal found** — an existing installation is present. Attempt
    `vllm-sr --version` or `~/.local/bin/vllm-sr --version` for diagnostics.
@@ -175,10 +193,19 @@ adding `~/.local/bin` to `PATH`.
 
 An existing installation is detected by **any** of these signals:
 
+**Default paths:**
 - `command -v vllm-sr` finds the launcher on `PATH`.
-- `test -x ~/.local/bin/vllm-sr` finds the default absolute launcher (common
-  when `~/.local/bin` is absent from the non-interactive shell `PATH`).
+- `test -e ~/.local/bin/vllm-sr || test -L ~/.local/bin/vllm-sr` finds the
+  default absolute launcher (common when `~/.local/bin` is absent from the
+  non-interactive shell `PATH`). `test -e` catches any regular file even
+  without the executable bit; `test -L` catches dangling symlinks whose
+  target is gone but still occupy the launcher location.
 - `test -d ~/.local/share/vllm-sr` finds the default install root.
+
+**Override paths (only when the corresponding env var is set):**
+- If `VLLM_SR_BIN_DIR` is set: `test -e "$VLLM_SR_BIN_DIR/vllm-sr" ||
+  test -L "$VLLM_SR_BIN_DIR/vllm-sr"`.
+- If `VLLM_SR_INSTALL_ROOT` is set: `test -d "$VLLM_SR_INSTALL_ROOT"`.
 
 If any signal is found:
 
@@ -276,6 +303,12 @@ explicit user direction — those are separate workflows.
 - `vllm-sr serve` starts the routing stack only; provider backends must already
   be reachable.
 - Do not confuse installing the CLI with starting or configuring a deployment.
+- The installer reads `VLLM_SR_INSTALL_ROOT`, `VLLM_SR_BIN_DIR`, and
+  `VLLM_SR_PIP_SPEC` from the environment. If any is set, discovery must
+  check the override path too, not only the defaults.
+- The installer unconditionally sets up shell completions, which may edit
+  `~/.bashrc`, `~/.zshrc`, or equivalent shell rc files. Disclose this in
+  the plan so the user can approve the change.
 
 ## Must Read
 
