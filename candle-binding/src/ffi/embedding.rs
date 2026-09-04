@@ -1754,6 +1754,30 @@ pub extern "C" fn free_batch_similarity_result(result: *mut BatchSimilarityResul
     }
 }
 
+/// One entry of the models-info table.
+///
+/// `limits` is `Some((max_position_embeddings, hidden_size))` from the loaded
+/// model's config and `None` when the model is not loaded, in which case both
+/// numbers are reported as 0 and the path as empty.
+pub(crate) fn embedding_model_info(
+    name: &str,
+    path: Option<&str>,
+    limits: Option<(usize, usize)>,
+) -> crate::ffi::types::EmbeddingModelInfo {
+    use std::ffi::CString;
+    let (max_sequence_length, default_dimension) = match limits {
+        Some((max_positions, hidden)) => (max_positions as i32, hidden as i32),
+        None => (0, 0),
+    };
+    crate::ffi::types::EmbeddingModelInfo {
+        model_name: CString::new(name).unwrap().into_raw(),
+        is_loaded: limits.is_some(),
+        max_sequence_length,
+        default_dimension,
+        model_path: CString::new(path.unwrap_or("")).unwrap().into_raw(),
+    }
+}
+
 /// Get information about loaded embedding models
 ///
 /// This function returns metadata about all available embedding models,
@@ -1770,7 +1794,6 @@ pub extern "C" fn get_embedding_models_info(
     result: *mut crate::ffi::types::EmbeddingModelsInfoResult,
 ) -> i32 {
     use crate::ffi::types::{EmbeddingModelInfo, EmbeddingModelsInfoResult};
-    use std::ffi::CString;
 
     if result.is_null() {
         eprintln!("Error: null pointer passed to get_embedding_models_info");
@@ -1789,52 +1812,20 @@ pub extern "C" fn get_embedding_models_info(
         }
     };
 
-    // Check which models are loaded
-    let qwen3_loaded = factory.get_qwen3_model().is_some();
-    let gemma_loaded = factory.get_gemma_model().is_some();
+    // The limits come from each loaded model's own config.json, not from
+    // constants: `max_position_embeddings` is what the RoPE cache and the
+    // position guard are sized for, and `hidden_size` is the default dimension.
+    let qwen3_limits = factory
+        .get_qwen3_model()
+        .map(|m| (m.config().max_position_embeddings, m.config().hidden_size));
+    let gemma_limits = factory
+        .get_gemma_model()
+        .map(|m| (m.config().max_position_embeddings, m.config().hidden_size));
 
-    // Get model paths from factory
-    let qwen3_path = factory.get_qwen3_model_path();
-    let gemma_path = factory.get_gemma_model_path();
-
-    // Create model info array
-    let mut models_vec = Vec::new();
-
-    // Qwen3 model info
-    {
-        let model_name = CString::new("qwen3").unwrap();
-        let model_path = if let Some(path) = qwen3_path {
-            CString::new(path).unwrap()
-        } else {
-            CString::new("").unwrap()
-        };
-
-        models_vec.push(EmbeddingModelInfo {
-            model_name: model_name.into_raw(),
-            is_loaded: qwen3_loaded,
-            max_sequence_length: if qwen3_loaded { 32768 } else { 0 },
-            default_dimension: if qwen3_loaded { 1024 } else { 0 },
-            model_path: model_path.into_raw(),
-        });
-    }
-
-    // Gemma model info
-    {
-        let model_name = CString::new("gemma").unwrap();
-        let model_path = if let Some(path) = gemma_path {
-            CString::new(path).unwrap()
-        } else {
-            CString::new("").unwrap()
-        };
-
-        models_vec.push(EmbeddingModelInfo {
-            model_name: model_name.into_raw(),
-            is_loaded: gemma_loaded,
-            max_sequence_length: if gemma_loaded { 8192 } else { 0 },
-            default_dimension: if gemma_loaded { 768 } else { 0 },
-            model_path: model_path.into_raw(),
-        });
-    }
+    let models_vec = vec![
+        embedding_model_info("qwen3", factory.get_qwen3_model_path(), qwen3_limits),
+        embedding_model_info("gemma", factory.get_gemma_model_path(), gemma_limits),
+    ];
 
     let num_models = models_vec.len() as i32;
     let models_ptr = Box::into_raw(models_vec.into_boxed_slice()) as *mut EmbeddingModelInfo;
