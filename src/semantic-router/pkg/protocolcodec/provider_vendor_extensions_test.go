@@ -33,7 +33,7 @@ const azureChatCompletion = `{
 }`
 
 func TestStripProviderVendorExtensionsRemovesAzureFields(t *testing.T) {
-	stripped, removed := stripProviderVendorExtensions([]byte(azureChatCompletion))
+	stripped, removed := stripProviderVendorExtensions([]byte(azureChatCompletion), llmprotocol.VendorAzure)
 
 	want := []string{
 		"choices[].content_filter_results",
@@ -59,7 +59,7 @@ func TestStripProviderVendorExtensionsRemovesAzureFields(t *testing.T) {
 func TestStripProviderVendorExtensionsLeavesCanonicalBodyUntouched(t *testing.T) {
 	canonical := `{"id":"chatcmpl-1","model":"gpt-4.1-mini","choices":[{"index":0}]}`
 
-	stripped, removed := stripProviderVendorExtensions([]byte(canonical))
+	stripped, removed := stripProviderVendorExtensions([]byte(canonical), llmprotocol.VendorAzure)
 
 	if removed != nil {
 		t.Errorf("removed = %v, want nil", removed)
@@ -74,7 +74,7 @@ func TestStripProviderVendorExtensionsLeavesCanonicalBodyUntouched(t *testing.T)
 func TestStripProviderVendorExtensionsIsPathScoped(t *testing.T) {
 	body := `{"choices":[{"index":0,"message":{"role":"assistant","routing":"nope"}}]}`
 
-	stripped, removed := stripProviderVendorExtensions([]byte(body))
+	stripped, removed := stripProviderVendorExtensions([]byte(body), llmprotocol.VendorAzure)
 
 	if removed != nil {
 		t.Errorf("removed = %v, want nil for a non-allowlisted path", removed)
@@ -105,7 +105,9 @@ func TestDecodeProviderWireAcceptsAzureDecoratedResponse(t *testing.T) {
 		} `json:"usage"`
 	}
 
-	if err := decodeProviderWire([]byte(azureChatCompletion), &target, llmprotocol.DefaultPolicy()); err != nil {
+	policy := llmprotocol.DefaultPolicy()
+	policy.ResponseVendor = llmprotocol.VendorAzure
+	if err := decodeProviderWire([]byte(azureChatCompletion), &target, policy); err != nil {
 		t.Fatalf("decodeProviderWire() error = %v, want nil", err)
 	}
 	if target.Model != "gpt-4.1-mini" {
@@ -132,5 +134,38 @@ func TestDecodeProviderWireStillRejectsUnknownFields(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "invalid_upstream_json") {
 		t.Errorf("error = %v, want invalid_upstream_json", err)
+	}
+}
+
+// Without the vendor allowance the same Azure body is still rejected: the
+// backend dialect, not the field name, is what grants the exemption.
+func TestDecodeProviderWireRejectsAzureFieldsWithoutVendorAllowance(t *testing.T) {
+	var target struct {
+		ID    string `json:"id"`
+		Model string `json:"model"`
+	}
+
+	err := decodeProviderWire([]byte(azureChatCompletion), &target, llmprotocol.DefaultPolicy())
+	if err == nil {
+		t.Fatal("decodeProviderWire() error = nil, want rejection without a vendor allowance")
+	}
+	if !strings.Contains(err.Error(), "invalid_upstream_json") {
+		t.Errorf("error = %v, want invalid_upstream_json", err)
+	}
+}
+
+// An unknown field must be identifiable from the error alone. Before this the
+// operator saw only "contains a non-canonical field" with no way to tell which.
+func TestDecodeProviderWireErrorNamesTheOffendingField(t *testing.T) {
+	var target struct {
+		Model string `json:"model"`
+	}
+
+	err := decodeProviderWire([]byte(`{"model":"m","surprise_field":1}`), &target, llmprotocol.DefaultPolicy())
+	if err == nil {
+		t.Fatal("decodeProviderWire() error = nil, want a rejection")
+	}
+	if !strings.Contains(err.Error(), "surprise_field") {
+		t.Errorf("error = %v, want it to name surprise_field", err)
 	}
 }

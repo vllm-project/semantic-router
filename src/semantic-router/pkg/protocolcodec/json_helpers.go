@@ -94,12 +94,20 @@ func decodeProviderJSON(body []byte, target any, policy llmprotocol.Policy, requ
 	}
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	if rejectUnknownFields(body, policy) {
-		// Known vendor decorations are removed before the canonical check so a
-		// provider that always emits them stays usable. Every other unknown
-		// field still fails below.
-		canonical, _ := stripProviderVendorExtensions(body)
+		// Documented decorations from the backend's resolved vendor are removed
+		// before the canonical check so a provider that always emits them stays
+		// usable. Every other unknown field still fails below.
+		canonical, _ := stripProviderVendorExtensions(body, policy.ResponseVendor)
 		if err := validateExactJSONFieldNames(canonical, reflect.TypeOf(target)); err != nil {
-			return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_json", "upstream response JSON contains a non-canonical field", err)
+			// Name the field. Without it an operator sees only "non-canonical
+			// field" and has no way to tell which provider extension broke the
+			// response or which vendor allowance would cover it.
+			return llmprotocol.NewError(
+				llmprotocol.ErrorUpstreamUnavailable,
+				"invalid_upstream_json",
+				fmt.Sprintf("upstream response JSON contains a non-canonical field: %s", err.Error()),
+				err,
+			)
 		}
 		decoder = json.NewDecoder(bytes.NewReader(canonical))
 		decoder.DisallowUnknownFields()

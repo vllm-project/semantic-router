@@ -95,6 +95,25 @@ func (r *OpenAIRouter) protocolEngine() (*protocolcodec.Engine, error) {
 	return protocolcodec.NewEngine(registry, llmprotocol.DefaultPolicy())
 }
 
+// protocolEngineForBackend builds an engine whose policy carries the selected
+// backend's vendor allowance. Only paths that decode a live provider response
+// use it; cache replay and client-facing encodes keep the strict default so a
+// backend allowance can never widen a contract it does not own.
+func (r *OpenAIRouter) protocolEngineForBackend(ctx *RequestContext) (*protocolcodec.Engine, error) {
+	if r == nil {
+		return nil, fmt.Errorf("protocol runtime is unavailable")
+	}
+	registry := r.ProtocolCodecs
+	if registry == nil {
+		registry = protocolcodec.NewBuiltinRegistry()
+	}
+	policy := llmprotocol.DefaultPolicy()
+	if ctx != nil {
+		policy.ResponseVendor = ctx.ResponseVendor
+	}
+	return protocolcodec.NewEngine(registry, policy)
+}
+
 // prepareProtocolRequest decodes every public wire format exactly once. The
 // neutral request is the sole mutable request contract after this boundary.
 func (r *OpenAIRouter) prepareProtocolRequest(
@@ -220,7 +239,7 @@ func (r *OpenAIRouter) decodeClientResponse(
 	if ctx == nil {
 		return nil, fmt.Errorf("request context is unavailable")
 	}
-	engine, err := r.protocolEngine()
+	engine, err := r.protocolEngineForBackend(ctx)
 	if err != nil {
 		return nil, err
 	}

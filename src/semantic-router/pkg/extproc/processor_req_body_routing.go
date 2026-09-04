@@ -68,6 +68,10 @@ func (r *OpenAIRouter) prepareProviderDispatch(
 		return nil, protocolErr
 	}
 	ctx.TargetFormat = dispatch.targetFormat
+	// The backend's dialect decides which vendor response decorations the
+	// decoder may ignore. Resolved here, at the only point the selected backend
+	// is known, because the response path has no other handle on it.
+	ctx.ResponseVendor = resolveOpenAIBackendDialect(dispatch.profile).vendorExtensionProvider()
 	ctx.SemanticRequest = request
 	logging.ComponentDebugEvent("extproc", "provider_dispatch_prepared", map[string]interface{}{
 		"request_id":  ctx.RequestID,
