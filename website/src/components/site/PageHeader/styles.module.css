@@ -8,11 +8,16 @@
   border-bottom: 1px solid var(--site-border);
 }
 
+/* No measure cap, matching .site-section-intro on the homepage.
+ *
+ * --measure is 72ch, and ch resolves against this container's own 1rem font —
+ * about 658px. That wrapped every one-sentence lede two thirds of the way
+ * across the frame and left a hole to its right. Uncapped, the lede sits on one
+ * line at wide viewports and wraps only when the frame genuinely runs out. */
 .text {
   display: grid;
   gap: var(--space-2);
   min-width: 0;
-  max-width: var(--measure);
 }
 
 .eyebrow {
@@ -38,13 +43,17 @@
  * Wraps rather than shrinks. The blog subtitle previously combined
  * `white-space: nowrap` with `clamp(0.7rem, …)`, so on a narrow laptop it
  * stayed on one line by dropping to 11px.
+ *
+ * `balance` rather than `pretty`, as on the homepage: `pretty` only rescues a
+ * single-word last line, so it left breaks like "…breakthroughs, and the /
+ * latest from the community". Balance evens whatever wrapping does happen.
  */
 .description {
   margin: 0;
   color: var(--site-muted);
   font-size: var(--text-base);
   line-height: 1.6;
-  text-wrap: pretty;
+  text-wrap: balance;
 }
 
 .actions {
