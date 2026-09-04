@@ -31,15 +31,20 @@ func (r *SemanticRouterReconciler) applyDiscoveredBackends(ctx context.Context, 
 	for index, modelName := range modelNames {
 		discovered := discoveredModels[modelName]
 
-		modelCard := routerconfig.RoutingModel{
-			Name:  modelName,
-			LoRAs: convertLoRAAdapters(discovered.LoRAs),
+		cardName := modelName
+		if discovered.Catalog != "" {
+			cardName = discovered.Catalog
 		}
-		canonical.Routing.ModelCards = append(canonical.Routing.ModelCards, modelCard)
+		if len(discovered.LoRAs) > 0 {
+			canonical.Routing.ModelCards = append(canonical.Routing.ModelCards, routerconfig.RoutingModel{
+				Name: cardName, LoRAs: convertLoRAAdapters(discovered.LoRAs),
+			})
+		}
 		canonical.Providers.Models = append(canonical.Providers.Models, routerconfig.CanonicalProviderModel{
-			Name:            modelName,
-			ReasoningFamily: discovered.ReasoningFamily,
-			BackendRefs:     append([]routerconfig.CanonicalBackendRef(nil), discovered.BackendRefs...),
+			Name:        modelName,
+			Catalog:     discovered.Catalog,
+			Reasoning:   discovered.Reasoning,
+			BackendRefs: append([]routerconfig.CanonicalBackendRef(nil), discovered.BackendRefs...),
 		})
 
 		if index == 0 {

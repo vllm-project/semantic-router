@@ -5,29 +5,42 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from cli.model_catalog import catalog_model_to_dict, load_all_model_catalogs
+from cli.model_catalog import (
+    DEFAULT_CHANNEL,
+    _load_catalog_document,
+)
 
 
 def packaged_model_catalog_document() -> dict[str, Any]:
     """Return every catalog channel without consulting a working-tree config."""
 
-    catalogs = load_all_model_catalogs()
-    return {
+    _, latest = _load_catalog_document(DEFAULT_CHANNEL)
+    defaults = latest.get("defaults") or {}
+    document = {
+        "schema_version": latest["schema_version"],
         "catalogs": [
             {
-                "catalog_version": catalog.version,
-                "channel": catalog.channel,
-                "default_model": catalog.default_model,
-                "enabled_models": list(catalog.enabled_models),
+                "catalog_version": latest["catalog_version"],
+                "channel": latest["channel"],
+                "default_model": defaults.get("model", ""),
+                "enabled_models": list(defaults.get("enabled") or []),
+                "default_intelligence_index": defaults.get("intelligence_index", ""),
             }
-            for catalog in catalogs
-        ],
-        "models": [
-            catalog_model_to_dict(model)
-            for catalog in catalogs
-            for model in catalog.models
         ],
     }
+    for resource in (
+        "protocols",
+        "providers",
+        "reasoning_families",
+        "models",
+        "offerings",
+        "benchmarks",
+        "evaluations",
+        "indices",
+        "index_results",
+    ):
+        document[resource] = latest.get(resource, [])
+    return document
 
 
 def main() -> None:

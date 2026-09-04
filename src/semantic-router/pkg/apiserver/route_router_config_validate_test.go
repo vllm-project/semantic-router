@@ -44,11 +44,12 @@ func TestHandleConfigValidateDoesNotExpandEnvironmentSecrets(t *testing.T) {
 version: v0.3
 providers:
   defaults:
-    default_model: m1
+    model: m1
   models:
     - name: m1
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
           api_key_env: VALIDATE_SECRET_CANARY
 routing:
   modelCards:
@@ -104,11 +105,12 @@ func localClassifierReloadConfig(modelPath string) string {
 version: v0.3
 providers:
   defaults:
-    default_model: m1
+    model: m1
   models:
     - name: m1
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
 routing:
   modelCards:
     - name: m1

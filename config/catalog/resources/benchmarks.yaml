@@ -1,0 +1,93 @@
+- id: artificial-analysis/gdpval-aa@2.0.0
+  display_name: GDPval-AA v2
+  domain: agents
+  source: https://artificialanalysis.ai/methodology/intelligence-benchmarking
+  metrics:
+    - id: elo
+      unit: elo
+      direction: higher_is_better
+      range: [0, 3000]
+- id: artificial-analysis/tau3-banking@1.0.0
+  display_name: tau3-Banking
+  domain: agents
+  source: https://artificialanalysis.ai/methodology/intelligence-benchmarking
+  metrics:
+    - id: pass_at_1
+      unit: proportion
+      direction: higher_is_better
+      range: [0, 1]
+- id: terminal-bench/terminal-bench@2.1.0
+  display_name: Terminal-Bench v2.1
+  domain: coding
+  source: https://artificialanalysis.ai/methodology/intelligence-benchmarking
+  metrics:
+    - id: pass_at_1
+      unit: proportion
+      direction: higher_is_better
+      range: [0, 1]
+- id: scicode/scicode@1.0.0
+  display_name: SciCode
+  domain: coding
+  source: https://artificialanalysis.ai/methodology/intelligence-benchmarking
+  metrics:
+    - id: pass_at_1
+      unit: proportion
+      direction: higher_is_better
+      range: [0, 1]
+- id: artificial-analysis/lcr@1.0.0
+  display_name: AA-LCR
+  domain: general
+  source: https://artificialanalysis.ai/methodology/intelligence-benchmarking
+  metrics:
+    - id: pass_at_1
+      unit: proportion
+      direction: higher_is_better
+      range: [0, 1]
+- id: artificial-analysis/omniscience@1.0.0
+  display_name: AA-Omniscience
+  domain: general
+  source: https://artificialanalysis.ai/methodology/intelligence-benchmarking
+  metrics:
+    - id: accuracy
+      unit: proportion
+      direction: higher_is_better
+      range: [0, 1]
+    - id: non_hallucination_rate
+      unit: proportion
+      direction: higher_is_better
+      range: [0, 1]
+- id: cais/humanitys-last-exam@1.0.0
+  display_name: Humanity's Last Exam
+  domain: scientific_reasoning
+  source: https://artificialanalysis.ai/methodology/intelligence-benchmarking
+  metrics:
+    - id: pass_at_1
+      unit: proportion
+      direction: higher_is_better
+      range: [0, 1]
+- id: idavidrein/gpqa-diamond@1.0.0
+  display_name: GPQA Diamond
+  domain: scientific_reasoning
+  source: https://artificialanalysis.ai/methodology/intelligence-benchmarking
+  metrics:
+    - id: pass_at_1
+      unit: proportion
+      direction: higher_is_better
+      range: [0, 1]
+- id: critpt/critpt@1.0.0
+  display_name: CritPt
+  domain: scientific_reasoning
+  source: https://artificialanalysis.ai/methodology/intelligence-benchmarking
+  metrics:
+    - id: pass_at_1
+      unit: proportion
+      direction: higher_is_better
+      range: [0, 1]
+- id: vllm-sr/operator-rating@1.0.0
+  display_name: Operator Rating
+  domain: operator
+  metrics:
+    - id: score
+      unit: proportion
+      direction: higher_is_better
+      range: [0, 1]

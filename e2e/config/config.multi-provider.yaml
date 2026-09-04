@@ -2,25 +2,22 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: gpt-4o
+    model: gpt-4o
   models:
     - name: gpt-4o
       backend_refs:
         - name: openai
           base_url: https://api.openai.com/v1
           provider: openai
-          type: openai
         - name: azure-east
           base_url: https://my-resource.openai.azure.com/openai/deployments/gpt-4o
           provider: azure-openai
           api_version: '2024-10-21'
-          type: azure-openai
     - name: gpt-4o-mini
       backend_refs:
         - name: openai
           base_url: https://api.openai.com/v1
           provider: openai
-          type: openai
     - name: claude-sonnet-4-20250514
       backend_refs:
         - name: anthropic
@@ -28,26 +25,23 @@ providers:
           provider: anthropic
           extra_headers:
             anthropic-version: '2023-06-01'
-          type: anthropic
     - name: MiniMax-M3
       backend_refs:
         - name: minimax
           base_url: https://api.minimax.io
           provider: minimax
-          type: minimax
     - name: MiniMax-M2.7
       backend_refs:
         - name: minimax
           base_url: https://api.minimax.io
           provider: minimax
-          type: minimax
     - name: Qwen/Qwen2.5-14B-Instruct
       external_model_ids:
         vllm: Qwen/Qwen2.5-14B-Instruct
       backend_refs:
         - name: local-vllm
           endpoint: 127.0.0.1:8000
-          type: vllm
+          provider: vllm
 routing:
   decisions:
     - name: code_to_local

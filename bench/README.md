@@ -93,17 +93,11 @@ A known-family patch uses the current v0.3 provider and Model Card fields:
 ```yaml
 providers:
   defaults:
-    reasoning_families:
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-    default_reasoning_effort: medium
+    reasoning_effort: medium
   models:
     - name: qwen3-14b
-      reasoning_family: qwen3
-routing:
-  modelCards:
-    - name: qwen3-14b
+      reasoning:
+        family: qwen3
 ```
 
 Reasoning is enabled per decision reference, after the evaluated model has been

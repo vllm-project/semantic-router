@@ -292,27 +292,6 @@ func protocolRequestFixture(format llmprotocol.WireFormat) []byte {
 	}
 }
 
-func TestProviderProtocolPath(t *testing.T) {
-	tests := []struct {
-		name         string
-		baseURL      string
-		protocolPath string
-		want         string
-	}{
-		{name: "root", baseURL: "https://api.example.com", protocolPath: "/v1/messages", want: "/v1/messages"},
-		{name: "version root", baseURL: "https://api.example.com/v1", protocolPath: "/v1/responses", want: "/v1/responses"},
-		{name: "nested version root", baseURL: "https://api.example.com/openai/v1", protocolPath: "/v1/responses", want: "/openai/v1/responses"},
-		{name: "custom base", baseURL: "https://api.example.com/proxy", protocolPath: "/v1/messages", want: "/proxy/v1/messages"},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			if got := providerProtocolPath(test.baseURL, test.protocolPath); got != test.want {
-				t.Fatalf("providerProtocolPath(%q, %q) = %q, want %q", test.baseURL, test.protocolPath, got, test.want)
-			}
-		})
-	}
-}
-
 func TestSetProviderRequestPathCoversProtocolAndBaseURLMatrix(t *testing.T) {
 	tests := []struct {
 		name    string

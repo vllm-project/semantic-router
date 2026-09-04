@@ -194,7 +194,7 @@ const buildLegacyBackendCatalog = (cfg: ConfigData): Record<string, BackendRefEn
       backendRef.weight = endpoint.weight
     }
     if (endpoint.type) {
-      backendRef.type = endpoint.type
+      backendRef.provider = endpoint.type
     }
     if (endpoint.api_key) {
       backendRef.api_key = endpoint.api_key
@@ -233,8 +233,8 @@ const mergeLegacyModelIntoProviderModel = (
   modelConfig: ModelConfigEntry,
   backendCatalog: Record<string, BackendRefEntry>,
 ) => {
-  if (!existing.reasoning_family && modelConfig.reasoning_family) {
-    existing.reasoning_family = modelConfig.reasoning_family
+  if (!existing.reasoning && modelConfig.reasoning_family) {
+    existing.reasoning = { family: modelConfig.reasoning_family }
   }
   if (!existing.provider_model_id && modelConfig.model_id) {
     existing.provider_model_id = modelConfig.model_id
@@ -286,7 +286,12 @@ const promoteLegacyModelBindings = (cfg: ConfigData) => {
       cardPatch.tags = cloneUnknown(modelConfig.tags)
     }
     if (typeof modelConfig.quality_score === 'number') {
-      cardPatch.quality_score = modelConfig.quality_score
+      cardPatch.evaluations = [
+        {
+          benchmark: 'vllm-sr/operator-rating@1.0.0',
+          metrics: { score: modelConfig.quality_score },
+        },
+      ]
     }
     if (modelConfig.modality) {
       cardPatch.modality = modelConfig.modality
@@ -301,7 +306,9 @@ const promoteLegacyModelBindings = (cfg: ConfigData) => {
 
     const providerModel = {
       name: modelName,
-      reasoning_family: modelConfig.reasoning_family,
+      reasoning: modelConfig.reasoning_family
+        ? { family: modelConfig.reasoning_family }
+        : undefined,
       provider_model_id: modelConfig.model_id,
       backend_refs: legacyBackendRefsForModel(modelConfig, backendCatalog),
       pricing: modelConfig.pricing ? cloneUnknown(modelConfig.pricing) : undefined,
@@ -317,14 +324,9 @@ const promoteLegacyModelBindings = (cfg: ConfigData) => {
 
 const promoteLegacyProviderDefaults = (cfg: ConfigData) => {
   const defaults = ensureProviderDefaultsConfig(cfg)
-  if (!defaults.default_model && cfg.default_model) {
-    defaults.default_model = cfg.default_model
-  }
-  if (!defaults.reasoning_families && cfg.reasoning_families) {
-    defaults.reasoning_families = cloneUnknown(cfg.reasoning_families)
-  }
-  if (!defaults.default_reasoning_effort && cfg.default_reasoning_effort) {
-    defaults.default_reasoning_effort = cfg.default_reasoning_effort
+  if (!defaults.model && cfg.default_model) defaults.model = cfg.default_model
+  if (!defaults.reasoning_effort && cfg.default_reasoning_effort) {
+    defaults.reasoning_effort = cfg.default_reasoning_effort
   }
 }
 

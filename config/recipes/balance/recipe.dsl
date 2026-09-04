@@ -449,7 +449,7 @@ MODEL anthropic/claude-opus-4.6 {
   description: "PREMIUM tier alias reserved for legal and high-risk analysis."
   capabilities: ["legal_analysis", "policy_review", "high_risk_review"]
   tags: ["tier:premium", "cost:highest", "specialty:legal"]
-  quality_score: 0.94
+  evaluations: [{ benchmark: "vllm-sr/operator-rating@1.0.0", metrics: { score: 0.94 } }]
   modality: "text"
 }
 
@@ -458,7 +458,7 @@ MODEL google/gemini-2.5-flash-lite {
   description: "MEDIUM tier alias for low-cost verified explanation and correction tasks."
   capabilities: ["verified_explanation", "source_backed_correction", "nuanced_explanation"]
   tags: ["tier:medium", "cost:low", "specialty:verified"]
-  quality_score: 0.68
+  evaluations: [{ benchmark: "vllm-sr/operator-rating@1.0.0", metrics: { score: 0.68 } }]
   modality: "text"
 }
 
@@ -467,7 +467,7 @@ MODEL google/gemini-3.1-pro {
   description: "COMPLEX tier alias for systems design, hard STEM, health guidance, and deep general reasoning."
   capabilities: ["architecture", "stem_analysis", "long_context", "general_reasoning"]
   tags: ["tier:complex", "cost:upper_mid", "specialty:complex_generalist"]
-  quality_score: 0.82
+  evaluations: [{ benchmark: "vllm-sr/operator-rating@1.0.0", metrics: { score: 0.82 } }]
   modality: "text"
 }
 
@@ -481,7 +481,7 @@ MODEL openai/gpt5.4 {
   description: "REASONING tier alias for narrow formal math proofs and derivations."
   capabilities: ["reasoning", "proofs", "formal_derivation"]
   tags: ["tier:reasoning", "cost:high", "specialty:formal_proof"]
-  quality_score: 0.9
+  evaluations: [{ benchmark: "vllm-sr/operator-rating@1.0.0", metrics: { score: 0.9 } }]
   modality: "text"
 }
 
@@ -490,7 +490,7 @@ MODEL qwen/qwen3.5-rocm {
   description: "SIMPLE tier alias and free self-hosted default for fast QA, broad fallback, creative drafting, and most low-cost traffic."
   capabilities: ["fast_qa", "self_hosted", "concise_answers", "general_chat", "creative_drafting"]
   tags: ["tier:simple", "cost:free", "deployment:self_hosted", "traffic:default"]
-  quality_score: 0.58
+  evaluations: [{ benchmark: "vllm-sr/operator-rating@1.0.0", metrics: { score: 0.58 } }]
   modality: "text"
 }
 

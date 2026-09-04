@@ -1315,13 +1315,6 @@ spec:
                       - rules
                       type: object
                     type: array
-                  default_reasoning_effort:
-                    description: Default reasoning effort
-                    enum:
-                    - low
-                    - medium
-                    - high
-                    type: string
                   embedding_models:
                     description: Embedding models configuration (qwen3, gemma, mmbert)
                     properties:
@@ -1553,17 +1546,15 @@ spec:
                         - mmbert32k
                         type: string
                     type: object
-                  reasoning_families:
-                    additionalProperties:
-                      description: ReasoningFamily defines reasoning family configuration
-                      properties:
-                        parameter:
-                          type: string
-                        type:
-                          type: string
-                      type: object
-                    description: Reasoning families
-                    type: object
+                  reasoning_effort:
+                    description: |-
+                      ReasoningEffort is the default reasoning effort for model bindings that do
+                      not select a different effort.
+                    enum:
+                    - low
+                    - medium
+                    - high
+                    type: string
                   response_cache:
                     description: Response cache configuration.
                     properties:
@@ -4210,6 +4201,11 @@ spec:
                       required:
                       - type
                       type: object
+                    catalog:
+                      description: |-
+                        Catalog optionally selects a repository built-in Model Card. Model remains
+                        the request-facing alias.
+                      type: string
                     loras:
                       description: LoRAs declares the LoRA adapters exposed for this
                         logical model in routing.modelCards.
@@ -4242,10 +4238,28 @@ spec:
                       description: Name of the backend ref generated under config.providers.models[].backend_refs
                       minLength: 1
                       type: string
-                    reasoningFamily:
-                      description: Reasoning family for the model (e.g., "qwen3",
-                        "deepseek", "gpt")
-                      type: string
+                    reasoning:
+                      description: |-
+                        Reasoning optionally selects a built-in family or defines inline wire
+                        behavior for this self-hosted model. Catalog-backed models normally omit it.
+                      properties:
+                        default:
+                          type: string
+                        family:
+                          type: string
+                        levels:
+                          items:
+                            type: string
+                          type: array
+                        parameter:
+                          type: string
+                        type:
+                          enum:
+                          - chat_template_kwargs
+                          - reasoning_effort
+                          - top_level_reasoning_effort
+                          type: string
+                      type: object
                     weight:
                       default: 1
                       description: 'Weight for load balancing (default: 1)'

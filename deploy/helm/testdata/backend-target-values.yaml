@@ -6,7 +6,7 @@ configOverride:
       port: 8899
   providers:
     defaults:
-      default_model: local/custom
+      model: local/custom
     models:
       - name: local/custom
         provider_model_id: provider/model-id

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
@@ -77,7 +78,7 @@ func TestMaintainedBalanceRoutingAssetsStayInSync(t *testing.T) {
 	want := mustCompileMaintainedRoutingDSL(t, prog)
 	got := mustLoadMaintainedBalanceRoutingYAML(t, yamlPath)
 	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("maintained DSL/YAML examples diverged\nwant: %+v\ngot: %+v", want, got)
+		t.Fatalf("maintained DSL/YAML examples diverged (-want +got):\n%s", cmp.Diff(want, got))
 	}
 }
 

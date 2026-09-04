@@ -1,4 +1,4 @@
-import { useMemo, useState, type Dispatch, type SetStateAction } from 'react'
+import { useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
 import styles from './ConfigPage.module.css'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
 import ConfigPageModelEndpoints from './ConfigPageModelEndpoints'
@@ -7,14 +7,15 @@ import ConfigPageConnectModelsDialog, {
   type ConnectedModelInput,
 } from './ConfigPageConnectModelsDialog'
 import ModelDeleteDialog from './ModelDeleteDialog'
-import ConfirmDialog from '../components/ConfirmDialog'
 import TableHeader from '../components/TableHeader'
 import { DataTable, type Column } from '../components/DataTable'
+import type { FieldConfig } from '../components/EditModal'
 import { normalizeStringList } from '../components/structuredFieldEditorSupport'
 import type { ViewSection } from '../components/ViewModal'
 import { ConfigData, NormalizedModel, ReasoningFamily } from './configPageSupport'
+import type { RoutingModelCard } from './configPageSupport'
+import useBuiltInModelCatalog from '../hooks/useBuiltInModelCatalog'
 import {
-  ensureProviderDefaultsConfig,
   ensureProvidersConfig,
   cloneConfigData,
   removeRoutingModelCard,
@@ -34,6 +35,7 @@ import {
 import {
   buildProviderModelPayload,
   normalizeModelBackendRefs,
+  normalizeModelEvaluations,
   normalizeModelLoras,
   normalizeModelPricing,
   normalizeModelStringMap,
@@ -43,6 +45,7 @@ import {
   ModelBackendRefsEditor,
   ModelCapabilitiesEditor,
   ModelExternalIdsEditor,
+  ModelEvaluationsEditor,
   ModelLorasEditor,
   ModelPricingEditor,
   ModelReliabilityEditor,
@@ -68,11 +71,314 @@ interface ConfigPageModelsSectionProps {
   listInputToArray: (input: string) => string[]
 }
 
-interface ReasoningFamilyFormState {
-  name: string
-  type: string
-  parameter: string
+const hasCardMetadata = (card: Omit<RoutingModelCard, 'name'>): boolean =>
+  Object.values(card).some((value) =>
+    Array.isArray(value) ? value.length > 0 : value !== undefined && value !== '',
+  )
+
+const modelCardPatch = (data: Record<string, unknown>): Omit<RoutingModelCard, 'name'> => {
+  const capabilities = normalizeStringList(data.capabilities)
+  const tags = normalizeStringList(data.tags)
+  const loras = normalizeModelLoras(data.loras)
+  const evaluations = normalizeModelEvaluations(data.evaluations)
+  return {
+    param_size:
+      typeof data.param_size === 'string' && data.param_size.trim()
+        ? data.param_size.trim()
+        : undefined,
+    context_window_size: data.context_window_size ? Number(data.context_window_size) : undefined,
+    description:
+      typeof data.description === 'string' && data.description.trim()
+        ? data.description.trim()
+        : undefined,
+    capabilities: capabilities.length > 0 ? capabilities : undefined,
+    loras: loras.length > 0 ? loras : undefined,
+    tags: tags.length > 0 ? tags : undefined,
+    evaluations: evaluations.length > 0 ? evaluations : undefined,
+    modality:
+      typeof data.modality === 'string' && data.modality.trim() ? data.modality.trim() : undefined,
+  }
 }
+
+const writeModelCard = (
+  config: ConfigData,
+  cardID: string,
+  card: Omit<RoutingModelCard, 'name'>,
+) => {
+  if (hasCardMetadata(card)) upsertRoutingModelCard(config, cardID, card)
+  else removeRoutingModelCard(config, cardID)
+}
+
+const modelDialogFields = (reasoningFamilyNames: string[], mode: 'add' | 'edit'): FieldConfig[] => [
+  ...(mode === 'add'
+    ? [
+        {
+          name: 'model_name',
+          label: 'Model Name',
+          type: 'text' as const,
+          required: true,
+          placeholder: 'e.g., openai/gpt-4',
+          description: 'Unique identifier for the model',
+        },
+      ]
+    : []),
+  {
+    name: 'catalog',
+    label: 'Built-in Catalog Model',
+    type: 'text',
+    placeholder: 'e.g., organization/model-id',
+    description:
+      mode === 'add'
+        ? 'Optional. Leave empty for a custom or self-hosted model.'
+        : 'Canonical card identity. Leave empty for a custom or self-hosted model.',
+  },
+  {
+    name: 'reasoning_family',
+    label: 'Reasoning Family',
+    type: 'select',
+    options: reasoningFamilyNames,
+    description: 'Optional for custom models. Built-in models inherit this automatically.',
+  },
+  {
+    name: 'reasoning_type',
+    label: 'Inline Reasoning Type',
+    type: 'select',
+    options: ['reasoning_effort', 'chat_template_kwargs', 'top_level_reasoning_effort'],
+    description: 'Use only when no built-in family matches a custom model.',
+  },
+  {
+    name: 'reasoning_parameter',
+    label: 'Inline Reasoning Parameter',
+    type: 'text',
+    placeholder: 'e.g., enable_thinking',
+  },
+  {
+    name: 'reasoning_levels',
+    label: 'Inline Reasoning Levels',
+    type: 'text',
+    placeholder: 'low, medium, high',
+  },
+  {
+    name: 'reasoning_default',
+    label: 'Inline Reasoning Default',
+    type: 'text',
+    placeholder: 'medium',
+  },
+  {
+    name: 'provider_model_id',
+    label: 'Provider Model ID',
+    type: 'text',
+    placeholder: 'e.g., openai/gpt-4.1',
+    description:
+      'Concrete upstream model identifier stored under providers.models[].provider_model_id',
+  },
+  {
+    name: 'api_format',
+    label: 'API Format',
+    type: 'text',
+    placeholder: 'e.g., openai',
+    description: 'Provider-specific wire format stored under providers.models[].api_format',
+  },
+  { name: 'param_size', label: 'Parameter Size', type: 'text', placeholder: 'e.g., 8B' },
+  {
+    name: 'context_window_size',
+    label: 'Context Window Size',
+    type: 'number',
+    placeholder: 'e.g., 131072',
+  },
+  {
+    name: 'modality',
+    label: 'Modality',
+    type: 'text',
+    placeholder: 'e.g., text, omni, diffusion',
+  },
+  {
+    name: 'description',
+    label: 'Description',
+    type: 'textarea',
+    placeholder: 'Short routing-facing model description',
+  },
+  ...getModelStructuredFormFields(),
+]
+
+const newModelFormData = (): Record<string, unknown> => ({
+  model_name: '',
+  catalog: '',
+  reasoning_family: '',
+  reasoning_type: '',
+  reasoning_parameter: '',
+  reasoning_levels: '',
+  reasoning_default: '',
+  provider_model_id: '',
+  api_format: '',
+  external_model_ids: {},
+  param_size: '',
+  context_window_size: '',
+  description: '',
+  capabilities: [],
+  loras: [],
+  tags: [],
+  evaluations: [],
+  modality: '',
+  backend_refs: [
+    {
+      name: 'endpoint-1',
+      endpoint: 'localhost:8000',
+      protocol: 'http',
+      weight: 1,
+      provider: 'vllm',
+    },
+  ],
+  pricing: {
+    currency: 'USD',
+    prompt_per_1m: 0,
+    cached_input_per_1m: 0,
+    completion_per_1m: 0,
+  },
+})
+
+const editModelFormData = (model: NormalizedModel): Record<string, unknown> => ({
+  catalog: model.catalog || '',
+  reasoning_family: model.reasoning?.family || '',
+  reasoning_type: model.reasoning?.type || '',
+  reasoning_parameter: model.reasoning?.parameter || '',
+  reasoning_levels: model.reasoning?.levels?.join(', ') || '',
+  reasoning_default: model.reasoning?.default || '',
+  provider_model_id: model.provider_model_id || '',
+  api_format: model.api_format || '',
+  external_model_ids: model.external_model_ids || {},
+  param_size: model.card_override?.param_size || '',
+  context_window_size: model.card_override?.context_window_size || '',
+  description: model.card_override?.description || '',
+  capabilities: model.card_override?.capabilities || [],
+  loras: model.card_override?.loras || [],
+  tags: model.card_override?.tags || [],
+  evaluations: model.card_override?.evaluations || [],
+  modality: model.card_override?.modality || '',
+  backend_refs: model.backend_refs || [],
+  pricing: model.pricing || {},
+  reliability: model.reliability || {},
+})
+
+const baseModelViewSection = (model: NormalizedModel, defaultModel: string): ViewSection => ({
+  title: 'Basic Information',
+  fields: [
+    { label: 'Model Name', value: model.name },
+    { label: 'Catalog Model', value: model.catalog || 'Custom' },
+    { label: 'Reasoning Family', value: model.reasoning_family || 'N/A' },
+    { label: 'Is Default', value: model.name === defaultModel ? 'Yes' : 'No' },
+    { label: 'Provider Model ID', value: model.provider_model_id || 'N/A' },
+    { label: 'API Format', value: model.api_format || 'N/A' },
+    { label: 'Modality', value: model.modality || 'N/A' },
+    { label: 'Param Size', value: model.param_size || 'N/A' },
+    {
+      label: 'Context Window',
+      value: model.context_window_size ? `${model.context_window_size}` : 'N/A',
+    },
+  ],
+})
+
+const modelViewSections = (
+  model: NormalizedModel,
+  defaultModel: string,
+  isReadonly: boolean,
+): ViewSection[] => {
+  const sections = [baseModelViewSection(model, defaultModel)]
+  const metadata = modelRoutingMetadataSection(model)
+  if (metadata) sections.push(metadata)
+  if (model.external_model_ids && Object.keys(model.external_model_ids).length > 0) {
+    sections.push({
+      title: 'External Model IDs',
+      fields: [
+        {
+          label: 'Provider IDs',
+          value: <ModelExternalIdsEditor value={model.external_model_ids} readOnly />,
+          fullWidth: true,
+        },
+      ],
+    })
+  }
+  if (model.backend_refs?.length) {
+    sections.push({
+      title: `Provider Backends (${model.backend_refs.length})`,
+      fields: [
+        {
+          label: 'Configured Backend Refs',
+          value: (
+            <ModelBackendRefsEditor
+              value={model.backend_refs}
+              readOnly
+              maskSensitive={isReadonly}
+            />
+          ),
+          fullWidth: true,
+        },
+      ],
+    })
+  }
+  if (model.pricing)
+    sections.push(
+      editorViewSection(
+        'Pricing',
+        'Token Pricing',
+        <ModelPricingEditor value={model.pricing} readOnly />,
+      ),
+    )
+  if (model.reliability)
+    sections.push(
+      editorViewSection(
+        'Delivery',
+        'Policy',
+        <ModelReliabilityEditor value={model.reliability} readOnly />,
+      ),
+    )
+  return sections
+}
+
+const modelRoutingMetadataSection = (model: NormalizedModel): ViewSection | null => {
+  const present =
+    model.description ||
+    model.capabilities?.length ||
+    model.tags?.length ||
+    model.loras?.length ||
+    model.evaluations?.length
+  if (!present) return null
+  return {
+    title: 'Routing Metadata',
+    fields: [
+      { label: 'Description', value: model.description || 'N/A', fullWidth: true },
+      {
+        label: 'Capabilities',
+        value: <ModelCapabilitiesEditor value={model.capabilities || []} readOnly />,
+        fullWidth: true,
+      },
+      {
+        label: 'Tags',
+        value: <ModelTagsEditor value={model.tags || []} readOnly />,
+        fullWidth: true,
+      },
+      {
+        label: 'LoRAs',
+        value: <ModelLorasEditor value={model.loras || []} readOnly />,
+        fullWidth: true,
+      },
+      ...(model.evaluations?.length
+        ? [
+            {
+              label: 'Operator Evaluations',
+              value: <ModelEvaluationsEditor value={model.evaluations} readOnly />,
+              fullWidth: true,
+            },
+          ]
+        : []),
+    ],
+  }
+}
+
+const editorViewSection = (title: string, label: string, value: ReactNode): ViewSection => ({
+  title,
+  fields: [{ label, value, fullWidth: true }],
+})
 
 export default function ConfigPageModelsSection({
   config,
@@ -98,13 +404,9 @@ export default function ConfigPageModelsSection({
   const [bulkDeletePending, setBulkDeletePending] = useState(false)
   const [operationError, setOperationError] = useState<string | null>(null)
   const [modelsPendingDelete, setModelsPendingDelete] = useState<string[]>([])
-  const [reasoningFamilyPendingDelete, setReasoningFamilyPendingDelete] = useState<string | null>(
-    null,
-  )
-  const [reasoningFamilyDeletePending, setReasoningFamilyDeletePending] = useState(false)
-  const [reasoningFamilyDeleteError, setReasoningFamilyDeleteError] = useState<string | null>(null)
   const [connectModelsOpen, setConnectModelsOpen] = useState(false)
   const liveVerification = useModelLiveVerification(config)
+  const { catalog: modelCatalog, error: modelCatalogError } = useBuiltInModelCatalog()
 
   const reasoningFamilyOptions = useMemo(() => getReasoningFamilyFilterOptions(models), [models])
   const modelReferenceCounts = useMemo(() => getModelReferenceCounts(config), [config])
@@ -139,118 +441,9 @@ export default function ConfigPageModelsSection({
   type ModelRow = NormalizedModel
 
   const handleViewModel = (model: ModelRow) => {
-    const sections: ViewSection[] = [
-      {
-        title: 'Basic Information',
-        fields: [
-          { label: 'Model Name', value: model.name },
-          { label: 'Reasoning Family', value: model.reasoning_family || 'N/A' },
-          { label: 'Is Default', value: model.name === defaultModel ? 'Yes' : 'No' },
-          { label: 'Provider Model ID', value: model.provider_model_id || 'N/A' },
-          { label: 'API Format', value: model.api_format || 'N/A' },
-          { label: 'Modality', value: model.modality || 'N/A' },
-          { label: 'Param Size', value: model.param_size || 'N/A' },
-          {
-            label: 'Context Window',
-            value: model.context_window_size ? `${model.context_window_size}` : 'N/A',
-          },
-        ],
-      },
-    ]
-
-    if (
-      model.description ||
-      model.capabilities?.length ||
-      model.tags?.length ||
-      model.loras?.length ||
-      typeof model.quality_score === 'number'
-    ) {
-      sections.push({
-        title: 'Routing Metadata',
-        fields: [
-          { label: 'Description', value: model.description || 'N/A', fullWidth: true },
-          {
-            label: 'Capabilities',
-            value: <ModelCapabilitiesEditor value={model.capabilities || []} readOnly />,
-            fullWidth: true,
-          },
-          {
-            label: 'Tags',
-            value: <ModelTagsEditor value={model.tags || []} readOnly />,
-            fullWidth: true,
-          },
-          {
-            label: 'LoRAs',
-            value: <ModelLorasEditor value={model.loras || []} readOnly />,
-            fullWidth: true,
-          },
-          {
-            label: 'Quality Score',
-            value: typeof model.quality_score === 'number' ? `${model.quality_score}` : 'N/A',
-          },
-        ],
-      })
-    }
-
-    if (model.external_model_ids && Object.keys(model.external_model_ids).length > 0) {
-      sections.push({
-        title: 'External Model IDs',
-        fields: [
-          {
-            label: 'Provider IDs',
-            value: <ModelExternalIdsEditor value={model.external_model_ids} readOnly />,
-            fullWidth: true,
-          },
-        ],
-      })
-    }
-
-    if (model.backend_refs && model.backend_refs.length > 0) {
-      sections.push({
-        title: `Provider Backends (${model.backend_refs.length})`,
-        fields: [
-          {
-            label: 'Configured Backend Refs',
-            value: (
-              <ModelBackendRefsEditor
-                value={model.backend_refs}
-                readOnly
-                maskSensitive={isReadonly}
-              />
-            ),
-            fullWidth: true,
-          },
-        ],
-      })
-    }
-
-    if (model.pricing) {
-      sections.push({
-        title: 'Pricing',
-        fields: [
-          {
-            label: 'Token Pricing',
-            value: <ModelPricingEditor value={model.pricing} readOnly />,
-            fullWidth: true,
-          },
-        ],
-      })
-    }
-
-    if (model.reliability) {
-      sections.push({
-        title: 'Delivery',
-        fields: [
-          {
-            label: 'Policy',
-            value: <ModelReliabilityEditor value={model.reliability} readOnly />,
-            fullWidth: true,
-          },
-        ],
-      })
-    }
-
-    openViewModal(`Model: ${model.name}`, sections, () => handleEditModel(model))
+    openViewModal(`Model: ${model.name}`, modelViewSections(model, defaultModel, isReadonly), () =>
+      handleEditModel(model),
+    )
   }
 
   const handleAddModel = () => {
@@ -258,128 +451,31 @@ export default function ConfigPageModelsSection({
 
     openEditModal(
       'Add New Model',
-      {
-        model_name: '',
-        reasoning_family: reasoningFamilyNames[0] || '',
-        provider_model_id: '',
-        api_format: '',
-        external_model_ids: {},
-        param_size: '',
-        context_window_size: '',
-        description: '',
-        capabilities: [],
-        loras: [],
-        tags: [],
-        quality_score: '',
-        modality: '',
-        backend_refs: [
-          {
-            name: 'endpoint-1',
-            endpoint: 'localhost:8000',
-            protocol: 'http' as const,
-            weight: 1,
-          },
-        ],
-        pricing: {
-          currency: 'USD',
-          prompt_per_1m: 0,
-          cached_input_per_1m: 0,
-          completion_per_1m: 0,
-        },
-      },
-      [
-        {
-          name: 'model_name',
-          label: 'Model Name',
-          type: 'text',
-          required: true,
-          placeholder: 'e.g., openai/gpt-4',
-          description: 'Unique identifier for the model',
-        },
-        {
-          name: 'reasoning_family',
-          label: 'Reasoning Family',
-          type: 'select',
-          options: reasoningFamilyNames,
-          description: 'Select from configured reasoning families',
-        },
-        {
-          name: 'provider_model_id',
-          label: 'Provider Model ID',
-          type: 'text',
-          placeholder: 'e.g., openai/gpt-4.1',
-          description:
-            'Concrete upstream model identifier stored under providers.models[].provider_model_id',
-        },
-        {
-          name: 'api_format',
-          label: 'API Format',
-          type: 'text',
-          placeholder: 'e.g., openai',
-          description: 'Provider-specific wire format stored under providers.models[].api_format',
-        },
-        {
-          name: 'param_size',
-          label: 'Parameter Size',
-          type: 'text',
-          placeholder: 'e.g., 8B',
-        },
-        {
-          name: 'context_window_size',
-          label: 'Context Window Size',
-          type: 'number',
-          placeholder: 'e.g., 131072',
-        },
-        {
-          name: 'modality',
-          label: 'Modality',
-          type: 'text',
-          placeholder: 'e.g., text, omni, diffusion',
-        },
-        {
-          name: 'description',
-          label: 'Description',
-          type: 'textarea',
-          placeholder: 'Short routing-facing model description',
-        },
-        ...getModelStructuredFormFields(),
-      ],
+      newModelFormData(),
+      modelDialogFields(reasoningFamilyNames, 'add'),
       async (data) => {
         if (!config) {
           return
         }
         validateModelStructuredFields(data)
         const modelName = validateNewModelName(data.model_name, models)
-        const capabilities = normalizeStringList(data.capabilities)
-        const tags = normalizeStringList(data.tags)
-        const loras = normalizeModelLoras(data.loras)
-
         const newConfig = cloneConfigData(config)
 
         if (isPythonCLI) {
           const providers = ensureProvidersConfig(newConfig)
-          upsertRoutingModelCard(newConfig, modelName, {
-            param_size: data.param_size || undefined,
-            context_window_size: data.context_window_size
-              ? Number(data.context_window_size)
-              : undefined,
-            description: data.description || undefined,
-            capabilities: capabilities.length > 0 ? capabilities : undefined,
-            loras: loras.length > 0 ? loras : undefined,
-            tags: tags.length > 0 ? tags : undefined,
-            quality_score:
-              data.quality_score === '' || data.quality_score === undefined
-                ? undefined
-                : Number(data.quality_score),
-            modality: data.modality || undefined,
-          })
+          const catalogID =
+            typeof data.catalog === 'string' && data.catalog.trim()
+              ? data.catalog.trim()
+              : modelName
+          writeModelCard(newConfig, catalogID, modelCardPatch(data))
           providers.models.push(buildProviderModelPayload(modelName, data))
         } else {
           if (!newConfig.model_config) {
             newConfig.model_config = {}
           }
           newConfig.model_config[modelName] = {
-            reasoning_family: data.reasoning_family,
+            reasoning_family:
+              typeof data.reasoning_family === 'string' ? data.reasoning_family : undefined,
             pricing: normalizeModelPricing(data.pricing),
             api_format: typeof data.api_format === 'string' ? data.api_format : undefined,
             external_model_ids: normalizeModelStringMap(data.external_model_ids),
@@ -404,6 +500,7 @@ export default function ConfigPageModelsSection({
     apiKey,
     modelIds,
     modelNames,
+    catalogModels,
     reasoningFamily,
     metadata,
     pricing,
@@ -418,9 +515,11 @@ export default function ConfigPageModelsSection({
 
     for (const modelId of modelIds) {
       const modelName = validateNewModelName(modelNames[modelId] ?? modelId, models)
+      const catalogID = catalogModels[modelId]
       providers.models.push({
         name: modelName,
-        reasoning_family: reasoningFamily,
+        ...(catalogID ? { catalog: catalogID } : {}),
+        ...(!catalogID && reasoningFamily ? { reasoning: { family: reasoningFamily } } : {}),
         provider_model_id: modelId,
         api_format: provider.apiFormat,
         pricing,
@@ -429,15 +528,12 @@ export default function ConfigPageModelsSection({
           {
             name: `${provider.id}-primary`,
             base_url: baseUrl,
-            provider: provider.apiFormat,
+            provider: provider.id,
             ...(apiKey ? { api_key: apiKey } : {}),
           },
         ],
       })
-      upsertRoutingModelCard(newConfig, modelName, {
-        ...metadata,
-        description: metadata.description || `${provider.name} model`,
-      })
+      writeModelCard(newConfig, catalogID || modelName, metadata)
     }
     await saveConfig(newConfig)
   }
@@ -447,99 +543,24 @@ export default function ConfigPageModelsSection({
 
     openEditModal(
       `Edit Model: ${model.name}`,
-      {
-        reasoning_family: model.reasoning_family || '',
-        provider_model_id: model.provider_model_id || '',
-        api_format: model.api_format || '',
-        external_model_ids: model.external_model_ids || {},
-        param_size: model.param_size || '',
-        context_window_size: model.context_window_size || '',
-        description: model.description || '',
-        capabilities: model.capabilities || [],
-        loras: model.loras || [],
-        tags: model.tags || [],
-        quality_score: model.quality_score ?? '',
-        modality: model.modality || '',
-        backend_refs: model.backend_refs || [],
-        pricing: model.pricing || {},
-        reliability: model.reliability || {},
-      },
-      [
-        {
-          name: 'reasoning_family',
-          label: 'Reasoning Family',
-          type: 'select',
-          options: reasoningFamilyNames,
-          description: 'Select from configured reasoning families',
-        },
-        {
-          name: 'provider_model_id',
-          label: 'Provider Model ID',
-          type: 'text',
-          placeholder: 'e.g., openai/gpt-4.1',
-          description:
-            'Concrete upstream model identifier stored under providers.models[].provider_model_id',
-        },
-        {
-          name: 'api_format',
-          label: 'API Format',
-          type: 'text',
-          placeholder: 'e.g., openai',
-          description: 'Provider-specific wire format stored under providers.models[].api_format',
-        },
-        {
-          name: 'param_size',
-          label: 'Parameter Size',
-          type: 'text',
-          placeholder: 'e.g., 8B',
-        },
-        {
-          name: 'context_window_size',
-          label: 'Context Window Size',
-          type: 'number',
-          placeholder: 'e.g., 131072',
-        },
-        {
-          name: 'modality',
-          label: 'Modality',
-          type: 'text',
-          placeholder: 'e.g., text, omni, diffusion',
-        },
-        {
-          name: 'description',
-          label: 'Description',
-          type: 'textarea',
-          placeholder: 'Short routing-facing model description',
-        },
-        ...getModelStructuredFormFields(),
-      ],
+      editModelFormData(model),
+      modelDialogFields(reasoningFamilyNames, 'edit'),
       async (data) => {
         if (!config) {
           return
         }
         validateModelStructuredFields(data)
         const newConfig = cloneConfigData(config)
-        const capabilities = normalizeStringList(data.capabilities)
-        const tags = normalizeStringList(data.tags)
-        const loras = normalizeModelLoras(data.loras)
-
         if (isPythonCLI && newConfig.providers?.models) {
           const providers = ensureProvidersConfig(newConfig)
-          upsertRoutingModelCard(newConfig, model.name, {
-            param_size: data.param_size || undefined,
-            context_window_size: data.context_window_size
-              ? Number(data.context_window_size)
-              : undefined,
-            description: data.description || undefined,
-            capabilities: capabilities.length > 0 ? capabilities : undefined,
-            loras: loras.length > 0 ? loras : undefined,
-            tags: tags.length > 0 ? tags : undefined,
-            quality_score:
-              data.quality_score === '' || data.quality_score === undefined
-                ? undefined
-                : Number(data.quality_score),
-            modality: data.modality || undefined,
-          })
+          const oldCardID = model.catalog || model.name
+          const nextCatalog =
+            typeof data.catalog === 'string' && data.catalog.trim()
+              ? data.catalog.trim()
+              : undefined
+          const nextCardID = nextCatalog || model.name
+          if (oldCardID !== nextCardID) removeRoutingModelCard(newConfig, oldCardID)
+          writeModelCard(newConfig, nextCardID, modelCardPatch(data))
           type ProviderModel = NonNullable<ConfigData['providers']>['models'][number]
           providers.models = providers.models.map((providerModel: ProviderModel) =>
             providerModel.name === model.name
@@ -552,7 +573,8 @@ export default function ConfigPageModelsSection({
         } else if (newConfig.model_config) {
           newConfig.model_config[model.name] = {
             ...newConfig.model_config[model.name],
-            reasoning_family: data.reasoning_family,
+            reasoning_family:
+              typeof data.reasoning_family === 'string' ? data.reasoning_family : undefined,
             pricing: normalizeModelPricing(data.pricing),
             api_format: typeof data.api_format === 'string' ? data.api_format : undefined,
             external_model_ids: normalizeModelStringMap(data.external_model_ids),
@@ -592,7 +614,8 @@ export default function ConfigPageModelsSection({
           (providerModel: ProviderModel) => !namesToDelete.has(providerModel.name),
         )
         for (const modelName of namesToDelete) {
-          removeRoutingModelCard(newConfig, modelName)
+          const model = models.find((candidate) => candidate.name === modelName)
+          removeRoutingModelCard(newConfig, model?.catalog || modelName)
         }
       } else if (newConfig.model_config) {
         for (const modelName of namesToDelete) {
@@ -641,161 +664,33 @@ export default function ConfigPageModelsSection({
     const familyConfig = reasoningFamilies[familyName]
     if (!familyConfig) return
 
-    openViewModal(
-      `Reasoning Family: ${familyName}`,
-      [
-        {
-          title: 'Configuration',
-          fields: [
-            { label: 'Family Name', value: familyName },
-            { label: 'Type', value: familyConfig.type },
-            { label: 'Parameter', value: familyConfig.parameter },
-          ],
-        },
-      ],
-      () => handleEditReasoningFamily(familyName),
-    )
-  }
-
-  const handleEditReasoningFamily = (familyName: string) => {
-    const familyConfig = reasoningFamilies[familyName]
-    if (!familyConfig || !config) return
-
-    openEditModal(
-      `Edit Reasoning Family: ${familyName}`,
-      { ...familyConfig },
-      [
-        {
-          name: 'type',
-          label: 'Type',
-          type: 'select',
-          options: ['reasoning_effort', 'chat_template_kwargs'],
-          required: true,
-          description: 'Type of reasoning family',
-        },
-        {
-          name: 'parameter',
-          label: 'Parameter',
-          type: 'text',
-          required: true,
-          placeholder: 'e.g., reasoning_effort',
-          description: 'Parameter name for reasoning control',
-        },
-      ],
-      async (data) => {
-        const newConfig = cloneConfigData(config)
-        if (isPythonCLI) {
-          const defaults = ensureProviderDefaultsConfig(newConfig)
-          if (!defaults.reasoning_families) {
-            defaults.reasoning_families = {}
-          }
-          defaults.reasoning_families[familyName] = data
-        } else if (newConfig.reasoning_families) {
-          newConfig.reasoning_families[familyName] = data
-        }
-        await saveConfig(newConfig)
+    openViewModal(`Reasoning Family: ${familyName}`, [
+      {
+        title: 'Configuration',
+        fields: [
+          { label: 'Family Name', value: familyName },
+          { label: 'Type', value: familyConfig.type },
+          { label: 'Parameter', value: familyConfig.parameter },
+          { label: 'Levels', value: familyConfig.levels?.join(', ') || 'N/A' },
+          { label: 'Default', value: familyConfig.default || 'N/A' },
+        ],
       },
-    )
+    ])
   }
-
-  const handleAddReasoningFamily = () => {
-    if (!config) return
-
-    openEditModal<ReasoningFamilyFormState>(
-      'Add Reasoning Family',
-      { name: '', type: 'reasoning_effort', parameter: '' },
-      [
-        {
-          name: 'name',
-          label: 'Family Name',
-          type: 'text',
-          required: true,
-          placeholder: 'e.g., o1-reasoning',
-          description: 'Unique name for this reasoning family',
-        },
-        {
-          name: 'type',
-          label: 'Type',
-          type: 'select',
-          options: ['reasoning_effort', 'chat_template_kwargs'],
-          required: true,
-          description: 'Type of reasoning family',
-        },
-        {
-          name: 'parameter',
-          label: 'Parameter',
-          type: 'text',
-          required: true,
-          placeholder: 'e.g., reasoning_effort',
-          description: 'Parameter name for reasoning control',
-        },
-      ],
-      async (data) => {
-        const familyName = data.name
-        const familyConfig = {
-          type: data.type,
-          parameter: data.parameter,
-        }
-
-        const newConfig = cloneConfigData(config)
-        if (isPythonCLI) {
-          const defaults = ensureProviderDefaultsConfig(newConfig)
-          if (!defaults.reasoning_families) {
-            defaults.reasoning_families = {}
-          }
-          defaults.reasoning_families[familyName] = familyConfig
-        } else {
-          if (!newConfig.reasoning_families) {
-            newConfig.reasoning_families = {}
-          }
-          newConfig.reasoning_families[familyName] = familyConfig
-        }
-        await saveConfig(newConfig)
-      },
-      'add',
-    )
+  type ReasoningFamilyRow = {
+    name: string
+    type: string
+    parameter: string
+    levels: string
+    defaultLevel: string
   }
-
-  const handleDeleteReasoningFamily = (familyName: string) => {
-    setReasoningFamilyDeleteError(null)
-    setReasoningFamilyPendingDelete(familyName)
-  }
-
-  const confirmDeleteReasoningFamily = async () => {
-    if (!reasoningFamilyPendingDelete) return
-    if (!config) {
-      setReasoningFamilyDeleteError('No active configuration is available.')
-      return
-    }
-
-    setReasoningFamilyDeletePending(true)
-    setReasoningFamilyDeleteError(null)
-    try {
-      const newConfig = cloneConfigData(config)
-      if (isPythonCLI && newConfig.providers?.defaults?.reasoning_families) {
-        const defaults = ensureProviderDefaultsConfig(newConfig)
-        defaults.reasoning_families = { ...defaults.reasoning_families }
-        delete defaults.reasoning_families[reasoningFamilyPendingDelete]
-      } else if (newConfig.reasoning_families) {
-        delete newConfig.reasoning_families[reasoningFamilyPendingDelete]
-      }
-      await saveConfig(newConfig)
-      setReasoningFamilyPendingDelete(null)
-    } catch (error) {
-      setReasoningFamilyDeleteError(
-        error instanceof Error ? error.message : 'Failed to delete reasoning family.',
-      )
-    } finally {
-      setReasoningFamilyDeletePending(false)
-    }
-  }
-
-  type ReasoningFamilyRow = { name: string; type: string; parameter: string }
   const reasoningFamilyData: ReasoningFamilyRow[] = Object.entries(reasoningFamilies).map(
     ([name, config]) => ({
       name,
       type: config.type,
       parameter: config.parameter,
+      levels: config.levels?.join(', ') || '',
+      defaultLevel: config.default || '',
     }),
   )
   const normalizedReasoningFamilySearch = reasoningFamilySearch.trim().toLocaleLowerCase()
@@ -804,7 +699,8 @@ export default function ConfigPageModelsSection({
         (family) =>
           family.name.toLocaleLowerCase().includes(normalizedReasoningFamilySearch) ||
           family.type.toLocaleLowerCase().includes(normalizedReasoningFamilySearch) ||
-          family.parameter.toLocaleLowerCase().includes(normalizedReasoningFamilySearch),
+          family.parameter.toLocaleLowerCase().includes(normalizedReasoningFamilySearch) ||
+          family.levels.toLocaleLowerCase().includes(normalizedReasoningFamilySearch),
       )
     : reasoningFamilyData
 
@@ -827,6 +723,17 @@ export default function ConfigPageModelsSection({
       header: 'Parameter',
       sortable: true,
       render: (row) => <code className={styles.reasoningFamilyParameter}>{row.parameter}</code>,
+    },
+    {
+      key: 'levels',
+      header: 'Levels',
+      render: (row) => row.levels || 'N/A',
+    },
+    {
+      key: 'defaultLevel',
+      header: 'Default',
+      width: '120px',
+      render: (row) => row.defaultLevel || 'N/A',
     },
   ]
 
@@ -881,15 +788,17 @@ export default function ConfigPageModelsSection({
           </div>
 
           <div className={styles.sectionTableBlock}>
+            {modelCatalogError ? (
+              <p role="status" className={styles.inlineInfo}>
+                Using the bundled catalog because the live catalog API is unavailable.
+              </p>
+            ) : null}
             <TableHeader
-              title="Reasoning Families"
+              title="Built-in Reasoning Families"
               count={filteredReasoningFamilyData.length}
               searchPlaceholder="Search family, type, or parameter..."
               searchValue={reasoningFamilySearch}
               onSearchChange={setReasoningFamilySearch}
-              onAdd={handleAddReasoningFamily}
-              addButtonText="Add Family"
-              disabled={isReadonly}
               variant="embedded"
             />
             <DataTable
@@ -897,11 +806,9 @@ export default function ConfigPageModelsSection({
               data={filteredReasoningFamilyData}
               keyExtractor={(row) => row.name}
               onView={(row) => handleViewReasoningFamily(row.name)}
-              onEdit={(row) => handleEditReasoningFamily(row.name)}
-              onDelete={(row) => handleDeleteReasoningFamily(row.name)}
-              emptyMessage="No reasoning families configured"
+              emptyMessage="No built-in reasoning families are available"
               className={styles.managerTable}
-              readonly={isReadonly}
+              readonly
               pagination={{
                 pageSize: 25,
                 pageSizeOptions: [25, 50, 100],
@@ -927,29 +834,10 @@ export default function ConfigPageModelsSection({
           ...(config?.entrypoints ?? []).flatMap((entrypoint) => entrypoint.model_names),
         ]}
         reasoningFamilies={Object.keys(reasoningFamilies)}
+        catalog={modelCatalog}
         onClose={() => setConnectModelsOpen(false)}
         onImport={handleConnectModels}
         onManualSetup={() => handleAddModel()}
-      />
-
-      <ConfirmDialog
-        isOpen={reasoningFamilyPendingDelete !== null}
-        title={`Delete reasoning family “${reasoningFamilyPendingDelete || ''}”?`}
-        description="Remove this reasoning control definition from the active model configuration. Models that still reference it may need to be updated separately."
-        eyebrow="Destructive configuration change"
-        confirmLabel="Delete family"
-        pending={reasoningFamilyDeletePending}
-        details={
-          reasoningFamilyDeleteError ? (
-            <span role="alert">{reasoningFamilyDeleteError}</span>
-          ) : undefined
-        }
-        onCancel={() => {
-          if (reasoningFamilyDeletePending) return
-          setReasoningFamilyPendingDelete(null)
-          setReasoningFamilyDeleteError(null)
-        }}
-        onConfirm={confirmDeleteReasoningFamily}
       />
     </>
   )

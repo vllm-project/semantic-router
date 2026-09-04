@@ -23,7 +23,8 @@ Day-0 support updates every product surface from one source.
 - Redistribution of benchmark data without permission.
 - Combining intelligence, efficiency, cost, and availability into one opaque
   score.
-- A permanent dual parser for old and new configuration contracts.
+- A new top-level configuration hierarchy or catalog build metadata in user
+  YAML.
 
 ## Exit Criteria
 
@@ -32,7 +33,7 @@ Day-0 support updates every product surface from one source.
 - Provider/API/reasoning defaults no longer depend on central config-helper
   switches or parallel Dashboard data.
 - The default intelligence index exposes components, version, coverage,
-  uncertainty, and provenance, and missing data never becomes zero.
+  status, and provenance, and missing data never becomes zero.
 - The Dashboard and website render generated provider/model support data,
   presentation assets, and evidence-backed leaderboards.
 - A model-only Day-0 change is complete through catalog data, conformance,
@@ -44,24 +45,25 @@ Day-0 support updates every product surface from one source.
   Day-0 workflow proposal with the current split inventory.
 - [ ] `TASK-02` Add versioned resource schemas, source layout, compiler,
   provenance, immutable registry, fixtures, and generated-diff enforcement.
-- [ ] `TASK-03` Add the breaking config materializer and one-way migration tool
-  for provider instances, aliases, built-in overlays, and custom model cards.
+- [ ] `TASK-03` Add the v0.3 catalog materializer and targeted migration tool
+  for aliases, backend Provider IDs, built-in overlays, and custom model cards.
 - [ ] `TASK-04` Move protocol, auth, provider, offering, and reasoning behavior
   to catalog-backed registries and remove config-helper glue.
 - [ ] `TASK-05` Add evaluation records, the default intelligence index, score
   resolver, missing-data policy, and runtime observed-quality separation.
 - [ ] `TASK-06` Move Dashboard Add Model and provider logos to the catalog API;
   generate the public Models support matrix and leaderboards.
-- [ ] `TASK-07` Land representative model/provider Day-0 changes and complete
-  config, protocol, UI, website, and affected E2E validation.
+- [ ] `TASK-07` Complete config, protocol, UI, website, and affected E2E
+  validation. The representative new-model Day-0 change lands separately after
+  this architecture PR.
 - [ ] `TASK-08` Remove superseded inventories and retire TD058 after every exit
   criterion is enforced.
 
 ## Next Action
 
-Implement one minimal vertical catalog slice: resource schemas, compiler,
-provenance, generated snapshot, and invalid-reference fixtures. Keep runtime
-behavior unchanged until that source is validated and reviewable.
+Implement the complete v0.3 vertical slice: resource schemas, compiler,
+materializer, generated runtime/UI/website views, migration, and affected
+validation. Do not add a new physical model in this architecture PR.
 
 ## Operating Rules
 

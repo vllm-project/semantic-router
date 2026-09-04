@@ -35,7 +35,8 @@ func TestEmitUserYAMLNestsInputModalitySignals(t *testing.T) {
 	if _, leaked := raw["input_modality"]; leaked {
 		t.Fatalf("input_modality leaked as a top-level key:\n%s", userYAML)
 	}
-	signals, _ := raw["signals"].(map[string]interface{})
+	routing, _ := raw["routing"].(map[string]interface{})
+	signals, _ := routing["signals"].(map[string]interface{})
 	rules, _ := signals["input_modality"].([]interface{})
 	if len(rules) != 1 {
 		t.Fatalf("signals.input_modality = %v, want one rule:\n%s", signals["input_modality"], userYAML)
@@ -46,8 +47,8 @@ func TestEmitUserYAMLNestsInputModalitySignals(t *testing.T) {
 	}
 }
 
-// The CRD emitter must carry the rule declaration alongside the decision that
-// references it so the CR stays self-contained.
+// The CRD emitter must carry the rule declaration under canonical routing so
+// the decision and its signal remain self-contained.
 func TestEmitCRDCarriesInputModalitySignals(t *testing.T) {
 	cfg := mustCompilePolicyDSL(t, inputModalityEmitterDSL)
 	crd, err := EmitCRD(cfg, "demo", "default")
@@ -60,8 +61,10 @@ func TestEmitCRDCarriesInputModalitySignals(t *testing.T) {
 	}
 	spec, _ := raw["spec"].(map[string]interface{})
 	configSpec, _ := spec["config"].(map[string]interface{})
-	rules, _ := configSpec["input_modality"].([]interface{})
+	routing, _ := configSpec["routing"].(map[string]interface{})
+	signals, _ := routing["signals"].(map[string]interface{})
+	rules, _ := signals["input_modality"].([]interface{})
 	if len(rules) != 1 {
-		t.Fatalf("spec.config.input_modality = %v, want one rule:\n%s", configSpec["input_modality"], crd)
+		t.Fatalf("spec.config.routing.signals.input_modality = %v, want one rule:\n%s", signals["input_modality"], crd)
 	}
 }

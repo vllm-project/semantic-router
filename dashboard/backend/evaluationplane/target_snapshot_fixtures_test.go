@@ -6,12 +6,13 @@ global:
     auto_model_names: [entrypoint-a]
 providers:
   defaults:
-    default_model: Org/Fast Model
+    model: Org/Fast Model
   models:
     - name: Org/Fast Model
       provider_model_id: PrivateOrg/Secret-Upstream-ID
       backend_refs:
         - name: private-primary
+          provider: vllm
           endpoint: private.models.example.test:8000/v1
           api_key: literal-test-secret
       pricing:
@@ -21,6 +22,7 @@ providers:
     - name: local/omni
       backend_refs:
         - name: local-primary
+          provider: vllm
           endpoint: local-private.example.test:8001
     - name: metadata-only
       provider_model_id: metadata-only-upstream
@@ -31,14 +33,16 @@ providers:
     - name: non-usd
       provider_model_id: foreign-upstream
       backend_refs:
-        - endpoint: foreign-private.example.test:8002
+        - provider: vllm
+          endpoint: foreign-private.example.test:8002
       pricing:
         currency: EUR
         prompt_per_1m: 0.1
         completion_per_1m: 0.2
     - name: ambiguous-unpriced
       backend_refs:
-        - endpoint: ambiguous-private.example.test:8003
+        - provider: vllm
+          endpoint: ambiguous-private.example.test:8003
       pricing:
         prompt_per_1m: 0.1
         completion_per_1m: 0.2
@@ -75,16 +79,16 @@ global:
       endpoint: http://envoy.test/v1/chat/completions
 providers:
   defaults:
-    default_model: model-a
+    model: model-a
   models:
     - name: model-a
-      backend_refs: [{endpoint: model-a.test:8000}]
+      backend_refs: [{provider: vllm, endpoint: model-a.test:8000}]
     - name: model-b
-      backend_refs: [{endpoint: model-b.test:8000}]
+      backend_refs: [{provider: vllm, endpoint: model-b.test:8000}]
     - name: model-c
-      backend_refs: [{endpoint: model-c.test:8000}]
+      backend_refs: [{provider: vllm, endpoint: model-c.test:8000}]
     - name: selector
-      backend_refs: [{endpoint: selector.test:8000}]
+      backend_refs: [{provider: vllm, endpoint: selector.test:8000}]
 routing:
   modelCards:
     - {name: model-a, modality: text}
@@ -119,10 +123,10 @@ global:
     auto_model_names: [default-mom]
 providers:
   defaults:
-    default_model: model-a
+    model: model-a
   models:
     - name: model-a
-      backend_refs: [{endpoint: model-a.test:8000}]
+      backend_refs: [{provider: vllm, endpoint: model-a.test:8000}]
 routing:
   modelCards:
     - {name: model-a, modality: text}

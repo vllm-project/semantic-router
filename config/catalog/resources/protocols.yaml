@@ -1,0 +1,33 @@
+- id: openai/chat-completions@1
+  display_name: OpenAI Chat Completions
+  wire_format: openai.chat.v1
+  operations:
+    - id: create
+      method: POST
+      path: /v1/chat/completions
+    - id: list_models
+      method: GET
+      path: /v1/models
+  capabilities: [chat, streaming, tools, structured_output, usage]
+- id: openai/responses@1
+  display_name: OpenAI Responses
+  wire_format: openai.responses.v1
+  operations:
+    - id: create
+      method: POST
+      path: /v1/responses
+    - id: list_models
+      method: GET
+      path: /v1/models
+  capabilities: [chat, streaming, tools, structured_output, reasoning, usage]
+- id: anthropic/messages@1
+  display_name: Anthropic Messages
+  wire_format: anthropic.messages.v1
+  operations:
+    - id: create
+      method: POST
+      path: /v1/messages
+    - id: list_models
+      method: GET
+      path: /v1/models
+  capabilities: [chat, streaming, tools, usage]

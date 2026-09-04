@@ -11,7 +11,7 @@ config:
   listeners: []
   providers:
     defaults:
-      default_model: qwen14b-dev
+      model: qwen14b-dev
     models:
       - name: qwen14b-dev
         external_model_ids:
@@ -20,7 +20,7 @@ config:
           - name: vllm-14b-dev
             endpoint: vllm-14b-dev.default.svc.cluster.local:8000
             weight: 1
-            type: vllm
+            provider: vllm
       - name: qwen14b-prod
         external_model_ids:
           vllm: Qwen/Qwen2.5-14B-Instruct
@@ -28,7 +28,7 @@ config:
           - name: vllm-14b-prod
             endpoint: vllm-14b-prod.default.svc.cluster.local:8000
             weight: 1
-            type: vllm
+            provider: vllm
   routing:
     decisions:
       - name: block_jailbreak_prod
@@ -179,7 +179,10 @@ config:
           - code
           - reasoning
           - math
-        quality_score: 0.85
+        evaluations:
+          - benchmark: vllm-sr/operator-rating@1.0.0
+            metrics:
+              score: 0.85
       - name: qwen14b-prod
         param_size: 14b
         description: Qwen2.5 14B — Prod environment (user-facing)
@@ -188,7 +191,10 @@ config:
           - code
           - reasoning
           - math
-        quality_score: 0.85
+        evaluations:
+          - benchmark: vllm-sr/operator-rating@1.0.0
+            metrics:
+              score: 0.85
   global:
     model_catalog:
       kbs: []

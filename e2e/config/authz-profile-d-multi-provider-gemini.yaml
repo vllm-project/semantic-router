@@ -23,12 +23,15 @@ providers:
     - name: gpt-4o-mini
       backend_refs:
         - name: openai-static
+          provider: vllm
           api_key: ""
     - name: claude-sonnet-4-5-20250929
       backend_refs:
         - name: anthropic-static
+          provider: vllm
           api_key: ""
     - name: gemini-2.0-flash
       backend_refs:
         - name: gemini-static
+          provider: vllm
           api_key: ""

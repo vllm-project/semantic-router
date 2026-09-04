@@ -20,7 +20,7 @@ func TestModelDiscoveryHandlerListsAndSortsProviderModels(t *testing.T) {
 	defer provider.Close()
 
 	request := httptest.NewRequest(http.MethodPost, modelDiscoveryPath, strings.NewReader(
-		`{"baseUrl":"`+provider.URL+`/v1","apiKey":"secret","authMode":"bearer"}`,
+		`{"baseUrl":"`+provider.URL+`/v1","apiKey":"secret","provider":"openai"}`,
 	))
 	response := httptest.NewRecorder()
 	ModelDiscoveryHandler(provider.Client()).ServeHTTP(response, request)
@@ -38,15 +38,15 @@ func TestModelDiscoveryHandlerUsesAnthropicHeaders(t *testing.T) {
 		if got := r.Header.Get("x-api-key"); got != "secret" {
 			t.Fatalf("x-api-key = %q", got)
 		}
-		if got := r.Header.Get("anthropic-version"); got == "" {
-			t.Fatal("anthropic-version is empty")
+		if got := r.Header.Get("anthropic-version"); got != "2023-06-01" {
+			t.Fatalf("anthropic-version = %q", got)
 		}
 		_, _ = w.Write([]byte(`{"data":[{"id":"claude"}]}`))
 	}))
 	defer provider.Close()
 
 	request := httptest.NewRequest(http.MethodPost, modelDiscoveryPath, strings.NewReader(
-		`{"baseUrl":"`+provider.URL+`/v1","apiKey":"secret","authMode":"anthropic"}`,
+		`{"baseUrl":"`+provider.URL+`/v1","apiKey":"secret","provider":"anthropic"}`,
 	))
 	response := httptest.NewRecorder()
 	ModelDiscoveryHandler(provider.Client()).ServeHTTP(response, request)
@@ -57,7 +57,7 @@ func TestModelDiscoveryHandlerUsesAnthropicHeaders(t *testing.T) {
 
 func TestModelDiscoveryHandlerRejectsInvalidBaseURL(t *testing.T) {
 	request := httptest.NewRequest(http.MethodPost, modelDiscoveryPath, strings.NewReader(
-		`{"baseUrl":"file:///etc/passwd","authMode":"bearer"}`,
+		`{"baseUrl":"file:///etc/passwd","provider":"openai"}`,
 	))
 	response := httptest.NewRecorder()
 	ModelDiscoveryHandler(nil).ServeHTTP(response, request)
@@ -79,7 +79,7 @@ func TestModelDiscoveryHandlerDoesNotForwardCredentialsAcrossRedirects(t *testin
 	defer provider.Close()
 
 	request := httptest.NewRequest(http.MethodPost, modelDiscoveryPath, strings.NewReader(
-		`{"baseUrl":"`+provider.URL+`","apiKey":"secret","authMode":"bearer"}`,
+		`{"baseUrl":"`+provider.URL+`","apiKey":"secret","provider":"openai"}`,
 	))
 	response := httptest.NewRecorder()
 	ModelDiscoveryHandler(provider.Client()).ServeHTTP(response, request)
@@ -89,5 +89,27 @@ func TestModelDiscoveryHandlerDoesNotForwardCredentialsAcrossRedirects(t *testin
 	}
 	if targetCalled {
 		t.Fatal("redirect target received the credentialed discovery request")
+	}
+}
+
+func TestModelDiscoveryHandlerRejectsUnknownProvider(t *testing.T) {
+	request := httptest.NewRequest(http.MethodPost, modelDiscoveryPath, strings.NewReader(
+		`{"baseUrl":"https://example.com/v1","provider":"operator-invented"}`,
+	))
+	response := httptest.NewRecorder()
+	ModelDiscoveryHandler(nil).ServeHTTP(response, request)
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d body = %s", response.Code, response.Body.String())
+	}
+}
+
+func TestModelDiscoveryHandlerRejectsUndeclaredProviderOperation(t *testing.T) {
+	request := httptest.NewRequest(http.MethodPost, modelDiscoveryPath, strings.NewReader(
+		`{"baseUrl":"https://example.openai.azure.com/openai/deployments/example","provider":"azure-openai"}`,
+	))
+	response := httptest.NewRecorder()
+	ModelDiscoveryHandler(nil).ServeHTTP(response, request)
+	if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), "does not declare model discovery support") {
+		t.Fatalf("status = %d body = %s", response.Code, response.Body.String())
 	}
 }

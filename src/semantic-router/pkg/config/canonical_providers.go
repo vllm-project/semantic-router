@@ -9,22 +9,33 @@ type CanonicalProviders struct {
 // CanonicalProviderDefaults groups provider-wide defaults separately from
 // per-model access bindings.
 type CanonicalProviderDefaults struct {
-	DefaultModel           string                           `yaml:"default_model,omitempty"`
-	ReasoningFamilies      map[string]ReasoningFamilyConfig `yaml:"reasoning_families,omitempty"`
-	DefaultReasoningEffort string                           `yaml:"default_reasoning_effort,omitempty"`
+	DefaultModel           string `yaml:"model,omitempty"`
+	DefaultReasoningEffort string `yaml:"reasoning_effort,omitempty"`
 }
 
 // CanonicalProviderModel binds a logical routing model to concrete access
 // details without mixing those access details into provider-wide defaults.
 type CanonicalProviderModel struct {
 	Name             string                `yaml:"name"`
-	ReasoningFamily  string                `yaml:"reasoning_family,omitempty"`
+	Catalog          string                `yaml:"catalog,omitempty"`
+	Reasoning        *CanonicalReasoning   `yaml:"reasoning,omitempty"`
 	ProviderModelID  string                `yaml:"provider_model_id,omitempty"`
 	BackendRefs      []CanonicalBackendRef `yaml:"backend_refs,omitempty"`
 	Pricing          ModelPricing          `yaml:"pricing,omitempty"`
 	Reliability      ProviderReliability   `yaml:"reliability,omitempty"`
 	APIFormat        string                `yaml:"api_format,omitempty"`
 	ExternalModelIDs map[string]string     `yaml:"external_model_ids,omitempty"`
+}
+
+// CanonicalReasoning either references one built-in family or defines the
+// request projection for a private/custom model inline. Family is mutually
+// exclusive with the inline fields.
+type CanonicalReasoning struct {
+	Family    string   `yaml:"family,omitempty"`
+	Type      string   `yaml:"type,omitempty"`
+	Parameter string   `yaml:"parameter,omitempty"`
+	Levels    []string `yaml:"levels,omitempty"`
+	Default   string   `yaml:"default,omitempty"`
 }
 
 // ProviderReliability controls generated data-plane load balancing and retry behavior.
@@ -46,7 +57,6 @@ type CanonicalBackendRef struct {
 	Endpoint     string            `yaml:"endpoint,omitempty"`
 	Protocol     string            `yaml:"protocol,omitempty"`
 	Weight       int               `yaml:"weight,omitempty"`
-	Type         string            `yaml:"type,omitempty"`
 	BaseURL      string            `yaml:"base_url,omitempty"`
 	Provider     string            `yaml:"provider,omitempty"`
 	AuthHeader   string            `yaml:"auth_header,omitempty"`

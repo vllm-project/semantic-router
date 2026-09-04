@@ -370,13 +370,13 @@ def merge_openclaw_models_into_target(
         for model in provider_models
         if isinstance(model, dict) and str(model.get("name", "")).strip()
     ]
-    default_model = str(defaults.get("default_model", "") or "").strip()
+    default_model = str(defaults.get("model", "") or "").strip()
     if not default_model or default_model not in provider_names:
-        defaults["default_model"] = imported_models[0].logical_name
+        defaults["model"] = imported_models[0].logical_name
 
     decisions = routing["decisions"]
     if not decisions:
-        routing["decisions"] = [build_default_decision(defaults["default_model"])]
+        routing["decisions"] = [build_default_decision(defaults["model"])]
 
 
 def build_backend_ref(imported_model: ImportedModel) -> dict[str, Any]:

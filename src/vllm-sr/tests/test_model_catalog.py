@@ -150,11 +150,12 @@ def test_packaged_catalog_export_is_complete_and_config_independent(
             "channel": "latest",
             "default_model": DEFAULT_MODEL,
             "enabled_models": [DEFAULT_MODEL],
+            "default_intelligence_index": "vllm-sr/intelligence@1.0.0",
         }
     ]
     assert {model["id"] for model in document["models"]} == CATALOG_MODELS
     assert all(
-        model["verification"]["status"] == "verified" for model in document["models"]
+        model["verification"]["status"] == "reproduced" for model in document["models"]
     )
 
 

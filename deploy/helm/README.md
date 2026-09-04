@@ -32,12 +32,13 @@ configOverride:
   version: v0.3
   providers:
     defaults:
-      default_model: my-model
+      model: my-model
     models:
       - name: my-model
         backend_refs:
           - name: primary
             endpoint: my-vllm.default.svc.cluster.local:8000
+            provider: vllm
   routing:
     modelCards:
       - name: my-model

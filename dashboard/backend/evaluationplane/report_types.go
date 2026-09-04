@@ -118,16 +118,27 @@ type TrackReport struct {
 	Error         string        `json:"error,omitempty"`
 }
 
+// ReportPrimaryMetric preserves the identity and measurement contract of the
+// promotion headline selected from the report's typed metrics. A nil summary
+// value means that no eligible metric is available; it is never synthesized
+// from a different metric or an untyped quality scalar.
+type ReportPrimaryMetric struct {
+	ID                 string    `json:"id"`
+	Value              float64   `json:"value"`
+	Unit               string    `json:"unit"`
+	ConfidenceInterval []float64 `json:"confidence_interval,omitempty"`
+}
+
 type ReportSummary struct {
-	Verdict          DecisionVerdict `json:"verdict"`
-	QualityScore     *float64        `json:"quality_score"`
-	LatencyP95MS     *float64        `json:"latency_p95_ms"`
-	RuntimeCost      *float64        `json:"runtime_cost"`
-	CapacityTCO      *float64        `json:"capacity_tco"`
-	Coverage         Coverage        `json:"coverage"`
-	PassedGates      int             `json:"passed_gates"`
-	FailedGates      int             `json:"failed_gates"`
-	UnavailableGates int             `json:"unavailable_gates"`
+	Verdict          DecisionVerdict      `json:"verdict"`
+	PrimaryMetric    *ReportPrimaryMetric `json:"primary_metric"`
+	LatencyP95MS     *float64             `json:"latency_p95_ms"`
+	RuntimeCost      *float64             `json:"runtime_cost"`
+	CapacityTCO      *float64             `json:"capacity_tco"`
+	Coverage         Coverage             `json:"coverage"`
+	PassedGates      int                  `json:"passed_gates"`
+	FailedGates      int                  `json:"failed_gates"`
+	UnavailableGates int                  `json:"unavailable_gates"`
 }
 
 type Report struct {

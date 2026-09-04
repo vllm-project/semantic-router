@@ -13,6 +13,7 @@ from cli.config_contract import (
     LEGACY_ROUTING_KEYS,
     LEGACY_SIGNAL_KEY_TO_CANONICAL,
 )
+from cli.config_migration_catalog import migrate_v03_catalog_contract
 
 
 def migrate_config_data(data: dict[str, Any]) -> dict[str, Any]:
@@ -60,6 +61,7 @@ def migrate_config_data(data: dict[str, Any]) -> dict[str, Any]:
     if "recipes" in source:
         canonical["recipes"] = deepcopy(source["recipes"])
     _normalize_response_cache_plugins(canonical)
+    migrate_v03_catalog_contract(canonical)
 
     return canonical
 
@@ -287,7 +289,11 @@ def _ensure_routing_model_refs(
     routing_models_by_name: dict[str, dict[str, Any]],
 ) -> None:
     defaults = _as_dict(providers.get("defaults"))
-    default_model = defaults.get("default_model") or providers.get("default_model")
+    default_model = (
+        defaults.get("model")
+        or defaults.get("default_model")
+        or providers.get("default_model")
+    )
     if isinstance(default_model, str) and default_model.strip():
         _ensure_routing_model(
             default_model.strip(), routing_models, routing_models_by_name

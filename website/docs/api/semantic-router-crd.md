@@ -62,7 +62,8 @@ spec:
   vllmEndpoints:
     - name: qwen-backend
       model: qwen/assistant
-      reasoningFamily: qwen3
+      reasoning:
+        family: qwen3
       backend:
         type: service
         service:
@@ -84,7 +85,7 @@ surface has two parts:
 - `config.routing` passes through the canonical routing object, including model
   cards, signals, projections, decisions, algorithms, and route plugins;
 - typed adapter fields such as `response_cache`, `tools`, `prompt_guard`,
-  `classifier`, `complexity_rules`, `reasoning_families`, `api`, and
+  `classifier`, `complexity_rules`, `reasoning_effort`, `api`, and
   `observability` are translated into their canonical provider or `global`
   locations.
 

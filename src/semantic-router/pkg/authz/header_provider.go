@@ -1,8 +1,6 @@
 package authz
 
-import (
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
-)
+import modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 
 // HeaderInjectionProvider reads per-user LLM credentials from request headers
 // injected by an external authorization service.
@@ -28,15 +26,17 @@ type HeaderInjectionProvider struct {
 // DefaultHeaderMap returns the standard header mapping used by Authorino and
 // the custom ext_authz service. Used as the default when no YAML config is provided.
 func DefaultHeaderMap() map[string]string {
-	return map[string]string{
-		string(ProviderOpenAI):      headers.UserOpenAIKey,
-		string(ProviderAnthropic):   headers.UserAnthropicKey,
-		string(ProviderAzureOpenAI): headers.UserAzureOpenAIKey,
-		string(ProviderBedrock):     headers.UserBedrockKey,
-		string(ProviderGemini):      headers.UserGeminiKey,
-		string(ProviderVertexAI):    headers.UserVertexAIKey,
-		string(ProviderMiniMax):     headers.UserMiniMaxKey,
+	result := map[string]string{}
+	registry, err := modelcatalog.BuiltIn()
+	if err != nil {
+		return result
 	}
+	for _, provider := range registry.Providers() {
+		if provider.Auth.InjectedHeader != "" {
+			result[provider.ID] = provider.Auth.InjectedHeader
+		}
+	}
+	return result
 }
 
 // NewHeaderInjectionProvider creates a provider that reads per-user keys

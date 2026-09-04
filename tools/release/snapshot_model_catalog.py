@@ -54,7 +54,7 @@ def _load_catalog(path: Path) -> dict[str, Any]:
 def _latest_bundles(latest_dir: Path) -> tuple[dict[str, Any], list[str]]:
     catalog = _load_catalog(latest_dir / "catalog.yaml")
     expected_identity = {
-        "schema_version": "vllm-sr/model-catalog/v1",
+        "schema_version": "vllm-sr/model-catalog/v2",
         "catalog_version": "latest",
         "channel": "latest",
         "release": "unreleased",

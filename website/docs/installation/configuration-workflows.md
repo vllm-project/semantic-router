@@ -68,7 +68,7 @@ configOverride:
       timeout: 300s
   providers:
     defaults:
-      default_model: local/general
+      model: local/general
     models:
       - name: local/general
         provider_model_id: my-served-model
@@ -76,6 +76,7 @@ configOverride:
           - name: primary
             endpoint: model-server.default.svc.cluster.local:8000
             protocol: http
+            provider: vllm
             weight: 100
   routing:
     strategy: priority

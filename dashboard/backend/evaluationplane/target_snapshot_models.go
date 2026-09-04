@@ -110,9 +110,13 @@ func modelArmConfigDigest(
 	if len(provider.ExternalModelIDs) > 0 {
 		externalDigest = digestJSON(provider.ExternalModelIDs)
 	}
+	reasoningFamily := ""
+	if provider.Reasoning != nil {
+		reasoningFamily = provider.Reasoning.Family
+	}
 	return digestJSON(armConfigFingerprint{
 		Model: arm.Model, ProviderModelIDDigest: arm.ProviderModelIDDigest,
-		ReasoningFamily: provider.ReasoningFamily, APIFormat: provider.APIFormat,
+		ReasoningFamily: reasoningFamily, APIFormat: provider.APIFormat,
 		InputCostPerMillionTokensUSD:   arm.InputCostPerMillionTokensUSD,
 		OutputCostPerMillionTokensUSD:  arm.OutputCostPerMillionTokensUSD,
 		CachedInputPerMillionTokensUSD: pricing.CachedInputPer1M,

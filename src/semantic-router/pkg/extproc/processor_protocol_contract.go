@@ -8,6 +8,7 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 
+	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
@@ -300,13 +301,25 @@ func (r *OpenAIRouter) encodeClientResponse(
 }
 
 func requestWirePath(format llmprotocol.WireFormat) string {
+	registry, err := modelcatalog.BuiltIn()
+	if err != nil {
+		return "/v1/chat/completions"
+	}
+	path, err := registry.ResolveProtocolOperationPath(requestWireProtocol(format), "create")
+	if err == nil {
+		return path
+	}
+	return "/v1/chat/completions"
+}
+
+func requestWireProtocol(format llmprotocol.WireFormat) string {
 	switch format {
 	case llmprotocol.OpenAIResponsesV1:
-		return "/v1/responses"
+		return "openai/responses@1"
 	case llmprotocol.AnthropicMessagesV1:
-		return "/v1/messages"
+		return "anthropic/messages@1"
 	default:
-		return "/v1/chat/completions"
+		return "openai/chat-completions@1"
 	}
 }
 

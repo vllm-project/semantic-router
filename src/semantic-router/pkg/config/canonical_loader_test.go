@@ -74,6 +74,31 @@ semantic_cache:
 	}
 }
 
+func TestParseYAMLBytesAllowsRoutingOnlyDefaultModel(t *testing.T) {
+	cfg, err := ParseYAMLBytes([]byte(`
+version: v0.3
+providers:
+  defaults:
+    model: private-model
+routing:
+  modelCards:
+    - name: private-model
+      description: Metadata-only routing model
+`))
+	if err != nil {
+		t.Fatalf("expected routing-only default model to be valid: %v", err)
+	}
+	if cfg.DefaultModel != "private-model" {
+		t.Fatalf("default model = %q, want private-model", cfg.DefaultModel)
+	}
+	if cfg.EffectiveModelRegistry == nil {
+		t.Fatal("expected routing-only model to be materialized")
+	}
+	if _, ok := cfg.EffectiveModelRegistry.Model("private-model"); !ok {
+		t.Fatal("expected routing-only model in effective registry")
+	}
+}
+
 func TestParseYAMLBytesRejectsDeprecatedGlobalModulesLayout(t *testing.T) {
 	canonicalYAML := []byte(`
 version: v0.3
@@ -83,11 +108,12 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: qwen2.5:3b
+    model: qwen2.5:3b
   models:
     - name: qwen2.5:3b
       backend_refs:
         - endpoint: 127.0.0.1:11434
+          provider: vllm
 routing:
   modelCards:
     - name: qwen2.5:3b
@@ -124,11 +150,12 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: qwen2.5:3b
+    model: qwen2.5:3b
   models:
     - name: qwen2.5:3b
       backend_refs:
         - endpoint: 127.0.0.1:11434
+          provider: vllm
 routing:
   modelCards:
     - name: qwen2.5:3b
@@ -168,11 +195,12 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: qwen2.5:3b
+    model: qwen2.5:3b
   models:
     - name: qwen2.5:3b
       backend_refs:
         - endpoint: 127.0.0.1:11434
+          provider: vllm
 routing:
   modelCards:
     - name: qwen2.5:3b
@@ -212,18 +240,16 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: qwen2.5:3b
-    default_reasoning_effort: low
-    reasoning_families:
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
+    model: qwen2.5:3b
+    reasoning_effort: low
   models:
     - name: qwen2.5:3b
-      reasoning_family: qwen3
+      reasoning:
+        family: qwen3
       provider_model_id: served-qwen
       backend_refs:
         - name: primary
+          provider: vllm
           endpoint: 127.0.0.1:11434
           protocol: http
 routing:
@@ -307,12 +333,13 @@ listeners:
     port: 8888
 providers:
   defaults:
-    default_model: qwen3
+    model: qwen3
   models:
     - name: qwen3
       provider_model_id: qwen3
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
 routing:
   modelCards:
     - name: qwen3
@@ -376,12 +403,13 @@ listeners:
     port: 8888
 providers:
   defaults:
-    default_model: qwen3
+    model: qwen3
   models:
     - name: qwen3
       provider_model_id: qwen3
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
 routing:
   signals:
     domains:
@@ -456,7 +484,7 @@ listeners:
     port: 8888
 providers:
   defaults:
-    default_model: qwen3
+    model: qwen3
   models:
     - name: qwen3
       provider_model_id: qwen3
@@ -468,6 +496,7 @@ providers:
         completion_per_1m: 0.96
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
 routing:
   modelCards:
     - name: qwen3
@@ -517,7 +546,7 @@ listeners:
     port: 8888
 providers:
   defaults:
-    default_model: claude-haiku
+    model: claude-haiku
   models:
     - name: claude-haiku
       provider_model_id: eu.anthropic.claude-haiku-4-5-20251001-v1:0
@@ -567,7 +596,7 @@ func TestProviderBackendRefProviderDrivesEndpointTypeForModelIDRewrite(t *testin
 version: v0.3
 providers:
   defaults:
-    default_model: gpt-worker
+    model: gpt-worker
   models:
     - name: gpt-worker
       provider_model_id: openai/gpt-5.5
@@ -706,11 +735,12 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: openai/gpt-oss-20b
+    model: openai/gpt-oss-20b
   models:
     - name: openai/gpt-oss-20b
       backend_refs:
         - name: primary
+          provider: vllm
           endpoint: localhost:8000
           protocol: http
           weight: 1
@@ -790,11 +820,12 @@ listeners:
     port: 8888
 providers:
   defaults:
-    default_model: qwen3
+    model: qwen3
   models:
     - name: qwen3
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
 routing:
   modelCards:
     - name: qwen3

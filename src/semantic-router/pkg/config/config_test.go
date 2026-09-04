@@ -124,11 +124,12 @@ listeners:
     port: 8888
 providers:
   defaults:
-    default_model: test-model
+    model: test-model
   models:
     - name: test-model
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
 routing:
   modelCards:
     - name: test-model
@@ -2539,11 +2540,12 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: test-model
+    model: test-model
   models:
     - name: test-model
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
 routing:
   modelCards:
     - name: test-model
@@ -3536,7 +3538,7 @@ model_config:
 			It("should error on unknown type", func() {
 				_, err := (&ProviderProfile{Type: "unknown"}).ProviderType()
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("unknown provider profile type"))
+				Expect(err.Error()).To(ContainSubstring("unknown provider ID"))
 			})
 
 			It("should error on empty type", func() {
@@ -3596,23 +3598,48 @@ model_config:
 			It("should error on unknown type", func() {
 				_, _, err := (&ProviderProfile{Type: "bogus"}).ResolveAuthHeader()
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("unknown provider type"))
+				Expect(err.Error()).To(ContainSubstring("unknown provider ID"))
 			})
 		})
 
-		Context("ResolveChatPath", func() {
+		Context("ResolveReasoningTransport", func() {
+			It("should return catalog semantics without inspecting endpoint hosts", func() {
+				transport, err := (&ProviderProfile{Type: "openai", BaseURL: "https://proxy.example/v1"}).ResolveReasoningTransport()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(string(transport)).To(Equal("top_level_effort"))
+
+				transport, err = (&ProviderProfile{Type: "deepseek", BaseURL: "https://private.example/v1"}).ResolveReasoningTransport()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(string(transport)).To(Equal("deepseek_thinking"))
+
+				transport, err = (&ProviderProfile{Type: "openai-compatible", BaseURL: "https://api.openai.com/v1"}).ResolveReasoningTransport()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(string(transport)).To(Equal("chat_template_kwargs"))
+			})
+
+			It("should reject an unknown provider", func() {
+				_, err := (&ProviderProfile{Type: "bogus"}).ResolveReasoningTransport()
+				Expect(err).To(HaveOccurred())
+			})
+		})
+
+		Context("ResolveCreatePath", func() {
 			It("should return type-specific default paths", func() {
-				path, err := (&ProviderProfile{Type: "openai", BaseURL: "https://api.openai.com/v1"}).ResolveChatPath()
+				path, err := (&ProviderProfile{Type: "openai", BaseURL: "https://api.openai.com/v1"}).ResolveCreatePath("")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(path).To(Equal("/v1/chat/completions"))
 
-				path, err = (&ProviderProfile{Type: "anthropic", BaseURL: "https://api.anthropic.com"}).ResolveChatPath()
+				path, err = (&ProviderProfile{Type: "anthropic", BaseURL: "https://api.anthropic.com"}).ResolveCreatePath("")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(path).To(Equal("/v1/messages"))
 
-				path, err = (&ProviderProfile{Type: "minimax", BaseURL: "https://api.minimax.io"}).ResolveChatPath()
+				path, err = (&ProviderProfile{Type: "minimax", BaseURL: "https://api.minimax.io"}).ResolveCreatePath("")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(path).To(Equal("/v1/chat/completions"))
+
+				path, err = (&ProviderProfile{Type: "openai", BaseURL: "https://api.openai.com/v1"}).ResolveCreatePath("openai/responses@1")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(path).To(Equal("/v1/responses"))
 			})
 
 			It("should not double the version segment for a versioned base_url", func() {
@@ -3630,7 +3657,7 @@ model_config:
 					{"anthropic", "https://gateway.example.com/v1beta", "/v1beta/v1/messages"},
 					{"anthropic", "https://api.anthropic.com/v1/", "/v1/messages"},
 				} {
-					path, err := (&ProviderProfile{Type: tc.providerType, BaseURL: tc.baseURL}).ResolveChatPath()
+					path, err := (&ProviderProfile{Type: tc.providerType, BaseURL: tc.baseURL}).ResolveCreatePath("")
 					Expect(err).NotTo(HaveOccurred(), "%s %s", tc.providerType, tc.baseURL)
 					Expect(path).To(Equal(tc.expected), "%s %s", tc.providerType, tc.baseURL)
 				}
@@ -3642,27 +3669,27 @@ model_config:
 					BaseURL:    "https://myresource.openai.azure.com/openai/deployments/gpt-4o",
 					APIVersion: "2024-10-21",
 				}
-				path, err := profile.ResolveChatPath()
+				path, err := profile.ResolveCreatePath("")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(path).To(Equal("/openai/deployments/gpt-4o/chat/completions?api-version=2024-10-21"))
 			})
 
-			It("should error for unrecognised type", func() {
-				_, err := (&ProviderProfile{Type: "vllm"}).ResolveChatPath()
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("unknown provider type"))
+			It("should resolve catalog-backed private runtimes", func() {
+				path, err := (&ProviderProfile{Type: "vllm"}).ResolveCreatePath("")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(path).To(Equal("/v1/chat/completions"))
 			})
 
 			It("should use explicit ChatPath override", func() {
 				profile := &ProviderProfile{Type: "openai", ChatPath: "/custom/path"}
-				path, err := profile.ResolveChatPath()
+				path, err := profile.ResolveCreatePath("")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(path).To(Equal("/custom/path"))
 			})
 
 			It("should error for nil profile", func() {
 				var nilProfile *ProviderProfile
-				_, err := nilProfile.ResolveChatPath()
+				_, err := nilProfile.ResolveCreatePath("")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("nil"))
 			})

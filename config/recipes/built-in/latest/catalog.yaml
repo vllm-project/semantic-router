@@ -1,4 +1,4 @@
-schema_version: vllm-sr/model-catalog/v1
+schema_version: vllm-sr/model-catalog/v2
 catalog_version: latest
 channel: latest
 release: unreleased
@@ -11,185 +11,1665 @@ compatibility:
     max_exclusive: 0.5.0
   config_schema: v0.3
   required_features:
-    - entrypoints
-    - isolated_recipes
-    - decision_algorithms
+  - entrypoints
+  - isolated_recipes
+  - decision_algorithms
+  - effective_model_registry
 defaults:
   model: vllm-sr/mom-v1-blend
   enabled:
-    - vllm-sr/mom-v1-blend
+  - vllm-sr/mom-v1-blend
+  intelligence_index: vllm-sr/intelligence@1.0.0
 assets:
-  - id: mom-v1
-    bundle: mom-v1
-    sha256: sha256:e7d6d1d29901f65f5b5d13c600624dc019116399995e2af33ce03ef47d125522
+- id: mom-v1
+  bundle: mom-v1
+  sha256: sha256:e7d6d1d29901f65f5b5d13c600624dc019116399995e2af33ce03ef47d125522
+protocols:
+- id: openai/chat-completions@1
+  display_name: OpenAI Chat Completions
+  wire_format: openai.chat.v1
+  operations:
+  - id: create
+    method: POST
+    path: /v1/chat/completions
+  - id: list_models
+    method: GET
+    path: /v1/models
+  capabilities:
+  - chat
+  - streaming
+  - tools
+  - structured_output
+  - usage
+- id: openai/responses@1
+  display_name: OpenAI Responses
+  wire_format: openai.responses.v1
+  operations:
+  - id: create
+    method: POST
+    path: /v1/responses
+  - id: list_models
+    method: GET
+    path: /v1/models
+  capabilities:
+  - chat
+  - streaming
+  - tools
+  - structured_output
+  - reasoning
+  - usage
+- id: anthropic/messages@1
+  display_name: Anthropic Messages
+  wire_format: anthropic.messages.v1
+  operations:
+  - id: create
+    method: POST
+    path: /v1/messages
+  - id: list_models
+    method: GET
+    path: /v1/models
+  capabilities:
+  - chat
+  - streaming
+  - tools
+  - usage
+providers:
+- id: vllm
+  display_name: vLLM
+  description: Connect a private vLLM endpoint.
+  category: start_here
+  support_tier: runtime
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  default_protocol: openai/chat-completions@1
+  supported_operations:
+  - openai/chat-completions@1#create
+  - openai/chat-completions@1#list_models
+  - openai/responses@1#create
+  - openai/responses@1#list_models
+  auth:
+    strategy: bearer
+    header: Authorization
+    prefix: Bearer
+  presentation:
+    logo: package:vllm
+    monogram: v
+    monochrome: false
+  conformance:
+    status: fixture_verified
+    verified_at: '2026-09-04'
+- id: sglang
+  display_name: SGLang
+  description: Connect a private SGLang endpoint.
+  category: start_here
+  support_tier: runtime
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  default_protocol: openai/chat-completions@1
+  supported_operations:
+  - openai/chat-completions@1#create
+  - openai/chat-completions@1#list_models
+  - openai/responses@1#create
+  - openai/responses@1#list_models
+  auth:
+    strategy: bearer
+    header: Authorization
+    prefix: Bearer
+  presentation:
+    logo: url:https://raw.githubusercontent.com/sgl-project/sgl-docs/main/favicon.png
+    monogram: S
+    monochrome: false
+  conformance:
+    status: unverified
+- id: amd-atom
+  display_name: AMD ATOM
+  description: Connect an AMD ATOM deployment.
+  category: start_here
+  support_tier: runtime
+  protocols:
+  - openai/chat-completions@1
+  default_protocol: openai/chat-completions@1
+  supported_operations:
+  - openai/chat-completions@1#create
+  auth:
+    strategy: bearer
+    header: Authorization
+    prefix: Bearer
+  presentation:
+    logo: public:/amd.png
+    monogram: A
+    monochrome: false
+  conformance:
+    status: unverified
+- id: openai-compatible
+  display_name: OpenAI Compatible
+  description: Connect any compatible private endpoint.
+  category: start_here
+  support_tier: compatible
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  default_protocol: openai/chat-completions@1
+  supported_operations:
+  - openai/chat-completions@1#create
+  - openai/chat-completions@1#list_models
+  - openai/responses@1#create
+  - openai/responses@1#list_models
+  auth:
+    strategy: bearer
+    header: Authorization
+    prefix: Bearer
+  presentation:
+    logo: package:openai
+    monogram: O
+    monochrome: true
+  conformance:
+    status: fixture_verified
+    verified_at: '2026-09-04'
+- id: openrouter
+  display_name: OpenRouter
+  description: One API for a broad model catalog.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://openrouter.ai/api/v1
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  default_protocol: openai/chat-completions@1
+  supported_operations:
+  - openai/chat-completions@1#create
+  - openai/chat-completions@1#list_models
+  - openai/responses@1#create
+  - openai/responses@1#list_models
+  reasoning_transport: top_level_effort
+  auth:
+    strategy: bearer
+    header: Authorization
+    prefix: Bearer
+  presentation:
+    logo: package:openrouter
+    monogram: OR
+    monochrome: false
+  conformance:
+    status: fixture_verified
+    verified_at: '2026-09-04'
+- id: openai
+  display_name: OpenAI
+  description: OpenAI models and reasoning families.
+  category: model_api
+  support_tier: native
+  default_base_url: https://api.openai.com/v1
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  default_protocol: openai/chat-completions@1
+  supported_operations:
+  - openai/chat-completions@1#create
+  - openai/chat-completions@1#list_models
+  - openai/responses@1#create
+  - openai/responses@1#list_models
+  reasoning_transport: top_level_effort
+  auth:
+    strategy: bearer
+    header: Authorization
+    prefix: Bearer
+    injected_header: x-user-openai-key
+  presentation:
+    logo: package:openai
+    monogram: O
+    monochrome: true
+  conformance:
+    status: fixture_verified
+    verified_at: '2026-09-04'
+- id: anthropic
+  display_name: Anthropic
+  description: Claude models through the native Messages API.
+  category: model_api
+  support_tier: native
+  default_base_url: https://api.anthropic.com
+  protocols:
+  - anthropic/messages@1
+  default_protocol: anthropic/messages@1
+  supported_operations:
+  - anthropic/messages@1#create
+  - anthropic/messages@1#list_models
+  default_headers:
+    anthropic-version: '2023-06-01'
+  auth:
+    strategy: api_key_header
+    header: x-api-key
+    prefix: ''
+    injected_header: x-user-anthropic-key
+  presentation:
+    logo: package:anthropic
+    monogram: A
+    monochrome: true
+  conformance:
+    status: fixture_verified
+    verified_at: '2026-09-04'
+- id: anthropic-compatible
+  display_name: Anthropic Compatible
+  description: Connect a private Anthropic-compatible endpoint.
+  category: private_runtime
+  support_tier: compatible
+  protocols:
+  - anthropic/messages@1
+  default_protocol: anthropic/messages@1
+  supported_operations:
+  - anthropic/messages@1#create
+  - anthropic/messages@1#list_models
+  default_headers:
+    anthropic-version: '2023-06-01'
+  auth:
+    strategy: api_key_header
+    header: x-api-key
+    prefix: ''
+  presentation:
+    logo: package:anthropic
+    monogram: A
+    monochrome: true
+  conformance:
+    status: fixture_verified
+    verified_at: '2026-09-04'
+- id: azure-openai
+  display_name: Azure OpenAI
+  description: Azure-hosted OpenAI deployments.
+  category: model_api
+  support_tier: native
+  protocols:
+  - openai/chat-completions@1
+  default_protocol: openai/chat-completions@1
+  supported_operations:
+  - openai/chat-completions@1#create
+  path_overrides:
+    openai/chat-completions@1#create: /chat/completions
+  api_version_query: true
+  auth:
+    strategy: api_key_header
+    header: api-key
+    prefix: ''
+    injected_header: x-user-azure-openai-key
+  presentation:
+    logo: package:openai
+    monogram: Az
+    monochrome: true
+  conformance:
+    status: fixture_verified
+    verified_at: '2026-09-04'
+- id: bedrock
+  display_name: Amazon Bedrock
+  description: Models exposed through Amazon Bedrock-compatible routing.
+  category: model_api
+  support_tier: native
+  protocols:
+  - openai/chat-completions@1
+  default_protocol: openai/chat-completions@1
+  supported_operations:
+  - openai/chat-completions@1#create
+  path_overrides:
+    openai/chat-completions@1#create: /chat/completions
+  auth:
+    strategy: bearer
+    header: Authorization
+    prefix: Bearer
+    injected_header: x-user-bedrock-key
+  presentation:
+    logo: monogram
+    monogram: AWS
+    monochrome: false
+  conformance:
+    status: fixture_verified
+    verified_at: '2026-09-04'
+- id: gemini
+  display_name: Google Gemini
+  description: Gemini through its OpenAI-compatible API.
+  category: model_api
+  support_tier: native
+  default_base_url: https://generativelanguage.googleapis.com/v1beta/openai
+  protocols:
+  - openai/chat-completions@1
+  default_protocol: openai/chat-completions@1
+  supported_operations:
+  - openai/chat-completions@1#create
+  - openai/chat-completions@1#list_models
+  auth:
+    strategy: bearer
+    header: Authorization
+    prefix: Bearer
+    injected_header: x-user-gemini-key
+  presentation:
+    logo: package:gemini
+    monogram: G
+    monochrome: false
+  conformance:
+    status: fixture_verified
+    verified_at: '2026-09-04'
+- id: vertex-ai
+  display_name: Google Vertex AI
+  description: Models exposed through Vertex AI-compatible routing.
+  category: model_api
+  support_tier: native
+  protocols:
+  - openai/chat-completions@1
+  default_protocol: openai/chat-completions@1
+  supported_operations:
+  - openai/chat-completions@1#create
+  path_overrides:
+    openai/chat-completions@1#create: /chat/completions
+  auth:
+    strategy: bearer
+    header: Authorization
+    prefix: Bearer
+    injected_header: x-user-vertex-ai-key
+  presentation:
+    logo: package:gemini
+    monogram: V
+    monochrome: false
+  conformance:
+    status: fixture_verified
+    verified_at: '2026-09-04'
+- id: deepseek
+  display_name: DeepSeek
+  description: DeepSeek chat and reasoning models.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://api.deepseek.com/v1
+  protocols:
+  - openai/chat-completions@1
+  default_protocol: openai/chat-completions@1
+  supported_operations:
+  - openai/chat-completions@1#create
+  - openai/chat-completions@1#list_models
+  reasoning_transport: deepseek_thinking
+  auth:
+    strategy: bearer
+    header: Authorization
+    prefix: Bearer
+  presentation:
+    logo: package:deepseek
+    monogram: D
+    monochrome: false
+  conformance:
+    status: fixture_verified
+    verified_at: '2026-09-04'
+- id: groq
+  display_name: Groq
+  description: Low-latency hosted inference.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://api.groq.com/openai/v1
+  protocols:
+  - openai/chat-completions@1
+  default_protocol: openai/chat-completions@1
+  supported_operations:
+  - openai/chat-completions@1#create
+  - openai/chat-completions@1#list_models
+  auth:
+    strategy: bearer
+    header: Authorization
+    prefix: Bearer
+  presentation:
+    logo: package:groq
+    monogram: G
+    monochrome: true
+  conformance:
+    status: unverified
+- id: together
+  display_name: Together AI
+  description: Open models through a hosted API.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://api.together.ai/v1
+  protocols:
+  - openai/chat-completions@1
+  default_protocol: openai/chat-completions@1
+  supported_operations:
+  - openai/chat-completions@1#create
+  - openai/chat-completions@1#list_models
+  auth:
+    strategy: bearer
+    header: Authorization
+    prefix: Bearer
+  presentation:
+    logo: package:together
+    monogram: T
+    monochrome: false
+  conformance:
+    status: unverified
+- id: fireworks
+  display_name: Fireworks AI
+  description: Fast serverless model inference.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://api.fireworks.ai/inference/v1
+  protocols:
+  - openai/chat-completions@1
+  default_protocol: openai/chat-completions@1
+  supported_operations:
+  - openai/chat-completions@1#create
+  - openai/chat-completions@1#list_models
+  auth:
+    strategy: bearer
+    header: Authorization
+    prefix: Bearer
+  presentation:
+    logo: package:fireworks
+    monogram: F
+    monochrome: false
+  conformance:
+    status: unverified
+- id: mistral
+  display_name: Mistral AI
+  description: Mistral chat and code models.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://api.mistral.ai/v1
+  protocols:
+  - openai/chat-completions@1
+  default_protocol: openai/chat-completions@1
+  supported_operations:
+  - openai/chat-completions@1#create
+  - openai/chat-completions@1#list_models
+  auth:
+    strategy: bearer
+    header: Authorization
+    prefix: Bearer
+  presentation:
+    logo: package:mistral
+    monogram: M
+    monochrome: false
+  conformance:
+    status: unverified
+- id: xai
+  display_name: xAI
+  description: Grok models through an OpenAI-style API.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://api.x.ai/v1
+  protocols:
+  - openai/chat-completions@1
+  default_protocol: openai/chat-completions@1
+  supported_operations:
+  - openai/chat-completions@1#create
+  - openai/chat-completions@1#list_models
+  auth:
+    strategy: bearer
+    header: Authorization
+    prefix: Bearer
+  presentation:
+    logo: package:xai
+    monogram: x
+    monochrome: true
+  conformance:
+    status: unverified
+- id: cerebras
+  display_name: Cerebras
+  description: High-speed hosted inference.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://api.cerebras.ai/v1
+  protocols:
+  - openai/chat-completions@1
+  default_protocol: openai/chat-completions@1
+  supported_operations:
+  - openai/chat-completions@1#create
+  - openai/chat-completions@1#list_models
+  auth:
+    strategy: bearer
+    header: Authorization
+    prefix: Bearer
+  presentation:
+    logo: package:cerebras
+    monogram: C
+    monochrome: false
+  conformance:
+    status: unverified
+- id: nvidia-nim
+  display_name: NVIDIA NIM
+  description: Hosted models from the NIM catalog.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://integrate.api.nvidia.com/v1
+  protocols:
+  - openai/chat-completions@1
+  default_protocol: openai/chat-completions@1
+  supported_operations:
+  - openai/chat-completions@1#create
+  - openai/chat-completions@1#list_models
+  auth:
+    strategy: bearer
+    header: Authorization
+    prefix: Bearer
+  presentation:
+    logo: package:nvidia
+    monogram: N
+    monochrome: false
+  conformance:
+    status: unverified
+- id: perplexity
+  display_name: Perplexity
+  description: Search-grounded models and online answers.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://api.perplexity.ai
+  protocols:
+  - openai/chat-completions@1
+  default_protocol: openai/chat-completions@1
+  supported_operations:
+  - openai/chat-completions@1#create
+  auth:
+    strategy: bearer
+    header: Authorization
+    prefix: Bearer
+  presentation:
+    logo: package:perplexity
+    monogram: P
+    monochrome: false
+  conformance:
+    status: unverified
+- id: cohere
+  display_name: Cohere
+  description: Command models through the compatibility API.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://api.cohere.com/compatibility/v1
+  protocols:
+  - openai/chat-completions@1
+  default_protocol: openai/chat-completions@1
+  supported_operations:
+  - openai/chat-completions@1#create
+  - openai/chat-completions@1#list_models
+  auth:
+    strategy: bearer
+    header: Authorization
+    prefix: Bearer
+  presentation:
+    logo: package:cohere
+    monogram: C
+    monochrome: false
+  conformance:
+    status: unverified
+- id: deepinfra
+  display_name: DeepInfra
+  description: Serverless inference across open models.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://api.deepinfra.com/v1/openai
+  protocols:
+  - openai/chat-completions@1
+  default_protocol: openai/chat-completions@1
+  supported_operations:
+  - openai/chat-completions@1#create
+  - openai/chat-completions@1#list_models
+  auth:
+    strategy: bearer
+    header: Authorization
+    prefix: Bearer
+  presentation:
+    logo: package:deepinfra
+    monogram: D
+    monochrome: false
+  conformance:
+    status: unverified
+- id: hugging-face
+  display_name: Hugging Face
+  description: Models served through the Hugging Face router.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://router.huggingface.co/v1
+  protocols:
+  - openai/chat-completions@1
+  default_protocol: openai/chat-completions@1
+  supported_operations:
+  - openai/chat-completions@1#create
+  - openai/chat-completions@1#list_models
+  auth:
+    strategy: bearer
+    header: Authorization
+    prefix: Bearer
+  presentation:
+    logo: package:huggingface
+    monogram: HF
+    monochrome: false
+  conformance:
+    status: unverified
+- id: sambanova
+  display_name: SambaNova
+  description: Hosted inference on SambaNova Cloud.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://api.sambanova.ai/v1
+  protocols:
+  - openai/chat-completions@1
+  default_protocol: openai/chat-completions@1
+  supported_operations:
+  - openai/chat-completions@1#create
+  - openai/chat-completions@1#list_models
+  auth:
+    strategy: bearer
+    header: Authorization
+    prefix: Bearer
+  presentation:
+    logo: package:sambanova
+    monogram: S
+    monochrome: false
+  conformance:
+    status: unverified
+- id: dashscope
+  display_name: DashScope
+  description: Qwen models through the compatible endpoint.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://dashscope-intl.aliyuncs.com/compatible-mode/v1
+  protocols:
+  - openai/chat-completions@1
+  default_protocol: openai/chat-completions@1
+  supported_operations:
+  - openai/chat-completions@1#create
+  - openai/chat-completions@1#list_models
+  auth:
+    strategy: bearer
+    header: Authorization
+    prefix: Bearer
+  presentation:
+    logo: package:qwen
+    monogram: Q
+    monochrome: false
+  conformance:
+    status: unverified
+- id: minimax
+  display_name: MiniMax
+  description: MiniMax language models and reasoning.
+  category: model_api
+  support_tier: native
+  default_base_url: https://api.minimax.io/v1
+  protocols:
+  - openai/chat-completions@1
+  default_protocol: openai/chat-completions@1
+  supported_operations:
+  - openai/chat-completions@1#create
+  auth:
+    strategy: bearer
+    header: Authorization
+    prefix: Bearer
+    injected_header: x-user-minimax-key
+  presentation:
+    logo: package:minimax
+    monogram: M
+    monochrome: false
+  conformance:
+    status: fixture_verified
+    verified_at: '2026-09-04'
+- id: moonshot
+  display_name: Moonshot AI
+  description: Kimi models through an OpenAI-style API.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://api.moonshot.ai/v1
+  protocols:
+  - openai/chat-completions@1
+  default_protocol: openai/chat-completions@1
+  supported_operations:
+  - openai/chat-completions@1#create
+  - openai/chat-completions@1#list_models
+  auth:
+    strategy: bearer
+    header: Authorization
+    prefix: Bearer
+  presentation:
+    logo: package:moonshot
+    monogram: K
+    monochrome: true
+  conformance:
+    status: unverified
+- id: zai
+  display_name: Z.ai
+  description: GLM models from the Z.ai platform.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://api.z.ai/api/paas/v4
+  protocols:
+  - openai/chat-completions@1
+  default_protocol: openai/chat-completions@1
+  supported_operations:
+  - openai/chat-completions@1#create
+  - openai/chat-completions@1#list_models
+  auth:
+    strategy: bearer
+    header: Authorization
+    prefix: Bearer
+  presentation:
+    logo: package:zai
+    monogram: Z
+    monochrome: true
+  conformance:
+    status: unverified
+- id: novita
+  display_name: Novita AI
+  description: Serverless access to open model families.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://api.novita.ai/v3/openai
+  protocols:
+  - openai/chat-completions@1
+  default_protocol: openai/chat-completions@1
+  supported_operations:
+  - openai/chat-completions@1#create
+  - openai/chat-completions@1#list_models
+  auth:
+    strategy: bearer
+    header: Authorization
+    prefix: Bearer
+  presentation:
+    logo: package:novita
+    monogram: N
+    monochrome: false
+  conformance:
+    status: unverified
+- id: nebius
+  display_name: Nebius AI Studio
+  description: Hosted open models from Nebius AI Studio.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://api.studio.nebius.com/v1
+  protocols:
+  - openai/chat-completions@1
+  default_protocol: openai/chat-completions@1
+  supported_operations:
+  - openai/chat-completions@1#create
+  - openai/chat-completions@1#list_models
+  auth:
+    strategy: bearer
+    header: Authorization
+    prefix: Bearer
+  presentation:
+    logo: package:nebius
+    monogram: N
+    monochrome: true
+  conformance:
+    status: unverified
+- id: featherless
+  display_name: Featherless AI
+  description: On-demand serverless open-model inference.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://api.featherless.ai/v1
+  protocols:
+  - openai/chat-completions@1
+  default_protocol: openai/chat-completions@1
+  supported_operations:
+  - openai/chat-completions@1#create
+  - openai/chat-completions@1#list_models
+  auth:
+    strategy: bearer
+    header: Authorization
+    prefix: Bearer
+  presentation:
+    logo: package:featherless
+    monogram: F
+    monochrome: false
+  conformance:
+    status: unverified
+- id: friendli
+  display_name: FriendliAI
+  description: Friendli serverless model endpoints.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://api.friendli.ai/serverless/v1
+  protocols:
+  - openai/chat-completions@1
+  default_protocol: openai/chat-completions@1
+  supported_operations:
+  - openai/chat-completions@1#create
+  - openai/chat-completions@1#list_models
+  auth:
+    strategy: bearer
+    header: Authorization
+    prefix: Bearer
+  presentation:
+    logo: package:friendli
+    monogram: F
+    monochrome: true
+  conformance:
+    status: unverified
+- id: vercel-ai-gateway
+  display_name: Vercel AI Gateway
+  description: A unified endpoint for hosted model providers.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://ai-gateway.vercel.sh/v1
+  protocols:
+  - openai/chat-completions@1
+  default_protocol: openai/chat-completions@1
+  supported_operations:
+  - openai/chat-completions@1#create
+  - openai/chat-completions@1#list_models
+  auth:
+    strategy: bearer
+    header: Authorization
+    prefix: Bearer
+  presentation:
+    logo: package:vercel
+    monogram: V
+    monochrome: true
+  conformance:
+    status: unverified
+- id: cometapi
+  display_name: CometAPI
+  description: Unified hosted access to model APIs.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://api.cometapi.com/v1
+  protocols:
+  - openai/chat-completions@1
+  default_protocol: openai/chat-completions@1
+  supported_operations:
+  - openai/chat-completions@1#create
+  - openai/chat-completions@1#list_models
+  auth:
+    strategy: bearer
+    header: Authorization
+    prefix: Bearer
+  presentation:
+    logo: package:cometapi
+    monogram: C
+    monochrome: false
+  conformance:
+    status: unverified
+- id: sakana
+  display_name: Sakana AI
+  description: Models served by Sakana AI.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://api.sakana.ai/v1
+  protocols:
+  - openai/chat-completions@1
+  default_protocol: openai/chat-completions@1
+  supported_operations:
+  - openai/chat-completions@1#create
+  auth:
+    strategy: bearer
+    header: Authorization
+    prefix: Bearer
+  presentation:
+    logo: url:https://console.sakana.ai/icon.svg
+    monogram: S
+    monochrome: false
+  conformance:
+    status: unverified
+- id: ollama
+  display_name: Ollama
+  description: Connect a private Ollama endpoint.
+  category: private_runtime
+  support_tier: runtime
+  protocols:
+  - openai/chat-completions@1
+  default_protocol: openai/chat-completions@1
+  supported_operations:
+  - openai/chat-completions@1#create
+  - openai/chat-completions@1#list_models
+  auth:
+    strategy: none
+    header: ''
+    prefix: ''
+  presentation:
+    logo: package:ollama
+    monogram: O
+    monochrome: true
+  conformance:
+    status: unverified
+- id: lm-studio
+  display_name: LM Studio
+  description: Connect a private LM Studio endpoint.
+  category: private_runtime
+  support_tier: runtime
+  protocols:
+  - openai/chat-completions@1
+  default_protocol: openai/chat-completions@1
+  supported_operations:
+  - openai/chat-completions@1#create
+  - openai/chat-completions@1#list_models
+  auth:
+    strategy: none
+    header: ''
+    prefix: ''
+  presentation:
+    logo: package:lmstudio
+    monogram: LM
+    monochrome: true
+  conformance:
+    status: unverified
+- id: xinference
+  display_name: Xinference
+  description: Connect a private Xinference endpoint.
+  category: private_runtime
+  support_tier: runtime
+  protocols:
+  - openai/chat-completions@1
+  default_protocol: openai/chat-completions@1
+  supported_operations:
+  - openai/chat-completions@1#create
+  - openai/chat-completions@1#list_models
+  auth:
+    strategy: bearer
+    header: Authorization
+    prefix: Bearer
+  presentation:
+    logo: package:xinference
+    monogram: X
+    monochrome: false
+  conformance:
+    status: unverified
+- id: nvidia-riva
+  display_name: NVIDIA Riva
+  description: Connect a private NVIDIA Riva endpoint.
+  category: private_runtime
+  support_tier: runtime
+  protocols:
+  - openai/chat-completions@1
+  default_protocol: openai/chat-completions@1
+  supported_operations:
+  - openai/chat-completions@1#create
+  auth:
+    strategy: bearer
+    header: Authorization
+    prefix: Bearer
+  presentation:
+    logo: package:nvidia
+    monogram: N
+    monochrome: false
+  conformance:
+    status: unverified
+- id: triton
+  display_name: NVIDIA Triton
+  description: Connect a private NVIDIA Triton endpoint.
+  category: private_runtime
+  support_tier: runtime
+  protocols:
+  - openai/chat-completions@1
+  default_protocol: openai/chat-completions@1
+  supported_operations:
+  - openai/chat-completions@1#create
+  auth:
+    strategy: bearer
+    header: Authorization
+    prefix: Bearer
+  presentation:
+    logo: package:nvidia
+    monogram: N
+    monochrome: false
+  conformance:
+    status: unverified
+- id: docker-model-runner
+  display_name: Docker Model Runner
+  description: Connect models running with Docker.
+  category: private_runtime
+  support_tier: runtime
+  protocols:
+  - openai/chat-completions@1
+  default_protocol: openai/chat-completions@1
+  supported_operations:
+  - openai/chat-completions@1#create
+  - openai/chat-completions@1#list_models
+  auth:
+    strategy: none
+    header: ''
+    prefix: ''
+  presentation:
+    logo: url:https://www.docker.com/wp-content/uploads/2022/03/Moby-logo.png
+    monogram: D
+    monochrome: false
+  conformance:
+    status: unverified
+- id: lemonade
+  display_name: Lemonade
+  description: Connect a private Lemonade endpoint.
+  category: private_runtime
+  support_tier: runtime
+  protocols:
+  - openai/chat-completions@1
+  default_protocol: openai/chat-completions@1
+  supported_operations:
+  - openai/chat-completions@1#create
+  - openai/chat-completions@1#list_models
+  auth:
+    strategy: none
+    header: ''
+    prefix: ''
+  presentation:
+    logo: public:/amd.png
+    monogram: L
+    monochrome: false
+  conformance:
+    status: unverified
+reasoning_families:
+- id: deepseek
+  type: chat_template_kwargs
+  parameter: thinking
+  levels:
+  - low
+  - medium
+  - high
+  default: medium
+- id: qwen3
+  type: chat_template_kwargs
+  parameter: enable_thinking
+  levels:
+  - low
+  - medium
+  - high
+  default: medium
+- id: gpt-oss
+  type: reasoning_effort
+  parameter: reasoning_effort
+  levels:
+  - low
+  - medium
+  - high
+  default: medium
+- id: gpt
+  type: reasoning_effort
+  parameter: reasoning_effort
+  levels:
+  - low
+  - medium
+  - high
+  default: medium
+- id: mistral
+  type: top_level_reasoning_effort
+  parameter: reasoning_effort
+  levels:
+  - low
+  - medium
+  - high
+  default: medium
 models:
-  - id: vllm-sr/mom-v1-blend
-    display_name: MoM V1 Blend
-    description: Multi-objective routing across quality, latency, cost, and answer recovery.
-    kind: virtual
-    family: mom
-    generation: 1
-    policy_version: 1.3.0
-    asset: mom-v1
-    entrypoint: vllm-sr/mom-v1-blend
-    recipe: balance
-    protocols: [openai_chat, openai_responses, anthropic_messages]
-    traits: [balanced, chat, reasoning, tools, multimodal]
-    roles:
-      - name: economy
-        required: true
-        minimum_candidates: 1
-        traits: [chat, tools, long_context]
-        recommended_pool: [local/qwen3.5-9b]
-      - name: balanced
-        required: true
-        minimum_candidates: 2
-        traits: [chat, reasoning, tools]
-        recommended_pool: [local/qwen3.6-35b, local/step-3.7-flash, local/qwen3.5-122b, local/mistral-small-4]
-      - name: vision
-        required: true
-        minimum_candidates: 1
-        traits: [chat, vision, multimodal, tools]
-        recommended_pool: [local/qwen3.6-35b, local/step-3.7-flash]
-      - name: terminal_context
-        required: true
-        minimum_candidates: 1
-        traits: [chat, reasoning, text, long_context]
-        recommended_pool: [local/glm-5.2]
-    verification:
-      authority: vllm-sr-maintainers
-      asset_sha256: sha256:e7d6d1d29901f65f5b5d13c600624dc019116399995e2af33ce03ef47d125522
-  - id: vllm-sr/mom-v1-lite
-    display_name: MoM V1 Lite
-    description: Economy-first direct answers with bounded opt-in reasoning.
-    kind: virtual
-    family: mom
-    generation: 1
-    policy_version: 1.2.0
-    asset: mom-v1
-    entrypoint: vllm-sr/mom-v1-lite
-    recipe: cost
-    protocols: [openai_chat, openai_responses, anthropic_messages]
-    traits: [cost_optimized, chat, reasoning, tools]
-    roles:
-      - name: economy
-        required: true
-        minimum_candidates: 1
-        traits: [chat, reasoning, tools, long_context]
-        recommended_pool: [local/qwen3.5-9b]
-      - name: multimodal_guard
-        required: true
-        minimum_candidates: 1
-        traits: [chat, vision, multimodal, long_context]
-        recommended_pool: [local/qwen3.6-35b]
-      - name: terminal_context
-        required: true
-        minimum_candidates: 1
-        traits: [chat, reasoning, text, long_context]
-        recommended_pool: [local/glm-5.2]
-    verification:
-      authority: vllm-sr-maintainers
-      asset_sha256: sha256:e7d6d1d29901f65f5b5d13c600624dc019116399995e2af33ce03ef47d125522
-  - id: vllm-sr/mom-v1-flash
-    display_name: MoM V1 Flash
-    description: Latency-first interactive, tool, vision, and heavy-workload routing.
-    kind: virtual
-    family: mom
-    generation: 1
-    policy_version: 1.3.0
-    asset: mom-v1
-    entrypoint: vllm-sr/mom-v1-flash
-    recipe: speed
-    protocols: [openai_chat, openai_responses, anthropic_messages]
-    traits: [latency_optimized, chat, tools, multimodal]
-    roles:
-      - name: interactive
-        required: true
-        minimum_candidates: 1
-        traits: [chat, tools, low_latency]
-        recommended_pool: [local/qwen3.5-9b, local/qwen3.6-35b]
-      - name: vision
-        required: true
-        minimum_candidates: 1
-        traits: [vision, multimodal, tools]
-        recommended_pool: [local/qwen3.6-35b, local/step-3.7-flash]
-      - name: terminal_context
-        required: true
-        minimum_candidates: 1
-        traits: [chat, reasoning, text, long_context]
-        recommended_pool: [local/glm-5.2]
-    verification:
-      authority: vllm-sr-maintainers
-      asset_sha256: sha256:e7d6d1d29901f65f5b5d13c600624dc019116399995e2af33ce03ef47d125522
-  - id: vllm-sr/mom-v1-ultra
-    display_name: MoM V1 Ultra
-    description: Accuracy-first direct and bounded multi-model orchestration.
-    kind: virtual
-    family: mom
-    generation: 1
-    policy_version: 1.2.0
-    asset: mom-v1
-    entrypoint: vllm-sr/mom-v1-ultra
-    recipe: accuracy
-    protocols: [openai_chat, openai_responses, anthropic_messages]
-    traits: [accuracy_optimized, chat, reasoning, tools, multimodal, orchestration]
-    roles:
-      - name: frontier
-        required: true
-        minimum_candidates: 1
-        traits: [chat, reasoning, structured_output, long_context, tools]
-        recommended_pool: [local/glm-5.2, local/qwen3.5-122b]
-      - name: panel
-        required: true
-        minimum_candidates: 3
-        traits: [reasoning, provider_diversity, tools]
-        recommended_pool: [local/step-3.7-flash, local/mistral-small-4, local/gpt-oss-120b]
-      - name: confidence
-        required: true
-        minimum_candidates: 2
-        traits: [token_logprobs, reasoning]
-        recommended_pool: [local/qwen3.6-35b, local/step-3.7-flash, local/glm-5.2]
-      - name: vision
-        required: true
-        minimum_candidates: 1
-        traits: [chat, vision, multimodal, tools]
-        recommended_pool: [local/qwen3.6-35b, local/step-3.7-flash]
-      - name: terminal_context
-        required: true
-        minimum_candidates: 1
-        traits: [chat, reasoning, text, long_context, tools]
-        recommended_pool: [local/glm-5.2]
-    verification:
-      authority: vllm-sr-maintainers
-      asset_sha256: sha256:e7d6d1d29901f65f5b5d13c600624dc019116399995e2af33ce03ef47d125522
-  - id: vllm-sr/mom-v1-vault
-    display_name: MoM V1 Vault
-    description: Local-only privacy, containment, and tool-history minimization.
-    kind: virtual
-    family: mom
-    generation: 1
-    policy_version: 1.2.0
-    asset: mom-v1
-    entrypoint: vllm-sr/mom-v1-vault
-    recipe: vault
-    protocols: [openai_chat, openai_responses, anthropic_messages]
-    traits: [privacy, local_only, chat, reasoning, tool_isolation]
-    roles:
-      - name: private
-        required: true
-        minimum_candidates: 2
-        traits: [local_only, chat, reasoning]
-        recommended_pool: [local/qwen3.5-9b, local/qwen3.6-35b, local/gpt-oss-120b]
-      - name: private_vision
-        required: true
-        minimum_candidates: 1
-        traits: [local_only, vision, multimodal]
-        recommended_pool: [local/qwen3.5-122b, local/qwen3.6-35b]
-      - name: terminal_context
-        required: true
-        minimum_candidates: 1
-        traits: [local_only, chat, reasoning, text, long_context]
-        recommended_pool: [local/glm-5.2]
-    verification:
-      authority: vllm-sr-maintainers
-      asset_sha256: sha256:e7d6d1d29901f65f5b5d13c600624dc019116399995e2af33ce03ef47d125522
+- id: vllm-sr/mom-v1-blend
+  display_name: MoM V1 Blend
+  description: Multi-objective routing across intelligence, latency, cost, and answer recovery.
+  kind: virtual
+  family: mom
+  generation: 1
+  policy_version: 1.3.0
+  lifecycle: active
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - multimodal
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  asset: mom-v1
+  entrypoint: vllm-sr/mom-v1-blend
+  recipe: balance
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  - anthropic/messages@1
+  traits:
+  - balanced
+  - chat
+  - reasoning
+  - tools
+  - multimodal
+  roles:
+  - name: economy
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    - tools
+    - long_context
+    recommended_pool:
+    - local/qwen3.5-9b
+  - name: balanced
+    required: true
+    minimum_candidates: 2
+    traits:
+    - chat
+    - reasoning
+    - tools
+    recommended_pool:
+    - local/qwen3.6-35b
+    - local/step-3.7-flash
+    - local/qwen3.5-122b
+    - local/mistral-small-4
+  - name: vision
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    - vision
+    - multimodal
+    - tools
+    recommended_pool:
+    - local/qwen3.6-35b
+    - local/step-3.7-flash
+  - name: terminal_context
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    - reasoning
+    - text
+    - long_context
+    recommended_pool:
+    - local/glm-5.2
+  verification:
+    authority: vllm-sr-maintainers
+    status: reproduced
+    verified_at: '2026-09-04'
+    asset_sha256: sha256:e7d6d1d29901f65f5b5d13c600624dc019116399995e2af33ce03ef47d125522
+- id: vllm-sr/mom-v1-lite
+  display_name: MoM V1 Lite
+  description: Economy-first direct answers with bounded opt-in reasoning.
+  kind: virtual
+  family: mom
+  generation: 1
+  policy_version: 1.2.0
+  lifecycle: active
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  asset: mom-v1
+  entrypoint: vllm-sr/mom-v1-lite
+  recipe: cost
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  - anthropic/messages@1
+  traits:
+  - cost_optimized
+  - chat
+  - reasoning
+  - tools
+  roles:
+  - name: economy
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    - reasoning
+    - tools
+    - long_context
+    recommended_pool:
+    - local/qwen3.5-9b
+  - name: multimodal_guard
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    - vision
+    - multimodal
+    - long_context
+    recommended_pool:
+    - local/qwen3.6-35b
+  - name: terminal_context
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    - reasoning
+    - text
+    - long_context
+    recommended_pool:
+    - local/glm-5.2
+  verification:
+    authority: vllm-sr-maintainers
+    status: reproduced
+    verified_at: '2026-09-04'
+    asset_sha256: sha256:e7d6d1d29901f65f5b5d13c600624dc019116399995e2af33ce03ef47d125522
+- id: vllm-sr/mom-v1-flash
+  display_name: MoM V1 Flash
+  description: Latency-first interactive, tool, vision, and heavy-workload routing.
+  kind: virtual
+  family: mom
+  generation: 1
+  policy_version: 1.3.0
+  lifecycle: active
+  capabilities:
+  - chat
+  - tools
+  - multimodal
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  asset: mom-v1
+  entrypoint: vllm-sr/mom-v1-flash
+  recipe: speed
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  - anthropic/messages@1
+  traits:
+  - latency_optimized
+  - chat
+  - tools
+  - multimodal
+  roles:
+  - name: interactive
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    - tools
+    - low_latency
+    recommended_pool:
+    - local/qwen3.5-9b
+    - local/qwen3.6-35b
+  - name: vision
+    required: true
+    minimum_candidates: 1
+    traits:
+    - vision
+    - multimodal
+    - tools
+    recommended_pool:
+    - local/qwen3.6-35b
+    - local/step-3.7-flash
+  - name: terminal_context
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    - reasoning
+    - text
+    - long_context
+    recommended_pool:
+    - local/glm-5.2
+  verification:
+    authority: vllm-sr-maintainers
+    status: reproduced
+    verified_at: '2026-09-04'
+    asset_sha256: sha256:e7d6d1d29901f65f5b5d13c600624dc019116399995e2af33ce03ef47d125522
+- id: vllm-sr/mom-v1-ultra
+  display_name: MoM V1 Ultra
+  description: Accuracy-first direct and bounded multi-model orchestration.
+  kind: virtual
+  family: mom
+  generation: 1
+  policy_version: 1.2.0
+  lifecycle: active
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - multimodal
+  - orchestration
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  asset: mom-v1
+  entrypoint: vllm-sr/mom-v1-ultra
+  recipe: accuracy
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  - anthropic/messages@1
+  traits:
+  - accuracy_optimized
+  - chat
+  - reasoning
+  - tools
+  - multimodal
+  - orchestration
+  roles:
+  - name: frontier
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    - reasoning
+    - structured_output
+    - long_context
+    - tools
+    recommended_pool:
+    - local/glm-5.2
+    - local/qwen3.5-122b
+  - name: panel
+    required: true
+    minimum_candidates: 3
+    traits:
+    - reasoning
+    - provider_diversity
+    - tools
+    recommended_pool:
+    - local/step-3.7-flash
+    - local/mistral-small-4
+    - local/gpt-oss-120b
+  - name: confidence
+    required: true
+    minimum_candidates: 2
+    traits:
+    - token_logprobs
+    - reasoning
+    recommended_pool:
+    - local/qwen3.6-35b
+    - local/step-3.7-flash
+    - local/glm-5.2
+  - name: vision
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    - vision
+    - multimodal
+    - tools
+    recommended_pool:
+    - local/qwen3.6-35b
+    - local/step-3.7-flash
+  - name: terminal_context
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    - reasoning
+    - text
+    - long_context
+    - tools
+    recommended_pool:
+    - local/glm-5.2
+  verification:
+    authority: vllm-sr-maintainers
+    status: reproduced
+    verified_at: '2026-09-04'
+    asset_sha256: sha256:e7d6d1d29901f65f5b5d13c600624dc019116399995e2af33ce03ef47d125522
+- id: vllm-sr/mom-v1-vault
+  display_name: MoM V1 Vault
+  description: Local-only privacy, containment, and tool-history minimization.
+  kind: virtual
+  family: mom
+  generation: 1
+  policy_version: 1.2.0
+  lifecycle: active
+  capabilities:
+  - chat
+  - reasoning
+  - tool_isolation
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  asset: mom-v1
+  entrypoint: vllm-sr/mom-v1-vault
+  recipe: vault
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  - anthropic/messages@1
+  traits:
+  - privacy
+  - local_only
+  - chat
+  - reasoning
+  - tool_isolation
+  roles:
+  - name: private
+    required: true
+    minimum_candidates: 2
+    traits:
+    - local_only
+    - chat
+    - reasoning
+    recommended_pool:
+    - local/qwen3.5-9b
+    - local/qwen3.6-35b
+    - local/gpt-oss-120b
+  - name: private_vision
+    required: true
+    minimum_candidates: 1
+    traits:
+    - local_only
+    - vision
+    - multimodal
+    recommended_pool:
+    - local/qwen3.5-122b
+    - local/qwen3.6-35b
+  - name: terminal_context
+    required: true
+    minimum_candidates: 1
+    traits:
+    - local_only
+    - chat
+    - reasoning
+    - text
+    - long_context
+    recommended_pool:
+    - local/glm-5.2
+  verification:
+    authority: vllm-sr-maintainers
+    status: reproduced
+    verified_at: '2026-09-04'
+    asset_sha256: sha256:e7d6d1d29901f65f5b5d13c600624dc019116399995e2af33ce03ef47d125522
+offerings: []
+benchmarks:
+- id: artificial-analysis/gdpval-aa@2.0.0
+  display_name: GDPval-AA v2
+  domain: agents
+  source: https://artificialanalysis.ai/methodology/intelligence-benchmarking
+  metrics:
+  - id: elo
+    unit: elo
+    direction: higher_is_better
+    range:
+    - 0
+    - 3000
+- id: artificial-analysis/tau3-banking@1.0.0
+  display_name: tau3-Banking
+  domain: agents
+  source: https://artificialanalysis.ai/methodology/intelligence-benchmarking
+  metrics:
+  - id: pass_at_1
+    unit: proportion
+    direction: higher_is_better
+    range:
+    - 0
+    - 1
+- id: terminal-bench/terminal-bench@2.1.0
+  display_name: Terminal-Bench v2.1
+  domain: coding
+  source: https://artificialanalysis.ai/methodology/intelligence-benchmarking
+  metrics:
+  - id: pass_at_1
+    unit: proportion
+    direction: higher_is_better
+    range:
+    - 0
+    - 1
+- id: scicode/scicode@1.0.0
+  display_name: SciCode
+  domain: coding
+  source: https://artificialanalysis.ai/methodology/intelligence-benchmarking
+  metrics:
+  - id: pass_at_1
+    unit: proportion
+    direction: higher_is_better
+    range:
+    - 0
+    - 1
+- id: artificial-analysis/lcr@1.0.0
+  display_name: AA-LCR
+  domain: general
+  source: https://artificialanalysis.ai/methodology/intelligence-benchmarking
+  metrics:
+  - id: pass_at_1
+    unit: proportion
+    direction: higher_is_better
+    range:
+    - 0
+    - 1
+- id: artificial-analysis/omniscience@1.0.0
+  display_name: AA-Omniscience
+  domain: general
+  source: https://artificialanalysis.ai/methodology/intelligence-benchmarking
+  metrics:
+  - id: accuracy
+    unit: proportion
+    direction: higher_is_better
+    range:
+    - 0
+    - 1
+  - id: non_hallucination_rate
+    unit: proportion
+    direction: higher_is_better
+    range:
+    - 0
+    - 1
+- id: cais/humanitys-last-exam@1.0.0
+  display_name: Humanity's Last Exam
+  domain: scientific_reasoning
+  source: https://artificialanalysis.ai/methodology/intelligence-benchmarking
+  metrics:
+  - id: pass_at_1
+    unit: proportion
+    direction: higher_is_better
+    range:
+    - 0
+    - 1
+- id: idavidrein/gpqa-diamond@1.0.0
+  display_name: GPQA Diamond
+  domain: scientific_reasoning
+  source: https://artificialanalysis.ai/methodology/intelligence-benchmarking
+  metrics:
+  - id: pass_at_1
+    unit: proportion
+    direction: higher_is_better
+    range:
+    - 0
+    - 1
+- id: critpt/critpt@1.0.0
+  display_name: CritPt
+  domain: scientific_reasoning
+  source: https://artificialanalysis.ai/methodology/intelligence-benchmarking
+  metrics:
+  - id: pass_at_1
+    unit: proportion
+    direction: higher_is_better
+    range:
+    - 0
+    - 1
+- id: vllm-sr/operator-rating@1.0.0
+  display_name: Operator Rating
+  domain: operator
+  metrics:
+  - id: score
+    unit: proportion
+    direction: higher_is_better
+    range:
+    - 0
+    - 1
+evaluations: []
+indices:
+- id: vllm-sr/intelligence@1.0.0
+  display_name: vLLM-SR Intelligence Index
+  description: Repository-computed profile derived from the published Artificial Analysis Intelligence Index v4.1.1 methodology.
+  methodology: https://artificialanalysis.ai/methodology/intelligence-benchmarking
+  aggregation: weighted_mean
+  scale:
+  - 0
+  - 100
+  missing:
+    policy: require_all
+  domains:
+    agents: 0.34
+    coding: 0.24
+    general: 0.18
+    scientific_reasoning: 0.24
+  components:
+  - metric: artificial-analysis/gdpval-aa@2.0.0#elo
+    weight: 0.2
+    normalization:
+      type: linear_clamp
+      min: 500
+      max: 2500
+  - metric: artificial-analysis/tau3-banking@1.0.0#pass_at_1
+    weight: 0.14
+    normalization:
+      type: identity
+  - metric: terminal-bench/terminal-bench@2.1.0#pass_at_1
+    weight: 0.16
+    normalization:
+      type: identity
+  - metric: scicode/scicode@1.0.0#pass_at_1
+    weight: 0.08
+    normalization:
+      type: identity
+  - metric: artificial-analysis/lcr@1.0.0#pass_at_1
+    weight: 0.06
+    normalization:
+      type: identity
+  - metric: artificial-analysis/omniscience@1.0.0#accuracy
+    weight: 0.08
+    normalization:
+      type: identity
+  - metric: artificial-analysis/omniscience@1.0.0#non_hallucination_rate
+    weight: 0.04
+    normalization:
+      type: identity
+  - metric: cais/humanitys-last-exam@1.0.0#pass_at_1
+    weight: 0.12
+    normalization:
+      type: identity
+  - metric: idavidrein/gpqa-diamond@1.0.0#pass_at_1
+    weight: 0.06
+    normalization:
+      type: identity
+  - metric: critpt/critpt@1.0.0#pass_at_1
+    weight: 0.06
+    normalization:
+      type: identity
+index_results:
+- model: vllm-sr/mom-v1-blend
+  index: vllm-sr/intelligence@1.0.0
+  status: not_applicable
+  score: null
+  coverage: 0.0
+  components: []
+  provenance: []
+- model: vllm-sr/mom-v1-lite
+  index: vllm-sr/intelligence@1.0.0
+  status: not_applicable
+  score: null
+  coverage: 0.0
+  components: []
+  provenance: []
+- model: vllm-sr/mom-v1-flash
+  index: vllm-sr/intelligence@1.0.0
+  status: not_applicable
+  score: null
+  coverage: 0.0
+  components: []
+  provenance: []
+- model: vllm-sr/mom-v1-ultra
+  index: vllm-sr/intelligence@1.0.0
+  status: not_applicable
+  score: null
+  coverage: 0.0
+  components: []
+  provenance: []
+- model: vllm-sr/mom-v1-vault
+  index: vllm-sr/intelligence@1.0.0
+  status: not_applicable
+  score: null
+  coverage: 0.0
+  components: []
+  provenance: []

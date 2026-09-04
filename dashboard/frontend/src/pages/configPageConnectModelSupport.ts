@@ -7,7 +7,6 @@ export interface ConnectModelAdvancedValues {
   contextWindow: string
   capabilities: string
   tags: string
-  qualityScore: string
   inputCost: string
   outputCost: string
   cacheReadCost: string
@@ -29,7 +28,6 @@ export const emptyConnectModelAdvancedValues = (): ConnectModelAdvancedValues =>
   contextWindow: '',
   capabilities: '',
   tags: '',
-  qualityScore: '',
   inputCost: '',
   outputCost: '',
   cacheReadCost: '',

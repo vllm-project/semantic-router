@@ -65,13 +65,14 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: "test-model"
+    model: "test-model"
   models:
     - name: "test-model"
       backend_refs:
         - name: "primary"
           endpoint: "host.docker.internal:8000"
           protocol: "http"
+          provider: "vllm"
           weight: 100
 routing:
   modelCards:
@@ -142,15 +143,17 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: "test-model"
+    model: "test-model"
   models:
     - name: "test-model"
       backend_refs:
         - name: "primary"
           endpoint: "http://10.0.0.1:8000/v1"
+          provider: "vllm"
           weight: 75
         - name: "secondary"
           endpoint: "http://10.0.0.2:8001/v1"
+          provider: "vllm"
           weight: 25
 routing:
   modelCards:
@@ -207,7 +210,7 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: "gemini-model"
+    model: "gemini-model"
   models:
     - name: "gemini-model"
       provider_model_id: "gemini-model"
@@ -277,7 +280,7 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: "provider-model"
+    model: "provider-model"
   models:
     - name: "provider-model"
       provider_model_id: "provider-model"
@@ -329,7 +332,7 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: test-model
+    model: test-model
   models:
     - name: test-model
       reliability:
@@ -344,7 +347,9 @@ providers:
         health_check_timeout: 3s
       backend_refs:
         - endpoint: 10.0.0.1:8000
+          provider: vllm
         - endpoint: 10.0.0.2:8000
+          provider: vllm
 routing:
   modelCards:
     - name: test-model
@@ -396,12 +401,13 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: "test-model"
+    model: "test-model"
   models:
     - name: "test-model"
       backend_refs:
         - name: "primary"
           endpoint: "https://api.example.com/compatible-mode/v1/"
+          provider: "vllm"
           weight: 100
 routing:
   modelCards:
@@ -454,7 +460,7 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: "test-model"
+    model: "test-model"
   models:
     - name: "test-model"
       provider_model_id: "openai/gpt-4o-mini"
@@ -519,7 +525,7 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: "claude-sonnet-4.6"
+    model: "claude-sonnet-4.6"
   models:
     - name: "claude-sonnet-4.6"
       api_format: "anthropic"
@@ -529,7 +535,6 @@ providers:
           protocol: "https"
           weight: 100
           base_url: "https://domain.com/Anthropic"
-          type: "anthropic"
           provider: "anthropic"
 routing:
   modelCards:
@@ -571,7 +576,7 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: "claude-test"
+    model: "claude-test"
   models:
     - name: "claude-test"
       api_format: "anthropic"

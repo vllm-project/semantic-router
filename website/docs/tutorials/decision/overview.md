@@ -81,7 +81,7 @@ Add [Algorithm](../algorithm/overview) when `modelRefs` contains more than one c
 - Every leaf must reference a signal or projection output declared in the same
   recipe.
 - Higher `priority` wins when more than one decision matches. Keep an explicit
-  unconditional fallback or configure `providers.defaults.default_model`.
+  unconditional fallback or configure `providers.defaults.model`.
 - Decision names and route diagnostics can become operational metadata; avoid
   secrets or personal identifiers in names and descriptions.
 - Boolean logic is policy, not authentication. Use trusted identity through

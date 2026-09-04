@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/consts"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -56,11 +57,11 @@ func (r *OpenAIRouter) setReasoningModeToRequestBodyForModelAndProvider(
 		mutation.model = logicalModel
 	}
 	familyConfig := r.getModelReasoningFamily(mutation.model)
-	dialect := resolveOpenAIBackendDialect(profile)
+	transport := resolveProviderReasoningTransport(profile)
 	if enabled {
-		r.applyEnabledReasoningMutation(mutation, familyConfig, decision, dialect)
+		r.applyEnabledReasoningMutation(mutation, familyConfig, decision, transport)
 	} else {
-		r.applyDisabledReasoningMutation(mutation, familyConfig, dialect)
+		r.applyDisabledReasoningMutation(mutation, familyConfig, transport)
 	}
 
 	logReasoningMutation(mutation, enabled)
@@ -163,12 +164,12 @@ func (r *OpenAIRouter) applyEnabledReasoningMutation(
 	mutation *reasoningRequestMutation,
 	familyConfig *config.ReasoningFamilyConfig,
 	decision *config.Decision,
-	dialect openAIBackendDialect,
+	transport modelcatalog.ReasoningTransport,
 ) {
 	if familyConfig == nil {
 		return
 	}
-	if usesDeepSeekOfficialReasoning(familyConfig, dialect) {
+	if usesDeepSeekOfficialReasoning(familyConfig, transport) {
 		effort := r.getReasoningEffort(decision, mutation.model)
 		applyDeepSeekOfficialReasoningMutation(mutation, true, effort)
 		return
@@ -179,7 +180,7 @@ func (r *OpenAIRouter) applyEnabledReasoningMutation(
 		mutation.reasoningApplied = true
 	case config.ReasoningFamilyTypeReasoningEffort:
 		effort := r.getReasoningEffort(decision, mutation.model)
-		applyReasoningEffortField(mutation, familyConfig.Parameter, effort, dialect)
+		applyReasoningEffortField(mutation, familyConfig.Parameter, effort, transport)
 		mutation.appliedEffort = effort
 		mutation.reasoningApplied = true
 	case config.ReasoningFamilyTypeTopLevelReasoningEffort:
@@ -195,18 +196,18 @@ func (r *OpenAIRouter) applyEnabledReasoningMutation(
 func (r *OpenAIRouter) applyDisabledReasoningMutation(
 	mutation *reasoningRequestMutation,
 	familyConfig *config.ReasoningFamilyConfig,
-	dialect openAIBackendDialect,
+	transport modelcatalog.ReasoningTransport,
 ) {
 	if familyConfig == nil {
 		return
 	}
-	if usesDeepSeekOfficialReasoning(familyConfig, dialect) {
+	if usesDeepSeekOfficialReasoning(familyConfig, transport) {
 		applyDeepSeekOfficialReasoningMutation(mutation, false, "")
 		return
 	}
 	switch familyConfig.Type {
 	case config.ReasoningFamilyTypeReasoningEffort:
-		preserveReasoningEffort(mutation, familyConfig.Parameter, dialect)
+		preserveReasoningEffort(mutation, familyConfig.Parameter, transport)
 	case config.ReasoningFamilyTypeTopLevelReasoningEffort:
 		preserveTopLevelReasoningEffort(mutation, familyConfig.Parameter)
 	case config.ReasoningFamilyTypeChatTemplateKwargs:
@@ -245,9 +246,9 @@ func applyReasoningEffortField(
 	mutation *reasoningRequestMutation,
 	parameter string,
 	effort string,
-	dialect openAIBackendDialect,
+	transport modelcatalog.ReasoningTransport,
 ) {
-	if dialect.usesTopLevelReasoningEffort() {
+	if usesTopLevelReasoningEffort(transport) {
 		mutation.requestMap[parameter] = reasoningStringValue(effort)
 		return
 	}
@@ -259,9 +260,9 @@ func applyReasoningEffortField(
 func preserveReasoningEffort(
 	mutation *reasoningRequestMutation,
 	parameter string,
-	dialect openAIBackendDialect,
+	transport modelcatalog.ReasoningTransport,
 ) {
-	if dialect.usesTopLevelReasoningEffort() {
+	if usesTopLevelReasoningEffort(transport) {
 		// When routing to OpenAI with reasoning disabled, keep a user-supplied
 		// top-level effort but do not synthesize a new one.
 		if mutation.hasOriginalEffort {
@@ -326,9 +327,9 @@ func (r *OpenAIRouter) reasoningMetricLabels(
 
 func usesDeepSeekOfficialReasoning(
 	familyConfig *config.ReasoningFamilyConfig,
-	dialect openAIBackendDialect,
+	transport modelcatalog.ReasoningTransport,
 ) bool {
-	return familyConfig != nil && dialect.usesDeepSeekOfficialReasoning()
+	return familyConfig != nil && isDeepSeekThinkingTransport(transport)
 }
 
 func applyDeepSeekOfficialReasoningMutation(mutation *reasoningRequestMutation, enabled bool, effort string) {
