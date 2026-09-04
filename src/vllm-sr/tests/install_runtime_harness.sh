@@ -139,11 +139,14 @@ else
   printf 'RUNTIME_ENV_FILE=absent\n'
 fi
 
-# For scenarios that need to verify printed commands, invoke the real
-# print_restart_command / print_next_steps and tag their output so the
-# Python side can assert the --runtime flag is present.
+# For scenarios that need to verify printed commands, invoke the full
+# installer path that prints plans + restart/start commands. This also
+# exercises detect_existing_runtime() so CALLS reflects whether Docker
+# was probed during print_install_plan, not just during ensure_runtime.
 if [ "$SCENARIO" = "print-command-podman" ]; then
   LAUNCH_PLATFORM=""
+  printf '[PRINT_INSTALL_PLAN]\n'
+  print_install_plan
   printf '[PRINT_RESTART_COMMAND]\n'
   print_restart_command
   printf '[PRINT_NEXT_STEPS]\n'
