@@ -33,9 +33,22 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       items: [
         'installation/installation',
-        'installation/deployment-options',
-        'installation/support-matrix',
-        'installation/backend-target-compatibility',
+        {
+          type: 'category',
+          label: 'Plan a Deployment',
+          items: [
+            'installation/deployment-options',
+            'installation/support-matrix',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Compatibility',
+          items: [
+            'installation/protocol-compatibility',
+            'installation/backend-target-compatibility',
+          ],
+        },
       ],
     },
     {

@@ -149,8 +149,10 @@ vllm-sr config migrate --config old-config.yaml
 
 ## Next
 
-- [Choose a Deployment](deployment-options) for local, GPU, Kubernetes, and
-  gateway options.
+- [Choose a Deployment](deployment-options) for local, Kubernetes, gateway, and
+  model-hosting options.
+- [Protocol Compatibility](protocol-compatibility) for client endpoints,
+  backend API formats, and cross-protocol translation.
 - [Configuration](configuration) for canonical YAML, recipes, and environment
   bindings.
 - [Models, Entrypoints, and Serving](../tutorials/global/models-entrypoints-serving)
