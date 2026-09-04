@@ -51,7 +51,7 @@ test('canonical SKILL.md has required sections', () => {
     '## Environment Discovery',
     '## Supported Installation Paths',
     '## Plan Before Mutation',
-    '## Installation Workflow',
+    '## Workflow',
     '## Validation',
     '## Unsupported States',
     '## Recovery',
@@ -86,6 +86,34 @@ test('canonical SKILL.md does not reference unsupported runtime values', () => {
     )
     assert.ok(!cell.includes('podman'), 'must not list podman until the upstream PR lands')
   }
+})
+
+test('canonical SKILL.md separates runtime state from active deployment', () => {
+  const content = readSkill(canonicalPath)
+  assert.ok(
+    content.includes('Existing local runtime state'),
+    'must have a runtime state subsection distinct from active deployment',
+  )
+  assert.ok(
+    /runtime\.env[^]+does not by itself prove/i.test(content),
+    'must state that runtime.env alone does not prove an active deployment',
+  )
+  assert.ok(
+    content.includes('### Active deployment'),
+    'must have an active deployment subsection',
+  )
+})
+
+test('canonical SKILL.md does not define a pip installation path', () => {
+  const content = readSkill(canonicalPath)
+  assert.ok(
+    !/Alternative path.*pip/i.test(content),
+    'must not define a pip alternative path; the public journey uses the maintained installer only',
+  )
+  assert.ok(
+    !content.includes('python -m pip install'),
+    'must not instruct pip install in the public skill body',
+  )
 })
 
 test('canonical SKILL.md declares out-of-scope items', () => {
