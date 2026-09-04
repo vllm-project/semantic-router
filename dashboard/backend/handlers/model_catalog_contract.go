@@ -156,10 +156,11 @@ func validateCatalogProtocols(values []modelcatalog.ProtocolDefinition) (map[str
 		}
 		ids[protocol.ID] = struct{}{}
 		operations := map[string]struct{}{}
+		defaultBasePath := strings.TrimRight(protocol.DefaultBasePath, "/")
 		for _, operation := range protocol.Operations {
 			if operation.ID == "" || !strings.HasPrefix(operation.Path, "/") ||
-				!(operation.Path == strings.TrimRight(protocol.DefaultBasePath, "/") ||
-					strings.HasPrefix(operation.Path, strings.TrimRight(protocol.DefaultBasePath, "/")+"/")) ||
+				(operation.Path != defaultBasePath &&
+					!strings.HasPrefix(operation.Path, defaultBasePath+"/")) ||
 				(operation.Method != "GET" && operation.Method != "POST" && operation.Method != "DELETE") {
 				return nil, fmt.Errorf("malformed protocol operation")
 			}
