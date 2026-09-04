@@ -104,13 +104,19 @@ func (r *Runner) buildAndLoadImages(ctx context.Context) error {
 		if err := r.builder.BuildAndLoad(ctx, r.opts.ClusterName, buildOpts); err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+func (r *Runner) restartLocalImageDeployments(ctx context.Context) error {
+	for _, image := range r.profileCapabilities.LocalImages {
 		for _, target := range image.RolloutRestarts {
 			if err := r.rolloutRestartDeployment(ctx, target.Namespace, target.Deployment); err != nil {
 				return err
 			}
 		}
 	}
-
 	return nil
 }
 

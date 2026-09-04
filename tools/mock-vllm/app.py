@@ -6,7 +6,7 @@ from collections.abc import Iterator
 from typing import Any
 
 import uvicorn
-from chat_request import ChatRequest, build_chat_content
+from chat_request import ChatMessage, ChatRequest, build_chat_content
 from classify import router as classify_router
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -709,7 +709,9 @@ async def chat_completions(request: Request):
     )
 
 
-def mock_workflow_chat_response(req: ChatRequest, created_ts: int) -> dict[str, Any] | None:
+def mock_workflow_chat_response(
+    req: ChatRequest, created_ts: int
+) -> dict[str, Any] | None:
     if is_workflow_planner_request(req):
         content = build_workflow_plan_content(req)
         usage = build_chat_usage(req, content)
@@ -729,7 +731,11 @@ def mock_workflow_tool_response(req: ChatRequest, created_ts: int) -> dict[str, 
     tool_name = "lookup"
     if req.tools:
         func = req.tools[0].get("function", {})
-        if isinstance(func, dict) and isinstance(func.get("name"), str) and func["name"]:
+        if (
+            isinstance(func, dict)
+            and isinstance(func.get("name"), str)
+            and func["name"]
+        ):
             tool_name = func["name"]
     response = mock_chat_tool_response(req, created_ts)
     response["choices"][0]["message"]["tool_calls"][0]["function"]["name"] = tool_name
@@ -745,12 +751,16 @@ def message_text(message: ChatMessage) -> str:
 def is_workflow_planner_request(req: ChatRequest) -> bool:
     if not req.response_format or req.response_format.get("type") != "json_object":
         return False
-    return any("You are the Router Flow planner" in message_text(message) for message in req.messages)
+    return any(
+        "You are the Router Flow planner" in message_text(message)
+        for message in req.messages
+    )
 
 
 def is_workflow_final_synthesis_request(req: ChatRequest) -> bool:
     return any(
-        "Router Flow final synthesizer" in message_text(message) for message in req.messages
+        "Router Flow final synthesizer" in message_text(message)
+        for message in req.messages
     )
 
 
