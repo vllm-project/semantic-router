@@ -1757,10 +1757,65 @@ pub extern "C" fn free_batch_similarity_result(result: *mut BatchSimilarityResul
     }
 }
 
-fn append_supported_dimension(dimensions: &mut Vec<usize>, dimension: usize) {
-    if dimension > 0 && !dimensions.contains(&dimension) {
-        dimensions.push(dimension);
+fn append_supported_dimension(dimensions: &mut Vec<i32>, dimension: usize) {
+    if dimension > 0 && dimension <= i32::MAX as usize {
+        let dimension = dimension as i32;
+        if !dimensions.contains(&dimension) {
+            dimensions.push(dimension);
+        }
     }
+}
+
+pub(crate) fn write_embedding_dimension_contract(
+    result: *mut EmbeddingDimensionContractResult,
+    model_name: &str,
+    native_dimension: usize,
+    declared_dimensions: &[usize],
+) -> i32 {
+    if result.is_null()
+        || native_dimension == 0
+        || native_dimension > i32::MAX as usize
+        || declared_dimensions
+            .iter()
+            .any(|dimension| *dimension == 0 || *dimension > i32::MAX as usize)
+    {
+        if !result.is_null() {
+            unsafe {
+                *result = EmbeddingDimensionContractResult::default();
+            }
+        }
+        return -1;
+    }
+
+    let mut supported_dimensions: Vec<i32> = Vec::with_capacity(declared_dimensions.len() + 1);
+    append_supported_dimension(&mut supported_dimensions, native_dimension);
+    for dimension in declared_dimensions {
+        append_supported_dimension(&mut supported_dimensions, *dimension);
+    }
+
+    let model_name = match std::ffi::CString::new(model_name) {
+        Ok(value) => value.into_raw(),
+        Err(_) => {
+            unsafe {
+                *result = EmbeddingDimensionContractResult::default();
+            }
+            return -1;
+        }
+    };
+    let num_supported_dimensions = supported_dimensions.len() as i32;
+    let supported_dimensions = Box::into_raw(supported_dimensions.into_boxed_slice()) as *mut i32;
+
+    unsafe {
+        *result = EmbeddingDimensionContractResult {
+            model_name,
+            native_dimension: native_dimension as i32,
+            supported_dimensions,
+            num_supported_dimensions,
+            error: false,
+        };
+    }
+
+    0
 }
 
 fn loaded_embedding_dimension_contract(model_type: &str) -> Result<(usize, Vec<usize>), String> {
@@ -1864,51 +1919,19 @@ pub extern "C" fn get_embedding_dimension_contract(
             }
         };
 
-    if native_dimension == 0
-        || native_dimension > i32::MAX as usize
-        || declared_dimensions
-            .iter()
-            .any(|dimension| *dimension == 0 || *dimension > i32::MAX as usize)
-    {
+    let status = write_embedding_dimension_contract(
+        result,
+        &model_type,
+        native_dimension,
+        &declared_dimensions,
+    );
+    if status != 0 {
         eprintln!(
             "ERROR: invalid embedding dimension contract for {}: native={}, supported={:?}",
             model_type, native_dimension, declared_dimensions
         );
-        unsafe {
-            (*result) = EmbeddingDimensionContractResult::default();
-        }
-        return -1;
     }
-
-    let mut supported_dimensions = Vec::with_capacity(declared_dimensions.len() + 1);
-    append_supported_dimension(&mut supported_dimensions, native_dimension);
-    for dimension in declared_dimensions {
-        append_supported_dimension(&mut supported_dimensions, dimension);
-    }
-
-    let model_name = match std::ffi::CString::new(model_type) {
-        Ok(value) => value.into_raw(),
-        Err(_) => {
-            unsafe {
-                (*result) = EmbeddingDimensionContractResult::default();
-            }
-            return -1;
-        }
-    };
-    let num_supported_dimensions = supported_dimensions.len() as i32;
-    let supported_dimensions = Box::into_raw(supported_dimensions.into_boxed_slice()) as *mut i32;
-
-    unsafe {
-        (*result) = EmbeddingDimensionContractResult {
-            model_name,
-            native_dimension: native_dimension as i32,
-            supported_dimensions,
-            num_supported_dimensions,
-            error: false,
-        };
-    }
-
-    0
+    status
 }
 
 /// Free a dimension contract returned by `get_embedding_dimension_contract`.
