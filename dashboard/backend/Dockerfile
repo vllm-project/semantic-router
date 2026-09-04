@@ -60,9 +60,9 @@ WORKDIR /app
 # Pipe falls back to direct on any proxy error; comma only on 404 and 410
 ENV GOPROXY="https://proxy.golang.org|direct"
 
-# Accept build arguments for target architecture
-ARG TARGETARCH=amd64
-ARG TARGETOS=linux
+# Use BuildKit-provided target platform arguments
+ARG TARGETARCH
+ARG TARGETOS
 ARG DASHBOARD_VERSION
 
 RUN set -eux; \
