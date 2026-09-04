@@ -1693,18 +1693,28 @@ pub extern "C" fn detect_hallucinations(
     // Hallucination detector expects context and answer as separate segments
     // Format: context [SEP] answer (the tokenizer will add [CLS] and final [SEP])
     // We need to include question in context if provided
-    let full_context = if question.is_empty() {
-        context.to_string()
+    // ModernBERT tokenizer uses [SEP] token (id 50282) to separate segments
+    let tail = if question.is_empty() {
+        format!(" [SEP] {}", answer)
     } else {
-        format!("{} Question: {}", context, question)
+        format!(" Question: {} [SEP] {}", question, answer)
     };
 
-    // Combine context and answer with separator
-    // ModernBERT tokenizer uses [SEP] token (id 50282) to separate segments
-    let formatted_input = format!("{} [SEP] {}", full_context, answer);
+    // Window the context so the answer always survives right truncation
+    let context = match classifier.fit_prefix_to_window(context, &tail) {
+        Ok(windowed) => windowed,
+        Err(e) => {
+            return HallucinationDetectionResult {
+                error: true,
+                error_message: unsafe { allocate_c_string(&format!("Tokenization failed: {}", e)) },
+                ..Default::default()
+            }
+        }
+    };
+    let formatted_input = format!("{}{}", context, tail);
 
     // Find where answer starts (after [SEP])
-    let answer_char_start = full_context.len() + " [SEP] ".len();
+    let answer_char_start = formatted_input.len() - answer.len();
 
     // Classify tokens
     match classifier.classify_tokens(&formatted_input) {
@@ -1936,7 +1946,19 @@ pub extern "C" fn classify_nli(premise: *const c_char, hypothesis: *const c_char
 
     // Format input for NLI: premise [SEP] hypothesis
     // ModernBERT NLI models use [SEP] token (id 50282) to separate segments
-    let nli_input = format!("{} [SEP] {}", premise, hypothesis);
+    // Window the premise so the hypothesis always survives right truncation
+    let tail = format!(" [SEP] {}", hypothesis);
+    let premise = match classifier.fit_prefix_to_window(premise, &tail) {
+        Ok(windowed) => windowed,
+        Err(e) => {
+            return NLIResult {
+                error: true,
+                error_message: unsafe { allocate_c_string(&format!("Tokenization failed: {}", e)) },
+                ..Default::default()
+            }
+        }
+    };
+    let nli_input = format!("{}{}", premise, tail);
 
     // Classify, returning the FULL softmax distribution. The previous
     // implementation used only the argmax class + its confidence and

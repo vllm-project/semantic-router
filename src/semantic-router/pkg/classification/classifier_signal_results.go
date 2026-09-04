@@ -1,6 +1,9 @@
 package classification
 
-import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/projectiontrace"
+import (
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/projectiontrace"
+)
 
 // SignalMetrics contains performance and probability metrics for a single signal.
 type SignalMetrics struct {
@@ -48,11 +51,11 @@ type SignalResults struct {
 	PIIDetected bool     // Whether any PII was detected
 	PIIEntities []string // Detected PII entity types (e.g., "EMAIL_ADDRESS", "PERSON")
 
-	SignalConfidences      map[string]float64 // Real confidence scores per signal, e.g. "embedding:ai" → 0.88
-	SignalValues           map[string]float64 // Raw signal values per signal when the evaluator exposes them, e.g. "structure:many_questions" → 4
-	SignalErrors           map[string]string  // Signal evaluation errors keyed by "type:name"
-	SignalErrorMatches     map[string]bool
-	AppliedUnknownPolicies map[string]string
+	SignalConfidences  map[string]float64 // Real confidence scores per signal, e.g. "embedding:ai" → 0.88
+	SignalValues       map[string]float64 // Raw signal values per signal when the evaluator exposes them, e.g. "structure:many_questions" → 4
+	SignalErrors       map[string]string  // Signal evaluation errors keyed by "type:name"
+	SignalErrorMatches map[string]bool
+	Diagnostics        decision.EvaluationDiagnostics
 
 	// Signal metrics (only populated in eval mode)
 	Metrics *SignalMetricsCollection
