@@ -148,3 +148,37 @@ fn test_get_embedding_smart_priority_combinations(
         crate::ffi::memory::free_embedding(result.data, result.length);
     }
 }
+
+/// The multimodal text encoder holds a fixed number of position embeddings, so
+/// a longer sequence has to be rejected before it reaches the position lookup.
+/// Regression for a long input failing with
+/// "index-select invalid index 512 with dim size 512".
+#[rstest]
+#[case(0, 512)]
+#[case(1, 512)]
+#[case(511, 512)]
+#[case(512, 512)]
+fn test_check_position_limit_accepts_up_to_limit(
+    #[case] seq_len: usize,
+    #[case] max_position: usize,
+) {
+    assert!(check_position_limit(seq_len, max_position).is_ok());
+}
+
+#[rstest]
+#[case(513, 512)]
+#[case(4096, 512)]
+fn test_check_position_limit_names_length_and_limit(
+    #[case] seq_len: usize,
+    #[case] max_position: usize,
+) {
+    let err = check_position_limit(seq_len, max_position).unwrap_err();
+    assert!(
+        err.contains(&seq_len.to_string()),
+        "error must name the input length: {err}"
+    );
+    assert!(
+        err.contains(&max_position.to_string()),
+        "error must name the limit: {err}"
+    );
+}
