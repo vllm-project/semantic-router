@@ -814,12 +814,6 @@ function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
     case 'hallucination_mitigation':
       return [
         { name: 'enabled', label: 'Enable Hallucination Mitigation', type: 'boolean' },
-        {
-          name: 'on_hallucination_detected',
-          label: 'On Detection Action',
-          type: 'text',
-          placeholder: 'block',
-        },
         routerStructuredField(key, 'fact_check'),
         routerStructuredField(key, 'detector'),
         routerStructuredField(key, 'explainer'),
@@ -1062,7 +1056,6 @@ function editDataForKey(key: RouterSystemKey, data: unknown): EditFormData {
     return {
       ...(hallucination || {}),
       enabled: hallucination?.enabled,
-      on_hallucination_detected: hallucination?.on_hallucination_detected,
       fact_check: asObject(hallucination?.fact_check) || {},
       detector: asObject(hallucination?.detector) || {},
       explainer: asObject(hallucination?.explainer) || {},
@@ -1139,7 +1132,6 @@ function saveForKey(key: RouterSystemKey, rawData: EditFormData): Partial<Config
     return buildNestedPatch(GLOBAL_SECTION_PATHS[key], {
       ...data,
       enabled: Boolean(data.enabled),
-      on_hallucination_detected: data.on_hallucination_detected,
       fact_check: asObject(data.fact_check) || {},
       detector: asObject(data.detector) || {},
       explainer: asObject(data.explainer) || {},

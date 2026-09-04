@@ -161,6 +161,7 @@ docs:
 - tools/agent/docs/tech-debt/td-054-typed-request-capability-eligibility-gap.md
 - tools/agent/docs/tech-debt/td-055-evidence-calibrated-session-switch-gate-gap.md
 - tools/agent/docs/tech-debt/td-056-onnx-candle-image-resize-duplication.md
+- tools/agent/docs/tech-debt/td-057-backend-target-producer-parity-gap.md
 local_agent_rules:
 - path: src/vllm-sr/cli/AGENTS.md
   scope: src/vllm-sr/cli/**
@@ -355,6 +356,9 @@ doc_governance:
   - path: tools/agent/docs/tech-debt/td-056-onnx-candle-image-resize-duplication.md
     steward: candle-binding
     freshness: update when the shared resize implementation is deduplicated or the exit criteria change
+  - path: tools/agent/docs/tech-debt/td-057-backend-target-producer-parity-gap.md
+    steward: router-core
+    freshness: update when backend-target producer parity or the linked exit criteria change
 skills:
 - tools/agent/skills/config-platform-change/SKILL.md
 - tools/agent/skills/harness-contract-change/SKILL.md
