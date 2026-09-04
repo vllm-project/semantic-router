@@ -1,14 +1,132 @@
 package main
 
 import (
+	"context"
 	"errors"
+	"fmt"
+	"net"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 )
+
+func TestRunRouterProcessShutsDownManagementServerWhenStartupIsCancelled(t *testing.T) {
+	apiPort := freePort(t)
+	routerPort := freePort(t)
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	configYAML := fmt.Sprintf(`version: v0.3
+global:
+  services:
+    management_api:
+      bind_address: 127.0.0.1
+      port: %d
+      remote_exposure: false
+      auth:
+        mode: disabled
+`, apiPort)
+	if err := os.WriteFile(configPath, []byte(configYAML), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	done := make(chan error, 1)
+	go func() {
+		done <- runRouterProcess(ctx, runtimeOptions{
+			configPath:  configPath,
+			port:        routerPort,
+			apiPort:     apiPort,
+			apiBind:     "127.0.0.1",
+			metricsPort: 0,
+			enableAPI:   true,
+		})
+	}()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("runRouterProcess() error = %v, want context canceled", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("runRouterProcess() did not finish after startup cancellation")
+	}
+
+	requireListenerReleased(t, "management", fmt.Sprintf("127.0.0.1:%d", apiPort))
+}
+
+func TestRunRouterProcessLoadedShutdownIsBoundedAndReleasesListener(t *testing.T) {
+	routerPort := freePort(t)
+	metricsPort := freePort(t)
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	configYAML, err := os.ReadFile(filepath.Join("..", "..", "..", "e2e", "config", "config.agent-smoke.cpu.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(configPath, configYAML, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		done <- runRouterProcess(ctx, runtimeOptions{
+			configPath:  configPath,
+			port:        routerPort,
+			metricsPort: metricsPort,
+			enableAPI:   false,
+		})
+	}()
+
+	address := fmt.Sprintf("127.0.0.1:%d", routerPort)
+	waitForProcessListener(t, done, address)
+
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("runRouterProcess() error = %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("loaded Router shutdown exceeded its bound")
+	}
+
+	requireListenerReleased(t, "ExtProc", address)
+	requireListenerReleased(t, "metrics", fmt.Sprintf("127.0.0.1:%d", metricsPort))
+}
+
+func waitForProcessListener(t *testing.T, done <-chan error, address string) {
+	t.Helper()
+	startupDeadline := time.Now().Add(5 * time.Second)
+	for {
+		select {
+		case err := <-done:
+			t.Fatalf("Router exited before ExtProc became ready: %v", err)
+		default:
+		}
+		connection, err := net.DialTimeout("tcp", address, 25*time.Millisecond)
+		if err == nil {
+			_ = connection.Close()
+			return
+		}
+		if time.Now().After(startupDeadline) {
+			t.Fatal("ExtProc listener did not become ready")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func requireListenerReleased(t *testing.T, name, address string) {
+	t.Helper()
+	listener, err := net.Listen("tcp", address)
+	if err != nil {
+		t.Fatalf("%s listener remained open after shutdown: %v", name, err)
+	}
+	_ = listener.Close()
+}
 
 func TestApplyKubernetesConfigUpdateEnsuresModelsBeforeReplace(t *testing.T) {
 	restoreKubernetesUpdateSeams := stubKubernetesUpdateSeams(t)

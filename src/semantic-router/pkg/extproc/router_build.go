@@ -356,15 +356,5 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 		return nil
 	})
 
-	components.resources.add(func() error {
-		router.routerLearningMu.Lock()
-		learningRuntime := router.routerLearningRuntime
-		router.routerLearningMu.Unlock()
-		if learningRuntime != nil {
-			learningRuntime.RetireAndWait()
-		}
-		return nil
-	})
-
 	return router
 }

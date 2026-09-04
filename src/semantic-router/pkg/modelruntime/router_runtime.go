@@ -141,7 +141,10 @@ func WarmupRouter(
 		tasks = append(tasks, Task{
 			Name:       taskName,
 			BestEffort: true,
-			Run: func(context.Context) error {
+			Run: func(ctx context.Context) error {
+				if err := ctx.Err(); err != nil {
+					return err
+				}
 				logging.ComponentEvent(component, warmup.Name+"_load_started", map[string]interface{}{})
 				return warmup.Load()
 			},

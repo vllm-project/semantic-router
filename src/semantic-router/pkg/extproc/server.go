@@ -6,12 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"os"
-	"os/signal"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
-	"syscall"
+	"time"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"google.golang.org/grpc"
@@ -27,6 +25,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	tlsutil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/tls"
 )
+
+const defaultGenerationDrainTimeout = 30 * time.Second
 
 var (
 	parseReloadConfig        = config.Parse
@@ -77,6 +77,7 @@ type Server struct {
 	certPath    string
 	runtime     *routerruntime.Registry
 	stopOnce    sync.Once
+	stopErr     error
 	reloadMu    sync.Mutex
 	stopping    atomic.Bool
 	watchMu     sync.Mutex
@@ -96,9 +97,8 @@ func NewServer(
 		return nil, err
 	}
 	attachRuntimeRegistry(router, runtimeRegistry)
-	publishRouterState(router.Config, router, runtimeRegistry)
-
 	service := NewRouterService(router)
+	publishRouterState(router.Config, router, runtimeRegistry)
 	return &Server{
 		configPath: configPath,
 		service:    service,
@@ -114,8 +114,16 @@ func (s *Server) GetRouter() *OpenAIRouter {
 	return s.service.GetRouter()
 }
 
-// Start starts the gRPC server
+// Start serves requests until Stop is called or the gRPC server fails.
 func (s *Server) Start() error {
+	return s.StartContext(context.Background())
+}
+
+// StartContext serves requests until ctx is cancelled or the gRPC server fails.
+func (s *Server) StartContext(ctx context.Context) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", s.port))
 	if err != nil {
 		s.Stop()
@@ -185,7 +193,7 @@ func (s *Server) Start() error {
 	}()
 
 	// Start config file watcher in background
-	ctx, cancel := context.WithCancel(context.Background())
+	watchCtx, cancel := context.WithCancel(ctx)
 	s.watchMu.Lock()
 	if s.stopping.Load() {
 		cancel()
@@ -199,14 +207,10 @@ func (s *Server) Start() error {
 		s.watchCancel = nil
 		s.watchMu.Unlock()
 	}()
-	go s.watchConfigAndReload(ctx)
+	go s.watchConfigAndReload(watchCtx)
 
-	// Wait for interrupt signal to gracefully shut down the server
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
-	defer signal.Stop(signalChan)
-
-	// Wait for either server error or shutdown signal
+	// Process signal ownership belongs to the command entrypoint. This server
+	// only observes the lifecycle context supplied by its caller.
 	select {
 	case err := <-serverErrCh:
 		if err != nil {
@@ -217,37 +221,59 @@ func (s *Server) Start() error {
 			s.Stop()
 			return err
 		}
-	case <-signalChan:
+	case <-ctx.Done():
 		logging.ComponentEvent("extproc", "server_shutdown_requested", map[string]interface{}{
 			"port": s.port,
 		})
 	}
-
-	s.Stop()
 	return nil
 }
 
 // Stop stops the gRPC server
 func (s *Server) Stop() {
-	s.stopOnce.Do(func() {
-		s.stopping.Store(true)
-		s.watchMu.Lock()
-		if s.watchCancel != nil {
-			s.watchCancel()
-		}
-		s.watchMu.Unlock()
-		if s.server != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultGenerationDrainTimeout)
+	defer cancel()
+	_ = s.Shutdown(ctx)
+}
+
+func (s *Server) Shutdown(ctx context.Context) error {
+	if ctx == nil {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(context.Background(), defaultGenerationDrainTimeout)
+		defer cancel()
+	}
+
+	s.stopOnce.Do(func() { s.stopErr = s.shutdown(ctx) })
+	return s.stopErr
+}
+
+func (s *Server) shutdown(ctx context.Context) error {
+	s.stopping.Store(true)
+	s.watchMu.Lock()
+	if s.watchCancel != nil {
+		s.watchCancel()
+	}
+	s.watchMu.Unlock()
+	if s.server != nil {
+		gracefulDone := make(chan struct{})
+		go func() {
 			s.server.GracefulStop()
-			logging.ComponentEvent("extproc", "server_stopped", map[string]interface{}{
-				"port": s.port,
-			})
+			close(gracefulDone)
+		}()
+		select {
+		case <-gracefulDone:
+		case <-ctx.Done():
+			s.server.Stop()
+			<-gracefulDone
 		}
-		s.reloadMu.Lock()
-		defer s.reloadMu.Unlock()
-		if s.service != nil {
-			_ = s.service.Close()
-		}
-	})
+		logging.ComponentEvent("extproc", "server_stopped", map[string]interface{}{
+			"port": s.port,
+		})
+	}
+	if s.service != nil {
+		return s.service.Shutdown(ctx)
+	}
+	return nil
 }
 
 // RouterService is a delegating gRPC service that forwards to the current router implementation.
@@ -261,15 +287,70 @@ type RouterService struct {
 }
 
 type routerGeneration struct {
-	router  *OpenAIRouter
+	router *OpenAIRouter
+
+	mu      sync.Mutex
 	refs    sync.WaitGroup
-	retired atomic.Bool
+	retired bool
+	drained chan struct{}
 }
 
 func NewRouterService(r *OpenAIRouter) *RouterService {
 	rs := &RouterService{}
-	rs.current.Store(&routerGeneration{router: r})
+	rs.current.Store(newRouterGeneration(r))
 	return rs
+}
+
+func newRouterGeneration(router *OpenAIRouter) *routerGeneration {
+	generation := &routerGeneration{
+		router:  router,
+		drained: make(chan struct{}),
+	}
+	if router != nil {
+		router.routerLearningMu.Lock()
+		router.generation = generation
+		if router.routerLearningRuntime != nil {
+			router.routerLearningRuntime.generation = generation
+		}
+		router.routerLearningMu.Unlock()
+	}
+	return generation
+}
+
+func (g *routerGeneration) acquire() (func(), bool) {
+	if g == nil {
+		return nil, false
+	}
+	g.mu.Lock()
+	if g.retired {
+		g.mu.Unlock()
+		return nil, false
+	}
+	g.refs.Add(1)
+	g.mu.Unlock()
+
+	var once sync.Once
+	return func() {
+		once.Do(g.refs.Done)
+	}, true
+}
+
+func (g *routerGeneration) retire() {
+	if g == nil {
+		return
+	}
+	g.mu.Lock()
+	if g.retired {
+		g.mu.Unlock()
+		return
+	}
+	g.retired = true
+	g.mu.Unlock()
+
+	go func() {
+		g.refs.Wait()
+		close(g.drained)
+	}()
 }
 
 // Swap replaces the current router implementation and closes the retired
@@ -286,12 +367,12 @@ func (rs *RouterService) Swap(r *OpenAIRouter, publish func()) error {
 		}
 		return errors.New("router service is shutting down")
 	}
-	old := rs.current.Swap(&routerGeneration{router: r})
+	old := rs.current.Swap(newRouterGeneration(r))
 	if publish != nil {
 		publish()
 	}
 	if old != nil {
-		old.retired.Store(true)
+		old.retire()
 		rs.retired.Add(1)
 	}
 	rs.mu.Unlock()
@@ -314,29 +395,55 @@ func (rs *RouterService) GetRouter() *OpenAIRouter {
 func (rs *RouterService) Process(stream ext_proc.ExternalProcessor_ProcessServer) error {
 	rs.mu.Lock()
 	generation := rs.current.Load()
-	if generation == nil || generation.retired.Load() {
+	if generation == nil {
 		rs.mu.Unlock()
 		return errors.New("router is shutting down")
 	}
-	generation.refs.Add(1)
+	release, acquired := generation.acquire()
 	rs.mu.Unlock()
-	defer generation.refs.Done()
+	if !acquired {
+		return errors.New("router is shutting down")
+	}
+	defer release()
 	return generation.router.Process(stream)
 }
 
 func (rs *RouterService) Close() error {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultGenerationDrainTimeout)
+	defer cancel()
+	return rs.Shutdown(ctx)
+}
+
+func (rs *RouterService) Shutdown(ctx context.Context) error {
+	if ctx == nil {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(context.Background(), defaultGenerationDrainTimeout)
+		defer cancel()
+	}
+
 	rs.mu.Lock()
 	if !rs.closed {
 		rs.closed = true
 		generation := rs.current.Swap(nil)
 		if generation != nil {
-			generation.retired.Store(true)
+			generation.retire()
 			rs.retired.Add(1)
 			go rs.closeRetiredGeneration(generation)
 		}
 	}
 	rs.mu.Unlock()
-	rs.retired.Wait()
+
+	done := make(chan struct{})
+	go func() {
+		rs.retired.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+
 	rs.errMu.Lock()
 	defer rs.errMu.Unlock()
 	return errors.Join(rs.errors...)
@@ -344,7 +451,11 @@ func (rs *RouterService) Close() error {
 
 func (rs *RouterService) closeRetiredGeneration(generation *routerGeneration) {
 	defer rs.retired.Done()
-	if err := closeRouterGeneration(generation); err != nil {
+	<-generation.drained
+	if generation.router == nil {
+		return
+	}
+	if err := generation.router.Close(); err != nil {
 		rs.errMu.Lock()
 		rs.errors = append(rs.errors, err)
 		rs.errMu.Unlock()
@@ -352,14 +463,6 @@ func (rs *RouterService) closeRetiredGeneration(generation *routerGeneration) {
 			"error": err.Error(),
 		})
 	}
-}
-
-func closeRouterGeneration(generation *routerGeneration) error {
-	if generation == nil || generation.router == nil {
-		return nil
-	}
-	generation.refs.Wait()
-	return generation.router.Close()
 }
 
 func (s *Server) reloadRouterFromFile(configPath string) error {

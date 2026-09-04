@@ -2,11 +2,18 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
+	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/apiserver"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/extproc"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/k8s"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/logo"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modeldownload"
@@ -15,12 +22,30 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 )
 
+const processShutdownTimeout = 30 * time.Second
+
+type contextShutdowner interface {
+	Shutdown(context.Context) error
+}
+
 func main() {
 	logo.PrintVLLMLogo()
 	opts := parseRuntimeOptions()
 	initializeRuntimeLogger()
 	applyBackendRuntimeTuningDefaults()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	runErr := runRouterProcess(ctx, opts)
+	stop()
 
+	if runErr != nil {
+		logging.ComponentErrorEvent("router", "router_process_failed", map[string]interface{}{
+			"error": runErr.Error(),
+		})
+		os.Exit(1)
+	}
+}
+
+func runRouterProcess(ctx context.Context, opts runtimeOptions) (runErr error) {
 	cfg := loadRuntimeConfigOrFatal(opts.configPath)
 	config.Replace(cfg)
 	runtimeRegistry := routerruntime.NewRegistry(cfg)
@@ -34,29 +59,109 @@ func main() {
 
 	// Start the API server early so /startup-status is available during
 	// model downloads and initialization.
-	if err := startAPIServerIfEnabled(opts, runtimeRegistry); err != nil {
+	apiServer, err := startAPIServerIfEnabled(opts, runtimeRegistry)
+	if err != nil {
 		failStartup(startupWriter, "Failed to start management API: %v", err)
 	}
+	var routerServer *extproc.Server
+	var metricsServer *http.Server
+	shutdownHooks := make([]func(), 0)
+	shutdownTracing := func() {}
+	// Return errors below so deferred shutdown can release started resources.
+	defer func() {
+		runErr = errors.Join(runErr, shutdownRouterProcess(
+			apiServer,
+			routerServer,
+			metricsServer,
+			&shutdownHooks,
+			shutdownTracing,
+		))
+	}()
 
-	ensureModelsDownloadedOrFatal(cfg, startupWriter)
-	exitIfDownloadOnly(opts.downloadOnly)
+	if err := ensureModelsDownloaded(ctx, cfg, startupWriter); err != nil {
+		return recordStartupError(startupWriter, "ensure models are downloaded", err)
+	}
+	if opts.downloadOnly {
+		logging.ComponentEvent("router", "download_only_complete", map[string]interface{}{
+			"mode": "download_only",
+		})
+		return nil
+	}
 
-	defer initializeTracing(cfg)()
+	shutdownTracing = initializeTracing(cfg)
 	initializeWindowedMetricsIfEnabled(cfg)
 
-	shutdownHooks := make([]func(), 0)
-	defer runShutdownHooks(&shutdownHooks)
-	startMetricsServerIfEnabled(cfg, opts.metricsPort)
+	metricsServer = startMetricsServerIfEnabled(cfg, opts.metricsPort)
 	startProfilingServerIfEnabled(cfg, opts, &shutdownHooks)
 
-	embeddingRuntime := initializeRuntimeDependencies(cfg, startupWriter, &shutdownHooks, runtimeRegistry)
-	server := newExtProcServerOrFatal(opts, startupWriter, runtimeRegistry)
+	embeddingRuntime, err := initializeRuntimeDependencies(ctx, cfg, startupWriter, &shutdownHooks, runtimeRegistry)
+	if err != nil {
+		return recordStartupError(startupWriter, "initialize runtime dependencies", err)
+	}
+	routerServer, err = extproc.NewServer(opts.configPath, opts.port, opts.secure, opts.certPath, runtimeRegistry)
+	if err != nil {
+		return recordStartupError(startupWriter, "create ExtProc server", err)
+	}
 
-	warmupRouterRuntime(server, embeddingRuntime)
+	if err := warmupRouterRuntime(ctx, routerServer, embeddingRuntime); err != nil {
+		return recordStartupError(startupWriter, "warm up router runtime", err)
+	}
 	markRouterReady(startupWriter, startupEmbeddingProviderStatus(embeddingRuntime))
 	logStartupSummary(cfg, opts, embeddingRuntime.AnyReady)
 	startKubernetesControllerIfNeeded(cfg, opts.kubeconfig, opts.namespace)
-	startExtProcServerOrFatal(server, startupWriter)
+	return startExtProcServer(ctx, routerServer, startupWriter)
+}
+
+func shutdownRouterProcess(
+	apiServer *apiserver.Server,
+	routerServer *extproc.Server,
+	metricsServer *http.Server,
+	shutdownHooks *[]func(),
+	shutdownTracing func(),
+) error {
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), processShutdownTimeout)
+	defer cancel()
+	servers := make([]contextShutdowner, 0, 3)
+	if apiServer != nil {
+		servers = append(servers, apiServer)
+	}
+	if routerServer != nil {
+		servers = append(servers, routerServer)
+	}
+	if metricsServer != nil {
+		servers = append(servers, metricsServer)
+	}
+	err := shutdownServers(shutdownCtx, servers...)
+	runShutdownHooks(shutdownHooks)
+	shutdownTracing()
+	return err
+}
+
+func recordStartupError(writer startupstatus.StatusWriter, operation string, cause error) error {
+	err := fmt.Errorf("%s: %w", operation, cause)
+	_ = writer.Write(startupstatus.State{
+		Phase:   "error",
+		Ready:   false,
+		Message: err.Error(),
+	})
+	logging.ComponentErrorEvent("router", "startup_failed", map[string]interface{}{
+		"message": err.Error(),
+	})
+	return err
+}
+
+func shutdownServers(ctx context.Context, servers ...contextShutdowner) error {
+	errorsByServer := make(chan error, len(servers))
+	for _, server := range servers {
+		go func(server contextShutdowner) {
+			errorsByServer <- server.Shutdown(ctx)
+		}(server)
+	}
+	shutdownErrors := make([]error, 0, len(servers))
+	for range servers {
+		shutdownErrors = append(shutdownErrors, <-errorsByServer)
+	}
+	return errors.Join(shutdownErrors...)
 }
 
 var (
@@ -101,7 +206,7 @@ func applyBackendRuntimeTuningDefaults() {
 	})
 }
 
-func ensureModelsDownloaded(cfg *config.RouterConfig, startupWriter startupstatus.StatusWriter) error {
+func ensureModelsDownloaded(ctx context.Context, cfg *config.RouterConfig, startupWriter startupstatus.StatusWriter) error {
 	reporter := func(progress modeldownload.ProgressState) {
 		state := startupstatus.State{
 			Ready:            false,
@@ -135,7 +240,7 @@ func ensureModelsDownloaded(cfg *config.RouterConfig, startupWriter startupstatu
 		}
 	}
 
-	return modeldownload.EnsureModelsForConfigWithProgress(cfg, reporter)
+	return modeldownload.EnsureModelsForConfigWithProgressContext(ctx, cfg, reporter)
 }
 
 func applyKubernetesConfigUpdate(newConfig *config.RouterConfig) error {

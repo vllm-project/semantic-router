@@ -12,9 +12,7 @@ import (
 )
 
 type routerLearningRuntime struct {
-	leaseMu         sync.Mutex
-	leaseRefs       sync.WaitGroup
-	retired         bool
+	generation      *routerGeneration
 	shared          *routerLearningSharedState
 	config          *config.RouterConfig
 	replayRecorder  *routerreplay.Recorder
@@ -257,30 +255,7 @@ func (rt *routerLearningRuntime) AcquireLease() (func(), bool) {
 	if rt == nil {
 		return nil, false
 	}
-	rt.leaseMu.Lock()
-	if rt.retired {
-		rt.leaseMu.Unlock()
-		return nil, false
-	}
-	rt.leaseRefs.Add(1)
-	rt.leaseMu.Unlock()
-
-	var once sync.Once
-	return func() {
-		once.Do(rt.leaseRefs.Done)
-	}, true
-}
-
-// RetireAndWait prevents new management leases and waits for requests that
-// already acquired this runtime before its replay store is closed.
-func (rt *routerLearningRuntime) RetireAndWait() {
-	if rt == nil {
-		return
-	}
-	rt.leaseMu.Lock()
-	rt.retired = true
-	rt.leaseMu.Unlock()
-	rt.leaseRefs.Wait()
+	return rt.generation.acquire()
 }
 
 func (r *OpenAIRouter) routerLearningRuntimeState() *routerLearningRuntime {
@@ -292,6 +267,7 @@ func (r *OpenAIRouter) routerLearningRuntimeState() *routerLearningRuntime {
 	if r.routerLearningRuntime == nil {
 		r.routerLearningRuntime = newRouterLearningRuntime(r.Config, r.ReplayRecorder, r.ReplayRecorders)
 	}
+	r.routerLearningRuntime.generation = r.generation
 	return r.routerLearningRuntime
 }
 

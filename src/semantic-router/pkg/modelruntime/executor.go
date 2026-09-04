@@ -159,7 +159,12 @@ func (r *executorRun) execute(ctx context.Context, taskCount int) error {
 		if done {
 			return nil
 		}
-		r.handleOutcome(<-r.resultCh)
+		select {
+		case outcome := <-r.resultCh:
+			r.handleOutcome(outcome)
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
 	return nil
 }
