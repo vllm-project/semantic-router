@@ -195,7 +195,7 @@ impl ModelFactory {
         let safetensors_path = format!("{}/model.safetensors", model_path);
         let vb = unsafe {
             VarBuilder::from_mmaped_safetensors(
-                &[safetensors_path.clone()],
+                std::slice::from_ref(&safetensors_path),
                 candle_core::DType::F32,
                 &self.device,
             )
