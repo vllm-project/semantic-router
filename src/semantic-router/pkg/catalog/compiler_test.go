@@ -86,8 +86,10 @@ func TestDeepSeekV4HasCompletePublishedEvaluationAndRuntimeOfferings(t *testing.
 			t.Fatalf("%s intelligence result is incomplete: %+v", modelID, result)
 		}
 		providers := map[string]bool{}
-		for _, offering := range registry.OfferingsForModel(modelID) {
-			providers[offering.Provider] = true
+		for _, offering := range registry.Offerings() {
+			if offering.Model == modelID {
+				providers[offering.Provider] = true
+			}
 		}
 		if !providers["deepseek"] || !providers["vllm"] {
 			t.Fatalf("%s offerings = %v, want deepseek and vllm", modelID, providers)
