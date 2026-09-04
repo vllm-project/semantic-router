@@ -61,6 +61,7 @@ Every entry uses these sections:
 - [TD045: Reviewed content moderation](td-045-reviewed-content-moderation.md)
 - [TD046: ONNX binding CI coverage](td-046-onnx-binding-ci-coverage-gap.md)
 - [TD047: Response-cache polarity guard surface mirrors](td-047-response-cache-polarity-guard-surface-mirrors.md)
+- [TD057: Observability metrics module boundaries](td-057-observability-metrics-module-boundaries.md)
 
 ### PL-0039: Evaluation Plane
 

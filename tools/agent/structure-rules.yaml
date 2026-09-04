@@ -223,6 +223,9 @@ structure_exceptions:
       - src/semantic-router/pkg/tools/tools.go
     function_checks: relaxed
   - paths:
+      - src/semantic-router/pkg/observability/metrics/metrics.go
+    file_checks: relaxed
+  - paths:
       - src/semantic-router/pkg/looper/confidence.go
     file_checks: relaxed
     function_checks: relaxed
