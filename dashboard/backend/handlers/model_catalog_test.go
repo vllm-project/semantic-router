@@ -121,18 +121,23 @@ func TestModelCatalogHandlerRejectsMalformedCLIContract(t *testing.T) {
 	t.Parallel()
 
 	for name, payload := range map[string]string{
-		"invalid json":          `{`,
-		"empty inventory":       `{"schema_version":"vllm-sr/model-catalog/v2","catalogs":[],"protocols":[],"providers":[],"reasoning_families":[],"models":[],"offerings":[],"benchmarks":[],"evaluations":[],"indices":[],"index_results":[]}`,
-		"missing protocols":     validModelCatalogPayload(","),
-		"missing roles":         validModelCatalogPayload(","),
-		"missing authority":     validModelCatalogPayload(","),
-		"invalid asset digest":  validModelCatalogPayload(","),
-		"orphan physical model": validModelCatalogPayload(","),
+		"invalid json":              `{`,
+		"empty inventory":           `{"schema_version":"vllm-sr/model-catalog/v2","catalogs":[],"protocols":[],"providers":[],"reasoning_families":[],"models":[],"offerings":[],"benchmarks":[],"evaluations":[],"indices":[],"index_results":[]}`,
+		"missing protocols":         validModelCatalogPayload(","),
+		"missing default base path": validModelCatalogPayload(","),
+		"missing roles":             validModelCatalogPayload(","),
+		"missing authority":         validModelCatalogPayload(","),
+		"invalid asset digest":      validModelCatalogPayload(","),
+		"orphan physical model":     validModelCatalogPayload(","),
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			if name == "missing protocols" {
 				payload = strings.Replace(payload, `"protocols":["openai/chat-completions@1"]`, `"protocols":[]`, 1)
+			}
+			if name == "missing default base path" {
+				payload = strings.Replace(payload, `    "default_base_path":"/v1",
+`, "", 1)
 			}
 			if name == "missing roles" {
 				payload = strings.Replace(payload, `"roles":[{"name":"balanced","required":true,"minimum_candidates":1,"traits":["chat"],"recommended_pool":["local/example"]}]`, `"roles":[]`, 1)
@@ -226,6 +231,7 @@ func validModelCatalogPayload(extra string) string {
     "id":"openai/chat-completions@1",
     "display_name":"OpenAI Chat Completions",
     "wire_format":"openai.chat.v1",
+    "default_base_path":"/v1",
     "operations":[{"id":"create","method":"POST","path":"/v1/chat/completions"}],
     "capabilities":["chat"]
   }],
