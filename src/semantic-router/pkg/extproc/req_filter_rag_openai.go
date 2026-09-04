@@ -54,7 +54,7 @@ func (r *OpenAIRouter) retrieveFromOpenAI(traceCtx context.Context, ctx *Request
 	logging.Infof("OpenAI RAG: Using direct search workflow (vector_store_id: %s)", openaiConfig.VectorStoreID)
 
 	// Create vector store client
-	vectorStoreClient := openai.NewVectorStoreClientWithSearchResponseLimit(
+	vectorStoreClient := openai.NewVectorStoreClientWithTimeout(
 		baseURL,
 		openaiConfig.APIKey,
 		openaiConfig.MaxResponseBytes,

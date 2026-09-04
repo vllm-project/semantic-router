@@ -28,11 +28,16 @@ type VectorStoreClient struct {
 
 // NewVectorStoreClient creates a new OpenAI Vector Store client
 func NewVectorStoreClient(baseURL string, apiKey string) *VectorStoreClient {
-	return NewVectorStoreClientWithSearchResponseLimit(baseURL, apiKey, 0, defaultVectorStoreTimeout)
+	return NewVectorStoreClientWithSearchResponseLimit(baseURL, apiKey, 0)
 }
 
-// NewVectorStoreClientWithSearchResponseLimit creates a client with a search response ceiling and timeout.
-func NewVectorStoreClientWithSearchResponseLimit(baseURL string, apiKey string, maxResponseBytes int64, timeout time.Duration) *VectorStoreClient {
+// NewVectorStoreClientWithSearchResponseLimit creates a client with a search response ceiling.
+func NewVectorStoreClientWithSearchResponseLimit(baseURL string, apiKey string, maxResponseBytes int64) *VectorStoreClient {
+	return NewVectorStoreClientWithTimeout(baseURL, apiKey, maxResponseBytes, defaultVectorStoreTimeout)
+}
+
+// NewVectorStoreClientWithTimeout creates a client with a search response ceiling and timeout.
+func NewVectorStoreClientWithTimeout(baseURL string, apiKey string, maxResponseBytes int64, timeout time.Duration) *VectorStoreClient {
 	if maxResponseBytes == 0 {
 		maxResponseBytes = defaultVectorStoreSearchMaxResponseBytes
 	}
