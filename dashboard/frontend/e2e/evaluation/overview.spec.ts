@@ -165,7 +165,7 @@ test.describe('Evaluation Plane · Overview', () => {
     ).toBeVisible()
     await expect(page.getByRole('button', { name: 'Delete Candidate recipe' })).toHaveCount(0)
     await page.getByRole('button', { name: `Open report for Candidate recipe` }).click()
-    await expect(page.getByRole('heading', { name: 'Candidate recipe' })).toBeVisible()
+    await expect(page.locator('#evaluation-readiness-title')).toHaveText('Candidate recipe')
   })
 
   test('keeps release decision inputs progressive and touch discoverable at 320px', async ({
