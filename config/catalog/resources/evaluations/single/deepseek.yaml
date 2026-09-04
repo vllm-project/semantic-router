@@ -1,0 +1,64 @@
+- id: deepseek/deepseek-v4-flash-model-card-max@1.0.0
+  model: deepseek/deepseek-v4-flash
+  subject:
+    variant: DeepSeek-V4-Flash
+    reasoning_effort: max
+    hle_mode: no_tools
+    source_kind: official_model_card
+  metrics:
+    tiger-ai-lab/mmlu-pro@1.0.0#accuracy: 0.862
+    idavidrein/gpqa-diamond@1.0.0#accuracy: 0.881
+    cais/humanitys-last-exam@1.0.0#accuracy: 0.348
+    swe-bench/verified@1.0.0#resolved: 0.790
+  status: available
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash
+    redistributable: true
+- id: deepseek/deepseek-v4-flash-release-eval@1.0.0
+  model: deepseek/deepseek-v4-flash
+  subject:
+    variant: deepseek-v4-flash
+    terminal_harness: DeepSeek API evaluation harness
+    source_kind: official_release_evaluation
+  metrics:
+    harbor/terminal-bench@2.1.0#resolved: 0.827
+  status: available
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://api-docs.deepseek.com/updates/
+    redistributable: true
+- id: deepseek/deepseek-v4-pro-model-card-max@1.0.0
+  model: deepseek/deepseek-v4-pro
+  subject:
+    variant: DeepSeek-V4-Pro
+    reasoning_effort: max
+    hle_mode: no_tools
+    source_kind: official_model_card
+  metrics:
+    tiger-ai-lab/mmlu-pro@1.0.0#accuracy: 0.875
+    idavidrein/gpqa-diamond@1.0.0#accuracy: 0.901
+    cais/humanitys-last-exam@1.0.0#accuracy: 0.377
+    swe-bench/verified@1.0.0#resolved: 0.806
+  status: available
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro
+    redistributable: true
+- id: deepseek/deepseek-v4-pro-release-eval@1.0.0
+  model: deepseek/deepseek-v4-pro
+  subject:
+    variant: deepseek-v4-pro
+    terminal_harness: DeepSeek API evaluation harness
+    source_kind: official_release_evaluation
+  metrics:
+    harbor/terminal-bench@2.1.0#resolved: 0.879
+  status: available
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://api-docs.deepseek.com/updates/
+    redistributable: true

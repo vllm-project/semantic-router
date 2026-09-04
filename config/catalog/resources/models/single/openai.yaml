@@ -251,7 +251,7 @@
   presentation: {logo: package:openai, monogram: O, monochrome: true}
   distribution: {type: proprietary_api, source: https://developers.openai.com/api/docs/models/gpt-4.1-nano}
   family: gpt-4.1
-  lifecycle: active
+  lifecycle: deprecated
   limits: {context_window_size: 1047576, max_output_tokens: 32768}
   capabilities: [chat, tools, structured_output, vision, long_context]
   modalities: {input: [text, image], output: [text]}
@@ -282,7 +282,7 @@
   presentation: {logo: package:openai, monogram: O, monochrome: true}
   distribution: {type: proprietary_api, source: https://developers.openai.com/api/docs/models/o4-mini}
   family: o-series
-  lifecycle: active
+  lifecycle: deprecated
   limits: {context_window_size: 200000, max_output_tokens: 100000}
   capabilities: [chat, reasoning, tools, structured_output, vision, long_context]
   modalities: {input: [text, image], output: [text]}
@@ -378,7 +378,7 @@
   presentation: {logo: package:openai, monogram: O, monochrome: true}
   distribution: {type: proprietary_api, source: https://developers.openai.com/api/docs/models/gpt-5-codex}
   family: gpt-5-codex
-  lifecycle: active
+  lifecycle: deprecated
   limits: {context_window_size: 272000, max_output_tokens: 128000}
   capabilities: [chat, reasoning, tools, structured_output, vision, long_context]
   modalities: {input: [text, image], output: [text]}
@@ -394,7 +394,7 @@
   presentation: {logo: package:openai, monogram: O, monochrome: true}
   distribution: {type: proprietary_api, source: https://developers.openai.com/api/docs/models/gpt-5.1-codex}
   family: gpt-5-codex
-  lifecycle: active
+  lifecycle: deprecated
   limits: {context_window_size: 272000, max_output_tokens: 128000}
   capabilities: [chat, reasoning, tools, structured_output, vision, long_context]
   modalities: {input: [text, image], output: [text]}
@@ -410,7 +410,7 @@
   presentation: {logo: package:openai, monogram: O, monochrome: true}
   distribution: {type: proprietary_api, source: https://developers.openai.com/api/docs/models/gpt-5.1-codex-max}
   family: gpt-5-codex
-  lifecycle: active
+  lifecycle: deprecated
   limits: {context_window_size: 272000, max_output_tokens: 128000}
   capabilities: [chat, reasoning, tools, structured_output, vision, long_context]
   modalities: {input: [text, image], output: [text]}
@@ -426,7 +426,7 @@
   presentation: {logo: package:openai, monogram: O, monochrome: true}
   distribution: {type: proprietary_api, source: https://developers.openai.com/api/docs/models/gpt-5.1-codex-mini}
   family: gpt-5-codex
-  lifecycle: active
+  lifecycle: deprecated
   limits: {context_window_size: 272000, max_output_tokens: 128000}
   capabilities: [chat, reasoning, tools, structured_output, vision, long_context]
   modalities: {input: [text, image], output: [text]}
@@ -442,7 +442,7 @@
   presentation: {logo: package:openai, monogram: O, monochrome: true}
   distribution: {type: proprietary_api, source: https://developers.openai.com/api/docs/models/gpt-5.2-codex}
   family: gpt-5-codex
-  lifecycle: active
+  lifecycle: deprecated
   limits: {context_window_size: 272000, max_output_tokens: 128000}
   capabilities: [chat, reasoning, tools, structured_output, vision, long_context]
   modalities: {input: [text, image], output: [text]}
@@ -504,7 +504,7 @@
   presentation: {logo: package:openai, monogram: O, monochrome: true}
   distribution: {type: proprietary_api, source: https://developers.openai.com/api/docs/models/o1}
   family: openai-o
-  lifecycle: active
+  lifecycle: deprecated
   limits: {context_window_size: 200000, max_output_tokens: 100000}
   capabilities: [chat, reasoning, tools, vision, long_context]
   modalities: {input: [text, image], output: [text]}
@@ -520,7 +520,7 @@
   presentation: {logo: package:openai, monogram: O, monochrome: true}
   distribution: {type: proprietary_api, source: https://developers.openai.com/api/docs/models/o1-pro}
   family: openai-o
-  lifecycle: active
+  lifecycle: deprecated
   limits: {context_window_size: 200000, max_output_tokens: 100000}
   capabilities: [chat, reasoning, tools, vision, long_context]
   modalities: {input: [text, image], output: [text]}
@@ -536,7 +536,7 @@
   presentation: {logo: package:openai, monogram: O, monochrome: true}
   distribution: {type: proprietary_api, source: https://developers.openai.com/api/docs/models/o3-mini}
   family: openai-o
-  lifecycle: active
+  lifecycle: deprecated
   limits: {context_window_size: 200000, max_output_tokens: 100000}
   capabilities: [chat, reasoning, tools, structured_output, long_context]
   modalities: {input: [text], output: [text]}

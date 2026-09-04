@@ -85,22 +85,24 @@
   publisher: DeepSeek
   presentation: {logo: package:deepseek, monogram: D, monochrome: false}
   distribution:
-    type: proprietary_api
-    source: https://api-docs.deepseek.com/quick_start/pricing
+    type: open_weights
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash
+    license: MIT
   family: deepseek-v4
+  parameter_size: 284B (13B active)
   revision: DeepSeek-V4-Flash-0731
   lifecycle: active
   limits: {context_window_size: 1000000, max_output_tokens: 384000}
   capabilities: [chat, reasoning, tools, structured_output, long_context]
   modalities: {input: [text], output: [text]}
   reasoning_family: deepseek
-  protocols: [openai/chat-completions@1]
+  protocols: [openai/chat-completions@1, openai/responses@1]
   verification:
     authority: DeepSeek
     status: claimed
     verified_at: 2026-09-05
-    source: https://api-docs.deepseek.com/quick_start/pricing
-  tags: [efficient, proprietary, reasoning]
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash
+  tags: [efficient, open_weights, reasoning, moe]
 - id: deepseek/deepseek-v4-pro
   display_name: DeepSeek V4 Pro
   description: DeepSeek's high-capability V4 reasoning model.
@@ -108,22 +110,24 @@
   publisher: DeepSeek
   presentation: {logo: package:deepseek, monogram: D, monochrome: false}
   distribution:
-    type: proprietary_api
-    source: https://api-docs.deepseek.com/quick_start/pricing
+    type: open_weights
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro
+    license: MIT
   family: deepseek-v4
+  parameter_size: 1.6T (49B active)
   revision: DeepSeek-V4-Pro-0813
   lifecycle: active
   limits: {context_window_size: 1000000, max_output_tokens: 384000}
   capabilities: [chat, reasoning, tools, structured_output, long_context]
   modalities: {input: [text], output: [text]}
   reasoning_family: deepseek
-  protocols: [openai/chat-completions@1]
+  protocols: [openai/chat-completions@1, openai/responses@1]
   verification:
     authority: DeepSeek
     status: claimed
     verified_at: 2026-09-05
-    source: https://api-docs.deepseek.com/quick_start/pricing
-  tags: [frontier, proprietary, reasoning]
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro
+  tags: [frontier, open_weights, reasoning, moe]
 - id: deepseek/deepseek-v3
   display_name: DeepSeek V3
   description: Original open-weight DeepSeek V3 MoE model for chat, coding, and general workloads.

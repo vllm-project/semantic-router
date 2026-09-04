@@ -33,3 +33,10 @@
   protocols: [openai/chat-completions@1]
   lifecycle: active
   verification: {status: claimed, verified_at: 2026-09-05, source: https://docs.cohere.com/docs/command-a-plus}
+- id: cohere/north-mini-code-1.0@1.0.0
+  provider: cohere
+  model: cohere/north-mini-code-1.0
+  provider_model_id: north-mini-code-1-0
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://docs.cohere.com/docs/north-mini-code-1.0}

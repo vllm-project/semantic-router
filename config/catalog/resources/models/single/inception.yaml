@@ -1,0 +1,33 @@
+- id: inception/mercury-2
+  display_name: Mercury 2
+  description: High-throughput diffusion language model for reasoning, tools, and structured output.
+  kind: physical
+  publisher: Inception
+  presentation: {logo: monogram, monogram: I, monochrome: false}
+  distribution: {type: proprietary_api, source: https://www.inceptionlabs.ai/models}
+  family: mercury-2
+  lifecycle: active
+  limits: {context_window_size: 128000}
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities: {input: [text], output: [text]}
+  reasoning_family: inception
+  protocols: [openai/chat-completions@1]
+  verification: {authority: Inception, status: claimed, verified_at: 2026-09-05, source: https://docs.inceptionlabs.ai/get-started/models}
+  tags: [proprietary, diffusion, low_latency, agentic]
+- id: inception/mercury-2.5-preview
+  display_name: Mercury 2.5 Preview
+  description: Preview of Inception's current diffusion reasoning model for low-latency agents.
+  kind: physical
+  publisher: Inception
+  presentation: {logo: monogram, monogram: I, monochrome: false}
+  distribution: {type: proprietary_api, source: https://www.inceptionlabs.ai/models}
+  family: mercury-2.5
+  released_at: 2026-08-31
+  lifecycle: experimental
+  limits: {context_window_size: 260000, max_output_tokens: 65536}
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities: {input: [text], output: [text]}
+  reasoning_family: inception
+  protocols: [openai/chat-completions@1]
+  verification: {authority: Inception, status: claimed, verified_at: 2026-09-05, source: https://www.inceptionlabs.ai/models}
+  tags: [proprietary, preview, diffusion, low_latency, agentic]

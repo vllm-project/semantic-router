@@ -48,3 +48,13 @@
   parameter: reasoning_effort
   levels: [low, medium, high]
   default: medium
+- id: celeris
+  type: chat_template_kwargs
+  parameter: enable_thinking
+  levels: [disabled, enabled]
+  default: enabled
+- id: inception
+  type: top_level_reasoning_effort
+  parameter: reasoning_effort
+  levels: [low, medium, high]
+  default: medium
