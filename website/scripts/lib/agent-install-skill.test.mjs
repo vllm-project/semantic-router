@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
+import { execSync } from 'node:child_process'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -10,6 +11,7 @@ const repoRoot = resolve(scriptDir, '..', '..', '..')
 const canonicalPath = resolve(repoRoot, 'tools', 'agent', 'skills', 'vllm-sr-install', 'SKILL.md')
 const publicPath = resolve(repoRoot, 'website', 'static', 'install', 'agent', 'vllm-sr', 'SKILL.md')
 const installationDocPath = resolve(repoRoot, 'website', 'docs', 'installation', 'installation.md')
+const syncScript = resolve(repoRoot, 'website', 'scripts', 'sync-public-agent-skill.mjs')
 
 const SKILL_URL = 'https://vllm-sr.ai/install/agent/vllm-sr/SKILL.md'
 
@@ -124,10 +126,23 @@ test('canonical SKILL.md declares out-of-scope items', () => {
   }
 })
 
-test('public static artifact is byte-for-byte identical to canonical source', () => {
+test('sync script produces a byte-for-byte identical public artifact', () => {
+  // The static copy is gitignored (built at build time, same as install.sh).
+  // Run the sync script to generate it, then verify parity.
+  execSync(`node "${syncScript}"`, { cwd: repoRoot })
+  assert.ok(existsSync(publicPath), 'sync script must produce the static artifact')
   const canonical = readSkill(canonicalPath)
   const artifact = readSkill(publicPath)
-  assert.equal(artifact, canonical, 'public SKILL.md must be identical to canonical source')
+  assert.equal(artifact, canonical, 'public SKILL.md must be identical to canonical source after sync')
+})
+
+test('static artifact is gitignored (built, not committed)', () => {
+  // Mirrors the install.sh pattern: canonical is committed, static copy is generated.
+  const result = execSync('git check-ignore website/static/install/agent/vllm-sr/SKILL.md', {
+    cwd: repoRoot,
+    encoding: 'utf8',
+  }).trim()
+  assert.ok(result.includes('website/static/install/agent/'), 'static artifact must be gitignored')
 })
 
 test('installation page contains the public SKILL URL', () => {
