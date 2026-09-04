@@ -11,7 +11,19 @@ type ShadowComparisonConfig struct {
 	Enabled   bool               `yaml:"enabled,omitempty"`
 	MaxWaitMS int                `yaml:"max_wait_ms,omitempty"`
 	Budget    ShadowBudgetConfig `yaml:"budget,omitempty"`
+	Judge     ShadowJudgeConfig  `yaml:"judge,omitempty"`
 	Arms      []ShadowArmConfig  `yaml:"arms,omitempty"`
+}
+
+// ShadowJudgeConfig configures the blinded model judge that compares surviving
+// arms (issue #3376 M3). Disabled by default: no judging runs and no judge
+// traffic is produced.
+type ShadowJudgeConfig struct {
+	Enabled        bool   `yaml:"enabled,omitempty"`
+	Model          string `yaml:"model"`
+	Endpoint       string `yaml:"endpoint"`
+	RubricVersion  string `yaml:"rubric_version,omitempty"`
+	TimeoutSeconds int    `yaml:"timeout_seconds,omitempty"`
 }
 
 // ShadowBudgetConfig bounds aggregate shadow resource usage per request

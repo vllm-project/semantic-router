@@ -5,6 +5,7 @@ import (
 
 	"github.com/openai/openai-go"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/shadow"
@@ -49,28 +50,68 @@ func (r *OpenAIRouter) dispatchShadowArms(reqCtx *RequestContext) {
 		if !ok {
 			return
 		}
-		// C1: key resolver wiring lands with the aggregate-budget milestone;
-		// arms are evaluated without Authorization today.
+		// C1/C2: arms evaluate the same normalized request under the budget.
+		// C3: a blinded judge compares the surviving arms (disabled by default).
 		results := shadow.Dispatch(ctx, cfg, params, nil)
-		for _, res := range results {
-			fields := map[string]interface{}{
-				"request_id":        reqCtx.RequestID,
-				"arm":               res.Arm,
-				"model":             res.Model,
-				"ok":                res.Outcome == shadow.OutcomeCompleted,
-				"outcome":           string(res.Outcome),
-				"latency_ms":        res.LatencyMS,
-				"prompt_tokens":     res.PromptTokens,
-				"completion_tokens": res.CompletionTokens,
-			}
-			if res.Outcome == shadow.OutcomeCompleted {
-				logging.ComponentEvent("extproc", "shadow_arm_result", fields)
-			} else {
-				fields["error"] = res.Err
-				logging.ComponentEvent("extproc", "shadow_arm_failed", fields)
-			}
-		}
+		r.observeShadowArms(reqCtx, results)
+		r.judgeShadowArms(ctx, cfg, params, results, reqCtx)
 	}()
+}
+
+// observeShadowArms logs one observability event per arm; the primary response
+// was already decided and is never touched here.
+func (r *OpenAIRouter) observeShadowArms(reqCtx *RequestContext, results []shadow.ArmResult) {
+	for _, res := range results {
+		fields := map[string]interface{}{
+			"request_id":        reqCtx.RequestID,
+			"arm":               res.Arm,
+			"model":             res.Model,
+			"ok":                res.Outcome == shadow.OutcomeCompleted,
+			"outcome":           string(res.Outcome),
+			"latency_ms":        res.LatencyMS,
+			"prompt_tokens":     res.PromptTokens,
+			"completion_tokens": res.CompletionTokens,
+		}
+		if res.Outcome == shadow.OutcomeCompleted {
+			logging.ComponentEvent("extproc", "shadow_arm_result", fields)
+		} else {
+			fields["error"] = res.Err
+			logging.ComponentEvent("extproc", "shadow_arm_failed", fields)
+		}
+	}
+}
+
+// judgeShadowArms runs the blinded comparison when a judge is configured.
+// All judge failures map to an explicit judge outcome and stay in
+// observability/Replay; they never affect the primary response.
+func (r *OpenAIRouter) judgeShadowArms(
+	ctx context.Context,
+	cfg config.ShadowComparisonConfig,
+	params *openai.ChatCompletionNewParams,
+	results []shadow.ArmResult,
+	reqCtx *RequestContext,
+) {
+	if !cfg.Judge.Enabled || cfg.Judge.Model == "" || cfg.Judge.Endpoint == "" {
+		return
+	}
+	judge := shadow.NewJudge(cfg.Judge, cfg.Arms)
+	question, _ := extractUserAndNonUserContent(params)
+	decision := judge.Decide(ctx, question, results)
+	fields := map[string]interface{}{
+		"request_id":     reqCtx.RequestID,
+		"judge_outcome":  string(decision.Outcome),
+		"winner_arm_id":  decision.WinnerArmID,
+		"judge_model":    decision.JudgeModel,
+		"rubric_version": decision.JudgeRubricVersion,
+		"latency_ms":     decision.LatencyMS,
+	}
+	if len(decision.TieArmIDs) > 0 {
+		fields["tie_arm_ids"] = decision.TieArmIDs
+	}
+	if decision.Reason != "" {
+		fields["reason"] = decision.Reason
+	}
+	logging.ComponentEvent("extproc", "shadow_judge_result", fields)
 }
 
 // shadowRequestParams serializes the single normalized semantic request into
