@@ -6,7 +6,7 @@
 from the conversation. Define its labels under
 `routing.signals.user_feedbacks`.
 
-This family is learned: it relies on the feedback detector configured under `global.model_catalog.modules.feedback_detector`.
+This family is learned: it relies on the feedback detector configured under `global.model_catalog.modules.feedback_detector`. Set `feedback_mapping_path` to the model's `label_mapping.json` to load its labels; when unset, the detector reads `id2label` from the model's `config.json`.
 
 ## Key Advantages
 
