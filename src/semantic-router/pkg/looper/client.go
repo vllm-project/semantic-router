@@ -154,6 +154,30 @@ type LogprobsConfig struct {
 //   - logprobsCfg: controls whether to enable logprobs and top_logprobs (nil = disabled)
 //   - accessKey: optional API key for Authorization header (Bearer token)
 func (c *Client) CallModel(ctx context.Context, req *openai.ChatCompletionNewParams, modelName string, streaming bool, iteration int, logprobsCfg *LogprobsConfig, accessKey string) (*ModelResponse, error) {
+	return c.callModel(
+		ctx,
+		req,
+		modelName,
+		streaming,
+		iteration,
+		logprobsCfg,
+		accessKey,
+		c.decisionName,
+		c.fusionDepth,
+	)
+}
+
+func (c *Client) callModel(
+	ctx context.Context,
+	req *openai.ChatCompletionNewParams,
+	modelName string,
+	streaming bool,
+	iteration int,
+	logprobsCfg *LogprobsConfig,
+	accessKey string,
+	decisionName string,
+	fusionDepth int,
+) (*ModelResponse, error) {
 	// Clone and modify the request with the target model
 	modifiedReq := cloneRequest(req)
 	modifiedReq.Model = modelName
@@ -186,7 +210,7 @@ func (c *Client) CallModel(ctx context.Context, req *openai.ChatCompletionNewPar
 	logprobsEnabled := logprobsCfg != nil && logprobsCfg.Enabled
 	endpoint := c.resolveEndpoint()
 	logging.ComponentDebugEvent("looper", "model_call_started", map[string]interface{}{
-		"decision":  c.decisionName,
+		"decision":  decisionName,
 		"model_ref": modelName,
 		"endpoint":  endpoint,
 		"streaming": streaming,
@@ -211,7 +235,7 @@ func (c *Client) CallModel(ctx context.Context, req *openai.ChatCompletionNewPar
 		httpReq.Header.Set("Authorization", "Bearer "+accessKey)
 	}
 
-	c.setInternalRequestHeaders(httpReq, ctx, iteration)
+	c.setInternalRequestHeaders(httpReq, ctx, iteration, decisionName, fusionDepth)
 
 	// Execute request
 	start := time.Now()
@@ -237,7 +261,25 @@ func (c *Client) CallModel(ctx context.Context, req *openai.ChatCompletionNewPar
 		return nil, err
 	}
 	result.LatencyMs = time.Since(start).Milliseconds()
+	c.logModelCallCompleted(decisionName, result)
 	return result, nil
+}
+
+func (c *Client) logModelCallCompleted(decisionName string, result *ModelResponse) {
+	fields := map[string]interface{}{
+		"decision":      decisionName,
+		"model_ref":     result.Model,
+		"content_len":   len(result.Content),
+		"reasoning_len": len(result.ReasoningContent),
+		"streaming":     result.IsStreaming,
+	}
+	if result.IsStreaming {
+		fields["total_tokens"] = result.Usage.TotalTokens
+	} else {
+		fields["avg_logprob"] = result.AverageLogprob
+		fields["avg_margin"] = result.AverageMargin
+	}
+	logging.ComponentDebugEvent("looper", "model_call_completed", fields)
 }
 
 // parseNonStreamingResponse parses a non-streaming JSON response
@@ -278,16 +320,6 @@ func (c *Client) parseNonStreamingResponse(body []byte, modelName string) (*Mode
 	// Extract reasoning content from vLLM extra fields
 	result.ReasoningContent = extractReasoningFromRaw(body)
 
-	logging.ComponentDebugEvent("looper", "model_call_completed", map[string]interface{}{
-		"decision":      c.decisionName,
-		"model_ref":     modelName,
-		"content_len":   len(result.Content),
-		"reasoning_len": len(result.ReasoningContent),
-		"avg_logprob":   result.AverageLogprob,
-		"avg_margin":    result.AverageMargin,
-		"streaming":     false,
-	})
-
 	return result, nil
 }
 
@@ -305,15 +337,6 @@ func (c *Client) parseStreamingResponse(body []byte, modelName string) (*ModelRe
 	result.Content = content
 	result.StreamingChunks = chunks
 	result.Usage = parseStreamingUsage(body)
-
-	logging.ComponentDebugEvent("looper", "model_call_completed", map[string]interface{}{
-		"decision":      c.decisionName,
-		"model_ref":     modelName,
-		"content_len":   len(result.Content),
-		"reasoning_len": len(result.ReasoningContent),
-		"total_tokens":  result.Usage.TotalTokens,
-		"streaming":     true,
-	})
 
 	return result, nil
 }
