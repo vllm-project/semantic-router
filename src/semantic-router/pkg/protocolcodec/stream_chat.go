@@ -143,7 +143,8 @@ func (decoder *chatStreamDecoder) pushFrame(frame []byte) ([]llmprotocol.Event, 
 		return []llmprotocol.Event{event}, nil, err
 	}
 	var chunk chatChunkWire
-	if err := decodeProviderWire(parsed.Data, &chunk, decoder.policy); err != nil {
+	vendorExtensions, err := decodeProviderWireVendorAware(parsed.Data, &chunk, decoder.policy)
+	if err != nil {
 		return nil, nil, err
 	}
 	if err := validateChatStreamChunk(chunk); err != nil {
@@ -157,6 +158,7 @@ func (decoder *chatStreamDecoder) pushFrame(frame []byte) ([]llmprotocol.Event, 
 		return []llmprotocol.Event{event}, nil, err
 	}
 	events, diagnostics, err := decoder.decodeChunkEvents(chunk)
+	appendVendorExtensionDiagnostics(&diagnostics, decoder.policy, llmprotocol.OpenAIChatV1, vendorExtensions)
 	diagnostics = decoder.appendProviderChunkDiagnostics(chunk, diagnostics)
 	return events, diagnostics, err
 }

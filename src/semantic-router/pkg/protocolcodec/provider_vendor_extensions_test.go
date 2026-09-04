@@ -2,6 +2,7 @@ package protocolcodec
 
 import (
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -32,8 +33,40 @@ const azureChatCompletion = `{
   }
 }`
 
+// azureTarget is a canonical-shaped subset: the schema decides what counts as
+// a decoration, so anything Azure adds beyond these fields is a drop.
+type azureTarget struct {
+	ID      string `json:"id"`
+	Object  string `json:"object"`
+	Created int64  `json:"created"`
+	Model   string `json:"model"`
+	Choices []struct {
+		Index        int    `json:"index"`
+		FinishReason string `json:"finish_reason"`
+		Message      struct {
+			Role    string `json:"role"`
+			Content string `json:"content"`
+		} `json:"message"`
+	} `json:"choices"`
+	Usage struct {
+		PromptTokens     int `json:"prompt_tokens"`
+		CompletionTokens int `json:"completion_tokens"`
+		TotalTokens      int `json:"total_tokens"`
+	} `json:"usage"`
+}
+
 func TestStripProviderVendorExtensionsRemovesAzureFields(t *testing.T) {
-	stripped := stripProviderVendorExtensions([]byte(azureChatCompletion), llmprotocol.VendorAzure)
+	stripped, dropped := stripProviderVendorExtensions([]byte(azureChatCompletion), reflect.TypeOf(azureTarget{}))
+
+	want := []string{
+		"choices[].content_filter_results",
+		"prompt_filter_results",
+		"routing",
+		"usage.latency_checkpoint",
+	}
+	if !reflect.DeepEqual(dropped, want) {
+		t.Errorf("dropped = %v, want %v", dropped, want)
+	}
 
 	for _, field := range []string{"prompt_filter_results", "\"routing\"", "content_filter_results", "latency_checkpoint"} {
 		if strings.Contains(string(stripped), field) {
@@ -50,34 +83,70 @@ func TestStripProviderVendorExtensionsRemovesAzureFields(t *testing.T) {
 func TestStripProviderVendorExtensionsLeavesCanonicalBodyUntouched(t *testing.T) {
 	canonical := `{"id":"chatcmpl-1","model":"gpt-4.1-mini","choices":[{"index":0}]}`
 
-	stripped := stripProviderVendorExtensions([]byte(canonical), llmprotocol.VendorAzure)
+	stripped, dropped := stripProviderVendorExtensions([]byte(canonical), reflect.TypeOf(azureTarget{}))
 
+	if dropped != nil {
+		t.Errorf("dropped = %v, want nil", dropped)
+	}
 	if string(stripped) != canonical {
 		t.Errorf("stripped = %s, want the original body unchanged", stripped)
 	}
 }
 
-// A vendor name is only ignored at the path the provider emits it. The same
-// token nested somewhere else is still an unknown field.
-func TestStripProviderVendorExtensionsIsPathScoped(t *testing.T) {
-	body := `{"choices":[{"index":0,"message":{"role":"assistant","routing":"nope"}}]}`
+// Decorations nested inside a canonical object are dropped at their real path,
+// not just at the top level.
+func TestStripProviderVendorExtensionsDropsNestedDecorations(t *testing.T) {
+	body := `{"id":"a","model":"m","choices":[{"index":0,"message":{"role":"assistant","content":"hi","azure_note":"x"}}]}`
 
-	stripped := stripProviderVendorExtensions([]byte(body), llmprotocol.VendorAzure)
+	stripped, dropped := stripProviderVendorExtensions([]byte(body), reflect.TypeOf(azureTarget{}))
 
-	if !strings.Contains(string(stripped), `"routing"`) {
-		t.Error("stripped a routing field that is not at the allowlisted path")
+	want := []string{"choices[].message.azure_note"}
+	if !reflect.DeepEqual(dropped, want) {
+		t.Errorf("dropped = %v, want %v", dropped, want)
+	}
+	if strings.Contains(string(stripped), "azure_note") {
+		t.Error("stripped body still contains the nested decoration")
 	}
 }
 
-func TestStripProviderVendorExtensionsIgnoresUnknownVendor(t *testing.T) {
-	for _, vendor := range []string{"", "not-a-vendor"} {
+func TestProviderVendorExtensionsAllowedOnlyForKnownVendors(t *testing.T) {
+	for _, vendor := range []string{"", "not-a-vendor", "openai"} {
 		t.Run("vendor="+vendor, func(t *testing.T) {
-			stripped := stripProviderVendorExtensions([]byte(azureChatCompletion), vendor)
+			policy := llmprotocol.DefaultPolicy()
+			policy.ResponseVendor = vendor
 
-			if string(stripped) != azureChatCompletion {
-				t.Error("stripped a field for a backend with no vendor allowance")
+			if providerVendorExtensionsAllowed(policy) {
+				t.Errorf("providerVendorExtensionsAllowed(%q) = true, want false", vendor)
 			}
 		})
+	}
+	policy := llmprotocol.DefaultPolicy()
+	policy.ResponseVendor = llmprotocol.VendorAzure
+	if !providerVendorExtensionsAllowed(policy) {
+		t.Error("providerVendorExtensionsAllowed(azure) = false, want true")
+	}
+}
+
+// The point of shape 3: a decoration Azure has not shipped yet must not break
+// the router the way a fixed name list would.
+func TestDecodeProviderWireAcceptsUnanticipatedAzureFields(t *testing.T) {
+	var target azureTarget
+	policy := llmprotocol.DefaultPolicy()
+	policy.ResponseVendor = llmprotocol.VendorAzure
+
+	body := `{"id":"a","object":"chat.completion","created":1,"model":"m",` +
+		`"a_field_azure_ships_next_year":{"nested":true},` +
+		`"choices":[{"index":0,"finish_reason":"stop","message":{"role":"assistant","content":"hi"}}]}`
+
+	dropped, err := decodeProviderWireVendorAware([]byte(body), &target, policy)
+	if err != nil {
+		t.Fatalf("decodeProviderWireVendorAware() error = %v, want nil", err)
+	}
+	if !reflect.DeepEqual(dropped, []string{"a_field_azure_ships_next_year"}) {
+		t.Errorf("dropped = %v, want the unanticipated field reported", dropped)
+	}
+	if target.Model != "m" {
+		t.Errorf("Model = %q, want m", target.Model)
 	}
 }
 
@@ -173,5 +242,35 @@ func TestDecodeProviderWireKeepsTheOffendingFieldOutOfTheClientMessage(t *testin
 	cause := errors.Unwrap(protocolError)
 	if cause == nil || !strings.Contains(cause.Error(), "surprise_field") {
 		t.Errorf("cause = %v, want it to name surprise_field for the operator log", cause)
+	}
+}
+
+// The whole point of dropping rather than rejecting is that the drop is
+// observable. Decoding a decorated Azure response must surface one
+// DiagnosticDropped per decoration.
+func TestDecodeResponseReportsVendorExtensionsAsDiagnostics(t *testing.T) {
+	policy := llmprotocol.DefaultPolicy()
+	policy.ResponseVendor = llmprotocol.VendorAzure
+
+	_, _, diagnostics, err := OpenAIChatCodec{}.DecodeResponse([]byte(azureChatCompletion), policy)
+	if err != nil {
+		t.Fatalf("DecodeResponse() error = %v, want nil", err)
+	}
+
+	dropped := map[string]bool{}
+	for _, diagnostic := range diagnostics {
+		if diagnostic.Action == llmprotocol.DiagnosticDropped {
+			dropped[diagnostic.Field] = true
+		}
+	}
+	for _, field := range []string{
+		"prompt_filter_results",
+		"routing",
+		"choices[].content_filter_results",
+		"usage.latency_checkpoint",
+	} {
+		if !dropped[field] {
+			t.Errorf("no dropped diagnostic for %q; diagnostics = %+v", field, diagnostics)
+		}
 	}
 }

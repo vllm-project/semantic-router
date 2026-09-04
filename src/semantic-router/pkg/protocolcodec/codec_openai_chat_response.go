@@ -9,7 +9,8 @@ import (
 
 func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (llmprotocol.Response, llmprotocol.Envelope, llmprotocol.Diagnostics, error) {
 	var wire chatResponseWire
-	if err := decodeProviderWire(body, &wire, policy); err != nil {
+	vendorExtensions, err := decodeProviderWireVendorAware(body, &wire, policy)
+	if err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
 	}
 	if err := validateChatResponseResource(wire); err != nil {
@@ -20,6 +21,7 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 	}
 	response := decodeChatResponseEnvelope(wire)
 	var diagnostics llmprotocol.Diagnostics
+	appendVendorExtensionDiagnostics(&diagnostics, policy, llmprotocol.OpenAIChatV1, vendorExtensions)
 	appendProviderFieldOmissions(&diagnostics, policy, llmprotocol.OpenAIChatV1, map[string]bool{
 		"choices.message.tool_calls.function.TokenizedArguments": chatChoicesHaveTokenizedArguments(wire.Choices),
 		"kv_transfer": wire.hasLegacyKVTransferMetadata(),
