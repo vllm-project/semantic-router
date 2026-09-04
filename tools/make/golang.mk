@@ -45,6 +45,14 @@ check-go-mod-tidy: ## Check go mod tidy for all Go modules
 			exit 1; \
 		fi
 	@echo "src/semantic-router go mod tidy check passed"
+	@echo "Checking src/semantic-router ONNX module..."
+	@cd src/semantic-router && go mod tidy -modfile=go.onnx.mod && \
+		if ! git diff --exit-code go.onnx.mod go.sum; then \
+			echo "ERROR: go.onnx.mod or the shared go.sum file is not tidy in src/semantic-router. Please run 'go mod tidy -modfile=go.onnx.mod' in src/semantic-router and commit the changes."; \
+			git diff go.onnx.mod go.sum; \
+			exit 1; \
+		fi
+	@echo "src/semantic-router ONNX go mod tidy check passed"
 	@echo "All go mod tidy checks passed"
 
 install-controller-gen: ## Install controller-gen for code generation
