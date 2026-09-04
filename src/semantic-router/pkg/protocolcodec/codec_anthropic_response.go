@@ -86,6 +86,11 @@ func anthropicResponseMetadataDiagnostics(wire anthropicResponseWire, policy llm
 	if len(wire.StopDetails) > 0 && !bytes.Equal(bytes.TrimSpace(wire.StopDetails), []byte("null")) {
 		appendProviderFieldOmission(&diagnostics, policy, llmprotocol.AnthropicMessagesV1, "stop_details", "structured refusal detail has no neutral representation")
 	}
+	if len(wire.ContextManagement) > 0 && !bytes.Equal(bytes.TrimSpace(wire.ContextManagement), []byte("null")) {
+		// Once per response, so a diagnostic is affordable here — unlike
+		// estimated_tokens, which fires per delta (D2).
+		appendProviderFieldOmission(&diagnostics, policy, llmprotocol.AnthropicMessagesV1, "context_management", "context editing echo is request metadata, not model output")
+	}
 	return diagnostics
 }
 

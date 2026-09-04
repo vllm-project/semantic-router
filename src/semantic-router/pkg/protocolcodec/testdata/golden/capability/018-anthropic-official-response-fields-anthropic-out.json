@@ -126,7 +126,13 @@
             },
             "service_tier": "standard"
           }
-        }
+        },
+        "diagnostics": [
+          {
+            "field": "context_management",
+            "action": "dropped"
+          }
+        ]
       }
     },
     {

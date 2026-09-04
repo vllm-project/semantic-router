@@ -102,7 +102,13 @@
             },
             "total_tokens": 3
           }
-        }
+        },
+        "diagnostics": [
+          {
+            "field": "context_management",
+            "action": "dropped"
+          }
+        ]
       }
     },
     {

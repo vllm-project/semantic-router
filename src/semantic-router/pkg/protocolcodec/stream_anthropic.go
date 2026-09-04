@@ -234,7 +234,7 @@ func (decoder *anthropicStreamDecoder) decodeAnthropicMessageDelta(
 	if err := decoder.observeAnthropicStop(wire.Delta); err != nil {
 		return nil, nil, err
 	}
-	diagnostics := decoder.anthropicMessageDeltaDiagnostics(wire.Delta)
+	diagnostics := decoder.anthropicMessageDeltaDiagnostics(wire)
 	if wire.Usage == nil {
 		return nil, diagnostics, nil
 	}
@@ -262,8 +262,17 @@ func (decoder *anthropicStreamDecoder) observeAnthropicStop(delta *anthropicDelt
 	return nil
 }
 
-func (decoder *anthropicStreamDecoder) anthropicMessageDeltaDiagnostics(delta *anthropicDeltaWire) llmprotocol.Diagnostics {
+// Takes the whole frame because context_management sits on the event, as a
+// sibling of delta rather than a member of it.
+func (decoder *anthropicStreamDecoder) anthropicMessageDeltaDiagnostics(wire anthropicEventWire) llmprotocol.Diagnostics {
 	var diagnostics llmprotocol.Diagnostics
+	if len(wire.ContextManagement) > 0 && !bytes.Equal(bytes.TrimSpace(wire.ContextManagement), []byte("null")) {
+		appendProviderFieldOmission(
+			&diagnostics, decoder.policy, llmprotocol.AnthropicMessagesV1,
+			"stream.context_management", "context editing echo is request metadata, not model output",
+		)
+	}
+	delta := wire.Delta
 	if delta == nil {
 		return diagnostics
 	}
