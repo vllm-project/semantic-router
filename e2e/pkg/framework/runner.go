@@ -13,6 +13,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -109,15 +110,33 @@ func (r *Runner) buildAndLoadImages(ctx context.Context) error {
 	return nil
 }
 
-func (r *Runner) restartLocalImageDeployments(ctx context.Context) error {
+func (r *Runner) restartLocalImageDeployments(ctx context.Context, client *kubernetes.Clientset) error {
+	if client == nil {
+		return fmt.Errorf("kube client is required to restart local image deployments")
+	}
 	for _, image := range r.profileCapabilities.LocalImages {
 		for _, target := range image.RolloutRestarts {
+			_, err := client.AppsV1().Deployments(target.Namespace).Get(
+				ctx, target.Deployment, metav1.GetOptions{})
+			if skipMissingLocalImageDeployment(err) {
+				r.log("Skipping restart of %s/%s: deployment not found",
+					target.Namespace, target.Deployment)
+				continue
+			}
+			if err != nil {
+				return fmt.Errorf("check deployment %s/%s: %w",
+					target.Namespace, target.Deployment, err)
+			}
 			if err := r.rolloutRestartDeployment(ctx, target.Namespace, target.Deployment); err != nil {
 				return err
 			}
 		}
 	}
 	return nil
+}
+
+func skipMissingLocalImageDeployment(err error) bool {
+	return apierrors.IsNotFound(err)
 }
 
 func (r *Runner) rolloutRestartDeployment(ctx context.Context, namespace, deployment string) error {

@@ -6,7 +6,8 @@ from collections.abc import Iterator
 from typing import Any
 
 import uvicorn
-from chat_request import ChatMessage, ChatRequest, build_chat_content
+import workflow_chat
+from chat_request import ChatRequest, build_chat_content
 from classify import router as classify_router
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -654,6 +655,22 @@ def generate_responses_tool_stream(body: dict[str, Any]) -> Iterator[str]:
         yield responses_sse(event, {"sequence_number": sequence, **payload})
 
 
+_chat_control = workflow_chat.ChatControlHelpers(
+    chat_contains=chat_contains,
+    chat_has_tool_result=chat_has_tool_result,
+    chat_requests_mock_tool=chat_requests_mock_tool,
+    build_chat_usage=build_chat_usage,
+    build_chat_response=build_chat_response,
+    mock_chat_tool_response=mock_chat_tool_response,
+    generate_chat_stream=generate_chat_stream,
+    generate_chat_tool_stream=generate_chat_tool_stream,
+)
+
+
+def mock_chat_control_response(req: ChatRequest, created_ts: int) -> Any | None:
+    return workflow_chat.mock_chat_control_response(req, created_ts, _chat_control)
+
+
 @app.post("/v1/chat/completions")
 async def chat_completions(request: Request):
     body, error_response = await parse_provider_request(
@@ -707,135 +724,6 @@ async def chat_completions(request: Request):
             "Connection": "keep-alive",
         },
     )
-
-
-def mock_workflow_chat_response(
-    req: ChatRequest, created_ts: int
-) -> dict[str, Any] | None:
-    if is_workflow_planner_request(req):
-        content = build_workflow_plan_content(req)
-        usage = build_chat_usage(req, content)
-        return build_chat_response(req, content, usage, created_ts)
-    if is_workflow_final_synthesis_request(req) or (
-        is_workflow_worker_request(req) and chat_has_tool_result(req)
-    ):
-        content = "The sum of 2 and 2 is 4."
-        usage = build_chat_usage(req, content)
-        return build_chat_response(req, content, usage, created_ts)
-    if is_workflow_worker_request(req) and req.tools and not chat_has_tool_result(req):
-        return mock_workflow_tool_response(req, created_ts)
-    return None
-
-
-def mock_workflow_tool_response(req: ChatRequest, created_ts: int) -> dict[str, Any]:
-    tool_name = "lookup"
-    if req.tools:
-        func = req.tools[0].get("function", {})
-        if (
-            isinstance(func, dict)
-            and isinstance(func.get("name"), str)
-            and func["name"]
-        ):
-            tool_name = func["name"]
-    response = mock_chat_tool_response(req, created_ts)
-    response["choices"][0]["message"]["tool_calls"][0]["function"]["name"] = tool_name
-    return response
-
-
-def message_text(message: ChatMessage) -> str:
-    if isinstance(message.content, str):
-        return message.content
-    return ""
-
-
-def is_workflow_planner_request(req: ChatRequest) -> bool:
-    if not req.response_format or req.response_format.get("type") != "json_object":
-        return False
-    return any(
-        "You are the Router Flow planner" in message_text(message)
-        for message in req.messages
-    )
-
-
-def is_workflow_final_synthesis_request(req: ChatRequest) -> bool:
-    return any(
-        "Router Flow final synthesizer" in message_text(message)
-        for message in req.messages
-    )
-
-
-def is_workflow_worker_request(req: ChatRequest) -> bool:
-    return any("Router Flow step" in message_text(message) for message in req.messages)
-
-
-def extract_worker_models_from_planner_prompt(req: ChatRequest) -> list[str]:
-    marker = "Available worker models, and the only worker models you may use:"
-    for message in req.messages:
-        content = message_text(message)
-        if marker not in content:
-            continue
-        section = content.split(marker, 1)[1]
-        section = section.split("\n\nLimits:", 1)[0]
-        models = [line.strip() for line in section.splitlines() if line.strip()]
-        if models:
-            return models
-    return ["openai/gpt-oss-20b"]
-
-
-def build_workflow_plan_content(req: ChatRequest) -> str:
-    worker_model = extract_worker_models_from_planner_prompt(req)[0]
-    return json.dumps(
-        {
-            "steps": [
-                {
-                    "id": "calculate",
-                    "role": "worker",
-                    "models": [worker_model],
-                    "prompt": "Use the calculate tool to solve the user request.",
-                }
-            ],
-            "final": {"prompt": "Return the final answer from the worker."},
-        },
-        separators=(",", ":"),
-    )
-
-
-def mock_chat_control_response(req: ChatRequest, created_ts: int) -> Any | None:
-    if chat_contains(req, "__mock_provider_error__"):
-        return JSONResponse(
-            status_code=429,
-            content={
-                "error": {
-                    "message": "mock provider rate limit",
-                    "type": "rate_limit_error",
-                    "param": None,
-                    "code": "rate_limit_exceeded",
-                }
-            },
-        )
-    workflow_response = mock_workflow_chat_response(req, created_ts)
-    if workflow_response is not None:
-        return workflow_response
-    if chat_has_tool_result(req):
-        content = "tool result accepted"
-        usage = build_chat_usage(req, content)
-        response = build_chat_response(req, content, usage, created_ts)
-        if req.stream:
-            return StreamingResponse(
-                generate_chat_stream(req, response, content, usage, created_ts),
-                media_type="text/event-stream",
-                headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
-            )
-        return response
-    if chat_requests_mock_tool(req):
-        if req.stream:
-            return StreamingResponse(
-                generate_chat_tool_stream(req, created_ts),
-                media_type="text/event-stream",
-                headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
-            )
-        return mock_chat_tool_response(req, created_ts)
-    return None
 
 
 @app.post("/v1/responses")

@@ -125,7 +125,7 @@ func (r *Runner) prepareRuntime(ctx context.Context, state *runState) error {
 	if err := r.setupProfile(ctx, state); err != nil {
 		return err
 	}
-	if err := r.restartLocalImageDeployments(ctx); err != nil {
+	if err := r.restartLocalImageDeployments(ctx, state.kubeClient); err != nil {
 		return fmt.Errorf("failed to restart local image deployments: %w", err)
 	}
 
