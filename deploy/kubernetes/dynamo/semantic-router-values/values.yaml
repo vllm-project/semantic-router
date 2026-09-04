@@ -325,6 +325,7 @@ config:
       api:
         batch_classification:
           max_batch_size: 100
+          max_concurrency: 8
       observability:
         tracing:
           enabled: false

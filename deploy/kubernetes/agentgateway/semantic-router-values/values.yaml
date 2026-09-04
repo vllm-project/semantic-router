@@ -366,6 +366,7 @@ config:
       api:
         batch_classification:
           max_batch_size: 100
+          max_concurrency: 8
           metrics:
             enabled: true
             detailed_goroutine_tracking: true

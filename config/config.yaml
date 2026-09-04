@@ -1659,6 +1659,7 @@ global:
     api:
       batch_classification:
         max_batch_size: 100
+        max_concurrency: 8
         metrics:
           sample_rate: 1.0
           batch_size_ranges:
