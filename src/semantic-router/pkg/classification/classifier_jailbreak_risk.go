@@ -109,6 +109,34 @@ func isJailbreakRiskAboveThreshold(mapping *JailbreakMapping, positiveLabels []s
 	return riskScore >= threshold, riskScore
 }
 
+// scanJailbreakChunks classifies text one chunk at a time and returns the
+// riskiest chunk's result. The model truncates at its own sequence limit, so a
+// single call only ever sees the start of a long text; every jailbreak surface
+// scans through here so none of them can silently answer on a prefix.
+//
+// A chunk that fails is skipped rather than failing the whole scan, the way the
+// routing path records it as unresolved and keeps going: a genuine match in a
+// later chunk still has to survive a transient failure in an earlier one, or
+// the surfaces disagree again. scanned is false when no chunk produced a
+// result, in which case lastErr carries the final failure if there was one.
+func (c *Classifier) scanJailbreakChunks(ctx context.Context, text string) (result SequenceClassificationResult, scanned bool, lastErr error) {
+	bestRisk := float32(-1)
+	for _, chunk := range jailbreakSignalChunks(text) {
+		chunkResult, err := c.jailbreakInference.Classify(ctx, chunk)
+		if err != nil {
+			logging.Errorf("jailbreak classification failed on one chunk: %v", err)
+			lastErr = err
+			continue
+		}
+		risk := jailbreakRiskScore(c.JailbreakMapping, c.Config.PromptGuard.PositiveLabels, chunkResult)
+		if risk > bestRisk {
+			bestRisk = risk
+			result = chunkResult
+		}
+	}
+	return result, bestRisk >= 0, lastErr
+}
+
 // CheckForJailbreakWithRisk analyzes text for jailbreak attempts and additionally
 // returns a risk score equal to P(jailbreak class), independent of which class the
 // model predicts. It mirrors CheckForJailbreak but is intended for callers (such as
@@ -117,8 +145,15 @@ func isJailbreakRiskAboveThreshold(mapping *JailbreakMapping, positiveLabels []s
 // forwarded to the configured backend so a remote (http_chat/http_classify) call
 // can be cancelled with the caller instead of always running to its own timeout.
 func (c *Classifier) CheckForJailbreakWithRisk(ctx context.Context, text string) (bool, string, float32, float32, error) {
-	threshold := c.Config.PromptGuard.Threshold
+	return c.CheckForJailbreakRiskWithThreshold(ctx, text, c.Config.PromptGuard.Threshold)
+}
 
+// CheckForJailbreakRiskWithThreshold is CheckForJailbreakWithRisk against a
+// caller-supplied threshold, for surfaces that carry their own (the
+// response_jailbreak plugin thresholds per decision). Both share one scan so a
+// caller cannot end up thresholding a different quantity than the routing
+// signal does.
+func (c *Classifier) CheckForJailbreakRiskWithThreshold(ctx context.Context, text string, threshold float32) (bool, string, float32, float32, error) {
 	if !c.IsJailbreakEnabled() {
 		return false, "", 0.0, 0.0, fmt.Errorf("jailbreak detection is not enabled or properly configured")
 	}
@@ -135,26 +170,8 @@ func (c *Classifier) CheckForJailbreakWithRisk(ctx context.Context, text string)
 	// way the routing path records it as unresolved and keeps scanning. A
 	// genuine match in a later chunk still has to survive a transient failure
 	// in an earlier one, or the two paths disagree again.
-	var (
-		result   SequenceClassificationResult
-		bestRisk = float32(-1)
-		lastErr  error
-	)
-	for _, chunk := range jailbreakSignalChunks(text) {
-		chunkResult, err := c.jailbreakInference.Classify(ctx, chunk)
-		if err != nil {
-			logging.Errorf("jailbreak classification failed on one chunk: %v", err)
-			lastErr = err
-			continue
-		}
-		_, risk := isJailbreakRiskAboveThreshold(
-			c.JailbreakMapping, c.Config.PromptGuard.PositiveLabels, chunkResult, threshold)
-		if risk > bestRisk {
-			bestRisk = risk
-			result = chunkResult
-		}
-	}
-	if bestRisk < 0 {
+	result, scanned, lastErr := c.scanJailbreakChunks(ctx, text)
+	if !scanned {
 		if lastErr != nil {
 			return false, "", 0.0, 0.0, fmt.Errorf("jailbreak classification failed: %w", lastErr)
 		}

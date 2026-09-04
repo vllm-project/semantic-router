@@ -375,6 +375,7 @@ const sidebars: SidebarsConfig = {
           label: 'Workflows, Memory & Tools',
           items: [
             'proposals/router-flow-workflows',
+            'proposals/agent-based-routing',
             'proposals/deliberation-algorithms',
             'proposals/agentic-memory',
             'proposals/agentic-rag',
