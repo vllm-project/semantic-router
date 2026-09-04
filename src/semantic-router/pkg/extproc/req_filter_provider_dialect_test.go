@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 func TestResolveOpenAIBackendDialect(t *testing.T) {
@@ -60,6 +61,39 @@ func TestResolveOpenAIBackendDialect(t *testing.T) {
 			assert.Equal(t, tt.wantKind, dialect.kind)
 			assert.Equal(t, tt.wantTopLevelEffort, dialect.usesTopLevelReasoningEffort())
 			assert.Equal(t, tt.wantTopLevelDeepSeekThink, dialect.usesDeepSeekOfficialReasoning())
+		})
+	}
+}
+
+func TestResolveOpenAIBackendDialectAzureHosts(t *testing.T) {
+	for name, baseURL := range map[string]string{
+		"azure openai":     "https://my-resource.openai.azure.com/openai/v1",
+		"ai foundry":       "https://my-resource.services.ai.azure.com/openai/v1",
+		"cognitiveservice": "https://my-resource.cognitiveservices.azure.com/openai/v1",
+	} {
+		t.Run(name, func(t *testing.T) {
+			dialect := resolveOpenAIBackendDialect(&config.ProviderProfile{Type: "openai", BaseURL: baseURL})
+
+			assert.Equal(t, openAIBackendDialectAzureOpenAI, dialect.kind)
+			assert.Equal(t, llmprotocol.VendorAzure, dialect.vendorExtensionProvider())
+			// Azure request shaping is unchanged from the generic dialect.
+			assert.False(t, dialect.usesTopLevelReasoningEffort())
+		})
+	}
+}
+
+// Every other backend keeps the strict contract: no vendor allowance at all.
+func TestResolveOpenAIBackendDialectGrantsNoVendorAllowanceByDefault(t *testing.T) {
+	for name, profile := range map[string]*config.ProviderProfile{
+		"local vllm": nil,
+		"official":   {Type: "openai", BaseURL: "https://api.openai.com/v1"},
+		"openrouter": {Type: "openai", BaseURL: "https://openrouter.ai/api/v1"},
+		"generic":    {Type: "openai", BaseURL: "https://llm.example.com/v1"},
+		// A host that merely mentions azure is not an Azure endpoint.
+		"lookalike": {Type: "openai", BaseURL: "https://azure.example.com/v1"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			assert.Empty(t, resolveOpenAIBackendDialect(profile).vendorExtensionProvider())
 		})
 	}
 }

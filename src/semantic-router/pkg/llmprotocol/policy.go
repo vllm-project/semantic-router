@@ -28,12 +28,22 @@ const (
 	SourceBoundedSameFormat SourcePreservationPolicy = "bounded_same_format"
 )
 
+// VendorAzure names Azure OpenAI and Azure AI Foundry as a response-decoration
+// source. Vendor identifiers are deliberately explicit rather than free-form:
+// a backend only gets an allowance the router knows the shape of.
+const VendorAzure = "azure"
+
 type Policy struct {
 	UnknownFields      UnknownFieldPolicy
 	LossyFeatures      LossyPolicy
 	MissingStableIDs   MissingIDPolicy
 	SourcePreservation SourcePreservationPolicy
-	Limits             Limits
+	// ResponseVendor names the provider whose documented response decorations
+	// the decoder may ignore. Empty is the strict default: every field outside
+	// the canonical schema is rejected. It is set from the resolved backend
+	// dialect, so an allowance never applies to a backend that did not earn it.
+	ResponseVendor string
+	Limits         Limits
 }
 
 type Limits struct {

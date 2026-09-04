@@ -241,8 +241,12 @@ type RequestContext struct {
 
 	// SourceFormat and SemanticRequest are the authoritative public protocol
 	// contract and neutral request.
-	SourceFormat             llmprotocol.WireFormat
-	TargetFormat             llmprotocol.WireFormat
+	SourceFormat llmprotocol.WireFormat
+	TargetFormat llmprotocol.WireFormat
+	// ResponseVendor is the vendor allowance resolved from the selected
+	// backend's dialect. It scopes which documented response decorations the
+	// provider decoder may ignore; empty keeps the strict canonical contract.
+	ResponseVendor           string
 	SemanticRequest          *llmprotocol.Request
 	SemanticResponse         *llmprotocol.Response
 	ProtocolEnvelope         llmprotocol.Envelope
