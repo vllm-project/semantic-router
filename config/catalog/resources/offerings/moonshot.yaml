@@ -1,0 +1,42 @@
+- id: moonshot/kimi-k2-instruct-0905@1.0.0
+  provider: moonshot
+  model: moonshot/kimi-k2-instruct-0905
+  provider_model_id: kimi-k2-0905-preview
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://platform.moonshot.ai/docs/api/chat}
+- id: moonshot/kimi-k2-thinking@1.0.0
+  provider: moonshot
+  model: moonshot/kimi-k2-thinking
+  provider_model_id: kimi-k2-thinking
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://platform.moonshot.ai/docs/api/chat}
+- id: moonshot/kimi-k2.5@1.0.0
+  provider: moonshot
+  model: moonshot/kimi-k2.5
+  provider_model_id: kimi-k2.5
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://platform.moonshot.ai/docs/api/chat}
+- id: moonshot/kimi-k2.6@1.0.0
+  provider: moonshot
+  model: moonshot/kimi-k2.6
+  provider_model_id: kimi-k2.6
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://platform.moonshot.ai/docs/api/chat}
+- id: moonshot/kimi-k2.7-code@1.0.0
+  provider: moonshot
+  model: moonshot/kimi-k2.7-code
+  provider_model_id: kimi-k2.7-code
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://platform.moonshot.ai/docs/api/chat}
+- id: moonshot/kimi-k3@1.0.0
+  provider: moonshot
+  model: moonshot/kimi-k3
+  provider_model_id: kimi-k3
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://platform.moonshot.ai/docs/api/chat}

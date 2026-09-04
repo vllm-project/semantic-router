@@ -1,0 +1,14 @@
+- id: vllm/ernie-4.5-21b-a3b@1.0.0
+  provider: vllm
+  model: baidu/ernie-4.5-21b-a3b
+  provider_model_id: baidu/ERNIE-4.5-21B-A3B-PT
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/baidu/ERNIE-4.5-21B-A3B-PT}
+- id: vllm/ernie-4.5-300b-a47b@1.0.0
+  provider: vllm
+  model: baidu/ernie-4.5-300b-a47b
+  provider_model_id: baidu/ERNIE-4.5-300B-A47B-PT
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/baidu/ERNIE-4.5-300B-A47B-PT}

@@ -1,0 +1,34 @@
+- id: baidu/ernie-4.5-21b-a3b
+  display_name: ERNIE 4.5 21B A3B
+  description: Efficient open-weight ERNIE text MoE model with 3B active parameters.
+  kind: physical
+  publisher: Baidu
+  presentation: {logo: package:baidu, monogram: E, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/baidu/ERNIE-4.5-21B-A3B-PT, license: Apache-2.0}
+  family: ernie-4.5
+  parameter_size: 21B (3B active)
+  released_at: 2025-06-30
+  lifecycle: active
+  limits: {context_window_size: 131072}
+  capabilities: [chat, long_context]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: Baidu ERNIE Team, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/baidu/ERNIE-4.5-21B-A3B-PT}
+  tags: [open_weights, moe, efficient]
+- id: baidu/ernie-4.5-300b-a47b
+  display_name: ERNIE 4.5 300B A47B
+  description: Large open-weight ERNIE text MoE model with 47B active parameters.
+  kind: physical
+  publisher: Baidu
+  presentation: {logo: package:baidu, monogram: E, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/baidu/ERNIE-4.5-300B-A47B-PT, license: Apache-2.0}
+  family: ernie-4.5
+  parameter_size: 300B (47B active)
+  released_at: 2025-06-30
+  lifecycle: active
+  limits: {context_window_size: 131072}
+  capabilities: [chat, long_context]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: Baidu ERNIE Team, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/baidu/ERNIE-4.5-300B-A47B-PT}
+  tags: [open_weights, moe]

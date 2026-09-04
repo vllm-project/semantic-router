@@ -52,8 +52,10 @@ These fields are easy to confuse:
 - backend-ref `provider` supplies provider-specific authentication and path
   defaults. It does not prove that the endpoint implements an API format.
 
-For Responses and Messages backends, a path in `base_url` is retained and the
-protocol path is appended. `chat_path` applies only to Chat Completions.
+For every backend format, `base_url` names the complete upstream API root. Its
+path is retained and the protocol operation suffix is appended exactly once;
+the protocol's default `/v1` base path is used only when the URL has no path.
+`chat_path` applies only to Chat Completions.
 
 ## Client-to-backend matrix
 

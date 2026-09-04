@@ -1,0 +1,84 @@
+- id: vllm/mistral-7b-instruct-v0.3@1.0.0
+  provider: vllm
+  model: mistral/mistral-7b-instruct-v0.3
+  provider_model_id: mistralai/Mistral-7B-Instruct-v0.3
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.3}
+- id: vllm/mistral-nemo-instruct-2407@1.0.0
+  provider: vllm
+  model: mistral/mistral-nemo-instruct-2407
+  provider_model_id: mistralai/Mistral-Nemo-Instruct-2407
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/mistralai/Mistral-Nemo-Instruct-2407}
+- id: vllm/mixtral-8x7b-instruct-v0.1@1.0.0
+  provider: vllm
+  model: mistral/mixtral-8x7b-instruct-v0.1
+  provider_model_id: mistralai/Mixtral-8x7B-Instruct-v0.1
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/mistralai/Mixtral-8x7B-Instruct-v0.1}
+- id: vllm/mixtral-8x22b-instruct-v0.1@1.0.0
+  provider: vllm
+  model: mistral/mixtral-8x22b-instruct-v0.1
+  provider_model_id: mistralai/Mixtral-8x22B-Instruct-v0.1
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/mistralai/Mixtral-8x22B-Instruct-v0.1}
+- id: vllm/mistral-small-3.1-24b-instruct@1.0.0
+  provider: vllm
+  model: mistral/mistral-small-3.1-24b-instruct
+  provider_model_id: mistralai/Mistral-Small-3.1-24B-Instruct-2503
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/mistralai/Mistral-Small-3.1-24B-Instruct-2503}
+- id: vllm/mistral-small-24b-instruct-2501@1.0.0
+  provider: vllm
+  model: mistral/mistral-small-24b-instruct-2501
+  provider_model_id: mistralai/Mistral-Small-24B-Instruct-2501
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/mistralai/Mistral-Small-24B-Instruct-2501}
+- id: vllm/codestral-22b-v0.1@1.0.0
+  provider: vllm
+  model: mistral/codestral-22b-v0.1
+  provider_model_id: mistralai/Codestral-22B-v0.1
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/mistralai/Codestral-22B-v0.1}
+- id: vllm/pixtral-large-instruct-2411@1.0.0
+  provider: vllm
+  model: mistral/pixtral-large-instruct-2411
+  provider_model_id: mistralai/Pixtral-Large-Instruct-2411
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/mistralai/Pixtral-Large-Instruct-2411}
+- id: vllm/mistral-large-instruct-2411@1.0.0
+  provider: vllm
+  model: mistral/mistral-large-instruct-2411
+  provider_model_id: mistralai/Mistral-Large-Instruct-2411
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/mistralai/Mistral-Large-Instruct-2411}
+- id: vllm/magistral-small-2506@1.0.0
+  provider: vllm
+  model: mistral/magistral-small-2506
+  provider_model_id: mistralai/Magistral-Small-2506
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/mistralai/Magistral-Small-2506}
+- id: vllm/codestral-mamba-7b-v0.1@1.0.0
+  provider: vllm
+  model: mistral/codestral-mamba-7b-v0.1
+  provider_model_id: mistralai/Mamba-Codestral-7B-v0.1
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/mistralai/Mamba-Codestral-7B-v0.1}
+- id: vllm/ministral-8b-instruct-2410@1.0.0
+  provider: vllm
+  model: mistral/ministral-8b-instruct-2410
+  provider_model_id: mistralai/Ministral-8B-Instruct-2410
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/mistralai/Ministral-8B-Instruct-2410}

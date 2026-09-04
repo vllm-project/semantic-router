@@ -1,0 +1,42 @@
+- id: xiaomi/mimo-v2-flash
+  display_name: MiMo V2 Flash
+  description: Open-weight Xiaomi MoE model for efficient reasoning and coding agents.
+  kind: physical
+  publisher: Xiaomi
+  presentation: {logo: monogram, monogram: Mi, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/XiaomiMiMo/MiMo-V2-Flash, license: MIT}
+  family: mimo-v2
+  lifecycle: active
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: Xiaomi, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/XiaomiMiMo/MiMo-V2-Flash}
+  tags: [open_weights, reasoning, efficient, moe]
+- id: xiaomi/mimo-v2.5
+  display_name: MiMo V2.5
+  description: Open-weight Xiaomi model for reasoning, coding, and agentic workloads.
+  kind: physical
+  publisher: Xiaomi
+  presentation: {logo: monogram, monogram: Mi, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/XiaomiMiMo/MiMo-V2.5, license: MIT}
+  family: mimo-v2
+  lifecycle: active
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: Xiaomi, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/XiaomiMiMo/MiMo-V2.5}
+  tags: [open_weights, reasoning, coding, agentic]
+- id: xiaomi/mimo-v2.5-pro
+  display_name: MiMo V2.5 Pro
+  description: High-capability open-weight Xiaomi model for complex software agents.
+  kind: physical
+  publisher: Xiaomi
+  presentation: {logo: monogram, monogram: Mi, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/XiaomiMiMo/MiMo-V2.5-Pro, license: MIT}
+  family: mimo-v2
+  lifecycle: active
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: Xiaomi, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/XiaomiMiMo/MiMo-V2.5-Pro}
+  tags: [open_weights, reasoning, coding, agentic]

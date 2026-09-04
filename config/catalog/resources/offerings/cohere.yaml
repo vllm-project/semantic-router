@@ -1,0 +1,35 @@
+- id: cohere/command-r-plus-08-2024@1.0.0
+  provider: cohere
+  model: cohere/command-r-plus-08-2024
+  provider_model_id: command-r-plus-08-2024
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://docs.cohere.com/docs/models}
+- id: cohere/command-a-03-2025@1.0.0
+  provider: cohere
+  model: cohere/command-a-03-2025
+  provider_model_id: command-a-03-2025
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://docs.cohere.com/docs/models}
+- id: cohere/command-a-vision-07-2025@1.0.0
+  provider: cohere
+  model: cohere/command-a-vision-07-2025
+  provider_model_id: command-a-vision-07-2025
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://docs.cohere.com/docs/models}
+- id: cohere/command-a-reasoning-08-2025@1.0.0
+  provider: cohere
+  model: cohere/command-a-reasoning-08-2025
+  provider_model_id: command-a-reasoning-08-2025
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://docs.cohere.com/docs/command-a-reasoning}
+- id: cohere/command-a-plus-05-2026@1.0.0
+  provider: cohere
+  model: cohere/command-a-plus-05-2026
+  provider_model_id: command-a-plus-05-2026
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://docs.cohere.com/docs/command-a-plus}

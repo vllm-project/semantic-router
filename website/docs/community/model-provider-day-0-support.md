@@ -7,7 +7,7 @@ description: Add a built-in model or provider once and generate the Router, CLI,
 
 Built-in support is a validated resource graph, not a name added to several
 independent lists. The repository catalog under `config/catalog/` generates the
-runtime registry, CLI bundle, Dashboard Add Model cards and logos, and the
+runtime registry, CLI bundle, Dashboard Model Hub and Add Model cards, and the
 public [Models page](/models).
 
 ## Choose the smallest change
@@ -21,26 +21,43 @@ public [Models page](/models).
 
 A provider card is not a claim that every model is built in. A built-in model
 has a validated Model Card, and a hosted model is selectable only when an
-offering binds that model to a provider.
+offering binds that model to a provider. Every active physical Model Card must
+therefore have at least one offering. Virtual recipes are different: their
+recommended pools may name operator-defined custom models and are not foreign
+keys into the built-in catalog.
 
 ## Add a model
 
 1. Add or update a focused family file under
-   `config/catalog/resources/models/`. Record intrinsic facts only: canonical
-   ID, revision, limits, modalities, capabilities, protocols, lifecycle, and
-   reasoning-family reference.
-2. Add an `OfferingDefinition` when vLLM-SR should know a provider model ID,
-   protocol restriction, price, or other provider-specific fact.
+   `config/catalog/resources/models/single/`. Record intrinsic facts only:
+   canonical ID, publisher and presentation, distribution source/license,
+   revision, limits, modalities, capabilities, protocols, lifecycle, and
+   reasoning-family reference. Recipe-backed logical models belong in
+   `models/virtual/` instead.
+2. Add an `OfferingDefinition` under `config/catalog/resources/offerings/`
+   when vLLM-SR should know a provider model ID, protocol restriction, price,
+   or other provider-specific fact.
 3. Reuse a reasoning family. Add a new family only when the request projection
    itself is new; do not duplicate a built-in family in user configuration.
-4. Add benchmark records only when the result is attributable and
-   redistributable. Keep each benchmark version and raw metric explicit.
+4. Add benchmark records under `evaluations/single/` only when the result is
+   attributable to a primary model source and redistributable. Keep each
+   benchmark version, exact subject, and raw metric explicit. Virtual-model
+   recipe runs use the identical schema under `evaluations/virtual/`.
 5. Add conformance fixtures for capabilities or protocol behavior claimed by
    the card/offering.
 
 Model IDs are namespaced, for example `organization/model`. Benchmark and
 index IDs use full semantic versions. A changed dataset, grader, prompt
 protocol, or aggregation rule requires a new benchmark version.
+
+The default intelligence index uses MMLU-Pro, GPQA Diamond, Humanity's Last
+Exam, SWE-bench Verified, and Terminal-Bench 2.1 at equal weight. It emits a
+headline score only at 60% coverage. A new model may ship with less evidence;
+the Hub then shows the available components and `Not yet measured` rather than
+inventing a value. Two available values for one model and versioned metric are
+rejected. Vendor-published results retain their exact model variant, reasoning
+mode, tool mode, and harness metadata and are labeled claimed; only a frozen
+vLLM-SR run with its artifact can be labeled reproduced.
 
 ## Add a provider
 
@@ -105,6 +122,11 @@ routing:
 
 Built-in reasoning comes from that card. A `providers.models[].reasoning`
 block is accepted only when `catalog` is omitted for a custom model.
+
+Custom cards may also declare optional `publisher`, `presentation`, and
+`distribution` metadata. That lets a private or newly released model render as
+a complete effective card without adding a repository resource; none of these
+fields stores credentials.
 
 For a private model, omit `catalog`. Its alias is its local card identity, and
 both reasoning and evaluations remain optional:

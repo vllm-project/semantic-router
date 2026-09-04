@@ -64,23 +64,26 @@ type CanonicalProjections struct {
 
 // RoutingModel defines the logical model catalog available to routing decisions.
 type RoutingModel struct {
-	Name              string                        `yaml:"name"`
-	DisplayName       string                        `yaml:"display_name,omitempty"`
-	Family            string                        `yaml:"family,omitempty"`
-	Revision          string                        `yaml:"revision,omitempty"`
-	ReleasedAt        string                        `yaml:"released_at,omitempty"`
-	KnowledgeCutoff   string                        `yaml:"knowledge_cutoff,omitempty"`
-	Lifecycle         string                        `yaml:"lifecycle,omitempty"`
-	ParamSize         string                        `yaml:"param_size,omitempty"`
-	ContextWindowSize int                           `yaml:"context_window_size,omitempty"`
-	MaxOutputTokens   int                           `yaml:"max_output_tokens,omitempty"`
-	Description       string                        `yaml:"description,omitempty"`
-	Capabilities      []string                      `yaml:"capabilities,omitempty"`
-	LoRAs             []LoRAAdapter                 `yaml:"loras,omitempty"`
-	Modalities        *modelcatalog.Modalities      `yaml:"modalities,omitempty"`
-	Modality          string                        `yaml:"modality,omitempty"`
-	Tags              []string                      `yaml:"tags,omitempty"`
-	Evaluations       []modelcatalog.UserEvaluation `yaml:"evaluations,omitempty"`
+	Name              string                             `yaml:"name"`
+	DisplayName       string                             `yaml:"display_name,omitempty"`
+	Publisher         string                             `yaml:"publisher,omitempty"`
+	Presentation      *modelcatalog.ProviderPresentation `yaml:"presentation,omitempty"`
+	Distribution      *modelcatalog.ModelDistribution    `yaml:"distribution,omitempty"`
+	Family            string                             `yaml:"family,omitempty"`
+	Revision          string                             `yaml:"revision,omitempty"`
+	ReleasedAt        string                             `yaml:"released_at,omitempty"`
+	KnowledgeCutoff   string                             `yaml:"knowledge_cutoff,omitempty"`
+	Lifecycle         string                             `yaml:"lifecycle,omitempty"`
+	ParamSize         string                             `yaml:"param_size,omitempty"`
+	ContextWindowSize int                                `yaml:"context_window_size,omitempty"`
+	MaxOutputTokens   int                                `yaml:"max_output_tokens,omitempty"`
+	Description       string                             `yaml:"description,omitempty"`
+	Capabilities      []string                           `yaml:"capabilities,omitempty"`
+	LoRAs             []LoRAAdapter                      `yaml:"loras,omitempty"`
+	Modalities        *modelcatalog.Modalities           `yaml:"modalities,omitempty"`
+	Modality          string                             `yaml:"modality,omitempty"`
+	Tags              []string                           `yaml:"tags,omitempty"`
+	Evaluations       []modelcatalog.UserEvaluation      `yaml:"evaluations,omitempty"`
 }
 
 func isCanonicalConfig(raw map[string]interface{}) bool {
@@ -197,13 +200,22 @@ func canonicalProviderModelIndex(
 ) (map[string]CanonicalProviderModel, map[string]struct{}, error) {
 	aliases := make(map[string]CanonicalProviderModel, len(models))
 	cardTargets := make(map[string]struct{}, len(models))
+	catalogBackedTargets := make(map[string]bool, len(models))
 	for index, model := range models {
 		cardID, err := validateCanonicalProviderModel(model, index, cards, aliases)
 		if err != nil {
 			return nil, nil, err
 		}
+		catalogBacked := strings.TrimSpace(model.Catalog) != ""
+		if existing, duplicate := catalogBackedTargets[cardID]; duplicate && existing != catalogBacked {
+			return nil, nil, fmt.Errorf(
+				"providers.models[%d] makes model card %q ambiguous: it cannot represent both a catalog-backed and custom model",
+				index, cardID,
+			)
+		}
 		aliases[model.Name] = model
 		cardTargets[cardID] = struct{}{}
+		catalogBackedTargets[cardID] = catalogBacked
 	}
 	return aliases, cardTargets, nil
 }

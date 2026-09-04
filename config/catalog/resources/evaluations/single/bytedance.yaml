@@ -1,0 +1,14 @@
+- id: bytedance/seed-oss-36b-instruct-model-card@1.0.0
+  model: bytedance/seed-oss-36b-instruct
+  subject:
+    variant: Seed-OSS-36B-Instruct
+    hle_mode: official_model_card
+    swe_harness: OpenHands
+    source_kind: official_model_card
+  metrics:
+    tiger-ai-lab/mmlu-pro@1.0.0#accuracy: 0.827
+    idavidrein/gpqa-diamond@1.0.0#accuracy: 0.714
+    cais/humanitys-last-exam@1.0.0#accuracy: 0.101
+    swe-bench/verified@1.0.0#resolved: 0.560
+  status: available
+  evidence: {provenance: vendor_claimed, verification: claimed, source: https://huggingface.co/ByteDance-Seed/Seed-OSS-36B-Instruct, redistributable: true}

@@ -23,14 +23,18 @@ func (registry *Registry) ResolveOperationPath(providerID, protocolID, operation
 	if !containsString(provider.SupportedOperations, operationKey) {
 		return "", fmt.Errorf("provider %q does not support operation %q", providerID, operationKey)
 	}
-	operationPath, err := registry.ResolveProtocolOperationPath(protocolID, operationID)
+	protocol, ok := registry.Protocol(protocolID)
+	if !ok {
+		return "", fmt.Errorf("unknown protocol %q", protocolID)
+	}
+	operationPath, err := resolveProtocolOperationPath(protocol, operationID)
 	if err != nil {
 		return "", err
 	}
 	if override := provider.PathOverrides[operationKey]; override != "" {
-		operationPath = override
+		return joinBasePath(basePath, override), nil
 	}
-	return joinBasePath(basePath, operationPath), nil
+	return joinProtocolOperationPath(basePath, protocol.DefaultBasePath, operationPath), nil
 }
 
 // ResolveProtocolOperationPath returns the canonical wire path declared by a
@@ -40,21 +44,34 @@ func (registry *Registry) ResolveProtocolOperationPath(protocolID, operationID s
 	if !ok {
 		return "", fmt.Errorf("unknown protocol %q", protocolID)
 	}
+	return resolveProtocolOperationPath(protocol, operationID)
+}
+
+func resolveProtocolOperationPath(protocol ProtocolDefinition, operationID string) (string, error) {
 	for _, operation := range protocol.Operations {
 		if operation.ID == operationID {
 			return operation.Path, nil
 		}
 	}
-	return "", fmt.Errorf("protocol %q has no %q operation", protocolID, operationID)
+	return "", fmt.Errorf("protocol %q has no %q operation", protocol.ID, operationID)
+}
+
+func joinProtocolOperationPath(basePath, defaultBasePath, operationPath string) string {
+	basePath = strings.TrimRight(basePath, "/")
+	if basePath == "" {
+		return operationPath
+	}
+	defaultBasePath = strings.TrimRight(defaultBasePath, "/")
+	if defaultBasePath != "" && defaultBasePath != "/" {
+		operationPath = strings.TrimPrefix(operationPath, defaultBasePath)
+	}
+	return joinBasePath(basePath, operationPath)
 }
 
 func joinBasePath(basePath, operationPath string) string {
 	basePath = strings.TrimRight(basePath, "/")
 	if basePath == "" {
 		return operationPath
-	}
-	if strings.HasSuffix(basePath, "/v1") && strings.HasPrefix(operationPath, "/v1/") {
-		return basePath + strings.TrimPrefix(operationPath, "/v1")
 	}
 	return basePath + operationPath
 }

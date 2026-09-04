@@ -1,0 +1,14 @@
+- id: deepseek/deepseek-v4-flash@1.0.0
+  provider: deepseek
+  model: deepseek/deepseek-v4-flash
+  provider_model_id: deepseek-v4-flash
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://api-docs.deepseek.com/quick_start/pricing}
+- id: deepseek/deepseek-v4-pro@1.0.0
+  provider: deepseek
+  model: deepseek/deepseek-v4-pro
+  provider_model_id: deepseek-v4-pro
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://api-docs.deepseek.com/quick_start/pricing}

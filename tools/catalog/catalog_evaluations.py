@@ -337,6 +337,7 @@ def validate_offerings(
     models: dict[str, dict[str, Any]],
     protocol_ids: set[str],
 ) -> None:
+    offered_models: set[str] = set()
     for index, item in enumerate(items):
         path = f"offerings[{index}]"
         _reject_unknown(
@@ -374,6 +375,19 @@ def validate_offerings(
             )
         if any(protocol not in model["protocols"] for protocol in protocols):
             raise CatalogBuildError(f"{path}.protocols is not supported by its model")
+        offered_models.add(str(item["model"]))
+    missing = sorted(
+        model_id
+        for model_id, model in models.items()
+        if model.get("kind") == "physical"
+        and model.get("lifecycle") != "removed"
+        and model_id not in offered_models
+    )
+    if missing:
+        raise CatalogBuildError(
+            "physical models require at least one provider offering: "
+            + ", ".join(missing)
+        )
 
 
 def validate_evaluations(
@@ -381,6 +395,7 @@ def validate_evaluations(
     model_ids: set[str],
     metrics: dict[str, dict[str, Any]],
 ) -> None:
+    available_metrics: dict[tuple[str, str], str] = {}
     for index, item in enumerate(items):
         path = f"evaluations[{index}]"
         _reject_unknown(
@@ -401,6 +416,16 @@ def validate_evaluations(
         values = _mapping(item.get("metrics", {}), f"{path}.metrics")
         _validate_evaluation_values(values, path, metrics)
         _validate_evaluation_evidence(item, values, path)
+        if item.get("status") == "available":
+            for metric_id in values:
+                key = (str(item["model"]), metric_id)
+                previous = available_metrics.get(key)
+                if previous is not None:
+                    raise CatalogBuildError(
+                        f"{path} conflicts with {previous}: one available value is "
+                        f"allowed per model and benchmark metric"
+                    )
+                available_metrics[key] = path
 
 
 def _validate_evaluation_values(

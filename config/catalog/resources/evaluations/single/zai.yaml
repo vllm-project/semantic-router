@@ -1,0 +1,59 @@
+- id: zai/glm-4.5-model-card@1.0.0
+  model: zai/glm-4.5
+  subject:
+    variant: GLM-4.5
+    hle_mode: no_tools
+    source_kind: official_model_card
+  metrics:
+    tiger-ai-lab/mmlu-pro@1.0.0#accuracy: 0.846
+    cais/humanitys-last-exam@1.0.0#accuracy: 0.0832
+  status: available
+  evidence: {provenance: vendor_claimed, verification: claimed, source: https://huggingface.co/zai-org/GLM-4.5, redistributable: true}
+- id: zai/glm-4.7-model-card@1.0.0
+  model: zai/glm-4.7
+  subject:
+    variant: GLM-4.7
+    hle_mode: no_tools
+    source_kind: official_model_card
+  metrics:
+    tiger-ai-lab/mmlu-pro@1.0.0#accuracy: 0.843
+    idavidrein/gpqa-diamond@1.0.0#accuracy: 0.857
+    cais/humanitys-last-exam@1.0.0#accuracy: 0.248
+    swe-bench/verified@1.0.0#resolved: 0.738
+  status: available
+  evidence: {provenance: vendor_claimed, verification: claimed, source: https://huggingface.co/zai-org/GLM-4.7, redistributable: true}
+- id: zai/glm-5-model-card@1.0.0
+  model: zai/glm-5
+  subject:
+    variant: GLM-5
+    hle_mode: no_tools
+    source_kind: official_model_card
+  metrics:
+    idavidrein/gpqa-diamond@1.0.0#accuracy: 0.860
+    cais/humanitys-last-exam@1.0.0#accuracy: 0.305
+    swe-bench/verified@1.0.0#resolved: 0.778
+  status: available
+  evidence: {provenance: vendor_claimed, verification: claimed, source: https://huggingface.co/zai-org/GLM-5, redistributable: true}
+- id: zai/glm-5.2-model-card@1.0.0
+  model: zai/glm-5.2
+  subject:
+    variant: GLM-5.2
+    hle_mode: no_tools
+    terminal_harness: Terminus-2
+    source_kind: official_model_card
+  metrics:
+    idavidrein/gpqa-diamond@1.0.0#accuracy: 0.912
+    cais/humanitys-last-exam@1.0.0#accuracy: 0.405
+    harbor/terminal-bench@2.1.0#resolved: 0.810
+  status: available
+  evidence: {provenance: vendor_claimed, verification: claimed, source: https://huggingface.co/zai-org/GLM-5.2, redistributable: true}
+- id: zai/glm-5.3-model-card@1.0.0
+  model: zai/glm-5.3
+  subject:
+    variant: GLM-5.3
+    terminal_harness: Claude Code 2.1.207
+    source_kind: official_model_card
+  metrics:
+    harbor/terminal-bench@2.1.0#resolved: 0.882
+  status: available
+  evidence: {provenance: vendor_claimed, verification: claimed, source: https://huggingface.co/zai-org/GLM-5.3, redistributable: true}

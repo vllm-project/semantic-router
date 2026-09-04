@@ -211,10 +211,29 @@ export interface ProvidersConfig {
 
 export interface RoutingModelCard {
   name: string
+  display_name?: string
+  publisher?: string
+  presentation?: {
+    logo: string
+    monogram: string
+    monochrome: boolean
+  }
+  distribution?: {
+    type: 'proprietary_api' | 'open_weights' | 'router_recipe'
+    source: string
+    license?: string
+  }
+  family?: string
+  revision?: string
+  released_at?: string
+  knowledge_cutoff?: string
+  lifecycle?: 'experimental' | 'active' | 'deprecated' | 'removed'
   param_size?: string
   context_window_size?: number
+  max_output_tokens?: number
   description?: string
   capabilities?: string[]
+  modalities?: { input: string[]; output: string[] }
   loras?: LoRAAdapter[]
   tags?: string[]
   evaluations?: ModelEvaluationConfig[]

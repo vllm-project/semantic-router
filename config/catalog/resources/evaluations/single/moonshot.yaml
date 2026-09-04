@@ -1,0 +1,40 @@
+- id: moonshot/kimi-k2-instruct-model-card@1.0.0
+  model: moonshot/kimi-k2-instruct
+  subject:
+    variant: Kimi-K2-Instruct
+    gpqa_mode: avg_at_8
+    hle_mode: text_only
+    swe_harness: bash_editor_single_attempt
+    source_kind: official_model_card
+  metrics:
+    tiger-ai-lab/mmlu-pro@1.0.0#accuracy: 0.811
+    idavidrein/gpqa-diamond@1.0.0#accuracy: 0.751
+    cais/humanitys-last-exam@1.0.0#accuracy: 0.047
+    swe-bench/verified@1.0.0#resolved: 0.658
+  status: available
+  evidence: {provenance: vendor_claimed, verification: claimed, source: https://huggingface.co/moonshotai/Kimi-K2-Instruct, redistributable: true}
+- id: moonshot/kimi-k2.5-model-card@1.0.0
+  model: moonshot/kimi-k2.5
+  subject:
+    variant: Kimi-K2.5
+    hle_mode: full_no_tools
+    source_kind: official_model_card
+  metrics:
+    tiger-ai-lab/mmlu-pro@1.0.0#accuracy: 0.871
+    idavidrein/gpqa-diamond@1.0.0#accuracy: 0.876
+    cais/humanitys-last-exam@1.0.0#accuracy: 0.301
+    swe-bench/verified@1.0.0#resolved: 0.768
+  status: available
+  evidence: {provenance: vendor_claimed, verification: claimed, source: https://huggingface.co/moonshotai/Kimi-K2.5, redistributable: true}
+- id: moonshot/kimi-k2.6-model-card@1.0.0
+  model: moonshot/kimi-k2.6
+  subject:
+    variant: Kimi-K2.6
+    hle_mode: full_no_tools
+    source_kind: official_model_card
+  metrics:
+    idavidrein/gpqa-diamond@1.0.0#accuracy: 0.905
+    cais/humanitys-last-exam@1.0.0#accuracy: 0.347
+    swe-bench/verified@1.0.0#resolved: 0.802
+  status: available
+  evidence: {provenance: vendor_claimed, verification: claimed, source: https://huggingface.co/moonshotai/Kimi-K2.6, redistributable: true}

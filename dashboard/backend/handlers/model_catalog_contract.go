@@ -95,7 +95,13 @@ func validateModelCatalogEnvelope(envelope modelCatalogEnvelope) error {
 	if err := validateCatalogHeaders(envelope.Catalogs, models, indices); err != nil {
 		return err
 	}
-	if err := validateCatalogOfferings(envelope.Offerings, providers, models, protocols); err != nil {
+	if err := validateCatalogOfferings(
+		envelope.Offerings,
+		providers,
+		models,
+		protocols,
+		envelope.Models,
+	); err != nil {
 		return err
 	}
 	if err := validateCatalogEvaluations(envelope.Evaluations, models, metrics); err != nil {
@@ -141,6 +147,7 @@ func validateCatalogProtocols(values []modelcatalog.ProtocolDefinition) (map[str
 	ids := make(map[string]struct{}, len(values))
 	for _, protocol := range values {
 		if protocol.ID == "" || protocol.DisplayName == "" || protocol.WireFormat == "" ||
+			!strings.HasPrefix(protocol.DefaultBasePath, "/") ||
 			len(protocol.Operations) == 0 || len(protocol.Capabilities) == 0 {
 			return nil, fmt.Errorf("malformed protocol")
 		}
@@ -151,6 +158,8 @@ func validateCatalogProtocols(values []modelcatalog.ProtocolDefinition) (map[str
 		operations := map[string]struct{}{}
 		for _, operation := range protocol.Operations {
 			if operation.ID == "" || !strings.HasPrefix(operation.Path, "/") ||
+				!(operation.Path == strings.TrimRight(protocol.DefaultBasePath, "/") ||
+					strings.HasPrefix(operation.Path, strings.TrimRight(protocol.DefaultBasePath, "/")+"/")) ||
 				(operation.Method != "GET" && operation.Method != "POST" && operation.Method != "DELETE") {
 				return nil, fmt.Errorf("malformed protocol operation")
 			}
@@ -183,7 +192,7 @@ func validateCatalogProviders(
 			len(provider.SupportedOperations) == 0 ||
 			provider.Presentation.Logo == "" || provider.Presentation.Monogram == "" ||
 			!oneOf(provider.Auth.Strategy, "none", "bearer", "api_key_header") ||
-			(provider.ReasoningTransport != "" && !oneOf(string(provider.ReasoningTransport), "chat_template_kwargs", "top_level_effort", "deepseek_thinking")) ||
+			(provider.ReasoningTransport != "" && !oneOf(string(provider.ReasoningTransport), "chat_template_kwargs", "top_level_effort", "thinking_object", "deepseek_thinking")) ||
 			!oneOf(provider.Conformance.Status, "unverified", "fixture_verified", "live_verified") {
 			return nil, fmt.Errorf("malformed provider")
 		}
@@ -302,12 +311,19 @@ func validateCatalogModels(
 	ids := make(map[string]struct{}, len(values))
 	for _, model := range values {
 		if model.ID == "" || model.DisplayName == "" || model.Description == "" ||
-			!oneOf(model.Kind, "physical", "virtual") || model.Family == "" ||
+			!oneOf(model.Kind, "physical", "virtual") || model.Publisher == "" ||
+			model.Presentation.Logo == "" || model.Presentation.Monogram == "" ||
+			!validCatalogPresentationURL(model.Presentation.Logo) ||
+			!oneOf(model.Distribution.Type, "proprietary_api", "open_weights", "router_recipe") ||
+			!validHTTPSURL(model.Distribution.Source) ||
+			(model.Distribution.Type == "open_weights" && model.Distribution.License == "") ||
+			model.Family == "" ||
 			!oneOf(model.Lifecycle, "experimental", "active", "deprecated", "removed") ||
 			len(model.Capabilities) == 0 || len(model.Modalities.Input) == 0 ||
 			len(model.Modalities.Output) == 0 || len(model.Protocols) == 0 ||
 			model.Verification.Authority == "" ||
-			!oneOf(model.Verification.Status, "claimed", "imported", "reproduced") {
+			!oneOf(model.Verification.Status, "claimed", "imported", "reproduced") ||
+			(model.Verification.Source != "" && !validHTTPSURL(model.Verification.Source)) {
 			return nil, fmt.Errorf("malformed model")
 		}
 		if _, exists := ids[model.ID]; exists {
@@ -327,8 +343,13 @@ func validateCatalogModels(
 		if model.Kind == "virtual" &&
 			(model.Generation < 1 || model.PolicyVersion == "" || model.Asset == "" ||
 				model.Entrypoint == "" || model.Recipe == "" || len(model.Traits) == 0 ||
-				!validModelCatalogRoles(model.Roles) || !validModelCatalogDigest(model.Verification.AssetSHA256)) {
+				model.Distribution.Type != "router_recipe" || !validModelCatalogRoles(model.Roles) ||
+				!validModelCatalogDigest(model.Verification.AssetSHA256)) {
 			return nil, fmt.Errorf("malformed virtual model")
+		}
+		if model.Kind == "physical" &&
+			(model.Distribution.Type == "router_recipe" || model.Verification.Source == "") {
+			return nil, fmt.Errorf("malformed physical model")
 		}
 	}
 	return ids, nil
@@ -337,8 +358,10 @@ func validateCatalogModels(
 func validateCatalogOfferings(
 	values []modelcatalog.OfferingDefinition,
 	providers, models, protocols map[string]struct{},
+	modelDefinitions []modelcatalog.ModelCard,
 ) error {
 	seen := map[string]struct{}{}
+	offeredModels := map[string]struct{}{}
 	for _, offering := range values {
 		if offering.ID == "" || offering.ProviderModelID == "" || len(offering.Protocols) == 0 ||
 			!oneOf(offering.Lifecycle, "experimental", "active", "deprecated", "removed") ||
@@ -355,10 +378,19 @@ func validateCatalogOfferings(
 		if _, ok := models[offering.Model]; !ok {
 			return fmt.Errorf("offering model is unknown")
 		}
+		offeredModels[offering.Model] = struct{}{}
 		for _, protocol := range offering.Protocols {
 			if _, ok := protocols[protocol]; !ok {
 				return fmt.Errorf("offering protocol is unknown")
 			}
+		}
+	}
+	for _, model := range modelDefinitions {
+		if model.Kind != "physical" || model.Lifecycle == "removed" {
+			continue
+		}
+		if _, ok := offeredModels[model.ID]; !ok {
+			return fmt.Errorf("physical model has no provider offering")
 		}
 	}
 	return nil
@@ -400,8 +432,9 @@ func validateCatalogEvaluations(
 	metrics map[string]modelcatalog.BenchmarkMetric,
 ) error {
 	seen := map[string]struct{}{}
+	availableMetrics := map[string]struct{}{}
 	for _, evaluation := range values {
-		if evaluation.ID == "" || evaluation.MeasuredAt == "" ||
+		if evaluation.ID == "" ||
 			!oneOf(evaluation.Status, "available", "missing", "failed", "not_applicable", "withheld") ||
 			!oneOf(evaluation.Evidence.Provenance, "vendor_claimed", "third_party", "vllm_sr_reproduced", "operator") ||
 			!oneOf(evaluation.Evidence.Verification, "claimed", "imported", "reproduced") ||
@@ -422,6 +455,13 @@ func validateCatalogEvaluations(
 			metric, ok := metrics[metricID]
 			if !ok || !finite(value) || value < metric.Range[0] || value > metric.Range[1] {
 				return fmt.Errorf("evaluation metric is invalid")
+			}
+			if evaluation.Status == "available" {
+				key := evaluation.Model + "#" + metricID
+				if _, duplicate := availableMetrics[key]; duplicate {
+					return fmt.Errorf("evaluation metric has multiple available values")
+				}
+				availableMetrics[key] = struct{}{}
 			}
 		}
 	}

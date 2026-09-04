@@ -1,0 +1,215 @@
+- id: deepseek/deepseek-v3.1
+  display_name: DeepSeek V3.1
+  description: Hybrid-reasoning open-weight DeepSeek MoE model for tools and agents.
+  kind: physical
+  publisher: DeepSeek
+  presentation: {logo: package:deepseek, monogram: D, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/deepseek-ai/DeepSeek-V3.1, license: MIT}
+  family: deepseek-v3
+  parameter_size: 671B (37B active)
+  lifecycle: active
+  limits: {context_window_size: 131072}
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities: {input: [text], output: [text]}
+  reasoning_family: deepseek
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: DeepSeek, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/deepseek-ai/DeepSeek-V3.1}
+  tags: [open_weights, reasoning, moe, agentic]
+- id: deepseek/deepseek-v3.2-exp
+  display_name: DeepSeek V3.2 Exp
+  description: Experimental sparse-attention DeepSeek model for reasoning and agents.
+  kind: physical
+  publisher: DeepSeek
+  presentation: {logo: package:deepseek, monogram: D, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/deepseek-ai/DeepSeek-V3.2-Exp, license: MIT}
+  family: deepseek-v3
+  parameter_size: 671B (37B active)
+  lifecycle: active
+  limits: {context_window_size: 131072}
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities: {input: [text], output: [text]}
+  reasoning_family: deepseek
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: DeepSeek, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/deepseek-ai/DeepSeek-V3.2-Exp}
+  tags: [open_weights, reasoning, moe, experimental]
+- id: deepseek/deepseek-coder-v2-instruct
+  display_name: DeepSeek Coder V2 Instruct
+  description: Large open-weight MoE coding model for software tasks.
+  kind: physical
+  publisher: DeepSeek
+  presentation: {logo: package:deepseek, monogram: D, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/deepseek-ai/DeepSeek-Coder-V2-Instruct, license: DeepSeek-Model-License}
+  family: deepseek-coder-v2
+  parameter_size: 236B (21B active)
+  lifecycle: active
+  limits: {context_window_size: 131072}
+  capabilities: [chat, tools, structured_output, coding, long_context]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: DeepSeek, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/deepseek-ai/DeepSeek-Coder-V2-Instruct}
+  tags: [open_weights, coding, moe, previous_generation]
+- id: deepseek/deepseek-coder-v2-lite-instruct
+  display_name: DeepSeek Coder V2 Lite Instruct
+  description: Efficient open-weight DeepSeek coding MoE model.
+  kind: physical
+  publisher: DeepSeek
+  presentation: {logo: package:deepseek, monogram: D, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct, license: DeepSeek-Model-License}
+  family: deepseek-coder-v2
+  parameter_size: 16B (2.4B active)
+  lifecycle: active
+  limits: {context_window_size: 131072}
+  capabilities: [chat, tools, structured_output, coding, long_context]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: DeepSeek, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct}
+  tags: [open_weights, coding, moe, efficient]
+- id: deepseek/deepseek-v2-chat
+  display_name: DeepSeek V2 Chat
+  description: Previous-generation DeepSeek MoE chat model.
+  kind: physical
+  publisher: DeepSeek
+  presentation: {logo: package:deepseek, monogram: D, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/deepseek-ai/DeepSeek-V2-Chat, license: DeepSeek-Model-License}
+  family: deepseek-v2
+  parameter_size: 236B (21B active)
+  lifecycle: active
+  limits: {context_window_size: 131072}
+  capabilities: [chat, tools, structured_output, long_context]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: DeepSeek, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/deepseek-ai/DeepSeek-V2-Chat}
+  tags: [open_weights, moe, previous_generation]
+- id: deepseek/deepseek-v2-lite-chat
+  display_name: DeepSeek V2 Lite Chat
+  description: Efficient previous-generation DeepSeek MoE chat model.
+  kind: physical
+  publisher: DeepSeek
+  presentation: {logo: package:deepseek, monogram: D, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/deepseek-ai/DeepSeek-V2-Lite-Chat, license: DeepSeek-Model-License}
+  family: deepseek-v2
+  parameter_size: 16B (2.4B active)
+  lifecycle: active
+  limits: {context_window_size: 32768}
+  capabilities: [chat, tools, structured_output, long_context]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: DeepSeek, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/deepseek-ai/DeepSeek-V2-Lite-Chat}
+  tags: [open_weights, moe, efficient, previous_generation]
+- id: deepseek/deepseek-r1-distill-llama-70b
+  display_name: DeepSeek R1 Distill Llama 70B
+  description: DeepSeek R1 reasoning distilled into Llama 3.3 70B.
+  kind: physical
+  publisher: DeepSeek
+  presentation: {logo: package:deepseek, monogram: D, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Llama-70B, license: MIT}
+  family: deepseek-r1-distill
+  parameter_size: 70B
+  lifecycle: active
+  limits: {context_window_size: 131072}
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities: {input: [text], output: [text]}
+  reasoning_family: deepseek
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: DeepSeek, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Llama-70B}
+  tags: [open_weights, reasoning, distilled]
+- id: deepseek/deepseek-r1-distill-qwen-1.5b
+  display_name: DeepSeek R1 Distill Qwen 1.5B
+  description: Compact DeepSeek R1 reasoning distillation based on Qwen2.5.
+  kind: physical
+  publisher: DeepSeek
+  presentation: {logo: package:deepseek, monogram: D, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B, license: MIT}
+  family: deepseek-r1-distill
+  parameter_size: 1.5B
+  lifecycle: active
+  limits: {context_window_size: 32768}
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities: {input: [text], output: [text]}
+  reasoning_family: deepseek
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: DeepSeek, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B}
+  tags: [open_weights, reasoning, distilled, edge]
+- id: deepseek/deepseek-r1-distill-qwen-7b
+  display_name: DeepSeek R1 Distill Qwen 7B
+  description: DeepSeek R1 reasoning distillation based on Qwen2.5 7B.
+  kind: physical
+  publisher: DeepSeek
+  presentation: {logo: package:deepseek, monogram: D, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-7B, license: MIT}
+  family: deepseek-r1-distill
+  parameter_size: 7B
+  lifecycle: active
+  limits: {context_window_size: 32768}
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities: {input: [text], output: [text]}
+  reasoning_family: deepseek
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: DeepSeek, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-7B}
+  tags: [open_weights, reasoning, distilled, efficient]
+- id: deepseek/deepseek-r1-distill-qwen-14b
+  display_name: DeepSeek R1 Distill Qwen 14B
+  description: DeepSeek R1 reasoning distillation based on Qwen2.5 14B.
+  kind: physical
+  publisher: DeepSeek
+  presentation: {logo: package:deepseek, monogram: D, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-14B, license: MIT}
+  family: deepseek-r1-distill
+  parameter_size: 14B
+  lifecycle: active
+  limits: {context_window_size: 32768}
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities: {input: [text], output: [text]}
+  reasoning_family: deepseek
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: DeepSeek, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-14B}
+  tags: [open_weights, reasoning, distilled]
+- id: deepseek/deepseek-vl2
+  display_name: DeepSeek-VL2
+  description: Open-weight DeepSeek mixture-of-experts vision-language model.
+  kind: physical
+  publisher: DeepSeek
+  presentation: {logo: package:deepseek, monogram: D, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/deepseek-ai/deepseek-vl2, license: MIT}
+  family: deepseek-vl2
+  parameter_size: 27B (4.5B active)
+  lifecycle: active
+  limits: {context_window_size: 32768}
+  capabilities: [chat, vision, tools, long_context]
+  modalities: {input: [text, image], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: DeepSeek, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/deepseek-ai/deepseek-vl2}
+  tags: [open_weights, multimodal, moe]
+- id: deepseek/janus-pro-7b
+  display_name: Janus Pro 7B
+  description: Unified DeepSeek multimodal understanding and generation model.
+  kind: physical
+  publisher: DeepSeek
+  presentation: {logo: package:deepseek, monogram: D, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/deepseek-ai/Janus-Pro-7B, license: MIT}
+  family: janus
+  parameter_size: 7B
+  lifecycle: active
+  limits: {context_window_size: 32768}
+  capabilities: [chat, vision, tools, long_context]
+  modalities: {input: [text, image], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: DeepSeek, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/deepseek-ai/Janus-Pro-7B}
+  tags: [open_weights, multimodal, efficient]
+- id: deepseek/deepseek-prover-v2-671b
+  display_name: DeepSeek Prover V2 671B
+  description: Open-weight DeepSeek theorem-proving and mathematical reasoning model.
+  kind: physical
+  publisher: DeepSeek
+  presentation: {logo: package:deepseek, monogram: D, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/deepseek-ai/DeepSeek-Prover-V2-671B, license: MIT}
+  family: deepseek-prover
+  parameter_size: 671B (37B active)
+  lifecycle: active
+  limits: {context_window_size: 163840}
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities: {input: [text], output: [text]}
+  reasoning_family: deepseek
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: DeepSeek, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/deepseek-ai/DeepSeek-Prover-V2-671B}
+  tags: [open_weights, reasoning, math, moe]

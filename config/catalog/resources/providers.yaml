@@ -308,6 +308,7 @@
   protocols: [openai/chat-completions@1]
   default_protocol: openai/chat-completions@1
   supported_operations: [openai/chat-completions@1#create, openai/chat-completions@1#list_models]
+  reasoning_transport: top_level_effort
   auth: {strategy: bearer, header: Authorization, prefix: Bearer}
   presentation: {logo: package:qwen, monogram: Q, monochrome: false}
   conformance: {status: unverified}
@@ -344,6 +345,7 @@
   protocols: [openai/chat-completions@1]
   default_protocol: openai/chat-completions@1
   supported_operations: [openai/chat-completions@1#create, openai/chat-completions@1#list_models]
+  reasoning_transport: thinking_object
   auth: {strategy: bearer, header: Authorization, prefix: Bearer}
   presentation: {logo: package:zai, monogram: Z, monochrome: true}
   conformance: {status: unverified}

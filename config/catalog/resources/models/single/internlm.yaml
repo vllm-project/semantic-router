@@ -1,0 +1,32 @@
+- id: internlm/internlm3-8b-instruct
+  display_name: InternLM3 8B Instruct
+  description: Bilingual instruction model with normal and deep-thinking modes for advanced reasoning.
+  kind: physical
+  publisher: Shanghai AI Laboratory
+  presentation: {logo: package:internlm, monogram: I, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/internlm/internlm3-8b-instruct, license: Apache-2.0}
+  family: internlm3
+  parameter_size: 8B
+  lifecycle: active
+  limits: {context_window_size: 32768}
+  capabilities: [chat, reasoning, long_context]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: InternLM Team, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/internlm/internlm3-8b-instruct}
+  tags: [open_weights, bilingual, efficient]
+- id: internlm/internlm2.5-20b-chat
+  display_name: InternLM2.5 20B Chat
+  description: Previous-generation bilingual InternLM chat model with reasoning and tool-use training.
+  kind: physical
+  publisher: Shanghai AI Laboratory
+  presentation: {logo: package:internlm, monogram: I, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/internlm/internlm2_5-20b-chat, license: InternLM-Model-License}
+  family: internlm2.5
+  parameter_size: 20B
+  lifecycle: active
+  limits: {context_window_size: 32768}
+  capabilities: [chat, reasoning, tools, long_context]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: InternLM Team, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/internlm/internlm2_5-20b-chat}
+  tags: [open_weights, bilingual, previous_generation]

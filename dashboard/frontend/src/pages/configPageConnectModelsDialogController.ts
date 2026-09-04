@@ -173,13 +173,19 @@ function useConnectDialogDerived(
   return { visibleProviders, visibleModels, resolvedModelNames, catalogModels, modelDisplayNames }
 }
 
-function providerCatalogModels(catalog: BuiltInModelCatalog, providerID?: string) {
+export function providerCatalogModels(catalog: BuiltInModelCatalog, providerID?: string) {
   const result = new Map<string, string>()
   if (!providerID) return result
+  const supportedModels = new Set(
+    catalog.models
+      .filter((model) => model.lifecycle === 'active' || model.lifecycle === 'experimental')
+      .map((model) => model.id),
+  )
   for (const offering of catalog.offerings) {
     if (
       offering.provider === providerID &&
-      offering.lifecycle !== 'removed' &&
+      (offering.lifecycle === 'active' || offering.lifecycle === 'experimental') &&
+      supportedModels.has(offering.model) &&
       !result.has(offering.provider_model_id)
     ) {
       result.set(offering.provider_model_id, offering.model)

@@ -1,0 +1,33 @@
+- id: zai/glm-4.5v
+  display_name: GLM-4.5V
+  description: Open-weight multimodal GLM model for visual reasoning and agents.
+  kind: physical
+  publisher: Z.ai
+  presentation: {logo: package:zai, monogram: Z, monochrome: true}
+  distribution: {type: open_weights, source: https://huggingface.co/zai-org/GLM-4.5V, license: MIT}
+  family: glm-4
+  parameter_size: 106B (12B active)
+  lifecycle: active
+  limits: {context_window_size: 131072}
+  capabilities: [chat, reasoning, vision, tools, long_context]
+  modalities: {input: [text, image], output: [text]}
+  reasoning_family: glm
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: Z.ai, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/zai-org/GLM-4.5V}
+  tags: [open_weights, multimodal, reasoning, moe]
+- id: zai/glm-4-32b-0414
+  display_name: GLM-4 32B 0414
+  description: Previous-generation open-weight GLM instruction model.
+  kind: physical
+  publisher: Z.ai
+  presentation: {logo: package:zai, monogram: Z, monochrome: true}
+  distribution: {type: open_weights, source: https://huggingface.co/zai-org/GLM-4-32B-0414, license: MIT}
+  family: glm-4
+  parameter_size: 32B
+  lifecycle: active
+  limits: {context_window_size: 32768}
+  capabilities: [chat, tools, structured_output, long_context]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: Z.ai, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/zai-org/GLM-4-32B-0414}
+  tags: [open_weights, dense, previous_generation]

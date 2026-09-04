@@ -136,6 +136,17 @@ func routingModelFromEffectiveModel(effective modelcatalog.EffectiveModel) Routi
 	if provenance["display_name"] == "operator" {
 		model.DisplayName = card.DisplayName
 	}
+	if provenance["publisher"] == "operator" {
+		model.Publisher = card.Publisher
+	}
+	if provenance["presentation"] == "operator" {
+		presentation := card.Presentation
+		model.Presentation = &presentation
+	}
+	if provenance["distribution"] == "operator" {
+		distribution := card.Distribution
+		model.Distribution = &distribution
+	}
 	if provenance["family"] == "operator" {
 		model.Family = card.Family
 	}

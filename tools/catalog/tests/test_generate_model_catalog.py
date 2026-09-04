@@ -40,21 +40,24 @@ class ModelCatalogCompilerTests(unittest.TestCase):
         )
         self.assertEqual(catalog.check(outputs), 0)
 
-    def test_default_intelligence_index_pins_published_v4_1_1_methodology(self) -> None:
+    def test_default_intelligence_index_is_public_and_coverage_aware(self) -> None:
         _, resources, _ = catalog.load_and_validate()
         index = next(
             item
             for item in resources["indices"]
             if item["id"] == "vllm-sr/intelligence@1.0.0"
         )
-        self.assertEqual(index["missing"], {"policy": "require_all"})
+        self.assertEqual(
+            index["missing"], {"policy": "require_coverage", "minimum": 0.6}
+        )
         self.assertEqual(
             index["domains"],
             {
-                "agents": 0.34,
-                "coding": 0.24,
-                "general": 0.18,
-                "scientific_reasoning": 0.24,
+                "general_reasoning": 0.20,
+                "scientific_reasoning": 0.20,
+                "frontier_reasoning": 0.20,
+                "software_engineering": 0.20,
+                "agentic_systems": 0.20,
             },
         )
         self.assertEqual(
@@ -63,27 +66,108 @@ class ModelCatalogCompilerTests(unittest.TestCase):
                 for component in index["components"]
             },
             {
-                "artificial-analysis/gdpval-aa@2.0.0#elo": 0.20,
-                "artificial-analysis/tau3-banking@1.0.0#pass_at_1": 0.14,
-                "terminal-bench/terminal-bench@2.1.0#pass_at_1": 0.16,
-                "scicode/scicode@1.0.0#pass_at_1": 0.08,
-                "artificial-analysis/lcr@1.0.0#pass_at_1": 0.06,
-                "artificial-analysis/omniscience@1.0.0#accuracy": 0.08,
-                "artificial-analysis/omniscience@1.0.0#non_hallucination_rate": 0.04,
-                "cais/humanitys-last-exam@1.0.0#pass_at_1": 0.12,
-                "idavidrein/gpqa-diamond@1.0.0#pass_at_1": 0.06,
-                "critpt/critpt@1.0.0#pass_at_1": 0.06,
+                "tiger-ai-lab/mmlu-pro@1.0.0#accuracy": 0.20,
+                "idavidrein/gpqa-diamond@1.0.0#accuracy": 0.20,
+                "cais/humanitys-last-exam@1.0.0#accuracy": 0.20,
+                "swe-bench/verified@1.0.0#resolved": 0.20,
+                "harbor/terminal-bench@2.1.0#resolved": 0.20,
             },
         )
-        gdpval = next(
-            component["normalization"]
-            for component in index["components"]
-            if component["metric"] == "artificial-analysis/gdpval-aa@2.0.0#elo"
+        self.assertTrue(
+            all(
+                component["normalization"] == {"type": "identity"}
+                for component in index["components"]
+            )
         )
-        self.assertEqual(gdpval, {"type": "linear_clamp", "min": 500, "max": 2500})
-        self.assertEqual(catalog._normalize_component(500, gdpval), 0)
-        self.assertEqual(catalog._normalize_component(1500, gdpval), 0.5)
-        self.assertEqual(catalog._normalize_component(2500, gdpval), 1)
+
+    def test_mainstream_model_inventory_covers_current_and_previous_generations(
+        self,
+    ) -> None:
+        _, resources, _ = catalog.load_and_validate()
+        physical_models = {
+            item["id"]: item
+            for item in resources["models"]
+            if item["kind"] == "physical"
+        }
+        offerings = resources["offerings"]
+
+        self.assertGreaterEqual(len(physical_models), 350)
+        self.assertGreaterEqual(len(offerings), 375)
+        expected_by_publisher = {
+            "OpenAI": {
+                "openai/gpt-4.1",
+                "openai/gpt-5.5",
+                "openai/gpt-5.6-sol",
+            },
+            "Anthropic": {
+                "anthropic/claude-3.5-sonnet",
+                "anthropic/claude-fable-5",
+                "anthropic/claude-mythos-5",
+            },
+            "Google": {
+                "google/gemini-2.5-pro",
+                "google/gemini-3.8-flash",
+                "google/gemma-3-27b-it",
+            },
+            "Meta": {
+                "meta/llama-2-70b-chat",
+                "meta/llama-3.3-70b-instruct",
+                "meta/llama-4-maverick-17b-128e-instruct",
+            },
+            "Alibaba Cloud": {
+                "qwen/qwen2.5-72b-instruct",
+                "qwen/qwen3-235b-a22b",
+                "qwen/qwen3.8-max",
+            },
+            "DeepSeek": {
+                "deepseek/deepseek-v2-chat",
+                "deepseek/deepseek-r1",
+                "deepseek/deepseek-v4-pro",
+            },
+            "Z.ai": {
+                "zai/glm-4.5",
+                "zai/glm-5.3",
+            },
+            "Moonshot AI": {
+                "moonshot/kimi-k2-instruct",
+                "moonshot/kimi-k3",
+            },
+            "NVIDIA": {
+                "nvidia/llama-3.1-nemotron-70b-instruct-hf",
+                "nvidia/nemotron-3-ultra",
+            },
+            "Mistral AI": {
+                "mistral/mixtral-8x7b-instruct-v0.1",
+                "mistral/mistral-small-4",
+            },
+            "MiniMax": {
+                "minimax/minimax-m1-80k",
+                "minimax/minimax-m3",
+            },
+        }
+        for publisher, expected_ids in expected_by_publisher.items():
+            self.assertTrue(expected_ids.issubset(physical_models))
+            self.assertTrue(
+                all(
+                    physical_models[model_id]["publisher"] == publisher
+                    for model_id in expected_ids
+                )
+            )
+
+        offered_models = {item["model"] for item in offerings}
+        self.assertTrue(set(physical_models).issubset(offered_models))
+
+    def test_virtual_model_pool_can_reference_operator_defined_models(self) -> None:
+        catalog._validate_virtual_model_role(
+            {
+                "name": "private",
+                "required": True,
+                "minimum_candidates": 1,
+                "traits": ["local_only"],
+                "recommended_pool": ["operator/private-model"],
+            },
+            "models[0].roles[0]",
+        )
 
     def test_schema_failure_reports_the_resource_path(self) -> None:
         schema = {
@@ -187,6 +271,50 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             catalog._validate_offerings(
                 [offering], providers, models, {"openai/chat-completions@1"}
             )
+
+    def test_physical_model_requires_an_offering(self) -> None:
+        with self.assertRaisesRegex(
+            catalog.CatalogBuildError, "require at least one provider offering"
+        ):
+            catalog._validate_offerings(
+                [],
+                {},
+                {
+                    "example/model": {
+                        "kind": "physical",
+                        "lifecycle": "active",
+                        "protocols": ["openai/chat-completions@1"],
+                    }
+                },
+                {"openai/chat-completions@1"},
+            )
+
+    def test_available_evaluation_metric_is_unambiguous(self) -> None:
+        records = [
+            {
+                "id": f"example/run-{index}@1.0.0",
+                "model": "example/model",
+                "subject": {},
+                "metrics": {"example/bench@1.0.0#score": value},
+                "status": "available",
+                "evidence": {
+                    "provenance": "operator",
+                    "verification": "claimed",
+                    "redistributable": True,
+                },
+            }
+            for index, value in enumerate((0.7, 0.8), start=1)
+        ]
+        metrics = {
+            "example/bench@1.0.0#score": {
+                "range": [0, 1],
+                "direction": "higher_is_better",
+            }
+        }
+        with self.assertRaisesRegex(
+            catalog.CatalogBuildError, "one available value is allowed"
+        ):
+            catalog._validate_evaluations(records, {"example/model"}, metrics)
 
     def test_missing_index_components_remain_unavailable(self) -> None:
         resources = {

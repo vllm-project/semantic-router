@@ -76,10 +76,9 @@ function isVerification(value: unknown, virtual: boolean): boolean {
   ) {
     return false
   }
-  return (
-    !virtual ||
-    (typeof value.asset_sha256 === 'string' && /^sha256:[0-9a-f]{64}$/.test(value.asset_sha256))
-  )
+  const hasValidAssetDigest =
+    typeof value.asset_sha256 === 'string' && /^sha256:[0-9a-f]{64}$/.test(value.asset_sha256)
+  return virtual ? hasValidAssetDigest : value.asset_sha256 === undefined || hasValidAssetDigest
 }
 
 function isCatalogModel(value: unknown): value is BuiltInModelMetadata {
@@ -90,6 +89,17 @@ function isCatalogModel(value: unknown): value is BuiltInModelMetadata {
     isNonEmptyString(value.display_name) &&
     isNonEmptyString(value.description) &&
     (virtual || value.kind === 'physical') &&
+    isNonEmptyString(value.publisher) &&
+    isRecord(value.presentation) &&
+    isNonEmptyString(value.presentation.logo) &&
+    isNonEmptyString(value.presentation.monogram) &&
+    typeof value.presentation.monochrome === 'boolean' &&
+    isRecord(value.distribution) &&
+    ['proprietary_api', 'open_weights', 'router_recipe'].includes(
+      String(value.distribution.type),
+    ) &&
+    isNonEmptyString(value.distribution.source) &&
+    (value.distribution.type !== 'open_weights' || isNonEmptyString(value.distribution.license)) &&
     isNonEmptyString(value.family) &&
     ['experimental', 'active', 'deprecated', 'removed'].includes(String(value.lifecycle)) &&
     isStringArray(value.capabilities) &&
@@ -144,7 +154,7 @@ function isCatalogProvider(value: unknown): value is CatalogProvider {
     isStringArray(value.supported_operations) &&
     value.supported_operations.length > 0 &&
     (value.reasoning_transport === undefined ||
-      ['chat_template_kwargs', 'top_level_effort', 'deepseek_thinking'].includes(
+      ['chat_template_kwargs', 'top_level_effort', 'thinking_object', 'deepseek_thinking'].includes(
         String(value.reasoning_transport),
       )) &&
     isRecord(value.auth) &&

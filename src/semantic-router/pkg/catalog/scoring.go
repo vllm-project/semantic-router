@@ -67,7 +67,17 @@ func (registry *Registry) compileEvaluations(
 	if err != nil {
 		return nil, nil, err
 	}
-	records := append([]EvaluationRecord(nil), registry.evaluations...)
+	records := make([]EvaluationRecord, 0, len(registry.evaluations)+len(input.Records))
+	for _, record := range registry.evaluations {
+		card, exists := cards[record.Model]
+		if exists && card.Provenance["id"] == SourceOperator {
+			// A custom model may intentionally use the same user-facing name as a
+			// built-in catalog identity. Never attach the built-in model's evidence
+			// to that operator-owned card.
+			continue
+		}
+		records = append(records, record)
+	}
 	records = append(records, input.Records...)
 	selected, err := validateAndSelectRecords(records, metrics)
 	if err != nil {

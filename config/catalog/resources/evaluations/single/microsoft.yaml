@@ -1,0 +1,9 @@
+- id: microsoft/phi-4-reasoning-plus-model-card@1.0.0
+  model: microsoft/phi-4-reasoning-plus
+  subject:
+    variant: Phi-4-reasoning-plus
+    source_kind: official_model_card
+  metrics:
+    tiger-ai-lab/mmlu-pro@1.0.0#accuracy: 0.760
+  status: available
+  evidence: {provenance: vendor_claimed, verification: claimed, source: https://huggingface.co/microsoft/Phi-4-reasoning-plus, redistributable: true}

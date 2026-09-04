@@ -1,0 +1,14 @@
+- id: vllm/snowflake-arctic-instruct@1.0.0
+  provider: vllm
+  model: snowflake/arctic-instruct
+  provider_model_id: Snowflake/snowflake-arctic-instruct
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/Snowflake/snowflake-arctic-instruct}
+- id: vllm/dbrx-instruct@1.0.0
+  provider: vllm
+  model: databricks/dbrx-instruct
+  provider_model_id: databricks/dbrx-instruct
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/databricks/dbrx-instruct}

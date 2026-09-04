@@ -1,0 +1,14 @@
+- id: vllm/falcon3-7b-instruct@1.0.0
+  provider: vllm
+  model: tii/falcon3-7b-instruct
+  provider_model_id: tiiuae/Falcon3-7B-Instruct
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/tiiuae/Falcon3-7B-Instruct}
+- id: vllm/falcon3-10b-instruct@1.0.0
+  provider: vllm
+  model: tii/falcon3-10b-instruct
+  provider_model_id: tiiuae/Falcon3-10B-Instruct
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/tiiuae/Falcon3-10B-Instruct}

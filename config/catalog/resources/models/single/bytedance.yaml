@@ -1,0 +1,17 @@
+- id: bytedance/seed-oss-36b-instruct
+  display_name: Seed OSS 36B Instruct
+  description: Open-weight long-context reasoning model for coding, tools, and agentic tasks.
+  kind: physical
+  publisher: ByteDance Seed
+  presentation: {logo: package:bytedance, monogram: S, monochrome: true}
+  distribution: {type: open_weights, source: https://huggingface.co/ByteDance-Seed/Seed-OSS-36B-Instruct, license: Apache-2.0}
+  family: seed-oss
+  parameter_size: 36B
+  released_at: 2025-08-20
+  lifecycle: active
+  limits: {context_window_size: 524288}
+  capabilities: [chat, reasoning, tools, long_context]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: ByteDance Seed Team, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/ByteDance-Seed/Seed-OSS-36B-Instruct}
+  tags: [open_weights, reasoning, coding, agentic]

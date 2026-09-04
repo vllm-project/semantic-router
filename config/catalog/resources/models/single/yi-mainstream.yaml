@@ -1,0 +1,96 @@
+- id: 01ai/yi-1.5-6b-chat
+  display_name: Yi 1.5 6B Chat
+  description: Compact multilingual Yi 1.5 chat model.
+  kind: physical
+  publisher: 01.AI
+  presentation: {logo: package:yi, monogram: Y, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/01-ai/Yi-1.5-6B-Chat, license: Apache-2.0}
+  family: yi-1.5
+  parameter_size: 6B
+  lifecycle: active
+  limits: {context_window_size: 32768}
+  capabilities: [chat, tools, structured_output, long_context]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: 01.AI, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/01-ai/Yi-1.5-6B-Chat}
+  tags: [open_weights, multilingual, efficient]
+- id: 01ai/yi-1.5-9b-chat
+  display_name: Yi 1.5 9B Chat
+  description: Mid-sized multilingual Yi 1.5 chat model.
+  kind: physical
+  publisher: 01.AI
+  presentation: {logo: package:yi, monogram: Y, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/01-ai/Yi-1.5-9B-Chat, license: Apache-2.0}
+  family: yi-1.5
+  parameter_size: 9B
+  lifecycle: active
+  limits: {context_window_size: 32768}
+  capabilities: [chat, tools, structured_output, long_context]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: 01.AI, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/01-ai/Yi-1.5-9B-Chat}
+  tags: [open_weights, multilingual]
+- id: 01ai/yi-coder-1.5b-chat
+  display_name: Yi Coder 1.5B Chat
+  description: Compact Yi coding model for local software tasks.
+  kind: physical
+  publisher: 01.AI
+  presentation: {logo: package:yi, monogram: Y, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/01-ai/Yi-Coder-1.5B-Chat, license: Apache-2.0}
+  family: yi-coder
+  parameter_size: 1.5B
+  lifecycle: active
+  limits: {context_window_size: 131072}
+  capabilities: [chat, coding, tools, long_context]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: 01.AI, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/01-ai/Yi-Coder-1.5B-Chat}
+  tags: [open_weights, coding, edge]
+- id: 01ai/yi-coder-9b-chat
+  display_name: Yi Coder 9B Chat
+  description: Open-weight Yi coding model for software tasks.
+  kind: physical
+  publisher: 01.AI
+  presentation: {logo: package:yi, monogram: Y, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/01-ai/Yi-Coder-9B-Chat, license: Apache-2.0}
+  family: yi-coder
+  parameter_size: 9B
+  lifecycle: active
+  limits: {context_window_size: 131072}
+  capabilities: [chat, coding, tools, long_context]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: 01.AI, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/01-ai/Yi-Coder-9B-Chat}
+  tags: [open_weights, coding]
+- id: 01ai/yi-vl-6b
+  display_name: Yi-VL 6B
+  description: Compact open-weight Yi vision-language model.
+  kind: physical
+  publisher: 01.AI
+  presentation: {logo: package:yi, monogram: Y, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/01-ai/Yi-VL-6B, license: Yi-License}
+  family: yi-vl
+  parameter_size: 6B
+  lifecycle: active
+  limits: {context_window_size: 4096}
+  capabilities: [chat, vision, tools, long_context]
+  modalities: {input: [text, image], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: 01.AI, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/01-ai/Yi-VL-6B}
+  tags: [open_weights, multimodal, efficient]
+- id: 01ai/yi-vl-34b
+  display_name: Yi-VL 34B
+  description: Large open-weight Yi vision-language model.
+  kind: physical
+  publisher: 01.AI
+  presentation: {logo: package:yi, monogram: Y, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/01-ai/Yi-VL-34B, license: Yi-License}
+  family: yi-vl
+  parameter_size: 34B
+  lifecycle: active
+  limits: {context_window_size: 4096}
+  capabilities: [chat, vision, tools, long_context]
+  modalities: {input: [text, image], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: 01.AI, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/01-ai/Yi-VL-34B}
+  tags: [open_weights, multimodal]

@@ -1,0 +1,14 @@
+- id: vllm/smollm3-3b@1.0.0
+  provider: vllm
+  model: huggingface/smollm3-3b
+  provider_model_id: HuggingFaceTB/SmolLM3-3B
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/HuggingFaceTB/SmolLM3-3B}
+- id: vllm/smollm2-1.7b-instruct@1.0.0
+  provider: vllm
+  model: huggingface/smollm2-1.7b-instruct
+  provider_model_id: HuggingFaceTB/SmolLM2-1.7B-Instruct
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/HuggingFaceTB/SmolLM2-1.7B-Instruct}

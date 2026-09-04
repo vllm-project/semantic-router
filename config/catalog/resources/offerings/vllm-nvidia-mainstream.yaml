@@ -1,0 +1,42 @@
+- id: vllm/nemotron-nano-9b-v2@1.0.0
+  provider: vllm
+  model: nvidia/nemotron-nano-9b-v2
+  provider_model_id: nvidia/NVIDIA-Nemotron-Nano-9B-v2
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/nvidia/NVIDIA-Nemotron-Nano-9B-v2}
+- id: vllm/nemotron-nano-12b-v2-vl@1.0.0
+  provider: vllm
+  model: nvidia/nemotron-nano-12b-v2-vl
+  provider_model_id: nvidia/NVIDIA-Nemotron-Nano-12B-v2-VL-BF16
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/nvidia/NVIDIA-Nemotron-Nano-12B-v2-VL-BF16}
+- id: vllm/nemotron-3-nano-4b@1.0.0
+  provider: vllm
+  model: nvidia/nemotron-3-nano-4b
+  provider_model_id: nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16}
+- id: vllm/llama-3.3-nemotron-super-49b-v1.5@1.0.0
+  provider: vllm
+  model: nvidia/llama-3.3-nemotron-super-49b-v1.5
+  provider_model_id: nvidia/Llama-3_3-Nemotron-Super-49B-v1_5
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/nvidia/Llama-3_3-Nemotron-Super-49B-v1_5}
+- id: vllm/nemotron-mini-4b-instruct@1.0.0
+  provider: vllm
+  model: nvidia/nemotron-mini-4b-instruct
+  provider_model_id: nvidia/Nemotron-Mini-4B-Instruct
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/nvidia/Nemotron-Mini-4B-Instruct}
+- id: vllm/nemotron-3-nano-omni-30b-a3b-reasoning@1.0.0
+  provider: vllm
+  model: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
+  provider_model_id: nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-BF16
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-BF16}

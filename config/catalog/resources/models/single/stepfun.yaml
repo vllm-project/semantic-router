@@ -1,0 +1,36 @@
+- id: stepfun/step-3.5-flash
+  display_name: Step 3.5 Flash
+  description: Efficient open-weight StepFun reasoning model for coding and agents.
+  kind: physical
+  publisher: StepFun
+  presentation: {logo: package:stepfun, monogram: S, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/stepfun-ai/Step-3.5-Flash, license: Apache-2.0}
+  family: step-3.5
+  lifecycle: active
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: StepFun, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/stepfun-ai/Step-3.5-Flash}
+  tags: [open_weights, reasoning, efficient, agentic]
+- id: stepfun/step-3.7-flash
+  display_name: Step 3.7 Flash
+  description: Open-weight multimodal MoE model optimized for reasoning and agents.
+  kind: physical
+  publisher: StepFun
+  presentation: {logo: package:stepfun, monogram: S, monochrome: false}
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/stepfun-ai/Step-3.7-Flash
+    license: Apache-2.0
+  family: step-3.7
+  parameter_size: 201B
+  lifecycle: active
+  capabilities: [chat, reasoning, tools, structured_output, vision, long_context]
+  modalities: {input: [text, image], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification:
+    authority: StepFun
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/stepfun-ai/Step-3.7-Flash
+  tags: [open_weights, multimodal, moe, agentic]

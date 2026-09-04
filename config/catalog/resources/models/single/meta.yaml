@@ -1,0 +1,178 @@
+- id: meta/llama-3.1-405b-instruct
+  display_name: Llama 3.1 405B Instruct
+  description: Meta's large open-weight Llama 3.1 instruction model.
+  kind: physical
+  publisher: Meta
+  presentation: {logo: package:meta, monogram: M, monochrome: false}
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/meta-llama/Llama-3.1-405B-Instruct
+    license: Llama-3.1-Community-License
+  family: llama-3.1
+  parameter_size: 405B
+  lifecycle: active
+  limits: {context_window_size: 131072}
+  capabilities: [chat, tools, structured_output, long_context]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: Meta, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/meta-llama/Llama-3.1-405B-Instruct}
+  tags: [open_weights, dense]
+- id: meta/llama-3.2-11b-vision-instruct
+  display_name: Llama 3.2 11B Vision Instruct
+  description: Compact open-weight multimodal Llama model for image understanding.
+  kind: physical
+  publisher: Meta
+  presentation: {logo: package:meta, monogram: M, monochrome: false}
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/meta-llama/Llama-3.2-11B-Vision-Instruct
+    license: Llama-3.2-Community-License
+  family: llama-3.2
+  parameter_size: 11B
+  lifecycle: active
+  limits: {context_window_size: 131072}
+  capabilities: [chat, tools, vision, long_context]
+  modalities: {input: [text, image], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: Meta, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/meta-llama/Llama-3.2-11B-Vision-Instruct}
+  tags: [open_weights, multimodal, efficient]
+- id: meta/llama-3.2-90b-vision-instruct
+  display_name: Llama 3.2 90B Vision Instruct
+  description: Large open-weight multimodal Llama model for visual reasoning.
+  kind: physical
+  publisher: Meta
+  presentation: {logo: package:meta, monogram: M, monochrome: false}
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/meta-llama/Llama-3.2-90B-Vision-Instruct
+    license: Llama-3.2-Community-License
+  family: llama-3.2
+  parameter_size: 90B
+  lifecycle: active
+  limits: {context_window_size: 131072}
+  capabilities: [chat, tools, vision, long_context]
+  modalities: {input: [text, image], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: Meta, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/meta-llama/Llama-3.2-90B-Vision-Instruct}
+  tags: [open_weights, multimodal]
+- id: meta/llama-3.3-70b-instruct
+  display_name: Llama 3.3 70B Instruct
+  description: Meta's open-weight multilingual Llama 3.3 instruction model.
+  kind: physical
+  publisher: Meta
+  presentation: {logo: package:meta, monogram: M, monochrome: false}
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/meta-llama/Llama-3.3-70B-Instruct
+    license: Llama-3.3-Community-License
+  family: llama-3.3
+  parameter_size: 70B
+  lifecycle: active
+  limits: {context_window_size: 131072}
+  capabilities: [chat, tools, structured_output, long_context]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: Meta, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/meta-llama/Llama-3.3-70B-Instruct}
+  tags: [open_weights, dense, multilingual]
+- id: meta/llama-4-scout-17b-16e-instruct
+  display_name: Llama 4 Scout 17B 16E Instruct
+  description: Meta's efficient open-weight multimodal Llama 4 MoE model.
+  kind: physical
+  publisher: Meta
+  presentation: {logo: package:meta, monogram: M, monochrome: false}
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/meta-llama/Llama-4-Scout-17B-16E-Instruct
+    license: Llama-4-Community-License
+  family: llama-4
+  parameter_size: 109B (17B active)
+  lifecycle: active
+  limits: {context_window_size: 10485760}
+  capabilities: [chat, tools, vision, long_context]
+  modalities: {input: [text, image], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: Meta, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/meta-llama/Llama-4-Scout-17B-16E-Instruct}
+  tags: [open_weights, multimodal, moe, long_context]
+- id: meta/llama-4-maverick-17b-128e-instruct
+  display_name: Llama 4 Maverick 17B 128E Instruct
+  description: Meta's large open-weight multimodal Llama 4 MoE model.
+  kind: physical
+  publisher: Meta
+  presentation: {logo: package:meta, monogram: M, monochrome: false}
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/meta-llama/Llama-4-Maverick-17B-128E-Instruct
+    license: Llama-4-Community-License
+  family: llama-4
+  parameter_size: 400B (17B active)
+  lifecycle: active
+  limits: {context_window_size: 1048576}
+  capabilities: [chat, tools, vision, long_context]
+  modalities: {input: [text, image], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: Meta, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/meta-llama/Llama-4-Maverick-17B-128E-Instruct}
+  tags: [open_weights, multimodal, moe]
+- id: meta/llama-3.1-8b-instruct
+  display_name: Llama 3.1 8B Instruct
+  description: Compact multilingual Meta Llama 3.1 instruction model for local serving.
+  kind: physical
+  publisher: Meta
+  presentation: {logo: package:meta, monogram: M, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/meta-llama/Llama-3.1-8B-Instruct, license: Llama-3.1-Community-License}
+  family: llama-3.1
+  parameter_size: 8B
+  lifecycle: active
+  limits: {context_window_size: 131072}
+  capabilities: [chat, tools, structured_output, long_context]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: Meta, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/meta-llama/Llama-3.1-8B-Instruct}
+  tags: [open_weights, efficient, multilingual]
+- id: meta/llama-3.1-70b-instruct
+  display_name: Llama 3.1 70B Instruct
+  description: Large multilingual Meta Llama 3.1 instruction model for tools and long context.
+  kind: physical
+  publisher: Meta
+  presentation: {logo: package:meta, monogram: M, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/meta-llama/Llama-3.1-70B-Instruct, license: Llama-3.1-Community-License}
+  family: llama-3.1
+  parameter_size: 70B
+  lifecycle: active
+  limits: {context_window_size: 131072}
+  capabilities: [chat, tools, structured_output, long_context]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: Meta, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/meta-llama/Llama-3.1-70B-Instruct}
+  tags: [open_weights, dense, multilingual]
+- id: meta/llama-3.2-1b-instruct
+  display_name: Llama 3.2 1B Instruct
+  description: Small Meta Llama 3.2 instruction model for edge and resource-constrained deployments.
+  kind: physical
+  publisher: Meta
+  presentation: {logo: package:meta, monogram: M, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/meta-llama/Llama-3.2-1B-Instruct, license: Llama-3.2-Community-License}
+  family: llama-3.2
+  parameter_size: 1B
+  lifecycle: active
+  limits: {context_window_size: 131072}
+  capabilities: [chat, long_context]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: Meta, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/meta-llama/Llama-3.2-1B-Instruct}
+  tags: [open_weights, edge, efficient]
+- id: meta/llama-3.2-3b-instruct
+  display_name: Llama 3.2 3B Instruct
+  description: Compact Meta Llama 3.2 instruction model for local assistants and retrieval.
+  kind: physical
+  publisher: Meta
+  presentation: {logo: package:meta, monogram: M, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/meta-llama/Llama-3.2-3B-Instruct, license: Llama-3.2-Community-License}
+  family: llama-3.2
+  parameter_size: 3B
+  lifecycle: active
+  limits: {context_window_size: 131072}
+  capabilities: [chat, tools, long_context]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: Meta, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/meta-llama/Llama-3.2-3B-Instruct}
+  tags: [open_weights, edge, efficient]

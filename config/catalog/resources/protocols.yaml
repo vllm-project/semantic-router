@@ -1,6 +1,7 @@
 - id: openai/chat-completions@1
   display_name: OpenAI Chat Completions
   wire_format: openai.chat.v1
+  default_base_path: /v1
   operations:
     - id: create
       method: POST
@@ -12,6 +13,7 @@
 - id: openai/responses@1
   display_name: OpenAI Responses
   wire_format: openai.responses.v1
+  default_base_path: /v1
   operations:
     - id: create
       method: POST
@@ -23,6 +25,7 @@
 - id: anthropic/messages@1
   display_name: Anthropic Messages
   wire_format: anthropic.messages.v1
+  default_base_path: /v1
   operations:
     - id: create
       method: POST

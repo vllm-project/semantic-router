@@ -1,0 +1,42 @@
+- id: xai/grok-4@1.0.0
+  provider: xai
+  model: xai/grok-4
+  provider_model_id: grok-4
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://docs.x.ai/developers/models}
+- id: xai/grok-4.1-fast@1.0.0
+  provider: xai
+  model: xai/grok-4.1-fast
+  provider_model_id: grok-4-1-fast
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://docs.x.ai/developers/models}
+- id: xai/grok-4.3@1.0.0
+  provider: xai
+  model: xai/grok-4.3
+  provider_model_id: grok-4.3
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://docs.x.ai/developers/models}
+- id: xai/grok-4.5@1.0.0
+  provider: xai
+  model: xai/grok-4.5
+  provider_model_id: grok-4.5
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://docs.x.ai/developers/models}
+- id: xai/grok-4.6@1.0.0
+  provider: xai
+  model: xai/grok-4.6
+  provider_model_id: grok-4.6
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://docs.x.ai/developers/models}
+- id: xai/grok-4.20@1.0.0
+  provider: xai
+  model: xai/grok-4.20
+  provider_model_id: grok-4.20
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://docs.x.ai/developers/models}

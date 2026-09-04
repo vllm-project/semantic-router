@@ -211,6 +211,17 @@ func (registry *Registry) Indices() []IndexDefinition {
 	return result
 }
 
+// Evaluations returns a defensive copy of the published evaluation evidence.
+// Subject metadata is benchmark-specific and therefore requires a recursive
+// copy instead of the shallow map copies used by closed catalog structures.
+func (registry *Registry) Evaluations() []EvaluationRecord {
+	result := make([]EvaluationRecord, len(registry.evaluations))
+	for index, value := range registry.evaluations {
+		result[index] = cloneEvaluation(value)
+	}
+	return result
+}
+
 func sortedKeys[Value any](values map[string]Value) []string {
 	keys := make([]string, 0, len(values))
 	for key := range values {
@@ -269,6 +280,37 @@ func cloneIndexResult(value IndexResult) IndexResult {
 	value.Domains = cloneMap(value.Domains)
 	value.Provenance = append([]string(nil), value.Provenance...)
 	return value
+}
+
+func cloneEvaluation(value EvaluationRecord) EvaluationRecord {
+	value.Metrics = cloneMap(value.Metrics)
+	if value.Subject != nil {
+		subject := value.Subject
+		value.Subject = make(EvaluationSubject, len(subject))
+		for key, subjectValue := range subject {
+			value.Subject[key] = cloneArbitraryValue(subjectValue)
+		}
+	}
+	return value
+}
+
+func cloneArbitraryValue(value any) any {
+	switch typed := value.(type) {
+	case map[string]any:
+		result := make(map[string]any, len(typed))
+		for key, nested := range typed {
+			result[key] = cloneArbitraryValue(nested)
+		}
+		return result
+	case []any:
+		result := make([]any, len(typed))
+		for index, nested := range typed {
+			result[index] = cloneArbitraryValue(nested)
+		}
+		return result
+	default:
+		return value
+	}
 }
 
 func cloneMap[Value any](source map[string]Value) map[string]Value {

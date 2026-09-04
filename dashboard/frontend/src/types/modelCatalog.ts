@@ -43,7 +43,11 @@ export interface CatalogProvider {
   supported_operations: string[]
   path_overrides?: Record<string, string>
   default_headers?: Record<string, string>
-  reasoning_transport?: 'chat_template_kwargs' | 'top_level_effort' | 'deepseek_thinking'
+  reasoning_transport?:
+    | 'chat_template_kwargs'
+    | 'top_level_effort'
+    | 'thinking_object'
+    | 'deepseek_thinking'
   api_version_query?: boolean
   auth: {
     strategy: 'none' | 'bearer' | 'api_key_header'
@@ -82,7 +86,20 @@ export interface BuiltInModelVerification {
   authority: string
   status: CatalogEvidenceStatus
   verified_at: string
+  source?: string
   asset_sha256?: string
+}
+
+export interface CatalogPresentation {
+  logo: string
+  monogram: string
+  monochrome: boolean
+}
+
+export interface CatalogModelDistribution {
+  type: 'proprietary_api' | 'open_weights' | 'router_recipe'
+  source: string
+  license?: string
 }
 
 export interface BuiltInModelMetadata {
@@ -90,6 +107,9 @@ export interface BuiltInModelMetadata {
   display_name: string
   description: string
   kind: 'physical' | 'virtual'
+  publisher: string
+  presentation: CatalogPresentation
+  distribution: CatalogModelDistribution
   family: string
   parameter_size?: string
   revision?: string

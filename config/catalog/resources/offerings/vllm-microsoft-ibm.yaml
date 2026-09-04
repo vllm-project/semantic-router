@@ -1,0 +1,70 @@
+- id: vllm/phi-4@1.0.0
+  provider: vllm
+  model: microsoft/phi-4
+  provider_model_id: microsoft/phi-4
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/microsoft/phi-4}
+- id: vllm/phi-4-mini-instruct@1.0.0
+  provider: vllm
+  model: microsoft/phi-4-mini-instruct
+  provider_model_id: microsoft/Phi-4-mini-instruct
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/microsoft/Phi-4-mini-instruct}
+- id: vllm/phi-4-multimodal-instruct@1.0.0
+  provider: vllm
+  model: microsoft/phi-4-multimodal-instruct
+  provider_model_id: microsoft/Phi-4-multimodal-instruct
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/microsoft/Phi-4-multimodal-instruct}
+- id: vllm/phi-4-reasoning-plus@1.0.0
+  provider: vllm
+  model: microsoft/phi-4-reasoning-plus
+  provider_model_id: microsoft/Phi-4-reasoning-plus
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/microsoft/Phi-4-reasoning-plus}
+- id: vllm/granite-3.3-8b-instruct@1.0.0
+  provider: vllm
+  model: ibm/granite-3.3-8b-instruct
+  provider_model_id: ibm-granite/granite-3.3-8b-instruct
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/ibm-granite/granite-3.3-8b-instruct}
+- id: vllm/granite-4.0-h-micro@1.0.0
+  provider: vllm
+  model: ibm/granite-4.0-h-micro
+  provider_model_id: ibm-granite/granite-4.0-h-micro
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/ibm-granite/granite-4.0-h-micro}
+- id: vllm/granite-4.0-h-small@1.0.0
+  provider: vllm
+  model: ibm/granite-4.0-h-small
+  provider_model_id: ibm-granite/granite-4.0-h-small
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/ibm-granite/granite-4.0-h-small}
+- id: vllm/granite-4.2-3b@1.0.0
+  provider: vllm
+  model: ibm/granite-4.2-3b
+  provider_model_id: ibm-granite/granite-4.2-3b
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: experimental
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/ibm-granite/granite-4.2-3b}
+- id: vllm/granite-4.2-8b@1.0.0
+  provider: vllm
+  model: ibm/granite-4.2-8b
+  provider_model_id: ibm-granite/granite-4.2-8b
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: experimental
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/ibm-granite/granite-4.2-8b}
+- id: vllm/granite-4.2-30b@1.0.0
+  provider: vllm
+  model: ibm/granite-4.2-30b
+  provider_model_id: ibm-granite/granite-4.2-30b
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: experimental
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/ibm-granite/granite-4.2-30b}

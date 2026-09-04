@@ -14,6 +14,8 @@ Day-0 support updates every product surface from one source.
 - Replace scalar quality metadata with evaluation records and versioned indices.
 - Generate the Dashboard Add Model experience and public Models/leaderboard
   views from the catalog.
+- Establish a broad current-and-previous-generation physical-model baseline;
+  keep GPT-6 Astra for the separate representative Day-0 change.
 - Validate the contribution flow with representative model and provider work.
 
 ## Non-Goals
@@ -43,15 +45,15 @@ Day-0 support updates every product surface from one source.
 
 - [x] `TASK-01` Publish the unified catalog, config, scoring, UX, website, and
   Day-0 workflow proposal with the current split inventory.
-- [ ] `TASK-02` Add versioned resource schemas, source layout, compiler,
+- [x] `TASK-02` Add versioned resource schemas, source layout, compiler,
   provenance, immutable registry, fixtures, and generated-diff enforcement.
-- [ ] `TASK-03` Add the v0.3 catalog materializer and targeted migration tool
+- [x] `TASK-03` Add the v0.3 catalog materializer and targeted migration tool
   for aliases, backend Provider IDs, built-in overlays, and custom model cards.
-- [ ] `TASK-04` Move protocol, auth, provider, offering, and reasoning behavior
+- [x] `TASK-04` Move protocol, auth, provider, offering, and reasoning behavior
   to catalog-backed registries and remove config-helper glue.
-- [ ] `TASK-05` Add evaluation records, the default intelligence index, score
+- [x] `TASK-05` Add evaluation records, the default intelligence index, score
   resolver, missing-data policy, and runtime observed-quality separation.
-- [ ] `TASK-06` Move Dashboard Add Model and provider logos to the catalog API;
+- [x] `TASK-06` Move Dashboard Add Model and provider logos to the catalog API;
   generate the public Models support matrix and leaderboards.
 - [ ] `TASK-07` Complete config, protocol, UI, website, and affected E2E
   validation. The representative new-model Day-0 change lands separately after
@@ -61,9 +63,10 @@ Day-0 support updates every product surface from one source.
 
 ## Next Action
 
-Implement the complete v0.3 vertical slice: resource schemas, compiler,
-materializer, generated runtime/UI/website views, migration, and affected
-validation. Do not add a new physical model in this architecture PR.
+Format and validate the complete v0.3 vertical slice and broad baseline catalog
+on the AMD validation host, exercise a real catalog-backed model through the
+Router and Dashboard, then close the plan and TD058. GPT-6 Astra remains the
+separate focused Day-0 follow-up.
 
 ## Operating Rules
 
