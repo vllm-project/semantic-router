@@ -367,7 +367,6 @@ export interface MemoryConfig {
   embedding_model?: string
   default_retrieval_limit?: number
   default_similarity_threshold?: number
-  extraction_batch_size?: number
   hybrid_search?: boolean
   hybrid_mode?: string
   adaptive_threshold?: boolean

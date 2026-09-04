@@ -99,7 +99,6 @@ func defaultCanonicalStoreGlobal() CanonicalStoreGlobal {
 			Milvus:                     MemoryMilvusConfig{Collection: "agentic_memory", Dimension: 384},
 			DefaultRetrievalLimit:      5,
 			DefaultSimilarityThreshold: 0.70,
-			ExtractionBatchSize:        10,
 		},
 		ResponseCache: SemanticCache{
 			Enabled:        true,
