@@ -135,11 +135,11 @@ routing:
       tags: [deployment:openrouter, role:worker]
     - name: gpt55-worker
       context_window_size: 1048576
-      description: OpenRouter worker for frontier synthesis.
-      capabilities: [chat, code, reasoning, long-context]
+      description: OpenRouter worker for long-context planning and frontier synthesis.
+      capabilities: [chat, code, reasoning, long-context, planning, synthesis]
       quality_score: 0.94
       modality: text
-      tags: [deployment:openrouter, role:worker]
+      tags: [deployment:openrouter, role:worker, role:planner]
 
   signals:
     conversation:
@@ -229,7 +229,7 @@ routing:
           mode: dynamic
           template: micro_agent
           planner:
-            model: qwen-coordinator
+            model: gpt55-worker
             max_completion_tokens: 2048
           max_steps: 4
           max_parallel: 3

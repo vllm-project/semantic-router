@@ -76,10 +76,11 @@ func AuthenticateRequest(service *Service) func(http.Handler) http.Handler {
 				return
 			}
 
-			required := RequiredPermission(r.Method, r.URL.Path)
-			if required != "" && !perms[required] {
-				http.Error(w, "Forbidden", http.StatusForbidden)
-				return
+			for _, required := range RequiredPermissions(r.Method, r.URL.Path) {
+				if !perms[required] {
+					http.Error(w, "Forbidden", http.StatusForbidden)
+					return
+				}
 			}
 
 			ctx := context.WithValue(r.Context(), authContextKey, AuthContext{
@@ -115,7 +116,7 @@ func ServiceUnavailableGuard() func(http.Handler) http.Handler {
 	}
 }
 
-func RequiredPermission(method, path string) string {
+func requiredPermission(method, path string) string {
 	path = strings.TrimSpace(strings.ToLower(path))
 	for _, resolver := range []func(string, string) (string, bool){
 		adminPermission,
@@ -125,7 +126,6 @@ func RequiredPermission(method, path string) string {
 		toolsPermission,
 		observabilityPermission,
 		recipePermission,
-		fleetSimPermission,
 		featurePermission,
 	} {
 		if permission, ok := resolver(method, path); ok {
@@ -138,6 +138,21 @@ func RequiredPermission(method, path string) string {
 	}
 
 	return ""
+}
+
+// RequiredPermissions returns every permission needed by a request. Most
+// routes require one permission; controlled-pair creation is both an evidence
+// write and an immediate two-worker launch, so it deliberately requires both.
+func RequiredPermissions(method, path string) []string {
+	path = strings.TrimSpace(strings.ToLower(path))
+	if method == http.MethodPost && path == "/api/evaluation/v1/controlled-pairs" {
+		return []string{PermEvalWrite, PermEvalRun}
+	}
+	primary := requiredPermission(method, path)
+	if primary == "" {
+		return nil
+	}
+	return []string{primary}
 }
 
 func recipePermission(_ string, path string) (string, bool) {
@@ -291,17 +306,10 @@ func observabilityPermission(_ string, path string) (string, bool) {
 	}
 }
 
-func fleetSimPermission(method, path string) (string, bool) {
-	if !strings.HasPrefix(path, "/api/fleet-sim/") && path != "/api/fleet-sim" {
-		return "", false
-	}
-	return readOrManagePermission(method, PermConfigRead, PermConfigWrite), true
-}
-
 func featurePermission(method, path string) (string, bool) {
 	switch {
 	case path == "/api/evaluation/v1" || strings.HasPrefix(path, "/api/evaluation/v1/"):
-		if isEvaluationRunAction(path) {
+		if isEvaluationRunAction(path) || isControlledPairCancelAction(path) {
 			return PermEvalRun, true
 		}
 		if method == http.MethodPost || method == http.MethodDelete {
@@ -315,6 +323,13 @@ func featurePermission(method, path string) (string, bool) {
 	default:
 		return "", false
 	}
+}
+
+func isControlledPairCancelAction(path string) bool {
+	path = strings.TrimRight(path, "/")
+	rest := strings.TrimPrefix(path, "/api/evaluation/v1/controlled-pairs/")
+	parts := strings.Split(rest, "/")
+	return len(parts) == 2 && parts[0] != "" && parts[1] == "cancel"
 }
 
 func isEvaluationRunAction(path string) bool {

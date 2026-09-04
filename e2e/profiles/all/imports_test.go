@@ -46,6 +46,21 @@ func TestEnvoyAIGatewayProfileKeepsKubernetesAlias(t *testing.T) {
 	}
 }
 
+func TestExternalGatewayResponsesProfileCoversStateContract(t *testing.T) {
+	profile, err := framework.NewProfileByName("external-gateway-responses")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"response-api-create",
+		"response-api-get",
+		"response-api-conversation-chaining",
+	}
+	if !reflect.DeepEqual(profile.GetTestCases(), want) {
+		t.Fatalf("external gateway Responses cases = %v, want %v", profile.GetTestCases(), want)
+	}
+}
+
 func TestProtocolCodecE2EMatrixProfilesAreClosed(t *testing.T) {
 	profiles := map[string][]string{
 		"response-api": {

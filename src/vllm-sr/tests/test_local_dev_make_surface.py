@@ -43,3 +43,15 @@ def test_memory_integration_uses_installed_agent_venv_cli() -> None:
     assert "vllm-sr-install-cli" in target
     assert 'PATH="$(AGENT_VENV)/bin:$$PATH" \\' in target
     assert "run_memory_integration.sh" in target
+
+
+def test_cli_integration_uses_an_isolated_runtime_stack() -> None:
+    content = DOCKER_MK_PATH.read_text(encoding="utf-8")
+    target = content.split("vllm-sr-test-integration:", 1)[1].split(
+        "memory-test-integration:", 1
+    )[0]
+
+    assert (
+        'VLLM_SR_STACK_NAME="$${VLLM_SR_STACK_NAME:-vllm-sr-cli-integration}"' in target
+    )
+    assert 'VLLM_SR_PORT_OFFSET="$${VLLM_SR_PORT_OFFSET:-4200}"' in target

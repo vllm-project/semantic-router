@@ -64,8 +64,22 @@ jobs:
       - name: Run dashboard checks
         run: make dashboard-check
 
+      - name: Run Evaluation browser acceptance
+        run: make dashboard-test-e2e-evaluation
+
       - name: Build dashboard
         run: make dashboard-build
+
+      - name: Upload Evaluation browser diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evaluation-browser-diagnostics
+          path: |
+            dashboard/frontend/playwright-report
+            dashboard/frontend/test-results
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Show results on failure
         if: failure()
@@ -74,6 +88,9 @@ jobs:
           echo ""
           echo "To run checks locally:"
           echo "  make dashboard-check"
+          echo ""
+          echo "To run Evaluation browser acceptance:"
+          echo "  make dashboard-test-e2e-evaluation"
           echo ""
           echo "To run only the backend Go tests:"
           echo "  make dashboard-test-backend"

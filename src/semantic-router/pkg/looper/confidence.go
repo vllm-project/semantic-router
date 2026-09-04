@@ -661,8 +661,9 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 		})
 
 		attempts++
-		resp, err := l.client.CallModel(
+		resp, err := l.callModelWithContextGate(
 			ctx,
+			req,
 			req.OriginalRequest,
 			modelName,
 			confidenceModelCallStreaming(req.IsStreaming, evaluator),
@@ -903,7 +904,7 @@ func (l *ConfidenceLooper) performSelfVerification(
 	})
 
 	// Call the same model to evaluate its answer
-	verifyResp, err := l.client.CallModel(ctx, verifyRequest, modelName, false, iteration, nil, accessKey)
+	verifyResp, err := l.callModelWithContextGate(ctx, req, verifyRequest, modelName, false, iteration, nil, accessKey)
 	if err != nil {
 		return selfVerificationExecution{Attempted: true}, fmt.Errorf("verifier model call failed: %w", err)
 	}

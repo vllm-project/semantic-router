@@ -66,6 +66,9 @@ func mutateReturnedProbeDetail(t *testing.T, service *Service) {
 		t.Fatalf("tool function = %#v", detail.Tools[0]["function"])
 	}
 	function["name"] = "mutated"
+	choice := detail.ToolChoice.(map[string]any)
+	choiceFunction := choice["function"].(map[string]any)
+	choiceFunction["name"] = "mutated"
 }
 
 func assertCachedDescriptorUnchanged(t *testing.T, service *Service) {
@@ -95,6 +98,7 @@ func assertCachedProbeDetailUnchanged(t *testing.T, service *Service) {
 	if !ok || function["name"] != "lookup" {
 		t.Fatalf("cached nested probe state was mutated: %#v", detail.Tools)
 	}
+	assertNamedToolChoice(t, detail.ToolChoice, "lookup")
 }
 
 func TestParsedSnapshotCacheInvalidatesAllDerivedStateTogether(t *testing.T) {

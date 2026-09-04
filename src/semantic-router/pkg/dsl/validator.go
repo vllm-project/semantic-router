@@ -398,6 +398,7 @@ var constraintRules = []constraintRule{
 	{field: "port", min: &floatMinPort, max: &floatMaxPort},
 	{field: "fuzzy_threshold", min: &floatZero},
 	{field: "ngram_arity", min: &floatOne},
+	{field: "minimum_candidates", min: &floatOne},
 }
 
 func (v *Validator) checkConstraints() {
@@ -450,10 +451,22 @@ func (v *Validator) checkSignalConstraints(s *SignalDecl) {
 		}
 	case "domain":
 		v.checkDomainSignalConstraints(s, context)
+	case "context":
+		v.checkContextSignalConstraints(s, context)
 	case "structure":
 		v.checkStructureSignalConstraints(s)
 	case "conversation":
 		v.checkConversationSignalConstraints(s)
+	}
+}
+
+// checkContextSignalConstraints rejects token bands the runtime would refuse:
+// neither limit set, unparsable or negative values, or min_tokens above
+// max_tokens. Equal values are an exact-match band, omitting max_tokens makes
+// the band open-ended, and omitting min_tokens means 0.
+func (v *Validator) checkContextSignalConstraints(s *SignalDecl, context string) {
+	if _, err := contextSignalBounds(s); err != nil {
+		v.addDiag(DiagConstraint, s.Pos, fmt.Sprintf("%s: %v", context, err), nil)
 	}
 }
 
@@ -521,6 +534,15 @@ func (v *Validator) checkRouteConstraints(r *RouteDecl) {
 			&QuickFix{Description: "Set priority to 0", NewText: "0"},
 		)
 	}
+
+	if r.OnUnknown != "" && !config.UnknownPolicy(r.OnUnknown).IsValid() {
+		v.addDiag(DiagConstraint, r.Pos,
+			fmt.Sprintf("%s: on_unknown must be %s, got %q", context, config.UnknownPolicyChoices(), r.OnUnknown),
+			nil,
+		)
+	}
+
+	v.checkRouteAction(r, context)
 
 	// Check algorithm constraints
 	if r.Algorithm != nil {

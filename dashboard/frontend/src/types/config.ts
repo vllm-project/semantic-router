@@ -123,8 +123,10 @@ export interface LanguageSignal {
 
 export interface ContextSignal {
   name: string
-  min_tokens: string
-  max_tokens: string
+  /** Inclusive lower bound. Defaults to 0 when omitted. */
+  min_tokens?: string
+  /** Inclusive upper bound. Omit for an open-ended band (no upper limit). */
+  max_tokens?: string
   description?: string
 }
 
@@ -188,6 +190,12 @@ export interface ClassifierSignal {
   labels: string[]
   instructions?: string
   use_cpu?: boolean
+}
+
+export interface InputModalitySignal {
+  name: string
+  description?: string
+  modality: 'text' | 'image' | 'audio' | 'video'
 }
 
 export interface ComplexityCandidates {
@@ -265,6 +273,7 @@ export interface Signals {
   conversation?: ConversationSignal[]
   metadata?: MetadataSignal[]
   classifiers?: ClassifierSignal[]
+  input_modality?: InputModalitySignal[]
 }
 
 // =============================================================================
@@ -292,6 +301,7 @@ export type DecisionConditionType =
   | 'event'
   | 'metadata'
   | 'classifier'
+  | 'input_modality'
   | 'projection'
 export interface DecisionCondition {
   type: DecisionConditionType
@@ -304,6 +314,7 @@ export interface DecisionCondition {
 export interface DecisionRules {
   operator: 'AND' | 'OR' | 'NOT'
   conditions: DecisionCondition[]
+  on_unknown?: 'no_match' | 'match' | 'fail_request'
 }
 
 export interface ModelRef {

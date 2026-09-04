@@ -43,6 +43,7 @@ routing:
         - model: large-model
       algorithm:
         type: latency_aware
+        minimum_candidates: 2
         latency_aware:
           tpot_percentile: 90
           ttft_percentile: 95
@@ -50,6 +51,13 @@ routing:
 
 Choose an algorithm from the inventory below, then follow its guide for the
 required fields and dependencies.
+
+`minimum_candidates` is a common algorithm field. A model-free Recipe may
+declare it before any Models are bound; once an Entrypoint materializes the
+Recipe, validation requires that many distinct `modelRefs`. The same boundary
+is checked again after request-time context eligibility filtering, so a panel,
+cascade, or selector does not silently run with a smaller pool than its policy
+declares.
 
 ## Algorithm Inventory
 
@@ -99,4 +107,7 @@ traffic before using them for production routing.
   cluster-wide scheduler.
 - Looper algorithms share request content with their configured workers. Apply
   privacy and provider-boundary decisions before choosing them.
+- Looper-generated planner, worker, verifier, judge, and synthesis prompts are
+  checked against each target Model's known context window before dispatch.
+  Missing context metadata remains eligible for compatibility.
 - Validate a complete config with `vllm-sr validate --config config.yaml`.

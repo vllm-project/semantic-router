@@ -76,6 +76,7 @@ PASSTHROUGH_ENV_RULES = (
     ("SR_LOG_ENCODING", False),
     ("SR_LOG_DEVELOPMENT", False),
     ("SR_LOG_ADD_CALLER", False),
+    ("VLLM_SR_ENVOY_LOG_LEVEL", False),
 )
 
 _STATIC_SENSITIVE = frozenset(name for name, masked in PASSTHROUGH_ENV_RULES if masked)

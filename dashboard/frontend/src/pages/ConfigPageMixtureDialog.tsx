@@ -14,6 +14,7 @@ import {
   applyRecipeAssignments,
   assignmentState,
   type ModelAssignments,
+  minimumCandidatesForDecision,
 } from './configPageMixtureSupport'
 import type { ConfigData, EntrypointConfig, NormalizedModel } from './configPageSupport'
 import styles from './ConfigPageMixtureDialog.module.css'
@@ -112,11 +113,15 @@ export default function ConfigPageMixtureDialog({
       return
     }
     const incompleteDecision = decisions.find(
-      (decision) => (assignments[decision.name]?.length ?? 0) === 0,
+      (decision) =>
+        (assignments[decision.name]?.length ?? 0) < minimumCandidatesForDecision(decision),
     )
     if (incompleteDecision) {
+      const minimum = minimumCandidatesForDecision(incompleteDecision)
       setActiveDecisionName(incompleteDecision.name)
-      setError(`Choose at least one model for “${incompleteDecision.name}”.`)
+      setError(
+        `Choose at least ${minimum} model${minimum === 1 ? '' : 's'} for “${incompleteDecision.name}”.`,
+      )
       return
     }
 
@@ -162,7 +167,8 @@ export default function ConfigPageMixtureDialog({
       (!normalizedModelSearch || modelName.toLocaleLowerCase().includes(normalizedModelSearch)),
   )
   const completedDecisionCount = decisions.filter(
-    (decision) => (assignments[decision.name]?.length ?? 0) > 0,
+    (decision) =>
+      (assignments[decision.name]?.length ?? 0) >= minimumCandidatesForDecision(decision),
   ).length
 
   return (
@@ -351,9 +357,8 @@ export default function ConfigPageMixtureDialog({
                       </span>
                     </div>
                     <span>
-                      {activeSelection.length
-                        ? `${activeSelection.length} selected`
-                        : 'Choose at least one'}
+                      {activeSelection.length} selected · minimum{' '}
+                      {minimumCandidatesForDecision(activeDecision)}
                     </span>
                   </div>
                   <div className={styles.modelPickerToolbar}>

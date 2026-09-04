@@ -1,0 +1,175 @@
+.pairStep {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.55fr) minmax(0, 1.45fr);
+  gap: 1rem;
+  padding: 1rem 0;
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.pairIntro {
+  display: grid;
+  align-content: start;
+  gap: 0.25rem;
+}
+
+.pairIntro h4 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+}
+
+.pairIntro p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+
+.pairWorkspace {
+  display: grid;
+  gap: 0.7rem;
+  min-width: 0;
+}
+
+.sourceGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.sourceGrid label {
+  display: grid;
+  gap: 0.32rem;
+  min-width: 0;
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  font-weight: 650;
+}
+
+.sourceGrid select {
+  width: 100%;
+}
+
+.pairAction {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.pairAction > span {
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  line-height: 1.45;
+}
+
+.pairAction button,
+.error button {
+  flex: 0 0 auto;
+}
+
+.errorActions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 0.35rem;
+}
+
+.progress {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+  border-radius: 0;
+}
+
+.progress > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.2rem 0.5rem;
+  padding: 0.55rem 0.65rem;
+}
+
+.progress > div + div {
+  border-left: 1px solid var(--border-subtle);
+}
+
+.progress dt {
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  font-weight: 650;
+}
+
+.progress dd {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+}
+
+.progress small {
+  grid-column: 1 / -1;
+  color: var(--text-muted);
+  font-size: 0.65rem;
+}
+
+.progressDetails {
+  width: 100%;
+}
+
+.error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 0.7rem;
+  border-left: 2px solid var(--color-danger);
+  background: transparent;
+  color: #ffb0b3;
+  font-size: 0.7rem;
+  line-height: 1.45;
+}
+
+.errorCopy {
+  display: grid;
+  min-width: 0;
+  gap: 0.3rem;
+}
+
+.ready {
+  padding: 0.6rem 0.7rem;
+  border-left: 2px solid var(--color-success);
+  background: transparent;
+  color: #a5f3c1;
+  font-size: 0.7rem;
+}
+
+@media (max-width: 760px) {
+  .pairStep,
+  .sourceGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .pairAction,
+  .error {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .errorActions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 480px) {
+  .progress {
+    grid-template-columns: 1fr;
+  }
+
+  .progress > div + div {
+    border-top: 1px solid var(--border-subtle);
+    border-left: 0;
+  }
+}

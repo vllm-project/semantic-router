@@ -214,6 +214,7 @@ export interface RecipeProbeDetail extends RecipeProbeSummary {
   query?: string
   messages?: RecipeProbeMessage[]
   tools?: unknown[]
+  tool_choice?: unknown
   repeat: number
   padding?: {
     text: string
@@ -320,6 +321,7 @@ export interface RecipeProbeRunPlan {
   model?: string
   messages: RecipeProbeMessage[]
   tools?: unknown[]
+  tool_choice?: unknown
   request: Record<string, unknown>
   editable: boolean
 }

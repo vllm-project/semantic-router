@@ -17,6 +17,7 @@ func materializeChatRequest(probe ProbeDetail) (ChatRequest, error) {
 		Model:               probe.Model,
 		Messages:            []map[string]any{},
 		Tools:               cloneObjects(probe.Tools),
+		ToolChoice:          cloneJSONValue(probe.ToolChoice),
 		Stream:              true,
 		MaxCompletionTokens: defaultCompletionTokens,
 	}
@@ -54,12 +55,13 @@ func materializeEvalRequest(probe ProbeDetail) (EvalRequest, error) {
 
 func materializeEvalRequestWithLimit(probe ProbeDetail, limit int) (EvalRequest, error) {
 	request := EvalRequest{
-		Model: probe.Model,
-		Tools: cloneObjects(probe.Tools),
+		Model:      probe.Model,
+		Tools:      cloneObjects(probe.Tools),
+		ToolChoice: cloneJSONValue(probe.ToolChoice),
 	}
 	if len(probe.Messages) > 0 {
 		messageLimit, err := requestValueByteLimit(
-			"messages", probe.Model, request.Tools, []any{}, limit,
+			"messages", probe.Model, request.Tools, request.ToolChoice, []any{}, limit,
 		)
 		if err != nil {
 			return EvalRequest{}, err
@@ -90,6 +92,7 @@ func requestValueByteLimit(
 	field string,
 	model string,
 	tools []map[string]any,
+	toolChoice any,
 	emptyValue any,
 	limit int,
 ) (int, error) {
@@ -99,6 +102,9 @@ func requestValueByteLimit(
 	}
 	if len(tools) > 0 {
 		envelope["tools"] = tools
+	}
+	if toolChoice != nil {
+		envelope["tool_choice"] = toolChoice
 	}
 	return requestEnvelopeValueByteLimit(envelope, emptyValue, limit)
 }

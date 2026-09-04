@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 )
@@ -17,19 +18,24 @@ type signalConversationHistory struct {
 	contextHasNonText      bool
 
 	// Conversation-shape facts for the conversation signal family.
-	hasDeveloperMessage     bool
-	userMessageCount        int
-	assistantMessageCount   int
-	systemMessageCount      int
-	toolMessageCount        int
-	toolDefinitionCount     int
-	assistantToolCallCount  int
-	toolResultCount         int
-	imageContentCount       int
-	assistantToolNames      []string
-	lastMessageRole         string
-	lastMessageToolResult   bool
-	lastUserAfterToolResult bool
+	hasDeveloperMessage       bool
+	userMessageCount          int
+	assistantMessageCount     int
+	systemMessageCount        int
+	toolMessageCount          int
+	toolDefinitionCount       int
+	toolChoiceRequired        bool
+	toolChoiceNone            bool
+	assistantToolCallCount    int
+	toolResultCount           int
+	imageContentCount         int
+	inputModality             classification.InputModalityFacts
+	assistantToolNames        []string
+	lastMessageRole           string
+	lastMessageToolResult     bool
+	lastMessageFlowToolResult bool
+	lastAssistantToolCall     bool
+	lastUserAfterToolResult   bool
 }
 
 func signalConversationHistoryFromSnapshot(result *requestSignalSnapshot) signalConversationHistory {
@@ -37,28 +43,33 @@ func signalConversationHistoryFromSnapshot(result *requestSignalSnapshot) signal
 		return signalConversationHistory{}
 	}
 	return signalConversationHistory{
-		currentUserMessage:      result.UserContent,
-		priorUserMessages:       append([]string(nil), result.PriorUserMessages...),
-		nonUserMessages:         append([]string(nil), result.NonUserMessages...),
-		hasAssistantReply:       result.HasAssistantReply,
-		metadata:                cloneRoutingMetadata(result.Metadata),
-		contextTokenFloor:       result.ContextTokenFloor,
-		contextTextBytes:        result.ContextTextBytes,
-		contextEquivalentBytes:  result.ContextEquivalentBytes,
-		contextHasNonText:       result.ContextHasNonText,
-		hasDeveloperMessage:     result.HasDeveloperMessage,
-		userMessageCount:        result.UserMessageCount,
-		assistantMessageCount:   result.AssistantMessageCount,
-		systemMessageCount:      result.SystemMessageCount,
-		toolMessageCount:        result.ToolMessageCount,
-		toolDefinitionCount:     result.ToolDefinitionCount,
-		assistantToolCallCount:  result.AssistantToolCallCount,
-		toolResultCount:         result.ToolResultCount,
-		imageContentCount:       result.ImageContentCount,
-		assistantToolNames:      append([]string(nil), result.AssistantToolNames...),
-		lastMessageRole:         result.LastMessageRole,
-		lastMessageToolResult:   result.LastMessageToolResult,
-		lastUserAfterToolResult: result.LastUserAfterToolResult,
+		currentUserMessage:        result.UserContent,
+		priorUserMessages:         append([]string(nil), result.PriorUserMessages...),
+		nonUserMessages:           append([]string(nil), result.NonUserMessages...),
+		hasAssistantReply:         result.HasAssistantReply,
+		metadata:                  cloneRoutingMetadata(result.Metadata),
+		contextTokenFloor:         result.ContextTokenFloor,
+		contextTextBytes:          result.ContextTextBytes,
+		contextEquivalentBytes:    result.ContextEquivalentBytes,
+		contextHasNonText:         result.ContextHasNonText,
+		hasDeveloperMessage:       result.HasDeveloperMessage,
+		userMessageCount:          result.UserMessageCount,
+		assistantMessageCount:     result.AssistantMessageCount,
+		systemMessageCount:        result.SystemMessageCount,
+		toolMessageCount:          result.ToolMessageCount,
+		toolDefinitionCount:       result.ToolDefinitionCount,
+		toolChoiceRequired:        result.ToolChoiceRequired,
+		toolChoiceNone:            result.ToolChoiceNone,
+		assistantToolCallCount:    result.AssistantToolCallCount,
+		toolResultCount:           result.ToolResultCount,
+		imageContentCount:         result.ImageContentCount,
+		inputModality:             result.InputModality,
+		assistantToolNames:        append([]string(nil), result.AssistantToolNames...),
+		lastMessageRole:           result.LastMessageRole,
+		lastMessageToolResult:     result.LastMessageToolResult,
+		lastMessageFlowToolResult: result.LastMessageFlowToolResult,
+		lastAssistantToolCall:     result.LastAssistantToolCall,
+		lastUserAfterToolResult:   result.LastUserAfterToolResult,
 	}
 }
 

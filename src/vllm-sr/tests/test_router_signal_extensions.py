@@ -237,6 +237,37 @@ def test_bare_classifier_leaf_preserves_predicate_fields():
     assert condition.on_error == "match"
 
 
+def test_rules_accept_terminal_on_unknown():
+    rules = Rules.model_validate(
+        {
+            "type": "classifier",
+            "name": "risk",
+            "label": "RISKY",
+            "predicate": {"gte": 0.8},
+            "on_unknown": "fail_request",
+        }
+    )
+    assert rules.on_unknown == "fail_request"
+
+
+def test_nested_condition_rejects_on_unknown():
+    with pytest.raises(ValidationError):
+        Rules.model_validate(
+            {
+                "operator": "AND",
+                "conditions": [
+                    {
+                        "type": "classifier",
+                        "name": "risk",
+                        "label": "RISKY",
+                        "predicate": {"gte": 0.8},
+                        "on_unknown": "match",
+                    }
+                ],
+            }
+        )
+
+
 def test_prompt_decision_rejects_duplicate_base_models():
     with pytest.raises(ValidationError):
         Decision(

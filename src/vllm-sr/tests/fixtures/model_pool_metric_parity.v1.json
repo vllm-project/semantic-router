@@ -1,0 +1,298 @@
+{
+  "schema_version": "model-pool-metric-parity.v1",
+  "frozen_arm_ids": [
+    "team.a",
+    "zulu",
+    "alpha"
+  ],
+  "planned_case_ids": [
+    "case-4",
+    "case-1",
+    "case-3",
+    "case-2"
+  ],
+  "pool_records": [
+    {
+      "case_id": "case-1",
+      "arm_id": "alpha",
+      "status": "succeeded",
+      "success": true,
+      "quality": 0.9,
+      "runtime_cost": 2
+    },
+    {
+      "case_id": "case-1",
+      "arm_id": "team.a",
+      "status": "failed",
+      "success": null,
+      "quality": null,
+      "runtime_cost": 1
+    },
+    {
+      "case_id": "case-1",
+      "arm_id": "zulu",
+      "status": "succeeded",
+      "success": true,
+      "quality": 0.5,
+      "runtime_cost": 3
+    },
+    {
+      "case_id": "case-2",
+      "arm_id": "alpha",
+      "status": "succeeded",
+      "success": true,
+      "quality": 0.4,
+      "runtime_cost": 2
+    },
+    {
+      "case_id": "case-2",
+      "arm_id": "team.a",
+      "status": "succeeded",
+      "success": true,
+      "quality": 0.8,
+      "runtime_cost": 3
+    },
+    {
+      "case_id": "case-2",
+      "arm_id": "zulu",
+      "status": "failed",
+      "success": null,
+      "quality": null,
+      "runtime_cost": 1
+    },
+    {
+      "case_id": "case-3",
+      "arm_id": "alpha",
+      "status": "failed",
+      "success": null,
+      "quality": null,
+      "runtime_cost": 1
+    },
+    {
+      "case_id": "case-3",
+      "arm_id": "team.a",
+      "status": "failed",
+      "success": null,
+      "quality": null,
+      "runtime_cost": 1
+    },
+    {
+      "case_id": "case-3",
+      "arm_id": "zulu",
+      "status": "failed",
+      "success": null,
+      "quality": null,
+      "runtime_cost": 1
+    },
+    {
+      "case_id": "case-4",
+      "arm_id": "alpha",
+      "status": "succeeded",
+      "success": true,
+      "quality": 0.7,
+      "runtime_cost": 2
+    },
+    {
+      "case_id": "case-4",
+      "arm_id": "team.a",
+      "status": "succeeded",
+      "success": true,
+      "quality": 0.6,
+      "runtime_cost": 1
+    },
+    {
+      "case_id": "case-4",
+      "arm_id": "zulu",
+      "status": "succeeded",
+      "success": true,
+      "quality": 0.7,
+      "runtime_cost": 2
+    }
+  ],
+  "joint_records": [
+    {
+      "case_id": "case-1",
+      "selected_arm_id": "alpha",
+      "status": "succeeded"
+    },
+    {
+      "case_id": "case-2",
+      "selected_arm_id": "team.a",
+      "status": "succeeded"
+    },
+    {
+      "case_id": "case-3",
+      "selected_arm_id": "zulu",
+      "status": "succeeded"
+    },
+    {
+      "case_id": "case-4",
+      "selected_arm_id": "alpha",
+      "status": "succeeded"
+    }
+  ],
+  "expected_metrics": [
+    {
+      "id": "model_pool.all_arm_failure_rate",
+      "value": 0.25,
+      "sample_count": 4,
+      "observed_exclusions": 0
+    },
+    {
+      "id": "model_pool.arm.alpha.marginal_contribution",
+      "value": 0.1,
+      "sample_count": 4,
+      "observed_exclusions": 0
+    },
+    {
+      "id": "model_pool.arm.alpha.quality",
+      "value": 0.5,
+      "sample_count": 4,
+      "observed_exclusions": 0
+    },
+    {
+      "id": "model_pool.arm.alpha.success_rate",
+      "value": 0.75,
+      "sample_count": 4,
+      "observed_exclusions": 0
+    },
+    {
+      "id": "model_pool.arm.u-dGVhbS5h.marginal_contribution",
+      "value": 0.1,
+      "sample_count": 4,
+      "observed_exclusions": 0
+    },
+    {
+      "id": "model_pool.arm.u-dGVhbS5h.quality",
+      "value": 0.35,
+      "sample_count": 4,
+      "observed_exclusions": 0
+    },
+    {
+      "id": "model_pool.arm.u-dGVhbS5h.success_rate",
+      "value": 0.5,
+      "sample_count": 4,
+      "observed_exclusions": 0
+    },
+    {
+      "id": "model_pool.arm.zulu.marginal_contribution",
+      "value": 0.0,
+      "sample_count": 4,
+      "observed_exclusions": 0
+    },
+    {
+      "id": "model_pool.arm.zulu.quality",
+      "value": 0.3,
+      "sample_count": 4,
+      "observed_exclusions": 0
+    },
+    {
+      "id": "model_pool.arm.zulu.success_rate",
+      "value": 0.5,
+      "sample_count": 4,
+      "observed_exclusions": 0
+    },
+    {
+      "id": "model_pool.arm_count",
+      "value": 3.0,
+      "sample_count": 4,
+      "observed_exclusions": 0
+    },
+    {
+      "id": "model_pool.best_single_quality",
+      "value": 0.5,
+      "sample_count": 4,
+      "observed_exclusions": 0
+    },
+    {
+      "id": "model_pool.mean_pairwise_failure_jaccard",
+      "value": 0.4444444444444444,
+      "sample_count": 4,
+      "observed_exclusions": 0
+    },
+    {
+      "id": "model_pool.oracle_gain",
+      "value": 0.09999999999999998,
+      "sample_count": 4,
+      "observed_exclusions": 0
+    },
+    {
+      "id": "model_pool.oracle_quality",
+      "value": 0.6,
+      "sample_count": 4,
+      "observed_exclusions": 0
+    },
+    {
+      "id": "model_pool.pareto_dominated_arm_count",
+      "value": 1.0,
+      "sample_count": 4,
+      "observed_exclusions": 0
+    },
+    {
+      "id": "model_pool.pareto_evaluable_arm_count",
+      "value": 3.0,
+      "sample_count": 4,
+      "observed_exclusions": 0
+    },
+    {
+      "id": "model_pool.quality_cost_shared_support_cases",
+      "value": 4.0,
+      "sample_count": 4,
+      "observed_exclusions": 0
+    },
+    {
+      "id": "model_pool.quality_cost_shared_support_fraction",
+      "value": 1.0,
+      "sample_count": 4,
+      "observed_exclusions": 0
+    },
+    {
+      "id": "model_pool.quality_dominated_arm_count",
+      "value": 1.0,
+      "sample_count": 4,
+      "observed_exclusions": 0
+    },
+    {
+      "id": "model_pool.quality_shared_support_cases",
+      "value": 4.0,
+      "sample_count": 4,
+      "observed_exclusions": 0
+    },
+    {
+      "id": "model_pool.quality_shared_support_fraction",
+      "value": 1.0,
+      "sample_count": 4,
+      "observed_exclusions": 0
+    },
+    {
+      "id": "model_pool.selection_arm_coverage",
+      "value": 1.0,
+      "sample_count": 4,
+      "observed_exclusions": 0
+    },
+    {
+      "id": "model_pool.selection_entropy_bits",
+      "value": 1.5,
+      "sample_count": 4,
+      "observed_exclusions": 0
+    },
+    {
+      "id": "model_pool.unique_win_rate",
+      "value": 0.5,
+      "sample_count": 4,
+      "observed_exclusions": 0
+    },
+    {
+      "id": "model_pool.unique_wins",
+      "value": 2.0,
+      "sample_count": 4,
+      "observed_exclusions": 0
+    },
+    {
+      "id": "model_pool.worst_arm_reliability",
+      "value": 0.5,
+      "sample_count": 4,
+      "observed_exclusions": 0
+    }
+  ]
+}

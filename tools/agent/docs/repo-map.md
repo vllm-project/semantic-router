@@ -41,7 +41,7 @@ the changed-file structure gate rejects unowned additions.
 - `src/vllm-sr/`
   - Python CLI, config generation, Docker orchestration, local bootstrap flow
 - `src/fleet-sim/`
-  - Fleet simulator package, HTTP service, data sets, examples, and service image used by the dashboard sidecar
+  - Standalone fleet simulator package, HTTP service, data sets, examples, and service image
 - `candle-binding/`, `ml-binding/`, `nlp-binding/`
   - Rust-backed inference and ML bindings used by the router
 - `dashboard/`
@@ -109,7 +109,7 @@ the changed-file structure gate rejects unowned additions.
 - `src/vllm-sr/**`
   - affects local developer experience and local image startup
 - `src/fleet-sim/**`
-  - affects simulator packaging, dashboard fleet-planning workflows, and local sidecar startup
+  - affects the standalone simulator package, service, and release workflow
 - `deploy/operator/**`
   - affects CRD schema, generated manifests, and controller-side config translation
 - `src/semantic-router/**`

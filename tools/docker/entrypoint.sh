@@ -26,8 +26,8 @@ case "$AI_BINDING" in
 esac
 
 if [[ ! -f "$BINARY" ]]; then
-  echo "[entrypoint] Binary not found: $BINARY (AI_BINDING=$AI_BINDING)" >&2
-  echo "[entrypoint] Falling back to candle binding..." >&2
+  echo "[entrypoint] ERROR: requested AI_BINDING='$AI_BINDING' is unavailable because $BINARY is missing." >&2
+  echo "[entrypoint] ERROR: falling back to AI_BINDING=candle; the effective backend differs from the requested backend." >&2
   BINARY=/app/router-candle
   AI_BINDING=candle
   if [[ ! -f "$BINARY" ]]; then

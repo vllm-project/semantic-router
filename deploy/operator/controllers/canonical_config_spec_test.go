@@ -222,7 +222,8 @@ func TestBuildCanonicalConfigPreservesDecisionAlgorithm(t *testing.T) {
 					{
 						Name: "hybrid-route",
 						Rules: vllmv1alpha1.RuleCombinationConfig{
-							Operator: "AND",
+							Operator:  "AND",
+							OnUnknown: "fail_request",
 							Conditions: []vllmv1alpha1.RuleConditionConfig{
 								{Type: "event", Name: "critical_payment_event"},
 							},
@@ -263,6 +264,9 @@ func TestBuildCanonicalConfigPreservesDecisionAlgorithm(t *testing.T) {
 	}
 	if canonical.Routing.Decisions[0].Rules.Conditions[0].Type != "event" {
 		t.Fatalf("expected event condition to survive typed decision conversion, got %#v", canonical.Routing.Decisions[0].Rules)
+	}
+	if canonical.Routing.Decisions[0].Rules.OnUnknown != "fail_request" {
+		t.Fatalf("expected on_unknown to survive typed decision conversion, got %#v", canonical.Routing.Decisions[0].Rules)
 	}
 }
 

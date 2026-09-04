@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"k8s.io/client-go/kubernetes"
 
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
@@ -18,7 +19,7 @@ import (
 
 const (
 	evaluationSchemaVersion = "evaluation.v1"
-	evaluationGateContract  = "evaluation-release-gates.v1"
+	evaluationGateContract  = "evaluation-release-gates.v2"
 	evaluationSmokeSuite    = "evaluation-smoke"
 	evaluationFixtureTarget = "fixture"
 	evaluationPollTimeout   = 2 * time.Minute
@@ -36,9 +37,12 @@ var evaluationTrackIDs = []string{
 }
 
 type dashboardEvaluationRun struct {
-	ID       string `json:"id"`
-	Status   string `json:"status"`
-	Progress struct {
+	ID              string     `json:"id"`
+	ClientRequestID string     `json:"client_request_id"`
+	Status          string     `json:"status"`
+	StartedAt       *time.Time `json:"started_at"`
+	CompletedAt     *time.Time `json:"completed_at"`
+	Progress        struct {
 		Percent int `json:"percent"`
 	} `json:"progress"`
 	Error string `json:"error"`
@@ -50,10 +54,11 @@ type dashboardEvaluationReport struct {
 		ChangeProfile string `json:"change_profile"`
 		EvidenceLevel string `json:"evidence_level"`
 	} `json:"run"`
-	Summary   evaluationReportSummary `json:"summary"`
-	Tracks    []evaluationTrackReport `json:"tracks"`
-	Gates     []evaluationGate        `json:"gates"`
-	Artifacts []evaluationArtifact    `json:"artifacts"`
+	Summary       evaluationReportSummary `json:"summary"`
+	Tracks        []evaluationTrackReport `json:"tracks"`
+	Gates         []evaluationGate        `json:"gates"`
+	Artifacts     []evaluationArtifact    `json:"artifacts"`
+	MethodReports []json.RawMessage       `json:"method_reports"`
 }
 
 type evaluationReportSummary struct {
@@ -89,9 +94,15 @@ type evaluationCatalogItem struct {
 	ID string `json:"id"`
 }
 
+type dashboardEvaluationErrorResponse struct {
+	Error struct {
+		Message string `json:"message"`
+	} `json:"error"`
+}
+
 func init() {
 	pkgtestcases.Register("dashboard-evaluation-plane", pkgtestcases.TestCase{
-		Description: "Run all Evaluation Plane tracks and verify evidence, gates, reports, comparison, and cancellation",
+		Description: "Run all Evaluation Plane tracks and verify evidence, gates, reports, paired admission, and lifecycle guards",
 		Tags:        []string{"dashboard", "evaluation"},
 		Fn:          testDashboardEvaluationPlane,
 	})
@@ -123,15 +134,15 @@ func testDashboardEvaluationPlane(
 	}
 
 	baseline, baselineReport, err := executeVerifiedEvaluationBaseline(
-		ctx, httpClient, baseURL, token,
+		ctx, httpClient, baseURL, token, newEvaluationClientRequestID(),
 	)
 	if err != nil {
 		return err
 	}
-	if err := verifySameRevisionComparisonGuard(ctx, httpClient, baseURL, token, baseline.ID); err != nil {
+	if err := verifySameRevisionCandidateAdmissionGuard(ctx, httpClient, baseURL, token, baseline.ID); err != nil {
 		return err
 	}
-	if err := verifyEvaluationCancellation(ctx, httpClient, baseURL, token); err != nil {
+	if err := verifyPendingEvaluationCancellationGuard(ctx, httpClient, baseURL, token); err != nil {
 		return err
 	}
 
@@ -149,9 +160,11 @@ func testDashboardEvaluationPlane(
 func executeVerifiedEvaluationBaseline(
 	ctx context.Context,
 	client *http.Client,
-	baseURL, token string,
+	baseURL, token, clientRequestID string,
 ) (dashboardEvaluationRun, dashboardEvaluationReport, error) {
-	baseline, err := createEvaluationSmokeRun(ctx, client, baseURL, token, "baseline", 41, "")
+	baseline, err := createEvaluationSmokeRun(
+		ctx, client, baseURL, token, clientRequestID, "baseline", 41, "",
+	)
 	if err != nil {
 		return baseline, dashboardEvaluationReport{}, err
 	}
@@ -174,70 +187,52 @@ func executeVerifiedEvaluationBaseline(
 	return baseline, report, nil
 }
 
-func verifySameRevisionComparisonGuard(
+func verifySameRevisionCandidateAdmissionGuard(
 	ctx context.Context,
 	client *http.Client,
 	baseURL, token, baselineID string,
 ) error {
-	candidate, err := createEvaluationSmokeRun(
-		ctx, client, baseURL, token, "candidate", 41, baselineID,
-	)
-	if err != nil {
+	candidateRequestID := newEvaluationClientRequestID()
+	if candidateRequestID == baselineID {
+		return fmt.Errorf("candidate create reused baseline client_request_id %q", baselineID)
+	}
+	payload := evaluationRunCreatePayload(candidateRequestID, "candidate", 41, baselineID)
+	var response dashboardEvaluationErrorResponse
+	if err := evaluationJSON(
+		ctx, client, http.MethodPost, baseURL+"/api/evaluation/v1/runs", token,
+		payload, &response, http.StatusBadRequest,
+	); err != nil {
 		return err
 	}
-	candidate, err = waitForEvaluationRun(ctx, client, baseURL, token, candidate.ID)
-	if err != nil {
-		return err
-	}
-	url := fmt.Sprintf("%s/api/evaluation/v1/compare?baseline_run_id=%s&candidate_run_id=%s", baseURL, baselineID, candidate.ID)
-	var response struct {
-		Error struct {
-			Message string `json:"message"`
-		} `json:"error"`
-	}
-	if err := evaluationJSON(ctx, client, http.MethodGet, url, token, nil, &response, http.StatusBadRequest); err != nil {
-		return err
-	}
-	if !strings.Contains(response.Error.Message, "source code revision treatment to change") {
-		return fmt.Errorf("same-revision comparison was rejected for the wrong reason: %s", response.Error.Message)
-	}
-	return nil
-}
-
-func verifyEvaluationCancellation(
-	ctx context.Context,
-	client *http.Client,
-	baseURL, token string,
-) error {
-	pending, err := createEvaluationRun(ctx, client, baseURL, token, "cancel-contract", 43, "")
-	if err != nil {
-		return err
-	}
-	cancelled, err := mutateEvaluationRun(ctx, client, baseURL, token, pending.ID, "cancel")
-	if err != nil {
-		return err
-	}
-	if cancelled.Status != "cancelled" {
-		return fmt.Errorf("cancelled run status = %q, want cancelled", cancelled.Status)
+	const expected = `invalid evaluation request: change_profile "schema_adapter" requires the code treatment factor to change`
+	if response.Error.Message != expected {
+		return fmt.Errorf("same-revision candidate was rejected for the wrong reason: %s", response.Error.Message)
 	}
 	return nil
 }
 
 func verifyEvaluationAPIGuards(ctx context.Context, client *http.Client, baseURL, token string) error {
-	invalid := map[string]interface{}{
-		"name": "must-not-start", "description": "RBAC boundary",
-		"suite_ids": []string{evaluationSmokeSuite}, "track_ids": evaluationTrackIDs,
-		"mode": "replay", "target_id": evaluationFixtureTarget,
-		"change_profile": "schema_adapter",
-		"sample_limit":   4, "concurrency": 1, "seed": 1, "auto_start": true,
+	invalid := evaluationRunCreatePayload(newEvaluationClientRequestID(), "must-not-start", 1, "")
+	invalid["description"] = "RBAC boundary"
+	invalid["sample_limit"] = 4
+	invalid["concurrency"] = 1
+	invalid["auto_start"] = true
+	var removedFieldResponse dashboardEvaluationErrorResponse
+	if err := evaluationJSON(ctx, client, http.MethodPost, baseURL+"/api/evaluation/v1/runs", token, invalid, &removedFieldResponse, http.StatusBadRequest); err != nil {
+		return fmt.Errorf("removed workflow field guard: %w", err)
 	}
-	if err := evaluationJSON(ctx, client, http.MethodPost, baseURL+"/api/evaluation/v1/runs", token, invalid, nil, http.StatusBadRequest); err != nil {
-		return fmt.Errorf("auto_start authorization guard: %w", err)
+	if !strings.Contains(removedFieldResponse.Error.Message, "auto_start") {
+		return fmt.Errorf("removed workflow field guard rejected the wrong field: %s", removedFieldResponse.Error.Message)
 	}
-	invalid["auto_start"] = false
+	delete(invalid, "auto_start")
+	invalid["client_request_id"] = newEvaluationClientRequestID()
 	invalid["unexpected_field"] = "schema drift"
-	if err := evaluationJSON(ctx, client, http.MethodPost, baseURL+"/api/evaluation/v1/runs", token, invalid, nil, http.StatusBadRequest); err != nil {
+	var unexpectedFieldResponse dashboardEvaluationErrorResponse
+	if err := evaluationJSON(ctx, client, http.MethodPost, baseURL+"/api/evaluation/v1/runs", token, invalid, &unexpectedFieldResponse, http.StatusBadRequest); err != nil {
 		return fmt.Errorf("strict evaluation request guard: %w", err)
+	}
+	if !strings.Contains(unexpectedFieldResponse.Error.Message, "unexpected_field") {
+		return fmt.Errorf("strict evaluation request guard rejected the wrong field: %s", unexpectedFieldResponse.Error.Message)
 	}
 	for _, legacyPath := range []string{"/api/evaluation/tasks", "/api/evaluation/run", "/api/evaluation/datasets"} {
 		if err := evaluationJSON(ctx, client, http.MethodGet, baseURL+legacyPath, token, nil, nil, http.StatusNotFound); err != nil {
@@ -283,11 +278,13 @@ func verifyEvaluationCatalog(ctx context.Context, client *http.Client, baseURL, 
 func createEvaluationSmokeRun(
 	ctx context.Context,
 	client *http.Client,
-	baseURL, token, name string,
+	baseURL, token, clientRequestID, name string,
 	seed int,
 	baselineID string,
 ) (dashboardEvaluationRun, error) {
-	run, err := createEvaluationRun(ctx, client, baseURL, token, name, seed, baselineID)
+	run, err := createEvaluationRun(
+		ctx, client, baseURL, token, clientRequestID, name, seed, baselineID,
+	)
 	if err != nil {
 		return run, err
 	}
@@ -300,29 +297,40 @@ func createEvaluationSmokeRun(
 func createEvaluationRun(
 	ctx context.Context,
 	client *http.Client,
-	baseURL, token, name string,
+	baseURL, token, clientRequestID, name string,
 	seed int,
 	baselineID string,
 ) (dashboardEvaluationRun, error) {
+	payload := evaluationRunCreatePayload(clientRequestID, name, seed, baselineID)
+	var run dashboardEvaluationRun
+	err := evaluationJSON(ctx, client, http.MethodPost, baseURL+"/api/evaluation/v1/runs", token, payload, &run, http.StatusCreated)
+	if err == nil && (run.ID != clientRequestID || run.ClientRequestID != clientRequestID) {
+		err = fmt.Errorf(
+			"created evaluation run identity = %q/%q, want %q",
+			run.ID, run.ClientRequestID, clientRequestID,
+		)
+	}
+	return run, err
+}
+
+func evaluationRunCreatePayload(clientRequestID, name string, seed int, baselineID string) map[string]interface{} {
 	payload := map[string]interface{}{
-		"name":           "E2E " + name,
-		"description":    "Deterministic Evaluation Plane acceptance run",
-		"suite_ids":      []string{evaluationSmokeSuite},
-		"track_ids":      evaluationTrackIDs,
-		"mode":           "replay",
-		"target_id":      evaluationFixtureTarget,
-		"change_profile": "schema_adapter",
-		"sample_limit":   8,
-		"concurrency":    2,
-		"seed":           seed,
-		"auto_start":     false,
+		"client_request_id": clientRequestID,
+		"name":              "E2E " + name,
+		"description":       "Deterministic Evaluation Plane acceptance run",
+		"suite_ids":         []string{evaluationSmokeSuite},
+		"track_ids":         evaluationTrackIDs,
+		"mode":              "replay",
+		"target_id":         evaluationFixtureTarget,
+		"change_profile":    "schema_adapter",
+		"sample_limit":      8,
+		"concurrency":       2,
+		"seed":              seed,
 	}
 	if baselineID != "" {
 		payload["baseline_run_id"] = baselineID
 	}
-	var run dashboardEvaluationRun
-	err := evaluationJSON(ctx, client, http.MethodPost, baseURL+"/api/evaluation/v1/runs", token, payload, &run, http.StatusCreated)
-	return run, err
+	return payload
 }
 
 func waitForEvaluationRun(
@@ -437,6 +445,9 @@ func verifyEvaluationReportGates(report dashboardEvaluationReport) error {
 }
 
 func verifyEvaluationReportArtifacts(report dashboardEvaluationReport) error {
+	if report.MethodReports == nil {
+		return fmt.Errorf("evaluation report method_reports must be a non-null collection")
+	}
 	if len(report.Artifacts) == 0 {
 		return fmt.Errorf("report must include artifacts")
 	}
@@ -494,7 +505,6 @@ func verifyProtectedEvaluationArtifacts(
 		name string
 		id   string
 	}{
-		{name: "report.html", id: "report-html"},
 		{name: "cases.jsonl", id: "cases-jsonl"},
 		{name: "run-manifest.json", id: "run-manifest-json"},
 	} {
@@ -598,4 +608,8 @@ func containsEveryEvaluationID(items []evaluationCatalogItem, wanted []string) b
 		}
 	}
 	return true
+}
+
+func newEvaluationClientRequestID() string {
+	return uuid.NewString()
 }

@@ -217,6 +217,7 @@ Request-level override:
 | `model_names` | list[string] | `["vllm-sr/fusion"]` | Direct request model slugs that trigger Fusion execution |
 | `model` | string | first analysis model | Judge/calling model used for analysis and final synthesis |
 | `analysis_models` | list[string] | `modelRefs` | Panel models for parallel analysis |
+| `minimum_candidates` | int | unset | Minimum distinct decision `modelRefs` required after Recipe materialization and context eligibility filtering |
 | `analysis_overrides` | list[object] | none | Per-panel-model `temperature` and `max_completion_tokens`, keyed by `model`. Request-level entries merge field-wise onto the decision entry for the same model, so setting one field keeps the decision value for the other |
 | `max_concurrent` | int | panel size | Maximum concurrent panel calls |
 | `max_completion_tokens` | int | request default | Max completion tokens applied to Fusion subrequests |
@@ -236,6 +237,8 @@ Best practice:
 - Keep `analysis_models` stable per decision, and use `analysis_overrides` for model-specific tuning.
 - Use decision-level overrides for your baseline and request-level overrides only for one-off experiments.
 - Prefer sparse request overrides (set only the field you need) to preserve decision defaults through field-wise merge.
+- Keep `min_successful_responses` at or below the effective panel size. Invalid
+  quorums are rejected; the Router does not lower them automatically.
 
 ## Grounding-Aware Synthesis
 

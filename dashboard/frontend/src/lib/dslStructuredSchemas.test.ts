@@ -33,6 +33,7 @@ describe('DSL structured field schemas', () => {
 
   it('describes workflow and multi-factor structures with typed nested schemas', () => {
     const workflows = getAlgorithmFieldSchema('workflows')
+    expect(requireField(workflows, 'minimum_candidates')).toMatchObject({ type: 'number', min: 1 })
     const planner = requireField(workflows, 'planner')
     const roles = requireField(workflows, 'roles')
     const final = requireField(workflows, 'final')
@@ -87,6 +88,17 @@ describe('DSL structured field schemas', () => {
     ])
     expect(requireField(getSignalFieldSchema('classifier'), 'labels').type).toBe('string[]')
 
+    const conversationFeature = requireField(getSignalFieldSchema('conversation'), 'feature')
+    const conversationSource = requireField(conversationFeature.fields || [], 'source')
+    expect(requireField(conversationSource.fields || [], 'type').options).toEqual(
+      expect.arrayContaining([
+        'tool_choice_required',
+        'tool_choice_none',
+        'flow_tool_state',
+        'image_content',
+      ]),
+    )
+
     const headerMutation = getPluginFieldSchema('header_mutation')
     expect(requireField(headerMutation, 'add').type).toBe('object[]')
     expect(requireField(headerMutation, 'update').type).toBe('object[]')
@@ -100,14 +112,23 @@ describe('DSL structured field schemas', () => {
     expect(requireField(dynamicRetrieval.fields || [], 'weights').type).toBe('object')
   })
 
-  it('offers every conversation source type, including image_content, and non_user as a role', () => {
+  it('offers every conversation source type and non_user as a role', () => {
     const conversationFeature = requireField(getSignalFieldSchema('conversation'), 'feature')
     const source = requireField(conversationFeature.fields || [], 'source')
     const sourceType = requireField(source.fields || [], 'type')
     const role = requireField(source.fields || [], 'role')
 
-    expect(sourceType.options).toContain('image_content')
-    expect(sourceType.options).toHaveLength(6)
+    expect(sourceType.options).toEqual([
+      'message',
+      'tool_definition',
+      'tool_choice_required',
+      'tool_choice_none',
+      'assistant_tool_call',
+      'assistant_tool_cycle',
+      'active_tool_loop',
+      'image_content',
+      'flow_tool_state',
+    ])
     expect(role.options).toContain('non_user')
   })
 })

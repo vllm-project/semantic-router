@@ -424,6 +424,10 @@ class AlgorithmConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    # Minimum distinct decision candidates required once a model-free Recipe
+    # is materialized by an Entrypoint.
+    minimum_candidates: int | None = Field(default=None, ge=1)
+
     # Algorithm type: looper ("confidence", "ratings", "remom", "fusion",
     # "workflows") or
     # selection ("static", "router_dc", "automix", "hybrid", "knn",

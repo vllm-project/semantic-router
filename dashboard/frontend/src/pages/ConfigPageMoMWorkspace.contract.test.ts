@@ -47,6 +47,8 @@ describe('Mixture-of-Models workspace contracts', () => {
     const usage = readSource('./ConfigPageModelUsageDialog.tsx')
 
     expect(lists).toContain('onUsage(entrypoint)')
+    expect(lists).toContain('onEvaluate(entrypoint)')
+    expect(lists).toContain('Evaluate')
     expect(lists).not.toContain('Catalog metadata is unavailable')
     expect(lists).not.toContain('RecipeModelPool')
     expect(usage).toContain('/v1/chat/completions')
@@ -64,7 +66,7 @@ describe('Mixture-of-Models workspace contracts', () => {
 
     expect(routing).toContain('<ConfigPageMixtureDialog')
     expect(dialog).toContain('Choose a recipe. Assign the right models.')
-    expect(dialog).toContain('Choose at least one model')
+    expect(dialog).toContain('minimumCandidatesForDecision')
     expect(dialog).toContain('applyRecipeAssignments')
     expect(support).toContain('assignDecisionModels')
   })

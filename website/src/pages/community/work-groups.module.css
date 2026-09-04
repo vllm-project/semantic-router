@@ -193,6 +193,12 @@
   white-space: nowrap;
 }
 
+.groupLinks {
+  display: grid;
+  gap: 0.35rem;
+  justify-items: end;
+}
+
 .person {
   display: inline-flex;
   gap: 0.4rem;
@@ -302,6 +308,10 @@
 
   .groupFooter {
     grid-template-columns: 1fr;
+  }
+
+  .groupLinks {
+    justify-items: start;
   }
 
   .rules {

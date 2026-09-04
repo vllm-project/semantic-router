@@ -2,11 +2,13 @@ package evaluationplane
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
 	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -16,7 +18,7 @@ func goldenFile(t *testing.T, name string) string {
 	if !ok {
 		t.Fatal("resolve golden test source path")
 	}
-	return filepath.Join(filepath.Dir(source), "..", "..", "..", "src", "vllm-sr", "cli", "evaluation", "golden", name)
+	return filepath.Join(filepath.Dir(source), "..", "..", "..", "src", "vllm-sr", "tests", "fixtures", "evaluation", name)
 }
 
 func decodeGoldenStrict(t *testing.T, name string, destination any) {
@@ -40,28 +42,28 @@ func decodeGoldenStrict(t *testing.T, name string, destination any) {
 	}
 }
 
-func TestPythonGoldenContractsDecodeStrictly(t *testing.T) {
+func TestPythonWorkerDraftAndInputGoldenContractsDecodeStrictly(t *testing.T) {
 	var catalog Catalog
 	decodeGoldenStrict(t, "catalog.json", &catalog)
 	var manifest RunManifest
 	decodeGoldenStrict(t, "manifest.json", &manifest)
 	var liveManifest RunManifest
 	decodeGoldenStrict(t, "live-manifest.json", &liveManifest)
-	var report Report
-	decodeGoldenStrict(t, "report.json", &report)
+	var report workerReport
+	decodeGoldenStrict(t, "worker-report-draft.json", &report)
 
 	for name, version := range map[string]string{
 		"catalog": catalog.SchemaVersion, "manifest": manifest.SchemaVersion,
-		"manifest target": manifest.Target.SchemaVersion, "report": report.SchemaVersion,
+		"manifest target": manifest.Target.SchemaVersion, "worker draft": report.SchemaVersion,
 		"live manifest": liveManifest.SchemaVersion, "live manifest target": liveManifest.Target.SchemaVersion,
-		"report run": report.Run.SchemaVersion, "report provenance": report.Provenance.SchemaVersion,
+		"worker run": report.Run.SchemaVersion, "worker provenance": report.Provenance.SchemaVersion,
 	} {
 		if version != SchemaVersion {
 			t.Fatalf("%s schema_version=%q, want %q", name, version, SchemaVersion)
 		}
 	}
 	if report.Run.ID != manifest.RunID {
-		t.Fatalf("golden report run=%q differs from manifest=%q", report.Run.ID, manifest.RunID)
+		t.Fatalf("golden worker draft run=%q differs from manifest=%q", report.Run.ID, manifest.RunID)
 	}
 	if !digestPattern.MatchString(manifest.PolicySnapshotDigest) ||
 		!digestPattern.MatchString(liveManifest.PolicySnapshotDigest) {
@@ -73,31 +75,38 @@ func TestPythonGoldenContractsDecodeStrictly(t *testing.T) {
 		t.Fatalf("golden gate/profile contract drift: catalog=%q manifest=%q live=%q report=%q",
 			catalog.GateContractVersion, manifest.ChangeProfile, liveManifest.ChangeProfile, report.Run.ChangeProfile)
 	}
+	if liveManifest.Target.Mixture == nil {
+		t.Fatal("live manifest omits its frozen mixture")
+	}
+	if err := validateMixtureContract(liveManifest.Target.Mixture); err != nil {
+		t.Fatalf("live manifest mixture contract: %v", err)
+	}
 	if err := validateTargetContract(
 		liveManifest.Target.RouterAPIKey,
 		liveManifest.Target.EnvoyAPIKey,
-		liveManifest.Target.ModelArms,
+		liveManifest.Target.Mixture.ModelArms,
 		liveManifest.Target.BackendTopologyDigest,
 	); err != nil {
 		t.Fatalf("live manifest target contract: %v", err)
 	}
-	if liveManifest.Mode != ModeLive || !digestPattern.MatchString(liveManifest.Target.BackendTopologyDigest) || len(liveManifest.Target.ModelArms) < 2 {
+	if liveManifest.Mode != ModeLive || !digestPattern.MatchString(liveManifest.Target.BackendTopologyDigest) || len(liveManifest.Target.Mixture.ModelArms) < 2 {
 		t.Fatalf("live manifest lacks a runnable topology snapshot: %+v", liveManifest.Target)
 	}
 	for name, goldenManifest := range map[string]RunManifest{"replay": manifest, "live": liveManifest} {
 		recomputed, err := manifestSemanticDigest(goldenManifest)
 		if err != nil {
-			t.Fatalf("compute %s golden manifest digest: %v", name, err)
+			t.Errorf("compute %s golden manifest digest: %v", name, err)
+			continue
 		}
 		if recomputed != goldenManifest.ManifestDigest {
-			t.Fatalf("%s golden manifest_digest=%q, server-owned digest=%q", name, goldenManifest.ManifestDigest, recomputed)
+			t.Errorf("%s golden manifest_digest=%q, server-owned digest=%q", name, goldenManifest.ManifestDigest, recomputed)
 		}
 	}
-	if liveManifest.Target.ModelArms[0].InputCostPerMillionTokensUSD != 0 ||
-		liveManifest.Target.ModelArms[0].OutputCostPerMillionTokensUSD != 1 ||
-		liveManifest.Target.ModelArms[1].InputCostPerMillionTokensUSD != 1e-7 ||
-		!math.Signbit(liveManifest.Target.ModelArms[1].OutputCostPerMillionTokensUSD) ||
-		liveManifest.Target.ModelArms[1].Model != "公共-strong-模型" || liveManifest.CreatedAt.Nanosecond() != 123456000 {
+	if liveManifest.Target.Mixture.ModelArms[0].InputCostPerMillionTokensUSD != 0 ||
+		liveManifest.Target.Mixture.ModelArms[0].OutputCostPerMillionTokensUSD != 1 ||
+		liveManifest.Target.Mixture.ModelArms[1].InputCostPerMillionTokensUSD != 1e-7 ||
+		!math.Signbit(liveManifest.Target.Mixture.ModelArms[1].OutputCostPerMillionTokensUSD) ||
+		liveManifest.Target.Mixture.ModelArms[1].Model != "公共-strong-模型" || liveManifest.CreatedAt.Nanosecond() != 123456000 {
 		t.Fatalf("live golden lost cross-language numeric/time/unicode cases: %+v", liveManifest)
 	}
 	for _, gate := range report.Gates {
@@ -159,7 +168,89 @@ func TestBuiltinCatalogMatchesPythonGoldenDefinitions(t *testing.T) {
 			t.Fatalf("Go/Python suite order drift at %d: Go=%s Python=%s", index, actual.Suites[index].ID, golden.Suites[index].ID)
 		}
 	}
-	if !reflect.DeepEqual(actual.Targets, golden.Targets) {
-		t.Fatalf("Go/Python target drift:\nGo:     %+v\nPython: %+v", actual.Targets, golden.Targets)
+	actualTargetsJSON, actualTargetsErr := json.Marshal(actual.Targets)
+	goldenTargetsJSON, goldenTargetsErr := json.Marshal(golden.Targets)
+	if actualTargetsErr != nil || goldenTargetsErr != nil || string(actualTargetsJSON) != string(goldenTargetsJSON) {
+		t.Fatalf("Go/Python target drift:\nGo:     %s\nPython: %s", actualTargetsJSON, goldenTargetsJSON)
 	}
+}
+
+func TestCapabilityMatrixMatchesPythonCurrentContract(t *testing.T) {
+	var matrix struct {
+		SchemaVersion string `json:"schema_version"`
+		Cases         []struct {
+			Name           string         `json:"name"`
+			Valid          bool           `json:"valid"`
+			Target         ManifestTarget `json:"target"`
+			ExpectedTracks []TrackID      `json:"expected_tracks"`
+		} `json:"cases"`
+	}
+	decodeGoldenStrict(t, "capability-matrix.json", &matrix)
+	if matrix.SchemaVersion != SchemaVersion || len(matrix.Cases) == 0 {
+		t.Fatalf("invalid capability matrix header: %+v", matrix)
+	}
+	for _, test := range matrix.Cases {
+		t.Run(test.Name, func(t *testing.T) {
+			err := validateCapabilityMatrixTarget(test.Target)
+			if test.Valid && err != nil {
+				t.Fatalf("Go rejected Python-valid target: %v", err)
+			}
+			if !test.Valid && err == nil {
+				t.Fatal("Go accepted Python-invalid target")
+			}
+			if !test.Valid {
+				return
+			}
+			tracks := availableTargetTracks(targetDefinition{
+				Public:       CatalogTarget{ID: test.Target.ID, Kind: test.Target.Kind, Mixture: catalogMixtureFromManifest(test.Target.Mixture)},
+				Contract:     targetContract{ExecutionProfile: targetProfileRuntime, PolicySnapshot: policySnapshotRuntime, TrackRequirements: runtimeTrackRequirements()},
+				RouterAPIURL: test.Target.RouterAPIURL, EnvoyURL: test.Target.EnvoyURL,
+				RouterAPIKey: test.Target.RouterAPIKey, EnvoyAPIKey: test.Target.EnvoyAPIKey,
+				AgentTaskLedger:     test.Target.AgentTaskLedger,
+				FaultRecoveryLedger: test.Target.FaultRecoveryLedger,
+				HardPolicyLedger:    test.Target.HardPolicyLedger, ProductionExperimentLedger: test.Target.ProductionExperimentLedger,
+				Mixture: test.Target.Mixture, BackendTopologyDigest: test.Target.BackendTopologyDigest,
+			})
+			if !reflect.DeepEqual(tracks, test.ExpectedTracks) {
+				t.Fatalf("runtime tracks=%v, want %v", tracks, test.ExpectedTracks)
+			}
+		})
+	}
+}
+
+func validateCapabilityMatrixTarget(target ManifestTarget) error {
+	if target.SchemaVersion != SchemaVersion || !portableIDPattern.MatchString(target.ID) ||
+		strings.TrimSpace(target.Kind) == "" || len(target.Kind) > 64 {
+		return fmt.Errorf("invalid target identity")
+	}
+	for _, rawURL := range []string{target.RouterAPIURL, target.EnvoyURL} {
+		if err := validateServerOrigin(rawURL); err != nil {
+			return fmt.Errorf("invalid target URL")
+		}
+	}
+	if err := validateEndpointCredentialBindings(
+		target.RouterAPIURL, target.EnvoyURL, target.RouterAPIKey, target.EnvoyAPIKey,
+	); err != nil {
+		return err
+	}
+	if err := validateMixtureContract(target.Mixture); err != nil {
+		return err
+	}
+	if err := validateServiceEndpoint("hard_policy_ledger", target.HardPolicyLedger); err != nil {
+		return err
+	}
+	if err := validateServiceEndpoint("fault_recovery_ledger", target.FaultRecoveryLedger); err != nil {
+		return err
+	}
+	if err := validateServiceEndpoint("agent_task_ledger", target.AgentTaskLedger); err != nil {
+		return err
+	}
+	if err := validateServiceEndpoint("production_experiment_ledger", target.ProductionExperimentLedger); err != nil {
+		return err
+	}
+	arms := []ModelArm(nil)
+	if target.Mixture != nil {
+		arms = target.Mixture.ModelArms
+	}
+	return validateTargetContract(target.RouterAPIKey, target.EnvoyAPIKey, arms, target.BackendTopologyDigest)
 }

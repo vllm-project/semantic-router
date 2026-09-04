@@ -27,6 +27,20 @@ type RequestFacts struct {
 	ContextTextBytes       int
 	ContextEquivalentBytes int
 	ContextHasNonText      bool
+
+	// InputModality carries structural input-modality presence counts for the
+	// input_modality signal family.
+	InputModality InputModalityFacts
+}
+
+// InputModalityFacts counts content parts per input modality across the
+// request's user messages. Counting is purely structural: no classifier or
+// embedding model runs, and media payloads are never inspected or retained.
+type InputModalityFacts struct {
+	TextContentCount  int
+	ImageContentCount int
+	AudioContentCount int
+	VideoContentCount int
 }
 
 func (c *Classifier) evaluateMetadataSignal(

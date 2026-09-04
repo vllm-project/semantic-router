@@ -15,7 +15,6 @@ from cli import container_cli, container_start, core, runtime_lifecycle
 from cli.consts import (
     DEFAULT_API_PORT,
     DEFAULT_DASHBOARD_PORT,
-    DEFAULT_FLEET_SIM_PORT,
     DEFAULT_METRICS_PORT,
     DEFAULT_ROUTER_PORT,
 )
@@ -79,7 +78,6 @@ def test_resolve_runtime_stack_supports_custom_stack_name_and_port_offset():
     assert (
         stack_layout.dashboard_container_name == "audit-a-vllm-sr-dashboard-container"
     )
-    assert stack_layout.fleet_sim_container_name == "audit-a-vllm-sr-sim"
     assert stack_layout.network_name == "audit-a-vllm-sr-network"
     assert stack_layout.jaeger_container_name == "audit-a-vllm-sr-jaeger"
     assert stack_layout.prometheus_container_name == "audit-a-vllm-sr-prometheus"
@@ -88,7 +86,6 @@ def test_resolve_runtime_stack_supports_custom_stack_name_and_port_offset():
     assert stack_layout.metrics_port == DEFAULT_METRICS_PORT + 200
     assert stack_layout.dashboard_port == DEFAULT_DASHBOARD_PORT + 200
     assert stack_layout.api_port == DEFAULT_API_PORT + 200
-    assert stack_layout.fleet_sim_port == DEFAULT_FLEET_SIM_PORT + 200
     assert (
         stack_layout.dashboard_service_url
         == "http://audit-a-vllm-sr-dashboard-container:8700"
@@ -146,9 +143,6 @@ def test_start_vllm_sr_uses_state_root_override(monkeypatch, tmp_path):
         record("container_create_network"),
     )
     monkeypatch.setattr(
-        core, "start_fleet_sim_sidecar", record("start_fleet_sim_sidecar", True)
-    )
-    monkeypatch.setattr(
         core, "container_start_vllm_sr", record("container_start_vllm_sr")
     )
     monkeypatch.setattr(
@@ -174,11 +168,9 @@ def test_start_vllm_sr_uses_state_root_override(monkeypatch, tmp_path):
 
     core.start_vllm_sr("/tmp/config.yaml", env_vars={}, enable_observability=False)
 
-    fleet_sim_calls = [c for c in calls if c[0] == "start_fleet_sim_sidecar"]
     start_calls = [c for c in calls if c[0] == "container_start_vllm_sr"]
     recover_calls = [c for c in calls if c[0] == "recover_openclaw_containers"]
 
-    assert fleet_sim_calls[0][1][0] == str(state_root)
     assert start_calls[0][2]["state_root_dir"] == str(state_root)
     assert recover_calls[0][1][0] == str(state_root)
 

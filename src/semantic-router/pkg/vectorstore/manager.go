@@ -265,3 +265,39 @@ func (m *Manager) UpdateFileCounts(ctx context.Context, id string, fn func(*File
 	}
 	return nil
 }
+
+// failQueuedFileCounts applies the count transition for a batch of queued
+// jobs before attempting to persist any of the updated stores. Keeping the
+// in-memory transition separate from persistence means a shutdown deadline
+// cannot leave some drained jobs counted as in progress just because an
+// earlier registry write stalled.
+func (m *Manager) failQueuedFileCounts(ctx context.Context, failedByStore map[string]int) error {
+	type snapshot struct {
+		id    string
+		store *VectorStore
+	}
+
+	snapshots := make([]snapshot, 0, len(failedByStore))
+	m.mu.Lock()
+	for id, failed := range failedByStore {
+		if failed <= 0 {
+			continue
+		}
+		vs, ok := m.stores[id]
+		if !ok {
+			m.mu.Unlock()
+			return fmt.Errorf("vector store not found: %s", id)
+		}
+		vs.FileCounts.InProgress -= failed
+		vs.FileCounts.Failed += failed
+		snapshots = append(snapshots, snapshot{id: id, store: cloneVectorStore(vs)})
+	}
+	m.mu.Unlock()
+
+	for _, item := range snapshots {
+		if err := m.registry.SaveStore(ctx, cloneVectorStore(item.store)); err != nil {
+			return fmt.Errorf("persist vector store metadata for %s: %w", item.id, err)
+		}
+	}
+	return nil
+}

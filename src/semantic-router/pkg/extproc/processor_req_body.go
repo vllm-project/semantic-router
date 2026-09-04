@@ -113,7 +113,7 @@ func (r *OpenAIRouter) handleModelRouting(request *llmprotocol.Request, original
 	}
 	isEntrypoint := ctx.Routing.SelectedRecipe() != nil
 	executesLooper := r.routeExecutesLooper(ctx)
-	if !isEntrypoint && !executesLooper {
+	if !isEntrypoint && !executesLooper && !r.usesExternalGatewayDispatch(originalModel) {
 		if unavailable := r.unavailableModelResponse(originalModel, ctx); unavailable != nil {
 			return unavailable, nil
 		}
@@ -197,7 +197,7 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 			request, originalModel, decisionName, reasoningDecision.UseReasoning, ctx,
 		)
 		if err != nil {
-			return nil, err
+			return r.imageFileDispatchFailure(err, ctx)
 		}
 		response := r.buildProviderDispatchResponse(dispatch, ctx)
 		r.handleToolSelectionForRequest(request, response, ctx)
@@ -218,7 +218,7 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 		request, matchedModel, decisionName, reasoningDecision.UseReasoning, ctx,
 	)
 	if err != nil {
-		return nil, err
+		return r.imageFileDispatchFailure(err, ctx)
 	}
 
 	response := r.buildProviderDispatchResponse(dispatch, ctx)
@@ -256,6 +256,9 @@ func (r *OpenAIRouter) handleSpecifiedModelRouting(request *llmprotocol.Request,
 		"request_id": ctx.RequestID,
 		"model":      originalModel,
 	})
+	if r.usesExternalGatewayDispatch(originalModel) {
+		return r.handleExternalGatewayModelRouting(request, originalModel, ctx)
+	}
 
 	// Reject models that are not configured. Without this guard an unknown
 	// model is forwarded with no resolvable backend credential and surfaces as
@@ -272,7 +275,7 @@ func (r *OpenAIRouter) handleSpecifiedModelRouting(request *llmprotocol.Request,
 
 	dispatch, err := r.prepareProviderDispatch(request, originalModel, "", false, ctx)
 	if err != nil {
-		return nil, err
+		return r.imageFileDispatchFailure(err, ctx)
 	}
 	response := r.buildProviderDispatchResponse(dispatch, ctx)
 

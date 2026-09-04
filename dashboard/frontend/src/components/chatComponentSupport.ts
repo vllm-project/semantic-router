@@ -6,6 +6,7 @@ import {
   type ConversationPreview,
   type Message,
 } from './ChatComponentTypes'
+import type { PlaygroundErrorPresentation } from './playgroundErrorPresentation'
 
 export interface ChatComponentProps {
   endpoint?: string
@@ -83,7 +84,7 @@ export const getLiveThinkingProcess = (messages: readonly Message[]): string =>
 
 export const findQueuedErrorConversationId = (
   queues: Record<string, readonly unknown[] | undefined>,
-  conversationErrors: Record<string, string>,
+  conversationErrors: Record<string, PlaygroundErrorPresentation>,
 ): string | undefined =>
   Object.keys(queues).find(
     (conversationId) =>

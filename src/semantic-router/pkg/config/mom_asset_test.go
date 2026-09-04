@@ -24,7 +24,7 @@ func TestMoMRecipeDocumentContract(t *testing.T) {
 	}
 
 	wantDecisions := map[string]int{
-		"balance":  5,
+		"balance":  6,
 		"speed":    5,
 		"cost":     4,
 		"accuracy": 7,
@@ -54,6 +54,13 @@ func assertModelFreeRecipe(t *testing.T, recipe CanonicalRecipe) {
 	for _, decision := range recipe.Routing.Decisions {
 		if len(decision.ModelRefs) != 0 {
 			t.Fatalf("Recipe %q decision %q must receive models through assignments", recipe.Name, decision.Name)
+		}
+		if decision.Algorithm == nil || decision.Algorithm.MinimumCandidates < 1 {
+			t.Fatalf(
+				"Recipe %q decision %q must declare algorithm.minimum_candidates",
+				recipe.Name,
+				decision.Name,
+			)
 		}
 	}
 }

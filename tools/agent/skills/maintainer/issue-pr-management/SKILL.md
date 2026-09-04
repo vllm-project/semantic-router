@@ -57,8 +57,11 @@ description: Manages GitHub issue and pull-request lifecycle including creation,
    - Anyone with repository write permission may comment `/accept` after
      confirming scope and exactly one owning `wg/*` label; the workflow then
      replaces `needs-acceptance` with `accepted`.
-   - Use `.prowlabels.yaml` for command-driven `area/*` and `priority/*`
-     taxonomy; do not treat those labels as lifecycle state.
+   - Use exactly one `wg/*` label for project ownership. `[Epic]` issues carry
+     the automatically synchronized `epic` label; do not recreate the retired
+     `area/*` or `track/*` taxonomies.
+   - Use `.prowlabels.yaml` for command-driven `priority/*` taxonomy; do not
+     treat priority as lifecycle state.
    - Use `ready-for-dev` only for accepted, unassigned work with review
      capacity. `help wanted` and `good first issue` are curated subsets.
    - Do not invent labels outside the repository taxonomy unless the maintainer explicitly asks for a new label.

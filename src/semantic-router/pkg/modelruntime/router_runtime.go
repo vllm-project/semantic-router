@@ -123,7 +123,6 @@ func WarmupRouter(
 	if component == "" {
 		component = "router"
 	}
-
 	tasks := make([]Task, 0, len(warmups))
 	taskNames := make([]string, 0, len(warmups))
 	for _, warmup := range warmups {
@@ -184,6 +183,11 @@ func embeddingRuntimeTasks(
 		})
 		logEmbeddingRuntimeStart(component, cfg, paths)
 		return tracker.snapshot(), remoteEmbeddingRuntimeTask(cfg, component, tracker), tracker
+	}
+	// OpenVINO model initialization belongs to the classifier runtime. Do not
+	// send its model paths through the Candle-only shared runtime.
+	if cfg.EmbeddingModels.EmbeddingBackend() == config.EmbeddingBackendOpenVINO {
+		return EmbeddingRuntimeState{}, nil, nil
 	}
 	if !paths.hasConfiguredModels() {
 		return EmbeddingRuntimeState{}, nil, nil

@@ -130,6 +130,31 @@ decisions:
 	}
 }
 
+func TestProbeToolChoiceRequiresProtocolShape(t *testing.T) {
+	tests := []struct {
+		name  string
+		value any
+		want  string
+	}{
+		{name: "empty string", value: "  ", want: "must not be empty"},
+		{name: "empty object", value: map[string]any{}, want: "must not be empty"},
+		{name: "scalar", value: true, want: "must be a string or object"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := validateProbeToolChoice(test.value)
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("validateProbeToolChoice() error = %v, want %q", err, test.want)
+			}
+		})
+	}
+	for _, valid := range []any{"none", map[string]any{"type": "function"}} {
+		if err := validateProbeToolChoice(valid); err != nil {
+			t.Fatalf("validateProbeToolChoice(%#v): %v", valid, err)
+		}
+	}
+}
+
 func TestProbeVariantEditableRequiresOneTerminalTextPart(t *testing.T) {
 	zero := 0
 	tests := []struct {
@@ -471,11 +496,11 @@ func TestMoMGeneratedTextPreservesLegacyTextReceipt(t *testing.T) {
 		t.Fatalf("decodeProbes(%s): %v", path, err)
 	}
 	receipt := materializeMoMFixtureReceipt(t, manifest)
-	if receipt.probeCount != 226 || receipt.messageProbes != 85 || receipt.generatedProbes != 50 ||
-		receipt.imageParts != 57 || receipt.textBytes != 26_229_731 {
+	if receipt.probeCount != 235 || receipt.messageProbes != 89 || receipt.generatedProbes != 50 ||
+		receipt.imageParts != 57 || receipt.textBytes != 26_230_077 {
 		t.Fatalf("receipt counts = %#v", receipt)
 	}
-	if receipt.textDigest != "17e56c0457f3ffd9419a25ad8b8e0de60c21fbcf62a88d31fced47c2d1a189b7" {
+	if receipt.textDigest != "3f01766dddb0f84699c0e450381874b6cd22428fb3ed41a5928e2fb79c00723b" {
 		t.Fatalf("materialized text digest = %s", receipt.textDigest)
 	}
 	assertMoMImageFixtureReceipt(t, manifest, receipt.imageURLs)

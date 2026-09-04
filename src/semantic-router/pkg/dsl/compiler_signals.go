@@ -205,6 +205,26 @@ func (c *Compiler) compileMetadataSignal(s *SignalDecl) {
 	c.config.MetadataRules = append(c.config.MetadataRules, rule)
 }
 
+func (c *Compiler) compileInputModalitySignal(s *SignalDecl) {
+	payload := fieldsToMap(s.Fields)
+	payload["name"] = s.Name
+	raw, err := yaml.Marshal(payload)
+	if err != nil {
+		c.addError(s.Pos, "failed to encode input_modality signal %q: %v", s.Name, err)
+		return
+	}
+	var rule config.InputModalityRule
+	if err := yaml.Unmarshal(raw, &rule); err != nil {
+		c.addError(s.Pos, "failed to decode input_modality signal %q: %v", s.Name, err)
+		return
+	}
+	if err := config.ValidateInputModalityRuleContract(rule); err != nil {
+		c.addError(s.Pos, "%v", err)
+		return
+	}
+	c.config.InputModalityRules = append(c.config.InputModalityRules, rule)
+}
+
 func (c *Compiler) compileClassifierSignal(s *SignalDecl) {
 	payload := fieldsToMap(s.Fields)
 	payload["name"] = s.Name

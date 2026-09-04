@@ -10,59 +10,65 @@ Open
 
 ## Release Relevance
 
-The exact-pin registry, source verifier, normalized suite contract, private
-store, and data-only replay executor can ship. Imported suites remain E0 and
-cannot substantiate an upstream or promotion claim until this gap is closed.
+Exact source pins, safe normalized imports, first-party parsers, deterministic
+replay, and live re-execution can ship as explicitly bounded evidence. An
+import must remain exploratory and must not claim native benchmark or
+leaderboard parity until its source-to-row transformation and native grader
+have been independently attested.
 
 ## Scope
 
-- native-to-normalized adapters for the registered benchmark repositories
-- adapter binary and configuration provenance
-- native metric/grader parity
-- redistribution and hidden-label handling
+- native-to-normalized benchmark adapters;
+- adapter binary, configuration, and transformation provenance;
+- native metric and grader parity;
+- redistribution, unsafe serialization, and hidden-label boundaries.
 
 ## Summary
 
-The Evaluation Plane verifies all registered source and dataset revisions and
-validates an operator-supplied normalized bundle. It does not yet execute a
-repository-owned normalizer or cryptographically bind every normalized row to
-the verified checkout. A caller could supply a schema-valid bundle unrelated to
-that checkout, so source verification alone is not adapter attestation.
+The research inventory covers thirteen benchmark designs. Eleven pins expose a
+safe data surface handled by maintained normalizers; RouteJudge/ORBIT and
+RouterEval remain diagnostic-only because their pinned repositories do not
+provide the required safe per-case export. Installed bundles are schema,
+digest, identity, coverage, and visible/grading-boundary checked, but the
+system does not execute arbitrary upstream code or prove that an upstream
+generator or native scoring command produced caller-supplied bytes.
+
+The current E0 and narrow live-reexecution labels are intentional and must not
+be raised merely because a checkout and normalized artifact both validate.
 
 ## Evidence
 
-- `suite-install` reruns the system source verifier and ignores a caller-supplied
-  receipt.
-- The suite store validates content hashes, strict schemas, case joins,
-  permissions, and immutable IDs.
-- No adapter executable digest, transformation receipt, native grader parity
-  result, or source-to-row derivation is currently required.
+- The plan and public benchmark atlas declare thirteen research descriptors,
+  eleven executable safe normalizers, and two diagnostic-only sources.
+- Suite installation validates exact pins, parser outputs, schemas, joins, and
+  digests, but does not execute repository-owned native graders.
+- Public reports explicitly keep normalized imports at E0 and disclaim native
+  leaderboard reproduction.
 
 ## Why It Matters
 
-Without transformation attestation, an imported suite can prove contract
-plumbing but not that RouterArena, ORBIT, CodeRouterBench, or another registered
-benchmark was faithfully reproduced. Raising its evidence level would turn a
-clean Git pin into a false scientific claim.
+Without adapter and native-metric attestation, a valid normalized bundle can
+still be unrelated to the verified checkout or omit native slices, graders,
+hidden labels, cascades, or dynamic agent execution. Treating it as leaderboard
+parity would turn provenance plumbing into a false scientific claim.
 
 ## Desired End State
 
-Each benchmark has a maintained, sandboxed adapter that reads only its exact
-pinned checkout, emits the normalized IR and a transformation receipt, and
-passes parity tests against the benchmark's native splits, graders, and metric
-reducers. Licensing and hidden labels remain separate from public artifacts.
+Every supportable source has a maintained, no-network adapter whose exact
+binary, inputs, outputs, and native-parity result are sealed together. Sources
+that cannot be handled safely remain explicit product limitations rather than
+silently downgraded or executed as third-party code.
 
 ## Exit Criteria
 
-- Implement one versioned adapter package for every registered benchmark and
-  dataset pin.
-- Run adapters in a no-network, read-only-source sandbox with fixed dependencies,
-  seed, and resource limits.
-- Bind source, dataset, adapter image/binary, configuration, output objects, and
-  row counts in one signed or independently anchored receipt.
-- Compare normalized metrics with native benchmark outputs on maintained golden
-  subsets and define accepted tolerances.
-- Add Dashboard/operator suite discovery only for fully installed, attested
-  suites; never execute upstream source from a browser request.
-- Raise evidence above E0 only for the claims whose required native artifacts
-  and parity checks passed.
+- Maintain one versioned, sandboxed adapter for every benchmark whose license
+  and safe export surface permit execution.
+- Bind exact source and dataset pins, adapter image or binary, configuration,
+  output objects, row counts, and transformation receipt in one independently
+  anchored record.
+- Compare normalized reducers with native benchmark results on maintained
+  golden subsets and publish explicit tolerances.
+- Keep licensing, hidden-label, unsafe-serialization, and unavailable-export
+  blockers distinct from implementation readiness.
+- Advertise native-parity discovery only for adapters whose source derivation,
+  grader parity, and required artifacts all passed.

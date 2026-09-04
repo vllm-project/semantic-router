@@ -1500,9 +1500,6 @@
   "team.track.academic.description": {
     "message": "围绕项目开展前沿学术研究，并与工程团队紧密协作，推动研究成果转化为项目能力。"
   },
-  "homepage.community.team.subtitle": {
-    "message": "维护者与活跃提交者共同推进研究、基础设施与模型系统建设。"
-  },
   "team.committers.title": {
     "message": "提交者"
   },
@@ -2674,25 +2671,25 @@
     "message": "合计"
   },
   "community.contributors.range.v03ToNow.label": {
-    "message": "v0.3 -> 当前"
+    "message": "v0.3 → 当前"
   },
   "community.contributors.range.v03ToNow.caption": {
     "message": "自 v0.3 起"
   },
   "community.contributors.range.v02ToV03.label": {
-    "message": "v0.2 -> v0.3"
+    "message": "v0.2 → v0.3"
   },
   "community.contributors.range.v02ToV03.caption": {
     "message": "两个版本之间"
   },
   "community.contributors.range.v01ToV02.label": {
-    "message": "v0.1 -> v0.2"
+    "message": "v0.1 → v0.2"
   },
   "community.contributors.range.v01ToV02.caption": {
     "message": "两个版本之间"
   },
   "community.contributors.range.v0ToV01.label": {
-    "message": "v0 -> v0.1"
+    "message": "v0 → v0.1"
   },
   "community.contributors.range.v0ToV01.caption": {
     "message": "项目起步阶段"

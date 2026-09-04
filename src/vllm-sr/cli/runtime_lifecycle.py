@@ -20,7 +20,6 @@ from cli.container_cli import (
     container_network_connect,
     container_remove_container,
     container_start_container,
-    container_start_fleet_sim,
     container_start_grafana,
     container_start_jaeger,
     container_start_prometheus,
@@ -126,44 +125,6 @@ def start_observability_stack(
     return shared_network_name
 
 
-def start_fleet_sim_sidecar(
-    config_dir: str,
-    env_vars: dict[str, str],
-    stack_layout: RuntimeStackLayout,
-    sim_image: str | None = None,
-    pull_policy: str | None = None,
-) -> bool:
-    """Start the local simulator sidecar unless an external URL is configured."""
-    external_url = env_vars.get("TARGET_FLEET_SIM_URL") or os.getenv(
-        "TARGET_FLEET_SIM_URL"
-    )
-    if external_url:
-        env_vars["TARGET_FLEET_SIM_URL"] = external_url
-        log.info(f"Using external vllm-sr-sim service: {external_url}")
-        return False
-
-    raw_enabled = env_vars.get(
-        "VLLM_SR_SIM_ENABLED", os.getenv("VLLM_SR_SIM_ENABLED", "true")
-    )
-    if str(raw_enabled).lower() == "false":
-        log.info("vllm-sr-sim sidecar disabled via VLLM_SR_SIM_ENABLED=false")
-        return False
-
-    log.info("Starting vllm-sr-sim sidecar...")
-    _start_named_service(
-        "vllm-sr-sim",
-        lambda: container_start_fleet_sim(
-            image=sim_image,
-            network_name=stack_layout.network_name,
-            config_dir=config_dir,
-            stack_layout=stack_layout,
-            pull_policy=pull_policy,
-        ),
-    )
-    env_vars["TARGET_FLEET_SIM_URL"] = stack_layout.fleet_sim_service_url
-    return True
-
-
 def connect_runtime_container(
     shared_network_name: str, stack_layout: RuntimeStackLayout
 ) -> None:
@@ -218,7 +179,7 @@ def maybe_finish_setup_mode(
             ("Activate", "Activate a runnable config to enable routing"),
         )
     )
-    _log_runtime_commands(dashboard_disabled=False, fleet_sim_enabled=False)
+    _log_runtime_commands(dashboard_disabled=False)
     return True
 
 
@@ -384,7 +345,6 @@ def log_runtime_summary(
     stack_layout: RuntimeStackLayout,
     dashboard_disabled: bool,
     enable_observability: bool,
-    fleet_sim_enabled: bool,
     started_backends: set[str] | None = None,
 ) -> None:
     """Print the local endpoints and common follow-up commands."""
@@ -401,8 +361,6 @@ def log_runtime_summary(
             port += stack_layout.port_offset
         endpoints.append((name, f"http://localhost:{port}"))
     endpoints.append(("Metrics", stack_layout.metrics_url))
-    if fleet_sim_enabled:
-        endpoints.append(("Fleet Sim", stack_layout.fleet_sim_url))
     fields(endpoints)
 
     if started_backends:
@@ -427,7 +385,7 @@ def log_runtime_summary(
             )
         )
 
-    _log_runtime_commands(dashboard_disabled, fleet_sim_enabled)
+    _log_runtime_commands(dashboard_disabled)
     _print_curl_example(listeners, stack_layout)
 
 
@@ -471,27 +429,16 @@ def _print_matching_lines(text: str) -> None:
             progress(f"  {line}")
 
 
-def _log_runtime_commands(dashboard_disabled: bool, fleet_sim_enabled: bool) -> None:
+def _log_runtime_commands(dashboard_disabled: bool) -> None:
     commands = []
     if not dashboard_disabled:
         commands.append(("Dashboard", "vllm-sr dashboard"))
-    if fleet_sim_enabled:
-        commands.extend(
-            (
-                ("Logs", "vllm-sr logs <envoy|router|dashboard|simulator> [-f]"),
-                (
-                    "Status",
-                    "vllm-sr status [envoy|router|dashboard|simulator|all]",
-                ),
-            )
+    commands.extend(
+        (
+            ("Logs", "vllm-sr logs <envoy|router|dashboard> [-f]"),
+            ("Status", "vllm-sr status [envoy|router|dashboard|all]"),
         )
-    else:
-        commands.extend(
-            (
-                ("Logs", "vllm-sr logs <envoy|router|dashboard> [-f]"),
-                ("Status", "vllm-sr status [envoy|router|dashboard|all]"),
-            )
-        )
+    )
     commands.append(("Stop", "vllm-sr stop"))
     echo()
     heading("Commands")

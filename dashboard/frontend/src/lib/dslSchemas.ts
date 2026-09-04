@@ -108,15 +108,15 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
           key: 'min_tokens',
           label: 'Min Tokens',
           type: 'string',
-          required: true,
-          placeholder: '4K',
+          placeholder: '4K (defaults to 0)',
+          description: 'Inclusive lower bound. Defaults to 0 when empty.',
         },
         {
           key: 'max_tokens',
           label: 'Max Tokens',
           type: 'string',
-          required: true,
-          placeholder: '32K',
+          placeholder: '32K (leave empty for no upper bound)',
+          description: 'Inclusive upper bound. Leave empty for an open-ended band.',
         },
         { key: 'description', label: 'Description', type: 'string' },
       ]
@@ -391,10 +391,13 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
                   options: [
                     'message',
                     'tool_definition',
+                    'tool_choice_required',
+                    'tool_choice_none',
                     'assistant_tool_call',
                     'assistant_tool_cycle',
                     'active_tool_loop',
                     'image_content', // validator_conversation.go:16 -- #3001
+                    'flow_tool_state',
                   ],
                   required: true,
                 },

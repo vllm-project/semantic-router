@@ -3,6 +3,7 @@ package classification
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -69,7 +70,7 @@ func TestNewHTTPClassifierInference(t *testing.T) {
 			// constructor accepts it, alignScoresToMapping then allocates a
 			// zero-length distribution, and every valid server response is
 			// rejected as "label not in the configured label mapping" - on
-			// every request, blocking all traffic under on_error: block.
+			// every request, blocking all traffic on transport failure.
 			name: "index-to-label-only mapping has zero labels",
 			externalCfg: &config.ExternalModelConfig{
 				ModelEndpoint: config.ClassifierVLLMEndpoint{Address: "127.0.0.1", Port: 8080},
@@ -133,18 +134,64 @@ func TestNewHTTPClassifierInference_DefaultTimeout(t *testing.T) {
 	}
 }
 
+func TestHTTPClassifierInferenceDeadlineStopsSlowRequest(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(200 * time.Millisecond)
+		_, _ = w.Write([]byte(`[{"label":"safe","score":1.0},{"label":"jailbreak","score":0.0}]`))
+	}))
+	defer server.Close()
+
+	inf := newTestHTTPClassifierInference(t, server, testJailbreakMapping())
+	inf.timeout = 25 * time.Millisecond
+	startedAt := time.Now()
+	_, err := inf.Classify(context.Background(), "slow request")
+	if err == nil {
+		t.Fatal("expected deadline error")
+	}
+	if elapsed := time.Since(startedAt); elapsed > 150*time.Millisecond {
+		t.Fatalf("deadline did not stop the request promptly: %v", elapsed)
+	}
+}
+
+func TestHTTPClassifierInferenceConcurrentClassify(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode([]httpClassifyLabelScore{
+			{Label: "jailbreak", Score: 0.9},
+			{Label: "safe", Score: 0.1},
+		})
+	}))
+	defer server.Close()
+
+	inf := newTestHTTPClassifierInference(t, server, testJailbreakMapping())
+	const calls = 20
+	errs := make(chan error, calls)
+	for i := 0; i < calls; i++ {
+		go func() {
+			result, err := inf.Classify(context.Background(), "concurrent request")
+			if err == nil && (len(result.Probabilities) != 2 || result.Probabilities[1] != 0.9) {
+				err = fmt.Errorf("unexpected result: %#v", result)
+			}
+			errs <- err
+		}()
+	}
+	for i := 0; i < calls; i++ {
+		if err := <-errs; err != nil {
+			t.Fatalf("concurrent classify: %v", err)
+		}
+	}
+}
+
 // newTestHTTPClassifierInference points an HTTPClassifierInference at a
 // local httptest.Server without going through address/port parsing.
 func newTestHTTPClassifierInference(t *testing.T, server *httptest.Server, mapping sequenceLabelMapping) *HTTPClassifierInference {
 	t.Helper()
 	inf, err := NewHTTPClassifierInference(&config.ExternalModelConfig{
-		ModelEndpoint: config.ClassifierVLLMEndpoint{Address: "placeholder", Port: 1},
+		ModelEndpoint: endpointForTestServer(t, server),
 		ModelName:     "custom-classifier",
 	}, mapping)
 	if err != nil {
 		t.Fatalf("failed to construct inference: %v", err)
 	}
-	inf.baseURL = server.URL
 	return inf
 }
 

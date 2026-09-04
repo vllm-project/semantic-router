@@ -215,6 +215,7 @@ export interface DecisionCondition {
 export interface DecisionRuleSet {
   operator: 'AND' | 'OR' | 'NOT'
   conditions: DecisionCondition[]
+  on_unknown?: 'no_match' | 'match' | 'fail_request'
 }
 
 export interface DecisionModelRef {
@@ -553,6 +554,7 @@ export interface VectorStoreConfig {
   embedding_model?: string
   embedding_dimension?: number
   ingestion_workers?: number
+  ingestion_drain_timeout_seconds?: number
   supported_formats?: string[]
   milvus?: VectorStoreMilvusConfig
   memory?: VectorStoreMemoryConfig
@@ -701,7 +703,6 @@ export interface CanonicalClassifierConfig {
 
 export interface CanonicalHallucinationModuleConfig {
   enabled?: boolean
-  on_hallucination_detected?: string
   fact_check?: FactCheckModelModuleConfig
   detector?: HallucinationDetectorModuleConfig
   explainer?: NLIExplainerModuleConfig
@@ -1138,8 +1139,10 @@ export interface LanguageSignal {
 
 export interface ContextSignal {
   name: string
-  min_tokens: string
-  max_tokens: string
+  /** Inclusive lower bound. Defaults to 0 when omitted. */
+  min_tokens?: string
+  /** Inclusive upper bound. Omit for an open-ended band (no upper limit). */
+  max_tokens?: string
   description?: string
 }
 
@@ -1297,6 +1300,7 @@ export interface DecisionFormState {
   description: string
   priority: number
   operator: 'AND' | 'OR' | 'NOT'
+  on_unknown?: '' | 'no_match' | 'match' | 'fail_request'
   conditions: DecisionCondition[]
   modelRefs: DecisionModelRef[]
   plugins: { type: string; configuration: string | DecisionPluginConfiguration }[]
@@ -1317,7 +1321,10 @@ export function decisionRulesForSave(
   next: DecisionRuleSet,
 ): DecisionRuleSet {
   if (existing?.conditions.some(conditionHasNestedRules)) {
-    return JSON.parse(JSON.stringify(existing)) as DecisionRuleSet
+    const preserved = JSON.parse(JSON.stringify(existing)) as DecisionRuleSet
+    if (next.on_unknown) preserved.on_unknown = next.on_unknown
+    else delete preserved.on_unknown
+    return preserved
   }
   return next
 }

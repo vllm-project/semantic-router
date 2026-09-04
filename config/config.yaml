@@ -363,7 +363,7 @@ routing:
 
     complexity:
       - name: needs_reasoning
-        threshold: 0.75
+        threshold: 0.10
         description: Escalate multi-step reasoning or synthesis-heavy prompts.
         hard:
           candidates:
@@ -411,7 +411,7 @@ routing:
 
     jailbreak:
       - name: prompt_injection
-        method: hybrid
+        method: contrastive
         threshold: 0.8
         include_history: true
         description: Detect common prompt-injection or jailbreak attempts.
@@ -475,12 +475,30 @@ routing:
             type: tool_definition
         predicate:
           gte: 1
+      - name: requires_tool_execution
+        description: Request protocol requires at least one tool call.
+        feature:
+          type: exists
+          source:
+            type: tool_choice_required
+      - name: forbids_tool_execution
+        description: Request protocol explicitly forbids tool calls.
+        feature:
+          type: exists
+          source:
+            type: tool_choice_none
       - name: active_tool_use
         description: Tool-result continuation inside an agent loop.
         feature:
           type: exists
           source:
             type: active_tool_loop
+      - name: resumable_flow_state
+        description: Request ends with a Router Flow tool result carrying continuation state.
+        feature:
+          type: exists
+          source:
+            type: flow_tool_state
       - name: has_developer_msg
         description: Request contains a developer message.
         feature:
@@ -524,6 +542,14 @@ routing:
         key: consent
         predicate:
           equals: denied
+
+    input_modality:
+      - name: image_input
+        description: Request contains at least one image content part.
+        modality: image
+      - name: audio_input
+        description: Request contains at least one audio content part.
+        modality: audio
 
     classifiers:
       - name: generic-safety-score
@@ -759,6 +785,7 @@ routing:
           weight: 0.6
       algorithm:
         type: confidence
+        minimum_candidates: 2
         on_error: fallback
         confidence:
           confidence_method: hybrid
@@ -1278,13 +1305,13 @@ routing:
       priority: 125
       rules:
         operator: AND
+        on_unknown: no_match
         conditions:
           - type: classifier
             name: generic-safety-score
             label: JAILBREAK
             predicate:
               gte: 0.5
-            on_error: no_match
       modelRefs:
         - model: qwen3-8b
           use_reasoning: false
@@ -1406,6 +1433,25 @@ routing:
               - name: x-escalation-reason
                 value: repeated-question
 
+    # A route action sends every request matching this decision to
+    # action.destination, overriding a caller-pinned model, so a detected
+    # prompt attack cannot bypass the guard by naming a model. The action
+    # requires an explicit jailbreak condition in rules, and destination must
+    # be defined in model_config. If the destination cannot satisfy the
+    # request context window, the decision falls back to its normal candidate
+    # policy (modelRefs/default selection).
+    - name: prompt_attack_guard_route
+      description: Route detected prompt attacks to a safe fallback model.
+      priority: 120
+      rules:
+        type: jailbreak
+        name: prompt_injection
+      action:
+        type: route
+        destination: qwen3-8b
+      modelRefs:
+        - model: qwen3-8b
+          use_reasoning: false
     - name: safe_only_svm_route
       description: SVM route that only matches when prompt-injection signals are absent.
       priority: 110
@@ -1934,7 +1980,7 @@ global:
       embedding_model: multimodal
       embedding_dimension: 384
       ingestion_workers: 4
-      ingestion_drain_timeout_seconds: 30
+      ingestion_drain_timeout_seconds: 25
       supported_formats: [.txt, .md, .json, .csv, .html, .pdf]
       milvus:
         connection:
@@ -2134,6 +2180,25 @@ global:
       hallucination_detector: models/mom-halugate-detector
       hallucination_explainer: models/mom-halugate-explainer
       feedback_detector: models/mmbert32k-feedback-detector-merged
+    # admission bounds concurrent inference per system model deployment.
+    # Keys must match global.model_catalog.system entries (prompt_guard,
+    # domain_classifier, pii_classifier, fact_check_classifier,
+    # hallucination_detector, hallucination_explainer, feedback_detector).
+    # max_concurrency: inference slots running at once (>= 1).
+    # max_queue: bounded wait queue beyond the slots (0 = no queue).
+    # queue_timeout_ms: longest a request may wait for a slot; on expiry the
+    # request is shed (0 = wait until the request context is done).
+    # on_overflow selects what happens when every slot is busy and the queue
+    # is full: shed (default) rejects the request, wait blocks for a queue
+    # slot and requires max_queue >= 1, fail_open admits without a slot.
+    # The gate is validated here but not yet wired into the request path;
+    # omitting admission means no gate and preserves current behavior.
+    admission:
+      prompt_guard:
+        max_concurrency: 4
+        max_queue: 64
+        queue_timeout_ms: 250
+        on_overflow: shed
     external:
       - name: external-guardrail
         llm_provider: openai
@@ -2309,8 +2374,6 @@ global:
           model_id: models/mmbert32k-intent-classifier-merged
           threshold: 0.5
           use_cpu: true
-          use_modernbert: false
-          use_mmbert_32k: true
           category_mapping_path: models/mmbert32k-intent-classifier-merged/category_mapping.json
           fallback_category: other
         mcp:
@@ -2355,7 +2418,6 @@ global:
           margin_threshold: 0.0
       hallucination_mitigation:
         enabled: true
-        on_hallucination_detected: annotate
         fact_check:
           model_ref: fact_check_classifier
           model_id: models/mmbert32k-factcheck-classifier-merged

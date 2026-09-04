@@ -16,7 +16,8 @@ before serving.
 | Item | Value |
 | --- | --- |
 | Request-facing model | `vllm-sr/auto` |
-| Coordinator | `qwen-coordinator` |
+| Workflow planner | `gpt55-worker` |
+| Fusion coordinator | `qwen-coordinator` |
 | Review workers | `opus48-worker`, `gemini31-worker`, `gpt55-worker` |
 | Visual understanding | `local/omni` |
 | Default behavior | One direct request to `gpt55-worker` |
@@ -55,7 +56,7 @@ worker failure as long as enough workers remain to complete the request.
 
 ## Requirements
 
-- An OpenAI-compatible endpoint for the local coordinator.
+- An OpenAI-compatible endpoint for the local fusion coordinator.
 - An OpenAI-compatible visual-language endpoint for `local/omni`.
 - An `OPENROUTER_API_KEY` for the three reference review workers, or replacement
   bindings to equivalent backends.

@@ -67,6 +67,9 @@ func (c *Compiler) compilePromptAlgo(
 
 func (c *Compiler) compileAlgorithm(spec *AlgoSpec) *config.AlgorithmConfig {
 	algo := &config.AlgorithmConfig{Type: spec.AlgoType}
+	if minimum, ok := getIntField(spec.Fields, "minimum_candidates"); ok {
+		algo.MinimumCandidates = minimum
+	}
 	c.populateAlgorithmSubConfig(algo, spec)
 	c.setAlgorithmTopLevelOnError(algo, spec.Fields)
 	if algo.ReMoM != nil {

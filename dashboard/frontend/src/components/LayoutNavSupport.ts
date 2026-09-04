@@ -1,7 +1,6 @@
-import { FLEET_SIM_NAV_ITEMS } from '../utils/fleetSimApi'
 import type { ProductIconName } from './ProductIcon'
 
-export type LayoutDropdownKey = 'build' | 'analyze' | 'operate'
+export type LayoutDropdownKey = 'build' | 'operate'
 
 export type LayoutConfigSection =
   | 'models'
@@ -162,46 +161,6 @@ export const BUILD_MENU_CATEGORIES: LayoutMenuCategory[] = [
           { kind: 'config', label: 'MCP Servers', icon: 'tool', configSection: 'mcp' },
           { kind: 'route', label: 'OpenClaw', icon: 'claw', to: '/openclaw' },
         ],
-      },
-    ],
-  },
-]
-
-export const ANALYZE_MENU_CATEGORIES: LayoutMenuCategory[] = [
-  {
-    key: 'fleet-simulation',
-    label: 'Fleet Simulation',
-    description: 'Plan heterogeneous capacity before traffic reaches the live fleet.',
-    sections: [
-      {
-        title: 'Plan',
-        description: 'Define workloads and compare fleet strategies.',
-        items: FLEET_SIM_NAV_ITEMS.slice(0, 2).map((item) => ({
-          kind: 'route' as const,
-          label: item.label,
-          icon: 'fleet' as const,
-          to: item.to,
-        })),
-      },
-      {
-        title: 'Inventory',
-        description: 'Model the hardware pools available to the router.',
-        items: FLEET_SIM_NAV_ITEMS.slice(2, 3).map((item) => ({
-          kind: 'route' as const,
-          label: item.label,
-          icon: 'fleet' as const,
-          to: item.to,
-        })),
-      },
-      {
-        title: 'Runs',
-        description: 'Review completed and in-progress simulations.',
-        items: FLEET_SIM_NAV_ITEMS.slice(3).map((item) => ({
-          kind: 'route' as const,
-          label: item.label,
-          icon: 'fleet' as const,
-          to: item.to,
-        })),
       },
     ],
   },

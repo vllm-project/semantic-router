@@ -57,7 +57,6 @@ surfaces:
     - src/semantic-router/pkg/cache/**
     - src/semantic-router/pkg/contextcompression/**
     - src/semantic-router/pkg/embedding/**
-    - src/semantic-router/pkg/hnsw/**
     - src/semantic-router/pkg/inflight/**
     - src/semantic-router/pkg/internalauth/**
     - src/semantic-router/pkg/llmprotocol/**
@@ -310,12 +309,10 @@ surfaces:
     paths:
     - tools/make/agent.mk
     - tools/make/docker.mk
-    - src/fleet-sim/**
     - src/vllm-sr/cli/**
     - e2e/config/config.agent-smoke.*.yaml
     task_rules:
     - vllm-sr-cli
-    - fleet-sim
   local_e2e:
     description: Affected local E2E profile selection and local profile execution.
     paths:

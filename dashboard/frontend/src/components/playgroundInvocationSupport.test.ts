@@ -24,6 +24,7 @@ const invocation = (intent: 'run' | 'edit'): PlaygroundInvocation => ({
     { role: 'user', content: 'Explain vector clocks.' },
   ],
   tools: [{ type: 'function', function: { name: 'lookup', parameters: {} } }],
+  toolChoice: { type: 'function', function: { name: 'lookup' } },
   request: { temperature: 0 },
 })
 
@@ -51,6 +52,7 @@ describe('playgroundInvocationSupport', () => {
       model: 'team/custom-balanced',
       temperature: 0,
       tools: expect.any(Array),
+      tool_choice: { type: 'function', function: { name: 'lookup' } },
       messages: expect.any(Array),
     })
   })
@@ -105,6 +107,7 @@ describe('playgroundInvocationSupport', () => {
         model: 'team/custom-balanced',
         temperature: 0,
         tools: expect.any(Array),
+        tool_choice: { type: 'function', function: { name: 'lookup' } },
         messages: expect.any(Array),
       },
       appendPromptMessage: true,

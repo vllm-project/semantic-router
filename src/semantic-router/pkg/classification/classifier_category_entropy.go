@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -13,6 +14,13 @@ import (
 
 // ClassifyCategoryWithEntropy performs category classification with entropy-based reasoning decision
 func (c *Classifier) ClassifyCategoryWithEntropy(text string) (string, float64, entropy.ReasoningDecision, error) {
+	return c.ClassifyCategoryWithEntropyContext(context.Background(), text)
+}
+
+// ClassifyCategoryWithEntropyContext preserves the caller lifecycle while
+// evaluating a category backend. The context-free method above remains for
+// compatibility with service callers that do not expose a request context.
+func (c *Classifier) ClassifyCategoryWithEntropyContext(ctx context.Context, text string) (string, float64, entropy.ReasoningDecision, error) {
 	// Try keyword and embedding classifiers first
 	category, confidence, decision, matched, err := c.tryKeywordBasedClassification(text)
 	if err != nil {
@@ -24,7 +32,7 @@ func (c *Classifier) ClassifyCategoryWithEntropy(text string) (string, float64, 
 
 	// Try in-tree first if properly configured
 	if c.IsCategoryEnabled() && c.categoryInference != nil {
-		return c.classifyCategoryWithEntropyInTree(text)
+		return c.classifyCategoryWithEntropyInTree(ctx, text)
 	}
 
 	// If in-tree classifier was initialized but config is now invalid, return specific error
@@ -101,13 +109,13 @@ func (c *Classifier) makeReasoningDecisionForKeywordCategory(category string) en
 }
 
 // classifyCategoryWithEntropyInTree performs category classification with entropy using in-tree model
-func (c *Classifier) classifyCategoryWithEntropyInTree(text string) (string, float64, entropy.ReasoningDecision, error) {
+func (c *Classifier) classifyCategoryWithEntropyInTree(ctx context.Context, text string) (string, float64, entropy.ReasoningDecision, error) {
 	if !c.IsCategoryEnabled() {
 		return "", 0.0, entropy.ReasoningDecision{}, fmt.Errorf("category classification is not properly configured")
 	}
 
 	// Get full probability distribution
-	result, err := c.categoryInference.ClassifyWithProbabilities(text)
+	result, err := c.categoryInference.ClassifyWithProbabilities(ctx, text)
 	if err != nil {
 		return "", 0.0, entropy.ReasoningDecision{}, fmt.Errorf("classification error: %w", err)
 	}

@@ -291,7 +291,7 @@ export function buildSignalFormFields(): FieldConfig<AddSignalFormState>[] {
       name: 'max_tokens',
       label: 'Maximum Tokens (context only)',
       type: 'text',
-      placeholder: '8K or 1024K',
+      placeholder: '8K or 1024K (leave empty for no upper bound)',
       shouldHide: hideUnless('Context'),
     },
     {

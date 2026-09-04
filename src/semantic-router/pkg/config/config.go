@@ -250,6 +250,7 @@ type InlineModels struct {
 	HallucinationMitigation HallucinationMitigationConfig `yaml:"hallucination_mitigation"`
 	FeedbackDetector        FeedbackDetectorConfig        `yaml:"feedback_detector"`
 	ModalityDetector        ModalityDetectorConfig        `yaml:"modality_detector"`
+	ModelAdmission          map[string]AdmissionConfig    `yaml:"model_admission,omitempty"`
 }
 
 // IntelligentRouting captures user-facing signal and decision configuration.

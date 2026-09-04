@@ -50,12 +50,29 @@ Provider pricing belongs beside each concrete model under
 `cached_input_per_1m`, and `cache_write_per_1m` rates. Routing model cards do not
 repeat deployment prices or credentials.
 
+See [Backend Target Compatibility](backend-target-compatibility) before moving
+provider bindings between Docker, Helm, the Operator, and Dashboard workflows.
+The matrix distinguishes canonical pass-through from Kubernetes discovery and
+records which URL, path, weight, and provider fields each surface preserves.
+
 Router-wide debugging surfaces stay closed by default.
 `global.services.observability.profiling` serves Go `pprof` endpoints, and only
 when it is explicitly enabled; it then binds `127.0.0.1:6060` so profiles never
 reach a routable interface without an explicit `bind` change. The switch is read
 once at startup, so changing it requires a Router restart. See
 [API and Observability](../tutorials/global/api-and-observability).
+
+Built-in category/domain classification uses the local `variant` selector when
+no remote backend is configured. To call a named external classifier, attach a
+`backend` under `global.model_catalog.modules.classifier.domain` and resolve
+its `model` from `global.model_catalog.external[]` with
+`model_role: classification`. The shared backend fields are `protocol`,
+`contract`, `model`, and optional `deadline_ms`; category
+currently supports `http_classify` with the full `label_distribution.v1`
+response contract. Omit `backend` to retain local behavior. The deprecated
+`use_modernbert` and `use_mmbert_32k` keys remain readable, while generated
+canonical configuration uses `variant: candle`, `variant: modernbert`, or
+`variant: mmbert32k`.
 
 The [Routing Pipeline](../overview/signal-driven-decisions) explains the design.
 Capability pages under **Capabilities** document each signal, projection,
@@ -79,11 +96,12 @@ build regenerates this block and fails if the checked-in catalog has drifted.
 | `classifier` — learned signal | `classifier` exposes reusable label scores from a local native sequence classifier, a remote sequence classifier, or a configured external LLM. | [`config/fragments/signal/classifier/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/classifier/) | [Guide](../tutorials/signal/learned/classifier) |
 | `complexity` — learned signal | `complexity` estimates whether a request is `easy`, `medium`, or `hard` by comparing it with configured example sets. | [`config/fragments/signal/complexity/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/complexity/) | [Guide](../tutorials/signal/learned/complexity) |
 | `context` — heuristic signal | `context` detects requests that need a larger effective context window. | [`config/fragments/signal/context/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/context/) | [Guide](../tutorials/signal/heuristic/context) |
-| `conversation` — heuristic signal | `conversation` routes on the structure of a chat, such as message count, developer instructions, available tools, or an active tool loop. | [`config/fragments/signal/conversation/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/conversation/) | [Guide](../tutorials/signal/heuristic/conversation) |
+| `conversation` — heuristic signal | `conversation` routes on chat structure and protocol facts, such as message count, developer instructions, available tools, explicit tool-use constraints, or an active tool loop. | [`config/fragments/signal/conversation/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/conversation/) | [Guide](../tutorials/signal/heuristic/conversation) |
 | `domain` — learned signal | `domain` classifies the request topic family. | [`config/fragments/signal/domain/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/domain/) | [Guide](../tutorials/signal/learned/domain) |
 | `embedding` — learned signal | `embedding` matches requests by semantic similarity to representative examples. | [`config/fragments/signal/embedding/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/embedding/) | [Guide](../tutorials/signal/learned/embedding) |
 | `event` — heuristic signal | `event` routes structured event-like requests by event type, severity, urgency, or domain-specific action code. | [`config/fragments/signal/event/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/event/) | [Guide](../tutorials/signal/heuristic/event) |
 | `fact-check` — learned signal | `fact-check` decides whether a prompt should be treated as evidence-sensitive traffic. | [`config/fragments/signal/fact-check/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/fact-check/) | [Guide](../tutorials/signal/learned/fact-check) |
+| `input-modality` — heuristic signal | `input_modality` deterministically matches which kinds of input — `text`, `image`, `audio`, or `video` — are present in the parsed request. | [`config/fragments/signal/input-modality/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/input-modality/) | [Guide](../tutorials/signal/heuristic/input-modality) |
 | `jailbreak` — learned signal | `jailbreak` detects prompt-injection and jailbreak attempts before the Router commits to a route. | [`config/fragments/signal/jailbreak/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/jailbreak/) | [Guide](../tutorials/signal/learned/jailbreak) |
 | `kb` — learned signal | `kb` binds routing signals to the output of a named knowledge base instance. | [`config/fragments/signal/kb/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/kb/) | [Guide](../tutorials/signal/learned/kb) |
 | `keyword` — heuristic signal | `keyword` matches explicit words and phrases in the request. | [`config/fragments/signal/keyword/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/keyword/) | [Guide](../tutorials/signal/heuristic/keyword) |
@@ -195,6 +213,11 @@ global:
         enabled: true
 ```
 
+Classifier backend failures remain `Unknown` while the complete boolean tree
+is evaluated. Set `rules.on_unknown` to `no_match`, `match`, or `fail_request`
+to resolve an undetermined terminal result. Omitting it preserves the existing
+classifier-family error behavior.
+
 Requests using an automatic model alias enter the default `routing` profile.
 A concrete provider model name is a direct pass-through request and bypasses
 recipe signals, decisions, route plugins, cache, learning, and session routing.
@@ -209,6 +232,12 @@ vllm-sr serve --config config.yaml
 Validation catches schema errors, unresolved references, incompatible recipe
 boundaries, invalid provider bindings, and unsupported plugin or algorithm
 settings before the Router starts.
+
+For portable model-free Recipes, set
+`routing.decisions[].algorithm.minimum_candidates` to the smallest pool that
+preserves the decision's intended behavior. Empty built-in assets remain
+valid, while a published Entrypoint is rejected if its concrete assignments do
+not meet the declared cardinality.
 
 ## Environment references and secrets
 

@@ -1,5 +1,6 @@
 algorithm:
   type: workflows
+  minimum_candidates: 2
   workflows:
     mode: dynamic
     planner:

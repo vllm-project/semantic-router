@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"encoding/json"
 	"testing"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -8,6 +9,24 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 )
+
+func TestCreateErrorResponseTypeMatchesStatusClass(t *testing.T) {
+	router := &OpenAIRouter{}
+	for status, wantType := range map[int]string{403: "invalid_request_error", 503: "api_error"} {
+		body := router.createErrorResponse(status, "boom").GetImmediateResponse().GetBody()
+		var parsed struct {
+			Error struct {
+				Type string `json:"type"`
+			} `json:"error"`
+		}
+		if err := json.Unmarshal(body, &parsed); err != nil {
+			t.Fatal(err)
+		}
+		if parsed.Error.Type != wantType {
+			t.Fatalf("status %d type = %q, want %q", status, parsed.Error.Type, wantType)
+		}
+	}
+}
 
 func TestFastResponseUsesClientProtocolAcrossEveryBackendAndMode(t *testing.T) {
 	payload, err := config.NewStructuredPayload(config.FastResponsePluginConfig{Message: "policy response"})

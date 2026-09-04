@@ -12,10 +12,16 @@ import RecoverableLazyRoute from './RecoverableLazyRoute'
 import SetupStatusPage from './SetupStatusPage'
 import ProductLoadingState from '../components/ProductLoadingState'
 import { loadInviteAcceptPage, loadLandingPage, loadLoginPage } from './routeLoaders'
+import { useReadonly } from '../contexts/ReadonlyContext'
 
 const AppRouter: React.FC = () => {
   const { setupState, isLoading, error, refreshSetupState } = useSetup()
   const { user } = useAuth()
+  const {
+    isLoading: settingsLoading,
+    evaluationAvailable,
+    evaluationUnavailableReason,
+  } = useReadonly()
   const [configSection, setConfigSection] = useState<ConfigSection>('global-config')
   const canUseMLSetup = canAccessMLSetup(user)
 
@@ -63,6 +69,9 @@ const AppRouter: React.FC = () => {
               canUseMLSetup,
               user,
               setupMode,
+              settingsLoading,
+              evaluationAvailable,
+              evaluationUnavailableReason,
             })}
           </Route>
         </Route>

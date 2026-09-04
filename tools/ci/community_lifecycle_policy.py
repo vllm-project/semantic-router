@@ -16,6 +16,7 @@ RELEASE_BLOCKER = "release-blocker"
 BACKLOG = "backlog"
 CLOSE_CANDIDATE = "close-candidate"
 STALE = "stale"
+EPIC = "epic"
 
 WORKGROUP_LABELS = (
     "wg/mom-routing",
@@ -89,6 +90,13 @@ def title_format_error(title: str | None) -> str | None:
     return None
 
 
+def is_epic_title(title: str | None) -> bool:
+    """Return whether the normalized title declares an Epic work item."""
+
+    match = TITLE_PREFIX_PATTERN.match(title or "")
+    return bool(match and match.group("category").strip().casefold() == "epic")
+
+
 def label_names(item: dict[str, Any]) -> set[str]:
     return {
         label["name"] if isinstance(label, dict) else str(label)
@@ -150,6 +158,19 @@ class IssueAcceptanceEvaluation:
     owner_label: str | None = None
 
 
+def plan_issue_kind(issue: dict[str, Any]) -> IssuePlan:
+    """Keep the structural Epic label aligned with the issue title."""
+
+    plan = IssuePlan()
+    labels = label_names(issue)
+    if is_epic_title(issue.get("title")):
+        if EPIC not in labels:
+            plan.add_labels.add(EPIC)
+    elif EPIC in labels:
+        plan.remove_labels.add(EPIC)
+    return plan
+
+
 def evaluate_issue_acceptance(
     issue: dict[str, Any],
     *,
@@ -209,14 +230,25 @@ def normalize_proposed_workgroup(
     issue: dict[str, Any],
     *,
     accepted: bool,
+    event_action: str,
+    event_label: str | None,
+    actor_can_manage: bool,
 ) -> set[str]:
+    """Seed an unowned issue from its form without undoing Maintainer triage."""
+
     workgroups = labels.intersection(WORKGROUP_LABELS)
+    owners = labels.intersection(OWNER_LABELS)
     form_workgroup = proposed_workgroup(issue.get("body"))
-    if accepted or not form_workgroup or workgroups == {form_workgroup}:
+    if accepted or not form_workgroup or owners:
         return workgroups
-    plan.remove_labels.update(workgroups - {form_workgroup})
+
+    # A Workgroup selected in the issue form is only the initial proposal. If a
+    # Maintainer removes that owner while reclassifying the issue, do not race
+    # the following label addition by restoring the stale form choice.
+    if actor_can_manage and event_action == "unlabeled" and event_label in OWNER_LABELS:
+        return workgroups
+
     plan.add_labels.add(form_workgroup)
-    labels.difference_update(workgroups)
     labels.add(form_workgroup)
     return {form_workgroup}
 
@@ -297,6 +329,9 @@ def plan_issue(
 
     plan = IssuePlan()
     labels = label_names(issue)
+    kind_plan = plan_issue_kind(issue)
+    plan.add_labels.update(kind_plan.add_labels)
+    plan.remove_labels.update(kind_plan.remove_labels)
     assignees = {
         assignee.get("login", "")
         for assignee in issue.get("assignees", [])
@@ -311,7 +346,15 @@ def plan_issue(
     )
 
     accepted = ACCEPTED in labels
-    workgroups = normalize_proposed_workgroup(plan, labels, issue, accepted=accepted)
+    workgroups = normalize_proposed_workgroup(
+        plan,
+        labels,
+        issue,
+        accepted=accepted,
+        event_action=event_action,
+        event_label=event_label,
+        actor_can_manage=actor_can_manage,
+    )
     owners = labels.intersection(OWNER_LABELS)
     if accepted and len(owners) != 1:
         plan.remove_labels.add(ACCEPTED)

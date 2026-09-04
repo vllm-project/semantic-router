@@ -205,6 +205,7 @@ export type AlgorithmType =
 
 export interface AlgorithmConfig {
   type: AlgorithmType
+  minimum_candidates?: number
   confidence?: ConfidenceAlgorithmConfig
   concurrent?: ConcurrentAlgorithmConfig
   latency_aware?: LatencyAwareAlgorithmConfig

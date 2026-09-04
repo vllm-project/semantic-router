@@ -210,6 +210,7 @@ type ProbeDetail struct {
 	Query            string                          `json:"query,omitempty"`
 	Messages         []map[string]any                `json:"messages,omitempty"`
 	Tools            []map[string]any                `json:"tools,omitempty"`
+	ToolChoice       any                             `json:"tool_choice,omitempty"`
 	Repeat           int                             `json:"repeat"`
 	Padding          *Padding                        `json:"padding,omitempty"`
 	GeneratedText    *GeneratedText                  `json:"generated_text,omitempty"`
@@ -252,6 +253,7 @@ type ChatRequest struct {
 	Model               string           `json:"model,omitempty"`
 	Messages            []map[string]any `json:"messages"`
 	Tools               []map[string]any `json:"tools,omitempty"`
+	ToolChoice          any              `json:"tool_choice,omitempty"`
 	Stream              bool             `json:"stream"`
 	MaxCompletionTokens int              `json:"max_completion_tokens"`
 }
@@ -263,15 +265,17 @@ type RunPlan struct {
 	Model        string           `json:"model,omitempty"`
 	Messages     []map[string]any `json:"messages"`
 	Tools        []map[string]any `json:"tools,omitempty"`
+	ToolChoice   any              `json:"tool_choice,omitempty"`
 	Request      ChatRequest      `json:"request"`
 	Editable     bool             `json:"editable"`
 }
 
 type EvalRequest struct {
-	Text     string           `json:"text,omitempty"`
-	Messages []map[string]any `json:"messages,omitempty"`
-	Tools    []map[string]any `json:"tools,omitempty"`
-	Model    string           `json:"model,omitempty"`
+	Text       string           `json:"text,omitempty"`
+	Messages   []map[string]any `json:"messages,omitempty"`
+	Tools      []map[string]any `json:"tools,omitempty"`
+	ToolChoice any              `json:"tool_choice,omitempty"`
+	Model      string           `json:"model,omitempty"`
 }
 
 type Evaluator interface {

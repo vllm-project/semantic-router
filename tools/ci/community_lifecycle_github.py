@@ -22,6 +22,7 @@ from community_lifecycle_policy import (
     extract_related_issue_numbers,
     label_names,
     plan_issue,
+    plan_issue_kind,
     title_format_error,
 )
 
@@ -147,6 +148,17 @@ def sync_issue_event(client: GitHubClient, event: dict[str, Any]) -> None:
         )
     for code, message in plan.comments:
         comment_once(client, repo, number, code, message)
+
+
+def sync_issue_kind_event(client: GitHubClient, event: dict[str, Any]) -> None:
+    """Synchronize only structural kind metadata for a title-only edit."""
+
+    repo = repository_name(event)
+    number = int(event["issue"]["number"])
+    issue = client.request(f"repos/{repo}/issues/{number}")
+    plan = plan_issue_kind(issue)
+    remove_labels(client, repo, number, plan.remove_labels)
+    add_labels(client, repo, number, plan.add_labels)
 
 
 def accept_issue_event(client: GitHubClient, event: dict[str, Any]) -> None:

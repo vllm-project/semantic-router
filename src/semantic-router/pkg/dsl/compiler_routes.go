@@ -20,6 +20,13 @@ func (c *Compiler) compileRoute(r *RouteDecl) config.Decision {
 		Tier:        r.Tier,
 		Rules:       c.compileRouteRules(r),
 	}
+	decision.Rules.OnUnknown = config.UnknownPolicy(r.OnUnknown)
+	if r.Action != nil {
+		decision.Action = &config.DecisionAction{
+			Type:        r.Action.Type,
+			Destination: r.Action.Destination,
+		}
+	}
 
 	for _, m := range r.Models {
 		c.appendModelRef(&decision, m)

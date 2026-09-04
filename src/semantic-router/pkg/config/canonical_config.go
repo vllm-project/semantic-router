@@ -51,6 +51,7 @@ type CanonicalSignals struct {
 	EventRules    []EventRule            `yaml:"events,omitempty"`
 	Metadata      []MetadataRule         `yaml:"metadata,omitempty"`
 	Classifiers   []ClassifierSignalRule `yaml:"classifiers,omitempty"`
+	InputModality []InputModalityRule    `yaml:"input_modality,omitempty"`
 }
 
 // CanonicalProjections groups derived routing outputs under routing.projections.
@@ -287,26 +288,27 @@ func validateCanonicalDecisionModelRefs(decision Decision, modelsByName map[stri
 
 func normalizeSignals(signals CanonicalSignals, decisions []Decision) Signals {
 	result := Signals{
-		KeywordRules:      append([]KeywordRule(nil), signals.Keywords...),
-		EmbeddingRules:    append([]EmbeddingRule(nil), signals.Embeddings...),
-		Categories:        append([]Category(nil), signals.Domains...),
-		FactCheckRules:    append([]FactCheckRule(nil), signals.FactCheck...),
-		UserFeedbackRules: append([]UserFeedbackRule(nil), signals.UserFeedbacks...),
-		ReaskRules:        append([]ReaskRule(nil), signals.Reasks...),
-		PreferenceRules:   append([]PreferenceRule(nil), signals.Preferences...),
-		LanguageRules:     append([]LanguageRule(nil), signals.Language...),
-		ContextRules:      append([]ContextRule(nil), signals.Context...),
-		StructureRules:    append([]StructureRule(nil), signals.Structure...),
-		ComplexityRules:   append([]ComplexityRule(nil), signals.Complexity...),
-		ModalityRules:     append([]ModalityRule(nil), signals.Modality...),
-		RoleBindings:      append([]RoleBinding(nil), signals.RoleBindings...),
-		JailbreakRules:    append([]JailbreakRule(nil), signals.Jailbreak...),
-		PIIRules:          append([]PIIRule(nil), signals.PII...),
-		KBRules:           append([]KBSignalRule(nil), signals.KB...),
-		ConversationRules: append([]ConversationRule(nil), signals.Conversation...),
-		EventRules:        append([]EventRule(nil), signals.EventRules...),
-		MetadataRules:     append([]MetadataRule(nil), signals.Metadata...),
-		ClassifierRules:   append([]ClassifierSignalRule(nil), signals.Classifiers...),
+		KeywordRules:       append([]KeywordRule(nil), signals.Keywords...),
+		EmbeddingRules:     append([]EmbeddingRule(nil), signals.Embeddings...),
+		Categories:         append([]Category(nil), signals.Domains...),
+		FactCheckRules:     append([]FactCheckRule(nil), signals.FactCheck...),
+		UserFeedbackRules:  append([]UserFeedbackRule(nil), signals.UserFeedbacks...),
+		ReaskRules:         append([]ReaskRule(nil), signals.Reasks...),
+		PreferenceRules:    append([]PreferenceRule(nil), signals.Preferences...),
+		LanguageRules:      append([]LanguageRule(nil), signals.Language...),
+		ContextRules:       append([]ContextRule(nil), signals.Context...),
+		StructureRules:     append([]StructureRule(nil), signals.Structure...),
+		ComplexityRules:    append([]ComplexityRule(nil), signals.Complexity...),
+		ModalityRules:      append([]ModalityRule(nil), signals.Modality...),
+		RoleBindings:       append([]RoleBinding(nil), signals.RoleBindings...),
+		JailbreakRules:     append([]JailbreakRule(nil), signals.Jailbreak...),
+		PIIRules:           append([]PIIRule(nil), signals.PII...),
+		KBRules:            append([]KBSignalRule(nil), signals.KB...),
+		ConversationRules:  append([]ConversationRule(nil), signals.Conversation...),
+		EventRules:         append([]EventRule(nil), signals.EventRules...),
+		MetadataRules:      append([]MetadataRule(nil), signals.Metadata...),
+		ClassifierRules:    append([]ClassifierSignalRule(nil), signals.Classifiers...),
+		InputModalityRules: append([]InputModalityRule(nil), signals.InputModality...),
 	}
 
 	if len(result.Categories) == 0 {

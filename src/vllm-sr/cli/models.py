@@ -21,6 +21,7 @@ from .config_contract import (
     CLASSIFIER_TYPE_LLM,
     CLASSIFIER_TYPE_LOCAL,
     ClassifierSignalType,
+    UnknownPolicy,
 )
 
 RoutingStrategy = Literal["priority", "confidence"]
@@ -487,6 +488,22 @@ class MetadataRule(BaseModel):
         return self
 
 
+class InputModalityRule(BaseModel):
+    """Deterministic structural input-modality presence signal."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    description: Optional[str] = None
+    modality: Literal["text", "image", "audio", "video"]
+
+    @model_validator(mode="after")
+    def validate_canonical_names(self):
+        if not self.name.strip() or self.name != self.name.strip():
+            raise ValueError("input_modality signal name must be nonempty and trimmed")
+        return self
+
+
 class ClassifierSignal(BaseModel):
     """Generic label-score classifier signal."""
 
@@ -574,6 +591,7 @@ class Signals(BaseModel):
     events: Optional[List[EventRule]] = []
     metadata: Optional[List[MetadataRule]] = []
     classifiers: Optional[List[ClassifierSignal]] = []
+    input_modality: Optional[List[InputModalityRule]] = []
 
     @model_validator(mode="after")
     def validate_rule_names(self):
@@ -582,7 +600,7 @@ class Signals(BaseModel):
             for signal in getattr(self, family) or []:
                 name = (
                     signal.name.lower()
-                    if family in {"metadata", "classifiers"}
+                    if family in {"metadata", "classifiers", "input_modality"}
                     else signal.name
                 )
                 if name in seen:
@@ -601,6 +619,7 @@ class Condition(BaseModel):
     label: Optional[str] = None
     predicate: Optional[NumericPredicate] = None
     on_error: Optional[Literal["no_match", "match"]] = None
+    on_unknown: Optional[UnknownPolicy] = None
     operator: Optional[str] = None
     conditions: Optional[List["Condition"]] = None
 
@@ -623,18 +642,22 @@ class Condition(BaseModel):
             )
 
         if has_operator:
-            if not self.conditions:
-                raise ValueError(
-                    "composite condition node requires non-empty conditions"
-                )
-            op = self.operator.strip().upper()
-            if op not in {"AND", "OR", "NOT"}:
-                raise ValueError("operator must be one of: AND, OR, NOT")
-            if op == "NOT" and len(self.conditions) != 1:
-                raise ValueError("NOT operator must have exactly one child condition")
-            return self
+            return self._validate_composite_node()
+        return self._validate_leaf_node()
 
-        # Leaf node validation
+    def _validate_composite_node(self):
+        if not self.conditions:
+            raise ValueError("composite condition node requires non-empty conditions")
+        op = self.operator.strip().upper()
+        if op not in {"AND", "OR", "NOT"}:
+            raise ValueError("operator must be one of: AND, OR, NOT")
+        if op == "NOT" and len(self.conditions) != 1:
+            raise ValueError("NOT operator must have exactly one child condition")
+        if self.on_unknown is not None:
+            raise ValueError("on_unknown is only valid on the root rules node")
+        return self
+
+    def _validate_leaf_node(self):
         if self.type is None or self.name is None:
             raise ValueError("leaf condition node requires both type and name")
         if self.conditions:
@@ -645,6 +668,8 @@ class Condition(BaseModel):
             raise ValueError("classifier conditions require label and predicate")
         if self.on_error is not None and self.type != "classifier":
             raise ValueError("on_error is only valid for classifier conditions")
+        if self.on_unknown is not None:
+            raise ValueError("on_unknown is only valid on the root rules node")
         return self
 
 
@@ -661,6 +686,7 @@ class Rules(BaseModel):
 
     operator: str = "AND"
     conditions: List[Condition] = Field(default_factory=list)
+    on_unknown: Optional[UnknownPolicy] = None
 
     @model_validator(mode="before")
     @classmethod
@@ -676,7 +702,10 @@ class Rules(BaseModel):
                 if key in data
             }
             leaf.setdefault("name", "")
-            return {"operator": "AND", "conditions": [leaf]}
+            rules = {"operator": "AND", "conditions": [leaf]}
+            if "on_unknown" in data:
+                rules["on_unknown"] = data["on_unknown"]
+            return rules
         return data
 
 
@@ -1473,6 +1502,30 @@ class OutputContractSpec(BaseModel):
     postprocess: Optional[List[OutputContractPostprocess]] = None
 
 
+def _conditions_reference_signal(conditions, signal_type):
+    for condition in conditions or []:
+        if (condition.type or "").lower() == signal_type:
+            return True
+        if _conditions_reference_signal(condition.conditions, signal_type):
+            return True
+    return False
+
+
+class DecisionAction(BaseModel):
+    """Explicit action a matched decision applies instead of candidate ranking."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["route"]
+    destination: str
+
+    @model_validator(mode="after")
+    def validate_destination(self):
+        if not self.destination.strip():
+            raise ValueError("action.destination is required")
+        return self
+
+
 class Decision(BaseModel):
     """Routing decision configuration."""
 
@@ -1485,6 +1538,7 @@ class Decision(BaseModel):
     # A decision without an explicit rule is the canonical match-all fallback.
     # This mirrors the Go runtime and the DSL `ROUTE` form without `WHEN`.
     rules: Rules = Field(default_factory=Rules)
+    action: Optional[DecisionAction] = None
     output_contract: Optional[str] = None
     output_contract_spec: Optional[OutputContractSpec] = None
     modelRefs: List[ModelRef] = Field(alias="modelRefs")
@@ -1494,7 +1548,29 @@ class Decision(BaseModel):
     annotations: Optional[Dict[str, Any]] = None
 
     @model_validator(mode="after")
+    def validate_action(self):
+        if self.action is None:
+            return self
+        if not _conditions_reference_signal(self.rules.conditions, "jailbreak"):
+            raise ValueError(
+                "a route action requires an explicit jailbreak condition in rules"
+            )
+        return self
+
+    @model_validator(mode="after")
     def validate_prompt_candidates(self):
+        if self.algorithm and self.algorithm.minimum_candidates and self.modelRefs:
+            effective_names = {
+                (model_ref.model.strip(), (model_ref.lora_name or "").strip())
+                for model_ref in self.modelRefs
+                if model_ref.model.strip()
+            }
+            if len(effective_names) < self.algorithm.minimum_candidates:
+                raise ValueError(
+                    "algorithm.minimum_candidates="
+                    f"{self.algorithm.minimum_candidates} requires at least that many "
+                    f"unique modelRefs, got {len(effective_names)}"
+                )
         if (
             self.algorithm
             and self.algorithm.type == "prompt"

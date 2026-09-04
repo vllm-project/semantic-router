@@ -1,26 +1,7 @@
-area:
-  - core
-  - research
-  - observability
-  - networking
-  - bench
-  - environment
-  - user-experience
-  - docs
-  - test-and-release
-
 priority:
   - P0
   - P1
   - P2
-
-track:
-  - contracts
-  - ops
-  - performance
-  - research-to-product
-  - hardening
-  - security
 
 wg:
   - mom-routing

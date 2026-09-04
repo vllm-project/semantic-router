@@ -22,7 +22,6 @@ export type ProductIconName =
   | 'evaluation'
   | 'eye'
   | 'eye-off'
-  | 'fleet'
   | 'insight'
   | 'label'
   | 'link'
@@ -137,14 +136,6 @@ const paths: Record<ProductIconName, ReactNode> = {
     <>
       <path d="M5 4h14v16H5zM8 8h5" />
       <path d="m8 14 2 2 5-5" />
-    </>
-  ),
-  fleet: (
-    <>
-      <rect x="3" y="5" width="7" height="5" rx="1" />
-      <rect x="14" y="5" width="7" height="5" rx="1" />
-      <rect x="8.5" y="15" width="7" height="5" rx="1" />
-      <path d="M6.5 10v2.5H18V10M12 12.5V15" />
     </>
   ),
   insight: (

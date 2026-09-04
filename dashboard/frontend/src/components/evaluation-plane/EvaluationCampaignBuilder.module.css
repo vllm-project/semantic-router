@@ -1,0 +1,13 @@
+.builder {
+  min-width: 0;
+  padding: 1rem 0 0;
+  border-bottom: 1px solid var(--border-subtle);
+  background: transparent;
+  isolation: isolate;
+}
+
+@media (max-width: 480px) {
+  .builder {
+    padding-top: 0.85rem;
+  }
+}

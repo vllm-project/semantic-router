@@ -59,6 +59,7 @@ func (d *decompiler) algorithmToFields(algo *config.AlgorithmConfig) map[string]
 	if algo == nil {
 		return fields
 	}
+	setIntValue(fields, "minimum_candidates", algo.MinimumCandidates)
 	algorithmOnErrorToFields(algo, fields)
 	if export, ok := algorithmFieldExporters[algo.Type]; ok {
 		export(algo, fields)

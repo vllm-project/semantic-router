@@ -1,0 +1,176 @@
+.gateList {
+  display: grid;
+  gap: 0;
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.gateRow {
+  display: grid;
+  grid-template-columns: minmax(250px, 0.8fr) minmax(280px, 1fr) auto;
+  align-items: start;
+  gap: 1rem;
+  padding: 0.85rem 0.75rem;
+  border-bottom: 1px solid var(--border-subtle);
+  background: transparent;
+}
+
+.gateRow:last-child {
+  border-bottom: 0;
+}
+
+.gateRow[data-tone='negative'] {
+  box-shadow: inset 2px 0 0 var(--color-danger);
+}
+
+.gateRow[data-tone='warning'] {
+  box-shadow: inset 2px 0 0 var(--color-warning);
+}
+
+.gateIdentity {
+  display: grid;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.gateIdentity strong {
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+}
+
+.gateIdentity p,
+.gateIdentity small {
+  display: block;
+  margin: 0.3rem 0 0;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.gateRationale {
+  color: var(--text-primary) !important;
+}
+
+.gateEvidence {
+  display: grid;
+  gap: 0.18rem;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+}
+
+.gateEvidenceMeta {
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+.gateRequirement {
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  font-weight: 650;
+}
+
+.gateVerdict {
+  justify-self: end;
+}
+
+.gateReferences {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0.2rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gateReferences code {
+  display: block;
+  max-width: 260px;
+  padding: 0.15rem 0.3rem;
+  overflow: hidden;
+  border-bottom: 1px solid var(--border-subtle);
+  border-radius: 0;
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  text-overflow: ellipsis;
+}
+
+.gateTechnicalDetails {
+  margin-top: 0.08rem;
+  --evaluation-disclosure-focus-color: var(--text-primary);
+  --evaluation-disclosure-hover-color: var(--text-primary);
+  --evaluation-disclosure-indicator-size: 0.38rem;
+  --evaluation-disclosure-open-color: var(--text-primary);
+}
+
+.gateTechnicalSummary {
+  width: 100%;
+  padding: 0.3rem 0;
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+
+.gateTechnicalCopy {
+  display: grid;
+  gap: 0.12rem;
+  margin: 0.35rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  line-height: 1.45;
+}
+
+.gateTechnicalCopy strong {
+  color: var(--text-secondary);
+  font-size: inherit;
+}
+
+.unavailableWarning {
+  margin-top: 0.25rem;
+  color: #f9d38b;
+  font-size: 0.72rem;
+}
+
+.nextActions {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding-left: 1.2rem;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  line-height: 1.55;
+}
+
+@media (max-width: 1050px) {
+  .gateRow {
+    grid-template-columns: minmax(220px, 0.8fr) minmax(260px, 1fr);
+  }
+
+  .gateIdentity {
+    grid-column: 1;
+    grid-row: 1;
+    padding-right: 6rem;
+  }
+
+  .gateEvidence {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .gateVerdict {
+    grid-column: 1;
+    grid-row: 1;
+  }
+}
+
+@media (max-width: 600px) {
+  .gateRow {
+    grid-template-columns: 1fr;
+  }
+
+  .gateEvidence {
+    grid-column: 1;
+    grid-row: 2;
+  }
+}

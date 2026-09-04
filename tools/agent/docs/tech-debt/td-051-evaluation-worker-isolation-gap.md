@@ -10,60 +10,61 @@ Open
 
 ## Release Relevance
 
-Dashboard evaluation is limited to trusted built-in executors and server-owned
-targets. Executing third-party adapter code or treating worker artifacts as a
-security boundary is blocked until this gap is closed.
+The current worker is suitable for trusted first-party executors and
+server-owned broker operations. Running third-party adapter code or treating
+worker-authored artifacts as an independent security boundary remains blocked
+until the worker has a distinct service identity and privilege boundary.
 
 ## Scope
 
-- worker process identity, groups, filesystem, network, and resource isolation
-- separation from Dashboard container-management privileges
-- server-side artifact parsing, redaction, and rendering
-- bounded logs and event payloads
+- worker identity, groups, filesystem, network, and resource isolation;
+- separation from Dashboard management authority and secrets;
+- typed server-side artifact parsing and bounded worker output.
 
 ## Summary
 
-The Dashboard starts the Python evaluation worker as a subprocess. Environment
-allowlisting, process groups, timeouts, output caps, private stores, and public
-artifact filename allowlists reduce exposure, but the worker still shares the
-Dashboard process UID and supplementary groups. In deployments where the
-Dashboard can access a container runtime socket, a compromised worker inherits
-that authority. A worker-created checksum also proves consistency, not trusted
-content.
+The Dashboard launches Python in isolated mode with an allowlisted environment
+and broker pipe. The worker applies resource limits, seccomp, Landlock,
+`no_new_privs`, non-dumpable state, private filesystem roots, bounded output,
+and process-group cancellation. Network, process creation, ptrace,
+process-vm, pidfd, and signal escape paths are denied fail closed.
+
+Those controls materially harden execution, but the worker still shares the
+Dashboard container's real UID and service boundary. It therefore is not a
+least-privilege home for untrusted benchmark code, especially when the parent
+deployment has management credentials or a container-runtime group.
 
 ## Evidence
 
-- The current container drops the Dashboard to one non-root account after
-  adding any required container-runtime group.
-- The worker has no distinct UID, mount namespace, network policy, seccomp
-  profile, or independent service boundary.
-- Markdown and HTML reports are private; the public UI consumes a strictly
-  parsed typed report. Other downloadable structured artifacts still require
-  server-side schema and redaction enforcement.
+- The Go process launches `sandbox_worker.py` as an isolated subprocess and
+  passes live authority only through a narrow broker pipe.
+- The Python sandbox installs Landlock, seccomp, rlimits, `no_new_privs`, and
+  non-dumpable state before executor work begins.
+- The canonical Dashboard image still has one runtime non-root identity; the
+  worker has no distinct UID, mount namespace, or independent service boundary.
+- Public artifacts are allowlisted and parsed as bounded typed data by the Go
+  control plane; worker-authored HTML or Markdown is not a public artifact.
 
 ## Why It Matters
 
-Evaluation workloads may contain private prompts, model outputs, tools, media,
-or adversarial data. Process-level validation is not a substitute for a least-
-privilege execution boundary, especially when the parent Dashboard has
-deployment-management authority.
+Evaluation inputs can include private prompts, model outputs, tools, media, and
+adversarial artifacts. Syscall and path restrictions reduce exposure but do not
+replace a distinct identity, mount boundary, network policy, and authenticated
+control plane.
 
 ## Desired End State
 
-Evaluation executes in a dedicated worker service or sandbox with a distinct
-identity, no container socket, sealed read-only inputs, a private output mount,
-explicit network policy, resource quotas, and a narrow authenticated control
-channel. The Dashboard validates typed outputs and renders public reports itself.
+Evaluation runs in a dedicated worker identity or service with sealed inputs,
+run-private output, explicit network and resource policy, and a narrow
+authenticated control channel. Dashboard validates typed output and owns every
+public rendering boundary.
 
 ## Exit Criteria
 
-- Run workers under a distinct UID and group set with no access to Dashboard
-  secrets, control sockets, configuration stores, or sibling run directories.
-- Apply read-only source/input mounts, a run-private writable mount, no-new-
-  privileges, syscall/resource limits, and per-suite network policy.
-- Accept only versioned typed result/event schemas with count, line, total-byte,
-  and redaction limits.
-- Parse and validate every public structured artifact server-side; render human
-  documents from typed data instead of trusting worker-authored markup.
-- Add adversarial integration tests for cross-run reads, secret exfiltration,
-  socket access, oversized output, descendant processes, and cancellation.
+- Run evaluation workers under a distinct UID and group set with no access to
+  Dashboard secrets, control sockets, configuration stores, or sibling runs.
+- Give workers sealed read-only inputs, one run-private writable mount, explicit
+  network policy, resource quotas, and a narrow authenticated broker channel.
+- Add adversarial integration coverage for cross-run reads, secrets and socket
+  access, oversized output, descendants, cancellation, and broker misuse.
+- Demonstrate the boundary in the canonical container and restart workflow.

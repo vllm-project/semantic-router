@@ -306,7 +306,7 @@ rebuild-and-test: install
 	@read -p "Press Enter to continue or Ctrl+C to cancel..." dummy
 	@echo ""
 	@echo "1. Cleaning up old containers..."
-	@docker rm -f vllm-sr-router-container vllm-sr-envoy-container vllm-sr-dashboard-container vllm-sr-sim-container vllm-sr-prometheus vllm-sr-grafana vllm-sr-jaeger 2>/dev/null || echo "  No containers to remove"
+	@docker rm -f vllm-sr-router-container vllm-sr-envoy-container vllm-sr-dashboard-container vllm-sr-prometheus vllm-sr-grafana vllm-sr-jaeger 2>/dev/null || echo "  No containers to remove"
 	@echo ""
 	@echo "2. Rebuilding Docker images..."
 	@echo "  Building from: $$(cd ../.. && pwd)"

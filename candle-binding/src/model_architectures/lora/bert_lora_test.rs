@@ -4,6 +4,8 @@ use super::bert_lora::*;
 use crate::classifiers::lora::intent_lora::IntentLoRAClassifier;
 use crate::model_architectures::traits::TaskType;
 use crate::test_fixtures::fixtures::*;
+use candle_core::{Device, Tensor};
+use candle_nn::{Linear, Module};
 use rstest::*;
 use serial_test::serial;
 use std::collections::HashMap;
@@ -162,4 +164,37 @@ fn test_bert_lora_high_performance_classify_text_with_probabilities_matches_top1
         (probabilities[probs_class] - probs_confidence).abs() < 1e-6,
         "probability at predicted class must equal reported confidence"
     );
+}
+
+#[test]
+fn test_bert_lora_pooler_uses_huggingface_weight_layout() -> anyhow::Result<()> {
+    let device = Device::Cpu;
+    let pooler = Linear::new(
+        Tensor::new(&[[1f32, 2.], [3., 4.]], &device)?,
+        Some(Tensor::new(&[0f32, 0.], &device)?),
+    );
+
+    let input = Tensor::new(&[[5f32, 6.]], &device)?;
+    let output = pooler.forward(&input)?.to_vec2::<f32>()?;
+
+    // HuggingFace stores W as [out_features, in_features], and Linear
+    // performs x @ W^T. A pre-transposed W would produce [23, 34].
+    assert_eq!(output, vec![vec![17f32, 39f32]]);
+    Ok(())
+}
+
+#[test]
+fn test_bert_lora_task_head_uses_huggingface_weight_layout() -> anyhow::Result<()> {
+    let device = Device::Cpu;
+    let task_head = Linear::new(
+        Tensor::new(&[[1f32, 2., 3.], [4., 5., 6.]], &device)?,
+        Some(Tensor::new(&[0f32, 0.], &device)?),
+    );
+
+    let input = Tensor::new(&[[5f32, 6., 7.]], &device)?;
+    let output = task_head.forward(&input)?.to_vec2::<f32>()?;
+
+    // A pre-transposed non-square weight would fail in Linear::forward.
+    assert_eq!(output, vec![vec![38f32, 92f32]]);
+    Ok(())
 }

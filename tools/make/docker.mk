@@ -243,6 +243,7 @@ VLLM_SR_SIM_CONTAINER ?= vllm-sr-sim-container
 VLLM_SR_SIM_DOCKERFILE ?= src/fleet-sim/Dockerfile
 VLLM_SR_SIM_DIR ?= src/fleet-sim
 VLLM_SR_SIM_PORT ?= 8810
+VLLM_SR_TEST_UPSTREAM_IMAGE ?= $(VLLM_SR_ROUTER_IMAGE)
 SKIP_ROUTER_IMAGE_SOURCE := $(origin SKIP_ROUTER_IMAGE)
 SKIP_COMPAT_IMAGE_SOURCE := $(origin SKIP_COMPAT_IMAGE)
 SKIP_ROUTER_IMAGE_DEFAULT := 0
@@ -356,16 +357,13 @@ vllm-sr-dev:
 	@if [ "$(VLLM_SR_TOPOLOGY_NORMALIZED)" = "split" ]; then \
 		echo "  3. Ensure the official Envoy image is available"; \
 		echo "  4. Rebuild the dashboard Docker image"; \
-		echo "  5. Build the vLLM-SR-Sim service image"; \
-		echo "  6. Install vLLM-SR and vLLM-SR-Sim CLIs in development mode"; \
+		echo "  5. Install the vLLM-SR CLI in development mode"; \
 	else \
-		echo "  3. Build the vLLM-SR-Sim service image"; \
-		echo "  4. Install vLLM-SR and vLLM-SR-Sim CLIs in development mode"; \
+		echo "  3. Install the vLLM-SR CLI in development mode"; \
 	fi
 	@echo ""
 	@echo "1. Cleaning up old containers..."
 	@$(CONTAINER_RUNTIME) rm -f $(VLLM_SR_RUNTIME_CONTAINERS) 2>/dev/null || echo "  No runtime containers to remove"
-	@$(CONTAINER_RUNTIME) rm -f $(VLLM_SR_SIM_CONTAINER) 2>/dev/null || echo "  No simulator container to remove"
 	@echo ""
 	@if [ "$(SKIP_ROUTER_IMAGE_EFFECTIVE)" = "1" ]; then \
 		echo "2. Reusing existing vLLM-SR router Docker image (SKIP_ROUTER_IMAGE=1)"; \
@@ -400,27 +398,20 @@ vllm-sr-dev:
 		$(CONTAINER_RUNTIME) build $(VLLM_SR_DASHBOARD_BUILD_ARGS) -t $(VLLM_SR_DASHBOARD_IMAGE) -f $(VLLM_SR_DASHBOARD_DOCKERFILE) .; \
 		echo ""; \
 		echo "Dashboard image built: $(VLLM_SR_DASHBOARD_IMAGE)"; \
-		echo ""; \
-		echo "5. Building vLLM-SR-Sim service image..."; \
-	else \
-		echo "3. Building vLLM-SR-Sim service image..."; \
 	fi
-	@$(CONTAINER_RUNTIME) build -t $(VLLM_SR_SIM_IMAGE) -f $(VLLM_SR_SIM_DOCKERFILE) .
-	@echo ""
-	@echo "Simulator image built: $(VLLM_SR_SIM_IMAGE)"
 	@echo ""
 	@if [ "$(VLLM_SR_TOPOLOGY_NORMALIZED)" = "split" ]; then \
-		echo "6. Installing vLLM-SR and vLLM-SR-Sim CLIs in development mode..."; \
+		echo "5. Installing vLLM-SR CLI in development mode..."; \
 	else \
-		echo "4. Installing vLLM-SR and vLLM-SR-Sim CLIs in development mode..."; \
+		echo "3. Installing vLLM-SR CLI in development mode..."; \
 	fi
 	@if [ -x "$(AGENT_VENV)/bin/pip" ]; then \
-		"$(AGENT_VENV)/bin/pip" install -q -e src/vllm-sr -e "$(VLLM_SR_SIM_DIR)[dev]"; \
+		"$(AGENT_VENV)/bin/pip" install -q -e src/vllm-sr; \
 	else \
-		python3 -m pip install --break-system-packages -e src/vllm-sr -e "$(VLLM_SR_SIM_DIR)[dev]" 2>/dev/null || \
-		python3 -m pip install -e src/vllm-sr -e "$(VLLM_SR_SIM_DIR)[dev]"; \
+		python3 -m pip install --break-system-packages -e src/vllm-sr 2>/dev/null || \
+		python3 -m pip install -e src/vllm-sr; \
 	fi
-	@echo "vLLM-SR CLI and vLLM-SR-Sim installed"
+	@echo "vLLM-SR CLI installed"
 	@echo ""
 	@echo "=========================================="
 	@echo "Development Setup Complete"
@@ -514,13 +505,13 @@ vllm-sr-test: vllm-sr-install-cli
 	@$(LOG_TARGET)
 	@cd e2e/testing/vllm-sr-cli && PATH="$(AGENT_VENV)/bin:$$PATH" "$(AGENT_PYTHON)" run_cli_tests.py --verbose
 
-vllm-sr-test-integration: ## Run CLI unit + integration tests (requires local router + simulator images)
-vllm-sr-test-integration: vllm-sr-build vllm-sr-envoy-build vllm-sr-dashboard-build vllm-sr-sim-build vllm-sr-install-cli
+vllm-sr-test-integration: ## Run CLI unit + integration tests (requires local runtime images)
+vllm-sr-test-integration: vllm-sr-build vllm-sr-envoy-build vllm-sr-dashboard-build vllm-sr-install-cli
 	@$(LOG_TARGET)
-	@cd e2e/testing/vllm-sr-cli && PATH="$(AGENT_VENV)/bin:$$PATH" CONTAINER_RUNTIME=$(CONTAINER_RUNTIME) VLLM_SR_IMAGE=$(VLLM_SR_IMAGE) VLLM_SR_ROUTER_IMAGE=$(VLLM_SR_ROUTER_IMAGE) VLLM_SR_ENVOY_IMAGE=$(VLLM_SR_ENVOY_IMAGE) VLLM_SR_DASHBOARD_IMAGE=$(VLLM_SR_DASHBOARD_IMAGE) VLLM_SR_SIM_IMAGE=$(VLLM_SR_SIM_IMAGE) RUN_INTEGRATION_TESTS=true "$(AGENT_PYTHON)" run_cli_tests.py --verbose --integration
+	@cd e2e/testing/vllm-sr-cli && PATH="$(AGENT_VENV)/bin:$$PATH" CONTAINER_RUNTIME=$(CONTAINER_RUNTIME) VLLM_SR_STACK_NAME="$${VLLM_SR_STACK_NAME:-vllm-sr-cli-integration}" VLLM_SR_PORT_OFFSET="$${VLLM_SR_PORT_OFFSET:-4200}" VLLM_SR_IMAGE=$(VLLM_SR_IMAGE) VLLM_SR_ROUTER_IMAGE=$(VLLM_SR_ROUTER_IMAGE) VLLM_SR_ENVOY_IMAGE=$(VLLM_SR_ENVOY_IMAGE) VLLM_SR_DASHBOARD_IMAGE=$(VLLM_SR_DASHBOARD_IMAGE) VLLM_SR_TEST_UPSTREAM_IMAGE=$(VLLM_SR_TEST_UPSTREAM_IMAGE) RUN_INTEGRATION_TESTS=true "$(AGENT_PYTHON)" run_cli_tests.py --verbose --integration
 
 memory-test-integration: ## Run memory integration tests with local Milvus, llm-katan, and vllm-sr serve
-memory-test-integration: vllm-sr-build vllm-sr-envoy-build vllm-sr-dashboard-build vllm-sr-sim-build vllm-sr-install-cli docker-build-llm-katan
+memory-test-integration: vllm-sr-build vllm-sr-envoy-build vllm-sr-dashboard-build vllm-sr-install-cli docker-build-llm-katan
 	@$(LOG_TARGET)
 	@CONTAINER_RUNTIME=$(CONTAINER_RUNTIME) \
 	DOCKER_REGISTRY=$(DOCKER_REGISTRY) \
@@ -529,6 +520,5 @@ memory-test-integration: vllm-sr-build vllm-sr-envoy-build vllm-sr-dashboard-bui
 	VLLM_SR_ROUTER_IMAGE=$(VLLM_SR_ROUTER_IMAGE) \
 	VLLM_SR_ENVOY_IMAGE=$(VLLM_SR_ENVOY_IMAGE) \
 	VLLM_SR_DASHBOARD_IMAGE=$(VLLM_SR_DASHBOARD_IMAGE) \
-	VLLM_SR_SIM_IMAGE=$(VLLM_SR_SIM_IMAGE) \
 	PATH="$(AGENT_VENV)/bin:$$PATH" \
 	bash e2e/testing/run_memory_integration.sh

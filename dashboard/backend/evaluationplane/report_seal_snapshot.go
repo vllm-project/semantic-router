@@ -14,11 +14,10 @@ import (
 const maxSealedEvidenceFiles = 4096
 
 type sealedEvidenceFile struct {
-	Scope       string `json:"scope"`
-	Name        string `json:"name"`
-	Digest      string `json:"digest"`
-	SizeBytes   int64  `json:"size_bytes"`
-	FileVersion string `json:"file_version"`
+	Scope     string `json:"scope"`
+	Name      string `json:"name"`
+	Digest    string `json:"digest"`
+	SizeBytes int64  `json:"size_bytes"`
 }
 
 func (s *Service) buildSealedEvidenceSnapshot(runID string, checksums map[string]string) ([]sealedEvidenceFile, error) {
@@ -70,9 +69,7 @@ func (s *Service) buildSealedEvidenceSnapshot(runID string, checksums map[string
 		if !casObjectNamePattern.MatchString(digest) {
 			return nil, fmt.Errorf("%w: sealed CAS identity is invalid", ErrInvalid)
 		}
-		entry, sealErr := sealEvidenceFile(
-			"cas", digest, filepath.Join(s.store.root, "objects", "sha256", digest), "sha256:"+digest, maxWorkerArtifactBytes,
-		)
+		entry, sealErr := s.store.sealCASObject(digest)
 		if sealErr != nil {
 			return nil, fmt.Errorf("seal CAS evidence %s: %w", digest, sealErr)
 		}
@@ -84,11 +81,17 @@ func (s *Service) buildSealedEvidenceSnapshot(runID string, checksums map[string
 	return entries, nil
 }
 
-func (s *Service) verifySealedEvidenceSnapshot(runID string, entries []sealedEvidenceFile, receipt []byte) error {
+func (s *Store) sealCASObject(digest string) (sealedEvidenceFile, error) {
+	return sealEvidenceFile(
+		"cas", digest, filepath.Join(s.root, "objects", "sha256", digest), "sha256:"+digest, maxWorkerArtifactBytes,
+	)
+}
+
+func (s *Store) verifySealedEvidenceSnapshot(runID string, entries []sealedEvidenceFile, receipt []byte) error {
 	if err := validateSealedEvidenceMetadata(entries); err != nil {
 		return err
 	}
-	runDir, err := s.store.checkedRunDir(runID)
+	runDir, err := s.checkedRunDir(runID)
 	if err != nil {
 		return err
 	}
@@ -144,7 +147,7 @@ func (s *Service) verifySealedEvidenceSnapshot(runID string, entries []sealedEvi
 		if !ok || entry.Digest != "sha256:"+digest {
 			return fmt.Errorf("%w: sealed CAS evidence receipt changed", ErrInvalid)
 		}
-		if err := verifyEvidenceFileMetadata(entry, filepath.Join(s.store.root, "objects", "sha256", digest)); err != nil {
+		if err := verifyEvidenceFileMetadata(entry, filepath.Join(s.root, "objects", "sha256", digest)); err != nil {
 			return err
 		}
 	}
@@ -178,7 +181,7 @@ func sealEvidenceFile(scope, name, path, expectedDigest string, limit int64) (se
 		return sealedEvidenceFile{}, fmt.Errorf("evidence file does not match its receipt")
 	}
 	return sealedEvidenceFile{
-		Scope: scope, Name: name, Digest: digest, SizeBytes: written, FileVersion: bundleFileVersion(after),
+		Scope: scope, Name: name, Digest: digest, SizeBytes: written,
 	}, nil
 }
 
@@ -210,7 +213,7 @@ func verifyEvidenceFileMetadata(expected sealedEvidenceFile, path string) error 
 }
 
 func verifyRunEvidenceSet(runDir string, expected map[string]sealedEvidenceFile) error {
-	excluded := map[string]bool{"events.jsonl": true, privateChecksumArtifactName: true, reportFileName: true}
+	excluded := map[string]bool{privateChecksumArtifactName: true, reportFileName: true}
 	for _, name := range workerRunArtifactNames {
 		if excluded[name] {
 			continue
@@ -237,7 +240,7 @@ func validateSealedEvidenceMetadata(entries []sealedEvidenceFile) error {
 		if entry.Scope == "cas" {
 			validName = casObjectNamePattern.MatchString(entry.Name) && entry.Digest == "sha256:"+entry.Name
 		}
-		if !validName || !digestPattern.MatchString(entry.Digest) || !digestPattern.MatchString(entry.FileVersion) ||
+		if !validName || !digestPattern.MatchString(entry.Digest) ||
 			entry.SizeBytes < 0 || (last != "" && key <= last) {
 			return fmt.Errorf("%w: report anchor evidence metadata is invalid", ErrInvalid)
 		}

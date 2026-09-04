@@ -213,8 +213,12 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 	if components.replayRecorder != nil {
 		replayReaderForLookup = components.replayRecorder.Reader()
 	}
-	components.recipeModelSelectors, components.modelSelector, components.lookupTable, components.lookupTableCancel = createModelSelectorRegistries(cfg, replayReaderForLookup)
-	registerModelSelectorResources(components.resources, components.recipeModelSelectors, components.lookupTableCancel)
+	if cfg.ModelSelection.Enabled {
+		components.recipeModelSelectors, components.modelSelector, components.lookupTable, components.lookupTableCancel = createModelSelectorRegistries(cfg, replayReaderForLookup)
+		registerModelSelectorResources(components.resources, components.recipeModelSelectors, components.lookupTableCancel)
+	} else {
+		logging.ComponentEvent("extproc", "model_selection_disabled", map[string]interface{}{})
+	}
 
 	components.memoryStore, components.memoryExtractor = createMemoryRuntime(cfg)
 	if components.memoryStore != nil {

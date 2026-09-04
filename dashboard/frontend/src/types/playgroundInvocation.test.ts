@@ -10,6 +10,7 @@ const plan = {
   model: 'vllm-sr/mom-private',
   messages: [{ role: 'user', content: '请检查这个请求' }],
   tools: [{ type: 'function', function: { name: 'scan' } }],
+  tool_choice: { type: 'function', function: { name: 'scan' } },
   request: {
     model: 'vllm-sr/mom-private',
     messages: [{ role: 'user', content: '请检查这个请求' }],
@@ -31,6 +32,7 @@ describe('Playground probe invocation', () => {
       model: plan.model,
       messages: plan.messages,
       tools: plan.tools,
+      toolChoice: plan.tool_choice,
       request: plan.request,
     })
     expect(isPlaygroundInvocation(invocation)).toBe(true)

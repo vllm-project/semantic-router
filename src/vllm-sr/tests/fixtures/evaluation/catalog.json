@@ -1,0 +1,1424 @@
+{
+  "schema_version": "evaluation.v1",
+  "gate_contract_version": "evaluation-release-gates.v2",
+  "change_profiles": [
+    {
+      "id": "schema_adapter",
+      "name": "API and integration",
+      "description": "Request or response formats, provider integrations, and adapter behavior changes.",
+      "campaign_slots": [
+        {
+          "gate_id": "G2",
+          "name": "Policy enforcement",
+          "description": "Checks that required safety and routing policies are enforced on the proposed system.",
+          "disposition": "advisory",
+          "binding_kind": "run",
+          "track_id": "safety",
+          "mode": "live",
+          "minimum_evidence_level": "E3",
+          "accepted_executor_ids": [
+            "live-runtime.v1"
+          ]
+        },
+        {
+          "gate_id": "G3",
+          "name": "Controlled value comparison",
+          "description": "Compares baseline and candidate outcomes on the same live cases with balanced execution order.",
+          "disposition": "advisory",
+          "binding_kind": "controlled_pair",
+          "track_id": "joint",
+          "mode": "live",
+          "minimum_evidence_level": "E4",
+          "accepted_executor_ids": [
+            "live-runtime.v1"
+          ]
+        },
+        {
+          "gate_id": "G4",
+          "name": "Workload-shift robustness",
+          "description": "Measures quality and reliability under the workload changes declared for this release.",
+          "disposition": "required",
+          "binding_kind": "run",
+          "track_id": "routing",
+          "mode": "live",
+          "minimum_evidence_level": "E4",
+          "accepted_executor_ids": [
+            "normalized-suite-live.v1"
+          ]
+        },
+        {
+          "gate_id": "G5",
+          "name": "Live consistency",
+          "description": "Checks that a fresh live run agrees with the saved candidate on the same evaluation cases.",
+          "disposition": "advisory",
+          "binding_kind": "fidelity_pair",
+          "track_id": "joint",
+          "mode": "live",
+          "minimum_evidence_level": "E5",
+          "accepted_executor_ids": [
+            "live-runtime.v1"
+          ]
+        },
+        {
+          "gate_id": "G6",
+          "name": "Fault recovery",
+          "description": "Measures fallback, retry, state continuity, and side effects during injected failures.",
+          "disposition": "not_applicable",
+          "binding_kind": "run",
+          "track_id": "agentic",
+          "mode": "live",
+          "minimum_evidence_level": "E5",
+          "accepted_executor_ids": [
+            "live-runtime.v1"
+          ]
+        },
+        {
+          "gate_id": "G7",
+          "name": "Cost, latency, and capacity",
+          "description": "Measures whether the proposed system meets its service objectives under repeated load.",
+          "disposition": "advisory",
+          "binding_kind": "run",
+          "track_id": "capacity",
+          "mode": "live",
+          "minimum_evidence_level": "E5",
+          "accepted_executor_ids": [
+            "live-runtime.v1"
+          ]
+        },
+        {
+          "gate_id": "G8",
+          "name": "Canary safety",
+          "description": "Checks production assignment, exposure limits, stop conditions, and rollback controls.",
+          "disposition": "not_applicable",
+          "binding_kind": "run",
+          "track_id": "preference",
+          "mode": "live",
+          "minimum_evidence_level": "E5",
+          "accepted_executor_ids": [
+            "live-runtime.v1"
+          ]
+        },
+        {
+          "gate_id": "G9",
+          "name": "Online preference",
+          "description": "Measures assigned user-preference outcomes for the baseline and proposed system.",
+          "disposition": "not_applicable",
+          "binding_kind": "run",
+          "track_id": "preference",
+          "mode": "live",
+          "minimum_evidence_level": "E5",
+          "accepted_executor_ids": [
+            "live-runtime.v1"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "recipe",
+      "name": "Routing recipe",
+      "description": "Routing rules, signals, decision logic, or selection policy changes.",
+      "campaign_slots": [
+        {
+          "gate_id": "G2",
+          "name": "Policy enforcement",
+          "description": "Checks that required safety and routing policies are enforced on the proposed system.",
+          "disposition": "required",
+          "binding_kind": "run",
+          "track_id": "safety",
+          "mode": "live",
+          "minimum_evidence_level": "E3",
+          "accepted_executor_ids": [
+            "live-runtime.v1"
+          ]
+        },
+        {
+          "gate_id": "G3",
+          "name": "Controlled value comparison",
+          "description": "Compares baseline and candidate outcomes on the same live cases with balanced execution order.",
+          "disposition": "required",
+          "binding_kind": "controlled_pair",
+          "track_id": "joint",
+          "mode": "live",
+          "minimum_evidence_level": "E4",
+          "accepted_executor_ids": [
+            "live-runtime.v1"
+          ]
+        },
+        {
+          "gate_id": "G4",
+          "name": "Workload-shift robustness",
+          "description": "Measures quality and reliability under the workload changes declared for this release.",
+          "disposition": "required",
+          "binding_kind": "run",
+          "track_id": "routing",
+          "mode": "live",
+          "minimum_evidence_level": "E4",
+          "accepted_executor_ids": [
+            "normalized-suite-live.v1"
+          ]
+        },
+        {
+          "gate_id": "G5",
+          "name": "Live consistency",
+          "description": "Checks that a fresh live run agrees with the saved candidate on the same evaluation cases.",
+          "disposition": "required",
+          "binding_kind": "fidelity_pair",
+          "track_id": "joint",
+          "mode": "live",
+          "minimum_evidence_level": "E5",
+          "accepted_executor_ids": [
+            "live-runtime.v1"
+          ]
+        },
+        {
+          "gate_id": "G6",
+          "name": "Fault recovery",
+          "description": "Measures fallback, retry, state continuity, and side effects during injected failures.",
+          "disposition": "not_applicable",
+          "binding_kind": "run",
+          "track_id": "agentic",
+          "mode": "live",
+          "minimum_evidence_level": "E5",
+          "accepted_executor_ids": [
+            "live-runtime.v1"
+          ]
+        },
+        {
+          "gate_id": "G7",
+          "name": "Cost, latency, and capacity",
+          "description": "Measures whether the proposed system meets its service objectives under repeated load.",
+          "disposition": "required",
+          "binding_kind": "run",
+          "track_id": "capacity",
+          "mode": "live",
+          "minimum_evidence_level": "E5",
+          "accepted_executor_ids": [
+            "live-runtime.v1"
+          ]
+        },
+        {
+          "gate_id": "G8",
+          "name": "Canary safety",
+          "description": "Checks production assignment, exposure limits, stop conditions, and rollback controls.",
+          "disposition": "advisory",
+          "binding_kind": "run",
+          "track_id": "preference",
+          "mode": "live",
+          "minimum_evidence_level": "E5",
+          "accepted_executor_ids": [
+            "live-runtime.v1"
+          ]
+        },
+        {
+          "gate_id": "G9",
+          "name": "Online preference",
+          "description": "Measures assigned user-preference outcomes for the baseline and proposed system.",
+          "disposition": "not_applicable",
+          "binding_kind": "run",
+          "track_id": "preference",
+          "mode": "live",
+          "minimum_evidence_level": "E5",
+          "accepted_executor_ids": [
+            "live-runtime.v1"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "selector",
+      "name": "Model selection",
+      "description": "Model scoring, prediction, classification, or model-binding changes.",
+      "campaign_slots": [
+        {
+          "gate_id": "G2",
+          "name": "Policy enforcement",
+          "description": "Checks that required safety and routing policies are enforced on the proposed system.",
+          "disposition": "required",
+          "binding_kind": "run",
+          "track_id": "safety",
+          "mode": "live",
+          "minimum_evidence_level": "E3",
+          "accepted_executor_ids": [
+            "live-runtime.v1"
+          ]
+        },
+        {
+          "gate_id": "G3",
+          "name": "Controlled value comparison",
+          "description": "Compares baseline and candidate outcomes on the same live cases with balanced execution order.",
+          "disposition": "required",
+          "binding_kind": "controlled_pair",
+          "track_id": "joint",
+          "mode": "live",
+          "minimum_evidence_level": "E4",
+          "accepted_executor_ids": [
+            "live-runtime.v1"
+          ]
+        },
+        {
+          "gate_id": "G4",
+          "name": "Workload-shift robustness",
+          "description": "Measures quality and reliability under the workload changes declared for this release.",
+          "disposition": "required",
+          "binding_kind": "run",
+          "track_id": "routing",
+          "mode": "live",
+          "minimum_evidence_level": "E4",
+          "accepted_executor_ids": [
+            "normalized-suite-live.v1"
+          ]
+        },
+        {
+          "gate_id": "G5",
+          "name": "Live consistency",
+          "description": "Checks that a fresh live run agrees with the saved candidate on the same evaluation cases.",
+          "disposition": "required",
+          "binding_kind": "fidelity_pair",
+          "track_id": "joint",
+          "mode": "live",
+          "minimum_evidence_level": "E5",
+          "accepted_executor_ids": [
+            "live-runtime.v1"
+          ]
+        },
+        {
+          "gate_id": "G6",
+          "name": "Fault recovery",
+          "description": "Measures fallback, retry, state continuity, and side effects during injected failures.",
+          "disposition": "advisory",
+          "binding_kind": "run",
+          "track_id": "agentic",
+          "mode": "live",
+          "minimum_evidence_level": "E5",
+          "accepted_executor_ids": [
+            "live-runtime.v1"
+          ]
+        },
+        {
+          "gate_id": "G7",
+          "name": "Cost, latency, and capacity",
+          "description": "Measures whether the proposed system meets its service objectives under repeated load.",
+          "disposition": "required",
+          "binding_kind": "run",
+          "track_id": "capacity",
+          "mode": "live",
+          "minimum_evidence_level": "E5",
+          "accepted_executor_ids": [
+            "live-runtime.v1"
+          ]
+        },
+        {
+          "gate_id": "G8",
+          "name": "Canary safety",
+          "description": "Checks production assignment, exposure limits, stop conditions, and rollback controls.",
+          "disposition": "required",
+          "binding_kind": "run",
+          "track_id": "preference",
+          "mode": "live",
+          "minimum_evidence_level": "E5",
+          "accepted_executor_ids": [
+            "live-runtime.v1"
+          ]
+        },
+        {
+          "gate_id": "G9",
+          "name": "Online preference",
+          "description": "Measures assigned user-preference outcomes for the baseline and proposed system.",
+          "disposition": "not_applicable",
+          "binding_kind": "run",
+          "track_id": "preference",
+          "mode": "live",
+          "minimum_evidence_level": "E5",
+          "accepted_executor_ids": [
+            "live-runtime.v1"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "model_pool",
+      "name": "Model pool",
+      "description": "Available models, their capabilities, quality, reliability, or pricing changes.",
+      "campaign_slots": [
+        {
+          "gate_id": "G2",
+          "name": "Policy enforcement",
+          "description": "Checks that required safety and routing policies are enforced on the proposed system.",
+          "disposition": "required",
+          "binding_kind": "run",
+          "track_id": "safety",
+          "mode": "live",
+          "minimum_evidence_level": "E3",
+          "accepted_executor_ids": [
+            "live-runtime.v1"
+          ]
+        },
+        {
+          "gate_id": "G3",
+          "name": "Controlled value comparison",
+          "description": "Compares baseline and candidate outcomes on the same live cases with balanced execution order.",
+          "disposition": "required",
+          "binding_kind": "controlled_pair",
+          "track_id": "joint",
+          "mode": "live",
+          "minimum_evidence_level": "E4",
+          "accepted_executor_ids": [
+            "live-runtime.v1"
+          ]
+        },
+        {
+          "gate_id": "G4",
+          "name": "Workload-shift robustness",
+          "description": "Measures quality and reliability under the workload changes declared for this release.",
+          "disposition": "required",
+          "binding_kind": "run",
+          "track_id": "routing",
+          "mode": "live",
+          "minimum_evidence_level": "E4",
+          "accepted_executor_ids": [
+            "normalized-suite-live.v1"
+          ]
+        },
+        {
+          "gate_id": "G5",
+          "name": "Live consistency",
+          "description": "Checks that a fresh live run agrees with the saved candidate on the same evaluation cases.",
+          "disposition": "required",
+          "binding_kind": "fidelity_pair",
+          "track_id": "joint",
+          "mode": "live",
+          "minimum_evidence_level": "E5",
+          "accepted_executor_ids": [
+            "live-runtime.v1"
+          ]
+        },
+        {
+          "gate_id": "G6",
+          "name": "Fault recovery",
+          "description": "Measures fallback, retry, state continuity, and side effects during injected failures.",
+          "disposition": "advisory",
+          "binding_kind": "run",
+          "track_id": "agentic",
+          "mode": "live",
+          "minimum_evidence_level": "E5",
+          "accepted_executor_ids": [
+            "live-runtime.v1"
+          ]
+        },
+        {
+          "gate_id": "G7",
+          "name": "Cost, latency, and capacity",
+          "description": "Measures whether the proposed system meets its service objectives under repeated load.",
+          "disposition": "required",
+          "binding_kind": "run",
+          "track_id": "capacity",
+          "mode": "live",
+          "minimum_evidence_level": "E5",
+          "accepted_executor_ids": [
+            "live-runtime.v1"
+          ]
+        },
+        {
+          "gate_id": "G8",
+          "name": "Canary safety",
+          "description": "Checks production assignment, exposure limits, stop conditions, and rollback controls.",
+          "disposition": "required",
+          "binding_kind": "run",
+          "track_id": "preference",
+          "mode": "live",
+          "minimum_evidence_level": "E5",
+          "accepted_executor_ids": [
+            "live-runtime.v1"
+          ]
+        },
+        {
+          "gate_id": "G9",
+          "name": "Online preference",
+          "description": "Measures assigned user-preference outcomes for the baseline and proposed system.",
+          "disposition": "not_applicable",
+          "binding_kind": "run",
+          "track_id": "preference",
+          "mode": "live",
+          "minimum_evidence_level": "E5",
+          "accepted_executor_ids": [
+            "live-runtime.v1"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "runtime_capacity",
+      "name": "Runtime and capacity",
+      "description": "Serving software, deployment placement, throughput, latency, or transport changes.",
+      "campaign_slots": [
+        {
+          "gate_id": "G2",
+          "name": "Policy enforcement",
+          "description": "Checks that required safety and routing policies are enforced on the proposed system.",
+          "disposition": "required",
+          "binding_kind": "run",
+          "track_id": "safety",
+          "mode": "live",
+          "minimum_evidence_level": "E3",
+          "accepted_executor_ids": [
+            "live-runtime.v1"
+          ]
+        },
+        {
+          "gate_id": "G3",
+          "name": "Controlled value comparison",
+          "description": "Compares baseline and candidate outcomes on the same live cases with balanced execution order.",
+          "disposition": "advisory",
+          "binding_kind": "controlled_pair",
+          "track_id": "joint",
+          "mode": "live",
+          "minimum_evidence_level": "E4",
+          "accepted_executor_ids": [
+            "live-runtime.v1"
+          ]
+        },
+        {
+          "gate_id": "G4",
+          "name": "Workload-shift robustness",
+          "description": "Measures quality and reliability under the workload changes declared for this release.",
+          "disposition": "advisory",
+          "binding_kind": "run",
+          "track_id": "routing",
+          "mode": "live",
+          "minimum_evidence_level": "E4",
+          "accepted_executor_ids": [
+            "normalized-suite-live.v1"
+          ]
+        },
+        {
+          "gate_id": "G5",
+          "name": "Live consistency",
+          "description": "Checks that a fresh live run agrees with the saved candidate on the same evaluation cases.",
+          "disposition": "required",
+          "binding_kind": "fidelity_pair",
+          "track_id": "joint",
+          "mode": "live",
+          "minimum_evidence_level": "E5",
+          "accepted_executor_ids": [
+            "live-runtime.v1"
+          ]
+        },
+        {
+          "gate_id": "G6",
+          "name": "Fault recovery",
+          "description": "Measures fallback, retry, state continuity, and side effects during injected failures.",
+          "disposition": "advisory",
+          "binding_kind": "run",
+          "track_id": "agentic",
+          "mode": "live",
+          "minimum_evidence_level": "E5",
+          "accepted_executor_ids": [
+            "live-runtime.v1"
+          ]
+        },
+        {
+          "gate_id": "G7",
+          "name": "Cost, latency, and capacity",
+          "description": "Measures whether the proposed system meets its service objectives under repeated load.",
+          "disposition": "required",
+          "binding_kind": "run",
+          "track_id": "capacity",
+          "mode": "live",
+          "minimum_evidence_level": "E5",
+          "accepted_executor_ids": [
+            "live-runtime.v1"
+          ]
+        },
+        {
+          "gate_id": "G8",
+          "name": "Canary safety",
+          "description": "Checks production assignment, exposure limits, stop conditions, and rollback controls.",
+          "disposition": "required",
+          "binding_kind": "run",
+          "track_id": "preference",
+          "mode": "live",
+          "minimum_evidence_level": "E5",
+          "accepted_executor_ids": [
+            "live-runtime.v1"
+          ]
+        },
+        {
+          "gate_id": "G9",
+          "name": "Online preference",
+          "description": "Measures assigned user-preference outcomes for the baseline and proposed system.",
+          "disposition": "not_applicable",
+          "binding_kind": "run",
+          "track_id": "preference",
+          "mode": "live",
+          "minimum_evidence_level": "E5",
+          "accepted_executor_ids": [
+            "live-runtime.v1"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "agent_multimodal",
+      "name": "Agents and multimodal",
+      "description": "Diagnostic-only checks for tool use, multi-step agent behavior, state handling, and multimodal inputs; this profile does not provide release-promotion evidence.",
+      "campaign_slots": [
+        {
+          "gate_id": "G2",
+          "name": "Policy enforcement",
+          "description": "Checks that required safety and routing policies are enforced on the proposed system.",
+          "disposition": "required",
+          "binding_kind": "run",
+          "track_id": "safety",
+          "mode": "live",
+          "minimum_evidence_level": "E3",
+          "accepted_executor_ids": [
+            "live-runtime.v1"
+          ]
+        },
+        {
+          "gate_id": "G3",
+          "name": "Controlled value comparison",
+          "description": "Compares baseline and candidate outcomes on the same live cases with balanced execution order.",
+          "disposition": "not_applicable",
+          "binding_kind": "controlled_pair",
+          "track_id": "joint",
+          "mode": "live",
+          "minimum_evidence_level": "E4",
+          "accepted_executor_ids": [
+            "live-runtime.v1"
+          ]
+        },
+        {
+          "gate_id": "G4",
+          "name": "Workload-shift robustness",
+          "description": "Measures quality and reliability under the workload changes declared for this release.",
+          "disposition": "required",
+          "binding_kind": "run",
+          "track_id": "routing",
+          "mode": "live",
+          "minimum_evidence_level": "E4",
+          "accepted_executor_ids": [
+            "normalized-suite-live.v1"
+          ]
+        },
+        {
+          "gate_id": "G5",
+          "name": "Live consistency",
+          "description": "Checks that a fresh multimodal run agrees with the saved candidate on the same evaluation cases.",
+          "disposition": "required",
+          "binding_kind": "fidelity_pair",
+          "track_id": "multimodal",
+          "mode": "live",
+          "minimum_evidence_level": "E4",
+          "accepted_executor_ids": [
+            "normalized-suite-live.v1"
+          ]
+        },
+        {
+          "gate_id": "G6",
+          "name": "Fault recovery",
+          "description": "Measures fallback, retry, state continuity, and side effects during injected failures.",
+          "disposition": "required",
+          "binding_kind": "run",
+          "track_id": "agentic",
+          "mode": "live",
+          "minimum_evidence_level": "E5",
+          "accepted_executor_ids": [
+            "live-runtime.v1"
+          ]
+        },
+        {
+          "gate_id": "G7",
+          "name": "Cost, latency, and capacity",
+          "description": "Measures whether the proposed system meets its service objectives under repeated load.",
+          "disposition": "required",
+          "binding_kind": "run",
+          "track_id": "capacity",
+          "mode": "live",
+          "minimum_evidence_level": "E5",
+          "accepted_executor_ids": [
+            "live-runtime.v1"
+          ]
+        },
+        {
+          "gate_id": "G8",
+          "name": "Canary safety",
+          "description": "Checks production assignment, exposure limits, stop conditions, and rollback controls.",
+          "disposition": "required",
+          "binding_kind": "run",
+          "track_id": "preference",
+          "mode": "live",
+          "minimum_evidence_level": "E5",
+          "accepted_executor_ids": [
+            "live-runtime.v1"
+          ]
+        },
+        {
+          "gate_id": "G9",
+          "name": "Online preference",
+          "description": "Measures assigned user-preference outcomes for the baseline and proposed system.",
+          "disposition": "advisory",
+          "binding_kind": "run",
+          "track_id": "preference",
+          "mode": "live",
+          "minimum_evidence_level": "E5",
+          "accepted_executor_ids": [
+            "live-runtime.v1"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "online_adaptation",
+      "name": "Online learning and feedback",
+      "description": "Traffic assignment, user preferences, feedback, or adaptive policy changes.",
+      "campaign_slots": [
+        {
+          "gate_id": "G2",
+          "name": "Policy enforcement",
+          "description": "Checks that required safety and routing policies are enforced on the proposed system.",
+          "disposition": "required",
+          "binding_kind": "run",
+          "track_id": "safety",
+          "mode": "live",
+          "minimum_evidence_level": "E3",
+          "accepted_executor_ids": [
+            "live-runtime.v1"
+          ]
+        },
+        {
+          "gate_id": "G3",
+          "name": "Controlled value comparison",
+          "description": "Compares baseline and candidate outcomes on the same live cases with balanced execution order.",
+          "disposition": "required",
+          "binding_kind": "controlled_pair",
+          "track_id": "joint",
+          "mode": "live",
+          "minimum_evidence_level": "E4",
+          "accepted_executor_ids": [
+            "live-runtime.v1"
+          ]
+        },
+        {
+          "gate_id": "G4",
+          "name": "Workload-shift robustness",
+          "description": "Measures quality and reliability under the workload changes declared for this release.",
+          "disposition": "required",
+          "binding_kind": "run",
+          "track_id": "routing",
+          "mode": "live",
+          "minimum_evidence_level": "E4",
+          "accepted_executor_ids": [
+            "normalized-suite-live.v1"
+          ]
+        },
+        {
+          "gate_id": "G5",
+          "name": "Live consistency",
+          "description": "Checks that a fresh live run agrees with the saved candidate on the same evaluation cases.",
+          "disposition": "required",
+          "binding_kind": "fidelity_pair",
+          "track_id": "joint",
+          "mode": "live",
+          "minimum_evidence_level": "E5",
+          "accepted_executor_ids": [
+            "live-runtime.v1"
+          ]
+        },
+        {
+          "gate_id": "G6",
+          "name": "Fault recovery",
+          "description": "Measures fallback, retry, state continuity, and side effects during injected failures.",
+          "disposition": "required",
+          "binding_kind": "run",
+          "track_id": "agentic",
+          "mode": "live",
+          "minimum_evidence_level": "E5",
+          "accepted_executor_ids": [
+            "live-runtime.v1"
+          ]
+        },
+        {
+          "gate_id": "G7",
+          "name": "Cost, latency, and capacity",
+          "description": "Measures whether the proposed system meets its service objectives under repeated load.",
+          "disposition": "required",
+          "binding_kind": "run",
+          "track_id": "capacity",
+          "mode": "live",
+          "minimum_evidence_level": "E5",
+          "accepted_executor_ids": [
+            "live-runtime.v1"
+          ]
+        },
+        {
+          "gate_id": "G8",
+          "name": "Canary safety",
+          "description": "Checks production assignment, exposure limits, stop conditions, and rollback controls.",
+          "disposition": "required",
+          "binding_kind": "run",
+          "track_id": "preference",
+          "mode": "live",
+          "minimum_evidence_level": "E5",
+          "accepted_executor_ids": [
+            "live-runtime.v1"
+          ]
+        },
+        {
+          "gate_id": "G9",
+          "name": "Online preference",
+          "description": "Measures assigned user-preference outcomes for the baseline and proposed system.",
+          "disposition": "required",
+          "binding_kind": "run",
+          "track_id": "preference",
+          "mode": "live",
+          "minimum_evidence_level": "E5",
+          "accepted_executor_ids": [
+            "live-runtime.v1"
+          ]
+        }
+      ]
+    }
+  ],
+  "tracks": [
+    {
+      "id": "routing",
+      "name": "Routing",
+      "description": "Decision quality, coverage, abstention, fallbacks, and missed best-model opportunities.",
+      "modes": [
+        "replay",
+        "live"
+      ],
+      "metrics": [
+        "routing.abstention_rate",
+        "routing.accuracy",
+        "routing.coverage",
+        "routing.fallback_rate",
+        "routing.latency_p50_ms",
+        "routing.latency_p95_ms",
+        "routing.robustness_pass_rate",
+        "routing.robustness_worst_slice_pass_rate",
+        "routing.selected_arm_count",
+        "routing.selection_entropy_bits",
+        "routing.success_rate",
+        "routing_recipe.e1.eligibility_complete_rate",
+        "routing_recipe.e1.selected_feasible_rate",
+        "routing_recipe.e2.oracle_regret"
+      ],
+      "evidence_levels": [
+        "E0",
+        "E3",
+        "E4"
+      ]
+    },
+    {
+      "id": "model_pool",
+      "name": "Model pool",
+      "description": "Quality and reliability of each model, complementary strengths, unique wins, and the best possible pool outcome.",
+      "modes": [
+        "replay",
+        "live"
+      ],
+      "metrics": [
+        "model_pool.all_arm_failure_rate",
+        "model_pool.arm_count",
+        "model_pool.best_single_quality",
+        "model_pool.mean_pairwise_failure_jaccard",
+        "model_pool.oracle_gain",
+        "model_pool.oracle_quality",
+        "model_pool.pareto_dominated_arm_count",
+        "model_pool.pareto_evaluable_arm_count",
+        "model_pool.quality_cost_shared_support_cases",
+        "model_pool.quality_cost_shared_support_fraction",
+        "model_pool.quality_dominated_arm_count",
+        "model_pool.quality_shared_support_cases",
+        "model_pool.quality_shared_support_fraction",
+        "model_pool.selection_arm_coverage",
+        "model_pool.selection_entropy_bits",
+        "model_pool.unique_win_rate",
+        "model_pool.unique_wins",
+        "model_pool.worst_arm_reliability",
+        "r2.compound_model_budget.audc",
+        "r2.compound_model_budget.nauc",
+        "r2.compound_model_budget.peak",
+        "r2.compound_model_budget.qnc"
+      ],
+      "evidence_levels": [
+        "E0",
+        "E4"
+      ]
+    },
+    {
+      "id": "joint",
+      "name": "Routing and model pool",
+      "description": "End-to-end quality, reliability, latency, and cost, including the gap from the best available model.",
+      "modes": [
+        "replay",
+        "live"
+      ],
+      "metrics": [
+        "joint.latency_p95_ms",
+        "joint.normalized_regret",
+        "joint.oracle_capture_ratio",
+        "joint.oracle_regret",
+        "joint.realized_quality",
+        "joint.reliability",
+        "joint.runtime_cost_per_success"
+      ],
+      "evidence_levels": [
+        "E0",
+        "E5"
+      ]
+    },
+    {
+      "id": "agentic",
+      "name": "Agent tasks",
+      "description": "Task completion, tool-use policy, state and privacy, recovery from failures, latency, and cost.",
+      "modes": [
+        "replay",
+        "live"
+      ],
+      "metrics": [
+        "agentic.invalid_tool_rate",
+        "agentic.mean_trajectory_steps",
+        "agentic.privacy_exposures_per_trajectory",
+        "agentic.recovery_baseline_success_rate",
+        "agentic.recovery_cluster_count",
+        "agentic.recovery_cluster_pass_rate",
+        "agentic.recovery_cluster_pass_rate_lower_95",
+        "agentic.recovery_distinct_seed_count",
+        "agentic.recovery_max_retry_amplification",
+        "agentic.recovery_maximum_latency_ms",
+        "agentic.recovery_mean_latency_delta_ms",
+        "agentic.recovery_minimum_cluster_count",
+        "agentic.recovery_minimum_distinct_seed_count",
+        "agentic.recovery_pair_count",
+        "agentic.recovery_retry_amplification_threshold",
+        "agentic.recovery_success_delta",
+        "agentic.recovery_treatment_success_rate",
+        "agentic.runtime_cost_per_success",
+        "agentic.success_rate",
+        "agentic.task_attempt_count",
+        "agentic.task_attempt_success_rate",
+        "agentic.task_attempt_success_rate_lower_95",
+        "agentic.task_cost_per_success_usd",
+        "agentic.task_distinct_count",
+        "agentic.task_invalid_tool_rate",
+        "agentic.task_mean_score",
+        "agentic.task_mean_steps",
+        "agentic.task_privacy_exposures_per_attempt",
+        "agentic.task_pure_reasoning_attempt_count",
+        "agentic.task_reliability",
+        "agentic.task_reliability_lower_95",
+        "agentic.task_required_tool_receipt_coverage",
+        "agentic.task_score",
+        "agentic.task_tool_required_attempt_count",
+        "agentic.task_total_cost_usd"
+      ],
+      "evidence_levels": [
+        "E0",
+        "E5"
+      ]
+    },
+    {
+      "id": "multimodal",
+      "name": "Multimodal",
+      "description": "Input capability matching, grounded response quality, reliability, and privacy for text and non-text requests.",
+      "modes": [
+        "replay",
+        "live"
+      ],
+      "metrics": [
+        "multimodal.privacy_violations",
+        "multimodal.quality",
+        "multimodal.support_rate"
+      ],
+      "evidence_levels": [
+        "E0",
+        "E4",
+        "E5"
+      ]
+    },
+    {
+      "id": "preference",
+      "name": "Preference",
+      "description": "Offline preference agreement and statistically valid online preference outcomes.",
+      "modes": [
+        "replay",
+        "live"
+      ],
+      "metrics": [
+        "experiment.assignment_balance_p_value",
+        "experiment.assignment_support",
+        "experiment.candidate_safe",
+        "experiment.controls_operational",
+        "experiment.minimum_assignment_count",
+        "experiment.risk_budget_max_rate",
+        "experiment.risk_event_rate",
+        "experiment.risk_event_upper_confidence_bound",
+        "preference.agreement",
+        "preference.effective_sample_ratio",
+        "preference.effective_sample_size",
+        "preference.minimum_reward_lift",
+        "preference.online_causal_eligible",
+        "preference.online_effective_sample_ratio",
+        "preference.online_effective_sample_size",
+        "preference.online_ips_reward",
+        "preference.online_minimum_effective_sample_ratio",
+        "preference.online_minimum_effective_sample_size",
+        "preference.online_outcome_coverage",
+        "preference.online_reward_lift",
+        "preference.online_reward_lift_passed",
+        "preference.online_segment_count",
+        "preference.online_segment_coverage",
+        "preference.online_snips_reward",
+        "preference.propensity_coverage",
+        "preference.reference_effective_sample_ratio",
+        "preference.reference_effective_sample_size",
+        "preference.reference_snips_reward",
+        "preference.self_normalized_ips_agreement"
+      ],
+      "evidence_levels": [
+        "E0",
+        "E4",
+        "E5"
+      ]
+    },
+    {
+      "id": "safety",
+      "name": "Safety",
+      "description": "Policy adherence, correct blocking behavior, privacy, and unsafe regressions.",
+      "modes": [
+        "replay",
+        "live"
+      ],
+      "metrics": [
+        "safety.block_accuracy",
+        "safety.false_negative_rate",
+        "safety.false_positive_rate",
+        "safety.hard_policy_observation_count",
+        "safety.hard_policy_static_passed",
+        "safety.violation_case_rate",
+        "safety.violation_rate",
+        "safety.violation_upper_95"
+      ],
+      "evidence_levels": [
+        "E0",
+        "E3",
+        "E4"
+      ]
+    },
+    {
+      "id": "capacity",
+      "name": "Capacity",
+      "description": "Throughput, tail latency, error bounds, stability, service-objective headroom, and test cost across repeated load levels.",
+      "modes": [
+        "replay",
+        "live"
+      ],
+      "metrics": [
+        "capacity.cost_per_successful_request",
+        "capacity.error_rate",
+        "capacity.error_rate_cluster_range_max",
+        "capacity.error_rate_upper_bound",
+        "capacity.latency_p95_ms",
+        "capacity.latency_p95_stability_cv_max",
+        "capacity.latency_p99_ms",
+        "capacity.measurement_cluster_count_min",
+        "capacity.measurement_request_count",
+        "capacity.saturation_concurrency",
+        "capacity.saturation_concurrency_lower_bound",
+        "capacity.saturation_observed",
+        "capacity.slo_headroom",
+        "capacity.success_concurrency_upper_bound",
+        "capacity.success_rate",
+        "capacity.throughput_rps",
+        "capacity.throughput_stability_cv_max",
+        "capacity.warmup_error_count"
+      ],
+      "evidence_levels": [
+        "E0",
+        "E5"
+      ]
+    }
+  ],
+  "suites": [
+    {
+      "id": "evaluation-smoke",
+      "name": "Evaluation setup check",
+      "description": "A small deterministic workload that verifies every evaluation area is connected and reportable.",
+      "track_ids": [
+        "routing",
+        "model_pool",
+        "joint",
+        "agentic",
+        "multimodal",
+        "preference",
+        "safety",
+        "capacity"
+      ],
+      "modes": [
+        "replay"
+      ],
+      "evidence_level": "E0",
+      "executors": {
+        "replay": "fixture-replay.v1"
+      },
+      "case_count": 4,
+      "revision": "builtin-v1",
+      "tags": [
+        "smoke",
+        "deterministic"
+      ],
+      "methods": [
+        {
+          "id": "fixture.routing.v1",
+          "track_id": "routing",
+          "qualified_gate_ids": [],
+          "evidence_source": "diagnostic_fixture",
+          "status": "configured"
+        },
+        {
+          "id": "fixture.model_pool.v1",
+          "track_id": "model_pool",
+          "qualified_gate_ids": [],
+          "evidence_source": "diagnostic_fixture",
+          "status": "configured"
+        },
+        {
+          "id": "fixture.joint.v1",
+          "track_id": "joint",
+          "qualified_gate_ids": [],
+          "evidence_source": "diagnostic_fixture",
+          "status": "configured"
+        },
+        {
+          "id": "fixture.agentic.v1",
+          "track_id": "agentic",
+          "qualified_gate_ids": [],
+          "evidence_source": "diagnostic_fixture",
+          "status": "configured"
+        },
+        {
+          "id": "fixture.multimodal.v1",
+          "track_id": "multimodal",
+          "qualified_gate_ids": [],
+          "evidence_source": "diagnostic_fixture",
+          "status": "configured"
+        },
+        {
+          "id": "fixture.preference.v1",
+          "track_id": "preference",
+          "qualified_gate_ids": [],
+          "evidence_source": "diagnostic_fixture",
+          "status": "configured"
+        },
+        {
+          "id": "fixture.safety.v1",
+          "track_id": "safety",
+          "qualified_gate_ids": [],
+          "evidence_source": "diagnostic_fixture",
+          "status": "configured"
+        },
+        {
+          "id": "fixture.capacity.v1",
+          "track_id": "capacity",
+          "qualified_gate_ids": [],
+          "evidence_source": "diagnostic_fixture",
+          "status": "configured"
+        }
+      ]
+    },
+    {
+      "id": "live-mom-core",
+      "name": "Routing and model-pool setup check",
+      "description": "A small hidden-answer workload for diagnosing routing, model-pool, and end-to-end execution. It is not large or diverse enough to support a release comparison.",
+      "track_ids": [
+        "routing",
+        "model_pool",
+        "joint"
+      ],
+      "modes": [
+        "replay",
+        "live"
+      ],
+      "evidence_level": "E0",
+      "executors": {
+        "replay": "mom-cohort-replay.v1",
+        "live": "live-runtime.v1"
+      },
+      "case_count": 64,
+      "revision": "mom-diagnostic-cohort-v2",
+      "tags": [
+        "smoke",
+        "mom",
+        "hidden-label",
+        "diagnostic-only"
+      ],
+      "methods": [
+        {
+          "id": "routing.live-diagnostic.v1",
+          "track_id": "routing",
+          "qualified_gate_ids": [],
+          "evidence_source": "live_runtime",
+          "status": "configured"
+        },
+        {
+          "id": "model-pool.live-dense.v1",
+          "track_id": "model_pool",
+          "qualified_gate_ids": [],
+          "evidence_source": "live_runtime",
+          "status": "configured"
+        },
+        {
+          "id": "joint.live-routed-outcome.v1",
+          "track_id": "joint",
+          "qualified_gate_ids": [],
+          "evidence_source": "live_runtime",
+          "status": "configured"
+        }
+      ]
+    },
+    {
+      "id": "live-agent-tasks",
+      "name": "Agent task evaluation",
+      "description": "Repeated tool-use and reasoning tasks with complete provider results. Measures task completion, tool-policy compliance, reliability, latency, and cost; it does not invoke tools itself or claim parity with external agent benchmarks.",
+      "track_ids": [
+        "agentic"
+      ],
+      "modes": [
+        "live"
+      ],
+      "evidence_level": "E5",
+      "executors": {
+        "live": "live-runtime.v1"
+      },
+      "revision": "executor-v1",
+      "tags": [],
+      "methods": [
+        {
+          "id": "live-agent-task.v1",
+          "track_id": "agentic",
+          "qualified_gate_ids": [],
+          "evidence_source": "live_runtime",
+          "status": "data_required",
+          "reason": "Connect a managed agent-task results source that includes every repeated attempt, the required tool policy for each task, and provider-confirmed outcomes for the selected Mixture."
+        }
+      ]
+    },
+    {
+      "id": "live-fault-recovery",
+      "name": "Agent fault-recovery evaluation",
+      "description": "Matched baseline and injected-failure tasks that measure recovery, state continuity, side effects, retries, and latency.",
+      "track_ids": [
+        "agentic"
+      ],
+      "modes": [
+        "live"
+      ],
+      "evidence_level": "E5",
+      "executors": {
+        "live": "live-runtime.v1"
+      },
+      "revision": "executor-v1",
+      "tags": [],
+      "methods": [
+        {
+          "id": "live-fault-recovery.v1",
+          "track_id": "agentic",
+          "qualified_gate_ids": [
+            "G6"
+          ],
+          "evidence_source": "live_runtime",
+          "status": "data_required",
+          "reason": "Connect a managed fault-recovery results source with complete matched baseline and injected-failure attempts at the same task step."
+        }
+      ]
+    },
+    {
+      "id": "live-multimodal",
+      "name": "Multimodal response evaluation",
+      "description": "Text and non-text requests graded for supported input handling, response quality, reliability, and latency.",
+      "track_ids": [
+        "multimodal"
+      ],
+      "modes": [
+        "live"
+      ],
+      "evidence_level": "E0",
+      "executors": {
+        "live": "live-runtime.v1"
+      },
+      "revision": "executor-v1",
+      "tags": [],
+      "methods": [
+        {
+          "id": "multimodal.live-chat.v1",
+          "track_id": "multimodal",
+          "qualified_gate_ids": [],
+          "evidence_source": "live_runtime",
+          "status": "configured"
+        }
+      ]
+    },
+    {
+      "id": "live-hard-policy",
+      "name": "Policy enforcement evaluation",
+      "description": "Live policy and adversarial cases that verify required rules are enforced by the selected system configuration.",
+      "track_ids": [
+        "safety"
+      ],
+      "modes": [
+        "live"
+      ],
+      "evidence_level": "E4",
+      "executors": {
+        "live": "live-runtime.v1"
+      },
+      "revision": "executor-v1",
+      "tags": [],
+      "methods": [
+        {
+          "id": "policy.hard-enforcement.v1",
+          "track_id": "safety",
+          "qualified_gate_ids": [
+            "G2"
+          ],
+          "evidence_source": "live_runtime",
+          "status": "data_required",
+          "reason": "Connect managed policy-test results with the evaluated rules, enforcement points, and complete outcomes for the selected configuration."
+        }
+      ]
+    },
+    {
+      "id": "live-production-experiment",
+      "name": "Guarded production evaluation",
+      "description": "Evaluates connected production experiment results for assignment balance, exposure controls, risk, stop conditions, rollback readiness, and preference lift between baseline and candidate.",
+      "track_ids": [
+        "preference"
+      ],
+      "modes": [
+        "live"
+      ],
+      "evidence_level": "E5",
+      "executors": {
+        "live": "live-runtime.v1"
+      },
+      "revision": "executor-v1",
+      "tags": [],
+      "methods": [
+        {
+          "id": "production.experiment-controls.v1",
+          "track_id": "preference",
+          "qualified_gate_ids": [
+            "G8"
+          ],
+          "evidence_source": "live_production",
+          "status": "data_required",
+          "reason": "Connect managed production experiment results with complete assignment, exposure, and safety-control data."
+        },
+        {
+          "id": "production.preference-lift.v1",
+          "track_id": "preference",
+          "qualified_gate_ids": [
+            "G9"
+          ],
+          "evidence_source": "live_production",
+          "status": "data_required",
+          "reason": "Connect managed production experiment results with complete preference outcomes and the recorded assignment probability for each policy."
+        }
+      ]
+    },
+    {
+      "id": "live-capacity",
+      "name": "Capacity setup check",
+      "description": "A short repeated closed-loop workload for checking load execution, telemetry, and report generation. It is diagnostic and does not support a release capacity decision.",
+      "track_ids": [
+        "capacity"
+      ],
+      "modes": [
+        "live"
+      ],
+      "evidence_level": "E0",
+      "executors": {
+        "live": "live-runtime.v1"
+      },
+      "revision": "executor-v1",
+      "tags": [
+        "smoke",
+        "diagnostic-only"
+      ],
+      "methods": [
+        {
+          "id": "capacity.slo-envelope.v1",
+          "track_id": "capacity",
+          "qualified_gate_ids": [],
+          "evidence_source": "live_runtime",
+          "status": "configured"
+        }
+      ]
+    }
+  ],
+  "targets": [
+    {
+      "id": "fixture",
+      "name": "Built-in evaluation sample",
+      "description": "A small deterministic replay for checking the full evaluation workflow without calling a live system.",
+      "kind": "builtin-fixture",
+      "track_ids": [
+        "routing",
+        "model_pool",
+        "joint",
+        "agentic",
+        "multimodal",
+        "preference",
+        "safety",
+        "capacity"
+      ],
+      "modes": [
+        "replay"
+      ],
+      "accepted_executors": {
+        "replay": [
+          "fixture-replay.v1"
+        ]
+      },
+      "evidence_level": "E0",
+      "healthy": true,
+      "labels": {
+        "execution": "local",
+        "network": "none"
+      }
+    },
+    {
+      "id": "benchmark-source",
+      "name": "Imported benchmark results",
+      "description": "Replay saved results from pinned benchmark revisions. This evaluates imported observations, not the live system.",
+      "kind": "normalized-benchmark-source",
+      "track_ids": [
+        "routing",
+        "model_pool",
+        "joint",
+        "agentic",
+        "multimodal",
+        "preference",
+        "safety",
+        "capacity"
+      ],
+      "modes": [
+        "replay"
+      ],
+      "accepted_executors": {
+        "replay": [
+          "normalized-suite-replay.v1"
+        ]
+      },
+      "healthy": false,
+      "labels": {
+        "execution": "recorded-source",
+        "identity": "suite-revision-bound",
+        "network": "none"
+      }
+    }
+  ]
+}

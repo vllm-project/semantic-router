@@ -42,8 +42,10 @@ the response.
 The plugin depends on
 `global.model_catalog.modules.hallucination_mitigation`; `use_nli: true` also
 uses the configured explainer/NLI model. Model responses and supplied grounding
-context are processed by those modules. Detection can identify unsupported
-text, but it cannot establish truth without authoritative evidence.
+context are processed by those modules. Grounding context longer than the
+detector's token window is trimmed from the end so the answer always reaches
+the model. Detection can identify unsupported text, but it cannot establish
+truth without authoritative evidence.
 
 See a complete example:
 [`config/fragments/plugin/hallucination/fact-check.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/hallucination/fact-check.yaml).

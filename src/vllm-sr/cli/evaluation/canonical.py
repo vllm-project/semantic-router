@@ -4,11 +4,39 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Mapping
 from datetime import date, datetime
 from enum import Enum
-from typing import Any
+from typing import Any, BinaryIO, NoReturn, TextIO
 
 from pydantic import BaseModel
+
+
+def _unique_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"JSON object repeats key {key!r}")
+        result[key] = value
+    return result
+
+
+def _reject_non_finite_json_constant(value: str) -> NoReturn:
+    raise ValueError(f"JSON number must be finite, got {value}")
+
+
+def strict_json_loads(data: str | bytes | bytearray) -> Any:
+    """Decode contract JSON without duplicate keys or non-finite numbers."""
+
+    return json.loads(
+        data,
+        object_pairs_hook=_unique_json_object,
+        parse_constant=_reject_non_finite_json_constant,
+    )
+
+
+def strict_json_load(handle: TextIO | BinaryIO) -> Any:
+    return strict_json_loads(handle.read())
 
 
 def json_value(value: Any, *, exclude_none: bool = True) -> Any:
@@ -19,7 +47,7 @@ def json_value(value: Any, *, exclude_none: bool = True) -> Any:
             value.model_dump(mode="json", exclude_none=exclude_none),
             exclude_none=exclude_none,
         )
-    if isinstance(value, dict):
+    if isinstance(value, Mapping):
         return {
             str(key): json_value(item, exclude_none=exclude_none)
             for key, item in value.items()

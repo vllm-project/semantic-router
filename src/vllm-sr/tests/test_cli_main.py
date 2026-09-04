@@ -64,6 +64,14 @@ def test_cli_version_matches_project_metadata():
     assert result.output.strip() == f"vllm-sr version: {expected_version}"
 
 
+def test_registered_serve_command_comes_from_cli_commands_runtime():
+    registered_serve = main.commands["serve"]
+    assert registered_serve is runtime_commands.serve
+    assert registered_serve.name == "serve"
+    assert importlib.util.find_spec("cli.commands.serve") is None
+    assert importlib.util.find_spec("cli.models_memory") is None
+
+
 def test_serve_materializes_active_config_under_custom_host_state_root(
     monkeypatch, tmp_path: Path
 ):
@@ -215,7 +223,7 @@ def test_serve_help_describes_docker_only_runtime():
     assert "--log-level" in result.output
     assert "latency_aware" in result.output
     assert "session_aware" not in result.output
-    assert "--sim-image" in result.output
+    assert "--sim-image" not in result.output
     assert "--recipe-env NAME" in result.output
     assert "router_r1" not in result.output
     assert "thompson" not in result.output
