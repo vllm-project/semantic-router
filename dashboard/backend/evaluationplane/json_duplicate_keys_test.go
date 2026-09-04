@@ -71,7 +71,7 @@ func TestPublishedReportRejectsNestedDuplicateJSONKeys(t *testing.T) {
 }
 
 func TestMethodDeclarationRejectsDuplicateJSONKeysInsideArrays(t *testing.T) {
-	payload, err := json.Marshal(R2CompoundModelBudgetPlugin())
+	payload, err := json.Marshal(R2CompoundModelBudgetMethod())
 	if err != nil {
 		t.Fatalf("encode method declaration: %v", err)
 	}
@@ -82,7 +82,7 @@ func TestMethodDeclarationRejectsDuplicateJSONKeysInsideArrays(t *testing.T) {
 		[]byte(`"slices":[{"schema_version":"forged","schema_version":`),
 	)
 
-	var method EvaluationMethodPlugin
+	var method EvaluationMethodDefinition
 	decodeErr := json.Unmarshal(payload, &method)
 	if decodeErr == nil || !strings.Contains(decodeErr.Error(), `duplicate JSON object key "schema_version"`) {
 		t.Fatalf("nested duplicate method-declaration key error=%v, want strict rejection", decodeErr)

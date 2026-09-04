@@ -475,10 +475,6 @@ function summaryForKey(key: RouterSystemKey, data: unknown): RouterSectionSummar
       return [
         { label: 'Enabled', value: stringOrFallback(section?.enabled, 'Disabled') },
         { label: 'Method', value: stringOrFallback(section?.method) },
-        {
-          label: 'Prompt prefixes',
-          value: `${Array.isArray(section?.prompt_prefixes) ? section.prompt_prefixes.length : 0}`,
-        },
       ]
     case 'observability':
       return [
@@ -814,12 +810,6 @@ function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
     case 'hallucination_mitigation':
       return [
         { name: 'enabled', label: 'Enable Hallucination Mitigation', type: 'boolean' },
-        {
-          name: 'on_hallucination_detected',
-          label: 'On Detection Action',
-          type: 'text',
-          placeholder: 'block',
-        },
         routerStructuredField(key, 'fact_check'),
         routerStructuredField(key, 'detector'),
         routerStructuredField(key, 'explainer'),
@@ -951,7 +941,6 @@ function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
     case 'modality_detector':
       return [
         { name: 'enabled', label: 'Enable Modality Detector', type: 'boolean' },
-        routerStructuredField(key, 'prompt_prefixes'),
         {
           name: 'method',
           label: 'Detection Method',
@@ -1062,7 +1051,6 @@ function editDataForKey(key: RouterSystemKey, data: unknown): EditFormData {
     return {
       ...(hallucination || {}),
       enabled: hallucination?.enabled,
-      on_hallucination_detected: hallucination?.on_hallucination_detected,
       fact_check: asObject(hallucination?.fact_check) || {},
       detector: asObject(hallucination?.detector) || {},
       explainer: asObject(hallucination?.explainer) || {},
@@ -1139,7 +1127,6 @@ function saveForKey(key: RouterSystemKey, rawData: EditFormData): Partial<Config
     return buildNestedPatch(GLOBAL_SECTION_PATHS[key], {
       ...data,
       enabled: Boolean(data.enabled),
-      on_hallucination_detected: data.on_hallucination_detected,
       fact_check: asObject(data.fact_check) || {},
       detector: asObject(data.detector) || {},
       explainer: asObject(data.explainer) || {},
