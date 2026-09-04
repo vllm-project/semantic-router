@@ -128,8 +128,6 @@ type workflowExecutionSummary struct {
 }
 
 func (l *WorkflowsLooper) Execute(ctx context.Context, req *Request) (*Response, error) {
-	l.client.SetDecisionName(req.DecisionName)
-
 	cfg := resolveWorkflowsExecutionConfig(req)
 	if len(req.ModelRefs) == 0 {
 		return nil, fmt.Errorf("workflows requires decision modelRefs")
@@ -711,5 +709,11 @@ func (l *WorkflowsLooper) callWorkflowModel(
 	if modelName == cfg.PlannerModel && cfg.PlannerMaxCompletionTokens > 0 {
 		callReq.MaxCompletionTokens = openai.Int(int64(cfg.PlannerMaxCompletionTokens))
 	}
-	return l.callModelWithContextGate(ctx, baseReq, callReq, modelName, false, iteration, nil, accessKeyForModel(baseReq, modelName))
+	return l.dispatchModel(
+		ctx,
+		baseReq,
+		callReq,
+		ModelTarget{Name: modelName, AccessKey: accessKeyForModel(baseReq, modelName)},
+		CallOptions{DecisionName: baseReq.DecisionName, Iteration: uint32(iteration)},
+	)
 }
