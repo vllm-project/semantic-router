@@ -15,9 +15,9 @@ from cli.evaluation.contracts import ResolvedRunSnapshot, RunManifest
 from cli.evaluation.evidence import ExecutionRecord
 from cli.evaluation.evidence_collection import collect_evidence
 from cli.evaluation.evidence_level import run_evidence_level
+from cli.evaluation.execution_contract import ExecutionPlan
 from cli.evaluation.execution_plan import (
     DEFAULT_SUITE_REGISTRY,
-    ExecutionPlan,
     SuiteRegistry,
     resolve_execution_plan,
 )

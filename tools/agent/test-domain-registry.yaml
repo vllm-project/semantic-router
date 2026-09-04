@@ -42,12 +42,12 @@ domains:
 
   security:
     owner: security
-    contract: Changed source does not introduce blocked supply-chain patterns.
+    contract: Changed source does not introduce blocked supply-chain patterns, and maintained first-party Helm resources remain hardened.
     layer: static
     selector: security
     pr_job: security
     workflow: .github/workflows/security-scan.yml
-    cadence: [pr]
+    cadence: [pr, main, weekly]
     resource_class: light
     local: {fast: [], feature: []}
     image_receipts: []
@@ -347,6 +347,17 @@ profiles:
     paths:
       - e2e/profiles/category-remote-backend/**
       - e2e/testcases/category_backend_routing.go
+  external-gateway-responses:
+    owner: e2e
+    coverage_role: responses-state-with-external-dispatch
+    selection: pr
+    paths:
+      - e2e/profiles/external-gateway-responses/**
+      - deploy/kubernetes/ai-gateway/semantic-router-values/responses-state.yaml
+      - src/semantic-router/pkg/extproc/processor_req_body_external_gateway.go
+      - src/semantic-router/pkg/extproc/processor_req_body.go
+      - src/semantic-router/pkg/extproc/router_build.go
+      - src/semantic-router/pkg/modeldownload/external_gateway_responses_asset_test.go
   aibrix:
     owner: e2e
     coverage_role: aibrix-control-plane-and-gateway
