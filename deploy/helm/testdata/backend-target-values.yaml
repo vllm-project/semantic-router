@@ -1,0 +1,46 @@
+configOverride:
+  version: v0.3
+  listeners:
+    - name: http
+      address: 0.0.0.0
+      port: 8899
+  providers:
+    defaults:
+      default_model: local/custom
+    models:
+      - name: local/custom
+        provider_model_id: provider/model-id
+        backend_refs:
+          - name: hosted-primary
+            base_url: https://provider.example/v1
+            protocol: https
+            weight: 75
+            provider: openai
+            auth_header: Authorization
+            auth_prefix: Bearer
+            api_key_env: PROVIDER_API_KEY
+            extra_headers:
+              X-Tenant: production
+            api_version: "2026-09-01"
+            chat_path: /chat/completions
+  routing:
+    modelCards:
+      - name: local/custom
+        description: Helm backend-target compatibility fixture
+    decisions:
+      - name: custom-route
+        priority: 100
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: local/custom
+            use_reasoning: false
+  global:
+    router:
+      skip_processing:
+        enabled: true
+      learning:
+        enabled: true
+        adaptation:
+          enabled: true

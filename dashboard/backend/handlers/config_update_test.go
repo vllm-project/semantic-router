@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"reflect"
 	"testing"
 	"time"
 
@@ -302,6 +303,81 @@ func TestUpdateConfigHandler_WritesBackendEndpoint(t *testing.T) {
 	}
 	if endpoint, ok := backend["endpoint"].(string); !ok || endpoint != "192.168.1.100:8000" {
 		t.Errorf("Expected endpoint to be '192.168.1.100:8000', got '%v'", endpoint)
+	}
+}
+
+func TestUpdateConfigHandler_PreservesBackendTargetFields(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := createValidTestConfig(t, tempDir)
+
+	config := canonicalConfigBody("provider.internal:8443")
+	providers := config["providers"].(map[string]interface{})
+	models := providers["models"].([]map[string]interface{})
+	models[0]["backend_refs"] = []map[string]interface{}{
+		{
+			"name":          "hosted-primary",
+			"endpoint":      "provider.internal:8443",
+			"protocol":      "https",
+			"weight":        75,
+			"type":          "openai",
+			"base_url":      "https://provider.example/v1",
+			"provider":      "openai",
+			"auth_header":   "Authorization",
+			"auth_prefix":   "Bearer",
+			"extra_headers": map[string]string{"X-Tenant": "production"},
+			"api_version":   "2026-09-01",
+			"chat_path":     "/chat/completions",
+			"api_key_env":   "PROVIDER_API_KEY",
+		},
+	}
+
+	bodyBytes, err := json.Marshal(config)
+	if err != nil {
+		t.Fatalf("marshal config: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/router/config/update", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	UpdateConfigHandler(configPath, false, "")(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d. Response: %s", w.Code, w.Body.String())
+	}
+
+	updatedData, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read updated config: %v", err)
+	}
+	var updated map[string]interface{}
+	if err := yaml.Unmarshal(updatedData, &updated); err != nil {
+		t.Fatalf("parse updated config: %v", err)
+	}
+	updatedProviders := updated["providers"].(map[string]interface{})
+	updatedModels := updatedProviders["models"].([]interface{})
+	updatedModel := updatedModels[0].(map[string]interface{})
+	updatedRefs := updatedModel["backend_refs"].([]interface{})
+	got := updatedRefs[0].(map[string]interface{})
+
+	want := map[string]interface{}{
+		"name":          "hosted-primary",
+		"endpoint":      "provider.internal:8443",
+		"protocol":      "https",
+		"weight":        75,
+		"type":          "openai",
+		"base_url":      "https://provider.example/v1",
+		"provider":      "openai",
+		"auth_header":   "Authorization",
+		"auth_prefix":   "Bearer",
+		"extra_headers": map[string]interface{}{"X-Tenant": "production"},
+		"api_version":   "2026-09-01",
+		"chat_path":     "/chat/completions",
+		"api_key_env":   "PROVIDER_API_KEY",
+	}
+	for key, expected := range want {
+		if actual := got[key]; !reflect.DeepEqual(actual, expected) {
+			t.Errorf("backend field %s = %#v, want %#v", key, actual, expected)
+		}
 	}
 }
 

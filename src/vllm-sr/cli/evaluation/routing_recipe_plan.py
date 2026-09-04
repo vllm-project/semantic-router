@@ -19,6 +19,7 @@ _MAX_ROUTING_RECIPE_ARMS = 64
 _MAX_RUNTIME_INPUT_ID_LENGTH = 128
 _SIGNAL_PART_COUNT = 2
 _KB_METRIC_PART_COUNT = 3
+_LABELED_SIGNAL_TYPES = frozenset({"classifier", "complexity"})
 _ROUTING_RECIPE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 _SUPPORTED_SIGNAL_TYPES = frozenset(
     {
@@ -71,7 +72,7 @@ def _valid_runtime_input_id(value: str, *, projection: bool) -> bool:
         return len(parts) == _KB_METRIC_PART_COUNT
     if signal_type not in _SUPPORTED_SIGNAL_TYPES:
         return False
-    return len(parts) == _SIGNAL_PART_COUNT or signal_type == "classifier"
+    return len(parts) == _SIGNAL_PART_COUNT or signal_type in _LABELED_SIGNAL_TYPES
 
 
 class RoutingRecipeInputSpec(_RoutingRecipeModel):

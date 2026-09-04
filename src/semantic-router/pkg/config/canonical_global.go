@@ -131,11 +131,10 @@ type CanonicalPIIModule struct {
 // CanonicalHallucinationModule keeps the mitigation block readable by splitting
 // fact-check, detector, and explainer responsibilities.
 type CanonicalHallucinationModule struct {
-	Enabled                 bool                           `yaml:"enabled,omitempty"`
-	OnHallucinationDetected string                         `yaml:"on_hallucination_detected,omitempty"`
-	FactCheck               CanonicalFactCheckModule       `yaml:"fact_check"`
-	Detector                CanonicalHallucinationDetector `yaml:"detector"`
-	Explainer               CanonicalExplainerModule       `yaml:"explainer"`
+	Enabled   bool                           `yaml:"enabled,omitempty"`
+	FactCheck CanonicalFactCheckModule       `yaml:"fact_check"`
+	Detector  CanonicalHallucinationDetector `yaml:"detector"`
+	Explainer CanonicalExplainerModule       `yaml:"explainer"`
 }
 
 type CanonicalFactCheckModule struct {
@@ -169,11 +168,10 @@ func (m CanonicalClassifierModule) runtimeConfig() Classifier {
 
 func (m CanonicalHallucinationModule) runtimeConfig() HallucinationMitigationConfig {
 	return HallucinationMitigationConfig{
-		Enabled:                 m.Enabled,
-		FactCheckModel:          m.FactCheck.FactCheckModelConfig,
-		HallucinationModel:      m.Detector.HallucinationModelConfig,
-		NLIModel:                m.Explainer.NLIModelConfig,
-		OnHallucinationDetected: m.OnHallucinationDetected,
+		Enabled:            m.Enabled,
+		FactCheckModel:     m.FactCheck.FactCheckModelConfig,
+		HallucinationModel: m.Detector.HallucinationModelConfig,
+		NLIModel:           m.Explainer.NLIModelConfig,
 	}
 }
 
