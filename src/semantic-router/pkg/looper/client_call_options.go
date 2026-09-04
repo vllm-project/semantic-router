@@ -39,6 +39,13 @@ const (
 	ResponseSSE
 )
 
+func responseMode(streaming bool) ResponseMode {
+	if streaming {
+		return ResponseSSE
+	}
+	return ResponseJSON
+}
+
 // CallOptions carries request-scoped Looper execution metadata. Keeping this
 // data off Client allows one Client to be reused safely by concurrent calls.
 type CallOptions struct {
