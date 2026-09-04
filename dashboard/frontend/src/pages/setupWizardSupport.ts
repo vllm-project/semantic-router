@@ -56,7 +56,7 @@ interface BuiltModel {
     endpoint?: string;
     protocol: "http" | "https";
     base_url?: string;
-    provider?: "openai" | "anthropic";
+    provider: ProviderKind;
     api_key?: string;
   }>;
   api_format?: "anthropic";
@@ -583,6 +583,7 @@ export function buildSetupConfig(
             weight: 100,
             endpoint,
             protocol,
+            provider: "vllm",
             api_key: apiKey,
           }
         : {
@@ -590,8 +591,7 @@ export function buildSetupConfig(
             weight: 100,
             protocol,
             base_url: trimmedBaseUrl,
-            provider:
-              model.providerKind === "anthropic" ? "anthropic" : "openai",
+            provider: model.providerKind,
             api_key: apiKey,
           };
 
@@ -633,14 +633,10 @@ export function buildSetupConfig(
     providers: {
       models: builtModels,
       defaults: {
-        default_model: defaultModel.name,
+        model: defaultModel.name,
       },
     },
     routing: {
-      modelCards: builtModels.map((model) => ({
-        name: model.name,
-        modality: "text",
-      })),
       decisions: [catchAllDecision],
     },
   };

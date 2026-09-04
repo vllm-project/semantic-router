@@ -36,10 +36,6 @@ func (service *modelVerificationService) call(ctx context.Context, target modelV
 		}
 		request.Header.Set(target.authHeader, value)
 	}
-	if target.dialect == "anthropic" && request.Header.Get("anthropic-version") == "" {
-		request.Header.Set("anthropic-version", "2023-06-01")
-	}
-
 	response, err := service.client.Do(request)
 	if err != nil {
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) || errors.Is(err, context.DeadlineExceeded) {

@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { normalizeModelBackendRefs } from './configPageModelFormSupport'
+import {
+  buildProviderModelPayload,
+  normalizeModelBackendRefs,
+  normalizeModelEvaluations,
+} from './configPageModelFormSupport'
 
 describe('model form backend targets', () => {
   it('preserves every canonical backend target field', () => {
@@ -9,7 +13,6 @@ describe('model form backend targets', () => {
       endpoint: 'provider.internal:8443',
       protocol: 'https',
       weight: 75,
-      type: 'openai',
       base_url: 'https://provider.example/v1',
       provider: 'openai',
       auth_header: 'Authorization',
@@ -22,5 +25,53 @@ describe('model form backend targets', () => {
     } as const
 
     expect(normalizeModelBackendRefs([backend])).toEqual([backend])
+  })
+
+  it('emits catalog identity and leaves built-in reasoning to the catalog', () => {
+    expect(
+      buildProviderModelPayload('frontier', {
+        catalog: 'vendor/frontier-v1',
+        reasoning_family: 'gpt',
+        provider_model_id: 'frontier-v1',
+        backend_refs: [
+          { name: 'primary', base_url: 'https://api.example/v1', provider: 'vendor' },
+        ],
+      }),
+    ).toMatchObject({
+      name: 'frontier',
+      catalog: 'vendor/frontier-v1',
+    })
+    expect(
+      buildProviderModelPayload('frontier', {
+        catalog: 'vendor/frontier-v1',
+        reasoning_family: 'gpt',
+      }).reasoning,
+    ).toBeUndefined()
+  })
+
+  it('emits custom reasoning only when catalog is absent', () => {
+    expect(
+      buildProviderModelPayload('private', {
+        reasoning_family: 'qwen3',
+      }),
+    ).toMatchObject({ name: 'private', reasoning: { family: 'qwen3' } })
+  })
+
+  it('normalizes open benchmark metrics without imposing a fixed benchmark schema', () => {
+    expect(
+      normalizeModelEvaluations([
+        {
+          benchmark: 'acme/support@1',
+          metrics: { resolution_rate: '0.82', invalid: 'not-a-number' },
+          metadata: { runtime: 'vllm', tensor_parallel: 2 },
+        },
+      ]),
+    ).toEqual([
+      {
+        benchmark: 'acme/support@1',
+        metrics: { resolution_rate: 0.82 },
+        metadata: { runtime: 'vllm', tensor_parallel: 2 },
+      },
+    ])
   })
 })

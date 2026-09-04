@@ -12,10 +12,14 @@ from cli.models import (
     Domain,
     Entrypoint,
     KeywordSignal,
+    LoRAAdapter,
+    ModelEvaluation,
     ProjectionMapping,
     ProjectionMappingOutput,
     ProjectionScore,
     ProjectionScoreInput,
+    Reasoning,
+    RoutingModel,
     UserConfig,
 )
 from cli.validator import validate_user_config
@@ -27,11 +31,13 @@ def recipe_config(*, recipe_model: str = "model-a", recipe_name: str = "private"
         {
             "version": "v0.3",
             "providers": {
-                "defaults": {"default_model": "model-a"},
+                "defaults": {"model": "model-a"},
                 "models": [
                     {
                         "name": "model-a",
-                        "backend_refs": [{"endpoint": "127.0.0.1:8000"}],
+                        "backend_refs": [
+                            {"endpoint": "127.0.0.1:8000", "provider": "vllm"}
+                        ],
                     }
                 ],
             },
@@ -75,6 +81,42 @@ def test_recipe_model_references_are_validated():
     errors = validate_user_config(recipe_config(recipe_model="missing-model"))
 
     assert any("unknown model 'missing-model'" in error.message for error in errors)
+
+
+def test_catalog_model_cannot_override_reasoning_binding():
+    config = recipe_config()
+    config.providers.models[0].catalog = "vllm-sr/mom-v1-lite"
+    config.providers.models[0].reasoning = Reasoning(family="qwen3")
+
+    errors = validate_user_config(config)
+
+    assert any(
+        error.field == "providers.models.model-a.reasoning"
+        and "inherits reasoning" in error.message
+        for error in errors
+    )
+
+
+def test_declared_lora_alias_can_have_metadata_only_model_card():
+    config = recipe_config()
+    config.routing.model_cards[0].loras = [LoRAAdapter(name="general-expert")]
+    config.routing.model_cards.append(RoutingModel(name="general-expert"))
+
+    errors = validate_user_config(config)
+
+    assert not any(
+        error.field == "routing.modelCards.general-expert.name" for error in errors
+    )
+
+
+def test_operator_evaluation_requires_versioned_identity_and_finite_metrics():
+    with pytest.raises(PydanticValidationError, match="string_pattern_mismatch"):
+        ModelEvaluation(benchmark="support", metrics={"score": 0.8})
+    with pytest.raises(PydanticValidationError, match="named finite numbers"):
+        ModelEvaluation(
+            benchmark="acme/support@1",
+            metrics={"score": float("nan")},
+        )
 
 
 def test_recipe_decision_tier_survives_schema_parse():

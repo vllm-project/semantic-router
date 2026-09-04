@@ -1,56 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import generatedCatalog from '../generated/modelCatalog.json'
 import { getBuiltInModelCatalog, ModelCatalogApiError } from './modelCatalogApi'
 
 afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-const validCatalog = {
-  catalogs: [
-    {
-      catalog_version: 'latest',
-      channel: 'latest',
-      default_model: 'vllm-sr/mom-v1-blend',
-      enabled_models: ['vllm-sr/mom-v1-blend'],
-    },
-  ],
-  models: [
-    {
-      id: 'vllm-sr/mom-v1-blend',
-      display_name: 'MoM V1 Blend',
-      description: 'Balanced built-in mixture-of-models policy.',
-      kind: 'virtual',
-      family: 'mom-v1',
-      generation: 1,
-      policy_version: '1.0.0',
-      entrypoint: 'vllm-sr/mom-v1-blend',
-      recipe: 'balance',
-      protocols: ['openai_chat'],
-      compatible: true,
-      compatibility_reason: 'compatible',
-      catalog_version: 'latest',
-      channel: 'latest',
-      enabled_by_default: true,
-      default: true,
-      verification: {
-        status: 'verified',
-        authority: 'vllm-sr-maintainers',
-        asset_sha256: `sha256:${'a'.repeat(64)}`,
-      },
-      traits: ['balanced'],
-      roles: [
-        {
-          name: 'balanced',
-          required: true,
-          minimum_candidates: 1,
-          traits: ['chat'],
-          recommended_pool: ['local/model'],
-        },
-      ],
-    },
-  ],
-}
+const validCatalog = generatedCatalog as unknown as Record<string, unknown>
 
 describe('built-in model catalog API', () => {
   it('loads the authenticated read-only catalog endpoint with abort support', async () => {
@@ -78,7 +35,9 @@ describe('built-in model catalog API', () => {
 
   it('fails closed when verification provenance is malformed', async () => {
     const malformed = structuredClone(validCatalog)
-    malformed.models[0].verification.asset_sha256 = 'sha256:not-a-digest'
+    const models = malformed.models as Array<Record<string, unknown>>
+    const verification = models[0].verification as Record<string, unknown>
+    verification.asset_sha256 = 'sha256:not-a-digest'
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => new Response(JSON.stringify(malformed), { status: 200 })),
@@ -91,17 +50,31 @@ describe('built-in model catalog API', () => {
   })
 
   it.each([
-    ['protocols', (model: Record<string, unknown>) => delete model.protocols],
     [
-      'role pool',
-      (model: Record<string, unknown>) => {
-        const roles = model.roles as Array<Record<string, unknown>>
-        roles[0].recommended_pool = []
+      'protocol operations',
+      (payload: Record<string, unknown>) => {
+        const protocols = payload.protocols as Array<Record<string, unknown>>
+        protocols[0].operations = []
+      },
+    ],
+    [
+      'reasoning levels',
+      (payload: Record<string, unknown>) => {
+        const families = payload.reasoning_families as Array<Record<string, unknown>>
+        families[0].levels = []
+      },
+    ],
+    [
+      'index normalization',
+      (payload: Record<string, unknown>) => {
+        const indices = payload.indices as Array<Record<string, unknown>>
+        const components = indices[0].components as Array<Record<string, unknown>>
+        components[0].normalization = { type: 'linear_clamp', min: 1, max: 0 }
       },
     ],
   ])('fails closed when required nested %s metadata is malformed', async (_name, mutate) => {
     const malformed = structuredClone(validCatalog)
-    mutate(malformed.models[0] as unknown as Record<string, unknown>)
+    mutate(malformed)
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => new Response(JSON.stringify(malformed), { status: 200 })),

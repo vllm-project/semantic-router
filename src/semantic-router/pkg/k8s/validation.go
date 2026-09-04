@@ -210,17 +210,25 @@ func validateReasoningFamilyReferences(
 	models []v1alpha1.ModelConfig,
 	reasoningFamilies map[string]config.ReasoningFamilyConfig,
 ) error {
-	if len(reasoningFamilies) == 0 {
-		return nil
-	}
 	for _, model := range models {
-		if model.ReasoningFamily == "" {
+		reasoning := model.Reasoning
+		if reasoning == nil {
 			continue
 		}
-		if _, ok := reasoningFamilies[model.ReasoningFamily]; ok {
+		if reasoning.Family != "" && hasInlineReasoningFields(reasoning) {
+			return fmt.Errorf("model %s reasoning family is mutually exclusive with inline reasoning fields", model.Name)
+		}
+		if reasoning.Family == "" || len(reasoningFamilies) == 0 {
 			continue
 		}
-		return fmt.Errorf("model %s references unknown reasoning family: %s", model.Name, model.ReasoningFamily)
+		if _, ok := reasoningFamilies[reasoning.Family]; ok {
+			continue
+		}
+		return fmt.Errorf("model %s references unknown reasoning family: %s", model.Name, reasoning.Family)
 	}
 	return nil
+}
+
+func hasInlineReasoningFields(reasoning *v1alpha1.ModelReasoning) bool {
+	return reasoning.Type != "" || reasoning.Parameter != "" || len(reasoning.Levels) > 0 || reasoning.Default != ""
 }

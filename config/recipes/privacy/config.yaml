@@ -17,12 +17,8 @@ global:
 
 providers:
   defaults:
-    default_model: local/private-qwen
-    reasoning_families:
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-    default_reasoning_effort: medium
+    model: local/private-qwen
+    reasoning_effort: medium
   # Example pricing intentionally exaggerates the local-vs-cloud spread so
   # Insights makes privacy-preserving savings obvious. These are not vendor
   # billing quotes.
@@ -34,10 +30,11 @@ providers:
         - name: local-omni
           endpoint: vllm-omni:8000
           protocol: http
-          type: vllm
+          provider: vllm
           weight: 1
     - name: local/private-qwen
-      reasoning_family: qwen3
+      reasoning:
+        family: qwen3
       provider_model_id: qwen/qwen3.5-rocm
       api_format: openai
       pricing:
@@ -48,7 +45,7 @@ providers:
         - name: local-vllm
           endpoint: vllm:8000
           protocol: http
-          type: vllm
+          provider: vllm
           weight: 1
     - name: cloud/frontier-reasoning
       provider_model_id: anthropic/claude-opus-4.6
@@ -59,6 +56,7 @@ providers:
         completion_per_1m: 7.20
       backend_refs:
         - name: vllm_primary
+          provider: vllm
           endpoint: vllm:8000
           protocol: http
           weight: 1
@@ -77,7 +75,10 @@ routing:
         - security_containment
         - code
         - internal_docs
-      quality_score: 0.74
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.74
       modality: text
       tags:
         - deployment:self_hosted
@@ -92,7 +93,10 @@ routing:
         - deep_synthesis
         - architecture_review
         - long_context
-      quality_score: 0.92
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.92
       modality: text
       tags:
         - deployment:cloud

@@ -375,7 +375,7 @@ func TestBuildReasoningRequestFields(t *testing.T) {
 			useReasoning:       true,
 			categoryName:       "test",
 			expectEffortReturn: "high",
-			profile:            &config.ProviderProfile{Type: "openai", BaseURL: "https://openrouter.ai/api/v1"},
+			profile:            &config.ProviderProfile{Type: "openrouter", BaseURL: "https://openrouter.ai/api/v1"},
 			verifyFunc: func(t *testing.T, fields map[string]interface{}) {
 				require.NotNil(t, fields)
 				reasoningEffort, exists := fields["reasoning_effort"]

@@ -28,23 +28,20 @@ global:
           stability_weight: 1.0
 providers:
   defaults:
-    default_model: qwen/qwen3.5-rocm
-    default_reasoning_effort: low
-    reasoning_families:
-      qwen3:
-        parameter: enable_thinking
-        type: chat_template_kwargs
+    model: qwen/qwen3.5-rocm
+    reasoning_effort: low
   models:
     - backend_refs:
         - endpoint: vllm-omni:8000
           name: local-omni
           protocol: http
-          type: vllm
+          provider: vllm
           weight: 1
       name: local/omni
       provider_model_id: local/omni
     - backend_refs:
         - endpoint: vllm:8000
+          provider: vllm
           name: vllm_primary
           protocol: http
           weight: 1
@@ -65,9 +62,11 @@ providers:
         health_check_path: /health
         health_check_interval: 10s
         health_check_timeout: 2s
-      reasoning_family: qwen3
+      reasoning:
+        family: qwen3
     - backend_refs:
         - endpoint: vllm:8000
+          provider: vllm
           name: vllm_primary
           protocol: http
           weight: 1
@@ -90,6 +89,7 @@ providers:
         health_check_timeout: 2s
     - backend_refs:
         - endpoint: vllm:8000
+          provider: vllm
           name: vllm_primary
           protocol: http
           weight: 1
@@ -112,6 +112,7 @@ providers:
         health_check_timeout: 2s
     - backend_refs:
         - endpoint: vllm:8000
+          provider: vllm
           name: vllm_primary
           protocol: http
           weight: 1
@@ -134,6 +135,7 @@ providers:
         health_check_timeout: 2s
     - backend_refs:
         - endpoint: vllm:8000
+          provider: vllm
           name: vllm_primary
           protocol: http
           weight: 1
@@ -1102,7 +1104,10 @@ routing:
       description: PREMIUM tier alias reserved for legal and high-risk analysis.
       modality: text
       name: anthropic/claude-opus-4.6
-      quality_score: 0.94
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.94
       tags:
         - tier:premium
         - cost:highest
@@ -1115,7 +1120,10 @@ routing:
       description: MEDIUM tier alias for low-cost verified explanation and correction tasks.
       modality: text
       name: google/gemini-2.5-flash-lite
-      quality_score: 0.68
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.68
       tags:
         - tier:medium
         - cost:low
@@ -1129,7 +1137,10 @@ routing:
       description: COMPLEX tier alias for systems design, hard STEM, health guidance, and deep general reasoning.
       modality: text
       name: google/gemini-3.1-pro
-      quality_score: 0.82
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.82
       tags:
         - tier:complex
         - cost:upper_mid
@@ -1142,7 +1153,10 @@ routing:
       description: REASONING tier alias for narrow formal math proofs and derivations.
       modality: text
       name: openai/gpt5.4
-      quality_score: 0.9
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.9
       tags:
         - tier:reasoning
         - cost:high
@@ -1157,7 +1171,10 @@ routing:
       description: SIMPLE tier alias and free self-hosted default for fast QA, broad fallback, creative drafting, and most low-cost traffic.
       modality: text
       name: qwen/qwen3.5-rocm
-      quality_score: 0.58
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.58
       tags:
         - tier:simple
         - cost:free

@@ -349,13 +349,13 @@ func profiledModelVerificationURL(profile *routerconfig.ProviderProfile) (string
 	if baseURL.User != nil {
 		return "", fmt.Errorf("provider base URL user info is unsupported")
 	}
-	chatPath, err := profile.ResolveChatPath()
+	createPath, err := profile.ResolveCreatePath("")
 	if err != nil {
 		return "", err
 	}
-	pathURL, err := url.Parse(chatPath)
+	pathURL, err := url.Parse(createPath)
 	if err != nil || pathURL.IsAbs() || pathURL.Host != "" {
-		return "", fmt.Errorf("provider chat path is invalid")
+		return "", fmt.Errorf("provider create path is invalid")
 	}
 	return (&url.URL{
 		Scheme:   baseURL.Scheme,

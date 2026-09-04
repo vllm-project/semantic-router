@@ -152,14 +152,19 @@ def test_migrate_config_data_splits_legacy_provider_models():
             "name": "gpt-4o",
             "description": "General reasoning model",
             "capabilities": ["general", "reasoning"],
-            "quality_score": 0.95,
+            "evaluations": [
+                {
+                    "benchmark": "vllm-sr/operator-rating@1.0.0",
+                    "metrics": {"score": 0.95},
+                }
+            ],
             "modality": "text",
         }
     ]
     assert migrated["providers"]["models"] == [
         {
             "name": "gpt-4o",
-            "reasoning_family": "openai",
+            "reasoning": {"family": "openai"},
             "backend_refs": [
                 {
                     "name": "primary",
@@ -167,11 +172,12 @@ def test_migrate_config_data_splits_legacy_provider_models():
                     "protocol": "https",
                     "weight": 100,
                     "api_key": "sk-test",
+                    "provider": "vllm",
                 }
             ],
         }
     ]
-    assert migrated["providers"]["defaults"]["default_model"] == "gpt-4o"
+    assert migrated["providers"]["defaults"]["model"] == "gpt-4o"
     assert migrated["global"]["stores"]["memory"]["enabled"] is True
 
 
@@ -228,14 +234,15 @@ def test_cli_config_migrate_writes_canonical_yaml(tmp_path: Path):
     migrated = yaml.safe_load(migrated_path.read_text())
 
     assert migrated["version"] == "v0.3"
-    assert migrated["providers"]["defaults"]["default_model"] == "gpt-4o-mini"
-    assert migrated["routing"]["modelCards"][0]["name"] == "gpt-4o-mini"
+    assert migrated["providers"]["defaults"]["model"] == "gpt-4o-mini"
+    assert "modelCards" not in migrated["routing"]
     assert migrated["providers"]["models"][0]["backend_refs"] == [
         {
             "name": "primary",
             "endpoint": "host.docker.internal:8000",
             "protocol": "http",
             "weight": 100,
+            "provider": "vllm",
         }
     ]
 
@@ -459,7 +466,7 @@ def _legacy_model_catalog_config() -> dict:
 def test_migrate_config_data_promotes_legacy_provider_defaults_and_signals():
     migrated = migrate_config_data(_legacy_model_catalog_config())
 
-    assert migrated["providers"]["defaults"]["default_model"] == "qwen3-32b"
+    assert migrated["providers"]["defaults"]["model"] == "qwen3-32b"
     assert migrated["routing"]["signals"]["keywords"][0]["name"] == "code-keywords"
 
 
@@ -482,7 +489,7 @@ def test_migrate_config_data_promotes_legacy_lora_catalog_and_backend_refs():
     assert migrated["providers"]["models"] == [
         {
             "name": "qwen3-32b",
-            "reasoning_family": "qwen3",
+            "reasoning": {"family": "qwen3"},
             "pricing": {
                 "currency": "USD",
                 "prompt_per_1m": 1.2,
@@ -498,6 +505,7 @@ def test_migrate_config_data_promotes_legacy_lora_catalog_and_backend_refs():
                     "protocol": "http",
                     "weight": 80,
                     "api_key": "sk-test-openai",
+                    "provider": "vllm",
                 },
                 {
                     "name": "openai",

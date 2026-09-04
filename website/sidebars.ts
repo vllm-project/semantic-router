@@ -502,6 +502,7 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       items: [
         'community/overview',
+        'community/model-provider-day-0-support',
         'community/development',
         'community/documentation',
         'community/translation-guide',

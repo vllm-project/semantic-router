@@ -274,6 +274,12 @@ const config: Config = {
           position: 'left',
         },
         {
+          label: 'Models',
+          to: '/models',
+          className: 'nav-primary',
+          position: 'left',
+        },
+        {
           label: 'Blog',
           to: '/blog',
           className: 'nav-primary',

@@ -1,5 +1,23 @@
 import type { ConfigData, NormalizedModel } from './configPageSupport'
 
+const benchmarkIdentityPattern =
+  /^[a-z0-9][a-z0-9._-]*(?:\/[a-z0-9][a-z0-9._-]*)+@[0-9]+(?:\.[0-9]+\.[0-9]+)?$/
+
+const isISOCalendarDate = (value: string): boolean => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  const [year, month, day] = value.split('-').map(Number)
+  const parsed = new Date(Date.UTC(year, month - 1, day))
+  return (
+    parsed.getUTCFullYear() === year &&
+    parsed.getUTCMonth() === month - 1 &&
+    parsed.getUTCDate() === day
+  )
+}
+
+const isNumericInput = (value: unknown): boolean =>
+  (typeof value === 'number' && Number.isFinite(value)) ||
+  (typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value)))
+
 export type ModelEndpointFilter = 'all' | 'configured' | 'missing'
 export type ModelRoleFilter = 'all' | 'default' | 'standard'
 
@@ -23,11 +41,7 @@ function searchableModelValues(model: NormalizedModel): string[] {
     ...(model.tags ?? []),
     ...(model.capabilities ?? []),
     ...(model.endpoints ?? []).flatMap((endpoint) => [endpoint.name, endpoint.protocol]),
-    ...(model.backend_refs ?? []).flatMap((backend) => [
-      backend.name,
-      backend.provider,
-      backend.type,
-    ]),
+    ...(model.backend_refs ?? []).flatMap((backend) => [backend.name, backend.provider]),
   ].filter((value): value is string => typeof value === 'string' && value.length > 0)
 }
 
@@ -167,9 +181,46 @@ export function validateNewModelName(rawName: unknown, existingModels: Normalize
 }
 
 export function validateModelStructuredFields(data: Record<string, unknown>): void {
+  validateModelReasoningFields(data)
+  validateModelCollectionShapes(data)
+  validateModelLoras(data.loras)
+  validateModelBackends(data.backend_refs)
+  validateModelEvaluations(data.evaluations)
+  validateModelObjectShapes(data)
+  validateExternalModelIDs(data.external_model_ids)
+  validateModelPricing(data.pricing)
+}
+
+function validateModelReasoningFields(data: Record<string, unknown>): void {
+  const catalog = typeof data.catalog === 'string' ? data.catalog.trim() : ''
+  const reasoningFamily = textValue(data.reasoning_family)
+  const reasoningType = textValue(data.reasoning_type)
+  const reasoningParameter = textValue(data.reasoning_parameter)
+  const customReasoning = [
+    reasoningFamily,
+    reasoningType,
+    reasoningParameter,
+    textValue(data.reasoning_default),
+    textValue(data.reasoning_levels),
+  ].some(Boolean)
+  if (catalog && customReasoning) {
+    throw new Error('Built-in catalog models inherit reasoning; clear the custom reasoning fields.')
+  }
+  if (reasoningFamily && (reasoningType || reasoningParameter)) {
+    throw new Error('Choose a built-in reasoning family or inline reasoning fields, not both.')
+  }
+  if ((reasoningType || reasoningParameter) && (!reasoningType || !reasoningParameter)) {
+    throw new Error('Inline reasoning requires both type and parameter.')
+  }
+}
+
+const textValue = (value: unknown): string => (typeof value === 'string' ? value.trim() : '')
+
+function validateModelCollectionShapes(data: Record<string, unknown>): void {
   const arrayFields = [
     ['backend_refs', 'Backend Refs'],
     ['loras', 'LoRAs'],
+    ['evaluations', 'Evaluations'],
   ] as const
   for (const [field, label] of arrayFields) {
     const value = data[field]
@@ -191,13 +242,15 @@ export function validateModelStructuredFields(data: Record<string, unknown>): vo
       throw new Error(`${label} must be a list of text values.`)
     }
   }
+}
 
-  if (Array.isArray(data.loras)) {
-    data.loras.forEach((value, index) => {
-      if (!value || typeof value !== 'object' || Array.isArray(value)) {
+function validateModelLoras(value: unknown): void {
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) {
         throw new Error(`LoRA adapter ${index + 1} must be a structured object.`)
       }
-      const lora = value as Record<string, unknown>
+      const lora = item as Record<string, unknown>
       if (typeof lora.name !== 'string' || !lora.name.trim()) {
         throw new Error(`LoRA adapter ${index + 1} requires a name.`)
       }
@@ -206,18 +259,23 @@ export function validateModelStructuredFields(data: Record<string, unknown>): vo
       }
     })
   }
+}
 
-  if (Array.isArray(data.backend_refs)) {
-    data.backend_refs.forEach((value, index) => {
-      if (!value || typeof value !== 'object' || Array.isArray(value)) {
+function validateModelBackends(value: unknown): void {
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) {
         throw new Error(`Provider backend ${index + 1} must be a structured object.`)
       }
 
-      const backend = value as Record<string, unknown>
+      const backend = item as Record<string, unknown>
       const endpoint = typeof backend.endpoint === 'string' ? backend.endpoint.trim() : ''
       const baseUrl = typeof backend.base_url === 'string' ? backend.base_url.trim() : ''
       if (!endpoint && !baseUrl) {
         throw new Error(`Provider backend ${index + 1} requires an endpoint or base URL.`)
+      }
+      if (typeof backend.provider !== 'string' || !backend.provider.trim()) {
+        throw new Error(`Provider backend ${index + 1} requires a catalog Provider ID.`)
       }
       if (
         backend.protocol !== undefined &&
@@ -249,7 +307,67 @@ export function validateModelStructuredFields(data: Record<string, unknown>): vo
       }
     })
   }
+}
 
+function validateModelEvaluations(value: unknown): void {
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) {
+        throw new Error(`Evaluation ${index + 1} must be a structured object.`)
+      }
+      validateModelEvaluation(item as Record<string, unknown>, index)
+    })
+  }
+}
+
+function validateModelEvaluation(evaluation: Record<string, unknown>, index: number): void {
+  if (
+    typeof evaluation.benchmark !== 'string' ||
+    !benchmarkIdentityPattern.test(evaluation.benchmark.trim())
+  ) {
+    throw new Error(`Evaluation ${index + 1} requires a namespaced, versioned benchmark.`)
+  }
+  if (
+    !evaluation.metrics ||
+    typeof evaluation.metrics !== 'object' ||
+    Array.isArray(evaluation.metrics) ||
+    Object.keys(evaluation.metrics).length === 0
+  ) {
+    throw new Error(`Evaluation ${index + 1} requires at least one metric.`)
+  }
+  for (const [metric, rawValue] of Object.entries(evaluation.metrics as Record<string, unknown>)) {
+    if (!metric.trim() || !isNumericInput(rawValue)) {
+      throw new Error(`Evaluation ${index + 1} metrics must be non-empty numeric pairs.`)
+    }
+  }
+  if (
+    evaluation.measured_at !== undefined &&
+    (typeof evaluation.measured_at !== 'string' || !isISOCalendarDate(evaluation.measured_at))
+  ) {
+    throw new Error(`Evaluation ${index + 1} measured_at must use YYYY-MM-DD.`)
+  }
+  if (evaluation.metadata !== undefined) {
+    validateEvaluationMetadata(evaluation.metadata, index)
+  }
+}
+
+function validateEvaluationMetadata(value: unknown, index: number): void {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`Evaluation ${index + 1} metadata must be a JSON object.`)
+  }
+  for (const [key, item] of Object.entries(value)) {
+    const scalar =
+      item === null ||
+      typeof item === 'string' ||
+      typeof item === 'boolean' ||
+      (typeof item === 'number' && Number.isFinite(item))
+    if (!key.trim() || !scalar) {
+      throw new Error(`Evaluation ${index + 1} metadata must contain scalar values.`)
+    }
+  }
+}
+
+function validateModelObjectShapes(data: Record<string, unknown>): void {
   const objectFields = [
     ['external_model_ids', 'External Model IDs'],
     ['pricing', 'Pricing'],
@@ -260,21 +378,21 @@ export function validateModelStructuredFields(data: Record<string, unknown>): vo
       throw new Error(`${label} must be a JSON object.`)
     }
   }
+}
 
-  if (
-    data.external_model_ids &&
-    typeof data.external_model_ids === 'object' &&
-    !Array.isArray(data.external_model_ids)
-  ) {
-    for (const [provider, modelId] of Object.entries(data.external_model_ids)) {
+function validateExternalModelIDs(value: unknown): void {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    for (const [provider, modelId] of Object.entries(value)) {
       if (!provider.trim() || typeof modelId !== 'string' || !modelId.trim()) {
         throw new Error('External Model IDs must contain non-empty provider/model ID pairs.')
       }
     }
   }
+}
 
-  if (data.pricing && typeof data.pricing === 'object' && !Array.isArray(data.pricing)) {
-    const pricing = data.pricing as Record<string, unknown>
+function validateModelPricing(value: unknown): void {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const pricing = value as Record<string, unknown>
     if (pricing.currency !== undefined && typeof pricing.currency !== 'string') {
       throw new Error('Pricing currency must be text.')
     }

@@ -3,7 +3,6 @@ package extproc
 import (
 	"errors"
 	"fmt"
-	"net/url"
 	"strings"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -368,35 +367,14 @@ func setProviderRequestPath(
 	format llmprotocol.WireFormat,
 ) {
 	requestPath := requestWirePath(format)
-	if profile != nil && format == llmprotocol.OpenAIChatV1 {
-		if configured, err := profile.ResolveChatPath(); err == nil && configured != "" {
+	if profile != nil {
+		if configured, err := profile.ResolveCreatePath(requestWireProtocol(format)); err == nil && configured != "" {
 			requestPath = configured
 		}
-	} else if profile != nil {
-		requestPath = providerProtocolPath(profile.BaseURL, requestPath)
 	}
 	*headersOut = append(*headersOut, &core.HeaderValueOption{Header: &core.HeaderValue{
 		Key: ":path", RawValue: []byte(requestPath),
 	}})
-}
-
-// providerProtocolPath preserves a provider's base path while allowing the
-// selected model protocol to own the endpoint suffix. ChatPath remains a
-// chat-completions override and must not redirect Responses or Messages
-// dispatches back to the chat endpoint.
-func providerProtocolPath(baseURL, protocolPath string) string {
-	parsed, err := url.Parse(baseURL)
-	if err != nil {
-		return protocolPath
-	}
-	basePath := strings.TrimRight(parsed.Path, "/")
-	if basePath == "" || basePath == "/" || strings.HasPrefix(protocolPath, basePath+"/") {
-		return protocolPath
-	}
-	if strings.HasSuffix(basePath, "/v1") && strings.HasPrefix(protocolPath, "/v1/") {
-		return basePath + strings.TrimPrefix(protocolPath, "/v1")
-	}
-	return basePath + protocolPath
 }
 
 func appendRoutingHeaders(headersOut *[]*core.HeaderValueOption, model string) {

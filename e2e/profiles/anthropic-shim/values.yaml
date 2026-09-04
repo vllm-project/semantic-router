@@ -11,7 +11,7 @@ config:
   listeners: []
   providers:
     defaults:
-      default_model: MoM
+      model: MoM
     models:
       - name: MoM
         # The selected backend accepts Anthropic Messages. Keep this explicit:
@@ -25,7 +25,7 @@ config:
             # translating them to its OpenAI-compatible API.
             endpoint: anthropic-backend-qwen.anthropic-backend-system.svc.cluster.local:8080
             weight: 1
-            type: anthropic
+            provider: anthropic
   routing:
     decisions:
       - name: route_to_anthropic_shim
@@ -55,7 +55,10 @@ config:
         description: Qwen2.5-0.5B-Instruct via llama.cpp + anthropic-shim
         capabilities:
           - chat
-        quality_score: 0.5
+        evaluations:
+          - benchmark: vllm-sr/operator-rating@1.0.0
+            metrics:
+              score: 0.5
   global:
     model_catalog:
       kbs: []

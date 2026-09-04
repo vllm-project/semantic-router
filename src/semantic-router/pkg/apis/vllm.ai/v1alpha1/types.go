@@ -59,11 +59,16 @@ type ModelConfig struct {
 	// +kubebuilder:validation:MaxLength=100
 	Name string `json:"name" yaml:"name"`
 
-	// ReasoningFamily specifies the reasoning syntax family (e.g., "qwen3", "deepseek")
-	// Must be defined in the global static configuration's ReasoningFamilies
+	// Catalog optionally selects a repository built-in Model Card. Name remains
+	// the request-facing alias used by decisions.
 	// +optional
-	// +kubebuilder:validation:MaxLength=50
-	ReasoningFamily string `json:"reasoningFamily,omitempty" yaml:"reasoningFamily,omitempty"`
+	// +kubebuilder:validation:MaxLength=200
+	Catalog string `json:"catalog,omitempty" yaml:"catalog,omitempty"`
+
+	// Reasoning optionally selects a built-in family or defines the request
+	// projection for a custom model. Catalog-backed models normally omit it.
+	// +optional
+	Reasoning *ModelReasoning `json:"reasoning,omitempty" yaml:"reasoning,omitempty"`
 
 	// Pricing defines the cost structure for this model
 	// +optional
@@ -73,6 +78,26 @@ type ModelConfig struct {
 	// +optional
 	// +kubebuilder:validation:MaxItems=50
 	LoRAs []LoRAConfig `json:"loras,omitempty" yaml:"loras,omitempty"`
+}
+
+// ModelReasoning selects a built-in reasoning family or defines an inline
+// request projection. Family and inline fields are mutually exclusive.
+type ModelReasoning struct {
+	// +optional
+	Family string `json:"family,omitempty" yaml:"family,omitempty"`
+
+	// +kubebuilder:validation:Enum=chat_template_kwargs;reasoning_effort;top_level_reasoning_effort
+	// +optional
+	Type string `json:"type,omitempty" yaml:"type,omitempty"`
+
+	// +optional
+	Parameter string `json:"parameter,omitempty" yaml:"parameter,omitempty"`
+
+	// +optional
+	Levels []string `json:"levels,omitempty" yaml:"levels,omitempty"`
+
+	// +optional
+	Default string `json:"default,omitempty" yaml:"default,omitempty"`
 }
 
 // ModelPricing defines the pricing structure for a model

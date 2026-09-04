@@ -5,61 +5,59 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-func TestResolveOpenAIBackendDialect(t *testing.T) {
+func TestResolveProviderReasoningTransport(t *testing.T) {
 	tests := []struct {
-		name                      string
-		profile                   *config.ProviderProfile
-		wantKind                  openAIBackendDialectKind
-		wantTopLevelEffort        bool
-		wantTopLevelDeepSeekThink bool
+		name      string
+		profile   *config.ProviderProfile
+		want      modelcatalog.ReasoningTransport
+		wantTop   bool
+		wantThink bool
 	}{
 		{
-			name:               "legacy endpoint without profile is vllm",
-			wantKind:           openAIBackendDialectVLLM,
-			wantTopLevelEffort: false,
+			name: "endpoint without profile uses template kwargs",
+			want: modelcatalog.ReasoningTransportChatTemplate,
 		},
 		{
-			name:               "local openai-compatible provider is generic",
-			profile:            &config.ProviderProfile{Type: "openai", BaseURL: "http://localhost:8000/v1"},
-			wantKind:           openAIBackendDialectGenericOpenAICompat,
-			wantTopLevelEffort: false,
+			name:    "vllm uses template kwargs",
+			profile: &config.ProviderProfile{Type: "vllm", BaseURL: "http://localhost:8000/v1"},
+			want:    modelcatalog.ReasoningTransportChatTemplate,
 		},
 		{
-			name:               "official openai uses top-level reasoning effort",
-			profile:            &config.ProviderProfile{Type: "openai", BaseURL: "https://api.openai.com/v1"},
-			wantKind:           openAIBackendDialectOfficialOpenAI,
-			wantTopLevelEffort: true,
+			name:    "openai uses top-level reasoning effort",
+			profile: &config.ProviderProfile{Type: "openai", BaseURL: "https://proxy.example/v1"},
+			want:    modelcatalog.ReasoningTransportTopLevelEffort,
+			wantTop: true,
 		},
 		{
-			name:                      "official deepseek uses top-level 'thinking' and effort",
-			profile:                   &config.ProviderProfile{Type: "openai", BaseURL: "https://api.deepseek.com"},
-			wantKind:                  openAIBackendDialectOfficialDeepSeek,
-			wantTopLevelEffort:        true,
-			wantTopLevelDeepSeekThink: true,
+			name:      "deepseek uses thinking object and effort",
+			profile:   &config.ProviderProfile{Type: "deepseek", BaseURL: "https://private.example/v1"},
+			want:      modelcatalog.ReasoningTransportDeepSeekThinking,
+			wantTop:   true,
+			wantThink: true,
 		},
 		{
-			name:               "openrouter uses top-level reasoning effort",
-			profile:            &config.ProviderProfile{Type: "openai", BaseURL: "https://openrouter.ai/api/v1"},
-			wantKind:           openAIBackendDialectOpenRouter,
-			wantTopLevelEffort: true,
+			name:    "openrouter uses top-level reasoning effort",
+			profile: &config.ProviderProfile{Type: "openrouter"},
+			want:    modelcatalog.ReasoningTransportTopLevelEffort,
+			wantTop: true,
 		},
 		{
-			name:               "unknown openai-compatible provider is generic",
-			profile:            &config.ProviderProfile{Type: "openai", BaseURL: "https://proxy.example.com/v1"},
-			wantKind:           openAIBackendDialectGenericOpenAICompat,
-			wantTopLevelEffort: false,
+			name:    "generic compatible provider uses template kwargs regardless of hostname",
+			profile: &config.ProviderProfile{Type: "openai-compatible", BaseURL: "https://api.openai.com/v1"},
+			want:    modelcatalog.ReasoningTransportChatTemplate,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			dialect := resolveOpenAIBackendDialect(tt.profile)
-			assert.Equal(t, tt.wantKind, dialect.kind)
-			assert.Equal(t, tt.wantTopLevelEffort, dialect.usesTopLevelReasoningEffort())
-			assert.Equal(t, tt.wantTopLevelDeepSeekThink, dialect.usesDeepSeekOfficialReasoning())
+			transport := resolveProviderReasoningTransport(tt.profile)
+			assert.Equal(t, tt.want, transport)
+			assert.Equal(t, tt.wantTop, usesTopLevelReasoningEffort(transport))
+			assert.Equal(t, tt.wantThink, isDeepSeekThinkingTransport(transport))
 		})
 	}
 }

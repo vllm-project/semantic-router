@@ -1,0 +1,47 @@
+- id: vllm-sr/intelligence@1.0.0
+  display_name: vLLM-SR Intelligence Index
+  description: Repository-computed profile derived from the published Artificial Analysis Intelligence Index v4.1.1 methodology.
+  methodology: https://artificialanalysis.ai/methodology/intelligence-benchmarking
+  aggregation: weighted_mean
+  scale: [0, 100]
+  missing:
+    policy: require_all
+  domains:
+    agents: 0.34
+    coding: 0.24
+    general: 0.18
+    scientific_reasoning: 0.24
+  components:
+    - metric: artificial-analysis/gdpval-aa@2.0.0#elo
+      weight: 0.20
+      normalization:
+        type: linear_clamp
+        min: 500
+        max: 2500
+    - metric: artificial-analysis/tau3-banking@1.0.0#pass_at_1
+      weight: 0.14
+      normalization: {type: identity}
+    - metric: terminal-bench/terminal-bench@2.1.0#pass_at_1
+      weight: 0.16
+      normalization: {type: identity}
+    - metric: scicode/scicode@1.0.0#pass_at_1
+      weight: 0.08
+      normalization: {type: identity}
+    - metric: artificial-analysis/lcr@1.0.0#pass_at_1
+      weight: 0.06
+      normalization: {type: identity}
+    - metric: artificial-analysis/omniscience@1.0.0#accuracy
+      weight: 0.08
+      normalization: {type: identity}
+    - metric: artificial-analysis/omniscience@1.0.0#non_hallucination_rate
+      weight: 0.04
+      normalization: {type: identity}
+    - metric: cais/humanitys-last-exam@1.0.0#pass_at_1
+      weight: 0.12
+      normalization: {type: identity}
+    - metric: idavidrein/gpqa-diamond@1.0.0#pass_at_1
+      weight: 0.06
+      normalization: {type: identity}
+    - metric: critpt/critpt@1.0.0#pass_at_1
+      weight: 0.06
+      normalization: {type: identity}

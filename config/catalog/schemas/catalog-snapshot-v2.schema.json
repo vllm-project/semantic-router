@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vllm.ai/schemas/model-catalog/catalog-snapshot-v2.schema.json",
+  "title": "vLLM Semantic Router generated model catalog snapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "catalogs",
+    "protocols",
+    "providers",
+    "reasoning_families",
+    "models",
+    "offerings",
+    "benchmarks",
+    "evaluations",
+    "indices",
+    "index_results"
+  ],
+  "properties": {
+    "schema_version": {"const": "vllm-sr/model-catalog/v2"},
+    "catalogs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["catalog_version", "channel", "default_model", "enabled_models", "default_intelligence_index"],
+        "properties": {
+          "catalog_version": {"type": "string", "minLength": 1},
+          "channel": {"enum": ["latest", "release"]},
+          "default_model": {"type": "string", "minLength": 1},
+          "enabled_models": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+          "default_intelligence_index": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "protocols": {"type": "array"},
+    "providers": {"type": "array"},
+    "reasoning_families": {"type": "array"},
+    "models": {"type": "array"},
+    "offerings": {"type": "array"},
+    "benchmarks": {"type": "array"},
+    "evaluations": {"type": "array"},
+    "indices": {"type": "array"},
+    "index_results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["model", "index", "status", "score", "coverage", "components", "provenance"],
+        "properties": {
+          "model": {"type": "string", "minLength": 1},
+          "index": {"type": "string", "minLength": 1},
+          "status": {"enum": ["available", "missing", "failed", "not_applicable", "withheld"]},
+          "score": {"type": ["number", "null"]},
+          "coverage": {"type": "number", "minimum": 0, "maximum": 1},
+          "components": {"type": "array"},
+          "domains": {"type": "object", "additionalProperties": {"type": "number"}},
+          "provenance": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    }
+  }
+}

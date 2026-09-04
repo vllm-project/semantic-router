@@ -7,6 +7,7 @@ import {
   ModelBackendRefsEditor,
   ModelCapabilitiesEditor,
   ModelExternalIdsEditor,
+  ModelEvaluationsEditor,
   ModelLorasEditor,
   ModelPricingEditor,
   ModelTagsEditor,
@@ -84,5 +85,23 @@ describe('model structured editors', () => {
         { name: ' ' },
       ]),
     ).toEqual([{ name: 'code-expert', description: 'Code specialization' }])
+  })
+
+  it('renders benchmark and metric evidence as structured fields', () => {
+    const markup = renderToStaticMarkup(
+      createElement(ModelEvaluationsEditor, {
+        value: [
+          {
+            benchmark: 'idavidrein/gpqa-diamond@1.0.0',
+            metrics: { pass_at_1: 0.72 },
+          },
+        ],
+        readOnly: true,
+      }),
+    )
+
+    expect(markup).toContain('idavidrein/gpqa-diamond@1.0.0')
+    expect(markup).toContain('pass_at_1')
+    expect(markup).toContain('0.72')
   })
 })

@@ -18,14 +18,15 @@ export interface ProviderEndpoint {
   endpoint: string // e.g., "host.docker.internal:8000" or "api.openai.com"
   protocol: 'http' | 'https'
   base_url?: string
-  provider?: 'openai' | 'anthropic'
+  provider?: string
   api_key?: string
   api_key_env?: string
 }
 
 export interface ProviderModel {
   name: string // e.g., "openai/gpt-oss-120b"
-  reasoning_family?: string
+  catalog?: string
+  reasoning?: ReasoningConfig
   provider_model_id?: string
   backend_refs?: ProviderEndpoint[]
   endpoints?: ProviderEndpoint[]
@@ -53,14 +54,19 @@ export interface ProviderModel {
 }
 
 export interface ProviderDefaults {
-  default_model?: string
-  reasoning_families?: Record<string, ReasoningFamily>
-  default_reasoning_effort?: string
+  model?: string
+  reasoning_effort?: string
 }
 
 export interface ReasoningFamily {
-  type: 'reasoning_effort' | 'chat_template_kwargs'
+  type: 'reasoning_effort' | 'chat_template_kwargs' | 'top_level_reasoning_effort'
   parameter: string // e.g., "reasoning_effort", "enable_thinking"
+  levels?: string[]
+  default?: string
+}
+
+export interface ReasoningConfig extends Partial<ReasoningFamily> {
+  family?: string
 }
 
 export interface Providers {

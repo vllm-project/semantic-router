@@ -27,7 +27,7 @@ export function parseConfigToTopology(config: ConfigData): ParsedTopology {
   const decisions = extractDecisions(config)
   const models = extractModels(config)
   const strategy = config.routing?.strategy || config.global?.router?.strategy || 'priority'
-  const defaultModel = config.providers?.defaults?.default_model
+  const defaultModel = config.providers?.defaults?.model
 
   return { globalPlugins, signals, decisions, models, strategy, defaultModel }
 }
@@ -120,7 +120,7 @@ function extractDecisions(config: ConfigData): DecisionConfig[] {
           use_reasoning: ref.use_reasoning,
           reasoning_effort: ref.reasoning_effort,
           lora_name: ref.lora_name,
-          reasoning_family: modelConfig?.reasoning_family,
+          reasoning_family: modelConfig?.reasoning?.family,
         }
       })
 
@@ -251,7 +251,7 @@ function extractModels(config: ConfigData): ModelConfig[] {
   config.providers?.models?.forEach((model) => {
     models.push({
       name: model.name,
-      reasoning_family: model.reasoning_family,
+      reasoning_family: model.reasoning?.family,
     })
   })
 

@@ -1,0 +1,510 @@
+- id: vllm
+  display_name: vLLM
+  description: Connect a private vLLM endpoint.
+  category: start_here
+  support_tier: runtime
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  default_protocol: openai/chat-completions@1
+  supported_operations: [openai/chat-completions@1#create, openai/chat-completions@1#list_models, openai/responses@1#create, openai/responses@1#list_models]
+  auth: {strategy: bearer, header: Authorization, prefix: Bearer}
+  presentation: {logo: package:vllm, monogram: v, monochrome: false}
+  conformance: {status: fixture_verified, verified_at: 2026-09-04}
+- id: sglang
+  display_name: SGLang
+  description: Connect a private SGLang endpoint.
+  category: start_here
+  support_tier: runtime
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  default_protocol: openai/chat-completions@1
+  supported_operations: [openai/chat-completions@1#create, openai/chat-completions@1#list_models, openai/responses@1#create, openai/responses@1#list_models]
+  auth: {strategy: bearer, header: Authorization, prefix: Bearer}
+  presentation: {logo: "url:https://raw.githubusercontent.com/sgl-project/sgl-docs/main/favicon.png", monogram: S, monochrome: false}
+  conformance: {status: unverified}
+- id: amd-atom
+  display_name: AMD ATOM
+  description: Connect an AMD ATOM deployment.
+  category: start_here
+  support_tier: runtime
+  protocols: [openai/chat-completions@1]
+  default_protocol: openai/chat-completions@1
+  supported_operations: [openai/chat-completions@1#create]
+  auth: {strategy: bearer, header: Authorization, prefix: Bearer}
+  presentation: {logo: public:/amd.png, monogram: A, monochrome: false}
+  conformance: {status: unverified}
+- id: openai-compatible
+  display_name: OpenAI Compatible
+  description: Connect any compatible private endpoint.
+  category: start_here
+  support_tier: compatible
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  default_protocol: openai/chat-completions@1
+  supported_operations: [openai/chat-completions@1#create, openai/chat-completions@1#list_models, openai/responses@1#create, openai/responses@1#list_models]
+  auth: {strategy: bearer, header: Authorization, prefix: Bearer}
+  presentation: {logo: package:openai, monogram: O, monochrome: true}
+  conformance: {status: fixture_verified, verified_at: 2026-09-04}
+- id: openrouter
+  display_name: OpenRouter
+  description: One API for a broad model catalog.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://openrouter.ai/api/v1
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  default_protocol: openai/chat-completions@1
+  supported_operations: [openai/chat-completions@1#create, openai/chat-completions@1#list_models, openai/responses@1#create, openai/responses@1#list_models]
+  reasoning_transport: top_level_effort
+  auth: {strategy: bearer, header: Authorization, prefix: Bearer}
+  presentation: {logo: package:openrouter, monogram: OR, monochrome: false}
+  conformance: {status: fixture_verified, verified_at: 2026-09-04}
+- id: openai
+  display_name: OpenAI
+  description: OpenAI models and reasoning families.
+  category: model_api
+  support_tier: native
+  default_base_url: https://api.openai.com/v1
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  default_protocol: openai/chat-completions@1
+  supported_operations: [openai/chat-completions@1#create, openai/chat-completions@1#list_models, openai/responses@1#create, openai/responses@1#list_models]
+  reasoning_transport: top_level_effort
+  auth: {strategy: bearer, header: Authorization, prefix: Bearer, injected_header: x-user-openai-key}
+  presentation: {logo: package:openai, monogram: O, monochrome: true}
+  conformance: {status: fixture_verified, verified_at: 2026-09-04}
+- id: anthropic
+  display_name: Anthropic
+  description: Claude models through the native Messages API.
+  category: model_api
+  support_tier: native
+  default_base_url: https://api.anthropic.com
+  protocols: [anthropic/messages@1]
+  default_protocol: anthropic/messages@1
+  supported_operations: [anthropic/messages@1#create, anthropic/messages@1#list_models]
+  default_headers: {anthropic-version: "2023-06-01"}
+  auth: {strategy: api_key_header, header: x-api-key, prefix: "", injected_header: x-user-anthropic-key}
+  presentation: {logo: package:anthropic, monogram: A, monochrome: true}
+  conformance: {status: fixture_verified, verified_at: 2026-09-04}
+- id: anthropic-compatible
+  display_name: Anthropic Compatible
+  description: Connect a private Anthropic-compatible endpoint.
+  category: private_runtime
+  support_tier: compatible
+  protocols: [anthropic/messages@1]
+  default_protocol: anthropic/messages@1
+  supported_operations: [anthropic/messages@1#create, anthropic/messages@1#list_models]
+  default_headers: {anthropic-version: "2023-06-01"}
+  auth: {strategy: api_key_header, header: x-api-key, prefix: ""}
+  presentation: {logo: package:anthropic, monogram: A, monochrome: true}
+  conformance: {status: fixture_verified, verified_at: 2026-09-04}
+- id: azure-openai
+  display_name: Azure OpenAI
+  description: Azure-hosted OpenAI deployments.
+  category: model_api
+  support_tier: native
+  protocols: [openai/chat-completions@1]
+  default_protocol: openai/chat-completions@1
+  supported_operations: [openai/chat-completions@1#create]
+  path_overrides: {openai/chat-completions@1#create: /chat/completions}
+  api_version_query: true
+  auth: {strategy: api_key_header, header: api-key, prefix: "", injected_header: x-user-azure-openai-key}
+  presentation: {logo: package:openai, monogram: Az, monochrome: true}
+  conformance: {status: fixture_verified, verified_at: 2026-09-04}
+- id: bedrock
+  display_name: Amazon Bedrock
+  description: Models exposed through Amazon Bedrock-compatible routing.
+  category: model_api
+  support_tier: native
+  protocols: [openai/chat-completions@1]
+  default_protocol: openai/chat-completions@1
+  supported_operations: [openai/chat-completions@1#create]
+  path_overrides: {openai/chat-completions@1#create: /chat/completions}
+  auth: {strategy: bearer, header: Authorization, prefix: Bearer, injected_header: x-user-bedrock-key}
+  presentation: {logo: monogram, monogram: AWS, monochrome: false}
+  conformance: {status: fixture_verified, verified_at: 2026-09-04}
+- id: gemini
+  display_name: Google Gemini
+  description: Gemini through its OpenAI-compatible API.
+  category: model_api
+  support_tier: native
+  default_base_url: https://generativelanguage.googleapis.com/v1beta/openai
+  protocols: [openai/chat-completions@1]
+  default_protocol: openai/chat-completions@1
+  supported_operations: [openai/chat-completions@1#create, openai/chat-completions@1#list_models]
+  auth: {strategy: bearer, header: Authorization, prefix: Bearer, injected_header: x-user-gemini-key}
+  presentation: {logo: package:gemini, monogram: G, monochrome: false}
+  conformance: {status: fixture_verified, verified_at: 2026-09-04}
+- id: vertex-ai
+  display_name: Google Vertex AI
+  description: Models exposed through Vertex AI-compatible routing.
+  category: model_api
+  support_tier: native
+  protocols: [openai/chat-completions@1]
+  default_protocol: openai/chat-completions@1
+  supported_operations: [openai/chat-completions@1#create]
+  path_overrides: {openai/chat-completions@1#create: /chat/completions}
+  auth: {strategy: bearer, header: Authorization, prefix: Bearer, injected_header: x-user-vertex-ai-key}
+  presentation: {logo: package:gemini, monogram: V, monochrome: false}
+  conformance: {status: fixture_verified, verified_at: 2026-09-04}
+- id: deepseek
+  display_name: DeepSeek
+  description: DeepSeek chat and reasoning models.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://api.deepseek.com/v1
+  protocols: [openai/chat-completions@1]
+  default_protocol: openai/chat-completions@1
+  supported_operations: [openai/chat-completions@1#create, openai/chat-completions@1#list_models]
+  reasoning_transport: deepseek_thinking
+  auth: {strategy: bearer, header: Authorization, prefix: Bearer}
+  presentation: {logo: package:deepseek, monogram: D, monochrome: false}
+  conformance: {status: fixture_verified, verified_at: 2026-09-04}
+- id: groq
+  display_name: Groq
+  description: Low-latency hosted inference.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://api.groq.com/openai/v1
+  protocols: [openai/chat-completions@1]
+  default_protocol: openai/chat-completions@1
+  supported_operations: [openai/chat-completions@1#create, openai/chat-completions@1#list_models]
+  auth: {strategy: bearer, header: Authorization, prefix: Bearer}
+  presentation: {logo: package:groq, monogram: G, monochrome: true}
+  conformance: {status: unverified}
+- id: together
+  display_name: Together AI
+  description: Open models through a hosted API.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://api.together.ai/v1
+  protocols: [openai/chat-completions@1]
+  default_protocol: openai/chat-completions@1
+  supported_operations: [openai/chat-completions@1#create, openai/chat-completions@1#list_models]
+  auth: {strategy: bearer, header: Authorization, prefix: Bearer}
+  presentation: {logo: package:together, monogram: T, monochrome: false}
+  conformance: {status: unverified}
+- id: fireworks
+  display_name: Fireworks AI
+  description: Fast serverless model inference.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://api.fireworks.ai/inference/v1
+  protocols: [openai/chat-completions@1]
+  default_protocol: openai/chat-completions@1
+  supported_operations: [openai/chat-completions@1#create, openai/chat-completions@1#list_models]
+  auth: {strategy: bearer, header: Authorization, prefix: Bearer}
+  presentation: {logo: package:fireworks, monogram: F, monochrome: false}
+  conformance: {status: unverified}
+- id: mistral
+  display_name: Mistral AI
+  description: Mistral chat and code models.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://api.mistral.ai/v1
+  protocols: [openai/chat-completions@1]
+  default_protocol: openai/chat-completions@1
+  supported_operations: [openai/chat-completions@1#create, openai/chat-completions@1#list_models]
+  auth: {strategy: bearer, header: Authorization, prefix: Bearer}
+  presentation: {logo: package:mistral, monogram: M, monochrome: false}
+  conformance: {status: unverified}
+- id: xai
+  display_name: xAI
+  description: Grok models through an OpenAI-style API.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://api.x.ai/v1
+  protocols: [openai/chat-completions@1]
+  default_protocol: openai/chat-completions@1
+  supported_operations: [openai/chat-completions@1#create, openai/chat-completions@1#list_models]
+  auth: {strategy: bearer, header: Authorization, prefix: Bearer}
+  presentation: {logo: package:xai, monogram: x, monochrome: true}
+  conformance: {status: unverified}
+- id: cerebras
+  display_name: Cerebras
+  description: High-speed hosted inference.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://api.cerebras.ai/v1
+  protocols: [openai/chat-completions@1]
+  default_protocol: openai/chat-completions@1
+  supported_operations: [openai/chat-completions@1#create, openai/chat-completions@1#list_models]
+  auth: {strategy: bearer, header: Authorization, prefix: Bearer}
+  presentation: {logo: package:cerebras, monogram: C, monochrome: false}
+  conformance: {status: unverified}
+- id: nvidia-nim
+  display_name: NVIDIA NIM
+  description: Hosted models from the NIM catalog.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://integrate.api.nvidia.com/v1
+  protocols: [openai/chat-completions@1]
+  default_protocol: openai/chat-completions@1
+  supported_operations: [openai/chat-completions@1#create, openai/chat-completions@1#list_models]
+  auth: {strategy: bearer, header: Authorization, prefix: Bearer}
+  presentation: {logo: package:nvidia, monogram: N, monochrome: false}
+  conformance: {status: unverified}
+- id: perplexity
+  display_name: Perplexity
+  description: Search-grounded models and online answers.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://api.perplexity.ai
+  protocols: [openai/chat-completions@1]
+  default_protocol: openai/chat-completions@1
+  supported_operations: [openai/chat-completions@1#create]
+  auth: {strategy: bearer, header: Authorization, prefix: Bearer}
+  presentation: {logo: package:perplexity, monogram: P, monochrome: false}
+  conformance: {status: unverified}
+- id: cohere
+  display_name: Cohere
+  description: Command models through the compatibility API.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://api.cohere.com/compatibility/v1
+  protocols: [openai/chat-completions@1]
+  default_protocol: openai/chat-completions@1
+  supported_operations: [openai/chat-completions@1#create, openai/chat-completions@1#list_models]
+  auth: {strategy: bearer, header: Authorization, prefix: Bearer}
+  presentation: {logo: package:cohere, monogram: C, monochrome: false}
+  conformance: {status: unverified}
+- id: deepinfra
+  display_name: DeepInfra
+  description: Serverless inference across open models.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://api.deepinfra.com/v1/openai
+  protocols: [openai/chat-completions@1]
+  default_protocol: openai/chat-completions@1
+  supported_operations: [openai/chat-completions@1#create, openai/chat-completions@1#list_models]
+  auth: {strategy: bearer, header: Authorization, prefix: Bearer}
+  presentation: {logo: package:deepinfra, monogram: D, monochrome: false}
+  conformance: {status: unverified}
+- id: hugging-face
+  display_name: Hugging Face
+  description: Models served through the Hugging Face router.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://router.huggingface.co/v1
+  protocols: [openai/chat-completions@1]
+  default_protocol: openai/chat-completions@1
+  supported_operations: [openai/chat-completions@1#create, openai/chat-completions@1#list_models]
+  auth: {strategy: bearer, header: Authorization, prefix: Bearer}
+  presentation: {logo: package:huggingface, monogram: HF, monochrome: false}
+  conformance: {status: unverified}
+- id: sambanova
+  display_name: SambaNova
+  description: Hosted inference on SambaNova Cloud.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://api.sambanova.ai/v1
+  protocols: [openai/chat-completions@1]
+  default_protocol: openai/chat-completions@1
+  supported_operations: [openai/chat-completions@1#create, openai/chat-completions@1#list_models]
+  auth: {strategy: bearer, header: Authorization, prefix: Bearer}
+  presentation: {logo: package:sambanova, monogram: S, monochrome: false}
+  conformance: {status: unverified}
+- id: dashscope
+  display_name: DashScope
+  description: Qwen models through the compatible endpoint.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://dashscope-intl.aliyuncs.com/compatible-mode/v1
+  protocols: [openai/chat-completions@1]
+  default_protocol: openai/chat-completions@1
+  supported_operations: [openai/chat-completions@1#create, openai/chat-completions@1#list_models]
+  auth: {strategy: bearer, header: Authorization, prefix: Bearer}
+  presentation: {logo: package:qwen, monogram: Q, monochrome: false}
+  conformance: {status: unverified}
+- id: minimax
+  display_name: MiniMax
+  description: MiniMax language models and reasoning.
+  category: model_api
+  support_tier: native
+  default_base_url: https://api.minimax.io/v1
+  protocols: [openai/chat-completions@1]
+  default_protocol: openai/chat-completions@1
+  supported_operations: [openai/chat-completions@1#create]
+  auth: {strategy: bearer, header: Authorization, prefix: Bearer, injected_header: x-user-minimax-key}
+  presentation: {logo: package:minimax, monogram: M, monochrome: false}
+  conformance: {status: fixture_verified, verified_at: 2026-09-04}
+- id: moonshot
+  display_name: Moonshot AI
+  description: Kimi models through an OpenAI-style API.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://api.moonshot.ai/v1
+  protocols: [openai/chat-completions@1]
+  default_protocol: openai/chat-completions@1
+  supported_operations: [openai/chat-completions@1#create, openai/chat-completions@1#list_models]
+  auth: {strategy: bearer, header: Authorization, prefix: Bearer}
+  presentation: {logo: package:moonshot, monogram: K, monochrome: true}
+  conformance: {status: unverified}
+- id: zai
+  display_name: Z.ai
+  description: GLM models from the Z.ai platform.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://api.z.ai/api/paas/v4
+  protocols: [openai/chat-completions@1]
+  default_protocol: openai/chat-completions@1
+  supported_operations: [openai/chat-completions@1#create, openai/chat-completions@1#list_models]
+  auth: {strategy: bearer, header: Authorization, prefix: Bearer}
+  presentation: {logo: package:zai, monogram: Z, monochrome: true}
+  conformance: {status: unverified}
+- id: novita
+  display_name: Novita AI
+  description: Serverless access to open model families.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://api.novita.ai/v3/openai
+  protocols: [openai/chat-completions@1]
+  default_protocol: openai/chat-completions@1
+  supported_operations: [openai/chat-completions@1#create, openai/chat-completions@1#list_models]
+  auth: {strategy: bearer, header: Authorization, prefix: Bearer}
+  presentation: {logo: package:novita, monogram: N, monochrome: false}
+  conformance: {status: unverified}
+- id: nebius
+  display_name: Nebius AI Studio
+  description: Hosted open models from Nebius AI Studio.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://api.studio.nebius.com/v1
+  protocols: [openai/chat-completions@1]
+  default_protocol: openai/chat-completions@1
+  supported_operations: [openai/chat-completions@1#create, openai/chat-completions@1#list_models]
+  auth: {strategy: bearer, header: Authorization, prefix: Bearer}
+  presentation: {logo: package:nebius, monogram: N, monochrome: true}
+  conformance: {status: unverified}
+- id: featherless
+  display_name: Featherless AI
+  description: On-demand serverless open-model inference.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://api.featherless.ai/v1
+  protocols: [openai/chat-completions@1]
+  default_protocol: openai/chat-completions@1
+  supported_operations: [openai/chat-completions@1#create, openai/chat-completions@1#list_models]
+  auth: {strategy: bearer, header: Authorization, prefix: Bearer}
+  presentation: {logo: package:featherless, monogram: F, monochrome: false}
+  conformance: {status: unverified}
+- id: friendli
+  display_name: FriendliAI
+  description: Friendli serverless model endpoints.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://api.friendli.ai/serverless/v1
+  protocols: [openai/chat-completions@1]
+  default_protocol: openai/chat-completions@1
+  supported_operations: [openai/chat-completions@1#create, openai/chat-completions@1#list_models]
+  auth: {strategy: bearer, header: Authorization, prefix: Bearer}
+  presentation: {logo: package:friendli, monogram: F, monochrome: true}
+  conformance: {status: unverified}
+- id: vercel-ai-gateway
+  display_name: Vercel AI Gateway
+  description: A unified endpoint for hosted model providers.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://ai-gateway.vercel.sh/v1
+  protocols: [openai/chat-completions@1]
+  default_protocol: openai/chat-completions@1
+  supported_operations: [openai/chat-completions@1#create, openai/chat-completions@1#list_models]
+  auth: {strategy: bearer, header: Authorization, prefix: Bearer}
+  presentation: {logo: package:vercel, monogram: V, monochrome: true}
+  conformance: {status: unverified}
+- id: cometapi
+  display_name: CometAPI
+  description: Unified hosted access to model APIs.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://api.cometapi.com/v1
+  protocols: [openai/chat-completions@1]
+  default_protocol: openai/chat-completions@1
+  supported_operations: [openai/chat-completions@1#create, openai/chat-completions@1#list_models]
+  auth: {strategy: bearer, header: Authorization, prefix: Bearer}
+  presentation: {logo: package:cometapi, monogram: C, monochrome: false}
+  conformance: {status: unverified}
+- id: sakana
+  display_name: Sakana AI
+  description: Models served by Sakana AI.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://api.sakana.ai/v1
+  protocols: [openai/chat-completions@1]
+  default_protocol: openai/chat-completions@1
+  supported_operations: [openai/chat-completions@1#create]
+  auth: {strategy: bearer, header: Authorization, prefix: Bearer}
+  presentation: {logo: "url:https://console.sakana.ai/icon.svg", monogram: S, monochrome: false}
+  conformance: {status: unverified}
+- id: ollama
+  display_name: Ollama
+  description: Connect a private Ollama endpoint.
+  category: private_runtime
+  support_tier: runtime
+  protocols: [openai/chat-completions@1]
+  default_protocol: openai/chat-completions@1
+  supported_operations: [openai/chat-completions@1#create, openai/chat-completions@1#list_models]
+  auth: {strategy: none, header: "", prefix: ""}
+  presentation: {logo: package:ollama, monogram: O, monochrome: true}
+  conformance: {status: unverified}
+- id: lm-studio
+  display_name: LM Studio
+  description: Connect a private LM Studio endpoint.
+  category: private_runtime
+  support_tier: runtime
+  protocols: [openai/chat-completions@1]
+  default_protocol: openai/chat-completions@1
+  supported_operations: [openai/chat-completions@1#create, openai/chat-completions@1#list_models]
+  auth: {strategy: none, header: "", prefix: ""}
+  presentation: {logo: package:lmstudio, monogram: LM, monochrome: true}
+  conformance: {status: unverified}
+- id: xinference
+  display_name: Xinference
+  description: Connect a private Xinference endpoint.
+  category: private_runtime
+  support_tier: runtime
+  protocols: [openai/chat-completions@1]
+  default_protocol: openai/chat-completions@1
+  supported_operations: [openai/chat-completions@1#create, openai/chat-completions@1#list_models]
+  auth: {strategy: bearer, header: Authorization, prefix: Bearer}
+  presentation: {logo: package:xinference, monogram: X, monochrome: false}
+  conformance: {status: unverified}
+- id: nvidia-riva
+  display_name: NVIDIA Riva
+  description: Connect a private NVIDIA Riva endpoint.
+  category: private_runtime
+  support_tier: runtime
+  protocols: [openai/chat-completions@1]
+  default_protocol: openai/chat-completions@1
+  supported_operations: [openai/chat-completions@1#create]
+  auth: {strategy: bearer, header: Authorization, prefix: Bearer}
+  presentation: {logo: package:nvidia, monogram: N, monochrome: false}
+  conformance: {status: unverified}
+- id: triton
+  display_name: NVIDIA Triton
+  description: Connect a private NVIDIA Triton endpoint.
+  category: private_runtime
+  support_tier: runtime
+  protocols: [openai/chat-completions@1]
+  default_protocol: openai/chat-completions@1
+  supported_operations: [openai/chat-completions@1#create]
+  auth: {strategy: bearer, header: Authorization, prefix: Bearer}
+  presentation: {logo: package:nvidia, monogram: N, monochrome: false}
+  conformance: {status: unverified}
+- id: docker-model-runner
+  display_name: Docker Model Runner
+  description: Connect models running with Docker.
+  category: private_runtime
+  support_tier: runtime
+  protocols: [openai/chat-completions@1]
+  default_protocol: openai/chat-completions@1
+  supported_operations: [openai/chat-completions@1#create, openai/chat-completions@1#list_models]
+  auth: {strategy: none, header: "", prefix: ""}
+  presentation: {logo: "url:https://www.docker.com/wp-content/uploads/2022/03/Moby-logo.png", monogram: D, monochrome: false}
+  conformance: {status: unverified}
+- id: lemonade
+  display_name: Lemonade
+  description: Connect a private Lemonade endpoint.
+  category: private_runtime
+  support_tier: runtime
+  protocols: [openai/chat-completions@1]
+  default_protocol: openai/chat-completions@1
+  supported_operations: [openai/chat-completions@1#create, openai/chat-completions@1#list_models]
+  auth: {strategy: none, header: "", prefix: ""}
+  presentation: {logo: public:/amd.png, monogram: L, monochrome: false}
+  conformance: {status: unverified}

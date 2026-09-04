@@ -177,7 +177,7 @@ listeners:
 
 providers:
   defaults:
-    default_model: local/general
+    model: local/general
   models:
     - name: local/general
       provider_model_id: my-served-model
@@ -185,6 +185,7 @@ providers:
         - name: primary
           endpoint: host.docker.internal:8000
           protocol: http
+          provider: vllm
 
 routing:
   strategy: priority
@@ -276,7 +277,7 @@ In the schema, `entrypoints[].model_names` lists the public aliases,
 `entrypoints[].recipe` selects a named recipe, and `recipes[].routing` contains
 that recipe's policy.
 
-If no decision matches, the recipe uses `providers.defaults.default_model`.
+If no decision matches, the recipe uses `providers.defaults.model`.
 The virtual entrypoint name never reaches a backend.
 
 See
