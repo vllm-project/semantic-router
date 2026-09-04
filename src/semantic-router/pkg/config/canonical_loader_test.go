@@ -365,6 +365,9 @@ global:
 	if !cfg.Memory.Enabled || !cfg.Memory.AutoStore {
 		t.Fatalf("expected memory override to still apply, got enabled=%v auto_store=%v", cfg.Memory.Enabled, cfg.Memory.AutoStore)
 	}
+	if got := cfg.Memory.Persistence.Queue; got != 64 {
+		t.Fatalf("expected sparse memory override to preserve default persistence queue 64, got %d", got)
+	}
 }
 
 func TestParseYAMLBytesPreservesDefaultSystemModelsForSparseModuleOverrides(t *testing.T) {

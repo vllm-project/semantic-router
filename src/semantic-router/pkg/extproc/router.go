@@ -72,6 +72,8 @@ type OpenAIRouter struct {
 	MemoryExtractor      *memory.MemoryExtractor
 	ProtocolCodecs       *protocolcodec.Registry
 
+	memoryPersistence *memory.PersistenceRunner
+
 	// CredentialResolver resolves per-user LLM API keys from multiple sources
 	// (ext_authz injected headers -> static config fallback).
 	CredentialResolver *authz.CredentialResolver

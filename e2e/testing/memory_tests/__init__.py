@@ -10,6 +10,7 @@ from memory_tests.test_per_decision import (
     PerDecisionMemoryDisabledTest,
     PerDecisionThresholdOverrideTest,
 )
+from memory_tests.test_persistence_receipts import MemoryPersistenceReceiptTest
 from memory_tests.test_pipeline import (
     MemoryContentIntegrityTest,
     MemoryInjectionPipelineTest,
@@ -23,6 +24,7 @@ __all__ = [
     "MemoryContentIntegrityTest",
     "MemoryFeaturesTest",
     "MemoryInjectionPipelineTest",
+    "MemoryPersistenceReceiptTest",
     "MemoryStorageTest",
     "MilvusVerifier",
     "PerDecisionMemoryDisabledTest",

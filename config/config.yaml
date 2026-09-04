@@ -1965,6 +1965,11 @@ global:
         block_patterns:
           - api key
           - password
+      persistence:
+        timeout_seconds: 30
+        concurrency: 8
+        queue: 64
+        shutdown_grace_seconds: 5
     vector_store:
       enabled: true
       backend_type: llama_stack

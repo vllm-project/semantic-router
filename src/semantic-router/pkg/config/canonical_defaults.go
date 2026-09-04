@@ -100,6 +100,12 @@ func defaultCanonicalStoreGlobal() CanonicalStoreGlobal {
 			DefaultRetrievalLimit:      5,
 			DefaultSimilarityThreshold: 0.70,
 			ExtractionBatchSize:        10,
+			Persistence: MemoryPersistenceConfig{
+				TimeoutSeconds:       30,
+				Concurrency:          8,
+				Queue:                64,
+				ShutdownGraceSeconds: 5,
+			},
 		},
 		ResponseCache: SemanticCache{
 			Enabled:        true,
