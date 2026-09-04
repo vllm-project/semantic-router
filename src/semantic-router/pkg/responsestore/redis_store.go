@@ -48,6 +48,14 @@ type RedisStore struct {
 	// a writer's SETNX + index ZADD completing while a lazy scan for the
 	// same conversation is in flight must not be undone by the scan.
 	lazyBackfillPreScanHook func()
+
+	// deleteResponseBatchOverride, when non-nil, replaces
+	// deleteConversationResponses' per-batch response payload deletion.
+	// Unexported test-only seam for asserting that a cascade delete failure
+	// partway through is reported to the caller (and leaves the conversation
+	// record and remaining batches untouched) without needing a real Redis
+	// fault to land mid-pipeline.
+	deleteResponseBatchOverride func(ctx context.Context, responseIDs []string) error
 }
 
 const (
@@ -100,6 +108,12 @@ const (
 	// backfill — keeps a single conversation's backfill from building one
 	// unbounded pipeline or command.
 	redisBackfillBatchSize = 256
+
+	// redisDeleteBatchSize bounds how many responses are deleted per round
+	// trip when cascading a conversation delete, so deleting a very large
+	// conversation never needs one ZRANGE 0 -1 or one pipeline sized to the
+	// whole conversation.
+	redisDeleteBatchSize = 256
 )
 
 // compareDeleteScript deletes KEYS[1] only if its current value equals
@@ -545,6 +559,22 @@ func (s *RedisStore) GetResponse(ctx context.Context, responseID string) (*respo
 	return &response, nil
 }
 
+// UpdateResponse replaces a response's payload and keeps its conversation
+// index in step: indexes under the new ConversationID (if any), then
+// best-effort unindexes the previous one if it changed. If the new index
+// write fails, restores the previous payload bytes and best-effort
+// reindexes the previous conversation before returning the error — an
+// update must never leave a payload pointing at a conversation whose index
+// was never actually written, matching the repairability blueprint §5 Phase
+// 5 asks for on top of StoreResponse's existing rollback/repair (Phase 2).
+//
+// Deliberate ordering deviation from the blueprint's UpdateResponse
+// pseudocode: this checks the new index write's outcome *before*
+// unindexing the previous conversation, not after. Unindexing first and
+// only then discovering the new write failed would leave a window where
+// neither the old nor the new conversation's index has the response, closed
+// here only by the subsequent best-effort reindex; checking first avoids
+// that window ever opening.
 func (s *RedisStore) UpdateResponse(ctx context.Context, response *responseapi.StoredResponse) error {
 	if !s.enabled {
 		return ErrStoreDisabled
@@ -555,10 +585,25 @@ func (s *RedisStore) UpdateResponse(ctx context.Context, response *responseapi.S
 
 	key := s.buildKey(ResponseKeyPrefix + response.ID)
 
-	// Doubles as the existence check, and detects a move between conversations.
-	previousConversationID, err := s.storedConversationID(ctx, response.ID)
+	// Doubles as the existence check. Kept as raw bytes (not just the
+	// previously-parsed ConversationID storedConversationID would give) so a
+	// failed index write below can restore the exact previous payload.
+	previousData, err := s.client.Get(ctx, key).Bytes()
 	if err != nil {
-		return err
+		if errors.Is(err, redis.Nil) {
+			return ErrNotFound
+		}
+		return fmt.Errorf("failed to check response existence: %w", err)
+	}
+
+	var previous responseapi.StoredResponse
+	previousConversationID := ""
+	if err := json.Unmarshal(previousData, &previous); err != nil {
+		// Not fatal: the update can still proceed, it just has nothing to
+		// unindex or restore from — same posture as storedConversationID.
+		logging.Warnf("RedisStore: failed to parse previous stored response %s during update: %v", response.ID, err)
+	} else {
+		previousConversationID = previous.ConversationID
 	}
 
 	data, err := json.Marshal(response)
@@ -570,16 +615,31 @@ func (s *RedisStore) UpdateResponse(ctx context.Context, response *responseapi.S
 		return fmt.Errorf("failed to update response in Redis: %w", err)
 	}
 
-	// TODO(#2814 Phase 5): make repairable — restore previous payload on index failure.
+	if response.ConversationID != "" {
+		if err := s.indexResponse(ctx, response.ConversationID, response.ID, response.CreatedAt); err != nil {
+			indexErr := fmt.Errorf("failed to index updated response in Redis: %w", err)
+
+			if restoreErr := s.client.Set(ctx, key, previousData, s.ttl).Err(); restoreErr != nil {
+				return fmt.Errorf("%w (failed to restore previous payload: %v)", indexErr, restoreErr)
+			}
+			if previousConversationID != "" {
+				if reindexErr := s.indexResponse(ctx, previousConversationID, response.ID, previous.CreatedAt); reindexErr != nil {
+					logging.Warnf("RedisStore: failed to reindex restored response %s under previous conversation %s after update rollback: %v",
+						response.ID, previousConversationID, reindexErr)
+				}
+			}
+			return indexErr
+		}
+	}
+
+	// The new index write (if any) is now confirmed in place, so the
+	// previous entry — if the conversation actually changed — is safe to
+	// drop. Best-effort: a stale leftover here is pruned by the next listing.
 	if previousConversationID != "" && previousConversationID != response.ConversationID {
 		if err := s.unindexResponse(ctx, previousConversationID, response.ID); err != nil {
 			logging.Warnf("RedisStore: failed to remove response %s from previous conversation %s index: %v",
 				response.ID, previousConversationID, err)
 		}
-	}
-	if err := s.indexResponse(ctx, response.ConversationID, response.ID, response.CreatedAt); err != nil {
-		logging.Warnf("RedisStore: failed to index response %s in conversation %s: %v",
-			response.ID, response.ConversationID, err)
 	}
 
 	return nil
@@ -987,6 +1047,11 @@ func (s *RedisStore) UpdateConversation(ctx context.Context, conversation *respo
 	return nil
 }
 
+// DeleteConversation deletes a conversation and, when deleteResponses is
+// set, cascades to its indexed responses first. The conversation record is
+// deleted last on purpose: if the cascade fails partway, the conversation
+// key survives as the retry anchor instead of leaving orphaned response
+// payloads with no record pointing at them (blueprint §5 Phase 5).
 func (s *RedisStore) DeleteConversation(ctx context.Context, conversationID string, deleteResponses bool) error {
 	if !s.enabled {
 		return ErrStoreDisabled
@@ -996,45 +1061,83 @@ func (s *RedisStore) DeleteConversation(ctx context.Context, conversationID stri
 	}
 
 	convKey := s.buildKey(ConversationKeyPrefix + conversationID)
-	deleted, err := s.client.Del(ctx, convKey).Result()
+
+	exists, err := s.client.Exists(ctx, convKey).Result()
 	if err != nil {
-		return fmt.Errorf("failed to delete conversation from Redis: %w", err)
+		return fmt.Errorf("failed to check conversation existence: %w", err)
 	}
-	if deleted == 0 {
+	if exists == 0 {
 		return ErrNotFound
 	}
 
-	// Optionally delete all responses in the conversation
 	if deleteResponses {
 		if err := s.deleteConversationResponses(ctx, conversationID); err != nil {
 			return err
 		}
 	}
 
+	if err := s.client.Del(ctx, convKey).Err(); err != nil {
+		return fmt.Errorf("failed to delete conversation from Redis: %w", err)
+	}
+
 	return nil
 }
 
-// deleteConversationResponses removes a conversation's responses and its index.
-// Reads the index directly: going via ListResponsesByConversation would cap the
-// cascade at the pagination limit.
+// deleteConversationResponses removes a conversation's responses and its
+// index/marker, in bounded batches of redisDeleteBatchSize read from the
+// front of the index — never one ZRANGE 0 -1 or one pipeline sized to the
+// whole conversation. Reads the index directly rather than through
+// ListResponsesByConversation, which would additionally cap the cascade at
+// a single page.
+//
+// Each iteration reads rank 0..redisDeleteBatchSize-1 again (not an
+// offsetting range): the ZREM at the end of the previous iteration already
+// removed those members, so the next read naturally advances. If a batch's
+// payload deletes or index removal fails, this returns the error and stops
+// rather than silently logging and reporting success — per blueprint §5
+// Phase 5, the caller needs to know the cascade was only partially applied.
+// The failure is safely retryable: undeleted response keys are unaffected,
+// and a Del of an already-deleted key is a no-op, not an error.
 func (s *RedisStore) deleteConversationResponses(ctx context.Context, conversationID string) error {
 	indexKey := s.conversationIndexKey(conversationID)
 
-	responseIDs, err := s.client.ZRange(ctx, indexKey, 0, -1).Result()
-	if err != nil {
-		return fmt.Errorf("failed to list responses for deletion: %w", err)
+	for {
+		responseIDs, err := s.client.ZRange(ctx, indexKey, 0, redisDeleteBatchSize-1).Result()
+		if err != nil {
+			return fmt.Errorf("failed to list responses for deletion: %w", err)
+		}
+		if len(responseIDs) == 0 {
+			break
+		}
+
+		if s.deleteResponseBatchOverride != nil {
+			if err := s.deleteResponseBatchOverride(ctx, responseIDs); err != nil {
+				return fmt.Errorf("failed to delete %d response(s) of conversation %s: %w",
+					len(responseIDs), conversationID, err)
+			}
+		} else {
+			pipe := s.client.Pipeline()
+			for _, responseID := range responseIDs {
+				pipe.Del(ctx, s.buildKey(ResponseKeyPrefix+responseID))
+			}
+			if _, err := pipe.Exec(ctx); err != nil {
+				return fmt.Errorf("failed to delete %d response(s) of conversation %s: %w",
+					len(responseIDs), conversationID, err)
+			}
+		}
+
+		if err := s.unindexResponse(ctx, conversationID, responseIDs...); err != nil {
+			return fmt.Errorf("failed to remove deleted responses from conversation %s index: %w", conversationID, err)
+		}
 	}
 
-	pipe := s.client.Pipeline()
-	for _, responseID := range responseIDs {
-		pipe.Del(ctx, s.buildKey(ResponseKeyPrefix+responseID))
+	// Single-key deletes, never combined with each other or with the
+	// response keys above.
+	if err := s.client.Del(ctx, indexKey).Err(); err != nil {
+		return fmt.Errorf("failed to delete conversation index for %s: %w", conversationID, err)
 	}
-	pipe.Del(ctx, indexKey)
-
-	if _, err := pipe.Exec(ctx); err != nil {
-		// Conversation is already gone; a returned error could not be usefully retried.
-		logging.Warnf("RedisStore: failed to delete %d response(s) of conversation %s: %v",
-			len(responseIDs), conversationID, err)
+	if err := s.client.Del(ctx, s.emptyConversationIndexMarkerKey(conversationID)).Err(); err != nil {
+		return fmt.Errorf("failed to delete conversation index empty marker for %s: %w", conversationID, err)
 	}
 
 	return nil
@@ -1075,7 +1178,20 @@ func (s *RedisStore) ListConversations(ctx context.Context, opts ListOptions) ([
 	return conversations, nil
 }
 
-// AddResponseToConversation adds a response ID to a conversation.
+// AddResponseToConversation indexes an already-stored response under a
+// conversation, verified against the response's own stored ConversationID —
+// never against the caller's say-so alone, so this can never create an
+// index entry for a conversation the response doesn't actually belong to.
+//
+// Deliberately narrow (blueprint §3.7/§7): a response with no stored
+// ConversationID, or one that belongs to a different conversation than
+// conversationID, returns ErrInvalidInput rather than silently adopting the
+// caller's conversationID or rewriting the stored payload's membership.
+// Widening this to actually reassign a response's conversation belongs to
+// the broader Conversations API semantics in #2999, not this lookup fix —
+// today's only real caller path is StoreResponse indexing directly from
+// StoredResponse.ConversationID, so this method mainly exists to satisfy
+// the ConversationStore interface usefully rather than as a no-op.
 func (s *RedisStore) AddResponseToConversation(ctx context.Context, conversationID, responseID string) error {
 	if !s.enabled {
 		return ErrStoreDisabled
@@ -1084,8 +1200,19 @@ func (s *RedisStore) AddResponseToConversation(ctx context.Context, conversation
 		return ErrInvalidInput
 	}
 
-	// Membership is recorded by StoreResponse via the conversation index, and
-	// traversal by previous_response_id. Kept for conversation metadata updates.
+	stored, err := s.GetResponse(ctx, responseID)
+	if err != nil {
+		return err
+	}
+
+	if stored.ConversationID == "" || stored.ConversationID != conversationID {
+		return ErrInvalidInput
+	}
+
+	if err := s.indexResponse(ctx, conversationID, responseID, stored.CreatedAt); err != nil {
+		return fmt.Errorf("failed to index response in Redis: %w", err)
+	}
+
 	return nil
 }
 
