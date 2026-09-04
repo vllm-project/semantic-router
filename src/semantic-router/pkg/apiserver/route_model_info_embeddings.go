@@ -3,6 +3,7 @@
 package apiserver
 
 import (
+	"context"
 	"fmt"
 	"path"
 	"strings"
@@ -25,7 +26,14 @@ func (s *ClassificationAPIServer) getEmbeddingModelsInfo(runtimeState *startupst
 		}
 
 		for _, model := range info {
-			if model.Capability != native.CapabilityEmbedding && model.Capability != native.CapabilityMultimodalEmbedding {
+			hasEmbedding := false
+			for _, cap := range model.Capabilities {
+				if cap == native.CapabilityEmbedding || cap == native.CapabilityMultimodalEmbedding {
+					hasEmbedding = true
+					break
+				}
+			}
+			if !hasEmbedding {
 				continue
 			}
 
