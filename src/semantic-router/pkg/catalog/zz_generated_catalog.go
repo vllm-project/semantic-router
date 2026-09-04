@@ -2,7 +2,7 @@
 
 package catalog
 
-const builtInCatalogDigest = "sha256:83cfe75043acc9c1647a8983fb3c8877e434f54677e483e20837da07e73c42d1"
+const builtInCatalogDigest = "sha256:4ca8032878c2b13be0c33e2dcaca070b6f2c17ed15b0cb3727f964067f6cabad"
 
 const builtInCatalogJSON = `{
   "benchmarks": [
@@ -199,6 +199,90 @@ const builtInCatalogJSON = `{
         "source_kind": "official_model_card",
         "swe_harness": "OpenHands",
         "variant": "Seed-OSS-36B-Instruct"
+      }
+    },
+    {
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash",
+        "verification": "claimed"
+      },
+      "id": "deepseek/deepseek-v4-flash-model-card-max@1.0.0",
+      "metrics": {
+        "cais/humanitys-last-exam@1.0.0#accuracy": 0.348,
+        "idavidrein/gpqa-diamond@1.0.0#accuracy": 0.881,
+        "swe-bench/verified@1.0.0#resolved": 0.79,
+        "tiger-ai-lab/mmlu-pro@1.0.0#accuracy": 0.862
+      },
+      "model": "deepseek/deepseek-v4-flash",
+      "status": "available",
+      "subject": {
+        "hle_mode": "no_tools",
+        "reasoning_effort": "max",
+        "source_kind": "official_model_card",
+        "variant": "DeepSeek-V4-Flash"
+      }
+    },
+    {
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://api-docs.deepseek.com/updates/",
+        "verification": "claimed"
+      },
+      "id": "deepseek/deepseek-v4-flash-release-eval@1.0.0",
+      "metrics": {
+        "harbor/terminal-bench@2.1.0#resolved": 0.827
+      },
+      "model": "deepseek/deepseek-v4-flash",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_release_evaluation",
+        "terminal_harness": "DeepSeek API evaluation harness",
+        "variant": "deepseek-v4-flash"
+      }
+    },
+    {
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro",
+        "verification": "claimed"
+      },
+      "id": "deepseek/deepseek-v4-pro-model-card-max@1.0.0",
+      "metrics": {
+        "cais/humanitys-last-exam@1.0.0#accuracy": 0.377,
+        "idavidrein/gpqa-diamond@1.0.0#accuracy": 0.901,
+        "swe-bench/verified@1.0.0#resolved": 0.806,
+        "tiger-ai-lab/mmlu-pro@1.0.0#accuracy": 0.875
+      },
+      "model": "deepseek/deepseek-v4-pro",
+      "status": "available",
+      "subject": {
+        "hle_mode": "no_tools",
+        "reasoning_effort": "max",
+        "source_kind": "official_model_card",
+        "variant": "DeepSeek-V4-Pro"
+      }
+    },
+    {
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://api-docs.deepseek.com/updates/",
+        "verification": "claimed"
+      },
+      "id": "deepseek/deepseek-v4-pro-release-eval@1.0.0",
+      "metrics": {
+        "harbor/terminal-bench@2.1.0#resolved": 0.879
+      },
+      "model": "deepseek/deepseek-v4-pro",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_release_evaluation",
+        "terminal_harness": "DeepSeek API evaluation harness",
+        "variant": "deepseek-v4-pro"
       }
     },
     {
@@ -3010,6 +3094,51 @@ const builtInCatalogJSON = `{
       ],
       "coverage": 0.0,
       "index": "vllm-sr/intelligence@1.0.0",
+      "model": "celeris/celeris-1",
+      "provenance": [],
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "metric": "tiger-ai-lab/mmlu-pro@1.0.0#accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "metric": "idavidrein/gpqa-diamond@1.0.0#accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "metric": "cais/humanitys-last-exam@1.0.0#accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "metric": "swe-bench/verified@1.0.0#resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "metric": "harbor/terminal-bench@2.1.0#resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
       "model": "cohere/command-r-v01",
       "provenance": [],
       "score": null,
@@ -3506,6 +3635,51 @@ const builtInCatalogJSON = `{
       "coverage": 0.0,
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "cohere/command-a-plus-05-2026",
+      "provenance": [],
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "metric": "tiger-ai-lab/mmlu-pro@1.0.0#accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "metric": "idavidrein/gpqa-diamond@1.0.0#accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "metric": "cais/humanitys-last-exam@1.0.0#accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "metric": "swe-bench/verified@1.0.0#resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "metric": "harbor/terminal-bench@2.1.0#resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "cohere/north-mini-code-1.0",
       "provenance": [],
       "score": null,
       "status": "missing"
@@ -4324,91 +4498,111 @@ const builtInCatalogJSON = `{
       "components": [
         {
           "metric": "tiger-ai-lab/mmlu-pro@1.0.0#accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
+          "normalized": 0.862,
+          "status": "available",
+          "value": 0.862,
           "weight": 0.2
         },
         {
           "metric": "idavidrein/gpqa-diamond@1.0.0#accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
+          "normalized": 0.881,
+          "status": "available",
+          "value": 0.881,
           "weight": 0.2
         },
         {
           "metric": "cais/humanitys-last-exam@1.0.0#accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
+          "normalized": 0.348,
+          "status": "available",
+          "value": 0.348,
           "weight": 0.2
         },
         {
           "metric": "swe-bench/verified@1.0.0#resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
+          "normalized": 0.79,
+          "status": "available",
+          "value": 0.79,
           "weight": 0.2
         },
         {
           "metric": "harbor/terminal-bench@2.1.0#resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
+          "normalized": 0.827,
+          "status": "available",
+          "value": 0.827,
           "weight": 0.2
         }
       ],
-      "coverage": 0.0,
+      "coverage": 1.0,
+      "domains": {
+        "agentic_systems": 82.69999999999999,
+        "frontier_reasoning": 34.8,
+        "general_reasoning": 86.2,
+        "scientific_reasoning": 88.10000000000001,
+        "software_engineering": 79.00000000000001
+      },
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "deepseek/deepseek-v4-flash",
-      "provenance": [],
-      "score": null,
-      "status": "missing"
+      "provenance": [
+        "deepseek/deepseek-v4-flash-model-card-max@1.0.0",
+        "deepseek/deepseek-v4-flash-release-eval@1.0.0"
+      ],
+      "score": 74.16,
+      "status": "available"
     },
     {
       "components": [
         {
           "metric": "tiger-ai-lab/mmlu-pro@1.0.0#accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
+          "normalized": 0.875,
+          "status": "available",
+          "value": 0.875,
           "weight": 0.2
         },
         {
           "metric": "idavidrein/gpqa-diamond@1.0.0#accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
+          "normalized": 0.901,
+          "status": "available",
+          "value": 0.901,
           "weight": 0.2
         },
         {
           "metric": "cais/humanitys-last-exam@1.0.0#accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
+          "normalized": 0.377,
+          "status": "available",
+          "value": 0.377,
           "weight": 0.2
         },
         {
           "metric": "swe-bench/verified@1.0.0#resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
+          "normalized": 0.806,
+          "status": "available",
+          "value": 0.806,
           "weight": 0.2
         },
         {
           "metric": "harbor/terminal-bench@2.1.0#resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
+          "normalized": 0.879,
+          "status": "available",
+          "value": 0.879,
           "weight": 0.2
         }
       ],
-      "coverage": 0.0,
+      "coverage": 1.0,
+      "domains": {
+        "agentic_systems": 87.9,
+        "frontier_reasoning": 37.7,
+        "general_reasoning": 87.5,
+        "scientific_reasoning": 90.10000000000001,
+        "software_engineering": 80.60000000000001
+      },
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "deepseek/deepseek-v4-pro",
-      "provenance": [],
-      "score": null,
-      "status": "missing"
+      "provenance": [
+        "deepseek/deepseek-v4-pro-model-card-max@1.0.0",
+        "deepseek/deepseek-v4-pro-release-eval@1.0.0"
+      ],
+      "score": 76.76,
+      "status": "available"
     },
     {
       "components": [
@@ -6374,6 +6568,96 @@ const builtInCatalogJSON = `{
       ],
       "score": 54.61333333333332,
       "status": "available"
+    },
+    {
+      "components": [
+        {
+          "metric": "tiger-ai-lab/mmlu-pro@1.0.0#accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "metric": "idavidrein/gpqa-diamond@1.0.0#accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "metric": "cais/humanitys-last-exam@1.0.0#accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "metric": "swe-bench/verified@1.0.0#resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "metric": "harbor/terminal-bench@2.1.0#resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "inception/mercury-2",
+      "provenance": [],
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "metric": "tiger-ai-lab/mmlu-pro@1.0.0#accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "metric": "idavidrein/gpqa-diamond@1.0.0#accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "metric": "cais/humanitys-last-exam@1.0.0#accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "metric": "swe-bench/verified@1.0.0#resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "metric": "harbor/terminal-bench@2.1.0#resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "inception/mercury-2.5-preview",
+      "provenance": [],
+      "score": null,
+      "status": "missing"
     },
     {
       "components": [
@@ -19086,7 +19370,7 @@ const builtInCatalogJSON = `{
       "description": "Anthropic high-capability model with extended context and output limits.",
       "display_name": "Claude Fable 5.1",
       "distribution": {
-        "source": "https://docs.anthropic.com/en/docs/about-claude/models/overview",
+        "source": "https://www.anthropic.com/claude/fable",
         "type": "proprietary_api"
       },
       "family": "claude-fable",
@@ -19122,7 +19406,7 @@ const builtInCatalogJSON = `{
       ],
       "verification": {
         "authority": "Anthropic",
-        "source": "https://docs.anthropic.com/en/docs/about-claude/models/overview",
+        "source": "https://www.anthropic.com/claude/fable",
         "status": "claimed",
         "verified_at": "2026-09-05"
       }
@@ -19427,16 +19711,16 @@ const builtInCatalogJSON = `{
         "vision",
         "long_context"
       ],
-      "description": "Preview of Anthropic's Mythos model family for advanced reasoning and agents.",
+      "description": "Deprecated preview of Anthropic's Mythos model family retained for compatibility discovery.",
       "display_name": "Claude Mythos Preview",
       "distribution": {
-        "source": "https://platform.claude.com/docs/en/about-claude/models/overview",
+        "source": "https://docs.anthropic.com/en/docs/about-claude/model-deprecations",
         "type": "proprietary_api"
       },
       "family": "claude-mythos",
       "id": "anthropic/claude-mythos-preview",
       "kind": "physical",
-      "lifecycle": "experimental",
+      "lifecycle": "deprecated",
       "limits": {
         "context_window_size": 1000000,
         "max_output_tokens": 128000
@@ -19463,11 +19747,11 @@ const builtInCatalogJSON = `{
       "tags": [
         "frontier",
         "proprietary",
-        "preview"
+        "deprecated"
       ],
       "verification": {
         "authority": "Anthropic",
-        "source": "https://platform.claude.com/docs/en/about-claude/models/overview",
+        "source": "https://docs.anthropic.com/en/docs/about-claude/model-deprecations",
         "status": "claimed",
         "verified_at": "2026-09-05"
       }
@@ -19810,6 +20094,62 @@ const builtInCatalogJSON = `{
       "verification": {
         "authority": "ByteDance Seed Team",
         "source": "https://huggingface.co/ByteDance-Seed/Seed-OSS-36B-Instruct",
+        "status": "claimed",
+        "verified_at": "2026-09-05"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
+        "structured_output",
+        "vision",
+        "long_context"
+      ],
+      "description": "Low-latency diffusion language model for short, structured, and agentic workloads.",
+      "display_name": "Celeris-1",
+      "distribution": {
+        "source": "https://docs.celeris.ai/models",
+        "type": "proprietary_api"
+      },
+      "family": "celeris-1",
+      "id": "celeris/celeris-1",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 131072
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "presentation": {
+        "logo": "monogram",
+        "monochrome": false,
+        "monogram": "C"
+      },
+      "protocols": [
+        "openai/chat-completions@1",
+        "openai/responses@1"
+      ],
+      "publisher": "Celeris",
+      "reasoning_family": "celeris",
+      "tags": [
+        "proprietary",
+        "diffusion",
+        "low_latency",
+        "multimodal",
+        "agentic"
+      ],
+      "verification": {
+        "authority": "Celeris",
+        "source": "https://docs.celeris.ai/making-requests",
         "status": "claimed",
         "verified_at": "2026-09-05"
       }
@@ -20448,6 +20788,63 @@ const builtInCatalogJSON = `{
       "verification": {
         "authority": "Cohere",
         "source": "https://docs.cohere.com/docs/command-a-plus",
+        "status": "claimed",
+        "verified_at": "2026-09-05"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
+        "structured_output",
+        "long_context"
+      ],
+      "description": "Compact open-weight MoE model trained for agentic software engineering and terminal tasks.",
+      "display_name": "North Mini Code 1.0",
+      "distribution": {
+        "license": "Apache-2.0",
+        "source": "https://huggingface.co/CohereLabs/North-Mini-Code-1.0",
+        "type": "open_weights"
+      },
+      "family": "north-mini-code",
+      "id": "cohere/north-mini-code-1.0",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 256000,
+        "max_output_tokens": 64000
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "30B (3B active)",
+      "presentation": {
+        "logo": "package:cohere",
+        "monochrome": false,
+        "monogram": "C"
+      },
+      "protocols": [
+        "openai/chat-completions@1",
+        "openai/responses@1"
+      ],
+      "publisher": "Cohere",
+      "released_at": "2026-06-09",
+      "tags": [
+        "open_weights",
+        "coding",
+        "agentic",
+        "efficient",
+        "moe"
+      ],
+      "verification": {
+        "authority": "Cohere",
+        "source": "https://huggingface.co/CohereLabs/North-Mini-Code-1.0",
         "status": "claimed",
         "verified_at": "2026-09-05"
       }
@@ -21435,8 +21832,9 @@ const builtInCatalogJSON = `{
       "description": "DeepSeek's latency-oriented V4 reasoning model.",
       "display_name": "DeepSeek V4 Flash",
       "distribution": {
-        "source": "https://api-docs.deepseek.com/quick_start/pricing",
-        "type": "proprietary_api"
+        "license": "MIT",
+        "source": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash",
+        "type": "open_weights"
       },
       "family": "deepseek-v4",
       "id": "deepseek/deepseek-v4-flash",
@@ -21454,25 +21852,28 @@ const builtInCatalogJSON = `{
           "text"
         ]
       },
+      "parameter_size": "284B (13B active)",
       "presentation": {
         "logo": "package:deepseek",
         "monochrome": false,
         "monogram": "D"
       },
       "protocols": [
-        "openai/chat-completions@1"
+        "openai/chat-completions@1",
+        "openai/responses@1"
       ],
       "publisher": "DeepSeek",
       "reasoning_family": "deepseek",
       "revision": "DeepSeek-V4-Flash-0731",
       "tags": [
         "efficient",
-        "proprietary",
-        "reasoning"
+        "open_weights",
+        "reasoning",
+        "moe"
       ],
       "verification": {
         "authority": "DeepSeek",
-        "source": "https://api-docs.deepseek.com/quick_start/pricing",
+        "source": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash",
         "status": "claimed",
         "verified_at": "2026-09-05"
       }
@@ -21488,8 +21889,9 @@ const builtInCatalogJSON = `{
       "description": "DeepSeek's high-capability V4 reasoning model.",
       "display_name": "DeepSeek V4 Pro",
       "distribution": {
-        "source": "https://api-docs.deepseek.com/quick_start/pricing",
-        "type": "proprietary_api"
+        "license": "MIT",
+        "source": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro",
+        "type": "open_weights"
       },
       "family": "deepseek-v4",
       "id": "deepseek/deepseek-v4-pro",
@@ -21507,25 +21909,28 @@ const builtInCatalogJSON = `{
           "text"
         ]
       },
+      "parameter_size": "1.6T (49B active)",
       "presentation": {
         "logo": "package:deepseek",
         "monochrome": false,
         "monogram": "D"
       },
       "protocols": [
-        "openai/chat-completions@1"
+        "openai/chat-completions@1",
+        "openai/responses@1"
       ],
       "publisher": "DeepSeek",
       "reasoning_family": "deepseek",
       "revision": "DeepSeek-V4-Pro-0813",
       "tags": [
         "frontier",
-        "proprietary",
-        "reasoning"
+        "open_weights",
+        "reasoning",
+        "moe"
       ],
       "verification": {
         "authority": "DeepSeek",
-        "source": "https://api-docs.deepseek.com/quick_start/pricing",
+        "source": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro",
         "status": "claimed",
         "verified_at": "2026-09-05"
       }
@@ -23818,6 +24223,113 @@ const builtInCatalogJSON = `{
       "verification": {
         "authority": "IBM",
         "source": "https://huggingface.co/ibm-granite/granite-4.2-30b",
+        "status": "claimed",
+        "verified_at": "2026-09-05"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
+        "structured_output",
+        "long_context"
+      ],
+      "description": "High-throughput diffusion language model for reasoning, tools, and structured output.",
+      "display_name": "Mercury 2",
+      "distribution": {
+        "source": "https://www.inceptionlabs.ai/models",
+        "type": "proprietary_api"
+      },
+      "family": "mercury-2",
+      "id": "inception/mercury-2",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 128000
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "presentation": {
+        "logo": "monogram",
+        "monochrome": false,
+        "monogram": "I"
+      },
+      "protocols": [
+        "openai/chat-completions@1"
+      ],
+      "publisher": "Inception",
+      "reasoning_family": "inception",
+      "tags": [
+        "proprietary",
+        "diffusion",
+        "low_latency",
+        "agentic"
+      ],
+      "verification": {
+        "authority": "Inception",
+        "source": "https://docs.inceptionlabs.ai/get-started/models",
+        "status": "claimed",
+        "verified_at": "2026-09-05"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
+        "structured_output",
+        "long_context"
+      ],
+      "description": "Preview of Inception's current diffusion reasoning model for low-latency agents.",
+      "display_name": "Mercury 2.5 Preview",
+      "distribution": {
+        "source": "https://www.inceptionlabs.ai/models",
+        "type": "proprietary_api"
+      },
+      "family": "mercury-2.5",
+      "id": "inception/mercury-2.5-preview",
+      "kind": "physical",
+      "lifecycle": "experimental",
+      "limits": {
+        "context_window_size": 260000,
+        "max_output_tokens": 65536
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "presentation": {
+        "logo": "monogram",
+        "monochrome": false,
+        "monogram": "I"
+      },
+      "protocols": [
+        "openai/chat-completions@1"
+      ],
+      "publisher": "Inception",
+      "reasoning_family": "inception",
+      "released_at": "2026-08-31",
+      "tags": [
+        "proprietary",
+        "preview",
+        "diffusion",
+        "low_latency",
+        "agentic"
+      ],
+      "verification": {
+        "authority": "Inception",
+        "source": "https://www.inceptionlabs.ai/models",
         "status": "claimed",
         "verified_at": "2026-09-05"
       }
@@ -29813,7 +30325,7 @@ const builtInCatalogJSON = `{
       "family": "gpt-4.1",
       "id": "openai/gpt-4.1-nano",
       "kind": "physical",
-      "lifecycle": "active",
+      "lifecycle": "deprecated",
       "limits": {
         "context_window_size": 1047576,
         "max_output_tokens": 32768
@@ -29921,7 +30433,7 @@ const builtInCatalogJSON = `{
       "family": "o-series",
       "id": "openai/o4-mini",
       "kind": "physical",
-      "lifecycle": "active",
+      "lifecycle": "deprecated",
       "limits": {
         "context_window_size": 200000,
         "max_output_tokens": 100000
@@ -30244,7 +30756,7 @@ const builtInCatalogJSON = `{
       "family": "gpt-5-codex",
       "id": "openai/gpt-5-codex",
       "kind": "physical",
-      "lifecycle": "active",
+      "lifecycle": "deprecated",
       "limits": {
         "context_window_size": 272000,
         "max_output_tokens": 128000
@@ -30298,7 +30810,7 @@ const builtInCatalogJSON = `{
       "family": "gpt-5-codex",
       "id": "openai/gpt-5.1-codex",
       "kind": "physical",
-      "lifecycle": "active",
+      "lifecycle": "deprecated",
       "limits": {
         "context_window_size": 272000,
         "max_output_tokens": 128000
@@ -30352,7 +30864,7 @@ const builtInCatalogJSON = `{
       "family": "gpt-5-codex",
       "id": "openai/gpt-5.1-codex-max",
       "kind": "physical",
-      "lifecycle": "active",
+      "lifecycle": "deprecated",
       "limits": {
         "context_window_size": 272000,
         "max_output_tokens": 128000
@@ -30406,7 +30918,7 @@ const builtInCatalogJSON = `{
       "family": "gpt-5-codex",
       "id": "openai/gpt-5.1-codex-mini",
       "kind": "physical",
-      "lifecycle": "active",
+      "lifecycle": "deprecated",
       "limits": {
         "context_window_size": 272000,
         "max_output_tokens": 128000
@@ -30460,7 +30972,7 @@ const builtInCatalogJSON = `{
       "family": "gpt-5-codex",
       "id": "openai/gpt-5.2-codex",
       "kind": "physical",
-      "lifecycle": "active",
+      "lifecycle": "deprecated",
       "limits": {
         "context_window_size": 272000,
         "max_output_tokens": 128000
@@ -30674,7 +31186,7 @@ const builtInCatalogJSON = `{
       "family": "openai-o",
       "id": "openai/o1",
       "kind": "physical",
-      "lifecycle": "active",
+      "lifecycle": "deprecated",
       "limits": {
         "context_window_size": 200000,
         "max_output_tokens": 100000
@@ -30728,7 +31240,7 @@ const builtInCatalogJSON = `{
       "family": "openai-o",
       "id": "openai/o1-pro",
       "kind": "physical",
-      "lifecycle": "active",
+      "lifecycle": "deprecated",
       "limits": {
         "context_window_size": 200000,
         "max_output_tokens": 100000
@@ -30781,7 +31293,7 @@ const builtInCatalogJSON = `{
       "family": "openai-o",
       "id": "openai/o3-mini",
       "kind": "physical",
-      "lifecycle": "active",
+      "lifecycle": "deprecated",
       "limits": {
         "context_window_size": 200000,
         "max_output_tokens": 100000
@@ -37616,7 +38128,7 @@ const builtInCatalogJSON = `{
       "provider": "anthropic",
       "provider_model_id": "claude-fable-5-1",
       "verification": {
-        "source": "https://docs.anthropic.com/en/docs/about-claude/models/overview",
+        "source": "https://www.anthropic.com/claude/fable",
         "status": "claimed",
         "verified_at": "2026-09-05"
       }
@@ -37713,7 +38225,7 @@ const builtInCatalogJSON = `{
     },
     {
       "id": "anthropic/claude-mythos-preview@1.0.0",
-      "lifecycle": "experimental",
+      "lifecycle": "deprecated",
       "model": "anthropic/claude-mythos-preview",
       "protocols": [
         "anthropic/messages@1"
@@ -37721,7 +38233,7 @@ const builtInCatalogJSON = `{
       "provider": "anthropic",
       "provider_model_id": "claude-mythos-preview",
       "verification": {
-        "source": "https://platform.claude.com/docs/en/about-claude/models/overview",
+        "source": "https://docs.anthropic.com/en/docs/about-claude/model-deprecations",
         "status": "claimed",
         "verified_at": "2026-09-05"
       }
@@ -37782,6 +38294,22 @@ const builtInCatalogJSON = `{
       "provider_model_id": "claude-3-haiku-20240307",
       "verification": {
         "source": "https://platform.claude.com/docs/en/about-claude/model-deprecations",
+        "status": "claimed",
+        "verified_at": "2026-09-05"
+      }
+    },
+    {
+      "id": "celeris/celeris-1@1.0.0",
+      "lifecycle": "active",
+      "model": "celeris/celeris-1",
+      "protocols": [
+        "openai/chat-completions@1",
+        "openai/responses@1"
+      ],
+      "provider": "celeris",
+      "provider_model_id": "celeris-1",
+      "verification": {
+        "source": "https://docs.celeris.ai/making-requests",
         "status": "claimed",
         "verified_at": "2026-09-05"
       }
@@ -37857,6 +38385,21 @@ const builtInCatalogJSON = `{
       "provider_model_id": "command-a-plus-05-2026",
       "verification": {
         "source": "https://docs.cohere.com/docs/command-a-plus",
+        "status": "claimed",
+        "verified_at": "2026-09-05"
+      }
+    },
+    {
+      "id": "cohere/north-mini-code-1.0@1.0.0",
+      "lifecycle": "active",
+      "model": "cohere/north-mini-code-1.0",
+      "protocols": [
+        "openai/chat-completions@1"
+      ],
+      "provider": "cohere",
+      "provider_model_id": "north-mini-code-1-0",
+      "verification": {
+        "source": "https://docs.cohere.com/docs/north-mini-code-1.0",
         "status": "claimed",
         "verified_at": "2026-09-05"
       }
@@ -37956,7 +38499,8 @@ const builtInCatalogJSON = `{
       "lifecycle": "active",
       "model": "deepseek/deepseek-v4-flash",
       "protocols": [
-        "openai/chat-completions@1"
+        "openai/chat-completions@1",
+        "openai/responses@1"
       ],
       "provider": "deepseek",
       "provider_model_id": "deepseek-v4-flash",
@@ -37971,7 +38515,8 @@ const builtInCatalogJSON = `{
       "lifecycle": "active",
       "model": "deepseek/deepseek-v4-pro",
       "protocols": [
-        "openai/chat-completions@1"
+        "openai/chat-completions@1",
+        "openai/responses@1"
       ],
       "provider": "deepseek",
       "provider_model_id": "deepseek-v4-pro",
@@ -38232,6 +38777,48 @@ const builtInCatalogJSON = `{
       "provider_model_id": "gemini-1.5-flash",
       "verification": {
         "source": "https://ai.google.dev/gemini-api/docs/deprecations",
+        "status": "claimed",
+        "verified_at": "2026-09-05"
+      }
+    },
+    {
+      "id": "inception/mercury-2@1.0.0",
+      "lifecycle": "active",
+      "model": "inception/mercury-2",
+      "pricing": {
+        "cached_input_per_1m": 0.025,
+        "completion_per_1m": 0.75,
+        "currency": "USD",
+        "prompt_per_1m": 0.25
+      },
+      "protocols": [
+        "openai/chat-completions@1"
+      ],
+      "provider": "inception",
+      "provider_model_id": "mercury-2",
+      "verification": {
+        "source": "https://docs.inceptionlabs.ai/get-started/models",
+        "status": "claimed",
+        "verified_at": "2026-09-05"
+      }
+    },
+    {
+      "id": "openrouter/mercury-2.5-preview@1.0.0",
+      "lifecycle": "experimental",
+      "model": "inception/mercury-2.5-preview",
+      "pricing": {
+        "cached_input_per_1m": 0.02,
+        "completion_per_1m": 0.75,
+        "currency": "USD",
+        "prompt_per_1m": 0.2
+      },
+      "protocols": [
+        "openai/chat-completions@1"
+      ],
+      "provider": "openrouter",
+      "provider_model_id": "inception/mercury-2.5-preview",
+      "verification": {
+        "source": "https://openrouter.ai/inception/mercury-2.5-preview",
         "status": "claimed",
         "verified_at": "2026-09-05"
       }
@@ -38801,7 +39388,7 @@ const builtInCatalogJSON = `{
     },
     {
       "id": "openai/gpt-4.1-nano@1.0.0",
-      "lifecycle": "active",
+      "lifecycle": "deprecated",
       "model": "openai/gpt-4.1-nano",
       "protocols": [
         "openai/chat-completions@1",
@@ -38833,7 +39420,7 @@ const builtInCatalogJSON = `{
     },
     {
       "id": "openai/o4-mini@1.0.0",
-      "lifecycle": "active",
+      "lifecycle": "deprecated",
       "model": "openai/o4-mini",
       "protocols": [
         "openai/chat-completions@1",
@@ -38925,7 +39512,7 @@ const builtInCatalogJSON = `{
     },
     {
       "id": "openai/gpt-5-codex@1.0.0",
-      "lifecycle": "active",
+      "lifecycle": "deprecated",
       "model": "openai/gpt-5-codex",
       "protocols": [
         "openai/responses@1"
@@ -38940,7 +39527,7 @@ const builtInCatalogJSON = `{
     },
     {
       "id": "openai/gpt-5.1-codex@1.0.0",
-      "lifecycle": "active",
+      "lifecycle": "deprecated",
       "model": "openai/gpt-5.1-codex",
       "protocols": [
         "openai/responses@1"
@@ -38955,7 +39542,7 @@ const builtInCatalogJSON = `{
     },
     {
       "id": "openai/gpt-5.1-codex-max@1.0.0",
-      "lifecycle": "active",
+      "lifecycle": "deprecated",
       "model": "openai/gpt-5.1-codex-max",
       "protocols": [
         "openai/responses@1"
@@ -38970,7 +39557,7 @@ const builtInCatalogJSON = `{
     },
     {
       "id": "openai/gpt-5.1-codex-mini@1.0.0",
-      "lifecycle": "active",
+      "lifecycle": "deprecated",
       "model": "openai/gpt-5.1-codex-mini",
       "protocols": [
         "openai/responses@1"
@@ -38985,7 +39572,7 @@ const builtInCatalogJSON = `{
     },
     {
       "id": "openai/gpt-5.2-codex@1.0.0",
-      "lifecycle": "active",
+      "lifecycle": "deprecated",
       "model": "openai/gpt-5.2-codex",
       "protocols": [
         "openai/responses@1"
@@ -39047,7 +39634,7 @@ const builtInCatalogJSON = `{
     },
     {
       "id": "openai/o1@1.0.0",
-      "lifecycle": "active",
+      "lifecycle": "deprecated",
       "model": "openai/o1",
       "protocols": [
         "openai/chat-completions@1",
@@ -39063,7 +39650,7 @@ const builtInCatalogJSON = `{
     },
     {
       "id": "openai/o1-pro@1.0.0",
-      "lifecycle": "active",
+      "lifecycle": "deprecated",
       "model": "openai/o1-pro",
       "protocols": [
         "openai/responses@1"
@@ -39078,7 +39665,7 @@ const builtInCatalogJSON = `{
     },
     {
       "id": "openai/o3-mini@1.0.0",
-      "lifecycle": "active",
+      "lifecycle": "deprecated",
       "model": "openai/o3-mini",
       "protocols": [
         "openai/chat-completions@1",
@@ -39560,6 +40147,22 @@ const builtInCatalogJSON = `{
       }
     },
     {
+      "id": "vllm/north-mini-code-1.0@1.0.0",
+      "lifecycle": "experimental",
+      "model": "cohere/north-mini-code-1.0",
+      "protocols": [
+        "openai/chat-completions@1",
+        "openai/responses@1"
+      ],
+      "provider": "vllm",
+      "provider_model_id": "CohereLabs/North-Mini-Code-1.0",
+      "verification": {
+        "source": "https://huggingface.co/CohereLabs/North-Mini-Code-1.0",
+        "status": "claimed",
+        "verified_at": "2026-09-05"
+      }
+    },
+    {
       "id": "vllm/deepseek-v3.1@1.0.0",
       "lifecycle": "active",
       "model": "deepseek/deepseek-v3.1",
@@ -39827,6 +40430,38 @@ const builtInCatalogJSON = `{
       "provider_model_id": "deepseek-ai/DeepSeek-V3.2",
       "verification": {
         "source": "https://huggingface.co/deepseek-ai/DeepSeek-V3.2",
+        "status": "claimed",
+        "verified_at": "2026-09-05"
+      }
+    },
+    {
+      "id": "vllm/deepseek-v4-flash@1.0.0",
+      "lifecycle": "active",
+      "model": "deepseek/deepseek-v4-flash",
+      "protocols": [
+        "openai/chat-completions@1",
+        "openai/responses@1"
+      ],
+      "provider": "vllm",
+      "provider_model_id": "deepseek-ai/DeepSeek-V4-Flash",
+      "verification": {
+        "source": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash",
+        "status": "claimed",
+        "verified_at": "2026-09-05"
+      }
+    },
+    {
+      "id": "vllm/deepseek-v4-pro@1.0.0",
+      "lifecycle": "active",
+      "model": "deepseek/deepseek-v4-pro",
+      "protocols": [
+        "openai/chat-completions@1",
+        "openai/responses@1"
+      ],
+      "provider": "vllm",
+      "provider_model_id": "deepseek-ai/DeepSeek-V4-Pro",
+      "verification": {
+        "source": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro",
         "status": "claimed",
         "verified_at": "2026-09-05"
       }
@@ -44057,13 +44692,16 @@ const builtInCatalogJSON = `{
         "monogram": "D"
       },
       "protocols": [
-        "openai/chat-completions@1"
+        "openai/chat-completions@1",
+        "openai/responses@1"
       ],
       "reasoning_transport": "deepseek_thinking",
       "support_tier": "compatible",
       "supported_operations": [
         "openai/chat-completions@1#create",
-        "openai/chat-completions@1#list_models"
+        "openai/chat-completions@1#list_models",
+        "openai/responses@1#create",
+        "openai/responses@1#list_models"
       ]
     },
     {
@@ -44234,6 +44872,68 @@ const builtInCatalogJSON = `{
       "protocols": [
         "openai/chat-completions@1"
       ],
+      "support_tier": "compatible",
+      "supported_operations": [
+        "openai/chat-completions@1#create",
+        "openai/chat-completions@1#list_models"
+      ]
+    },
+    {
+      "auth": {
+        "header": "Authorization",
+        "prefix": "Bearer",
+        "strategy": "bearer"
+      },
+      "category": "model_api",
+      "conformance": {
+        "status": "unverified"
+      },
+      "default_base_url": "https://inference.celeris.ai/celeris-1/v1",
+      "default_protocol": "openai/chat-completions@1",
+      "description": "Low-latency Celeris diffusion models through an OpenAI-compatible API.",
+      "display_name": "Celeris",
+      "id": "celeris",
+      "presentation": {
+        "logo": "monogram",
+        "monochrome": false,
+        "monogram": "C"
+      },
+      "protocols": [
+        "openai/chat-completions@1",
+        "openai/responses@1"
+      ],
+      "support_tier": "compatible",
+      "supported_operations": [
+        "openai/chat-completions@1#create",
+        "openai/chat-completions@1#list_models",
+        "openai/responses@1#create",
+        "openai/responses@1#list_models"
+      ]
+    },
+    {
+      "auth": {
+        "header": "Authorization",
+        "prefix": "Bearer",
+        "strategy": "bearer"
+      },
+      "category": "model_api",
+      "conformance": {
+        "status": "unverified"
+      },
+      "default_base_url": "https://api.inceptionlabs.ai/v1",
+      "default_protocol": "openai/chat-completions@1",
+      "description": "Mercury diffusion models through the Inception OpenAI-compatible API.",
+      "display_name": "Inception",
+      "id": "inception",
+      "presentation": {
+        "logo": "monogram",
+        "monochrome": false,
+        "monogram": "I"
+      },
+      "protocols": [
+        "openai/chat-completions@1"
+      ],
+      "reasoning_transport": "top_level_effort",
       "support_tier": "compatible",
       "supported_operations": [
         "openai/chat-completions@1#create",
@@ -45035,6 +45735,27 @@ const builtInCatalogJSON = `{
     {
       "default": "medium",
       "id": "mistral",
+      "levels": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "parameter": "reasoning_effort",
+      "type": "top_level_reasoning_effort"
+    },
+    {
+      "default": "enabled",
+      "id": "celeris",
+      "levels": [
+        "disabled",
+        "enabled"
+      ],
+      "parameter": "enable_thinking",
+      "type": "chat_template_kwargs"
+    },
+    {
+      "default": "medium",
+      "id": "inception",
       "levels": [
         "low",
         "medium",

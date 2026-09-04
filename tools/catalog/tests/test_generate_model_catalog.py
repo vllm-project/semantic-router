@@ -91,8 +91,8 @@ class ModelCatalogCompilerTests(unittest.TestCase):
         }
         offerings = resources["offerings"]
 
-        self.assertGreaterEqual(len(physical_models), 350)
-        self.assertGreaterEqual(len(offerings), 375)
+        self.assertGreaterEqual(len(physical_models), 365)
+        self.assertGreaterEqual(len(offerings), 395)
         expected_by_publisher = {
             "OpenAI": {
                 "openai/gpt-4.1",
@@ -143,6 +143,15 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             "MiniMax": {
                 "minimax/minimax-m1-80k",
                 "minimax/minimax-m3",
+            },
+            "Cohere": {
+                "cohere/command-a-plus-05-2026",
+                "cohere/north-mini-code-1.0",
+            },
+            "Celeris": {"celeris/celeris-1"},
+            "Inception": {
+                "inception/mercury-2",
+                "inception/mercury-2.5-preview",
             },
         }
         for publisher, expected_ids in expected_by_publisher.items():

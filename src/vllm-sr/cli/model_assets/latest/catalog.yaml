@@ -381,10 +381,13 @@ providers:
   default_base_url: https://api.deepseek.com/v1
   protocols:
   - openai/chat-completions@1
+  - openai/responses@1
   default_protocol: openai/chat-completions@1
   supported_operations:
   - openai/chat-completions@1#create
   - openai/chat-completions@1#list_models
+  - openai/responses@1#create
+  - openai/responses@1#list_models
   reasoning_transport: deepseek_thinking
   auth:
     strategy: bearer
@@ -526,6 +529,54 @@ providers:
   presentation:
     logo: package:cerebras
     monogram: C
+    monochrome: false
+  conformance:
+    status: unverified
+- id: celeris
+  display_name: Celeris
+  description: Low-latency Celeris diffusion models through an OpenAI-compatible API.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://inference.celeris.ai/celeris-1/v1
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  default_protocol: openai/chat-completions@1
+  supported_operations:
+  - openai/chat-completions@1#create
+  - openai/chat-completions@1#list_models
+  - openai/responses@1#create
+  - openai/responses@1#list_models
+  auth:
+    strategy: bearer
+    header: Authorization
+    prefix: Bearer
+  presentation:
+    logo: monogram
+    monogram: C
+    monochrome: false
+  conformance:
+    status: unverified
+- id: inception
+  display_name: Inception
+  description: Mercury diffusion models through the Inception OpenAI-compatible API.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://api.inceptionlabs.ai/v1
+  protocols:
+  - openai/chat-completions@1
+  default_protocol: openai/chat-completions@1
+  supported_operations:
+  - openai/chat-completions@1#create
+  - openai/chat-completions@1#list_models
+  reasoning_transport: top_level_effort
+  auth:
+    strategy: bearer
+    header: Authorization
+    prefix: Bearer
+  presentation:
+    logo: monogram
+    monogram: I
     monochrome: false
   conformance:
     status: unverified
@@ -1126,6 +1177,21 @@ reasoning_families:
   - max
   default: medium
 - id: mistral
+  type: top_level_reasoning_effort
+  parameter: reasoning_effort
+  levels:
+  - low
+  - medium
+  - high
+  default: medium
+- id: celeris
+  type: chat_template_kwargs
+  parameter: enable_thinking
+  levels:
+  - disabled
+  - enabled
+  default: enabled
+- id: inception
   type: top_level_reasoning_effort
   parameter: reasoning_effort
   levels:
@@ -2210,7 +2276,7 @@ models:
     monochrome: true
   distribution:
     type: proprietary_api
-    source: https://docs.anthropic.com/en/docs/about-claude/models/overview
+    source: https://www.anthropic.com/claude/fable
   family: claude-fable
   lifecycle: active
   limits:
@@ -2234,7 +2300,7 @@ models:
     authority: Anthropic
     status: claimed
     verified_at: '2026-09-05'
-    source: https://docs.anthropic.com/en/docs/about-claude/models/overview
+    source: https://www.anthropic.com/claude/fable
   tags:
   - frontier
   - proprietary
@@ -2465,7 +2531,7 @@ models:
   - agentic
 - id: anthropic/claude-mythos-preview
   display_name: Claude Mythos Preview
-  description: Preview of Anthropic's Mythos model family for advanced reasoning and agents.
+  description: Deprecated preview of Anthropic's Mythos model family retained for compatibility discovery.
   kind: physical
   publisher: Anthropic
   presentation:
@@ -2474,9 +2540,9 @@ models:
     monochrome: true
   distribution:
     type: proprietary_api
-    source: https://platform.claude.com/docs/en/about-claude/models/overview
+    source: https://docs.anthropic.com/en/docs/about-claude/model-deprecations
   family: claude-mythos
-  lifecycle: experimental
+  lifecycle: deprecated
   limits:
     context_window_size: 1000000
     max_output_tokens: 128000
@@ -2500,11 +2566,11 @@ models:
     authority: Anthropic
     status: claimed
     verified_at: '2026-09-05'
-    source: https://platform.claude.com/docs/en/about-claude/models/overview
+    source: https://docs.anthropic.com/en/docs/about-claude/model-deprecations
   tags:
   - frontier
   - proprietary
-  - preview
+  - deprecated
 - id: anthropic/claude-3.5-sonnet
   display_name: Claude 3.5 Sonnet
   description: Previous-generation Anthropic model for coding, analysis, and vision.
@@ -2766,6 +2832,50 @@ models:
   - open_weights
   - reasoning
   - coding
+  - agentic
+- id: celeris/celeris-1
+  display_name: Celeris-1
+  description: Low-latency diffusion language model for short, structured, and agentic workloads.
+  kind: physical
+  publisher: Celeris
+  presentation:
+    logo: monogram
+    monogram: C
+    monochrome: false
+  distribution:
+    type: proprietary_api
+    source: https://docs.celeris.ai/models
+  family: celeris-1
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  reasoning_family: celeris
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  verification:
+    authority: Celeris
+    status: claimed
+    verified_at: '2026-09-05'
+    source: https://docs.celeris.ai/making-requests
+  tags:
+  - proprietary
+  - diffusion
+  - low_latency
+  - multimodal
   - agentic
 - id: cohere/command-r-v01
   display_name: Command R v01
@@ -3262,6 +3372,51 @@ models:
   - multilingual
   - moe
   - agentic
+- id: cohere/north-mini-code-1.0
+  display_name: North Mini Code 1.0
+  description: Compact open-weight MoE model trained for agentic software engineering and terminal tasks.
+  kind: physical
+  publisher: Cohere
+  presentation:
+    logo: package:cohere
+    monogram: C
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/CohereLabs/North-Mini-Code-1.0
+    license: Apache-2.0
+  family: north-mini-code
+  parameter_size: 30B (3B active)
+  released_at: '2026-06-09'
+  lifecycle: active
+  limits:
+    context_window_size: 256000
+    max_output_tokens: 64000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  verification:
+    authority: Cohere
+    status: claimed
+    verified_at: '2026-09-05'
+    source: https://huggingface.co/CohereLabs/North-Mini-Code-1.0
+  tags:
+  - open_weights
+  - coding
+  - agentic
+  - efficient
+  - moe
 - id: databricks/dbrx-instruct
   display_name: DBRX Instruct
   description: Open enterprise MoE model from Databricks for reasoning, coding, and general chat.
@@ -4028,9 +4183,11 @@ models:
     monogram: D
     monochrome: false
   distribution:
-    type: proprietary_api
-    source: https://api-docs.deepseek.com/quick_start/pricing
+    type: open_weights
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash
+    license: MIT
   family: deepseek-v4
+  parameter_size: 284B (13B active)
   revision: DeepSeek-V4-Flash-0731
   lifecycle: active
   limits:
@@ -4050,15 +4207,17 @@ models:
   reasoning_family: deepseek
   protocols:
   - openai/chat-completions@1
+  - openai/responses@1
   verification:
     authority: DeepSeek
     status: claimed
     verified_at: '2026-09-05'
-    source: https://api-docs.deepseek.com/quick_start/pricing
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash
   tags:
   - efficient
-  - proprietary
+  - open_weights
   - reasoning
+  - moe
 - id: deepseek/deepseek-v4-pro
   display_name: DeepSeek V4 Pro
   description: DeepSeek's high-capability V4 reasoning model.
@@ -4069,9 +4228,11 @@ models:
     monogram: D
     monochrome: false
   distribution:
-    type: proprietary_api
-    source: https://api-docs.deepseek.com/quick_start/pricing
+    type: open_weights
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro
+    license: MIT
   family: deepseek-v4
+  parameter_size: 1.6T (49B active)
   revision: DeepSeek-V4-Pro-0813
   lifecycle: active
   limits:
@@ -4091,15 +4252,17 @@ models:
   reasoning_family: deepseek
   protocols:
   - openai/chat-completions@1
+  - openai/responses@1
   verification:
     authority: DeepSeek
     status: claimed
     verified_at: '2026-09-05'
-    source: https://api-docs.deepseek.com/quick_start/pricing
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro
   tags:
   - frontier
-  - proprietary
+  - open_weights
   - reasoning
+  - moe
 - id: deepseek/deepseek-v3
   display_name: DeepSeek V3
   description: Original open-weight DeepSeek V3 MoE model for chat, coding, and general workloads.
@@ -5895,6 +6058,89 @@ models:
   - reasoning
   - multilingual
   - enterprise
+- id: inception/mercury-2
+  display_name: Mercury 2
+  description: High-throughput diffusion language model for reasoning, tools, and structured output.
+  kind: physical
+  publisher: Inception
+  presentation:
+    logo: monogram
+    monogram: I
+    monochrome: false
+  distribution:
+    type: proprietary_api
+    source: https://www.inceptionlabs.ai/models
+  family: mercury-2
+  lifecycle: active
+  limits:
+    context_window_size: 128000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  reasoning_family: inception
+  protocols:
+  - openai/chat-completions@1
+  verification:
+    authority: Inception
+    status: claimed
+    verified_at: '2026-09-05'
+    source: https://docs.inceptionlabs.ai/get-started/models
+  tags:
+  - proprietary
+  - diffusion
+  - low_latency
+  - agentic
+- id: inception/mercury-2.5-preview
+  display_name: Mercury 2.5 Preview
+  description: Preview of Inception's current diffusion reasoning model for low-latency agents.
+  kind: physical
+  publisher: Inception
+  presentation:
+    logo: monogram
+    monogram: I
+    monochrome: false
+  distribution:
+    type: proprietary_api
+    source: https://www.inceptionlabs.ai/models
+  family: mercury-2.5
+  released_at: '2026-08-31'
+  lifecycle: experimental
+  limits:
+    context_window_size: 260000
+    max_output_tokens: 65536
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  reasoning_family: inception
+  protocols:
+  - openai/chat-completions@1
+  verification:
+    authority: Inception
+    status: claimed
+    verified_at: '2026-09-05'
+    source: https://www.inceptionlabs.ai/models
+  tags:
+  - proprietary
+  - preview
+  - diffusion
+  - low_latency
+  - agentic
 - id: internlm/intern-s1-mini
   display_name: Intern-S1 Mini
   description: Compact open-weight InternLM scientific reasoning model.
@@ -10541,7 +10787,7 @@ models:
     type: proprietary_api
     source: https://developers.openai.com/api/docs/models/gpt-4.1-nano
   family: gpt-4.1
-  lifecycle: active
+  lifecycle: deprecated
   limits:
     context_window_size: 1047576
     max_output_tokens: 32768
@@ -10624,7 +10870,7 @@ models:
     type: proprietary_api
     source: https://developers.openai.com/api/docs/models/o4-mini
   family: o-series
-  lifecycle: active
+  lifecycle: deprecated
   limits:
     context_window_size: 200000
     max_output_tokens: 100000
@@ -10875,7 +11121,7 @@ models:
     type: proprietary_api
     source: https://developers.openai.com/api/docs/models/gpt-5-codex
   family: gpt-5-codex
-  lifecycle: active
+  lifecycle: deprecated
   limits:
     context_window_size: 272000
     max_output_tokens: 128000
@@ -10917,7 +11163,7 @@ models:
     type: proprietary_api
     source: https://developers.openai.com/api/docs/models/gpt-5.1-codex
   family: gpt-5-codex
-  lifecycle: active
+  lifecycle: deprecated
   limits:
     context_window_size: 272000
     max_output_tokens: 128000
@@ -10959,7 +11205,7 @@ models:
     type: proprietary_api
     source: https://developers.openai.com/api/docs/models/gpt-5.1-codex-max
   family: gpt-5-codex
-  lifecycle: active
+  lifecycle: deprecated
   limits:
     context_window_size: 272000
     max_output_tokens: 128000
@@ -11001,7 +11247,7 @@ models:
     type: proprietary_api
     source: https://developers.openai.com/api/docs/models/gpt-5.1-codex-mini
   family: gpt-5-codex
-  lifecycle: active
+  lifecycle: deprecated
   limits:
     context_window_size: 272000
     max_output_tokens: 128000
@@ -11043,7 +11289,7 @@ models:
     type: proprietary_api
     source: https://developers.openai.com/api/docs/models/gpt-5.2-codex
   family: gpt-5-codex
-  lifecycle: active
+  lifecycle: deprecated
   limits:
     context_window_size: 272000
     max_output_tokens: 128000
@@ -11210,7 +11456,7 @@ models:
     type: proprietary_api
     source: https://developers.openai.com/api/docs/models/o1
   family: openai-o
-  lifecycle: active
+  lifecycle: deprecated
   limits:
     context_window_size: 200000
     max_output_tokens: 100000
@@ -11252,7 +11498,7 @@ models:
     type: proprietary_api
     source: https://developers.openai.com/api/docs/models/o1-pro
   family: openai-o
-  lifecycle: active
+  lifecycle: deprecated
   limits:
     context_window_size: 200000
     max_output_tokens: 100000
@@ -11293,7 +11539,7 @@ models:
     type: proprietary_api
     source: https://developers.openai.com/api/docs/models/o3-mini
   family: openai-o
-  lifecycle: active
+  lifecycle: deprecated
   limits:
     context_window_size: 200000
     max_output_tokens: 100000
@@ -16601,7 +16847,7 @@ offerings:
   verification:
     status: claimed
     verified_at: '2026-09-05'
-    source: https://docs.anthropic.com/en/docs/about-claude/models/overview
+    source: https://www.anthropic.com/claude/fable
 - id: anthropic/claude-fable-5@1.0.0
   provider: anthropic
   model: anthropic/claude-fable-5
@@ -16674,11 +16920,11 @@ offerings:
   provider_model_id: claude-mythos-preview
   protocols:
   - anthropic/messages@1
-  lifecycle: experimental
+  lifecycle: deprecated
   verification:
     status: claimed
     verified_at: '2026-09-05'
-    source: https://platform.claude.com/docs/en/about-claude/models/overview
+    source: https://docs.anthropic.com/en/docs/about-claude/model-deprecations
 - id: anthropic/claude-3.5-sonnet@1.0.0
   provider: anthropic
   model: anthropic/claude-3.5-sonnet
@@ -16723,6 +16969,18 @@ offerings:
     status: claimed
     verified_at: '2026-09-05'
     source: https://platform.claude.com/docs/en/about-claude/model-deprecations
+- id: celeris/celeris-1@1.0.0
+  provider: celeris
+  model: celeris/celeris-1
+  provider_model_id: celeris-1
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: '2026-09-05'
+    source: https://docs.celeris.ai/making-requests
 - id: cohere/command-r-plus-08-2024@1.0.0
   provider: cohere
   model: cohere/command-r-plus-08-2024
@@ -16778,6 +17036,17 @@ offerings:
     status: claimed
     verified_at: '2026-09-05'
     source: https://docs.cohere.com/docs/command-a-plus
+- id: cohere/north-mini-code-1.0@1.0.0
+  provider: cohere
+  model: cohere/north-mini-code-1.0
+  provider_model_id: north-mini-code-1-0
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: '2026-09-05'
+    source: https://docs.cohere.com/docs/north-mini-code-1.0
 - id: dashscope/qwen3.5-plus@1.0.0
   provider: dashscope
   model: qwen/qwen3.5-plus
@@ -16850,6 +17119,7 @@ offerings:
   provider_model_id: deepseek-v4-flash
   protocols:
   - openai/chat-completions@1
+  - openai/responses@1
   lifecycle: active
   verification:
     status: claimed
@@ -16861,6 +17131,7 @@ offerings:
   provider_model_id: deepseek-v4-pro
   protocols:
   - openai/chat-completions@1
+  - openai/responses@1
   lifecycle: active
   verification:
     status: claimed
@@ -17053,6 +17324,38 @@ offerings:
     status: claimed
     verified_at: '2026-09-05'
     source: https://ai.google.dev/gemini-api/docs/deprecations
+- id: inception/mercury-2@1.0.0
+  provider: inception
+  model: inception/mercury-2
+  provider_model_id: mercury-2
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  pricing:
+    currency: USD
+    prompt_per_1m: 0.25
+    cached_input_per_1m: 0.025
+    completion_per_1m: 0.75
+  verification:
+    status: claimed
+    verified_at: '2026-09-05'
+    source: https://docs.inceptionlabs.ai/get-started/models
+- id: openrouter/mercury-2.5-preview@1.0.0
+  provider: openrouter
+  model: inception/mercury-2.5-preview
+  provider_model_id: inception/mercury-2.5-preview
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: experimental
+  pricing:
+    currency: USD
+    prompt_per_1m: 0.2
+    cached_input_per_1m: 0.02
+    completion_per_1m: 0.75
+  verification:
+    status: claimed
+    verified_at: '2026-09-05'
+    source: https://openrouter.ai/inception/mercury-2.5-preview
 - id: minimax/minimax-m2@1.0.0
   provider: minimax
   model: minimax/minimax-m2
@@ -17479,7 +17782,7 @@ offerings:
   protocols:
   - openai/chat-completions@1
   - openai/responses@1
-  lifecycle: active
+  lifecycle: deprecated
   verification:
     status: claimed
     verified_at: '2026-09-05'
@@ -17503,7 +17806,7 @@ offerings:
   protocols:
   - openai/chat-completions@1
   - openai/responses@1
-  lifecycle: active
+  lifecycle: deprecated
   verification:
     status: claimed
     verified_at: '2026-09-05'
@@ -17570,7 +17873,7 @@ offerings:
   provider_model_id: gpt-5-codex
   protocols:
   - openai/responses@1
-  lifecycle: active
+  lifecycle: deprecated
   verification:
     status: claimed
     verified_at: '2026-09-05'
@@ -17581,7 +17884,7 @@ offerings:
   provider_model_id: gpt-5.1-codex
   protocols:
   - openai/responses@1
-  lifecycle: active
+  lifecycle: deprecated
   verification:
     status: claimed
     verified_at: '2026-09-05'
@@ -17592,7 +17895,7 @@ offerings:
   provider_model_id: gpt-5.1-codex-max
   protocols:
   - openai/responses@1
-  lifecycle: active
+  lifecycle: deprecated
   verification:
     status: claimed
     verified_at: '2026-09-05'
@@ -17603,7 +17906,7 @@ offerings:
   provider_model_id: gpt-5.1-codex-mini
   protocols:
   - openai/responses@1
-  lifecycle: active
+  lifecycle: deprecated
   verification:
     status: claimed
     verified_at: '2026-09-05'
@@ -17614,7 +17917,7 @@ offerings:
   provider_model_id: gpt-5.2-codex
   protocols:
   - openai/responses@1
-  lifecycle: active
+  lifecycle: deprecated
   verification:
     status: claimed
     verified_at: '2026-09-05'
@@ -17661,7 +17964,7 @@ offerings:
   protocols:
   - openai/chat-completions@1
   - openai/responses@1
-  lifecycle: active
+  lifecycle: deprecated
   verification:
     status: claimed
     verified_at: '2026-09-05'
@@ -17672,7 +17975,7 @@ offerings:
   provider_model_id: o1-pro
   protocols:
   - openai/responses@1
-  lifecycle: active
+  lifecycle: deprecated
   verification:
     status: claimed
     verified_at: '2026-09-05'
@@ -17684,7 +17987,7 @@ offerings:
   protocols:
   - openai/chat-completions@1
   - openai/responses@1
-  lifecycle: active
+  lifecycle: deprecated
   verification:
     status: claimed
     verified_at: '2026-09-05'
@@ -18039,6 +18342,18 @@ offerings:
     status: claimed
     verified_at: '2026-09-05'
     source: https://huggingface.co/CohereLabs/command-a-plus-05-2026-w4a4
+- id: vllm/north-mini-code-1.0@1.0.0
+  provider: vllm
+  model: cohere/north-mini-code-1.0
+  provider_model_id: CohereLabs/North-Mini-Code-1.0
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: '2026-09-05'
+    source: https://huggingface.co/CohereLabs/North-Mini-Code-1.0
 - id: vllm/deepseek-v3.1@1.0.0
   provider: vllm
   model: deepseek/deepseek-v3.1
@@ -18243,6 +18558,30 @@ offerings:
     status: claimed
     verified_at: '2026-09-05'
     source: https://huggingface.co/deepseek-ai/DeepSeek-V3.2
+- id: vllm/deepseek-v4-flash@1.0.0
+  provider: vllm
+  model: deepseek/deepseek-v4-flash
+  provider_model_id: deepseek-ai/DeepSeek-V4-Flash
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: '2026-09-05'
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash
+- id: vllm/deepseek-v4-pro@1.0.0
+  provider: vllm
+  model: deepseek/deepseek-v4-pro
+  provider_model_id: deepseek-ai/DeepSeek-V4-Pro
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: '2026-09-05'
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro
 - id: vllm/deepseek-v3@1.0.0
   provider: vllm
   model: deepseek/deepseek-v3
@@ -21171,6 +21510,70 @@ evaluations:
     verification: claimed
     source: https://huggingface.co/ByteDance-Seed/Seed-OSS-36B-Instruct
     redistributable: true
+- id: deepseek/deepseek-v4-flash-model-card-max@1.0.0
+  model: deepseek/deepseek-v4-flash
+  subject:
+    variant: DeepSeek-V4-Flash
+    reasoning_effort: max
+    hle_mode: no_tools
+    source_kind: official_model_card
+  metrics:
+    tiger-ai-lab/mmlu-pro@1.0.0#accuracy: 0.862
+    idavidrein/gpqa-diamond@1.0.0#accuracy: 0.881
+    cais/humanitys-last-exam@1.0.0#accuracy: 0.348
+    swe-bench/verified@1.0.0#resolved: 0.79
+  status: available
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash
+    redistributable: true
+- id: deepseek/deepseek-v4-flash-release-eval@1.0.0
+  model: deepseek/deepseek-v4-flash
+  subject:
+    variant: deepseek-v4-flash
+    terminal_harness: DeepSeek API evaluation harness
+    source_kind: official_release_evaluation
+  metrics:
+    harbor/terminal-bench@2.1.0#resolved: 0.827
+  status: available
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://api-docs.deepseek.com/updates/
+    redistributable: true
+- id: deepseek/deepseek-v4-pro-model-card-max@1.0.0
+  model: deepseek/deepseek-v4-pro
+  subject:
+    variant: DeepSeek-V4-Pro
+    reasoning_effort: max
+    hle_mode: no_tools
+    source_kind: official_model_card
+  metrics:
+    tiger-ai-lab/mmlu-pro@1.0.0#accuracy: 0.875
+    idavidrein/gpqa-diamond@1.0.0#accuracy: 0.901
+    cais/humanitys-last-exam@1.0.0#accuracy: 0.377
+    swe-bench/verified@1.0.0#resolved: 0.806
+  status: available
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro
+    redistributable: true
+- id: deepseek/deepseek-v4-pro-release-eval@1.0.0
+  model: deepseek/deepseek-v4-pro
+  subject:
+    variant: deepseek-v4-pro
+    terminal_harness: DeepSeek API evaluation harness
+    source_kind: official_release_evaluation
+  metrics:
+    harbor/terminal-bench@2.1.0#resolved: 0.879
+  status: available
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://api-docs.deepseek.com/updates/
+    redistributable: true
 - id: lg/exaone-4.0-32b-reasoning-model-card@1.0.0
   model: lg/exaone-4.0-32b
   subject:
@@ -23213,6 +23616,38 @@ index_results:
     general_reasoning: 82.69999999999999
     scientific_reasoning: 71.39999999999999
     software_engineering: 56.00000000000001
+- model: celeris/celeris-1
+  index: vllm-sr/intelligence@1.0.0
+  status: missing
+  score: null
+  coverage: 0.0
+  components:
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    metric: tiger-ai-lab/mmlu-pro@1.0.0#accuracy
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    metric: idavidrein/gpqa-diamond@1.0.0#accuracy
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    metric: cais/humanitys-last-exam@1.0.0#accuracy
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    metric: swe-bench/verified@1.0.0#resolved
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    metric: harbor/terminal-bench@2.1.0#resolved
+  provenance: []
 - model: cohere/command-r-v01
   index: vllm-sr/intelligence@1.0.0
   status: missing
@@ -23566,6 +24001,38 @@ index_results:
     metric: harbor/terminal-bench@2.1.0#resolved
   provenance: []
 - model: cohere/command-a-plus-05-2026
+  index: vllm-sr/intelligence@1.0.0
+  status: missing
+  score: null
+  coverage: 0.0
+  components:
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    metric: tiger-ai-lab/mmlu-pro@1.0.0#accuracy
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    metric: idavidrein/gpqa-diamond@1.0.0#accuracy
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    metric: cais/humanitys-last-exam@1.0.0#accuracy
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    metric: swe-bench/verified@1.0.0#resolved
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    metric: harbor/terminal-bench@2.1.0#resolved
+  provenance: []
+- model: cohere/north-mini-code-1.0
   index: vllm-sr/intelligence@1.0.0
   status: missing
   score: null
@@ -24175,68 +24642,84 @@ index_results:
   provenance: []
 - model: deepseek/deepseek-v4-flash
   index: vllm-sr/intelligence@1.0.0
-  status: missing
-  score: null
-  coverage: 0.0
+  status: available
+  score: 74.16
+  coverage: 1.0
   components:
   - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
+    status: available
+    value: 0.862
+    normalized: 0.862
     metric: tiger-ai-lab/mmlu-pro@1.0.0#accuracy
   - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
+    status: available
+    value: 0.881
+    normalized: 0.881
     metric: idavidrein/gpqa-diamond@1.0.0#accuracy
   - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
+    status: available
+    value: 0.348
+    normalized: 0.348
     metric: cais/humanitys-last-exam@1.0.0#accuracy
   - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
+    status: available
+    value: 0.79
+    normalized: 0.79
     metric: swe-bench/verified@1.0.0#resolved
   - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
+    status: available
+    value: 0.827
+    normalized: 0.827
     metric: harbor/terminal-bench@2.1.0#resolved
-  provenance: []
+  provenance:
+  - deepseek/deepseek-v4-flash-model-card-max@1.0.0
+  - deepseek/deepseek-v4-flash-release-eval@1.0.0
+  domains:
+    agentic_systems: 82.69999999999999
+    frontier_reasoning: 34.8
+    general_reasoning: 86.2
+    scientific_reasoning: 88.10000000000001
+    software_engineering: 79.00000000000001
 - model: deepseek/deepseek-v4-pro
   index: vllm-sr/intelligence@1.0.0
-  status: missing
-  score: null
-  coverage: 0.0
+  status: available
+  score: 76.76
+  coverage: 1.0
   components:
   - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
+    status: available
+    value: 0.875
+    normalized: 0.875
     metric: tiger-ai-lab/mmlu-pro@1.0.0#accuracy
   - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
+    status: available
+    value: 0.901
+    normalized: 0.901
     metric: idavidrein/gpqa-diamond@1.0.0#accuracy
   - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
+    status: available
+    value: 0.377
+    normalized: 0.377
     metric: cais/humanitys-last-exam@1.0.0#accuracy
   - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
+    status: available
+    value: 0.806
+    normalized: 0.806
     metric: swe-bench/verified@1.0.0#resolved
   - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
+    status: available
+    value: 0.879
+    normalized: 0.879
     metric: harbor/terminal-bench@2.1.0#resolved
-  provenance: []
+  provenance:
+  - deepseek/deepseek-v4-pro-model-card-max@1.0.0
+  - deepseek/deepseek-v4-pro-release-eval@1.0.0
+  domains:
+    agentic_systems: 87.9
+    frontier_reasoning: 37.7
+    general_reasoning: 87.5
+    scientific_reasoning: 90.10000000000001
+    software_engineering: 80.60000000000001
 - model: deepseek/deepseek-v3
   index: vllm-sr/intelligence@1.0.0
   status: missing
@@ -25633,6 +26116,70 @@ index_results:
     agentic_systems: 29.24
     general_reasoning: 77.60000000000001
     software_engineering: 56.99999999999999
+- model: inception/mercury-2
+  index: vllm-sr/intelligence@1.0.0
+  status: missing
+  score: null
+  coverage: 0.0
+  components:
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    metric: tiger-ai-lab/mmlu-pro@1.0.0#accuracy
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    metric: idavidrein/gpqa-diamond@1.0.0#accuracy
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    metric: cais/humanitys-last-exam@1.0.0#accuracy
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    metric: swe-bench/verified@1.0.0#resolved
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    metric: harbor/terminal-bench@2.1.0#resolved
+  provenance: []
+- model: inception/mercury-2.5-preview
+  index: vllm-sr/intelligence@1.0.0
+  status: missing
+  score: null
+  coverage: 0.0
+  components:
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    metric: tiger-ai-lab/mmlu-pro@1.0.0#accuracy
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    metric: idavidrein/gpqa-diamond@1.0.0#accuracy
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    metric: cais/humanitys-last-exam@1.0.0#accuracy
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    metric: swe-bench/verified@1.0.0#resolved
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    metric: harbor/terminal-bench@2.1.0#resolved
+  provenance: []
 - model: internlm/intern-s1-mini
   index: vllm-sr/intelligence@1.0.0
   status: missing

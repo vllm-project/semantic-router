@@ -48,10 +48,10 @@ and a recommended model reference is not a complete built-in model card.
 The old Dashboard therefore contained 40 provider presets, while the Router
 had seven hard-coded runtime types and the packaged catalog had no
 general-purpose physical-model registry. The implemented catalog takes the
-union of those identities and compiles 43 providers, three protocol
-definitions, 363 physical Model Cards, five virtual Model Cards, 392 verified
-or claimed offerings, six benchmark definitions, and 46 source-backed
-evaluation records. Nineteen models currently satisfy the default index's
+union of those identities and compiles 45 providers, three protocol
+definitions, 367 physical Model Cards, five virtual Model Cards, 399 verified
+or claimed offerings, six benchmark definitions, and 50 source-backed
+evaluation records. Twenty-one models currently satisfy the default index's
 coverage policy. Support tier, lifecycle, and conformance remain explicit, so
 inclusion is not flattened into a native-support claim.
 
@@ -74,7 +74,7 @@ intentionally absent.
 | Anthropic | Claude 3/3.5/3.7; Haiku/Sonnet/Opus 4–5; Fable 5/5.1; Mythos | 21 |
 | Meta | Llama 2, Llama 3–4 text/vision variants, and Code Llama | 18 |
 | NVIDIA | Llama Nemotron and Nemotron 3/3.5 Nano, Mini, Super, Ultra, Lightning, Omni, and VL variants | 15 |
-| Cohere | Command R/R+/R7B/A/A+/Vision/Reasoning and Aya 23/Expanse variants | 12 |
+| Cohere | Command R/R+/R7B/A/A+/Vision/Reasoning, North Mini Code, and Aya 23/Expanse variants | 13 |
 | Microsoft | Phi-3/3.5 and Phi-4 text, MoE, vision, mini, multimodal, and reasoning variants | 12 |
 | Moonshot AI | Kimi K2–K3, Kimi Dev/Linear/VL, and Moonlight | 12 |
 | Z.ai | GLM-4/4.5/4.5V through 5.3, including Air and Flash variants | 12 |
@@ -93,7 +93,9 @@ intentionally absent.
 | Baidu | ERNIE 4.5 21B A3B and 300B A47B | 2 |
 | Hugging Face | SmolLM2 and SmolLM3 | 2 |
 | StepFun | Step 3.5 Flash and 3.7 Flash | 2 |
+| Inception | Mercury 2 and Mercury 2.5 Preview diffusion models | 2 |
 | ByteDance Seed | Seed OSS 36B Instruct | 1 |
+| Celeris | Celeris-1 low-latency diffusion model | 1 |
 | Databricks | DBRX Instruct | 1 |
 | Snowflake | Arctic Instruct | 1 |
 | Tencent | Hunyuan A13B Instruct | 1 |
@@ -457,9 +459,10 @@ it with four narrow seams:
    non-secret request headers, reasoning transport, presentation, and support
    tier.
 2. **Transport resolver** for generic URL/path/header resolution.
-3. **Auth strategy registry** for bearer, API-key header, cloud signing, and
-   workload-identity behavior.
-4. **Protocol/provider adapters** only where wire semantics genuinely differ.
+3. **Auth strategy resolver** for the data-backed `none`, bearer, and API-key
+   header strategies supported by the first catalog release.
+4. **Protocol/provider adapters** only where wire semantics genuinely differ,
+   including the future extension seam for cloud signing and workload identity.
 
 No central switch grows when a data-only compatible provider is added. A new
 adapter is registered beside its implementation and conformance fixtures, not

@@ -34,3 +34,10 @@
   restrictions: {minimum_vllm_version: 0.25.0, quantization: W4A4}
   lifecycle: experimental
   verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/CohereLabs/command-a-plus-05-2026-w4a4}
+- id: vllm/north-mini-code-1.0@1.0.0
+  provider: vllm
+  model: cohere/north-mini-code-1.0
+  provider_model_id: CohereLabs/North-Mini-Code-1.0
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: experimental
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/CohereLabs/North-Mini-Code-1.0}

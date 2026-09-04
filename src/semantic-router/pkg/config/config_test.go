@@ -3653,6 +3653,14 @@ model_config:
 				path, err = (&ProviderProfile{Type: "openai", BaseURL: "https://api.openai.com/v1"}).ResolveCreatePath("openai/responses@1")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(path).To(Equal("/v1/responses"))
+
+				path, err = (&ProviderProfile{Type: "deepseek", BaseURL: "https://api.deepseek.com/v1"}).ResolveCreatePath("openai/responses@1")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(path).To(Equal("/v1/responses"))
+
+				path, err = (&ProviderProfile{Type: "celeris", BaseURL: "https://inference.celeris.ai/celeris-1/v1"}).ResolveCreatePath("openai/responses@1")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(path).To(Equal("/celeris-1/v1/responses"))
 			})
 
 			It("should not double the version segment for a versioned base_url", func() {

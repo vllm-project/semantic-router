@@ -67,7 +67,7 @@
   provider_model_id: claude-fable-5-1
   protocols: [anthropic/messages@1]
   lifecycle: active
-  verification: {status: claimed, verified_at: 2026-09-05, source: https://docs.anthropic.com/en/docs/about-claude/models/overview}
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://www.anthropic.com/claude/fable}
 - id: anthropic/claude-fable-5@1.0.0
   provider: anthropic
   model: anthropic/claude-fable-5
@@ -115,8 +115,8 @@
   model: anthropic/claude-mythos-preview
   provider_model_id: claude-mythos-preview
   protocols: [anthropic/messages@1]
-  lifecycle: experimental
-  verification: {status: claimed, verified_at: 2026-09-05, source: https://platform.claude.com/docs/en/about-claude/models/overview}
+  lifecycle: deprecated
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://docs.anthropic.com/en/docs/about-claude/model-deprecations}
 - id: anthropic/claude-3.5-sonnet@1.0.0
   provider: anthropic
   model: anthropic/claude-3.5-sonnet

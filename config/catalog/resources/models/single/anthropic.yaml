@@ -152,7 +152,7 @@
   presentation: {logo: package:anthropic, monogram: A, monochrome: true}
   distribution:
     type: proprietary_api
-    source: https://docs.anthropic.com/en/docs/about-claude/models/overview
+    source: https://www.anthropic.com/claude/fable
   family: claude-fable
   lifecycle: active
   limits: {context_window_size: 1000000, max_output_tokens: 128000}
@@ -163,7 +163,7 @@
     authority: Anthropic
     status: claimed
     verified_at: 2026-09-05
-    source: https://docs.anthropic.com/en/docs/about-claude/models/overview
+    source: https://www.anthropic.com/claude/fable
   tags: [frontier, proprietary, agentic]
 - id: anthropic/claude-fable-5
   display_name: Claude Fable 5
@@ -252,19 +252,19 @@
   tags: [frontier, proprietary, agentic]
 - id: anthropic/claude-mythos-preview
   display_name: Claude Mythos Preview
-  description: Preview of Anthropic's Mythos model family for advanced reasoning and agents.
+  description: Deprecated preview of Anthropic's Mythos model family retained for compatibility discovery.
   kind: physical
   publisher: Anthropic
   presentation: {logo: package:anthropic, monogram: A, monochrome: true}
-  distribution: {type: proprietary_api, source: https://platform.claude.com/docs/en/about-claude/models/overview}
+  distribution: {type: proprietary_api, source: https://docs.anthropic.com/en/docs/about-claude/model-deprecations}
   family: claude-mythos
-  lifecycle: experimental
+  lifecycle: deprecated
   limits: {context_window_size: 1000000, max_output_tokens: 128000}
   capabilities: [chat, reasoning, tools, structured_output, vision, long_context]
   modalities: {input: [text, image, pdf], output: [text]}
   protocols: [anthropic/messages@1]
-  verification: {authority: Anthropic, status: claimed, verified_at: 2026-09-05, source: https://platform.claude.com/docs/en/about-claude/models/overview}
-  tags: [frontier, proprietary, preview]
+  verification: {authority: Anthropic, status: claimed, verified_at: 2026-09-05, source: https://docs.anthropic.com/en/docs/about-claude/model-deprecations}
+  tags: [frontier, proprietary, deprecated]
 - id: anthropic/claude-3.5-sonnet
   display_name: Claude 3.5 Sonnet
   description: Previous-generation Anthropic model for coding, analysis, and vision.

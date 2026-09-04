@@ -1,0 +1,16 @@
+- id: inception/mercury-2@1.0.0
+  provider: inception
+  model: inception/mercury-2
+  provider_model_id: mercury-2
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  pricing: {currency: USD, prompt_per_1m: 0.25, cached_input_per_1m: 0.025, completion_per_1m: 0.75}
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://docs.inceptionlabs.ai/get-started/models}
+- id: openrouter/mercury-2.5-preview@1.0.0
+  provider: openrouter
+  model: inception/mercury-2.5-preview
+  provider_model_id: inception/mercury-2.5-preview
+  protocols: [openai/chat-completions@1]
+  lifecycle: experimental
+  pricing: {currency: USD, prompt_per_1m: 0.20, cached_input_per_1m: 0.02, completion_per_1m: 0.75}
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://openrouter.ai/inception/mercury-2.5-preview}

@@ -79,3 +79,20 @@
   protocols: [openai/chat-completions@1, openai/responses@1]
   verification: {authority: Cohere, status: claimed, verified_at: 2026-09-05, source: https://docs.cohere.com/docs/command-a-plus}
   tags: [open_weights, multimodal, reasoning, multilingual, moe, agentic]
+- id: cohere/north-mini-code-1.0
+  display_name: North Mini Code 1.0
+  description: Compact open-weight MoE model trained for agentic software engineering and terminal tasks.
+  kind: physical
+  publisher: Cohere
+  presentation: {logo: package:cohere, monogram: C, monochrome: false}
+  distribution: {type: open_weights, source: https://huggingface.co/CohereLabs/North-Mini-Code-1.0, license: Apache-2.0}
+  family: north-mini-code
+  parameter_size: 30B (3B active)
+  released_at: 2026-06-09
+  lifecycle: active
+  limits: {context_window_size: 256000, max_output_tokens: 64000}
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities: {input: [text], output: [text]}
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  verification: {authority: Cohere, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/CohereLabs/North-Mini-Code-1.0}
+  tags: [open_weights, coding, agentic, efficient, moe]

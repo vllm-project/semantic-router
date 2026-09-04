@@ -26,6 +26,20 @@
   protocols: [openai/chat-completions@1, openai/responses@1]
   lifecycle: active
   verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/deepseek-ai/DeepSeek-V3.2}
+- id: vllm/deepseek-v4-flash@1.0.0
+  provider: vllm
+  model: deepseek/deepseek-v4-flash
+  provider_model_id: deepseek-ai/DeepSeek-V4-Flash
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash}
+- id: vllm/deepseek-v4-pro@1.0.0
+  provider: vllm
+  model: deepseek/deepseek-v4-pro
+  provider_model_id: deepseek-ai/DeepSeek-V4-Pro
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: {status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro}
 - id: vllm/deepseek-v3@1.0.0
   provider: vllm
   model: deepseek/deepseek-v3
