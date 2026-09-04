@@ -10,12 +10,11 @@ from typing import TYPE_CHECKING, Protocol
 from cli.evaluation.contract_primitives import ArtifactRef
 from cli.evaluation.contracts import RunManifest
 from cli.evaluation.evidence import ExecutionRecord, RoutingDiagnostic
-from cli.evaluation.execution_contract import EvaluationInputs
+from cli.evaluation.execution_contract import EvaluationInputs, ExecutionPlan
 from cli.evaluation.executor_contracts import ExecutorContract
 from cli.evaluation.store import ArtifactStore
 
 if TYPE_CHECKING:
-    from cli.evaluation.execution_plan import ExecutionPlan
     from cli.evaluation.suite_store import NormalizedSuiteStore
 
 
