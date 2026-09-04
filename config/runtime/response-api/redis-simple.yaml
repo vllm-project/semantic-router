@@ -49,8 +49,23 @@ tls_enabled: false
 #     pool_size: 10
 
 # Redis Key Schema:
-# sr:response:{response_id}      → JSON blob of StoredResponse
-# sr:conversation:{conv_id}      → JSON blob of StoredConversation
+# sr:response:{response_id}             → JSON blob of StoredResponse (source of truth)
+# sr:conversation:{conv_id}             → JSON blob of StoredConversation
+# sr:conversation-index:{conv_id}       → sorted set of response IDs, scored by created_at.
+#                                          Derived from sr:response:* and repairable from it;
+#                                          not itself the source of truth.
+# sr:conversation-index-empty:{conv_id} → marker (value "v1") set after a completed legacy
+#                                          scan finds no live responses for conv_id, so an
+#                                          empty or unknown conversation isn't rescanned on
+#                                          every read. TTL-bound, same as the response/
+#                                          conversation/index keys above.
+# sr:conversation-index-lock:{conv_id}  → short-lived (30s) lock guarding the one-time legacy
+#                                          scan against a stampede of concurrent readers. An
+#                                          optimization, not a correctness dependency.
+#
+# All four families are disjoint prefixes by design: sr:conversation-index* must never be
+# matched by the sr:conversation:* or sr:response:* scans used elsewhere, or a sorted set or
+# marker string would be read back as conversation/response JSON.
 #
 # Both Response API and Semantic Cache share DB 0 but use different base prefixes:
 # - Response API: sr:*
