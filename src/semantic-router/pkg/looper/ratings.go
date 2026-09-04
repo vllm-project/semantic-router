@@ -47,9 +47,6 @@ func (l *RatingsLooper) Execute(ctx context.Context, req *Request) (*Response, e
 		return nil, fmt.Errorf("no models configured")
 	}
 
-	// Set decision name in client for header transmission
-	l.client.SetDecisionName(req.DecisionName)
-
 	// Get config from algorithm
 	maxConcurrent := len(req.ModelRefs)
 	onError := "skip"
@@ -110,15 +107,16 @@ func (l *RatingsLooper) Execute(ctx context.Context, req *Request) (*Response, e
 
 			// Use idx+1 as iteration number for concurrent requests.
 			// RatingsLooper doesn't need logprobs (no confidence-based routing).
-			resp, err := l.callModelWithContextGate(
+			resp, err := l.dispatchModel(
 				ctx,
 				req,
 				toolFreeLooperRequest(req.OriginalRequest),
-				modelName,
-				req.IsStreaming,
-				idx+1,
-				nil,
-				accessKey,
+				ModelTarget{Name: modelName, AccessKey: accessKey},
+				CallOptions{
+					DecisionName: req.DecisionName,
+					Iteration:    uint32(idx + 1),
+					Mode:         responseMode(req.IsStreaming),
+				},
 			)
 
 			mu.Lock()
