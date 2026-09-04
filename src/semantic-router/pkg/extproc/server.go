@@ -26,7 +26,10 @@ import (
 	tlsutil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/tls"
 )
 
-const defaultGenerationDrainTimeout = 30 * time.Second
+const (
+	defaultGenerationDrainTimeout = 30 * time.Second
+	generationDrainReserve        = 5 * time.Second
+)
 
 var (
 	parseReloadConfig        = config.Parse
@@ -254,7 +257,15 @@ func (s *Server) shutdown(ctx context.Context) error {
 		s.watchCancel()
 	}
 	s.watchMu.Unlock()
+	var shutdownErr error
 	if s.server != nil {
+		gracefulCtx := ctx
+		cancelGraceful := func() {}
+		if deadline, ok := ctx.Deadline(); ok {
+			gracefulCtx, cancelGraceful = context.WithDeadline(ctx, deadline.Add(-generationDrainReserve))
+		}
+		defer cancelGraceful()
+
 		gracefulDone := make(chan struct{})
 		go func() {
 			s.server.GracefulStop()
@@ -262,7 +273,8 @@ func (s *Server) shutdown(ctx context.Context) error {
 		}()
 		select {
 		case <-gracefulDone:
-		case <-ctx.Done():
+		case <-gracefulCtx.Done():
+			shutdownErr = gracefulCtx.Err()
 			s.server.Stop()
 			<-gracefulDone
 		}
@@ -271,9 +283,9 @@ func (s *Server) shutdown(ctx context.Context) error {
 		})
 	}
 	if s.service != nil {
-		return s.service.Shutdown(ctx)
+		shutdownErr = errors.Join(shutdownErr, s.service.Shutdown(ctx))
 	}
-	return nil
+	return shutdownErr
 }
 
 // RouterService is a delegating gRPC service that forwards to the current router implementation.
@@ -441,9 +453,13 @@ func (rs *RouterService) Shutdown(ctx context.Context) error {
 	select {
 	case <-done:
 	case <-ctx.Done():
-		return ctx.Err()
+		return errors.Join(ctx.Err(), rs.retiredGenerationErrors())
 	}
 
+	return rs.retiredGenerationErrors()
+}
+
+func (rs *RouterService) retiredGenerationErrors() error {
 	rs.errMu.Lock()
 	defer rs.errMu.Unlock()
 	return errors.Join(rs.errors...)

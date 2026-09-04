@@ -103,7 +103,7 @@ func Execute(ctx context.Context, tasks []Task, options Options) (Summary, error
 	defer cancel()
 
 	run := newExecutorRun(states, ready, normalizeParallelism(len(tasks), options.MaxParallelism), cancel, len(tasks), options.OnEvent)
-	if err := run.execute(runCtx, len(tasks)); err != nil {
+	if err := run.execute(ctx, runCtx, len(tasks)); err != nil {
 		return summary, err
 	}
 
@@ -149,9 +149,12 @@ func buildEventEmitter(onEvent func(Event)) func(Event) {
 	return onEvent
 }
 
-func (r *executorRun) execute(ctx context.Context, taskCount int) error {
+func (r *executorRun) execute(parentCtx, taskCtx context.Context, taskCount int) error {
 	for r.finished < taskCount {
-		r.scheduleReady(ctx)
+		if err := parentCtx.Err(); err != nil {
+			return err
+		}
+		r.scheduleReady(taskCtx)
 		done, err := r.handleIdleState()
 		if err != nil {
 			return err
@@ -162,8 +165,8 @@ func (r *executorRun) execute(ctx context.Context, taskCount int) error {
 		select {
 		case outcome := <-r.resultCh:
 			r.handleOutcome(outcome)
-		case <-ctx.Done():
-			return ctx.Err()
+		case <-parentCtx.Done():
+			return parentCtx.Err()
 		}
 	}
 	return nil

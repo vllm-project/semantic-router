@@ -266,8 +266,8 @@ func (r *OpenAIRouter) routerLearningRuntimeState() *routerLearningRuntime {
 	defer r.routerLearningMu.Unlock()
 	if r.routerLearningRuntime == nil {
 		r.routerLearningRuntime = newRouterLearningRuntime(r.Config, r.ReplayRecorder, r.ReplayRecorders)
+		r.routerLearningRuntime.generation = r.generation
 	}
-	r.routerLearningRuntime.generation = r.generation
 	return r.routerLearningRuntime
 }
 

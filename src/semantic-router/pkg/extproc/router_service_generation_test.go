@@ -3,6 +3,7 @@ package extproc
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -42,6 +43,84 @@ func TestRouterServiceShutdownBoundsStuckGenerationWithoutClosingUnderLease(t *t
 	if storage.closeCalls.Load() != 1 {
 		t.Fatalf("generation close calls = %d, want 1 after lease release", storage.closeCalls.Load())
 	}
+}
+
+func TestRouterServiceShutdownIncludesCompletedGenerationErrorsOnTimeout(t *testing.T) {
+	closeErr := errors.New("retired generation close failed")
+	closed := make(chan struct{})
+	firstResources := newResourceScope()
+	firstResources.add(func() error {
+		close(closed)
+		return closeErr
+	})
+	first := (&routerComponents{resources: firstResources}).buildRouter()
+	second := (&routerComponents{resources: newResourceScope()}).buildRouter()
+	service := NewRouterService(first)
+	if err := service.Swap(second, nil); err != nil {
+		t.Fatalf("Swap() error = %v", err)
+	}
+	<-closed
+	waitForRetiredGenerationError(t, service)
+
+	release, acquired := service.current.Load().acquire()
+	if !acquired {
+		t.Fatal("failed to acquire current generation")
+	}
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 25*time.Millisecond)
+	defer cancel()
+	err := service.Shutdown(shutdownCtx)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Shutdown() error = %v, want deadline exceeded", err)
+	}
+	if !errors.Is(err, closeErr) {
+		t.Fatalf("Shutdown() error = %v, want retired generation close error", err)
+	}
+	release()
+}
+
+func TestRouterLearningRuntimeGenerationIsStableDuringConcurrentLeases(t *testing.T) {
+	router := (&routerComponents{resources: newResourceScope()}).buildRouter()
+	service := NewRouterService(router)
+	runtime := router.routerLearningRuntimeState()
+
+	var wg sync.WaitGroup
+	for range 100 {
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			if got := router.routerLearningRuntimeState(); got != runtime {
+				t.Errorf("routerLearningRuntimeState() returned a different runtime")
+			}
+		}()
+		go func() {
+			defer wg.Done()
+			release, acquired := runtime.AcquireLease()
+			if !acquired {
+				t.Errorf("AcquireLease() rejected an active generation")
+				return
+			}
+			release()
+		}()
+	}
+	wg.Wait()
+	if err := service.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
+func waitForRetiredGenerationError(t *testing.T, service *RouterService) {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		service.errMu.Lock()
+		hasError := len(service.errors) > 0
+		service.errMu.Unlock()
+		if hasError {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatal("retired generation close error was not recorded")
 }
 
 func TestRouterServiceShutdownPreservesAcknowledgedLearningOutcome(t *testing.T) {
