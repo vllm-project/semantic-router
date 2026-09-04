@@ -15,7 +15,7 @@ func TestVectorStoreClientTimeoutHonorsConfig(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewVectorStoreClientWithSearchResponseLimit(server.URL, "test-key", 0, time.Second)
+	client := NewVectorStoreClientWithTimeout(server.URL, "test-key", 0, time.Second)
 
 	start := time.Now()
 	_, err := client.SearchVectorStore(context.Background(), "vs_1", "query", 1, nil)

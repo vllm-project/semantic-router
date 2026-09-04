@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"math"
 	"time"
 )
 
@@ -9,9 +10,14 @@ const DefaultExternalRAGTimeoutSeconds = 30
 
 const DefaultOpenAIRAGTimeoutSeconds = 60
 
+const MaxRAGTimeoutSeconds = math.MaxInt64 / int64(time.Second)
+
 func ragTimeout(seconds *int, defaultSeconds int) time.Duration {
 	if seconds == nil || *seconds <= 0 {
 		return time.Duration(defaultSeconds) * time.Second
+	}
+	if int64(*seconds) > MaxRAGTimeoutSeconds {
+		return time.Duration(MaxRAGTimeoutSeconds) * time.Second
 	}
 	return time.Duration(*seconds) * time.Second
 }

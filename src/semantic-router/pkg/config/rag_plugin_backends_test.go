@@ -1,6 +1,7 @@
 package config
 
 import (
+	"math"
 	"testing"
 	"time"
 )
@@ -8,6 +9,7 @@ import (
 func TestRAGTimeoutHonorsConfig(t *testing.T) {
 	sixty := 60
 	zero := 0
+	huge := math.MaxInt
 	cases := []struct {
 		name    string
 		seconds *int
@@ -16,6 +18,7 @@ func TestRAGTimeoutHonorsConfig(t *testing.T) {
 		{"unset_uses_default", nil, 30 * time.Second},
 		{"configured_passes_through", &sixty, 60 * time.Second},
 		{"zero_uses_default", &zero, 30 * time.Second},
+		{"overflowing_clamps_to_max", &huge, time.Duration(MaxRAGTimeoutSeconds) * time.Second},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
