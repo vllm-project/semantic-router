@@ -50,8 +50,8 @@ type anthropicEventWire struct {
 }
 
 type anthropicMessageDeltaUsageWire struct {
-	CacheCreationInputTokens int64                           `json:"cache_creation_input_tokens"`
-	CacheReadInputTokens     int64                           `json:"cache_read_input_tokens"`
+	CacheCreationInputTokens *int64                          `json:"cache_creation_input_tokens"`
+	CacheReadInputTokens     *int64                          `json:"cache_read_input_tokens"`
 	InputTokens              int64                           `json:"input_tokens"`
 	OutputTokens             int64                           `json:"output_tokens"`
 	OutputTokensDetails      anthropicOutputUsageDetailsWire `json:"output_tokens_details"`
@@ -356,12 +356,29 @@ func decodeAnthropicContentDelta(wire anthropicEventWire) (llmprotocol.Event, er
 }
 
 func decodeAnthropicStreamUsage(wire anthropicUsageWire, initial bool) llmprotocol.Usage {
-	usage := llmprotocol.Usage{State: llmprotocol.UsageAvailable}
-	if initial || wire.InputTokens > 0 || wire.CacheReadInputTokens > 0 || wire.CacheCreationInputTokens > 0 {
+	usage := llmprotocol.Usage{
+		State:           llmprotocol.UsageAvailable,
+		InputCacheRead:  unknownCount(),
+		InputCacheWrite: unknownCount(),
+	}
+	hasCacheTokens := wire.CacheReadInputTokens != nil && *wire.CacheReadInputTokens > 0 ||
+		wire.CacheCreationInputTokens != nil && *wire.CacheCreationInputTokens > 0
+	if initial || wire.InputTokens > 0 || hasCacheTokens {
+		inputTotal := wire.InputTokens
+		if wire.CacheReadInputTokens != nil {
+			inputTotal += *wire.CacheReadInputTokens
+		}
+		if wire.CacheCreationInputTokens != nil {
+			inputTotal += *wire.CacheCreationInputTokens
+		}
 		usage.InputUncached = authoritative(wire.InputTokens)
-		usage.InputCacheRead = authoritative(wire.CacheReadInputTokens)
-		usage.InputCacheWrite = authoritative(wire.CacheCreationInputTokens)
-		usage.InputTotal = authoritative(wire.InputTokens + wire.CacheReadInputTokens + wire.CacheCreationInputTokens)
+		usage.InputTotal = authoritative(inputTotal)
+	}
+	if wire.CacheReadInputTokens != nil {
+		usage.InputCacheRead = optionalAuthoritative(wire.CacheReadInputTokens)
+	}
+	if wire.CacheCreationInputTokens != nil {
+		usage.InputCacheWrite = optionalAuthoritative(wire.CacheCreationInputTokens)
 	}
 	if wire.OutputTokens > 0 || !initial {
 		reasoning := wire.OutputTokensDetails.ThinkingTokens

@@ -203,7 +203,7 @@ func (OpenAIChatCodec) EncodeResponse(response llmprotocol.Response, envelope ll
 		return nil, diagnostics, err
 	}
 	wire.Choices = choices
-	wire.Usage = encodeChatUsage(response.Usage)
+	wire.Usage = encodeChatUsage(response.Usage, envelope.Format)
 	body, err := marshalWire(wire)
 	return body, diagnostics, err
 }
@@ -257,7 +257,7 @@ func encodeChatOutput(items []llmprotocol.OutputItem, index int, stop llmprotoco
 	return chatChoiceWire{Index: index, Message: message, FinishReason: &reason}, nil
 }
 
-func encodeChatUsage(usage llmprotocol.Usage) *chatUsageWire {
+func encodeChatUsage(usage llmprotocol.Usage, source llmprotocol.WireFormat) *chatUsageWire {
 	if usage.State == llmprotocol.UsageUnavailable || usage.InputTotal.Value == nil && usage.OutputTotal.Value == nil && usage.Total.Value == nil {
 		return nil
 	}
@@ -268,7 +268,10 @@ func encodeChatUsage(usage llmprotocol.Usage) *chatUsageWire {
 		total = prompt + completion
 	}
 	wire := &chatUsageWire{PromptTokens: prompt, CompletionTokens: completion, TotalTokens: total}
-	if usage.InputCacheRead.Value != nil || usage.InputCacheWrite.Value != nil {
+	// Keep the established zero-filled Chat shape when translating from another
+	// protocol; neutral settlement has already retained the missing-field state.
+	if usage.InputCacheRead.Value != nil || usage.InputCacheWrite.Value != nil ||
+		source != "" && source != llmprotocol.OpenAIChatV1 {
 		wire.PromptTokensDetails = &chatPromptTokensDetailsWire{
 			CachedTokens: tokenValue(usage.InputCacheRead), CacheWriteTokens: tokenValue(usage.InputCacheWrite),
 		}

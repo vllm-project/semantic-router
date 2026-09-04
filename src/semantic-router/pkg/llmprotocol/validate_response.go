@@ -290,8 +290,10 @@ func usageSumStatus(total TokenCount, parts ...TokenCount) [2]bool {
 func countEqualsSum(total TokenCount, parts ...TokenCount) (bool, bool) {
 	var sum int64
 	found := false
+	complete := true
 	for _, part := range parts {
 		if part.Value == nil {
+			complete = complete && part.Provenance == ""
 			continue
 		}
 		found = true
@@ -301,6 +303,9 @@ func countEqualsSum(total TokenCount, parts ...TokenCount) (bool, bool) {
 		sum += *part.Value
 	}
 	if total.Value == nil {
+		return true, false
+	}
+	if !complete {
 		return true, false
 	}
 	return !found || *total.Value == sum, false
