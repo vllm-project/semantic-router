@@ -21,8 +21,10 @@ package apiserver
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -62,18 +64,40 @@ const purposeVision = "vision"
 
 // uploadExtensionAllowed reports whether a file extension may be uploaded for
 // the given purpose: images for vision, documents for everything else.
-func uploadExtensionAllowed(ext, purpose string) bool {
+func uploadExtensionAllowed(ext, purpose string, documentExtensions map[string]bool) bool {
 	if purpose == purposeVision {
 		return imageExtensions[ext]
 	}
-	return allowedExtensions[ext]
+	return documentExtensions[ext]
 }
 
-func allowedExtensionList(purpose string) string {
+func allowedExtensionList(purpose string, documentExtensions map[string]bool) string {
 	if purpose == purposeVision {
 		return ".png, .jpg, .jpeg, .gif, .webp"
 	}
-	return ".txt, .md, .json, .csv, .html"
+	return strings.Join(slices.Sorted(maps.Keys(documentExtensions)), ", ")
+}
+
+func (s *ClassificationAPIServer) uploadLimits() (int64, map[string]bool) {
+	maxBytes := int64(maxUploadSize)
+	documentExtensions := allowedExtensions
+	if s == nil || s.config == nil || s.config.VectorStore == nil {
+		return maxBytes, documentExtensions
+	}
+	if s.config.VectorStore.MaxFileSizeMB > 0 {
+		maxBytes = int64(s.config.VectorStore.MaxFileSizeMB) * 1024 * 1024
+	}
+	if len(s.config.VectorStore.SupportedFormats) > 0 {
+		documentExtensions = make(map[string]bool, len(s.config.VectorStore.SupportedFormats))
+		for _, format := range s.config.VectorStore.SupportedFormats {
+			ext := strings.ToLower(strings.TrimSpace(format))
+			if ext != "" && !strings.HasPrefix(ext, ".") {
+				ext = "." + ext
+			}
+			documentExtensions[ext] = true
+		}
+	}
+	return maxBytes, documentExtensions
 }
 
 // SetFileStore sets the global file store for the API server.
@@ -88,8 +112,9 @@ func (s *ClassificationAPIServer) handleUploadFile(w http.ResponseWriter, r *htt
 		return
 	}
 
+	maxBytes, documentExtensions := s.uploadLimits()
 	// Limit upload size.
-	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
+	r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
 
 	if err := r.ParseMultipartForm(multipartMemoryLimit); err != nil {
 		var maxBytesErr *http.MaxBytesError
@@ -98,7 +123,7 @@ func (s *ClassificationAPIServer) handleUploadFile(w http.ResponseWriter, r *htt
 			return
 		}
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT",
-			fmt.Sprintf("failed to parse multipart form (max size: %dMB): %s", maxUploadSize/(1024*1024), err.Error()))
+			fmt.Sprintf("failed to parse multipart form (max size: %dMB): %s", maxBytes/(1024*1024), err.Error()))
 		return
 	}
 	if r.MultipartForm != nil {
@@ -132,9 +157,9 @@ func (s *ClassificationAPIServer) handleUploadFile(w http.ResponseWriter, r *htt
 
 	// Validate extension against the purpose.
 	ext := strings.ToLower(filepath.Ext(header.Filename))
-	if !uploadExtensionAllowed(ext, purpose) {
+	if !uploadExtensionAllowed(ext, purpose, documentExtensions) {
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_FILE_TYPE",
-			fmt.Sprintf("unsupported file type for purpose %q: %s (allowed: %s)", purpose, ext, allowedExtensionList(purpose)))
+			fmt.Sprintf("unsupported file type for purpose %q: %s (allowed: %s)", purpose, ext, allowedExtensionList(purpose, documentExtensions)))
 		return
 	}
 
