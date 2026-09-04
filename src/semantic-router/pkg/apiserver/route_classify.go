@@ -181,6 +181,13 @@ func (s *ClassificationAPIServer) parseBatchClassificationRequest(w http.Respons
 		return BatchClassificationRequest{}, false
 	}
 
+	if maxBatchSize := s.maxBatchSize(); maxBatchSize > 0 && len(req.Texts) > maxBatchSize {
+		metrics.RecordBatchClassificationError("unified", "batch_too_large")
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT",
+			fmt.Sprintf("texts array exceeds max_batch_size %d", maxBatchSize))
+		return BatchClassificationRequest{}, false
+	}
+
 	if validateErr := validateTaskType(req.TaskType); validateErr != nil {
 		metrics.RecordBatchClassificationError("unified", "invalid_task_type")
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_TASK_TYPE", validateErr.Error())
@@ -188,6 +195,13 @@ func (s *ClassificationAPIServer) parseBatchClassificationRequest(w http.Respons
 	}
 
 	return req, true
+}
+
+func (s *ClassificationAPIServer) maxBatchSize() int {
+	if s.config == nil {
+		return 0
+	}
+	return s.config.API.BatchClassification.MaxBatchSize
 }
 
 func (s *ClassificationAPIServer) ensureUnifiedClassifierAvailable(w http.ResponseWriter) bool {
