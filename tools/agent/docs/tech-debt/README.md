@@ -74,6 +74,10 @@ Every entry uses these sections:
 - [TD054: Typed request capability eligibility](td-054-typed-request-capability-eligibility-gap.md)
 - [TD055: Evidence-calibrated session switch gate](td-055-evidence-calibrated-session-switch-gate-gap.md)
 
+### PL-0042: Unified Model Catalog and Evaluation Index
+
+- [TD058: Fragmented model support metadata](td-058-fragmented-model-support-metadata.md)
+
 ### Unassigned
 
 - [TD056: onnx-binding/candle-binding image resize duplication](td-056-onnx-candle-image-resize-duplication.md)

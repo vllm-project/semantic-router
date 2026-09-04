@@ -50,6 +50,7 @@ different client and transport protocols.
 
 | Proposal | Created | Status | Scope |
 | --- | --- | --- | --- |
+| [Unified Model Catalog and Evaluation Index](./unified-model-catalog-and-evaluation-index) | 2026-09-04 | Proposal | Unifies provider, protocol, model, reasoning, presentation, Day-0, and evidence-backed ranking metadata. |
 | [Unified Config Contract v0.3](./unified-config-contract-v0-3) | 2026-03-17 | Implemented | One configuration contract across authoring and deployment surfaces. |
 | [Multi-Protocol Adapter Architecture](./multi-protocol-adaptor) | 2026-02-18 | Proposal | Protocol-independent access to the routing engine. |
 

@@ -144,6 +144,7 @@ docs:
 - tools/agent/docs/plans/pl-0039-evaluation-plane.md
 - tools/agent/docs/plans/pl-0040-mom-routing-hardening.md
 - tools/agent/docs/plans/pl-0041-agent-aware-router-contracts.md
+- tools/agent/docs/plans/pl-0042-unified-model-catalog.md
 - tools/agent/docs/tech-debt/td-006-structural-rule-exceptions.md
 - tools/agent/docs/tech-debt/td-016-fleet-sim-shared-ruff-contract-gap.md
 - tools/agent/docs/tech-debt/td-017-fleet-sim-structure-gate-migration-gap.md
@@ -162,6 +163,7 @@ docs:
 - tools/agent/docs/tech-debt/td-055-evidence-calibrated-session-switch-gate-gap.md
 - tools/agent/docs/tech-debt/td-056-onnx-candle-image-resize-duplication.md
 - tools/agent/docs/tech-debt/td-057-backend-target-producer-parity-gap.md
+- tools/agent/docs/tech-debt/td-058-fragmented-model-support-metadata.md
 local_agent_rules:
 - path: src/vllm-sr/cli/AGENTS.md
   scope: src/vllm-sr/cli/**
@@ -305,6 +307,9 @@ doc_governance:
   - path: tools/agent/docs/plans/pl-0041-agent-aware-router-contracts.md
     steward: router-core
     freshness: update while Epic #2994 agent-aware Router contracts proposal and phased delivery work is active
+  - path: tools/agent/docs/plans/pl-0042-unified-model-catalog.md
+    steward: router-core
+    freshness: update while unified model catalog and evaluation index delivery work is active
   - path: tools/agent/docs/tech-debt/td-006-structural-rule-exceptions.md
     steward: agent-contract
     freshness: update when the TD006 debt record changes materially
@@ -359,6 +364,9 @@ doc_governance:
   - path: tools/agent/docs/tech-debt/td-057-backend-target-producer-parity-gap.md
     steward: router-core
     freshness: update when backend-target producer parity or the linked exit criteria change
+  - path: tools/agent/docs/tech-debt/td-058-fragmented-model-support-metadata.md
+    steward: router-core
+    freshness: update when model support metadata convergence or the linked exit criteria change
 skills:
 - tools/agent/skills/config-platform-change/SKILL.md
 - tools/agent/skills/harness-contract-change/SKILL.md
