@@ -1,7 +1,9 @@
 package extproc
 
 import (
+	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -69,6 +71,66 @@ func TestReloadRouterFromConfig_WorkflowFileStateSurvives(t *testing.T) {
 	if !tracker.sawToolResult() || !tracker.sawFinal() {
 		t.Fatal("file resume after reload did not finish the workflow")
 	}
+}
+
+func TestReloadRouterFromConfig_WorkflowFileStateConcurrentPutTake(t *testing.T) {
+	restore := stubReloadSeams(t)
+	defer restore()
+
+	upstream, _ := newWorkflowPauseResumeServer(t)
+	cfg := newWorkflowLooperConfig(t, upstream.URL, config.WorkflowStateBackendFile)
+	oldRouter := newWorkflowRouter(t, cfg)
+	server := &Server{service: NewRouterService(oldRouter)}
+	t.Cleanup(func() { _ = server.service.Close() })
+	stubWorkflowReloadSeams(t, cfg)
+
+	const workers = 4
+	const opsPerWorker = 8
+	errCh := make(chan error, workers*opsPerWorker)
+	buildReloadRouter = func(*config.RouterConfig) (*OpenAIRouter, error) {
+		var wg sync.WaitGroup
+		for w := 0; w < workers; w++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for i := 0; i < opsPerWorker; i++ {
+					if err := pauseAndResumeWorkflow(t, oldRouter); err != nil {
+						errCh <- err
+						return
+					}
+				}
+			}()
+		}
+		newRouter := newWorkflowRouter(t, cfg)
+		wg.Wait()
+		return newRouter, nil
+	}
+
+	if err := server.reloadRouterFromConfig("file", "/tmp/unused-workflow.yaml", oldRouter.Config); err != nil {
+		t.Fatalf("reloadRouterFromConfig: %v", err)
+	}
+	close(errCh)
+	for err := range errCh {
+		t.Fatalf("concurrent file Put/Take during reload failed: %v", err)
+	}
+}
+
+func pauseAndResumeWorkflow(t *testing.T, router *OpenAIRouter) error {
+	pauseResp, err := routeWorkflowRequestErr(router, workflowPauseChatBody(t))
+	if err != nil {
+		return err
+	}
+	if got := immediateStatus(pauseResp); got != 200 {
+		return fmt.Errorf("pause status = %d, body %s", got, immediateBody(pauseResp))
+	}
+	resumeResp, err := routeWorkflowRequestErr(router, workflowResumeChatBody(t, immediateBody(pauseResp)))
+	if err != nil {
+		return err
+	}
+	if got := immediateStatus(resumeResp); got != 200 {
+		return fmt.Errorf("resume status = %d, body %s", got, immediateBody(resumeResp))
+	}
+	return nil
 }
 
 func TestReloadRouterFromConfig_WorkflowRedisStateSurvives(t *testing.T) {

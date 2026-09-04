@@ -273,20 +273,6 @@ func cleanupStateStoreDirAndGetInitialBytes(storeDir string) int64 {
 	return initialBytes
 }
 
-func newWorkflowFileToolStateStore(dir string, ttl time.Duration) *workflowFileToolStateStore {
-	storeDir := workflowStateFileDir(dir)
-	initialBytes := cleanupStateStoreDirAndGetInitialBytes(storeDir)
-	s := &workflowFileToolStateStore{
-		dir:          storeDir,
-		ttl:          ttl,
-		done:         make(chan struct{}),
-		currentBytes: initialBytes,
-	}
-	s.wg.Add(1)
-	go s.sweepLoop()
-	return s
-}
-
 func (s *workflowFileToolStateStore) sweepLoop() {
 	defer s.wg.Done()
 	ticker := time.NewTicker(workflowStateSweeperInterval)
@@ -441,7 +427,7 @@ func (s *workflowFileToolStateStore) Clear(_ context.Context) error {
 	return nil
 }
 
-func (s *workflowFileToolStateStore) Close() error {
+func (s *workflowFileToolStateStore) stopSweeper() error {
 	s.closeOnce.Do(func() {
 		close(s.done)
 		s.wg.Wait()
