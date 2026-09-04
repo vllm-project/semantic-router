@@ -65,7 +65,6 @@ plugins:
         collection: docs
         reuse_cache_connection: true
         content_field: content
-        metadata_field: metadata
 ```
 
 **Qdrant backend:**

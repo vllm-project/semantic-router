@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from cli.evaluation.errors import SuiteStoreError
 from cli.evaluation.evidence import ExecutionRecord
 from cli.evaluation.evidence_source_ids import (
     DECLARED_SHIFT_LIVE_EVIDENCE_SOURCE_ID,
@@ -18,7 +19,6 @@ from cli.evaluation.orchestrator import run_evaluation
 from cli.evaluation.store import LocalArtifactStore
 from cli.evaluation.suite_contract import NormalizedPerturbation
 from cli.evaluation.suite_store import NormalizedSuiteStore
-from cli.evaluation.suite_store_error import SuiteStoreError
 from evaluation_normalized_suite_test_support import (
     _catalog,
     _digest,

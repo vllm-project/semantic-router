@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from cli.evaluation.errors import SuiteStoreError
 from cli.evaluation.evidence import ExecutionRecord
 from cli.evaluation.normalized_suite_inputs import (
     SelectedCase,
@@ -14,7 +15,6 @@ from cli.evaluation.normalized_suite_record_helpers import (
     rows_for_case,
     unavailable_record,
 )
-from cli.evaluation.suite_store_error import SuiteStoreError
 
 
 def agentic_records(

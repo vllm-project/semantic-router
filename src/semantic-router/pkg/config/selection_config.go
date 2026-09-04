@@ -16,7 +16,6 @@ type ModelSelectionConfig struct {
 	ML       MLSelectionConfig       `yaml:"ml,omitempty"`
 
 	SessionAware SessionAwareSelectionConfig `yaml:"-"`
-	Momentum     MomentumSelectionConfig     `yaml:"momentum,omitempty"`
 
 	// ModelSwitchGate configures session-aware stay-vs-switch evaluation.
 	ModelSwitchGate ModelSwitchGateConfig `yaml:"-"`
@@ -78,14 +77,6 @@ type HandoffPenaltyOverride struct {
 type RemainingTurnPriorOverride struct {
 	IntentOrDomain string  `yaml:"intent_or_domain"`
 	Value          float64 `yaml:"value"`
-}
-
-// MomentumSelectionConfig configures Conversational Routing Momentum (CRM).
-type MomentumSelectionConfig struct {
-	Enabled   bool    `yaml:"enabled,omitempty"`
-	Attack    float64 `yaml:"attack,omitempty"`
-	Release   float64 `yaml:"release,omitempty"`
-	Threshold float64 `yaml:"threshold,omitempty"`
 }
 
 // ModelSwitchGateConfig configures auditable session-aware model switching.
