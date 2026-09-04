@@ -94,7 +94,7 @@ def _load_persisted_runtime(env_path: str) -> str | None:
                     return value.strip().lower() or None
     except FileNotFoundError:
         pass
-    except OSError as exc:
+    except (OSError, UnicodeDecodeError) as exc:
         log.warning(
             f"Could not read persisted {CONTAINER_RUNTIME_ENV} from "
             f"{env_path}: {exc}. Falling back to auto-detection."
