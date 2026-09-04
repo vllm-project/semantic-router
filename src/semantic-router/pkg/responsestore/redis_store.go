@@ -26,6 +26,13 @@ type RedisStore struct {
 	keyPrefix string
 	ttl       time.Duration
 	enabled   bool
+
+	// indexResponseOverride, when non-nil, replaces indexResponse's Redis
+	// calls entirely. Unexported test-only seam: a real Redis outage would
+	// fail the payload SETNX and the index write together, which cannot
+	// isolate "payload write succeeded, index write failed" for rollback and
+	// repair tests. Never set outside _test.go files in this package.
+	indexResponseOverride func(ctx context.Context, conversationID, responseID string, createdAt int64) error
 }
 
 const (
@@ -68,6 +75,18 @@ const (
 	// the lazy-scan migration lock before it is considered abandoned.
 	conversationIndexMigrationLockTTL = 30 * time.Second
 )
+
+// compareDeleteScript deletes KEYS[1] only if its current value equals
+// ARGV[1]. Single-key: legal in Redis Cluster with no hash-tagging needed.
+// Used to roll back a response payload after its index write fails, without
+// risking a blind DEL of a value a concurrent writer stored in the same slot
+// after the original payload's TTL expired.
+var compareDeleteScript = redis.NewScript(`
+if redis.call("GET", KEYS[1]) == ARGV[1] then
+	return redis.call("DEL", KEYS[1])
+end
+return 0
+`)
 
 // The function validates configuration, establishes connection, and tests connectivity.
 func NewRedisStore(config StoreConfig) (*RedisStore, error) {
@@ -382,13 +401,91 @@ func (s *RedisStore) StoreResponse(ctx context.Context, response *responseapi.St
 		return fmt.Errorf("failed to store response in Redis: %w", err)
 	}
 	if !stored {
+		// The payload already here is the source of truth for whether this
+		// retry needs an index repair, not the caller's attempted request:
+		// verified inside repairExistingResponseIndex.
+		if response.ConversationID != "" {
+			if repairErr := s.repairExistingResponseIndex(ctx, response); repairErr != nil {
+				return repairErr
+			}
+		}
 		return ErrAlreadyExists
 	}
 
-	// TODO(#2814 Phase 2): replace with compare-delete rollback on index failure.
+	if response.ConversationID == "" {
+		return nil
+	}
+
 	if err := s.indexResponse(ctx, response.ConversationID, response.ID, response.CreatedAt); err != nil {
-		logging.Warnf("RedisStore: failed to index response %s in conversation %s: %v",
-			response.ID, response.ConversationID, err)
+		indexErr := fmt.Errorf("failed to index response in Redis: %w", err)
+
+		// Compare-delete rollback: never a blind DEL. Only removes the
+		// payload if it is still exactly what this call wrote, so a
+		// concurrent writer that stored a new value after this payload's TTL
+		// expired is never clobbered (the ABA race the blueprint calls out).
+		deleted, rollbackErr := s.compareDeleteResponsePayload(ctx, key, data)
+		if rollbackErr != nil {
+			return fmt.Errorf("%w (rollback failed: %v)", indexErr, rollbackErr)
+		}
+		if !deleted {
+			return fmt.Errorf("%w (payload changed before rollback, left in place)", indexErr)
+		}
+		return indexErr
+	}
+
+	return nil
+}
+
+// compareDeleteResponsePayload deletes key only if its current value equals
+// expected. Used to roll back a response payload after its index write
+// fails, without risking a blind DEL removing a value a concurrent writer
+// stored after the original payload expired on its TTL.
+//
+// Single-key Lua script — touches only KEYS[1] — so it stays legal in Redis
+// Cluster; a two-key script spanning the response and index keys would not.
+func (s *RedisStore) compareDeleteResponsePayload(ctx context.Context, key string, expected []byte) (bool, error) {
+	res, err := compareDeleteScript.Run(ctx, s.client, []string{key}, expected).Result()
+	if err != nil {
+		return false, fmt.Errorf("failed to compare-delete response payload %s: %w", key, err)
+	}
+
+	deleted, ok := res.(int64)
+	if !ok {
+		return false, fmt.Errorf("unexpected compare-delete result type %T for %s", res, key)
+	}
+
+	return deleted > 0, nil
+}
+
+// repairExistingResponseIndex runs when StoreResponse's SETNX finds the
+// response ID already stored. It never trusts the caller's attempted
+// payload: the stored response is read back and is the only source of truth
+// for whether — and under which conversation — the index should be
+// repaired. A duplicate ID whose stored payload belongs to a different
+// conversation than the one the caller attempted must not poison that
+// conversation's index.
+func (s *RedisStore) repairExistingResponseIndex(ctx context.Context, attempted *responseapi.StoredResponse) error {
+	stored, err := s.GetResponse(ctx, attempted.ID)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			// SETNX reported existence, but the payload is gone now (raced
+			// with a delete, or expired). Nothing to repair from; keep the
+			// duplicate contract.
+			return nil
+		}
+		return fmt.Errorf("failed to read stored response %s for index repair: %w", attempted.ID, err)
+	}
+
+	if stored.ConversationID == "" || stored.ConversationID != attempted.ConversationID {
+		// Either no index is expected, or the stored payload proves this
+		// duplicate belongs to a different conversation than attempted.
+		// Repairing the attempted conversation's index here would be
+		// indexing a response that conversation does not actually own.
+		return nil
+	}
+
+	if err := s.indexResponse(ctx, stored.ConversationID, stored.ID, stored.CreatedAt); err != nil {
+		return fmt.Errorf("response already exists but failed to repair conversation index: %w", err)
 	}
 
 	return nil
@@ -781,6 +878,9 @@ func (s *RedisStore) AddResponseToConversation(ctx context.Context, conversation
 func (s *RedisStore) indexResponse(ctx context.Context, conversationID, responseID string, createdAt int64) error {
 	if conversationID == "" || responseID == "" {
 		return nil
+	}
+	if s.indexResponseOverride != nil {
+		return s.indexResponseOverride(ctx, conversationID, responseID, createdAt)
 	}
 
 	indexKey := s.conversationIndexKey(conversationID)
