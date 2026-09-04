@@ -54,13 +54,16 @@ func (r *OpenAIRouter) dispatchShadowArms(reqCtx *RequestContext) {
 		results := shadow.Dispatch(ctx, cfg, params, nil)
 		for _, res := range results {
 			fields := map[string]interface{}{
-				"request_id": reqCtx.RequestID,
-				"arm":        res.Arm,
-				"model":      res.Model,
-				"ok":         res.OK,
-				"latency_ms": res.LatencyMS,
+				"request_id":        reqCtx.RequestID,
+				"arm":               res.Arm,
+				"model":             res.Model,
+				"ok":                res.Outcome == shadow.OutcomeCompleted,
+				"outcome":           string(res.Outcome),
+				"latency_ms":        res.LatencyMS,
+				"prompt_tokens":     res.PromptTokens,
+				"completion_tokens": res.CompletionTokens,
 			}
-			if res.OK {
+			if res.Outcome == shadow.OutcomeCompleted {
 				logging.ComponentEvent("extproc", "shadow_arm_result", fields)
 			} else {
 				fields["error"] = res.Err

@@ -8,9 +8,27 @@ import "time"
 // (issue #3376). Secrets never live here; the router injects per-arm
 // credentials at dispatch time.
 type ShadowComparisonConfig struct {
-	Enabled   bool              `yaml:"enabled,omitempty"`
-	MaxWaitMS int               `yaml:"max_wait_ms,omitempty"`
-	Arms      []ShadowArmConfig `yaml:"arms,omitempty"`
+	Enabled   bool               `yaml:"enabled,omitempty"`
+	MaxWaitMS int                `yaml:"max_wait_ms,omitempty"`
+	Budget    ShadowBudgetConfig `yaml:"budget,omitempty"`
+	Arms      []ShadowArmConfig  `yaml:"arms,omitempty"`
+}
+
+// ShadowBudgetConfig bounds aggregate shadow resource usage per request
+// (issue #3376 M2: reserved before shadow dispatch, reconciled on every arm
+// outcome). A zero value means that dimension is unlimited.
+type ShadowBudgetConfig struct {
+	// MaxCalls caps the number of arms that may be admitted per request.
+	MaxCalls int64 `yaml:"max_calls,omitempty"`
+	// MaxTokens caps aggregate completion accounting across admitted arms.
+	MaxTokens int64 `yaml:"max_tokens,omitempty"`
+	// MaxCost caps aggregate spend; requires PricePerMillionTokens to be set.
+	MaxCost float64 `yaml:"max_cost,omitempty"`
+	// MaxConcurrency caps simultaneously in-flight arms.
+	MaxConcurrency int `yaml:"max_concurrency,omitempty"`
+	// PricePerMillionTokens converts accounted tokens to cost (0 = cost never
+	// accumulates, so MaxCost is never binding).
+	PricePerMillionTokens float64 `yaml:"price_per_million_tokens,omitempty"`
 }
 
 // ShadowArmConfig describes one candidate model evaluated on real traffic.

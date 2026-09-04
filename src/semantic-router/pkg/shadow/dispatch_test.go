@@ -84,11 +84,14 @@ func TestDispatchSuccessAndByteIdentity(t *testing.T) {
 		t.Fatalf("want 2 results, got %d", len(results))
 	}
 	for _, res := range results {
-		if !res.OK {
-			t.Errorf("arm %s failed: %s", res.Arm, res.Err)
+		if res.Outcome != OutcomeCompleted {
+			t.Errorf("arm %s outcome = %s, want completed (%s)", res.Arm, res.Outcome, res.Err)
 		}
 		if res.Content != "shadow answer" {
 			t.Errorf("arm %s content = %q", res.Arm, res.Content)
+		}
+		if res.PromptTokens != 9 || res.CompletionTokens != 3 {
+			t.Errorf("arm %s usage parsed = prompt:%d comp:%d, want 9/3", res.Arm, res.PromptTokens, res.CompletionTokens)
 		}
 	}
 
@@ -125,10 +128,10 @@ func TestDispatchArmFailureIsolated(t *testing.T) {
 	for _, res := range results {
 		byName[res.Arm] = res
 	}
-	if byName["bad"].OK || byName["bad"].Err == "" {
-		t.Errorf("bad arm should fail with an error, got ok=%v err=%q", byName["bad"].OK, byName["bad"].Err)
+	if byName["bad"].Outcome != OutcomeFailed || byName["bad"].Err == "" {
+		t.Errorf("bad arm should fail, got outcome=%s err=%q", byName["bad"].Outcome, byName["bad"].Err)
 	}
-	if !byName["good"].OK {
+	if byName["good"].Outcome != OutcomeCompleted {
 		t.Errorf("good arm must not be affected by sibling failure: %s", byName["good"].Err)
 	}
 }
@@ -142,7 +145,7 @@ func TestDispatchAccessKey(t *testing.T) {
 
 	results := Dispatch(context.Background(), cfg, testParams(),
 		func(armName string) (string, error) { return "sk-test", nil })
-	if len(results) != 1 || !results[0].OK {
+	if len(results) != 1 || results[0].Outcome != OutcomeCompleted {
 		t.Fatalf("unexpected results: %+v", results)
 	}
 	_, auth := arm.snapshot()
@@ -168,8 +171,8 @@ func TestDispatchCancellationFailsArm(t *testing.T) {
 
 	select {
 	case results := <-done:
-		if len(results) != 1 || results[0].OK {
-			t.Fatalf("cancelled arm should have failed, got %+v", results)
+		if len(results) != 1 || results[0].Outcome != OutcomeCancelled {
+			t.Fatalf("cancelled arm should be cancelled, got %+v", results)
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("dispatch did not return after cancellation")
@@ -183,7 +186,7 @@ func TestDispatchNilParamsFailsClosed(t *testing.T) {
 		Arms:    []config.ShadowArmConfig{{Name: "arm", Model: "model", Endpoint: arm.server.URL}},
 	}
 	results := Dispatch(context.Background(), cfg, nil, nil)
-	if len(results) != 1 || results[0].OK || results[0].Err != "nil params" {
+	if len(results) != 1 || results[0].Outcome != OutcomeFailed || results[0].Err != "nil params" {
 		t.Fatalf("nil params should fail closed, got %+v", results)
 	}
 }

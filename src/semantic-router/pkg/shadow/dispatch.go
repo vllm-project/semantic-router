@@ -1,9 +1,9 @@
 // Package shadow implements bounded multi-arm shadow comparison for routing
 // evaluation (issue #3376). Each arm replays the same normalized request to an
 // OpenAI-compatible backend so normalized inputs stay byte-identical across the
-// primary route and every shadow arm. Dispatch is synchronous over the arms but
-// is designed to run inside a caller-owned goroutine; all arm failures are
-// reported in the returned results and never surfaced to the primary path.
+// primary route and every shadow arm. Dispatch runs arms concurrently under a
+// per-request aggregate budget; all arm failures are reported in the returned
+// results and never surfaced to the primary path.
 //
 // The arm client is intentionally a small stdlib OpenAI-compatible POST: it
 // keeps this package free of the native binding dependency chain carried by the
@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/openai/openai-go"
@@ -39,14 +40,20 @@ type ArmResult struct {
 	// Model is what the arm actually invoked (kept for operator debugging,
 	// excluded from judge input by the M3 blinding layer).
 	Model string
-	// OK is true only when the arm returned a non-streaming completion.
-	OK bool
+	// Outcome is the normalized lifecycle result, reconciled into the
+	// aggregate budget and persisted to Replay evidence (C4).
+	Outcome Outcome
 	// LatencyMS is the observed round-trip on success.
 	LatencyMS int64
 	// Content is the extracted text of the completion. Raw hidden reasoning
 	// from the candidate is intentionally never captured (issue #3376).
 	Content string
-	// Err is set for configuration, timeout, cancellation or HTTP failures.
+	// PromptTokens / CompletionTokens are parsed from the arm's usage block
+	// (0 when the response carried none).
+	PromptTokens     int64
+	CompletionTokens int64
+	// Err is set for configuration, timeout, cancellation, budget or HTTP
+	// failures.
 	Err string
 }
 
@@ -54,66 +61,111 @@ type ArmResult struct {
 // Authorization header). Returning an error fails that arm only.
 type AccessKey func(armName string) (string, error)
 
-// Dispatch evaluates the normalized params against every configured arm and
-// returns one result per arm, in configuration order. Nil params is a
-// fail-closed result for every arm. ctx cancellation (client disconnect,
-// aggregate shadow window, router shutdown) stops all in-flight arms.
+// Dispatch evaluates the normalized params against every configured arm
+// concurrently under the aggregate budget and returns one result per arm in
+// configuration order. Arms rejected before admission carry OutcomeSkipped.
+// Nil params is a fail-closed result for every arm. ctx cancellation (client
+// disconnect, aggregate shadow window, router shutdown) stops all in-flight
+// arms.
 func Dispatch(ctx context.Context, cfg config.ShadowComparisonConfig, params *openai.ChatCompletionNewParams, key AccessKey) []ArmResult {
-	results := make([]ArmResult, 0, len(cfg.Arms))
-	for _, arm := range cfg.Arms {
-		results = append(results, runArm(ctx, arm, params, key))
+	results := make([]ArmResult, len(cfg.Arms))
+	if len(cfg.Arms) == 0 {
+		return results
 	}
+	budget := newBudget(cfg.Budget)
+	var wg sync.WaitGroup
+	for i := range cfg.Arms {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			results[i] = runArm(ctx, budget, cfg.Arms[i], params, key)
+		}(i)
+	}
+	wg.Wait()
 	return results
 }
 
-func runArm(ctx context.Context, arm config.ShadowArmConfig, params *openai.ChatCompletionNewParams, key AccessKey) ArmResult {
+func runArm(ctx context.Context, budget *Budget, arm config.ShadowArmConfig, params *openai.ChatCompletionNewParams, key AccessKey) ArmResult {
 	if params == nil {
-		return armFailure(arm, "nil params")
+		return ArmResult{Arm: arm.Name, Model: arm.Model, Outcome: OutcomeFailed, Err: "nil params"}
 	}
 	if arm.Model == "" || arm.Endpoint == "" {
-		return armFailure(arm, "arm missing model or endpoint")
+		return ArmResult{Arm: arm.Name, Model: arm.Model, Outcome: OutcomeFailed, Err: "arm missing model or endpoint"}
 	}
 	if ctx == nil {
 		ctx = context.Background()
 	}
 
+	// Aggregate budget gates admission deterministically.
+	rejected, ok := budget.tryEnter(arm.Name, arm.Model)
+	if !ok {
+		return rejected
+	}
+	defer budget.release()
+
 	// Each arm gets its own bounded context so one slow arm cannot outlive the
 	// aggregate shadow window.
-	// ponytail: per-arm timeout only; per-arm concurrency and token/cost
-	// budgets land in the M2 aggregate budget controller (issue #3376).
+	// ponytail: per-arm timeout only; token/cost are soft (accounted on
+	// completion, enforced for later arms), wall time is bounded by the
+	// caller's aggregate context.
 	armCtx, cancel, armTimeout := boundedContext(ctx, arm)
 	defer cancel()
 
 	req, reqErr := buildArmRequest(armCtx, arm, params, key)
 	if reqErr != "" {
-		return armFailure(arm, reqErr)
+		return budgetedFailure(arm, outcomeFor(armCtx), reqErr)
 	}
 
 	client := &http.Client{Timeout: armTimeout}
 	start := time.Now()
 	resp, err := client.Do(req)
 	if err != nil {
-		return armFailure(arm, fmt.Sprintf("request: %v", err))
+		msg := fmt.Sprintf("request: %v", err)
+		return budgetedFailure(arm, outcomeFor(armCtx), msg)
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
 	if err != nil {
-		return armFailure(arm, fmt.Sprintf("read response: %v", err))
+		return budgetedFailure(arm, OutcomeFailed, fmt.Sprintf("read response: %v", err))
 	}
 	if resp.StatusCode != http.StatusOK {
-		return armFailure(arm, fmt.Sprintf("status %d: %s", resp.StatusCode, truncate(respBody)))
+		return budgetedFailure(arm, OutcomeFailed,
+			fmt.Sprintf("status %d: %s", resp.StatusCode, truncate(respBody)))
 	}
-	content, parseErr := parseCompletion(respBody)
+
+	completion, parseErr := parseCompletion(respBody)
 	if parseErr != "" {
-		return armFailure(arm, parseErr)
+		return budgetedFailure(arm, OutcomeFailed, parseErr)
 	}
+	budget.reconcile(OutcomeCompleted, completion.PromptTokens, completion.CompletionTokens)
 	return ArmResult{
-		Arm:       arm.Name,
-		Model:     arm.Model,
-		OK:        true,
-		LatencyMS: time.Since(start).Milliseconds(),
-		Content:   content,
+		Arm:              arm.Name,
+		Model:            arm.Model,
+		Outcome:          OutcomeCompleted,
+		LatencyMS:        time.Since(start).Milliseconds(),
+		Content:          completion.Content,
+		PromptTokens:     completion.PromptTokens,
+		CompletionTokens: completion.CompletionTokens,
+	}
+}
+
+// budgetedFailure returns the ArmResult for a non-completed outcome; only
+// completed arms ever consume token/cost in the budget.
+func budgetedFailure(arm config.ShadowArmConfig, outcome Outcome, err string) ArmResult {
+	return ArmResult{Arm: arm.Name, Model: arm.Model, Outcome: outcome, Err: err}
+}
+
+// outcomeFor maps an arm failure to its normalized outcome: a deadline first,
+// then cancellation, then generic failure.
+func outcomeFor(armCtx context.Context) Outcome {
+	switch {
+	case armCtx.Err() == context.DeadlineExceeded:
+		return OutcomeTimedOut
+	case armCtx.Err() == context.Canceled:
+		return OutcomeCancelled
+	default:
+		return OutcomeFailed
 	}
 }
 
@@ -156,23 +208,37 @@ func buildArmRequest(ctx context.Context, arm config.ShadowArmConfig, params *op
 	return req, ""
 }
 
-// parseCompletion extracts the single text completion from a non-streaming
-// OpenAI-compatible body under a closed response shape.
-func parseCompletion(respBody []byte) (string, string) {
+type armCompletion struct {
+	Content          string
+	PromptTokens     int64
+	CompletionTokens int64
+}
+
+// parseCompletion extracts the single text completion plus usage accounting
+// from a non-streaming OpenAI-compatible body under a closed response shape.
+func parseCompletion(respBody []byte) (*armCompletion, string) {
 	var completion struct {
 		Choices []struct {
 			Message struct {
 				Content string `json:"content"`
 			} `json:"message"`
 		} `json:"choices"`
+		Usage struct {
+			PromptTokens     int64 `json:"prompt_tokens"`
+			CompletionTokens int64 `json:"completion_tokens"`
+		} `json:"usage"`
 	}
 	if err := json.Unmarshal(respBody, &completion); err != nil {
-		return "", fmt.Sprintf("parse response: %v", err)
+		return nil, fmt.Sprintf("parse response: %v", err)
 	}
 	if len(completion.Choices) == 0 {
-		return "", "empty choices"
+		return nil, "empty choices"
 	}
-	return completion.Choices[0].Message.Content, ""
+	return &armCompletion{
+		Content:          completion.Choices[0].Message.Content,
+		PromptTokens:     completion.Usage.PromptTokens,
+		CompletionTokens: completion.Usage.CompletionTokens,
+	}, ""
 }
 
 // cloneParams shallow-copies params so the caller's normalized request is never
@@ -180,10 +246,6 @@ func parseCompletion(respBody []byte) (string, string) {
 func cloneParams(params *openai.ChatCompletionNewParams) *openai.ChatCompletionNewParams {
 	copied := *params
 	return &copied
-}
-
-func armFailure(arm config.ShadowArmConfig, err string) ArmResult {
-	return ArmResult{Arm: arm.Name, Model: arm.Model, Err: err}
 }
 
 func truncate(b []byte) string {
