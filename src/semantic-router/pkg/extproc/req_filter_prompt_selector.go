@@ -69,14 +69,14 @@ func (r *OpenAIRouter) newDecisionPromptSelector(
 		if err != nil {
 			return selection.PromptInvocationResult{}, err
 		}
-		response, err := client.CallModel(
+		response, err := client.CallModelWithOptions(
 			callCtx,
-			openAIRequest,
-			model,
-			false,
-			1,
-			nil,
-			r.Config.GetModelAccessKey(model),
+			*openAIRequest,
+			looper.ModelTarget{
+				Name:      model,
+				AccessKey: r.Config.GetModelAccessKey(model),
+			},
+			looper.CallOptions{Iteration: 1},
 		)
 		if err != nil {
 			return selection.PromptInvocationResult{}, err
