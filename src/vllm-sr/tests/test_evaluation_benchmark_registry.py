@@ -160,6 +160,7 @@ def test_source_verifier_rejects_symlinked_checkout(tmp_path: Path) -> None:
 
 def test_suite_manifest_rejects_unverified_or_label_collocated_input() -> None:
     receipt = BenchmarkSourceReceipt(
+        source_kind="registered_adapter",
         adapter_id="routerarena",
         expected_source_revision="a" * 40,
         observed_source_revision="a" * 40,

@@ -14,6 +14,7 @@ from cli.evaluation.benchmark_sources import SourceVerificationError
 from cli.evaluation.builtin_executors import DEFAULT_EXECUTOR_REGISTRY
 from cli.evaluation.canonical import canonical_json_bytes
 from cli.evaluation.contracts import CaseGrading, CaseVisible
+from cli.evaluation.errors import SuiteStoreError
 from cli.evaluation.executor_contracts import BUILTIN_NORMALIZED_SUITE_EXECUTORS
 from cli.evaluation.suite_catalog import NormalizedSuiteCatalog
 from cli.evaluation.suite_contract import (
@@ -30,7 +31,6 @@ from cli.evaluation.suite_install_contract import (
 )
 from cli.evaluation.suite_store import NormalizedSuiteStore
 from cli.evaluation.suite_store_cas import SuiteCAS
-from cli.evaluation.suite_store_error import SuiteStoreError
 from pydantic import ValidationError
 
 
@@ -46,6 +46,7 @@ def _catalog(store: NormalizedSuiteStore) -> NormalizedSuiteCatalog:
 def _trusted_source_verifier(monkeypatch: pytest.MonkeyPatch) -> None:
     def verified(descriptor: Any, _source_root: Path) -> BenchmarkSourceReceipt:
         return BenchmarkSourceReceipt(
+            source_kind="registered_adapter",
             adapter_id=descriptor.id,
             expected_source_revision=descriptor.source_revision,
             observed_source_revision=descriptor.source_revision,
@@ -115,6 +116,7 @@ def _artifact(root: Path, role: str) -> SuiteArtifactInstall:
 def _receipt(*, clean: bool = True) -> BenchmarkSourceReceipt:
     descriptor = get_benchmark_adapter("routerarena")
     return BenchmarkSourceReceipt(
+        source_kind="registered_adapter",
         adapter_id=descriptor.id,
         expected_source_revision=descriptor.source_revision,
         observed_source_revision=descriptor.source_revision,

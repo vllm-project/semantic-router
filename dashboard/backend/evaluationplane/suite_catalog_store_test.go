@@ -6,12 +6,16 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
 type importedSuiteFixtureOptions struct {
 	adapterID              string
+	sourceKind             string
 	sourceRevisionOverride string
+	decisionUnit           string
+	actionSpace            string
 	trackIDs               []TrackID
 	evidenceLevel          EvidenceLevel
 	origin                 string
@@ -35,6 +39,7 @@ func normalizedImportedSuiteFixtureOptions(
 	t.Helper()
 	options := importedSuiteFixtureOptions{
 		adapterID:     "routerarena",
+		sourceKind:    "registered_adapter",
 		trackIDs:      []TrackID{"routing"},
 		evidenceLevel: "E0",
 		origin:        "user_provided_import",
@@ -50,6 +55,9 @@ func normalizedImportedSuiteFixtureOptions(
 	}
 	if options.origin == "" {
 		options.origin = "user_provided_import"
+	}
+	if options.sourceKind == "" {
+		options.sourceKind = "registered_adapter"
 	}
 	if options.armIDs == nil {
 		options.armIDs = []string{}
@@ -149,7 +157,15 @@ func writeImportedSuiteFixture(t *testing.T, root, suiteID string, custom ...imp
 	}
 	contract, knownAdapter := normalizedAdapterContracts[options.adapterID]
 	if !knownAdapter {
-		t.Fatalf("unknown normalized fixture adapter %q", options.adapterID)
+		if options.sourceKind != "benchmark_pack" || options.sourceRevisionOverride == "" ||
+			options.decisionUnit == "" || options.actionSpace == "" {
+			t.Fatalf("unknown normalized fixture adapter %q", options.adapterID)
+		}
+		contract = normalizedAdapterContract{
+			sourceRevision: options.sourceRevisionOverride,
+			decisionUnit:   options.decisionUnit, actionSpace: options.actionSpace,
+			trackIDs: append([]TrackID(nil), options.trackIDs...),
+		}
 	}
 	sourceRevision := contract.sourceRevision
 	if options.sourceRevisionOverride != "" {
@@ -194,7 +210,7 @@ func importedSuiteFixtureManifest(
 ) map[string]any {
 	t.Helper()
 	source := map[string]any{
-		"schema_version": adapterContractVersion, "adapter_id": options.adapterID,
+		"schema_version": benchmarkSourceContractVersion, "source_kind": options.sourceKind, "adapter_id": options.adapterID,
 		"expected_source_revision": sourceRevision,
 		"observed_source_revision": sourceRevision,
 		"source_clean":             true, "verified": true,
@@ -363,7 +379,7 @@ func TestInstalledCatalogAdmitsOnlyQualifiedServerLiveDeclaredShift(t *testing.T
 		t.Fatal("an unverified normalized import advertised live execution")
 	}
 	for _, suiteID := range []string{"qualified-declared-shift", "unverified-declared-shift"} {
-		method := methodsBySuite[suiteID]["routerarena.normalized.v2.routing"]
+		method := methodsBySuite[suiteID]["normalized.routerarena.routing.v1"]
 		if method.EvidenceSource != "normalized_import" || len(method.QualifiedGateIDs) != 0 || method.Status != "configured" {
 			t.Fatalf("suite %q promoted its normalized import method: %+v", suiteID, method)
 		}
@@ -383,7 +399,7 @@ func TestInstalledImportReadinessDoesNotInheritResearchNativeStatus(t *testing.T
 		if suite.ID != "xroute-import" {
 			continue
 		}
-		if len(suite.Methods) != 1 || suite.Methods[0].ID != "xroutebench.normalized.v2.model_pool" ||
+		if len(suite.Methods) != 1 || suite.Methods[0].ID != "normalized.xroutebench.model_pool.v1" ||
 			suite.Methods[0].Status != "configured" || suite.Methods[0].EvidenceSource != "normalized_import" ||
 			len(suite.Methods[0].QualifiedGateIDs) != 0 || suite.Methods[0].Reason != "" {
 			t.Fatalf("installed import inherited research-native readiness: %+v", suite.Methods)
@@ -391,6 +407,129 @@ func TestInstalledImportReadinessDoesNotInheritResearchNativeStatus(t *testing.T
 		return
 	}
 	t.Fatal("installed xroute import is missing")
+}
+
+func TestInstalledCatalogLoadsADataOnlyBenchmarkPack(t *testing.T) {
+	service, _ := newTestService(t, &controlledProcess{}, 1)
+	writeImportedSuiteFixture(t, service.registrySource.suiteStorePath, "acme-routing-pack", importedSuiteFixtureOptions{
+		adapterID: "acme.routing", sourceKind: "benchmark_pack", sourceRevisionOverride: strings.Repeat("d", 40),
+		decisionUnit: "request", actionSpace: "one model", trackIDs: []TrackID{"routing"},
+		gradingCaseOverrides: map[string]any{"expected_route": "arm-a"},
+	})
+	catalog, err := service.Catalog()
+	if err != nil {
+		t.Fatalf("Catalog: %v", err)
+	}
+	for _, suite := range catalog.Suites {
+		if suite.ID != "acme-routing-pack" {
+			continue
+		}
+		if len(suite.Methods) != 2 || suite.Methods[0].ID != "normalized.acme.routing.routing.v1" ||
+			suite.Methods[0].EvidenceSource != CatalogMethodEvidenceSourceNormalizedImport ||
+			suite.Methods[0].Status != "configured" || len(suite.Methods[0].QualifiedGateIDs) != 0 ||
+			suite.Methods[1].ID != benchmarkPackLiveMethodID("routing") ||
+			suite.Methods[1].EvidenceSource != CatalogMethodEvidenceSourceLiveRuntime ||
+			suite.Methods[1].Status != "configured" || len(suite.Methods[1].QualifiedGateIDs) != 0 ||
+			len(suite.Modes) != 2 || suite.Modes[0] != ModeReplay || suite.Modes[1] != ModeLive ||
+			suite.Executors[ModeLive] != normalizedSuiteLiveExecutorID {
+			t.Fatalf("benchmark pack catalog projection is invalid: %+v", suite)
+		}
+		return
+	}
+	t.Fatal("installed benchmark pack is missing")
+}
+
+func TestInstalledBenchmarkPackWithoutHiddenLabelsStaysReplayOnly(t *testing.T) {
+	service, _ := newTestService(t, &controlledProcess{}, 1)
+	writeImportedSuiteFixture(t, service.registrySource.suiteStorePath, "ungraded-routing-pack", importedSuiteFixtureOptions{
+		adapterID: "acme.ungraded", sourceKind: "benchmark_pack", sourceRevisionOverride: strings.Repeat("e", 40),
+		decisionUnit: "request", actionSpace: "one model", trackIDs: []TrackID{"routing"},
+	})
+	catalog, err := service.Catalog()
+	if err != nil {
+		t.Fatalf("Catalog: %v", err)
+	}
+	for _, suite := range catalog.Suites {
+		if suite.ID != "ungraded-routing-pack" {
+			continue
+		}
+		if len(suite.Methods) != 1 || suite.Methods[0].ID != "normalized.acme.ungraded.routing.v1" ||
+			len(suite.Modes) != 1 || suite.Modes[0] != ModeReplay {
+			t.Fatalf("ungraded benchmark pack advertised live execution: %+v", suite)
+		}
+		return
+	}
+	t.Fatal("installed ungraded benchmark pack is missing")
+}
+
+func TestInstalledBenchmarkPackWithoutMultimodalAnswerStaysReplayOnly(t *testing.T) {
+	service, _ := newTestService(t, &controlledProcess{}, 1)
+	writeImportedSuiteFixture(t, service.registrySource.suiteStorePath, "ungraded-multimodal-pack", importedSuiteFixtureOptions{
+		adapterID: "acme.ungraded-multimodal", sourceKind: "benchmark_pack", sourceRevisionOverride: strings.Repeat("e", 40),
+		decisionUnit: "request", actionSpace: "one answer", trackIDs: []TrackID{"multimodal"},
+	})
+	catalog, err := service.Catalog()
+	if err != nil {
+		t.Fatalf("Catalog: %v", err)
+	}
+	for _, suite := range catalog.Suites {
+		if suite.ID != "ungraded-multimodal-pack" {
+			continue
+		}
+		if len(suite.Methods) != 1 || suite.Methods[0].ID != "normalized.acme.ungraded-multimodal.multimodal.v1" ||
+			len(suite.Modes) != 1 || suite.Modes[0] != ModeReplay {
+			t.Fatalf("ungraded multimodal pack advertised live execution: %+v", suite)
+		}
+		return
+	}
+	t.Fatal("installed ungraded multimodal benchmark pack is missing")
+}
+
+func TestInstalledBenchmarkPackAdvertisesOnlyCompletePlatformLiveTracks(t *testing.T) {
+	service, _ := newTestService(t, &controlledProcess{}, 1)
+	writeImportedSuiteFixture(t, service.registrySource.suiteStorePath, "all-track-pack", importedSuiteFixtureOptions{
+		adapterID: "acme.all-tracks", sourceKind: "benchmark_pack", sourceRevisionOverride: strings.Repeat("f", 40),
+		decisionUnit: "request", actionSpace: "one model", trackIDs: append([]TrackID(nil), allTrackIDs...),
+		gradingCaseOverrides: map[string]any{"expected_route": "arm-a", "expected_answer": "answer"},
+		mediaManifestBytes: testJSONLines(t, map[string]any{
+			"schema_version": normalizedSuiteSchemaVersion, "id": "fixture-image",
+			"digest": suiteDocumentDigest([]byte{0}), "media_type": "image/png", "size_bytes": 1,
+			"modality": "image", "license_id": "upstream",
+		}),
+	})
+	catalog, err := service.Catalog()
+	if err != nil {
+		t.Fatalf("Catalog: %v", err)
+	}
+	for _, suite := range catalog.Suites {
+		if suite.ID != "all-track-pack" {
+			continue
+		}
+		liveTracks := make(map[TrackID]struct{})
+		for _, method := range suite.Methods {
+			if strings.HasPrefix(method.ID, benchmarkPackLiveMethodPrefix+".") {
+				liveTracks[method.TrackID] = struct{}{}
+			}
+		}
+		for _, trackID := range []TrackID{"routing", "model_pool", "joint", "multimodal", "capacity"} {
+			if _, present := liveTracks[trackID]; !present {
+				t.Fatalf("complete benchmark pack omitted live track %q: %+v", trackID, suite.Methods)
+			}
+		}
+		for _, trackID := range []TrackID{"agentic", "preference", "safety"} {
+			if _, present := liveTracks[trackID]; present {
+				t.Fatalf("benchmark pack advertised unsupported live track %q", trackID)
+			}
+		}
+		if len(liveTracks) != 5 {
+			t.Fatalf("benchmark pack live tracks=%+v, want exactly five", liveTracks)
+		}
+		if len(suite.Modes) != 2 || suite.Modes[0] != ModeReplay || suite.Modes[1] != ModeLive {
+			t.Fatalf("mixed benchmark pack modes=%+v, want replay and live", suite.Modes)
+		}
+		return
+	}
+	t.Fatal("installed all-track benchmark pack is missing")
 }
 
 func TestInstalledCatalogRejectsQualifiedDeclaredShiftWithUnknownPairCase(t *testing.T) {
@@ -470,7 +609,7 @@ func TestInstalledMultimodalLiveAdmissionFailsClosedOnMissingHiddenAnswer(t *tes
 	}
 }
 
-func TestInstalledFirstPartyNormalizedLiveCreateAdmissionIsTrackExact(t *testing.T) {
+func TestInstalledNormalizedLiveCreateAdmissionIsTrackExact(t *testing.T) {
 	service, _ := newTestService(t, &controlledProcess{}, 1)
 	if err := os.WriteFile(service.registrySource.configPath, []byte(modelArmTestYAML), 0o600); err != nil {
 		t.Fatalf("write Mixture-of-Models config: %v", err)
@@ -480,6 +619,11 @@ func TestInstalledFirstPartyNormalizedLiveCreateAdmissionIsTrackExact(t *testing
 		declaredShiftCatalogFixtureOptions(t, true, "source"),
 	)
 	writeImportedSuiteFixture(t, service.registrySource.suiteStorePath, "qualified-mmr", multimodalLiveCatalogFixtureOptions(t, true))
+	writeImportedSuiteFixture(t, service.registrySource.suiteStorePath, "routing-pack", importedSuiteFixtureOptions{
+		adapterID: "acme.routing", sourceKind: "benchmark_pack", sourceRevisionOverride: strings.Repeat("d", 40),
+		decisionUnit: "request", actionSpace: "one model", trackIDs: []TrackID{"routing"},
+		gradingCaseOverrides: map[string]any{"expected_route": "Org/Fast Model"},
+	})
 
 	declaredShift := validCreateRequest()
 	declaredShift.ClientRequestID = newTestClientRequestID()
@@ -503,6 +647,15 @@ func TestInstalledFirstPartyNormalizedLiveCreateAdmissionIsTrackExact(t *testing
 	multimodal.SampleLimit = 1
 	if _, err := service.CreateRunAs(context.Background(), SystemActor(), multimodal); err != nil {
 		t.Fatalf("CreateRun qualified multimodal live cohort: %v", err)
+	}
+
+	pack := declaredShift
+	pack.ClientRequestID = newTestClientRequestID()
+	pack.Name = "declarative benchmark pack"
+	pack.SuiteIDs = []string{"routing-pack"}
+	pack.SampleLimit = 1
+	if _, err := service.CreateRunAs(context.Background(), SystemActor(), pack); err != nil {
+		t.Fatalf("CreateRun declarative benchmark pack: %v", err)
 	}
 
 	modelPool := multimodal
