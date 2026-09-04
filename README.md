@@ -42,13 +42,14 @@ curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --channel dev
 
 For platform notes, detailed setup options, and troubleshooting, see the **[Installation Guide](https://vllm-sr.ai/docs/installation/)**.
 
-<details>
-<summary>Online playground credentials</summary>
+### Online playground
+
+Try the online playground at <https://app.vllm-sr.ai/playground>.
+
+Credentials:
 
 - Username: `love@vllm-sr.ai`
 - Password: `vllm-sr-read`
-
-</details>
 
 ## Latest News
 
