@@ -82,14 +82,18 @@ func (c *QdrantCache) AddExact(
 		return nil
 	}
 	recordID := exactCacheRecordID(partition, fingerprint)
+	dimension, err := c.embeddingDimension()
+	if err != nil {
+		return err
+	}
 	wait := true
-	_, err := c.client.Upsert(ctx, &qdrant.UpsertPoints{
+	_, err = c.client.Upsert(ctx, &qdrant.UpsertPoints{
 		CollectionName: c.collectionName,
 		Wait:           &wait,
 		Points: []*qdrant.PointStruct{{
 			Id: arbitraryIDToUUID(recordID),
 			Vectors: qdrant.NewVectorsDense(
-				exactCacheSentinelVector(c.embeddingDimension()),
+				exactCacheSentinelVector(dimension),
 			),
 			Payload: qdrant.NewValueMap(map[string]any{
 				"request_id":    recordID,

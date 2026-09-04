@@ -95,9 +95,9 @@ func NewMilvusStore(options MilvusStoreOptions) (*MilvusStore, error) {
 		}
 	}
 
-	effectiveDimension, err := candle_binding.ResolveEmbeddingDimension(
-		string(embeddingCfg.Model),
-		embeddingCfg.Dimension,
+	effectiveDimension, err := resolveMilvusStoreEmbeddingDimension(
+		embeddingCfg,
+		cfg.Milvus.Dimension,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve memory embedding dimension: %w", err)
@@ -130,6 +130,33 @@ func NewMilvusStore(options MilvusStoreOptions) (*MilvusStore, error) {
 	})
 
 	return store, nil
+}
+
+func resolveMilvusStoreEmbeddingDimension(
+	embeddingCfg EmbeddingConfig,
+	configuredMilvusDimension int,
+) (int, error) {
+	if !deterministicEmbeddingsEnabled() {
+		return candle_binding.ResolveEmbeddingDimension(
+			string(embeddingCfg.Model),
+			embeddingCfg.Dimension,
+		)
+	}
+
+	// Deterministic integration mode intentionally runs without loading a
+	// native model. Preserve its configured vector width instead of querying a
+	// runtime contract that cannot exist in this mode.
+	dimension := embeddingCfg.Dimension
+	if dimension <= 0 {
+		dimension = configuredMilvusDimension
+	}
+	if dimension <= 0 {
+		dimension = deterministicEmbeddingDimension(embeddingCfg)
+	}
+	if dimension <= 0 {
+		return 0, fmt.Errorf("deterministic memory embedding dimension must be positive: %d", dimension)
+	}
+	return dimension, nil
 }
 
 func (m *MilvusStore) IsEnabled() bool {

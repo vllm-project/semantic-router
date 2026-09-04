@@ -37,11 +37,7 @@ func deterministicEmbeddingDimension(cfg EmbeddingConfig) int {
 	}
 	switch cfg.Model {
 	case EmbeddingModelMMBERT:
-		return 768
-	case EmbeddingModelQwen3:
-		return 1024
-	case EmbeddingModelGemma:
-		return 768
+		return 256
 	case EmbeddingModelBERT, EmbeddingModelMulti:
 		return 384
 	default:

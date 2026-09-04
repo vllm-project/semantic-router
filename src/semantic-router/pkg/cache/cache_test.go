@@ -1809,8 +1809,18 @@ func TestMilvusCacheOptionsFromHybridOptionsPreservesEmbeddingModel(t *testing.T
 }
 
 func TestSemanticCacheEmbeddingDimensionUsesConfiguredValue(t *testing.T) {
-	if got := semanticCacheEmbeddingDimension(512, "mmbert"); got != 512 {
+	got, err := semanticCacheEmbeddingDimension(512, "mmbert")
+	if err != nil {
+		t.Fatalf("semanticCacheEmbeddingDimension() error = %v", err)
+	}
+	if got != 512 {
 		t.Fatalf("expected configured dimension 512, got %d", got)
+	}
+}
+
+func TestSemanticCacheEmbeddingDimensionReturnsContractError(t *testing.T) {
+	if _, err := semanticCacheEmbeddingDimension(0, "not-a-model"); err == nil {
+		t.Fatal("expected contract lookup failure to be returned")
 	}
 }
 

@@ -341,6 +341,38 @@ func TestMilvusStore_LegacyAndOmittedDimensionsKeepSameResult(t *testing.T) {
 	assert.Equal(t, legacyStore.config.Milvus.Dimension, omittedStore.config.Milvus.Dimension)
 }
 
+func TestNewMilvusStoreDeterministicModeSkipsNativeContract(t *testing.T) {
+	t.Setenv(deterministicEmbeddingsEnv, "1")
+
+	cfg := DefaultMemoryConfig()
+	cfg.EmbeddingModel = string(EmbeddingModelQwen3)
+	cfg.Milvus.Dimension = 384
+	mockClient := &MockMilvusClient{
+		HasCollectionFunc: func(context.Context, string) (bool, error) {
+			return false, nil
+		},
+	}
+
+	store, err := NewMilvusStore(MilvusStoreOptions{
+		Client:         mockClient,
+		CollectionName: "deterministic_memory",
+		Config:         cfg,
+		Enabled:        true,
+		EmbeddingConfig: &EmbeddingConfig{
+			Model:     EmbeddingModelQwen3,
+			Dimension: 384,
+		},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, store)
+	assert.Equal(t, 384, store.effectiveDimension)
+	assert.Equal(t, 384, store.embeddingConfig.Dimension)
+
+	embedding, err := GenerateEmbedding("deterministic integration memory", store.embeddingConfig)
+	require.NoError(t, err)
+	assert.Len(t, embedding, 384)
+}
+
 func TestMilvusStore_ExistingCollectionDimensionMismatch(t *testing.T) {
 	mockClient := &MockMilvusClient{
 		HasCollectionFunc: func(context.Context, string) (bool, error) {
