@@ -262,7 +262,15 @@ func (s *Server) shutdown(ctx context.Context) error {
 		gracefulCtx := ctx
 		cancelGraceful := func() {}
 		if deadline, ok := ctx.Deadline(); ok {
-			gracefulCtx, cancelGraceful = context.WithDeadline(ctx, deadline.Add(-generationDrainReserve))
+			reserve := generationDrainReserve
+			budget := time.Until(deadline)
+			switch {
+			case budget <= 0:
+				reserve = 0
+			case budget < 2*reserve:
+				reserve = budget / 2
+			}
+			gracefulCtx, cancelGraceful = context.WithDeadline(ctx, deadline.Add(-reserve))
 		}
 		defer cancelGraceful()
 

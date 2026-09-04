@@ -73,11 +73,13 @@ func TestServerShutdownDrainsGenerationAfterForcedGRPCStopWithinDeadline(t *test
 	}
 
 	server := &Server{server: grpcServer, service: service}
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 25*time.Millisecond)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 	started := time.Now()
 	err = server.Shutdown(shutdownCtx)
-	if elapsed := time.Since(started); elapsed > 250*time.Millisecond {
+	if elapsed := time.Since(started); elapsed < 50*time.Millisecond {
+		t.Fatalf("Shutdown() took %v, want short budgets shared with graceful stop", elapsed)
+	} else if elapsed > 250*time.Millisecond {
 		t.Fatalf("Shutdown() took %v, want it bounded by the caller deadline", elapsed)
 	}
 	if !errors.Is(err, context.DeadlineExceeded) {
