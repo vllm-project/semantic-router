@@ -205,6 +205,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/plugin/rag',
                 'tutorials/plugin/router-replay',
                 'tutorials/plugin/response-cache',
+                'tutorials/plugin/prompt-cache',
               ],
             },
             {

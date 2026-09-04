@@ -250,6 +250,14 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 	}
 	body, err := r.encodeDispatchRequest(ctx)
 	if err != nil {
+		var protocolError *llmprotocol.ProtocolError
+		if errors.As(err, &protocolError) &&
+			protocolError.Code == promptCacheErrorTargetUnsupported {
+			if ctx != nil {
+				ctx.ImmediateProtocolError = protocolError
+			}
+			return nil, err
+		}
 		metrics.RecordRequestError(dispatch.logicalModel, "serialization_error")
 		return nil, status.Errorf(codes.Internal, "encode provider request: %v", err)
 	}

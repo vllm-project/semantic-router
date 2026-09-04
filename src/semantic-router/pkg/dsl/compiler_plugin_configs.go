@@ -43,6 +43,9 @@ var pluginConfigCompilers = map[string]pluginConfigCompiler{
 		cfg := &config.ContextCompressionPluginConfig{}
 		return compilePluginFields(c, fields, cfg)
 	},
+	"prompt_cache": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
+		return compilePromptCachePluginConfig(c, fields)
+	},
 	"hallucination": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
 		return c.compileHallucinationPluginConfig(fields), true
 	},
@@ -74,6 +77,18 @@ var pluginConfigCompilers = map[string]pluginConfigCompiler{
 	"tools": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
 		return c.compileToolsPlugin(fields), true
 	},
+}
+
+func compilePromptCachePluginConfig(
+	c *Compiler,
+	fields map[string]Value,
+) (interface{}, bool) {
+	if targets, ok := fields["targets"].(ArrayValue); ok && len(targets.Items) == 0 {
+		c.addError(Position{}, "prompt_cache targets must not be empty")
+		return nil, false
+	}
+	cfg := &config.PromptCachePluginConfig{}
+	return compilePluginFields(c, fields, cfg)
 }
 
 func (c *Compiler) compileHeaderMutationPluginConfig(fields map[string]Value) config.HeaderMutationPluginConfig {

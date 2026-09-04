@@ -278,6 +278,76 @@ func TestContextCompressionPluginNestedRoundTrip(t *testing.T) {
 	}
 }
 
+func TestPromptCachePluginRoundTrip(t *testing.T) {
+	cfg := &config.RouterConfig{
+		IntelligentRouting: config.IntelligentRouting{
+			Decisions: []config.Decision{{
+				Name:      "cache-prefix",
+				ModelRefs: []config.ModelRef{{Model: "model"}},
+				Plugins: []config.DecisionPlugin{{
+					Type: config.DecisionPluginPromptCache,
+					Configuration: config.MustStructuredPayload(
+						config.PromptCachePluginConfig{
+							Enabled: true,
+							TTL:     "1h",
+							Targets: []string{
+								config.PromptCacheTargetInstructions,
+								config.PromptCacheTargetTools,
+							},
+							OnUnsupported: config.PromptCacheUnsupportedReject,
+						},
+					),
+				}},
+			}},
+		},
+	}
+	dslText := mustDecompileRoutingPluginConfigTest(t, cfg)
+	assertDecompiledPluginConfigContains(t, dslText, []string{
+		"PLUGIN prompt_cache",
+		`ttl: "1h"`,
+		`on_unsupported: "reject"`,
+		`targets: ["instructions", "tools"]`,
+	})
+	compiled := mustCompileRoutingPluginConfigTest(t, dslText)
+	plugin := findDecisionPluginForTest(
+		t,
+		compiled.Decisions[0],
+		config.DecisionPluginPromptCache,
+	)
+	var pluginConfig config.PromptCachePluginConfig
+	if err := config.UnmarshalPluginConfig(plugin.Configuration, &pluginConfig); err != nil {
+		t.Fatalf("prompt_cache decode error: %v", err)
+	}
+	if !pluginConfig.Enabled ||
+		pluginConfig.TTL != "1h" ||
+		pluginConfig.OnUnsupported != config.PromptCacheUnsupportedReject ||
+		len(pluginConfig.Targets) != 2 {
+		t.Fatalf("prompt_cache config = %#v", pluginConfig)
+	}
+}
+
+func TestPromptCachePluginRejectsEmptyTargets(t *testing.T) {
+	_, errs := Compile(`
+ROUTE empty_prompt_cache_targets {
+  PRIORITY 1
+  MODEL "model"
+  PLUGIN prompt_cache {
+    enabled: true
+    targets: []
+  }
+}
+`)
+	if len(errs) == 0 {
+		t.Fatal("expected empty prompt_cache targets to fail")
+	}
+	for _, err := range errs {
+		if strings.Contains(err.Error(), "prompt_cache targets must not be empty") {
+			return
+		}
+	}
+	t.Fatalf("compile errors = %v", errs)
+}
+
 func assertToolsPluginDynamicRetrievalRoundTrip(t *testing.T, decision config.Decision) {
 	t.Helper()
 

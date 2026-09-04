@@ -197,6 +197,27 @@ export function getCapabilityPluginFieldSchema(pluginType: string): FieldSchema[
           options: ['fail_open', 'fail_closed'],
         },
       ]
+    case 'prompt_cache':
+      return [
+        { key: 'enabled', label: 'Enabled', type: 'boolean' },
+        {
+          key: 'ttl',
+          label: 'Marker TTL',
+          type: 'select',
+          options: ['5m', '1h'],
+        },
+        {
+          key: 'targets',
+          label: 'Stable Targets',
+          type: 'string[]',
+        },
+        {
+          key: 'on_unsupported',
+          label: 'Unsupported Target',
+          type: 'select',
+          options: ['skip', 'reject'],
+        },
+      ]
     default:
       return null
   }

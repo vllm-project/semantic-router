@@ -31,4 +31,14 @@ describe('capability plugin field schemas', () => {
       'revision',
     ])
   })
+
+  it('exposes the prompt cache marker contract', () => {
+    const fields = getCapabilityPluginFieldSchema('prompt_cache')
+    expect(fields?.map((field) => field.key)).toEqual([
+      'enabled',
+      'ttl',
+      'targets',
+      'on_unsupported',
+    ])
+  })
 })

@@ -267,6 +267,7 @@ export type PluginType =
   | 'tools'
   | 'tool_selection'
   | 'context_compression'
+  | 'prompt_cache'
 
 export interface PluginConfig {
   type: PluginType

@@ -70,6 +70,7 @@ class TestPluginTypeValidation:
             PluginType.RESPONSE_JAILBREAK.value,
             PluginType.TOOLS.value,
             PluginType.TOOL_SELECTION.value,
+            PluginType.PROMPT_CACHE.value,
         ]
 
         for plugin_type in valid_types:

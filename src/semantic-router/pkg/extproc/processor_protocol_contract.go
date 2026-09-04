@@ -182,6 +182,9 @@ func (r *OpenAIRouter) encodeDispatchRequest(ctx *RequestContext) ([]byte, error
 		format = llmprotocol.OpenAIChatV1
 	}
 	dispatchRequest := *ctx.SemanticRequest
+	if err := r.applyPromptCachePolicy(&dispatchRequest, ctx, format); err != nil {
+		return nil, err
+	}
 	if format == llmprotocol.OpenAIChatV1 && dispatchRequest.Stream &&
 		!streamUsageAlreadyRequested(dispatchRequest.StreamOptions) {
 		// The Router always asks Chat backends for the final usage chunk so

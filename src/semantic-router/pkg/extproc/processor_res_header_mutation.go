@@ -365,9 +365,20 @@ func addDecisionDetailHeaders(builder *responseHeaderMutationBuilder, ctx *Reque
 	builder.addString(headers.VSRLearningScopes, learningPolicyPairHeader(ctx, learningPolicyFieldScope))
 	builder.addString(headers.VSRLearningReasons, learningPolicyPairHeader(ctx, learningPolicyFieldReason))
 	builder.addBool(headers.VSRInjectedSystemPrompt, ctx.VSRInjectedSystemPrompt)
+	addPromptCacheReceiptHeaders(builder, ctx)
 	if ctx.VSRCacheSimilarity > 0 {
 		builder.addFloat("x-vsr-cache-similarity", float64(ctx.VSRCacheSimilarity))
 	}
+}
+
+func addPromptCacheReceiptHeaders(
+	builder *responseHeaderMutationBuilder,
+	ctx *RequestContext,
+) {
+	builder.addString(headers.VSRPromptCacheAction, ctx.PromptCacheAction)
+	builder.addString(headers.VSRPromptCacheReason, ctx.PromptCacheReason)
+	builder.addInt(headers.VSRPromptCacheInserted, ctx.PromptCacheInserted)
+	builder.addInt(headers.VSRPromptCachePreserved, ctx.PromptCachePreserved)
 }
 
 // addMatchedSignalHeaders adds the signal-evaluation headers (matched

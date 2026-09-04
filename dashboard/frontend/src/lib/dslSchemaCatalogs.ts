@@ -38,6 +38,7 @@ export const PLUGIN_TYPES = [
   'request_params',
   'response_jailbreak',
   'context_compression',
+  'prompt_cache',
 ] as const
 
 export const PLUGIN_DESCRIPTIONS: Record<string, string> = {
@@ -54,6 +55,7 @@ export const PLUGIN_DESCRIPTIONS: Record<string, string> = {
   request_params: 'Mutate request parameters before forwarding to the model',
   response_jailbreak: 'Screen generated responses for jailbreak-like output before returning',
   context_compression: 'Compress large tool outputs before provider dispatch',
+  prompt_cache: 'Add bounded Anthropic prompt-cache markers after route selection',
 }
 
 export const BACKEND_TYPES = [
