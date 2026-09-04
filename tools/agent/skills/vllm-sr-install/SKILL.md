@@ -8,8 +8,8 @@ description: Harness-neutral public installation skill for vLLM Semantic Router.
 
 This skill is published at
 <https://vllm-sr.ai/install/agent/vllm-sr/SKILL.md>
-and is usable by any compatible coding agent without cloning the
-repository.
+and is usable by any compatible coding agent or agent harness that can
+consume the public skill document — no repository clone required.
 
 ## Trigger
 
@@ -66,6 +66,12 @@ Before choosing an installation path, detect and report:
 | Existing config | `ls config.yaml` in the working directory |
 | Existing local runtime state | `ls ~/.local/share/vllm-sr/runtime.env` |
 
+Docker / Podman discovery is **informational only**. It may be useful for
+later deployment decisions, but it is not used to silently select or activate a
+runtime during the initial agent-safe installation. The installation step in
+this skill always uses `--runtime skip`, so neither Docker nor Podman is a
+selection condition for the CLI installation path.
+
 If the working directory contains a `tools/agent/repo-manifest.yaml` file, the
 agent MAY read it for repository-native supported paths. Otherwise, the agent
 must rely solely on the public installer contract described below.
@@ -89,7 +95,6 @@ The installer accepts these relevant flags:
 | `--mode` | `cli` \| `serve` | `serve` | `cli` installs the CLI only. |
 | `--runtime` | `auto` \| `docker` \| `skip` | `auto` | `skip` disables container runtime detection. |
 | `--no-launch` | flag | off | Skip the automatic first `vllm-sr serve`. |
-| `--channel` | `stable` \| `dev` | `dev` | `dev` pins the newest published `.dev` package. |
 | `--install-root` | path | `~/.local/share/vllm-sr` | Installation root. |
 | `--bin-dir` | path | `~/.local/bin` | Launcher directory. |
 
@@ -97,17 +102,10 @@ For agent-driven initial install, prefer `--mode cli --runtime skip --no-launch`
 to avoid implicit container or serve behaviour. The user can later run
 `vllm-sr serve` to start the full local stack.
 
-### Alternative path — pip
-
-```bash
-python -m venv vsr
-source vsr/bin/activate
-python -m pip install --upgrade vllm-sr
-vllm-sr --version
-```
-
-Use pip only when the one-line installer is unavailable or the user explicitly
-requests it.
+The installer also supports `--channel stable|dev`. The public skill does not
+override the installer's channel default — the installer is responsible for
+its own release-channel semantics. Do not pass `--channel` unless the user
+explicitly requests a specific channel.
 
 ## Plan Before Mutation
 
@@ -130,7 +128,7 @@ Plan:
 Do not proceed until the user confirms, unless the user already gave explicit
 instructions to install.
 
-## Installation Workflow
+## Workflow
 
 1. **Discover** the environment using the checks above.
 2. **Detect existing installation.** If `vllm-sr --version` succeeds, report the
@@ -155,29 +153,52 @@ user and suggest adding it.
 
 Do not claim success without this verification.
 
-## Existing Installation and Configuration
+## Existing Installation, Runtime State, Configuration, and Deployment
 
-If `vllm-sr --version` already succeeds:
+### Existing CLI installation
+
+If `vllm-sr --version` succeeds:
 
 - Report the installed version.
 - Do not reinstall.
 - If the user asks to upgrade, point them to the installation docs at
   <https://vllm-sr.ai/docs/installation/installation>.
 
+### Existing local runtime state
+
+If `~/.local/share/vllm-sr/runtime.env` exists, report it as **runtime state**,
+not as proof of an active deployment:
+
+```text
+Existing vLLM-SR runtime state was detected at ~/.local/share/vllm-sr/runtime.env.
+This does not by itself prove that a deployment is currently active.
+No runtime state was modified.
+```
+
+Continue to the next checks (existing configuration, active deployment signals)
+rather than stopping the journey solely because `runtime.env` exists.
+
+### Existing configuration
+
 If a `config.yaml` exists in the working directory:
 
 - Do not rewrite, replace, or migrate it.
+- Report its presence.
 - The user may run `vllm-sr validate --config config.yaml` separately.
 
-## Existing Deployment
+### Active deployment
 
-If signals of an existing deployment are present (running containers, existing
-`runtime.env`, or active listener ports):
+Only treat the environment as having an **active deployment** when strong
+signals are present — for example running vLLM-SR containers, a clearly active
+listener or process associated with vLLM-SR, or other unambiguous deployment
+indicators. The presence of `runtime.env` alone is **not** sufficient.
+
+When an active deployment is detected:
 
 ```text
-An existing deployment was detected.
+An active deployment was detected.
 No changes were made.
-Changing an existing deployment requires explicit user approval and is outside
+Changing an active deployment requires explicit user approval and is outside
 the scope of this installation skill.
 ```
 
@@ -201,7 +222,7 @@ If installation fails:
 3. Common causes: network failure, missing `curl`, insufficient permissions for
    `~/.local/bin`, or Python version mismatch.
 4. Direct the user to
-   [Troubleshooting](https://vllm-sr.ai/docs/troubleshooting/common-errors).
+  [Troubleshooting](https://vllm-sr.ai/docs/troubleshooting/common-errors).
 
 ## Next Supported Step
 
@@ -222,6 +243,8 @@ explicit user direction — those are separate workflows.
 - The installer persists the selected container runtime to
   `~/.local/share/vllm-sr/runtime.env`. Passing `--runtime skip` prevents
   unintended container detection.
+- `runtime.env` records runtime state, not an active deployment. Do not infer
+  deployment status from its presence alone.
 - `vllm-sr serve` starts the routing stack only; provider backends must already
   be reachable.
 - Do not confuse installing the CLI with starting or configuring a deployment.
@@ -245,6 +268,8 @@ explicit user direction — those are separate workflows.
 - The installation is validated with `vllm-sr --version`.
 - Existing installations, configurations, and deployments are not overwritten
   without explicit approval.
+- `runtime.env` is reported as runtime state, not conflated with an active
+  deployment.
 - No credentials, private endpoints, or secret values appear in skill output.
 - The skill stops before configuration generation, evaluation, tuning,
   activation, or rollback.
