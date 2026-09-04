@@ -2,12 +2,14 @@ package extproc
 
 import (
 	"context"
+	"time"
 
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/shadow"
 )
 
@@ -52,9 +54,11 @@ func (r *OpenAIRouter) dispatchShadowArms(reqCtx *RequestContext) {
 		}
 		// C1/C2: arms evaluate the same normalized request under the budget.
 		// C3: a blinded judge compares the surviving arms (disabled by default).
+		// C4: the comparison evidence lands in Replay via the outcome channel.
 		results := shadow.Dispatch(ctx, cfg, params, nil)
 		r.observeShadowArms(reqCtx, results)
-		r.judgeShadowArms(ctx, cfg, params, results, reqCtx)
+		decision := r.judgeShadowArms(ctx, cfg, params, results, reqCtx)
+		r.recordShadowEvidence(reqCtx, cfg, results, decision)
 	}()
 }
 
@@ -83,16 +87,17 @@ func (r *OpenAIRouter) observeShadowArms(reqCtx *RequestContext, results []shado
 
 // judgeShadowArms runs the blinded comparison when a judge is configured.
 // All judge failures map to an explicit judge outcome and stay in
-// observability/Replay; they never affect the primary response.
+// observability/Replay; they never affect the primary response. A zero-value
+// decision (empty outcome) means no judge is configured.
 func (r *OpenAIRouter) judgeShadowArms(
 	ctx context.Context,
 	cfg config.ShadowComparisonConfig,
 	params *openai.ChatCompletionNewParams,
 	results []shadow.ArmResult,
 	reqCtx *RequestContext,
-) {
+) shadow.JudgeDecision {
 	if !cfg.Judge.Enabled || cfg.Judge.Model == "" || cfg.Judge.Endpoint == "" {
-		return
+		return shadow.JudgeDecision{}
 	}
 	judge := shadow.NewJudge(cfg.Judge, cfg.Arms)
 	question, _ := extractUserAndNonUserContent(params)
@@ -112,6 +117,53 @@ func (r *OpenAIRouter) judgeShadowArms(
 		fields["reason"] = decision.Reason
 	}
 	logging.ComponentEvent("extproc", "shadow_judge_result", fields)
+	return decision
+}
+
+// recordShadowEvidence attaches the comparison evidence to the replay record
+// via the outcome channel. Only opaque arm ids and compact features (outcome,
+// latency, usage) are stored — no response content and no model identity, per
+// the issue's non-goals and D7. The opaque->model mapping stays in the
+// deployment config; arm identity lives in observability. Judge disabled
+// still records the arms with a "observed" verdict.
+func (r *OpenAIRouter) recordShadowEvidence(
+	reqCtx *RequestContext,
+	cfg config.ShadowComparisonConfig,
+	results []shadow.ArmResult,
+	decision shadow.JudgeDecision,
+) {
+	if r.ReplayRecorder == nil || reqCtx.RouterReplayID == "" {
+		return
+	}
+	judge := shadow.NewJudge(cfg.Judge, cfg.Arms)
+	outcome := buildShadowEvidence(judge, results, decision)
+	// Reuse the same guard the learning runtime applies: only attach to a
+	// record that still exists.
+	if _, found := r.ReplayRecorder.GetRecord(reqCtx.RouterReplayID); !found {
+		return
+	}
+	if err := r.ReplayRecorder.AppendOutcome(reqCtx.RouterReplayID, outcome); err != nil {
+		logging.ComponentEvent("extproc", "shadow_evidence_failed", map[string]interface{}{
+			"request_id": reqCtx.RequestID,
+			"replay_id":  reqCtx.RouterReplayID,
+			"error":      err.Error(),
+		})
+	}
+}
+
+// buildShadowEvidence packs arm results and the (optional) judge decision into
+// a replay Outcome. The reusable evidence logic (blind ids, compact features,
+// verdict mapping) lives in shadow.Judge.Evidence; this layer only wraps it
+// into the replay outcome shape.
+func buildShadowEvidence(judge *shadow.Judge, results []shadow.ArmResult, decision shadow.JudgeDecision) routerreplay.Outcome {
+	verdict, metadata := judge.Evidence(results, decision)
+	return routerreplay.Outcome{
+		Timestamp: time.Now().UTC(),
+		Source:    "shadow_comparison",
+		Verdict:   verdict,
+		Reason:    decision.Reason,
+		Metadata:  metadata,
+	}
 }
 
 // shadowRequestParams serializes the single normalized semantic request into
