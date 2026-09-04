@@ -1340,6 +1340,17 @@ export function conditionHasNestedRules(condition: DecisionCondition): boolean {
   return Boolean(condition.operator || condition.conditions?.length)
 }
 
+export function decisionRulesForSaveChecked(
+  existing: DecisionRuleSet | undefined,
+  next: DecisionRuleSet,
+): DecisionRuleSet {
+  const rules = decisionRulesForSave(existing, next)
+  if (decisionRulesConflict(rules)) {
+    throw new Error('Condition on_error has no effect when on_unknown is set; remove one of them.')
+  }
+  return rules
+}
+
 export function decisionRulesConflict(rules: DecisionRuleSet): boolean {
   return Boolean(rules.on_unknown) && (rules.conditions || []).some(conditionSetsOnError)
 }

@@ -3,8 +3,10 @@ import { describe, expect, it } from 'vitest'
 import {
   decisionRulesConflict,
   decisionRulesForSave,
+  decisionRulesForSaveChecked,
   mergeDecisionForSave,
   type DecisionConfig,
+  type DecisionRuleSet,
 } from './configPageSupport'
 
 describe('decision editor preservation', () => {
@@ -119,6 +121,18 @@ describe('decision rules on_unknown + on_error conflict', () => {
       { operator: 'AND', conditions: [], on_unknown: 'no_match' },
     )
     expect(decisionRulesConflict(preserved)).toBe(true)
+  })
+
+  it('rejects a conflicting save and passes a clean one through', () => {
+    expect(() =>
+      decisionRulesForSaveChecked(undefined, {
+        operator: 'AND',
+        on_unknown: 'no_match',
+        conditions: [conflictingLeaf],
+      }),
+    ).toThrow('on_error has no effect')
+    const clean: DecisionRuleSet = { operator: 'AND', conditions: [conflictingLeaf] }
+    expect(decisionRulesForSaveChecked(undefined, clean)).toBe(clean)
   })
 
   it('accepts either field alone', () => {

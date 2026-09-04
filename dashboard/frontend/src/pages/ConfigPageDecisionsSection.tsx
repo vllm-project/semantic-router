@@ -20,8 +20,7 @@ import type {
 import {
   cloneDecisionConditions,
   conditionHasNestedRules,
-  decisionRulesConflict,
-  decisionRulesForSave,
+  decisionRulesForSaveChecked,
   mergeDecisionForSave,
 } from './configPageSupport'
 import type { OpenEditModal, OpenViewModal } from './configPageRouterSectionSupport'
@@ -759,22 +758,15 @@ export default function ConfigPageDecisionsSection({
         return { type, configuration }
       })
 
-      const rules = decisionRulesForSave(decision?.rules, {
-        operator: formData.operator,
-        conditions,
-        ...(formData.on_unknown ? { on_unknown: formData.on_unknown } : {}),
-      })
-      if (decisionRulesConflict(rules)) {
-        throw new Error(
-          'Condition on_error has no effect when on_unknown is set; remove one of them.',
-        )
-      }
-
       const newDecision = mergeDecisionForSave(mode === 'edit' ? decision : undefined, {
         name,
         description: formData.description,
         priority: priority || 0,
-        rules,
+        rules: decisionRulesForSaveChecked(decision?.rules, {
+          operator: formData.operator,
+          conditions,
+          ...(formData.on_unknown ? { on_unknown: formData.on_unknown } : {}),
+        }),
         modelRefs,
         plugins,
       })
