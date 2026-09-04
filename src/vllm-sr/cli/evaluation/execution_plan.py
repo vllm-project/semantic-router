@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from collections.abc import Iterable
 from types import MappingProxyType
 
 from cli.evaluation.catalog import get_catalog
 from cli.evaluation.catalog_suites import CatalogSuite
 from cli.evaluation.contracts import RunManifest
-from cli.evaluation.execution_contract import NORMALIZED_LIVE_EXECUTOR_ID
+from cli.evaluation.errors import SuiteStoreError
+from cli.evaluation.execution_contract import (
+    NORMALIZED_LIVE_EXECUTOR_ID,
+    ExecutionPlan,
+)
 from cli.evaluation.executor_registry import ExecutorRegistry
 from cli.evaluation.manifest_identity import require_manifest_digest
 from cli.evaluation.normalized_suite_live_admission import (
@@ -17,35 +20,10 @@ from cli.evaluation.normalized_suite_live_admission import (
 )
 from cli.evaluation.suite_contract import BenchmarkSuiteManifest
 from cli.evaluation.suite_store import NormalizedSuiteStore
-from cli.evaluation.suite_store_error import SuiteStoreError
 from cli.evaluation.target_capabilities import (
     DEFAULT_TARGET_REGISTRY,
     TargetRegistry,
 )
-
-
-@dataclass(frozen=True)
-class ExecutionPlan:
-    suites: tuple[BenchmarkSuiteManifest, ...]
-    suite_revisions: Mapping[str, str]
-    suite_executors: Mapping[str, str]
-    allowed_tracks: frozenset[str]
-
-    def __post_init__(self) -> None:
-        object.__setattr__(
-            self, "suite_revisions", MappingProxyType(dict(self.suite_revisions))
-        )
-        object.__setattr__(
-            self, "suite_executors", MappingProxyType(dict(self.suite_executors))
-        )
-        if set(self.suite_revisions) != set(self.suite_executors):
-            raise ValueError("execution plan suite identities must have equal key sets")
-        if len(set(self.suite_executors.values())) != 1:
-            raise ValueError("one evaluation run cannot mix executor implementations")
-
-    @property
-    def executor_id(self) -> str:
-        return next(iter(self.suite_executors.values()))
 
 
 class SuiteRegistry:
@@ -134,14 +112,14 @@ def _installed_plan(
             )
             if inadmissible:
                 raise ValueError(
-                    f"suite {suite.id} has no first-party normalized live method for "
+                    f"suite {suite.id} has no supported normalized live method for "
                     + ", ".join(inadmissible)
                 )
         allowed_tracks = frozenset(
             track for tracks in admitted_by_suite.values() for track in tracks
         )
     else:
-        raise ValueError("frozen executor has no normalized suite admission registry")
+        raise ValueError("frozen executor has no normalized-suite admission contract")
     return ExecutionPlan(
         suites=manifests,
         suite_revisions={suite.id: suite.revision for suite in manifests},
