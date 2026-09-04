@@ -32,14 +32,22 @@ func (ImagesCodec) Capabilities() llmprotocol.CapabilitySet {
 	)
 }
 
-const imagesDefaultSize = "1024x1024"
+const (
+	imagesDefaultSize       = "1024x1024"
+	imagesResponseFormatB64 = "b64_json"
+)
 
 type imagesRequestWire struct {
-	Model          string `json:"model,omitempty"`
-	Prompt         string `json:"prompt"`
-	Size           string `json:"size,omitempty"`
-	N              *int   `json:"n,omitempty"`
-	ResponseFormat string `json:"response_format,omitempty"`
+	Model             string `json:"model,omitempty"`
+	Prompt            string `json:"prompt"`
+	Size              string `json:"size,omitempty"`
+	N                 *int   `json:"n,omitempty"`
+	Quality           string `json:"quality,omitempty"`
+	ResponseFormat    string `json:"response_format,omitempty"`
+	Background        string `json:"background,omitempty"`
+	Moderation        string `json:"moderation,omitempty"`
+	OutputFormat      string `json:"output_format,omitempty"`
+	OutputCompression *int64 `json:"output_compression,omitempty"`
 }
 
 type imagesResponseWire struct {
@@ -60,8 +68,9 @@ type imagesErrorWire struct {
 }
 
 // DecodeRequest decodes a direct images-dialect client request into the
-// neutral request IR. A non-empty prompt becomes a user text message and the
-// size is carried as hosted image-generation options.
+// neutral request IR. A non-empty prompt becomes a user text message, and
+// every images request field maps onto the neutral image-generation options
+// so the conversion is lossless.
 func (ImagesCodec) DecodeRequest(body []byte, _ llmprotocol.Policy) (llmprotocol.Request, llmprotocol.Envelope, llmprotocol.Diagnostics, error) {
 	var wire imagesRequestWire
 	if err := json.Unmarshal(body, &wire); err != nil {
@@ -70,9 +79,8 @@ func (ImagesCodec) DecodeRequest(body []byte, _ llmprotocol.Policy) (llmprotocol
 	if wire.Prompt == "" {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, invalidRequestTranslation(fmt.Errorf("images prompt is required"))
 	}
-	size := wire.Size
-	if size == "" {
-		size = imagesDefaultSize
+	if wire.ResponseFormat != "" && wire.ResponseFormat != imagesResponseFormatB64 {
+		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, unsupportedDownstreamTranslation(fmt.Errorf("images wire only supports response_format %q", imagesResponseFormatB64))
 	}
 	content := llmprotocol.Content{Kind: llmprotocol.ContentText, Text: wire.Prompt}
 	request := llmprotocol.Request{
@@ -81,7 +89,18 @@ func (ImagesCodec) DecodeRequest(body []byte, _ llmprotocol.Policy) (llmprotocol
 			Role:    llmprotocol.RoleUser,
 			Content: []llmprotocol.Content{content},
 		}},
-		ImageGeneration: &llmprotocol.ImageGenerationOptions{Size: size},
+		ImageGeneration: &llmprotocol.ImageGenerationOptions{
+			Model:             wire.Model,
+			Quality:           wire.Quality,
+			Size:              wire.Size,
+			OutputFormat:      wire.OutputFormat,
+			OutputCompression: wire.OutputCompression,
+			Moderation:        wire.Moderation,
+			Background:        wire.Background,
+		},
+	}
+	if request.ImageGeneration.Size == "" {
+		request.ImageGeneration.Size = imagesDefaultSize
 	}
 	if wire.N != nil {
 		request.CandidateCount = llmprotocol.Int64(int64(*wire.N))
@@ -91,12 +110,18 @@ func (ImagesCodec) DecodeRequest(body []byte, _ llmprotocol.Policy) (llmprotocol
 
 // EncodeRequest renders a neutral request as a DALL-E images request. The
 // prompt is taken from the last user text block; size comes from the hosted
-// image-generation options with a 1024x1024 default.
+// image-generation options with a 1024x1024 default. Every other neutral
+// option that the images dialect cannot express fails closed instead of being
+// silently dropped, and the provider model plus b64_json response format are
+// always sent so the upstream reply matches what DecodeResponse accepts.
 func (ImagesCodec) EncodeRequest(request llmprotocol.Request, _ llmprotocol.Envelope, _ llmprotocol.Policy) ([]byte, llmprotocol.Diagnostics, error) {
 	if request.ImageGeneration == nil {
 		return nil, nil, unsupportedDownstreamTranslation(fmt.Errorf("images wire requires a hosted image_generation request"))
 	}
-	prompt, ok := lastRequestText(request)
+	if err := rejectUnsupportedImageOptions(*request.ImageGeneration); err != nil {
+		return nil, nil, err
+	}
+	prompt, ok := lastUserRequestText(request)
 	if !ok {
 		return nil, nil, unsupportedDownstreamTranslation(fmt.Errorf("images prompt is unavailable"))
 	}
@@ -104,7 +129,17 @@ func (ImagesCodec) EncodeRequest(request llmprotocol.Request, _ llmprotocol.Enve
 	if size == "" {
 		size = imagesDefaultSize
 	}
-	wire := imagesRequestWire{Prompt: prompt, Size: size}
+	wire := imagesRequestWire{
+		Model:             request.Model,
+		Prompt:            prompt,
+		Size:              size,
+		Quality:           request.ImageGeneration.Quality,
+		ResponseFormat:    imagesResponseFormatB64,
+		Background:        request.ImageGeneration.Background,
+		Moderation:        request.ImageGeneration.Moderation,
+		OutputFormat:      request.ImageGeneration.OutputFormat,
+		OutputCompression: request.ImageGeneration.OutputCompression,
+	}
 	if n := request.CandidateCount; n != nil && *n > 0 {
 		value := int(*n)
 		wire.N = &value
@@ -114,6 +149,26 @@ func (ImagesCodec) EncodeRequest(request llmprotocol.Request, _ llmprotocol.Enve
 		return nil, nil, fmt.Errorf("encode images request: %w", err)
 	}
 	return body, nil, nil
+}
+
+// rejectUnsupportedImageOptions fails closed on neutral image-generation
+// options that belong to the Responses tool contract but have no images
+// request field, so supported conversions stay lossless instead of silently
+// dropping the caller's intent.
+func rejectUnsupportedImageOptions(options llmprotocol.ImageGenerationOptions) error {
+	if options.InputFidelity != "" {
+		return unsupportedDownstreamTranslation(fmt.Errorf("images wire does not support image option \"input_fidelity\""))
+	}
+	if options.Action != "" {
+		return unsupportedDownstreamTranslation(fmt.Errorf("images wire does not support image option \"action\""))
+	}
+	if options.PartialImages != nil {
+		return unsupportedDownstreamTranslation(fmt.Errorf("images wire does not support image option \"partial_images\""))
+	}
+	if options.InputImageMask != nil {
+		return unsupportedDownstreamTranslation(fmt.Errorf("images wire does not support image option \"input_image_mask\""))
+	}
+	return nil
 }
 
 // DecodeResponse converts a DALL-E response ({data:[{b64_json}]}) into the
@@ -232,6 +287,7 @@ func (ImagesCodec) EncodeTransportError(err llmprotocol.TransportError) []byte {
 func (ImagesCodec) NewDecoder(_ llmprotocol.StreamContext, _ llmprotocol.Policy) llmprotocol.StreamDecoder {
 	return imagesStreamUnsupportedDecoder{}
 }
+
 func (ImagesCodec) NewEncoder(_ llmprotocol.StreamContext, _ llmprotocol.Policy) llmprotocol.StreamEncoder {
 	return imagesStreamUnsupportedEncoder{}
 }
@@ -253,16 +309,23 @@ func (imagesStreamUnsupportedEncoder) Finalize(error) ([][]byte, llmprotocol.Dia
 	return nil, nil, fmt.Errorf("images wire does not support streaming")
 }
 
-// lastRequestText returns the last non-empty user text block, which is the
-// prompt to render for image generation.
-func lastRequestText(request llmprotocol.Request) (string, bool) {
+// lastUserRequestText returns the last non-empty text block of the last user
+// message, which is the prompt to render for image generation. Content in
+// assistant or tool roles never becomes the prompt, so multi-message
+// conversations cannot steer the image request.
+func lastUserRequestText(request llmprotocol.Request) (string, bool) {
 	for index := len(request.Messages) - 1; index >= 0; index-- {
-		for block := len(request.Messages[index].Content) - 1; block >= 0; block-- {
-			content := request.Messages[index].Content[block]
+		message := request.Messages[index]
+		if message.Role != llmprotocol.RoleUser {
+			continue
+		}
+		for block := len(message.Content) - 1; block >= 0; block-- {
+			content := message.Content[block]
 			if content.Kind == llmprotocol.ContentText && content.Text != "" {
 				return content.Text, true
 			}
 		}
+		return "", false
 	}
 	return "", false
 }

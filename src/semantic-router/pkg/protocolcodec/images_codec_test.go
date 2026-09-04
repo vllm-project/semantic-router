@@ -26,7 +26,8 @@ func TestImagesCodecEncodeRequestSinksResponsesImageGeneration(t *testing.T) {
 		t.Fatalf("EncodeRequest failed: %v", err)
 	}
 	var wire imagesRequestWire
-	if err := json.Unmarshal(body, &wire); err != nil {
+	err = json.Unmarshal(body, &wire)
+	if err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
 	if wire.Prompt != "draw a cat" {
@@ -34,6 +35,147 @@ func TestImagesCodecEncodeRequestSinksResponsesImageGeneration(t *testing.T) {
 	}
 	if wire.Size != size {
 		t.Fatalf("size = %q, want %q", wire.Size, size)
+	}
+	if wire.Model != "openai/gpt-image" {
+		t.Fatalf("model = %q, want the provider model to be preserved", wire.Model)
+	}
+	if wire.ResponseFormat != "b64_json" {
+		t.Fatalf("response_format = %q, want b64_json so the reply matches the decoder", wire.ResponseFormat)
+	}
+}
+
+// The prompt must come from the last user turn: assistant text never steers
+// the image request, and earlier user turns lose to the latest one.
+func TestImagesCodecEncodeRequestPromptSticksToLastUserTurn(t *testing.T) {
+	codec := ImagesCodec{}
+	request := llmprotocol.Request{
+		Messages: []llmprotocol.Message{
+			{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{
+				{Kind: llmprotocol.ContentText, Text: "draw a cat"},
+			}},
+			{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{
+				{Kind: llmprotocol.ContentText, Text: "sure, a huge red cat"},
+			}},
+			{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{
+				{Kind: llmprotocol.ContentText, Text: "make it a dog instead"},
+			}},
+		},
+		ImageGeneration: &llmprotocol.ImageGenerationOptions{},
+	}
+	body, _, err := codec.EncodeRequest(request, llmprotocol.Envelope{}, llmprotocol.Policy{})
+	if err != nil {
+		t.Fatalf("EncodeRequest failed: %v", err)
+	}
+	var wire imagesRequestWire
+	err = json.Unmarshal(body, &wire)
+	if err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if wire.Prompt != "make it a dog instead" {
+		t.Fatalf("prompt = %q, want the last user turn", wire.Prompt)
+	}
+
+	// A trailing assistant turn must not become the prompt.
+	request.Messages = append(request.Messages, llmprotocol.Message{
+		Role: llmprotocol.RoleAssistant,
+		Content: []llmprotocol.Content{
+			{Kind: llmprotocol.ContentText, Text: "here you go"},
+		},
+	})
+	body, _, err = codec.EncodeRequest(request, llmprotocol.Envelope{}, llmprotocol.Policy{})
+	if err != nil {
+		t.Fatalf("EncodeRequest failed: %v", err)
+	}
+	if err := json.Unmarshal(body, &wire); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if wire.Prompt != "make it a dog instead" {
+		t.Fatalf("prompt = %q, assistant text must not become the prompt", wire.Prompt)
+	}
+
+	// A last user turn without text must fail closed instead of borrowing an
+	// earlier turn's prompt.
+	request.Messages = append(request.Messages, llmprotocol.Message{
+		Role: llmprotocol.RoleUser,
+		Content: []llmprotocol.Content{
+			{Kind: llmprotocol.ContentImage, URL: "https://example.com/ref.png"},
+		},
+	})
+	if _, _, err := codec.EncodeRequest(request, llmprotocol.Envelope{}, llmprotocol.Policy{}); err == nil {
+		t.Fatal("EncodeRequest must fail when the last user turn carries no text")
+	}
+}
+
+// Neutral image options that belong to the Responses tool contract but have
+// no images request field must fail closed instead of being silently dropped.
+func TestImagesCodecEncodeRequestRejectsUnsupportedOptions(t *testing.T) {
+	codec := ImagesCodec{}
+	base := func() llmprotocol.Request {
+		return llmprotocol.Request{
+			Messages: []llmprotocol.Message{{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{
+				{Kind: llmprotocol.ContentText, Text: "a horse"},
+			}}},
+			ImageGeneration: &llmprotocol.ImageGenerationOptions{},
+		}
+	}
+	for name, mutate := range map[string]func(*llmprotocol.ImageGenerationOptions){
+		"input_fidelity": func(o *llmprotocol.ImageGenerationOptions) { o.InputFidelity = "high" },
+		"action":         func(o *llmprotocol.ImageGenerationOptions) { o.Action = "edit" },
+		"partial_images": func(o *llmprotocol.ImageGenerationOptions) { o.PartialImages = llmprotocol.Int64(2) },
+		"input_image_mask": func(o *llmprotocol.ImageGenerationOptions) {
+			o.InputImageMask = &llmprotocol.ImageGenerationMask{FileID: "file-1"}
+		},
+	} {
+		request := base()
+		mutate(request.ImageGeneration)
+		if _, _, err := codec.EncodeRequest(request, llmprotocol.Envelope{}, llmprotocol.Policy{}); err == nil {
+			t.Fatalf("option %s must fail closed, got success", name)
+		}
+	}
+}
+
+// Images-native neutral options must reach the wire untouched; only the
+// response format is forced to b64_json.
+func TestImagesCodecEncodeRequestCarriesImagesOptions(t *testing.T) {
+	codec := ImagesCodec{}
+	compression := int64(72)
+	request := llmprotocol.Request{
+		Model: "upstream/omni",
+		Messages: []llmprotocol.Message{{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{
+			{Kind: llmprotocol.ContentText, Text: "a horse"},
+		}}},
+		ImageGeneration: &llmprotocol.ImageGenerationOptions{
+			Quality:           "high",
+			Size:              "1536x1024",
+			Background:        "transparent",
+			Moderation:        "low",
+			OutputFormat:      "webp",
+			OutputCompression: &compression,
+		},
+	}
+	body, _, err := codec.EncodeRequest(request, llmprotocol.Envelope{}, llmprotocol.Policy{})
+	if err != nil {
+		t.Fatalf("EncodeRequest failed: %v", err)
+	}
+	var wire imagesRequestWire
+	err = json.Unmarshal(body, &wire)
+	if err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if wire.Model != "upstream/omni" || wire.Quality != "high" || wire.Size != "1536x1024" ||
+		wire.Background != "transparent" || wire.Moderation != "low" || wire.OutputFormat != "webp" ||
+		wire.OutputCompression == nil || *wire.OutputCompression != 72 {
+		t.Fatalf("images options lost on encode: %+v", wire)
+	}
+}
+
+// A client explicitly asking for url responses must be rejected: the sink
+// only ever emits b64_json.
+func TestImagesCodecDecodeRequestRejectsURLResponseFormat(t *testing.T) {
+	codec := ImagesCodec{}
+	body := []byte(`{"prompt":"a horse","response_format":"url"}`)
+	if _, _, _, err := codec.DecodeRequest(body, llmprotocol.Policy{}); err == nil {
+		t.Fatalf("response_format url must fail closed")
 	}
 }
 
