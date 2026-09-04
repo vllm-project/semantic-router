@@ -21,7 +21,11 @@ func (r *OpenAIRouter) handleUpstreamTransportError(
 	body []byte,
 	ctx *RequestContext,
 ) *ext_proc.ProcessingResponse {
-	engine, err := r.protocolEngine()
+	// An upstream error body comes from the same backend as a success body and
+	// carries the same vendor decorations. Azure returns a decorated envelope
+	// for content-filter blocks and rate limits, so decoding it strictly would
+	// replace the real upstream reason with a generic router error.
+	engine, err := r.protocolEngineForBackend(ctx)
 	if err != nil {
 		return r.createErrorResponse(503, "protocol runtime unavailable")
 	}
