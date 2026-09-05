@@ -6,7 +6,7 @@ use candle_core::Device;
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 use std::ptr;
-use std::sync::{Mutex, OnceLock};
+use std::sync::Mutex;
 
 /// Global Qwen3Guard instance (for safety/jailbreak detection)
 
@@ -181,7 +181,7 @@ pub unsafe extern "C" fn classify_with_qwen3_guard(
         }
     };
 
-    match guard_mutex.lock() {
+    let res = match guard_mutex.lock() {
         Ok(mut guard) => match guard.generate_guard(text_str, mode_str) {
             Ok(guard_result) => {
                 let raw_output_c = match CString::new(guard_result.raw_output.as_str()) {
@@ -226,7 +226,8 @@ pub unsafe extern "C" fn classify_with_qwen3_guard(
             }
             -1
         }
-    }
+    };
+    res
 }
 
 /// Check if Qwen3Guard is initialized

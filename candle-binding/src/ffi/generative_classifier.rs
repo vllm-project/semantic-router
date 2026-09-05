@@ -17,7 +17,7 @@ use candle_core::Device;
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 use std::ptr;
-use std::sync::{Mutex, OnceLock};
+use std::sync::Mutex;
 
 /// Global multi-adapter classifier instance (for LoRA-based classification)
 
@@ -315,7 +315,7 @@ pub unsafe extern "C" fn load_qwen3_lora_adapter(
     };
 
     // Load adapter
-    match classifier_mutex.lock() {
+    let res = match classifier_mutex.lock() {
         Ok(mut classifier) => match classifier.load_adapter(adapter_name_str, adapter_path_str) {
             Ok(_) => {
                 println!(
@@ -336,7 +336,8 @@ pub unsafe extern "C" fn load_qwen3_lora_adapter(
             eprintln!("Error: failed to acquire lock: {}", e);
             -1
         }
-    }
+    };
+    res
 }
 
 /// Classify text using a specific LoRA adapter
@@ -390,7 +391,7 @@ pub unsafe extern "C" fn classify_with_qwen3_adapter(
         }
     };
 
-    match classifier_mutex.lock() {
+    let res = match classifier_mutex.lock() {
         Ok(mut classifier) => {
             match classifier.classify_with_adapter(&text_str, &adapter_name_str) {
                 Ok(multi_result) => match write_generative_success(result, multi_result) {
@@ -413,7 +414,8 @@ pub unsafe extern "C" fn classify_with_qwen3_adapter(
             eprintln!("Error: failed to acquire lock: {}", e);
             write_generative_error(result, &format!("Failed to acquire lock: {}", e))
         }
-    }
+    };
+    res
 }
 
 /// Get list of loaded adapter names
@@ -449,7 +451,7 @@ pub unsafe extern "C" fn get_qwen3_loaded_adapters(
         }
     };
 
-    match classifier_mutex.lock() {
+    let res = match classifier_mutex.lock() {
         Ok(classifier) => {
             let adapter_names = classifier.list_adapters();
             let count = adapter_names.len();
@@ -485,7 +487,8 @@ pub unsafe extern "C" fn get_qwen3_loaded_adapters(
             eprintln!("Error: failed to acquire lock: {}", e);
             -1
         }
-    }
+    };
+    res
 }
 
 /// Zero-shot classification with base model (no adapter required)
@@ -544,7 +547,7 @@ pub unsafe extern "C" fn classify_zero_shot_qwen3(
         }
     };
 
-    match classifier_mutex.lock() {
+    let res = match classifier_mutex.lock() {
         Ok(mut classifier) => match classifier.classify_zero_shot(&text_str, cats) {
             Ok(multi_result) => match write_generative_success(result, multi_result) {
                 Ok(()) => 0,
@@ -562,7 +565,8 @@ pub unsafe extern "C" fn classify_zero_shot_qwen3(
             eprintln!("Error: failed to acquire lock: {}", e);
             write_generative_error(result, &format!("Failed to acquire lock: {}", e))
         }
-    }
+    };
+    res
 }
 
 /// Check if Qwen3 Multi-LoRA classifier is initialized

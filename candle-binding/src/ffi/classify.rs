@@ -22,14 +22,8 @@ use crate::ffi::memory::{
 use crate::ffi::types::BertTokenEntity;
 use crate::ffi::types::*;
 use crate::registry::get_registry;
-use crate::BertClassifier;
 use std::ffi::CString;
 use std::ffi::{c_char, CStr};
-use std::sync::Arc;
-
-
-// Import DeBERTa classifier for jailbreak detection
-use super::init::DEBERTA_JAILBREAK_CLASSIFIER;
 
 // Classification constants for consistent category detection
 /// PII detection positive class identifier (numeric)
@@ -283,7 +277,10 @@ pub extern "C" fn classify_jailbreak_text_with_probabilities(
     };
 
     // Try LoRA jailbreak classifier first (preferred for higher accuracy)
-    if let Some(classifier) = LORA_JAILBREAK_CLASSIFIER.get() {
+    if let Some(classifier) = get_registry()
+        .get::<crate::classifiers::lora::security_lora::SecurityLoRAClassifier>(
+        "lora_jailbreak_classifier",
+    ) {
         let classifier = classifier.clone();
         match classifier.classify_with_index_and_probabilities(text) {
             Ok((class_idx, confidence, _label, probabilities)) => {
@@ -308,7 +305,7 @@ pub extern "C" fn classify_jailbreak_text_with_probabilities(
     }
 
     // Fallback to Traditional BERT classifier
-    if let Some(classifier) = BERT_JAILBREAK_CLASSIFIER.get() {
+    if let Some(classifier) = get_registry().get::<crate::BertClassifier>("legacy_bert_jailbreak") {
         let classifier = classifier.clone();
         match classifier.classify_text_with_probabilities(text) {
             Ok((class_idx, confidence, probabilities)) => {
@@ -574,7 +571,12 @@ pub extern "C" fn classify_bert_pii_tokens(text: *const c_char) -> BertTokenClas
         }
     };
 
-    if let Some(classifier) = TRADITIONAL_BERT_TOKEN_CLASSIFIER.get() {
+    if let Some(classifier) =
+        get_registry()
+            .get::<crate::model_architectures::traditional::bert::TraditionalBertTokenClassifier>(
+                "bert_token_classifier",
+            )
+    {
         let classifier = classifier.clone();
         match classifier.classify_tokens(text) {
             Ok(token_results) => {
@@ -678,7 +680,12 @@ pub extern "C" fn classify_candle_bert_tokens_with_labels(
     }
 
     // Fall back to traditional BERT token classifier
-    if let Some(classifier) = TRADITIONAL_BERT_TOKEN_CLASSIFIER.get() {
+    if let Some(classifier) =
+        get_registry()
+            .get::<crate::model_architectures::traditional::bert::TraditionalBertTokenClassifier>(
+                "bert_token_classifier",
+            )
+    {
         let classifier = classifier.clone();
         match classifier.classify_tokens(text) {
             Ok(token_results) => {
@@ -765,7 +772,12 @@ pub extern "C" fn classify_candle_bert_tokens(
     }
 
     // Fallback to traditional BERT token classifier
-    if let Some(classifier) = TRADITIONAL_BERT_TOKEN_CLASSIFIER.get() {
+    if let Some(classifier) =
+        get_registry()
+            .get::<crate::model_architectures::traditional::bert::TraditionalBertTokenClassifier>(
+                "bert_token_classifier",
+            )
+    {
         let classifier = classifier.clone();
         match classifier.classify_tokens(text) {
             Ok(token_results) => {
@@ -795,7 +807,7 @@ pub extern "C" fn classify_candle_bert_tokens(
     }
 
     // Fallback to ModernBERT token classifier (for PII detection with ModernBERT models)
-    if let Some(classifier) = TRADITIONAL_MODERNBERT_TOKEN_CLASSIFIER.get() {
+    if let Some(classifier) = get_registry().get::<crate::model_architectures::traditional::modernbert::TraditionalModernBertTokenClassifier>("modernbert_token_classifier") {
         let classifier = classifier.clone();
         match classifier.classify_tokens(text) {
             Ok(token_results) => {
@@ -887,8 +899,7 @@ pub extern "C" fn classify_candle_bert_text(text: *const c_char) -> Classificati
     }
 
     // Fallback to Traditional BERT classifier
-    if let Some(classifier) = get_registry().get::<crate::BertClassifier>("legacy_bert")
-    {
+    if let Some(classifier) = get_registry().get::<crate::BertClassifier>("legacy_bert") {
         let classifier = classifier.clone();
         match classifier.classify_text(text) {
             Ok((class_id, confidence)) => {
@@ -937,8 +948,7 @@ pub extern "C" fn classify_bert_text(text: *const c_char) -> ClassificationResul
             Err(_) => return default_result,
         }
     };
-    if let Some(classifier) = get_registry().get::<crate::BertClassifier>("legacy_bert")
-    {
+    if let Some(classifier) = get_registry().get::<crate::BertClassifier>("legacy_bert") {
         let classifier = classifier.clone();
         match classifier.classify_text(text) {
             Ok((class_id, confidence)) => {
@@ -1095,10 +1105,7 @@ pub extern "C" fn classify_modernbert_text(text: *const c_char) -> ModernBertCla
             Err(_) => return default_result,
         }
     };
-    if let Some(classifier) =
-        get_registry()
-            .get::<crate::BertClassifier>("legacy_bert")
-    {
+    if let Some(classifier) = get_registry().get::<crate::BertClassifier>("legacy_bert") {
         let classifier = classifier.clone();
         match classifier.classify_text(text) {
             Ok((predicted_class, confidence)) => ModernBertClassificationResult {
@@ -1137,9 +1144,7 @@ pub extern "C" fn classify_modernbert_text_with_probabilities(
         }
     };
 
-    if let Some(classifier) =
-        get_registry().get::<crate::BertClassifier>("legacy_bert")
-    {
+    if let Some(classifier) = get_registry().get::<crate::BertClassifier>("legacy_bert") {
         let classifier = classifier.clone();
         match classifier.classify_text_with_probabilities(text) {
             Ok((class_id, confidence, probabilities)) => {
@@ -1194,9 +1199,7 @@ pub extern "C" fn classify_modernbert_pii_text(
         }
     };
 
-    if let Some(classifier) =
-        get_registry().get::<crate::BertClassifier>("legacy_bert_pii")
-    {
+    if let Some(classifier) = get_registry().get::<crate::BertClassifier>("legacy_bert_pii") {
         let classifier = classifier.clone();
         match classifier.classify_text(text) {
             Ok((class_id, confidence)) => ModernBertClassificationResult {
@@ -1239,9 +1242,7 @@ pub extern "C" fn classify_modernbert_jailbreak_text(
         }
     };
 
-    if let Some(classifier) =
-        get_registry().get::<crate::BertClassifier>("legacy_bert_jailbreak")
-    {
+    if let Some(classifier) = get_registry().get::<crate::BertClassifier>("legacy_bert_jailbreak") {
         let classifier = classifier.clone();
         match classifier.classify_text(text) {
             Ok((class_id, confidence)) => ModernBertClassificationResult {
@@ -1295,7 +1296,7 @@ pub extern "C" fn classify_modernbert_jailbreak_text_with_probabilities(
         }
     };
 
-    if let Some(classifier) = TRADITIONAL_MODERNBERT_JAILBREAK_CLASSIFIER.get() {
+    if let Some(classifier) = get_registry().get::<crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier>("legacy_bert_jailbreak") {
         let classifier = classifier.clone();
         match classifier.classify_text_with_probabilities(text) {
             Ok((class_id, confidence, probabilities)) => {
@@ -1431,7 +1432,7 @@ pub extern "C" fn classify_fact_check_text(text: *const c_char) -> ModernBertCla
         }
     };
 
-    if let Some(classifier) = TRADITIONAL_MODERNBERT_FACT_CHECK_CLASSIFIER.get() {
+    if let Some(classifier) = get_registry().get::<crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier>("fact_check_classifier") {
         let classifier = classifier.clone();
         match classifier.classify_text(text) {
             Ok((class_id, confidence)) => ModernBertClassificationResult {
@@ -1550,7 +1551,7 @@ pub extern "C" fn classify_modernbert_pii_tokens(
         }
     };
 
-    if let Some(classifier) = TRADITIONAL_MODERNBERT_TOKEN_CLASSIFIER.get() {
+    if let Some(classifier) = get_registry().get::<crate::model_architectures::traditional::modernbert::TraditionalModernBertTokenClassifier>("modernbert_token_classifier") {
         let classifier = classifier.clone();
         // Use real token classification
         match classifier.classify_tokens(text) {
@@ -2400,7 +2401,7 @@ pub extern "C" fn classify_mmbert_32k_jailbreak_with_probabilities(
         }
     };
 
-    if let Some(classifier) = MMBERT_32K_JAILBREAK_CLASSIFIER.get() {
+    if let Some(classifier) = get_registry().get::<crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier>("mmbert_32k_jailbreak_classifier") {
         match classifier.classify_text_with_probabilities(text) {
             Ok((class_id, confidence, probabilities)) => {
                 let num_classes = probabilities.len();

@@ -14,7 +14,6 @@ use std::ffi::{c_char, CStr};
 //Import embedding models and model factory
 use crate::model_architectures::config::{DualPathConfig, EmbeddingConfig};
 use crate::model_architectures::model_factory::ModelFactory;
-use std::sync::OnceLock;
 
 // ============================================================================
 // Refactoring: Shared embedding generation logic
@@ -73,17 +72,20 @@ pub(crate) fn truncate_embedding_to_dimension(
 /// Get a reference to the multimodal model + tokenizer, checking standalone first
 /// then falling back to the factory.
 fn get_multimodal_refs() -> Option<(&'static MultiModalEmbeddingModel, &'static MmTokenizer)> {
-    if let Some((model, tokenizer, _)) =
-        get_registry()
-            .get::<(MultiModalEmbeddingModel, MmTokenizer, String)>("standalone_multimodal")
+    if let Some(entry) = get_registry()
+        .get::<(MultiModalEmbeddingModel, MmTokenizer, String)>("standalone_multimodal")
     {
-        return Some((model, tokenizer));
+        let ptr = std::sync::Arc::as_ptr(&entry);
+        return Some(unsafe { (&(*ptr).0, &(*ptr).1) });
     }
     if let Some(factory) = get_registry().get::<ModelFactory>("global_model_factory") {
-        if let (Some(model), Some(tokenizer)) = (
-            factory.get_multimodal_model(),
-            factory.get_multimodal_tokenizer(),
-        ) {
+        let ptr = std::sync::Arc::as_ptr(&factory);
+        if let (Some(model), Some(tokenizer)) = unsafe {
+            (
+                (*ptr).get_multimodal_model(),
+                (*ptr).get_multimodal_tokenizer(),
+            )
+        } {
             return Some((model, tokenizer));
         }
     }
@@ -965,12 +967,21 @@ pub extern "C" fn get_embedding_with_dim(
     // Check if selected model is available, fall back to mmbert if not
     let model_type_str = match model_type {
         ModelType::Qwen3Embedding => {
-            if factory.is_some_and(|f| f.get_qwen3_model().is_some()) {
+            if factory
+                .as_ref()
+                .is_some_and(|f| f.get_qwen3_model().is_some())
+            {
                 "qwen3"
-            } else if factory.is_some_and(|f| f.get_mmbert_model().is_some()) {
+            } else if factory
+                .as_ref()
+                .is_some_and(|f| f.get_mmbert_model().is_some())
+            {
                 eprintln!("INFO: Qwen3 not available, falling back to mmbert");
                 "mmbert"
-            } else if factory.is_some_and(|f| f.get_gemma_model().is_some()) {
+            } else if factory
+                .as_ref()
+                .is_some_and(|f| f.get_gemma_model().is_some())
+            {
                 eprintln!("INFO: Qwen3 not available, falling back to gemma");
                 "gemma"
             } else {
@@ -984,12 +995,21 @@ pub extern "C" fn get_embedding_with_dim(
             }
         }
         ModelType::GemmaEmbedding => {
-            if factory.is_some_and(|f| f.get_gemma_model().is_some()) {
+            if factory
+                .as_ref()
+                .is_some_and(|f| f.get_gemma_model().is_some())
+            {
                 "gemma"
-            } else if factory.is_some_and(|f| f.get_mmbert_model().is_some()) {
+            } else if factory
+                .as_ref()
+                .is_some_and(|f| f.get_mmbert_model().is_some())
+            {
                 eprintln!("INFO: Gemma not available, falling back to mmbert");
                 "mmbert"
-            } else if factory.is_some_and(|f| f.get_qwen3_model().is_some()) {
+            } else if factory
+                .as_ref()
+                .is_some_and(|f| f.get_qwen3_model().is_some())
+            {
                 eprintln!("INFO: Gemma not available, falling back to qwen3");
                 "qwen3"
             } else {
@@ -1161,13 +1181,13 @@ pub extern "C" fn get_embedding_2d_matryoshka(
 
     // Generate embedding based on model type
     let embedding_result = match model_type {
-        ModelType::Qwen3Embedding => generate_qwen3_embedding(factory, text_str, target_dimension),
-        ModelType::GemmaEmbedding => generate_gemma_embedding(factory, text_str, target_dimension),
+        ModelType::Qwen3Embedding => generate_qwen3_embedding(&factory, text_str, target_dimension),
+        ModelType::GemmaEmbedding => generate_gemma_embedding(&factory, text_str, target_dimension),
         ModelType::MmBertEmbedding => {
-            generate_mmbert_embedding(factory, text_str, layer, target_dimension)
+            generate_mmbert_embedding(&factory, text_str, layer, target_dimension)
         }
         ModelType::MultiModalEmbedding => {
-            generate_multimodal_text_embedding(factory, text_str, layer, target_dimension)
+            generate_multimodal_text_embedding(&factory, text_str, layer, target_dimension)
         }
         _ => {
             eprintln!("Error: unsupported model type: {:?}", model_type);
@@ -1382,13 +1402,13 @@ pub extern "C" fn calculate_embedding_similarity(
         // Manual mode: directly use specified model
 
         let (emb1, emb2, model_id) = if model_type_str == "qwen3" {
-            let emb1 = generate_qwen3_embedding(factory, text1_str, target_dimension)
+            let emb1 = generate_qwen3_embedding(&factory, text1_str, target_dimension)
                 .map_err(|e| {
                     eprintln!("Error generating Qwen3 embedding for text1: {}", e);
                     e
                 })
                 .ok();
-            let emb2 = generate_qwen3_embedding(factory, text2_str, target_dimension)
+            let emb2 = generate_qwen3_embedding(&factory, text2_str, target_dimension)
                 .map_err(|e| {
                     eprintln!("Error generating Qwen3 embedding for text2: {}", e);
                     e
@@ -1397,13 +1417,13 @@ pub extern "C" fn calculate_embedding_similarity(
             (emb1, emb2, 0)
         } else {
             // "gemma"
-            let emb1 = generate_gemma_embedding(factory, text1_str, target_dimension)
+            let emb1 = generate_gemma_embedding(&factory, text1_str, target_dimension)
                 .map_err(|e| {
                     eprintln!("Error generating Gemma embedding for text1: {}", e);
                     e
                 })
                 .ok();
-            let emb2 = generate_gemma_embedding(factory, text2_str, target_dimension)
+            let emb2 = generate_gemma_embedding(&factory, text2_str, target_dimension)
                 .map_err(|e| {
                     eprintln!("Error generating Gemma embedding for text2: {}", e);
                     e
@@ -1616,7 +1636,7 @@ pub extern "C" fn calculate_similarity_batch(
 
     // Batch generate embeddings using the appropriate model
     let embeddings_batch = if use_qwen3 {
-        match generate_qwen3_embeddings_batch(factory, &all_texts, target_dimension) {
+        match generate_qwen3_embeddings_batch(&factory, &all_texts, target_dimension) {
             Ok(embs) => embs,
             Err(e) => {
                 eprintln!("Error: Qwen3 batch embedding generation failed: {}", e);
@@ -1627,7 +1647,7 @@ pub extern "C" fn calculate_similarity_batch(
             }
         }
     } else {
-        match generate_gemma_embeddings_batch(factory, &all_texts, target_dimension) {
+        match generate_gemma_embeddings_batch(&factory, &all_texts, target_dimension) {
             Ok(embs) => embs,
             Err(e) => {
                 eprintln!("Error: Gemma batch embedding generation failed: {}", e);
