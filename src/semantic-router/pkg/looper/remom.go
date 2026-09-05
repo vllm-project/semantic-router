@@ -251,6 +251,11 @@ type IntermediateResp struct {
 	Reasoning        string `json:"reasoning,omitempty"`
 	CompactedContent string `json:"compacted_content,omitempty"`
 	TokenCount       int    `json:"token_count,omitempty"`
+	// Usage is the backend-reported usage for this response. It is carried so
+	// the next round's synthesis prompt compacts at the same observed
+	// bytes-per-token ratio as CompactedContent; it is not part of the
+	// published intermediate-response payload.
+	Usage TokenUsage `json:"-"`
 }
 
 // Default synthesis templates
@@ -454,6 +459,7 @@ func intermediateResponsesToModelResponses(responses []IntermediateResp) []*Mode
 			Content:          ir.Content,
 			ReasoningContent: ir.Reasoning,
 			Model:            ir.Model,
+			Usage:            ir.Usage,
 		})
 	}
 	return prevResponses
@@ -538,6 +544,7 @@ func (l *ReMoMLooper) buildReMoMRoundResponse(
 			Reasoning:        resp.ReasoningContent,
 			CompactedContent: l.compactResponse(cfg, synthesisText, bytesPerToken),
 			TokenCount:       estimateTokens(synthesisText, bytesPerToken),
+			Usage:            resp.Usage,
 		})
 	}
 	return roundResp

@@ -1,8 +1,12 @@
 package looper
 
 import (
+	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"unicode/utf8"
 
@@ -56,8 +60,8 @@ func TestCompactResponse_BudgetTracksObservedBytesPerToken(t *testing.T) {
 	asciiOut := looper.compactResponse(cfg, ascii, reMoMBytesPerToken(asciiResp))
 	cjkOut := looper.compactResponse(cfg, cjk, reMoMBytesPerToken(cjkResp))
 
-	assert.Equal(t, 400, len(asciiOut))
-	assert.Equal(t, 300, len(cjkOut))
+	assert.Len(t, asciiOut, 400)
+	assert.Len(t, cjkOut, 300)
 	assert.Equal(t, 100, utf8.RuneCountInString(cjkOut))
 	assert.Equal(t, 100, estimateTokens(asciiOut, reMoMBytesPerToken(asciiResp)))
 	assert.Equal(t, 100, estimateTokens(cjkOut, reMoMBytesPerToken(cjkResp)))
@@ -140,4 +144,76 @@ func TestBuildReMoMRoundResponse_UsesObservedRatio(t *testing.T) {
 	require.Len(t, round.Responses, 1)
 	assert.Equal(t, 100, round.Responses[0].TokenCount)
 	assert.Equal(t, strings.Repeat("量", 10), round.Responses[0].CompactedContent)
+}
+
+// The observed ratio has to reach the prompt the next round actually receives,
+// not just the intermediate metadata. Round one returns CJK text billed at
+// 3 bytes per token; the synthesis round must see a reference cut at that
+// ratio, and it must match the compacted_content published for round one.
+func TestReMoMMultiRoundSynthesisPromptUsesObservedRatio(t *testing.T) {
+	const (
+		compactionTokens = 100
+		roundOneTokens   = 2000
+	)
+	// One 3-byte rune per billed token, so the observed ratio is 3 bytes/token.
+	roundOneContent := strings.Repeat("量", roundOneTokens)
+	wantReference := strings.Repeat("量", compactionTokens)
+
+	var mu sync.Mutex
+	var synthesisPrompts []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		payload := decodeReMoMTestRequest(t, r)
+		switch payload.Model {
+		case "model-a":
+			writeReMoMTestCompletionWithReasoning(t, w, payload.Model, roundOneContent, "", TokenUsage{
+				PromptTokens:     10,
+				CompletionTokens: roundOneTokens,
+				TotalTokens:      roundOneTokens + 10,
+			})
+		case "model-final":
+			mu.Lock()
+			synthesisPrompts = append(synthesisPrompts, lastReMoMTestMessageContent(payload))
+			mu.Unlock()
+			writeReMoMTestCompletion(t, w, payload.Model, "final answer")
+		default:
+			t.Errorf("unexpected model %q", payload.Model)
+		}
+	}))
+	defer server.Close()
+
+	response, err := NewReMoMLooper(&config.LooperConfig{Endpoint: server.URL}).Execute(
+		context.Background(),
+		newReMoMTestRequest(&config.ReMoMAlgorithmConfig{
+			BreadthSchedule:              []int{1},
+			ModelDistribution:            remomDistributionRoundRobin,
+			SynthesisModel:               "model-final",
+			CompactionStrategy:           "last_n_tokens",
+			CompactionTokens:             compactionTokens,
+			SynthesisTemplate:            "{{range .ReferenceResponses}}<ref>{{.Content}}</ref>{{end}}",
+			IncludeIntermediateResponses: true,
+			OnError:                      config.ReMoMOnErrorSkip,
+		}, false, []config.ModelRef{{Model: "model-a"}, {Model: "model-final"}}),
+	)
+	require.NoError(t, err)
+	require.Len(t, synthesisPrompts, 1, "expected exactly one synthesis round")
+
+	prompt := synthesisPrompts[0]
+	start := strings.Index(prompt, "<ref>")
+	end := strings.Index(prompt, "</ref>")
+	require.True(t, start >= 0 && end > start, "synthesis prompt is missing the reference markers:\n%s", prompt)
+	reference := prompt[start+len("<ref>") : end]
+
+	assert.True(t, utf8.ValidString(reference), "reference sent to the next round must be valid UTF-8")
+	assert.Equal(t, wantReference, reference,
+		"next-round prompt must be cut at the observed 3 bytes/token (%d runes), not the 4 bytes/token fallback (%d runes)",
+		compactionTokens, utf8.RuneCountInString(reference))
+
+	var body struct {
+		Rounds []RoundResponse `json:"reasoning_mom_responses"`
+	}
+	require.NoError(t, json.Unmarshal(response.Body, &body))
+	require.Len(t, body.Rounds, 2)
+	require.Len(t, body.Rounds[0].Responses, 1)
+	assert.Equal(t, body.Rounds[0].Responses[0].CompactedContent, reference,
+		"published compacted_content and the reference in the next-round prompt must agree")
 }
