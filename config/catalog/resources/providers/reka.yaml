@@ -1,0 +1,44 @@
+id: reka
+display_name: Reka AI
+description: Reka multimodal models through the native OpenAI-compatible API.
+category: model_api
+support_tier: compatible
+default_base_url: https://api.reka.ai/v1
+protocols:
+- openai/chat-completions@1
+default_protocol: openai/chat-completions@1
+supported_operations:
+- openai/chat-completions@1#create
+- openai/chat-completions@1#list_models
+auth:
+  strategy: api_key_header
+  header: X-Api-Key
+  prefix: ''
+presentation:
+  logo: monogram
+  monogram: R
+  monochrome: true
+conformance:
+  status: unverified
+models:
+- catalog: reka/reka-edge-2603
+  id: reka-edge
+  protocols: [openai/chat-completions@1]
+  pricing:
+    currency: USD
+    prompt_per_1m: 0.10
+    completion_per_1m: 0.10
+  lifecycle: active
+  verification: &reka-binding-verification
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.reka.ai/quickstart
+- catalog: reka/reka-flash-3
+  id: reka-flash
+  protocols: [openai/chat-completions@1]
+  pricing:
+    currency: USD
+    prompt_per_1m: 0.80
+    completion_per_1m: 2.00
+  lifecycle: active
+  verification: *reka-binding-verification

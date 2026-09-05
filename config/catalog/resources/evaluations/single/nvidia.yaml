@@ -1,0 +1,266 @@
+- id: nvidia/nemotron-3-ultra-nvfp4-model-card-humanitys-last-exam@1.0.0
+  model: nvidia/nemotron-3-ultra
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: default
+  subject: &id001
+    variant: NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4
+    hle_mode: no_tools
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.261
+  status: available
+  evidence: &id002
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4
+    redistributable: true
+- id: nvidia/nemotron-3-ultra-nvfp4-model-card-verified@1.0.0
+  model: nvidia/nemotron-3-ultra
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: default
+  subject: *id001
+  metrics:
+    resolved: 0.695
+  status: available
+  evidence: *id002
+- id: nvidia/nemotron-3-ultra-nvfp4-model-card-terminal-bench@1.0.0
+  model: nvidia/nemotron-3-ultra
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: default
+  subject: *id001
+  metrics:
+    resolved: 0.539
+  status: available
+  evidence: *id002
+- id: nvidia/nemotron-cascade-2-model-card-mmlu-pro@1.0.0
+  model: nvidia/nemotron-cascade-2-30b-a3b
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: published
+  subject: &nemotron-cascade2-subject
+    variant: Nemotron-Cascade-2-30B-A3B
+    hle_mode: no_tools
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.798
+  status: available
+  evidence: &nemotron-cascade2-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/nvidia/Nemotron-Cascade-2-30B-A3B
+    redistributable: true
+- id: nvidia/nemotron-cascade-2-model-card-gpqa-diamond@1.0.0
+  model: nvidia/nemotron-cascade-2-30b-a3b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: published
+  subject: *nemotron-cascade2-subject
+  metrics:
+    accuracy: 0.761
+  status: available
+  evidence: *nemotron-cascade2-evidence
+- id: nvidia/nemotron-cascade-2-model-card-humanitys-last-exam@1.0.0
+  model: nvidia/nemotron-cascade-2-30b-a3b
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: published
+  subject: *nemotron-cascade2-subject
+  metrics:
+    accuracy: 0.177
+  status: available
+  evidence: *nemotron-cascade2-evidence
+- id: nvidia/nemotron-cascade-2-model-card-swe-bench-verified@1.0.0
+  model: nvidia/nemotron-cascade-2-30b-a3b
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: published
+  subject: *nemotron-cascade2-subject
+  metrics:
+    resolved: 0.502
+  status: available
+  evidence: *nemotron-cascade2-evidence
+- id: nvidia/nemotron-cascade-2-model-card-terminal-bench-2.0@1.0.0
+  model: nvidia/nemotron-cascade-2-30b-a3b
+  benchmark: harbor/terminal-bench@2.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: published
+  subject: *nemotron-cascade2-subject
+  metrics:
+    resolved: 0.211
+  status: available
+  evidence: *nemotron-cascade2-evidence
+- id: nvidia/openreasoning-nemotron-1.5b-model-card-mmlu-pro@1.0.0
+  model: nvidia/openreasoning-nemotron-1.5b
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject: &openreasoning-nemotron-15b-subject
+    variant: OpenReasoning-Nemotron-1.5B
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.475
+  status: available
+  evidence: &openreasoning-nemotron-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/nvidia/OpenReasoning-Nemotron-1.5B
+    redistributable: true
+- id: nvidia/openreasoning-nemotron-1.5b-model-card-gpqa-diamond@1.0.0
+  model: nvidia/openreasoning-nemotron-1.5b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject: *openreasoning-nemotron-15b-subject
+  metrics:
+    accuracy: 0.316
+  status: available
+  evidence: *openreasoning-nemotron-evidence
+- id: nvidia/openreasoning-nemotron-1.5b-model-card-humanitys-last-exam@1.0.0
+  model: nvidia/openreasoning-nemotron-1.5b
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: default
+  subject: *openreasoning-nemotron-15b-subject
+  metrics:
+    accuracy: 0.055
+  status: available
+  evidence: *openreasoning-nemotron-evidence
+- id: nvidia/openreasoning-nemotron-7b-model-card-mmlu-pro@1.0.0
+  model: nvidia/openreasoning-nemotron-7b
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject: &openreasoning-nemotron-7b-subject
+    variant: OpenReasoning-Nemotron-7B
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.719
+  status: available
+  evidence: *openreasoning-nemotron-evidence
+- id: nvidia/openreasoning-nemotron-7b-model-card-gpqa-diamond@1.0.0
+  model: nvidia/openreasoning-nemotron-7b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject: *openreasoning-nemotron-7b-subject
+  metrics:
+    accuracy: 0.611
+  status: available
+  evidence: *openreasoning-nemotron-evidence
+- id: nvidia/openreasoning-nemotron-7b-model-card-humanitys-last-exam@1.0.0
+  model: nvidia/openreasoning-nemotron-7b
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: default
+  subject: *openreasoning-nemotron-7b-subject
+  metrics:
+    accuracy: 0.083
+  status: available
+  evidence: *openreasoning-nemotron-evidence
+- id: nvidia/openreasoning-nemotron-14b-model-card-mmlu-pro@1.0.0
+  model: nvidia/openreasoning-nemotron-14b
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject: &openreasoning-nemotron-14b-subject
+    variant: OpenReasoning-Nemotron-14B
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.775
+  status: available
+  evidence: *openreasoning-nemotron-evidence
+- id: nvidia/openreasoning-nemotron-14b-model-card-gpqa-diamond@1.0.0
+  model: nvidia/openreasoning-nemotron-14b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject: *openreasoning-nemotron-14b-subject
+  metrics:
+    accuracy: 0.716
+  status: available
+  evidence: *openreasoning-nemotron-evidence
+- id: nvidia/openreasoning-nemotron-14b-model-card-humanitys-last-exam@1.0.0
+  model: nvidia/openreasoning-nemotron-14b
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: default
+  subject: *openreasoning-nemotron-14b-subject
+  metrics:
+    accuracy: 0.101
+  status: available
+  evidence: *openreasoning-nemotron-evidence
+- id: nvidia/openreasoning-nemotron-32b-model-card-mmlu-pro@1.0.0
+  model: nvidia/openreasoning-nemotron-32b
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject: &openreasoning-nemotron-32b-subject
+    variant: OpenReasoning-Nemotron-32B
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.8
+  status: available
+  evidence: *openreasoning-nemotron-evidence
+- id: nvidia/openreasoning-nemotron-32b-model-card-gpqa-diamond@1.0.0
+  model: nvidia/openreasoning-nemotron-32b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject: *openreasoning-nemotron-32b-subject
+  metrics:
+    accuracy: 0.731
+  status: available
+  evidence: *openreasoning-nemotron-evidence
+- id: nvidia/openreasoning-nemotron-32b-model-card-humanitys-last-exam@1.0.0
+  model: nvidia/openreasoning-nemotron-32b
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: default
+  subject: *openreasoning-nemotron-32b-subject
+  metrics:
+    accuracy: 0.119
+  status: available
+  evidence: *openreasoning-nemotron-evidence
+- id: nvidia/nemotron-terminal-8b-model-card-terminal-bench-2.0@1.0.0
+  model: nvidia/nemotron-terminal-8b
+  benchmark: harbor/terminal-bench@2.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: default
+  subject: &nemotron-terminal-8b-subject
+    variant: Nemotron-Terminal-8B
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.13
+  status: available
+  evidence: &nemotron-terminal-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/nvidia/Nemotron-Terminal-8B
+    redistributable: true
+- id: nvidia/nemotron-terminal-14b-model-card-terminal-bench-2.0@1.0.0
+  model: nvidia/nemotron-terminal-14b
+  benchmark: harbor/terminal-bench@2.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: default
+  subject:
+    <<: *nemotron-terminal-8b-subject
+    variant: Nemotron-Terminal-14B
+  metrics:
+    resolved: 0.202
+  status: available
+  evidence: *nemotron-terminal-evidence
+- id: nvidia/nemotron-terminal-32b-model-card-terminal-bench-2.0@1.0.0
+  model: nvidia/nemotron-terminal-32b
+  benchmark: harbor/terminal-bench@2.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: default
+  subject:
+    <<: *nemotron-terminal-8b-subject
+    variant: Nemotron-Terminal-32B
+  metrics:
+    resolved: 0.274
+  status: available
+  evidence: *nemotron-terminal-evidence

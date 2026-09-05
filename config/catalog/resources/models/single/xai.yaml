@@ -3,95 +3,249 @@
   description: xAI reasoning model for tools, coding, and long-context workloads.
   kind: physical
   publisher: xAI
-  presentation: {logo: package:xai, monogram: x, monochrome: true}
-  distribution: {type: proprietary_api, source: https://docs.x.ai/developers/models}
-  family: grok-4
-  lifecycle: active
-  capabilities: [chat, reasoning, tools, structured_output, vision, long_context]
-  modalities: {input: [text, image], output: [text]}
-  reasoning_family: gpt
-  protocols: [openai/chat-completions@1]
-  verification: {authority: xAI, status: claimed, verified_at: 2026-09-05, source: https://docs.x.ai/developers/models}
-  tags: [proprietary, reasoning, agentic]
-- id: xai/grok-4.1-fast
-  display_name: Grok 4.1 Fast
-  description: xAI low-latency Grok model for tool-calling and interactive agents.
-  kind: physical
-  publisher: xAI
-  presentation: {logo: package:xai, monogram: x, monochrome: true}
-  distribution: {type: proprietary_api, source: https://docs.x.ai/developers/models}
-  family: grok-4
-  lifecycle: active
-  capabilities: [chat, reasoning, tools, structured_output, vision, long_context]
-  modalities: {input: [text, image], output: [text]}
-  reasoning_family: gpt
-  protocols: [openai/chat-completions@1]
-  verification: {authority: xAI, status: claimed, verified_at: 2026-09-05, source: https://docs.x.ai/developers/models}
-  tags: [proprietary, efficient, agentic]
-- id: xai/grok-4.3
-  display_name: Grok 4.3
-  description: xAI Grok model for advanced reasoning and agentic workloads.
-  kind: physical
-  publisher: xAI
-  presentation: {logo: package:xai, monogram: x, monochrome: true}
-  distribution: {type: proprietary_api, source: https://docs.x.ai/developers/models}
-  family: grok-4
-  lifecycle: active
-  capabilities: [chat, reasoning, tools, structured_output, vision, long_context]
-  modalities: {input: [text, image], output: [text]}
-  reasoning_family: gpt
-  protocols: [openai/chat-completions@1]
-  verification: {authority: xAI, status: claimed, verified_at: 2026-09-05, source: https://docs.x.ai/developers/models}
-  tags: [proprietary, reasoning, agentic]
-- id: xai/grok-4.5
-  display_name: Grok 4.5
-  description: xAI frontier model for multimodal reasoning and production agents.
-  kind: physical
-  publisher: xAI
-  presentation: {logo: package:xai, monogram: x, monochrome: true}
-  distribution: {type: proprietary_api, source: https://docs.x.ai/developers/models}
-  family: grok-4
-  lifecycle: active
-  capabilities: [chat, reasoning, tools, structured_output, vision, long_context]
-  modalities: {input: [text, image], output: [text]}
-  reasoning_family: gpt
-  protocols: [openai/chat-completions@1]
-  verification: {authority: xAI, status: claimed, verified_at: 2026-09-05, source: https://docs.x.ai/developers/models}
-  tags: [frontier, proprietary, agentic]
-- id: xai/grok-4.6
-  display_name: Grok 4.6
-  description: xAI frontier reasoning model with image input and tool support.
-  kind: physical
-  publisher: xAI
-  presentation: {logo: package:xai, monogram: x, monochrome: true}
+  presentation:
+    logo: package:xai
+    monogram: x
+    monochrome: true
   distribution:
     type: proprietary_api
     source: https://docs.x.ai/developers/models
   family: grok-4
   lifecycle: active
-  limits: {context_window_size: 500000}
-  capabilities: [chat, reasoning, tools, structured_output, vision, long_context]
-  modalities: {input: [text, image], output: [text]}
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
   reasoning_family: gpt
-  protocols: [openai/chat-completions@1]
   verification:
     authority: xAI
     status: claimed
     verified_at: 2026-09-05
     source: https://docs.x.ai/developers/models
-  tags: [frontier, proprietary, agentic]
+  tags:
+  - proprietary
+  - reasoning
+  - agentic
+- id: xai/grok-4.1-fast
+  display_name: Grok 4.1 Fast
+  description: xAI low-latency Grok model for tool-calling and interactive agents.
+  kind: physical
+  publisher: xAI
+  presentation:
+    logo: package:xai
+    monogram: x
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://docs.x.ai/developers/models
+  family: grok-4
+  lifecycle: active
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  reasoning_family: gpt
+  verification:
+    authority: xAI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.x.ai/developers/models
+  tags:
+  - proprietary
+  - efficient
+  - agentic
+- id: xai/grok-4.3
+  display_name: Grok 4.3
+  description: xAI Grok model for advanced reasoning and agentic workloads.
+  kind: physical
+  publisher: xAI
+  presentation:
+    logo: package:xai
+    monogram: x
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://docs.x.ai/developers/models
+  family: grok-4
+  lifecycle: active
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  reasoning_family: gpt
+  verification:
+    authority: xAI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.x.ai/developers/models
+  tags:
+  - proprietary
+  - reasoning
+  - agentic
+- id: xai/grok-4.5
+  display_name: Grok 4.5
+  description: xAI frontier model for multimodal reasoning and production agents.
+  kind: physical
+  publisher: xAI
+  presentation:
+    logo: package:xai
+    monogram: x
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://docs.x.ai/developers/models
+  family: grok-4
+  lifecycle: active
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  reasoning_family: gpt
+  verification:
+    authority: xAI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.x.ai/developers/models
+  tags:
+  - frontier
+  - proprietary
+  - agentic
+- id: xai/grok-4.6
+  display_name: Grok 4.6
+  description: xAI frontier reasoning model with image input and tool support.
+  kind: physical
+  publisher: xAI
+  presentation:
+    logo: package:xai
+    monogram: x
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://docs.x.ai/developers/models
+  family: grok-4
+  lifecycle: active
+  limits:
+    context_window_size: 500000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  reasoning_family: gpt
+  verification:
+    authority: xAI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.x.ai/developers/models
+  tags:
+  - frontier
+  - proprietary
+  - agentic
 - id: xai/grok-4.20
   display_name: Grok 4.20
   description: xAI current Grok model with reasoning and multi-agent variants.
   kind: physical
   publisher: xAI
-  presentation: {logo: package:xai, monogram: x, monochrome: true}
-  distribution: {type: proprietary_api, source: https://docs.x.ai/developers/models}
+  presentation:
+    logo: package:xai
+    monogram: x
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://docs.x.ai/developers/models
   family: grok-4
   lifecycle: active
-  capabilities: [chat, reasoning, tools, structured_output, vision, long_context]
-  modalities: {input: [text, image], output: [text]}
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
   reasoning_family: gpt
-  protocols: [openai/chat-completions@1]
-  verification: {authority: xAI, status: claimed, verified_at: 2026-09-05, source: https://docs.x.ai/developers/models}
-  tags: [frontier, proprietary, agentic]
+  verification:
+    authority: xAI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.x.ai/developers/models
+  tags:
+  - frontier
+  - proprietary
+  - agentic
+- id: xai/grok-build-0.1
+  display_name: Grok Build 0.1
+  description: Early-access xAI coding model for agentic software engineering and workflow automation.
+  kind: physical
+  publisher: xAI
+  presentation:
+    logo: package:xai
+    monogram: x
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://docs.x.ai/developers/models/grok-build-0.1
+  family: grok-build
+  released_at: 2026-05-19
+  lifecycle: experimental
+  limits:
+    context_window_size: 256000
+  capabilities: [chat, reasoning, tools, structured_output, vision, coding, long_context]
+  modalities:
+    input: [text, image]
+    output: [text]
+  verification:
+    authority: xAI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.x.ai/developers/models/grok-build-0.1
+  tags: [proprietary, preview, coding, reasoning, agentic]

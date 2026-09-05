@@ -1,0 +1,47 @@
+id: upstage
+display_name: Upstage
+description: Solar models through Upstage's OpenAI-compatible API.
+category: model_api
+support_tier: native
+default_base_url: https://api.upstage.ai/v1
+protocols:
+- openai/chat-completions@1
+default_protocol: openai/chat-completions@1
+supported_operations:
+- openai/chat-completions@1#create
+- openai/chat-completions@1#list_models
+reasoning_transport: top_level_effort
+auth:
+  strategy: bearer
+  header: Authorization
+  prefix: Bearer
+presentation:
+  logo: package:upstage
+  monogram: U
+  monochrome: false
+conformance:
+  status: unverified
+models:
+- catalog: upstage/solar-pro-3
+  id: solar-pro3
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://console.upstage.ai/api-keys?api=chat-reasoning
+- catalog: upstage/solar-pro-4
+  id: solar-pro4
+  protocols:
+  - openai/chat-completions@1
+  pricing:
+    currency: USD
+    prompt_per_1m: 0.3
+    cached_input_per_1m: 0.06
+    completion_per_1m: 1.2
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://www.upstage.ai/blog/en/solar-pro-4

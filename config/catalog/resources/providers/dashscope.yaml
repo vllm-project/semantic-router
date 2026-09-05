@@ -1,0 +1,123 @@
+id: dashscope
+display_name: DashScope
+description: Qwen models through the compatible endpoint.
+category: model_api
+support_tier: compatible
+default_base_url: https://dashscope-intl.aliyuncs.com/compatible-mode/v1
+protocols:
+- openai/chat-completions@1
+default_protocol: openai/chat-completions@1
+supported_operations:
+- openai/chat-completions@1#create
+- openai/chat-completions@1#list_models
+reasoning_transport: top_level_effort
+auth:
+  strategy: bearer
+  header: Authorization
+  prefix: Bearer
+presentation:
+  logo: package:qwen
+  monogram: Q
+  monochrome: false
+conformance:
+  status: unverified
+models:
+- catalog: qwen/qwen3.5-plus
+  id: qwen3.5-plus
+  protocols:
+  - openai/chat-completions@1
+  reasoning_transport: top_level_boolean
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://www.alibabacloud.com/help/en/model-studio/text-generation-model
+- catalog: qwen/qwen3.6-plus
+  id: qwen3.6-plus
+  protocols:
+  - openai/chat-completions@1
+  reasoning_transport: top_level_boolean
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://www.alibabacloud.com/help/en/model-studio/text-generation-model
+- catalog: qwen/qwen3.7-plus
+  id: qwen3.7-plus
+  protocols:
+  - openai/chat-completions@1
+  reasoning_transport: top_level_boolean
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://www.alibabacloud.com/help/en/model-studio/text-generation-model
+- catalog: qwen/qwen3.7-max
+  id: qwen3.7-max
+  protocols:
+  - openai/chat-completions@1
+  reasoning_transport: top_level_boolean
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://www.alibabacloud.com/help/en/model-studio/text-generation-model
+- catalog: qwen/qwen3.7-flash
+  id: qwen3.7-flash
+  protocols:
+  - openai/chat-completions@1
+  reasoning_transport: top_level_boolean
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://www.alibabacloud.com/help/en/model-studio/qwen3-7-flash
+- catalog: qwen/qwen3.8-flash
+  id: qwen3.8-flash
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://www.alibabacloud.com/help/en/model-studio/text-generation-model
+- catalog: qwen/qwen3.8-max
+  id: qwen3.8-max
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://www.alibabacloud.com/help/en/model-studio/text-generation-model
+- catalog: qwen/qwen3.5-omni-plus
+  id: qwen3.5-omni-plus
+  protocols:
+  - openai/chat-completions@1
+  reasoning_transport: top_level_boolean
+  restrictions:
+    regions: [cn-beijing]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://www.alibabacloud.com/help/en/model-studio/model-pricing
+- catalog: qwen/qwen3.5-omni-flash
+  id: qwen3.5-omni-flash
+  protocols:
+  - openai/chat-completions@1
+  reasoning_transport: top_level_boolean
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://www.alibabacloud.com/help/en/model-studio/newly-released-models
+- catalog: qwen/qwen3-max
+  id: qwen3-max
+  protocols: [openai/chat-completions@1]
+  reasoning_transport: top_level_boolean
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.modelstudio.console.alibabacloud.com/en/model-studio/model-qwen3-max

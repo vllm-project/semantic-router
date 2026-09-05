@@ -1,0 +1,29 @@
+- id: dots/dots3-note-preview
+  display_name: Dots3 Note Preview
+  description: Dots Studio's open-weight native multimodal MoE for long-context document and agent workflows.
+  kind: physical
+  publisher: Dots Studio
+  presentation:
+    logo: monogram
+    monogram: D3
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/dots-studio/dots3-note-prev
+    license: Apache-2.0
+  family: dots3-note
+  parameter_size: 280B (16B active)
+  reasoning_family: dots3
+  lifecycle: experimental
+  limits:
+    context_window_size: 524288
+  capabilities: [chat, reasoning, tools, structured_output, vision, audio, video, long_context]
+  modalities:
+    input: [text, image, video, audio]
+    output: [text]
+  verification:
+    authority: Dots Studio
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/dots-studio/dots3-note-prev
+  tags: [open_weights, multimodal, reasoning, agentic, moe, long_context, preview]

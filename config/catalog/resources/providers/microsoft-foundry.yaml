@@ -1,0 +1,34 @@
+id: microsoft-foundry
+display_name: Microsoft Foundry
+description: Microsoft AI models deployed into an operator-owned Foundry resource.
+category: model_api
+support_tier: native
+protocols:
+- openai/chat-completions@1
+default_protocol: openai/chat-completions@1
+supported_operations:
+- openai/chat-completions@1#create
+path_overrides:
+  openai/chat-completions@1#create: /mai/v1/chat/completions
+auth:
+  strategy: api_key_header
+  header: api-key
+  prefix: ''
+presentation:
+  logo: package:microsoft
+  monogram: MS
+  monochrome: false
+conformance:
+  status: unverified
+models:
+- catalog: microsoft/mai-thinking-1
+  id: mai-thinking-1
+  protocols: [openai/chat-completions@1]
+  restrictions:
+    provider_model_id_kind: deployment_name
+    catalog_model_name: MAI-Thinking-1
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://learn.microsoft.com/azure/foundry/foundry-models/how-to/use-foundry-models-mai-thinking

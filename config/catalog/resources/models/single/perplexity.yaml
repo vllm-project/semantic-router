@@ -1,0 +1,90 @@
+- id: perplexity/sonar
+  display_name: Sonar
+  description: Fast search-grounded answer model with citations and real-time web retrieval.
+  kind: physical
+  publisher: Perplexity
+  presentation: &perplexity-presentation
+    logo: package:perplexity
+    monogram: P
+    monochrome: false
+  distribution:
+    type: proprietary_api
+    source: https://docs.perplexity.ai/docs/sonar/models/sonar
+  family: sonar
+  lifecycle: active
+  limits:
+    context_window_size: 128000
+  capabilities: [chat, search_grounding, citations, long_context]
+  modalities: &perplexity-modalities
+    input: [text]
+    output: [text]
+  verification:
+    authority: Perplexity
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.perplexity.ai/docs/sonar/models/sonar
+  tags: [proprietary, search, grounded, efficient]
+- id: perplexity/sonar-pro
+  display_name: Sonar Pro
+  description: Advanced search-grounded answer model for complex queries and multi-source synthesis.
+  kind: physical
+  publisher: Perplexity
+  presentation: *perplexity-presentation
+  distribution:
+    type: proprietary_api
+    source: https://docs.perplexity.ai/docs/sonar/models/sonar-pro
+  family: sonar
+  lifecycle: active
+  limits:
+    context_window_size: 200000
+  capabilities: [chat, search_grounding, citations, long_context]
+  modalities: *perplexity-modalities
+  verification:
+    authority: Perplexity
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.perplexity.ai/docs/sonar/models/sonar-pro
+  tags: [proprietary, search, grounded, long_context]
+- id: perplexity/sonar-reasoning-pro
+  display_name: Sonar Reasoning Pro
+  description: Search-grounded model with multi-step chain-of-thought reasoning for complex analysis.
+  kind: physical
+  publisher: Perplexity
+  presentation: *perplexity-presentation
+  distribution:
+    type: proprietary_api
+    source: https://docs.perplexity.ai/docs/sonar/models/sonar-reasoning-pro
+  family: sonar-reasoning
+  lifecycle: active
+  limits:
+    context_window_size: 128000
+  capabilities: [chat, reasoning, search_grounding, citations, structured_output, long_context]
+  modalities: *perplexity-modalities
+  verification:
+    authority: Perplexity
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.perplexity.ai/docs/sonar/models/sonar-reasoning-pro
+  tags: [proprietary, reasoning, search, grounded]
+- id: perplexity/sonar-deep-research
+  display_name: Sonar Deep Research
+  description: Exhaustive search-and-reasoning model for long-form research across hundreds of sources.
+  kind: physical
+  publisher: Perplexity
+  presentation: *perplexity-presentation
+  distribution:
+    type: proprietary_api
+    source: https://docs.perplexity.ai/docs/sonar/models/sonar-deep-research
+  family: sonar-research
+  reasoning_family: perplexity-deep-research
+  lifecycle: active
+  limits:
+    context_window_size: 128000
+  capabilities: [chat, reasoning, search_grounding, citations, long_context]
+  modalities: *perplexity-modalities
+  verification:
+    authority: Perplexity
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.perplexity.ai/docs/sonar/models/sonar-deep-research
+  tags: [proprietary, reasoning, deep_research, search, grounded]

@@ -43,6 +43,7 @@ func (registry *EffectiveRegistry) Model(name string) (EffectiveModel, bool) {
 	value.Card = cloneEffectiveCard(value.Card)
 	value.Providers = cloneEffectiveModelProviders(value.Providers)
 	value.Indices = cloneIndexResults(value.Indices)
+	value.IndicesByEffort = cloneIndexResultsByEffort(value.IndicesByEffort)
 	value.BindingDefaults.ExternalModelIDs = cloneMap(value.BindingDefaults.ExternalModelIDs)
 	return value, true
 }
@@ -57,19 +58,20 @@ func cloneEffectiveModelProviders(values []EffectiveModelProvider) []EffectiveMo
 		value.Provider.Instance.Endpoints = append([]Endpoint(nil), value.Provider.Instance.Endpoints...)
 		value.Provider.Instance.Headers = cloneMap(value.Provider.Instance.Headers)
 		value.Provider.Definition = cloneProvider(value.Provider.Definition)
-		value.Offering = cloneOfferingPointer(value.Offering)
+		value.CatalogBinding = cloneCatalogBindingPointer(value.CatalogBinding)
 		result[index] = value
 	}
 	return result
 }
 
-func cloneOfferingPointer(value *OfferingDefinition) *OfferingDefinition {
+func cloneCatalogBindingPointer(value *CatalogModelBinding) *CatalogModelBinding {
 	if value == nil {
 		return nil
 	}
 	result := *value
 	result.Protocols = append([]string(nil), value.Protocols...)
-	result.Restrictions = cloneMap(value.Restrictions)
+	result.Restrictions = cloneArbitraryMap(value.Restrictions)
+	result.Pricing.CacheWritePer1M = cloneFloatPointer(value.Pricing.CacheWritePer1M)
 	return &result
 }
 
@@ -80,6 +82,17 @@ func cloneIndexResults(values map[string]IndexResult) map[string]IndexResult {
 	result := make(map[string]IndexResult, len(values))
 	for id, value := range values {
 		result[id] = cloneIndexResult(value)
+	}
+	return result
+}
+
+func cloneIndexResultsByEffort(values map[string]map[string]IndexResult) map[string]map[string]IndexResult {
+	if values == nil {
+		return nil
+	}
+	result := make(map[string]map[string]IndexResult, len(values))
+	for effort, indices := range values {
+		result[effort] = cloneIndexResults(indices)
 	}
 	return result
 }

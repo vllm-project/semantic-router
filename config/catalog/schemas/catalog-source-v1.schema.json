@@ -69,7 +69,6 @@
         "providers",
         "reasoning_families",
         "models",
-        "offerings",
         "benchmarks",
         "evaluations",
         "indices"
@@ -79,7 +78,6 @@
         "providers": {"type": "string", "minLength": 1},
         "reasoning_families": {"type": "string", "minLength": 1},
         "models": {"type": "string", "minLength": 1},
-        "offerings": {"type": "string", "minLength": 1},
         "benchmarks": {"type": "string", "minLength": 1},
         "evaluations": {"type": "string", "minLength": 1},
         "indices": {"type": "string", "minLength": 1}

@@ -1,0 +1,1509 @@
+id: openrouter
+display_name: OpenRouter
+description: One API for a broad model catalog.
+category: model_api
+support_tier: compatible
+default_base_url: https://openrouter.ai/api/v1
+protocols:
+- openai/chat-completions@1
+- openai/responses@1
+default_protocol: openai/chat-completions@1
+supported_operations:
+- openai/chat-completions@1#create
+- openai/chat-completions@1#list_models
+- openai/responses@1#create
+- openai/responses@1#list_models
+reasoning_transport: reasoning_object
+auth:
+  strategy: bearer
+  header: Authorization
+  prefix: Bearer
+presentation:
+  logo: package:openrouter
+  monogram: OR
+  monochrome: false
+conformance:
+  status: fixture_verified
+  verified_at: 2026-09-04
+models:
+- catalog: inclusionai/ling-3.0-flash
+  id: inclusionai/ling-3.0-flash
+  protocols:
+  - openai/chat-completions@1
+  pricing:
+    currency: USD
+    prompt_per_1m: 0.021
+    cached_input_per_1m: 0.0042
+    completion_per_1m: 0.063
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/inclusionai/ling-3.0-flash
+- catalog: upstage/solar-pro-3
+  id: upstage/solar-pro-3
+  protocols:
+  - openai/chat-completions@1
+  pricing:
+    currency: USD
+    prompt_per_1m: 0.15
+    cached_input_per_1m: 0.015
+    completion_per_1m: 0.6
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/upstage/solar-pro-3
+- catalog: upstage/solar-pro-4
+  id: upstage/solar-pro4
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/upstage/solar-pro4
+- catalog: zai/glm-5-turbo
+  id: z-ai/glm-5-turbo
+  protocols:
+  - openai/chat-completions@1
+  pricing:
+    currency: USD
+    prompt_per_1m: 1.2
+    cached_input_per_1m: 0.24
+    completion_per_1m: 4.0
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/z-ai/glm-5-turbo
+- catalog: zai/glm-5v-turbo
+  id: z-ai/glm-5v-turbo
+  protocols:
+  - openai/chat-completions@1
+  pricing:
+    currency: USD
+    prompt_per_1m: 1.2
+    cached_input_per_1m: 0.24
+    completion_per_1m: 4.0
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/z-ai/glm-5v-turbo
+- catalog: qwen/qwen3-coder-next
+  id: qwen/qwen3-coder-next
+  protocols:
+  - openai/chat-completions@1
+  pricing:
+    currency: USD
+    prompt_per_1m: 0.12
+    cached_input_per_1m: 0.07
+    completion_per_1m: 0.8
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/qwen/qwen3-coder-next
+- catalog: inception/mercury-2.5-preview
+  id: inception/mercury-2.5-preview
+  protocols:
+  - openai/chat-completions@1
+  pricing:
+    currency: USD
+    prompt_per_1m: 0.2
+    cached_input_per_1m: 0.02
+    completion_per_1m: 0.75
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/inception/mercury-2.5-preview
+- catalog: tencent/hy3
+  id: tencent/hy3
+  protocols:
+  - openai/chat-completions@1
+  pricing:
+    currency: USD
+    prompt_per_1m: 0.132
+    cached_input_per_1m: 0.033
+    completion_per_1m: 0.528
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/tencent/hy3
+- catalog: tencent/hy4-preview
+  id: tencent/hy4-preview
+  protocols:
+  - openai/chat-completions@1
+  pricing:
+    currency: USD
+    prompt_per_1m: 0.834
+    cached_input_per_1m: 0.042
+    completion_per_1m: 2.501
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/tencent/hy4-preview
+- catalog: thinking-machines/inkling
+  id: thinkingmachines/inkling
+  protocols:
+  - openai/chat-completions@1
+  pricing:
+    currency: USD
+    prompt_per_1m: 1.0
+    cached_input_per_1m: 0.17
+    completion_per_1m: 4.05
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/thinkingmachines/inkling
+- catalog: thinking-machines/inkling-small
+  id: thinkingmachines/inkling-small
+  protocols:
+  - openai/chat-completions@1
+  pricing:
+    currency: USD
+    prompt_per_1m: 0.45
+    cached_input_per_1m: 0.1
+    completion_per_1m: 1.2
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/thinkingmachines/inkling-small
+- catalog: xiaomi/mimo-v2.5
+  id: xiaomi/mimo-v2.5
+  protocols:
+  - openai/chat-completions@1
+  pricing:
+    currency: USD
+    prompt_per_1m: 0.14
+    cached_input_per_1m: 0.0028
+    completion_per_1m: 0.28
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/xiaomi/mimo-v2.5
+- catalog: xiaomi/mimo-v2.5-pro
+  id: xiaomi/mimo-v2.5-pro
+  protocols:
+  - openai/chat-completions@1
+  pricing:
+    currency: USD
+    prompt_per_1m: 0.435
+    cached_input_per_1m: 0.0036
+    completion_per_1m: 0.87
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/xiaomi/mimo-v2.5-pro
+- catalog: qwen/qwen3.8-flash
+  id: qwen/qwen3.8-flash
+  protocols:
+  - openai/chat-completions@1
+  pricing:
+    currency: USD
+    prompt_per_1m: 0.15
+    cached_input_per_1m: 0.016
+    completion_per_1m: 0.47
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/qwen/qwen3.8-flash
+- catalog: qwen/qwen3.8-27b
+  id: qwen/qwen3.8-27b
+  protocols:
+  - openai/chat-completions@1
+  pricing:
+    currency: USD
+    prompt_per_1m: 0.42
+    cached_input_per_1m: 0.085
+    completion_per_1m: 3.0
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/qwen/qwen3.8-27b
+- catalog: qwen/qwen3.8-2.4t-a95b
+  id: qwen/qwen3.8-2.4t-a95b
+  protocols:
+  - openai/chat-completions@1
+  pricing:
+    currency: USD
+    prompt_per_1m: 2.0
+    cached_input_per_1m: 0.25
+    completion_per_1m: 6.0
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/qwen/qwen3.8-2.4t-a95b
+- catalog: meta/muse-spark-1.1
+  id: meta/muse-spark-1.1
+  protocols: [openai/chat-completions@1]
+  pricing:
+    currency: USD
+    prompt_per_1m: 1.25
+    cached_input_per_1m: 0.15
+    completion_per_1m: 4.25
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/meta/muse-spark-1.1
+- catalog: meta/muse-spark-1.2
+  id: meta/muse-spark-1.2
+  protocols: [openai/chat-completions@1]
+  pricing:
+    currency: USD
+    prompt_per_1m: 1.25
+    cached_input_per_1m: 0.15
+    completion_per_1m: 4.25
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/meta/muse-spark-1.2
+- catalog: meta/muse-spark-1.3
+  id: meta/muse-spark-1.3
+  protocols: [openai/chat-completions@1]
+  pricing:
+    currency: USD
+    prompt_per_1m: 1.25
+    cached_input_per_1m: 0.15
+    completion_per_1m: 4.25
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/meta/muse-spark-1.3
+- catalog: meta/muse-glimmer-30b
+  id: meta/muse-glimmer-30b
+  protocols: [openai/chat-completions@1]
+  pricing:
+    currency: USD
+    prompt_per_1m: 0.3
+    cached_input_per_1m: 0.04
+    completion_per_1m: 1.1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/meta/muse-glimmer-30b
+- catalog: bytedance/seed-2.1-turbo
+  id: bytedance-seed/seed-2-1-turbo
+  protocols: [openai/chat-completions@1]
+  pricing:
+    currency: USD
+    prompt_per_1m: 0.5
+    completion_per_1m: 2.5
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/bytedance-seed/seed-2-1-turbo
+- catalog: bytedance/seed-2.0-code
+  id: bytedance-seed/seed-2.0-code
+  protocols: [openai/chat-completions@1]
+  pricing:
+    currency: USD
+    prompt_per_1m: 0.5
+    completion_per_1m: 3.0
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/bytedance-seed/seed-2.0-code
+- catalog: bytedance/seed-2.0-lite
+  id: bytedance-seed/seed-2.0-lite
+  protocols: [openai/chat-completions@1]
+  pricing:
+    currency: USD
+    prompt_per_1m: 0.25
+    completion_per_1m: 2.0
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/bytedance-seed/seed-2.0-lite
+- catalog: bytedance/seed-2.0-mini
+  id: bytedance-seed/seed-2.0-mini
+  protocols: [openai/chat-completions@1]
+  pricing:
+    currency: USD
+    prompt_per_1m: 0.1
+    completion_per_1m: 0.4
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/bytedance-seed/seed-2.0-mini
+- catalog: bytedance/seed-1.6
+  id: bytedance-seed/seed-1.6
+  protocols: [openai/chat-completions@1]
+  pricing:
+    currency: USD
+    prompt_per_1m: 0.25
+    completion_per_1m: 2.0
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/bytedance-seed/seed-1.6
+- catalog: bytedance/seed-1.6-flash
+  id: bytedance-seed/seed-1.6-flash
+  protocols: [openai/chat-completions@1]
+  pricing:
+    currency: USD
+    prompt_per_1m: 0.075
+    completion_per_1m: 0.3
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/bytedance-seed/seed-1.6-flash
+- catalog: deepseek/deepseek-v4-flash-vision-exp
+  id: deepseek/deepseek-v4-flash-vision-exp
+  protocols: [openai/chat-completions@1]
+  pricing:
+    currency: USD
+    prompt_per_1m: 0.22
+    completion_per_1m: 0.66
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/deepseek/deepseek-v4-flash-vision-exp
+- catalog: meituan/longcat-2.0
+  id: meituan/longcat-2.0
+  protocols: [openai/chat-completions@1]
+  pricing:
+    currency: USD
+    prompt_per_1m: 0.3
+    completion_per_1m: 1.2
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/meituan/longcat-2.0
+- catalog: liquid/lfm2.5-2.6b
+  id: liquid/lfm-2.5-2.6b:free
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/liquid/lfm-2.5-2.6b:free
+- catalog: nex-agi/nex-n2-pro
+  id: nex-agi/nex-n2-pro
+  protocols: [openai/chat-completions@1]
+  pricing:
+    currency: USD
+    prompt_per_1m: 0.25
+    completion_per_1m: 1.0
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/nex-agi/nex-n2-pro
+- catalog: nex-agi/nex-n2-mini
+  id: nex-agi/nex-n2-mini
+  protocols: [openai/chat-completions@1]
+  pricing:
+    currency: USD
+    prompt_per_1m: 0.025
+    completion_per_1m: 0.1
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/nex-agi/nex-n2-mini
+- catalog: amazon/nova-lite-v1
+  id: amazon/nova-lite-v1
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/amazon/nova-lite-v1
+- catalog: amazon/nova-micro-v1
+  id: amazon/nova-micro-v1
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/amazon/nova-micro-v1
+- catalog: amazon/nova-premier-v1
+  id: amazon/nova-premier-v1
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/amazon/nova-premier-v1
+- catalog: amazon/nova-pro-v1
+  id: amazon/nova-pro-v1
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/amazon/nova-pro-v1
+- catalog: anthropic/claude-3-haiku
+  id: anthropic/claude-3-haiku
+  protocols: [openai/chat-completions@1]
+  lifecycle: removed
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/anthropic/claude-3-haiku
+- catalog: anthropic/claude-fable-5
+  id: anthropic/claude-fable-5
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/anthropic/claude-fable-5
+- catalog: anthropic/claude-fable-5.1
+  id: anthropic/claude-fable-5.1
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/anthropic/claude-fable-5.1
+- catalog: anthropic/claude-haiku-4.5
+  id: anthropic/claude-haiku-4.5
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/anthropic/claude-haiku-4.5
+- catalog: anthropic/claude-opus-4
+  id: anthropic/claude-opus-4
+  protocols: [openai/chat-completions@1]
+  lifecycle: removed
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/anthropic/claude-opus-4
+- catalog: anthropic/claude-opus-4.1
+  id: anthropic/claude-opus-4.1
+  protocols: [openai/chat-completions@1]
+  lifecycle: removed
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/anthropic/claude-opus-4.1
+- catalog: anthropic/claude-opus-4.5
+  id: anthropic/claude-opus-4.5
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/anthropic/claude-opus-4.5
+- catalog: anthropic/claude-opus-4.6
+  id: anthropic/claude-opus-4.6
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/anthropic/claude-opus-4.6
+- catalog: anthropic/claude-opus-4.7
+  id: anthropic/claude-opus-4.7
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/anthropic/claude-opus-4.7
+- catalog: anthropic/claude-opus-4.8
+  id: anthropic/claude-opus-4.8
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/anthropic/claude-opus-4.8
+- catalog: anthropic/claude-opus-5
+  id: anthropic/claude-opus-5
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/anthropic/claude-opus-5
+- catalog: anthropic/claude-sonnet-4
+  id: anthropic/claude-sonnet-4
+  protocols: [openai/chat-completions@1]
+  lifecycle: removed
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/anthropic/claude-sonnet-4
+- catalog: anthropic/claude-sonnet-4.5
+  id: anthropic/claude-sonnet-4.5
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/anthropic/claude-sonnet-4.5
+- catalog: anthropic/claude-sonnet-4.6
+  id: anthropic/claude-sonnet-4.6
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/anthropic/claude-sonnet-4.6
+- catalog: anthropic/claude-sonnet-5
+  id: anthropic/claude-sonnet-5
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/anthropic/claude-sonnet-5
+- catalog: cohere/command-r-plus-08-2024
+  id: cohere/command-r-plus-08-2024
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/cohere/command-r-plus-08-2024
+- catalog: cohere/command-r7b-12-2024
+  id: cohere/command-r7b-12-2024
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/cohere/command-r7b-12-2024
+- catalog: deepseek/deepseek-r1
+  id: deepseek/deepseek-r1
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/deepseek/deepseek-r1
+- catalog: deepseek/deepseek-r1-0528
+  id: deepseek/deepseek-r1-0528
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/deepseek/deepseek-r1-0528
+- catalog: deepseek/deepseek-r1-distill-llama-70b
+  id: deepseek/deepseek-r1-distill-llama-70b
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/deepseek/deepseek-r1-distill-llama-70b
+- catalog: deepseek/deepseek-v3.1-terminus
+  id: deepseek/deepseek-v3.1-terminus
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/deepseek/deepseek-v3.1-terminus
+- catalog: deepseek/deepseek-v3.2
+  id: deepseek/deepseek-v3.2
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/deepseek/deepseek-v3.2
+- catalog: deepseek/deepseek-v3.2-exp
+  id: deepseek/deepseek-v3.2-exp
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/deepseek/deepseek-v3.2-exp
+- catalog: deepseek/deepseek-v4-flash
+  id: deepseek/deepseek-v4-flash-0731
+  protocols: [openai/chat-completions@1]
+  pricing:
+    currency: USD
+    prompt_per_1m: 0.065
+    cached_input_per_1m: 0.016
+    completion_per_1m: 0.18
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/deepseek/deepseek-v4-flash-0731
+- catalog: deepseek/deepseek-v4-pro
+  id: deepseek/deepseek-v4-pro-0813
+  protocols: [openai/chat-completions@1]
+  pricing:
+    currency: USD
+    prompt_per_1m: 1.12068
+    cached_input_per_1m: 0.037356
+    completion_per_1m: 3.36204
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/deepseek/deepseek-v4-pro-0813
+- catalog: google/gemini-2.5-flash
+  id: google/gemini-2.5-flash
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/google/gemini-2.5-flash
+- catalog: google/gemini-2.5-flash-lite
+  id: google/gemini-2.5-flash-lite
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/google/gemini-2.5-flash-lite
+- catalog: google/gemini-2.5-pro
+  id: google/gemini-2.5-pro
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/google/gemini-2.5-pro
+- catalog: google/gemini-3-flash-preview
+  id: google/gemini-3-flash-preview
+  protocols: [openai/chat-completions@1]
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/google/gemini-3-flash-preview
+- catalog: google/gemini-3.1-flash-lite
+  id: google/gemini-3.1-flash-lite
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/google/gemini-3.1-flash-lite
+- catalog: google/gemini-3.1-flash-lite-preview
+  id: google/gemini-3.1-flash-lite-preview
+  protocols: [openai/chat-completions@1]
+  lifecycle: removed
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/google/gemini-3.1-flash-lite-preview
+- catalog: google/gemini-3.1-pro-preview
+  id: google/gemini-3.1-pro-preview
+  protocols: [openai/chat-completions@1]
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/google/gemini-3.1-pro-preview
+- catalog: google/gemini-3.5-flash
+  id: google/gemini-3.5-flash
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/google/gemini-3.5-flash
+- catalog: google/gemini-3.5-flash-lite
+  id: google/gemini-3.5-flash-lite
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/google/gemini-3.5-flash-lite
+- catalog: google/gemini-3.6-flash
+  id: google/gemini-3.6-flash
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/google/gemini-3.6-flash
+- catalog: google/gemini-3.7-flash
+  id: google/gemini-3.7-flash
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/google/gemini-3.7-flash
+- catalog: google/gemini-3.8-flash
+  id: google/gemini-3.8-flash
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/google/gemini-3.8-flash
+- catalog: google/gemma-2-27b-it
+  id: google/gemma-2-27b-it
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/google/gemma-2-27b-it
+- catalog: google/gemma-3-12b-it
+  id: google/gemma-3-12b-it
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/google/gemma-3-12b-it
+- catalog: google/gemma-3-27b-it
+  id: google/gemma-3-27b-it
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/google/gemma-3-27b-it
+- catalog: google/gemma-3-4b-it
+  id: google/gemma-3-4b-it
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/google/gemma-3-4b-it
+- catalog: google/gemma-4-26b-a4b-it
+  id: google/gemma-4-26b-a4b-it
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/google/gemma-4-26b-a4b-it
+- catalog: google/gemma-4-31b-it
+  id: google/gemma-4-31b-it
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/google/gemma-4-31b-it
+- catalog: inception/mercury-2
+  id: inception/mercury-2
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/inception/mercury-2
+- catalog: microsoft/phi-4
+  id: microsoft/phi-4
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/microsoft/phi-4
+- catalog: minimax/minimax-m2
+  id: minimax/minimax-m2
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/minimax/minimax-m2
+- catalog: minimax/minimax-m2.1
+  id: minimax/minimax-m2.1
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/minimax/minimax-m2.1
+- catalog: minimax/minimax-m2.5
+  id: minimax/minimax-m2.5
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/minimax/minimax-m2.5
+- catalog: minimax/minimax-m2.7
+  id: minimax/minimax-m2.7
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/minimax/minimax-m2.7
+- catalog: minimax/minimax-m3
+  id: minimax/minimax-m3
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/minimax/minimax-m3
+- catalog: nvidia/nemotron-3.5-lightning
+  id: nvidia/nemotron-3.5-lightning
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/nvidia/nemotron-3.5-lightning
+- catalog: openai/gpt-4.1
+  id: openai/gpt-4.1
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/openai/gpt-4.1
+- catalog: openai/gpt-4.1-mini
+  id: openai/gpt-4.1-mini
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/openai/gpt-4.1-mini
+- catalog: openai/gpt-4.1-nano
+  id: openai/gpt-4.1-nano
+  protocols: [openai/chat-completions@1]
+  lifecycle: deprecated
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/openai/gpt-4.1-nano
+- catalog: openai/gpt-4o
+  id: openai/gpt-4o
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/openai/gpt-4o
+- catalog: openai/gpt-4o-mini
+  id: openai/gpt-4o-mini
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/openai/gpt-4o-mini
+- catalog: openai/gpt-5
+  id: openai/gpt-5
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/openai/gpt-5
+- catalog: openai/gpt-5-mini
+  id: openai/gpt-5-mini
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/openai/gpt-5-mini
+- catalog: openai/gpt-5-nano
+  id: openai/gpt-5-nano
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/openai/gpt-5-nano
+- catalog: openai/gpt-5-pro
+  id: openai/gpt-5-pro
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/openai/gpt-5-pro
+- catalog: openai/gpt-5.1
+  id: openai/gpt-5.1
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/openai/gpt-5.1
+- catalog: openai/gpt-5.1-codex
+  id: openai/gpt-5.1-codex
+  protocols: [openai/chat-completions@1]
+  lifecycle: deprecated
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/openai/gpt-5.1-codex
+- catalog: openai/gpt-5.1-codex-max
+  id: openai/gpt-5.1-codex-max
+  protocols: [openai/chat-completions@1]
+  lifecycle: deprecated
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/openai/gpt-5.1-codex-max
+- catalog: openai/gpt-5.1-codex-mini
+  id: openai/gpt-5.1-codex-mini
+  protocols: [openai/chat-completions@1]
+  lifecycle: deprecated
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/openai/gpt-5.1-codex-mini
+- catalog: openai/gpt-5.2
+  id: openai/gpt-5.2
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/openai/gpt-5.2
+- catalog: openai/gpt-5.2-codex
+  id: openai/gpt-5.2-codex
+  protocols: [openai/chat-completions@1]
+  lifecycle: deprecated
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/openai/gpt-5.2-codex
+- catalog: openai/gpt-5.2-pro
+  id: openai/gpt-5.2-pro
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/openai/gpt-5.2-pro
+- catalog: openai/gpt-5.3-codex
+  id: openai/gpt-5.3-codex
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/openai/gpt-5.3-codex
+- catalog: openai/gpt-5.4
+  id: openai/gpt-5.4
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/openai/gpt-5.4
+- catalog: openai/gpt-5.4-mini
+  id: openai/gpt-5.4-mini
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/openai/gpt-5.4-mini
+- catalog: openai/gpt-5.4-nano
+  id: openai/gpt-5.4-nano
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/openai/gpt-5.4-nano
+- catalog: openai/gpt-5.4-pro
+  id: openai/gpt-5.4-pro
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/openai/gpt-5.4-pro
+- catalog: openai/gpt-5.5
+  id: openai/gpt-5.5
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/openai/gpt-5.5
+- catalog: openai/gpt-5.5-pro
+  id: openai/gpt-5.5-pro
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/openai/gpt-5.5-pro
+- catalog: openai/gpt-5.6-luna
+  id: openai/gpt-5.6-luna
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/openai/gpt-5.6-luna
+- catalog: openai/gpt-5.6-sol
+  id: openai/gpt-5.6-sol
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/openai/gpt-5.6-sol
+- catalog: openai/gpt-5.6-terra
+  id: openai/gpt-5.6-terra
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/openai/gpt-5.6-terra
+- catalog: openai/gpt-oss-120b
+  id: openai/gpt-oss-120b
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/openai/gpt-oss-120b
+- catalog: openai/gpt-oss-20b
+  id: openai/gpt-oss-20b
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/openai/gpt-oss-20b
+- catalog: openai/o1
+  id: openai/o1
+  protocols: [openai/chat-completions@1]
+  lifecycle: deprecated
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/openai/o1
+- catalog: openai/o1-pro
+  id: openai/o1-pro
+  protocols: [openai/chat-completions@1]
+  lifecycle: deprecated
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/openai/o1-pro
+- catalog: openai/o3
+  id: openai/o3
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/openai/o3
+- catalog: openai/o3-mini
+  id: openai/o3-mini
+  protocols: [openai/chat-completions@1]
+  lifecycle: deprecated
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/openai/o3-mini
+- catalog: openai/o3-pro
+  id: openai/o3-pro
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/openai/o3-pro
+- catalog: openai/o4-mini
+  id: openai/o4-mini
+  protocols: [openai/chat-completions@1]
+  lifecycle: deprecated
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/openai/o4-mini
+- catalog: qwen/qwen2.5-vl-72b-instruct
+  id: qwen/qwen2.5-vl-72b-instruct
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/qwen/qwen2.5-vl-72b-instruct
+- catalog: qwen/qwen3-14b
+  id: qwen/qwen3-14b
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/qwen/qwen3-14b
+- catalog: qwen/qwen3-235b-a22b
+  id: qwen/qwen3-235b-a22b
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/qwen/qwen3-235b-a22b
+- catalog: qwen/qwen3-235b-a22b-thinking-2507
+  id: qwen/qwen3-235b-a22b-thinking-2507
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/qwen/qwen3-235b-a22b-thinking-2507
+- catalog: qwen/qwen3-30b-a3b
+  id: qwen/qwen3-30b-a3b
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/qwen/qwen3-30b-a3b
+- catalog: qwen/qwen3-32b
+  id: qwen/qwen3-32b
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/qwen/qwen3-32b
+- catalog: qwen/qwen3-8b
+  id: qwen/qwen3-8b
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/qwen/qwen3-8b
+- catalog: qwen/qwen3-coder-30b-a3b-instruct
+  id: qwen/qwen3-coder-30b-a3b-instruct
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/qwen/qwen3-coder-30b-a3b-instruct
+- catalog: qwen/qwen3-next-80b-a3b-instruct
+  id: qwen/qwen3-next-80b-a3b-instruct
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/qwen/qwen3-next-80b-a3b-instruct
+- catalog: qwen/qwen3-next-80b-a3b-thinking
+  id: qwen/qwen3-next-80b-a3b-thinking
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/qwen/qwen3-next-80b-a3b-thinking
+- catalog: qwen/qwen3-vl-235b-a22b-instruct
+  id: qwen/qwen3-vl-235b-a22b-instruct
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/qwen/qwen3-vl-235b-a22b-instruct
+- catalog: qwen/qwen3-vl-30b-a3b-instruct
+  id: qwen/qwen3-vl-30b-a3b-instruct
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/qwen/qwen3-vl-30b-a3b-instruct
+- catalog: qwen/qwen3-vl-32b-instruct
+  id: qwen/qwen3-vl-32b-instruct
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/qwen/qwen3-vl-32b-instruct
+- catalog: qwen/qwen3-vl-8b-instruct
+  id: qwen/qwen3-vl-8b-instruct
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/qwen/qwen3-vl-8b-instruct
+- catalog: qwen/qwen3.5-122b-a10b
+  id: qwen/qwen3.5-122b-a10b
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/qwen/qwen3.5-122b-a10b
+- catalog: qwen/qwen3.5-27b
+  id: qwen/qwen3.5-27b
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/qwen/qwen3.5-27b
+- catalog: qwen/qwen3.5-35b-a3b
+  id: qwen/qwen3.5-35b-a3b
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/qwen/qwen3.5-35b-a3b
+- catalog: qwen/qwen3.5-397b-a17b
+  id: qwen/qwen3.5-397b-a17b
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/qwen/qwen3.5-397b-a17b
+- catalog: qwen/qwen3.5-9b
+  id: qwen/qwen3.5-9b
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/qwen/qwen3.5-9b
+- catalog: qwen/qwen3.6-27b
+  id: qwen/qwen3.6-27b
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/qwen/qwen3.6-27b
+- catalog: qwen/qwen3.6-35b-a3b
+  id: qwen/qwen3.6-35b-a3b
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/qwen/qwen3.6-35b-a3b
+- catalog: qwen/qwen3.6-plus
+  id: qwen/qwen3.6-plus
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/qwen/qwen3.6-plus
+- catalog: qwen/qwen3.7-max
+  id: qwen/qwen3.7-max
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/qwen/qwen3.7-max
+- catalog: qwen/qwen3.7-plus
+  id: qwen/qwen3.7-plus
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/qwen/qwen3.7-plus
+- catalog: stepfun/step-3.5-flash
+  id: stepfun/step-3.5-flash
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/stepfun/step-3.5-flash
+- catalog: stepfun/step-3.7-flash
+  id: stepfun/step-3.7-flash
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/stepfun/step-3.7-flash
+- catalog: tencent/hunyuan-a13b-instruct
+  id: tencent/hunyuan-a13b-instruct
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/tencent/hunyuan-a13b-instruct
+- catalog: tencent/hy-mt2-1.8b
+  id: tencent/hy-mt2-1.8b
+  protocols: &new-openrouter-protocols [openai/chat-completions@1]
+  pricing: {currency: USD, prompt_per_1m: 0.044, completion_per_1m: 0.177}
+  lifecycle: active
+  verification: &new-openrouter-verification
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://openrouter.ai/api/v1/models
+- catalog: tencent/hy-mt2-7b
+  id: tencent/hy-mt2-7b
+  protocols: *new-openrouter-protocols
+  pricing: {currency: USD, prompt_per_1m: 0.074, completion_per_1m: 0.295}
+  lifecycle: active
+  verification: *new-openrouter-verification
+- catalog: tencent/hy-mt2-30b-a3b
+  id: tencent/hy-mt2-30b-a3b
+  protocols: *new-openrouter-protocols
+  pricing: {currency: USD, prompt_per_1m: 0.074, completion_per_1m: 0.295}
+  lifecycle: active
+  verification: *new-openrouter-verification
+- catalog: poolside/laguna-xs-2.1
+  id: poolside/laguna-xs-2.1
+  protocols: *new-openrouter-protocols
+  pricing: {currency: USD, prompt_per_1m: 0.06, cached_input_per_1m: 0.03, completion_per_1m: 0.12}
+  lifecycle: active
+  verification: *new-openrouter-verification
+- catalog: poolside/laguna-s-2.1
+  id: poolside/laguna-s-2.1
+  protocols: *new-openrouter-protocols
+  pricing: {currency: USD, prompt_per_1m: 0.09, cached_input_per_1m: 0.009, completion_per_1m: 0.18}
+  lifecycle: active
+  verification: *new-openrouter-verification
+- catalog: arcee/trinity-large-thinking
+  id: arcee-ai/trinity-large-thinking
+  protocols: *new-openrouter-protocols
+  pricing: {currency: USD, prompt_per_1m: 0.25, cached_input_per_1m: 0.06, completion_per_1m: 0.80}
+  lifecycle: active
+  verification: *new-openrouter-verification
+- catalog: kwaipilot/kat-coder-pro-v2.5
+  id: kwaipilot/kat-coder-pro-v2.5
+  protocols: *new-openrouter-protocols
+  pricing: {currency: USD, prompt_per_1m: 0.74, cached_input_per_1m: 0.15, completion_per_1m: 2.96}
+  lifecycle: active
+  verification: *new-openrouter-verification
+- catalog: kwaipilot/kat-coder-pro-v2
+  id: kwaipilot/kat-coder-pro-v2
+  protocols: *new-openrouter-protocols
+  pricing: {currency: USD, prompt_per_1m: 0.30, cached_input_per_1m: 0.06, completion_per_1m: 1.20}
+  lifecycle: active
+  verification: *new-openrouter-verification
+- catalog: reka/reka-edge-2603
+  id: rekaai/reka-edge
+  protocols: *new-openrouter-protocols
+  pricing: {currency: USD, prompt_per_1m: 0.10, completion_per_1m: 0.10}
+  lifecycle: active
+  verification: *new-openrouter-verification
+- catalog: reka/reka-flash-3
+  id: rekaai/reka-flash-3
+  protocols: *new-openrouter-protocols
+  pricing: {currency: USD, prompt_per_1m: 0.10, completion_per_1m: 0.20}
+  lifecycle: active
+  verification: *new-openrouter-verification
+- catalog: sakana/fugu-ultra
+  id: sakana/fugu-ultra
+  protocols: *new-openrouter-protocols
+  pricing: {currency: USD, prompt_per_1m: 5.00, cached_input_per_1m: 0.50, completion_per_1m: 30.00}
+  lifecycle: active
+  verification: *new-openrouter-verification
+- catalog: sakana/sakana-namazu
+  id: sakana/sakana-namazu
+  protocols: *new-openrouter-protocols
+  pricing: {currency: USD, prompt_per_1m: 0.95, cached_input_per_1m: 0.15, completion_per_1m: 4.00}
+  lifecycle: active
+  verification: *new-openrouter-verification
+- catalog: aion/aion-2.0
+  id: aion-labs/aion-2.0
+  protocols: *new-openrouter-protocols
+  pricing: {currency: USD, prompt_per_1m: 0.80, cached_input_per_1m: 0.20, completion_per_1m: 1.60}
+  lifecycle: active
+  verification: *new-openrouter-verification
+- catalog: aion/aion-3.0
+  id: aion-labs/aion-3.0
+  protocols: *new-openrouter-protocols
+  pricing: {currency: USD, prompt_per_1m: 3.00, cached_input_per_1m: 0.75, completion_per_1m: 6.00}
+  lifecycle: active
+  verification: *new-openrouter-verification
+- catalog: aion/aion-3.0-mini
+  id: aion-labs/aion-3.0-mini
+  protocols: *new-openrouter-protocols
+  pricing: {currency: USD, prompt_per_1m: 0.70, cached_input_per_1m: 0.18, completion_per_1m: 1.40}
+  lifecycle: active
+  verification: *new-openrouter-verification
+- catalog: writer/palmyra-x5
+  id: writer/palmyra-x5
+  protocols: *new-openrouter-protocols
+  pricing: {currency: USD, prompt_per_1m: 0.60, completion_per_1m: 6.00}
+  lifecycle: active
+  verification: *new-openrouter-verification
+- catalog: perceptron/perceptron-mk1
+  id: perceptron/perceptron-mk1
+  protocols: *new-openrouter-protocols
+  pricing: {currency: USD, prompt_per_1m: 0.15, completion_per_1m: 1.50}
+  lifecycle: active
+  verification: *new-openrouter-verification
+- catalog: qwen/qwen3.7-flash
+  id: qwen/qwen3.7-flash
+  protocols: *new-openrouter-protocols
+  reasoning_transport: reasoning_object
+  lifecycle: active
+  verification: *new-openrouter-verification
+- catalog: qwen/qwen3.8-max
+  id: qwen/qwen3.8-max-0902
+  protocols: *new-openrouter-protocols
+  reasoning_transport: reasoning_object
+  pricing: {currency: USD, prompt_per_1m: 2.00, cached_input_per_1m: 0.25, completion_per_1m: 6.00}
+  lifecycle: active
+  verification: *new-openrouter-verification
+- catalog: perplexity/sonar
+  id: perplexity/sonar
+  protocols: *new-openrouter-protocols
+  lifecycle: active
+  verification: *new-openrouter-verification
+- catalog: perplexity/sonar-pro
+  id: perplexity/sonar-pro
+  protocols: *new-openrouter-protocols
+  lifecycle: active
+  verification: *new-openrouter-verification
+- catalog: perplexity/sonar-reasoning-pro
+  id: perplexity/sonar-reasoning-pro
+  protocols: *new-openrouter-protocols
+  lifecycle: active
+  verification: *new-openrouter-verification
+- catalog: perplexity/sonar-deep-research
+  id: perplexity/sonar-deep-research
+  protocols: *new-openrouter-protocols
+  reasoning_transport: reasoning_object
+  lifecycle: active
+  verification: *new-openrouter-verification
+- catalog: xai/grok-build-0.1
+  id: x-ai/grok-build-0.1
+  protocols: *new-openrouter-protocols
+  lifecycle: experimental
+  verification: *new-openrouter-verification

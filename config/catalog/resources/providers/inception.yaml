@@ -1,0 +1,38 @@
+id: inception
+display_name: Inception
+description: Mercury diffusion models through the Inception OpenAI-compatible API.
+category: model_api
+support_tier: compatible
+default_base_url: https://api.inceptionlabs.ai/v1
+protocols:
+- openai/chat-completions@1
+default_protocol: openai/chat-completions@1
+supported_operations:
+- openai/chat-completions@1#create
+- openai/chat-completions@1#list_models
+reasoning_transport: top_level_effort
+auth:
+  strategy: bearer
+  header: Authorization
+  prefix: Bearer
+presentation:
+  logo: monogram
+  monogram: I
+  monochrome: false
+conformance:
+  status: unverified
+models:
+- catalog: inception/mercury-2
+  id: mercury-2
+  protocols:
+  - openai/chat-completions@1
+  pricing:
+    currency: USD
+    prompt_per_1m: 0.25
+    cached_input_per_1m: 0.025
+    completion_per_1m: 0.75
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.inceptionlabs.ai/get-started/models

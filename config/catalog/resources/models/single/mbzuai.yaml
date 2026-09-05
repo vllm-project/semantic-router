@@ -1,0 +1,94 @@
+- id: mbzuai/k2-horizon-375b-a23b
+  display_name: K2 Horizon 375B A23B
+  description: Frontier-scale open-weight MoE from the Institute of Foundation Models with long-context reasoning and agent capabilities.
+  kind: physical
+  publisher: Institute of Foundation Models
+  presentation:
+    logo: monogram
+    monogram: IFM
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/IFM/K2-Horizon-375B-A23B
+    license: Apache-2.0
+  family: k2-horizon
+  parameter_size: 375B (23B active)
+  released_at: 2026-08-19
+  reasoning_family: k2-horizon
+  lifecycle: experimental
+  limits:
+    context_window_size: 524288
+    max_output_tokens: 32768
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input: [text]
+    output: [text]
+  verification:
+    authority: Institute of Foundation Models
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/IFM/K2-Horizon-375B-A23B
+  tags: [open_weights, frontier, multilingual, reasoning, moe, agentic]
+- id: mbzuai/k2-think-v2
+  display_name: K2 Think V2
+  description: Open-weight 70B reasoning model from the Institute of Foundation Models, built on K2 V2 Instruct.
+  kind: physical
+  publisher: Institute of Foundation Models
+  presentation:
+    logo: monogram
+    monogram: IFM
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/IFM/K2-Think-V2
+    license: Apache-2.0
+  family: k2-v2
+  parameter_size: 73B
+  reasoning_family: k2-think-v2
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities:
+    input: [text]
+    output: [text]
+  verification:
+    authority: Institute of Foundation Models
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/IFM/K2-Think-V2
+  tags: [open_weights, reasoning, math, long_context]
+- id: mbzuai/k2-v2-instruct
+  display_name: K2 V2 Instruct
+  description: Fully open 70B dense instruction model with long-context consistency, tools, and released training artifacts.
+  kind: physical
+  publisher: Institute of Foundation Models
+  presentation:
+    logo: monogram
+    monogram: IFM
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/IFM/K2-V2-Instruct
+    license: Apache-2.0
+  family: k2-v2
+  parameter_size: 70B
+  released_at: 2025-12-05
+  lifecycle: active
+  limits:
+    context_window_size: 524288
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities:
+    input: [text]
+    output: [text]
+  verification:
+    authority: Institute of Foundation Models
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/IFM/K2-V2-Instruct
+  tags: [open_weights, fully_open, reasoning, agentic, long_context]

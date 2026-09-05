@@ -372,6 +372,24 @@
   font-size: 0.62rem;
 }
 
+.effortSelect {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  color: var(--ifm-color-emphasis-700);
+  font-size: 0.66rem;
+}
+
+.effortSelect select {
+  min-width: 7rem;
+  padding: 0.28rem 0.45rem;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  background: var(--ifm-background-surface-color);
+  color: var(--ifm-font-color-base);
+  font: inherit;
+}
+
 .benchmarkGrid {
   display: grid;
   gap: 0.35rem;
@@ -423,7 +441,7 @@
   line-height: 1.45;
 }
 
-.offeringList {
+.providerList {
   display: grid;
   gap: 0;
   margin: 0;
@@ -431,7 +449,7 @@
   list-style: none;
 }
 
-.offeringList li {
+.providerList li {
   display: flex;
   align-items: start;
   justify-content: space-between;
@@ -440,18 +458,18 @@
   border-bottom: 1px solid var(--ifm-color-emphasis-200);
 }
 
-.offeringList li > span {
+.providerList li > span {
   display: grid;
   min-width: 0;
 }
 
-.offeringList strong,
-.offeringList code,
-.offeringList small {
+.providerList strong,
+.providerList code,
+.providerList small {
   font-size: 0.62rem;
 }
 
-.offeringList code {
+.providerList code {
   overflow: hidden;
   padding: 0;
   background: transparent;
@@ -460,7 +478,7 @@
   white-space: nowrap;
 }
 
-.offeringList small {
+.providerList small {
   color: var(--ifm-color-emphasis-600);
 }
 

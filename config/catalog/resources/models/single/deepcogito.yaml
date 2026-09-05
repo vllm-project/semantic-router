@@ -1,0 +1,30 @@
+- id: deepcogito/cogito-671b-v2.1
+  display_name: Cogito 671B v2.1
+  description: Open-weight hybrid-reasoning MoE for coding, STEM, tools, and multilingual assistance.
+  kind: physical
+  publisher: Deep Cogito
+  presentation:
+    logo: monogram
+    monogram: DC
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/deepcogito/cogito-671b-v2.1
+    license: MIT
+  family: cogito-v2.1
+  parameter_size: 671B
+  released_at: 2025-11-19
+  reasoning_family: cogito
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities: [chat, reasoning, tools, long_context]
+  modalities:
+    input: [text]
+    output: [text]
+  verification:
+    authority: Deep Cogito
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://www.deepcogito.com/research/cogito-v2-1
+  tags: [open_weights, hybrid_reasoning, multilingual, coding, moe]

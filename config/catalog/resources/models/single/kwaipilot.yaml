@@ -1,0 +1,69 @@
+- id: kwaipilot/kat-coder-v2.5-dev
+  display_name: KAT-Coder V2.5 Dev
+  description: Open-weight compact MoE model trained for autonomous software-engineering agents.
+  kind: physical
+  publisher: Kuaishou KwaiPilot
+  presentation: &kwaipilot-presentation
+    logo: monogram
+    monogram: K
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/Kwaipilot/KAT-Coder-V2.5-Dev
+    license: Apache-2.0
+  family: kat-coder-v2.5
+  parameter_size: 35B (3B active)
+  reasoning_family: kat-coder
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities: &kwaipilot-modalities
+    input: [text]
+    output: [text]
+  verification: &kwaipilot-verification
+    authority: Kuaishou KwaiPilot
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/Kwaipilot/KAT-Coder-V2.5-Dev
+  tags: [open_weights, reasoning, coding, agentic, moe]
+- id: kwaipilot/kat-coder-pro-v2.5
+  display_name: KAT-Coder Pro V2.5
+  description: Proprietary Kuaishou coding model for long-running repository and terminal agents.
+  kind: physical
+  publisher: Kuaishou KwaiPilot
+  presentation: *kwaipilot-presentation
+  distribution:
+    type: proprietary_api
+    source: https://arxiv.org/abs/2607.05471
+  family: kat-coder-v2.5
+  reasoning_family: kat-coder
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities: *kwaipilot-modalities
+  verification:
+    <<: *kwaipilot-verification
+    source: https://arxiv.org/abs/2607.05471
+  tags: [proprietary, reasoning, coding, agentic]
+- id: kwaipilot/kat-coder-pro-v2
+  display_name: KAT-Coder Pro V2
+  description: Previous-generation proprietary Kuaishou agentic coding model.
+  kind: physical
+  publisher: Kuaishou KwaiPilot
+  presentation: *kwaipilot-presentation
+  distribution:
+    type: proprietary_api
+    source: https://arxiv.org/abs/2603.27703
+  family: kat-coder-v2
+  reasoning_family: kat-coder
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities: *kwaipilot-modalities
+  verification:
+    <<: *kwaipilot-verification
+    source: https://arxiv.org/abs/2603.27703
+  tags: [proprietary, reasoning, coding, agentic]

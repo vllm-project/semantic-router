@@ -11,7 +11,7 @@ from typing import Any
 from catalog_common import (
     MIN_PIECEWISE_POINTS,
     PAIR_LENGTH,
-    SHA256,
+    SLUG,
     VERSIONED_ID,
     CatalogBuildError,
 )
@@ -37,13 +37,24 @@ def metric_catalog(benchmarks: list[dict[str, Any]]) -> dict[str, dict[str, Any]
     for benchmark_index, benchmark in enumerate(benchmarks):
         path = f"benchmarks[{benchmark_index}]"
         _reject_unknown(
-            benchmark, {"id", "display_name", "domain", "source", "metrics"}, path
+            benchmark,
+            {
+                "id",
+                "display_name",
+                "domain",
+                "source",
+                "default_profile",
+                "profiles",
+                "metrics",
+            },
+            path,
         )
         benchmark_id = _nonempty_string(benchmark.get("id"), f"{path}.id")
         if not VERSIONED_ID.fullmatch(benchmark_id):
             raise CatalogBuildError(
                 f"{path}.id must be a namespaced semantic-version identity"
             )
+        profiles = _benchmark_profiles(benchmark, path)
         for metric_index, raw_metric in enumerate(
             _sequence(benchmark.get("metrics"), f"{path}.metrics")
         ):
@@ -64,8 +75,31 @@ def metric_catalog(benchmarks: list[dict[str, Any]]) -> dict[str, dict[str, Any]
                 **metric,
                 "benchmark": benchmark_id,
                 "domain": benchmark.get("domain"),
+                "profiles": profiles,
             }
     return metrics
+
+
+def _benchmark_profiles(benchmark: dict[str, Any], path: str) -> frozenset[str]:
+    profiles: set[str] = set()
+    for profile_index, raw_profile in enumerate(
+        _sequence(benchmark.get("profiles"), f"{path}.profiles")
+    ):
+        profile_path = f"{path}.profiles[{profile_index}]"
+        profile = _mapping(raw_profile, profile_path)
+        _reject_unknown(profile, {"id", "display_name", "description"}, profile_path)
+        profile_id = _nonempty_string(profile.get("id"), f"{profile_path}.id")
+        if not SLUG.fullmatch(profile_id) or profile_id in profiles:
+            raise CatalogBuildError(f"{profile_path}.id is invalid or duplicated")
+        _nonempty_string(profile.get("display_name"), f"{profile_path}.display_name")
+        _nonempty_string(profile.get("description"), f"{profile_path}.description")
+        profiles.add(profile_id)
+    default_profile = _nonempty_string(
+        benchmark.get("default_profile"), f"{path}.default_profile"
+    )
+    if default_profile not in profiles:
+        raise CatalogBuildError(f"{path}.default_profile is not declared in profiles")
+    return frozenset(profiles)
 
 
 def _validate_metric(metric: dict[str, Any], path: str) -> None:
@@ -224,14 +258,38 @@ def _validate_index_component(
     metrics: dict[str, dict[str, Any]],
 ) -> tuple[float, str | None, str | None]:
     component = _mapping(raw_component, path)
-    _reject_unknown(component, {"metric", "index", "weight", "normalization"}, path)
-    references = [key for key in ("metric", "index") if component.get(key)]
-    if len(references) != 1:
-        raise CatalogBuildError(f"{path} must reference exactly one metric or index")
-    metric_id = component.get("metric")
+    _reject_unknown(
+        component,
+        {
+            "benchmark",
+            "metric",
+            "benchmark_profile",
+            "index",
+            "weight",
+            "normalization",
+        },
+        path,
+    )
+    direct = any(
+        component.get(key) for key in ("benchmark", "metric", "benchmark_profile")
+    )
     dependency = component.get("index")
+    if direct == bool(dependency):
+        raise CatalogBuildError(f"{path} must reference exactly one metric or index")
+    metric_id: str | None = None
+    if direct:
+        benchmark = _nonempty_string(component.get("benchmark"), f"{path}.benchmark")
+        metric = _nonempty_string(component.get("metric"), f"{path}.metric")
+        profile = _nonempty_string(
+            component.get("benchmark_profile"), f"{path}.benchmark_profile"
+        )
+        metric_id = f"{benchmark}#{metric}"
     if metric_id and metric_id not in metrics:
         raise CatalogBuildError(f"{path} references an unknown metric")
+    if metric_id and profile not in metrics[metric_id]["profiles"]:
+        raise CatalogBuildError(
+            f"{path}.benchmark_profile is not declared by its benchmark"
+        )
     if dependency and dependency not in index_ids:
         raise CatalogBuildError(f"{path} references an unknown index")
     weight = component.get("weight")
@@ -331,145 +389,6 @@ def _validate_index_cycles(index_ids: set[str], edges: dict[str, set[str]]) -> N
         visit(identity)
 
 
-def validate_offerings(
-    items: list[dict[str, Any]],
-    providers: dict[str, dict[str, Any]],
-    models: dict[str, dict[str, Any]],
-    protocol_ids: set[str],
-) -> None:
-    offered_models: set[str] = set()
-    for index, item in enumerate(items):
-        path = f"offerings[{index}]"
-        _reject_unknown(
-            item,
-            {
-                "id",
-                "provider",
-                "model",
-                "provider_model_id",
-                "protocols",
-                "pricing",
-                "restrictions",
-                "lifecycle",
-                "verification",
-            },
-            path,
-        )
-        provider = providers.get(str(item.get("provider")))
-        model = models.get(str(item.get("model")))
-        if provider is None or model is None:
-            raise CatalogBuildError(f"{path} references an unknown provider or model")
-        protocols = _sequence(item.get("protocols"), f"{path}.protocols")
-        if not protocols or any(protocol not in protocol_ids for protocol in protocols):
-            raise CatalogBuildError(f"{path}.protocols references an unknown protocol")
-        if any(protocol not in provider["protocols"] for protocol in protocols):
-            raise CatalogBuildError(
-                f"{path}.protocols is not supported by its provider"
-            )
-        if any(
-            f"{protocol}#create" not in provider["supported_operations"]
-            for protocol in protocols
-        ):
-            raise CatalogBuildError(
-                f"{path}.protocols has no provider create operation"
-            )
-        if any(protocol not in model["protocols"] for protocol in protocols):
-            raise CatalogBuildError(f"{path}.protocols is not supported by its model")
-        offered_models.add(str(item["model"]))
-    missing = sorted(
-        model_id
-        for model_id, model in models.items()
-        if model.get("kind") == "physical"
-        and model.get("lifecycle") != "removed"
-        and model_id not in offered_models
-    )
-    if missing:
-        raise CatalogBuildError(
-            "physical models require at least one provider offering: "
-            + ", ".join(missing)
-        )
-
-
-def validate_evaluations(
-    items: list[dict[str, Any]],
-    model_ids: set[str],
-    metrics: dict[str, dict[str, Any]],
-) -> None:
-    available_metrics: dict[tuple[str, str], str] = {}
-    for index, item in enumerate(items):
-        path = f"evaluations[{index}]"
-        _reject_unknown(
-            item,
-            {"id", "model", "subject", "metrics", "status", "measured_at", "evidence"},
-            path,
-        )
-        if item.get("model") not in model_ids:
-            raise CatalogBuildError(f"{path}.model references an unknown model")
-        if item.get("status") not in {
-            "available",
-            "missing",
-            "failed",
-            "not_applicable",
-            "withheld",
-        }:
-            raise CatalogBuildError(f"{path}.status is unsupported")
-        values = _mapping(item.get("metrics", {}), f"{path}.metrics")
-        _validate_evaluation_values(values, path, metrics)
-        _validate_evaluation_evidence(item, values, path)
-        if item.get("status") == "available":
-            for metric_id in values:
-                key = (str(item["model"]), metric_id)
-                previous = available_metrics.get(key)
-                if previous is not None:
-                    raise CatalogBuildError(
-                        f"{path} conflicts with {previous}: one available value is "
-                        f"allowed per model and benchmark metric"
-                    )
-                available_metrics[key] = path
-
-
-def _validate_evaluation_values(
-    values: dict[str, Any], path: str, metrics: dict[str, dict[str, Any]]
-) -> None:
-    for metric_id, value in values.items():
-        definition = metrics.get(metric_id)
-        if definition is None:
-            raise CatalogBuildError(
-                f"{path}.metrics references an unknown metric: {metric_id}"
-            )
-        if not _is_finite_number(value):
-            raise CatalogBuildError(f"{path}.metrics.{metric_id} must be finite")
-        if value < definition["range"][0] or value > definition["range"][1]:
-            raise CatalogBuildError(
-                f"{path}.metrics.{metric_id} is outside its declared range"
-            )
-
-
-def _validate_evaluation_evidence(
-    item: dict[str, Any], values: dict[str, Any], path: str
-) -> None:
-    evidence = _mapping(item.get("evidence"), f"{path}.evidence")
-    _reject_unknown(
-        evidence,
-        {"provenance", "verification", "source", "artifact", "redistributable"},
-        f"{path}.evidence",
-    )
-    if item.get("status") == "available" and not values:
-        raise CatalogBuildError(
-            f"{path}.metrics cannot be empty for an available record"
-        )
-    if (
-        item.get("status") == "available"
-        and evidence.get("redistributable") is not True
-    ):
-        raise CatalogBuildError(
-            f"{path} cannot be published without redistribution permission"
-        )
-    artifact = evidence.get("artifact")
-    if artifact and not SHA256.fullmatch(str(artifact)):
-        raise CatalogBuildError(f"{path}.evidence.artifact must be a SHA-256 digest")
-
-
 def normalize_component(value: float, normalization: dict[str, Any]) -> float:
     kind = normalization.get("type", "identity")
     if kind == "identity":
@@ -532,11 +451,13 @@ class _IndexEvaluator:
     def __init__(
         self,
         model: dict[str, Any],
-        measurements: dict[str, tuple[float, dict[str, Any]]],
+        reasoning_effort: str,
+        measurements: dict[tuple[str, str, str], tuple[float, dict[str, Any]]],
         definitions: dict[str, dict[str, Any]],
         benchmarks: dict[str, dict[str, Any]],
     ) -> None:
         self.model = model
+        self.reasoning_effort = reasoning_effort
         self.measurements = measurements
         self.definitions = definitions
         self.benchmarks = benchmarks
@@ -547,8 +468,6 @@ class _IndexEvaluator:
             return self.memo[index_id]
         if index_id in visiting:
             raise CatalogBuildError(f"index dependency cycle includes {index_id}")
-        if self.model.get("kind") == "virtual":
-            return self._store(index_id, self._not_applicable(index_id))
         visiting.add(index_id)
         definition = self.definitions[index_id]
         accumulation = self._accumulate(definition, visiting)
@@ -560,12 +479,16 @@ class _IndexEvaluator:
     ) -> _IndexAccumulation:
         accumulation = _IndexAccumulation()
         for component in definition["components"]:
-            value, domain, provenance = self._component_value(component, visiting)
+            value, domain, provenance, evaluation_id = self._component_value(
+                component, visiting
+            )
             accumulation.provenance.update(provenance)
             component_result = _missing_component_result(component)
             if value is None:
                 accumulation.components.append(component_result)
                 continue
+            if evaluation_id is not None:
+                component_result["evaluation"] = evaluation_id
             normalized = normalize_component(
                 value, component.get("normalization", {"type": "identity"})
             )
@@ -576,27 +499,31 @@ class _IndexEvaluator:
 
     def _component_value(
         self, component: dict[str, Any], visiting: set[str]
-    ) -> tuple[float | None, str | None, set[str]]:
+    ) -> tuple[float | None, str | None, set[str], str | None]:
         metric_id = component.get("metric")
         if metric_id:
-            measurement = self.measurements.get(metric_id)
+            benchmark = str(component["benchmark"])
+            benchmark_profile = str(component["benchmark_profile"])
+            measurement = self.measurements.get(
+                (benchmark, benchmark_profile, str(metric_id))
+            )
             if measurement is None:
-                return None, None, set()
+                return None, None, set(), None
             value, record = measurement
-            benchmark_id = metric_id.split("#", 1)[0]
             return (
                 value,
-                str(self.benchmarks[benchmark_id]["domain"]),
+                str(self.benchmarks[benchmark]["domain"]),
                 {str(record["id"])},
+                str(record["id"]),
             )
         dependency_id = str(component["index"])
         dependency = self.compute(dependency_id, visiting)
         provenance = set(dependency["provenance"])
         if dependency["status"] != "available" or dependency["score"] is None:
-            return None, None, provenance
+            return None, None, provenance, None
         lower, upper = self.definitions[dependency_id]["scale"]
         value = (dependency["score"] - lower) / (upper - lower)
-        return float(value), None, provenance
+        return float(value), None, provenance, None
 
     def _result(
         self,
@@ -607,6 +534,7 @@ class _IndexEvaluator:
         available = _index_is_available(definition, accumulation.present_weight)
         result: dict[str, Any] = {
             "model": self.model["id"],
+            "reasoning_effort": self.reasoning_effort,
             "index": index_id,
             "status": "available" if available else "missing",
             "score": _index_score(definition, accumulation, available),
@@ -618,17 +546,6 @@ class _IndexEvaluator:
         if domains:
             result["domains"] = domains
         return result
-
-    def _not_applicable(self, index_id: str) -> dict[str, Any]:
-        return {
-            "model": self.model["id"],
-            "index": index_id,
-            "status": "not_applicable",
-            "score": None,
-            "coverage": 0.0,
-            "components": [],
-            "provenance": [],
-        }
 
     def _store(self, index_id: str, result: dict[str, Any]) -> dict[str, Any]:
         self.memo[index_id] = result
@@ -668,7 +585,9 @@ def _missing_component_result(component: dict[str, Any]) -> dict[str, Any]:
         "normalized": None,
     }
     if component.get("metric"):
+        result["benchmark"] = component["benchmark"]
         result["metric"] = component["metric"]
+        result["benchmark_profile"] = component["benchmark_profile"]
     if component.get("index"):
         result["index"] = component["index"]
     return result
@@ -714,16 +633,43 @@ def _index_domain_scores(
 
 def _available_evaluations(
     evaluations: list[dict[str, Any]],
-) -> dict[str, dict[str, tuple[float, dict[str, Any]]]]:
-    records_by_model: dict[str, dict[str, tuple[float, dict[str, Any]]]] = defaultdict(
-        dict
-    )
+) -> dict[
+    str,
+    dict[str, dict[tuple[str, str, str], tuple[float, dict[str, Any]]]],
+]:
+    records_by_model: dict[
+        str,
+        dict[str, dict[tuple[str, str, str], tuple[float, dict[str, Any]]]],
+    ] = defaultdict(lambda: defaultdict(dict))
     for record in evaluations:
         if record.get("status") != "available":
             continue
-        for metric_id, value in record.get("metrics", {}).items():
-            records_by_model[record["model"]][metric_id] = (float(value), record)
+        model = str(record["model"])
+        effort = str(record["reasoning_effort"])
+        benchmark = str(record["benchmark"])
+        profile = str(record["benchmark_profile"])
+        for metric, value in record.get("metrics", {}).items():
+            records_by_model[model][effort][(benchmark, profile, metric)] = (
+                float(value),
+                record,
+            )
     return records_by_model
+
+
+def _model_reasoning_efforts(
+    model: dict[str, Any],
+    reasoning_families: dict[str, dict[str, Any]],
+    measurements: dict[str, Any],
+) -> list[str]:
+    family_id = model.get("reasoning_family")
+    if family_id is None:
+        efforts = ["default"]
+    else:
+        efforts = list(reasoning_families[str(family_id)]["levels"])
+    for effort in sorted(measurements):
+        if effort not in efforts:
+            efforts.append(effort)
+    return efforts
 
 
 def index_results(resources: dict[str, list[dict[str, Any]]]) -> list[dict[str, Any]]:
@@ -732,13 +678,54 @@ def index_results(resources: dict[str, list[dict[str, Any]]]) -> list[dict[str, 
     benchmarks = {
         definition["id"]: definition for definition in resources["benchmarks"]
     }
+    reasoning_families = {
+        definition["id"]: definition for definition in resources["reasoning_families"]
+    }
     results: list[dict[str, Any]] = []
     for model in resources["models"]:
-        evaluator = _IndexEvaluator(
-            model, measurements.get(model["id"], {}), definitions, benchmarks
-        )
-        results.extend(
-            evaluator.compute(definition["id"], set())
-            for definition in resources["indices"]
-        )
+        model_measurements = measurements.get(model["id"], {})
+        for effort in _model_reasoning_efforts(
+            model, reasoning_families, model_measurements
+        ):
+            evaluator = _IndexEvaluator(
+                model,
+                effort,
+                model_measurements.get(effort, {}),
+                definitions,
+                benchmarks,
+            )
+            results.extend(
+                evaluator.compute(definition["id"], set())
+                for definition in resources["indices"]
+            )
     return results
+
+
+def evaluation_coverage(
+    resources: dict[str, list[dict[str, Any]]],
+    default_index: str,
+    results: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """Materialize required benchmark slots without inventing missing scores."""
+
+    rows: list[dict[str, Any]] = []
+    for result in results if results is not None else index_results(resources):
+        if result["index"] != default_index:
+            continue
+        for component in result["components"]:
+            if "benchmark" not in component:
+                continue
+            row: dict[str, Any] = {
+                "model": result["model"],
+                "reasoning_effort": result["reasoning_effort"],
+                "benchmark": component["benchmark"],
+                "benchmark_profile": component["benchmark_profile"],
+                "metric": component["metric"],
+                "status": component["status"],
+            }
+            if component.get("value") is not None:
+                row["value"] = component["value"]
+            if component.get("evaluation"):
+                row["evaluation"] = component["evaluation"]
+            rows.append(row)
+    return rows

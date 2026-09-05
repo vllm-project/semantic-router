@@ -1,0 +1,53 @@
+- id: servicenow/apriel-1.6-15b-thinker-model-card-mmlu-pro@1.0.0
+  model: servicenow/apriel-1.6-15b-thinker
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: published
+  subject: &apriel-subject
+    variant: Apriel 1.6 15B Thinker
+    source_kind: official_vendor_republication
+    measurement_origin: Artificial Analysis
+  metrics:
+    accuracy: 0.79
+  status: available
+  evidence: &apriel-third-party-evidence
+    provenance: third_party
+    verification: imported
+    source: https://huggingface.co/ServiceNow-AI/Apriel-1.6-15b-Thinker
+    redistributable: true
+- id: servicenow/apriel-1.6-15b-thinker-model-card-gpqa-diamond@1.0.0
+  model: servicenow/apriel-1.6-15b-thinker
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: published
+  subject: *apriel-subject
+  metrics:
+    accuracy: 0.73
+  status: available
+  evidence: *apriel-third-party-evidence
+- id: servicenow/apriel-1.6-15b-thinker-model-card-humanitys-last-exam@1.0.0
+  model: servicenow/apriel-1.6-15b-thinker
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: published
+  subject: *apriel-subject
+  metrics:
+    accuracy: 0.1
+  status: available
+  evidence: *apriel-third-party-evidence
+- id: servicenow/apriel-1.6-15b-thinker-model-card-swe-bench-verified@1.0.0
+  model: servicenow/apriel-1.6-15b-thinker
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: published
+  subject:
+    variant: Apriel 1.6 15B Thinker
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.23
+  status: available
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/ServiceNow-AI/Apriel-1.6-15b-Thinker
+    redistributable: true

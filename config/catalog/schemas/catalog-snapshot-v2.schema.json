@@ -11,9 +11,9 @@
     "providers",
     "reasoning_families",
     "models",
-    "offerings",
     "benchmarks",
     "evaluations",
+    "evaluation_coverage",
     "indices",
     "index_results"
   ],
@@ -39,23 +39,63 @@
     "providers": {"type": "array"},
     "reasoning_families": {"type": "array"},
     "models": {"type": "array"},
-    "offerings": {"type": "array"},
     "benchmarks": {"type": "array"},
     "evaluations": {"type": "array"},
+    "evaluation_coverage": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["model", "reasoning_effort", "benchmark", "benchmark_profile", "metric", "status"],
+        "properties": {
+          "model": {"type": "string", "minLength": 1},
+          "reasoning_effort": {"type": "string", "minLength": 1},
+          "benchmark": {"type": "string", "minLength": 1},
+          "benchmark_profile": {"type": "string", "minLength": 1},
+          "metric": {"type": "string", "minLength": 1},
+          "status": {"enum": ["available", "missing", "failed", "not_applicable", "withheld"]},
+          "value": {"type": "number"},
+          "evaluation": {"type": "string", "minLength": 1}
+        }
+      }
+    },
     "indices": {"type": "array"},
     "index_results": {
       "type": "array",
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["model", "index", "status", "score", "coverage", "components", "provenance"],
+        "required": ["model", "reasoning_effort", "index", "status", "score", "coverage", "components", "provenance"],
         "properties": {
           "model": {"type": "string", "minLength": 1},
+          "reasoning_effort": {"type": "string", "minLength": 1},
           "index": {"type": "string", "minLength": 1},
           "status": {"enum": ["available", "missing", "failed", "not_applicable", "withheld"]},
           "score": {"type": ["number", "null"]},
           "coverage": {"type": "number", "minimum": 0, "maximum": 1},
-          "components": {"type": "array"},
+          "components": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["weight", "status", "value", "normalized"],
+              "properties": {
+                "benchmark": {"type": "string", "minLength": 1},
+                "metric": {"type": "string", "minLength": 1},
+                "benchmark_profile": {"type": "string", "minLength": 1},
+                "evaluation": {"type": "string", "minLength": 1},
+                "index": {"type": "string", "minLength": 1},
+                "weight": {"type": "number"},
+                "status": {"enum": ["available", "missing", "failed", "not_applicable", "withheld"]},
+                "value": {"type": ["number", "null"]},
+                "normalized": {"type": ["number", "null"]}
+              },
+              "oneOf": [
+                {"required": ["benchmark", "metric", "benchmark_profile"]},
+                {"required": ["index"]}
+              ]
+            }
+          },
           "domains": {"type": "object", "additionalProperties": {"type": "number"}},
           "provenance": {"type": "array", "items": {"type": "string"}}
         }

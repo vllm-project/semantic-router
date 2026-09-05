@@ -1,0 +1,142 @@
+id: zai
+display_name: Z.ai
+description: GLM models from the Z.ai platform.
+category: model_api
+support_tier: compatible
+default_base_url: https://api.z.ai/api/paas/v4
+protocols:
+- openai/chat-completions@1
+default_protocol: openai/chat-completions@1
+supported_operations:
+- openai/chat-completions@1#create
+- openai/chat-completions@1#list_models
+reasoning_transport: thinking_object
+auth:
+  strategy: bearer
+  header: Authorization
+  prefix: Bearer
+presentation:
+  logo: package:zai
+  monogram: Z
+  monochrome: true
+conformance:
+  status: unverified
+models:
+- catalog: zai/glm-4.5
+  id: glm-4.5
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.z.ai/guides/llm/glm-4.5
+- catalog: zai/glm-4.5-air
+  id: glm-4.5-air
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.z.ai/guides/llm/glm-4.5
+- catalog: zai/glm-4.6
+  id: glm-4.6
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.z.ai/guides/llm/glm-4.6
+- catalog: zai/glm-4.7
+  id: glm-4.7
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.z.ai/guides/llm/glm-4.7
+- catalog: zai/glm-4.7-flash
+  id: glm-4.7-flash
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/zai-org/GLM-4.7-Flash
+- catalog: zai/glm-5
+  id: glm-5
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.z.ai/guides/llm/glm-5
+- catalog: zai/glm-5.1
+  id: glm-5.1
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.z.ai/guides/llm/glm-5
+- catalog: zai/glm-5.2
+  id: glm-5.2
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/zai-org/GLM-5.2
+- catalog: zai/glm-5.3
+  id: glm-5.3
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/zai-org/GLM-5.3
+- catalog: zai/glm-5.3-flash
+  id: glm-5.3-flash
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/zai-org/GLM-5.3-Flash
+- catalog: zai/glm-5-turbo
+  id: glm-5-turbo
+  protocols:
+  - openai/chat-completions@1
+  pricing:
+    currency: USD
+    prompt_per_1m: 1.2
+    cached_input_per_1m: 0.24
+    completion_per_1m: 4.0
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.z.ai/guides/llm/glm-5-turbo
+- catalog: zai/glm-5v-turbo
+  id: glm-5v-turbo
+  protocols:
+  - openai/chat-completions@1
+  pricing:
+    currency: USD
+    prompt_per_1m: 1.2
+    cached_input_per_1m: 0.24
+    completion_per_1m: 4.0
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.z.ai/guides/vlm/glm-5v-turbo

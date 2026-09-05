@@ -1,36 +1,171 @@
-- id: ibm/granite-4.2-3b-model-card@1.0.0
+- id: ibm/granite-4.2-3b-model-card-mmlu-pro@1.0.0
   model: ibm/granite-4.2-3b
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
   subject:
     variant: Granite-4.2-3B
     thinking_mode: default
     source_kind: official_model_card
   metrics:
-    tiger-ai-lab/mmlu-pro@1.0.0#accuracy: 0.6784
+    accuracy: 0.6784
   status: available
-  evidence: {provenance: vendor_claimed, verification: claimed, source: https://huggingface.co/ibm-granite/granite-4.2-3b, redistributable: true}
-- id: ibm/granite-4.2-8b-model-card@1.0.0
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/ibm-granite/granite-4.2-3b
+    redistributable: true
+- id: ibm/granite-4.2-8b-model-card-mmlu-pro@1.0.0
   model: ibm/granite-4.2-8b
-  subject:
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject: &id001
     variant: Granite-4.2-8B
     thinking_mode: default
     terminal_harness: NeMo Evaluator SDK
     source_kind: official_model_card
   metrics:
-    tiger-ai-lab/mmlu-pro@1.0.0#accuracy: 0.7404
-    swe-bench/verified@1.0.0#resolved: 0.4767
-    harbor/terminal-bench@2.1.0#resolved: 0.2056
+    accuracy: 0.7404
   status: available
-  evidence: {provenance: vendor_claimed, verification: claimed, source: https://huggingface.co/ibm-granite/granite-4.2-8b, redistributable: true}
-- id: ibm/granite-4.2-30b-model-card@1.0.0
+  evidence: &id002
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/ibm-granite/granite-4.2-8b
+    redistributable: true
+- id: ibm/granite-4.2-8b-model-card-verified@1.0.0
+  model: ibm/granite-4.2-8b
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: default
+  subject: *id001
+  metrics:
+    resolved: 0.4767
+  status: available
+  evidence: *id002
+- id: ibm/granite-4.2-8b-model-card-terminal-bench@1.0.0
+  model: ibm/granite-4.2-8b
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: default
+  subject: *id001
+  metrics:
+    resolved: 0.2056
+  status: available
+  evidence: *id002
+- id: ibm/granite-4.2-30b-model-card-mmlu-pro@1.0.0
   model: ibm/granite-4.2-30b
-  subject:
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject: &id003
     variant: Granite-4.2-30B
     thinking_mode: default
     terminal_harness: NeMo Evaluator SDK
     source_kind: official_model_card
   metrics:
-    tiger-ai-lab/mmlu-pro@1.0.0#accuracy: 0.776
-    swe-bench/verified@1.0.0#resolved: 0.57
-    harbor/terminal-bench@2.1.0#resolved: 0.2924
+    accuracy: 0.776
   status: available
-  evidence: {provenance: vendor_claimed, verification: claimed, source: https://huggingface.co/ibm-granite/granite-4.2-30b, redistributable: true}
+  evidence: &id004
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/ibm-granite/granite-4.2-30b
+    redistributable: true
+- id: ibm/granite-4.2-30b-model-card-verified@1.0.0
+  model: ibm/granite-4.2-30b
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: default
+  subject: *id003
+  metrics:
+    resolved: 0.57
+  status: available
+  evidence: *id004
+- id: ibm/granite-4.2-30b-model-card-terminal-bench@1.0.0
+  model: ibm/granite-4.2-30b
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: default
+  subject: *id003
+  metrics:
+    resolved: 0.2924
+  status: available
+  evidence: *id004
+- id: ibm/granite-4.1-3b-model-card-mmlu-pro@1.0.0
+  model: ibm/granite-4.1-3b
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject: &granite41-3b-subject
+    variant: Granite-4.1-3B
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.4983
+  status: available
+  evidence: &granite41-3b-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/ibm-granite/granite-4.1-3b
+    redistributable: true
+- id: ibm/granite-4.1-3b-model-card-gpqa-diamond@1.0.0
+  model: ibm/granite-4.1-3b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject: *granite41-3b-subject
+  metrics:
+    accuracy: 0.317
+  status: available
+  evidence: *granite41-3b-evidence
+- id: ibm/granite-4.1-8b-model-card-mmlu-pro@1.0.0
+  model: ibm/granite-4.1-8b
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject: &granite41-8b-subject
+    variant: Granite-4.1-8B
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.5599
+  status: available
+  evidence: &granite41-8b-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/ibm-granite/granite-4.1-8b
+    redistributable: true
+- id: ibm/granite-4.1-8b-model-card-gpqa-diamond@1.0.0
+  model: ibm/granite-4.1-8b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject: *granite41-8b-subject
+  metrics:
+    accuracy: 0.4196
+  status: available
+  evidence: *granite41-8b-evidence
+- id: ibm/granite-4.1-30b-model-card-mmlu-pro@1.0.0
+  model: ibm/granite-4.1-30b
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject: &granite41-30b-subject
+    variant: Granite-4.1-30B
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.6409
+  status: available
+  evidence: &granite41-30b-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/ibm-granite/granite-4.1-30b
+    redistributable: true
+- id: ibm/granite-4.1-30b-model-card-gpqa-diamond@1.0.0
+  model: ibm/granite-4.1-30b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject: *granite41-30b-subject
+  metrics:
+    accuracy: 0.4576
+  status: available
+  evidence: *granite41-30b-evidence

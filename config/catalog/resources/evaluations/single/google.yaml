@@ -1,0 +1,263 @@
+- id: openai/gemini-3.1-pro-comparison-gpqa-diamond@1.0.0
+  model: google/gemini-3.1-pro-preview
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: high
+  subject: &id001
+    variant: Gemini 3.1 Pro Preview
+    hle_mode: no_tools
+    source_kind: official_cross-vendor_comparison
+  metrics:
+    accuracy: 0.943
+  status: available
+  evidence: &id002
+    provenance: third_party
+    verification: claimed
+    source: https://openai.com/index/introducing-gpt-5-5/
+    redistributable: true
+- id: openai/gemini-3.1-pro-comparison-humanitys-last-exam@1.0.0
+  model: google/gemini-3.1-pro-preview
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: high
+  subject: *id001
+  metrics:
+    accuracy: 0.444
+  status: available
+  evidence: *id002
+- id: openai/gemini-3.1-pro-later-comparison-terminal-bench@1.0.0
+  model: google/gemini-3.1-pro-preview
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: high
+  subject:
+    variant: Gemini 3.1 Pro Preview
+    terminal_harness: OpenAI published comparison
+    source_kind: official_cross-vendor_comparison
+  metrics:
+    resolved: 0.707
+  status: available
+  evidence:
+    provenance: third_party
+    verification: claimed
+    source: https://openai.com/index/gpt-5-6/
+    redistributable: true
+- id: google/gemma-4-e2b-model-card-mmlu-pro@1.0.0
+  model: google/gemma-4-e2b-it
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject: &gemma4-e2b-subject
+    variant: Gemma 4 E2B
+    reasoning_mode: enabled
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.600
+  status: available
+  evidence: &gemma4-e2b-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/google/gemma-4-E2B
+    redistributable: true
+- id: google/gemma-4-e2b-model-card-gpqa-diamond@1.0.0
+  model: google/gemma-4-e2b-it
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject: *gemma4-e2b-subject
+  metrics:
+    accuracy: 0.434
+  status: available
+  evidence: *gemma4-e2b-evidence
+- id: google/gemma-4-e4b-model-card-mmlu-pro@1.0.0
+  model: google/gemma-4-e4b-it
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject: &gemma4-e4b-subject
+    variant: Gemma 4 E4B
+    reasoning_mode: enabled
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.694
+  status: available
+  evidence: &gemma4-e4b-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/google/gemma-4-E4B
+    redistributable: true
+- id: google/gemma-4-e4b-model-card-gpqa-diamond@1.0.0
+  model: google/gemma-4-e4b-it
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject: *gemma4-e4b-subject
+  metrics:
+    accuracy: 0.586
+  status: available
+  evidence: *gemma4-e4b-evidence
+- id: google/gemma-4-12b-model-card-mmlu-pro@1.0.0
+  model: google/gemma-4-12b-it
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject: &gemma4-12b-subject
+    variant: Gemma 4 12B
+    reasoning_mode: enabled
+    hle_mode: no_tools
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.772
+  status: available
+  evidence: &gemma4-12b-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/google/gemma-4-12B
+    redistributable: true
+- id: google/gemma-4-12b-model-card-gpqa-diamond@1.0.0
+  model: google/gemma-4-12b-it
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject: *gemma4-12b-subject
+  metrics:
+    accuracy: 0.788
+  status: available
+  evidence: *gemma4-12b-evidence
+- id: google/gemma-4-12b-model-card-humanitys-last-exam@1.0.0
+  model: google/gemma-4-12b-it
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: enabled
+  subject: *gemma4-12b-subject
+  metrics:
+    accuracy: 0.052
+  status: available
+  evidence: *gemma4-12b-evidence
+- id: google/gemma-4-26b-model-card-mmlu-pro@1.0.0
+  model: google/gemma-4-26b-a4b-it
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject: &gemma4-26b-subject
+    variant: Gemma 4 26B A4B
+    reasoning_mode: enabled
+    hle_mode: no_tools
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.826
+  status: available
+  evidence: &gemma4-26b-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/google/gemma-4-26b-a4b-it
+    redistributable: true
+- id: google/gemma-4-26b-model-card-gpqa-diamond@1.0.0
+  model: google/gemma-4-26b-a4b-it
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject: *gemma4-26b-subject
+  metrics:
+    accuracy: 0.823
+  status: available
+  evidence: *gemma4-26b-evidence
+- id: google/gemma-4-26b-model-card-humanitys-last-exam@1.0.0
+  model: google/gemma-4-26b-a4b-it
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: enabled
+  subject: *gemma4-26b-subject
+  metrics:
+    accuracy: 0.087
+  status: available
+  evidence: *gemma4-26b-evidence
+- id: google/gemma-4-31b-model-card-mmlu-pro@1.0.0
+  model: google/gemma-4-31b-it
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject: &gemma4-31b-subject
+    variant: Gemma 4 31B
+    reasoning_mode: enabled
+    hle_mode: no_tools
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.852
+  status: available
+  evidence: &gemma4-31b-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/google/gemma-4-31b-it
+    redistributable: true
+- id: google/gemma-4-31b-model-card-gpqa-diamond@1.0.0
+  model: google/gemma-4-31b-it
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject: *gemma4-31b-subject
+  metrics:
+    accuracy: 0.843
+  status: available
+  evidence: *gemma4-31b-evidence
+- id: google/gemma-4-31b-model-card-humanitys-last-exam@1.0.0
+  model: google/gemma-4-31b-it
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: enabled
+  subject: *gemma4-31b-subject
+  metrics:
+    accuracy: 0.195
+  status: available
+  evidence: *gemma4-31b-evidence
+- id: google/diffusiongemma-model-card-mmlu-pro@1.0.0
+  model: google/diffusiongemma-26b-a4b-it
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: published
+  subject: &diffusiongemma-subject
+    variant: DiffusionGemma 26B A4B
+    sampler: entropy-bounded-denoising
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.776
+  status: available
+  evidence: &diffusiongemma-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/google/diffusiongemma-26B-A4B-it
+    redistributable: true
+- id: google/diffusiongemma-model-card-gpqa-diamond@1.0.0
+  model: google/diffusiongemma-26b-a4b-it
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: published
+  subject: *diffusiongemma-subject
+  metrics:
+    accuracy: 0.732
+  status: available
+  evidence: *diffusiongemma-evidence
+- id: google/diffusiongemma-model-card-hle-no-tools@1.0.0
+  model: google/diffusiongemma-26b-a4b-it
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: published
+  subject:
+    <<: *diffusiongemma-subject
+    tool_policy: no-tools
+  metrics:
+    accuracy: 0.11
+  status: available
+  evidence: *diffusiongemma-evidence
+- id: google/diffusiongemma-model-card-hle-search@1.0.0
+  model: google/diffusiongemma-26b-a4b-it
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: with-tools
+  reasoning_effort: published
+  subject:
+    <<: *diffusiongemma-subject
+    tool_policy: search
+  metrics:
+    accuracy: 0.119
+  status: available
+  evidence: *diffusiongemma-evidence

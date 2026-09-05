@@ -1,0 +1,105 @@
+- id: openai/claude-fable-5-comparison-gpqa-diamond@1.0.0
+  model: anthropic/claude-fable-5
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject: &id001
+    variant: Claude Fable 5
+    source_kind: official_cross-vendor_comparison
+  metrics:
+    accuracy: 0.92
+  status: available
+  evidence: &id002
+    provenance: third_party
+    verification: claimed
+    source: https://openai.com/index/gpt-5-6/
+    redistributable: true
+- id: openai/claude-fable-5-comparison-terminal-bench@1.0.0
+  model: anthropic/claude-fable-5
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: default
+  subject: *id001
+  metrics:
+    resolved: 0.831
+  status: available
+  evidence: *id002
+- id: openai/claude-mythos-5-comparison-gpqa-diamond@1.0.0
+  model: anthropic/claude-mythos-5
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject: &id003
+    variant: Claude Mythos 5
+    source_kind: official_cross-vendor_comparison
+  metrics:
+    accuracy: 0.946
+  status: available
+  evidence: &id004
+    provenance: third_party
+    verification: claimed
+    source: https://openai.com/index/gpt-5-6/
+    redistributable: true
+- id: openai/claude-mythos-5-comparison-terminal-bench@1.0.0
+  model: anthropic/claude-mythos-5
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: default
+  subject: *id003
+  metrics:
+    resolved: 0.88
+  status: available
+  evidence: *id004
+- id: openai/claude-opus-4.8-comparison-gpqa-diamond@1.0.0
+  model: anthropic/claude-opus-4.8
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject: &id005
+    variant: Claude Opus 4.8
+    source_kind: official_cross-vendor_comparison
+  metrics:
+    accuracy: 0.941
+  status: available
+  evidence: &id006
+    provenance: third_party
+    verification: claimed
+    source: https://openai.com/index/gpt-5-6/
+    redistributable: true
+- id: openai/claude-opus-4.8-comparison-terminal-bench@1.0.0
+  model: anthropic/claude-opus-4.8
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: default
+  subject: *id005
+  metrics:
+    resolved: 0.789
+  status: available
+  evidence: *id006
+- id: openai/claude-opus-4.7-comparison-gpqa-diamond@1.0.0
+  model: anthropic/claude-opus-4.7
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject: &id007
+    variant: Claude Opus 4.7
+    hle_mode: no_tools
+    source_kind: official_cross-vendor_comparison
+  metrics:
+    accuracy: 0.942
+  status: available
+  evidence: &id008
+    provenance: third_party
+    verification: claimed
+    source: https://openai.com/index/introducing-gpt-5-5/
+    redistributable: true
+- id: openai/claude-opus-4.7-comparison-humanitys-last-exam@1.0.0
+  model: anthropic/claude-opus-4.7
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: default
+  subject: *id007
+  metrics:
+    accuracy: 0.469
+  status: available
+  evidence: *id008

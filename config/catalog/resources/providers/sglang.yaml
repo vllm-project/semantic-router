@@ -1,0 +1,411 @@
+id: sglang
+display_name: SGLang
+description: Connect a private SGLang endpoint.
+category: start_here
+support_tier: runtime
+protocols:
+- openai/chat-completions@1
+- openai/responses@1
+default_protocol: openai/chat-completions@1
+supported_operations:
+- openai/chat-completions@1#create
+- openai/chat-completions@1#list_models
+- openai/responses@1#create
+- openai/responses@1#list_models
+auth:
+  strategy: bearer
+  header: Authorization
+  prefix: Bearer
+presentation:
+  logo: url:https://raw.githubusercontent.com/sgl-project/sgl-docs/main/favicon.png
+  monogram: S
+  monochrome: false
+conformance:
+  status: unverified
+models:
+- catalog: sarvam/sarvam-105b
+  id: sarvamai/sarvam-105b
+  protocols: &new-sglang-protocols [openai/chat-completions@1, openai/responses@1]
+  reasoning_transport: top_level_effort
+  restrictions: &sarvam-sglang-restrictions
+    minimum_sglang_version: nightly
+    trust_remote_code: true
+  lifecycle: experimental
+  verification: &sarvam-sglang-verification
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/sarvamai/sarvam-105b
+- catalog: sarvam/sarvam-30b
+  id: sarvamai/sarvam-30b
+  protocols: *new-sglang-protocols
+  reasoning_transport: top_level_effort
+  restrictions: *sarvam-sglang-restrictions
+  lifecycle: experimental
+  verification:
+    <<: *sarvam-sglang-verification
+    source: https://huggingface.co/sarvamai/sarvam-30b
+- catalog: nvidia/nemotron-3-ultra
+  id: nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4
+- catalog: meituan/longcat-2.0
+  id: meituan-longcat/LongCat-2.0
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/meituan-longcat/LongCat-2.0
+- catalog: liquid/lfm2.5-8b-a1b
+  id: LiquidAI/LFM2.5-8B-A1B
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification: &liquid-sglang-verification
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/LiquidAI/LFM2.5-8B-A1B
+- catalog: liquid/lfm2.5-2.6b
+  id: LiquidAI/LFM2.5-2.6B
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification:
+    <<: *liquid-sglang-verification
+    source: https://huggingface.co/LiquidAI/LFM2.5-2.6B
+- catalog: liquid/lfm2.5-1.2b-instruct
+  id: LiquidAI/LFM2.5-1.2B-Instruct
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification:
+    <<: *liquid-sglang-verification
+    source: https://huggingface.co/LiquidAI/LFM2.5-1.2B-Instruct
+- catalog: deepseek/deepseek-v4-flash-vision-exp
+  id: deepseek-ai/DeepSeek-V4-Flash-Vision-Exp
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash-Vision-Exp
+- catalog: meituan/longcat-flash-lite
+  id: meituan-longcat/LongCat-Flash-Lite
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/meituan-longcat/LongCat-Flash-Lite
+- catalog: xiaomi/mimo-7b-rl
+  id: XiaomiMiMo/MiMo-7B-RL
+  protocols: *new-sglang-protocols
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/XiaomiMiMo/MiMo-7B-RL
+- catalog: xiaomi/mimo-vl-7b-rl-2508
+  id: XiaomiMiMo/MiMo-VL-7B-RL-2508
+  protocols: *new-sglang-protocols
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/XiaomiMiMo/MiMo-VL-7B-RL-2508
+- catalog: poolside/laguna-xs-2.1
+  id: poolside/Laguna-XS-2.1
+  protocols: *new-sglang-protocols
+  lifecycle: active
+  verification: &poolside-sglang-verification
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/poolside/Laguna-XS-2.1
+- catalog: poolside/laguna-s-2.1
+  id: poolside/Laguna-S-2.1
+  protocols: *new-sglang-protocols
+  lifecycle: active
+  verification:
+    <<: *poolside-sglang-verification
+    source: https://huggingface.co/poolside/Laguna-S-2.1
+- catalog: kwaipilot/kat-coder-v2.5-dev
+  id: Kwaipilot/KAT-Coder-V2.5-Dev
+  protocols: *new-sglang-protocols
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/Kwaipilot/KAT-Coder-V2.5-Dev
+- catalog: tencent/hy-mt2-1.8b
+  id: tencent/Hy-MT2-1.8B
+  protocols: *new-sglang-protocols
+  lifecycle: active
+  verification: &hy-mt2-sglang-verification
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/tencent/Hy-MT2-1.8B
+- catalog: tencent/hy-mt2-7b
+  id: tencent/Hy-MT2-7B
+  protocols: *new-sglang-protocols
+  lifecycle: active
+  verification:
+    <<: *hy-mt2-sglang-verification
+    source: https://huggingface.co/tencent/Hy-MT2-7B
+- catalog: tencent/hy-mt2-30b-a3b
+  id: tencent/Hy-MT2-30B-A3B
+  protocols: *new-sglang-protocols
+  lifecycle: active
+  verification:
+    <<: *hy-mt2-sglang-verification
+    source: https://huggingface.co/tencent/Hy-MT2-30B-A3B
+- catalog: nvidia/nemotron-terminal-8b
+  id: nvidia/Nemotron-Terminal-8B
+  protocols: *new-sglang-protocols
+  lifecycle: active
+  verification: &nemotron-terminal-sglang-verification
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/nvidia/Nemotron-Terminal-8B
+- catalog: nvidia/nemotron-terminal-14b
+  id: nvidia/Nemotron-Terminal-14B
+  protocols: *new-sglang-protocols
+  lifecycle: active
+  verification:
+    <<: *nemotron-terminal-sglang-verification
+    source: https://huggingface.co/nvidia/Nemotron-Terminal-14B
+- catalog: nvidia/nemotron-terminal-32b
+  id: nvidia/Nemotron-Terminal-32B
+  protocols: *new-sglang-protocols
+  lifecycle: active
+  verification:
+    <<: *nemotron-terminal-sglang-verification
+    source: https://huggingface.co/nvidia/Nemotron-Terminal-32B
+- catalog: ai9stars/g9v3-39b-a5b
+  id: ai9stars/G9v3-39A5B
+  protocols: *new-sglang-protocols
+  restrictions:
+    minimum_sglang_version: 0.5.12
+  lifecycle: experimental
+  verification: &g9v3-sglang-verification
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/ai9stars/G9v3-39A5B
+- catalog: ai9stars/g9v3-3b
+  id: ai9stars/G9v3-3B
+  protocols: *new-sglang-protocols
+  restrictions:
+    minimum_sglang_version: 0.5.12
+  lifecycle: active
+  verification:
+    <<: *g9v3-sglang-verification
+    source: https://huggingface.co/ai9stars/G9v3-3B
+- catalog: stepfun/step3-vl-10b
+  id: stepfun-ai/Step3-VL-10B
+  protocols: *new-sglang-protocols
+  restrictions:
+    minimum_sglang_version: main
+    trust_remote_code: true
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/stepfun-ai/Step3-VL-10B
+- catalog: liquid/lfm2-24b-a2b
+  id: LiquidAI/LFM2-24B-A2B
+  protocols: *new-sglang-protocols
+  lifecycle: active
+  verification: &lfm2-sglang-verification
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/LiquidAI/LFM2-24B-A2B
+- catalog: liquid/lfm2-8b-a1b
+  id: LiquidAI/LFM2-8B-A1B
+  protocols: *new-sglang-protocols
+  lifecycle: active
+  verification:
+    <<: *lfm2-sglang-verification
+    source: https://huggingface.co/LiquidAI/LFM2-8B-A1B
+- catalog: liquid/lfm2-2.6b
+  id: LiquidAI/LFM2-2.6B
+  protocols: *new-sglang-protocols
+  lifecycle: active
+  verification:
+    <<: *lfm2-sglang-verification
+    source: https://huggingface.co/LiquidAI/LFM2-2.6B
+- catalog: naver/hyperclovax-seed-think-32b
+  id: naver-hyperclovax/HyperCLOVAX-SEED-Think-32B
+  protocols: *new-sglang-protocols
+  restrictions:
+    trust_remote_code: true
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/naver-hyperclovax/HyperCLOVAX-SEED-Think-32B
+- catalog: ibm/granite-4.1-3b
+  id: ibm-granite/granite-4.1-3b
+  protocols: *new-sglang-protocols
+  lifecycle: active
+  verification: &granite41-sglang-verification
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/ibm-granite/granite-4.1-3b
+- catalog: ibm/granite-4.1-8b
+  id: ibm-granite/granite-4.1-8b
+  protocols: *new-sglang-protocols
+  lifecycle: active
+  verification:
+    <<: *granite41-sglang-verification
+    source: https://huggingface.co/ibm-granite/granite-4.1-8b
+- catalog: ibm/granite-4.1-30b
+  id: ibm-granite/granite-4.1-30b
+  protocols: *new-sglang-protocols
+  lifecycle: active
+  verification:
+    <<: *granite41-sglang-verification
+    source: https://huggingface.co/ibm-granite/granite-4.1-30b
+- catalog: agnes/agnes-2.5-pro-alpha
+  id: Agnes-AI/Agnes-2.5-Pro-Alpha
+  protocols: *new-sglang-protocols
+  restrictions:
+    tensor_parallel_size: 8
+    tool_call_parser: qwen3_coder
+    reasoning_parser: qwen3
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/Agnes-AI/Agnes-2.5-Pro-Alpha
+- catalog: nousresearch/hermes-4-70b
+  id: NousResearch/Hermes-4-70B
+  protocols: *new-sglang-protocols
+  restrictions:
+    tool_call_parser: qwen25
+  lifecycle: active
+  verification: &hermes4-sglang-verification
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/NousResearch/Hermes-4-70B
+- catalog: nousresearch/hermes-4-405b
+  id: NousResearch/Hermes-4-405B
+  protocols: *new-sglang-protocols
+  restrictions:
+    tool_call_parser: qwen25
+  lifecycle: active
+  verification:
+    <<: *hermes4-sglang-verification
+    source: https://huggingface.co/NousResearch/Hermes-4-405B
+- catalog: apodex/apodex-1.1-mini
+  id: apodex/Apodex-1.1-mini
+  protocols: *new-sglang-protocols
+  restrictions:
+    tensor_parallel_size: 8
+    context_length: 262144
+    tool_call_parser: qwen3_coder
+    reasoning_parser: qwen3
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/apodex/Apodex-1.1-mini
+- catalog: cohere/tiny-aya-global
+  id: CohereLabs/tiny-aya-global
+  protocols: *new-sglang-protocols
+  lifecycle: active
+  verification: &tiny-aya-sglang-verification
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/CohereLabs/tiny-aya-global
+- catalog: cohere/tiny-aya-earth
+  id: CohereLabs/tiny-aya-earth
+  protocols: *new-sglang-protocols
+  lifecycle: active
+  verification:
+    <<: *tiny-aya-sglang-verification
+    source: https://huggingface.co/CohereLabs/tiny-aya-earth
+- catalog: cohere/tiny-aya-fire
+  id: CohereLabs/tiny-aya-fire
+  protocols: *new-sglang-protocols
+  lifecycle: active
+  verification:
+    <<: *tiny-aya-sglang-verification
+    source: https://huggingface.co/CohereLabs/tiny-aya-fire
+- catalog: cohere/tiny-aya-water
+  id: CohereLabs/tiny-aya-water
+  protocols: *new-sglang-protocols
+  lifecycle: active
+  verification:
+    <<: *tiny-aya-sglang-verification
+    source: https://huggingface.co/CohereLabs/tiny-aya-water
+- catalog: nousresearch/hermes-3-llama-3.1-70b
+  id: NousResearch/Hermes-3-Llama-3.1-70B
+  protocols: *new-sglang-protocols
+  restrictions: &hermes3-sglang-restrictions
+    tool_call_parser: qwen25
+  lifecycle: active
+  verification: &hermes3-sglang-verification
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/NousResearch/Hermes-3-Llama-3.1-70B
+- catalog: nousresearch/hermes-3-llama-3.1-405b
+  id: NousResearch/Hermes-3-Llama-3.1-405B
+  protocols: *new-sglang-protocols
+  restrictions: *hermes3-sglang-restrictions
+  lifecycle: active
+  verification:
+    <<: *hermes3-sglang-verification
+    source: https://huggingface.co/NousResearch/Hermes-3-Llama-3.1-405B
+- catalog: nousresearch/deephermes-3-llama-3-8b-preview
+  id: NousResearch/DeepHermes-3-Llama-3-8B-Preview
+  protocols: *new-sglang-protocols
+  lifecycle: experimental
+  verification: &deephermes-sglang-verification
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/NousResearch/DeepHermes-3-Llama-3-8B-Preview
+- catalog: nousresearch/deephermes-3-mistral-24b-preview
+  id: NousResearch/DeepHermes-3-Mistral-24B-Preview
+  protocols: *new-sglang-protocols
+  lifecycle: experimental
+  verification:
+    <<: *deephermes-sglang-verification
+    source: https://huggingface.co/NousResearch/DeepHermes-3-Mistral-24B-Preview
+- catalog: nanbeige/nanbeige4.1-3b
+  id: Nanbeige/Nanbeige4.1-3B
+  protocols: *new-sglang-protocols
+  restrictions:
+    trust_remote_code: true
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/Nanbeige/Nanbeige4.1-3B
+- catalog: nanbeige/nanbeige4.2-3b
+  id: Nanbeige/Nanbeige4.2-3B
+  protocols: *new-sglang-protocols
+  restrictions:
+    runtime_distribution: https://github.com/Nanbeige/sglang
+    runtime_ref: nbg42
+    upstream_status: pending
+    trust_remote_code: true
+    tool_call_parser: nanbeige
+    reasoning_parser: nanbeige
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/Nanbeige/Nanbeige4.2-3B
+- catalog: google/diffusiongemma-26b-a4b-it
+  id: google/diffusiongemma-26B-A4B-it
+  protocols: *new-sglang-protocols
+  restrictions:
+    minimum_sglang_version: main
+    architecture: diffusion_gemma
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/google/diffusiongemma-26B-A4B-it

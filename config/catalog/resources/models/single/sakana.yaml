@@ -1,0 +1,74 @@
+- id: sakana/fugu
+  display_name: Sakana Fugu
+  description: Learned multi-agent orchestration model balancing capability and latency behind one model API.
+  kind: physical
+  publisher: Sakana AI
+  presentation: &sakana-presentation
+    logo: monogram
+    monogram: S
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://sakana.ai/fugu/
+  family: fugu
+  reasoning_family: sakana-fugu
+  lifecycle: active
+  capabilities: [chat, reasoning, tools, structured_output]
+  modalities: &sakana-modalities
+    input: [text, image]
+    output: [text]
+  verification: &sakana-verification
+    authority: Sakana AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://console.sakana.ai/models
+  tags: [proprietary, reasoning, agentic, orchestrator]
+- id: sakana/fugu-ultra
+  display_name: Sakana Fugu Ultra
+  description: Quality-optimized Sakana multi-agent orchestration model for hard, long-running tasks.
+  kind: physical
+  publisher: Sakana AI
+  presentation: *sakana-presentation
+  distribution:
+    type: proprietary_api
+    source: https://sakana.ai/fugu/
+  family: fugu
+  reasoning_family: sakana-fugu-ultra
+  lifecycle: active
+  capabilities: [chat, reasoning, tools, structured_output]
+  modalities: *sakana-modalities
+  verification: *sakana-verification
+  tags: [proprietary, reasoning, agentic, orchestrator, frontier]
+- id: sakana/fugu-cyber
+  display_name: Sakana Fugu Cyber
+  description: Access-controlled Sakana orchestration model specialized for cybersecurity workflows.
+  kind: physical
+  publisher: Sakana AI
+  presentation: *sakana-presentation
+  distribution:
+    type: proprietary_api
+    source: https://sakana.ai/fugu/
+  family: fugu
+  reasoning_family: sakana-fugu
+  lifecycle: experimental
+  capabilities: [chat, reasoning, tools, structured_output]
+  modalities: *sakana-modalities
+  verification: *sakana-verification
+  tags: [proprietary, reasoning, agentic, orchestrator, cybersecurity]
+- id: sakana/sakana-namazu
+  display_name: Sakana Namazu
+  description: Japanese-specialized multimodal agent model with built-in web search and code execution.
+  kind: physical
+  publisher: Sakana AI
+  presentation: *sakana-presentation
+  distribution:
+    type: proprietary_api
+    source: https://sakana.ai/namazu/
+  family: sakana-namazu
+  lifecycle: active
+  capabilities: [chat, reasoning, tools, structured_output, vision]
+  modalities: *sakana-modalities
+  verification:
+    <<: *sakana-verification
+    source: https://console.sakana.ai/models?model=sakana-namazu
+  tags: [proprietary, reasoning, agentic, japanese, multimodal]

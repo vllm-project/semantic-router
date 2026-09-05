@@ -1,62 +1,546 @@
+- id: microsoft/phi-3-mini-128k-instruct
+  display_name: Phi-3 Mini 128K Instruct
+  description: Compact previous-generation Phi-3 instruction model with long context.
+  kind: physical
+  publisher: Microsoft
+  presentation:
+    logo: package:microsoft
+    monogram: M
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/microsoft/Phi-3-mini-128k-instruct
+    license: MIT
+  family: phi-3
+  parameter_size: 3.8B
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Microsoft
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/microsoft/Phi-3-mini-128k-instruct
+  tags:
+  - open_weights
+  - efficient
+  - long_context
+  - previous_generation
+- id: microsoft/phi-3-small-128k-instruct
+  display_name: Phi-3 Small 128K Instruct
+  description: Small previous-generation Phi-3 instruction model with long context.
+  kind: physical
+  publisher: Microsoft
+  presentation:
+    logo: package:microsoft
+    monogram: M
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/microsoft/Phi-3-small-128k-instruct
+    license: MIT
+  family: phi-3
+  parameter_size: 7B
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Microsoft
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/microsoft/Phi-3-small-128k-instruct
+  tags:
+  - open_weights
+  - long_context
+  - previous_generation
+- id: microsoft/phi-3-medium-128k-instruct
+  display_name: Phi-3 Medium 128K Instruct
+  description: Mid-sized previous-generation Phi-3 instruction model with long context.
+  kind: physical
+  publisher: Microsoft
+  presentation:
+    logo: package:microsoft
+    monogram: M
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/microsoft/Phi-3-medium-128k-instruct
+    license: MIT
+  family: phi-3
+  parameter_size: 14B
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Microsoft
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/microsoft/Phi-3-medium-128k-instruct
+  tags:
+  - open_weights
+  - long_context
+  - previous_generation
+- id: microsoft/phi-3.5-mini-instruct
+  display_name: Phi-3.5 Mini Instruct
+  description: Compact multilingual Phi-3.5 instruction model.
+  kind: physical
+  publisher: Microsoft
+  presentation:
+    logo: package:microsoft
+    monogram: M
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/microsoft/Phi-3.5-mini-instruct
+    license: MIT
+  family: phi-3.5
+  parameter_size: 3.8B
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Microsoft
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/microsoft/Phi-3.5-mini-instruct
+  tags:
+  - open_weights
+  - multilingual
+  - efficient
+  - previous_generation
+- id: microsoft/phi-3.5-moe-instruct
+  display_name: Phi-3.5 MoE Instruct
+  description: Efficient mixture-of-experts Phi-3.5 instruction model.
+  kind: physical
+  publisher: Microsoft
+  presentation:
+    logo: package:microsoft
+    monogram: M
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/microsoft/Phi-3.5-MoE-instruct
+    license: MIT
+  family: phi-3.5
+  parameter_size: 41.9B (6.6B active)
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Microsoft
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/microsoft/Phi-3.5-MoE-instruct
+  tags:
+  - open_weights
+  - multilingual
+  - moe
+  - previous_generation
+- id: microsoft/phi-3.5-vision-instruct
+  display_name: Phi-3.5 Vision Instruct
+  description: Compact Phi-3.5 vision-language instruction model.
+  kind: physical
+  publisher: Microsoft
+  presentation:
+    logo: package:microsoft
+    monogram: M
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/microsoft/Phi-3.5-vision-instruct
+    license: MIT
+  family: phi-3.5
+  parameter_size: 4.2B
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - tools
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Microsoft
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/microsoft/Phi-3.5-vision-instruct
+  tags:
+  - open_weights
+  - multimodal
+  - efficient
+  - previous_generation
+- id: microsoft/phi-4-mini-reasoning
+  display_name: Phi-4 Mini Reasoning
+  description: Compact open-weight Phi-4 mathematical reasoning model.
+  kind: physical
+  publisher: Microsoft
+  presentation:
+    logo: package:microsoft
+    monogram: M
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/microsoft/Phi-4-mini-reasoning
+    license: MIT
+  family: phi-4
+  parameter_size: 3.8B
+  lifecycle: active
+  limits:
+    context_window_size: 32768
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Microsoft
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/microsoft/Phi-4-mini-reasoning
+  tags:
+  - open_weights
+  - reasoning
+  - math
+  - efficient
+- id: microsoft/phi-4-reasoning
+  display_name: Phi-4 Reasoning
+  description: Open-weight Phi-4 model specialized for mathematical reasoning.
+  kind: physical
+  publisher: Microsoft
+  presentation:
+    logo: package:microsoft
+    monogram: M
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/microsoft/Phi-4-reasoning
+    license: MIT
+  family: phi-4
+  parameter_size: 14B
+  lifecycle: active
+  limits:
+    context_window_size: 32768
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Microsoft
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/microsoft/Phi-4-reasoning
+  tags:
+  - open_weights
+  - reasoning
+  - math
 - id: microsoft/phi-4
   display_name: Phi-4
   description: Compact open-weight Microsoft model for math, coding, and reasoning.
   kind: physical
   publisher: Microsoft
-  presentation: {logo: monogram, monogram: MS, monochrome: false}
-  distribution: {type: open_weights, source: https://huggingface.co/microsoft/phi-4, license: MIT}
+  presentation:
+    logo: monogram
+    monogram: MS
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/microsoft/phi-4
+    license: MIT
   family: phi-4
   parameter_size: 14B
   lifecycle: active
-  limits: {context_window_size: 16384}
-  capabilities: [chat, reasoning, structured_output]
-  modalities: {input: [text], output: [text]}
-  protocols: [openai/chat-completions@1, openai/responses@1]
-  verification: {authority: Microsoft, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/microsoft/phi-4}
-  tags: [open_weights, reasoning, dense, efficient]
+  limits:
+    context_window_size: 16384
+  capabilities:
+  - chat
+  - reasoning
+  - structured_output
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Microsoft
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/microsoft/phi-4
+  tags:
+  - open_weights
+  - reasoning
+  - dense
+  - efficient
 - id: microsoft/phi-4-mini-instruct
   display_name: Phi-4 Mini Instruct
   description: Small open-weight Microsoft instruction model for local deployment.
   kind: physical
   publisher: Microsoft
-  presentation: {logo: monogram, monogram: MS, monochrome: false}
-  distribution: {type: open_weights, source: https://huggingface.co/microsoft/Phi-4-mini-instruct, license: MIT}
+  presentation:
+    logo: monogram
+    monogram: MS
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/microsoft/Phi-4-mini-instruct
+    license: MIT
   family: phi-4
   parameter_size: 3.8B
   lifecycle: active
-  capabilities: [chat, tools, structured_output, long_context]
-  modalities: {input: [text], output: [text]}
-  protocols: [openai/chat-completions@1, openai/responses@1]
-  verification: {authority: Microsoft, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/microsoft/Phi-4-mini-instruct}
-  tags: [open_weights, dense, efficient]
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Microsoft
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/microsoft/Phi-4-mini-instruct
+  tags:
+  - open_weights
+  - dense
+  - efficient
 - id: microsoft/phi-4-multimodal-instruct
   display_name: Phi-4 Multimodal Instruct
   description: Open-weight Microsoft model for text, image, and audio understanding.
   kind: physical
   publisher: Microsoft
-  presentation: {logo: monogram, monogram: MS, monochrome: false}
-  distribution: {type: open_weights, source: https://huggingface.co/microsoft/Phi-4-multimodal-instruct, license: MIT}
+  presentation:
+    logo: monogram
+    monogram: MS
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/microsoft/Phi-4-multimodal-instruct
+    license: MIT
   family: phi-4
   parameter_size: 5.6B
   lifecycle: active
-  capabilities: [chat, tools, vision, audio, long_context]
-  modalities: {input: [text, image, audio], output: [text]}
-  protocols: [openai/chat-completions@1, openai/responses@1]
-  verification: {authority: Microsoft, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/microsoft/Phi-4-multimodal-instruct}
-  tags: [open_weights, multimodal, efficient]
+  capabilities:
+  - chat
+  - tools
+  - vision
+  - audio
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - audio
+    output:
+    - text
+  verification:
+    authority: Microsoft
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/microsoft/Phi-4-multimodal-instruct
+  tags:
+  - open_weights
+  - multimodal
+  - efficient
 - id: microsoft/phi-4-reasoning-plus
   display_name: Phi-4 Reasoning Plus
   description: Compact open-weight Microsoft model tuned for deep math and coding reasoning.
   kind: physical
   publisher: Microsoft
-  presentation: {logo: monogram, monogram: MS, monochrome: false}
-  distribution: {type: open_weights, source: https://huggingface.co/microsoft/Phi-4-reasoning-plus, license: MIT}
+  presentation:
+    logo: monogram
+    monogram: MS
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/microsoft/Phi-4-reasoning-plus
+    license: MIT
   family: phi-4
   parameter_size: 14B
   lifecycle: active
-  limits: {context_window_size: 32768, max_output_tokens: 32768}
-  capabilities: [chat, reasoning, structured_output]
-  modalities: {input: [text], output: [text]}
-  protocols: [openai/chat-completions@1, openai/responses@1]
-  verification: {authority: Microsoft, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/microsoft/Phi-4-reasoning-plus}
-  tags: [open_weights, reasoning, dense, efficient]
+  limits:
+    context_window_size: 32768
+    max_output_tokens: 32768
+  capabilities:
+  - chat
+  - reasoning
+  - structured_output
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Microsoft
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/microsoft/Phi-4-reasoning-plus
+  tags:
+  - open_weights
+  - reasoning
+  - dense
+  - efficient
+- id: microsoft/mai-thinking-1
+  display_name: MAI-Thinking-1
+  description: Microsoft AI's proprietary MoE reasoning model for software engineering, quantitative reasoning, and enterprise agents.
+  kind: physical
+  publisher: Microsoft AI
+  presentation:
+    logo: package:microsoft
+    monogram: MAI
+    monochrome: false
+  distribution:
+    type: proprietary_api
+    source: https://microsoft.ai/models/mai-thinking-1/
+  family: mai-thinking
+  parameter_size: ~1T (35B active)
+  released_at: 2026-06-02
+  lifecycle: experimental
+  limits:
+    context_window_size: 262144
+    max_output_tokens: 65536
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Microsoft AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://microsoft.ai/models/mai-thinking-1/
+  tags:
+  - proprietary
+  - reasoning
+  - coding
+  - moe
+  - preview
+- id: microsoft/phi-4-mini-flash-reasoning
+  display_name: Phi-4 Mini Flash Reasoning
+  description: Efficient open-weight 3.8B hybrid reasoning model optimized for long generation and low latency.
+  kind: physical
+  publisher: Microsoft
+  presentation:
+    logo: package:microsoft
+    monogram: Φ
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/microsoft/Phi-4-mini-flash-reasoning
+    license: MIT
+  family: phi-4
+  parameter_size: 3.8B
+  lifecycle: active
+  limits:
+    context_window_size: 65536
+  capabilities: [chat, reasoning, long_context]
+  modalities:
+    input: [text]
+    output: [text]
+  verification:
+    authority: Microsoft
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/microsoft/Phi-4-mini-flash-reasoning
+  tags: [open_weights, reasoning, efficient, hybrid]
+- id: microsoft/phi-4-reasoning-vision-15b
+  display_name: Phi-4 Reasoning Vision 15B
+  description: Open-weight multimodal Phi model for high-resolution visual reasoning and agentic analysis.
+  kind: physical
+  publisher: Microsoft
+  presentation:
+    logo: package:microsoft
+    monogram: Φ
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/microsoft/Phi-4-reasoning-vision-15B
+    license: MIT
+  family: phi-4
+  parameter_size: 15B
+  lifecycle: active
+  limits:
+    context_window_size: 16384
+  capabilities: [chat, reasoning, vision]
+  modalities:
+    input: [text, image]
+    output: [text]
+  verification:
+    authority: Microsoft
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/microsoft/Phi-4-reasoning-vision-15B
+  tags: [open_weights, reasoning, multimodal]

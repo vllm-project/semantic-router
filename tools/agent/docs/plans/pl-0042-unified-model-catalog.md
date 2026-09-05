@@ -3,7 +3,7 @@
 ## Goal
 
 Deliver one versioned catalog and materialization path for provider, protocol,
-model, offering, reasoning, presentation, evaluation, and index metadata so
+model, provider mapping, reasoning, presentation, evaluation, and index metadata so
 Day-0 support updates every product surface from one source.
 
 ## Scope
@@ -49,7 +49,7 @@ Day-0 support updates every product surface from one source.
   provenance, immutable registry, fixtures, and generated-diff enforcement.
 - [x] `TASK-03` Add the v0.3 catalog materializer and targeted migration tool
   for aliases, backend Provider IDs, built-in overlays, and custom model cards.
-- [x] `TASK-04` Move protocol, auth, provider, offering, and reasoning behavior
+- [x] `TASK-04` Move protocol, auth, provider, provider mapping, and reasoning behavior
   to catalog-backed registries and remove config-helper glue.
 - [x] `TASK-05` Add evaluation records, the default intelligence index, score
   resolver, missing-data policy, and runtime observed-quality separation.

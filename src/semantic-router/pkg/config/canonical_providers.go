@@ -36,6 +36,7 @@ type CanonicalReasoning struct {
 	Parameter string   `yaml:"parameter,omitempty"`
 	Levels    []string `yaml:"levels,omitempty"`
 	Default   string   `yaml:"default,omitempty"`
+	Disabled  string   `yaml:"disabled,omitempty"`
 }
 
 // ProviderReliability controls generated data-plane load balancing and retry behavior.

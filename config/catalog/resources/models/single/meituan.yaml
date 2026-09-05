@@ -1,0 +1,59 @@
+- id: meituan/longcat-2.0
+  display_name: LongCat 2.0
+  description: Open-weight trillion-parameter MoE model for million-token reasoning, coding, and agentic workflows.
+  kind: physical
+  publisher: Meituan LongCat
+  presentation:
+    logo: monogram
+    monogram: LC
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/meituan-longcat/LongCat-2.0
+    license: MIT
+  family: longcat-2
+  parameter_size: 1.6T (48B active)
+  released_at: 2026-06-29
+  reasoning_family: longcat-2
+  lifecycle: active
+  limits:
+    context_window_size: 1048576
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities:
+    input: [text]
+    output: [text]
+  verification:
+    authority: Meituan LongCat Team
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/meituan-longcat/LongCat-2.0
+  tags: [open_weights, hybrid_reasoning, moe, agentic, frontier]
+- id: meituan/longcat-flash-lite
+  display_name: LongCat Flash Lite
+  description: Efficient open-weight LongCat MoE model for agentic and long-context text workloads.
+  kind: physical
+  publisher: Meituan LongCat
+  presentation:
+    logo: monogram
+    monogram: LC
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/meituan-longcat/LongCat-Flash-Lite
+    license: MIT
+  family: longcat-flash
+  parameter_size: 69B
+  reasoning_family: longcat-2
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities:
+    input: [text]
+    output: [text]
+  verification:
+    authority: Meituan LongCat Team
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/meituan-longcat/LongCat-Flash-Lite
+  tags: [open_weights, hybrid_reasoning, moe, agentic, efficient]

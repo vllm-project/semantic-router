@@ -1,0 +1,37 @@
+- id: meituan/longcat-2-model-card-gpqa-diamond@1.0.0
+  model: meituan/longcat-2.0
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject: &longcat2-subject
+    variant: LongCat-2.0
+    mode: thinking
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.889
+  status: available
+  evidence: &longcat2-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/meituan-longcat/LongCat-2.0
+    redistributable: true
+- id: meituan/longcat-2-model-card-terminal-bench@1.0.0
+  model: meituan/longcat-2.0
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: enabled
+  subject: *longcat2-subject
+  metrics:
+    resolved: 0.708
+  status: available
+  evidence: *longcat2-evidence
+- id: meituan/longcat-2-model-card-swe-bench-pro@1.0.0
+  model: meituan/longcat-2.0
+  benchmark: swe-bench/pro@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: enabled
+  subject: *longcat2-subject
+  metrics:
+    resolved: 0.595
+  status: available
+  evidence: *longcat2-evidence

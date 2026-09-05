@@ -1,0 +1,121 @@
+- id: upstage/solar-open2-250b
+  display_name: Solar Open2 250B
+  description: Frontier open-weight sparse MoE from Upstage with one-million-token context and switchable reasoning.
+  kind: physical
+  publisher: Upstage
+  presentation:
+    logo: package:upstage
+    monogram: U
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/upstage/Solar-Open-2-250B
+    license: Upstage-Solar-License
+  family: solar-open2
+  parameter_size: 250B (15B active)
+  released_at: 2026-08-26
+  reasoning_family: solar-open2
+  lifecycle: experimental
+  limits:
+    context_window_size: 1048576
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input: [text]
+    output: [text]
+  verification:
+    authority: Upstage
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/upstage/Solar-Open-2-250B
+  tags: [open_weights, frontier, multilingual, reasoning, moe, agentic]
+- id: upstage/solar-pro-3
+  display_name: Solar Pro 3
+  description: Upstage's production API model for efficient reasoning, coding, and Korean-language agentic workloads.
+  kind: physical
+  publisher: Upstage
+  presentation:
+    logo: package:upstage
+    monogram: U
+    monochrome: false
+  distribution:
+    type: proprietary_api
+    source: https://www.upstage.ai/blog/en/solar-pro-3-0323
+  family: solar-pro
+  reasoning_family: solar-pro
+  parameter_size: 102B (12B active)
+  released_at: 2026-01-26
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities:
+    input: [text]
+    output: [text]
+  verification:
+    authority: Upstage
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://www.upstage.ai/blog/en/solar-pro-3-0323
+  tags: [proprietary, reasoning, coding, agentic, multilingual, moe]
+- id: upstage/solar-open-100b
+  display_name: Solar Open 100B
+  description: Open-weight 102.6B MoE for Korean-English enterprise reasoning, tools, and agentic workflows.
+  kind: physical
+  publisher: Upstage
+  presentation:
+    logo: package:upstage
+    monogram: U
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/upstage/Solar-Open-100B
+    license: Upstage-Solar-License
+  family: solar-open
+  parameter_size: 102.6B (12B active)
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities:
+    input: [text]
+    output: [text]
+  verification:
+    authority: Upstage
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/upstage/Solar-Open-100B
+  tags: [open_weights, reasoning, agentic, multilingual, moe]
+- id: upstage/solar-pro-4
+  display_name: Solar Pro 4
+  description: Upstage's frontier API model for long-context reasoning and end-to-end agentic work.
+  kind: physical
+  publisher: Upstage
+  presentation:
+    logo: package:upstage
+    monogram: U
+    monochrome: false
+  distribution:
+    type: proprietary_api
+    source: https://www.upstage.ai/blog/en/solar-pro-4
+  family: solar-pro
+  reasoning_family: solar-pro
+  released_at: 2026-08-06
+  lifecycle: active
+  limits:
+    context_window_size: 524288
+    max_output_tokens: 131072
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities:
+    input: [text]
+    output: [text]
+  verification:
+    authority: Upstage
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://www.upstage.ai/blog/en/solar-pro-4
+  tags: [proprietary, frontier, reasoning, coding, agentic, multilingual]

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { resolveConnectedModelName } from './configPageConnectModelSupport'
 import generatedCatalog from '../generated/modelCatalog.json'
 import type { BuiltInModelCatalog } from '../types/modelCatalog'
-import { providerCatalogModels } from './configPageConnectModelsDialogController'
+import { modelsForProvider } from './configPageConnectModelsDialogController'
 
 describe('connected model naming', () => {
   it('keeps the upstream model id when the public namespace is free', () => {
@@ -26,8 +26,8 @@ describe('connected model naming', () => {
 })
 
 describe('catalog-backed model matching', () => {
-  it('does not materialize removed model offerings from provider discovery', () => {
-    const models = providerCatalogModels(
+  it('does not materialize removed provider models from provider discovery', () => {
+    const models = modelsForProvider(
       generatedCatalog as unknown as BuiltInModelCatalog,
       'anthropic',
     )

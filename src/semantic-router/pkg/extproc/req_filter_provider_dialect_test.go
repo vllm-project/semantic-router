@@ -11,12 +11,13 @@ import (
 
 func TestResolveProviderReasoningTransport(t *testing.T) {
 	tests := []struct {
-		name      string
-		profile   *config.ProviderProfile
-		want      modelcatalog.ReasoningTransport
-		wantTop   bool
-		wantThink bool
-		wantDeep  bool
+		name       string
+		profile    *config.ProviderProfile
+		want       modelcatalog.ReasoningTransport
+		wantTop    bool
+		wantThink  bool
+		wantDeep   bool
+		wantObject bool
 	}{
 		{
 			name: "endpoint without profile uses template kwargs",
@@ -48,10 +49,10 @@ func TestResolveProviderReasoningTransport(t *testing.T) {
 			wantThink: true,
 		},
 		{
-			name:    "openrouter uses top-level reasoning effort",
-			profile: &config.ProviderProfile{Type: "openrouter"},
-			want:    modelcatalog.ReasoningTransportTopLevelEffort,
-			wantTop: true,
+			name:       "openrouter uses normalized reasoning object",
+			profile:    &config.ProviderProfile{Type: "openrouter"},
+			want:       modelcatalog.ReasoningTransportReasoningObject,
+			wantObject: true,
 		},
 		{
 			name:    "generic compatible provider uses template kwargs regardless of hostname",
@@ -67,6 +68,7 @@ func TestResolveProviderReasoningTransport(t *testing.T) {
 			assert.Equal(t, tt.wantTop, usesTopLevelReasoningEffort(transport))
 			assert.Equal(t, tt.wantThink, usesThinkingObjectTransport(transport))
 			assert.Equal(t, tt.wantDeep, isDeepSeekThinkingTransport(transport))
+			assert.Equal(t, tt.wantObject, usesReasoningObjectTransport(transport))
 		})
 	}
 }

@@ -3,228 +3,592 @@
   description: Ultra-compact open-weight Gemma instruction model for high-throughput local tasks.
   kind: physical
   publisher: Google
-  presentation: {logo: package:google, monogram: G, monochrome: false}
-  distribution: {type: open_weights, source: https://huggingface.co/google/gemma-3-270m-it, license: Gemma}
+  presentation:
+    logo: package:google
+    monogram: G
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/google/gemma-3-270m-it
+    license: Gemma
   family: gemma-3
   parameter_size: 270M
   lifecycle: active
-  capabilities: [chat]
-  modalities: {input: [text], output: [text]}
-  protocols: [openai/chat-completions@1, openai/responses@1]
-  verification: {authority: Google DeepMind, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/google/gemma-3-270m-it}
-  tags: [open_weights, compact, efficient]
+  capabilities:
+  - chat
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Google DeepMind
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/google/gemma-3-270m-it
+  tags:
+  - open_weights
+  - compact
+  - efficient
 - id: google/gemma-3-1b-it
   display_name: Gemma 3 1B IT
   description: Compact open-weight Gemma instruction model for local text workloads.
   kind: physical
   publisher: Google
-  presentation: {logo: package:google, monogram: G, monochrome: false}
-  distribution: {type: open_weights, source: https://huggingface.co/google/gemma-3-1b-it, license: Gemma}
+  presentation:
+    logo: package:google
+    monogram: G
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/google/gemma-3-1b-it
+    license: Gemma
   family: gemma-3
   parameter_size: 1B
   lifecycle: active
-  capabilities: [chat, long_context]
-  modalities: {input: [text], output: [text]}
-  protocols: [openai/chat-completions@1, openai/responses@1]
-  verification: {authority: Google DeepMind, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/google/gemma-3-1b-it}
-  tags: [open_weights, compact, efficient]
+  capabilities:
+  - chat
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Google DeepMind
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/google/gemma-3-1b-it
+  tags:
+  - open_weights
+  - compact
+  - efficient
 - id: google/gemma-3-4b-it
   display_name: Gemma 3 4B IT
   description: Small open-weight multimodal Gemma instruction model with 128K context.
   kind: physical
   publisher: Google
-  presentation: {logo: package:google, monogram: G, monochrome: false}
-  distribution: {type: open_weights, source: https://huggingface.co/google/gemma-3-4b-it, license: Gemma}
+  presentation:
+    logo: package:google
+    monogram: G
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/google/gemma-3-4b-it
+    license: Gemma
   family: gemma-3
   parameter_size: 4B
   lifecycle: active
-  limits: {context_window_size: 131072}
-  capabilities: [chat, vision, long_context]
-  modalities: {input: [text, image], output: [text]}
-  protocols: [openai/chat-completions@1, openai/responses@1]
-  verification: {authority: Google DeepMind, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/google/gemma-3-4b-it}
-  tags: [open_weights, multimodal, efficient]
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Google DeepMind
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/google/gemma-3-4b-it
+  tags:
+  - open_weights
+  - multimodal
+  - efficient
 - id: google/gemma-3-12b-it
   display_name: Gemma 3 12B IT
   description: Mid-sized open-weight multimodal Gemma instruction model with 128K context.
   kind: physical
   publisher: Google
-  presentation: {logo: package:google, monogram: G, monochrome: false}
-  distribution: {type: open_weights, source: https://huggingface.co/google/gemma-3-12b-it, license: Gemma}
+  presentation:
+    logo: package:google
+    monogram: G
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/google/gemma-3-12b-it
+    license: Gemma
   family: gemma-3
   parameter_size: 12B
   lifecycle: active
-  limits: {context_window_size: 131072}
-  capabilities: [chat, vision, long_context]
-  modalities: {input: [text, image], output: [text]}
-  protocols: [openai/chat-completions@1, openai/responses@1]
-  verification: {authority: Google DeepMind, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/google/gemma-3-12b-it}
-  tags: [open_weights, multimodal]
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Google DeepMind
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/google/gemma-3-12b-it
+  tags:
+  - open_weights
+  - multimodal
 - id: google/gemini-2.5-pro
   display_name: Gemini 2.5 Pro
   description: Google's advanced multimodal model for reasoning, coding, and long context.
   kind: physical
   publisher: Google
-  presentation: {logo: package:gemini, monogram: G, monochrome: false}
-  distribution: {type: proprietary_api, source: https://ai.google.dev/gemini-api/docs/models}
+  presentation:
+    logo: package:gemini
+    monogram: G
+    monochrome: false
+  distribution:
+    type: proprietary_api
+    source: https://ai.google.dev/gemini-api/docs/models
   family: gemini-2.5
+  reasoning_family: gemini-2.5-pro
   lifecycle: active
-  limits: {context_window_size: 1048576, max_output_tokens: 65536}
-  capabilities: [chat, reasoning, tools, structured_output, vision, audio, video, long_context]
-  modalities: {input: [text, image, audio, video, pdf], output: [text]}
-  protocols: [openai/chat-completions@1]
-  verification: {authority: Google, status: claimed, verified_at: 2026-09-05, source: https://ai.google.dev/gemini-api/docs/models}
-  tags: [proprietary, multimodal, reasoning]
+  limits:
+    context_window_size: 1048576
+    max_output_tokens: 65536
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - audio
+  - video
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - audio
+    - video
+    - pdf
+    output:
+    - text
+  verification:
+    authority: Google
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://ai.google.dev/gemini-api/docs/models
+  tags:
+  - proprietary
+  - multimodal
+  - reasoning
 - id: google/gemini-2.5-flash
   display_name: Gemini 2.5 Flash
   description: Google's fast multimodal model for balanced quality and throughput.
   kind: physical
   publisher: Google
-  presentation: {logo: package:gemini, monogram: G, monochrome: false}
-  distribution: {type: proprietary_api, source: https://ai.google.dev/gemini-api/docs/models}
+  presentation:
+    logo: package:gemini
+    monogram: G
+    monochrome: false
+  distribution:
+    type: proprietary_api
+    source: https://ai.google.dev/gemini-api/docs/models
   family: gemini-2.5
+  reasoning_family: gemini-2.5-flash
   lifecycle: active
-  limits: {context_window_size: 1048576, max_output_tokens: 65536}
-  capabilities: [chat, reasoning, tools, structured_output, vision, audio, video, long_context]
-  modalities: {input: [text, image, audio, video, pdf], output: [text]}
-  protocols: [openai/chat-completions@1]
-  verification: {authority: Google, status: claimed, verified_at: 2026-09-05, source: https://ai.google.dev/gemini-api/docs/models}
-  tags: [proprietary, multimodal, efficient]
+  limits:
+    context_window_size: 1048576
+    max_output_tokens: 65536
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - audio
+  - video
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - audio
+    - video
+    - pdf
+    output:
+    - text
+  verification:
+    authority: Google
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://ai.google.dev/gemini-api/docs/models
+  tags:
+  - proprietary
+  - multimodal
+  - efficient
 - id: google/gemini-2.5-flash-lite
   display_name: Gemini 2.5 Flash-Lite
   description: Google's efficient multimodal model for high-throughput workloads.
   kind: physical
   publisher: Google
-  presentation: {logo: package:gemini, monogram: G, monochrome: false}
+  presentation:
+    logo: package:gemini
+    monogram: G
+    monochrome: false
   distribution:
     type: proprietary_api
     source: https://ai.google.dev/gemini-api/docs/models
   family: gemini-2.5
+  reasoning_family: gemini-2.5-flash-lite
   lifecycle: active
-  limits: {context_window_size: 1048576, max_output_tokens: 65536}
-  capabilities: [chat, reasoning, tools, structured_output, vision, audio, video, long_context]
-  modalities: {input: [text, image, audio, video, pdf], output: [text]}
-  protocols: [openai/chat-completions@1]
+  limits:
+    context_window_size: 1048576
+    max_output_tokens: 65536
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - audio
+  - video
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - audio
+    - video
+    - pdf
+    output:
+    - text
   verification:
     authority: Google
     status: claimed
     verified_at: 2026-09-05
     source: https://ai.google.dev/gemini-api/docs/models
-  tags: [efficient, proprietary, multimodal]
+  tags:
+  - efficient
+  - proprietary
+  - multimodal
 - id: google/gemini-3-pro-preview
   display_name: Gemini 3 Pro Preview
   description: Google's preview Gemini 3 model for multimodal reasoning and agents.
   kind: physical
   publisher: Google
-  presentation: {logo: package:gemini, monogram: G, monochrome: false}
-  distribution: {type: proprietary_api, source: https://ai.google.dev/gemini-api/docs/models}
-  family: gemini-3
-  lifecycle: removed
-  capabilities: [chat, reasoning, tools, structured_output, vision, audio, video, long_context]
-  modalities: {input: [text, image, audio, video, pdf], output: [text]}
-  protocols: [openai/chat-completions@1]
-  verification: {authority: Google, status: claimed, verified_at: 2026-09-05, source: https://ai.google.dev/gemini-api/docs/models}
-  tags: [preview, proprietary, multimodal]
-- id: google/gemini-3-flash-preview
-  display_name: Gemini 3 Flash Preview
-  description: Google's preview low-latency Gemini 3 multimodal model.
-  kind: physical
-  publisher: Google
-  presentation: {logo: package:gemini, monogram: G, monochrome: false}
-  distribution: {type: proprietary_api, source: https://ai.google.dev/gemini-api/docs/models}
-  family: gemini-3
-  lifecycle: experimental
-  capabilities: [chat, reasoning, tools, structured_output, vision, audio, video, long_context]
-  modalities: {input: [text, image, audio, video, pdf], output: [text]}
-  protocols: [openai/chat-completions@1]
-  verification: {authority: Google, status: claimed, verified_at: 2026-09-05, source: https://ai.google.dev/gemini-api/docs/models}
-  tags: [preview, proprietary, multimodal, efficient]
-- id: google/gemini-3.1-pro-preview
-  display_name: Gemini 3.1 Pro Preview
-  description: Google's preview frontier model for multimodal reasoning and agents.
-  kind: physical
-  publisher: Google
-  presentation: {logo: package:gemini, monogram: G, monochrome: false}
+  presentation:
+    logo: package:gemini
+    monogram: G
+    monochrome: false
   distribution:
     type: proprietary_api
     source: https://ai.google.dev/gemini-api/docs/models
-  family: gemini-3.1
-  lifecycle: experimental
-  limits: {context_window_size: 1048576, max_output_tokens: 65536}
-  capabilities: [chat, reasoning, tools, structured_output, vision, audio, video, long_context]
-  modalities: {input: [text, image, audio, video, pdf], output: [text]}
-  protocols: [openai/chat-completions@1]
+  family: gemini-3
+  reasoning_family: gemini-pro-two-level-high
+  lifecycle: removed
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - audio
+  - video
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - audio
+    - video
+    - pdf
+    output:
+    - text
   verification:
     authority: Google
     status: claimed
     verified_at: 2026-09-05
     source: https://ai.google.dev/gemini-api/docs/models
-  tags: [preview, proprietary, multimodal]
+  tags:
+  - preview
+  - proprietary
+  - multimodal
+- id: google/gemini-3-flash-preview
+  display_name: Gemini 3 Flash Preview
+  description: Google's preview low-latency Gemini 3 multimodal model.
+  kind: physical
+  publisher: Google
+  presentation:
+    logo: package:gemini
+    monogram: G
+    monochrome: false
+  distribution:
+    type: proprietary_api
+    source: https://ai.google.dev/gemini-api/docs/models
+  family: gemini-3
+  reasoning_family: gemini-flash-four-level-high
+  lifecycle: experimental
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - audio
+  - video
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - audio
+    - video
+    - pdf
+    output:
+    - text
+  verification:
+    authority: Google
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://ai.google.dev/gemini-api/docs/models
+  tags:
+  - preview
+  - proprietary
+  - multimodal
+  - efficient
+- id: google/gemini-3.1-pro-preview
+  display_name: Gemini 3.1 Pro Preview
+  description: Google's preview frontier model for multimodal reasoning and agents.
+  kind: physical
+  publisher: Google
+  presentation:
+    logo: package:gemini
+    monogram: G
+    monochrome: false
+  distribution:
+    type: proprietary_api
+    source: https://ai.google.dev/gemini-api/docs/models
+  family: gemini-3.1
+  reasoning_family: gemini-pro-three-level-high
+  lifecycle: experimental
+  limits:
+    context_window_size: 1048576
+    max_output_tokens: 65536
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - audio
+  - video
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - audio
+    - video
+    - pdf
+    output:
+    - text
+  verification:
+    authority: Google
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://ai.google.dev/gemini-api/docs/models
+  tags:
+  - preview
+  - proprietary
+  - multimodal
 - id: google/gemini-3.1-flash-lite-preview
   display_name: Gemini 3.1 Flash-Lite Preview
   description: Google's preview Gemini 3.1 model for high-throughput multimodal workloads.
   kind: physical
   publisher: Google
-  presentation: {logo: package:gemini, monogram: G, monochrome: false}
-  distribution: {type: proprietary_api, source: https://ai.google.dev/gemini-api/docs/models}
+  presentation:
+    logo: package:gemini
+    monogram: G
+    monochrome: false
+  distribution:
+    type: proprietary_api
+    source: https://ai.google.dev/gemini-api/docs/models
   family: gemini-3.1
+  reasoning_family: gemini-flash-four-level-minimal
   lifecycle: removed
-  capabilities: [chat, reasoning, tools, structured_output, vision, audio, video, long_context]
-  modalities: {input: [text, image, audio, video, pdf], output: [text]}
-  protocols: [openai/chat-completions@1]
-  verification: {authority: Google, status: claimed, verified_at: 2026-09-05, source: https://ai.google.dev/gemini-api/docs/models}
-  tags: [preview, proprietary, multimodal, efficient]
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - audio
+  - video
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - audio
+    - video
+    - pdf
+    output:
+    - text
+  verification:
+    authority: Google
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://ai.google.dev/gemini-api/docs/models
+  tags:
+  - preview
+  - proprietary
+  - multimodal
+  - efficient
 - id: google/gemini-3.5-flash
   display_name: Gemini 3.5 Flash
   description: Google's previous-generation Flash model for general multimodal workloads.
   kind: physical
   publisher: Google
-  presentation: {logo: package:gemini, monogram: G, monochrome: false}
-  distribution: {type: proprietary_api, source: https://ai.google.dev/gemini-api/docs/models}
+  presentation:
+    logo: package:gemini
+    monogram: G
+    monochrome: false
+  distribution:
+    type: proprietary_api
+    source: https://ai.google.dev/gemini-api/docs/models
   family: gemini-3.5
+  reasoning_family: gemini-flash-four-level-medium
   lifecycle: active
-  limits: {context_window_size: 1048576, max_output_tokens: 65536}
-  capabilities: [chat, reasoning, tools, structured_output, vision, audio, video, long_context]
-  modalities: {input: [text, image, audio, video, pdf], output: [text]}
-  protocols: [openai/chat-completions@1]
-  verification: {authority: Google, status: claimed, verified_at: 2026-09-05, source: https://ai.google.dev/gemini-api/docs/models}
-  tags: [proprietary, multimodal, efficient]
+  limits:
+    context_window_size: 1048576
+    max_output_tokens: 65536
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - audio
+  - video
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - audio
+    - video
+    - pdf
+    output:
+    - text
+  verification:
+    authority: Google
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://ai.google.dev/gemini-api/docs/models
+  tags:
+  - proprietary
+  - multimodal
+  - efficient
 - id: google/gemini-3.6-flash
   display_name: Gemini 3.6 Flash
   description: Google's balanced Flash model for multimodal reasoning and agentic workloads.
   kind: physical
   publisher: Google
-  presentation: {logo: package:gemini, monogram: G, monochrome: false}
-  distribution: {type: proprietary_api, source: https://ai.google.dev/gemini-api/docs/models}
+  presentation:
+    logo: package:gemini
+    monogram: G
+    monochrome: false
+  distribution:
+    type: proprietary_api
+    source: https://ai.google.dev/gemini-api/docs/models
   family: gemini-3.6
+  reasoning_family: gemini-flash-four-level-medium
   lifecycle: active
-  limits: {context_window_size: 1048576, max_output_tokens: 65536}
-  capabilities: [chat, reasoning, tools, structured_output, vision, audio, video, long_context]
-  modalities: {input: [text, image, audio, video, pdf], output: [text]}
-  protocols: [openai/chat-completions@1]
-  verification: {authority: Google, status: claimed, verified_at: 2026-09-05, source: https://ai.google.dev/gemini-api/docs/models}
-  tags: [proprietary, multimodal, agentic]
+  limits:
+    context_window_size: 1048576
+    max_output_tokens: 65536
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - audio
+  - video
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - audio
+    - video
+    - pdf
+    output:
+    - text
+  verification:
+    authority: Google
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://ai.google.dev/gemini-api/docs/models
+  tags:
+  - proprietary
+  - multimodal
+  - agentic
 - id: google/gemini-3.7-flash
   display_name: Gemini 3.7 Flash
   description: Google's current Flash model for coding, agents, and reliable multi-step execution.
   kind: physical
   publisher: Google
-  presentation: {logo: package:gemini, monogram: G, monochrome: false}
-  distribution: {type: proprietary_api, source: https://ai.google.dev/gemini-api/docs/latest-model}
+  presentation:
+    logo: package:gemini
+    monogram: G
+    monochrome: false
+  distribution:
+    type: proprietary_api
+    source: https://ai.google.dev/gemini-api/docs/latest-model
   family: gemini-3.7
+  reasoning_family: gemini-flash-three-level-medium
   lifecycle: active
-  limits: {context_window_size: 1048576, max_output_tokens: 65536}
-  capabilities: [chat, reasoning, tools, structured_output, vision, audio, video, long_context]
-  modalities: {input: [text, image, audio, video, pdf], output: [text]}
-  protocols: [openai/chat-completions@1]
-  verification: {authority: Google, status: claimed, verified_at: 2026-09-05, source: https://ai.google.dev/gemini-api/docs/latest-model}
-  tags: [frontier, proprietary, multimodal, agentic]
+  limits:
+    context_window_size: 1048576
+    max_output_tokens: 65536
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - audio
+  - video
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - audio
+    - video
+    - pdf
+    output:
+    - text
+  verification:
+    authority: Google
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://ai.google.dev/gemini-api/docs/latest-model
+  tags:
+  - frontier
+  - proprietary
+  - multimodal
+  - agentic
 - id: google/gemma-3-27b-it
   display_name: Gemma 3 27B IT
   description: Google's open-weight multimodal Gemma 3 instruction model.
   kind: physical
   publisher: Google
-  presentation: {logo: package:gemini, monogram: G, monochrome: false}
+  presentation:
+    logo: package:gemini
+    monogram: G
+    monochrome: false
   distribution:
     type: open_weights
     source: https://huggingface.co/google/gemma-3-27b-it
@@ -232,208 +596,686 @@
   family: gemma-3
   parameter_size: 27B
   lifecycle: active
-  limits: {context_window_size: 131072}
-  capabilities: [chat, tools, vision, long_context]
-  modalities: {input: [text, image], output: [text]}
-  protocols: [openai/chat-completions@1, openai/responses@1]
-  verification: {authority: Google, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/google/gemma-3-27b-it}
-  tags: [open_weights, multimodal]
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - tools
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Google
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/google/gemma-3-27b-it
+  tags:
+  - open_weights
+  - multimodal
+- id: google/gemma-4-e2b-it
+  display_name: Gemma 4 E2B IT
+  description: Google's compact multimodal Gemma 4 model with 2.3B active parameters and configurable thinking.
+  kind: physical
+  publisher: Google
+  presentation:
+    logo: package:google
+    monogram: G
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/google/gemma-4-E2B
+    license: Gemma
+  family: gemma-4
+  reasoning_family: gemma4
+  parameter_size: 5.1B (2.3B active)
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - audio
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - audio
+    output:
+    - text
+  verification:
+    authority: Google DeepMind
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/google/gemma-4-E2B
+  tags:
+  - open_weights
+  - multimodal
+  - compact
+- id: google/gemma-4-e4b-it
+  display_name: Gemma 4 E4B IT
+  description: Google's efficient multimodal Gemma 4 model with 4.5B active parameters and configurable thinking.
+  kind: physical
+  publisher: Google
+  presentation:
+    logo: package:google
+    monogram: G
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/google/gemma-4-E4B
+    license: Gemma
+  family: gemma-4
+  reasoning_family: gemma4
+  parameter_size: 8B (4.5B active)
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - audio
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - audio
+    output:
+    - text
+  verification:
+    authority: Google DeepMind
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/google/gemma-4-E4B
+  tags:
+  - open_weights
+  - multimodal
+  - efficient
+- id: google/gemma-4-12b-it
+  display_name: Gemma 4 12B IT
+  description: Google's 12B multimodal Gemma 4 instruction model with configurable thinking.
+  kind: physical
+  publisher: Google
+  presentation:
+    logo: package:google
+    monogram: G
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/google/gemma-4-12B
+    license: Gemma
+  family: gemma-4
+  reasoning_family: gemma4
+  parameter_size: 12B
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - audio
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - audio
+    output:
+    - text
+  verification:
+    authority: Google DeepMind
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/google/gemma-4-12B
+  tags:
+  - open_weights
+  - multimodal
 - id: google/gemma-4-26b-a4b-it
   display_name: Gemma 4 26B A4B IT
   description: Google's open-weight multimodal instruction model with sparse activation.
   kind: physical
   publisher: Google
-  presentation: {logo: package:gemini, monogram: G, monochrome: false}
+  presentation:
+    logo: package:google
+    monogram: G
+    monochrome: false
   distribution:
     type: open_weights
     source: https://huggingface.co/google/gemma-4-26b-a4b-it
-    license: Apache-2.0
+    license: Gemma
   family: gemma-4
+  reasoning_family: gemma4
   parameter_size: 26B (4B active)
   lifecycle: active
-  capabilities: [chat, reasoning, tools, vision, long_context]
-  modalities: {input: [text, image], output: [text]}
-  protocols: [openai/chat-completions@1, openai/responses@1]
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
   verification:
     authority: Google
     status: claimed
     verified_at: 2026-09-05
     source: https://huggingface.co/google/gemma-4-26b-a4b-it
-  tags: [open_weights, multimodal, moe]
+  tags:
+  - open_weights
+  - multimodal
+  - moe
 - id: google/gemma-4-31b-it
   display_name: Gemma 4 31B IT
   description: Google's open-weight Gemma 4 instruction model for multimodal workloads.
   kind: physical
   publisher: Google
-  presentation: {logo: package:gemini, monogram: G, monochrome: false}
+  presentation:
+    logo: package:google
+    monogram: G
+    monochrome: false
   distribution:
     type: open_weights
     source: https://huggingface.co/google/gemma-4-31b-it
     license: Gemma
   family: gemma-4
+  reasoning_family: gemma4
   parameter_size: 31B
   lifecycle: active
-  capabilities: [chat, reasoning, tools, vision, long_context]
-  modalities: {input: [text, image], output: [text]}
-  protocols: [openai/chat-completions@1, openai/responses@1]
-  verification: {authority: Google, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/google/gemma-4-31b-it}
-  tags: [open_weights, multimodal]
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Google
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/google/gemma-4-31b-it
+  tags:
+  - open_weights
+  - multimodal
 - id: google/gemini-3.5-flash-lite
   display_name: Gemini 3.5 Flash-Lite
   description: Google's low-latency multimodal model for high-volume agent and document workloads.
   kind: physical
   publisher: Google
-  presentation: {logo: package:gemini, monogram: G, monochrome: false}
-  distribution: {type: proprietary_api, source: https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite}
+  presentation:
+    logo: package:gemini
+    monogram: G
+    monochrome: false
+  distribution:
+    type: proprietary_api
+    source: https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite
   family: gemini-3.5
+  reasoning_family: gemini-flash-four-level-minimal
   lifecycle: active
-  limits: {context_window_size: 1048576, max_output_tokens: 65536}
-  capabilities: [chat, reasoning, tools, structured_output, vision, audio, video, long_context]
-  modalities: {input: [text, image, audio, video, pdf], output: [text]}
-  protocols: [openai/chat-completions@1]
-  verification: {authority: Google, status: claimed, verified_at: 2026-09-05, source: https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite}
-  tags: [proprietary, multimodal, efficient, agentic]
+  limits:
+    context_window_size: 1048576
+    max_output_tokens: 65536
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - audio
+  - video
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - audio
+    - video
+    - pdf
+    output:
+    - text
+  verification:
+    authority: Google
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite
+  tags:
+  - proprietary
+  - multimodal
+  - efficient
+  - agentic
 - id: google/gemini-3.8-flash
   display_name: Gemini 3.8 Flash
   description: Google's current Flash model for long-horizon coding, autonomous agents, and multimodal work.
   kind: physical
   publisher: Google
-  presentation: {logo: package:gemini, monogram: G, monochrome: false}
-  distribution: {type: proprietary_api, source: https://ai.google.dev/gemini-api/docs/models}
+  presentation:
+    logo: package:gemini
+    monogram: G
+    monochrome: false
+  distribution:
+    type: proprietary_api
+    source: https://ai.google.dev/gemini-api/docs/models
   family: gemini-3
+  reasoning_family: gemini-flash-three-level-medium
   lifecycle: active
-  capabilities: [chat, reasoning, tools, structured_output, vision, audio, video, long_context]
-  modalities: {input: [text, image, audio, video, pdf], output: [text]}
-  protocols: [openai/chat-completions@1]
-  verification: {authority: Google, status: claimed, verified_at: 2026-09-05, source: https://ai.google.dev/gemini-api/docs/models}
-  tags: [proprietary, multimodal, agentic]
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - audio
+  - video
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - audio
+    - video
+    - pdf
+    output:
+    - text
+  verification:
+    authority: Google
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://ai.google.dev/gemini-api/docs/models
+  tags:
+  - proprietary
+  - multimodal
+  - agentic
 - id: google/gemini-3.1-flash-lite
   display_name: Gemini 3.1 Flash-Lite
   description: Stable cost-efficient Gemini model for high-frequency multimodal workloads.
   kind: physical
   publisher: Google
-  presentation: {logo: package:gemini, monogram: G, monochrome: false}
-  distribution: {type: proprietary_api, source: https://ai.google.dev/gemini-api/docs/models}
+  presentation:
+    logo: package:gemini
+    monogram: G
+    monochrome: false
+  distribution:
+    type: proprietary_api
+    source: https://ai.google.dev/gemini-api/docs/models
   family: gemini-3.1
+  reasoning_family: gemini-flash-four-level-minimal
   lifecycle: active
-  capabilities: [chat, reasoning, tools, structured_output, vision, audio, video, long_context]
-  modalities: {input: [text, image, audio, video, pdf], output: [text]}
-  protocols: [openai/chat-completions@1]
-  verification: {authority: Google, status: claimed, verified_at: 2026-09-05, source: https://ai.google.dev/gemini-api/docs/models}
-  tags: [proprietary, multimodal, efficient]
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - audio
+  - video
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - audio
+    - video
+    - pdf
+    output:
+    - text
+  verification:
+    authority: Google
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://ai.google.dev/gemini-api/docs/models
+  tags:
+  - proprietary
+  - multimodal
+  - efficient
 - id: google/gemini-2.0-flash
   display_name: Gemini 2.0 Flash
   description: Retired second-generation Gemini workhorse retained for compatibility discovery.
   kind: physical
   publisher: Google
-  presentation: {logo: package:gemini, monogram: G, monochrome: false}
-  distribution: {type: proprietary_api, source: https://ai.google.dev/gemini-api/docs/models}
+  presentation:
+    logo: package:gemini
+    monogram: G
+    monochrome: false
+  distribution:
+    type: proprietary_api
+    source: https://ai.google.dev/gemini-api/docs/models
   family: gemini-2
   lifecycle: removed
-  capabilities: [chat, tools, structured_output, vision, audio, video, long_context]
-  modalities: {input: [text, image, audio, video, pdf], output: [text]}
-  protocols: [openai/chat-completions@1]
-  verification: {authority: Google, status: claimed, verified_at: 2026-09-05, source: https://ai.google.dev/gemini-api/docs/models}
-  tags: [proprietary, multimodal, retired]
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - vision
+  - audio
+  - video
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - audio
+    - video
+    - pdf
+    output:
+    - text
+  verification:
+    authority: Google
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://ai.google.dev/gemini-api/docs/models
+  tags:
+  - proprietary
+  - multimodal
+  - retired
 - id: google/gemini-2.0-flash-lite
   display_name: Gemini 2.0 Flash-Lite
   description: Retired efficient Gemini 2 model retained for compatibility discovery.
   kind: physical
   publisher: Google
-  presentation: {logo: package:gemini, monogram: G, monochrome: false}
-  distribution: {type: proprietary_api, source: https://ai.google.dev/gemini-api/docs/models}
+  presentation:
+    logo: package:gemini
+    monogram: G
+    monochrome: false
+  distribution:
+    type: proprietary_api
+    source: https://ai.google.dev/gemini-api/docs/models
   family: gemini-2
   lifecycle: removed
-  capabilities: [chat, tools, structured_output, vision, audio, video, long_context]
-  modalities: {input: [text, image, audio, video, pdf], output: [text]}
-  protocols: [openai/chat-completions@1]
-  verification: {authority: Google, status: claimed, verified_at: 2026-09-05, source: https://ai.google.dev/gemini-api/docs/models}
-  tags: [proprietary, multimodal, efficient, retired]
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - vision
+  - audio
+  - video
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - audio
+    - video
+    - pdf
+    output:
+    - text
+  verification:
+    authority: Google
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://ai.google.dev/gemini-api/docs/models
+  tags:
+  - proprietary
+  - multimodal
+  - efficient
+  - retired
 - id: google/gemini-1.5-pro
   display_name: Gemini 1.5 Pro
   description: Historical long-context Gemini model retained for compatibility discovery.
   kind: physical
   publisher: Google
-  presentation: {logo: package:gemini, monogram: G, monochrome: false}
-  distribution: {type: proprietary_api, source: https://ai.google.dev/gemini-api/docs/deprecations}
+  presentation:
+    logo: package:gemini
+    monogram: G
+    monochrome: false
+  distribution:
+    type: proprietary_api
+    source: https://ai.google.dev/gemini-api/docs/deprecations
   family: gemini-1.5
   lifecycle: removed
-  capabilities: [chat, tools, vision, audio, video, long_context]
-  modalities: {input: [text, image, audio, video, pdf], output: [text]}
-  protocols: [openai/chat-completions@1]
-  verification: {authority: Google, status: claimed, verified_at: 2026-09-05, source: https://ai.google.dev/gemini-api/docs/deprecations}
-  tags: [proprietary, multimodal, retired]
+  capabilities:
+  - chat
+  - tools
+  - vision
+  - audio
+  - video
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - audio
+    - video
+    - pdf
+    output:
+    - text
+  verification:
+    authority: Google
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://ai.google.dev/gemini-api/docs/deprecations
+  tags:
+  - proprietary
+  - multimodal
+  - retired
 - id: google/gemini-1.5-flash
   display_name: Gemini 1.5 Flash
   description: Historical low-latency Gemini model retained for compatibility discovery.
   kind: physical
   publisher: Google
-  presentation: {logo: package:gemini, monogram: G, monochrome: false}
-  distribution: {type: proprietary_api, source: https://ai.google.dev/gemini-api/docs/deprecations}
+  presentation:
+    logo: package:gemini
+    monogram: G
+    monochrome: false
+  distribution:
+    type: proprietary_api
+    source: https://ai.google.dev/gemini-api/docs/deprecations
   family: gemini-1.5
   lifecycle: removed
-  capabilities: [chat, tools, vision, audio, video, long_context]
-  modalities: {input: [text, image, audio, video, pdf], output: [text]}
-  protocols: [openai/chat-completions@1]
-  verification: {authority: Google, status: claimed, verified_at: 2026-09-05, source: https://ai.google.dev/gemini-api/docs/deprecations}
-  tags: [proprietary, multimodal, efficient, retired]
+  capabilities:
+  - chat
+  - tools
+  - vision
+  - audio
+  - video
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - audio
+    - video
+    - pdf
+    output:
+    - text
+  verification:
+    authority: Google
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://ai.google.dev/gemini-api/docs/deprecations
+  tags:
+  - proprietary
+  - multimodal
+  - efficient
+  - retired
 - id: google/gemma-3n-e2b-it
   display_name: Gemma 3n E2B IT
   description: Mobile-first multimodal Gemma model with two-billion-parameter effective size.
   kind: physical
   publisher: Google
-  presentation: {logo: package:google, monogram: G, monochrome: false}
-  distribution: {type: open_weights, source: https://huggingface.co/google/gemma-3n-E2B-it, license: Gemma}
+  presentation:
+    logo: package:google
+    monogram: G
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/google/gemma-3n-E2B-it
+    license: Gemma
   family: gemma-3n
   parameter_size: E2B
   lifecycle: active
-  capabilities: [chat, vision, audio, long_context]
-  modalities: {input: [text, image, audio, video], output: [text]}
-  protocols: [openai/chat-completions@1, openai/responses@1]
-  verification: {authority: Google DeepMind, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/google/gemma-3n-E2B-it}
-  tags: [open_weights, multimodal, edge, efficient]
+  capabilities:
+  - chat
+  - vision
+  - audio
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - audio
+    - video
+    output:
+    - text
+  verification:
+    authority: Google DeepMind
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/google/gemma-3n-E2B-it
+  tags:
+  - open_weights
+  - multimodal
+  - edge
+  - efficient
 - id: google/gemma-3n-e4b-it
   display_name: Gemma 3n E4B IT
   description: Mobile-first multimodal Gemma model with four-billion-parameter effective size.
   kind: physical
   publisher: Google
-  presentation: {logo: package:google, monogram: G, monochrome: false}
-  distribution: {type: open_weights, source: https://huggingface.co/google/gemma-3n-E4B-it, license: Gemma}
+  presentation:
+    logo: package:google
+    monogram: G
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/google/gemma-3n-E4B-it
+    license: Gemma
   family: gemma-3n
   parameter_size: E4B
   lifecycle: active
-  capabilities: [chat, vision, audio, long_context]
-  modalities: {input: [text, image, audio, video], output: [text]}
-  protocols: [openai/chat-completions@1, openai/responses@1]
-  verification: {authority: Google DeepMind, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/google/gemma-3n-E4B-it}
-  tags: [open_weights, multimodal, edge, efficient]
+  capabilities:
+  - chat
+  - vision
+  - audio
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - audio
+    - video
+    output:
+    - text
+  verification:
+    authority: Google DeepMind
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/google/gemma-3n-E4B-it
+  tags:
+  - open_weights
+  - multimodal
+  - edge
+  - efficient
 - id: google/gemma-2-9b-it
   display_name: Gemma 2 9B IT
   description: Previous-generation open-weight Gemma instruction model for local serving.
   kind: physical
   publisher: Google
-  presentation: {logo: package:google, monogram: G, monochrome: false}
-  distribution: {type: open_weights, source: https://huggingface.co/google/gemma-2-9b-it, license: Gemma}
+  presentation:
+    logo: package:google
+    monogram: G
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/google/gemma-2-9b-it
+    license: Gemma
   family: gemma-2
   parameter_size: 9B
   lifecycle: active
-  capabilities: [chat]
-  modalities: {input: [text], output: [text]}
-  protocols: [openai/chat-completions@1, openai/responses@1]
-  verification: {authority: Google DeepMind, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/google/gemma-2-9b-it}
-  tags: [open_weights, previous_generation]
+  capabilities:
+  - chat
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Google DeepMind
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/google/gemma-2-9b-it
+  tags:
+  - open_weights
+  - previous_generation
 - id: google/gemma-2-27b-it
   display_name: Gemma 2 27B IT
   description: Large previous-generation open-weight Gemma instruction model.
   kind: physical
   publisher: Google
-  presentation: {logo: package:google, monogram: G, monochrome: false}
-  distribution: {type: open_weights, source: https://huggingface.co/google/gemma-2-27b-it, license: Gemma}
+  presentation:
+    logo: package:google
+    monogram: G
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/google/gemma-2-27b-it
+    license: Gemma
   family: gemma-2
   parameter_size: 27B
   lifecycle: active
-  capabilities: [chat]
-  modalities: {input: [text], output: [text]}
-  protocols: [openai/chat-completions@1, openai/responses@1]
-  verification: {authority: Google DeepMind, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/google/gemma-2-27b-it}
-  tags: [open_weights, previous_generation]
+  capabilities:
+  - chat
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Google DeepMind
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/google/gemma-2-27b-it
+  tags:
+  - open_weights
+  - previous_generation
+- id: google/diffusiongemma-26b-a4b-it
+  display_name: DiffusionGemma 26B A4B
+  description: Open-weight block-diffusion Gemma model for high-speed multimodal reasoning, tools, and coding.
+  kind: physical
+  publisher: Google
+  presentation:
+    logo: package:google
+    monogram: G
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/google/diffusiongemma-26B-A4B-it
+    license: Apache-2.0
+  family: diffusiongemma
+  parameter_size: 25.2B (3.8B active)
+  lifecycle: experimental
+  limits:
+    context_window_size: 262144
+  capabilities: [chat, reasoning, tools, vision, video, coding, multilingual, long_context]
+  modalities:
+    input: [text, image, video]
+    output: [text]
+  verification:
+    authority: Google DeepMind
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/google/diffusiongemma-26B-A4B-it
+  tags: [open_weights, diffusion, multimodal, reasoning, moe, efficient]

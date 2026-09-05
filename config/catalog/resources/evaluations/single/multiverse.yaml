@@ -1,0 +1,54 @@
+- id: multiverse/hypernova-60b-2605-model-card-mmlu-pro@1.0.0
+  model: multiverse/hypernova-60b-2605
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: high
+  subject: &hypernova-subject
+    variant: HyperNova 60B 2605
+    reasoning_effort: high
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.768
+  status: available
+  evidence: &hypernova-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/MultiverseComputingCAI/Hypernova-60B-2605
+    redistributable: true
+- id: multiverse/hypernova-60b-2605-model-card-gpqa-diamond@1.0.0
+  model: multiverse/hypernova-60b-2605
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: high
+  subject: *hypernova-subject
+  metrics:
+    accuracy: 0.719
+  status: available
+  evidence: *hypernova-evidence
+- id: multiverse/hypernova-60b-2605-model-card-humanitys-last-exam@1.0.0
+  model: multiverse/hypernova-60b-2605
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: high
+  subject: *hypernova-subject
+  metrics:
+    accuracy: 0.15
+  status: available
+  evidence: *hypernova-evidence
+- id: multiverse/quasar-438b-launch-terminal-bench@2.1.0
+  model: multiverse/quasar-438b
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: published
+  subject:
+    variant: Quasar 438B
+    source_kind: official_vendor_republication
+    measurement_origin: Artificial Analysis
+  metrics:
+    resolved: 0.693
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://multiversecomputing.com/resources/introducing-quasar-438b-europe-s-leading-ai-model
+    redistributable: true

@@ -1,0 +1,52 @@
+- id: apodex/apodex-1.1
+  display_name: Apodex 1.1
+  description: Flagship reasoning model for long-horizon research, coding, and agentic work through the Apodex API.
+  kind: physical
+  publisher: Apodex AI
+  presentation: &apodex-presentation
+    logo: monogram
+    monogram: A
+    monochrome: false
+  distribution:
+    type: proprietary_api
+    source: https://platform.apodex.ai/docs/models
+  family: apodex-1.1
+  parameter_size: 397B
+  released_at: 2026-08-27
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities: [chat, reasoning, long_context]
+  modalities: &apodex-modalities
+    input: [text]
+    output: [text]
+  verification:
+    authority: Apodex AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://platform.apodex.ai/docs/models
+  tags: [proprietary, reasoning, frontier, long_context]
+- id: apodex/apodex-1.1-mini
+  display_name: Apodex 1.1 Mini
+  description: Open-weight Qwen3.5 MoE reasoning model for high-throughput agentic and tool-using workloads.
+  kind: physical
+  publisher: Apodex AI
+  presentation: *apodex-presentation
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/apodex/Apodex-1.1-mini
+    license: Apache-2.0
+  family: apodex-1.1
+  parameter_size: 35B
+  released_at: 2026-08-27
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities: *apodex-modalities
+  verification:
+    authority: Apodex AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/apodex/Apodex-1.1-mini
+  tags: [open_weights, reasoning, agentic, tools, long_context, moe]

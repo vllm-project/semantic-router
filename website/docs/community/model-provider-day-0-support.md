@@ -14,15 +14,15 @@ public [Models page](/models).
 
 | Change | Catalog resources | Code adapter |
 | --- | --- | --- |
-| New model on an existing compatible provider | Model Card; offering when the provider model ID or pricing is built in; reasoning/evaluation records when known | No |
-| New OpenAI- or Anthropic-compatible provider | Provider definition; offering records for built-in models | No |
+| New model on an existing compatible provider | Model Card; one entry in that provider's `models[]`; reasoning/evaluation records when known | No |
+| New OpenAI- or Anthropic-compatible provider | One provider file with its built-in `models[]` mappings | No |
 | New wire protocol or genuinely different semantics | Protocol and provider definitions, conformance fixtures | Yes, at the protocol/auth/transport seam |
 | Self-hosted model used by one operator | None required; write a normal custom model binding and optional Model Card | No |
 
 A provider card is not a claim that every model is built in. A built-in model
-has a validated Model Card, and a hosted model is selectable only when an
-offering binds that model to a provider. Every active physical Model Card must
-therefore have at least one offering. Virtual recipes are different: their
+has a validated Model Card, and a hosted model is selectable only when a
+provider's `models[]` maps it to the provider-native ID. Every active physical
+Model Card must therefore have at least one provider mapping. Virtual recipes are different: their
 recommended pools may name operator-defined custom models and are not foreign
 keys into the built-in catalog.
 
@@ -34,9 +34,10 @@ keys into the built-in catalog.
    revision, limits, modalities, capabilities, protocols, lifecycle, and
    reasoning-family reference. Recipe-backed logical models belong in
    `models/virtual/` instead.
-2. Add an `OfferingDefinition` under `config/catalog/resources/offerings/`
-   when vLLM-SR should know a provider model ID, protocol restriction, price,
-   or other provider-specific fact.
+2. Add a mapping under `config/catalog/resources/providers/<provider>.yaml`
+   `models[]` when vLLM-SR should know a provider-native model ID, protocol
+   restriction, price, or other provider-specific fact. Do not create a second
+   provider/model inventory.
 3. Reuse a reasoning family. Add a new family only when the request projection
    itself is new; do not duplicate a built-in family in user configuration.
 4. Add benchmark records under `evaluations/single/` only when the result is
@@ -44,7 +45,7 @@ keys into the built-in catalog.
    benchmark version, exact subject, and raw metric explicit. Virtual-model
    recipe runs use the identical schema under `evaluations/virtual/`.
 5. Add conformance fixtures for capabilities or protocol behavior claimed by
-   the card/offering.
+   the card/provider mapping.
 
 Model IDs are namespaced, for example `organization/model`. Benchmark and
 index IDs use full semantic versions. A changed dataset, grader, prompt
@@ -59,10 +60,17 @@ rejected. Vendor-published results retain their exact model variant, reasoning
 mode, tool mode, and harness metadata and are labeled claimed; only a frozen
 vLLM-SR run with its artifact can be labeled reproduced.
 
+Generation emits exactly those five benchmark slots for every model and every
+selectable reasoning effort. A slot without trustworthy evidence is explicit
+`missing`, never zero. When a source reports several efforts, author a separate
+evaluation record for each effort; results from `high`, `xhigh`, or `max` are
+not copied across rows. Extra benchmarks remain visible as evidence without
+silently entering this version of the default index.
+
 ## Add a provider
 
-1. Give the provider one stable lowercase Provider ID in
-   `config/catalog/resources/providers.yaml`.
+1. Give the provider one stable lowercase Provider ID in a focused file under
+   `config/catalog/resources/providers/`.
 2. Declare only protocols the provider actually transports and the exact
    fully-qualified `supported_operations` subset it implements. Every declared
    protocol must include `#create`; add `#list_models` only when that provider

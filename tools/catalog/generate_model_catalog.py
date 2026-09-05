@@ -28,19 +28,24 @@ from catalog_common import mapping as _mapping  # noqa: E402
 from catalog_common import nonempty_string as _nonempty_string  # noqa: E402
 from catalog_common import reject_unknown as _reject_unknown  # noqa: E402
 from catalog_common import sequence as _sequence  # noqa: E402
+from catalog_evaluations import (  # noqa: E402
+    evaluation_coverage as _evaluation_coverage,
+)
 from catalog_evaluations import index_results as _index_results  # noqa: E402
 from catalog_evaluations import metric_catalog as _metric_catalog  # noqa: E402
 from catalog_evaluations import (  # noqa: E402, F401 - tested compatibility seam
     normalize_component as _normalize_component,
 )
-from catalog_evaluations import (  # noqa: E402
-    validate_evaluations as _validate_evaluations,
-)
 from catalog_evaluations import validate_indices as _validate_indices  # noqa: E402
-from catalog_evaluations import validate_offerings as _validate_offerings  # noqa: E402
 from catalog_io import load_json as _load_json  # noqa: E402
 from catalog_io import load_yaml as _load_yaml  # noqa: E402
 from catalog_io import validate_schema as _validate_schema  # noqa: E402
+from catalog_validation import (  # noqa: E402
+    validate_evaluations as _validate_evaluations,
+)
+from catalog_validation import (  # noqa: E402
+    validate_provider_bindings as _validate_provider_bindings,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SOURCE_ROOT = REPO_ROOT / "config" / "catalog"
@@ -80,7 +85,6 @@ RESOURCE_KEYS = (
     "providers",
     "reasoning_families",
     "models",
-    "offerings",
     "benchmarks",
     "evaluations",
     "indices",
@@ -209,6 +213,7 @@ _PROVIDER_FIELDS = {
     "auth",
     "presentation",
     "conformance",
+    "models",
 }
 
 
@@ -245,6 +250,8 @@ def _validate_provider_identity(
     if item.get("reasoning_transport", "chat_template_kwargs") not in {
         "chat_template_kwargs",
         "top_level_effort",
+        "top_level_boolean",
+        "reasoning_object",
         "thinking_object",
         "deepseek_thinking",
     }:
@@ -369,7 +376,9 @@ def _validate_provider_header(
 def _validate_reasoning(items: list[dict[str, Any]]) -> None:
     for index, item in enumerate(items):
         path = f"reasoning_families[{index}]"
-        _reject_unknown(item, {"id", "type", "parameter", "levels", "default"}, path)
+        _reject_unknown(
+            item, {"id", "type", "parameter", "levels", "default", "disabled"}, path
+        )
         if not SLUG.fullmatch(_nonempty_string(item.get("id"), f"{path}.id")):
             raise CatalogBuildError(f"{path}.id must be a lowercase slug")
         if item.get("type") not in {
@@ -385,17 +394,18 @@ def _validate_reasoning(items: list[dict[str, Any]]) -> None:
             or len(levels) != len(set(levels))
         ):
             raise CatalogBuildError(f"{path}.levels/default is invalid")
+        if item.get("disabled") is not None and item.get("disabled") not in levels:
+            raise CatalogBuildError(f"{path}.disabled must be listed in levels")
 
 
 def _validate_models(
     items: list[dict[str, Any]],
-    protocol_ids: set[str],
     asset_ids: set[str],
     reasoning_ids: set[str],
 ) -> None:
     for index, item in enumerate(items):
         path = f"models[{index}]"
-        kind = _validate_model_identity(item, path, protocol_ids, reasoning_ids)
+        kind = _validate_model_identity(item, path, reasoning_ids)
         _validate_model_verification(item, path)
         if kind == "virtual":
             _validate_virtual_model(item, path, asset_ids)
@@ -426,7 +436,6 @@ _MODEL_FIELDS = {
     "asset",
     "entrypoint",
     "recipe",
-    "protocols",
     "traits",
     "roles",
     "verification",
@@ -438,7 +447,6 @@ _MODEL_FIELDS = {
 def _validate_model_identity(
     item: dict[str, Any],
     path: str,
-    protocol_ids: set[str],
     reasoning_ids: set[str],
 ) -> str:
     _reject_unknown(item, _MODEL_FIELDS, path)
@@ -460,9 +468,6 @@ def _validate_model_identity(
         raise CatalogBuildError(f"{path}.distribution.type is unsupported")
     if distribution.get("type") == "open_weights" and not distribution.get("license"):
         raise CatalogBuildError(f"{path}.distribution.license is required")
-    protocols = _sequence(item.get("protocols"), f"{path}.protocols")
-    if not protocols or any(protocol not in protocol_ids for protocol in protocols):
-        raise CatalogBuildError(f"{path}.protocols references an unknown protocol")
     family = item.get("reasoning_family")
     if family and family not in reasoning_ids:
         raise CatalogBuildError(f"{path}.reasoning_family references an unknown family")
@@ -612,14 +617,15 @@ def load_and_validate() -> (
     _validate_providers(resources["providers"], resources["protocols"])
     _validate_reasoning(resources["reasoning_families"])
     reasoning_ids = {item["id"] for item in resources["reasoning_families"]}
-    _validate_models(resources["models"], protocol_ids, asset_ids, reasoning_ids)
+    _validate_models(resources["models"], asset_ids, reasoning_ids)
     model_ids = {item["id"] for item in resources["models"]}
     providers = {item["id"]: item for item in resources["providers"]}
     models = {item["id"]: item for item in resources["models"]}
-    _validate_offerings(resources["offerings"], providers, models, protocol_ids)
+    _validate_provider_bindings(providers, models, protocol_ids)
     metrics = _metric_catalog(resources["benchmarks"])
     _validate_indices(resources["indices"], metrics)
-    _validate_evaluations(resources["evaluations"], model_ids, metrics)
+    reasoning = {item["id"]: item for item in resources["reasoning_families"]}
+    _validate_evaluations(resources["evaluations"], models, reasoning, metrics)
 
     defaults = _mapping(manifest.get("defaults"), "defaults")
     _reject_unknown(defaults, {"model", "enabled", "intelligence_index"}, "defaults")
@@ -657,6 +663,10 @@ def _generated_models(
 def render_outputs() -> dict[Path, bytes]:
     manifest, resources, assets = load_and_validate()
     models = _generated_models(resources, assets)
+    results = _index_results(resources)
+    coverage = _evaluation_coverage(
+        resources, manifest["defaults"]["intelligence_index"], results
+    )
     generated_manifest = {
         "schema_version": OUTPUT_SCHEMA,
         "catalog_version": manifest["catalog_version"],
@@ -669,11 +679,11 @@ def render_outputs() -> dict[Path, bytes]:
         "providers": resources["providers"],
         "reasoning_families": resources["reasoning_families"],
         "models": models,
-        "offerings": resources["offerings"],
         "benchmarks": resources["benchmarks"],
         "evaluations": resources["evaluations"],
+        "evaluation_coverage": coverage,
         "indices": resources["indices"],
-        "index_results": _index_results(resources),
+        "index_results": results,
     }
     public = {
         "schema_version": OUTPUT_SCHEMA,
@@ -692,11 +702,11 @@ def render_outputs() -> dict[Path, bytes]:
         "providers": resources["providers"],
         "reasoning_families": resources["reasoning_families"],
         "models": models,
-        "offerings": resources["offerings"],
         "benchmarks": resources["benchmarks"],
         "evaluations": resources["evaluations"],
+        "evaluation_coverage": coverage,
         "indices": resources["indices"],
-        "index_results": _index_results(resources),
+        "index_results": results,
     }
     _validate_schema(public, _load_json(SNAPSHOT_SCHEMA_PATH), "generated snapshot")
     public_json = (

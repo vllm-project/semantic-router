@@ -25,7 +25,13 @@ func applyEffectiveModelRegistry(
 	cfg.DefaultQualityIndex = defaults.QualityIndex
 	cfg.ReasoningFamilies = map[string]ReasoningFamilyConfig{}
 	for _, family := range registry.ReasoningFamilies() {
-		cfg.ReasoningFamilies[family.ID] = ReasoningFamilyConfig{Type: family.Type, Parameter: family.Parameter}
+		cfg.ReasoningFamilies[family.ID] = ReasoningFamilyConfig{
+			Type:      family.Type,
+			Parameter: family.Parameter,
+			Levels:    append([]string(nil), family.Levels...),
+			Default:   family.Default,
+			Disabled:  family.Disabled,
+		}
 	}
 	cfg.ModelConfig = make(map[string]ModelParams)
 	cfg.ProviderProfiles = make(map[string]ProviderProfile)
@@ -36,7 +42,7 @@ func applyEffectiveModelRegistry(
 	}
 
 	for _, model := range registry.Models() {
-		params := modelParamsFromEffectiveModel(model, defaults.QualityIndex)
+		params := modelParamsFromEffectiveModel(model, defaults.QualityIndex, defaults.ReasoningEffort)
 		params.AuthoredModel = authoredByAlias[model.Alias]
 		if model.BindingDefaults.Protocol != "" {
 			apiFormat, err := apiFormatForProtocol(model.BindingDefaults.Protocol)
@@ -58,11 +64,15 @@ func applyEffectiveModelRegistry(
 	return validateEffectiveLoRAReferences(cfg)
 }
 
-func modelParamsFromEffectiveModel(model modelcatalog.EffectiveModel, qualityIndex string) ModelParams {
+func modelParamsFromEffectiveModel(model modelcatalog.EffectiveModel, qualityIndex, reasoningEffort string) ModelParams {
 	card := model.Card.Card
 	modality := model.Card.RuntimeModality
 	if modality == "" {
 		modality = runtimeModalityFromCard(card)
+	}
+	indexResults := model.Indices
+	if effortResults, ok := model.IndicesByEffort[reasoningEffort]; ok {
+		indexResults = effortResults
 	}
 	params := ModelParams{
 		Catalog:           model.Catalog,
@@ -75,7 +85,7 @@ func modelParamsFromEffectiveModel(model modelcatalog.EffectiveModel, qualityInd
 		Evaluations:       cloneUserEvaluations(model.Card.Evaluations),
 		ReasoningFamily:   card.ReasoningFamily,
 		Modality:          modality,
-		IndexResults:      cloneCatalogIndexResults(model.Indices),
+		IndexResults:      cloneCatalogIndexResults(indexResults),
 		QualityIndex:      qualityIndex,
 		Pricing:           modelPricingFromCatalog(model.BindingDefaults.Pricing),
 		Reliability:       providerReliabilityFromCatalog(model.BindingDefaults.Reliability),
@@ -183,8 +193,8 @@ func applyBindingCredential(providerID, credential string, params *ModelParams) 
 
 func applyBindingServiceMetadata(effective modelcatalog.EffectiveModelProvider, params *ModelParams) {
 	pricing := effective.Binding.Pricing
-	if pricing == (modelcatalog.Pricing{}) && effective.Offering != nil {
-		pricing = effective.Offering.Pricing
+	if pricing == (modelcatalog.Pricing{}) && effective.CatalogBinding != nil {
+		pricing = effective.CatalogBinding.Pricing
 	}
 	if params.Pricing == (ModelPricing{}) {
 		params.Pricing = modelPricingFromCatalog(pricing)
@@ -227,10 +237,15 @@ func materializedProviderProfile(
 	baseURL string,
 ) ProviderProfile {
 	provider := effective.Provider
+	reasoningTransport := provider.Definition.ReasoningTransport
+	if effective.CatalogBinding != nil && effective.CatalogBinding.ReasoningTransport != "" {
+		reasoningTransport = effective.CatalogBinding.ReasoningTransport
+	}
 	return ProviderProfile{
 		Type: provider.Definition.ID, Protocol: effective.Binding.Protocol, BaseURL: baseURL,
-		ExtraHeaders: mergeProviderHeaders(provider.Definition.DefaultHeaders, provider.Instance.Headers),
-		APIVersion:   provider.Instance.APIVersion, AuthHeader: provider.Instance.AuthHeader,
+		ReasoningTransport: reasoningTransport,
+		ExtraHeaders:       mergeProviderHeaders(provider.Definition.DefaultHeaders, provider.Instance.Headers),
+		APIVersion:         provider.Instance.APIVersion, AuthHeader: provider.Instance.AuthHeader,
 		AuthPrefix: provider.Instance.AuthPrefix, ChatPath: provider.Instance.ChatPath,
 	}
 }

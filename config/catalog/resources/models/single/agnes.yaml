@@ -1,0 +1,55 @@
+- id: agnes/agnes-2.5-pro-alpha
+  display_name: Agnes 2.5 Pro Alpha
+  description: Open-weight million-token multimodal reasoning model for coding, science, and agentic workflows.
+  kind: physical
+  publisher: Agnes AI
+  presentation:
+    logo: monogram
+    monogram: A
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/Agnes-AI/Agnes-2.5-Pro-Alpha
+    license: Apache-2.0
+  family: agnes-2.5
+  parameter_size: 397B (17B active)
+  lifecycle: experimental
+  limits:
+    context_window_size: 1048576
+    max_output_tokens: 65536
+  capabilities: [chat, reasoning, tools, vision, structured_output, long_context]
+  modalities:
+    input: [text, image]
+    output: [text]
+  verification:
+    authority: Agnes AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/Agnes-AI/Agnes-2.5-Pro-Alpha
+  tags: [open_weights, preview, frontier, reasoning, multimodal, agentic]
+- id: agnes/agnes-2.5-pro-beta
+  display_name: Agnes 2.5 Pro Beta
+  description: Hosted beta of Agnes's million-token multimodal reasoning model for coding and agentic work.
+  kind: physical
+  publisher: Agnes AI
+  presentation:
+    logo: monogram
+    monogram: A
+    monochrome: false
+  distribution:
+    type: proprietary_api
+    source: https://beta.agnes-ai.com/
+  family: agnes-2.5
+  lifecycle: experimental
+  limits:
+    context_window_size: 1048576
+  capabilities: [chat, reasoning, tools, vision, structured_output, long_context]
+  modalities:
+    input: [text, image]
+    output: [text]
+  verification:
+    authority: Agnes AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://beta.agnes-ai.com/
+  tags: [proprietary, preview, frontier, reasoning, multimodal, agentic]

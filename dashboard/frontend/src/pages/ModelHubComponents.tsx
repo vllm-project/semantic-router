@@ -1,11 +1,10 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import type {
   BuiltInModelCatalog,
   BuiltInModelMetadata,
   CatalogEvaluation,
-  CatalogProvider,
 } from '../types/modelCatalog'
 import { resolveModelCatalogIcon } from './modelProviderIcons'
 import {
@@ -209,7 +208,9 @@ export const ModelList: React.FC<{
           >
             {formatIntelligence(row.intelligence)}
             {row.intelligence?.status === 'available' ? (
-              <small>{Math.round(row.intelligence.coverage * 100)}% coverage</small>
+              <small>
+                {row.intelligence.reasoning_effort} · {Math.round(row.intelligence.coverage * 100)}%
+              </small>
             ) : null}
           </span>
         </button>
@@ -228,32 +229,56 @@ const IntelligenceEvidence: React.FC<{
   row: ModelHubRow
   catalog: BuiltInModelCatalog
   evaluations: Map<string, CatalogEvaluation>
-}> = ({ row, catalog, evaluations }) => (
+}> = ({ row, catalog, evaluations }) => {
+  const [effort, setEffort] = useState(
+    row.intelligence?.reasoning_effort ?? row.intelligenceByEffort[0]?.reasoning_effort ?? 'default',
+  )
+  const result =
+    row.intelligenceByEffort.find((candidate) => candidate.reasoning_effort === effort) ??
+    row.intelligence
+  return (
   <section className={styles.detailSection}>
     <div className={styles.detailSectionTitle}>
       <h3>Intelligence evidence</h3>
-      <strong>{formatIntelligence(row.intelligence)}</strong>
+      <strong>{formatIntelligence(result)}</strong>
     </div>
+    {row.intelligenceByEffort.length > 1 ? (
+      <label className={styles.effortSelect}>
+        <span>Reasoning effort</span>
+        <select value={effort} onChange={(event) => setEffort(event.target.value)}>
+          {row.intelligenceByEffort.map((candidate) => (
+            <option key={candidate.reasoning_effort} value={candidate.reasoning_effort}>
+              {readable(candidate.reasoning_effort)}
+            </option>
+          ))}
+        </select>
+      </label>
+    ) : null}
     <p>
-      {row.intelligence?.status === 'available'
-        ? `${Math.round(row.intelligence.coverage * 100)}% of the default index is backed by published evidence.`
-        : 'No composite is shown until three of the five default benchmarks are available.'}
+      {result?.status === 'available'
+        ? `${Math.round(result.coverage * 100)}% of the default index is backed by published evidence for this effort.`
+        : 'No composite is shown until three of the five default benchmarks are available for this effort.'}
     </p>
     <div className={styles.benchmarkGrid}>
-      {row.intelligence?.components.map((component) => (
-        <div key={component.metric ?? component.index}>
+      {result?.components.map((component) => (
+        <div
+          key={
+            component.index ??
+            `${component.benchmark}#${component.metric}@${component.benchmark_profile}`
+          }
+        >
           <span>
             {component.metric
-              ? benchmarkName(component.metric, catalog)
+              ? benchmarkName(component.benchmark, component.metric, catalog)
               : (component.index ?? 'Index component')}
           </span>
           <strong>{scorePercent(component.value)}</strong>
         </div>
       ))}
     </div>
-    {row.intelligence?.provenance.length ? (
+    {result?.provenance.length ? (
       <div className={styles.sources}>
-        {row.intelligence.provenance.map((recordID) => {
+        {result.provenance.map((recordID) => {
           const record = evaluations.get(recordID)
           return record ? (
             <div className={styles.evidenceRecord} key={recordID}>
@@ -272,23 +297,23 @@ const IntelligenceEvidence: React.FC<{
       </div>
     ) : null}
   </section>
-)
+  )
+}
 
-const OfferingList: React.FC<{
+const ProviderList: React.FC<{
   row: ModelHubRow
-  providers: Map<string, CatalogProvider>
-}> = ({ row, providers }) => (
+}> = ({ row }) => (
   <section className={styles.detailSection}>
     <h3>Available through</h3>
-    {row.offerings.length ? (
-      <ul className={styles.offeringList}>
-        {row.offerings.map((offering) => (
-          <li key={offering.id}>
+    {row.providers.length ? (
+      <ul className={styles.providerList}>
+        {row.providers.map(({ provider, model }) => (
+          <li key={`${provider.id}/${model.id}`}>
             <span>
-              <strong>{providers.get(offering.provider)?.display_name ?? offering.provider}</strong>
-              <code>{offering.provider_model_id}</code>
+              <strong>{provider.display_name}</strong>
+              <code>{model.id}</code>
             </span>
-            <small>{offering.lifecycle}</small>
+            <small>{model.lifecycle}</small>
           </li>
         ))}
       </ul>
@@ -301,9 +326,8 @@ const OfferingList: React.FC<{
 export const ModelDetail: React.FC<{
   row: ModelHubRow | null
   catalog: BuiltInModelCatalog
-  providers: Map<string, CatalogProvider>
   evaluations: Map<string, CatalogEvaluation>
-}> = ({ row, catalog, providers, evaluations }) => (
+}> = ({ row, catalog, evaluations }) => (
   <aside className={styles.detailPanel} aria-live="polite">
     {row ? (
       <>
@@ -321,7 +345,7 @@ export const ModelDetail: React.FC<{
           <span>{row.model.lifecycle}</span>
           {row.model.parameter_size ? <span>{row.model.parameter_size}</span> : null}
         </div>
-        <IntelligenceEvidence row={row} catalog={catalog} evaluations={evaluations} />
+        <IntelligenceEvidence key={row.model.id} row={row} catalog={catalog} evaluations={evaluations} />
         <section className={styles.detailSection}>
           <h3>Capabilities</h3>
           <div className={styles.badges}>
@@ -330,7 +354,7 @@ export const ModelDetail: React.FC<{
             ))}
           </div>
         </section>
-        <OfferingList row={row} providers={providers} />
+        <ProviderList row={row} />
         <a
           className={styles.sourceLink}
           href={row.model.distribution.source}

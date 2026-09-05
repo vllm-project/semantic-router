@@ -1,0 +1,77 @@
+id: moonshot
+display_name: Moonshot AI
+description: Kimi models through an OpenAI-style API.
+category: model_api
+support_tier: compatible
+default_base_url: https://api.moonshot.ai/v1
+protocols:
+- openai/chat-completions@1
+default_protocol: openai/chat-completions@1
+supported_operations:
+- openai/chat-completions@1#create
+- openai/chat-completions@1#list_models
+auth:
+  strategy: bearer
+  header: Authorization
+  prefix: Bearer
+presentation:
+  logo: package:moonshot
+  monogram: K
+  monochrome: true
+conformance:
+  status: unverified
+models:
+- catalog: moonshot/kimi-k2-instruct-0905
+  id: kimi-k2-0905-preview
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://platform.moonshot.ai/docs/api/chat
+- catalog: moonshot/kimi-k2-thinking
+  id: kimi-k2-thinking
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://platform.moonshot.ai/docs/api/chat
+- catalog: moonshot/kimi-k2.5
+  id: kimi-k2.5
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://platform.moonshot.ai/docs/api/chat
+- catalog: moonshot/kimi-k2.6
+  id: kimi-k2.6
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://platform.moonshot.ai/docs/api/chat
+- catalog: moonshot/kimi-k2.7-code
+  id: kimi-k2.7-code
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://platform.moonshot.ai/docs/api/chat
+- catalog: moonshot/kimi-k3
+  id: kimi-k3
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://platform.moonshot.ai/docs/api/chat

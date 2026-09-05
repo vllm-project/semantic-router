@@ -1,0 +1,25 @@
+id: openai-compatible
+display_name: OpenAI Compatible
+description: Connect any compatible private endpoint.
+category: start_here
+support_tier: compatible
+protocols:
+- openai/chat-completions@1
+- openai/responses@1
+default_protocol: openai/chat-completions@1
+supported_operations:
+- openai/chat-completions@1#create
+- openai/chat-completions@1#list_models
+- openai/responses@1#create
+- openai/responses@1#list_models
+auth:
+  strategy: bearer
+  header: Authorization
+  prefix: Bearer
+presentation:
+  logo: package:openai
+  monogram: O
+  monochrome: true
+conformance:
+  status: fixture_verified
+  verified_at: 2026-09-04

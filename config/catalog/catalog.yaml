@@ -25,10 +25,9 @@ assets:
     bundle: ../recipes/built-in/latest/mom-v1
 resources:
   protocols: resources/protocols.yaml
-  providers: resources/providers.yaml
+  providers: resources/providers
   reasoning_families: resources/reasoning-families.yaml
   models: resources/models
-  offerings: resources/offerings
   benchmarks: resources/benchmarks.yaml
   evaluations: resources/evaluations
   indices: resources/indices.yaml

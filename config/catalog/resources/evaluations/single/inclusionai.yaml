@@ -1,0 +1,78 @@
+- id: inclusionai/ling-3.0-flash-model-card-swe-bench-pro@1.0.0
+  model: inclusionai/ling-3.0-flash
+  benchmark: swe-bench/pro@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: published
+  subject: &ling3-flash-official-subject
+    variant: Ling 3.0 Flash
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.566
+  status: available
+  evidence: &ling3-flash-official-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/inclusionAI/Ling-3.0-flash
+    redistributable: true
+- id: inclusionai/ling-2.6-1t-model-card-swe-bench-verified@1.0.0
+  model: inclusionai/ling-2.6-1t
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: default
+  subject:
+    variant: Ling 2.6 1T
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.722
+  status: available
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/inclusionAI/Ling-2.6-1T
+    redistributable: true
+- id: inclusionai/ling-2.6-flash-model-card-swe-bench-verified@1.0.0
+  model: inclusionai/ling-2.6-flash
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: default
+  subject:
+    variant: Ling 2.6 Flash
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.612
+  status: available
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/inclusionAI/Ling-2.6-flash
+    redistributable: true
+- id: inclusionai/ring-2.6-1t-model-card-gpqa-diamond@1.0.0
+  model: inclusionai/ring-2.6-1t
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: xhigh
+  subject:
+    variant: Ring 2.6 1T
+    reasoning_mode: xhigh
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.8827
+  status: available
+  evidence: &ring26-official-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/inclusionAI/Ring-2.6-1T
+    redistributable: true
+- id: inclusionai/ring-2.6-1t-model-card-swe-bench-verified@1.0.0
+  model: inclusionai/ring-2.6-1t
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: high
+  subject:
+    variant: Ring 2.6 1T
+    reasoning_mode: high
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.740
+  status: available
+  evidence: *ring26-official-evidence

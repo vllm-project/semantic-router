@@ -48,12 +48,14 @@ and a recommended model reference is not a complete built-in model card.
 The old Dashboard therefore contained 40 provider presets, while the Router
 had seven hard-coded runtime types and the packaged catalog had no
 general-purpose physical-model registry. The implemented catalog takes the
-union of those identities and compiles 45 providers, three protocol
-definitions, 367 physical Model Cards, five virtual Model Cards, 399 verified
-or claimed offerings, six benchmark definitions, and 50 source-backed
-evaluation records. Twenty-one models currently satisfy the default index's
-coverage policy. Support tier, lifecycle, and conformance remain explicit, so
-inclusion is not flattened into a native-support claim.
+union of those identities and compiles 58 providers, three protocol
+definitions, 504 physical Model Cards, five virtual Model Cards, 762 verified
+or claimed provider-owned mappings, 12 benchmark definitions, and 349
+source-backed evaluation records. It generates 4,850 default benchmark slots
+for 970 model/effort rows: 284 slots have lawful published evidence, 53 rows
+satisfy the initial 60% coverage policy, and every other slot stays explicitly
+missing. Support tier, lifecycle, and conformance remain independent, so
+catalog inclusion is not flattened into a native-support or benchmark claim.
 
 ### Implemented physical-model catalog
 
@@ -61,55 +63,121 @@ The first catalog population covers models already named by maintained recipes
 and examples, then adds a broad current-and-previous-generation set across
 major API publishers and open-weight runtimes. It is not a claim to mirror
 every model string exposed by an aggregator. A model is built-in only when it
-has a complete Model Card and at least one provider offering; GPT-6 Astra is
+has a complete Model Card and at least one provider-owned model mapping; GPT-6 Astra is
 intentionally absent.
 
 | Publisher | Generations and families represented | Models |
 | --- | --- | ---: |
-| Alibaba Cloud | Qwen2.5 and Qwen3 common sizes; QwQ; Qwen Coder/VL/Next; Qwen3.5–3.8 API and open-weight variants | 57 |
+| Alibaba Cloud | Qwen2.5 and Qwen3 common sizes; QwQ; Qwen Coder/VL/Next/Max; Qwen3.5–3.8 API and open-weight variants | 62 |
 | OpenAI | GPT-4.1/4o; GPT-5 through 5.6; Pro and Codex variants; o1/o3/o4-mini; GPT-OSS | 36 |
-| Google | Gemini 1.5 through 3.8; Gemma 2, 3, 3n, and 4 | 28 |
+| Google | Gemini 1.5 through 3.8; Gemma 2, 3, 3n, and 4; DiffusionGemma | 32 |
 | Mistral AI | Mistral 7B/NeMo/Small/Medium/Large; Mixtral; Ministral; Devstral; Magistral; Codestral; Pixtral | 24 |
-| DeepSeek | V2/V2.5/V3/V4; Coder V2; R1 and its Qwen/Llama distillations; Prover, VL2, and Janus | 23 |
+| DeepSeek | V2/V2.5/V3/V4; Coder V2; R1 and its Qwen/Llama distillations; Prover, VL2, and Janus | 24 |
 | Anthropic | Claude 3/3.5/3.7; Haiku/Sonnet/Opus 4–5; Fable 5/5.1; Mythos | 21 |
-| Meta | Llama 2, Llama 3–4 text/vision variants, and Code Llama | 18 |
-| NVIDIA | Llama Nemotron and Nemotron 3/3.5 Nano, Mini, Super, Ultra, Lightning, Omni, and VL variants | 15 |
-| Cohere | Command R/R+/R7B/A/A+/Vision/Reasoning, North Mini Code, and Aya 23/Expanse variants | 13 |
-| Microsoft | Phi-3/3.5 and Phi-4 text, MoE, vision, mini, multimodal, and reasoning variants | 12 |
+| Meta | Llama 2, Llama 3–4, Code Llama, Muse Spark 1.1–1.3, and Muse Glimmer | 22 |
+| NVIDIA | Llama Nemotron; Nemotron 3/3.5; OpenReasoning 1.5B–32B; Terminal 8B–32B; Cascade, Omni, and VL variants | 23 |
+| Cohere | Command R/R+/R7B/A/A+/Vision/Reasoning, North Mini Code, Aya 23/Expanse, and Tiny Aya regional variants | 17 |
+| Microsoft | Phi-3/3.5 and Phi-4 text, MoE, vision, mini, multimodal, Flash, and reasoning variants | 14 |
 | Moonshot AI | Kimi K2–K3, Kimi Dev/Linear/VL, and Moonlight | 12 |
-| Z.ai | GLM-4/4.5/4.5V through 5.3, including Air and Flash variants | 12 |
+| Z.ai | GLM-4/4.5/4.5V through 5.3, including Air, Flash, Turbo, and vision variants | 14 |
 | Technology Innovation Institute | Falcon3, Falcon H1/H1R, and Falcon Mamba families | 11 |
 | MiniMax | Text/VL-01, M1, M2 through M3, and H3 | 10 |
+| ByteDance Seed | Seed OSS, Seed 1.6, Seed 2.0, and Seed 2.1 model families | 9 |
 | OpenBMB | MiniCPM3 through 5 and MiniCPM-V/O multimodal and reasoning variants | 9 |
 | Shanghai AI Laboratory | InternLM2.5/3 and Intern-S/S2 models | 9 |
 | 01.AI | Yi, Yi 1.5, Yi Coder, and Yi VL | 8 |
 | AI21 Labs | Jamba 1.5 through 2 and Jamba Reasoning | 8 |
-| IBM | Granite 3.3, Granite 4 H, and Granite 4.2 3B/8B/30B | 6 |
-| xAI | Grok 4, 4.1, 4.3, 4.5, 4.6, and 4.20 | 6 |
+| Xiaomi | MiMo 7B/VL, V2 Flash/Pro/Omni, and V2.5/Pro | 7 |
+| IBM | Granite 3.3, Granite 4 H, and Granite 4.1/4.2 3B/8B/30B | 9 |
+| LG AI Research | EXAONE 3.5/4.0/4.5 and K-EXAONE 236B/2.0 | 6 |
+| Tencent | Hunyuan A13B, Hy3, Hy4 Preview, and Hy-MT2 1.8B/7B/30B | 6 |
+| xAI | Grok 4, 4.1, 4.3, 4.5, 4.6, 4.20, and Grok Build | 7 |
 | Ai2 | OLMo 2, OLMo 3, and OLMo 3.1 Instruct/Think variants | 5 |
 | Amazon | Nova Micro, Lite, Pro, Premier, and Nova 2 Lite | 5 |
-| LG AI Research | EXAONE 3.5 and EXAONE 4.0 1.2B/32B | 3 |
-| Xiaomi | MiMo V2, V2.5, and V2.5 Pro | 3 |
-| Baidu | ERNIE 4.5 21B A3B and 300B A47B | 2 |
+| InclusionAI | Ling 2.6/3.0 and Ring 2.6 open-weight reasoning models | 5 |
+| Liquid AI | LFM2 2.6B/8B/24B and LFM2.5 dense, MoE, instruct, thinking, and vision-language variants | 8 |
+| Sakana AI | Fugu, Fugu Ultra/Cyber, and Sakana Namazu | 4 |
+| Aion Labs | Aion 2.0, 3.0, and 3.0 Mini | 3 |
+| Kuaishou KwaiPilot | KAT-Coder V2/V2.5 Pro and V2.5 Dev | 3 |
+| StepFun | Step 3.5/3.7 Flash and Step3 VL 10B | 3 |
+| Upstage | Solar Open 100B, Solar Open2, Solar Pro 3, and Solar Pro 4 | 4 |
+| AI9Stars | G9v3 3B and 39B A5B | 2 |
+| Baidu | ERNIE 4.5 open-weight variants plus ERNIE 5.0 and Thinking Preview | 4 |
 | Hugging Face | SmolLM2 and SmolLM3 | 2 |
-| StepFun | Step 3.5 Flash and 3.7 Flash | 2 |
 | Inception | Mercury 2 and Mercury 2.5 Preview diffusion models | 2 |
-| ByteDance Seed | Seed OSS 36B Instruct | 1 |
+| Institute of Foundation Models | K2 V2 Instruct, K2 Think V2, and K2 Horizon | 3 |
+| Meituan LongCat | LongCat 2.0 and LongCat Flash Lite | 2 |
+| Motif Technologies | Motif 2 Reasoning and Motif 3 | 2 |
+| Nex AGI | Nex N2 Mini and Pro | 2 |
+| Poolside | Laguna XS 2.1 and Laguna S 2.1 | 2 |
+| Reka AI | Reka Edge 2603 and Reka Flash 3 | 2 |
+| Thinking Machines Lab | Inkling and Inkling Small | 2 |
+| Writer | Palmyra X4 and X5 | 2 |
+| NAVER | HyperCLOVA X SEED Think 14B and 32B | 2 |
+| Nous Research | Hermes 3/4 70B and 405B plus DeepHermes 3 Llama and Mistral variants | 6 |
+| Multiverse Computing | Quasar, HyperNova, and Carina | 3 |
+| Sarvam AI | Sarvam 105B, 105B Conversations, and 30B | 3 |
+| Agnes AI | Agnes 2.5 Pro Alpha and Beta | 2 |
+| Apodex AI | Apodex 1.1 hosted frontier model and open-weight Mini | 2 |
+| Nanbeige LLM Lab | Nanbeige 4.1 and hybrid-reasoning 4.2 3B | 2 |
+| Perplexity | Sonar, Sonar Pro, Sonar Reasoning Pro, and Sonar Deep Research | 4 |
+| Swiss AI Initiative | Apertus 1.5 8B and 70B | 2 |
+| Arcee AI | Trinity Large Thinking | 1 |
 | Celeris | Celeris-1 low-latency diffusion model | 1 |
 | Databricks | DBRX Instruct | 1 |
+| Deep Cogito | Cogito 671B v2.1 | 1 |
+| Dots Studio | Dots3 Note Preview | 1 |
+| Microsoft AI | MAI-Thinking-1 | 1 |
+| Perceptron | Perceptron Mk1 | 1 |
+| Prime Intellect | INTELLECT-3 | 1 |
+| ServiceNow | Apriel 1.6 15B Thinker | 1 |
+| SK Telecom | A.X K2 | 1 |
 | Snowflake | Arctic Instruct | 1 |
-| Tencent | Hunyuan A13B Instruct | 1 |
 
 Every row carries publisher-owned presentation metadata, distribution source
 and license where applicable, capabilities, modalities, context when verified,
 reasoning behavior where the Router has a matching projection, lifecycle, and
-offering evidence. Evaluation coverage is independent: a model remains visible
+provider mapping evidence. Evaluation coverage is independent: a model remains visible
 when no comparable public score has been located.
+
+The population audit applies three inclusion rules. A separately selectable
+model or checkpoint gets one canonical card; a dated provider snapshot, batch
+SKU, free route, contributor tier, quantization, or alias stays on the provider
+mapping or evaluation subject. A physical card must have a primary publisher
+source and at least one honest provider/runtime path; fork-only and nightly
+runtime support is marked `experimental` with the exact restriction. This
+text-generation catalog excludes image-, video-, audio-, embedding-, rerank-,
+and moderation-only models even when the same vendor exposes them. The
+2026-09-05 audit covered current publisher, provider, open-runtime, and public
+release inventories, then verified model facts against publisher API
+documentation, model cards, or technical reports. Discovery lists identify
+candidates and aliases; they are not copied as benchmark evidence.
+
+The final gap pass added Apodex 1.1 and Mini, Apertus 1.5, Tiny Aya, the Sonar
+family, Qwen3 Max, Grok Build, Hermes 3/4, DeepHermes 3, LFM2.5 VL,
+Nanbeige 4.1/4.2, DiffusionGemma, and Agnes 2.5 Pro Beta. It also reconfirmed
+the already cataloged Tencent Hy3/Hy4, Xiaomi MiMo, Thinking Machines Inkling,
+Meta Llama/Muse, ByteDance Seed, Microsoft Phi, and Microsoft AI MAI families.
+The remaining high-signal discoveries are intentionally admission-gated rather
+than silently represented as supported:
+
+| Discovered item | Why it is not a built-in physical card in this change | Admission condition |
+| --- | --- | --- |
+| GPT-6 Astra and Astra Pro | Reserved from this baseline by design | Separate Day-0 example PR with protocol, provider, reasoning, evaluation, docs, and E2E changes |
+| Trillion Tri-21B-Think | Its publisher card says vLLM/SGLang support is pending and exposes no hosted inference endpoint | A verifiable hosted API or an upstream runtime release plus a working fixture |
+| China Mobile JT-family release-list entries | No stable first-party model card plus callable API/runtime contract was located | Publisher documentation that fixes model identity, limits, and an executable path |
+| Product-only or private-preview names such as MAI-Code-1.1-Flash | A product announcement or benchmark label is not a generally selectable model endpoint | A stable public provider model ID or released weights supported by a runtime |
+| Nova 2 preview names beyond the documented Bedrock IDs | Third-party aliases do not establish an Amazon model contract | A generally available Bedrock inference-profile or model ID in first-party documentation |
+| Provider batch/free/dated aliases, quantizations, and router meta-models | They are delivery variants of another physical model, not distinct intrinsic model identities | Keep them as provider mappings or evaluation-subject metadata unless the publisher defines a distinct model |
+
+This boundary is deliberately stricter than inventory matching: a missing card
+is visible as an audited gap, while a false runtime or provider claim would
+mislead both users and future Day-0 contributors.
 
 ## Goals
 
 1. Define one repository-owned catalog for protocols, providers, models,
-   provider offerings, reasoning behavior, presentation metadata, benchmarks,
+   provider-owned model mappings, reasoning behavior, presentation metadata, benchmarks,
    and composite indices.
 2. Generate Router, CLI, Dashboard, website, schema, and documentation views
    from the same validated source.
@@ -142,9 +210,10 @@ when no comparable public score has been located.
 - **Facts before defaults.** Protocol capabilities, model capabilities, and
   benchmark measurements remain distinct facts; defaults only select among
   them.
-- **Intrinsic model versus provider offering.** Context, modalities, and model
-  behavior belong to a model card. Endpoint paths, provider model IDs,
-  availability, and prices belong to an offering.
+- **Intrinsic model versus provider-owned model mapping.** Context,
+  modalities, and model behavior belong to a model card. Endpoint paths,
+  provider-native model IDs, availability, and prices belong to that
+  provider's `models[]` entry.
 - **Explicit identity.** Canonical catalog identity never depends on a
   request-facing alias.
 - **Evidence is append-only by identity.** A new evaluation does not silently
@@ -162,7 +231,7 @@ when no comparable public score has been located.
 
 ```mermaid
 flowchart LR
-  Builtins["Repository catalog\nprotocols · providers · models · offerings\nbehaviors · benchmarks · indices"]
+  Builtins["Repository catalog\nprotocols · providers · models · provider mappings\nbehaviors · benchmarks · indices"]
   User["User config\nprovider bindings · model aliases\noptional cards and evaluations"]
   Compiler["Generator + materializer\nvalidate · merge · bind · compute"]
   Registry["Effective Registry\nimmutable typed snapshot + provenance"]
@@ -191,9 +260,8 @@ none owns an independent provider or model inventory.
 | Resource | Owns | Does not own |
 | --- | --- | --- |
 | `ProtocolDefinition` | Versioned wire-format identity, declared operations and paths, and protocol capabilities | Provider credentials, model context limits, prices |
-| `ProviderDefinition` | Canonical provider identity, auth, supported protocol-operation subset, path and non-secret header defaults, reasoning transport, support tier, conformance, display name, and logo metadata | Credentials, request-facing aliases, model intelligence |
+| `ProviderDefinition` | Canonical provider identity, auth, supported protocol-operation subset, path and non-secret header defaults, reasoning transport, support tier, conformance, display name, logo metadata, and its `models[]` native-ID/protocol/restriction/pricing mappings | Credentials, request-facing aliases, model intelligence |
 | `ModelCard` | Canonical model identity, publisher/presentation/distribution, family/revision, release and knowledge dates, input/output limits, modalities, capabilities, reasoning behavior reference, lifecycle | Endpoint URL, credentials, provider price |
-| `OfferingDefinition` | A provider/model pairing, provider model ID, supported protocols, parameter restrictions, lifecycle, verification, and optional dated pricing | Provider-independent model facts, endpoint credentials, routing alias |
 | `ReasoningFamilyDefinition` | Request projection type/parameter plus effort vocabulary and default | Operator credentials, quality ranking |
 | `BenchmarkDefinition` | Benchmark/version identity, domain, source, and metric direction/range/units | A model's result |
 | `EvaluationRecord` | Exact model subject, raw measurements, optional measurement date, status, source/artifact, provenance, verification, and redistribution permission | Aggregation policy |
@@ -207,8 +275,8 @@ none owns an independent provider or model inventory.
 - Protocol, benchmark, and index identities include a version. Composite index
   versions use full semantic-version strings, for example
   `vllm-sr/intelligence@1.0.0`.
-- An offering is keyed by `(provider, model, offering revision)` rather than by
-  a display label.
+- A provider-owned model mapping is addressed by the Provider ID plus canonical
+  Model Card identity and provider-native model ID, never by a display label.
 - A model revision, quantization, runtime, and reasoning effort are part of an
   evaluation subject. Results from materially different subjects are not
   silently pooled.
@@ -252,8 +320,8 @@ routing:
         - model: frontier
 ```
 
-The `vendor-cloud` and `vendor/reasoner-v1` values are illustrative, not support
-claims. The identities are deliberately separate:
+The `vendor-cloud` and `vendor/reasoner-v1` values are illustrative, not
+support claims. The identities are deliberately separate:
 
 - `providers.models[].name` is the request-facing alias used by decisions;
 - `providers.models[].catalog` is the canonical built-in Model Card identity;
@@ -429,16 +497,18 @@ operation. Each provider therefore declares an explicit, fully qualified
 `supported_operations` subset such as
 `openai/chat-completions@1#create`. Provider-specific paths are legal only for
 declared operations. A provider definition also selects an auth strategy and
-reusable request semantics such as reasoning transport. An offering narrows the
-protocols a particular model supports and records model-specific parameter
-restrictions.
+reusable request semantics such as reasoning transport. A provider-owned
+`models[]` entry narrows the protocols a particular model supports and records
+model-specific parameter restrictions.
 Code adapters remain necessary only
 for true semantic differences such as cloud signing, deployment-scoped URL
 construction, event translation, or non-compatible error behavior.
 
 `reasoning_transport` is internal catalog data, not user YAML. Its reusable
-modes are `chat_template_kwargs`, `top_level_effort`, `thinking_object`, and
-`deepseek_thinking`. The generic `thinking_object` mode projects a model's
+modes are `chat_template_kwargs`, `top_level_effort`, `top_level_boolean`,
+`reasoning_object`, `thinking_object`, and `deepseek_thinking`.
+`reasoning_object` projects an effort into the OpenRouter-style
+`reasoning.effort` object. The generic `thinking_object` mode projects a model's
 reasoning switch into `thinking.type`; `deepseek_thinking` adds the provider's
 effort field to that shape. Runtime dispatch selects these modes from the
 Provider ID; it never infers provider behavior from an endpoint hostname.
@@ -447,7 +517,7 @@ This separates three questions that are currently conflated:
 
 1. Can the Router decode and encode this protocol?
 2. Can the provider transport that protocol correctly?
-3. Does this model offering support this operation and parameter set?
+3. Does this provider mapping support this model, operation, and parameter set?
 
 ## Replacing provider glue
 
@@ -485,7 +555,7 @@ The same cut removes these steady-state duplicates:
 The compiler performs the following deterministic stages:
 
 1. The build generator loads repository-owned protocol, provider, model,
-   offering, reasoning, benchmark, evaluation, and index resources.
+   provider mapping, reasoning, benchmark, evaluation, and index resources.
 2. It validates JSON Schema plus canonical IDs, versions, required references,
    uniqueness, URL safety, index weights, normalization parameters, and cycles.
    Virtual-model pool recommendations are deliberately not resolved because
@@ -499,7 +569,7 @@ The compiler performs the following deterministic stages:
 5. The materializer applies presence-aware field overlays while retaining
    `builtin`/`operator` field provenance.
 6. It joins every alias to one card and each backend binding to one Provider ID,
-   protocol, optional offering, auth strategy, and reasoning behavior.
+   protocol, optional provider mapping, auth strategy, and reasoning behavior.
 7. It validates user measurement ranges and computes repository-defined indices
    whose missing-data policy is satisfied.
 8. It publishes one immutable `EffectiveRegistry` to Router runtime consumers;
@@ -534,18 +604,68 @@ a new benchmark version.
 
 ### Evaluation records
 
-An evaluation record freezes the canonical model, raw versioned metric IDs and
-values, status, an optional measurement date, and evidence. Its typed subject can record
-model revision, offering, runtime/version, quantization, precision, tensor
-parallelism, protocol, reasoning effort, and additional material parameters.
-Evidence records provenance, verification, optional source/artifact, and an
-explicit redistribution decision.
+An evaluation record freezes the canonical model, explicit
+`reasoning_effort`, raw versioned metric IDs and values, status, an optional
+measurement date, and evidence. Its typed subject can additionally record
+model revision, provider mapping, runtime/version, quantization, precision,
+tensor parallelism, protocol, tool policy, harness, and other material
+parameters. Evidence records provenance, verification, optional
+source/artifact, and an explicit redistribution decision.
 
 Provenance is one of `vendor_claimed`, `third_party`, `vllm_sr_reproduced`, or
 `operator`. Verification is separately recorded as `claimed`, `imported`, or
 `reproduced`. Conflicting available values for the same model and metric are
 rejected rather than resolved through a hidden preference rule. Source record
 IDs remain attached to computed results.
+
+The generator materializes a complete five-slot coverage matrix for every
+Model Card and every selectable reasoning effort. Each slot is either linked
+to one available evaluation or explicitly `missing`; absence is never encoded
+as zero. An effort-specific result is used only for that exact effort. A
+vendor's `high` score, for example, cannot populate `medium`, `xhigh`, or
+`max`. A published result whose runtime setting is not known remains in a
+separate `published` evidence row rather than being guessed into a selectable
+row. The same contract applies to virtual models, which can receive scores from
+executions of their packaged recipes.
+
+The initial population audit makes both coverage and gaps visible. These are
+representative default-five rows in the generated snapshot; additional
+published benchmarks remain available as detail records without being forced
+into this index:
+
+| Model subject | Reasoning effort | Available default components | Explicitly missing |
+| --- | --- | ---: | ---: |
+| K-EXAONE 2.0 750B A37B | `enabled` | 5 | 0 |
+| Hunyuan Hy3 | `high` | 4 | 1 |
+| MiMo V2 Flash | `enabled` | 4 | 1 |
+| Inkling | `xhigh` | 4 | 1 |
+| Qwen3.8 27B | `xhigh` | 3 | 2 |
+| Hunyuan Hy4 Preview | `high` | 3 | 2 |
+| MAI-Thinking-1 | `published` | 3 | 2 |
+| Agnes 2.5 Pro Alpha | `published` | 3 | 2 |
+| HyperNova 60B 2605 | `high` | 3 | 2 |
+| DiffusionGemma 26B A4B IT | `published` | 3 | 2 |
+| Nanbeige 4.2 3B | `enabled` | 3 | 2 |
+| Apodex 1.1 | `published` | 2 | 3 |
+| Nanbeige 4.1 3B | `default` | 2 | 3 |
+| GLM-5.3-Flash | `max` | 2 | 3 |
+| Tiny Aya Global | `published` | 1 | 4 |
+
+For example, the available Qwen3.8 27B measurements belong only to `xhigh`;
+the generated `none`, `low`, and `medium` rows each retain five missing slots.
+GLM-5.3-Flash's published HLE result uses tools and therefore stays visible as
+an evaluation record but does not fill the default index's `no-tools` HLE
+component. Nanbeige 4.2's published results apply only to thinking-enabled
+generation, so its `disabled` row remains five-for-five missing. This is
+intentional comparability, not an ingestion omission.
+
+“Five benchmarks per model” is therefore a schema and coverage guarantee, not
+a promise to fabricate five numbers: every physical or virtual model and each
+of its independently selectable reasoning efforts has exactly one slot for
+each default benchmark. A slot is `available` only when the repository can
+redistribute a source-backed value for that exact subject; otherwise it is
+`missing`, `failed`, `not_applicable`, or `withheld`. The generated catalog
+currently contains 4,850 such slots, of which 284 have lawful measurements.
 
 ### Index definitions
 
@@ -679,7 +799,7 @@ evidence and does not enter the public default leaderboard.
 The Dashboard gains a dedicated **Model Hub** alongside the existing model
 configuration page. Model Hub and the public website share the generated
 catalog snapshot and information hierarchy: publisher logo, model identity,
-distribution, lifecycle, capabilities, context, offerings, benchmark columns,
+distribution, lifecycle, capabilities, context, provider mappings, benchmark columns,
 headline score, coverage, and source-backed details. The Dashboard remains the
 interactive surface; the website is a static build projection, not a second
 dataset.
@@ -694,10 +814,10 @@ The Add Model workflow keeps provider cards and logos. Its data source changes:
    The **List models** action appears only when the provider explicitly declares
    the default protocol's `list_models` operation; manual model-ID entry remains
    available for every provider.
-2. Selecting a provider filters compatible model offerings and shows whether
+2. Selecting a provider filters its compatible model mappings and shows whether
    support is native, compatible, runtime-hosted, experimental, or deprecated.
 3. Selecting a built-in model saves `providers.models[].catalog`, pre-fills
-   provider model ID when an offering supplies one, and does not emit generated
+   provider model ID when a provider mapping supplies one, and does not emit generated
    Model Card defaults.
 4. Selecting Custom omits `catalog` and exposes the existing handwritten
    `routing.modelCards` fields, including optional evaluations and custom
@@ -730,7 +850,7 @@ as the reliable fallback when a packaged or approved remote logo cannot load.
 ### Built-in model table
 
 Columns include canonical model name, kind, context limit, capabilities,
-reasoning family, offering count, default-index score, and coverage. Virtual
+reasoning family, provider mapping count, default-index score, and coverage. Virtual
 and physical models are searchable, filterable, and visually distinct.
 
 ### Leaderboards
@@ -760,12 +880,13 @@ A model-only support change follows one bounded sequence:
    restrictions, pricing date, and lifecycle.
 2. **Model card:** add or update one canonical card. Do not copy endpoint,
    price, or provider-only facts into it.
-3. **Offerings:** add every verified provider/model offering with provider model
-   ID, protocols, parameter constraints, pricing when known, and evidence.
+3. **Provider mapping:** add each verified native model ID, protocol set,
+   parameter constraint, optional pricing, and evidence under the provider's
+   `models[]`.
 4. **Reasoning behavior:** reference an existing built-in family or add a new
    family with per-protocol request-shaping fixtures. Users do not redeclare it.
 5. **Adapters:** add code only for a true wire-semantic difference. Compatible
-   offerings remain data-only.
+   provider mappings remain data-only.
 6. **Conformance fixtures:** cover accepted and rejected parameters, tools,
    streaming, usage, error translation, model-ID projection, and every claimed
    protocol operation.
@@ -793,7 +914,7 @@ Provider work is a superset of model work:
    adapter only when compatibility is insufficient;
 3. add auth, URL construction, error, streaming, and protocol conformance
    fixtures;
-4. add verified model offerings;
+4. add verified provider-owned model mappings;
 5. regenerate Dashboard, website, CLI, and runtime registry projections;
 6. verify that provider removal or deprecation is visible and fails safely.
 
@@ -817,7 +938,7 @@ The generated surfaces use independent fields instead of one overloaded
 | Evaluation status | `available`, `missing`, `failed`, `not_applicable`, `withheld` |
 
 “Built-in model” means the release contains a validated `ModelCard` and at least
-one offering or packaged virtual-model binding. A string mentioned in a
+one provider mapping or packaged virtual-model binding. A string mentioned in a
 recommended pool is not built-in until it satisfies that contract.
 
 ## Configuration migration
@@ -853,10 +974,10 @@ config/catalog/
   resources/
     models/single/  # deployable proprietary and open-weight Model Cards
     models/virtual/ # recipe-backed logical Model Cards
-    offerings/      # provider/model bindings
     evaluations/single/  # source-backed physical-model results
     evaluations/virtual/ # recipe evaluation results
-    providers.yaml, protocols.yaml, reasoning-families.yaml
+    providers/         # one provider plus its models[] mappings per file
+    protocols.yaml, reasoning-families.yaml
     benchmarks.yaml, indices.yaml
 
 src/semantic-router/pkg/catalog/
@@ -933,7 +1054,7 @@ separate follow-up adds GPT-6 Astra as the focused, reviewable Day-0 example.
 - `deployment` and `routing_overrides` are not added.
 - Built-in reasoning families are automatic; custom runtimes can select or
   define reasoning under their own model binding.
-- Backend API specifications are protocol definitions plus offering
+- Backend API specifications are protocol definitions plus provider mapping
   constraints, not provider-form conditionals.
 - The Dashboard Add Model experience and logos remain, backed by generated
   catalog data.

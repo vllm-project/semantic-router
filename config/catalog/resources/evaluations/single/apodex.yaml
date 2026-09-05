@@ -1,0 +1,38 @@
+- id: apodex/apodex-1.1-report-hle-agent-team@1.0.0
+  model: apodex/apodex-1.1
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: with-tools
+  reasoning_effort: published
+  subject: &apodex-agent-team-subject
+    variant: Apodex 1.1
+    harness: Agent Team
+    tool_policy: with-tools
+    source_kind: official_technical_report
+  metrics:
+    accuracy: 0.561
+  status: available
+  evidence: &apodex-report-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/abs/2608.23283
+    redistributable: true
+- id: apodex/apodex-1.1-report-swe-bench-agent-team@1.0.0
+  model: apodex/apodex-1.1
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: published
+  subject: *apodex-agent-team-subject
+  metrics:
+    resolved: 0.777
+  status: available
+  evidence: *apodex-report-evidence
+- id: apodex/apodex-1.1-report-terminal-bench-agent-team@1.0.0
+  model: apodex/apodex-1.1
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: published
+  subject: *apodex-agent-team-subject
+  metrics:
+    resolved: 0.708
+  status: available
+  evidence: *apodex-report-evidence

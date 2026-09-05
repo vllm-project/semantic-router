@@ -3,6 +3,7 @@ import Layout from '@theme/Layout'
 import Ai2 from '@lobehub/icons/es/Ai2/components/Mono'
 import Ai21 from '@lobehub/icons/es/Ai21/components/Mono'
 import Bedrock from '@lobehub/icons/es/Bedrock/components/Mono'
+import ByteDance from '@lobehub/icons/es/ByteDance/components/Mono'
 import Claude from '@lobehub/icons/es/Claude/components/Mono'
 import Cohere from '@lobehub/icons/es/Cohere/components/Mono'
 import DeepSeek from '@lobehub/icons/es/DeepSeek/components/Mono'
@@ -11,6 +12,7 @@ import Grok from '@lobehub/icons/es/Grok/components/Mono'
 import IBM from '@lobehub/icons/es/IBM/components/Mono'
 import InternLM from '@lobehub/icons/es/InternLM/components/Mono'
 import Kimi from '@lobehub/icons/es/Kimi/components/Mono'
+import LG from '@lobehub/icons/es/LG/components/Mono'
 import Meta from '@lobehub/icons/es/Meta/components/Mono'
 import Microsoft from '@lobehub/icons/es/Microsoft/components/Mono'
 import Minimax from '@lobehub/icons/es/Minimax/components/Mono'
@@ -21,6 +23,8 @@ import Qwen from '@lobehub/icons/es/Qwen/components/Mono'
 import Snowflake from '@lobehub/icons/es/Snowflake/components/Mono'
 import Stepfun from '@lobehub/icons/es/Stepfun/components/Mono'
 import TII from '@lobehub/icons/es/TII/components/Mono'
+import Tencent from '@lobehub/icons/es/Tencent/components/Mono'
+import Upstage from '@lobehub/icons/es/Upstage/components/Mono'
 import XiaomiMiMo from '@lobehub/icons/es/XiaomiMiMo/components/Mono'
 import Yi from '@lobehub/icons/es/Yi/components/Mono'
 import Zhipu from '@lobehub/icons/es/Zhipu/components/Mono'
@@ -54,11 +58,21 @@ interface CatalogProvider {
   reasoning_transport?:
     | 'chat_template_kwargs'
     | 'top_level_effort'
+    | 'top_level_boolean'
+    | 'reasoning_object'
     | 'thinking_object'
     | 'deepseek_thinking'
   auth: { strategy: string }
   presentation: { logo: string, monogram: string, monochrome: boolean }
   conformance: { status: string, verified_at?: string }
+  models?: CatalogModelBinding[]
+}
+
+interface CatalogModelBinding {
+  catalog: string
+  id: string
+  protocols: string[]
+  lifecycle: string
 }
 
 interface CatalogModel {
@@ -80,16 +94,7 @@ interface CatalogModel {
   capabilities: string[]
   modalities: { input: string[], output: string[] }
   reasoning_family?: string
-  protocols: string[]
   verification: { status: string, verified_at: string, source?: string }
-}
-
-interface CatalogOffering {
-  id: string
-  provider: string
-  model: string
-  provider_model_id: string
-  lifecycle: string
 }
 
 interface CatalogEvaluation {
@@ -110,17 +115,26 @@ interface CatalogIndex {
   aggregation: string
   scale: [number, number]
   missing: { policy: string, minimum?: number }
-  components: Array<{ metric?: string, index?: string, weight: number }>
+  components: Array<{
+    benchmark?: string
+    metric?: string
+    benchmark_profile?: string
+    index?: string
+    weight: number
+  }>
 }
 
 interface CatalogIndexResult {
   model: string
+  reasoning_effort: string
   index: string
   status: string
   score: number | null
   coverage: number
   components: Array<{
+    benchmark?: string
     metric?: string
+    benchmark_profile?: string
     index?: string
     status: string
     value?: number | null
@@ -132,8 +146,8 @@ interface CatalogSnapshot {
   catalogs: CatalogHeader[]
   protocols: CatalogProtocol[]
   providers: CatalogProvider[]
+  reasoning_families: Array<{ id: string, levels: string[], default: string }>
   models: CatalogModel[]
-  offerings: CatalogOffering[]
   benchmarks: Array<{ id: string, display_name: string, domain: string }>
   evaluations: CatalogEvaluation[]
   indices: CatalogIndex[]
@@ -164,11 +178,15 @@ const packageIcons: Record<string, typeof OpenAI> = {
   ai2: Ai2,
   ai21: Ai21,
   anthropic: Claude,
+  bytedance: ByteDance,
   cohere: Cohere,
   deepseek: DeepSeek,
   gemini: Gemini,
   internlm: InternLM,
+  exaone: LG,
+  lg: LG,
   meta: Meta,
+  microsoft: Microsoft,
   minimax: Minimax,
   mistral: Mistral,
   moonshot: Kimi,
@@ -177,8 +195,11 @@ const packageIcons: Record<string, typeof OpenAI> = {
   qwen: Qwen,
   snowflake: Snowflake,
   stepfun: Stepfun,
+  tencent: Tencent,
   tii: TII,
+  upstage: Upstage,
   xai: Grok,
+  xiaomimimo: XiaomiMiMo,
   yi: Yi,
   zai: Zhipu,
 }
@@ -189,13 +210,16 @@ const publisherIcons: Record<string, typeof OpenAI> = {
   'Alibaba Cloud': Qwen,
   'Amazon': Bedrock,
   'Anthropic': Claude,
+  'ByteDance Seed': ByteDance,
   'Cohere': Cohere,
   'DeepSeek': DeepSeek,
   'Google': Gemini,
   'IBM': IBM,
+  'LG AI Research': LG,
   'Shanghai AI Laboratory': InternLM,
   'Meta': Meta,
   'Microsoft': Microsoft,
+  'Microsoft AI': Microsoft,
   'MiniMax': Minimax,
   'Mistral AI': Mistral,
   'Moonshot AI': Kimi,
@@ -204,6 +228,8 @@ const publisherIcons: Record<string, typeof OpenAI> = {
   'StepFun': Stepfun,
   'Snowflake': Snowflake,
   'Technology Innovation Institute': TII,
+  'Tencent': Tencent,
+  'Upstage': Upstage,
   'Xiaomi': XiaomiMiMo,
   '01.AI': Yi,
   'xAI': Grok,
@@ -225,12 +251,12 @@ const scoreStatus = (result?: CatalogIndexResult) => {
 }
 
 const benchmarkName = (
-  metric: string,
+  benchmarkID: string | undefined,
+  metricID: string,
   benchmarks: CatalogSnapshot['benchmarks'],
 ) => {
-  const [benchmarkID, metricID] = metric.split('#', 2)
   const benchmark = benchmarks.find(candidate => candidate.id === benchmarkID)
-  return benchmark ? `${benchmark.display_name} · ${metricID}` : metric
+  return benchmark ? `${benchmark.display_name} · ${metricID}` : metricID
 }
 
 const benchmarkValue = (value?: number | null) => (
@@ -276,32 +302,56 @@ export default function ModelsPage() {
   >('supported')
   const [modelSort, setModelSort] = useState<'intelligence' | 'name'>('intelligence')
   const [selectedModelID, setSelectedModelID] = useState<string | null>(null)
+  const [selectedEffort, setSelectedEffort] = useState<string | null>(null)
 
   const protocols = useMemo(
     () => new Map(catalog.protocols.map(protocol => [protocol.id, protocol])),
     [],
   )
-  const offeringsByModel = useMemo(() => {
-    const offerings = new Map<string, CatalogOffering[]>()
-    for (const offering of catalog.offerings) {
-      offerings.set(offering.model, [...(offerings.get(offering.model) ?? []), offering])
+  const providersByModel = useMemo(() => {
+    const bindings = new Map<string, Array<{ provider: CatalogProvider, model: CatalogModelBinding }>>()
+    for (const provider of catalog.providers) {
+      for (const model of provider.models ?? []) {
+        bindings.set(model.catalog, [
+          ...(bindings.get(model.catalog) ?? []),
+          { provider, model },
+        ])
+      }
     }
-    return offerings
+    return bindings
   }, [])
   const defaultIndexID = catalog.catalogs.find(header => header.channel === 'latest')
     ?.default_intelligence_index
     ?? catalog.catalogs[0]?.default_intelligence_index
   const defaultIndex = catalog.indices.find(index => index.id === defaultIndexID)
-  const results = useMemo(
-    () => new Map(catalog.index_results.map(result => [`${result.index}:${result.model}`, result])),
-    [],
-  )
+  const resultsByModel = useMemo(() => {
+    const groups = new Map<string, CatalogIndexResult[]>()
+    for (const result of catalog.index_results) {
+      const key = `${result.index}:${result.model}`
+      groups.set(key, [...(groups.get(key) ?? []), result])
+    }
+    return groups
+  }, [])
+  const preferredResults = useMemo(() => {
+    const families = new Map(catalog.reasoning_families.map(family => [family.id, family]))
+    return new Map(catalog.models.map((model) => {
+      const key = `${defaultIndexID}:${model.id}`
+      const candidates = resultsByModel.get(key) ?? []
+      const defaultEffort = model.reasoning_family
+        ? families.get(model.reasoning_family)?.default
+        : 'default'
+      const preferred = candidates.find(result => (
+        result.reasoning_effort === defaultEffort && result.status === 'available'
+      )) ?? candidates
+        .filter(result => result.status === 'available')
+        .sort((left, right) => right.coverage - left.coverage)[0]
+        ?? candidates.find(result => result.reasoning_effort === defaultEffort)
+        ?? candidates[0]
+      return [key, preferred] as const
+    }))
+  }, [defaultIndexID, resultsByModel])
   const evaluations = useMemo(
     () => new Map(catalog.evaluations.map(evaluation => [evaluation.id, evaluation])),
-    [],
-  )
-  const providerByID = useMemo(
-    () => new Map(catalog.providers.map(provider => [provider.id, provider])),
     [],
   )
   const publishers = useMemo(
@@ -340,8 +390,8 @@ export default function ModelsPage() {
       })
       .sort((left, right) => {
         if (modelSort === 'name') return left.display_name.localeCompare(right.display_name)
-        const leftScore = results.get(`${defaultIndex?.id}:${left.id}`)?.score
-        const rightScore = results.get(`${defaultIndex?.id}:${right.id}`)?.score
+        const leftScore = preferredResults.get(`${defaultIndex?.id}:${left.id}`)?.score
+        const rightScore = preferredResults.get(`${defaultIndex?.id}:${right.id}`)?.score
         if (leftScore !== null && leftScore !== undefined && rightScore !== null && rightScore !== undefined) {
           return rightScore - leftScore
         }
@@ -357,21 +407,27 @@ export default function ModelsPage() {
     modelPublisher,
     modelSearch,
     modelSort,
-    results,
+    preferredResults,
   ])
   const selectedModel = models.find(model => model.id === selectedModelID) ?? models[0]
-  const selectedResult = selectedModel && defaultIndex
-    ? results.get(`${defaultIndex.id}:${selectedModel.id}`)
+  const selectedResults = selectedModel && defaultIndex
+    ? resultsByModel.get(`${defaultIndex.id}:${selectedModel.id}`) ?? []
+    : []
+  const preferredSelectedResult = selectedModel && defaultIndex
+    ? preferredResults.get(`${defaultIndex.id}:${selectedModel.id}`)
     : undefined
-  const selectedOfferings = selectedModel
-    ? (offeringsByModel.get(selectedModel.id) ?? [])
+  const selectedResult = selectedResults.find(result => (
+    result.reasoning_effort === selectedEffort
+  )) ?? preferredSelectedResult
+  const selectedProviders = selectedModel
+    ? (providersByModel.get(selectedModel.id) ?? [])
     : []
   const physicalModels = catalog.models.filter(model => model.kind === 'physical').length
   const virtualModels = catalog.models.length - physicalModels
   const scoredModels = defaultIndex
-    ? catalog.index_results.filter(result => (
+    ? new Set(catalog.index_results.filter(result => (
       result.index === defaultIndex.id && result.status === 'available'
-    )).length
+    )).map(result => result.model)).size
     : 0
 
   return (
@@ -483,7 +539,7 @@ export default function ModelsPage() {
               <div className={styles.modelList} role="listbox" aria-label="Model catalog results">
                 {models.map((model) => {
                   const result = defaultIndex
-                    ? results.get(`${defaultIndex.id}:${model.id}`)
+                    ? preferredResults.get(`${defaultIndex.id}:${model.id}`)
                     : undefined
                   const active = model.id === selectedModel?.id
                   return (
@@ -493,7 +549,10 @@ export default function ModelsPage() {
                       role="option"
                       aria-selected={active}
                       className={`${styles.modelRow} ${active ? styles.modelRowActive : ''}`}
-                      onClick={() => setSelectedModelID(model.id)}
+                      onClick={() => {
+                        setSelectedModelID(model.id)
+                        setSelectedEffort(null)
+                      }}
                     >
                       <span className={styles.modelIdentity}>
                         <CatalogMark presentation={model.presentation} publisher={model.publisher} />
@@ -550,17 +609,36 @@ export default function ModelsPage() {
                       </div>
 
                       <DetailSection title="Intelligence evidence" value={scoreStatus(selectedResult)}>
+                        {selectedResults.length > 1
+                          ? (
+                              <label className={styles.effortSelect}>
+                                <span>Reasoning effort</span>
+                                <select
+                                  value={selectedResult?.reasoning_effort ?? ''}
+                                  onChange={event => setSelectedEffort(event.target.value)}
+                                >
+                                  {selectedResults.map(result => (
+                                    <option key={result.reasoning_effort} value={result.reasoning_effort}>
+                                      {readable(result.reasoning_effort)}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                            )
+                          : null}
                         <p>
                           {selectedResult?.score != null
-                            ? `${Math.round(selectedResult.coverage * 100)}% of the default index is backed by published evidence.`
-                            : 'No composite is shown until three of the five default benchmarks are available.'}
+                            ? `${Math.round(selectedResult.coverage * 100)}% of the default index is backed by published evidence for this effort.`
+                            : 'No composite is shown until three of the five default benchmarks are available for this effort.'}
                         </p>
                         <div className={styles.benchmarkGrid}>
                           {selectedResult?.components.map(component => (
-                            <div key={component.metric ?? component.index}>
+                            <div
+                              key={component.index ?? `${component.benchmark}#${component.metric}@${component.benchmark_profile}`}
+                            >
                               <span>
                                 {component.metric
-                                  ? benchmarkName(component.metric, catalog.benchmarks)
+                                  ? benchmarkName(component.benchmark, component.metric, catalog.benchmarks)
                                   : (component.index ?? 'Index component')}
                               </span>
                               <strong>{benchmarkValue(component.value)}</strong>
@@ -607,18 +685,16 @@ export default function ModelsPage() {
                       </DetailSection>
 
                       <DetailSection title="Available through">
-                        {selectedOfferings.length
+                        {selectedProviders.length
                           ? (
-                              <ul className={styles.offeringList}>
-                                {selectedOfferings.map(offering => (
-                                  <li key={offering.id}>
+                              <ul className={styles.providerList}>
+                                {selectedProviders.map(({ provider, model }) => (
+                                  <li key={`${provider.id}/${model.id}`}>
                                     <span>
-                                      <strong>
-                                        {providerByID.get(offering.provider)?.display_name ?? offering.provider}
-                                      </strong>
-                                      <code>{offering.provider_model_id}</code>
+                                      <strong>{provider.display_name}</strong>
+                                      <code>{model.id}</code>
                                     </span>
-                                    <small>{offering.lifecycle}</small>
+                                    <small>{model.lifecycle}</small>
                                   </li>
                                 ))}
                               </ul>
@@ -787,12 +863,19 @@ export default function ModelsPage() {
                 </div>
                 <div className={styles.componentGrid}>
                   {defaultIndex.components.map(component => (
-                    <div key={component.metric ?? component.index} className={styles.component}>
+                    <div
+                      key={component.index ?? `${component.benchmark}#${component.metric}@${component.benchmark_profile}`}
+                      className={styles.component}
+                    >
                       <span>
                         {Math.round(component.weight * 100)}
                         %
                       </span>
-                      <code>{component.metric ?? component.index}</code>
+                      <code>
+                        {component.benchmark
+                          ? `${component.benchmark}#${component.metric}`
+                          : component.index}
+                      </code>
                     </div>
                   ))}
                 </div>

@@ -1,103 +1,436 @@
+- id: moonshot/kimi-vl-a3b-instruct
+  display_name: Kimi-VL A3B Instruct
+  description: Efficient Moonshot vision-language MoE instruction model.
+  kind: physical
+  publisher: Moonshot AI
+  presentation:
+    logo: package:moonshot
+    monogram: K
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/moonshotai/Kimi-VL-A3B-Instruct
+    license: MIT
+  family: kimi-vl
+  parameter_size: 16B (3B active)
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - vision
+  - tools
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Moonshot AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/moonshotai/Kimi-VL-A3B-Instruct
+  tags:
+  - open_weights
+  - multimodal
+  - moe
+  - efficient
+- id: moonshot/kimi-vl-a3b-thinking
+  display_name: Kimi-VL A3B Thinking
+  description: Efficient Moonshot vision-language reasoning model.
+  kind: physical
+  publisher: Moonshot AI
+  presentation:
+    logo: package:moonshot
+    monogram: K
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/moonshotai/Kimi-VL-A3B-Thinking
+    license: MIT
+  family: kimi-vl
+  parameter_size: 16B (3B active)
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - reasoning
+  - vision
+  - tools
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Moonshot AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/moonshotai/Kimi-VL-A3B-Thinking
+  tags:
+  - open_weights
+  - multimodal
+  - reasoning
+  - moe
+- id: moonshot/kimi-linear-48b-a3b-instruct
+  display_name: Kimi Linear 48B A3B Instruct
+  description: Linear-attention Moonshot MoE instruction model for long context.
+  kind: physical
+  publisher: Moonshot AI
+  presentation:
+    logo: package:moonshot
+    monogram: K
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/moonshotai/Kimi-Linear-48B-A3B-Instruct
+    license: MIT
+  family: kimi-linear
+  parameter_size: 48B (3B active)
+  lifecycle: active
+  limits:
+    context_window_size: 1048576
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Moonshot AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/moonshotai/Kimi-Linear-48B-A3B-Instruct
+  tags:
+  - open_weights
+  - moe
+  - efficient
+  - long_context
+- id: moonshot/moonlight-16b-a3b-instruct
+  display_name: Moonlight 16B A3B Instruct
+  description: Compact Moonshot MoE instruction model for local deployment.
+  kind: physical
+  publisher: Moonshot AI
+  presentation:
+    logo: package:moonshot
+    monogram: K
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/moonshotai/Moonlight-16B-A3B-Instruct
+    license: MIT
+  family: moonlight
+  parameter_size: 16B (3B active)
+  lifecycle: active
+  limits:
+    context_window_size: 32768
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Moonshot AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/moonshotai/Moonlight-16B-A3B-Instruct
+  tags:
+  - open_weights
+  - moe
+  - efficient
+- id: moonshot/kimi-dev-72b
+  display_name: Kimi Dev 72B
+  description: Open-weight Moonshot coding model for software-engineering tasks.
+  kind: physical
+  publisher: Moonshot AI
+  presentation:
+    logo: package:moonshot
+    monogram: K
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/moonshotai/Kimi-Dev-72B
+    license: MIT
+  family: kimi-dev
+  parameter_size: 72B
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - coding
+  - tools
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Moonshot AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/moonshotai/Kimi-Dev-72B
+  tags:
+  - open_weights
+  - coding
+  - agentic
 - id: moonshot/kimi-k2-instruct
   display_name: Kimi K2 Instruct
   description: Original open-weight Kimi K2 MoE model optimized for coding and tool-using agents.
   kind: physical
   publisher: Moonshot AI
-  presentation: {logo: package:moonshot, monogram: K, monochrome: true}
-  distribution: {type: open_weights, source: https://huggingface.co/moonshotai/Kimi-K2-Instruct, license: Modified-MIT}
+  presentation:
+    logo: package:moonshot
+    monogram: K
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/moonshotai/Kimi-K2-Instruct
+    license: Modified-MIT
   family: kimi-k2
   parameter_size: 1T (32B active)
   released_at: 2025-07-11
   lifecycle: active
-  limits: {context_window_size: 131072}
-  capabilities: [chat, tools, structured_output, long_context]
-  modalities: {input: [text], output: [text]}
-  protocols: [openai/chat-completions@1, openai/responses@1]
-  verification: {authority: Moonshot AI, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/moonshotai/Kimi-K2-Instruct}
-  tags: [open_weights, moe, agentic]
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Moonshot AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/moonshotai/Kimi-K2-Instruct
+  tags:
+  - open_weights
+  - moe
+  - agentic
 - id: moonshot/kimi-k2-instruct-0905
   display_name: Kimi K2 Instruct 0905
   description: Open-weight Kimi K2 MoE model for agentic tool use and coding.
   kind: physical
   publisher: Moonshot AI
-  presentation: {logo: package:moonshot, monogram: K, monochrome: true}
-  distribution: {type: open_weights, source: https://huggingface.co/moonshotai/Kimi-K2-Instruct-0905, license: Modified-MIT}
+  presentation:
+    logo: package:moonshot
+    monogram: K
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/moonshotai/Kimi-K2-Instruct-0905
+    license: Modified-MIT
   family: kimi-k2
   parameter_size: 1T (32B active)
   lifecycle: active
-  limits: {context_window_size: 262144}
-  capabilities: [chat, tools, structured_output, long_context]
-  modalities: {input: [text], output: [text]}
-  protocols: [openai/chat-completions@1, openai/responses@1]
-  verification: {authority: Moonshot AI, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/moonshotai/Kimi-K2-Instruct-0905}
-  tags: [open_weights, moe, agentic]
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Moonshot AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/moonshotai/Kimi-K2-Instruct-0905
+  tags:
+  - open_weights
+  - moe
+  - agentic
 - id: moonshot/kimi-k2-thinking
   display_name: Kimi K2 Thinking
   description: Open-weight Kimi K2 reasoning MoE model for complex agentic tasks.
   kind: physical
   publisher: Moonshot AI
-  presentation: {logo: package:moonshot, monogram: K, monochrome: true}
-  distribution: {type: open_weights, source: https://huggingface.co/moonshotai/Kimi-K2-Thinking, license: Modified-MIT}
+  presentation:
+    logo: package:moonshot
+    monogram: K
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/moonshotai/Kimi-K2-Thinking
+    license: Modified-MIT
   family: kimi-k2
   parameter_size: 1T (32B active)
   lifecycle: active
-  limits: {context_window_size: 262144}
-  capabilities: [chat, reasoning, tools, structured_output, long_context]
-  modalities: {input: [text], output: [text]}
-  protocols: [openai/chat-completions@1, openai/responses@1]
-  verification: {authority: Moonshot AI, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/moonshotai/Kimi-K2-Thinking}
-  tags: [open_weights, reasoning, moe, agentic]
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Moonshot AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/moonshotai/Kimi-K2-Thinking
+  tags:
+  - open_weights
+  - reasoning
+  - moe
+  - agentic
 - id: moonshot/kimi-k2.5
   display_name: Kimi K2.5
   description: Open-weight native multimodal Kimi model for visual and software agents.
   kind: physical
   publisher: Moonshot AI
-  presentation: {logo: package:moonshot, monogram: K, monochrome: true}
-  distribution: {type: open_weights, source: https://huggingface.co/moonshotai/Kimi-K2.5, license: Modified-MIT}
+  presentation:
+    logo: package:moonshot
+    monogram: K
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/moonshotai/Kimi-K2.5
+    license: Modified-MIT
   family: kimi-k2
   parameter_size: 1T (32B active)
   lifecycle: active
-  capabilities: [chat, reasoning, tools, structured_output, vision, long_context]
-  modalities: {input: [text, image, video], output: [text]}
-  protocols: [openai/chat-completions@1, openai/responses@1]
-  verification: {authority: Moonshot AI, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/moonshotai/Kimi-K2.5}
-  tags: [open_weights, multimodal, moe, agentic]
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    output:
+    - text
+  verification:
+    authority: Moonshot AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/moonshotai/Kimi-K2.5
+  tags:
+  - open_weights
+  - multimodal
+  - moe
+  - agentic
 - id: moonshot/kimi-k2.6
   display_name: Kimi K2.6
   description: Open-weight multimodal Kimi model for reasoning and agentic workflows.
   kind: physical
   publisher: Moonshot AI
-  presentation: {logo: package:moonshot, monogram: K, monochrome: true}
-  distribution: {type: open_weights, source: https://huggingface.co/moonshotai/Kimi-K2.6, license: Modified-MIT}
+  presentation:
+    logo: package:moonshot
+    monogram: K
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/moonshotai/Kimi-K2.6
+    license: Modified-MIT
   family: kimi-k2
   parameter_size: 1T
   lifecycle: active
-  capabilities: [chat, reasoning, tools, structured_output, vision, long_context]
-  modalities: {input: [text, image, video], output: [text]}
-  protocols: [openai/chat-completions@1, openai/responses@1]
-  verification: {authority: Moonshot AI, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/moonshotai/Kimi-K2.6}
-  tags: [open_weights, multimodal, moe, agentic]
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    output:
+    - text
+  verification:
+    authority: Moonshot AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/moonshotai/Kimi-K2.6
+  tags:
+  - open_weights
+  - multimodal
+  - moe
+  - agentic
 - id: moonshot/kimi-k2.7-code
   display_name: Kimi K2.7 Code
   description: Open-weight Kimi coding model for long-horizon software agents.
   kind: physical
   publisher: Moonshot AI
-  presentation: {logo: package:moonshot, monogram: K, monochrome: true}
-  distribution: {type: open_weights, source: https://huggingface.co/moonshotai/Kimi-K2.7-Code, license: Modified-MIT}
+  presentation:
+    logo: package:moonshot
+    monogram: K
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/moonshotai/Kimi-K2.7-Code
+    license: Modified-MIT
   family: kimi-k2
   parameter_size: 1T
   lifecycle: active
-  capabilities: [chat, reasoning, tools, structured_output, vision, long_context]
-  modalities: {input: [text, image], output: [text]}
-  protocols: [openai/chat-completions@1, openai/responses@1]
-  verification: {authority: Moonshot AI, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/moonshotai/Kimi-K2.7-Code}
-  tags: [open_weights, coding, multimodal, agentic]
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Moonshot AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/moonshotai/Kimi-K2.7-Code
+  tags:
+  - open_weights
+  - coding
+  - multimodal
+  - agentic
 - id: moonshot/kimi-k3
   display_name: Kimi K3
   description: Moonshot AI native multimodal MoE model for long-context agents.
   kind: physical
   publisher: Moonshot AI
-  presentation: {logo: package:moonshot, monogram: K, monochrome: true}
+  presentation:
+    logo: package:moonshot
+    monogram: K
+    monochrome: true
   distribution:
     type: open_weights
     source: https://huggingface.co/moonshotai/Kimi-K3
@@ -105,13 +438,29 @@
   family: kimi-k3
   parameter_size: 2.8T (104B active)
   lifecycle: active
-  limits: {context_window_size: 1048576}
-  capabilities: [chat, reasoning, tools, structured_output, vision, long_context]
-  modalities: {input: [text, image, video], output: [text]}
-  protocols: [openai/chat-completions@1, openai/responses@1]
+  limits:
+    context_window_size: 1048576
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    output:
+    - text
   verification:
     authority: Moonshot AI
     status: claimed
     verified_at: 2026-09-05
     source: https://huggingface.co/moonshotai/Kimi-K3
-  tags: [open_weights, frontier, multimodal, moe]
+  tags:
+  - open_weights
+  - frontier
+  - multimodal
+  - moe

@@ -1,5 +1,8 @@
-- id: huggingface/smollm3-3b-thinking-model-card@1.0.0
+- id: huggingface/smollm3-3b-thinking-model-card-gpqa-diamond@1.0.0
   model: huggingface/smollm3-3b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: published
   subject:
     variant: SmolLM3 3B
     harness: LightEval
@@ -7,6 +10,10 @@
     thinking_mode: true
     source_kind: official_model_card
   metrics:
-    idavidrein/gpqa-diamond@1.0.0#accuracy: 0.417
+    accuracy: 0.417
   status: available
-  evidence: {provenance: vendor_claimed, verification: claimed, source: https://huggingface.co/HuggingFaceTB/SmolLM3-3B, redistributable: true}
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/HuggingFaceTB/SmolLM3-3B
+    redistributable: true

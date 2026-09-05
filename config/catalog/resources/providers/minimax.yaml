@@ -1,0 +1,69 @@
+id: minimax
+display_name: MiniMax
+description: MiniMax language models and reasoning.
+category: model_api
+support_tier: native
+default_base_url: https://api.minimax.io/v1
+protocols:
+- openai/chat-completions@1
+default_protocol: openai/chat-completions@1
+supported_operations:
+- openai/chat-completions@1#create
+auth:
+  strategy: bearer
+  header: Authorization
+  prefix: Bearer
+  injected_header: x-user-minimax-key
+presentation:
+  logo: package:minimax
+  monogram: M
+  monochrome: false
+conformance:
+  status: fixture_verified
+  verified_at: 2026-09-04
+models:
+- catalog: minimax/minimax-m2
+  id: MiniMax-M2
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://platform.minimax.io/docs/guides/models-intro
+- catalog: minimax/minimax-m2.1
+  id: MiniMax-M2.1
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://platform.minimax.io/docs/guides/models-intro
+- catalog: minimax/minimax-m2.5
+  id: MiniMax-M2.5
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://platform.minimax.io/docs/guides/models-intro
+- catalog: minimax/minimax-m2.7
+  id: MiniMax-M2.7
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://platform.minimax.io/docs/guides/models-intro
+- catalog: minimax/minimax-m3
+  id: MiniMax-M3
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://platform.minimax.io/docs/guides/models-intro

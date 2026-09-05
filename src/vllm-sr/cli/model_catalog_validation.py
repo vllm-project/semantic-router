@@ -58,9 +58,9 @@ _ROOT_KEYS = frozenset(
         "providers",
         "reasoning_families",
         "models",
-        "offerings",
         "benchmarks",
         "evaluations",
+        "evaluation_coverage",
         "indices",
         "index_results",
     }
@@ -82,7 +82,6 @@ _MODEL_KEYS = frozenset(
         "asset",
         "entrypoint",
         "recipe",
-        "protocols",
         "traits",
         "roles",
         "verification",

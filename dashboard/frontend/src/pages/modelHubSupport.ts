@@ -1,8 +1,9 @@
 import type {
   BuiltInModelCatalog,
   BuiltInModelMetadata,
+  CatalogModelBinding,
   CatalogIndexResult,
-  CatalogOffering,
+  CatalogProvider,
 } from '../types/modelCatalog'
 
 export type ModelHubKindFilter = 'all' | 'physical' | 'virtual'
@@ -26,8 +27,9 @@ export interface ModelHubFilters {
 
 export interface ModelHubRow {
   model: BuiltInModelMetadata
-  offerings: CatalogOffering[]
+  providers: Array<{ provider: CatalogProvider; model: CatalogModelBinding }>
   intelligence: CatalogIndexResult | null
+  intelligenceByEffort: CatalogIndexResult[]
 }
 
 export interface ModelHubStats {
@@ -43,15 +45,18 @@ const normalizedSearch = (value: string): string => value.trim().toLocaleLowerCa
 
 export function modelHubStats(catalog: BuiltInModelCatalog): ModelHubStats {
   const defaultIndex = catalog.catalogs[0]?.default_intelligence_index
+  const scoredModels = new Set(
+    catalog.index_results
+      .filter((result) => result.index === defaultIndex && result.status === 'available')
+      .map((result) => result.model),
+  )
   return {
     models: catalog.models.length,
     physicalModels: catalog.models.filter((model) => model.kind === 'physical').length,
     virtualModels: catalog.models.filter((model) => model.kind === 'virtual').length,
     providers: catalog.providers.length,
     publishers: new Set(catalog.models.map((model) => model.publisher)).size,
-    scoredModels: catalog.index_results.filter(
-      (result) => result.index === defaultIndex && result.status === 'available',
-    ).length,
+    scoredModels: scoredModels.size,
   }
 }
 
@@ -67,16 +72,19 @@ export function modelHubRows(
 ): ModelHubRow[] {
   const defaultIndex = catalog.catalogs[0]?.default_intelligence_index
   const scores = new Map(
-    catalog.index_results
-      .filter((result) => result.index === defaultIndex)
-      .map((result) => [result.model, result]),
+    catalog.models.map((model) => [model.id, modelIndexResults(catalog, model, defaultIndex)]),
   )
-  const offerings = new Map<string, CatalogOffering[]>()
-  catalog.offerings.forEach((offering) => {
-    const existing = offerings.get(offering.model) ?? []
-    existing.push(offering)
-    offerings.set(offering.model, existing)
-  })
+  const providers = new Map<
+    string,
+    Array<{ provider: CatalogProvider; model: CatalogModelBinding }>
+  >()
+  catalog.providers.forEach((provider) =>
+    (provider.models ?? []).forEach((model) => {
+      const existing = providers.get(model.catalog) ?? []
+      existing.push({ provider, model })
+      providers.set(model.catalog, existing)
+    }),
+  )
   const query = normalizedSearch(filters.query)
 
   const rows = catalog.models
@@ -108,13 +116,17 @@ export function modelHubRows(
         .toLocaleLowerCase()
       return haystack.includes(query)
     })
-    .map((model) => ({
-      model,
-      offerings: [...(offerings.get(model.id) ?? [])].sort((left, right) =>
-        left.provider.localeCompare(right.provider),
-      ),
-      intelligence: scores.get(model.id) ?? null,
-    }))
+    .map((model) => {
+      const intelligenceByEffort = scores.get(model.id) ?? []
+      return {
+        model,
+        providers: [...(providers.get(model.id) ?? [])].sort((left, right) =>
+          left.provider.display_name.localeCompare(right.provider.display_name),
+        ),
+        intelligence: preferredIndexResult(catalog, model, intelligenceByEffort),
+        intelligenceByEffort,
+      }
+    })
 
   return rows.sort((left, right) => {
     if (filters.sort === 'name') {
@@ -129,6 +141,47 @@ export function modelHubRows(
       left.model.display_name.localeCompare(right.model.display_name)
     )
   })
+}
+
+export function modelIndexResults(
+  catalog: BuiltInModelCatalog,
+  model: BuiltInModelMetadata,
+  index?: string,
+): CatalogIndexResult[] {
+  const results = catalog.index_results.filter(
+    (result) => result.model === model.id && result.index === index,
+  )
+  const family = catalog.reasoning_families.find(
+    (candidate) => candidate.id === model.reasoning_family,
+  )
+  const order = new Map((family?.levels ?? ['default']).map((effort, position) => [effort, position]))
+  return [...results].sort(
+    (left, right) =>
+      (order.get(left.reasoning_effort) ?? Number.MAX_SAFE_INTEGER) -
+        (order.get(right.reasoning_effort) ?? Number.MAX_SAFE_INTEGER) ||
+      left.reasoning_effort.localeCompare(right.reasoning_effort),
+  )
+}
+
+export function preferredIndexResult(
+  catalog: BuiltInModelCatalog,
+  model: BuiltInModelMetadata,
+  results: CatalogIndexResult[],
+): CatalogIndexResult | null {
+  const family = catalog.reasoning_families.find(
+    (candidate) => candidate.id === model.reasoning_family,
+  )
+  const preferredEffort = family?.default ?? 'default'
+  const preferred = results.find((result) => result.reasoning_effort === preferredEffort)
+  if (preferred?.status === 'available') return preferred
+  return (
+    results
+      .filter((result) => result.status === 'available')
+      .sort((left, right) => right.coverage - left.coverage)[0] ??
+    preferred ??
+    results[0] ??
+    null
+  )
 }
 
 export function formatContextWindow(tokens?: number): string {
@@ -151,8 +204,11 @@ export function formatIntelligence(result: CatalogIndexResult | null): string {
   return result.score.toFixed(1)
 }
 
-export function benchmarkName(metric: string, catalog: BuiltInModelCatalog): string {
-  const [benchmarkID, metricID] = metric.split('#', 2)
+export function benchmarkName(
+  benchmarkID: string | undefined,
+  metricID: string,
+  catalog: BuiltInModelCatalog,
+): string {
   const benchmark = catalog.benchmarks.find((candidate) => candidate.id === benchmarkID)
-  return benchmark ? `${benchmark.display_name} · ${metricID}` : metric
+  return benchmark ? `${benchmark.display_name} · ${metricID}` : metricID
 }

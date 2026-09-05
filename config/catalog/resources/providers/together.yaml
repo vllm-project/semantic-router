@@ -1,0 +1,22 @@
+id: together
+display_name: Together AI
+description: Open models through a hosted API.
+category: model_api
+support_tier: compatible
+default_base_url: https://api.together.ai/v1
+protocols:
+- openai/chat-completions@1
+default_protocol: openai/chat-completions@1
+supported_operations:
+- openai/chat-completions@1#create
+- openai/chat-completions@1#list_models
+auth:
+  strategy: bearer
+  header: Authorization
+  prefix: Bearer
+presentation:
+  logo: package:together
+  monogram: T
+  monochrome: false
+conformance:
+  status: unverified

@@ -1,0 +1,52 @@
+- id: liquid/lfm2.5-1.2b-thinking-model-card-mmlu-pro@1.0.0
+  model: liquid/lfm2.5-1.2b-thinking
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject: &lfm25-12b-thinking-subject
+    variant: LFM2.5-1.2B-Thinking
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.4965
+  status: available
+  evidence: &lfm25-12b-thinking-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/LiquidAI/LFM2.5-1.2B-Thinking
+    redistributable: true
+- id: liquid/lfm2.5-1.2b-thinking-model-card-gpqa-diamond@1.0.0
+  model: liquid/lfm2.5-1.2b-thinking
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject: *lfm25-12b-thinking-subject
+  metrics:
+    accuracy: 0.3786
+  status: available
+  evidence: *lfm25-12b-thinking-evidence
+- id: liquid/lfm2.5-1.2b-instruct-model-card-mmlu-pro@1.0.0
+  model: liquid/lfm2.5-1.2b-instruct
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject: &lfm25-12b-instruct-subject
+    variant: LFM2.5-1.2B-Instruct
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.4435
+  status: available
+  evidence: &lfm25-12b-instruct-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/LiquidAI/LFM2.5-1.2B-Instruct
+    redistributable: true
+- id: liquid/lfm2.5-1.2b-instruct-model-card-gpqa-diamond@1.0.0
+  model: liquid/lfm2.5-1.2b-instruct
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject: *lfm25-12b-instruct-subject
+  metrics:
+    accuracy: 0.3889
+  status: available
+  evidence: *lfm25-12b-instruct-evidence

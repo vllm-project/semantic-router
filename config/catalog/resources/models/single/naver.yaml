@@ -1,0 +1,57 @@
+- id: naver/hyperclovax-seed-think-14b
+  display_name: HyperCLOVA X SEED Think 14B
+  description: Open-weight Korean-English reasoning model with tool calling and native vLLM serving support.
+  kind: physical
+  publisher: NAVER
+  presentation:
+    logo: monogram
+    monogram: N
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/naver-hyperclovax/HyperCLOVAX-SEED-Think-14B
+    license: HyperCLOVA-X-SEED
+  family: hyperclovax-seed
+  parameter_size: 14.74B
+  lifecycle: active
+  limits:
+    context_window_size: 32768
+  capabilities: [chat, reasoning, tools]
+  modalities:
+    input: [text]
+    output: [text]
+  verification:
+    authority: NAVER Cloud HyperCLOVA X
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/naver-hyperclovax/HyperCLOVAX-SEED-Think-14B
+  tags: [open_weights, reasoning, multilingual, tools]
+- id: naver/hyperclovax-seed-think-32b
+  display_name: HyperCLOVA X SEED Think 32B
+  description: Open-weight Korean-centric 32B multimodal model with optional thinking and long-context agent capabilities.
+  kind: physical
+  publisher: NAVER
+  presentation:
+    logo: monogram
+    monogram: N
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/naver-hyperclovax/HyperCLOVAX-SEED-Think-32B
+    license: HyperCLOVA-X-SEED
+  family: hyperclovax-seed
+  parameter_size: 32B
+  reasoning_family: hyperclovax-seed
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities: [chat, reasoning, tools, vision, video, long_context]
+  modalities:
+    input: [text, image, video]
+    output: [text]
+  verification:
+    authority: NAVER Cloud HyperCLOVA X
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/naver-hyperclovax/HyperCLOVAX-SEED-Think-32B
+  tags: [open_weights, reasoning, multimodal, multilingual, tools]

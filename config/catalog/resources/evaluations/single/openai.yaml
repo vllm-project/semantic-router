@@ -1,0 +1,177 @@
+- id: openai/gpt-5.5-launch-evals-gpqa-diamond@1.0.0
+  model: openai/gpt-5.5
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: published
+  subject: &id001
+    variant: GPT-5.5
+    reasoning_mode: thinking
+    hle_mode: no_tools
+    source_kind: official_launch_evaluation
+  metrics:
+    accuracy: 0.936
+  status: available
+  evidence: &id002
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://openai.com/index/introducing-gpt-5-5/
+    redistributable: true
+- id: openai/gpt-5.5-launch-evals-humanitys-last-exam@1.0.0
+  model: openai/gpt-5.5
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: published
+  subject: *id001
+  metrics:
+    accuracy: 0.414
+  status: available
+  evidence: *id002
+- id: openai/gpt-5.5-later-comparison-terminal-bench@1.0.0
+  model: openai/gpt-5.5
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: published
+  subject:
+    variant: GPT-5.5
+    terminal_harness: OpenAI published comparison
+    source_kind: official_launch_evaluation
+  metrics:
+    resolved: 0.856
+  status: available
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://openai.com/index/gpt-5-6/
+    redistributable: true
+- id: openai/gpt-5.4-comparison-gpqa-diamond@1.0.0
+  model: openai/gpt-5.4
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: published
+  subject: &id003
+    variant: GPT-5.4 Thinking
+    hle_mode: no_tools
+    source_kind: official_comparative_evaluation
+  metrics:
+    accuracy: 0.928
+  status: available
+  evidence: &id004
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://openai.com/index/introducing-gpt-5-5/
+    redistributable: true
+- id: openai/gpt-5.4-comparison-humanitys-last-exam@1.0.0
+  model: openai/gpt-5.4
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: published
+  subject: *id003
+  metrics:
+    accuracy: 0.398
+  status: available
+  evidence: *id004
+- id: openai/gpt-5.4-pro-comparison-gpqa-diamond@1.0.0
+  model: openai/gpt-5.4-pro
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: published
+  subject: &id005
+    variant: GPT-5.4 Pro
+    hle_mode: no_tools
+    source_kind: official_comparative_evaluation
+  metrics:
+    accuracy: 0.944
+  status: available
+  evidence: &id006
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://openai.com/index/introducing-gpt-5-5/
+    redistributable: true
+- id: openai/gpt-5.4-pro-comparison-humanitys-last-exam@1.0.0
+  model: openai/gpt-5.4-pro
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: published
+  subject: *id005
+  metrics:
+    accuracy: 0.427
+  status: available
+  evidence: *id006
+- id: openai/gpt-5.6-sol-launch-evals-gpqa-diamond@1.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: published
+  subject: &id007
+    variant: GPT-5.6 Sol
+    source_kind: official_launch_evaluation
+  metrics:
+    accuracy: 0.946
+  status: available
+  evidence: &id008
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://openai.com/index/gpt-5-6/
+    redistributable: true
+- id: openai/gpt-5.6-sol-launch-evals-terminal-bench@1.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: published
+  subject: *id007
+  metrics:
+    resolved: 0.888
+  status: available
+  evidence: *id008
+- id: openai/gpt-5.6-terra-launch-evals-gpqa-diamond@1.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: published
+  subject: &id009
+    variant: GPT-5.6 Terra
+    source_kind: official_launch_evaluation
+  metrics:
+    accuracy: 0.929
+  status: available
+  evidence: &id010
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://openai.com/index/gpt-5-6/
+    redistributable: true
+- id: openai/gpt-5.6-terra-launch-evals-terminal-bench@1.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: published
+  subject: *id009
+  metrics:
+    resolved: 0.874
+  status: available
+  evidence: *id010
+- id: openai/gpt-5.6-luna-launch-evals-gpqa-diamond@1.0.0
+  model: openai/gpt-5.6-luna
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: published
+  subject: &id011
+    variant: GPT-5.6 Luna
+    source_kind: official_launch_evaluation
+  metrics:
+    accuracy: 0.923
+  status: available
+  evidence: &id012
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://openai.com/index/gpt-5-6/
+    redistributable: true
+- id: openai/gpt-5.6-luna-launch-evals-terminal-bench@1.0.0
+  model: openai/gpt-5.6-luna
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: published
+  subject: *id011
+  metrics:
+    resolved: 0.847
+  status: available
+  evidence: *id012

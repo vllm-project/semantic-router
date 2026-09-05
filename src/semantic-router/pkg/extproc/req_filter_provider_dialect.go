@@ -30,6 +30,10 @@ func usesThinkingObjectTransport(transport modelcatalog.ReasoningTransport) bool
 		transport == modelcatalog.ReasoningTransportDeepSeekThinking
 }
 
+func usesReasoningObjectTransport(transport modelcatalog.ReasoningTransport) bool {
+	return transport == modelcatalog.ReasoningTransportReasoningObject
+}
+
 func isDeepSeekThinkingTransport(transport modelcatalog.ReasoningTransport) bool {
 	return transport == modelcatalog.ReasoningTransportDeepSeekThinking
 }

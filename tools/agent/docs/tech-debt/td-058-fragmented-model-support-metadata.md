@@ -26,7 +26,7 @@ matrix and leaderboard.
 ## Summary
 
 The repository has no single typed source for provider, protocol, model,
-offering, reasoning, presentation, benchmark, and score metadata. Provider
+provider mapping, reasoning, presentation, benchmark, and score metadata. Provider
 defaults are hard-coded in Router config helpers, the Dashboard owns a broader
 independent provider catalog, the CLI catalog covers packaged virtual models,
 and physical models are mostly free-form configuration or recommended strings.
@@ -46,7 +46,7 @@ scalar `quality_score`.
   contains 40 provider/runtime UX presets independent of the Router registry.
 - [`src/vllm-sr/cli/model_assets/latest/catalog.yaml`](../../../../src/vllm-sr/cli/model_assets/latest/catalog.yaml)
   contains five built-in virtual models and recommended physical-model strings,
-  but no general provider/offering/model-card graph.
+  but no general provider/provider mapping/model-card graph.
 - Selection, Looper, session-aware selection, training conversion, and
   Evaluation report code read, infer, or emit `quality_score` through different
   evidence rules.
@@ -67,7 +67,7 @@ scalar `quality_score`.
 ## Desired End State
 
 One versioned repository catalog defines protocols, providers, model cards,
-offerings, reasoning behavior, presentation metadata, benchmarks, and composite
+provider mappings, reasoning behavior, presentation metadata, benchmarks, and composite
 indices. A compiler merges optional user cards and evaluations into one
 immutable effective registry with field provenance. Router, CLI, Dashboard, and
 website artifacts are generated or materialized from that registry. Runtime

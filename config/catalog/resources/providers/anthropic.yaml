@@ -1,0 +1,216 @@
+id: anthropic
+display_name: Anthropic
+description: Claude models through the native Messages API.
+category: model_api
+support_tier: native
+default_base_url: https://api.anthropic.com
+protocols:
+- anthropic/messages@1
+default_protocol: anthropic/messages@1
+supported_operations:
+- anthropic/messages@1#create
+- anthropic/messages@1#list_models
+default_headers:
+  anthropic-version: '2023-06-01'
+auth:
+  strategy: api_key_header
+  header: x-api-key
+  prefix: ''
+  injected_header: x-user-anthropic-key
+presentation:
+  logo: package:anthropic
+  monogram: A
+  monochrome: true
+conformance:
+  status: fixture_verified
+  verified_at: 2026-09-04
+models:
+- catalog: anthropic/claude-haiku-4.5
+  id: claude-haiku-4-5
+  protocols:
+  - anthropic/messages@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.anthropic.com/en/docs/about-claude/models/overview
+- catalog: anthropic/claude-sonnet-4.5
+  id: claude-sonnet-4-5
+  protocols:
+  - anthropic/messages@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.anthropic.com/en/docs/about-claude/models/overview
+- catalog: anthropic/claude-sonnet-4.6
+  id: claude-sonnet-4-6
+  protocols:
+  - anthropic/messages@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.anthropic.com/en/docs/about-claude/models/overview
+- catalog: anthropic/claude-sonnet-5
+  id: claude-sonnet-5
+  protocols:
+  - anthropic/messages@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.anthropic.com/en/docs/about-claude/models/overview
+- catalog: anthropic/claude-opus-4.5
+  id: claude-opus-4-5
+  protocols:
+  - anthropic/messages@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.anthropic.com/en/docs/about-claude/models/overview
+- catalog: anthropic/claude-opus-4.6
+  id: claude-opus-4-6
+  protocols:
+  - anthropic/messages@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.anthropic.com/en/docs/about-claude/models/overview
+- catalog: anthropic/claude-opus-4.7
+  id: claude-opus-4-7
+  protocols:
+  - anthropic/messages@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.anthropic.com/en/docs/about-claude/models/overview
+- catalog: anthropic/claude-opus-4.8
+  id: claude-opus-4-8
+  protocols:
+  - anthropic/messages@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.anthropic.com/en/docs/about-claude/models/overview
+- catalog: anthropic/claude-opus-5
+  id: claude-opus-5
+  protocols:
+  - anthropic/messages@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.anthropic.com/en/docs/about-claude/models/overview
+- catalog: anthropic/claude-fable-5.1
+  id: claude-fable-5-1
+  protocols:
+  - anthropic/messages@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://www.anthropic.com/claude/fable
+- catalog: anthropic/claude-fable-5
+  id: claude-fable-5
+  protocols:
+  - anthropic/messages@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.anthropic.com/en/docs/about-claude/models/overview
+- catalog: anthropic/claude-sonnet-4
+  id: claude-sonnet-4-20250514
+  protocols:
+  - anthropic/messages@1
+  lifecycle: removed
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.anthropic.com/en/docs/about-claude/model-deprecations
+- catalog: anthropic/claude-opus-4
+  id: claude-opus-4-20250514
+  protocols:
+  - anthropic/messages@1
+  lifecycle: removed
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.anthropic.com/en/docs/about-claude/model-deprecations
+- catalog: anthropic/claude-opus-4.1
+  id: claude-opus-4-1-20250805
+  protocols:
+  - anthropic/messages@1
+  lifecycle: removed
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.anthropic.com/en/docs/about-claude/model-deprecations
+- catalog: anthropic/claude-sonnet-3.7
+  id: claude-3-7-sonnet-20250219
+  protocols:
+  - anthropic/messages@1
+  lifecycle: removed
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.anthropic.com/en/docs/about-claude/model-deprecations
+- catalog: anthropic/claude-mythos-5
+  id: claude-mythos-5
+  protocols:
+  - anthropic/messages@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://platform.claude.com/docs/en/about-claude/models/overview
+- catalog: anthropic/claude-mythos-preview
+  id: claude-mythos-preview
+  protocols:
+  - anthropic/messages@1
+  lifecycle: deprecated
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.anthropic.com/en/docs/about-claude/model-deprecations
+- catalog: anthropic/claude-3.5-sonnet
+  id: claude-3-5-sonnet-20241022
+  protocols:
+  - anthropic/messages@1
+  lifecycle: removed
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://platform.claude.com/docs/en/about-claude/model-deprecations
+- catalog: anthropic/claude-3.5-haiku
+  id: claude-3-5-haiku-20241022
+  protocols:
+  - anthropic/messages@1
+  lifecycle: removed
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://platform.claude.com/docs/en/about-claude/model-deprecations
+- catalog: anthropic/claude-3-opus
+  id: claude-3-opus-20240229
+  protocols:
+  - anthropic/messages@1
+  lifecycle: removed
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://platform.claude.com/docs/en/about-claude/model-deprecations
+- catalog: anthropic/claude-3-haiku
+  id: claude-3-haiku-20240307
+  protocols:
+  - anthropic/messages@1
+  lifecycle: removed
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://platform.claude.com/docs/en/about-claude/model-deprecations

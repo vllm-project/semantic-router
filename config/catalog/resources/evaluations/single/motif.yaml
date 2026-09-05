@@ -1,0 +1,63 @@
+- id: motif/motif-3-model-card-gpqa-diamond@1.0.0
+  model: motif/motif-3
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject: &motif3-subject
+    variant: Motif 3
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.834
+  status: available
+  evidence: &motif3-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Motif-Technologies/Motif-3
+    redistributable: true
+- id: motif/motif-3-model-card-humanitys-last-exam@1.0.0
+  model: motif/motif-3
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: default
+  subject: *motif3-subject
+  metrics:
+    accuracy: 0.370
+  status: available
+  evidence: *motif3-evidence
+- id: motif/motif-3-model-card-swe-bench-verified@1.0.0
+  model: motif/motif-3
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: default
+  subject: *motif3-subject
+  metrics:
+    resolved: 0.762
+  status: available
+  evidence: *motif3-evidence
+- id: motif/motif-3-model-card-terminal-bench@1.0.0
+  model: motif/motif-3
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: default
+  subject: *motif3-subject
+  metrics:
+    resolved: 0.749
+  status: available
+  evidence: *motif3-evidence
+- id: motif/motif-2-reasoning-model-card-gpqa-diamond@1.0.0
+  model: motif/motif-2-12.7b-reasoning
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject:
+    variant: Motif-2-12.7B-Reasoning
+    setting: 0-shot CoT
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.700
+  status: available
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Motif-Technologies/Motif-2-12.7B-Reasoning
+    redistributable: true

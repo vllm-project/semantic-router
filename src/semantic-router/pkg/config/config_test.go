@@ -3612,6 +3612,19 @@ model_config:
 		})
 
 		Context("ResolveReasoningTransport", func() {
+			It("should honor a validated provider-model override", func() {
+				transport, err := (&ProviderProfile{
+					Type: "dashscope", ReasoningTransport: "top_level_boolean",
+				}).ResolveReasoningTransport()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(string(transport)).To(Equal("top_level_boolean"))
+
+				_, err = (&ProviderProfile{
+					Type: "dashscope", ReasoningTransport: "invented",
+				}).ResolveReasoningTransport()
+				Expect(err).To(HaveOccurred())
+			})
+
 			It("should return catalog semantics without inspecting endpoint hosts", func() {
 				transport, err := (&ProviderProfile{Type: "openai", BaseURL: "https://proxy.example/v1"}).ResolveReasoningTransport()
 				Expect(err).NotTo(HaveOccurred())

@@ -1,0 +1,47 @@
+- id: agnes/agnes-2.5-pro-alpha-model-card-gpqa-diamond@1.0.0
+  model: agnes/agnes-2.5-pro-alpha
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: published
+  subject: &agnes-subject
+    variant: Agnes 2.5 Pro Alpha
+    source_kind: official_vendor_republication
+    measurement_origin: Artificial Analysis
+  metrics:
+    accuracy: 0.876
+  status: available
+  evidence: &agnes-evidence
+    provenance: third_party
+    verification: imported
+    source: https://huggingface.co/Agnes-AI/Agnes-2.5-Pro-Alpha
+    redistributable: true
+- id: agnes/agnes-2.5-pro-alpha-model-card-humanitys-last-exam@1.0.0
+  model: agnes/agnes-2.5-pro-alpha
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: published
+  subject: *agnes-subject
+  metrics:
+    accuracy: 0.336
+  status: available
+  evidence: *agnes-evidence
+- id: agnes/agnes-2.5-pro-alpha-model-card-terminal-bench@2.1.0
+  model: agnes/agnes-2.5-pro-alpha
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: published
+  subject: *agnes-subject
+  metrics:
+    resolved: 0.67
+  status: available
+  evidence: *agnes-evidence
+- id: agnes/agnes-2.5-pro-alpha-model-card-gdpval-aa@2.0.0
+  model: agnes/agnes-2.5-pro-alpha
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: published
+  subject: *agnes-subject
+  metrics:
+    elo: 1176
+  status: available
+  evidence: *agnes-evidence

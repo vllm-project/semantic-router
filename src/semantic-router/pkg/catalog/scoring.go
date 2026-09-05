@@ -11,11 +11,12 @@ type metricDefinition struct {
 	benchmark string
 	metric    BenchmarkMetric
 	domain    string
+	profiles  map[string]struct{}
 }
 
 type selectedEvaluationRecords struct {
-	values   map[string]map[string]float64
-	evidence map[string]map[string]string
+	values   map[string]map[string]map[string]float64
+	evidence map[string]map[string]map[string]string
 	models   map[string]struct{}
 	seen     map[string]struct{}
 }
@@ -27,6 +28,7 @@ type indexValidationSummary struct {
 
 type indexEvaluator struct {
 	model    string
+	effort   string
 	indices  map[string]IndexDefinition
 	metrics  map[string]metricDefinition
 	values   map[string]float64
@@ -54,7 +56,8 @@ type indexAccumulator struct {
 func (registry *Registry) compileEvaluations(
 	input EvaluationConfig,
 	cards map[string]EffectiveModelCard,
-) (map[string]IndexDefinition, map[string]map[string]IndexResult, error) {
+	reasoning map[string]ReasoningFamilyDefinition,
+) (map[string]IndexDefinition, map[string]map[string]map[string]IndexResult, error) {
 	benchmarks, err := registry.mergeBenchmarks(input.Benchmarks)
 	if err != nil {
 		return nil, nil, err
@@ -86,7 +89,7 @@ func (registry *Registry) compileEvaluations(
 	for model := range cards {
 		selected.models[model] = struct{}{}
 	}
-	results, err := computeAllIndexResults(indices, metrics, cards, selected)
+	results, err := computeAllIndexResults(indices, metrics, cards, reasoning, selected)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -142,11 +145,12 @@ func computeAllIndexResults(
 	indices map[string]IndexDefinition,
 	metrics map[string]metricDefinition,
 	cards map[string]EffectiveModelCard,
+	reasoning map[string]ReasoningFamilyDefinition,
 	selected selectedEvaluationRecords,
-) (map[string]map[string]IndexResult, error) {
-	results := make(map[string]map[string]IndexResult, len(selected.models))
+) (map[string]map[string]map[string]IndexResult, error) {
+	results := make(map[string]map[string]map[string]IndexResult, len(selected.models))
 	for model := range selected.models {
-		computed, err := computeModelIndexResults(model, indices, metrics, cards, selected)
+		computed, err := computeModelIndexResults(model, indices, metrics, cards, reasoning, selected)
 		if err != nil {
 			return nil, err
 		}
@@ -160,330 +164,69 @@ func computeModelIndexResults(
 	indices map[string]IndexDefinition,
 	metrics map[string]metricDefinition,
 	cards map[string]EffectiveModelCard,
+	reasoning map[string]ReasoningFamilyDefinition,
 	selected selectedEvaluationRecords,
-) (map[string]IndexResult, error) {
-	if card, ok := cards[model]; ok && card.Card.Kind == "virtual" {
-		return notApplicableIndexResults(model, indices), nil
-	}
-	evaluator := indexEvaluator{
-		model: model, indices: indices, metrics: metrics,
-		values: selected.values[model], evidence: selected.evidence[model],
-		memo: map[string]IndexResult{}, visiting: map[string]bool{},
-	}
-	for _, indexID := range sortedKeys(indices) {
-		result, err := evaluator.compute(indexID)
-		if err != nil {
-			return nil, err
+) (map[string]map[string]IndexResult, error) {
+	results := map[string]map[string]IndexResult{}
+	for _, effort := range modelReasoningEfforts(cards[model], reasoning, selected.values[model]) {
+		evaluator := indexEvaluator{
+			model: model, effort: effort, indices: indices, metrics: metrics,
+			values: selected.values[model][effort], evidence: selected.evidence[model][effort],
+			memo: map[string]IndexResult{}, visiting: map[string]bool{},
 		}
-		evaluator.memo[indexID] = result
-	}
-	return evaluator.memo, nil
-}
-
-func notApplicableIndexResults(model string, indices map[string]IndexDefinition) map[string]IndexResult {
-	results := make(map[string]IndexResult, len(indices))
-	for _, indexID := range sortedKeys(indices) {
-		results[indexID] = IndexResult{
-			Model: model, Index: indexID, Status: "not_applicable",
-			Components: []IndexComponentResult{}, Provenance: []string{},
-		}
-	}
-	return results
-}
-
-func validateBenchmark(definition BenchmarkDefinition, path string) error {
-	if strings.TrimSpace(definition.DisplayName) == "" || strings.TrimSpace(definition.Domain) == "" {
-		return fmt.Errorf("%s.display_name and domain are required", path)
-	}
-	if len(definition.Metrics) == 0 {
-		return fmt.Errorf("%s.metrics cannot be empty", path)
-	}
-	seen := map[string]struct{}{}
-	for index, metric := range definition.Metrics {
-		metricPath := fmt.Sprintf("%s.metrics[%d]", path, index)
-		if strings.TrimSpace(metric.ID) == "" {
-			return fmt.Errorf("%s.id cannot be empty", metricPath)
-		}
-		if _, duplicate := seen[metric.ID]; duplicate {
-			return fmt.Errorf("%s.id %q is duplicated", metricPath, metric.ID)
-		}
-		seen[metric.ID] = struct{}{}
-		if metric.Direction != "higher_is_better" && metric.Direction != "lower_is_better" {
-			return fmt.Errorf("%s.direction %q is unsupported", metricPath, metric.Direction)
-		}
-		if !finite(metric.Range[0]) || !finite(metric.Range[1]) || metric.Range[0] >= metric.Range[1] {
-			return fmt.Errorf("%s.range is invalid", metricPath)
-		}
-	}
-	return nil
-}
-
-func buildMetricDefinitions(benchmarks map[string]BenchmarkDefinition) (map[string]metricDefinition, error) {
-	result := map[string]metricDefinition{}
-	for id, benchmark := range benchmarks {
-		if err := validateBenchmark(benchmark, "benchmark["+id+"]"); err != nil {
-			return nil, err
-		}
-		for _, metric := range benchmark.Metrics {
-			metricID := id + "#" + metric.ID
-			if _, exists := result[metricID]; exists {
-				return nil, fmt.Errorf("benchmark metric %q is duplicated", metricID)
+		for _, indexID := range sortedKeys(indices) {
+			result, err := evaluator.compute(indexID)
+			if err != nil {
+				return nil, err
 			}
-			result[metricID] = metricDefinition{benchmark: id, metric: metric, domain: benchmark.Domain}
+			evaluator.memo[indexID] = result
 		}
+		results[effort] = evaluator.memo
 	}
-	return result, nil
+	return results, nil
 }
 
-func validateIndices(indices map[string]IndexDefinition, metrics map[string]metricDefinition) error {
-	for id, definition := range indices {
-		if err := validateIndexDefinition(id, definition, indices, metrics); err != nil {
-			return err
-		}
+func modelReasoningEfforts(
+	card EffectiveModelCard,
+	reasoning map[string]ReasoningFamilyDefinition,
+	measurements map[string]map[string]float64,
+) []string {
+	efforts := []string{"default"}
+	if family, ok := reasoning[card.Card.ReasoningFamily]; ok {
+		efforts = append([]string(nil), family.Levels...)
 	}
-	return validateIndexDependencyGraph(indices)
-}
-
-func validateIndexDefinition(
-	id string,
-	definition IndexDefinition,
-	indices map[string]IndexDefinition,
-	metrics map[string]metricDefinition,
-) error {
-	path := "index[" + id + "]"
-	if definition.Aggregation != "weighted_mean" {
-		return fmt.Errorf("%s.aggregation %q is unsupported", path, definition.Aggregation)
+	seen := make(map[string]struct{}, len(efforts))
+	for _, effort := range efforts {
+		seen[effort] = struct{}{}
 	}
-	if definition.Scale[0] >= definition.Scale[1] {
-		return fmt.Errorf("%s.scale is invalid", path)
-	}
-	if err := validateMissingPolicy(definition.Missing, path+".missing"); err != nil {
-		return err
-	}
-	if len(definition.Components) == 0 {
-		return fmt.Errorf("%s.components cannot be empty", path)
-	}
-	if err := validateDomainWeights(definition.Domains, path); err != nil {
-		return err
-	}
-	summary, err := validateIndexComponents(definition.Components, path, indices, metrics)
-	if err != nil {
-		return err
-	}
-	return validateDeclaredDomainWeights(definition.Domains, summary, path)
-}
-
-func validateMissingPolicy(policy MissingPolicy, path string) error {
-	switch policy.Policy {
-	case "require_all", "reported_only":
-		return nil
-	case "require_coverage":
-		if policy.Minimum <= 0 || policy.Minimum > 1 {
-			return fmt.Errorf("%s.minimum must be within (0, 1]", path)
-		}
-		return nil
-	default:
-		return fmt.Errorf("%s.policy %q is unsupported", path, policy.Policy)
-	}
-}
-
-func validateDomainWeights(domains map[string]float64, path string) error {
-	if len(domains) == 0 {
-		return nil
-	}
-	total := 0.0
-	for domain, weight := range domains {
-		if strings.TrimSpace(domain) == "" || !finite(weight) || weight <= 0 {
-			return fmt.Errorf("%s.domains[%q] must be positive and finite", path, domain)
-		}
-		total += weight
-	}
-	if math.Abs(total-1) > 1e-9 {
-		return fmt.Errorf("%s domain weights sum to %.12g, want 1", path, total)
-	}
-	return nil
-}
-
-func validateIndexComponents(
-	components []IndexComponent,
-	path string,
-	indices map[string]IndexDefinition,
-	metrics map[string]metricDefinition,
-) (indexValidationSummary, error) {
-	summary := indexValidationSummary{directDomainWeights: map[string]float64{}}
-	total := 0.0
-	for index, component := range components {
-		componentPath := fmt.Sprintf("%s.components[%d]", path, index)
-		if err := validateIndexComponent(component, componentPath, indices, metrics, &summary); err != nil {
-			return indexValidationSummary{}, err
-		}
-		total += component.Weight
-	}
-	if math.Abs(total-1) > 1e-9 {
-		return indexValidationSummary{}, fmt.Errorf("%s component weights sum to %.12g, want 1", path, total)
-	}
-	return summary, nil
-}
-
-func validateIndexComponent(
-	component IndexComponent,
-	path string,
-	indices map[string]IndexDefinition,
-	metrics map[string]metricDefinition,
-	summary *indexValidationSummary,
-) error {
-	if (component.Metric == "") == (component.Index == "") {
-		return fmt.Errorf("%s must reference exactly one metric or index", path)
-	}
-	if !finite(component.Weight) || component.Weight <= 0 {
-		return fmt.Errorf("%s.weight must be positive and finite", path)
-	}
-	if err := validateIndexComponentReference(component, path, indices, metrics, summary); err != nil {
-		return err
-	}
-	return validateNormalization(component.Normalization, path+".normalization")
-}
-
-func validateIndexComponentReference(
-	component IndexComponent,
-	path string,
-	indices map[string]IndexDefinition,
-	metrics map[string]metricDefinition,
-	summary *indexValidationSummary,
-) error {
-	if component.Metric != "" {
-		metric, exists := metrics[component.Metric]
-		if !exists {
-			return fmt.Errorf("%s.metric %q is unknown", path, component.Metric)
-		}
-		summary.directDomainWeights[metric.domain] += component.Weight
-		return nil
-	}
-	summary.hasNestedComponent = true
-	if _, exists := indices[component.Index]; !exists {
-		return fmt.Errorf("%s.index %q is unknown", path, component.Index)
-	}
-	return nil
-}
-
-func validateDeclaredDomainWeights(domains map[string]float64, summary indexValidationSummary, path string) error {
-	if len(domains) == 0 || summary.hasNestedComponent {
-		return nil
-	}
-	if len(summary.directDomainWeights) != len(domains) {
-		return fmt.Errorf("%s domains do not match direct component weights", path)
-	}
-	for domain, weight := range domains {
-		if math.Abs(summary.directDomainWeights[domain]-weight) > 1e-9 {
-			return fmt.Errorf("%s domains do not match direct component weights", path)
-		}
-	}
-	return nil
-}
-
-func validateIndexDependencyGraph(indices map[string]IndexDefinition) error {
-	validator := indexDependencyValidator{
-		indices: indices,
-		visited: map[string]bool{},
-		active:  map[string]bool{},
-	}
-	for id := range indices {
-		if err := validator.visit(id); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-type indexDependencyValidator struct {
-	indices map[string]IndexDefinition
-	visited map[string]bool
-	active  map[string]bool
-}
-
-func (validator *indexDependencyValidator) visit(id string) error {
-	if validator.active[id] {
-		return fmt.Errorf("index dependency cycle includes %q", id)
-	}
-	if validator.visited[id] {
-		return nil
-	}
-	validator.active[id] = true
-	defer delete(validator.active, id)
-	for _, component := range validator.indices[id].Components {
-		if component.Index == "" {
+	for _, effort := range sortedKeys(measurements) {
+		if _, ok := seen[effort]; ok {
 			continue
 		}
-		if err := validator.visit(component.Index); err != nil {
-			return err
+		efforts = append(efforts, effort)
+	}
+	return efforts
+}
+
+func preferredEvaluationEffort(
+	card EffectiveModelCard,
+	values map[string]map[string]IndexResult,
+	reasoning map[string]ReasoningFamilyDefinition,
+) string {
+	if family, ok := reasoning[card.Card.ReasoningFamily]; ok {
+		if _, present := values[family.Default]; present {
+			return family.Default
 		}
 	}
-	validator.visited[id] = true
-	return nil
-}
-
-func validateNormalization(normalization Normalization, path string) error {
-	kind := normalization.Type
-	if kind == "" {
-		kind = "identity"
-	}
-	switch kind {
-	case "identity", "one_minus":
-		return nil
-	case "linear_clamp":
-		return validateLinearClamp(normalization, path)
-	case "piecewise_linear":
-		return validatePiecewiseLinear(normalization.Points, path)
-	case "logistic":
-		return validateLogistic(normalization, path)
-	case "lookup":
-		return validateLookup(normalization.Values, path)
-	default:
-		return fmt.Errorf("%s.type %q is unsupported", path, kind)
-	}
-}
-
-func validateLinearClamp(normalization Normalization, path string) error {
-	if normalization.Min == nil || normalization.Max == nil || *normalization.Min >= *normalization.Max {
-		return fmt.Errorf("%s linear_clamp requires min < max", path)
-	}
-	return nil
-}
-
-func validatePiecewiseLinear(points []NormalizationPoint, path string) error {
-	if len(points) < 2 {
-		return fmt.Errorf("%s piecewise_linear requires at least two points", path)
-	}
-	for index, point := range points {
-		if !finite(point.Input) || !finite(point.Output) || point.Output < 0 || point.Output > 1 {
-			return fmt.Errorf("%s.points[%d] is invalid", path, index)
-		}
-		if index > 0 && point.Input <= points[index-1].Input {
-			return fmt.Errorf("%s.points inputs must be strictly increasing", path)
+	for _, effort := range []string{"default", "medium", "high", "max", "xhigh", "published"} {
+		if _, ok := values[effort]; ok {
+			return effort
 		}
 	}
-	return nil
-}
-
-func validateLogistic(normalization Normalization, path string) error {
-	valid := normalization.K != nil && normalization.X0 != nil &&
-		finite(*normalization.K) && finite(*normalization.X0) && *normalization.K != 0
-	if !valid {
-		return fmt.Errorf("%s logistic requires finite non-zero k and finite x0", path)
+	for _, effort := range sortedKeys(values) {
+		return effort
 	}
-	return nil
-}
-
-func validateLookup(values map[string]float64, path string) error {
-	if len(values) == 0 {
-		return fmt.Errorf("%s lookup requires values", path)
-	}
-	for key, value := range values {
-		if strings.TrimSpace(key) == "" || !finite(value) || value < 0 || value > 1 {
-			return fmt.Errorf("%s.values[%q] is invalid", path, key)
-		}
-	}
-	return nil
+	return "default"
 }
 
 func validateAndSelectRecords(
@@ -491,8 +234,8 @@ func validateAndSelectRecords(
 	metrics map[string]metricDefinition,
 ) (selectedEvaluationRecords, error) {
 	selected := selectedEvaluationRecords{
-		values:   map[string]map[string]float64{},
-		evidence: map[string]map[string]string{},
+		values:   map[string]map[string]map[string]float64{},
+		evidence: map[string]map[string]map[string]string{},
 		models:   map[string]struct{}{},
 		seen:     map[string]struct{}{},
 	}
@@ -534,6 +277,9 @@ func (selected *selectedEvaluationRecords) add(
 }
 
 func validateAvailableRecord(record EvaluationRecord, path string) error {
+	if strings.TrimSpace(record.Benchmark) == "" || strings.TrimSpace(record.BenchmarkProfile) == "" || strings.TrimSpace(record.ReasoningEffort) == "" {
+		return fmt.Errorf("%s benchmark, benchmark_profile, and reasoning_effort are required", path)
+	}
 	if record.Evidence.Provenance == "" || record.Evidence.Verification == "" {
 		return fmt.Errorf("%s.evidence provenance and verification are required", path)
 	}
@@ -547,8 +293,17 @@ func (selected *selectedEvaluationRecords) ensureModel(model string) {
 	if selected.values[model] != nil {
 		return
 	}
-	selected.values[model] = map[string]float64{}
-	selected.evidence[model] = map[string]string{}
+	selected.values[model] = map[string]map[string]float64{}
+	selected.evidence[model] = map[string]map[string]string{}
+}
+
+func (selected *selectedEvaluationRecords) ensureEffort(model, effort string) {
+	selected.ensureModel(model)
+	if selected.values[model][effort] != nil {
+		return
+	}
+	selected.values[model][effort] = map[string]float64{}
+	selected.evidence[model][effort] = map[string]string{}
 }
 
 func (selected *selectedEvaluationRecords) addMetric(
@@ -558,9 +313,13 @@ func (selected *selectedEvaluationRecords) addMetric(
 	path string,
 	metrics map[string]metricDefinition,
 ) error {
-	definition, exists := metrics[metricID]
+	fullMetricID := record.Benchmark + "#" + metricID
+	definition, exists := metrics[fullMetricID]
 	if !exists {
-		return fmt.Errorf("%s.metrics references unknown metric %q", path, metricID)
+		return fmt.Errorf("%s.metrics references unknown metric %q", path, fullMetricID)
+	}
+	if _, ok := definition.profiles[record.BenchmarkProfile]; !ok {
+		return fmt.Errorf("%s.benchmark_profile %q is unknown", path, record.BenchmarkProfile)
 	}
 	if !finite(value) || value < definition.metric.Range[0] || value > definition.metric.Range[1] {
 		return fmt.Errorf(
@@ -568,15 +327,21 @@ func (selected *selectedEvaluationRecords) addMetric(
 			path, metricID, definition.metric.Range[0], definition.metric.Range[1],
 		)
 	}
-	if previous, exists := selected.values[record.Model][metricID]; exists && previous != value {
+	selected.ensureEffort(record.Model, record.ReasoningEffort)
+	key := evaluationMetricKey(record.Benchmark, record.BenchmarkProfile, metricID)
+	if previous, exists := selected.values[record.Model][record.ReasoningEffort][key]; exists && previous != value {
 		return fmt.Errorf(
-			"%s conflicts with another available value for model %q metric %q",
-			path, record.Model, metricID,
+			"%s conflicts with another available value for model %q effort %q metric %q",
+			path, record.Model, record.ReasoningEffort, fullMetricID,
 		)
 	}
-	selected.values[record.Model][metricID] = value
-	selected.evidence[record.Model][metricID] = record.ID
+	selected.values[record.Model][record.ReasoningEffort][key] = value
+	selected.evidence[record.Model][record.ReasoningEffort][key] = record.ID
 	return nil
+}
+
+func evaluationMetricKey(benchmark, profile, metric string) string {
+	return benchmark + "\x00" + profile + "\x00" + metric
 }
 
 func (evaluator *indexEvaluator) compute(indexID string) (IndexResult, error) {
@@ -589,7 +354,7 @@ func (evaluator *indexEvaluator) compute(indexID string) (IndexResult, error) {
 	evaluator.visiting[indexID] = true
 	defer delete(evaluator.visiting, indexID)
 	definition := evaluator.indices[indexID]
-	accumulator := newIndexAccumulator(evaluator.model, indexID, len(definition.Components))
+	accumulator := newIndexAccumulator(evaluator.model, evaluator.effort, indexID, len(definition.Components))
 	for _, component := range definition.Components {
 		evaluated, err := evaluator.evaluateComponent(component)
 		if err != nil {
@@ -604,18 +369,22 @@ func (evaluator *indexEvaluator) compute(indexID string) (IndexResult, error) {
 
 func (evaluator *indexEvaluator) evaluateComponent(component IndexComponent) (evaluatedIndexComponent, error) {
 	result := IndexComponentResult{
-		Metric: component.Metric, Index: component.Index,
+		Benchmark: component.Benchmark, Metric: component.Metric,
+		BenchmarkProfile: component.BenchmarkProfile, Index: component.Index,
 		Weight: component.Weight, Status: "missing",
 	}
 	if component.Metric != "" {
-		raw, present := evaluator.values[component.Metric]
+		key := evaluationMetricKey(component.Benchmark, component.BenchmarkProfile, component.Metric)
+		raw, present := evaluator.values[key]
 		provenance := []string{}
-		if recordID := evaluator.evidence[component.Metric]; recordID != "" {
+		if recordID := evaluator.evidence[key]; recordID != "" {
 			provenance = append(provenance, recordID)
+			result.Evaluation = recordID
 		}
+		metricID := component.Benchmark + "#" + component.Metric
 		return evaluatedIndexComponent{
 			result: result, raw: raw, present: present,
-			domain: evaluator.metrics[component.Metric].domain, provenance: provenance,
+			domain: evaluator.metrics[metricID].domain, provenance: provenance,
 		}, nil
 	}
 	return evaluator.evaluateNestedComponent(component, result)
@@ -640,10 +409,10 @@ func (evaluator *indexEvaluator) evaluateNestedComponent(
 	return evaluated, nil
 }
 
-func newIndexAccumulator(model, indexID string, componentCount int) indexAccumulator {
+func newIndexAccumulator(model, effort, indexID string, componentCount int) indexAccumulator {
 	return indexAccumulator{
 		result: IndexResult{
-			Model: model, Index: indexID, Status: "missing",
+			Model: model, ReasoningEffort: effort, Index: indexID, Status: "missing",
 			Components: make([]IndexComponentResult, 0, componentCount),
 			Domains:    map[string]float64{}, Provenance: []string{},
 		},
@@ -769,7 +538,7 @@ func lookupNormalizedValue(value float64, values map[string]float64) (float64, e
 
 func componentIdentity(component IndexComponent) string {
 	if component.Metric != "" {
-		return component.Metric
+		return component.Benchmark + "#" + component.Metric + "@" + component.BenchmarkProfile
 	}
 	return component.Index
 }

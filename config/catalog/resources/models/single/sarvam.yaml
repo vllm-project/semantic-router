@@ -1,0 +1,87 @@
+- id: sarvam/sarvam-105b
+  display_name: Sarvam 105B
+  description: Open-weight flagship MoE reasoning model trained for English and Indian languages.
+  kind: physical
+  publisher: Sarvam AI
+  presentation:
+    logo: monogram
+    monogram: S
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/sarvamai/sarvam-105b
+    license: Apache-2.0
+  family: sarvam
+  parameter_size: 105B+
+  reasoning_family: sarvam
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities: [chat, reasoning, tools, long_context]
+  modalities:
+    input: [text]
+    output: [text]
+  verification:
+    authority: Sarvam AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.sarvam.ai/api/getting-started/models/sarvam-105b
+  tags: [open_weights, reasoning, agentic, multilingual, moe]
+
+- id: sarvam/sarvam-105b-conversations
+  display_name: Sarvam 105B Conversations
+  description: Conversational Sarvam 105B post-training variant for real-time dialogue and voice agents.
+  kind: physical
+  publisher: Sarvam AI
+  presentation:
+    logo: monogram
+    monogram: S
+    monochrome: false
+  distribution:
+    type: proprietary_api
+    source: https://docs.sarvam.ai/api/getting-started/models/sarvam-105b
+  family: sarvam
+  parameter_size: 105B+
+  lifecycle: active
+  limits:
+    context_window_size: 32768
+  capabilities: [chat]
+  modalities:
+    input: [text]
+    output: [text]
+  verification:
+    authority: Sarvam AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.sarvam.ai/api/getting-started/models/sarvam-105b
+  tags: [proprietary, conversational, multilingual]
+
+- id: sarvam/sarvam-30b
+  display_name: Sarvam 30B
+  description: Efficient open-weight MoE model for multilingual reasoning, coding, and tool use.
+  kind: physical
+  publisher: Sarvam AI
+  presentation:
+    logo: monogram
+    monogram: S
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/sarvamai/sarvam-30b
+    license: Apache-2.0
+  family: sarvam
+  parameter_size: 30B (2.4B active)
+  reasoning_family: sarvam
+  lifecycle: deprecated
+  limits:
+    context_window_size: 65536
+  capabilities: [chat, reasoning, tools, long_context]
+  modalities:
+    input: [text]
+    output: [text]
+  verification:
+    authority: Sarvam AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.sarvam.ai/changelog
+  tags: [open_weights, reasoning, multilingual, efficient, moe]

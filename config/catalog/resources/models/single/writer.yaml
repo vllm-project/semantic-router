@@ -1,0 +1,46 @@
+- id: writer/palmyra-x5
+  display_name: Palmyra X5
+  description: Enterprise multimodal and adaptive-reasoning model with a one-million-token context window.
+  kind: physical
+  publisher: Writer
+  presentation: &writer-presentation
+    logo: monogram
+    monogram: W
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://writer.com/blog/long-context-palmyra-x5/
+  family: palmyra
+  released_at: 2025-04-28
+  lifecycle: active
+  limits:
+    context_window_size: 1000000
+  capabilities: [chat, reasoning, tools, structured_output, vision, long_context]
+  modalities:
+    input: [text, image]
+    output: [text]
+  verification: &writer-verification
+    authority: Writer
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://dev.writer.com/home/models
+  tags: [proprietary, reasoning, enterprise, agentic, multimodal, long_context]
+- id: writer/palmyra-x4
+  display_name: Palmyra X4
+  description: Previous-generation enterprise reasoning model for tool-using and grounded workflows.
+  kind: physical
+  publisher: Writer
+  presentation: *writer-presentation
+  distribution:
+    type: proprietary_api
+    source: https://dev.writer.com/home/models
+  family: palmyra
+  lifecycle: active
+  limits:
+    context_window_size: 128000
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities:
+    input: [text]
+    output: [text]
+  verification: *writer-verification
+  tags: [proprietary, reasoning, enterprise, agentic, long_context]

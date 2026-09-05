@@ -1,0 +1,43 @@
+- id: skt/ax-k2-model-card-gpqa-diamond@1.0.0
+  model: skt/ax-k2
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject: &ax-k2-subject
+    variant: A.X-K2
+    mode: thinking
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.856
+  status: available
+  evidence: &ax-k2-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/skt/A.X-K2
+    redistributable: true
+- id: skt/ax-k2-model-card-humanitys-last-exam@1.0.0
+  model: skt/ax-k2
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: enabled
+  subject: *ax-k2-subject
+  metrics:
+    accuracy: 0.278
+  status: available
+  evidence: *ax-k2-evidence
+- id: skt/ax-k2-model-card-terminal-bench@1.0.0
+  model: skt/ax-k2
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: enabled
+  subject:
+    <<: *ax-k2-subject
+    measurement_origin: Artificial Analysis
+  metrics:
+    resolved: 0.36
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://huggingface.co/skt/A.X-K2
+    redistributable: true

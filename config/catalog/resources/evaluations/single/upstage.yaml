@@ -1,0 +1,99 @@
+- id: upstage/solar-open2-model-card-mmlu-pro@1.0.0
+  model: upstage/solar-open2-250b
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: high
+  subject: &solar-subject
+    variant: Solar-Open-2-250B
+    reasoning_mode: high
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.862
+  status: available
+  evidence: &solar-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/upstage/Solar-Open-2-250B
+    redistributable: true
+- id: upstage/solar-open2-model-card-gpqa-diamond@1.0.0
+  model: upstage/solar-open2-250b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: high
+  subject: *solar-subject
+  metrics:
+    accuracy: 0.863
+  status: available
+  evidence: *solar-evidence
+- id: upstage/solar-open2-model-card-humanitys-last-exam@1.0.0
+  model: upstage/solar-open2-250b
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: high
+  subject: *solar-subject
+  metrics:
+    accuracy: 0.288
+  status: available
+  evidence: *solar-evidence
+- id: upstage/solar-open2-model-card-swe-bench-verified@1.0.0
+  model: upstage/solar-open2-250b
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: high
+  subject: *solar-subject
+  metrics:
+    resolved: 0.704
+  status: available
+  evidence: *solar-evidence
+- id: upstage/solar-open2-model-card-gdpval-aa@1.0.0
+  model: upstage/solar-open2-250b
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: high
+  subject: *solar-subject
+  metrics:
+    elo: 1128
+  status: available
+  evidence: *solar-evidence
+- id: upstage/solar-pro4-model-card-mmlu-pro@1.0.0
+  model: upstage/solar-pro-4
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: published
+  subject: &solar-pro4-official-subject
+    variant: Solar Pro 4
+    source_kind: official_release
+  metrics:
+    accuracy: 0.863
+  status: available
+  evidence: &solar-pro4-official-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://www.upstage.ai/blog/en/solar-pro-4
+    redistributable: true
+- id: upstage/solar-pro4-model-card-swe-bench-verified@1.0.0
+  model: upstage/solar-pro-4
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: published
+  subject: *solar-pro4-official-subject
+  metrics:
+    resolved: 0.706
+  status: available
+  evidence: *solar-pro4-official-evidence
+- id: upstage/solar-pro3-model-card-terminal-bench-2.0@1.0.0
+  model: upstage/solar-pro-3
+  benchmark: harbor/terminal-bench@2.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: published
+  subject: &solar-pro3-subject
+    variant: solar-pro3-260323
+    source_kind: official_release
+  metrics:
+    resolved: 0.101
+  status: available
+  evidence: &solar-pro3-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://www.upstage.ai/blog/en/solar-pro-3-0323
+    redistributable: true

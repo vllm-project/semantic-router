@@ -1,0 +1,29 @@
+- id: skt/ax-k2
+  display_name: A.X K2
+  description: SK Telecom's open-weight frontier MoE for multilingual reasoning and agentic workflows.
+  kind: physical
+  publisher: SK Telecom
+  presentation:
+    logo: monogram
+    monogram: AX
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/skt/A.X-K2
+    license: Apache-2.0
+  family: ax-k2
+  parameter_size: 688B (33B active)
+  reasoning_family: ax-k2
+  lifecycle: experimental
+  limits:
+    context_window_size: 262144
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities:
+    input: [text]
+    output: [text]
+  verification:
+    authority: SK Telecom
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/skt/A.X-K2
+  tags: [open_weights, frontier, multilingual, reasoning, agentic, moe]

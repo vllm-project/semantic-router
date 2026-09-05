@@ -1,26 +1,85 @@
-- id: minimax/minimax-m1-80k-model-card@1.0.0
+- id: minimax/minimax-m1-80k-model-card-mmlu-pro@1.0.0
   model: minimax/minimax-m1-80k
-  subject:
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject: &id001
     variant: MiniMax-M1-80K
     hle_mode: text_only
     swe_harness: agentless_486_task_subset
     source_kind: official_model_card
   metrics:
-    tiger-ai-lab/mmlu-pro@1.0.0#accuracy: 0.811
-    idavidrein/gpqa-diamond@1.0.0#accuracy: 0.700
-    cais/humanitys-last-exam@1.0.0#accuracy: 0.084
-    swe-bench/verified@1.0.0#resolved: 0.560
+    accuracy: 0.811
   status: available
-  evidence: {provenance: vendor_claimed, verification: claimed, source: https://huggingface.co/MiniMaxAI/MiniMax-M1-80k, redistributable: true}
-- id: minimax/minimax-m2.5-model-card@1.0.0
+  evidence: &id002
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/MiniMaxAI/MiniMax-M1-80k
+    redistributable: true
+- id: minimax/minimax-m1-80k-model-card-gpqa-diamond@1.0.0
+  model: minimax/minimax-m1-80k
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject: *id001
+  metrics:
+    accuracy: 0.7
+  status: available
+  evidence: *id002
+- id: minimax/minimax-m1-80k-model-card-humanitys-last-exam@1.0.0
+  model: minimax/minimax-m1-80k
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: default
+  subject: *id001
+  metrics:
+    accuracy: 0.084
+  status: available
+  evidence: *id002
+- id: minimax/minimax-m1-80k-model-card-verified@1.0.0
+  model: minimax/minimax-m1-80k
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: default
+  subject: *id001
+  metrics:
+    resolved: 0.56
+  status: available
+  evidence: *id002
+- id: minimax/minimax-m2.5-model-card-gpqa-diamond@1.0.0
   model: minimax/minimax-m2.5
-  subject:
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject: &id003
     variant: MiniMax-M2.5
     hle_mode: no_tools
     source_kind: official_model_card
   metrics:
-    idavidrein/gpqa-diamond@1.0.0#accuracy: 0.852
-    cais/humanitys-last-exam@1.0.0#accuracy: 0.194
-    swe-bench/verified@1.0.0#resolved: 0.802
+    accuracy: 0.852
   status: available
-  evidence: {provenance: vendor_claimed, verification: claimed, source: https://huggingface.co/MiniMaxAI/MiniMax-M2.5, redistributable: true}
+  evidence: &id004
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/MiniMaxAI/MiniMax-M2.5
+    redistributable: true
+- id: minimax/minimax-m2.5-model-card-humanitys-last-exam@1.0.0
+  model: minimax/minimax-m2.5
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: default
+  subject: *id003
+  metrics:
+    accuracy: 0.194
+  status: available
+  evidence: *id004
+- id: minimax/minimax-m2.5-model-card-verified@1.0.0
+  model: minimax/minimax-m2.5
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: default
+  subject: *id003
+  metrics:
+    resolved: 0.802
+  status: available
+  evidence: *id004

@@ -1,0 +1,26 @@
+- id: sakana/fugu-ultra-model-card-gpqa-diamond@1.0.0
+  model: sakana/fugu-ultra
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: published
+  subject: &fugu-ultra-subject
+    variant: Fugu Ultra
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.951
+  status: available
+  evidence: &fugu-ultra-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://sakana.ai/fugu-beta/
+    redistributable: true
+- id: sakana/fugu-ultra-model-card-swe-bench-pro@1.0.0
+  model: sakana/fugu-ultra
+  benchmark: swe-bench/pro@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: published
+  subject: *fugu-ultra-subject
+  metrics:
+    resolved: 0.542
+  status: available
+  evidence: *fugu-ultra-evidence

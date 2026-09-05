@@ -1,0 +1,21 @@
+id: lemonade
+display_name: Lemonade
+description: Connect a private Lemonade endpoint.
+category: private_runtime
+support_tier: runtime
+protocols:
+- openai/chat-completions@1
+default_protocol: openai/chat-completions@1
+supported_operations:
+- openai/chat-completions@1#create
+- openai/chat-completions@1#list_models
+auth:
+  strategy: none
+  header: ''
+  prefix: ''
+presentation:
+  logo: public:/amd.png
+  monogram: L
+  monochrome: false
+conformance:
+  status: unverified

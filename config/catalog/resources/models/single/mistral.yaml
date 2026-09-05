@@ -3,52 +3,121 @@
   description: Mistral's balanced proprietary model for multimodal enterprise workloads.
   kind: physical
   publisher: Mistral AI
-  presentation: {logo: package:mistral, monogram: M, monochrome: false}
-  distribution: {type: proprietary_api, source: https://docs.mistral.ai/getting-started/models/models_overview/}
+  presentation:
+    logo: package:mistral
+    monogram: M
+    monochrome: false
+  distribution:
+    type: proprietary_api
+    source: https://docs.mistral.ai/getting-started/models/models_overview/
   family: mistral-medium
   lifecycle: active
-  capabilities: [chat, reasoning, tools, structured_output, vision, long_context]
-  modalities: {input: [text, image], output: [text]}
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
   reasoning_family: mistral
-  protocols: [openai/chat-completions@1]
-  verification: {authority: Mistral AI, status: claimed, verified_at: 2026-09-05, source: https://docs.mistral.ai/getting-started/models/models_overview/}
-  tags: [proprietary, multimodal, enterprise]
+  verification:
+    authority: Mistral AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.mistral.ai/getting-started/models/models_overview/
+  tags:
+  - proprietary
+  - multimodal
+  - enterprise
 - id: mistral/mistral-medium-3.5
   display_name: Mistral Medium 3.5
   description: Mistral's current balanced model for reasoning and production agents.
   kind: physical
   publisher: Mistral AI
-  presentation: {logo: package:mistral, monogram: M, monochrome: false}
-  distribution: {type: proprietary_api, source: https://docs.mistral.ai/getting-started/models/models_overview/}
+  presentation:
+    logo: package:mistral
+    monogram: M
+    monochrome: false
+  distribution:
+    type: proprietary_api
+    source: https://docs.mistral.ai/getting-started/models/models_overview/
   family: mistral-medium
   lifecycle: active
-  capabilities: [chat, reasoning, tools, structured_output, vision, long_context]
-  modalities: {input: [text, image], output: [text]}
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
   reasoning_family: mistral
-  protocols: [openai/chat-completions@1]
-  verification: {authority: Mistral AI, status: claimed, verified_at: 2026-09-05, source: https://docs.mistral.ai/getting-started/models/models_overview/}
-  tags: [proprietary, multimodal, enterprise]
+  verification:
+    authority: Mistral AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.mistral.ai/getting-started/models/models_overview/
+  tags:
+  - proprietary
+  - multimodal
+  - enterprise
 - id: mistral/mistral-small-3.2-24b
   display_name: Mistral Small 3.2 24B
   description: Dense open-weight multimodal Mistral model for private deployment.
   kind: physical
   publisher: Mistral AI
-  presentation: {logo: package:mistral, monogram: M, monochrome: false}
-  distribution: {type: open_weights, source: https://huggingface.co/mistralai/Mistral-Small-3.2-24B-Instruct-2506, license: Apache-2.0}
+  presentation:
+    logo: package:mistral
+    monogram: M
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/mistralai/Mistral-Small-3.2-24B-Instruct-2506
+    license: Apache-2.0
   family: mistral-small-3
   parameter_size: 24B
   lifecycle: active
-  capabilities: [chat, tools, structured_output, vision, long_context]
-  modalities: {input: [text, image], output: [text]}
-  protocols: [openai/chat-completions@1, openai/responses@1]
-  verification: {authority: Mistral AI, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/mistralai/Mistral-Small-3.2-24B-Instruct-2506}
-  tags: [open_weights, multimodal, dense]
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Mistral AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/mistralai/Mistral-Small-3.2-24B-Instruct-2506
+  tags:
+  - open_weights
+  - multimodal
+  - dense
 - id: mistral/mistral-small-4
   display_name: Mistral Small 4
   description: Open-weight multimodal MoE model with configurable reasoning.
   kind: physical
   publisher: Mistral AI
-  presentation: {logo: package:mistral, monogram: M, monochrome: false}
+  presentation:
+    logo: package:mistral
+    monogram: M
+    monochrome: false
   distribution:
     type: open_weights
     source: https://huggingface.co/mistralai/Mistral-Small-4-119B-2603
@@ -56,137 +125,775 @@
   family: mistral-small-4
   parameter_size: 119B (6.5B active)
   lifecycle: active
-  limits: {context_window_size: 262144}
-  capabilities: [chat, reasoning, tools, structured_output, vision, long_context]
-  modalities: {input: [text, image], output: [text]}
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
   reasoning_family: mistral
-  protocols: [openai/chat-completions@1, openai/responses@1]
   verification:
     authority: Mistral AI
     status: claimed
     verified_at: 2026-09-05
     source: https://huggingface.co/mistralai/Mistral-Small-4-119B-2603
-  tags: [open_weights, multimodal, moe]
+  tags:
+  - open_weights
+  - multimodal
+  - moe
 - id: mistral/mistral-large-3
   display_name: Mistral Large 3
   description: Large open-weight Mistral MoE model for multimodal enterprise agents.
   kind: physical
   publisher: Mistral AI
-  presentation: {logo: package:mistral, monogram: M, monochrome: false}
-  distribution: {type: open_weights, source: https://huggingface.co/mistralai/Mistral-Large-3-675B-Instruct-2512, license: Apache-2.0}
+  presentation:
+    logo: package:mistral
+    monogram: M
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/mistralai/Mistral-Large-3-675B-Instruct-2512
+    license: Apache-2.0
   family: mistral-large-3
   parameter_size: 675B
   lifecycle: active
-  capabilities: [chat, reasoning, tools, structured_output, vision, long_context]
-  modalities: {input: [text, image], output: [text]}
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
   reasoning_family: mistral
-  protocols: [openai/chat-completions@1, openai/responses@1]
-  verification: {authority: Mistral AI, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/mistralai/Mistral-Large-3-675B-Instruct-2512}
-  tags: [open_weights, multimodal, moe, frontier]
+  verification:
+    authority: Mistral AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/mistralai/Mistral-Large-3-675B-Instruct-2512
+  tags:
+  - open_weights
+  - multimodal
+  - moe
+  - frontier
 - id: mistral/ministral-3-3b
   display_name: Ministral 3 3B
   description: Compact open-weight multimodal Mistral model for edge deployment.
   kind: physical
   publisher: Mistral AI
-  presentation: {logo: package:mistral, monogram: M, monochrome: false}
-  distribution: {type: open_weights, source: https://huggingface.co/mistralai/Ministral-3-3B-Instruct-2512, license: Apache-2.0}
+  presentation:
+    logo: package:mistral
+    monogram: M
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/mistralai/Ministral-3-3B-Instruct-2512
+    license: Apache-2.0
   family: ministral-3
   parameter_size: 3B
   lifecycle: active
-  capabilities: [chat, tools, structured_output, vision, long_context]
-  modalities: {input: [text, image], output: [text]}
-  protocols: [openai/chat-completions@1, openai/responses@1]
-  verification: {authority: Mistral AI, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/mistralai/Ministral-3-3B-Instruct-2512}
-  tags: [open_weights, multimodal, edge]
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Mistral AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/mistralai/Ministral-3-3B-Instruct-2512
+  tags:
+  - open_weights
+  - multimodal
+  - edge
 - id: mistral/ministral-3-8b
   display_name: Ministral 3 8B
   description: Efficient open-weight multimodal Mistral model for local serving.
   kind: physical
   publisher: Mistral AI
-  presentation: {logo: package:mistral, monogram: M, monochrome: false}
-  distribution: {type: open_weights, source: https://huggingface.co/mistralai/Ministral-3-8B-Instruct-2512, license: Apache-2.0}
+  presentation:
+    logo: package:mistral
+    monogram: M
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/mistralai/Ministral-3-8B-Instruct-2512
+    license: Apache-2.0
   family: ministral-3
   parameter_size: 8B
   lifecycle: active
-  capabilities: [chat, tools, structured_output, vision, long_context]
-  modalities: {input: [text, image], output: [text]}
-  protocols: [openai/chat-completions@1, openai/responses@1]
-  verification: {authority: Mistral AI, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/mistralai/Ministral-3-8B-Instruct-2512}
-  tags: [open_weights, multimodal, efficient]
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Mistral AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/mistralai/Ministral-3-8B-Instruct-2512
+  tags:
+  - open_weights
+  - multimodal
+  - efficient
 - id: mistral/ministral-3-14b
   display_name: Ministral 3 14B
   description: Open-weight multimodal Ministral model for capable private inference.
   kind: physical
   publisher: Mistral AI
-  presentation: {logo: package:mistral, monogram: M, monochrome: false}
-  distribution: {type: open_weights, source: https://huggingface.co/mistralai/Ministral-3-14B-Instruct-2512, license: Apache-2.0}
+  presentation:
+    logo: package:mistral
+    monogram: M
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/mistralai/Ministral-3-14B-Instruct-2512
+    license: Apache-2.0
   family: ministral-3
   parameter_size: 14B
   lifecycle: active
-  capabilities: [chat, tools, structured_output, vision, long_context]
-  modalities: {input: [text, image], output: [text]}
-  protocols: [openai/chat-completions@1, openai/responses@1]
-  verification: {authority: Mistral AI, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/mistralai/Ministral-3-14B-Instruct-2512}
-  tags: [open_weights, multimodal]
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Mistral AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/mistralai/Ministral-3-14B-Instruct-2512
+  tags:
+  - open_weights
+  - multimodal
 - id: mistral/devstral-small-2-24b
   display_name: Devstral Small 2 24B
   description: Compact open-weight Mistral software-engineering agent model with vision support.
   kind: physical
   publisher: Mistral AI
-  presentation: {logo: package:mistral, monogram: M, monochrome: false}
-  distribution: {type: open_weights, source: https://huggingface.co/mistralai/Devstral-Small-2-24B-Instruct-2512, license: Apache-2.0}
+  presentation:
+    logo: package:mistral
+    monogram: M
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/mistralai/Devstral-Small-2-24B-Instruct-2512
+    license: Apache-2.0
   family: devstral-2
   parameter_size: 24B
   lifecycle: active
-  capabilities: [chat, reasoning, tools, structured_output, vision, long_context]
-  modalities: {input: [text, image], output: [text]}
-  protocols: [openai/chat-completions@1, openai/responses@1]
-  verification: {authority: Mistral AI, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/mistralai/Devstral-Small-2-24B-Instruct-2512}
-  tags: [open_weights, coding, agentic]
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Mistral AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/mistralai/Devstral-Small-2-24B-Instruct-2512
+  tags:
+  - open_weights
+  - coding
+  - agentic
 - id: mistral/devstral-2-123b
   display_name: Devstral 2 123B
   description: Large open-weight Mistral model specialized for repository-scale software agents.
   kind: physical
   publisher: Mistral AI
-  presentation: {logo: package:mistral, monogram: M, monochrome: false}
-  distribution: {type: open_weights, source: https://huggingface.co/mistralai/Devstral-2-123B-Instruct-2512, license: Modified-MIT}
+  presentation:
+    logo: package:mistral
+    monogram: M
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/mistralai/Devstral-2-123B-Instruct-2512
+    license: Modified-MIT
   family: devstral-2
   parameter_size: 123B
   lifecycle: active
-  capabilities: [chat, reasoning, tools, structured_output, long_context]
-  modalities: {input: [text], output: [text]}
-  protocols: [openai/chat-completions@1, openai/responses@1]
-  verification: {authority: Mistral AI, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/mistralai/Devstral-2-123B-Instruct-2512}
-  tags: [open_weights, coding, agentic]
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Mistral AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/mistralai/Devstral-2-123B-Instruct-2512
+  tags:
+  - open_weights
+  - coding
+  - agentic
 - id: mistral/magistral-small-2509
   display_name: Magistral Small 1.2
   description: Open-weight Mistral reasoning model with multilingual and vision capabilities.
   kind: physical
   publisher: Mistral AI
-  presentation: {logo: package:mistral, monogram: M, monochrome: false}
-  distribution: {type: open_weights, source: https://huggingface.co/mistralai/Magistral-Small-2509, license: Apache-2.0}
+  presentation:
+    logo: package:mistral
+    monogram: M
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/mistralai/Magistral-Small-2509
+    license: Apache-2.0
   family: magistral
   parameter_size: 24B
   lifecycle: active
-  limits: {context_window_size: 131072}
-  capabilities: [chat, reasoning, tools, vision, long_context]
-  modalities: {input: [text, image], output: [text]}
-  protocols: [openai/chat-completions@1, openai/responses@1]
-  verification: {authority: Mistral AI, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/mistralai/Magistral-Small-2509}
-  tags: [open_weights, reasoning, multimodal]
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Mistral AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/mistralai/Magistral-Small-2509
+  tags:
+  - open_weights
+  - reasoning
+  - multimodal
 - id: mistral/pixtral-12b-2409
   display_name: Pixtral 12B 2409
   description: Open-weight Mistral vision-language model with variable-resolution image input.
   kind: physical
   publisher: Mistral AI
-  presentation: {logo: package:mistral, monogram: M, monochrome: false}
-  distribution: {type: open_weights, source: https://huggingface.co/mistralai/Pixtral-12B-2409, license: Apache-2.0}
+  presentation:
+    logo: package:mistral
+    monogram: M
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/mistralai/Pixtral-12B-2409
+    license: Apache-2.0
   family: pixtral
   parameter_size: 12B (+400M vision encoder)
   lifecycle: active
-  limits: {context_window_size: 131072}
-  capabilities: [chat, tools, vision, long_context]
-  modalities: {input: [text, image], output: [text]}
-  protocols: [openai/chat-completions@1, openai/responses@1]
-  verification: {authority: Mistral AI, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/mistralai/Pixtral-12B-2409}
-  tags: [open_weights, multimodal]
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - tools
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Mistral AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/mistralai/Pixtral-12B-2409
+  tags:
+  - open_weights
+  - multimodal
+- id: mistral/mistral-7b-instruct-v0.3
+  display_name: Mistral 7B Instruct v0.3
+  description: Compact previous-generation Mistral instruction model.
+  kind: physical
+  publisher: Mistral AI
+  presentation:
+    logo: package:mistral
+    monogram: M
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.3
+    license: Apache-2.0
+  family: mistral-7b
+  parameter_size: 7B
+  lifecycle: active
+  limits:
+    context_window_size: 32768
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Mistral AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.3
+  tags:
+  - open_weights
+  - efficient
+  - previous_generation
+- id: mistral/mistral-nemo-instruct-2407
+  display_name: Mistral NeMo Instruct 2407
+  description: Open-weight multilingual Mistral NeMo instruction model.
+  kind: physical
+  publisher: Mistral AI
+  presentation:
+    logo: package:mistral
+    monogram: M
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/mistralai/Mistral-Nemo-Instruct-2407
+    license: Apache-2.0
+  family: mistral-nemo
+  parameter_size: 12B
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Mistral AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/mistralai/Mistral-Nemo-Instruct-2407
+  tags:
+  - open_weights
+  - multilingual
+  - previous_generation
+- id: mistral/mixtral-8x7b-instruct-v0.1
+  display_name: Mixtral 8x7B Instruct v0.1
+  description: Sparse mixture-of-experts Mistral instruction model.
+  kind: physical
+  publisher: Mistral AI
+  presentation:
+    logo: package:mistral
+    monogram: M
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/mistralai/Mixtral-8x7B-Instruct-v0.1
+    license: Apache-2.0
+  family: mixtral
+  parameter_size: 46.7B (12.9B active)
+  lifecycle: active
+  limits:
+    context_window_size: 32768
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Mistral AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/mistralai/Mixtral-8x7B-Instruct-v0.1
+  tags:
+  - open_weights
+  - moe
+  - previous_generation
+- id: mistral/mixtral-8x22b-instruct-v0.1
+  display_name: Mixtral 8x22B Instruct v0.1
+  description: Large sparse mixture-of-experts Mistral instruction model.
+  kind: physical
+  publisher: Mistral AI
+  presentation:
+    logo: package:mistral
+    monogram: M
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/mistralai/Mixtral-8x22B-Instruct-v0.1
+    license: Apache-2.0
+  family: mixtral
+  parameter_size: 141B (39B active)
+  lifecycle: active
+  limits:
+    context_window_size: 65536
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Mistral AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/mistralai/Mixtral-8x22B-Instruct-v0.1
+  tags:
+  - open_weights
+  - moe
+  - previous_generation
+- id: mistral/mistral-small-3.1-24b-instruct
+  display_name: Mistral Small 3.1 24B Instruct
+  description: Open-weight multimodal Mistral model for local agents.
+  kind: physical
+  publisher: Mistral AI
+  presentation:
+    logo: package:mistral
+    monogram: M
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/mistralai/Mistral-Small-3.1-24B-Instruct-2503
+    license: Apache-2.0
+  family: mistral-small
+  parameter_size: 24B
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - tools
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Mistral AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/mistralai/Mistral-Small-3.1-24B-Instruct-2503
+  tags:
+  - open_weights
+  - multimodal
+  - agentic
+- id: mistral/mistral-small-24b-instruct-2501
+  display_name: Mistral Small 24B Instruct 2501
+  description: Open-weight Mistral instruction model for local serving.
+  kind: physical
+  publisher: Mistral AI
+  presentation:
+    logo: package:mistral
+    monogram: M
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/mistralai/Mistral-Small-24B-Instruct-2501
+    license: Apache-2.0
+  family: mistral-small
+  parameter_size: 24B
+  lifecycle: active
+  limits:
+    context_window_size: 32768
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Mistral AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/mistralai/Mistral-Small-24B-Instruct-2501
+  tags:
+  - open_weights
+  - dense
+  - previous_generation
+- id: mistral/codestral-22b-v0.1
+  display_name: Codestral 22B v0.1
+  description: Open-weight Mistral coding model for completion and generation.
+  kind: physical
+  publisher: Mistral AI
+  presentation:
+    logo: package:mistral
+    monogram: M
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/mistralai/Codestral-22B-v0.1
+    license: MNPL-0.1
+  family: codestral
+  parameter_size: 22B
+  lifecycle: active
+  limits:
+    context_window_size: 32768
+  capabilities:
+  - chat
+  - coding
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Mistral AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/mistralai/Codestral-22B-v0.1
+  tags:
+  - open_weights
+  - coding
+  - previous_generation
+- id: mistral/pixtral-large-instruct-2411
+  display_name: Pixtral Large Instruct 2411
+  description: Large open-weight Mistral vision-language instruction model.
+  kind: physical
+  publisher: Mistral AI
+  presentation:
+    logo: package:mistral
+    monogram: M
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/mistralai/Pixtral-Large-Instruct-2411
+    license: MRL-0.1
+  family: pixtral
+  parameter_size: 124B
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - tools
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Mistral AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/mistralai/Pixtral-Large-Instruct-2411
+  tags:
+  - open_weights
+  - multimodal
+  - previous_generation
+- id: mistral/mistral-large-instruct-2411
+  display_name: Mistral Large Instruct 2411
+  description: Large open-weight Mistral instruction model.
+  kind: physical
+  publisher: Mistral AI
+  presentation:
+    logo: package:mistral
+    monogram: M
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/mistralai/Mistral-Large-Instruct-2411
+    license: MRL-0.1
+  family: mistral-large
+  parameter_size: 123B
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Mistral AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/mistralai/Mistral-Large-Instruct-2411
+  tags:
+  - open_weights
+  - dense
+  - previous_generation
+- id: mistral/magistral-small-2506
+  display_name: Magistral Small 2506
+  description: Open-weight Mistral reasoning model for transparent multi-step work.
+  kind: physical
+  publisher: Mistral AI
+  presentation:
+    logo: package:mistral
+    monogram: M
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/mistralai/Magistral-Small-2506
+    license: Apache-2.0
+  family: magistral
+  parameter_size: 24B
+  lifecycle: active
+  limits:
+    context_window_size: 40960
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  reasoning_family: mistral
+  verification:
+    authority: Mistral AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/mistralai/Magistral-Small-2506
+  tags:
+  - open_weights
+  - reasoning
+  - previous_generation
+- id: mistral/codestral-mamba-7b-v0.1
+  display_name: Codestral Mamba 7B v0.1
+  description: Linear-time open-weight coding model from Mistral.
+  kind: physical
+  publisher: Mistral AI
+  presentation:
+    logo: package:mistral
+    monogram: M
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/mistralai/Mamba-Codestral-7B-v0.1
+    license: Apache-2.0
+  family: codestral-mamba
+  parameter_size: 7B
+  lifecycle: active
+  limits:
+    context_window_size: 256000
+  capabilities:
+  - chat
+  - coding
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Mistral AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/mistralai/Mamba-Codestral-7B-v0.1
+  tags:
+  - open_weights
+  - coding
+  - efficient
+  - long_context
+- id: mistral/ministral-8b-instruct-2410
+  display_name: Ministral 8B Instruct 2410
+  description: Compact Mistral instruction model for edge deployment.
+  kind: physical
+  publisher: Mistral AI
+  presentation:
+    logo: package:mistral
+    monogram: M
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/mistralai/Ministral-8B-Instruct-2410
+    license: MRL-0.1
+  family: ministral
+  parameter_size: 8B
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Mistral AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/mistralai/Ministral-8B-Instruct-2410
+  tags:
+  - open_weights
+  - edge
+  - efficient
+  - previous_generation

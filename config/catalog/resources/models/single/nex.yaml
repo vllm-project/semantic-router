@@ -1,0 +1,49 @@
+- id: nex-agi/nex-n2-pro
+  display_name: Nex-N2-Pro
+  description: Open-weight frontier agent model for long-horizon software engineering and terminal workflows.
+  kind: physical
+  publisher: Nex AGI
+  presentation: &nex-presentation
+    logo: monogram
+    monogram: N2
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/nex-agi/Nex-N2-Pro
+    license: Apache-2.0
+  family: nex-n2
+  parameter_size: 397B (17B active)
+  lifecycle: experimental
+  limits:
+    context_window_size: 262144
+  capabilities: [chat, reasoning, tools, structured_output, vision, long_context]
+  modalities: &nex-modalities
+    input: [text, image]
+    output: [text]
+  verification: &nex-verification
+    authority: Nex AGI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/nex-agi/Nex-N2-Pro
+  tags: [open_weights, reasoning, agentic, coding, frontier]
+- id: nex-agi/nex-n2-mini
+  display_name: Nex-N2-Mini
+  description: Efficient open-weight Nex agent model for coding, tool use, and terminal workflows.
+  kind: physical
+  publisher: Nex AGI
+  presentation: *nex-presentation
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/nex-agi/Nex-N2-Mini
+    license: Apache-2.0
+  family: nex-n2
+  parameter_size: 35B (3B active)
+  lifecycle: experimental
+  limits:
+    context_window_size: 262144
+  capabilities: [chat, reasoning, tools, structured_output, vision, long_context]
+  modalities: *nex-modalities
+  verification:
+    <<: *nex-verification
+    source: https://huggingface.co/nex-agi/Nex-N2-Mini
+  tags: [open_weights, reasoning, agentic, coding, efficient]

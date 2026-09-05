@@ -1,0 +1,96 @@
+- id: nanbeige/nanbeige4.1-3b-model-card-gpqa@1.0.0
+  model: nanbeige/nanbeige4.1-3b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject: &nanbeige41-subject
+    variant: Nanbeige4.1-3B
+    reasoning_mode: reasoning
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.838
+  status: available
+  evidence: &nanbeige41-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Nanbeige/Nanbeige4.1-3B
+    redistributable: true
+- id: nanbeige/nanbeige4.1-3b-model-card-hle-no-tools@1.0.0
+  model: nanbeige/nanbeige4.1-3b
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: default
+  subject:
+    <<: *nanbeige41-subject
+    tool_policy: no-tools
+  metrics:
+    accuracy: 0.126
+  status: available
+  evidence: *nanbeige41-evidence
+- id: nanbeige/nanbeige4.1-3b-model-card-hle-tools@1.0.0
+  model: nanbeige/nanbeige4.1-3b
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: with-tools
+  reasoning_effort: default
+  subject:
+    <<: *nanbeige41-subject
+    tool_policy: with-tools
+    harness: MiroFlow
+  metrics:
+    accuracy: 0.2229
+  status: available
+  evidence: *nanbeige41-evidence
+- id: nanbeige/nanbeige4.2-3b-model-card-gpqa-thinking@1.0.0
+  model: nanbeige/nanbeige4.2-3b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject: &nanbeige42-subject
+    variant: Nanbeige4.2-3B
+    reasoning_mode: thinking
+    preserve_thinking: true
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.874
+  status: available
+  evidence: &nanbeige42-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Nanbeige/Nanbeige4.2-3B
+    redistributable: true
+- id: nanbeige/nanbeige4.2-3b-model-card-hle-thinking@1.0.0
+  model: nanbeige/nanbeige4.2-3b
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: enabled
+  subject:
+    <<: *nanbeige42-subject
+    tool_policy: no-tools
+  metrics:
+    accuracy: 0.178
+  status: available
+  evidence: *nanbeige42-evidence
+- id: nanbeige/nanbeige4.2-3b-model-card-swe-bench-thinking@1.0.0
+  model: nanbeige/nanbeige4.2-3b
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: enabled
+  subject:
+    <<: *nanbeige42-subject
+    harness: OpenHands
+  metrics:
+    resolved: 0.636
+  status: available
+  evidence: *nanbeige42-evidence
+- id: nanbeige/nanbeige4.2-3b-model-card-terminal-bench-2.0-thinking@1.0.0
+  model: nanbeige/nanbeige4.2-3b
+  benchmark: harbor/terminal-bench@2.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: enabled
+  subject:
+    <<: *nanbeige42-subject
+    harness: Terminus 2
+  metrics:
+    resolved: 0.441
+  status: available
+  evidence: *nanbeige42-evidence

@@ -1,0 +1,96 @@
+- id: nousresearch/hermes-4-70b-report-mmlu-pro-reasoning@1.0.0
+  model: nousresearch/hermes-4-70b
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject: &hermes4-70b-reasoning-subject
+    variant: Hermes 4 70B
+    reasoning_mode: reasoning
+    source_kind: official_technical_report
+  metrics:
+    accuracy: 0.807
+  status: available
+  evidence: &hermes4-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/abs/2508.18255
+    redistributable: true
+- id: nousresearch/hermes-4-70b-report-gpqa-diamond-reasoning@1.0.0
+  model: nousresearch/hermes-4-70b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject: *hermes4-70b-reasoning-subject
+  metrics:
+    accuracy: 0.661
+  status: available
+  evidence: *hermes4-evidence
+- id: nousresearch/hermes-4-70b-report-mmlu-pro-non-reasoning@1.0.0
+  model: nousresearch/hermes-4-70b
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: disabled
+  subject: &hermes4-70b-direct-subject
+    variant: Hermes 4 70B
+    reasoning_mode: non-reasoning
+    source_kind: official_technical_report
+  metrics:
+    accuracy: 0.549
+  status: available
+  evidence: *hermes4-evidence
+- id: nousresearch/hermes-4-70b-report-gpqa-diamond-non-reasoning@1.0.0
+  model: nousresearch/hermes-4-70b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: disabled
+  subject: *hermes4-70b-direct-subject
+  metrics:
+    accuracy: 0.333
+  status: available
+  evidence: *hermes4-evidence
+- id: nousresearch/hermes-4-405b-report-mmlu-pro-reasoning@1.0.0
+  model: nousresearch/hermes-4-405b
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject: &hermes4-405b-reasoning-subject
+    variant: Hermes 4 405B
+    reasoning_mode: reasoning
+    source_kind: official_technical_report
+  metrics:
+    accuracy: 0.805
+  status: available
+  evidence: *hermes4-evidence
+- id: nousresearch/hermes-4-405b-report-gpqa-diamond-reasoning@1.0.0
+  model: nousresearch/hermes-4-405b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject: *hermes4-405b-reasoning-subject
+  metrics:
+    accuracy: 0.705
+  status: available
+  evidence: *hermes4-evidence
+- id: nousresearch/hermes-4-405b-report-mmlu-pro-non-reasoning@1.0.0
+  model: nousresearch/hermes-4-405b
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: disabled
+  subject: &hermes4-405b-direct-subject
+    variant: Hermes 4 405B
+    reasoning_mode: non-reasoning
+    source_kind: official_technical_report
+  metrics:
+    accuracy: 0.583
+  status: available
+  evidence: *hermes4-evidence
+- id: nousresearch/hermes-4-405b-report-gpqa-diamond-non-reasoning@1.0.0
+  model: nousresearch/hermes-4-405b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: disabled
+  subject: *hermes4-405b-direct-subject
+  metrics:
+    accuracy: 0.394
+  status: available
+  evidence: *hermes4-evidence

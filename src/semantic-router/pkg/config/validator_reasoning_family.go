@@ -50,7 +50,44 @@ func validateReasoningFamilyContracts(cfg *RouterConfig) error {
 				ReasoningFamilyTypeTopLevelReasoningEffort,
 			)
 		}
+		if err := validateReasoningFamilyLevels(familyName, family); err != nil {
+			return err
+		}
 	}
 
+	return nil
+}
+
+func validateReasoningFamilyLevels(name string, family ReasoningFamilyConfig) error {
+	if len(family.Levels) == 0 {
+		if family.Default != "" || family.Disabled != "" {
+			return fmt.Errorf(
+				"providers.defaults.reasoning_families[%q].levels must be set when default or disabled is set",
+				name,
+			)
+		}
+		// Legacy/custom families did not declare a finite level set. Keep those
+		// valid while every built-in family materializes the complete contract.
+		return nil
+	}
+
+	seen := make(map[string]struct{}, len(family.Levels))
+	for _, level := range family.Levels {
+		if strings.TrimSpace(level) == "" {
+			return fmt.Errorf("providers.defaults.reasoning_families[%q].levels must not contain an empty value", name)
+		}
+		if _, exists := seen[level]; exists {
+			return fmt.Errorf("providers.defaults.reasoning_families[%q].levels contains duplicate %q", name, level)
+		}
+		seen[level] = struct{}{}
+	}
+	if _, ok := seen[family.Default]; !ok {
+		return fmt.Errorf("providers.defaults.reasoning_families[%q].default %q must be listed in levels", name, family.Default)
+	}
+	if family.Disabled != "" {
+		if _, ok := seen[family.Disabled]; !ok {
+			return fmt.Errorf("providers.defaults.reasoning_families[%q].disabled %q must be listed in levels", name, family.Disabled)
+		}
+	}
 	return nil
 }
