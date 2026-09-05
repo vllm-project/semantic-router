@@ -136,6 +136,10 @@ func (*leasedLearningRuntime) UpdateOutcome(_ context.Context, _ *RouterOutcome)
 	return RouterOutcomeResult{}
 }
 
+func (*leasedLearningRuntime) ExperienceSnapshots() []RouterExperienceSnapshot {
+	return nil
+}
+
 func (runtime *leasedLearningRuntime) AcquireLease() (func(), bool) {
 	runtime.mu.Lock()
 	defer runtime.mu.Unlock()

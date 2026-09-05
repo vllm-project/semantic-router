@@ -26,8 +26,18 @@ type routerLearningRuntime struct {
 // generation-scoped on routerLearningRuntime.
 type routerLearningSharedState struct {
 	mu              sync.Mutex
-	experience      map[string]*routerLearningModelExperience
+	experience      map[routerLearningExperienceKey]*routerLearningModelExperience
 	idempotencyKeys map[string]*outcomeIdempotencyClaim
+}
+
+// routerLearningExperienceKey identifies one decision/tier/model experience
+// context. decision is "_global" when the entry is decision-agnostic, mirroring
+// the tier/model fallback in experienceSnapshot, and may itself be a
+// recipe-scoped key (see outcomeDecisionKey) when recipes are in use.
+type routerLearningExperienceKey struct {
+	decision string
+	tier     int
+	model    string
 }
 
 type outcomeIdempotencyClaim struct {
@@ -228,7 +238,7 @@ func newRouterLearningRuntime(
 ) *routerLearningRuntime {
 	return &routerLearningRuntime{
 		shared: &routerLearningSharedState{
-			experience:      map[string]*routerLearningModelExperience{},
+			experience:      map[routerLearningExperienceKey]*routerLearningModelExperience{},
 			idempotencyKeys: map[string]*outcomeIdempotencyClaim{},
 		},
 		config:          cfg,
@@ -361,7 +371,7 @@ func (rt *routerLearningRuntime) experienceSnapshot(decisionName string, decisio
 	}
 	rt.shared.mu.Lock()
 	defer rt.shared.mu.Unlock()
-	for _, key := range []string{
+	for _, key := range []routerLearningExperienceKey{
 		modelExperienceKey(decisionName, decisionTier, model),
 		modelExperienceKey("", decisionTier, model),
 		modelExperienceKey("", 0, model),
@@ -380,11 +390,10 @@ func defaultRouterLearningModelExperience() routerLearningModelExperience {
 	}
 }
 
-func modelExperienceKey(decisionName string, decisionTier int, model string) string {
+func modelExperienceKey(decisionName string, decisionTier int, model string) routerLearningExperienceKey {
 	decisionName = strings.TrimSpace(decisionName)
-	model = strings.TrimSpace(model)
 	if decisionName == "" {
 		decisionName = "_global"
 	}
-	return decisionName + "|" + strconv.Itoa(decisionTier) + "|" + model
+	return routerLearningExperienceKey{decision: decisionName, tier: decisionTier, model: strings.TrimSpace(model)}
 }
