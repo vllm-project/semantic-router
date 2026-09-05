@@ -234,6 +234,91 @@ Use the maintainer board to decide what needs review, rebase, unblock, or
 close-candidate follow-up. Use `stale.yml` only for the automated stale/close
 lifecycle.
 
+### Assignee inactivity policy
+
+Open `accepted` issues with at least one assignee are subject to a daily
+two-stage inactivity sweep run by `maintenance.yml` →
+`unassign-inactive-assignees.yml`. Each assignee moves through the stages
+independently:
+
+- **15 days** without activity from that assignee: they receive a warning
+  comment naming them. No label is applied — the comment is the record.
+- **30 days** without activity **and** at least the 15-day grace window since
+  their own warning: the assignee is removed and a notice is posted. The issue
+  stays open and `accepted` for anyone to pick up.
+
+An assignee is never removed without a warning on record. An assignee first
+seen well past 30 days is warned on that run and only becomes removable a full
+grace window later, so a contributor cannot be dropped without notice on the
+sweep's first encounter with them.
+
+#### What counts as activity
+
+Activity is attributed to one assignee at a time, from Timeline API events:
+
+- their own comments and reviews on the issue;
+- their own comments, reviews, and force-pushes on a pull request
+  cross-referenced from the issue, plus opening such a pull request;
+- commits on those pull requests whose GitHub author or committer is that
+  assignee, read from the commit list rather than the timeline, which carries
+  only a git identity;
+- being assigned to the issue, which starts or restarts their clock.
+
+Every cross-referenced pull request in the same repository is evaluated, not
+just the most recent; the scan stops early only once activity recent enough to
+settle the outcome as active has been found.
+
+Deliberately excluded: bot writes, label and milestone churn, mentions, and
+anything done by another person. A linked pull request's `updated_at` is not
+used, so review traffic and CI writes on somebody else's pull request cannot
+keep an inactive assignee assigned, and an active co-assignee never shields an
+inactive one.
+
+#### Recovering and overriding
+
+- **Activity resumes.** Any qualifying event supersedes a pending warning; the
+  next sweep reports the assignee as recovered and takes no action. A fresh
+  warning is only posted if they go quiet for another 15 days.
+- **Extending an assignment.** Reassign the contributor (`gh issue edit
+  <n> --add-assignee <login>`) — the `assigned` event restarts their clock.
+- **Pausing an issue entirely.** Add the `hold` label. Issues carrying any
+  label listed in the workflow's `exempt_labels` input (default `hold`) are
+  skipped. Locked issues are skipped too, since they cannot receive a warning.
+- **Undoing a removal.** Re-assign the contributor. The removal notice from the
+  previous cycle is superseded by the new `assigned` event.
+
+#### Failure behaviour
+
+Every read that could prove recent activity fails closed: if the timeline,
+linked pull request, or comment lookup fails, that assignment is left untouched
+and the run is marked failed. Every write is guarded by a per-assignee marker
+comment, so a run that dies partway through resumes rather than double-posting
+or re-removing; the removal notice is always posted before the assignment is
+removed, and the removal is retried on the next run if it did not land. Re-run
+the workflow to retry a failed sweep — it only redoes what did not complete.
+
+Each run writes a job summary listing every transition, the days of inactivity
+behind it, and any failed evaluation.
+
+#### Running it manually
+
+```bash
+gh workflow run maintenance.yml -f task=unassign
+```
+
+The reusable workflow also accepts `dry_run`, `warn_after_days`,
+`unassign_after_days`, and `exempt_labels`; invoke it directly from the Actions
+UI or CLI to preview a sweep without mutations.
+
+Sweeps are serialized repository-wide by a single concurrency group, so a manual
+dispatch queues behind an in-flight scheduled sweep instead of racing it and
+double-posting a warning or removal notice.
+
+The workflow logic lives in `.github/scripts/unassign-inactive.js` and is
+covered by `.github/scripts/__tests__/`, run in CI by the `github-scripts-tests`
+pre-commit hook. Run it locally with `npm --prefix .github/scripts ci && npm
+--prefix .github/scripts test`.
+
 Manual trigger example:
 
 ```bash
