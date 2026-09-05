@@ -79,20 +79,11 @@ func (r *OpenAIRouter) applyPromptCachePolicy(
 		return nil
 	}
 
-	inserted := 0
-	ttl := plugin.EffectiveTTL()
-	for _, target := range plugin.EffectiveTargets() {
-		var added bool
-		switch target {
-		case config.PromptCacheTargetInstructions:
-			added = injectInstructionPromptCacheMarker(request, ttl)
-		case config.PromptCacheTargetTools:
-			added = injectToolPromptCacheMarker(request, ttl)
-		}
-		if added {
-			inserted++
-		}
-	}
+	inserted := injectPromptCacheMarkers(
+		request,
+		plugin.EffectiveTargets(),
+		plugin.EffectiveTTL(),
+	)
 
 	if inserted > 0 {
 		request.Generation++
@@ -116,6 +107,27 @@ func (r *OpenAIRouter) applyPromptCachePolicy(
 		time.Since(start),
 	)
 	return nil
+}
+
+func injectPromptCacheMarkers(
+	request *llmprotocol.Request,
+	targets []string,
+	ttl string,
+) int {
+	inserted := 0
+	for _, target := range targets {
+		switch target {
+		case config.PromptCacheTargetInstructions:
+			if injectInstructionPromptCacheMarker(request, ttl) {
+				inserted++
+			}
+		case config.PromptCacheTargetTools:
+			if injectToolPromptCacheMarker(request, ttl) {
+				inserted++
+			}
+		}
+	}
+	return inserted
 }
 
 func (r *OpenAIRouter) promptCacheTargetSupported(format llmprotocol.WireFormat) bool {

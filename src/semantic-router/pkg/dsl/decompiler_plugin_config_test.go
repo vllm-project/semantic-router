@@ -1,6 +1,7 @@
 package dsl
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -383,7 +384,7 @@ func TestPromptCachePluginRejectsInvalidFields(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_, errs := Compile(`
+			source := `
 ROUTE invalid_prompt_cache {
   PRIORITY 1
   MODEL "model"
@@ -392,13 +393,23 @@ ROUTE invalid_prompt_cache {
     ` + test.pluginBody + `
   }
 }
-`)
-			for _, err := range errs {
-				if strings.Contains(err.Error(), test.wantError) {
-					return
-				}
+`
+			_, errs := Compile(source)
+			if !slices.ContainsFunc(errs, func(err error) bool {
+				return strings.Contains(err.Error(), test.wantError)
+			}) {
+				t.Fatalf("compile errors = %v, want substring %q", errs, test.wantError)
 			}
-			t.Fatalf("compile errors = %v, want substring %q", errs, test.wantError)
+
+			diagnostics, parseErrs := Validate(source)
+			if len(parseErrs) != 0 {
+				t.Fatalf("parse errors = %v", parseErrs)
+			}
+			if !slices.ContainsFunc(diagnostics, func(diagnostic Diagnostic) bool {
+				return strings.Contains(diagnostic.Message, test.wantError)
+			}) {
+				t.Fatalf("validation diagnostics = %v, want substring %q", diagnostics, test.wantError)
+			}
 		})
 	}
 }
