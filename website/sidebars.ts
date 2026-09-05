@@ -407,6 +407,13 @@ const sidebars: SidebarsConfig = {
         },
         {
           type: 'category',
+          label: 'Evaluation & Quality',
+          items: [
+            'proposals/mom-first-class-evaluation',
+          ],
+        },
+        {
+          type: 'category',
           label: 'Configuration & Protocols',
           items: [
             'proposals/unified-config-contract-v0-3',
