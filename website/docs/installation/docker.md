@@ -70,6 +70,23 @@ set `VLLM_SR_ENVOY_LOG_LEVEL=debug` before starting the stack, then unset it
 when finished: debug logging can expose forwarded request headers, including
 provider `Authorization` headers, in logs.
 
+## Expose the Dashboard through a reverse proxy
+
+Grafana Live validates the `Origin` header used to establish its WebSocket.
+When an HTTPS reverse proxy exposes the Dashboard on a public hostname, allow
+that exact origin before starting the stack:
+
+```bash
+export GF_LIVE_ALLOWED_ORIGINS='https://dashboard.example.com'
+vllm-sr serve --config config.yaml
+```
+
+Separate multiple origins with commas. Use origins in
+`scheme://host[:port]` form without paths, queries, fragments, or trailing
+slashes. Grafana supports wildcard patterns, but exact origins are safer for
+public deployments. `vllm-sr serve` writes the value into the generated
+`.vllm-sr/grafana/grafana.serve.ini`; restart the stack after changing it.
+
 ## When to move to Kubernetes
 
 Docker does not provide multi-node scheduling, rolling deployment control, or
