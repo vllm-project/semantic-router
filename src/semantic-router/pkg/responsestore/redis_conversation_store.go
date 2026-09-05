@@ -216,11 +216,9 @@ func (s *RedisStore) ensureConversationIndexResolved(ctx context.Context, conver
 		return nil
 	}
 
-	migrated, err := s.conversationMigrated(ctx, conversationID)
-	if err != nil {
+	if _, resolved, err := s.conversationIndexProof(ctx, conversationID); err != nil {
 		return err
-	}
-	if migrated {
+	} else if resolved {
 		return nil
 	}
 	return s.ensureConversationIndex(ctx, conversationID)
