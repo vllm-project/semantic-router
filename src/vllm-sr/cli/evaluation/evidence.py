@@ -24,6 +24,7 @@ from cli.evaluation.method_evidence import (
     RecoveryMethodEvidence,
     RobustnessMethodEvidence,
 )
+from cli.evaluation.router_learning_evidence import RouterLearningMethodEvidence
 
 
 class RouteEvidence(StrictModel):
@@ -200,6 +201,7 @@ class ExecutionRecord(StrictModel):
     production_experiment: ProductionExperimentMethodEvidence | None = None
     online_preference: OnlinePreferenceMethodEvidence | None = None
     hard_policy: HardPolicyMethodEvidence | None = None
+    router_learning: RouterLearningMethodEvidence | None = None
     safety_violations: int | None = Field(default=None, ge=0)
     should_block: bool | None = None
     blocked: bool | None = None

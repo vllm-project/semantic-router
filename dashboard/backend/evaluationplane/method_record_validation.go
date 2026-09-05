@@ -24,6 +24,7 @@ func validateMethodRecord(record executionRecordEvidence, executor executorContr
 		record.Recovery != nil,
 		record.ProductionExperiment != nil,
 		record.HardPolicy != nil,
+		record.RouterLearning != nil,
 	} {
 		if present {
 			methodCount++
@@ -76,7 +77,68 @@ func validateMethodRecord(record executionRecordEvidence, executor executorContr
 			return err
 		}
 	}
+	if record.RouterLearning != nil {
+		if executor.ID != routerLearningReplayExecutorID || record.TrackID != "joint" {
+			return fmt.Errorf("router learning method evidence requires its replay executor and joint track")
+		}
+		if err := validateRouterLearningMethod(*record.RouterLearning, record); err != nil {
+			return err
+		}
+	}
 	return nil
+}
+
+func validateRouterLearningMethod(method routerLearningMethodEvidence, record executionRecordEvidence) error {
+	if method.ContractVersion != "evaluation-router-learning-method.v1" ||
+		method.CorpusRevision != "router-learning-core-v1" ||
+		(method.PolicyID != "static-base" && method.PolicyID != "routing-sampling" && method.PolicyID != "beta-bernoulli") ||
+		!evidenceIDPattern.MatchString(method.TrialID) || method.TrialSeed < 0 || method.TrialSeed > 1<<32-1 || method.RoundIndex < 0 ||
+		method.FeedbackDelayRounds < 0 || method.CallCount < 1 || !finiteFloat(method.LifecycleCostUSD) || method.LifecycleCostUSD < 0 ||
+		method.PropensityStatus != "unsupported" || len(method.CandidateArmIDs) < 2 || len(method.EligibleArmIDs) == 0 ||
+		!distinctNonBlankStrings(method.CandidateArmIDs) || !distinctNonBlankStrings(method.EligibleArmIDs) ||
+		!stringInSlice(method.ProposedArmID, method.CandidateArmIDs) || !stringInSlice(method.SelectedArmID, method.CandidateArmIDs) {
+		return fmt.Errorf("router learning method evidence is invalid")
+	}
+	for _, armID := range append(append([]string(nil), method.CandidateArmIDs...), method.EligibleArmIDs...) {
+		if !evidenceIDPattern.MatchString(armID) {
+			return fmt.Errorf("router learning arm identity is invalid")
+		}
+	}
+	for _, armID := range method.EligibleArmIDs {
+		if !stringInSlice(armID, method.CandidateArmIDs) {
+			return fmt.Errorf("router learning eligible arm is not a candidate")
+		}
+	}
+	protected := method.ProtectedArmID != nil
+	if protected != method.ProtectionRequired ||
+		(protected && !stringInSlice(*method.ProtectedArmID, method.EligibleArmIDs)) ||
+		method.ProtectionViolation != (protected && method.SelectedArmID != *method.ProtectedArmID) ||
+		method.HardConstraintViolation != !stringInSlice(method.SelectedArmID, method.EligibleArmIDs) {
+		return fmt.Errorf("router learning guardrail evidence disagrees")
+	}
+	if record.SelectionMethod == nil || *record.SelectionMethod != method.PolicyID ||
+		record.SelectedArmID == nil || *record.SelectedArmID != method.SelectedArmID ||
+		record.Success == nil || *record.Success != method.OutcomeSuccess ||
+		record.RuntimeCost == nil || !reducedFloatsEqual(*record.RuntimeCost, method.LifecycleCostUSD) {
+		return fmt.Errorf("router learning method evidence does not match its execution record")
+	}
+	expectedStatus := "failed"
+	if method.OutcomeSuccess {
+		expectedStatus = "succeeded"
+	}
+	if record.Status != expectedStatus {
+		return fmt.Errorf("router learning outcome status disagrees")
+	}
+	return nil
+}
+
+func stringInSlice(value string, values []string) bool {
+	for _, candidate := range values {
+		if value == candidate {
+			return true
+		}
+	}
+	return false
 }
 
 // validateV2MethodCoordinates admits only the R2 raw cells that the server can

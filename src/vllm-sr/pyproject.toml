@@ -57,6 +57,7 @@ include-package-data = false
     "golden/metric_analysis_catalog.v1.json",
     "golden/research_benchmark_inventory.v1.json",
     "resources/live_mom_cases.v1.json",
+    "resources/router_learning_core.v1.json",
 ]
 
 [tool.pytest.ini_options]

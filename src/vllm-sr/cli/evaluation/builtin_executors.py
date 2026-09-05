@@ -14,6 +14,7 @@ from cli.evaluation.execution_contract import (
     MOM_REPLAY_EXECUTOR_ID,
     NORMALIZED_LIVE_EXECUTOR_ID,
     NORMALIZED_REPLAY_EXECUTOR_ID,
+    ROUTER_LEARNING_REPLAY_EXECUTOR_ID,
     ExecutionPlan,
 )
 from cli.evaluation.executor_contracts import BUILTIN_EXECUTOR_CONTRACTS
@@ -29,6 +30,7 @@ from cli.evaluation.normalized_suite_live_executor import (
     execute_normalized_suite_live,
 )
 from cli.evaluation.resolution import sample_case_sets, sample_fixture
+from cli.evaluation.router_learning_executor import collect_router_learning_evidence
 from cli.evaluation.runtime_factors import runtime_factors
 from cli.evaluation.store import ArtifactStore
 from cli.evaluation.suite_store import NormalizedSuiteStore
@@ -160,6 +162,31 @@ class LiveRuntimeExecutor:
         )
 
 
+class RouterLearningReplayExecutor:
+    contract = _CONTRACTS[ROUTER_LEARNING_REPLAY_EXECUTOR_ID]
+
+    def collect(
+        self,
+        manifest: RunManifest,
+        store: ArtifactStore,
+        plan: ExecutionPlan,
+        suite_store: NormalizedSuiteStore | None,
+    ) -> CollectedEvidence:
+        del plan, suite_store
+        inputs, records = collect_router_learning_evidence(manifest)
+        if inputs.fixture is None:
+            raise ValueError("Router Learning replay omitted its frozen fixture")
+        return CollectedEvidence(
+            inputs=inputs,
+            visible_ref=store.put_json(inputs.visible),
+            grading_ref=store.put_json(inputs.grading),
+            fixture_ref=store.put_json(inputs.fixture),
+            records=records,
+            discovered_entrypoints=(),
+            routing_traces=(),
+        )
+
+
 class NormalizedReplayExecutor:
     contract = _CONTRACTS[NORMALIZED_REPLAY_EXECUTOR_ID]
 
@@ -231,6 +258,7 @@ DEFAULT_EXECUTOR_REGISTRY = ExecutorRegistry(
     (
         FixtureReplayExecutor(),
         MoMReplayExecutor(),
+        RouterLearningReplayExecutor(),
         LiveRuntimeExecutor(),
         NormalizedReplayExecutor(),
         NormalizedLiveExecutor(),

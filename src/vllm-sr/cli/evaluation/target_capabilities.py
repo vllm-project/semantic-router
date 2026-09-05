@@ -17,6 +17,7 @@ from cli.evaluation.execution_contract import (
     MOM_REPLAY_EXECUTOR_ID,
     NORMALIZED_LIVE_EXECUTOR_ID,
     NORMALIZED_REPLAY_EXECUTOR_ID,
+    ROUTER_LEARNING_REPLAY_EXECUTOR_ID,
 )
 from cli.evaluation.executor_contracts import (
     BUILTIN_EXECUTOR_CONTRACTS,
@@ -367,7 +368,12 @@ def builtin_target_contracts() -> tuple[TargetContract, ...]:
             kind="builtin-fixture",
             track_requirements={track_id: frozenset() for track_id in TRACK_IDS},
             modes=("replay",),
-            accepted_executors={"replay": (FIXTURE_REPLAY_EXECUTOR_ID,)},
+            accepted_executors={
+                "replay": (
+                    FIXTURE_REPLAY_EXECUTOR_ID,
+                    ROUTER_LEARNING_REPLAY_EXECUTOR_ID,
+                )
+            },
             execution_profile="recorded-source",
             policy_snapshot_profile="fixture",
             health_profile="always",
