@@ -153,10 +153,17 @@ func shadowConnectorOptions(cfg config.ShadowDispatchPluginConfig) connector.Opt
 
 // shadowCallHeaders carries the per-request context a shadow copy keeps:
 // trace headers, decision header mutations, provider extra headers, and its
-// own request identifier. Client headers are never forwarded.
+// own request identifier. Client headers are never forwarded. Per-request
+// headers are filtered once more against the shadow backend's own auth
+// header, so a decision mutation can never stand in for the shadow's
+// credential; only shadowAuthorizer may set that header.
 func shadowCallHeaders(job *shadowJob, target *shadowTarget) map[string]string {
 	result := make(map[string]string, len(job.extraHeaders)+2)
+	shadowAuthHeader := shadowProfileAuthHeader(target.profile)
 	for key, value := range job.extraHeaders {
+		if shadowHeaderIsSensitive(key, shadowAuthHeader) {
+			continue
+		}
 		result[key] = value
 	}
 	if target.profile != nil {
