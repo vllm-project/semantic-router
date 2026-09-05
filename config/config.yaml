@@ -755,6 +755,13 @@ routing:
               enabled: true
               candidate_pool_size: 30
               min_combined_score: 0.4
+            # Session-scoped sticky selection (issue #3347): opt-in, disabled
+            # by default. See website/docs/tutorials/plugin/tool-selection.md.
+            sticky:
+              enabled: false
+              max_tools: 16
+              max_new_tools_per_turn: 2
+              pin_called_tools: true
       emits:
         - kind: retention
           retention:
@@ -2068,6 +2075,30 @@ global:
         max_idle_conns: 5
         conn_max_lifetime: 300
         table_name: vector_store_registry
+
+    # Session-scoped sticky tool-set selection's shared store (issue #3347).
+    # Constructed only when at least one decision's tool_selection.sticky is
+    # enabled; see website/docs/tutorials/plugin/tool-selection.md. backend:
+    # redis is a self-consistent, Validate()-passing sample (matching
+    # response_api's store_backend: redis above) rather than
+    # vector_store's exhaustive-multiple-backends-at-once shape: local has
+    # no backend-specific sub-block of its own to also need coverage for,
+    # so there's no field-coverage reason to show both backends here, and
+    # this block is parsed and validated for real by
+    # TestReferenceConfigUsesStrictCanonicalSchema. Switch to backend: local
+    # and drop the redis block entirely for a single-process deployment.
+    tool_sessions:
+      backend: redis
+      ttl_seconds: 1800
+      max_sessions: 10000
+      max_sessions_per_identity: 128
+      max_state_bytes: 16384
+      timeout_ms: 50
+      redis:
+        address: redis:6379
+        password: "${VLLM_SR_STACK_REDIS_PASSWORD}"
+        database: 2
+        key_prefix: "vsr:session-tools:v1:"
 
   integrations:
     tools:

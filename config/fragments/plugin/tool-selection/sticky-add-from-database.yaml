@@ -1,0 +1,19 @@
+plugin:
+  type: tool_selection
+  configuration:
+    enabled: true
+    mode: add
+    tools_db_path: config/tools_db.json
+    top_k: 5
+    similarity_threshold: 0.35
+    # Session-scoped sticky selection (issue #3347): opt-in, disabled by
+    # default. A trusted session retains prior tool order, pins tools
+    # observed in assistant tool calls, and appends a bounded number of
+    # newly relevant tools per turn. Current-turn authorization, policy,
+    # availability, and model/wire capability checks always re-run before a
+    # stored identity is used — sticky state is never trusted blindly.
+    sticky:
+      enabled: false
+      max_tools: 16
+      max_new_tools_per_turn: 2
+      pin_called_tools: true
