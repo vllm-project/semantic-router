@@ -153,6 +153,13 @@ const (
 	// whole conversation.
 	redisDeleteBatchSize = 256
 
+	// conversationIndexRestoreTimeout bounds the compensating write that puts
+	// unresolved members back into a conversation index after a cascade
+	// batch removed them optimistically (restoreConversationIndexMembers).
+	// That write runs on a context deliberately detached from the caller's,
+	// so it needs a deadline of its own rather than inheriting one.
+	conversationIndexRestoreTimeout = 5 * time.Second
+
 	// ConversationIndexCompletionKeySuffix is a single global (not per-
 	// conversation) key: sr:conversation-index-complete:v1, value
 	// conversationIndexCompletionValue once set. Its presence with that

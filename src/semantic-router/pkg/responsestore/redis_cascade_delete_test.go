@@ -440,3 +440,55 @@ func TestCascadeDeleteClusterCrossSlotSafe(t *testing.T) {
 	_, err := store.GetConversation(ctx, convID)
 	assert.ErrorIs(t, err, ErrNotFound)
 }
+
+// TestCascadeDeleteCancelledContextRestoresIndexMembers is the regression
+// test for the compensating restore's context: deleteConversationResponseBatch
+// removes a batch's index members up front (so a response recreated mid-
+// cascade keeps the membership its own writer just added — see
+// TestCascadeDeleteDoesNotEraseRecreatedMembership) and restores whatever it
+// could not resolve. If that restore ran on the caller's context, a request
+// cancelled after the ZREM had already landed would fail it every time,
+// leaving a live payload with no index member: invisible to reads, and
+// unrecoverable once the store is finalized.
+func TestCascadeDeleteCancelledContextRestoresIndexMembers(t *testing.T) {
+	store := newConversationIndexStore(t)
+	baseCtx := context.Background()
+
+	const convID = "conv_cascade_cancelled"
+	const respID = "resp_cascade_cancelled"
+	require.NoError(t, store.CreateConversation(baseCtx, &responseapi.StoredConversation{
+		ID: convID, CreatedAt: time.Now().Unix(),
+	}))
+	require.NoError(t, store.StoreResponse(baseCtx, &responseapi.StoredResponse{
+		ID: respID, ConversationID: convID, Status: "completed", CreatedAt: time.Now().Unix(),
+	}))
+	// Resolve the proof first, so DeleteConversation's own first-touch legacy
+	// scan doesn't issue the ZREM this test's hook is waiting for.
+	require.NoError(t, store.ensureConversationIndexResolved(baseCtx, convID))
+
+	ctx, cancel := context.WithCancel(baseCtx)
+	defer cancel()
+
+	// Cancel the moment the batch's up-front ZREM has committed: every
+	// command after it — the payload GET, and the restore — sees a cancelled
+	// caller context.
+	store.client.AddHook(&afterCommandHook{name: "zrem", after: cancel})
+
+	err := store.DeleteConversation(ctx, convID, true)
+	require.Error(t, err, "a cancelled cascade must report failure, not silently succeed")
+
+	assert.Equal(t, []string{respID}, conversationIndexMembers(t, store, convID),
+		"a cancelled cascade must restore the members it optimistically removed")
+	assert.Equal(t, int64(1), exists(t, store, store.buildKey(ResponseKeyPrefix+respID)),
+		"the payload must still be live: nothing resolved it")
+
+	// The conversation record survived as the retry anchor, and a retry on a
+	// live context completes the cascade for real rather than reporting
+	// success over an emptied index.
+	_, getErr := store.GetConversation(baseCtx, convID)
+	require.NoError(t, getErr)
+
+	require.NoError(t, store.DeleteConversation(baseCtx, convID, true))
+	_, getErr = store.GetResponse(baseCtx, respID)
+	assert.ErrorIs(t, getErr, ErrNotFound, "the retry must actually delete the payload, not orphan it")
+}

@@ -124,11 +124,27 @@ func (s *RedisStore) resolveCascadeBatchResults(
 // restoreConversationIndexMembers makes an interrupted cascade retryable.
 // NX is deliberate: if a concurrent writer already re-added a member with a
 // newer score, restoring the old candidate must not overwrite that score.
+//
+// Runs on a context detached from the caller's (context.WithoutCancel, with
+// its own conversationIndexRestoreTimeout deadline), for the same reason
+// releaseConversationIndexScanLease does: this is the compensating half of
+// an operation that has already removed these members, and the most likely
+// reason the cascade is unwinding at all is that the caller's context was
+// cancelled — a client disconnect or request deadline partway through a
+// large cascade. Restoring on that same cancelled context would fail every
+// time, leaving up to redisDeleteBatchSize live payloads with no index
+// member: invisible to reads, and unrecoverable once the store is finalized
+// (nothing rescans after that). The deadline keeps a wedged Redis from
+// turning this compensation into an unbounded hang.
 func (s *RedisStore) restoreConversationIndexMembers(ctx context.Context, conversationID string, members []redis.Z) error {
 	if len(members) == 0 {
 		return nil
 	}
-	if err := s.client.ZAddArgs(ctx, s.conversationIndexKey(conversationID), redis.ZAddArgs{
+
+	restoreCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), conversationIndexRestoreTimeout)
+	defer cancel()
+
+	if err := s.client.ZAddArgs(restoreCtx, s.conversationIndexKey(conversationID), redis.ZAddArgs{
 		NX:      true,
 		Members: members,
 	}).Err(); err != nil {
