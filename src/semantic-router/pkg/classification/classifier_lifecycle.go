@@ -172,6 +172,7 @@ func (c *Classifier) Close() error {
 	closeResource("jailbreak classifier", c.jailbreakInference)
 	closeResource("complexity score backend", c.complexityScoreBackend)
 	closeResource("complexity label backend", c.complexityLabelBackend)
+	closeResource("PII classifier", c.piiInference)
 	genericNames := make([]string, 0, len(c.genericClassifiers))
 	for name := range c.genericClassifiers {
 		genericNames = append(genericNames, name)

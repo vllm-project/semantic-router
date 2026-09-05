@@ -39,3 +39,12 @@ func (p *piiHTTPBackend) ClassifyTokens(text string) (candle_binding.TokenClassi
 	}
 	return candle_binding.TokenClassificationResult{Entities: entities}, nil
 }
+
+// Close releases the remote connector so a retired classifier generation does
+// not keep the previous backend's idle connections alive across reloads.
+func (p *piiHTTPBackend) Close() error {
+	if closer, ok := p.backend.(interface{ Close() error }); ok && closer != nil {
+		return closer.Close()
+	}
+	return nil
+}
