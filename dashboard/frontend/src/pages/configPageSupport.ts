@@ -1450,52 +1450,6 @@ export const normalizeProviderModelEndpoints = (model: {
   return normalizeEndpoints(model.endpoints)
 }
 
-export const mergeProviderBackendRefs = (
-  existingRefs: BackendRefEntry[] | undefined,
-  endpoints: Endpoint[],
-  accessKey?: string,
-): BackendRefEntry[] => {
-  const existing = Array.isArray(existingRefs) ? existingRefs : []
-
-  return endpoints.map((ep, index) => {
-    const matched = existing.find((ref) => ref.name === ep.name) || existing[index]
-
-    const merged: BackendRefEntry = {
-      ...(matched || {}),
-      name: ep.name,
-      protocol: ep.protocol,
-      weight: ep.weight,
-    }
-
-    const matchedDisplayEndpoint =
-      typeof matched?.endpoint === 'string' && matched.endpoint.trim()
-        ? matched.endpoint.trim()
-        : typeof matched?.base_url === 'string'
-          ? matched.base_url.trim()
-          : ''
-
-    if (matched?.base_url && !matched?.endpoint) {
-      if (ep.endpoint.trim() && ep.endpoint.trim() !== matchedDisplayEndpoint) {
-        merged.base_url = ep.endpoint.trim()
-      } else {
-        merged.base_url = matched.base_url
-      }
-      delete merged.endpoint
-    } else {
-      merged.endpoint = ep.endpoint
-    }
-
-    if (accessKey?.trim()) {
-      merged.api_key = accessKey.trim()
-      delete merged.api_key_env
-    } else if (!matched?.api_key && matched?.api_key_env) {
-      delete merged.api_key
-    }
-
-    return merged
-  })
-}
-
 export const TABLE_COLUMN_WIDTH = {
   compact: '140px',
   medium: '160px',

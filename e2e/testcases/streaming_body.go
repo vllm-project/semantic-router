@@ -1,7 +1,6 @@
 package testcases
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -461,48 +460,4 @@ func sendStreamingRequest(ctx context.Context, question, model, localPort string
 	}
 
 	return resp, nil
-}
-
-// consumeSSEResponse reads an SSE stream and returns the accumulated content
-// from all delta chunks. It also validates the stream ends with [DONE].
-func consumeSSEResponse(resp *http.Response) (string, error) {
-	var content strings.Builder
-	scanner := bufio.NewScanner(resp.Body)
-
-	gotDone := false
-	for scanner.Scan() {
-		line := scanner.Text()
-		if !strings.HasPrefix(line, "data: ") {
-			continue
-		}
-		data := strings.TrimPrefix(line, "data: ")
-		data = strings.TrimSpace(data)
-
-		if data == "[DONE]" {
-			gotDone = true
-			break
-		}
-
-		var chunk struct {
-			Choices []struct {
-				Delta struct {
-					Content string `json:"content"`
-				} `json:"delta"`
-			} `json:"choices"`
-		}
-		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
-			continue
-		}
-		if len(chunk.Choices) > 0 {
-			content.WriteString(chunk.Choices[0].Delta.Content)
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		return content.String(), fmt.Errorf("scanner: %w", err)
-	}
-	if !gotDone {
-		return content.String(), fmt.Errorf("SSE stream did not end with [DONE]")
-	}
-	return content.String(), nil
 }

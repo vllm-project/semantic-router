@@ -5,7 +5,7 @@ import type { ViewField, ViewSection } from '../components/ViewPanel'
 import { formatDateTime } from '../utils/dateTime'
 import { Link } from 'react-router-dom'
 
-import type { InsightsCostSummary, InsightsRecord, Signal } from './insightsPageTypes'
+import type { InsightsRecord, Signal } from './insightsPageTypes'
 import { buildProjectionTraceFields } from './insightsPageProjectionTrace'
 import { renderToolNamesCell } from './insightsPageToolTrace'
 import styles from './InsightsPage.module.css'
@@ -29,58 +29,6 @@ export function getInsightsLifecyclePresentation(record: InsightsRecord) {
     : state.replace('_', ' ')
 
   return { state, successful, errored, pending, label }
-}
-
-export function getUniqueDecisions(records: InsightsRecord[]) {
-  const decisions = new Set<string>()
-  records.forEach((record) => {
-    if (record.decision) {
-      decisions.add(record.decision)
-    }
-  })
-  return Array.from(decisions).sort()
-}
-
-export function getUniqueModels(records: InsightsRecord[]) {
-  const models = new Set<string>()
-  records.forEach((record) => {
-    if (record.selected_model) {
-      models.add(record.selected_model)
-    }
-    if (record.original_model) {
-      models.add(record.original_model)
-    }
-  })
-  return Array.from(models).sort()
-}
-
-export function buildInsightsSummary(records: InsightsRecord[]): InsightsCostSummary {
-  let totalSaved = 0
-  let baselineSpend = 0
-  let actualSpend = 0
-  let currency: string | undefined
-  let costRecordCount = 0
-
-  records.forEach((record) => {
-    if (!hasCompleteCostData(record)) {
-      return
-    }
-
-    totalSaved += record.cost_savings ?? 0
-    baselineSpend += record.baseline_cost ?? 0
-    actualSpend += record.actual_cost ?? 0
-    currency = currency || record.currency
-    costRecordCount += 1
-  })
-
-  return {
-    totalSaved,
-    baselineSpend,
-    actualSpend,
-    currency,
-    costRecordCount,
-    excludedRecordCount: records.length - costRecordCount,
-  }
 }
 
 export function getInsightsRecordPath(recordId: string) {
