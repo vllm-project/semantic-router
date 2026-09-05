@@ -74,58 +74,11 @@ search:
   # Consistency level for search operations
   consistency_level: "Session"  # Options: Strong, Session, Bounded, Eventually
 
-# Performance and resource settings
-performance:
-  # Connection pool settings
-  connection_pool:
-    # Maximum number of connections in the pool
-    max_connections: 10
-
-    # Maximum idle connections
-    max_idle_connections: 5
-
-    # Connection timeout for acquiring from pool
-    acquire_timeout: 5
-
-  # Batch operation settings
-  batch:
-    # Maximum batch size for insert operations
-    insert_batch_size: 1000
-
-    # Batch timeout in seconds
-    timeout: 30
-
-# Data management
-data_management:
-  # Automatic data expiration (TTL) settings
-  ttl:
-    # Enable automatic TTL-based cleanup (requires TTL to be set in main config)
-    enabled: true
-
-    # Field name to store timestamp for TTL calculation
-    timestamp_field: "timestamp"
-
-    # Cleanup interval in seconds (how often to run cleanup)
-    cleanup_interval: 3600  # 1 hour
-
-  # Compaction settings
-  compaction:
-    # Enable automatic compaction
-    enabled: true
-
-    # Compaction interval in seconds
-    interval: 86400  # 24 hours
-
 # Logging and monitoring
 logging:
   # Log level for Milvus client operations (debug, info, warn, error)
   level: "info"
 
-  # Enable query/search logging for debugging
-  enable_query_log: false
-
-  # Enable performance metrics collection
-  enable_metrics: true
 
 # Development and debugging settings
 development:
@@ -135,8 +88,6 @@ development:
   # Create collection if it doesn't exist
   auto_create_collection: true
 
-  # Print detailed error messages
-  verbose_errors: true
 
 # Example configurations for different environments:
 #

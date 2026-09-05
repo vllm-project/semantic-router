@@ -682,7 +682,6 @@ dependencies:
       development:
         dropIndexOnStartup: false
         autoCreateIndex: true
-        verboseErrors: true
     milvus:
       enabled: false
       host: ""
@@ -712,7 +711,6 @@ dependencies:
       development:
         dropCollectionOnStartup: false
         autoCreateCollection: true
-        verboseErrors: true
   responseApi:
     redis:
       enabled: false

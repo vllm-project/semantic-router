@@ -683,7 +683,6 @@ function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
         { name: 'hybrid_search', label: 'Hybrid Search', type: 'boolean' },
         { name: 'hybrid_mode', label: 'Hybrid Mode', type: 'text', placeholder: 'rerank' },
         { name: 'adaptive_threshold', label: 'Adaptive Threshold', type: 'boolean' },
-        routerStructuredField(key, 'quality_scoring'),
         routerStructuredField(key, 'reflection'),
       ]
     case 'response_cache':
