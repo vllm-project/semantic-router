@@ -14,12 +14,15 @@ import (
 	"time"
 )
 
-// Operation describes one static operation in a remote model protocol.
+// Operation describes one static operation in a remote model protocol. An
+// empty Path targets the configured base URL exactly. SuccessStatusCode
+// narrows success to one 2xx status; zero accepts any 2xx.
 type Operation struct {
-	Name      string
-	Method    string
-	Path      string
-	RetrySafe bool
+	Name              string
+	Method            string
+	Path              string
+	SuccessStatusCode int
+	RetrySafe         bool
 }
 
 // Options defines bounded transport behavior. Byte limits and AttemptTimeout
@@ -84,6 +87,18 @@ func validateOptions(options Options) error {
 
 // Do invokes an operation and returns its bounded successful response body.
 func (c *Client) Do(ctx context.Context, operation Operation, body []byte) ([]byte, error) {
+	return c.DoWithHeaders(ctx, operation, body, nil)
+}
+
+// DoWithHeaders invokes an operation with request-scoped protocol headers.
+// The connector's authorization hook runs after these headers and may
+// intentionally override them.
+func (c *Client) DoWithHeaders(
+	ctx context.Context,
+	operation Operation,
+	body []byte,
+	headers http.Header,
+) ([]byte, error) {
 	if err := validateOperation(operation); err != nil {
 		return nil, &Error{Kind: KindRequest, Operation: operation.Name, Cause: err}
 	}
@@ -99,7 +114,7 @@ func (c *Client) Do(ctx context.Context, operation Operation, body []byte) ([]by
 	}
 
 	for attempt := 1; ; attempt++ {
-		responseBody, connectorErr := c.doAttempt(ctx, operation, body, attempt)
+		responseBody, connectorErr := c.doAttempt(ctx, operation, body, headers, attempt)
 		if connectorErr == nil {
 			return responseBody, nil
 		}
@@ -124,8 +139,13 @@ func validateOperation(operation Operation) error {
 	if strings.TrimSpace(operation.Method) == "" {
 		return fmt.Errorf("operation method is required")
 	}
-	if !strings.HasPrefix(operation.Path, "/") || strings.ContainsAny(operation.Path, "?#") {
+	if operation.Path != "" &&
+		(!strings.HasPrefix(operation.Path, "/") || strings.ContainsAny(operation.Path, "?#")) {
 		return fmt.Errorf("operation path must be an absolute path without query or fragment")
+	}
+	if operation.SuccessStatusCode != 0 &&
+		(operation.SuccessStatusCode < http.StatusOK || operation.SuccessStatusCode >= http.StatusMultipleChoices) {
+		return fmt.Errorf("operation success status code must be between 200 and 299")
 	}
 	return nil
 }
@@ -134,6 +154,7 @@ func (c *Client) doAttempt(
 	ctx context.Context,
 	operation Operation,
 	body []byte,
+	headers http.Header,
 	attempt int,
 ) ([]byte, *Error) {
 	if ctx == nil {
@@ -142,7 +163,7 @@ func (c *Client) doAttempt(
 	attemptCtx, cancel := context.WithTimeout(ctx, c.options.AttemptTimeout)
 	defer cancel()
 
-	request, connectorErr := c.newRequest(attemptCtx, operation, body, attempt)
+	request, connectorErr := c.newRequest(attemptCtx, operation, body, headers, attempt)
 	if connectorErr != nil {
 		return nil, connectorErr
 	}
@@ -164,17 +185,23 @@ func (c *Client) newRequest(
 	ctx context.Context,
 	operation Operation,
 	body []byte,
+	headers http.Header,
 	attempt int,
 ) (*http.Request, *Error) {
 	target := *c.baseURL
-	target.Path = path.Join(c.baseURL.Path, operation.Path)
-	target.RawPath = ""
+	if operation.Path != "" {
+		target.Path = path.Join(c.baseURL.Path, operation.Path)
+		target.RawPath = ""
+	}
 	request, err := http.NewRequestWithContext(ctx, operation.Method, target.String(), bytes.NewReader(body))
 	if err != nil {
 		return nil, &Error{Kind: KindRequest, Operation: operation.Name, Attempt: attempt, Cause: err}
 	}
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Accept", "application/json")
+	for name, values := range headers {
+		request.Header[http.CanonicalHeaderKey(name)] = append([]string(nil), values...)
+	}
 	if c.authorize != nil {
 		if err := c.authorize(ctx, request); err != nil {
 			return nil, &Error{Kind: KindAuthorization, Operation: operation.Name, Attempt: attempt, Cause: err}
@@ -189,7 +216,7 @@ func (c *Client) readResponse(
 	response *http.Response,
 	attempt int,
 ) ([]byte, *Error) {
-	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+	if !operationAcceptsStatus(operation, response.StatusCode) {
 		errorBody, truncated, readErr := readBounded(response.Body, c.options.MaxErrorBytes)
 		if readErr != nil {
 			return nil, &Error{
@@ -233,6 +260,13 @@ func (c *Client) readResponse(
 		}
 	}
 	return responseBody, nil
+}
+
+func operationAcceptsStatus(operation Operation, statusCode int) bool {
+	if operation.SuccessStatusCode != 0 {
+		return statusCode == operation.SuccessStatusCode
+	}
+	return statusCode >= http.StatusOK && statusCode < http.StatusMultipleChoices
 }
 
 func readBounded(reader io.Reader, limit int64) ([]byte, bool, error) {

@@ -118,8 +118,12 @@ type ConfidenceLooper struct {
 
 // NewConfidenceLooper creates a new ConfidenceLooper instance
 func NewConfidenceLooper(cfg *config.LooperConfig) *ConfidenceLooper {
+	return newConfidenceLooper(cfg, nil)
+}
+
+func newConfidenceLooper(cfg *config.LooperConfig, client *Client) *ConfidenceLooper {
 	return &ConfidenceLooper{
-		BaseLooper: NewBaseLooper(cfg),
+		BaseLooper: newBaseLooper(cfg, client),
 	}
 }
 
@@ -523,9 +527,6 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 		return nil, fmt.Errorf("no models configured")
 	}
 
-	// Set decision name in client for header transmission
-	l.client.SetDecisionName(req.DecisionName)
-
 	// Get config from algorithm
 	onError := "skip"
 	var sizeAwareCfg *config.ConfidenceAlgorithmConfig
@@ -661,15 +662,19 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 		})
 
 		attempts++
-		resp, err := l.callModelWithContextGate(
+		resp, err := l.dispatchModel(
 			ctx,
 			req,
 			req.OriginalRequest,
-			modelName,
-			confidenceModelCallStreaming(req.IsStreaming, evaluator),
-			attempts,
-			logprobsCfg,
-			accessKey,
+			ModelTarget{Name: modelName, AccessKey: accessKey},
+			CallOptions{
+				DecisionName: req.DecisionName,
+				Iteration:    uint32(attempts),
+				Mode: responseMode(
+					confidenceModelCallStreaming(req.IsStreaming, evaluator),
+				),
+				Logprobs: logprobsCfg,
+			},
 		)
 		if err != nil {
 			logging.ComponentWarnEvent("looper", "model_dispatch_failed", map[string]interface{}{
@@ -904,7 +909,13 @@ func (l *ConfidenceLooper) performSelfVerification(
 	})
 
 	// Call the same model to evaluate its answer
-	verifyResp, err := l.callModelWithContextGate(ctx, req, verifyRequest, modelName, false, iteration, nil, accessKey)
+	verifyResp, err := l.dispatchModel(
+		ctx,
+		req,
+		verifyRequest,
+		ModelTarget{Name: modelName, AccessKey: accessKey},
+		CallOptions{DecisionName: req.DecisionName, Iteration: uint32(iteration)},
+	)
 	if err != nil {
 		return selfVerificationExecution{Attempted: true}, fmt.Errorf("verifier model call failed: %w", err)
 	}

@@ -40,8 +40,15 @@ type BaseLooper struct {
 
 // NewBaseLooper creates a new BaseLooper instance
 func NewBaseLooper(cfg *config.LooperConfig) *BaseLooper {
+	return newBaseLooper(cfg, nil)
+}
+
+func newBaseLooper(cfg *config.LooperConfig, client *Client) *BaseLooper {
+	if client == nil {
+		client = NewClient(cfg)
+	}
 	return &BaseLooper{
-		client: NewClient(cfg),
+		client: client,
 		cfg:    cfg,
 	}
 }
@@ -51,9 +58,6 @@ func (l *BaseLooper) Execute(ctx context.Context, req *Request) (*Response, erro
 	if len(req.ModelRefs) == 0 {
 		return nil, fmt.Errorf("no models configured")
 	}
-
-	// Set decision name in client for header transmission
-	l.client.SetDecisionName(req.DecisionName)
 
 	logging.ComponentEvent("looper", "execution_started", map[string]interface{}{
 		"looper":           "base",
@@ -90,15 +94,16 @@ func (l *BaseLooper) Execute(ctx context.Context, req *Request) (*Response, erro
 		})
 
 		// BaseLooper doesn't need logprobs (no confidence-based routing).
-		resp, err := l.callModelWithContextGate(
+		resp, err := l.dispatchModel(
 			ctx,
 			req,
 			toolFreeLooperRequest(req.OriginalRequest),
-			modelName,
-			req.IsStreaming,
-			iteration,
-			nil,
-			accessKey,
+			ModelTarget{Name: modelName, AccessKey: accessKey},
+			CallOptions{
+				DecisionName: req.DecisionName,
+				Iteration:    uint32(iteration),
+				Mode:         responseMode(req.IsStreaming),
+			},
 		)
 		if err != nil {
 			logging.ComponentWarnEvent("looper", "model_dispatch_failed", map[string]interface{}{

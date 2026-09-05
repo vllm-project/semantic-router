@@ -110,6 +110,79 @@ func TestDoAppliesAuthAndPreservesBasePath(t *testing.T) {
 	}
 }
 
+func TestDoUsesExactBaseURLWhenOperationPathIsEmpty(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if got := request.URL.EscapedPath(); got != "/v1/chat/completions" {
+			t.Errorf("path = %q, want /v1/chat/completions", got)
+		}
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer server.Close()
+
+	client, err := New(server.URL+"/v1/chat/completions", nil, testOptions())
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	defer client.Close()
+
+	operation := testOperation
+	operation.Path = ""
+	if _, err := client.Do(context.Background(), operation, nil); err != nil {
+		t.Fatalf("Do() error = %v", err)
+	}
+}
+
+func TestDoRejectsUnexpectedSuccessfulStatus(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	client := newTestClient(t, server, testOptions())
+	if _, err := client.Do(context.Background(), testOperation, nil); err != nil {
+		t.Fatalf("Do() with default success policy error = %v", err)
+	}
+
+	operation := testOperation
+	operation.SuccessStatusCode = http.StatusOK
+
+	_, err := client.Do(context.Background(), operation, nil)
+	connectorErr := assertConnectorError(t, err, KindStatus, 1, false)
+	if connectorErr.StatusCode != http.StatusNoContent {
+		t.Fatalf("status code = %d, want %d", connectorErr.StatusCode, http.StatusNoContent)
+	}
+}
+
+func TestDoWithHeadersAppliesRequestScopedHeadersBeforeAuthorization(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if got := request.Header.Get("X-Request-Scope"); got != "request-a" {
+			t.Errorf("X-Request-Scope = %q, want request-a", got)
+		}
+		if got := request.Header.Get("Authorization"); got != "Bearer client" {
+			t.Errorf("Authorization = %q, want connector authorizer to win", got)
+		}
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer server.Close()
+
+	client, err := New(server.URL, func(_ context.Context, request *http.Request) error {
+		request.Header.Set("Authorization", "Bearer client")
+		return nil
+	}, testOptions())
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	defer client.Close()
+
+	headers := http.Header{
+		"Authorization":   []string{"Bearer request"},
+		"X-Request-Scope": []string{"request-a"},
+	}
+	if _, err := client.DoWithHeaders(context.Background(), testOperation, nil, headers); err != nil {
+		t.Fatalf("DoWithHeaders() error = %v", err)
+	}
+}
+
 func TestDoRejectsOversizedRequestBeforeSending(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		t.Error("server received an oversized request")

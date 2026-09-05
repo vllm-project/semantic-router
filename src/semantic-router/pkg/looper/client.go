@@ -21,7 +21,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"strings"
 	"time"
 
@@ -33,40 +32,29 @@ import (
 
 // Client handles HTTP requests to OpenAI-compatible endpoints
 type Client struct {
-	httpClient       *http.Client
-	endpoint         string
-	headers          map[string]string
-	decisionName     string // Decision name to pass in looper requests
-	fusionDepth      int    // Recursion guard for Fusion requests
-	maxResponseBytes int64  // Ceiling for a single upstream response body
+	connector modelConnector
+	initErr   error
+	endpoint  string
+	headers   map[string]string
 }
 
-// NewClient creates a new looper HTTP client
+// NewClient creates a connector-backed Looper client. Constructor failures are
+// returned by the first call so existing standalone constructors remain source
+// compatible; router construction uses NewConnectorClient to fail eagerly.
 func NewClient(cfg *config.LooperConfig) *Client {
-	c := &Client{
-		httpClient: &http.Client{
-			Timeout: time.Duration(cfg.GetTimeout()) * time.Second,
-		},
-		endpoint:         cfg.Endpoint,
-		headers:          cfg.Headers,
-		maxResponseBytes: cfg.GetMaxResponseBytes(),
+	client, err := NewConnectorClient(cfg)
+	if err != nil {
+		return &Client{initErr: err}
 	}
-	return c
+	return client
 }
 
-// SetDecisionName sets the decision name for this client
-func (c *Client) SetDecisionName(name string) {
-	c.decisionName = name
-}
-
-// SetFusionDepth sets the Fusion recursion depth marker for internal requests.
-func (c *Client) SetFusionDepth(depth int) {
-	c.fusionDepth = depth
-}
-
-// resolveEndpoint returns the configured looper endpoint.
-func (c *Client) resolveEndpoint() string {
-	return c.endpoint
+// Close releases idle connections owned by the client.
+func (c *Client) Close() error {
+	if c != nil && c.connector != nil {
+		return c.connector.Close()
+	}
+	return nil
 }
 
 // ModelResponse contains the parsed response from a model call
@@ -148,20 +136,49 @@ type LogprobsConfig struct {
 	TopLogprobs int  // Number of top logprobs to return (0-5, default 1 for margin calculation)
 }
 
-// CallModel sends a request to the configured endpoint with a specific model
-// Parameters:
-//   - iteration: 1-based iteration number for tracking
-//   - logprobsCfg: controls whether to enable logprobs and top_logprobs (nil = disabled)
-//   - accessKey: optional API key for Authorization header (Bearer token)
-func (c *Client) CallModel(ctx context.Context, req *openai.ChatCompletionNewParams, modelName string, streaming bool, iteration int, logprobsCfg *LogprobsConfig, accessKey string) (*ModelResponse, error) {
+// CallModel preserves the original Looper client API. New call sites that need
+// request-scoped routing metadata should use CallModelWithOptions.
+func (c *Client) CallModel(
+	ctx context.Context,
+	req *openai.ChatCompletionNewParams,
+	modelName string,
+	streaming bool,
+	iteration int,
+	logprobs *LogprobsConfig,
+	accessKey string,
+) (*ModelResponse, error) {
+	if req == nil {
+		return nil, fmt.Errorf("chat completion request is required")
+	}
+	if iteration <= 0 {
+		return nil, fmt.Errorf("looper iteration must be positive")
+	}
+	return c.CallModelWithOptions(
+		ctx,
+		*req,
+		ModelTarget{Name: modelName, AccessKey: accessKey},
+		CallOptions{
+			Iteration: uint32(iteration),
+			Mode:      responseMode(streaming),
+			Logprobs:  logprobs,
+		},
+	)
+}
+
+func (c *Client) callModel(
+	ctx context.Context,
+	req *openai.ChatCompletionNewParams,
+	target ModelTarget,
+	options CallOptions,
+) (*ModelResponse, error) {
 	// Clone and modify the request with the target model
 	modifiedReq := cloneRequest(req)
-	modifiedReq.Model = modelName
+	modifiedReq.Model = target.Name
 
 	// Configure logprobs based on config
-	if logprobsCfg != nil && logprobsCfg.Enabled {
+	if options.Logprobs != nil && options.Logprobs.Enabled {
 		modifiedReq.Logprobs = openai.Bool(true)
-		topLogprobs := logprobsCfg.TopLogprobs
+		topLogprobs := options.Logprobs.TopLogprobs
 		if topLogprobs < 1 {
 			topLogprobs = 1 // Need at least 1 for margin calculation
 		}
@@ -178,50 +195,25 @@ func (c *Client) CallModel(ctx context.Context, req *openai.ChatCompletionNewPar
 	}
 
 	// Add stream parameter via JSON manipulation (SDK doesn't expose Stream field)
+	streaming := options.Mode == ResponseSSE
 	body, err = setStreamParam(body, streaming)
 	if err != nil {
 		return nil, fmt.Errorf("failed to set stream param: %w", err)
 	}
 
-	logprobsEnabled := logprobsCfg != nil && logprobsCfg.Enabled
-	endpoint := c.resolveEndpoint()
+	logprobsEnabled := options.Logprobs != nil && options.Logprobs.Enabled
 	logging.ComponentDebugEvent("looper", "model_call_started", map[string]interface{}{
-		"decision":  c.decisionName,
-		"model_ref": modelName,
-		"endpoint":  endpoint,
+		"decision":  options.DecisionName,
+		"model_ref": target.Name,
+		"endpoint":  c.endpoint,
 		"streaming": streaming,
-		"iteration": iteration,
+		"iteration": options.Iteration,
 		"logprobs":  logprobsEnabled,
 	})
 
-	// Create HTTP request
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(body))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	// Set headers
-	httpReq.Header.Set("Content-Type", "application/json")
-	for k, v := range c.headers {
-		httpReq.Header.Set(k, v)
-	}
-
-	// Set Authorization header if access key is provided
-	if accessKey != "" {
-		httpReq.Header.Set("Authorization", "Bearer "+accessKey)
-	}
-
-	c.setInternalRequestHeaders(httpReq, ctx, iteration)
-
-	// Execute request
 	start := time.Now()
-	resp, err := c.httpClient.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := c.readResponseBody(resp)
+	headers := c.requestHeaders(ctx, target, options)
+	respBody, err := c.callModelThroughConnector(ctx, body, headers)
 	if err != nil {
 		return nil, err
 	}
@@ -229,15 +221,33 @@ func (c *Client) CallModel(ctx context.Context, req *openai.ChatCompletionNewPar
 	// Parse response based on streaming mode
 	var result *ModelResponse
 	if streaming {
-		result, err = c.parseStreamingResponse(respBody, modelName)
+		result, err = c.parseStreamingResponse(respBody, target.Name)
 	} else {
-		result, err = c.parseNonStreamingResponse(respBody, modelName)
+		result, err = c.parseNonStreamingResponse(respBody, target.Name)
 	}
 	if err != nil {
 		return nil, err
 	}
 	result.LatencyMs = time.Since(start).Milliseconds()
+	logModelCallCompleted(options.DecisionName, result)
 	return result, nil
+}
+
+func logModelCallCompleted(decisionName string, result *ModelResponse) {
+	fields := map[string]interface{}{
+		"decision":      decisionName,
+		"model_ref":     result.Model,
+		"content_len":   len(result.Content),
+		"reasoning_len": len(result.ReasoningContent),
+		"streaming":     result.IsStreaming,
+	}
+	if result.IsStreaming {
+		fields["total_tokens"] = result.Usage.TotalTokens
+	} else {
+		fields["avg_logprob"] = result.AverageLogprob
+		fields["avg_margin"] = result.AverageMargin
+	}
+	logging.ComponentDebugEvent("looper", "model_call_completed", fields)
 }
 
 // parseNonStreamingResponse parses a non-streaming JSON response
@@ -278,16 +288,6 @@ func (c *Client) parseNonStreamingResponse(body []byte, modelName string) (*Mode
 	// Extract reasoning content from vLLM extra fields
 	result.ReasoningContent = extractReasoningFromRaw(body)
 
-	logging.ComponentDebugEvent("looper", "model_call_completed", map[string]interface{}{
-		"decision":      c.decisionName,
-		"model_ref":     modelName,
-		"content_len":   len(result.Content),
-		"reasoning_len": len(result.ReasoningContent),
-		"avg_logprob":   result.AverageLogprob,
-		"avg_margin":    result.AverageMargin,
-		"streaming":     false,
-	})
-
 	return result, nil
 }
 
@@ -305,15 +305,6 @@ func (c *Client) parseStreamingResponse(body []byte, modelName string) (*ModelRe
 	result.Content = content
 	result.StreamingChunks = chunks
 	result.Usage = parseStreamingUsage(body)
-
-	logging.ComponentDebugEvent("looper", "model_call_completed", map[string]interface{}{
-		"decision":      c.decisionName,
-		"model_ref":     modelName,
-		"content_len":   len(result.Content),
-		"reasoning_len": len(result.ReasoningContent),
-		"total_tokens":  result.Usage.TotalTokens,
-		"streaming":     true,
-	})
 
 	return result, nil
 }

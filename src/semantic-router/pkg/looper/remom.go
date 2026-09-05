@@ -33,8 +33,12 @@ const (
 
 // NewReMoMLooper creates a new ReMoM looper
 func NewReMoMLooper(cfg *config.LooperConfig) *ReMoMLooper {
+	return newReMoMLooper(cfg, nil)
+}
+
+func newReMoMLooper(cfg *config.LooperConfig, client *Client) *ReMoMLooper {
 	return &ReMoMLooper{
-		BaseLooper: NewBaseLooper(cfg),
+		BaseLooper: newBaseLooper(cfg, client),
 	}
 }
 
@@ -116,15 +120,12 @@ func (l *ReMoMLooper) remomRunOneParallelCall(
 	}
 
 	startTime := time.Now()
-	resp, err := l.callModelWithContextGate(
+	resp, err := l.dispatchModel(
 		ctx,
 		req,
 		msgCopy,
-		modelName,
-		false,
-		idx+1,
-		nil,
-		accessKeyForModel(req, modelName),
+		ModelTarget{Name: modelName, AccessKey: accessKeyForModel(req, modelName)},
+		CallOptions{DecisionName: req.DecisionName, Iteration: uint32(idx + 1)},
 	)
 	elapsed := time.Since(startTime)
 
@@ -302,8 +303,6 @@ type remomRoundExecution struct {
 
 // Execute implements the Looper interface for ReMoM
 func (l *ReMoMLooper) Execute(ctx context.Context, req *Request) (*Response, error) {
-	l.client.SetDecisionName(req.DecisionName)
-
 	var cfg *config.ReMoMAlgorithmConfig
 	if req.Algorithm != nil && req.Algorithm.ReMoM != nil {
 		cfg = req.Algorithm.ReMoM
