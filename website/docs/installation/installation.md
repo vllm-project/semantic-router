@@ -70,6 +70,25 @@ when the stable release has a higher PEP 440 precedence than development builds
 with the same base version. For production, select and pin an explicit stable
 version after reviewing its release notes and compatibility requirements.
 
+### Agent install
+
+If you use a coding agent such as Claude Code, Cursor, or any compatible
+harness, you can give it this prompt:
+
+```text
+Install the vLLM Semantic Router skill from
+https://vllm-sr.ai/install/agent/vllm-sr/SKILL.md. Then use it to
+inspect this environment and install vLLM Semantic Router through a
+supported path. Show me the plan first, validate the installation,
+and ask before changing an existing configuration or deployment.
+```
+
+The agent reads the public skill, discovers your environment, shows a
+bounded plan, installs through the one-line installer in CLI-only mode,
+and validates with `vllm-sr --version`. It stops before configuration
+generation, evaluation, tuning, activation, or rollback — those are
+separate workflows you control explicitly.
+
 ## Open or start the local stack
 
 The one-line installer starts the stack automatically; continue to the

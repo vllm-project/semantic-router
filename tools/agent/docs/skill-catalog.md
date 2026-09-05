@@ -31,6 +31,10 @@ Maintainer:
 - `maintainer-issue-pr-management`
 - `routing-calibration-loop`
 
+Contributor:
+
+- `vllm-sr-install`
+
 ## Source of Truth
 
 - Executable registry: [skill-registry.yaml](../skill-registry.yaml)
