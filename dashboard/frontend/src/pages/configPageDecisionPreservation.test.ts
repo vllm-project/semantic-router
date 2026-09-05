@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  decisionRulesConflict,
   decisionRulesForSave,
+  decisionRulesForSaveChecked,
   mergeDecisionForSave,
   type DecisionConfig,
+  type DecisionRuleSet,
 } from './configPageSupport'
 
 describe('decision editor preservation', () => {
@@ -80,5 +83,66 @@ describe('decision editor preservation', () => {
     expect(result.conditions).toEqual(existing.conditions)
     expect(result.on_unknown).toBe('match')
     expect(result).not.toBe(existing)
+  })
+})
+
+describe('decision rules on_unknown + on_error conflict', () => {
+  const conflictingLeaf = {
+    type: 'classifier',
+    name: 'risk',
+    label: 'RISKY',
+    predicate: { gte: 0.5 },
+    on_error: 'no_match' as const,
+  }
+
+  it('flags a flat conflicting rule set', () => {
+    expect(
+      decisionRulesConflict({
+        operator: 'AND',
+        on_unknown: 'no_match',
+        conditions: [conflictingLeaf],
+      }),
+    ).toBe(true)
+  })
+
+  it('flags on_error nested below the root', () => {
+    expect(
+      decisionRulesConflict({
+        operator: 'AND',
+        on_unknown: 'match',
+        conditions: [{ operator: 'OR', conditions: [conflictingLeaf] }],
+      }),
+    ).toBe(true)
+  })
+
+  it('flags a preserved nested tree when the form adds on_unknown', () => {
+    const preserved = decisionRulesForSave(
+      { operator: 'AND', conditions: [{ operator: 'OR', conditions: [conflictingLeaf] }] },
+      { operator: 'AND', conditions: [], on_unknown: 'no_match' },
+    )
+    expect(decisionRulesConflict(preserved)).toBe(true)
+  })
+
+  it('rejects a conflicting save and passes a clean one through', () => {
+    expect(() =>
+      decisionRulesForSaveChecked(undefined, {
+        operator: 'AND',
+        on_unknown: 'no_match',
+        conditions: [conflictingLeaf],
+      }),
+    ).toThrow('on_error has no effect')
+    const clean: DecisionRuleSet = { operator: 'AND', conditions: [conflictingLeaf] }
+    expect(decisionRulesForSaveChecked(undefined, clean)).toBe(clean)
+  })
+
+  it('accepts either field alone', () => {
+    expect(decisionRulesConflict({ operator: 'AND', conditions: [conflictingLeaf] })).toBe(false)
+    expect(
+      decisionRulesConflict({
+        operator: 'AND',
+        on_unknown: 'no_match',
+        conditions: [{ type: 'keyword', name: 'x' }],
+      }),
+    ).toBe(false)
   })
 })

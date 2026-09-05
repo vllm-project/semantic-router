@@ -20,7 +20,7 @@ import type {
 import {
   cloneDecisionConditions,
   conditionHasNestedRules,
-  decisionRulesForSave,
+  decisionRulesForSaveChecked,
   mergeDecisionForSave,
 } from './configPageSupport'
 import type { OpenEditModal, OpenViewModal } from './configPageRouterSectionSupport'
@@ -59,13 +59,8 @@ export default function ConfigPageDecisionsSection({
   const [decisionPendingDelete, setDecisionPendingDelete] = useState<DecisionConfig | null>(null)
   const [decisionDeletePending, setDecisionDeletePending] = useState(false)
   const [decisionDeleteError, setDecisionDeleteError] = useState<string | null>(null)
-  const {
-    applyScopedConfig,
-    routingScopes,
-    scopedConfig,
-    selectedScopeId,
-    setSelectedScopeId,
-  } = useRoutingScopeManager(config)
+  const { applyScopedConfig, routingScopes, scopedConfig, selectedScopeId, setSelectedScopeId } =
+    useRoutingScopeManager(config)
   useEffect(() => {
     setDecisionPendingDelete(null)
     setDecisionDeleteError(null)
@@ -767,7 +762,7 @@ export default function ConfigPageDecisionsSection({
         name,
         description: formData.description,
         priority: priority || 0,
-        rules: decisionRulesForSave(decision?.rules, {
+        rules: decisionRulesForSaveChecked(decision?.rules, {
           operator: formData.operator,
           conditions,
           ...(formData.on_unknown ? { on_unknown: formData.on_unknown } : {}),
