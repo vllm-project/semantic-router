@@ -1,0 +1,41 @@
+id: mistral
+display_name: Mistral AI
+description: Mistral chat and code models.
+category: model_api
+support_tier: compatible
+default_base_url: https://api.mistral.ai/v1
+protocols:
+- openai/chat-completions@1
+default_protocol: openai/chat-completions@1
+supported_operations:
+- openai/chat-completions@1#create
+- openai/chat-completions@1#list_models
+auth:
+  strategy: bearer
+  header: Authorization
+  prefix: Bearer
+presentation:
+  logo: package:mistral
+  monogram: M
+  monochrome: false
+conformance:
+  status: unverified
+models:
+- catalog: mistral/mistral-medium-3.1
+  id: mistral-medium-2508
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.mistral.ai/getting-started/models/models_overview/
+- catalog: mistral/mistral-medium-3.5
+  id: mistral-medium-3.5
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.mistral.ai/getting-started/models/models_overview/

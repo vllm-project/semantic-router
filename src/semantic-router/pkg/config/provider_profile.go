@@ -115,6 +115,12 @@ func (profile *ProviderProfile) ResolveAuthHeader() (string, string, error) {
 // reasoning controls. Compatible providers default to template kwargs; only
 // providers that explicitly claim another wire shape opt into it.
 func (profile *ProviderProfile) ResolveReasoningTransport() (modelcatalog.ReasoningTransport, error) {
+	if profile != nil && profile.ReasoningTransport != "" {
+		if !validReasoningTransport(profile.ReasoningTransport) {
+			return "", fmt.Errorf("provider profile reasoning_transport %q is unsupported", profile.ReasoningTransport)
+		}
+		return profile.ReasoningTransport, nil
+	}
 	definition, err := profile.catalogDefinition()
 	if err != nil {
 		return "", err
@@ -123,6 +129,20 @@ func (profile *ProviderProfile) ResolveReasoningTransport() (modelcatalog.Reason
 		return modelcatalog.ReasoningTransportChatTemplate, nil
 	}
 	return definition.ReasoningTransport, nil
+}
+
+func validReasoningTransport(transport modelcatalog.ReasoningTransport) bool {
+	switch transport {
+	case modelcatalog.ReasoningTransportChatTemplate,
+		modelcatalog.ReasoningTransportTopLevelEffort,
+		modelcatalog.ReasoningTransportTopLevelBoolean,
+		modelcatalog.ReasoningTransportReasoningObject,
+		modelcatalog.ReasoningTransportThinkingObject,
+		modelcatalog.ReasoningTransportDeepSeekThinking:
+		return true
+	default:
+		return false
+	}
 }
 
 // ResolveCreatePath resolves the request-creation operation from the protocol

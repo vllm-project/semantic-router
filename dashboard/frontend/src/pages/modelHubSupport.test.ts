@@ -35,7 +35,7 @@ describe('model hub support', () => {
       'zai/glm-5.3',
       'zai/glm-5.3-flash',
     ])
-    expect(rows.every((row) => row.offerings.length > 0)).toBe(true)
+    expect(rows.every((row) => row.providers.length > 0)).toBe(true)
   })
 
   it('sorts available intelligence scores ahead of missing evidence', () => {
@@ -80,7 +80,7 @@ describe('model hub support', () => {
     expect(formatContextWindow(131_072)).toBe('131.1K')
     expect(formatContextWindow()).toBe('Not published')
     expect(formatIntelligence(null)).toBe('Not yet measured')
-    expect(benchmarkName('idavidrein/gpqa-diamond@1.0.0#accuracy', catalog)).toBe(
+    expect(benchmarkName('idavidrein/gpqa-diamond@1.0.0', 'accuracy', catalog)).toBe(
       'GPQA Diamond · accuracy',
     )
   })

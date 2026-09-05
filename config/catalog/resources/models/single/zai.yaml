@@ -3,168 +3,530 @@
   description: Open-weight hybrid-reasoning MoE model for coding, tools, and agentic workloads.
   kind: physical
   publisher: Z.ai
-  presentation: {logo: package:zai, monogram: Z, monochrome: true}
-  distribution: {type: open_weights, source: https://huggingface.co/zai-org/GLM-4.5, license: MIT}
+  presentation:
+    logo: package:zai
+    monogram: Z
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/zai-org/GLM-4.5
+    license: MIT
   family: glm-4
   parameter_size: 355B (32B active)
   released_at: 2025-07-28
   reasoning_family: glm
   lifecycle: active
-  limits: {context_window_size: 131072}
-  capabilities: [chat, reasoning, tools, structured_output, long_context]
-  modalities: {input: [text], output: [text]}
-  protocols: [openai/chat-completions@1, openai/responses@1]
-  verification: {authority: Z.ai, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/zai-org/GLM-4.5}
-  tags: [open_weights, hybrid_reasoning, moe, agentic]
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Z.ai
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/zai-org/GLM-4.5
+  tags:
+  - open_weights
+  - hybrid_reasoning
+  - moe
+  - agentic
 - id: zai/glm-4.5-air
   display_name: GLM-4.5 Air
   description: Efficient open-weight hybrid-reasoning MoE model for coding and tool-using agents.
   kind: physical
   publisher: Z.ai
-  presentation: {logo: package:zai, monogram: Z, monochrome: true}
-  distribution: {type: open_weights, source: https://huggingface.co/zai-org/GLM-4.5-Air, license: MIT}
+  presentation:
+    logo: package:zai
+    monogram: Z
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/zai-org/GLM-4.5-Air
+    license: MIT
   family: glm-4
   parameter_size: 106B (12B active)
   released_at: 2025-07-28
   reasoning_family: glm
   lifecycle: active
-  limits: {context_window_size: 131072}
-  capabilities: [chat, reasoning, tools, structured_output, long_context]
-  modalities: {input: [text], output: [text]}
-  protocols: [openai/chat-completions@1, openai/responses@1]
-  verification: {authority: Z.ai, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/zai-org/GLM-4.5-Air}
-  tags: [open_weights, hybrid_reasoning, moe, efficient]
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Z.ai
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/zai-org/GLM-4.5-Air
+  tags:
+  - open_weights
+  - hybrid_reasoning
+  - moe
+  - efficient
 - id: zai/glm-4.6
   display_name: GLM-4.6
   description: Open-weight GLM MoE model for coding, reasoning, and agents.
   kind: physical
   publisher: Z.ai
-  presentation: {logo: package:zai, monogram: Z, monochrome: true}
-  distribution: {type: open_weights, source: https://huggingface.co/zai-org/GLM-4.6, license: MIT}
+  presentation:
+    logo: package:zai
+    monogram: Z
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/zai-org/GLM-4.6
+    license: MIT
   family: glm-4
   parameter_size: 357B
   reasoning_family: glm
   lifecycle: active
-  capabilities: [chat, reasoning, tools, structured_output, long_context]
-  modalities: {input: [text], output: [text]}
-  protocols: [openai/chat-completions@1, openai/responses@1]
-  verification: {authority: Z.ai, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/zai-org/GLM-4.6}
-  tags: [open_weights, reasoning, moe, agentic]
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Z.ai
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/zai-org/GLM-4.6
+  tags:
+  - open_weights
+  - reasoning
+  - moe
+  - agentic
 - id: zai/glm-4.7
   display_name: GLM-4.7
   description: Open-weight GLM MoE model for multilingual coding and terminal agents.
   kind: physical
   publisher: Z.ai
-  presentation: {logo: package:zai, monogram: Z, monochrome: true}
-  distribution: {type: open_weights, source: https://huggingface.co/zai-org/GLM-4.7, license: MIT}
+  presentation:
+    logo: package:zai
+    monogram: Z
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/zai-org/GLM-4.7
+    license: MIT
   family: glm-4
   parameter_size: 358B
   reasoning_family: glm
   lifecycle: active
-  capabilities: [chat, reasoning, tools, structured_output, long_context]
-  modalities: {input: [text], output: [text]}
-  protocols: [openai/chat-completions@1, openai/responses@1]
-  verification: {authority: Z.ai, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/zai-org/GLM-4.7}
-  tags: [open_weights, reasoning, moe, agentic]
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Z.ai
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/zai-org/GLM-4.7
+  tags:
+  - open_weights
+  - reasoning
+  - moe
+  - agentic
 - id: zai/glm-4.7-flash
   display_name: GLM-4.7 Flash
   description: Compact open-weight GLM model for efficient local agentic workloads.
   kind: physical
   publisher: Z.ai
-  presentation: {logo: package:zai, monogram: Z, monochrome: true}
-  distribution: {type: open_weights, source: https://huggingface.co/zai-org/GLM-4.7-Flash, license: MIT}
+  presentation:
+    logo: package:zai
+    monogram: Z
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/zai-org/GLM-4.7-Flash
+    license: MIT
   family: glm-4
   parameter_size: 31B
   reasoning_family: glm
   lifecycle: active
-  capabilities: [chat, reasoning, tools, structured_output, long_context]
-  modalities: {input: [text], output: [text]}
-  protocols: [openai/chat-completions@1, openai/responses@1]
-  verification: {authority: Z.ai, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/zai-org/GLM-4.7-Flash}
-  tags: [open_weights, reasoning, efficient, agentic]
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Z.ai
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/zai-org/GLM-4.7-Flash
+  tags:
+  - open_weights
+  - reasoning
+  - efficient
+  - agentic
 - id: zai/glm-5
   display_name: GLM-5
   description: Open-weight GLM frontier MoE model for systems engineering and long-horizon agents.
   kind: physical
   publisher: Z.ai
-  presentation: {logo: package:zai, monogram: Z, monochrome: true}
-  distribution: {type: open_weights, source: https://huggingface.co/zai-org/GLM-5, license: MIT}
+  presentation:
+    logo: package:zai
+    monogram: Z
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/zai-org/GLM-5
+    license: MIT
   family: glm-5
   parameter_size: 744B (40B active)
   reasoning_family: glm
   lifecycle: active
-  limits: {context_window_size: 200000, max_output_tokens: 128000}
-  capabilities: [chat, reasoning, tools, structured_output, long_context]
-  modalities: {input: [text], output: [text]}
-  protocols: [openai/chat-completions@1, openai/responses@1]
-  verification: {authority: Z.ai, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/zai-org/GLM-5}
-  tags: [open_weights, frontier, moe, agentic]
+  limits:
+    context_window_size: 200000
+    max_output_tokens: 128000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Z.ai
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/zai-org/GLM-5
+  tags:
+  - open_weights
+  - frontier
+  - moe
+  - agentic
 - id: zai/glm-5.1
   display_name: GLM-5.1
   description: Z.ai reasoning model for coding, agents, and long-context tasks.
   kind: physical
   publisher: Z.ai
-  presentation: {logo: package:zai, monogram: Z, monochrome: true}
-  distribution: {type: open_weights, source: https://huggingface.co/zai-org/GLM-5.1, license: MIT}
+  presentation:
+    logo: package:zai
+    monogram: Z
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/zai-org/GLM-5.1
+    license: MIT
   family: glm-5
   parameter_size: 754B
   reasoning_family: glm
   lifecycle: active
-  limits: {context_window_size: 200000, max_output_tokens: 128000}
-  capabilities: [chat, reasoning, tools, structured_output, long_context]
-  modalities: {input: [text], output: [text]}
-  protocols: [openai/chat-completions@1]
+  limits:
+    context_window_size: 200000
+    max_output_tokens: 128000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
   verification:
     authority: Z.ai
     status: claimed
     verified_at: 2026-09-05
     source: https://huggingface.co/zai-org/GLM-5.1
-  tags: [open_weights, frontier, moe, agentic]
+  tags:
+  - open_weights
+  - frontier
+  - moe
+  - agentic
 - id: zai/glm-5.2
   display_name: GLM-5.2
   description: Open-weight GLM frontier model for long-horizon engineering agents.
   kind: physical
   publisher: Z.ai
-  presentation: {logo: package:zai, monogram: Z, monochrome: true}
-  distribution: {type: open_weights, source: https://huggingface.co/zai-org/GLM-5.2, license: MIT}
+  presentation:
+    logo: package:zai
+    monogram: Z
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/zai-org/GLM-5.2
+    license: MIT
   family: glm-5
   parameter_size: 753B
   reasoning_family: glm
   lifecycle: active
-  capabilities: [chat, reasoning, tools, structured_output, long_context]
-  modalities: {input: [text], output: [text]}
-  protocols: [openai/chat-completions@1, openai/responses@1]
-  verification: {authority: Z.ai, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/zai-org/GLM-5.2}
-  tags: [open_weights, frontier, moe, agentic]
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Z.ai
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/zai-org/GLM-5.2
+  tags:
+  - open_weights
+  - frontier
+  - moe
+  - agentic
 - id: zai/glm-5.3
   display_name: GLM-5.3
   description: Open-weight GLM frontier model for reasoning, coding, and long-horizon agents.
   kind: physical
   publisher: Z.ai
-  presentation: {logo: package:zai, monogram: Z, monochrome: true}
-  distribution: {type: open_weights, source: https://huggingface.co/zai-org/GLM-5.3, license: GLM-5.3}
+  presentation:
+    logo: package:zai
+    monogram: Z
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/zai-org/GLM-5.3
+    license: GLM-5.3
   family: glm-5
   parameter_size: 753B
-  reasoning_family: glm
+  reasoning_family: glm-5.3
   lifecycle: active
-  capabilities: [chat, reasoning, tools, structured_output, long_context]
-  modalities: {input: [text], output: [text]}
-  protocols: [openai/chat-completions@1, openai/responses@1]
-  verification: {authority: Z.ai, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/zai-org/GLM-5.3}
-  tags: [open_weights, frontier, moe, agentic]
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Z.ai
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/zai-org/GLM-5.3
+  tags:
+  - open_weights
+  - frontier
+  - moe
+  - agentic
 - id: zai/glm-5.3-flash
   display_name: GLM-5.3 Flash
   description: Efficient open-weight multimodal GLM model for interactive agents.
   kind: physical
   publisher: Z.ai
-  presentation: {logo: package:zai, monogram: Z, monochrome: true}
-  distribution: {type: open_weights, source: https://huggingface.co/zai-org/GLM-5.3-Flash, license: MIT}
+  presentation:
+    logo: package:zai
+    monogram: Z
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/zai-org/GLM-5.3-Flash
+    license: MIT
   family: glm-5
-  parameter_size: 321B
-  reasoning_family: glm
+  parameter_size: 320B (18B active)
+  reasoning_family: glm-5.3
   lifecycle: active
-  capabilities: [chat, reasoning, tools, structured_output, vision, long_context]
-  modalities: {input: [text, image], output: [text]}
-  protocols: [openai/chat-completions@1, openai/responses@1]
-  verification: {authority: Z.ai, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/zai-org/GLM-5.3-Flash}
-  tags: [open_weights, multimodal, efficient, agentic]
+  limits:
+    context_window_size: 1048576
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Z.ai
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/zai-org/GLM-5.3-Flash
+  tags:
+  - open_weights
+  - multimodal
+  - efficient
+  - agentic
+- id: zai/glm-4.5v
+  display_name: GLM-4.5V
+  description: Open-weight multimodal GLM model for visual reasoning and agents.
+  kind: physical
+  publisher: Z.ai
+  presentation:
+    logo: package:zai
+    monogram: Z
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/zai-org/GLM-4.5V
+    license: MIT
+  family: glm-4
+  parameter_size: 106B (12B active)
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - reasoning
+  - vision
+  - tools
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  reasoning_family: glm
+  verification:
+    authority: Z.ai
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/zai-org/GLM-4.5V
+  tags:
+  - open_weights
+  - multimodal
+  - reasoning
+  - moe
+- id: zai/glm-4-32b-0414
+  display_name: GLM-4 32B 0414
+  description: Previous-generation open-weight GLM instruction model.
+  kind: physical
+  publisher: Z.ai
+  presentation:
+    logo: package:zai
+    monogram: Z
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/zai-org/GLM-4-32B-0414
+    license: MIT
+  family: glm-4
+  parameter_size: 32B
+  lifecycle: active
+  limits:
+    context_window_size: 32768
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Z.ai
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/zai-org/GLM-4-32B-0414
+  tags:
+  - open_weights
+  - dense
+  - previous_generation
+- id: zai/glm-5-turbo
+  display_name: GLM-5-Turbo
+  description: Z.ai's API model optimized for high-throughput, persistent, long-chain agent workflows.
+  kind: physical
+  publisher: Z.ai
+  presentation:
+    logo: package:zai
+    monogram: Z
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://docs.z.ai/guides/llm/glm-5-turbo
+  family: glm-5
+  reasoning_family: glm
+  released_at: 2026-03-15
+  lifecycle: active
+  limits:
+    context_window_size: 204800
+    max_output_tokens: 131072
+  capabilities: [chat, reasoning, tools, structured_output, coding, long_context]
+  modalities:
+    input: [text]
+    output: [text]
+  verification:
+    authority: Z.ai
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.z.ai/guides/llm/glm-5-turbo
+  tags: [proprietary, reasoning, coding, agentic]
+- id: zai/glm-5v-turbo
+  display_name: GLM-5V-Turbo
+  description: Z.ai's multimodal API model for visual coding, GUI agents, and long-horizon action execution.
+  kind: physical
+  publisher: Z.ai
+  presentation:
+    logo: package:zai
+    monogram: Z
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://docs.z.ai/guides/vlm/glm-5v-turbo
+  family: glm-5v
+  reasoning_family: glm
+  released_at: 2026-04-01
+  lifecycle: active
+  limits:
+    context_window_size: 204800
+    max_output_tokens: 131072
+  capabilities: [chat, reasoning, tools, coding, vision, video, long_context]
+  modalities:
+    input: [text, image, video, pdf]
+    output: [text]
+  verification:
+    authority: Z.ai
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.z.ai/guides/vlm/glm-5v-turbo
+  tags: [proprietary, multimodal, reasoning, coding, agentic]

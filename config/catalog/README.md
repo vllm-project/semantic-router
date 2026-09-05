@@ -1,8 +1,8 @@
 # Built-in model catalog
 
 This directory is the repository source of truth for built-in protocols,
-providers, model cards, provider offerings, reasoning behavior, benchmark
-definitions, evaluation records, and composite indices.
+providers and their native model mappings, model cards, reasoning behavior,
+benchmark definitions, evaluation records, and composite indices.
 
 The source manifest is `catalog.yaml`. Resource files live under `resources/`;
 physical model families use one focused file under `resources/models/single/`
@@ -28,16 +28,13 @@ index identity; those are embedded build metadata.
   default protocol base path used when an endpoint does not supply an API root.
   A configured `base_url` path replaces this default base path; the operation
   suffix is then appended exactly once.
-- `providers.yaml`: Provider IDs, protocol compatibility, auth defaults,
+- `providers/`: one file per Provider ID, including protocol compatibility,
+  auth defaults, provider-native model IDs, per-provider restrictions/pricing,
   non-secret request-header defaults, reasoning transport, support tier,
-  conformance, and presentation metadata. Credential-bearing headers are
-  forbidden here.
+  conformance, and presentation metadata. Each provider owns its `models[]`
+  mappings; credential-bearing headers are forbidden here.
 - `models/single/`: intrinsic facts for one deployable model family.
 - `models/virtual/`: recipe-backed logical model identities and role contracts.
-- `offerings/`: provider/model pairings, provider model IDs, restrictions, and
-  dated pricing. A model card may have many offerings without duplicating its
-  identity. Every active physical Model Card must have at least one offering;
-  virtual recipes are materialized from their packaged asset instead.
 - `reasoning-families.yaml`: reusable request projections for reasoning knobs.
 - `benchmarks.yaml`: versioned benchmark and metric definitions.
 - `evaluations/single/`: redistributable measurements for physical models.
@@ -50,12 +47,25 @@ are unknown. Two available records for the same model and versioned metric are
 rejected instead of choosing a hidden winner; revise the evaluation identity or
 resolve the conflicting evidence explicitly.
 
+The generator creates exactly five default-index slots for every Model Card and
+every selectable reasoning effort: MMLU-Pro, GPQA Diamond, Humanity's Last Exam
+without tools, SWE-bench Verified, and Terminal-Bench 2.1. A slot links only to
+an exact model/effort/profile measurement; otherwise it is emitted as
+`missing`. A vendor-published score with an unspecified effort stays on a
+separate `published` row and is never copied into `low`, `medium`, `high`, or
+another selectable effort.
+
 A physical Model Card represents one canonical upstream model identity. Date
 snapshots, cloud aliases, quantizations, and serving-engine packaging do not
-become duplicate cards: provider-specific names belong in offerings, while
-runtime or quantization details belong in an evaluation subject. A distinct
-checkpoint only becomes a new card when the publisher treats it as a separately
-selectable model with materially different behavior.
+become duplicate cards: provider-specific names belong in that provider's
+`models[]`, while runtime or quantization details belong in an evaluation
+subject. A distinct checkpoint only becomes a new card when the publisher
+treats it as a separately selectable model with materially different behavior.
+
+Every active physical Model Card must be reachable through at least one
+provider-owned mapping. A card may therefore appear under several providers
+without duplicating its intrinsic identity. Virtual recipes are materialized
+from packaged assets and keep their own evaluation directory.
 
 The `reasoning` capability and `reasoning_family` serve different purposes. A
 card can truthfully advertise reasoning even when vLLM Semantic Router has not

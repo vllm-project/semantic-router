@@ -35,7 +35,15 @@ func catalogEvaluationRecords(card RoutingModel, modelIndex int, builtIn *modelc
 			if _, ok := knownMetrics[metric]; !ok {
 				return nil, fmt.Errorf("%s.metrics.%s is not defined by benchmark %q", path, metric, evaluation.Benchmark)
 			}
-			metrics[evaluation.Benchmark+"#"+metric] = value
+			metrics[metric] = value
+		}
+		benchmarkProfile := evaluation.BenchmarkProfile
+		if benchmarkProfile == "" {
+			benchmarkProfile = benchmark.DefaultProfile
+		}
+		reasoningEffort := evaluation.ReasoningEffort
+		if reasoningEffort == "" {
+			reasoningEffort = "default"
 		}
 		subject := modelcatalog.EvaluationSubject{}
 		if len(evaluation.Metadata) > 0 {
@@ -43,7 +51,8 @@ func catalogEvaluationRecords(card RoutingModel, modelIndex int, builtIn *modelc
 		}
 		records = append(records, modelcatalog.EvaluationRecord{
 			ID:    fmt.Sprintf("operator/%d/%d/%s", modelIndex, evaluationIndex, sanitizeCatalogID(card.Name)),
-			Model: card.Name, Metrics: metrics, Status: "available", MeasuredAt: evaluation.MeasuredAt,
+			Model: card.Name, Benchmark: evaluation.Benchmark, BenchmarkProfile: benchmarkProfile,
+			ReasoningEffort: reasoningEffort, Metrics: metrics, Status: "available", MeasuredAt: evaluation.MeasuredAt,
 			Subject: subject,
 			Evidence: modelcatalog.EvaluationEvidence{
 				Provenance: "operator", Verification: "claimed", Source: evaluation.Source, Redistributable: true,

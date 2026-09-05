@@ -1,0 +1,85 @@
+- id: multiverse/quasar-438b
+  display_name: Quasar 438B
+  description: Proprietary long-context reasoning model for enterprise agents and coding in English and Spanish.
+  kind: physical
+  publisher: Multiverse Computing
+  presentation:
+    logo: monogram
+    monogram: MV
+    monochrome: false
+  distribution:
+    type: proprietary_api
+    source: https://multiversecomputing.com/resources/introducing-quasar-438b-europe-s-leading-ai-model
+  family: quasar
+  parameter_size: 438B
+  released_at: 2026-09-02
+  lifecycle: active
+  limits:
+    context_window_size: 1048576
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities:
+    input: [text]
+    output: [text]
+  verification:
+    authority: Multiverse Computing
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://multiversecomputing.com/resources/introducing-quasar-438b-europe-s-leading-ai-model
+  tags: [proprietary, frontier, reasoning, agentic, multilingual]
+
+- id: multiverse/hypernova-60b-2605
+  display_name: HyperNova 60B 2605
+  description: Open-weight compressed MoE reasoning model with native tools and structured output.
+  kind: physical
+  publisher: Multiverse Computing
+  presentation:
+    logo: monogram
+    monogram: MV
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/MultiverseComputingCAI/Hypernova-60B-2605
+    license: Apache-2.0
+  family: hypernova
+  parameter_size: 60B (4.8B active)
+  released_at: 2026-05-06
+  reasoning_family: hypernova
+  lifecycle: active
+  capabilities: [chat, reasoning, tools, structured_output]
+  modalities:
+    input: [text]
+    output: [text]
+  verification:
+    authority: Multiverse Computing
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/MultiverseComputingCAI/Hypernova-60B-2605
+  tags: [open_weights, reasoning, agentic, efficient, moe]
+
+- id: multiverse/carina-60b
+  display_name: Carina 60B
+  description: Efficient English-Spanish reasoning and tool-use model derived from the HyperNova family.
+  kind: physical
+  publisher: Multiverse Computing
+  presentation:
+    logo: monogram
+    monogram: MV
+    monochrome: false
+  distribution:
+    type: proprietary_api
+    source: https://multiversecomputing.com/resources/introducing-carina-60b-built-for-efficiency-fluent-in-spanish
+  family: carina
+  parameter_size: 60B
+  released_at: 2026-07-15
+  reasoning_family: hypernova
+  lifecycle: active
+  capabilities: [chat, reasoning, tools, structured_output]
+  modalities:
+    input: [text]
+    output: [text]
+  verification:
+    authority: Multiverse Computing
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://multiversecomputing.com/resources/introducing-carina-60b-built-for-efficiency-fluent-in-spanish
+  tags: [proprietary, reasoning, agentic, efficient, multilingual]

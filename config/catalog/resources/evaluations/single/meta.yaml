@@ -1,0 +1,192 @@
+- id: meta/muse-glimmer-30b-model-card-gpqa-diamond@1.0.0
+  model: meta/muse-glimmer-30b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: high
+  subject: &glimmer-subject
+    variant: Muse Glimmer 30B
+    reasoning_mode: high
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.835
+  status: available
+  evidence: &glimmer-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/meta-models/Muse-Glimmer-30B
+    redistributable: true
+- id: meta/muse-glimmer-30b-model-card-humanitys-last-exam@1.0.0
+  model: meta/muse-glimmer-30b
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: high
+  subject: *glimmer-subject
+  metrics:
+    accuracy: 0.22
+  status: available
+  evidence: *glimmer-evidence
+- id: meta/muse-glimmer-30b-model-card-swe-bench-verified@1.0.0
+  model: meta/muse-glimmer-30b
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: high
+  subject:
+    <<: *glimmer-subject
+    harness: Muse Code
+  metrics:
+    resolved: 0.76
+  status: available
+  evidence: *glimmer-evidence
+- id: meta/muse-glimmer-30b-model-card-terminal-bench@1.0.0
+  model: meta/muse-glimmer-30b
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: high
+  subject:
+    <<: *glimmer-subject
+    harness: Terminus 2
+  metrics:
+    resolved: 0.517
+  status: available
+  evidence: *glimmer-evidence
+- id: meta/muse-glimmer-30b-model-card-swe-bench-pro@1.0.0
+  model: meta/muse-glimmer-30b
+  benchmark: swe-bench/pro@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: high
+  subject: *glimmer-subject
+  metrics:
+    resolved: 0.512
+  status: available
+  evidence: *glimmer-evidence
+- id: meta/muse-glimmer-30b-model-card-gdpval-aa@1.0.0
+  model: meta/muse-glimmer-30b
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: high
+  subject: *glimmer-subject
+  metrics:
+    elo: 953
+  status: available
+  evidence: *glimmer-evidence
+- id: meta/muse-spark-1.1-report-humanitys-last-exam@1.0.0
+  model: meta/muse-spark-1.1
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: with-tools
+  reasoning_effort: high
+  subject: &muse11-subject
+    variant: Muse Spark 1.1
+    reasoning_mode: high
+    source_kind: official_evaluation_report
+  metrics:
+    accuracy: 0.621
+  status: available
+  evidence: &muse11-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://ai.meta.com/blog/introducing-muse-spark-meta-model-api/
+    redistributable: true
+- id: meta/muse-spark-1.1-report-terminal-bench@1.0.0
+  model: meta/muse-spark-1.1
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: high
+  subject: *muse11-subject
+  metrics:
+    resolved: 0.8
+  status: available
+  evidence: *muse11-evidence
+- id: meta/muse-spark-1.1-report-swe-bench-pro@1.0.0
+  model: meta/muse-spark-1.1
+  benchmark: swe-bench/pro@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: high
+  subject: *muse11-subject
+  metrics:
+    resolved: 0.615
+  status: available
+  evidence: *muse11-evidence
+- id: meta/muse-spark-1.1-report-deep-swe@1.0.0
+  model: meta/muse-spark-1.1
+  benchmark: datacurve/deep-swe@1.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: high
+  subject: *muse11-subject
+  metrics:
+    resolved: 0.533
+  status: available
+  evidence: *muse11-evidence
+- id: meta/muse-spark-1.2-release-terminal-bench@1.0.0
+  model: meta/muse-spark-1.2
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: xhigh
+  subject: &muse12-subject
+    variant: Muse Spark 1.2
+    reasoning_mode: xhigh
+    source_kind: official_release
+  metrics:
+    resolved: 0.829
+  status: available
+  evidence: &muse12-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://research.meta.ai/blog/introducing-muse-code-and-muse-spark-1-2
+    redistributable: true
+- id: meta/muse-spark-1.2-release-deep-swe@1.0.0
+  model: meta/muse-spark-1.2
+  benchmark: datacurve/deep-swe@1.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: xhigh
+  subject: *muse12-subject
+  metrics:
+    resolved: 0.593
+  status: available
+  evidence: *muse12-evidence
+- id: meta/muse-spark-1.3-release-terminal-bench@1.0.0
+  model: meta/muse-spark-1.3
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: max
+  subject: &muse13-subject
+    variant: Muse Spark 1.3
+    reasoning_mode: max
+    source_kind: official_release
+  metrics:
+    resolved: 0.888
+  status: available
+  evidence: &muse13-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://research.meta.ai/blog/introducing-muse-spark-1-3
+    redistributable: true
+- id: meta/muse-spark-1.3-release-deep-swe@1.0.0
+  model: meta/muse-spark-1.3
+  benchmark: datacurve/deep-swe@1.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: max
+  subject: *muse13-subject
+  metrics:
+    resolved: 0.754
+  status: available
+  evidence: *muse13-evidence
+- id: meta/muse-spark-1.3-release-automation-bench@1.0.0
+  model: meta/muse-spark-1.3
+  benchmark: zapier/automation-bench@1.0.6
+  benchmark_profile: published-agent
+  reasoning_effort: max
+  subject: *muse13-subject
+  metrics:
+    score: 0.496
+  status: available
+  evidence: *muse13-evidence
+- id: meta/muse-spark-1.3-release-gdpval-aa@1.0.0
+  model: meta/muse-spark-1.3
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: max
+  subject: *muse13-subject
+  metrics:
+    elo: 1754
+  status: available
+  evidence: *muse13-evidence

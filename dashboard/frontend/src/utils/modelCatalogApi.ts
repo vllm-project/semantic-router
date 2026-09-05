@@ -7,7 +7,7 @@ import type {
   CatalogEvaluation,
   CatalogIndex,
   CatalogIndexResult,
-  CatalogOffering,
+  CatalogModelBinding,
   CatalogProtocol,
   CatalogProvider,
   CatalogReasoningFamily,
@@ -106,7 +106,6 @@ function isCatalogModel(value: unknown): value is BuiltInModelMetadata {
     isRecord(value.modalities) &&
     isStringArray(value.modalities.input) &&
     isStringArray(value.modalities.output) &&
-    isStringArray(value.protocols) &&
     isVerification(value.verification, virtual) &&
     (!virtual ||
       (Number.isInteger(value.generation) &&
@@ -154,7 +153,7 @@ function isCatalogProvider(value: unknown): value is CatalogProvider {
     isStringArray(value.supported_operations) &&
     value.supported_operations.length > 0 &&
     (value.reasoning_transport === undefined ||
-      ['chat_template_kwargs', 'top_level_effort', 'thinking_object', 'deepseek_thinking'].includes(
+      ['chat_template_kwargs', 'top_level_effort', 'top_level_boolean', 'reasoning_object', 'thinking_object', 'deepseek_thinking'].includes(
         String(value.reasoning_transport),
       )) &&
     isRecord(value.auth) &&
@@ -166,7 +165,9 @@ function isCatalogProvider(value: unknown): value is CatalogProvider {
     isNonEmptyString(value.presentation.monogram) &&
     typeof value.presentation.monochrome === 'boolean' &&
     isRecord(value.conformance) &&
-    ['unverified', 'fixture_verified', 'live_verified'].includes(String(value.conformance.status))
+    ['unverified', 'fixture_verified', 'live_verified'].includes(String(value.conformance.status)) &&
+    (value.models === undefined ||
+      (Array.isArray(value.models) && value.models.every(isCatalogModelBinding)))
   )
 }
 
@@ -184,13 +185,11 @@ function isReasoningFamily(value: unknown): value is CatalogReasoningFamily {
   )
 }
 
-function isOffering(value: unknown): value is CatalogOffering {
+function isCatalogModelBinding(value: unknown): value is CatalogModelBinding {
   return (
     isRecord(value) &&
     isNonEmptyString(value.id) &&
-    isNonEmptyString(value.provider) &&
-    isNonEmptyString(value.model) &&
-    isNonEmptyString(value.provider_model_id) &&
+    isNonEmptyString(value.catalog) &&
     isStringArray(value.protocols) &&
     ['experimental', 'active', 'deprecated', 'removed'].includes(String(value.lifecycle)) &&
     isRecord(value.verification) &&
@@ -204,6 +203,16 @@ function isBenchmark(value: unknown): value is CatalogBenchmark {
     isNonEmptyString(value.id) &&
     isNonEmptyString(value.display_name) &&
     isNonEmptyString(value.domain) &&
+    isNonEmptyString(value.default_profile) &&
+    Array.isArray(value.profiles) &&
+    value.profiles.length > 0 &&
+    value.profiles.every(
+      (profile) =>
+        isRecord(profile) &&
+        isNonEmptyString(profile.id) &&
+        isNonEmptyString(profile.display_name) &&
+        isNonEmptyString(profile.description),
+    ) &&
     Array.isArray(value.metrics) &&
     value.metrics.length > 0 &&
     value.metrics.every(
@@ -224,6 +233,9 @@ function isEvaluation(value: unknown): value is CatalogEvaluation {
     isRecord(value) &&
     isNonEmptyString(value.id) &&
     isNonEmptyString(value.model) &&
+    isNonEmptyString(value.benchmark) &&
+    isNonEmptyString(value.benchmark_profile) &&
+    isNonEmptyString(value.reasoning_effort) &&
     isRecord(value.subject) &&
     isNumberRecord(value.metrics) &&
     Object.keys(value.metrics).length > 0 &&
@@ -236,6 +248,22 @@ function isEvaluation(value: unknown): value is CatalogEvaluation {
     ) &&
     ['claimed', 'imported', 'reproduced'].includes(String(value.evidence.verification)) &&
     typeof value.evidence.redistributable === 'boolean'
+  )
+}
+
+function isEvaluationCoverage(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    isNonEmptyString(value.model) &&
+    isNonEmptyString(value.reasoning_effort) &&
+    isNonEmptyString(value.benchmark) &&
+    isNonEmptyString(value.benchmark_profile) &&
+    isNonEmptyString(value.metric) &&
+    ['available', 'missing', 'failed', 'not_applicable', 'withheld'].includes(
+      String(value.status),
+    ) &&
+    (value.value === undefined || typeof value.value === 'number') &&
+    (value.evaluation === undefined || isNonEmptyString(value.evaluation))
   )
 }
 
@@ -277,12 +305,25 @@ function isIndex(value: unknown): value is CatalogIndex {
     Array.isArray(value.components) &&
     value.components.length > 0 &&
     value.components.every(
-      (component) =>
-        isRecord(component) &&
-        (isNonEmptyString(component.metric) !== isNonEmptyString(component.index)) &&
-        typeof component.weight === 'number' &&
-        component.weight > 0 &&
-        isNormalization(component.normalization),
+      (component) => {
+        if (!isRecord(component)) return false
+        const metricReference =
+          isNonEmptyString(component.benchmark) &&
+          isNonEmptyString(component.metric) &&
+          isNonEmptyString(component.benchmark_profile) &&
+          !isNonEmptyString(component.index)
+        const indexReference =
+          isNonEmptyString(component.index) &&
+          !isNonEmptyString(component.benchmark) &&
+          !isNonEmptyString(component.metric) &&
+          !isNonEmptyString(component.benchmark_profile)
+        return (
+          (metricReference || indexReference) &&
+          typeof component.weight === 'number' &&
+          component.weight > 0 &&
+          isNormalization(component.normalization)
+        )
+      },
     )
   )
 }
@@ -291,6 +332,7 @@ function isIndexResult(value: unknown): value is CatalogIndexResult {
   return (
     isRecord(value) &&
     isNonEmptyString(value.model) &&
+    isNonEmptyString(value.reasoning_effort) &&
     isNonEmptyString(value.index) &&
     ['available', 'missing', 'failed', 'not_applicable', 'withheld'].includes(
       String(value.status),
@@ -301,13 +343,33 @@ function isIndexResult(value: unknown): value is CatalogIndexResult {
     value.coverage <= 1 &&
     Array.isArray(value.components) &&
     value.components.every(
-      (component) =>
-        isRecord(component) &&
-        (isNonEmptyString(component.metric) !== isNonEmptyString(component.index)) &&
-        typeof component.weight === 'number' &&
-        ['available', 'missing', 'failed', 'not_applicable', 'withheld'].includes(
-          String(component.status),
-        ),
+      (component) => {
+        if (!isRecord(component)) return false
+        const metricReference =
+          isNonEmptyString(component.benchmark) &&
+          isNonEmptyString(component.metric) &&
+          isNonEmptyString(component.benchmark_profile) &&
+          !isNonEmptyString(component.index)
+        const indexReference =
+          isNonEmptyString(component.index) &&
+          !isNonEmptyString(component.benchmark) &&
+          !isNonEmptyString(component.metric) &&
+          !isNonEmptyString(component.benchmark_profile)
+        return (
+          (metricReference || indexReference) &&
+          typeof component.weight === 'number' &&
+          ['available', 'missing', 'failed', 'not_applicable', 'withheld'].includes(
+            String(component.status),
+          ) &&
+          (component.value === null ||
+            component.value === undefined ||
+            typeof component.value === 'number') &&
+          (component.normalized === null ||
+            component.normalized === undefined ||
+            typeof component.normalized === 'number') &&
+          (component.evaluation === undefined || isNonEmptyString(component.evaluation))
+        )
+      },
     ) &&
     isStringArray(value.provenance, true)
   )
@@ -330,13 +392,13 @@ function isBuiltInModelCatalog(value: unknown): value is BuiltInModelCatalog {
     Array.isArray(value.models) &&
     value.models.length > 0 &&
     value.models.every(isCatalogModel) &&
-    Array.isArray(value.offerings) &&
-    value.offerings.every(isOffering) &&
     Array.isArray(value.benchmarks) &&
     value.benchmarks.length > 0 &&
     value.benchmarks.every(isBenchmark) &&
     Array.isArray(value.evaluations) &&
     value.evaluations.every(isEvaluation) &&
+    Array.isArray(value.evaluation_coverage) &&
+    value.evaluation_coverage.every(isEvaluationCoverage) &&
     Array.isArray(value.indices) &&
     value.indices.length > 0 &&
     value.indices.every(isIndex) &&

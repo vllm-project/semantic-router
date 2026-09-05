@@ -1,0 +1,22 @@
+id: vercel-ai-gateway
+display_name: Vercel AI Gateway
+description: A unified endpoint for hosted model providers.
+category: model_api
+support_tier: compatible
+default_base_url: https://ai-gateway.vercel.sh/v1
+protocols:
+- openai/chat-completions@1
+default_protocol: openai/chat-completions@1
+supported_operations:
+- openai/chat-completions@1#create
+- openai/chat-completions@1#list_models
+auth:
+  strategy: bearer
+  header: Authorization
+  prefix: Bearer
+presentation:
+  logo: package:vercel
+  monogram: V
+  monochrome: true
+conformance:
+  status: unverified

@@ -45,6 +45,40 @@
         "monochrome": {"type": "boolean"}
       }
     },
+    "modelBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["catalog", "id", "protocols", "lifecycle", "verification"],
+      "properties": {
+        "catalog": {"$ref": "#/$defs/modelID"},
+        "id": {"$ref": "#/$defs/nonEmptyString"},
+        "protocols": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/protocolID"}
+        },
+        "reasoning_transport": {
+          "enum": ["chat_template_kwargs", "top_level_effort", "top_level_boolean", "reasoning_object", "thinking_object", "deepseek_thinking"]
+        },
+        "pricing": {
+          "type": "object",
+          "additionalProperties": {"type": ["number", "string", "boolean"]}
+        },
+        "restrictions": {"type": "object"},
+        "lifecycle": {"enum": ["experimental", "active", "deprecated", "removed"]},
+        "verification": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status"],
+          "properties": {
+            "status": {"enum": ["claimed", "imported", "reproduced"]},
+            "verified_at": {"type": "string", "format": "date"},
+            "source": {"type": "string", "format": "uri"}
+          }
+        }
+      }
+    },
     "distribution": {
       "type": "object",
       "additionalProperties": false,
@@ -142,7 +176,7 @@
             "additionalProperties": {"$ref": "#/$defs/nonEmptyString"}
           },
           "reasoning_transport": {
-            "enum": ["chat_template_kwargs", "top_level_effort", "thinking_object", "deepseek_thinking"]
+            "enum": ["chat_template_kwargs", "top_level_effort", "top_level_boolean", "reasoning_object", "thinking_object", "deepseek_thinking"]
           },
           "api_version_query": {"type": "boolean"},
           "auth": {
@@ -165,6 +199,11 @@
               "status": {"enum": ["unverified", "fixture_verified", "live_verified"]},
               "verified_at": {"type": "string", "format": "date"}
             }
+          },
+          "models": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {"$ref": "#/$defs/modelBinding"}
           }
         }
       }
@@ -180,7 +219,8 @@
           "type": {"enum": ["chat_template_kwargs", "reasoning_effort", "top_level_reasoning_effort"]},
           "parameter": {"$ref": "#/$defs/nonEmptyString"},
           "levels": {"$ref": "#/$defs/stringSet"},
-          "default": {"$ref": "#/$defs/nonEmptyString"}
+          "default": {"$ref": "#/$defs/nonEmptyString"},
+          "disabled": {"$ref": "#/$defs/nonEmptyString"}
         }
       }
     },
@@ -201,7 +241,6 @@
           "lifecycle",
           "capabilities",
           "modalities",
-          "protocols",
           "verification"
         ],
         "properties": {
@@ -242,12 +281,6 @@
           "asset": {"$ref": "#/$defs/slug"},
           "entrypoint": {"$ref": "#/$defs/modelID"},
           "recipe": {"$ref": "#/$defs/slug"},
-          "protocols": {
-            "type": "array",
-            "minItems": 1,
-            "uniqueItems": true,
-            "items": {"$ref": "#/$defs/protocolID"}
-          },
           "traits": {"$ref": "#/$defs/stringSet"},
           "roles": {
             "type": "array",
@@ -282,53 +315,32 @@
         ]
       }
     },
-    "offerings": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["id", "provider", "model", "provider_model_id", "protocols", "lifecycle", "verification"],
-        "properties": {
-          "id": {"$ref": "#/$defs/versionedID"},
-          "provider": {"$ref": "#/$defs/slug"},
-          "model": {"$ref": "#/$defs/modelID"},
-          "provider_model_id": {"$ref": "#/$defs/nonEmptyString"},
-          "protocols": {
-            "type": "array",
-            "minItems": 1,
-            "uniqueItems": true,
-            "items": {"$ref": "#/$defs/protocolID"}
-          },
-          "pricing": {
-            "type": "object",
-            "additionalProperties": {"type": ["number", "string", "boolean"]}
-          },
-          "restrictions": {"type": "object"},
-          "lifecycle": {"enum": ["experimental", "active", "deprecated", "removed"]},
-          "verification": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["status"],
-            "properties": {
-              "status": {"enum": ["claimed", "imported", "reproduced"]},
-              "verified_at": {"type": "string", "format": "date"},
-              "source": {"type": "string", "format": "uri"}
-            }
-          }
-        }
-      }
-    },
     "benchmarks": {
       "type": "array",
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "display_name", "domain", "metrics"],
+        "required": ["id", "display_name", "domain", "default_profile", "profiles", "metrics"],
         "properties": {
           "id": {"$ref": "#/$defs/versionedID"},
           "display_name": {"$ref": "#/$defs/nonEmptyString"},
           "domain": {"$ref": "#/$defs/slug"},
           "source": {"type": "string", "format": "uri"},
+          "default_profile": {"$ref": "#/$defs/slug"},
+          "profiles": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "display_name", "description"],
+              "properties": {
+                "id": {"$ref": "#/$defs/slug"},
+                "display_name": {"$ref": "#/$defs/nonEmptyString"},
+                "description": {"$ref": "#/$defs/nonEmptyString"}
+              }
+            }
+          },
           "metrics": {
             "type": "array",
             "minItems": 1,
@@ -357,10 +369,13 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "model", "subject", "metrics", "status", "evidence"],
+        "required": ["id", "model", "benchmark", "benchmark_profile", "reasoning_effort", "subject", "metrics", "status", "evidence"],
         "properties": {
           "id": {"$ref": "#/$defs/versionedID"},
           "model": {"$ref": "#/$defs/modelID"},
+          "benchmark": {"$ref": "#/$defs/versionedID"},
+          "benchmark_profile": {"$ref": "#/$defs/slug"},
+          "reasoning_effort": {"$ref": "#/$defs/slug"},
           "subject": {"type": "object"},
           "metrics": {"type": "object", "additionalProperties": {"type": "number"}},
           "status": {"enum": ["available", "missing", "failed", "not_applicable", "withheld"]},
@@ -416,7 +431,9 @@
               "additionalProperties": false,
               "required": ["weight", "normalization"],
               "properties": {
-                "metric": {"$ref": "#/$defs/nonEmptyString"},
+                "benchmark": {"$ref": "#/$defs/versionedID"},
+                "metric": {"$ref": "#/$defs/slug"},
+                "benchmark_profile": {"$ref": "#/$defs/slug"},
                 "index": {"$ref": "#/$defs/versionedID"},
                 "weight": {"type": "number", "exclusiveMinimum": 0},
                 "normalization": {
@@ -450,7 +467,10 @@
                   }
                 }
               },
-              "oneOf": [{"required": ["metric"]}, {"required": ["index"]}]
+              "oneOf": [
+                {"required": ["benchmark", "metric", "benchmark_profile"]},
+                {"required": ["index"]}
+              ]
             }
           }
         }

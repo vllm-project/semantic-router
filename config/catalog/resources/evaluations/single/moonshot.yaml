@@ -1,40 +1,172 @@
-- id: moonshot/kimi-k2-instruct-model-card@1.0.0
+- id: moonshot/kimi-k3-model-card-gpqa-diamond@1.0.0
+  model: moonshot/kimi-k3
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: max
+  subject: &id001
+    variant: Kimi-K3
+    reasoning_effort: max
+    hle_mode: no_tools
+    terminal_harness: Kimi Code
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.935
+  status: available
+  evidence: &id002
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/moonshotai/Kimi-K3
+    redistributable: true
+- id: moonshot/kimi-k3-model-card-humanitys-last-exam@1.0.0
+  model: moonshot/kimi-k3
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: max
+  subject: *id001
+  metrics:
+    accuracy: 0.435
+  status: available
+  evidence: *id002
+- id: moonshot/kimi-k3-model-card-terminal-bench@1.0.0
+  model: moonshot/kimi-k3
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: max
+  subject: *id001
+  metrics:
+    resolved: 0.883
+  status: available
+  evidence: *id002
+- id: moonshot/kimi-k2-instruct-model-card-mmlu-pro@1.0.0
   model: moonshot/kimi-k2-instruct
-  subject:
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject: &id003
     variant: Kimi-K2-Instruct
     gpqa_mode: avg_at_8
     hle_mode: text_only
     swe_harness: bash_editor_single_attempt
     source_kind: official_model_card
   metrics:
-    tiger-ai-lab/mmlu-pro@1.0.0#accuracy: 0.811
-    idavidrein/gpqa-diamond@1.0.0#accuracy: 0.751
-    cais/humanitys-last-exam@1.0.0#accuracy: 0.047
-    swe-bench/verified@1.0.0#resolved: 0.658
+    accuracy: 0.811
   status: available
-  evidence: {provenance: vendor_claimed, verification: claimed, source: https://huggingface.co/moonshotai/Kimi-K2-Instruct, redistributable: true}
-- id: moonshot/kimi-k2.5-model-card@1.0.0
+  evidence: &id004
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/moonshotai/Kimi-K2-Instruct
+    redistributable: true
+- id: moonshot/kimi-k2-instruct-model-card-gpqa-diamond@1.0.0
+  model: moonshot/kimi-k2-instruct
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject: *id003
+  metrics:
+    accuracy: 0.751
+  status: available
+  evidence: *id004
+- id: moonshot/kimi-k2-instruct-model-card-humanitys-last-exam@1.0.0
+  model: moonshot/kimi-k2-instruct
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: default
+  subject: *id003
+  metrics:
+    accuracy: 0.047
+  status: available
+  evidence: *id004
+- id: moonshot/kimi-k2-instruct-model-card-verified@1.0.0
+  model: moonshot/kimi-k2-instruct
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: default
+  subject: *id003
+  metrics:
+    resolved: 0.658
+  status: available
+  evidence: *id004
+- id: moonshot/kimi-k2.5-model-card-mmlu-pro@1.0.0
   model: moonshot/kimi-k2.5
-  subject:
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject: &id005
     variant: Kimi-K2.5
     hle_mode: full_no_tools
     source_kind: official_model_card
   metrics:
-    tiger-ai-lab/mmlu-pro@1.0.0#accuracy: 0.871
-    idavidrein/gpqa-diamond@1.0.0#accuracy: 0.876
-    cais/humanitys-last-exam@1.0.0#accuracy: 0.301
-    swe-bench/verified@1.0.0#resolved: 0.768
+    accuracy: 0.871
   status: available
-  evidence: {provenance: vendor_claimed, verification: claimed, source: https://huggingface.co/moonshotai/Kimi-K2.5, redistributable: true}
-- id: moonshot/kimi-k2.6-model-card@1.0.0
+  evidence: &id006
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/moonshotai/Kimi-K2.5
+    redistributable: true
+- id: moonshot/kimi-k2.5-model-card-gpqa-diamond@1.0.0
+  model: moonshot/kimi-k2.5
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject: *id005
+  metrics:
+    accuracy: 0.876
+  status: available
+  evidence: *id006
+- id: moonshot/kimi-k2.5-model-card-humanitys-last-exam@1.0.0
+  model: moonshot/kimi-k2.5
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: default
+  subject: *id005
+  metrics:
+    accuracy: 0.301
+  status: available
+  evidence: *id006
+- id: moonshot/kimi-k2.5-model-card-verified@1.0.0
+  model: moonshot/kimi-k2.5
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: default
+  subject: *id005
+  metrics:
+    resolved: 0.768
+  status: available
+  evidence: *id006
+- id: moonshot/kimi-k2.6-model-card-gpqa-diamond@1.0.0
   model: moonshot/kimi-k2.6
-  subject:
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject: &id007
     variant: Kimi-K2.6
     hle_mode: full_no_tools
     source_kind: official_model_card
   metrics:
-    idavidrein/gpqa-diamond@1.0.0#accuracy: 0.905
-    cais/humanitys-last-exam@1.0.0#accuracy: 0.347
-    swe-bench/verified@1.0.0#resolved: 0.802
+    accuracy: 0.905
   status: available
-  evidence: {provenance: vendor_claimed, verification: claimed, source: https://huggingface.co/moonshotai/Kimi-K2.6, redistributable: true}
+  evidence: &id008
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/moonshotai/Kimi-K2.6
+    redistributable: true
+- id: moonshot/kimi-k2.6-model-card-humanitys-last-exam@1.0.0
+  model: moonshot/kimi-k2.6
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: default
+  subject: *id007
+  metrics:
+    accuracy: 0.347
+  status: available
+  evidence: *id008
+- id: moonshot/kimi-k2.6-model-card-verified@1.0.0
+  model: moonshot/kimi-k2.6
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: default
+  subject: *id007
+  metrics:
+    resolved: 0.802
+  status: available
+  evidence: *id008

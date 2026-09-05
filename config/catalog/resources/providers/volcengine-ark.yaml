@@ -1,0 +1,41 @@
+id: volcengine-ark
+display_name: Volcengine Ark
+description: ByteDance Seed and Doubao models through the Ark OpenAI-compatible API.
+category: model_api
+support_tier: native
+default_base_url: https://ark.cn-beijing.volces.com/api/v3
+protocols:
+- openai/chat-completions@1
+- openai/responses@1
+default_protocol: openai/chat-completions@1
+supported_operations:
+- openai/chat-completions@1#create
+- openai/responses@1#create
+reasoning_transport: top_level_effort
+auth:
+  strategy: bearer
+  header: Authorization
+  prefix: Bearer
+presentation:
+  logo: package:bytedance
+  monogram: S
+  monochrome: true
+conformance:
+  status: unverified
+models:
+- catalog: bytedance/seed-2.1-pro
+  id: doubao-seed-2-1-pro-260628
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://www.volcengine.com/docs/82379/2549861
+- catalog: bytedance/seed-2.0-pro
+  id: doubao-seed-2-0-pro-260215
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://www.volcengine.com/docs/82379/1795150

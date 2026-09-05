@@ -27,10 +27,6 @@ const ModelHubPage: React.FC = () => {
   const publishers = useMemo(() => modelHubPublishers(catalog), [catalog])
   const rows = useMemo(() => modelHubRows(catalog, filters), [catalog, filters])
   const selected = rows.find((row) => row.model.id === selectedID) ?? rows[0] ?? null
-  const providers = useMemo(
-    () => new Map(catalog.providers.map((provider) => [provider.id, provider])),
-    [catalog],
-  )
   const evaluations = useMemo(
     () => new Map(catalog.evaluations.map((evaluation) => [evaluation.id, evaluation])),
     [catalog],
@@ -60,7 +56,6 @@ const ModelHubPage: React.FC = () => {
         <ModelDetail
           row={selected}
           catalog={catalog}
-          providers={providers}
           evaluations={evaluations}
         />
       </section>

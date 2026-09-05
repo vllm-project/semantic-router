@@ -1,0 +1,24 @@
+id: vertex-ai
+display_name: Google Vertex AI
+description: Models exposed through Vertex AI-compatible routing.
+category: model_api
+support_tier: native
+protocols:
+- openai/chat-completions@1
+default_protocol: openai/chat-completions@1
+supported_operations:
+- openai/chat-completions@1#create
+path_overrides:
+  openai/chat-completions@1#create: /chat/completions
+auth:
+  strategy: bearer
+  header: Authorization
+  prefix: Bearer
+  injected_header: x-user-vertex-ai-key
+presentation:
+  logo: package:gemini
+  monogram: V
+  monochrome: false
+conformance:
+  status: fixture_verified
+  verified_at: 2026-09-04

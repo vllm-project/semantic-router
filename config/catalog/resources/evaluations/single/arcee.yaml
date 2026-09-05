@@ -1,0 +1,36 @@
+- id: arcee/trinity-large-thinking-model-card-mmlu-pro@1.0.0
+  model: arcee/trinity-large-thinking
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject: &trinity-large-thinking-subject
+    variant: Trinity-Large-Thinking
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.834
+  status: available
+  evidence: &trinity-large-thinking-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/arcee-ai/Trinity-Large-Thinking
+    redistributable: true
+- id: arcee/trinity-large-thinking-model-card-gpqa-diamond@1.0.0
+  model: arcee/trinity-large-thinking
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject: *trinity-large-thinking-subject
+  metrics:
+    accuracy: 0.763
+  status: available
+  evidence: *trinity-large-thinking-evidence
+- id: arcee/trinity-large-thinking-model-card-swe-bench-verified@1.0.0
+  model: arcee/trinity-large-thinking
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: default
+  subject: *trinity-large-thinking-subject
+  metrics:
+    resolved: 0.632
+  status: available
+  evidence: *trinity-large-thinking-evidence

@@ -1,0 +1,16 @@
+- id: writer/palmyra-x5-model-card-mmlu-pro@1.0.0
+  model: writer/palmyra-x5
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject:
+    variant: Palmyra X5
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.6502
+  status: available
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://writer.com/blog/palmyra-x5/
+    redistributable: true

@@ -1,0 +1,37 @@
+- id: kwaipilot/kat-coder-v2.5-dev-model-card-swe-bench-verified@1.0.0
+  model: kwaipilot/kat-coder-v2.5-dev
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: enabled
+  subject: &kat-coder-v25-dev-subject
+    variant: KAT-Coder-V2.5-Dev
+    mode: thinking
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.694
+  status: available
+  evidence: &kat-coder-v25-dev-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Kwaipilot/KAT-Coder-V2.5-Dev
+    redistributable: true
+- id: kwaipilot/kat-coder-v2.5-dev-model-card-swe-bench-pro@1.0.0
+  model: kwaipilot/kat-coder-v2.5-dev
+  benchmark: swe-bench/pro@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: enabled
+  subject: *kat-coder-v25-dev-subject
+  metrics:
+    resolved: 0.4596
+  status: available
+  evidence: *kat-coder-v25-dev-evidence
+- id: kwaipilot/kat-coder-v2.5-dev-model-card-terminal-bench@1.0.0
+  model: kwaipilot/kat-coder-v2.5-dev
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: enabled
+  subject: *kat-coder-v25-dev-subject
+  metrics:
+    resolved: 0.4102
+  status: available
+  evidence: *kat-coder-v25-dev-evidence

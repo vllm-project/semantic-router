@@ -343,6 +343,7 @@ func applyCatalogCardReasoning(model CanonicalProviderModel, overlay *modelcatal
 			overlay.Reasoning = &modelcatalog.ReasoningFamilyDefinition{
 				Type: model.Reasoning.Type, Parameter: model.Reasoning.Parameter,
 				Levels: append([]string(nil), model.Reasoning.Levels...), Default: model.Reasoning.Default,
+				Disabled: model.Reasoning.Disabled,
 			}
 		}
 	}

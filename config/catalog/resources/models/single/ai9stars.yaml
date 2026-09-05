@@ -1,0 +1,51 @@
+- id: ai9stars/g9v3-39b-a5b
+  display_name: G9v3 39B A5B
+  description: AI9Stars sparse open-weight model for local reasoning, tools, coding, and assistant workloads.
+  kind: physical
+  publisher: AI9Stars
+  presentation: &ai9stars-presentation
+    logo: monogram
+    monogram: G9
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/ai9stars/G9v3-39A5B
+    license: Apache-2.0
+  family: g9v3
+  parameter_size: 39B (5B active)
+  reasoning_family: g9v3
+  lifecycle: experimental
+  limits:
+    context_window_size: 131072
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities: &ai9stars-modalities
+    input: [text]
+    output: [text]
+  verification: &ai9stars-verification
+    authority: AI9Stars
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/ai9stars/G9v3-39A5B
+  tags: [open_weights, reasoning, tools, coding, moe, preview]
+- id: ai9stars/g9v3-3b
+  display_name: G9v3 3B
+  description: Compact AI9Stars open-weight model with switchable thinking for local inference.
+  kind: physical
+  publisher: AI9Stars
+  presentation: *ai9stars-presentation
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/ai9stars/G9v3-3B
+    license: Apache-2.0
+  family: g9v3
+  parameter_size: 3B
+  reasoning_family: g9v3
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities: *ai9stars-modalities
+  verification:
+    <<: *ai9stars-verification
+    source: https://huggingface.co/ai9stars/G9v3-3B
+  tags: [open_weights, reasoning, tools, efficient]

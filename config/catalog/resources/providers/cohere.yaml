@@ -1,0 +1,100 @@
+id: cohere
+display_name: Cohere
+description: Command models through the compatibility API.
+category: model_api
+support_tier: compatible
+default_base_url: https://api.cohere.com/compatibility/v1
+protocols:
+- openai/chat-completions@1
+default_protocol: openai/chat-completions@1
+supported_operations:
+- openai/chat-completions@1#create
+- openai/chat-completions@1#list_models
+auth:
+  strategy: bearer
+  header: Authorization
+  prefix: Bearer
+presentation:
+  logo: package:cohere
+  monogram: C
+  monochrome: false
+conformance:
+  status: unverified
+models:
+- catalog: cohere/command-r-plus-08-2024
+  id: command-r-plus-08-2024
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.cohere.com/docs/models
+- catalog: cohere/command-a-03-2025
+  id: command-a-03-2025
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.cohere.com/docs/models
+- catalog: cohere/command-a-vision-07-2025
+  id: command-a-vision-07-2025
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.cohere.com/docs/models
+- catalog: cohere/command-a-reasoning-08-2025
+  id: command-a-reasoning-08-2025
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.cohere.com/docs/command-a-reasoning
+- catalog: cohere/command-a-plus-05-2026
+  id: command-a-plus-05-2026
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.cohere.com/docs/command-a-plus
+- catalog: cohere/north-mini-code-1.0
+  id: north-mini-code-1-0
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.cohere.com/docs/north-mini-code-1.0
+- catalog: cohere/tiny-aya-global
+  id: tiny-aya-global
+  protocols: &tiny-aya-cohere-protocols [openai/chat-completions@1]
+  lifecycle: active
+  verification: &tiny-aya-cohere-verification
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.cohere.com/v2/docs/tiny-aya
+- catalog: cohere/tiny-aya-earth
+  id: tiny-aya-earth
+  protocols: *tiny-aya-cohere-protocols
+  lifecycle: active
+  verification: *tiny-aya-cohere-verification
+- catalog: cohere/tiny-aya-fire
+  id: tiny-aya-fire
+  protocols: *tiny-aya-cohere-protocols
+  lifecycle: active
+  verification: *tiny-aya-cohere-verification
+- catalog: cohere/tiny-aya-water
+  id: tiny-aya-water
+  protocols: *tiny-aya-cohere-protocols
+  lifecycle: active
+  verification: *tiny-aya-cohere-verification

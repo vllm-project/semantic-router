@@ -10,17 +10,17 @@ import (
 // Registry is an immutable lookup view over one validated catalog snapshot.
 // Lookup methods return values or defensive copies, never internal maps.
 type Registry struct {
-	header            CatalogHeader
-	protocols         map[string]ProtocolDefinition
-	providers         map[string]ProviderDefinition
-	reasoningFamilies map[string]ReasoningFamilyDefinition
-	models            map[string]ModelCard
-	offerings         map[string]OfferingDefinition
-	benchmarks        map[string]BenchmarkDefinition
-	indices           map[string]IndexDefinition
-	evaluations       []EvaluationRecord
-	indexResults      map[string]map[string]IndexResult
-	digest            string
+	header             CatalogHeader
+	protocols          map[string]ProtocolDefinition
+	providers          map[string]ProviderDefinition
+	reasoningFamilies  map[string]ReasoningFamilyDefinition
+	models             map[string]ModelCard
+	benchmarks         map[string]BenchmarkDefinition
+	indices            map[string]IndexDefinition
+	evaluations        []EvaluationRecord
+	evaluationCoverage []EvaluationCoverage
+	indexResults       map[string]map[string]map[string]IndexResult
+	digest             string
 }
 
 var (
@@ -50,17 +50,17 @@ func registryFromSnapshot(document snapshot, digest string) (*Registry, error) {
 		return nil, fmt.Errorf("model catalog must contain exactly one active header")
 	}
 	registry := &Registry{
-		header:            document.Catalogs[0],
-		protocols:         make(map[string]ProtocolDefinition, len(document.Protocols)),
-		providers:         make(map[string]ProviderDefinition, len(document.Providers)),
-		reasoningFamilies: make(map[string]ReasoningFamilyDefinition, len(document.ReasoningFamilies)),
-		models:            make(map[string]ModelCard, len(document.Models)),
-		offerings:         make(map[string]OfferingDefinition, len(document.Offerings)),
-		benchmarks:        make(map[string]BenchmarkDefinition, len(document.Benchmarks)),
-		indices:           make(map[string]IndexDefinition, len(document.Indices)),
-		evaluations:       append([]EvaluationRecord(nil), document.Evaluations...),
-		indexResults:      make(map[string]map[string]IndexResult),
-		digest:            digest,
+		header:             document.Catalogs[0],
+		protocols:          make(map[string]ProtocolDefinition, len(document.Protocols)),
+		providers:          make(map[string]ProviderDefinition, len(document.Providers)),
+		reasoningFamilies:  make(map[string]ReasoningFamilyDefinition, len(document.ReasoningFamilies)),
+		models:             make(map[string]ModelCard, len(document.Models)),
+		benchmarks:         make(map[string]BenchmarkDefinition, len(document.Benchmarks)),
+		indices:            make(map[string]IndexDefinition, len(document.Indices)),
+		evaluations:        append([]EvaluationRecord(nil), document.Evaluations...),
+		evaluationCoverage: append([]EvaluationCoverage(nil), document.EvaluationCoverage...),
+		indexResults:       make(map[string]map[string]map[string]IndexResult),
+		digest:             digest,
 	}
 	for _, definition := range document.Protocols {
 		registry.protocols[definition.ID] = definition
@@ -74,9 +74,6 @@ func registryFromSnapshot(document snapshot, digest string) (*Registry, error) {
 	for _, definition := range document.Models {
 		registry.models[definition.ID] = definition
 	}
-	for _, definition := range document.Offerings {
-		registry.offerings[definition.ID] = definition
-	}
 	for _, definition := range document.Benchmarks {
 		registry.benchmarks[definition.ID] = definition
 	}
@@ -85,9 +82,12 @@ func registryFromSnapshot(document snapshot, digest string) (*Registry, error) {
 	}
 	for _, result := range document.IndexResults {
 		if registry.indexResults[result.Model] == nil {
-			registry.indexResults[result.Model] = map[string]IndexResult{}
+			registry.indexResults[result.Model] = map[string]map[string]IndexResult{}
 		}
-		registry.indexResults[result.Model][result.Index] = result
+		if registry.indexResults[result.Model][result.ReasoningEffort] == nil {
+			registry.indexResults[result.Model][result.ReasoningEffort] = map[string]IndexResult{}
+		}
+		registry.indexResults[result.Model][result.ReasoningEffort][result.Index] = result
 	}
 	return registry, nil
 }
@@ -125,21 +125,20 @@ func (registry *Registry) Index(id string) (IndexDefinition, bool) {
 	return cloneIndex(value), ok
 }
 
-func (registry *Registry) Offering(id string) (OfferingDefinition, bool) {
-	value, ok := registry.offerings[id]
-	value.Protocols = append([]string(nil), value.Protocols...)
-	value.Restrictions = cloneMap(value.Restrictions)
-	return value, ok
-}
-
 func (registry *Registry) Benchmark(id string) (BenchmarkDefinition, bool) {
 	value, ok := registry.benchmarks[id]
 	value.Metrics = append([]BenchmarkMetric(nil), value.Metrics...)
+	value.Profiles = append([]BenchmarkProfile(nil), value.Profiles...)
 	return value, ok
 }
 
 func (registry *Registry) IndexResult(model, index string) (IndexResult, bool) {
-	results := registry.indexResults[model]
+	effort := registry.defaultReasoningEffort(model)
+	return registry.IndexResultForEffort(model, effort, index)
+}
+
+func (registry *Registry) IndexResultForEffort(model, effort, index string) (IndexResult, bool) {
+	results := registry.indexResults[model][effort]
 	value, ok := results[index]
 	return cloneIndexResult(value), ok
 }
@@ -147,7 +146,6 @@ func (registry *Registry) IndexResult(model, index string) (IndexResult, bool) {
 func (registry *Registry) ProviderIDs() []string  { return sortedKeys(registry.providers) }
 func (registry *Registry) ModelIDs() []string     { return sortedKeys(registry.models) }
 func (registry *Registry) ProtocolIDs() []string  { return sortedKeys(registry.protocols) }
-func (registry *Registry) OfferingIDs() []string  { return sortedKeys(registry.offerings) }
 func (registry *Registry) BenchmarkIDs() []string { return sortedKeys(registry.benchmarks) }
 func (registry *Registry) IndexIDs() []string     { return sortedKeys(registry.indices) }
 
@@ -176,16 +174,6 @@ func (registry *Registry) Models() []ModelCard {
 	result := make([]ModelCard, 0, len(ids))
 	for _, id := range ids {
 		value, _ := registry.Model(id)
-		result = append(result, value)
-	}
-	return result
-}
-
-func (registry *Registry) Offerings() []OfferingDefinition {
-	ids := registry.OfferingIDs()
-	result := make([]OfferingDefinition, 0, len(ids))
-	for _, id := range ids {
-		value, _ := registry.Offering(id)
 		result = append(result, value)
 	}
 	return result
@@ -222,6 +210,27 @@ func (registry *Registry) Evaluations() []EvaluationRecord {
 	return result
 }
 
+func (registry *Registry) EvaluationCoverage() []EvaluationCoverage {
+	result := make([]EvaluationCoverage, len(registry.evaluationCoverage))
+	for index, value := range registry.evaluationCoverage {
+		result[index] = value
+		result[index].Value = cloneFloatPointer(value.Value)
+	}
+	return result
+}
+
+func (registry *Registry) defaultReasoningEffort(modelID string) string {
+	model, ok := registry.models[modelID]
+	if !ok || model.ReasoningFamily == "" {
+		return "default"
+	}
+	family, ok := registry.reasoningFamilies[model.ReasoningFamily]
+	if !ok {
+		return "default"
+	}
+	return family.Default
+}
+
 func sortedKeys[Value any](values map[string]Value) []string {
 	keys := make([]string, 0, len(values))
 	for key := range values {
@@ -242,6 +251,12 @@ func cloneProvider(value ProviderDefinition) ProviderDefinition {
 	value.SupportedOperations = append([]string(nil), value.SupportedOperations...)
 	value.PathOverrides = cloneMap(value.PathOverrides)
 	value.DefaultHeaders = cloneMap(value.DefaultHeaders)
+	value.Models = append([]CatalogModelBinding(nil), value.Models...)
+	for index := range value.Models {
+		value.Models[index].Protocols = append([]string(nil), value.Models[index].Protocols...)
+		value.Models[index].Restrictions = cloneArbitraryMap(value.Models[index].Restrictions)
+		value.Models[index].Pricing.CacheWritePer1M = cloneFloatPointer(value.Models[index].Pricing.CacheWritePer1M)
+	}
 	return value
 }
 
@@ -255,7 +270,6 @@ func cloneModel(value ModelCard) ModelCard {
 	value.Modalities.Input = append([]string(nil), value.Modalities.Input...)
 	value.Modalities.Output = append([]string(nil), value.Modalities.Output...)
 	value.Tags = append([]string(nil), value.Tags...)
-	value.Protocols = append([]string(nil), value.Protocols...)
 	value.Traits = append([]string(nil), value.Traits...)
 	value.Roles = append([]ModelRole(nil), value.Roles...)
 	for index := range value.Roles {
@@ -276,7 +290,12 @@ func cloneIndex(value IndexDefinition) IndexDefinition {
 }
 
 func cloneIndexResult(value IndexResult) IndexResult {
+	value.Score = cloneFloatPointer(value.Score)
 	value.Components = append([]IndexComponentResult(nil), value.Components...)
+	for index := range value.Components {
+		value.Components[index].Value = cloneFloatPointer(value.Components[index].Value)
+		value.Components[index].Normalized = cloneFloatPointer(value.Components[index].Normalized)
+	}
 	value.Domains = cloneMap(value.Domains)
 	value.Provenance = append([]string(nil), value.Provenance...)
 	return value
@@ -311,6 +330,25 @@ func cloneArbitraryValue(value any) any {
 	default:
 		return value
 	}
+}
+
+func cloneArbitraryMap(source map[string]any) map[string]any {
+	if source == nil {
+		return nil
+	}
+	result := make(map[string]any, len(source))
+	for key, value := range source {
+		result[key] = cloneArbitraryValue(value)
+	}
+	return result
+}
+
+func cloneFloatPointer(value *float64) *float64 {
+	if value == nil {
+		return nil
+	}
+	result := *value
+	return &result
 }
 
 func cloneMap[Value any](source map[string]Value) map[string]Value {

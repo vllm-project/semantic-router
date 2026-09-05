@@ -1,0 +1,86 @@
+id: xai
+display_name: xAI
+description: Grok models through an OpenAI-style API.
+category: model_api
+support_tier: compatible
+default_base_url: https://api.x.ai/v1
+protocols:
+- openai/chat-completions@1
+default_protocol: openai/chat-completions@1
+supported_operations:
+- openai/chat-completions@1#create
+- openai/chat-completions@1#list_models
+auth:
+  strategy: bearer
+  header: Authorization
+  prefix: Bearer
+presentation:
+  logo: package:xai
+  monogram: x
+  monochrome: true
+conformance:
+  status: unverified
+models:
+- catalog: xai/grok-4
+  id: grok-4
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.x.ai/developers/models
+- catalog: xai/grok-4.1-fast
+  id: grok-4-1-fast
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.x.ai/developers/models
+- catalog: xai/grok-4.3
+  id: grok-4.3
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.x.ai/developers/models
+- catalog: xai/grok-4.5
+  id: grok-4.5
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.x.ai/developers/models
+- catalog: xai/grok-4.6
+  id: grok-4.6
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.x.ai/developers/models
+- catalog: xai/grok-4.20
+  id: grok-4.20
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.x.ai/developers/models
+- catalog: xai/grok-build-0.1
+  id: grok-build-0.1
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.x.ai/developers/models/grok-build-0.1

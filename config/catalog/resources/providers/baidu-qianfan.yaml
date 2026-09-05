@@ -1,0 +1,77 @@
+id: baidu-qianfan
+display_name: Baidu Qianfan
+description: ERNIE and selected third-party models through Qianfan's OpenAI-compatible API.
+category: model_api
+support_tier: compatible
+default_base_url: https://api.baiduqianfan.ai/v1
+protocols:
+- openai/chat-completions@1
+default_protocol: openai/chat-completions@1
+supported_operations:
+- openai/chat-completions@1#create
+auth:
+  strategy: bearer
+  header: Authorization
+  prefix: Bearer
+presentation:
+  logo: package:baidu
+  monogram: E
+  monochrome: false
+conformance:
+  status: unverified
+models:
+- catalog: baidu/ernie-5.0
+  id: ernie-5.0
+  protocols: &qianfan-protocols [openai/chat-completions@1]
+  lifecycle: active
+  verification: &qianfan-verification
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://intl.cloud.baidu.com/en/doc/qianfan/s/7m95lyy43-intl-en
+- catalog: baidu/ernie-5.0-thinking-preview
+  id: ernie-5.0-thinking-preview
+  protocols: *qianfan-protocols
+  reasoning_transport: top_level_boolean
+  lifecycle: experimental
+  verification:
+    <<: *qianfan-verification
+    source: https://intl.cloud.baidu.com/en/doc/qianfan/s/Wm95lyynv-intl-en
+- catalog: deepseek/deepseek-v4-pro
+  id: deepseek-v4-pro
+  protocols: *qianfan-protocols
+  lifecycle: active
+  verification: *qianfan-verification
+- catalog: deepseek/deepseek-v4-flash
+  id: deepseek-v4-flash
+  protocols: *qianfan-protocols
+  lifecycle: active
+  verification: *qianfan-verification
+- catalog: deepseek/deepseek-v3.2
+  id: deepseek-v3.2
+  protocols: *qianfan-protocols
+  reasoning_transport: deepseek_thinking
+  lifecycle: active
+  verification: *qianfan-verification
+- catalog: zai/glm-5.2
+  id: glm-5.2
+  protocols: *qianfan-protocols
+  reasoning_transport: thinking_object
+  lifecycle: active
+  verification: *qianfan-verification
+- catalog: zai/glm-5.1
+  id: glm-5.1
+  protocols: *qianfan-protocols
+  reasoning_transport: thinking_object
+  lifecycle: active
+  verification: *qianfan-verification
+- catalog: zai/glm-5
+  id: glm-5
+  protocols: *qianfan-protocols
+  reasoning_transport: thinking_object
+  lifecycle: active
+  verification: *qianfan-verification
+- catalog: moonshot/kimi-k2.6
+  id: kimi-k2.6
+  protocols: *qianfan-protocols
+  lifecycle: active
+  verification: *qianfan-verification

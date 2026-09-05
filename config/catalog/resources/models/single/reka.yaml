@@ -1,0 +1,51 @@
+- id: reka/reka-edge-2603
+  display_name: Reka Edge 2603
+  description: Compact open-weight vision-language model for physical AI, video understanding, grounding, and edge deployment.
+  kind: physical
+  publisher: Reka AI
+  presentation: &reka-presentation
+    logo: monogram
+    monogram: R
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/RekaAI/reka-edge-2603
+    license: Reka-Edge-2603
+  family: reka-edge
+  parameter_size: 7B
+  lifecycle: active
+  limits:
+    context_window_size: 16384
+  capabilities: [chat, reasoning, tools, structured_output, vision, video]
+  modalities:
+    input: [text, image, video]
+    output: [text]
+  verification: &reka-verification
+    authority: Reka AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/RekaAI/reka-edge-2603
+  tags: [open_weights, reasoning, multimodal, physical_ai, efficient]
+- id: reka/reka-flash-3
+  display_name: Reka Flash 3
+  description: Open-weight 21B general-purpose reasoning model optimized for low-latency and on-device workloads.
+  kind: physical
+  publisher: Reka AI
+  presentation: *reka-presentation
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/RekaAI/reka-flash-3
+    license: Apache-2.0
+  family: reka-flash
+  parameter_size: 21B
+  lifecycle: active
+  limits:
+    context_window_size: 32768
+  capabilities: [chat, reasoning, long_context]
+  modalities:
+    input: [text]
+    output: [text]
+  verification:
+    <<: *reka-verification
+    source: https://huggingface.co/RekaAI/reka-flash-3
+  tags: [open_weights, reasoning, efficient, on_device]

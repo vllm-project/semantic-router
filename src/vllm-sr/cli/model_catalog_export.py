@@ -33,9 +33,9 @@ def packaged_model_catalog_document() -> dict[str, Any]:
         "providers",
         "reasoning_families",
         "models",
-        "offerings",
         "benchmarks",
         "evaluations",
+        "evaluation_coverage",
         "indices",
         "index_results",
     ):

@@ -1,0 +1,45 @@
+id: apodex
+display_name: Apodex AI
+description: Apodex reasoning models through first-party OpenAI and Anthropic compatible APIs.
+category: model_api
+support_tier: compatible
+default_base_url: https://api.apodex.ai/v1
+protocols:
+- openai/chat-completions@1
+- openai/responses@1
+- anthropic/messages@1
+default_protocol: openai/chat-completions@1
+supported_operations:
+- openai/chat-completions@1#create
+- openai/chat-completions@1#list_models
+- openai/responses@1#create
+- openai/responses@1#list_models
+- anthropic/messages@1#create
+- anthropic/messages@1#list_models
+auth:
+  strategy: bearer
+  header: Authorization
+  prefix: Bearer
+presentation:
+  logo: monogram
+  monogram: A
+  monochrome: false
+conformance:
+  status: unverified
+models:
+- catalog: apodex/apodex-1.1
+  id: apodex-1.1
+  protocols: &apodex-protocols
+  - openai/chat-completions@1
+  - openai/responses@1
+  - anthropic/messages@1
+  lifecycle: active
+  verification: &apodex-verification
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://platform.apodex.ai/docs/models
+- catalog: apodex/apodex-1.1-mini
+  id: apodex-1.1-mini
+  protocols: *apodex-protocols
+  lifecycle: active
+  verification: *apodex-verification

@@ -1,0 +1,92 @@
+- id: nex-agi/nex-n2-pro-model-card-gpqa-diamond@1.0.0
+  model: nex-agi/nex-n2-pro
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject: &nex-n2-pro-subject
+    variant: Nex-N2-Pro
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.907
+  status: available
+  evidence: &nex-n2-pro-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/nex-agi/Nex-N2-Pro
+    redistributable: true
+- id: nex-agi/nex-n2-pro-model-card-swe-bench-verified@1.0.0
+  model: nex-agi/nex-n2-pro
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: default
+  subject: *nex-n2-pro-subject
+  metrics:
+    resolved: 0.808
+  status: available
+  evidence: *nex-n2-pro-evidence
+- id: nex-agi/nex-n2-pro-model-card-terminal-bench@1.0.0
+  model: nex-agi/nex-n2-pro
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: default
+  subject: *nex-n2-pro-subject
+  metrics:
+    resolved: 0.753
+  status: available
+  evidence: *nex-n2-pro-evidence
+- id: nex-agi/nex-n2-pro-model-card-swe-bench-pro@1.0.0
+  model: nex-agi/nex-n2-pro
+  benchmark: swe-bench/pro@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: default
+  subject: *nex-n2-pro-subject
+  metrics:
+    resolved: 0.588
+  status: available
+  evidence: *nex-n2-pro-evidence
+- id: nex-agi/nex-n2-mini-model-card-gpqa-diamond@1.0.0
+  model: nex-agi/nex-n2-mini
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject: &nex-n2-mini-subject
+    variant: Nex-N2-Mini
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.826
+  status: available
+  evidence: &nex-n2-mini-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/nex-agi/Nex-N2-Mini
+    redistributable: true
+- id: nex-agi/nex-n2-mini-model-card-swe-bench-verified@1.0.0
+  model: nex-agi/nex-n2-mini
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: default
+  subject: *nex-n2-mini-subject
+  metrics:
+    resolved: 0.744
+  status: available
+  evidence: *nex-n2-mini-evidence
+- id: nex-agi/nex-n2-mini-model-card-terminal-bench@1.0.0
+  model: nex-agi/nex-n2-mini
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: default
+  subject: *nex-n2-mini-subject
+  metrics:
+    resolved: 0.607
+  status: available
+  evidence: *nex-n2-mini-evidence
+- id: nex-agi/nex-n2-mini-model-card-swe-bench-pro@1.0.0
+  model: nex-agi/nex-n2-mini
+  benchmark: swe-bench/pro@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: default
+  subject: *nex-n2-mini-subject
+  metrics:
+    resolved: 0.502
+  status: available
+  evidence: *nex-n2-mini-evidence

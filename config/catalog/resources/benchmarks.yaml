@@ -2,6 +2,11 @@
   display_name: MMLU-Pro
   domain: general_reasoning
   source: https://github.com/TIGER-AI-Lab/MMLU-Pro
+  default_profile: published-standard
+  profiles:
+    - id: published-standard
+      display_name: Published standard
+      description: Vendor-published MMLU-Pro result using the source's documented standard setup.
   metrics:
     - id: accuracy
       unit: proportion
@@ -11,6 +16,11 @@
   display_name: GPQA Diamond
   domain: scientific_reasoning
   source: https://arxiv.org/abs/2311.12022
+  default_profile: published-standard
+  profiles:
+    - id: published-standard
+      display_name: Published standard
+      description: Vendor-published GPQA Diamond accuracy with setup details retained on the evaluation record.
   metrics:
     - id: accuracy
       unit: proportion
@@ -20,6 +30,17 @@
   display_name: Humanity's Last Exam
   domain: frontier_reasoning
   source: https://agi.safe.ai/
+  default_profile: no-tools
+  profiles:
+    - id: no-tools
+      display_name: No tools
+      description: Text-only evaluation without browsing, code execution, or retrieval tools.
+    - id: with-tools
+      display_name: With tools
+      description: Evaluation where the model may use tools; visible as evidence but excluded from the default index.
+    - id: published-unspecified
+      display_name: Published setup unspecified
+      description: Published result whose tool policy is not stated; visible but excluded from the default index.
   metrics:
     - id: accuracy
       unit: proportion
@@ -29,6 +50,14 @@
   display_name: SWE-bench Verified
   domain: software_engineering
   source: https://github.com/SWE-bench/SWE-bench
+  default_profile: published-agent
+  profiles:
+    - id: published-agent
+      display_name: Published agent
+      description: Full SWE-bench Verified result from a documented vendor agent or harness.
+    - id: published-subset
+      display_name: Published subset
+      description: A documented subset result; visible as evidence but excluded from the default index.
   metrics:
     - id: resolved
       unit: proportion
@@ -38,14 +67,108 @@
   display_name: Terminal-Bench 2.1
   domain: agentic_systems
   source: https://github.com/harbor-framework/terminal-bench-2-1
+  default_profile: published-agent
+  profiles:
+    - id: published-agent
+      display_name: Published agent
+      description: Terminal-Bench 2.1 result with the model's agent and harness retained on the evaluation record.
   metrics:
     - id: resolved
+      unit: proportion
+      direction: higher_is_better
+      range: [0, 1]
+- id: swe-bench/pro@1.0.0
+  display_name: SWE-bench Pro
+  domain: software_engineering
+  source: https://scale.com/leaderboard/swe_bench_pro_public
+  default_profile: published-agent
+  profiles:
+    - id: published-agent
+      display_name: Published agent
+      description: Vendor-published SWE-bench Pro result with harness details retained on the evaluation record.
+  metrics:
+    - id: resolved
+      unit: proportion
+      direction: higher_is_better
+      range: [0, 1]
+- id: harbor/terminal-bench@2.0.0
+  display_name: Terminal-Bench 2.0
+  domain: agentic_systems
+  source: https://github.com/harbor-framework/terminal-bench
+  default_profile: published-agent
+  profiles:
+    - id: published-agent
+      display_name: Published agent
+      description: Terminal-Bench 2.0 result retained separately from the incompatible 2.1 benchmark.
+  metrics:
+    - id: resolved
+      unit: proportion
+      direction: higher_is_better
+      range: [0, 1]
+- id: datacurve/deep-swe@1.1.0
+  display_name: DeepSWE 1.1
+  domain: software_engineering
+  source: https://huggingface.co/datasets/datacurve/DeepSWE
+  default_profile: published-agent
+  profiles:
+    - id: published-agent
+      display_name: Published agent
+      description: Vendor-published DeepSWE 1.1 result with harness metadata on the evaluation record.
+  metrics:
+    - id: resolved
+      unit: proportion
+      direction: higher_is_better
+      range: [0, 1]
+- id: artificial-analysis/gdpval-aa@2.0.0
+  display_name: GDPval-AA v2
+  domain: knowledge_work
+  source: https://artificialanalysis.ai/evaluations/gdpval-aa
+  default_profile: published-agent
+  profiles:
+    - id: published-agent
+      display_name: Published agent
+      description: Vendor-published GDPval-AA v2 Elo with the evaluated agent and reasoning budget retained on the record.
+  metrics:
+    - id: elo
+      unit: elo
+      direction: higher_is_better
+      range: [0, 3000]
+- id: berkeley-rdi/agents-last-exam@1.0.0
+  display_name: Agents' Last Exam
+  domain: agentic_systems
+  source: https://github.com/rdi-berkeley/agents-last-exam
+  default_profile: published-agent
+  profiles:
+    - id: published-agent
+      display_name: Published agent
+      description: Vendor-published full pass rate using a documented agent harness.
+  metrics:
+    - id: pass_rate
+      unit: proportion
+      direction: higher_is_better
+      range: [0, 1]
+- id: zapier/automation-bench@1.0.6
+  display_name: AutomationBench 1.0.6
+  domain: agentic_systems
+  source: https://github.com/zapier/AutomationBench
+  default_profile: published-agent
+  profiles:
+    - id: published-agent
+      display_name: Published agent
+      description: Vendor-published AutomationBench score using the stated benchmark release and harness.
+  metrics:
+    - id: score
       unit: proportion
       direction: higher_is_better
       range: [0, 1]
 - id: vllm-sr/operator-rating@1.0.0
   display_name: Operator Rating
   domain: operator
+  default_profile: operator
+  profiles:
+    - id: operator
+      display_name: Operator-defined
+      description: A local operator measurement that is never treated as repository-published benchmark evidence.
   metrics:
     - id: score
       unit: proportion

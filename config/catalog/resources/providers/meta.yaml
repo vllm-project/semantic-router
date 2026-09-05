@@ -1,0 +1,49 @@
+id: meta
+display_name: Meta Model API
+description: Muse models through Meta's OpenAI-compatible Model API.
+category: model_api
+support_tier: native
+default_base_url: https://api.meta.ai/v1
+protocols:
+- openai/chat-completions@1
+- openai/responses@1
+default_protocol: openai/chat-completions@1
+supported_operations:
+- openai/chat-completions@1#create
+- openai/responses@1#create
+reasoning_transport: top_level_effort
+auth:
+  strategy: bearer
+  header: Authorization
+  prefix: Bearer
+presentation:
+  logo: package:meta
+  monogram: M
+  monochrome: false
+conformance:
+  status: unverified
+models:
+- catalog: meta/muse-spark-1.1
+  id: muse-spark-1.1
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://github.com/meta-models/meta-model-cookbook/tree/main/01_api_fundamentals
+- catalog: meta/muse-spark-1.2
+  id: muse-spark-1.2
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://ai.meta.com/llama/
+- catalog: meta/muse-spark-1.3
+  id: muse-spark-1.3
+  protocols: [openai/chat-completions@1, openai/responses@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://github.com/meta-models/meta-model-cookbook/tree/main/01_api_fundamentals

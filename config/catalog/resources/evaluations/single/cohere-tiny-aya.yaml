@@ -1,0 +1,16 @@
+- id: cohere/tiny-aya-global-hf-eval-gpqa-diamond@1.0.0
+  model: cohere/tiny-aya-global
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: published
+  subject:
+    variant: tiny-aya-global
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.2828
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://huggingface.co/CohereLabs/tiny-aya-global
+    redistributable: true

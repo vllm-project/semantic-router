@@ -42,11 +42,11 @@ func (registry *Registry) Compile(input CompileInput) (*EffectiveRegistry, error
 	if err != nil {
 		return nil, err
 	}
-	indices, results, err := registry.compileEvaluations(input.Evaluations, cards)
+	indices, results, err := registry.compileEvaluations(input.Evaluations, cards, reasoning)
 	if err != nil {
 		return nil, err
 	}
-	models, err := registry.compileModels(input.Models, providers, cards, results)
+	models, err := registry.compileModels(input.Models, providers, cards, reasoning, results)
 	if err != nil {
 		return nil, err
 	}
@@ -270,6 +270,11 @@ func validateReasoningFamily(definition ReasoningFamilyDefinition, path string) 
 	}
 	if _, ok := seen[definition.Default]; !ok {
 		return fmt.Errorf("%s.default %q is not listed in levels", path, definition.Default)
+	}
+	if definition.Disabled != "" {
+		if _, ok := seen[definition.Disabled]; !ok {
+			return fmt.Errorf("%s.disabled %q is not listed in levels", path, definition.Disabled)
+		}
 	}
 	return nil
 }
@@ -591,17 +596,17 @@ func sanitizeID(value string) string {
 
 func builtinCardProvenance(card ModelCard) FieldProvenance {
 	result := FieldProvenance{}
-	for _, field := range []string{"id", "display_name", "description", "kind", "publisher", "presentation", "distribution", "family", "parameter_size", "revision", "released_at", "knowledge_cutoff", "lifecycle", "limits.context_window_size", "limits.max_output_tokens", "capabilities", "modalities", "reasoning_family", "tags", "protocols", "verification"} {
+	for _, field := range []string{"id", "display_name", "description", "kind", "publisher", "presentation", "distribution", "family", "parameter_size", "revision", "released_at", "knowledge_cutoff", "lifecycle", "limits.context_window_size", "limits.max_output_tokens", "capabilities", "modalities", "reasoning_family", "tags", "verification"} {
 		result[field] = SourceBuiltin
 	}
 	return result
 }
 
-func (registry *Registry) compileModels(inputs []ModelAlias, providers map[string]EffectiveProvider, cards map[string]EffectiveModelCard, results map[string]map[string]IndexResult) (map[string]EffectiveModel, error) {
+func (registry *Registry) compileModels(inputs []ModelAlias, providers map[string]EffectiveProvider, cards map[string]EffectiveModelCard, reasoning map[string]ReasoningFamilyDefinition, results map[string]map[string]map[string]IndexResult) (map[string]EffectiveModel, error) {
 	models := make(map[string]EffectiveModel, len(inputs))
 	for index, input := range inputs {
 		path := fmt.Sprintf("models[%d]", index)
-		effective, err := registry.compileModel(input, path, providers, cards, results, models)
+		effective, err := registry.compileModel(input, path, providers, cards, results, reasoning, models)
 		if err != nil {
 			return nil, err
 		}
@@ -615,7 +620,8 @@ func (registry *Registry) compileModel(
 	path string,
 	providers map[string]EffectiveProvider,
 	cards map[string]EffectiveModelCard,
-	results map[string]map[string]IndexResult,
+	results map[string]map[string]map[string]IndexResult,
+	reasoning map[string]ReasoningFamilyDefinition,
 	existing map[string]EffectiveModel,
 ) (EffectiveModel, error) {
 	input.Name = strings.TrimSpace(input.Name)
@@ -634,12 +640,15 @@ func (registry *Registry) compileModel(
 	if err != nil {
 		return EffectiveModel{}, err
 	}
+	indicesByEffort := cloneIndexResultsByEffort(results[input.Catalog])
+	preferredEffort := preferredEvaluationEffort(card, indicesByEffort, reasoning)
 	return EffectiveModel{
 		Alias:           input.Name,
 		Catalog:         input.Catalog,
 		Card:            cloneEffectiveCard(card),
 		Providers:       effectiveProviders,
-		Indices:         cloneMap(results[input.Catalog]),
+		Indices:         cloneIndexResults(indicesByEffort[preferredEffort]),
+		IndicesByEffort: indicesByEffort,
 		BindingDefaults: input.BindingDefaults,
 	}, nil
 }
@@ -684,17 +693,17 @@ func (registry *Registry) compileModelProvider(
 	if binding.Protocol == "" {
 		binding.Protocol = provider.Definition.DefaultProtocol
 	}
-	if err := validateModelProviderProtocol(binding.Protocol, path, selectedProtocol, provider, card); err != nil {
+	if err := validateModelProviderProtocol(binding.Protocol, path, selectedProtocol, provider); err != nil {
 		return EffectiveModelProvider{}, err
 	}
-	offering := registry.findOffering(provider.Definition.ID, card.Card.ID, binding.ModelID, binding.Protocol)
-	if binding.ModelID == "" && offering != nil {
-		binding.ModelID = offering.ProviderModelID
+	catalogBinding := registry.findCatalogBinding(provider.Definition.ID, card.Card.ID, binding.ModelID, binding.Protocol)
+	if binding.ModelID == "" && catalogBinding != nil {
+		binding.ModelID = catalogBinding.ID
 	}
 	if card.Card.Kind == "physical" && binding.ModelID == "" {
-		return EffectiveModelProvider{}, fmt.Errorf("%s.model_id is required when no catalog offering supplies it", path)
+		return EffectiveModelProvider{}, fmt.Errorf("%s.model_id is required when the provider catalog has no matching model", path)
 	}
-	return EffectiveModelProvider{Binding: binding, Provider: provider, Offering: offering}, nil
+	return EffectiveModelProvider{Binding: binding, Provider: provider, CatalogBinding: catalogBinding}, nil
 }
 
 func validateModelProviderProtocol(
@@ -702,7 +711,6 @@ func validateModelProviderProtocol(
 	path string,
 	selected string,
 	provider EffectiveProvider,
-	card EffectiveModelCard,
 ) error {
 	if !contains(provider.Definition.Protocols, protocol) {
 		return fmt.Errorf("%s.protocol %q is not supported by provider %q", path, protocol, provider.Definition.ID)
@@ -710,28 +718,27 @@ func validateModelProviderProtocol(
 	if !contains(provider.Definition.SupportedOperations, protocol+"#create") {
 		return fmt.Errorf("%s.protocol %q cannot create requests through provider %q", path, protocol, provider.Definition.ID)
 	}
-	if len(card.Card.Protocols) > 0 && !contains(card.Card.Protocols, protocol) {
-		return fmt.Errorf("%s.protocol %q is not supported by model card %q", path, protocol, card.Card.ID)
-	}
 	if selected != "" && protocol != selected {
 		return fmt.Errorf("%s.protocol %q conflicts with %q; one alias must use one wire protocol", path, protocol, selected)
 	}
 	return nil
 }
 
-func (registry *Registry) findOffering(providerID, modelID, providerModelID, protocol string) *OfferingDefinition {
-	ids := sortedKeys(registry.offerings)
-	for _, id := range ids {
-		offering := registry.offerings[id]
-		if offering.Provider != providerID || offering.Model != modelID || !contains(offering.Protocols, protocol) {
+func (registry *Registry) findCatalogBinding(providerID, modelID, nativeModelID, protocol string) *CatalogModelBinding {
+	provider, ok := registry.providers[providerID]
+	if !ok {
+		return nil
+	}
+	for _, catalogBinding := range provider.Models {
+		if catalogBinding.Catalog != modelID || !contains(catalogBinding.Protocols, protocol) {
 			continue
 		}
-		if providerModelID != "" && offering.ProviderModelID != providerModelID {
+		if nativeModelID != "" && catalogBinding.ID != nativeModelID {
 			continue
 		}
-		copy := offering
-		copy.Protocols = append([]string(nil), offering.Protocols...)
-		copy.Restrictions = cloneMap(offering.Restrictions)
+		copy := catalogBinding
+		copy.Protocols = append([]string(nil), catalogBinding.Protocols...)
+		copy.Restrictions = cloneMap(catalogBinding.Restrictions)
 		return &copy
 	}
 	return nil

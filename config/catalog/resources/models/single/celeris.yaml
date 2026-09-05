@@ -3,14 +3,39 @@
   description: Low-latency diffusion language model for short, structured, and agentic workloads.
   kind: physical
   publisher: Celeris
-  presentation: {logo: monogram, monogram: C, monochrome: false}
-  distribution: {type: proprietary_api, source: https://docs.celeris.ai/models}
+  presentation:
+    logo: monogram
+    monogram: C
+    monochrome: false
+  distribution:
+    type: proprietary_api
+    source: https://docs.celeris.ai/models
   family: celeris-1
   lifecycle: active
-  limits: {context_window_size: 131072}
-  capabilities: [chat, reasoning, tools, structured_output, vision, long_context]
-  modalities: {input: [text, image], output: [text]}
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
   reasoning_family: celeris
-  protocols: [openai/chat-completions@1, openai/responses@1]
-  verification: {authority: Celeris, status: claimed, verified_at: 2026-09-05, source: https://docs.celeris.ai/making-requests}
-  tags: [proprietary, diffusion, low_latency, multimodal, agentic]
+  verification:
+    authority: Celeris
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.celeris.ai/making-requests
+  tags:
+  - proprietary
+  - diffusion
+  - low_latency
+  - multimodal
+  - agentic

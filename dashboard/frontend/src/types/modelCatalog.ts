@@ -46,6 +46,8 @@ export interface CatalogProvider {
   reasoning_transport?:
     | 'chat_template_kwargs'
     | 'top_level_effort'
+    | 'top_level_boolean'
+    | 'reasoning_object'
     | 'thinking_object'
     | 'deepseek_thinking'
   api_version_query?: boolean
@@ -64,6 +66,28 @@ export interface CatalogProvider {
     status: 'unverified' | 'fixture_verified' | 'live_verified'
     verified_at?: string
   }
+  models?: CatalogModelBinding[]
+}
+
+export interface CatalogModelBinding {
+  catalog: string
+  id: string
+  protocols: string[]
+  reasoning_transport?:
+    | 'chat_template_kwargs'
+    | 'top_level_effort'
+    | 'top_level_boolean'
+    | 'reasoning_object'
+    | 'thinking_object'
+    | 'deepseek_thinking'
+  pricing?: Record<string, string | number | boolean>
+  restrictions?: Record<string, unknown>
+  lifecycle: ModelCatalogLifecycle
+  verification: {
+    status: CatalogEvidenceStatus
+    verified_at?: string
+    source?: string
+  }
 }
 
 export interface CatalogReasoningFamily {
@@ -72,6 +96,7 @@ export interface CatalogReasoningFamily {
   parameter: string
   levels: string[]
   default: string
+  disabled?: string
 }
 
 export interface BuiltInModelRole {
@@ -129,26 +154,9 @@ export interface BuiltInModelMetadata {
   asset?: string
   entrypoint?: string
   recipe?: string
-  protocols: string[]
   traits?: string[]
   roles?: BuiltInModelRole[]
   verification: BuiltInModelVerification
-}
-
-export interface CatalogOffering {
-  id: string
-  provider: string
-  model: string
-  provider_model_id: string
-  protocols: string[]
-  pricing?: Record<string, string | number | boolean>
-  restrictions?: Record<string, unknown>
-  lifecycle: ModelCatalogLifecycle
-  verification: {
-    status: CatalogEvidenceStatus
-    verified_at?: string
-    source?: string
-  }
 }
 
 export interface CatalogBenchmarkMetric {
@@ -163,12 +171,17 @@ export interface CatalogBenchmark {
   display_name: string
   domain: string
   source?: string
+  default_profile: string
+  profiles: Array<{ id: string; display_name: string; description: string }>
   metrics: CatalogBenchmarkMetric[]
 }
 
 export interface CatalogEvaluation {
   id: string
   model: string
+  benchmark: string
+  benchmark_profile: string
+  reasoning_effort: string
   subject: Record<string, unknown>
   metrics: Record<string, number>
   status: CatalogResultStatus
@@ -183,7 +196,9 @@ export interface CatalogEvaluation {
 }
 
 export interface CatalogIndexComponent {
+  benchmark?: string
   metric?: string
+  benchmark_profile?: string
   index?: string
   weight: number
   normalization: {
@@ -220,13 +235,17 @@ export interface CatalogIndex {
 
 export interface CatalogIndexResult {
   model: string
+  reasoning_effort: string
   index: string
   status: CatalogResultStatus
   score: number | null
   coverage: number
   components: Array<{
+    benchmark?: string
     metric?: string
+    benchmark_profile?: string
     index?: string
+    evaluation?: string
     weight: number
     status: CatalogResultStatus
     value?: number | null
@@ -236,6 +255,17 @@ export interface CatalogIndexResult {
   provenance: string[]
 }
 
+export interface CatalogEvaluationCoverage {
+  model: string
+  reasoning_effort: string
+  benchmark: string
+  benchmark_profile: string
+  metric: string
+  status: CatalogResultStatus
+  value?: number
+  evaluation?: string
+}
+
 export interface BuiltInModelCatalog {
   schema_version: 'vllm-sr/model-catalog/v2'
   catalogs: BuiltInModelCatalogVersion[]
@@ -243,9 +273,9 @@ export interface BuiltInModelCatalog {
   providers: CatalogProvider[]
   reasoning_families: CatalogReasoningFamily[]
   models: BuiltInModelMetadata[]
-  offerings: CatalogOffering[]
   benchmarks: CatalogBenchmark[]
   evaluations: CatalogEvaluation[]
+  evaluation_coverage: CatalogEvaluationCoverage[]
   indices: CatalogIndex[]
   index_results: CatalogIndexResult[]
 }

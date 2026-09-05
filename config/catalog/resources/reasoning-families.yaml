@@ -6,33 +6,62 @@
 - id: qwen3
   type: chat_template_kwargs
   parameter: enable_thinking
-  levels: [low, medium, high]
-  default: medium
+  levels: [disabled, enabled]
+  default: enabled
+  disabled: disabled
 - id: qwen3.8
   type: reasoning_effort
   parameter: reasoning_effort
-  levels: [low, medium, xhigh]
+  levels: [none, low, medium, xhigh]
   default: xhigh
+  disabled: none
 - id: glm
   type: chat_template_kwargs
   parameter: enable_thinking
-  levels: [low, medium, high]
-  default: medium
+  levels: [disabled, enabled]
+  default: enabled
+  disabled: disabled
+- id: glm-5.3
+  type: reasoning_effort
+  parameter: reasoning_effort
+  levels: [low, high, max]
+  default: max
 - id: hunyuan
   type: chat_template_kwargs
   parameter: enable_thinking
-  levels: [low, medium, high]
-  default: medium
+  levels: [disabled, enabled]
+  default: enabled
+  disabled: disabled
+- id: hunyuan-hy3
+  type: reasoning_effort
+  parameter: reasoning_effort
+  levels: [no_think, low, high]
+  default: no_think
+  disabled: no_think
+- id: hunyuan-hy4
+  type: reasoning_effort
+  parameter: reasoning_effort
+  levels: [no_think, low, high]
+  default: high
+  disabled: no_think
+- id: longcat-2
+  type: chat_template_kwargs
+  parameter: enable_thinking
+  levels: [disabled, enabled]
+  default: enabled
+  disabled: disabled
 - id: exaone
   type: chat_template_kwargs
   parameter: enable_thinking
-  levels: [low, medium, high]
-  default: medium
+  levels: [disabled, enabled]
+  default: enabled
+  disabled: disabled
 - id: smollm3
   type: chat_template_kwargs
   parameter: enable_thinking
-  levels: [low, medium, high]
-  default: medium
+  levels: [disabled, enabled]
+  default: enabled
+  disabled: disabled
 - id: gpt-oss
   type: reasoning_effort
   parameter: reasoning_effort
@@ -53,8 +82,207 @@
   parameter: enable_thinking
   levels: [disabled, enabled]
   default: enabled
+  disabled: disabled
 - id: inception
   type: top_level_reasoning_effort
   parameter: reasoning_effort
   levels: [low, medium, high]
   default: medium
+- id: mimo
+  type: chat_template_kwargs
+  parameter: enable_thinking
+  levels: [disabled, enabled]
+  default: enabled
+  disabled: disabled
+- id: inkling
+  type: reasoning_effort
+  parameter: reasoning_effort
+  levels: [minimal, low, medium, high, xhigh, max]
+  default: xhigh
+- id: muse
+  type: reasoning_effort
+  parameter: reasoning_effort
+  levels: [minimal, low, medium, high, xhigh, max]
+  default: high
+- id: k2-horizon
+  type: reasoning_effort
+  parameter: reasoning_effort
+  levels: [high]
+  default: high
+- id: solar-open2
+  type: reasoning_effort
+  parameter: reasoning_effort
+  levels: [none, high]
+  default: high
+  disabled: none
+- id: gemma4
+  type: chat_template_kwargs
+  parameter: enable_thinking
+  levels: [disabled, enabled]
+  default: enabled
+  disabled: disabled
+- id: ling3
+  type: chat_template_kwargs
+  parameter: enable_thinking
+  levels: [disabled, enabled]
+  default: enabled
+  disabled: disabled
+- id: ring2.6
+  type: reasoning_effort
+  parameter: reasoning_effort
+  levels: [high, xhigh]
+  default: high
+- id: solar-pro
+  type: top_level_reasoning_effort
+  parameter: reasoning_effort
+  levels: [low, medium, high]
+  default: medium
+- id: gemini-2.5-pro
+  type: top_level_reasoning_effort
+  parameter: reasoning_effort
+  levels: [low, medium, high]
+  default: high
+- id: gemini-2.5-flash
+  type: top_level_reasoning_effort
+  parameter: reasoning_effort
+  levels: [none, low, medium, high]
+  default: medium
+  disabled: none
+- id: gemini-2.5-flash-lite
+  type: top_level_reasoning_effort
+  parameter: reasoning_effort
+  levels: [none, low, medium, high]
+  default: none
+  disabled: none
+- id: gemini-pro-two-level-high
+  type: top_level_reasoning_effort
+  parameter: reasoning_effort
+  levels: [low, high]
+  default: high
+- id: gemini-pro-three-level-high
+  type: top_level_reasoning_effort
+  parameter: reasoning_effort
+  levels: [low, medium, high]
+  default: high
+- id: gemini-flash-four-level-high
+  type: top_level_reasoning_effort
+  parameter: reasoning_effort
+  levels: [minimal, low, medium, high]
+  default: high
+- id: gemini-flash-four-level-medium
+  type: top_level_reasoning_effort
+  parameter: reasoning_effort
+  levels: [minimal, low, medium, high]
+  default: medium
+- id: gemini-flash-three-level-medium
+  type: top_level_reasoning_effort
+  parameter: reasoning_effort
+  levels: [low, medium, high]
+  default: medium
+- id: gemini-flash-four-level-minimal
+  type: top_level_reasoning_effort
+  parameter: reasoning_effort
+  levels: [minimal, low, medium, high]
+  default: minimal
+- id: laguna
+  type: chat_template_kwargs
+  parameter: enable_thinking
+  levels: [disabled, enabled]
+  default: enabled
+  disabled: disabled
+- id: kat-coder
+  type: chat_template_kwargs
+  parameter: enable_thinking
+  levels: [disabled, enabled]
+  default: enabled
+  disabled: disabled
+- id: aion
+  type: top_level_reasoning_effort
+  parameter: reasoning_effort
+  levels: [none, low, medium, high]
+  default: medium
+  disabled: none
+- id: sakana-fugu
+  type: top_level_reasoning_effort
+  parameter: reasoning_effort
+  levels: [high, xhigh]
+  default: high
+- id: sakana-fugu-ultra
+  type: top_level_reasoning_effort
+  parameter: reasoning_effort
+  levels: [high, xhigh, max]
+  default: high
+- id: ax-k2
+  type: chat_template_kwargs
+  parameter: enable_thinking
+  levels: [disabled, enabled]
+  default: enabled
+  disabled: disabled
+- id: dots3
+  type: chat_template_kwargs
+  parameter: enable_thinking
+  levels: [disabled, enabled]
+  default: enabled
+  disabled: disabled
+- id: g9v3
+  type: chat_template_kwargs
+  parameter: enable_thinking
+  levels: [disabled, enabled]
+  default: enabled
+  disabled: disabled
+- id: k2-think-v2
+  type: chat_template_kwargs
+  parameter: reasoning_effort
+  levels: [low, medium, high]
+  default: high
+- id: hypernova
+  type: reasoning_effort
+  parameter: reasoning_effort
+  levels: [low, medium, high]
+  default: high
+- id: sarvam
+  type: reasoning_effort
+  parameter: reasoning_effort
+  levels: [low, medium, high]
+  default: medium
+- id: cogito
+  type: chat_template_kwargs
+  parameter: enable_thinking
+  levels: [disabled, enabled]
+  default: enabled
+  disabled: disabled
+- id: ernie5-preview
+  type: chat_template_kwargs
+  parameter: enable_thinking
+  levels: [disabled, enabled]
+  default: enabled
+  disabled: disabled
+- id: hyperclovax-seed
+  type: chat_template_kwargs
+  parameter: thinking
+  levels: [disabled, enabled]
+  default: disabled
+  disabled: disabled
+- id: apertus-v1.5
+  type: chat_template_kwargs
+  parameter: enable_thinking
+  levels: [disabled, enabled]
+  default: disabled
+  disabled: disabled
+- id: perplexity-deep-research
+  type: reasoning_effort
+  parameter: reasoning_effort
+  levels: [low, medium, high]
+  default: medium
+- id: nanbeige4.2
+  type: chat_template_kwargs
+  parameter: enable_thinking
+  levels: [disabled, enabled]
+  default: enabled
+  disabled: disabled
+- id: hermes4
+  type: chat_template_kwargs
+  parameter: thinking
+  levels: [disabled, enabled]
+  default: disabled
+  disabled: disabled

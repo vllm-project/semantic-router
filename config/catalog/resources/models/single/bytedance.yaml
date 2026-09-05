@@ -3,15 +3,288 @@
   description: Open-weight long-context reasoning model for coding, tools, and agentic tasks.
   kind: physical
   publisher: ByteDance Seed
-  presentation: {logo: package:bytedance, monogram: S, monochrome: true}
-  distribution: {type: open_weights, source: https://huggingface.co/ByteDance-Seed/Seed-OSS-36B-Instruct, license: Apache-2.0}
+  presentation:
+    logo: package:bytedance
+    monogram: S
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/ByteDance-Seed/Seed-OSS-36B-Instruct
+    license: Apache-2.0
   family: seed-oss
   parameter_size: 36B
   released_at: 2025-08-20
   lifecycle: active
-  limits: {context_window_size: 524288}
-  capabilities: [chat, reasoning, tools, long_context]
-  modalities: {input: [text], output: [text]}
-  protocols: [openai/chat-completions@1, openai/responses@1]
-  verification: {authority: ByteDance Seed Team, status: claimed, verified_at: 2026-09-05, source: https://huggingface.co/ByteDance-Seed/Seed-OSS-36B-Instruct}
-  tags: [open_weights, reasoning, coding, agentic]
+  limits:
+    context_window_size: 524288
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: ByteDance Seed Team
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/ByteDance-Seed/Seed-OSS-36B-Instruct
+  tags:
+  - open_weights
+  - reasoning
+  - coding
+  - agentic
+- id: bytedance/seed-2.0-pro
+  display_name: Seed2.0 Pro
+  description: ByteDance Seed's flagship proprietary multimodal agent model for complex reasoning and production workflows.
+  kind: physical
+  publisher: ByteDance Seed
+  presentation:
+    logo: package:bytedance
+    monogram: S
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://seed.bytedance.com/en/seed2
+  family: seed-2.0
+  released_at: 2026-02-14
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - video
+  - long_context
+  modalities:
+    input: [text, image, video]
+    output: [text]
+  verification:
+    authority: ByteDance Seed Team
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://seed.bytedance.com/en/seed2
+  tags: [proprietary, multimodal, agentic, frontier]
+- id: bytedance/seed-2.0-lite
+  display_name: Seed2.0 Lite
+  description: Efficient Seed2.0 multimodal agent model for high-throughput reasoning and tool workflows.
+  kind: physical
+  publisher: ByteDance Seed
+  presentation:
+    logo: package:bytedance
+    monogram: S
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://seed.bytedance.com/en/seed2
+  family: seed-2.0
+  released_at: 2026-02-14
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - video
+  - long_context
+  modalities:
+    input: [text, image, video]
+    output: [text]
+  verification:
+    authority: ByteDance Seed Team
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://seed.bytedance.com/en/seed2
+  tags: [proprietary, multimodal, agentic, efficient]
+- id: bytedance/seed-2.0-mini
+  display_name: Seed2.0 Mini
+  description: Smallest production tier in the Seed2.0 multimodal agent family.
+  kind: physical
+  publisher: ByteDance Seed
+  presentation:
+    logo: package:bytedance
+    monogram: S
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://seed.bytedance.com/en/seed2
+  family: seed-2.0
+  released_at: 2026-02-14
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - video
+  - long_context
+  modalities:
+    input: [text, image, video]
+    output: [text]
+  verification:
+    authority: ByteDance Seed Team
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://seed.bytedance.com/en/seed2
+  tags: [proprietary, multimodal, efficient]
+- id: bytedance/seed-2.1-pro
+  display_name: Seed2.1 Pro
+  description: ByteDance Seed's highest-capability Seed2.1 model for real-world productivity, coding, and multimodal agents.
+  kind: physical
+  publisher: ByteDance Seed
+  presentation:
+    logo: package:bytedance
+    monogram: S
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://seed.bytedance.com/en/seed2_1
+  family: seed-2.1
+  released_at: 2026-06-23
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - video
+  - long_context
+  modalities:
+    input: [text, image, video]
+    output: [text]
+  verification:
+    authority: ByteDance Seed Team
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://seed.bytedance.com/en/seed2_1
+  tags: [proprietary, multimodal, agentic, coding, frontier]
+- id: bytedance/seed-2.1-turbo
+  display_name: Seed2.1 Turbo
+  description: Lower-latency Seed2.1 production model retaining multimodal, coding, and agent capabilities.
+  kind: physical
+  publisher: ByteDance Seed
+  presentation:
+    logo: package:bytedance
+    monogram: S
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://seed.bytedance.com/en/seed2_1
+  family: seed-2.1
+  released_at: 2026-06-23
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - video
+  - long_context
+  modalities:
+    input: [text, image, video]
+    output: [text]
+  verification:
+    authority: ByteDance Seed Team
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://seed.bytedance.com/en/seed2_1
+  tags: [proprietary, multimodal, agentic, efficient, frontier]
+- id: bytedance/seed-2.0-code
+  display_name: Seed2.0 Code
+  description: ByteDance Seed's code-specialized proprietary model for repository-scale software engineering and agent workflows.
+  kind: physical
+  publisher: ByteDance Seed
+  presentation:
+    logo: package:bytedance
+    monogram: S
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://seed.bytedance.com/en/seed2
+  family: seed-2.0
+  released_at: 2026-02-14
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities:
+    input: [text]
+    output: [text]
+  verification:
+    authority: ByteDance Seed Team
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://seed.bytedance.com/en/seed2
+  tags: [proprietary, coding, agentic]
+- id: bytedance/seed-1.6
+  display_name: Seed 1.6
+  description: Previous-generation ByteDance Seed general-purpose reasoning model with multimodal and agent capabilities.
+  kind: physical
+  publisher: ByteDance Seed
+  presentation:
+    logo: package:bytedance
+    monogram: S
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://seed.bytedance.com/en/seed1_6
+  family: seed-1.6
+  released_at: 2025-06-11
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities: [chat, reasoning, tools, structured_output, vision, long_context]
+  modalities:
+    input: [text, image]
+    output: [text]
+  verification:
+    authority: ByteDance Seed Team
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://seed.bytedance.com/en/seed1_6
+  tags: [proprietary, multimodal, agentic, previous_generation]
+- id: bytedance/seed-1.6-flash
+  display_name: Seed 1.6 Flash
+  description: Low-latency member of the Seed 1.6 family for high-throughput multimodal applications.
+  kind: physical
+  publisher: ByteDance Seed
+  presentation:
+    logo: package:bytedance
+    monogram: S
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://seed.bytedance.com/en/seed1_6
+  family: seed-1.6
+  released_at: 2025-06-11
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities: [chat, reasoning, tools, structured_output, vision, long_context]
+  modalities:
+    input: [text, image]
+    output: [text]
+  verification:
+    authority: ByteDance Seed Team
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://seed.bytedance.com/en/seed1_6
+  tags: [proprietary, multimodal, efficient, previous_generation]

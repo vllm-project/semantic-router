@@ -163,7 +163,7 @@ function useConnectDialogDerived(
     return resolved
   }, [existing, state.advanced.namePrefix, state.models, state.provider])
   const catalogModels = useMemo(
-    () => providerCatalogModels(catalog, state.provider?.id),
+    () => modelsForProvider(catalog, state.provider?.id),
     [catalog, state.provider?.id],
   )
   const modelDisplayNames = useMemo(
@@ -173,7 +173,7 @@ function useConnectDialogDerived(
   return { visibleProviders, visibleModels, resolvedModelNames, catalogModels, modelDisplayNames }
 }
 
-export function providerCatalogModels(catalog: BuiltInModelCatalog, providerID?: string) {
+export function modelsForProvider(catalog: BuiltInModelCatalog, providerID?: string) {
   const result = new Map<string, string>()
   if (!providerID) return result
   const supportedModels = new Set(
@@ -181,14 +181,14 @@ export function providerCatalogModels(catalog: BuiltInModelCatalog, providerID?:
       .filter((model) => model.lifecycle === 'active' || model.lifecycle === 'experimental')
       .map((model) => model.id),
   )
-  for (const offering of catalog.offerings) {
+  const provider = catalog.providers.find((candidate) => candidate.id === providerID)
+  for (const model of provider?.models ?? []) {
     if (
-      offering.provider === providerID &&
-      (offering.lifecycle === 'active' || offering.lifecycle === 'experimental') &&
-      supportedModels.has(offering.model) &&
-      !result.has(offering.provider_model_id)
+      (model.lifecycle === 'active' || model.lifecycle === 'experimental') &&
+      supportedModels.has(model.catalog) &&
+      !result.has(model.id)
     ) {
-      result.set(offering.provider_model_id, offering.model)
+      result.set(model.id, model.catalog)
     }
   }
   return result

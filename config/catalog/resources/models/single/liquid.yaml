@@ -1,0 +1,180 @@
+- id: liquid/lfm2.5-8b-a1b
+  display_name: LFM2.5 8B A1B
+  description: Compact open-weight hybrid MoE reasoning model optimized for high-throughput agentic inference.
+  kind: physical
+  publisher: Liquid AI
+  presentation: &liquid-presentation
+    logo: package:liquid
+    monogram: L
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/LiquidAI/LFM2.5-8B-A1B
+    license: LFM-1.0
+  family: lfm2.5
+  parameter_size: 8.3B (1.5B active)
+  lifecycle: active
+  limits:
+    context_window_size: 128000
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities: &liquid-modalities
+    input: [text]
+    output: [text]
+  verification: &liquid-verification
+    authority: Liquid AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/LiquidAI/LFM2.5-8B-A1B
+  tags: [open_weights, reasoning, moe, efficient, agentic]
+- id: liquid/lfm2.5-2.6b
+  display_name: LFM2.5 2.6B
+  description: Small open-weight hybrid reasoning model for tools, extraction, RAG, and on-device agents.
+  kind: physical
+  publisher: Liquid AI
+  presentation: *liquid-presentation
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/LiquidAI/LFM2.5-2.6B
+    license: LFM-1.0
+  family: lfm2.5
+  parameter_size: 2.69B
+  released_at: 2026-08-04
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities: *liquid-modalities
+  verification:
+    <<: *liquid-verification
+    source: https://huggingface.co/LiquidAI/LFM2.5-2.6B
+  tags: [open_weights, reasoning, efficient, agentic, on_device]
+- id: liquid/lfm2.5-1.2b-thinking
+  display_name: LFM2.5 1.2B Thinking
+  description: Edge-oriented open-weight reasoning model with tool use and a 32K context window.
+  kind: physical
+  publisher: Liquid AI
+  presentation: *liquid-presentation
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/LiquidAI/LFM2.5-1.2B-Thinking
+    license: LFM-1.0
+  family: lfm2.5
+  parameter_size: 1.17B
+  lifecycle: active
+  limits:
+    context_window_size: 32768
+  capabilities: [chat, reasoning, tools, structured_output]
+  modalities: *liquid-modalities
+  verification:
+    <<: *liquid-verification
+    source: https://huggingface.co/LiquidAI/LFM2.5-1.2B-Thinking
+  tags: [open_weights, reasoning, efficient, on_device]
+- id: liquid/lfm2.5-1.2b-instruct
+  display_name: LFM2.5 1.2B Instruct
+  description: Edge-oriented open-weight instruction model with tool use and a 32K context window.
+  kind: physical
+  publisher: Liquid AI
+  presentation: *liquid-presentation
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/LiquidAI/LFM2.5-1.2B-Instruct
+    license: LFM-1.0
+  family: lfm2.5
+  parameter_size: 1.17B
+  lifecycle: active
+  limits:
+    context_window_size: 32768
+  capabilities: [chat, tools, structured_output]
+  modalities: *liquid-modalities
+  verification:
+    <<: *liquid-verification
+    source: https://huggingface.co/LiquidAI/LFM2.5-1.2B-Instruct
+  tags: [open_weights, efficient, on_device]
+- id: liquid/lfm2-24b-a2b
+  display_name: LFM2 24B A2B
+  description: Largest LFM2 hybrid MoE instruct model, with two billion active parameters and day-one vLLM and SGLang support.
+  kind: physical
+  publisher: Liquid AI
+  presentation: *liquid-presentation
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/LiquidAI/LFM2-24B-A2B
+    license: LFM-1.0
+  family: lfm2
+  parameter_size: 24B (2B active)
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities: [chat, tools, structured_output, long_context]
+  modalities: *liquid-modalities
+  verification:
+    <<: *liquid-verification
+    source: https://huggingface.co/LiquidAI/LFM2-24B-A2B
+  tags: [open_weights, moe, efficient, agentic, on_device]
+- id: liquid/lfm2-8b-a1b
+  display_name: LFM2 8B A1B
+  description: Efficient LFM2 hybrid MoE instruct model with one billion active parameters.
+  kind: physical
+  publisher: Liquid AI
+  presentation: *liquid-presentation
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/LiquidAI/LFM2-8B-A1B
+    license: LFM-1.0
+  family: lfm2
+  parameter_size: 8.3B (1.5B active)
+  lifecycle: active
+  limits:
+    context_window_size: 32768
+  capabilities: [chat, tools, structured_output]
+  modalities: *liquid-modalities
+  verification:
+    <<: *liquid-verification
+    source: https://huggingface.co/LiquidAI/LFM2-8B-A1B
+  tags: [open_weights, moe, efficient, on_device]
+- id: liquid/lfm2-2.6b
+  display_name: LFM2 2.6B
+  description: Compact hybrid LFM2 instruct model for low-latency local and edge serving.
+  kind: physical
+  publisher: Liquid AI
+  presentation: *liquid-presentation
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/LiquidAI/LFM2-2.6B
+    license: LFM-1.0
+  family: lfm2
+  parameter_size: 2.6B
+  lifecycle: active
+  limits:
+    context_window_size: 32768
+  capabilities: [chat, tools, structured_output]
+  modalities: *liquid-modalities
+  verification:
+    <<: *liquid-verification
+    source: https://huggingface.co/LiquidAI/LFM2-2.6B
+  tags: [open_weights, efficient, on_device]
+- id: liquid/lfm2.5-vl-1.6b
+  display_name: LFM2.5 VL 1.6B
+  description: Compact open-weight vision-language model for OCR, document understanding, and multilingual visual chat.
+  kind: physical
+  publisher: Liquid AI
+  presentation: *liquid-presentation
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/LiquidAI/LFM2.5-VL-1.6B
+    license: LFM-1.0
+  family: lfm2.5-vl
+  parameter_size: 1.6B
+  lifecycle: active
+  limits:
+    context_window_size: 32768
+  capabilities: [chat, vision, multilingual]
+  modalities:
+    input: [text, image]
+    output: [text]
+  verification:
+    authority: Liquid AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/LiquidAI/LFM2.5-VL-1.6B
+  tags: [open_weights, multimodal, multilingual, efficient, on_device]

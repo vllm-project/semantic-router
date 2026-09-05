@@ -1,0 +1,16 @@
+- id: 01ai/yi-1.5-34b-chat-model-card-mmlu-pro@1.0.0
+  model: 01ai/yi-1.5-34b-chat
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject:
+    variant: Yi 1.5 34B Chat
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.5229
+  status: available
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/01-ai/Yi-1.5-34B-Chat
+    redistributable: true

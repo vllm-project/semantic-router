@@ -122,7 +122,7 @@ func TestModelCatalogHandlerRejectsMalformedCLIContract(t *testing.T) {
 
 	for name, payload := range map[string]string{
 		"invalid json":              `{`,
-		"empty inventory":           `{"schema_version":"vllm-sr/model-catalog/v2","catalogs":[],"protocols":[],"providers":[],"reasoning_families":[],"models":[],"offerings":[],"benchmarks":[],"evaluations":[],"indices":[],"index_results":[]}`,
+		"empty inventory":           `{"schema_version":"vllm-sr/model-catalog/v2","catalogs":[],"protocols":[],"providers":[],"reasoning_families":[],"models":[],"benchmarks":[],"evaluations":[],"evaluation_coverage":[],"indices":[],"index_results":[]}`,
 		"missing protocols":         validModelCatalogPayload(","),
 		"missing default base path": validModelCatalogPayload(","),
 		"missing roles":             validModelCatalogPayload(","),
@@ -152,7 +152,7 @@ func TestModelCatalogHandlerRejectsMalformedCLIContract(t *testing.T) {
 				payload = strings.Replace(payload, `"models":[{`, `"models":[{
     "id":"example/physical",
     "display_name":"Example Physical",
-    "description":"Physical model without an offering.",
+    "description":"Physical model without a provider model.",
     "kind":"physical",
     "publisher":"Example",
     "presentation":{"logo":"package:example","monogram":"E","monochrome":true},
@@ -161,7 +161,6 @@ func TestModelCatalogHandlerRejectsMalformedCLIContract(t *testing.T) {
     "lifecycle":"active",
     "capabilities":["chat"],
     "modalities":{"input":["text"],"output":["text"]},
-    "protocols":["openai/chat-completions@1"],
     "verification":{"status":"claimed","authority":"Example","verified_at":"2026-09-05","source":"https://models.example/model"}
   },{`, 1)
 			}
@@ -267,16 +266,17 @@ func validModelCatalogPayload(extra string) string {
     "lifecycle":"active",
     "capabilities":["chat"],
     "modalities":{"input":["text"],"output":["text"]},
-    "protocols":["openai/chat-completions@1"],
     "traits":["balanced","chat"],
     "roles":[{"name":"balanced","required":true,"minimum_candidates":1,"traits":["chat"],"recommended_pool":["local/example"]}],
     "verification":{"status":"reproduced","authority":"vllm-sr-maintainers","verified_at":"2026-09-04","asset_sha256":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
   }],
-  "offerings":[],
+  "evaluation_coverage":[],
   "benchmarks":[{
     "id":"example/benchmark@1.0.0",
     "display_name":"Example Benchmark",
     "domain":"general",
+    "default_profile":"published-standard",
+    "profiles":[{"id":"published-standard","display_name":"Published standard","description":"Test profile."}],
     "metrics":[{"id":"score","unit":"proportion","direction":"higher_is_better","range":[0,1]}]
   }],
   "evaluations":[],
@@ -288,10 +288,11 @@ func validModelCatalogPayload(extra string) string {
     "scale":[0,100],
     "missing":{"policy":"require_all"},
     "domains":{"general":1},
-    "components":[{"metric":"example/benchmark@1.0.0#score","weight":1,"normalization":{"type":"identity"}}]
+    "components":[{"benchmark":"example/benchmark@1.0.0","metric":"score","benchmark_profile":"published-standard","weight":1,"normalization":{"type":"identity"}}]
   }],
   "index_results":[{
     "model":"vllm-sr/mom-v1-blend",
+    "reasoning_effort":"default",
     "index":"example/index@1.0.0",
     "status":"not_applicable",
     "score":null,

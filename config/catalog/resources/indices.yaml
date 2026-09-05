@@ -14,18 +14,28 @@
     software_engineering: 0.20
     agentic_systems: 0.20
   components:
-    - metric: tiger-ai-lab/mmlu-pro@1.0.0#accuracy
+    - benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+      metric: accuracy
+      benchmark_profile: published-standard
       weight: 0.20
       normalization: {type: identity}
-    - metric: idavidrein/gpqa-diamond@1.0.0#accuracy
+    - benchmark: idavidrein/gpqa-diamond@1.0.0
+      metric: accuracy
+      benchmark_profile: published-standard
       weight: 0.20
       normalization: {type: identity}
-    - metric: cais/humanitys-last-exam@1.0.0#accuracy
+    - benchmark: cais/humanitys-last-exam@1.0.0
+      metric: accuracy
+      benchmark_profile: no-tools
       weight: 0.20
       normalization: {type: identity}
-    - metric: swe-bench/verified@1.0.0#resolved
+    - benchmark: swe-bench/verified@1.0.0
+      metric: resolved
+      benchmark_profile: published-agent
       weight: 0.20
       normalization: {type: identity}
-    - metric: harbor/terminal-bench@2.1.0#resolved
+    - benchmark: harbor/terminal-bench@2.1.0
+      metric: resolved
+      benchmark_profile: published-agent
       weight: 0.20
       normalization: {type: identity}

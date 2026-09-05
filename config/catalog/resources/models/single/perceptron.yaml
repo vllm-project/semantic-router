@@ -1,0 +1,27 @@
+- id: perceptron/perceptron-mk1
+  display_name: Perceptron Mk1
+  description: Proprietary vision-language model for long-form video understanding, grounding, and embodied reasoning.
+  kind: physical
+  publisher: Perceptron
+  presentation:
+    logo: monogram
+    monogram: P
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://github.com/perceptron-ai-inc/perceptron
+  family: perceptron-mk1
+  lifecycle: active
+  limits:
+    context_window_size: 32768
+    max_output_tokens: 8192
+  capabilities: [chat, reasoning, structured_output, vision, video]
+  modalities:
+    input: [text, image, video]
+    output: [text]
+  verification:
+    authority: Perceptron
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://github.com/perceptron-ai-inc/perceptron
+  tags: [proprietary, reasoning, multimodal, physical_ai]

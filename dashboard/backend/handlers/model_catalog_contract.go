@@ -24,18 +24,18 @@ var (
 // come from the Router catalog package so the HTTP boundary cannot drift from
 // the runtime registry.
 type modelCatalogEnvelope struct {
-	SchemaVersion     string                                   `json:"schema_version"`
-	Catalogs          []modelcatalog.CatalogHeader             `json:"catalogs"`
-	Protocols         []modelcatalog.ProtocolDefinition        `json:"protocols"`
-	Providers         []modelcatalog.ProviderDefinition        `json:"providers"`
-	ReasoningFamilies []modelcatalog.ReasoningFamilyDefinition `json:"reasoning_families"`
-	Models            []modelcatalog.ModelCard                 `json:"models"`
-	Offerings         []modelcatalog.OfferingDefinition        `json:"offerings"`
-	Benchmarks        []modelcatalog.BenchmarkDefinition       `json:"benchmarks"`
-	Evaluations       []modelcatalog.EvaluationRecord          `json:"evaluations"`
-	Indices           []modelcatalog.IndexDefinition           `json:"indices"`
-	IndexResults      []modelcatalog.IndexResult               `json:"index_results"`
-	Configured        json.RawMessage                          `json:"configured,omitempty"`
+	SchemaVersion      string                                   `json:"schema_version"`
+	Catalogs           []modelcatalog.CatalogHeader             `json:"catalogs"`
+	Protocols          []modelcatalog.ProtocolDefinition        `json:"protocols"`
+	Providers          []modelcatalog.ProviderDefinition        `json:"providers"`
+	ReasoningFamilies  []modelcatalog.ReasoningFamilyDefinition `json:"reasoning_families"`
+	Models             []modelcatalog.ModelCard                 `json:"models"`
+	Benchmarks         []modelcatalog.BenchmarkDefinition       `json:"benchmarks"`
+	Evaluations        []modelcatalog.EvaluationRecord          `json:"evaluations"`
+	EvaluationCoverage []modelcatalog.EvaluationCoverage        `json:"evaluation_coverage"`
+	Indices            []modelcatalog.IndexDefinition           `json:"indices"`
+	IndexResults       []modelcatalog.IndexResult               `json:"index_results"`
+	Configured         json.RawMessage                          `json:"configured,omitempty"`
 }
 
 func normalizeModelCatalogDocument(raw []byte) ([]byte, error) {
@@ -72,7 +72,7 @@ func validateModelCatalogEnvelope(envelope modelCatalogEnvelope) error {
 	if err != nil {
 		return err
 	}
-	providers, err := validateCatalogProviders(envelope.Providers, protocols, envelope.Protocols)
+	_, err = validateCatalogProviders(envelope.Providers, protocols, envelope.Protocols)
 	if err != nil {
 		return err
 	}
@@ -80,7 +80,7 @@ func validateModelCatalogEnvelope(envelope modelCatalogEnvelope) error {
 	if err != nil {
 		return err
 	}
-	models, err := validateCatalogModels(envelope.Models, protocols, reasoning)
+	models, err := validateCatalogModels(envelope.Models, reasoning)
 	if err != nil {
 		return err
 	}
@@ -95,9 +95,8 @@ func validateModelCatalogEnvelope(envelope modelCatalogEnvelope) error {
 	if err := validateCatalogHeaders(envelope.Catalogs, models, indices); err != nil {
 		return err
 	}
-	if err := validateCatalogOfferings(
-		envelope.Offerings,
-		providers,
+	if err := validateCatalogProviderBindings(
+		envelope.Providers,
 		models,
 		protocols,
 		envelope.Models,
@@ -105,6 +104,9 @@ func validateModelCatalogEnvelope(envelope modelCatalogEnvelope) error {
 		return err
 	}
 	if err := validateCatalogEvaluations(envelope.Evaluations, models, metrics); err != nil {
+		return err
+	}
+	if err := validateCatalogEvaluationCoverage(envelope.EvaluationCoverage, models, metrics); err != nil {
 		return err
 	}
 	return validateCatalogIndexResults(envelope.IndexResults, models, indices)
@@ -193,7 +195,7 @@ func validateCatalogProviders(
 			len(provider.SupportedOperations) == 0 ||
 			provider.Presentation.Logo == "" || provider.Presentation.Monogram == "" ||
 			!oneOf(provider.Auth.Strategy, "none", "bearer", "api_key_header") ||
-			(provider.ReasoningTransport != "" && !oneOf(string(provider.ReasoningTransport), "chat_template_kwargs", "top_level_effort", "thinking_object", "deepseek_thinking")) ||
+			(provider.ReasoningTransport != "" && !oneOf(string(provider.ReasoningTransport), "chat_template_kwargs", "top_level_effort", "top_level_boolean", "reasoning_object", "thinking_object", "deepseek_thinking")) ||
 			!oneOf(provider.Conformance.Status, "unverified", "fixture_verified", "live_verified") {
 			return nil, fmt.Errorf("malformed provider")
 		}
@@ -306,7 +308,6 @@ func validateCatalogReasoning(
 
 func validateCatalogModels(
 	values []modelcatalog.ModelCard,
-	protocols map[string]struct{},
 	reasoning map[string]struct{},
 ) (map[string]struct{}, error) {
 	ids := make(map[string]struct{}, len(values))
@@ -321,7 +322,7 @@ func validateCatalogModels(
 			model.Family == "" ||
 			!oneOf(model.Lifecycle, "experimental", "active", "deprecated", "removed") ||
 			len(model.Capabilities) == 0 || len(model.Modalities.Input) == 0 ||
-			len(model.Modalities.Output) == 0 || len(model.Protocols) == 0 ||
+			len(model.Modalities.Output) == 0 ||
 			model.Verification.Authority == "" ||
 			!oneOf(model.Verification.Status, "claimed", "imported", "reproduced") ||
 			(model.Verification.Source != "" && !validHTTPSURL(model.Verification.Source)) {
@@ -331,11 +332,6 @@ func validateCatalogModels(
 			return nil, fmt.Errorf("duplicate model")
 		}
 		ids[model.ID] = struct{}{}
-		for _, protocol := range model.Protocols {
-			if _, ok := protocols[protocol]; !ok {
-				return nil, fmt.Errorf("model protocol is unknown")
-			}
-		}
 		if model.ReasoningFamily != "" {
 			if _, ok := reasoning[model.ReasoningFamily]; !ok {
 				return nil, fmt.Errorf("model reasoning family is unknown")
@@ -356,33 +352,40 @@ func validateCatalogModels(
 	return ids, nil
 }
 
-func validateCatalogOfferings(
-	values []modelcatalog.OfferingDefinition,
-	providers, models, protocols map[string]struct{},
+func validateCatalogProviderBindings(
+	providers []modelcatalog.ProviderDefinition,
+	models, protocols map[string]struct{},
 	modelDefinitions []modelcatalog.ModelCard,
 ) error {
-	seen := map[string]struct{}{}
-	offeredModels := map[string]struct{}{}
-	for _, offering := range values {
-		if offering.ID == "" || offering.ProviderModelID == "" || len(offering.Protocols) == 0 ||
-			!oneOf(offering.Lifecycle, "experimental", "active", "deprecated", "removed") ||
-			!oneOf(offering.Verification.Status, "claimed", "imported", "reproduced") {
-			return fmt.Errorf("malformed offering")
-		}
-		if _, duplicate := seen[offering.ID]; duplicate {
-			return fmt.Errorf("duplicate offering")
-		}
-		seen[offering.ID] = struct{}{}
-		if _, ok := providers[offering.Provider]; !ok {
-			return fmt.Errorf("offering provider is unknown")
-		}
-		if _, ok := models[offering.Model]; !ok {
-			return fmt.Errorf("offering model is unknown")
-		}
-		offeredModels[offering.Model] = struct{}{}
-		for _, protocol := range offering.Protocols {
-			if _, ok := protocols[protocol]; !ok {
-				return fmt.Errorf("offering protocol is unknown")
+	boundModels := map[string]struct{}{}
+	for _, provider := range providers {
+		nativeIDs := map[string]struct{}{}
+		pairs := map[string]struct{}{}
+		for _, binding := range provider.Models {
+			if binding.ID == "" || binding.Catalog == "" || len(binding.Protocols) == 0 ||
+				!oneOf(binding.Lifecycle, "experimental", "active", "deprecated", "removed") ||
+				!oneOf(binding.Verification.Status, "claimed", "imported", "reproduced") ||
+				(binding.ReasoningTransport != "" && !oneOf(string(binding.ReasoningTransport), "chat_template_kwargs", "top_level_effort", "top_level_boolean", "reasoning_object", "thinking_object", "deepseek_thinking")) ||
+				(binding.Verification.Source != "" && !validHTTPSURL(binding.Verification.Source)) {
+				return fmt.Errorf("malformed provider catalog model")
+			}
+			if _, duplicate := nativeIDs[binding.ID]; duplicate {
+				return fmt.Errorf("duplicate provider-native model id")
+			}
+			nativeIDs[binding.ID] = struct{}{}
+			if _, ok := models[binding.Catalog]; !ok {
+				return fmt.Errorf("provider catalog model is unknown")
+			}
+			boundModels[binding.Catalog] = struct{}{}
+			for _, protocol := range binding.Protocols {
+				if _, ok := protocols[protocol]; !ok || !catalogContains(provider.Protocols, protocol) {
+					return fmt.Errorf("provider catalog model protocol is unknown")
+				}
+				pair := binding.Catalog + "#" + protocol
+				if _, duplicate := pairs[pair]; duplicate {
+					return fmt.Errorf("duplicate provider catalog model protocol")
+				}
+				pairs[pair] = struct{}{}
 			}
 		}
 	}
@@ -390,20 +393,26 @@ func validateCatalogOfferings(
 		if model.Kind != "physical" || model.Lifecycle == "removed" {
 			continue
 		}
-		if _, ok := offeredModels[model.ID]; !ok {
-			return fmt.Errorf("physical model has no provider offering")
+		if _, ok := boundModels[model.ID]; !ok {
+			return fmt.Errorf("physical model has no provider binding")
 		}
 	}
 	return nil
 }
 
+type catalogMetricContract struct {
+	metric   modelcatalog.BenchmarkMetric
+	profiles map[string]struct{}
+}
+
 func validateCatalogBenchmarks(
 	values []modelcatalog.BenchmarkDefinition,
-) (map[string]modelcatalog.BenchmarkMetric, error) {
-	metrics := map[string]modelcatalog.BenchmarkMetric{}
+) (map[string]catalogMetricContract, error) {
+	metrics := map[string]catalogMetricContract{}
 	benchmarks := map[string]struct{}{}
 	for _, benchmark := range values {
-		if benchmark.ID == "" || benchmark.DisplayName == "" || benchmark.Domain == "" || len(benchmark.Metrics) == 0 ||
+		if benchmark.ID == "" || benchmark.DisplayName == "" || benchmark.Domain == "" ||
+			benchmark.DefaultProfile == "" || len(benchmark.Profiles) == 0 || len(benchmark.Metrics) == 0 ||
 			(benchmark.Source != "" && !validHTTPSURL(benchmark.Source)) {
 			return nil, fmt.Errorf("malformed benchmark")
 		}
@@ -411,6 +420,19 @@ func validateCatalogBenchmarks(
 			return nil, fmt.Errorf("duplicate benchmark")
 		}
 		benchmarks[benchmark.ID] = struct{}{}
+		profiles := map[string]struct{}{}
+		for _, profile := range benchmark.Profiles {
+			if profile.ID == "" || profile.DisplayName == "" || profile.Description == "" {
+				return nil, fmt.Errorf("malformed benchmark profile")
+			}
+			if _, duplicate := profiles[profile.ID]; duplicate {
+				return nil, fmt.Errorf("duplicate benchmark profile")
+			}
+			profiles[profile.ID] = struct{}{}
+		}
+		if _, ok := profiles[benchmark.DefaultProfile]; !ok {
+			return nil, fmt.Errorf("benchmark default profile is unknown")
+		}
 		for _, metric := range benchmark.Metrics {
 			key := benchmark.ID + "#" + metric.ID
 			if metric.ID == "" || metric.Unit == "" ||
@@ -421,7 +443,7 @@ func validateCatalogBenchmarks(
 			if _, duplicate := metrics[key]; duplicate {
 				return nil, fmt.Errorf("duplicate benchmark metric")
 			}
-			metrics[key] = metric
+			metrics[key] = catalogMetricContract{metric: metric, profiles: profiles}
 		}
 	}
 	return metrics, nil
@@ -430,12 +452,13 @@ func validateCatalogBenchmarks(
 func validateCatalogEvaluations(
 	values []modelcatalog.EvaluationRecord,
 	models map[string]struct{},
-	metrics map[string]modelcatalog.BenchmarkMetric,
+	metrics map[string]catalogMetricContract,
 ) error {
 	seen := map[string]struct{}{}
 	availableMetrics := map[string]struct{}{}
 	for _, evaluation := range values {
-		if evaluation.ID == "" ||
+		if evaluation.ID == "" || evaluation.Benchmark == "" ||
+			evaluation.BenchmarkProfile == "" || evaluation.ReasoningEffort == "" ||
 			!oneOf(evaluation.Status, "available", "missing", "failed", "not_applicable", "withheld") ||
 			!oneOf(evaluation.Evidence.Provenance, "vendor_claimed", "third_party", "vllm_sr_reproduced", "operator") ||
 			!oneOf(evaluation.Evidence.Verification, "claimed", "imported", "reproduced") ||
@@ -453,12 +476,17 @@ func validateCatalogEvaluations(
 			return fmt.Errorf("available evaluation lacks publishable evidence")
 		}
 		for metricID, value := range evaluation.Metrics {
-			metric, ok := metrics[metricID]
-			if !ok || !finite(value) || value < metric.Range[0] || value > metric.Range[1] {
+			fullMetricID := evaluation.Benchmark + "#" + metricID
+			contract, ok := metrics[fullMetricID]
+			profileOK := false
+			if ok {
+				_, profileOK = contract.profiles[evaluation.BenchmarkProfile]
+			}
+			if !ok || !profileOK || !finite(value) || value < contract.metric.Range[0] || value > contract.metric.Range[1] {
 				return fmt.Errorf("evaluation metric is invalid")
 			}
 			if evaluation.Status == "available" {
-				key := evaluation.Model + "#" + metricID
+				key := evaluation.Model + "#" + evaluation.ReasoningEffort + "#" + fullMetricID + "#" + evaluation.BenchmarkProfile
 				if _, duplicate := availableMetrics[key]; duplicate {
 					return fmt.Errorf("evaluation metric has multiple available values")
 				}
@@ -469,9 +497,41 @@ func validateCatalogEvaluations(
 	return nil
 }
 
+func validateCatalogEvaluationCoverage(
+	values []modelcatalog.EvaluationCoverage,
+	models map[string]struct{},
+	metrics map[string]catalogMetricContract,
+) error {
+	seen := make(map[string]struct{}, len(values))
+	for _, coverage := range values {
+		metricID := coverage.Benchmark + "#" + coverage.Metric
+		contract, metricOK := metrics[metricID]
+		profileOK := false
+		if metricOK {
+			_, profileOK = contract.profiles[coverage.BenchmarkProfile]
+		}
+		_, modelOK := models[coverage.Model]
+		key := coverage.Model + "#" + coverage.ReasoningEffort + "#" + metricID + "#" + coverage.BenchmarkProfile
+		if _, duplicate := seen[key]; duplicate {
+			return fmt.Errorf("duplicate evaluation coverage")
+		}
+		seen[key] = struct{}{}
+		if !modelOK || coverage.ReasoningEffort == "" || !metricOK || !profileOK ||
+			!oneOf(coverage.Status, "available", "missing", "failed", "not_applicable", "withheld") ||
+			(coverage.Status == "available" && (coverage.Value == nil || coverage.Evaluation == "" || !finite(*coverage.Value))) ||
+			(coverage.Status != "available" && (coverage.Value != nil || coverage.Evaluation != "")) {
+			return fmt.Errorf("malformed evaluation coverage")
+		}
+		if coverage.Value != nil && (*coverage.Value < contract.metric.Range[0] || *coverage.Value > contract.metric.Range[1]) {
+			return fmt.Errorf("evaluation coverage value is invalid")
+		}
+	}
+	return nil
+}
+
 func validateCatalogIndices(
 	values []modelcatalog.IndexDefinition,
-	metrics map[string]modelcatalog.BenchmarkMetric,
+	metrics map[string]catalogMetricContract,
 ) (map[string]struct{}, error) {
 	ids := make(map[string]struct{}, len(values))
 	for _, index := range values {
@@ -494,7 +554,12 @@ func validateCatalogIndices(
 				return nil, fmt.Errorf("malformed index component")
 			}
 			if component.Metric != "" {
-				if _, ok := metrics[component.Metric]; !ok {
+				metric, ok := metrics[component.Benchmark+"#"+component.Metric]
+				profileOK := false
+				if ok {
+					_, profileOK = metric.profiles[component.BenchmarkProfile]
+				}
+				if component.Benchmark == "" || component.BenchmarkProfile == "" || !ok || !profileOK {
 					return nil, fmt.Errorf("index metric is unknown")
 				}
 			}
@@ -518,14 +583,14 @@ func validateCatalogIndexResults(
 ) error {
 	seen := map[string]struct{}{}
 	for _, result := range values {
-		key := result.Model + "#" + result.Index
+		key := result.Model + "#" + result.ReasoningEffort + "#" + result.Index
 		if _, duplicate := seen[key]; duplicate {
 			return fmt.Errorf("duplicate index result")
 		}
 		seen[key] = struct{}{}
 		_, modelOK := models[result.Model]
 		_, indexOK := indices[result.Index]
-		if !modelOK || !indexOK || !oneOf(result.Status, "available", "missing", "failed", "not_applicable", "withheld") ||
+		if !modelOK || result.ReasoningEffort == "" || !indexOK || !oneOf(result.Status, "available", "missing", "failed", "not_applicable", "withheld") ||
 			!finite(result.Coverage) || result.Coverage < 0 || result.Coverage > 1 ||
 			(result.Status == "available" && (result.Score == nil || !finite(*result.Score))) ||
 			(result.Status != "available" && result.Score != nil) {

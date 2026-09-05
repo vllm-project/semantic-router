@@ -1,0 +1,28 @@
+- id: arcee/trinity-large-thinking
+  display_name: Trinity Large Thinking
+  description: Open-weight sparse-MoE reasoning model optimized for agentic workflows and explicit thinking traces.
+  kind: physical
+  publisher: Arcee AI
+  presentation:
+    logo: monogram
+    monogram: A
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/arcee-ai/Trinity-Large-Thinking
+    license: OpenMDW-1.1
+  family: trinity-large
+  parameter_size: 398B (13B active)
+  lifecycle: active
+  limits:
+    context_window_size: 524288
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities:
+    input: [text]
+    output: [text]
+  verification:
+    authority: Arcee AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/arcee-ai/Trinity-Large-Thinking
+  tags: [open_weights, reasoning, coding, agentic, moe, long_context]

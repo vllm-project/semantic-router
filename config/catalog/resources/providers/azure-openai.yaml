@@ -1,0 +1,25 @@
+id: azure-openai
+display_name: Azure OpenAI
+description: Azure-hosted OpenAI deployments.
+category: model_api
+support_tier: native
+protocols:
+- openai/chat-completions@1
+default_protocol: openai/chat-completions@1
+supported_operations:
+- openai/chat-completions@1#create
+path_overrides:
+  openai/chat-completions@1#create: /chat/completions
+api_version_query: true
+auth:
+  strategy: api_key_header
+  header: api-key
+  prefix: ''
+  injected_header: x-user-azure-openai-key
+presentation:
+  logo: package:openai
+  monogram: Az
+  monochrome: true
+conformance:
+  status: fixture_verified
+  verified_at: 2026-09-04

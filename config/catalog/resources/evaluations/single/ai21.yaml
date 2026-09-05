@@ -1,22 +1,36 @@
-- id: ai21/jamba-1.5-mini-model-card@1.0.0
+- id: ai21/jamba-1.5-mini-model-card-mmlu-pro@1.0.0
   model: ai21/jamba-1.5-mini
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
   subject:
     variant: Jamba 1.5 Mini
     harness: vendor_evaluation
     prompting: chain_of_thought
     source_kind: official_model_card
   metrics:
-    tiger-ai-lab/mmlu-pro@1.0.0#accuracy: 0.425
+    accuracy: 0.425
   status: available
-  evidence: {provenance: vendor_claimed, verification: claimed, source: https://huggingface.co/ai21labs/AI21-Jamba-Mini-1.5, redistributable: true}
-- id: ai21/jamba-1.5-large-model-card@1.0.0
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/ai21labs/AI21-Jamba-Mini-1.5
+    redistributable: true
+- id: ai21/jamba-1.5-large-model-card-mmlu-pro@1.0.0
   model: ai21/jamba-1.5-large
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
   subject:
     variant: Jamba 1.5 Large
     harness: vendor_evaluation
     prompting: chain_of_thought
     source_kind: official_model_card
   metrics:
-    tiger-ai-lab/mmlu-pro@1.0.0#accuracy: 0.535
+    accuracy: 0.535
   status: available
-  evidence: {provenance: vendor_claimed, verification: claimed, source: https://huggingface.co/ai21labs/AI21-Jamba-Large-1.5, redistributable: true}
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/ai21labs/AI21-Jamba-Large-1.5
+    redistributable: true

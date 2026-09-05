@@ -3,321 +3,744 @@
   description: Anthropic fast model for responsive agents and high-volume workloads.
   kind: physical
   publisher: Anthropic
-  presentation: {logo: package:anthropic, monogram: A, monochrome: true}
-  distribution: {type: proprietary_api, source: https://docs.anthropic.com/en/docs/about-claude/models/overview}
+  presentation:
+    logo: package:anthropic
+    monogram: A
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://docs.anthropic.com/en/docs/about-claude/models/overview
   family: claude-haiku
   lifecycle: active
-  capabilities: [chat, reasoning, tools, vision, long_context]
-  modalities: {input: [text, image], output: [text]}
-  protocols: [anthropic/messages@1]
-  verification: {authority: Anthropic, status: claimed, verified_at: 2026-09-05, source: https://docs.anthropic.com/en/docs/about-claude/models/overview}
-  tags: [efficient, proprietary, agentic]
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Anthropic
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.anthropic.com/en/docs/about-claude/models/overview
+  tags:
+  - efficient
+  - proprietary
+  - agentic
 - id: anthropic/claude-sonnet-4.5
   display_name: Claude Sonnet 4.5
   description: Anthropic balanced model for coding, reasoning, and computer-use agents.
   kind: physical
   publisher: Anthropic
-  presentation: {logo: package:anthropic, monogram: A, monochrome: true}
-  distribution: {type: proprietary_api, source: https://docs.anthropic.com/en/docs/about-claude/models/overview}
+  presentation:
+    logo: package:anthropic
+    monogram: A
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://docs.anthropic.com/en/docs/about-claude/models/overview
   family: claude-sonnet
   lifecycle: active
-  capabilities: [chat, reasoning, tools, vision, long_context]
-  modalities: {input: [text, image], output: [text]}
-  protocols: [anthropic/messages@1]
-  verification: {authority: Anthropic, status: claimed, verified_at: 2026-09-05, source: https://docs.anthropic.com/en/docs/about-claude/models/overview}
-  tags: [proprietary, coding, agentic]
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Anthropic
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.anthropic.com/en/docs/about-claude/models/overview
+  tags:
+  - proprietary
+  - coding
+  - agentic
 - id: anthropic/claude-sonnet-4.6
   display_name: Claude Sonnet 4.6
   description: Anthropic high-capability Sonnet model for software and agentic workflows.
   kind: physical
   publisher: Anthropic
-  presentation: {logo: package:anthropic, monogram: A, monochrome: true}
-  distribution: {type: proprietary_api, source: https://docs.anthropic.com/en/docs/about-claude/models/overview}
+  presentation:
+    logo: package:anthropic
+    monogram: A
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://docs.anthropic.com/en/docs/about-claude/models/overview
   family: claude-sonnet
   lifecycle: active
-  capabilities: [chat, reasoning, tools, vision, long_context]
-  modalities: {input: [text, image], output: [text]}
-  protocols: [anthropic/messages@1]
-  verification: {authority: Anthropic, status: claimed, verified_at: 2026-09-05, source: https://docs.anthropic.com/en/docs/about-claude/models/overview}
-  tags: [proprietary, coding, agentic]
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Anthropic
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.anthropic.com/en/docs/about-claude/models/overview
+  tags:
+  - proprietary
+  - coding
+  - agentic
 - id: anthropic/claude-sonnet-5
   display_name: Claude Sonnet 5
   description: Anthropic frontier Sonnet model for reasoning, coding, and production agents.
   kind: physical
   publisher: Anthropic
-  presentation: {logo: package:anthropic, monogram: A, monochrome: true}
-  distribution: {type: proprietary_api, source: https://docs.anthropic.com/en/docs/about-claude/models/overview}
+  presentation:
+    logo: package:anthropic
+    monogram: A
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://docs.anthropic.com/en/docs/about-claude/models/overview
   family: claude-sonnet
   lifecycle: active
-  capabilities: [chat, reasoning, tools, vision, long_context]
-  modalities: {input: [text, image], output: [text]}
-  protocols: [anthropic/messages@1]
-  verification: {authority: Anthropic, status: claimed, verified_at: 2026-09-05, source: https://docs.anthropic.com/en/docs/about-claude/models/overview}
-  tags: [frontier, proprietary, agentic]
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Anthropic
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.anthropic.com/en/docs/about-claude/models/overview
+  tags:
+  - frontier
+  - proprietary
+  - agentic
 - id: anthropic/claude-opus-4.5
   display_name: Claude Opus 4.5
   description: Anthropic Opus model for complex reasoning, coding, and long-running agents.
   kind: physical
   publisher: Anthropic
-  presentation: {logo: package:anthropic, monogram: A, monochrome: true}
-  distribution: {type: proprietary_api, source: https://docs.anthropic.com/en/docs/about-claude/models/overview}
+  presentation:
+    logo: package:anthropic
+    monogram: A
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://docs.anthropic.com/en/docs/about-claude/models/overview
   family: claude-opus
   lifecycle: active
-  capabilities: [chat, reasoning, tools, vision, long_context]
-  modalities: {input: [text, image], output: [text]}
-  protocols: [anthropic/messages@1]
-  verification: {authority: Anthropic, status: claimed, verified_at: 2026-09-05, source: https://docs.anthropic.com/en/docs/about-claude/models/overview}
-  tags: [frontier, proprietary, agentic]
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Anthropic
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.anthropic.com/en/docs/about-claude/models/overview
+  tags:
+  - frontier
+  - proprietary
+  - agentic
 - id: anthropic/claude-opus-4.6
   display_name: Claude Opus 4.6
   description: Anthropic model for complex reasoning, coding, and agentic work.
   kind: physical
   publisher: Anthropic
-  presentation: {logo: package:anthropic, monogram: A, monochrome: true}
+  presentation:
+    logo: package:anthropic
+    monogram: A
+    monochrome: true
   distribution:
     type: proprietary_api
     source: https://docs.anthropic.com/en/docs/about-claude/models/overview
   family: claude-opus
   lifecycle: active
-  capabilities: [chat, reasoning, tools, vision, long_context]
-  modalities: {input: [text, image], output: [text]}
-  protocols: [anthropic/messages@1]
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
   verification:
     authority: Anthropic
     status: claimed
     verified_at: 2026-09-05
     source: https://docs.anthropic.com/en/docs/about-claude/models/overview
-  tags: [frontier, proprietary, agentic]
+  tags:
+  - frontier
+  - proprietary
+  - agentic
 - id: anthropic/claude-opus-4.7
   display_name: Claude Opus 4.7
   description: Anthropic advanced Opus model for complex software and agentic tasks.
   kind: physical
   publisher: Anthropic
-  presentation: {logo: package:anthropic, monogram: A, monochrome: true}
-  distribution: {type: proprietary_api, source: https://docs.anthropic.com/en/docs/about-claude/models/overview}
+  presentation:
+    logo: package:anthropic
+    monogram: A
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://docs.anthropic.com/en/docs/about-claude/models/overview
   family: claude-opus
   lifecycle: active
-  capabilities: [chat, reasoning, tools, vision, long_context]
-  modalities: {input: [text, image], output: [text]}
-  protocols: [anthropic/messages@1]
-  verification: {authority: Anthropic, status: claimed, verified_at: 2026-09-05, source: https://docs.anthropic.com/en/docs/about-claude/models/overview}
-  tags: [frontier, proprietary, agentic]
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Anthropic
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.anthropic.com/en/docs/about-claude/models/overview
+  tags:
+  - frontier
+  - proprietary
+  - agentic
 - id: anthropic/claude-opus-4.8
   display_name: Claude Opus 4.8
   description: Anthropic long-context model for advanced coding and agentic tasks.
   kind: physical
   publisher: Anthropic
-  presentation: {logo: package:anthropic, monogram: A, monochrome: true}
+  presentation:
+    logo: package:anthropic
+    monogram: A
+    monochrome: true
   distribution:
     type: proprietary_api
     source: https://docs.anthropic.com/en/docs/about-claude/models/overview
   family: claude-opus
   lifecycle: active
-  limits: {context_window_size: 1000000, max_output_tokens: 128000}
-  capabilities: [chat, reasoning, tools, vision, long_context]
-  modalities: {input: [text, image], output: [text]}
-  protocols: [anthropic/messages@1]
+  limits:
+    context_window_size: 1000000
+    max_output_tokens: 128000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
   verification:
     authority: Anthropic
     status: claimed
     verified_at: 2026-09-05
     source: https://docs.anthropic.com/en/docs/about-claude/models/overview
-  tags: [frontier, proprietary, agentic]
+  tags:
+  - frontier
+  - proprietary
+  - agentic
 - id: anthropic/claude-opus-5
   display_name: Claude Opus 5
   description: Anthropic frontier model for high-complexity reasoning, software, and agents.
   kind: physical
   publisher: Anthropic
-  presentation: {logo: package:anthropic, monogram: A, monochrome: true}
+  presentation:
+    logo: package:anthropic
+    monogram: A
+    monochrome: true
   distribution:
     type: proprietary_api
     source: https://docs.anthropic.com/en/docs/about-claude/models/overview
   family: claude-opus
   lifecycle: active
-  limits: {context_window_size: 1000000, max_output_tokens: 128000}
-  capabilities: [chat, reasoning, tools, vision, long_context]
-  modalities: {input: [text, image], output: [text]}
-  protocols: [anthropic/messages@1]
+  limits:
+    context_window_size: 1000000
+    max_output_tokens: 128000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
   verification:
     authority: Anthropic
     status: claimed
     verified_at: 2026-09-05
     source: https://docs.anthropic.com/en/docs/about-claude/models/overview
-  tags: [frontier, proprietary, agentic]
+  tags:
+  - frontier
+  - proprietary
+  - agentic
 - id: anthropic/claude-fable-5.1
   display_name: Claude Fable 5.1
   description: Anthropic high-capability model with extended context and output limits.
   kind: physical
   publisher: Anthropic
-  presentation: {logo: package:anthropic, monogram: A, monochrome: true}
+  presentation:
+    logo: package:anthropic
+    monogram: A
+    monochrome: true
   distribution:
     type: proprietary_api
     source: https://www.anthropic.com/claude/fable
   family: claude-fable
   lifecycle: active
-  limits: {context_window_size: 1000000, max_output_tokens: 128000}
-  capabilities: [chat, reasoning, tools, vision, long_context]
-  modalities: {input: [text, image], output: [text]}
-  protocols: [anthropic/messages@1]
+  limits:
+    context_window_size: 1000000
+    max_output_tokens: 128000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
   verification:
     authority: Anthropic
     status: claimed
     verified_at: 2026-09-05
     source: https://www.anthropic.com/claude/fable
-  tags: [frontier, proprietary, agentic]
+  tags:
+  - frontier
+  - proprietary
+  - agentic
 - id: anthropic/claude-fable-5
   display_name: Claude Fable 5
   description: Anthropic Fable model for high-capability reasoning and agentic work.
   kind: physical
   publisher: Anthropic
-  presentation: {logo: package:anthropic, monogram: A, monochrome: true}
-  distribution: {type: proprietary_api, source: https://docs.anthropic.com/en/docs/about-claude/models/overview}
+  presentation:
+    logo: package:anthropic
+    monogram: A
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://docs.anthropic.com/en/docs/about-claude/models/overview
   family: claude-fable
   lifecycle: active
-  capabilities: [chat, reasoning, tools, vision, long_context]
-  modalities: {input: [text, image], output: [text]}
-  protocols: [anthropic/messages@1]
-  verification: {authority: Anthropic, status: claimed, verified_at: 2026-09-05, source: https://docs.anthropic.com/en/docs/about-claude/models/overview}
-  tags: [frontier, proprietary, agentic]
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Anthropic
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.anthropic.com/en/docs/about-claude/models/overview
+  tags:
+  - frontier
+  - proprietary
+  - agentic
 - id: anthropic/claude-sonnet-4
   display_name: Claude Sonnet 4
   description: Retired previous-generation Anthropic model for coding, reasoning, and agents.
   kind: physical
   publisher: Anthropic
-  presentation: {logo: package:anthropic, monogram: A, monochrome: true}
-  distribution: {type: proprietary_api, source: https://docs.anthropic.com/en/docs/about-claude/model-deprecations}
+  presentation:
+    logo: package:anthropic
+    monogram: A
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://docs.anthropic.com/en/docs/about-claude/model-deprecations
   family: claude-sonnet
   lifecycle: removed
-  capabilities: [chat, reasoning, tools, vision, long_context]
-  modalities: {input: [text, image], output: [text]}
-  protocols: [anthropic/messages@1]
-  verification: {authority: Anthropic, status: claimed, verified_at: 2026-09-05, source: https://docs.anthropic.com/en/docs/about-claude/model-deprecations}
-  tags: [proprietary, coding, retired]
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Anthropic
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.anthropic.com/en/docs/about-claude/model-deprecations
+  tags:
+  - proprietary
+  - coding
+  - retired
 - id: anthropic/claude-opus-4
   display_name: Claude Opus 4
   description: Retired previous-generation Anthropic model for complex reasoning and agents.
   kind: physical
   publisher: Anthropic
-  presentation: {logo: package:anthropic, monogram: A, monochrome: true}
-  distribution: {type: proprietary_api, source: https://docs.anthropic.com/en/docs/about-claude/model-deprecations}
+  presentation:
+    logo: package:anthropic
+    monogram: A
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://docs.anthropic.com/en/docs/about-claude/model-deprecations
   family: claude-opus
   lifecycle: removed
-  capabilities: [chat, reasoning, tools, vision, long_context]
-  modalities: {input: [text, image], output: [text]}
-  protocols: [anthropic/messages@1]
-  verification: {authority: Anthropic, status: claimed, verified_at: 2026-09-05, source: https://docs.anthropic.com/en/docs/about-claude/model-deprecations}
-  tags: [proprietary, retired]
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Anthropic
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.anthropic.com/en/docs/about-claude/model-deprecations
+  tags:
+  - proprietary
+  - retired
 - id: anthropic/claude-opus-4.1
   display_name: Claude Opus 4.1
   description: Retired Anthropic Opus model retained as a discoverable compatibility record.
   kind: physical
   publisher: Anthropic
-  presentation: {logo: package:anthropic, monogram: A, monochrome: true}
-  distribution: {type: proprietary_api, source: https://docs.anthropic.com/en/docs/about-claude/model-deprecations}
+  presentation:
+    logo: package:anthropic
+    monogram: A
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://docs.anthropic.com/en/docs/about-claude/model-deprecations
   family: claude-opus
   lifecycle: removed
-  capabilities: [chat, reasoning, tools, vision, long_context]
-  modalities: {input: [text, image], output: [text]}
-  protocols: [anthropic/messages@1]
-  verification: {authority: Anthropic, status: claimed, verified_at: 2026-09-05, source: https://docs.anthropic.com/en/docs/about-claude/model-deprecations}
-  tags: [proprietary, retired]
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Anthropic
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.anthropic.com/en/docs/about-claude/model-deprecations
+  tags:
+  - proprietary
+  - retired
 - id: anthropic/claude-sonnet-3.7
   display_name: Claude Sonnet 3.7
   description: Retired Anthropic hybrid-reasoning model retained for compatibility discovery.
   kind: physical
   publisher: Anthropic
-  presentation: {logo: package:anthropic, monogram: A, monochrome: true}
-  distribution: {type: proprietary_api, source: https://docs.anthropic.com/en/docs/about-claude/model-deprecations}
+  presentation:
+    logo: package:anthropic
+    monogram: A
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://docs.anthropic.com/en/docs/about-claude/model-deprecations
   family: claude-sonnet
   lifecycle: removed
-  capabilities: [chat, reasoning, tools, vision, long_context]
-  modalities: {input: [text, image], output: [text]}
-  protocols: [anthropic/messages@1]
-  verification: {authority: Anthropic, status: claimed, verified_at: 2026-09-05, source: https://docs.anthropic.com/en/docs/about-claude/model-deprecations}
-  tags: [proprietary, retired]
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Anthropic
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.anthropic.com/en/docs/about-claude/model-deprecations
+  tags:
+  - proprietary
+  - retired
 - id: anthropic/claude-mythos-5
   display_name: Claude Mythos 5
   description: Anthropic frontier model for deep reasoning and long-running agentic work.
   kind: physical
   publisher: Anthropic
-  presentation: {logo: package:anthropic, monogram: A, monochrome: true}
-  distribution: {type: proprietary_api, source: https://platform.claude.com/docs/en/about-claude/models/overview}
+  presentation:
+    logo: package:anthropic
+    monogram: A
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://platform.claude.com/docs/en/about-claude/models/overview
   family: claude-mythos
   lifecycle: active
-  limits: {context_window_size: 1000000, max_output_tokens: 128000}
-  capabilities: [chat, reasoning, tools, structured_output, vision, long_context]
-  modalities: {input: [text, image, pdf], output: [text]}
-  protocols: [anthropic/messages@1]
-  verification: {authority: Anthropic, status: claimed, verified_at: 2026-09-05, source: https://platform.claude.com/docs/en/about-claude/models/overview}
-  tags: [frontier, proprietary, agentic]
+  limits:
+    context_window_size: 1000000
+    max_output_tokens: 128000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - pdf
+    output:
+    - text
+  verification:
+    authority: Anthropic
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://platform.claude.com/docs/en/about-claude/models/overview
+  tags:
+  - frontier
+  - proprietary
+  - agentic
 - id: anthropic/claude-mythos-preview
   display_name: Claude Mythos Preview
   description: Deprecated preview of Anthropic's Mythos model family retained for compatibility discovery.
   kind: physical
   publisher: Anthropic
-  presentation: {logo: package:anthropic, monogram: A, monochrome: true}
-  distribution: {type: proprietary_api, source: https://docs.anthropic.com/en/docs/about-claude/model-deprecations}
+  presentation:
+    logo: package:anthropic
+    monogram: A
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://docs.anthropic.com/en/docs/about-claude/model-deprecations
   family: claude-mythos
   lifecycle: deprecated
-  limits: {context_window_size: 1000000, max_output_tokens: 128000}
-  capabilities: [chat, reasoning, tools, structured_output, vision, long_context]
-  modalities: {input: [text, image, pdf], output: [text]}
-  protocols: [anthropic/messages@1]
-  verification: {authority: Anthropic, status: claimed, verified_at: 2026-09-05, source: https://docs.anthropic.com/en/docs/about-claude/model-deprecations}
-  tags: [frontier, proprietary, deprecated]
+  limits:
+    context_window_size: 1000000
+    max_output_tokens: 128000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - pdf
+    output:
+    - text
+  verification:
+    authority: Anthropic
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.anthropic.com/en/docs/about-claude/model-deprecations
+  tags:
+  - frontier
+  - proprietary
+  - deprecated
 - id: anthropic/claude-3.5-sonnet
   display_name: Claude 3.5 Sonnet
   description: Previous-generation Anthropic model for coding, analysis, and vision.
   kind: physical
   publisher: Anthropic
-  presentation: {logo: package:anthropic, monogram: A, monochrome: true}
-  distribution: {type: proprietary_api, source: https://platform.claude.com/docs/en/about-claude/model-deprecations}
+  presentation:
+    logo: package:anthropic
+    monogram: A
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://platform.claude.com/docs/en/about-claude/model-deprecations
   family: claude-sonnet
   lifecycle: removed
-  capabilities: [chat, tools, vision, long_context]
-  modalities: {input: [text, image], output: [text]}
-  protocols: [anthropic/messages@1]
-  verification: {authority: Anthropic, status: claimed, verified_at: 2026-09-05, source: https://platform.claude.com/docs/en/about-claude/model-deprecations}
-  tags: [proprietary, coding, retired]
+  capabilities:
+  - chat
+  - tools
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Anthropic
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://platform.claude.com/docs/en/about-claude/model-deprecations
+  tags:
+  - proprietary
+  - coding
+  - retired
 - id: anthropic/claude-3.5-haiku
   display_name: Claude 3.5 Haiku
   description: Previous-generation fast Anthropic model for high-volume workloads.
   kind: physical
   publisher: Anthropic
-  presentation: {logo: package:anthropic, monogram: A, monochrome: true}
-  distribution: {type: proprietary_api, source: https://platform.claude.com/docs/en/about-claude/model-deprecations}
+  presentation:
+    logo: package:anthropic
+    monogram: A
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://platform.claude.com/docs/en/about-claude/model-deprecations
   family: claude-haiku
   lifecycle: removed
-  capabilities: [chat, tools, vision, long_context]
-  modalities: {input: [text, image], output: [text]}
-  protocols: [anthropic/messages@1]
-  verification: {authority: Anthropic, status: claimed, verified_at: 2026-09-05, source: https://platform.claude.com/docs/en/about-claude/model-deprecations}
-  tags: [proprietary, efficient, retired]
+  capabilities:
+  - chat
+  - tools
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Anthropic
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://platform.claude.com/docs/en/about-claude/model-deprecations
+  tags:
+  - proprietary
+  - efficient
+  - retired
 - id: anthropic/claude-3-opus
   display_name: Claude 3 Opus
   description: Historical Anthropic flagship retained for compatibility discovery.
   kind: physical
   publisher: Anthropic
-  presentation: {logo: package:anthropic, monogram: A, monochrome: true}
-  distribution: {type: proprietary_api, source: https://platform.claude.com/docs/en/about-claude/model-deprecations}
+  presentation:
+    logo: package:anthropic
+    monogram: A
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://platform.claude.com/docs/en/about-claude/model-deprecations
   family: claude-opus
   lifecycle: removed
-  capabilities: [chat, tools, vision, long_context]
-  modalities: {input: [text, image], output: [text]}
-  protocols: [anthropic/messages@1]
-  verification: {authority: Anthropic, status: claimed, verified_at: 2026-09-05, source: https://platform.claude.com/docs/en/about-claude/model-deprecations}
-  tags: [proprietary, retired]
+  capabilities:
+  - chat
+  - tools
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Anthropic
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://platform.claude.com/docs/en/about-claude/model-deprecations
+  tags:
+  - proprietary
+  - retired
 - id: anthropic/claude-3-haiku
   display_name: Claude 3 Haiku
   description: Historical compact Anthropic model retained for compatibility discovery.
   kind: physical
   publisher: Anthropic
-  presentation: {logo: package:anthropic, monogram: A, monochrome: true}
-  distribution: {type: proprietary_api, source: https://platform.claude.com/docs/en/about-claude/model-deprecations}
+  presentation:
+    logo: package:anthropic
+    monogram: A
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://platform.claude.com/docs/en/about-claude/model-deprecations
   family: claude-haiku
   lifecycle: removed
-  capabilities: [chat, tools, vision, long_context]
-  modalities: {input: [text, image], output: [text]}
-  protocols: [anthropic/messages@1]
-  verification: {authority: Anthropic, status: claimed, verified_at: 2026-09-05, source: https://platform.claude.com/docs/en/about-claude/model-deprecations}
-  tags: [proprietary, efficient, retired]
+  capabilities:
+  - chat
+  - tools
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Anthropic
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://platform.claude.com/docs/en/about-claude/model-deprecations
+  tags:
+  - proprietary
+  - efficient
+  - retired

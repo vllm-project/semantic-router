@@ -56,7 +56,7 @@ func TestBuiltInEvaluationPreservesOpenSubjectMetadata(t *testing.T) {
 	}
 
 	for _, evaluation := range registry.Evaluations() {
-		if evaluation.ID != "qwen/qwen3.8-max-model-card@1.0.0" {
+		if evaluation.ID != "qwen/qwen3.8-max-model-card-gpqa-diamond@1.0.0" {
 			continue
 		}
 		if evaluation.Subject["variant"] != "Qwen3.8-Max" ||
@@ -74,7 +74,7 @@ func TestBuiltInEvaluationPreservesOpenSubjectMetadata(t *testing.T) {
 	t.Fatal("Qwen3.8 Max evaluation is missing")
 }
 
-func TestDeepSeekV4HasCompletePublishedEvaluationAndRuntimeOfferings(t *testing.T) {
+func TestDeepSeekV4HasEffortIsolatedEvaluationAndProviderBindings(t *testing.T) {
 	registry, err := BuiltIn()
 	if err != nil {
 		t.Fatal(err)
@@ -92,19 +92,51 @@ func TestDeepSeekV4HasCompletePublishedEvaluationAndRuntimeOfferings(t *testing.
 
 func assertDeepSeekModelSupport(t *testing.T, registry *Registry, modelID string) {
 	t.Helper()
-	result, ok := registry.IndexResult(modelID, "vllm-sr/intelligence@1.0.0")
-	if !ok || result.Status != "available" || result.Score == nil || result.Coverage != 1 {
-		t.Fatalf("%s intelligence result is incomplete: %+v", modelID, result)
+	defaultResult, ok := registry.IndexResult(modelID, "vllm-sr/intelligence@1.0.0")
+	if !ok || defaultResult.ReasoningEffort != "high" || defaultResult.Status != "missing" || defaultResult.Score != nil {
+		t.Fatalf("%s default-effort result must not borrow max-effort evidence: %+v", modelID, defaultResult)
 	}
-	providers := map[string]bool{}
-	for _, offering := range registry.Offerings() {
-		if offering.Model == modelID {
-			providers[offering.Provider] = true
+	result, ok := registry.IndexResultForEffort(modelID, "max", "vllm-sr/intelligence@1.0.0")
+	if !ok || result.Status != "available" || result.Score == nil || result.Coverage != 1 {
+		t.Fatalf("%s max-effort intelligence result is incomplete: %+v", modelID, result)
+	}
+	for _, providerID := range []string{"deepseek", "vllm"} {
+		provider, ok := registry.Provider(providerID)
+		if !ok || !providerBindsModel(provider, modelID) {
+			t.Fatalf("%s is missing its %s provider binding", modelID, providerID)
 		}
 	}
-	if !providers["deepseek"] || !providers["vllm"] {
-		t.Fatalf("%s offerings = %v, want deepseek and vllm", modelID, providers)
+}
+
+func providerBindsModel(provider ProviderDefinition, modelID string) bool {
+	for _, binding := range provider.Models {
+		if binding.Catalog == modelID {
+			return true
+		}
 	}
+	return false
+}
+
+func TestEvaluationCoverageReturnsDefensiveValues(t *testing.T) {
+	registry, err := BuiltIn()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	coverage := registry.EvaluationCoverage()
+	for index := range coverage {
+		if coverage[index].Value == nil {
+			continue
+		}
+		original := *coverage[index].Value
+		*coverage[index].Value = original + 1
+		reloaded := registry.EvaluationCoverage()
+		if reloaded[index].Value == nil || *reloaded[index].Value != original {
+			t.Fatalf("registry coverage value was mutated: got %+v, want %v", reloaded[index].Value, original)
+		}
+		return
+	}
+	t.Fatal("built-in evaluation coverage has no available values")
 }
 
 func TestCompileCustomRuntimeCardAndBuiltInReasoning(t *testing.T) {

@@ -57,8 +57,9 @@ providers:
       reasoning:
         type: reasoning_effort
         parameter: reasoning.effort
-        levels: [low, medium, high]
+        levels: [none, low, medium, high]
         default: medium
+        disabled: none
       provider_model_id: qwen3-32b-instruct
       api_format: anthropic
       pricing:

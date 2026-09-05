@@ -43,32 +43,48 @@ type Conformance struct {
 	VerifiedAt string `json:"verified_at,omitempty"`
 }
 
+// CatalogModelBinding is a provider-owned mapping from one canonical model
+// card to the provider-native identifier exposed by that API or runtime.
+type CatalogModelBinding struct {
+	Catalog            string                     `json:"catalog"`
+	ID                 string                     `json:"id"`
+	Protocols          []string                   `json:"protocols"`
+	ReasoningTransport ReasoningTransport         `json:"reasoning_transport,omitempty"`
+	Pricing            Pricing                    `json:"pricing,omitempty"`
+	Restrictions       map[string]any             `json:"restrictions,omitempty"`
+	Lifecycle          string                     `json:"lifecycle,omitempty"`
+	Verification       CatalogBindingVerification `json:"verification"`
+}
+
 type ReasoningTransport string
 
 const (
 	ReasoningTransportChatTemplate     ReasoningTransport = "chat_template_kwargs"
 	ReasoningTransportTopLevelEffort   ReasoningTransport = "top_level_effort"
+	ReasoningTransportTopLevelBoolean  ReasoningTransport = "top_level_boolean"
+	ReasoningTransportReasoningObject  ReasoningTransport = "reasoning_object"
 	ReasoningTransportThinkingObject   ReasoningTransport = "thinking_object"
 	ReasoningTransportDeepSeekThinking ReasoningTransport = "deepseek_thinking"
 )
 
 type ProviderDefinition struct {
-	ID                  string               `json:"id"`
-	DisplayName         string               `json:"display_name"`
-	Description         string               `json:"description"`
-	Category            string               `json:"category"`
-	SupportTier         string               `json:"support_tier"`
-	DefaultBaseURL      string               `json:"default_base_url,omitempty"`
-	Protocols           []string             `json:"protocols"`
-	DefaultProtocol     string               `json:"default_protocol"`
-	SupportedOperations []string             `json:"supported_operations"`
-	PathOverrides       map[string]string    `json:"path_overrides,omitempty"`
-	DefaultHeaders      map[string]string    `json:"default_headers,omitempty"`
-	ReasoningTransport  ReasoningTransport   `json:"reasoning_transport,omitempty"`
-	APIVersionQuery     bool                 `json:"api_version_query,omitempty"`
-	Auth                ProviderAuth         `json:"auth"`
-	Presentation        ProviderPresentation `json:"presentation"`
-	Conformance         Conformance          `json:"conformance"`
+	ID                  string                `json:"id"`
+	DisplayName         string                `json:"display_name"`
+	Description         string                `json:"description"`
+	Category            string                `json:"category"`
+	SupportTier         string                `json:"support_tier"`
+	DefaultBaseURL      string                `json:"default_base_url,omitempty"`
+	Protocols           []string              `json:"protocols"`
+	DefaultProtocol     string                `json:"default_protocol"`
+	SupportedOperations []string              `json:"supported_operations"`
+	PathOverrides       map[string]string     `json:"path_overrides,omitempty"`
+	DefaultHeaders      map[string]string     `json:"default_headers,omitempty"`
+	ReasoningTransport  ReasoningTransport    `json:"reasoning_transport,omitempty"`
+	APIVersionQuery     bool                  `json:"api_version_query,omitempty"`
+	Auth                ProviderAuth          `json:"auth"`
+	Presentation        ProviderPresentation  `json:"presentation"`
+	Conformance         Conformance           `json:"conformance"`
+	Models              []CatalogModelBinding `json:"models,omitempty"`
 }
 
 // CredentialsRef keeps secrets out of the catalog and lets configuration name
@@ -131,6 +147,9 @@ type ReasoningFamilyDefinition struct {
 	Parameter string   `json:"parameter" yaml:"parameter"`
 	Levels    []string `json:"levels" yaml:"levels,omitempty"`
 	Default   string   `json:"default" yaml:"default,omitempty"`
+	// Disabled is the provider/model-native level that explicitly turns
+	// reasoning off. It is empty for always-reasoning families.
+	Disabled string `json:"disabled,omitempty" yaml:"disabled,omitempty"`
 }
 
 type Modalities struct {
@@ -194,7 +213,6 @@ type ModelCard struct {
 	Asset           string               `json:"asset,omitempty"`
 	Entrypoint      string               `json:"entrypoint,omitempty"`
 	Recipe          string               `json:"recipe,omitempty"`
-	Protocols       []string             `json:"protocols"`
 	Traits          []string             `json:"traits,omitempty"`
 	Roles           []ModelRole          `json:"roles,omitempty"`
 	Verification    ModelVerification    `json:"verification"`
@@ -238,11 +256,13 @@ type ModelCardOverlay struct {
 // surface. Repository benchmark definitions own metric semantics; provenance
 // and verification are assigned internally when this is materialized.
 type UserEvaluation struct {
-	Benchmark  string             `json:"benchmark" yaml:"benchmark"`
-	Metrics    map[string]float64 `json:"metrics" yaml:"metrics"`
-	Source     string             `json:"source,omitempty" yaml:"source,omitempty"`
-	MeasuredAt string             `json:"measured_at,omitempty" yaml:"measured_at,omitempty"`
-	Metadata   map[string]any     `json:"metadata,omitempty" yaml:"metadata,omitempty"`
+	Benchmark        string             `json:"benchmark" yaml:"benchmark"`
+	BenchmarkProfile string             `json:"benchmark_profile,omitempty" yaml:"benchmark_profile,omitempty"`
+	ReasoningEffort  string             `json:"reasoning_effort,omitempty" yaml:"reasoning_effort,omitempty"`
+	Metrics          map[string]float64 `json:"metrics" yaml:"metrics"`
+	Source           string             `json:"source,omitempty" yaml:"source,omitempty"`
+	MeasuredAt       string             `json:"measured_at,omitempty" yaml:"measured_at,omitempty"`
+	Metadata         map[string]any     `json:"metadata,omitempty" yaml:"metadata,omitempty"`
 }
 
 // EvaluationConfig is the optional operator extension surface.
@@ -282,22 +302,16 @@ type Reliability struct {
 	HealthCheckTimeout  string `json:"health_check_timeout,omitempty" yaml:"health_check_timeout,omitempty"`
 }
 
-type OfferingVerification struct {
+type CatalogBindingVerification struct {
 	Status     string `json:"status" yaml:"status,omitempty"`
 	VerifiedAt string `json:"verified_at,omitempty" yaml:"verified_at,omitempty"`
 	Source     string `json:"source,omitempty" yaml:"source,omitempty"`
 }
 
-type OfferingDefinition struct {
-	ID              string               `json:"id"`
-	Provider        string               `json:"provider"`
-	Model           string               `json:"model"`
-	ProviderModelID string               `json:"provider_model_id"`
-	Protocols       []string             `json:"protocols"`
-	Pricing         Pricing              `json:"pricing,omitempty"`
-	Restrictions    map[string]any       `json:"restrictions,omitempty"`
-	Lifecycle       string               `json:"lifecycle,omitempty"`
-	Verification    OfferingVerification `json:"verification"`
+type BenchmarkProfile struct {
+	ID          string `json:"id" yaml:"id"`
+	DisplayName string `json:"display_name" yaml:"display_name"`
+	Description string `json:"description" yaml:"description"`
 }
 
 type BenchmarkMetric struct {
@@ -308,11 +322,13 @@ type BenchmarkMetric struct {
 }
 
 type BenchmarkDefinition struct {
-	ID          string            `json:"id" yaml:"id"`
-	DisplayName string            `json:"display_name" yaml:"display_name"`
-	Domain      string            `json:"domain" yaml:"domain"`
-	Source      string            `json:"source,omitempty" yaml:"source,omitempty"`
-	Metrics     []BenchmarkMetric `json:"metrics" yaml:"metrics"`
+	ID             string             `json:"id" yaml:"id"`
+	DisplayName    string             `json:"display_name" yaml:"display_name"`
+	Domain         string             `json:"domain" yaml:"domain"`
+	Source         string             `json:"source,omitempty" yaml:"source,omitempty"`
+	DefaultProfile string             `json:"default_profile" yaml:"default_profile"`
+	Profiles       []BenchmarkProfile `json:"profiles" yaml:"profiles"`
+	Metrics        []BenchmarkMetric  `json:"metrics" yaml:"metrics"`
 }
 
 type EvaluationEvidence struct {
@@ -329,13 +345,27 @@ type EvaluationEvidence struct {
 type EvaluationSubject map[string]any
 
 type EvaluationRecord struct {
-	ID         string             `json:"id" yaml:"id"`
-	Model      string             `json:"model" yaml:"model"`
-	Subject    EvaluationSubject  `json:"subject,omitempty" yaml:"subject,omitempty"`
-	Metrics    map[string]float64 `json:"metrics" yaml:"metrics"`
-	Status     string             `json:"status" yaml:"status"`
-	MeasuredAt string             `json:"measured_at,omitempty" yaml:"measured_at,omitempty"`
-	Evidence   EvaluationEvidence `json:"evidence" yaml:"evidence"`
+	ID               string             `json:"id" yaml:"id"`
+	Model            string             `json:"model" yaml:"model"`
+	Benchmark        string             `json:"benchmark" yaml:"benchmark"`
+	BenchmarkProfile string             `json:"benchmark_profile" yaml:"benchmark_profile"`
+	ReasoningEffort  string             `json:"reasoning_effort" yaml:"reasoning_effort"`
+	Subject          EvaluationSubject  `json:"subject,omitempty" yaml:"subject,omitempty"`
+	Metrics          map[string]float64 `json:"metrics" yaml:"metrics"`
+	Status           string             `json:"status" yaml:"status"`
+	MeasuredAt       string             `json:"measured_at,omitempty" yaml:"measured_at,omitempty"`
+	Evidence         EvaluationEvidence `json:"evidence" yaml:"evidence"`
+}
+
+type EvaluationCoverage struct {
+	Model            string   `json:"model"`
+	ReasoningEffort  string   `json:"reasoning_effort"`
+	Benchmark        string   `json:"benchmark"`
+	BenchmarkProfile string   `json:"benchmark_profile"`
+	Metric           string   `json:"metric"`
+	Status           string   `json:"status"`
+	Value            *float64 `json:"value,omitempty"`
+	Evaluation       string   `json:"evaluation,omitempty"`
 }
 
 type NormalizationPoint struct {
@@ -354,10 +384,12 @@ type Normalization struct {
 }
 
 type IndexComponent struct {
-	Metric        string        `json:"metric,omitempty" yaml:"metric,omitempty"`
-	Index         string        `json:"index,omitempty" yaml:"index,omitempty"`
-	Weight        float64       `json:"weight" yaml:"weight"`
-	Normalization Normalization `json:"normalization,omitempty" yaml:"normalization,omitempty"`
+	Benchmark        string        `json:"benchmark,omitempty" yaml:"benchmark,omitempty"`
+	Metric           string        `json:"metric,omitempty" yaml:"metric,omitempty"`
+	BenchmarkProfile string        `json:"benchmark_profile,omitempty" yaml:"benchmark_profile,omitempty"`
+	Index            string        `json:"index,omitempty" yaml:"index,omitempty"`
+	Weight           float64       `json:"weight" yaml:"weight"`
+	Normalization    Normalization `json:"normalization,omitempty" yaml:"normalization,omitempty"`
 }
 
 type MissingPolicy struct {
@@ -378,23 +410,27 @@ type IndexDefinition struct {
 }
 
 type IndexComponentResult struct {
-	Metric     string   `json:"metric,omitempty"`
-	Index      string   `json:"index,omitempty"`
-	Weight     float64  `json:"weight"`
-	Status     string   `json:"status"`
-	Value      *float64 `json:"value,omitempty"`
-	Normalized *float64 `json:"normalized,omitempty"`
+	Benchmark        string   `json:"benchmark,omitempty"`
+	Metric           string   `json:"metric,omitempty"`
+	BenchmarkProfile string   `json:"benchmark_profile,omitempty"`
+	Index            string   `json:"index,omitempty"`
+	Evaluation       string   `json:"evaluation,omitempty"`
+	Weight           float64  `json:"weight"`
+	Status           string   `json:"status"`
+	Value            *float64 `json:"value,omitempty"`
+	Normalized       *float64 `json:"normalized,omitempty"`
 }
 
 type IndexResult struct {
-	Model      string                 `json:"model"`
-	Index      string                 `json:"index"`
-	Status     string                 `json:"status"`
-	Score      *float64               `json:"score"`
-	Coverage   float64                `json:"coverage"`
-	Components []IndexComponentResult `json:"components"`
-	Domains    map[string]float64     `json:"domains,omitempty"`
-	Provenance []string               `json:"provenance"`
+	Model           string                 `json:"model"`
+	ReasoningEffort string                 `json:"reasoning_effort"`
+	Index           string                 `json:"index"`
+	Status          string                 `json:"status"`
+	Score           *float64               `json:"score"`
+	Coverage        float64                `json:"coverage"`
+	Components      []IndexComponentResult `json:"components"`
+	Domains         map[string]float64     `json:"domains,omitempty"`
+	Provenance      []string               `json:"provenance"`
 }
 
 // FieldProvenance records whether an effective field came from the repository
@@ -415,18 +451,19 @@ type EffectiveProvider struct {
 }
 
 type EffectiveModel struct {
-	Alias           string                   `json:"alias"`
-	Catalog         string                   `json:"catalog"`
-	Card            EffectiveModelCard       `json:"card"`
-	Providers       []EffectiveModelProvider `json:"providers"`
-	Indices         map[string]IndexResult   `json:"indices,omitempty"`
-	BindingDefaults ModelProviderBinding     `json:"-"`
+	Alias           string                            `json:"alias"`
+	Catalog         string                            `json:"catalog"`
+	Card            EffectiveModelCard                `json:"card"`
+	Providers       []EffectiveModelProvider          `json:"providers"`
+	Indices         map[string]IndexResult            `json:"indices,omitempty"`
+	IndicesByEffort map[string]map[string]IndexResult `json:"indices_by_effort,omitempty"`
+	BindingDefaults ModelProviderBinding              `json:"-"`
 }
 
 type EffectiveModelProvider struct {
-	Binding  ModelProviderBinding `json:"binding"`
-	Provider EffectiveProvider    `json:"provider"`
-	Offering *OfferingDefinition  `json:"offering,omitempty"`
+	Binding        ModelProviderBinding `json:"binding"`
+	Provider       EffectiveProvider    `json:"provider"`
+	CatalogBinding *CatalogModelBinding `json:"catalog_binding,omitempty"`
 }
 
 // CompileInput contains only user-owned extensions and bindings. Repository
@@ -441,15 +478,15 @@ type CompileInput struct {
 }
 
 type snapshot struct {
-	SchemaVersion     string                      `json:"schema_version"`
-	Catalogs          []CatalogHeader             `json:"catalogs"`
-	Protocols         []ProtocolDefinition        `json:"protocols"`
-	Providers         []ProviderDefinition        `json:"providers"`
-	ReasoningFamilies []ReasoningFamilyDefinition `json:"reasoning_families"`
-	Models            []ModelCard                 `json:"models"`
-	Offerings         []OfferingDefinition        `json:"offerings"`
-	Benchmarks        []BenchmarkDefinition       `json:"benchmarks"`
-	Evaluations       []EvaluationRecord          `json:"evaluations"`
-	Indices           []IndexDefinition           `json:"indices"`
-	IndexResults      []IndexResult               `json:"index_results"`
+	SchemaVersion      string                      `json:"schema_version"`
+	Catalogs           []CatalogHeader             `json:"catalogs"`
+	Protocols          []ProtocolDefinition        `json:"protocols"`
+	Providers          []ProviderDefinition        `json:"providers"`
+	ReasoningFamilies  []ReasoningFamilyDefinition `json:"reasoning_families"`
+	Models             []ModelCard                 `json:"models"`
+	Benchmarks         []BenchmarkDefinition       `json:"benchmarks"`
+	Evaluations        []EvaluationRecord          `json:"evaluations"`
+	EvaluationCoverage []EvaluationCoverage        `json:"evaluation_coverage"`
+	Indices            []IndexDefinition           `json:"indices"`
+	IndexResults       []IndexResult               `json:"index_results"`
 }
