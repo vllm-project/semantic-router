@@ -62,9 +62,9 @@ describe('canonical metric analysis catalog', () => {
     expect(JSON.parse(METRIC_ANALYSIS_CATALOG_SOURCE)).toEqual(JSON.parse(typescriptResource))
   })
 
-  it('resolves all 136 exact ids and all six typed dynamic families', () => {
+  it('resolves all 136 exact ids and all seven typed dynamic families', () => {
     expect(STATIC_METRIC_ANALYSIS_IDS).toHaveLength(136)
-    expect(DYNAMIC_METRIC_ANALYSIS_FAMILY_IDS).toHaveLength(6)
+    expect(DYNAMIC_METRIC_ANALYSIS_FAMILY_IDS).toHaveLength(7)
     expect(STATIC_METRIC_ANALYSIS_IDS).toEqual([...STATIC_METRIC_ANALYSIS_IDS].sort())
     expect(DYNAMIC_METRIC_ANALYSIS_FAMILY_IDS).toEqual(
       [...DYNAMIC_METRIC_ANALYSIS_FAMILY_IDS].sort(),
