@@ -7,12 +7,11 @@ import (
 )
 
 func openvinoEmbeddingFunc(modelType string) func(string) ([]float32, error) {
+	usesModernBERT := openvinoEmbeddingUsesModernBERT(modelType)
 	return func(text string) ([]float32, error) {
-		switch modelType {
-		case "mmbert", "modernbert":
+		if usesModernBERT {
 			return openvino_binding.GetModernBertEmbedding(text, 32768)
-		default:
-			return openvino_binding.GetEmbedding(text, 32768)
 		}
+		return openvino_binding.GetEmbedding(text, 32768)
 	}
 }

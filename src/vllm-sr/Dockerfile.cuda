@@ -62,7 +62,7 @@ RUN [ "$GIT_SSL_NO_VERIFY" = "1" ] && git config --global http.sslVerify false |
     rm -rf src
 
 COPY candle-binding/src/ ./src/
-COPY candle-binding/go.mod candle-binding/semantic-router.go ./
+COPY candle-binding/go.mod candle-binding/semantic-router.go candle-binding/embedding_capabilities.go candle-binding/embedding_capabilities_native.go ./
 
 RUN find target -name "libcandle_semantic_router.so" -delete 2>/dev/null; \
     find target -name "libcandle_semantic_router.a" -delete 2>/dev/null; \
@@ -230,7 +230,7 @@ RUN [ "$GIT_SSL_NO_VERIFY" = "1" ] && git config --global http.sslVerify false |
     rm -rf src
 
 COPY onnx-binding/src/ ./src/
-COPY onnx-binding/go.mod onnx-binding/semantic-router.go ./
+COPY onnx-binding/go.mod onnx-binding/semantic-router.go onnx-binding/embedding_capabilities.go onnx-binding/embedding_capabilities_native.go ./
 
 RUN find target -name "libonnx_semantic_router.so" -delete 2>/dev/null; \
     find target -name "libonnx_semantic_router.a" -delete 2>/dev/null; \
@@ -260,8 +260,8 @@ COPY --from=nlp-builder /build/out/ /usr/local/lib/
 
 ENV LD_LIBRARY_PATH=/usr/local/lib
 
-COPY --from=rust-builder /build/go.mod /build/semantic-router.go /build/../candle-binding/
-COPY --from=onnx-builder /build/go.mod /build/semantic-router.go /build/../onnx-binding/
+COPY --from=rust-builder /build/go.mod /build/semantic-router.go /build/embedding_capabilities.go /build/embedding_capabilities_native.go /build/../candle-binding/
+COPY --from=onnx-builder /build/go.mod /build/semantic-router.go /build/embedding_capabilities.go /build/embedding_capabilities_native.go /build/../onnx-binding/
 COPY --from=onnx-builder /build/out/ /build/../onnx-binding/target/release/
 
 COPY ml-binding/go.mod ml-binding/ml_binding.go /build/../ml-binding/

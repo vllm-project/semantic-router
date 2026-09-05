@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
@@ -138,21 +139,19 @@ func TestQwenMLRequestUsesModelDefaultDimension(t *testing.T) {
 	}
 }
 
-// TestSelectionEmbeddingModelTypeNormalizesCase guards against a configured
-// modelType (e.g. "Qwen3") passing validation case-insensitively but then
-// reaching candle_binding.SupportsBatchedEmbedding and GetEmbeddingBatched
-// unnormalized -- the former is case/whitespace-tolerant, the latter is not,
-// so a mismatch there routes a "batchable" model into a call that fails.
-func TestSelectionEmbeddingModelTypeNormalizesCase(t *testing.T) {
+// TestSelectionEmbeddingModelTypeDefersNormalization verifies that native
+// model names are preserved for the capability query, which is the single
+// owner of canonicalization.
+func TestSelectionEmbeddingModelTypeDefersNormalization(t *testing.T) {
 	cases := []struct {
 		name      string
 		modelType string
 		want      string
 	}{
-		{"mixed case", "Qwen3", "qwen3"},
-		{"padded whitespace", "  qwen3  ", "qwen3"},
+		{"mixed case", "Qwen3", "Qwen3"},
+		{"padded whitespace", "  qwen3  ", "  qwen3  "},
 		{"already normalized", "mmbert", "mmbert"},
-		{"empty falls back to default", "", config.EmbeddingModelTypeQwen3},
+		{"empty falls back to binding default", "", string(candle_binding.DefaultEmbeddingModelType)},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -166,13 +165,9 @@ func TestSelectionEmbeddingModelTypeNormalizesCase(t *testing.T) {
 	}
 }
 
-// TestBuildMLSelectionConfigNormalizesModelTypeCase guards the same
-// unnormalized-modelType bug as TestSelectionEmbeddingModelTypeNormalizesCase,
-// but on the sibling ml.model_type path: nothing validates or rewrites it, so
-// it reaches factory.go's mlEmbeddingConfig -- and the same
-// SupportsBatchedEmbedding/FFI dispatch -- independently of the default
-// embedding model type.
-func TestBuildMLSelectionConfigNormalizesModelTypeCase(t *testing.T) {
+// TestBuildMLSelectionConfigDefersModelTypeNormalization keeps native
+// canonicalization behind the binding capability interface.
+func TestBuildMLSelectionConfigDefersModelTypeNormalization(t *testing.T) {
 	cfg := &config.RouterConfig{
 		IntelligentRouting: config.IntelligentRouting{
 			ModelSelection: config.ModelSelectionConfig{
@@ -185,7 +180,7 @@ func TestBuildMLSelectionConfigNormalizesModelTypeCase(t *testing.T) {
 	}
 
 	mlCfg := buildModelSelectionConfig(cfg).ML
-	if mlCfg.ModelType != config.EmbeddingModelTypeQwen3 {
-		t.Fatalf("ML selection model type = %q, want %q", mlCfg.ModelType, config.EmbeddingModelTypeQwen3)
+	if mlCfg.ModelType != "Qwen3" {
+		t.Fatalf("ML selection model type = %q, want original value %q", mlCfg.ModelType, "Qwen3")
 	}
 }

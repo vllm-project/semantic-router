@@ -19,6 +19,10 @@ the [learned-signal documentation](../website/docs/tutorials/signal/overview.md)
 ## Build
 
 The module requires Go 1.21 or newer, Rust, Cargo, CGo, and a C compiler.
+The complete ONNX inference wrapper is supported only on non-Windows CGo
+builds targeting `amd64` or `arm64`. Other build combinations expose only the
+capability-query stub, which returns the typed `ErrBackendUnavailable` error;
+they are not supported as complete ONNX router or inference builds.
 
 ```bash
 cd onnx-binding
