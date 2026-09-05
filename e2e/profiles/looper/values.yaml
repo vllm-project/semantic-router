@@ -17,16 +17,49 @@ config:
           - name: looper-fake-backend
             endpoint: looper-fake-backend.default.svc.cluster.local:8000
             weight: 1
+      - name: fusion-panel-valid
+        provider_model_id: fusion-panel-valid
+        backend_refs:
+          - name: looper-fake-backend
+            endpoint: looper-fake-backend.default.svc.cluster.local:8000
+            weight: 1
+      - name: fusion-panel-empty
+        provider_model_id: fusion-panel-empty
+        backend_refs:
+          - name: looper-fake-backend
+            endpoint: looper-fake-backend.default.svc.cluster.local:8000
+            weight: 1
+      - name: fusion-panel-fail
+        provider_model_id: fusion-panel-fail
+        backend_refs:
+          - name: looper-fake-backend
+            endpoint: looper-fake-backend.default.svc.cluster.local:8000
+            weight: 1
+      - name: fusion-judge
+        provider_model_id: fusion-judge
+        backend_refs:
+          - name: looper-fake-backend
+            endpoint: looper-fake-backend.default.svc.cluster.local:8000
+            weight: 1
   routing:
     modelCards:
       - name: ratings-model-a
       - name: ratings-model-b
+      - name: fusion-panel-valid
+      - name: fusion-panel-empty
+      - name: fusion-panel-fail
+      - name: fusion-judge
     signals:
       keywords:
         - name: looper_ratings_probe_keywords
           operator: OR
           keywords:
             - __LOOPER_RATINGS_PROBE__
+          case_sensitive: true
+        - name: looper_fusion_quorum_probe_keywords
+          operator: OR
+          keywords:
+            - __LOOPER_FUSION_QUORUM_PROBE__
           case_sensitive: true
     decisions:
       - name: looper_ratings_decision
@@ -46,6 +79,32 @@ config:
           type: ratings
           ratings:
             max_concurrent: 2
+            on_error: skip
+      - name: looper_fusion_quorum_decision
+        description: Reject Fusion synthesis when usable panel responses do not meet quorum
+        priority: 110
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: looper_fusion_quorum_probe_keywords
+        modelRefs:
+          - model: fusion-panel-valid
+            use_reasoning: false
+          - model: fusion-panel-empty
+            use_reasoning: false
+          - model: fusion-panel-fail
+            use_reasoning: false
+        algorithm:
+          type: fusion
+          fusion:
+            model: fusion-judge
+            analysis_models:
+              - fusion-panel-valid
+              - fusion-panel-empty
+              - fusion-panel-fail
+            max_concurrent: 3
+            min_successful_responses: 2
             on_error: skip
       - name: default-route
         description: Fallback for unmatched profile traffic
