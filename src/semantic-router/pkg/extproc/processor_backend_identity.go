@@ -3,7 +3,9 @@ package extproc
 import (
 	"strings"
 
+	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -21,23 +23,32 @@ func captureUpstreamBackendIdentity(req *ext_proc.ProcessingRequest, ctx *Reques
 	if req == nil || ctx == nil || req.GetResponseHeaders() == nil {
 		return
 	}
+	// Response attributes are authoritative for the endpoint Envoy actually
+	// selected. Clear any earlier value before parsing so missing or malformed
+	// metadata fails closed, including after an upstream retry.
+	ctx.UpstreamBackendName = ""
+	ctx.UpstreamBackendType = ""
+	ctx.AllowDynamoExtensions = false
+
 	attributes := req.GetAttributes()[extProcAttributesNamespace]
-	metadata := structField(attributes, upstreamHostMetadataAttribute)
-	filterMetadata := structField(metadata, "filter_metadata")
-	identity := structField(filterMetadata, backendIdentityNamespace)
+	if attributes == nil {
+		return
+	}
+	metadataText := attributes.GetFields()[upstreamHostMetadataAttribute].GetStringValue()
+	if metadataText == "" {
+		return
+	}
+	var metadata corev3.Metadata
+	if err := prototext.Unmarshal([]byte(metadataText), &metadata); err != nil {
+		return
+	}
+	identity := metadata.GetFilterMetadata()[backendIdentityNamespace]
 	if identity == nil {
 		return
 	}
 	ctx.UpstreamBackendName = strings.TrimSpace(stringField(identity, "backend_name"))
 	ctx.UpstreamBackendType = strings.ToLower(strings.TrimSpace(stringField(identity, "backend_type")))
 	ctx.AllowDynamoExtensions = ctx.UpstreamBackendType == "dynamo"
-}
-
-func structField(value *structpb.Struct, name string) *structpb.Struct {
-	if value == nil {
-		return nil
-	}
-	return value.GetFields()[name].GetStructValue()
 }
 
 func stringField(value *structpb.Struct, name string) string {
