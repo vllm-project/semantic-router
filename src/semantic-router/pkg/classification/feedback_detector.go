@@ -56,49 +56,43 @@ func NewFeedbackDetector(cfg *config.FeedbackDetectorConfig) (*FeedbackDetector,
 	return detector, nil
 }
 
-// loadMappingFromConfig loads the id2label mapping from the model's config.json
-func (d *FeedbackDetector) loadMappingFromConfig(modelPath string) error {
-	configPath := filepath.Join(modelPath, "config.json")
-	data, err := os.ReadFile(configPath)
+type feedbackMappingFile struct {
+	IdxToLabel map[string]string `json:"idx_to_label"`
+	LabelToIdx map[string]int    `json:"label_to_idx"`
+	ID2Label   map[string]string `json:"id2label"`
+	Label2ID   map[string]int    `json:"label2id"`
+}
+
+func (d *FeedbackDetector) loadMapping(path string) error {
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return fmt.Errorf("failed to read config.json: %w", err)
+		return fmt.Errorf("failed to read feedback mapping %s: %w", path, err)
 	}
-
-	var configData struct {
-		ID2Label map[string]string `json:"id2label"`
-		Label2ID map[string]int    `json:"label2id"`
+	var file feedbackMappingFile
+	if err := json.Unmarshal(data, &file); err != nil {
+		return fmt.Errorf("failed to parse feedback mapping %s: %w", path, err)
 	}
-
-	if err := json.Unmarshal(data, &configData); err != nil {
-		return fmt.Errorf("failed to parse config.json: %w", err)
+	idxToLabel, labelToIdx := file.IdxToLabel, file.LabelToIdx
+	if len(idxToLabel) == 0 {
+		idxToLabel, labelToIdx = file.ID2Label, file.Label2ID
 	}
-
-	// Build mapping from config.json
+	if len(idxToLabel) == 0 {
+		return fmt.Errorf("feedback mapping %s declares no labels", path)
+	}
 	d.mapping = &FeedbackMapping{
-		LabelToIdx: make(map[string]int),
-		IdxToLabel: make(map[string]string),
+		LabelToIdx: make(map[string]int, len(labelToIdx)),
+		IdxToLabel: make(map[string]string, len(idxToLabel)),
 	}
-
-	// Use id2label from config.json and normalize labels
-	for idx, label := range configData.ID2Label {
-		normalizedLabel := normalizeFeedbackLabel(label)
-		d.mapping.IdxToLabel[idx] = normalizedLabel
+	for idx, label := range idxToLabel {
+		d.mapping.IdxToLabel[idx] = normalizeFeedbackLabel(label)
 	}
-
-	// Use label2id from config.json and normalize labels
-	for label, idx := range configData.Label2ID {
-		normalizedLabel := normalizeFeedbackLabel(label)
-		d.mapping.LabelToIdx[normalizedLabel] = idx
+	for label, idx := range labelToIdx {
+		d.mapping.LabelToIdx[normalizeFeedbackLabel(label)] = idx
 	}
-
 	logging.ComponentEvent("classifier", "feedback_mapping_loaded", map[string]interface{}{
-		"labels":    len(d.mapping.IdxToLabel),
-		"model_ref": modelPath,
+		"labels":       len(d.mapping.IdxToLabel),
+		"mapping_path": path,
 	})
-	for idx, label := range d.mapping.IdxToLabel {
-		logging.Debugf("  %s -> %s", idx, label)
-	}
-
 	return nil
 }
 
@@ -132,9 +126,12 @@ func (d *FeedbackDetector) Initialize() error {
 		return fmt.Errorf("feedback detector requires ModelID to be configured")
 	}
 
-	// Load mapping from model's config.json (required - no hardcoded fallback)
-	if err := d.loadMappingFromConfig(d.config.ModelID); err != nil {
-		return fmt.Errorf("failed to load id2label mapping from %s/config.json: %w", d.config.ModelID, err)
+	mappingPath := d.config.FeedbackMappingPath
+	if mappingPath == "" {
+		mappingPath = filepath.Join(d.config.ModelID, "config.json")
+	}
+	if err := d.loadMapping(mappingPath); err != nil {
+		return err
 	}
 
 	backend := "modernbert"
