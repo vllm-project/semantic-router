@@ -187,6 +187,7 @@ jobs:
             TAGS="${TAGS},${IMAGE}:latest"
           fi
           {
+            echo "image=$IMAGE"
             echo "primary=$PRIMARY_TAG"
             echo "nightly_date=$NIGHTLY_DATE"
             echo "tags=$TAGS"
@@ -204,6 +205,7 @@ jobs:
         run: bash tools/ci/docker-build-args.sh
 
       - name: Build and publish image
+        id: publish
         uses: docker/build-push-action@v6
         with:
           context: ${{ steps.definition.outputs.context }}
@@ -215,3 +217,9 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}-publish,ignore-error=true
           build-args: ${{ steps.build-args.outputs.args }}
           provenance: false
+
+      - name: Verify published Dashboard image
+        if: matrix.image == 'dashboard'
+        env:
+          IMAGE_REF: ${{ steps.tags.outputs.image }}@${{ steps.publish.outputs.digest }}
+        run: python3 tools/ci/verify_published_dashboard_image.py "$IMAGE_REF"
