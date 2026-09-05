@@ -79,13 +79,6 @@ type FusionTrace struct {
 	Grounding      *FusionGroundingTrace `json:"grounding,omitempty"`
 }
 
-type fusionPanelResult struct {
-	index int
-	model string
-	resp  *ModelResponse
-	err   error
-}
-
 func (l *FusionLooper) Execute(ctx context.Context, req *Request) (*Response, error) {
 	l.client.SetDecisionName(req.DecisionName)
 	l.client.SetFusionDepth(1)
@@ -112,21 +105,21 @@ func (l *FusionLooper) Execute(ctx context.Context, req *Request) (*Response, er
 		"streaming":       req.IsStreaming,
 	})
 
-	panelResponses, failedModels, err := l.executeFusionPanel(ctx, req, cfg)
+	panel, err := l.executeFusionPanel(ctx, req, cfg)
 	if err != nil {
-		if cfg.OnError == config.FusionOnErrorFail || len(panelResponses) == 0 {
-			return nil, err
-		}
+		return nil, err
+	}
+	if len(panel.failedModels) > 0 {
 		logging.ComponentWarnEvent("looper", "fusion_panel_partial", map[string]interface{}{
 			"decision":  req.DecisionName,
-			"responses": len(panelResponses),
-			"error":     err.Error(),
+			"responses": len(panel.responses),
+			"failures":  len(panel.failedModels),
 		})
 	}
 
 	// Grounding (optional) ranks/filters the panel before the judge. It makes no
 	// model calls, so usage is summed from the full panel (the real cost paid).
-	groundedPanel, groundingScores, groundingMode, err := l.applyGrounding(req, cfg, panelResponses)
+	groundedPanel, groundingScores, groundingMode, err := l.applyGrounding(req, cfg, panel.responses)
 	if err != nil {
 		return nil, err
 	}
@@ -136,9 +129,9 @@ func (l *FusionLooper) Execute(ctx context.Context, req *Request) (*Response, er
 	if err != nil {
 		return nil, err
 	}
-	usage := SumUsage(panelResponses...).Add(analysisResp, finalResp)
+	usage := panel.usage.Add(analysisResp, finalResp)
 
-	trace := buildFusionTrace(cfg, groundedPanel, failedModels, analysis, groundingMode, groundingScores)
+	trace := buildFusionTrace(cfg, groundedPanel, panel.failedModels, analysis, groundingMode, groundingScores)
 	modelsUsed := orderedFusionModelsUsed(cfg.AnalysisModels, cfg.Model)
 	iterations := len(cfg.AnalysisModels) + 2
 
@@ -157,131 +150,6 @@ func (l *FusionLooper) validateFusionModels(cfg fusionExecutionConfig) error {
 		}
 	}
 	return nil
-}
-
-func (l *FusionLooper) executeFusionPanel(
-	ctx context.Context,
-	req *Request,
-	cfg fusionExecutionConfig,
-) ([]*ModelResponse, []FusionFailedModel, error) {
-	// Paired multi-arm evaluation supplies the panel verbatim so every arm
-	// synthesizes from a byte-identical panel (see bench/grounded_fusion). Skip
-	// the live model calls and feed the cached panel straight into grounding +
-	// synthesis, which are source-agnostic over []*ModelResponse.
-	if len(req.CachedPanel) > 0 {
-		return req.CachedPanel, nil, nil
-	}
-
-	panelCtx := ctx
-	cancel := func() {}
-	if cfg.RoundTimeoutSeconds > 0 {
-		panelCtx, cancel = context.WithTimeout(ctx, time.Duration(cfg.RoundTimeoutSeconds)*time.Second)
-	}
-	defer cancel()
-
-	results := make(chan fusionPanelResult, len(cfg.AnalysisModels))
-	sem := make(chan struct{}, cfg.MaxConcurrent)
-	for i, model := range cfg.AnalysisModels {
-		go func(index int, modelName string) {
-			select {
-			case sem <- struct{}{}:
-			case <-panelCtx.Done():
-				results <- fusionPanelResult{index: index, model: modelName, err: panelCtx.Err()}
-				return
-			}
-			defer func() { <-sem }()
-			resp, err := l.callFusionModel(panelCtx, req, req.OriginalRequest, cfg, modelName, false, false, index+1, cfg.AnalysisOverrides[modelName])
-			results <- fusionPanelResult{index: index, model: modelName, resp: resp, err: err}
-		}(i, model)
-	}
-
-	collector := newFusionPanelCollector(cfg, cancel)
-	for range cfg.AnalysisModels {
-		select {
-		case result := <-results:
-			responses, err, done := collector.handleResult(result)
-			if done {
-				return responses, collector.failed, err
-			}
-		case <-panelCtx.Done():
-			responses, err := collector.handleTimeout(panelCtx.Err())
-			return responses, collector.failed, err
-		}
-	}
-
-	responses := collector.responses()
-	if len(responses) == 0 {
-		return nil, collector.failed, fmt.Errorf("fusion panel failed: all %d analysis models failed", len(cfg.AnalysisModels))
-	}
-	return responses, collector.failed, nil
-}
-
-type fusionPanelCollector struct {
-	cfg       fusionExecutionConfig
-	cancel    context.CancelFunc
-	ordered   []*ModelResponse
-	failed    []FusionFailedModel
-	successes int
-}
-
-func newFusionPanelCollector(cfg fusionExecutionConfig, cancel context.CancelFunc) *fusionPanelCollector {
-	return &fusionPanelCollector{
-		cfg:     cfg,
-		cancel:  cancel,
-		ordered: make([]*ModelResponse, len(cfg.AnalysisModels)),
-	}
-}
-
-func (c *fusionPanelCollector) handleResult(result fusionPanelResult) ([]*ModelResponse, error, bool) {
-	if result.err != nil {
-		c.failed = append(c.failed, FusionFailedModel{Model: result.model, Error: result.err.Error()})
-		if c.cfg.OnError == config.FusionOnErrorFail {
-			c.cancel()
-			return nil, fmt.Errorf("fusion panel model %q failed: %w", result.model, result.err), true
-		}
-		return nil, nil, false
-	}
-	c.ordered[result.index] = result.resp
-	c.successes++
-	if c.successes < c.cfg.MinSuccessfulResponses {
-		return nil, nil, false
-	}
-	c.logQuorum()
-	c.cancel()
-	return c.responses(), nil, true
-}
-
-func (c *fusionPanelCollector) handleTimeout(err error) ([]*ModelResponse, error) {
-	responses := c.responses()
-	if len(responses) > 0 && c.cfg.OnError != config.FusionOnErrorFail {
-		c.failed = append(c.failed, FusionFailedModel{Model: "panel", Error: err.Error()})
-		return responses, err
-	}
-	return nil, err
-}
-
-func (c *fusionPanelCollector) responses() []*ModelResponse {
-	return compactFusionPanelResponses(c.ordered)
-}
-
-func (c *fusionPanelCollector) logQuorum() {
-	if c.successes >= len(c.cfg.AnalysisModels) {
-		return
-	}
-	logging.ComponentEvent("looper", "fusion_panel_quorum_reached", map[string]interface{}{
-		"responses": c.successes,
-		"panel":     len(c.cfg.AnalysisModels),
-	})
-}
-
-func compactFusionPanelResponses(ordered []*ModelResponse) []*ModelResponse {
-	responses := make([]*ModelResponse, 0, len(ordered))
-	for _, resp := range ordered {
-		if resp != nil {
-			responses = append(responses, resp)
-		}
-	}
-	return responses
 }
 
 func (l *FusionLooper) callFusionModel(

@@ -70,7 +70,8 @@ without changing a public entrypoint.
 
 ## Request lifecycle
 
-1. A client sends a request to an OpenAI- or Anthropic-compatible endpoint.
+1. A client sends a request using OpenAI Chat Completions, OpenAI Responses, or
+   Anthropic Messages.
 2. Envoy presents the request to the Router.
 3. The requested model resolves to an entrypoint and its recipe.
 4. The Router extracts relevant signals and computes projections.
@@ -100,6 +101,10 @@ The Router can consider request semantics and configured runtime observations;
 it does not replace a backend scheduler. A deployment may therefore use
 Semantic Router to choose a model class and another component to choose a
 healthy replica of that model.
+
+The client and selected backend do not need to use the same wire format. See
+[Protocol Compatibility](../installation/protocol-compatibility) for the
+supported client endpoints, backend formats, and pairwise translation matrix.
 
 ## Next
 

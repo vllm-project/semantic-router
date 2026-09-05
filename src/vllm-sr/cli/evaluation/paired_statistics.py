@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Callable
 from dataclasses import dataclass
-from types import MappingProxyType
 from typing import Literal
 
 from cli.evaluation.evidence import ExecutionRecord
@@ -117,9 +116,6 @@ _STATISTICS = (
         "record",
         _violation,
     ),
-)
-PAIRED_STATISTIC_REGISTRY = MappingProxyType(
-    {statistic.metric_id: statistic for statistic in _STATISTICS}
 )
 
 
