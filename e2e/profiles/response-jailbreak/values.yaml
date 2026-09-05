@@ -22,10 +22,12 @@ config:
     # a passthrough to a concrete backend model, which skips plugins
     # entirely (see performDecisionEvaluation).
     #
-    # There is deliberately no jailbreak signal rule here: prompt_guard is
-    # enabled for the response filter, but nothing on the request path
-    # thresholds it, so the probe prompt reaches the backend and comes back
-    # as LLM output - which is the surface under test.
+    # There is deliberately no request-direction jailbreak rule here:
+    # prompt_guard is enabled for the response filter, but nothing on the
+    # request path thresholds it, so the probe prompt reaches the backend and
+    # comes back as LLM output - which is the surface under test. The one
+    # jailbreak rule below has direction: response, so it is scored from that
+    # output only.
     decisions:
       - name: response_jailbreak_block
         description: Blocks the response when the guardrail flags LLM output
@@ -80,6 +82,15 @@ config:
           operator: OR
           keywords:
             - __response_warn_probe__
+      # Scored from the model's output, not the request. The block and warn
+      # decisions above enforce on this observation through their
+      # response_jailbreak plugins; their plugin thresholds are ignored once
+      # this rule exists, so the threshold that decides lives here.
+      jailbreak:
+        - name: unsafe_completion
+          direction: response
+          threshold: 0.5
+          description: Detect jailbreak content in the model's own output.
     modelCards:
       - name: openai/mock-model
   global:

@@ -143,7 +143,7 @@ until the selected cases are known to be isolated.
 - **rag-hybrid-search**: manual Llama Stack hybrid-search coverage.
 - **hallucination**: manual fact-check gating and warning behavior.
 - **jailbreak-onerror**: manual PromptGuardConfig.OnError coverage against an unreachable classifier endpoint.
-- **response-jailbreak**: manual response_jailbreak coverage for LLM output carrying jailbreak content past the classifier's sequence window.
+- **response-jailbreak**: response-direction jailbreak signal and response_jailbreak plugin coverage for LLM output carrying jailbreak content past the classifier's sequence window, and the streamed-response pass-through contract.
 
 ### Coverage Ownership Matrix
 

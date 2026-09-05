@@ -41,7 +41,9 @@ func (c *Classifier) signalReadiness() map[string]bool {
 // IsJailbreakEnabled silently skipped otherwise healthy contrastive rules when
 // the optional Prompt Guard model was disabled.
 func (c *Classifier) isJailbreakSignalReady() bool {
-	if len(c.Config.JailbreakRules) == 0 {
+	// Response-direction rules are scored from the model's output, so they do
+	// not make the request-stage signal ready on their own.
+	if len(c.Config.RequestJailbreakRules()) == 0 {
 		return false
 	}
 

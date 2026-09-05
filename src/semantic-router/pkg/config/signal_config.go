@@ -146,6 +146,10 @@ type JailbreakRule struct {
 	Description       string   `yaml:"description,omitempty"`
 	JailbreakPatterns []string `yaml:"jailbreak_patterns,omitempty"`
 	BenignPatterns    []string `yaml:"benign_patterns,omitempty"`
+	// Direction is the stage the rule observes: "request" (the default) scores
+	// the prompt before a model is selected, "response" scores the model's
+	// output once it has answered. See JailbreakRule.Stage.
+	Direction string `yaml:"direction,omitempty"`
 }
 
 type PIIRule struct {

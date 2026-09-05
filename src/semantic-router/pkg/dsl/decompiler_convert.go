@@ -223,6 +223,9 @@ func (d *decompiler) jailbreakToSignal(jb *config.JailbreakRule) *SignalDecl {
 	if jb.IncludeHistory {
 		fields["include_history"] = BoolValue{V: true}
 	}
+	if jb.Direction != "" {
+		fields["direction"] = StringValue{V: jb.Direction}
+	}
 	if jb.Description != "" {
 		fields["description"] = StringValue{V: jb.Description}
 	}

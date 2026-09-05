@@ -44,7 +44,16 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 
 	r.updateResponseCache(ctx, clientBody)
 
-	if jailbreakResponse := r.performSemanticResponseJailbreakDetection(ctx, semanticResponse); jailbreakResponse != nil {
+	// The response-stage signal is scored from the declared rules before any
+	// plugin runs, so the observation exists whether or not the selected
+	// decision carries a plugin; the plugins below then consume it.
+	r.evaluateResponseJailbreakSignal(ctx, semanticAssistantContent(semanticResponse))
+
+	jailbreakResponse := r.performSemanticResponseJailbreakDetection(ctx, semanticResponse)
+	// Recorded before a block returns, so a blocked response leaves the same
+	// evidence in Router Replay as a delivered one.
+	r.recordRouterReplayResponseJailbreak(ctx)
+	if jailbreakResponse != nil {
 		return jailbreakResponse
 	}
 	if hallucinationResponse := r.performSemanticHallucinationDetection(ctx, semanticResponse); hallucinationResponse != nil {
@@ -85,6 +94,7 @@ func (r *OpenAIRouter) applySemanticResponseWarnings(
 	if len(codes) > 0 {
 		setResponseWarningsHeader(response, codes)
 	}
+	addResponseStageSignalHeaders(ctx, response)
 	if !changed {
 		return response, originalBody
 	}
@@ -119,9 +129,30 @@ func appendNonEmpty(codes []string, code string) []string {
 	return append(codes, code)
 }
 
+// addResponseStageSignalHeaders rewrites x-vsr-matched-jailbreak in the body
+// phase once the response-direction rules have been scored. The response
+// headers phase wrote the request-stage matches before the body existed, so
+// the debug header would otherwise never show a response-stage match. Same
+// gate as the request-stage signal headers: only when debug is requested.
+func addResponseStageSignalHeaders(ctx *RequestContext, response *ext_proc.ProcessingResponse) {
+	if ctx == nil || len(ctx.VSRMatchedResponseJailbreak) == 0 || !debugHeadersRequested(ctx) {
+		return
+	}
+	matched := make([]string, 0, len(ctx.VSRMatchedJailbreak)+len(ctx.VSRMatchedResponseJailbreak))
+	matched = append(matched, ctx.VSRMatchedJailbreak...)
+	matched = append(matched, ctx.VSRMatchedResponseJailbreak...)
+	setResponseBodyHeader(response, headers.VSRMatchedJailbreak, strings.Join(matched, ","))
+}
+
 // setResponseWarningsHeader writes the consolidated x-vsr-response-warnings header
 // (comma-separated codes) onto the response, merging with any existing mutation.
 func setResponseWarningsHeader(response *ext_proc.ProcessingResponse, codes []string) {
+	setResponseBodyHeader(response, headers.VSRResponseWarnings, strings.Join(codes, ","))
+}
+
+// setResponseBodyHeader sets one response header from the body phase, merging
+// with any header mutation the response already carries.
+func setResponseBodyHeader(response *ext_proc.ProcessingResponse, key, value string) {
 	bodyResponse, ok := response.Response.(*ext_proc.ProcessingResponse_ResponseBody)
 	if !ok {
 		return
@@ -131,8 +162,8 @@ func setResponseWarningsHeader(response *ext_proc.ProcessingResponse, codes []st
 	}
 	opt := &core.HeaderValueOption{
 		Header: &core.HeaderValue{
-			Key:      headers.VSRResponseWarnings,
-			RawValue: []byte(strings.Join(codes, ",")),
+			Key:      key,
+			RawValue: []byte(value),
 		},
 	}
 	if hm := bodyResponse.ResponseBody.Response.HeaderMutation; hm != nil {

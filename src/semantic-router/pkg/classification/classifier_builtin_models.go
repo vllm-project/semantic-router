@@ -130,6 +130,11 @@ func (c *Classifier) CheckForJailbreakWithThreshold(ctx context.Context, text st
 	}
 
 	isJailbreak := confidence >= threshold && isPositiveJailbreakLabel(c.Config.PromptGuard.PositiveLabels, jailbreakType)
+	if !isJailbreak && lastErr != nil {
+		// A clean verdict needs every chunk; one that was never scored leaves
+		// the text unresolved, as CheckForJailbreakRiskWithThreshold does.
+		return false, "", 0.0, fmt.Errorf("jailbreak classification failed on part of the text: %w", lastErr)
+	}
 	if isJailbreak {
 		logging.Warnf("JAILBREAK DETECTED: '%s' (confidence: %.3f, threshold: %.3f)",
 			jailbreakType, confidence, threshold)

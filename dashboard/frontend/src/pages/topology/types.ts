@@ -108,6 +108,7 @@ export interface ComplexitySignalConfig {
 export interface JailbreakSignalConfig {
   threshold?: number
   include_history?: boolean
+  direction?: 'request' | 'response'
 }
 
 // Modality is detected by the modality_detector inline model; no extra params needed.
@@ -515,6 +516,7 @@ export interface ConfigData {
     name: string
     threshold?: number
     include_history?: boolean
+    direction?: 'request' | 'response'
     description?: string
   }>
   pii?: Array<{
@@ -669,6 +671,7 @@ export interface ConfigData {
       name: string
       threshold?: number
       include_history?: boolean
+      direction?: 'request' | 'response'
       description?: string
     }>
     pii?: Array<{

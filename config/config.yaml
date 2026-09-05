@@ -422,6 +422,13 @@ routing:
         benign_patterns:
           - explain the policy
           - summarize the safety rules
+      # direction: response scores the model's output instead of the prompt, so
+      # this rule only exists once the model has answered; the selected
+      # decision's response_jailbreak plugin enforces on it.
+      - name: unsafe_completion
+        direction: response
+        threshold: 0.85
+        description: Detect jailbreak content in the model's own output.
 
     pii:
       - name: restricted_pii
