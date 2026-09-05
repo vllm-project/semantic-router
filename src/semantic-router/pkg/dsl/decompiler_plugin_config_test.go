@@ -414,6 +414,39 @@ ROUTE invalid_prompt_cache {
 	}
 }
 
+func TestPromptCachePluginRejectsInvalidTemplateOverride(t *testing.T) {
+	source := `
+PLUGIN cached prompt_cache {
+  enabled: true
+  ttl: "5m"
+}
+
+ROUTE invalid_prompt_cache {
+  PRIORITY 1
+  MODEL "model"
+  PLUGIN cached {
+    ttl: "10m"
+  }
+}
+`
+	_, errs := Compile(source)
+	if !slices.ContainsFunc(errs, func(err error) bool {
+		return strings.Contains(err.Error(), "ttl must be 5m or 1h")
+	}) {
+		t.Fatalf("compile errors = %v", errs)
+	}
+
+	diagnostics, parseErrs := Validate(source)
+	if len(parseErrs) != 0 {
+		t.Fatalf("parse errors = %v", parseErrs)
+	}
+	if !slices.ContainsFunc(diagnostics, func(diagnostic Diagnostic) bool {
+		return strings.Contains(diagnostic.Message, "ttl must be 5m or 1h")
+	}) {
+		t.Fatalf("validation diagnostics = %v", diagnostics)
+	}
+}
+
 func assertToolsPluginDynamicRetrievalRoundTrip(t *testing.T, decision config.Decision) {
 	t.Helper()
 
