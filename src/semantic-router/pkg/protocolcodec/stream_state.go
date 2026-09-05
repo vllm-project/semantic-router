@@ -125,8 +125,8 @@ func (state *streamState) prepareEvent(event llmprotocol.Event) (llmprotocol.Eve
 	if !validStreamEventType(event.Type) {
 		return llmprotocol.Event{}, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "unknown_stream_event", "upstream stream event type is invalid", nil)
 	}
-	if event.DynamoNVExt != nil && event.Type != llmprotocol.EventProviderOpaque {
-		return llmprotocol.Event{}, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_dynamo_nvext_event", "Dynamo nvext is only valid on provider extension stream events", nil)
+	if event.DynamoNVExt != nil && !dynamoNVExtStreamEventType(event.Type) {
+		return llmprotocol.Event{}, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_dynamo_nvext_event", "Dynamo nvext is only valid on provider extension or response lifecycle stream events", nil)
 	}
 	if event.DynamoNVExt != nil && len(event.Opaque) != 0 {
 		return llmprotocol.Event{}, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_dynamo_nvext_event", "Dynamo nvext stream events cannot mix structured and opaque data", nil)
@@ -145,6 +145,16 @@ func (state *streamState) prepareEvent(event llmprotocol.Event) (llmprotocol.Eve
 	}
 	state.ensureCollections()
 	return state.prepareLifecycleEvent(event)
+}
+
+func dynamoNVExtStreamEventType(eventType llmprotocol.EventType) bool {
+	switch eventType {
+	case llmprotocol.EventProviderOpaque, llmprotocol.EventResponseStarted,
+		llmprotocol.EventResponseCompleted, llmprotocol.EventResponseFailed:
+		return true
+	default:
+		return false
+	}
 }
 
 func validStreamEventType(eventType llmprotocol.EventType) bool {

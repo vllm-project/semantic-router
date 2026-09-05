@@ -21,6 +21,12 @@ func (OpenAIResponsesCodec) EncodeRequest(request llmprotocol.Request, envelope 
 	if err != nil {
 		return nil, nil, err
 	}
+	if envelope.Dynamo != nil && envelope.Dynamo.RequestNVExt != nil {
+		wire.NVExt, err = encodeDynamoRequestNVExt(envelope.Dynamo.RequestNVExt, policy)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
 	body, err := marshalWire(wire)
 	return body, nil, err
 }

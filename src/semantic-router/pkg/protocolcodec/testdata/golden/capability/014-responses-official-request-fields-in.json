@@ -17,6 +17,7 @@
     {"name": "metadata", "patch": {"metadata": {"trace": "field-matrix"}}},
     {"name": "model", "patch": {"model": "alternate-client-model"}},
     {"name": "moderation", "patch": {"moderation": {"mode": "auto"}}},
+    {"name": "nvext", "patch": {"nvext": {"greed_sampling": true}}},
     {"name": "parallel_tool_calls", "patch": {"parallel_tool_calls": false}},
     {"name": "previous_response_id", "patch": {"previous_response_id": "resp_previous"}},
     {"name": "prompt", "patch": {"prompt": {"id": "pmpt_1"}}},

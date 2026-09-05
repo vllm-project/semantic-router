@@ -44,7 +44,7 @@ func TestOfficialRequestFieldInventoriesAreClosed(t *testing.T) {
 				"stream_options", "temperature", "text", "tool_choice", "tools", "top_logprobs", "top_p",
 				"truncation", "user",
 			),
-			extensions: fields("auto_store"),
+			extensions: fields("auto_store", "nvext"),
 		},
 		{
 			name: "Anthropic Messages",
@@ -107,7 +107,7 @@ func TestOfficialRequestFieldDispositionsAreClosed(t *testing.T) {
 				"service_tier", "top_logprobs",
 			),
 			transport:  fields("stream_options"),
-			extensions: fields("auto_store"),
+			extensions: fields("auto_store", "nvext"),
 		},
 		{
 			name: "Anthropic Messages",
@@ -159,7 +159,7 @@ func TestOfficialResponseFieldInventoriesAreClosed(t *testing.T) {
 				"safety_identifier", "service_tier", "status", "temperature", "text", "tool_choice",
 				"tools", "top_logprobs", "top_p", "truncation", "usage", "user",
 			),
-			extensions: fields("conversation_id", "store"),
+			extensions: fields("conversation_id", "nvext", "store"),
 		},
 		{
 			name: "Anthropic Messages",

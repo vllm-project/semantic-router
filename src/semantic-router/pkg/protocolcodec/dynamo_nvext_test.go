@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 
@@ -36,6 +37,56 @@ func TestDynamoNVExtBufferedChatRoundTrip(t *testing.T) {
 	}
 	assertNestedJSONField(t, responseResult.Body, "nvext", "prompt_token_ids", []any{float64(1), float64(2)})
 	assertNestedJSONField(t, responseResult.Body, "nvext", "completion_token_ids", []any{float64(10), float64(11)})
+}
+
+func TestDynamoNVExtBufferedResponsesRoundTrip(t *testing.T) {
+	codec := OpenAIResponsesCodec{}
+	policy := llmprotocol.DefaultPolicy()
+	requestBody := []byte(`{"model":"provider-model","input":"hi","nvext":{"greed_sampling":true,"annotations":["worker_id"],"extra_fields":["prompt_token_ids"],"cache_salt":"tenant-a"}}`)
+	request, requestEnvelope, _, err := codec.DecodeRequest(requestBody, policy)
+	if err != nil {
+		t.Fatalf("DecodeRequest() error = %v", err)
+	}
+	if requestEnvelope.Dynamo == nil || requestEnvelope.Dynamo.RequestNVExt == nil {
+		t.Fatal("decoded Responses request did not retain Dynamo nvext")
+	}
+	request.Generation++ // Disable source replay so the typed encode path is exercised.
+	encodedRequest, _, err := codec.EncodeRequest(request, requestEnvelope, policy)
+	if err != nil {
+		t.Fatalf("EncodeRequest() error = %v", err)
+	}
+	assertNestedJSONField(t, encodedRequest, "nvext", "cache_salt", "tenant-a")
+	assertNestedJSONField(t, encodedRequest, "nvext", "extra_fields", []any{"prompt_token_ids"})
+
+	responseBody := []byte(`{"id":"response_1","object":"response","created_at":100,"model":"provider-model","status":"completed","error":null,"incomplete_details":null,"instructions":null,"metadata":{},"output":[{"id":"item_1","type":"message","role":"assistant","status":"completed","content":[{"type":"output_text","text":"ok"}]}],"parallel_tool_calls":true,"temperature":null,"tool_choice":"auto","tools":[],"top_p":null,"usage":{"input_tokens":1,"input_tokens_details":{"cached_tokens":0},"output_tokens":1,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":2},"nvext":{"worker_id":{"decode_worker_id":2},"prompt_token_ids":[1,2],"completion_token_ids":[10,11]}}`)
+	response, responseEnvelope, _, err := codec.DecodeResponse(responseBody, policy)
+	if err != nil {
+		t.Fatalf("DecodeResponse() error = %v", err)
+	}
+	if responseEnvelope.Dynamo == nil || responseEnvelope.Dynamo.ResponseNVExt == nil {
+		t.Fatal("decoded Responses response did not retain Dynamo nvext")
+	}
+	response.Generation++ // Disable source replay so the typed encode path is exercised.
+	encodedResponse, _, err := codec.EncodeResponse(response, responseEnvelope, policy)
+	if err != nil {
+		t.Fatalf("EncodeResponse() error = %v", err)
+	}
+	assertNestedJSONField(t, encodedResponse, "nvext", "prompt_token_ids", []any{float64(1), float64(2)})
+	assertNestedJSONField(t, encodedResponse, "nvext", "completion_token_ids", []any{float64(10), float64(11)})
+}
+
+func TestDynamoNVExtBufferedResponsesRejectsUnknownAndCrossFormat(t *testing.T) {
+	engine := NewBuiltinEngine()
+	invalidRequest := []byte(`{"model":"provider-model","input":"hi","nvext":{"future":true}}`)
+	assertErrorCodeContains(t, translateRequestError(engine, llmprotocol.OpenAIResponsesV1, invalidRequest), "invalid_json")
+
+	validRequest := []byte(`{"model":"provider-model","input":"hi","nvext":{"greed_sampling":true}}`)
+	_, err := engine.TranslateRequest(llmprotocol.OpenAIResponsesV1, llmprotocol.OpenAIChatV1, validRequest, nil)
+	assertErrorCodeContains(t, err, "unsupported_dynamo_nvext_translation")
+
+	validResponse := []byte(`{"id":"response_1","object":"response","created_at":100,"model":"provider-model","status":"completed","error":null,"incomplete_details":null,"instructions":null,"metadata":{},"output":[{"id":"item_1","type":"message","role":"assistant","status":"completed","content":[{"type":"output_text","text":"ok"}]}],"parallel_tool_calls":true,"temperature":null,"tool_choice":"auto","tools":[],"top_p":null,"usage":{"input_tokens":1,"input_tokens_details":{"cached_tokens":0},"output_tokens":1,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":2},"nvext":{"token_ids":[1]}}`)
+	_, err = engine.TranslateResponse(llmprotocol.OpenAIResponsesV1, llmprotocol.OpenAIChatV1, validResponse, nil)
+	assertErrorCodeContains(t, err, "unsupported_dynamo_nvext_translation")
 }
 
 func TestDynamoNVExtBufferedRejectsUnknownAndCrossFormat(t *testing.T) {
@@ -132,6 +183,58 @@ func TestDynamoNVExtStreamRejectsUnknownAndDeepMetadata(t *testing.T) {
 	assertErrorCodeContains(t, err, "invalid_upstream_json")
 }
 
+func TestDynamoNVExtResponsesStreamPreservesBoundedLifecycleResource(t *testing.T) {
+	payload := dynamoResponsesStreamFixture(t)
+	stream := newDynamoResponsesTestStream(t, llmprotocol.DefaultPolicy(), llmprotocol.OpenAIResponsesV1)
+	frames, events, _, err := stream.Push([]byte(payload))
+	if err != nil {
+		t.Fatalf("Push() error = %v", err)
+	}
+	finalFrames, finalEvents, _, err := stream.Finalize(nil)
+	if err != nil {
+		t.Fatalf("Finalize() error = %v", err)
+	}
+	frames = append(frames, finalFrames...)
+	events = append(events, finalEvents...)
+	if count := bytes.Count(bytes.Join(frames, nil), []byte(`"nvext"`)); count != 1 {
+		t.Fatalf("encoded Responses nvext count = %d, want 1", count)
+	}
+	for _, event := range events {
+		if event.Type == llmprotocol.EventResponseCompleted && event.DynamoNVExt != nil {
+			if len(event.DynamoNVExt.PromptTokenIDs) != 2 || len(event.DynamoNVExt.CompletionTokenIDs) != 2 {
+				t.Fatalf("unexpected Responses Dynamo extension: %#v", event.DynamoNVExt)
+			}
+			return
+		}
+	}
+	t.Fatal("Responses stream did not retain Dynamo nvext on its terminal lifecycle event")
+}
+
+func TestDynamoNVExtResponsesStreamEnforcesCumulativeLimit(t *testing.T) {
+	policy := llmprotocol.DefaultPolicy()
+	policy.Limits.DynamoNVExtStreamBytes = len(`{"prompt_token_ids":[1,2],"completion_token_ids":[10,11]}`) - 1
+	stream := newDynamoResponsesTestStream(t, policy, llmprotocol.OpenAIResponsesV1)
+	_, _, _, err := stream.Push([]byte(dynamoResponsesStreamFixture(t)))
+	assertErrorCodeContains(t, err, "dynamo_nvext_stream_size_limit")
+}
+
+func dynamoResponsesStreamFixture(t *testing.T) string {
+	t.Helper()
+	body, err := os.ReadFile("testdata/golden/stream/002-responses-text-in.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fixture struct {
+		Chunks []string `json:"chunks"`
+	}
+	if err := json.Unmarshal(body, &fixture); err != nil {
+		t.Fatal(err)
+	}
+	payload := strings.Join(fixture.Chunks, "")
+	payload = strings.Replace(payload, `"total_tokens":5}}`, `"total_tokens":5},"nvext":{"prompt_token_ids":[1,2],"completion_token_ids":[10,11]}}`, 1)
+	return payload
+}
+
 func newDynamoTestStream(t *testing.T, policy llmprotocol.Policy, target llmprotocol.WireFormat) *StreamEngine {
 	t.Helper()
 	engine, err := NewEngine(NewBuiltinRegistry(), policy)
@@ -139,6 +242,25 @@ func newDynamoTestStream(t *testing.T, policy llmprotocol.Policy, target llmprot
 		t.Fatal(err)
 	}
 	stream, err := engine.NewStream(llmprotocol.OpenAIChatV1, target, llmprotocol.StreamContext{
+		Context: context.Background(), PublicModel: "public-model", ProviderModel: "provider-model",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return stream
+}
+
+func newDynamoResponsesTestStream(
+	t *testing.T,
+	policy llmprotocol.Policy,
+	target llmprotocol.WireFormat,
+) *StreamEngine {
+	t.Helper()
+	engine, err := NewEngine(NewBuiltinRegistry(), policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stream, err := engine.NewStream(llmprotocol.OpenAIResponsesV1, target, llmprotocol.StreamContext{
 		Context: context.Background(), PublicModel: "public-model", ProviderModel: "provider-model",
 	})
 	if err != nil {
