@@ -1,7 +1,6 @@
 import pytest
-from pydantic import ValidationError
-
 from cli.models import PluginConfig, PromptCachePluginConfig
+from pydantic import ValidationError
 
 
 def test_prompt_cache_plugin_parses_complete_contract() -> None:
