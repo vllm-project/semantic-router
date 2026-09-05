@@ -16,6 +16,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
@@ -71,6 +72,7 @@ type OpenAIRouter struct {
 	MemoryStore          memory.Store
 	MemoryExtractor      *memory.MemoryExtractor
 	ProtocolCodecs       *protocolcodec.Registry
+	looperClient         *looper.Client
 
 	// CredentialResolver resolves per-user LLM API keys from multiple sources
 	// (ext_authz injected headers -> static config fallback).

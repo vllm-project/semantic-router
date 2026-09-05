@@ -192,7 +192,7 @@ func (r *OpenAIRouter) executeContextRecoveryFollowup(
 	if err != nil {
 		return nil, fmt.Errorf("prepare context recovery followup: %w", err)
 	}
-	client := looper.NewClient(&r.Config.Looper)
+	client := r.looperModelClient()
 	followup, err := client.CallModelWithOptions(
 		ctx,
 		*openAIRequest,

@@ -33,8 +33,12 @@ const (
 
 // NewReMoMLooper creates a new ReMoM looper
 func NewReMoMLooper(cfg *config.LooperConfig) *ReMoMLooper {
+	return newReMoMLooper(cfg, nil)
+}
+
+func newReMoMLooper(cfg *config.LooperConfig, client *Client) *ReMoMLooper {
 	return &ReMoMLooper{
-		BaseLooper: NewBaseLooper(cfg),
+		BaseLooper: newBaseLooper(cfg, client),
 	}
 }
 

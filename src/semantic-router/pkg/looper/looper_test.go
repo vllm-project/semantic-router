@@ -63,6 +63,36 @@ func TestFactoryRegistryMatchesConfigCatalog(t *testing.T) {
 	}
 }
 
+func TestFactoryWithClientSharesClientAcrossAlgorithms(t *testing.T) {
+	client := NewClient(&config.LooperConfig{})
+	for _, algorithmType := range config.SupportedLooperAlgorithmTypes() {
+		constructed, err := FactoryWithClient(&config.LooperConfig{}, algorithmType, client)
+		if err != nil {
+			t.Fatalf("FactoryWithClient(%q) returned error: %v", algorithmType, err)
+		}
+		if got := baseLooperClient(constructed); got != client {
+			t.Fatalf("FactoryWithClient(%q) client = %p, want %p", algorithmType, got, client)
+		}
+	}
+}
+
+func baseLooperClient(constructed Looper) *Client {
+	switch typed := constructed.(type) {
+	case *ConfidenceLooper:
+		return typed.client
+	case *FusionLooper:
+		return typed.client
+	case *RatingsLooper:
+		return typed.client
+	case *ReMoMLooper:
+		return typed.client
+	case *WorkflowsLooper:
+		return typed.client
+	default:
+		return nil
+	}
+}
+
 func TestFactoryRejectsUnknownAlgorithmWithoutBaseFallback(t *testing.T) {
 	got, err := Factory(&config.LooperConfig{}, "unregistered")
 	if got != nil {

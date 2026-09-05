@@ -18,8 +18,12 @@ type WorkflowsLooper struct {
 }
 
 func NewWorkflowsLooper(cfg *config.LooperConfig) *WorkflowsLooper {
+	return newWorkflowsLooper(cfg, nil)
+}
+
+func newWorkflowsLooper(cfg *config.LooperConfig, client *Client) *WorkflowsLooper {
 	return &WorkflowsLooper{
-		BaseLooper: NewBaseLooper(cfg),
+		BaseLooper: newBaseLooper(cfg, client),
 		toolStates: newWorkflowToolStateStoreFromConfig(
 			workflowFlowRuntimeConfig(cfg),
 		),

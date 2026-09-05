@@ -19,7 +19,7 @@ func (r *OpenAIRouter) newDecisionPromptSelector(
 	for model, params := range r.Config.ModelConfig {
 		descriptions[model] = params.Description
 	}
-	client := looper.NewClient(&r.Config.Looper)
+	client := r.looperModelClient()
 
 	invoke := func(
 		ctx context.Context,

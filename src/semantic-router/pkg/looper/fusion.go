@@ -20,7 +20,11 @@ type FusionLooper struct {
 }
 
 func NewFusionLooper(cfg *config.LooperConfig) *FusionLooper {
-	return &FusionLooper{BaseLooper: NewBaseLooper(cfg)}
+	return newFusionLooper(cfg, nil)
+}
+
+func newFusionLooper(cfg *config.LooperConfig, client *Client) *FusionLooper {
+	return &FusionLooper{BaseLooper: newBaseLooper(cfg, client)}
 }
 
 type fusionExecutionConfig struct {

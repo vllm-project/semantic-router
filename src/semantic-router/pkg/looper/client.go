@@ -54,6 +54,14 @@ func NewClient(cfg *config.LooperConfig) *Client {
 	return c
 }
 
+// Close releases idle connections owned by the client.
+func (c *Client) Close() error {
+	if c != nil && c.httpClient != nil {
+		c.httpClient.CloseIdleConnections()
+	}
+	return nil
+}
+
 // SetDecisionName sets the decision name for this client
 func (c *Client) SetDecisionName(name string) {
 	c.decisionName = name

@@ -118,8 +118,12 @@ type ConfidenceLooper struct {
 
 // NewConfidenceLooper creates a new ConfidenceLooper instance
 func NewConfidenceLooper(cfg *config.LooperConfig) *ConfidenceLooper {
+	return newConfidenceLooper(cfg, nil)
+}
+
+func newConfidenceLooper(cfg *config.LooperConfig, client *Client) *ConfidenceLooper {
 	return &ConfidenceLooper{
-		BaseLooper: NewBaseLooper(cfg),
+		BaseLooper: newBaseLooper(cfg, client),
 	}
 }
 

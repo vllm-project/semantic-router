@@ -40,8 +40,15 @@ type BaseLooper struct {
 
 // NewBaseLooper creates a new BaseLooper instance
 func NewBaseLooper(cfg *config.LooperConfig) *BaseLooper {
+	return newBaseLooper(cfg, nil)
+}
+
+func newBaseLooper(cfg *config.LooperConfig, client *Client) *BaseLooper {
+	if client == nil {
+		client = NewClient(cfg)
+	}
 	return &BaseLooper{
-		client: NewClient(cfg),
+		client: client,
 		cfg:    cfg,
 	}
 }
