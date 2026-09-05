@@ -103,7 +103,7 @@ func (r *OpenAIRouter) buildLooperBackendDispatchResponse(
 	useReasoning bool,
 	ctx *RequestContext,
 ) (*ext_proc.ProcessingResponse, error) {
-	if err := validateDynamoBackendPool(r.Config, modelName, ctx.ProtocolEnvelope); err != nil {
+	if err := validateDynamoBackendPool(r.Config, modelName, ctx, ctx.ProtocolEnvelope); err != nil {
 		if protocolError, ok := err.(*llmprotocol.ProtocolError); ok {
 			copy := *protocolError
 			ctx.ImmediateProtocolError = &copy

@@ -157,6 +157,10 @@ static_resources:
                 response_header_mode: "SEND"
                 request_body_mode: "BUFFERED"
                 response_body_mode: "BUFFERED"
+              # The response-side protocol boundary needs the identity of the
+              # endpoint Envoy actually selected, including after retries.
+              response_attributes:
+              - xds.upstream_host_metadata
               # Unlike route/idle timeouts, zero expires immediately here.
               # Bound each Router processing step independently of chat duration.
               message_timeout: 1200s
@@ -272,6 +276,11 @@ static_resources:
             {% elif endpoint.is_domain %}
             hostname: "{{ endpoint.address }}"
             {% endif %}
+          metadata:
+            filter_metadata:
+              semantic-router:
+                backend_name: {{ endpoint.name | tojson }}
+                backend_type: {{ endpoint.backend_type | tojson }}
           load_balancing_weight: {{ endpoint.weight | default(1) }}
         {% endfor %}
     {% if model.has_https %}
