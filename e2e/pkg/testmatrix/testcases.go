@@ -49,6 +49,8 @@ var BaselineRouterContract = []string{
 	"session-pricing-response-api",
 	// Event signal rule matching and routing (issue #3178)
 	"event-routing",
+	// Language signal rule matching and routing (issue #3178)
+	"language-routing",
 }
 
 // DashboardContract is the canonical E2E contract for the dashboard API surface.
