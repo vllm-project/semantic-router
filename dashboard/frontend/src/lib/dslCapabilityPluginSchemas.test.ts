@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { getCapabilityPluginFieldSchema } from './dslCapabilityPluginSchemas'
+import { resolveCapabilityPluginFieldSchema } from './dslCapabilityPluginSchemas'
 
 describe('capability plugin field schemas', () => {
   it('exposes the complete context compression contract', () => {
-    const fields = getCapabilityPluginFieldSchema('context_compression')
+    const fields = resolveCapabilityPluginFieldSchema('context_compression')
     expect(fields?.map((field) => field.key)).toEqual([
       'enabled',
       'mode',
@@ -19,7 +19,7 @@ describe('capability plugin field schemas', () => {
   })
 
   it('exposes the shadow dispatch bounds', () => {
-    const fields = getCapabilityPluginFieldSchema('shadow_dispatch')
+    const fields = resolveCapabilityPluginFieldSchema('shadow_dispatch')
     expect(fields?.map((field) => field.key)).toEqual([
       'enabled',
       'model',
@@ -36,7 +36,7 @@ describe('capability plugin field schemas', () => {
   })
 
   it('exposes canonical response cache fields', () => {
-    const fields = getCapabilityPluginFieldSchema('response_cache')
+    const fields = resolveCapabilityPluginFieldSchema('response_cache')
     expect(fields?.map((field) => field.key)).toEqual([
       'enabled',
       'mode',
