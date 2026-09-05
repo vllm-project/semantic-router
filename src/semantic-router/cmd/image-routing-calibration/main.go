@@ -35,9 +35,10 @@
 // separable with ~0.10 and ~0.14 cosine headroom on each side.
 // code_or_terminal_imagery is NOT separable on repo imagery — dark UI
 // screenshots outscore several genuine code/terminal images — so its shipped
-// 0.44 is a judgment call that keeps the E2E code fixture matching with ~0.03
-// headroom. Treat that rule as the first suspect when the multimodal E2E
-// profile regresses.
+// 0.4632 is the max-F1 band midpoint (F1 0.375) and the E2E code fixture
+// (score 0.4748) clears it by only ~0.012. Treat that rule as the first suspect
+// when the multimodal E2E profile regresses; a stronger code fixture is the
+// real fix.
 //
 // Scores are the classifier's prototype blend under aggregation_method=max
 // (best_weight*best + (1-best_weight)*mean(top_m), defaults 0.75 / 2), not a
@@ -360,7 +361,10 @@ func calibrateRule(rule config.EmbeddingRule, fixtures []fixtureReport) ruleRepo
 			}
 		}
 	}
-	values := map[float64]bool{0: true, float64(rule.SimilarityThreshold): true}
+	// The sweep is built only from fixture scores (plus 0), never from the
+	// threshold currently shipped, so the recommendation cannot depend on the
+	// value being calibrated. The shipped value is evaluated separately below.
+	values := map[float64]bool{0: true}
 	for _, fixture := range fixtures {
 		values[fixture.Scores[rule.Name]] = true
 	}
@@ -494,7 +498,7 @@ func renderMarkdown(report calibrationReport) string {
 	b.WriteString("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|:---:|\n")
 	for _, rule := range report.Rules {
 		s := rule.Shipped
-		fmt.Fprintf(&b, "| `%s` | `%.2f` | %d | %d | %d | %d | %d | %.3f | %.3f | %.3f | `%+.4f` | `%+.4f` | %t |\n",
+		fmt.Fprintf(&b, "| `%s` | `%.4f` | %d | %d | %d | %d | %d | %.3f | %.3f | %.3f | `%+.4f` | `%+.4f` | %t |\n",
 			rule.Name, s.Threshold, rule.Positives, rule.Negatives,
 			s.TP, s.FP, s.FN, s.Precision, s.Recall, s.F1, s.HeadroomPositive, s.HeadroomNegative, s.Separable)
 	}
