@@ -14,6 +14,28 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
+type promptCacheWireRequest struct {
+	System []struct {
+		Text         string `json:"text"`
+		CacheControl *struct {
+			Type string `json:"type"`
+			TTL  string `json:"ttl"`
+		} `json:"cache_control"`
+	} `json:"system"`
+	Messages []struct {
+		Content []struct {
+			CacheControl interface{} `json:"cache_control"`
+		} `json:"content"`
+	} `json:"messages"`
+	Tools []struct {
+		Name         string `json:"name"`
+		CacheControl *struct {
+			Type string `json:"type"`
+			TTL  string `json:"ttl"`
+		} `json:"cache_control"`
+	} `json:"tools"`
+}
+
 func TestEncodeDispatchRequestInjectsAnthropicPromptCacheMarkers(t *testing.T) {
 	request := promptCacheTestRequest()
 	before := testutil.ToFloat64(metrics.PluginExecutionTotal.WithLabelValues(
@@ -34,47 +56,16 @@ func TestEncodeDispatchRequestInjectsAnthropicPromptCacheMarkers(t *testing.T) {
 		t.Fatalf("encode dispatch request: %v", err)
 	}
 
-	var wire struct {
-		System []struct {
-			Text         string `json:"text"`
-			CacheControl *struct {
-				Type string `json:"type"`
-				TTL  string `json:"ttl"`
-			} `json:"cache_control"`
-		} `json:"system"`
-		Messages []struct {
-			Content []struct {
-				CacheControl interface{} `json:"cache_control"`
-			} `json:"content"`
-		} `json:"messages"`
-		Tools []struct {
-			Name         string `json:"name"`
-			CacheControl *struct {
-				Type string `json:"type"`
-				TTL  string `json:"ttl"`
-			} `json:"cache_control"`
-		} `json:"tools"`
-	}
+	var wire promptCacheWireRequest
 	if err := json.Unmarshal(body, &wire); err != nil {
 		t.Fatalf("decode Anthropic request: %v", err)
 	}
-	if len(wire.System) != 2 || wire.System[0].CacheControl != nil ||
-		wire.System[1].CacheControl == nil || wire.System[1].CacheControl.TTL != "1h" {
-		t.Fatalf("system cache markers = %#v", wire.System)
+	assertPromptCacheWireRequest(t, wire)
+	assertPromptCacheReceipt(t, ctx, promptCacheActionInserted, 2, 0)
+	if request.Generation != 1 {
+		t.Fatalf("retained request generation = %d, want 1", request.Generation)
 	}
-	if len(wire.Tools) != 2 || wire.Tools[0].CacheControl != nil ||
-		wire.Tools[1].CacheControl == nil || wire.Tools[1].CacheControl.TTL != "1h" {
-		t.Fatalf("tool cache markers = %#v", wire.Tools)
-	}
-	if len(wire.Messages) != 1 || len(wire.Messages[0].Content) != 1 ||
-		wire.Messages[0].Content[0].CacheControl != nil {
-		t.Fatalf("message content was marked: %#v", wire.Messages)
-	}
-	if ctx.PromptCacheAction != promptCacheActionInserted ||
-		ctx.PromptCacheInserted != 2 || ctx.PromptCachePreserved != 0 {
-		t.Fatalf("prompt cache receipt = %#v", ctx)
-	}
-	if request.Generation != 1 || countPromptCacheMarkers(*request) != 0 {
+	if countPromptCacheMarkers(*request) != 0 {
 		t.Fatalf("provider marker leaked into retained request: %#v", request)
 	}
 	after := testutil.ToFloat64(metrics.PluginExecutionTotal.WithLabelValues(
@@ -90,14 +81,69 @@ func TestEncodeDispatchRequestInjectsAnthropicPromptCacheMarkers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("repeat encode dispatch request: %v", err)
 	}
-	if !bytes.Equal(repeatedBody, body) || request.Generation != 1 ||
-		countPromptCacheMarkers(*request) != 0 ||
-		testutil.ToFloat64(metrics.PluginExecutionTotal.WithLabelValues(
-			config.DecisionPluginPromptCache,
-			"prompt-cache-route",
-			promptCacheActionInserted,
-		)) != after {
+	if !bytes.Equal(repeatedBody, body) {
+		t.Fatal("repeat encode changed the provider request")
+	}
+	if request.Generation != 1 {
+		t.Fatalf("repeat encode changed retained generation: %d", request.Generation)
+	}
+	if countPromptCacheMarkers(*request) != 0 {
 		t.Fatalf("repeat encode changed retained prompt cache state: %#v", request)
+	}
+	repeatedMetric := testutil.ToFloat64(metrics.PluginExecutionTotal.WithLabelValues(
+		config.DecisionPluginPromptCache,
+		"prompt-cache-route",
+		promptCacheActionInserted,
+	))
+	if repeatedMetric != after {
+		t.Fatalf("repeat encode metric = %v, want %v", repeatedMetric, after)
+	}
+}
+
+func assertPromptCacheWireRequest(t *testing.T, wire promptCacheWireRequest) {
+	t.Helper()
+	if len(wire.System) != 2 {
+		t.Fatalf("system blocks = %#v", wire.System)
+	}
+	if wire.System[0].CacheControl != nil {
+		t.Fatalf("first system block was marked: %#v", wire.System)
+	}
+	if wire.System[1].CacheControl == nil || wire.System[1].CacheControl.TTL != "1h" {
+		t.Fatalf("last system block cache marker = %#v", wire.System)
+	}
+	if len(wire.Tools) != 2 {
+		t.Fatalf("tools = %#v", wire.Tools)
+	}
+	if wire.Tools[0].CacheControl != nil {
+		t.Fatalf("first tool was marked: %#v", wire.Tools)
+	}
+	if wire.Tools[1].CacheControl == nil || wire.Tools[1].CacheControl.TTL != "1h" {
+		t.Fatalf("last tool cache marker = %#v", wire.Tools)
+	}
+	if len(wire.Messages) != 1 || len(wire.Messages[0].Content) != 1 {
+		t.Fatalf("message content = %#v", wire.Messages)
+	}
+	if wire.Messages[0].Content[0].CacheControl != nil {
+		t.Fatalf("message content was marked: %#v", wire.Messages)
+	}
+}
+
+func assertPromptCacheReceipt(
+	t *testing.T,
+	ctx *RequestContext,
+	action string,
+	inserted int,
+	preserved int,
+) {
+	t.Helper()
+	if ctx.PromptCacheAction != action {
+		t.Fatalf("prompt cache action = %q, want %q", ctx.PromptCacheAction, action)
+	}
+	if ctx.PromptCacheInserted != inserted {
+		t.Fatalf("inserted markers = %d, want %d", ctx.PromptCacheInserted, inserted)
+	}
+	if ctx.PromptCachePreserved != preserved {
+		t.Fatalf("preserved markers = %d, want %d", ctx.PromptCachePreserved, preserved)
 	}
 }
 
