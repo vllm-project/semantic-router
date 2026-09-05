@@ -33,6 +33,8 @@ func (c *Classifier) initializeFeedbackDetector() error {
 		return fmt.Errorf("failed to initialize feedback detector: %w", err)
 	}
 
+	detector.SetAdmissioner(c.admissionRegistry.For(admissionDeploymentFeedbackDetector))
+
 	c.feedbackDetector = detector
 	return nil
 }

@@ -93,7 +93,7 @@ func TestSemanticCachePolarityVerifierSurfacesBackendErrors(t *testing.T) {
 	if candle.IsNLIModelInitialized() {
 		t.Skip("an NLI model is loaded; the uninitialized error path cannot be observed")
 	}
-	if _, err := semanticCachePolarityVerifier(context.Background(), "premise", "hypothesis"); err == nil {
+	if _, err := (&Classifier{}).admittedPolarityVerifier()(context.Background(), "premise", "hypothesis"); err == nil {
 		t.Fatal("verifier must return the binding error when no NLI model is loaded (the cache then fails open)")
 	}
 }

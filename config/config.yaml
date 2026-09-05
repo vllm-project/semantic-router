@@ -1653,7 +1653,6 @@ global:
     api:
       batch_classification:
         max_batch_size: 100
-        concurrency_threshold: 5
         max_concurrency: 8
         metrics:
           sample_rate: 1.0
@@ -2184,8 +2183,9 @@ global:
     # on_overflow selects what happens when every slot is busy and the queue
     # is full: shed (default) rejects the request, wait blocks for a queue
     # slot and requires max_queue >= 1, fail_open admits without a slot.
-    # The gate is validated here but not yet wired into the request path;
-    # omitting admission means no gate and preserves current behavior.
+    # A shed inference surfaces as a classify error and follows the same
+    # on_error / on_unknown policy as any other inference failure.
+    # Omitting admission means no gate and preserves current behavior.
     admission:
       prompt_guard:
         max_concurrency: 4

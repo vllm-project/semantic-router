@@ -65,10 +65,25 @@ func categoryProbabilityFallbackAllowed(inference CategoryInference) bool {
 	return !ok || policy.fallbackToTop1OnProbabilityError()
 }
 
+const (
+	domainEvaluationFailedCode       = "domain_evaluation_failed"
+	factCheckEvaluationFailedCode    = "fact_check_evaluation_failed"
+	userFeedbackEvaluationFailedCode = "user_feedback_evaluation_failed"
+	piiEvaluationFailedCode          = "pii_evaluation_failed"
+)
+
+func recordSignalRuleErrors(results *SignalResults, mu *sync.Mutex, signalType string, names []string, code string) {
+	mu.Lock()
+	defer mu.Unlock()
+	for _, name := range names {
+		results.SignalErrors[signalConfidenceKey(signalType, name)] = code
+	}
+}
+
 func (c *Classifier) evaluateDomainSignal(ctx context.Context, results *SignalResults, mu *sync.Mutex, text string) {
 	start := time.Now()
 	domainResult, err := c.categoryInference.ClassifyWithProbabilities(ctx, text)
-	if err != nil && categoryProbabilityFallbackAllowed(c.categoryInference) {
+	if err != nil && !isAdmissionError(err) && categoryProbabilityFallbackAllowed(c.categoryInference) {
 		// Fall back to Classify() (top-1 only) when ClassifyWithProbabilities is unavailable.
 		logging.Debugf("[Signal Computation] ClassifyWithProbabilities unavailable, falling back to Classify: %v", err)
 		basicResult, basicErr := c.categoryInference.Classify(ctx, text)
@@ -103,6 +118,11 @@ func (c *Classifier) evaluateDomainSignal(ctx context.Context, results *SignalRe
 
 	if err != nil {
 		logging.Errorf("domain rule evaluation failed: %v", err)
+		names := make([]string, 0, len(c.Config.Categories))
+		for _, category := range c.Config.Categories {
+			names = append(names, category.Name)
+		}
+		recordSignalRuleErrors(results, mu, config.SignalTypeDomain, names, domainEvaluationFailedCode)
 	} else {
 		matched := c.matchDomainCategories(domainResult, categoryName)
 		mu.Lock()
@@ -139,6 +159,11 @@ func (c *Classifier) evaluateFactCheckSignal(results *SignalResults, mu *sync.Mu
 	logging.Debugf("[Signal Computation] Fact-check signal evaluation completed in %v", elapsed)
 	if err != nil {
 		logging.Errorf("fact-check rule evaluation failed: %v", err)
+		names := make([]string, 0, len(c.Config.FactCheckRules))
+		for _, rule := range c.Config.FactCheckRules {
+			names = append(names, rule.Name)
+		}
+		recordSignalRuleErrors(results, mu, config.SignalTypeFactCheck, names, factCheckEvaluationFailedCode)
 	} else if factCheckResult != nil {
 		// Check if this signal is defined in fact_check_rules
 		for _, rule := range c.Config.FactCheckRules {
@@ -184,6 +209,11 @@ func (c *Classifier) evaluateUserFeedbackSignal(results *SignalResults, mu *sync
 	logging.Debugf("[Signal Computation] User feedback signal evaluation completed in %v", elapsed)
 	if err != nil {
 		logging.Errorf("user feedback rule evaluation failed: %v", err)
+		names := make([]string, 0, len(c.Config.UserFeedbackRules))
+		for _, rule := range c.Config.UserFeedbackRules {
+			names = append(names, rule.Name)
+		}
+		recordSignalRuleErrors(results, mu, config.SignalTypeUserFeedback, names, userFeedbackEvaluationFailedCode)
 	} else if feedbackResult != nil {
 		// Check if this signal is defined in user_feedback_rules
 		for _, rule := range c.Config.UserFeedbackRules {

@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	candle "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/admission"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
@@ -23,7 +24,15 @@ type FactCheckClassifier struct {
 	mapping      *FactCheckMapping
 	initialized  bool
 	useMmBERT32K bool // Track if mmBERT-32K is used for inference
+	gate         admission.Admissioner
 	mu           sync.RWMutex
+}
+
+// SetAdmissioner installs the deployment's admission gate for model inference.
+func (c *FactCheckClassifier) SetAdmissioner(gate admission.Admissioner) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.gate = gate
 }
 
 // NewFactCheckClassifier creates a new fact-check classifier
@@ -108,13 +117,12 @@ func (c *FactCheckClassifier) Classify(text string) (*FactCheckResult, error) {
 		}, nil
 	}
 
-	var result candle.ClassResult
-	var err error
-	if c.useMmBERT32K {
-		result, err = candle.ClassifyMmBert32KFactcheck(text)
-	} else {
-		result, err = candle.ClassifyFactCheckText(text)
-	}
+	result, err := admitModelInference(nil, c.gate, admissionDeploymentFactCheckClassifier, func() (candle.ClassResult, error) {
+		if c.useMmBERT32K {
+			return candle.ClassifyMmBert32KFactcheck(text)
+		}
+		return candle.ClassifyFactCheckText(text)
+	})
 	if err != nil {
 		return nil, fmt.Errorf("fact-check ML classification failed: %w", err)
 	}

@@ -181,7 +181,6 @@ func (c *Classifier) evaluateAllSignalsWithContext(
 	signalScope []config.Decision,
 	signalScopeSet bool,
 ) *SignalResults {
-	defer c.enterSignalEvaluationLoadGate()()
 	// Determine which signals (type:name) should be evaluated
 	var usedSignals map[string]bool
 	switch {
