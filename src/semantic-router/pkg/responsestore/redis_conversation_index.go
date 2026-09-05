@@ -15,23 +15,52 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 )
 
+// conversationIndexProof is the typed value stored at a conversation's
+// migrated marker key. Its presence and value (not the index key's mere
+// existence) are what let a read or cascade delete trust the index as
+// exhaustive — see ConversationIndexMigratedKeyPrefix and
+// conversationIndexProof (the method).
+type conversationIndexProof string
+
+const (
+	// conversationIndexProofEmpty means a completed legacy scan found no
+	// live responses for the conversation. A weaker, more perishable claim
+	// than populated — see markConversationMigrated's TTL policy.
+	conversationIndexProofEmpty conversationIndexProof = "v1:empty"
+	// conversationIndexProofPopulated means a completed legacy scan (or,
+	// via refreshPopulatedConversationProof, a later ordinary write to an
+	// already-populated conversation) found live responses now reflected
+	// in the index.
+	conversationIndexProofPopulated conversationIndexProof = "v1:populated"
+)
+
+// refreshPopulatedProofScript extends the migrated marker's TTL only if its
+// current value is still exactly ARGV[1] (conversationIndexProofPopulated).
+// Deliberately conditional rather than a blind EXPIRE: indexResponse must
+// never extend a "confirmed empty" proof's life just because an ordinary
+// write happened to land on that conversation afterward — see
+// refreshPopulatedConversationProof. Single-key: KEYS[1] only.
+var refreshPopulatedProofScript = redis.NewScript(`
+if redis.call("GET", KEYS[1]) ~= ARGV[1] then
+	return 0
+end
+return redis.call("PEXPIRE", KEYS[1], ARGV[2])
+`)
+
 // indexResponse adds a response to its conversation index, scored by
-// created_at, and refreshes the TTL of both the index and — if one already
-// exists — the migrated marker.
+// created_at, and refreshes the index's own TTL.
 //
-// Deliberately does not set or clear the migrated marker itself, only
-// refreshes an existing one's TTL: this call proves nothing about whether a
-// legacy-scan backfill has ever run for conversationID (a fresh
-// conversation's very first write reaches this exact path), so it must
-// never be mistaken for the signal that makes the index trustworthy as
-// exhaustive. If a migrated marker already exists, though, a completed
-// backfill's "exhaustive as of scan time" guarantee stays true across this
-// correctly-indexed incremental write — the two states are additive, not
-// competing — so keeping the marker alive as long as the data it now also
-// describes (rather than letting it lapse on its own separate, possibly
-// shorter TTL) avoids forcing a needless re-scan on an actively-written
-// conversation. EXPIRE on a marker that was never set is a documented no-op
-// (returns 0), not an error, so this is safe to call unconditionally.
+// Deliberately does not set the migrated proof itself: this call proves
+// nothing about whether a legacy-scan backfill has ever run for
+// conversationID (a fresh conversation's very first write reaches this
+// exact path), so it must never be mistaken for the signal that makes the
+// index trustworthy as exhaustive. It does best-effort refresh an
+// *existing* conversationIndexProofPopulated proof's TTL via
+// refreshPopulatedConversationProof, so an actively-written conversation's
+// proof doesn't need to outlive its own separate TTL and force a needless
+// re-scan — but it will never refresh, let alone set, a
+// conversationIndexProofEmpty proof: that value is stale the moment a real
+// write lands, and extending its life would be exactly backwards.
 //
 // Returns an error instead of swallowing it: the payload this indexes is
 // already durable by the time this runs (StoreResponse writes it first), so
@@ -53,11 +82,36 @@ func (s *RedisStore) indexResponse(ctx context.Context, conversationID, response
 	if s.ttl > 0 {
 		// Outlive the newest member. Guarded: EXPIRE with 0 deletes the key.
 		pipe.Expire(ctx, indexKey, s.ttl)
-		pipe.Expire(ctx, s.conversationIndexMigratedKey(conversationID), s.ttl)
 	}
 
 	if _, err := pipe.Exec(ctx); err != nil {
 		return fmt.Errorf("failed to index response %s in conversation %s: %w", responseID, conversationID, err)
+	}
+
+	if err := s.refreshPopulatedConversationProof(ctx, conversationID); err != nil {
+		// Best-effort, by design: the ZADD above is what every read
+		// actually consults for correctness. A missed refresh here only
+		// risks the proof lapsing early and forcing one avoidable rescan.
+		logging.Debugf("RedisStore: failed to refresh conversation %s migrated proof: %v", conversationID, err)
+	}
+
+	return nil
+}
+
+// refreshPopulatedConversationProof best-effort extends a conversation's
+// migrated marker TTL, but only when its current value is exactly
+// conversationIndexProofPopulated — see refreshPopulatedProofScript and
+// indexResponse's doc comment for why an empty proof must never be
+// refreshed this way. A no-op against a persistent store (s.ttl <= 0),
+// since a populated proof there was set with no TTL to refresh.
+func (s *RedisStore) refreshPopulatedConversationProof(ctx context.Context, conversationID string) error {
+	if s.ttl <= 0 {
+		return nil
+	}
+
+	key := s.conversationIndexMigratedKey(conversationID)
+	if _, err := refreshPopulatedProofScript.Run(ctx, s.client, []string{key}, string(conversationIndexProofPopulated), s.ttl.Milliseconds()).Result(); err != nil {
+		return fmt.Errorf("failed to refresh conversation %s migrated proof: %w", conversationID, err)
 	}
 
 	return nil
@@ -91,23 +145,33 @@ type legacyBackfillResult struct {
 	Found int
 }
 
-// conversationMigrated reports whether a legacy-scan backfill has ever
-// completed for conversationID — the single signal that makes the index's
-// current state (populated, or absent entirely) trustworthy as exhaustive.
-//
-// Deliberately not "does the index exist, or the marker": a conversation
+// conversationIndexProof reads a conversation's migrated marker with GET,
+// not EXISTS, and reports its typed value along with whether that value is
+// actually resolved. resolved=false covers both "no marker at all" and "a
+// marker exists but holds a value this code doesn't recognize" (e.g. a
+// future proof format, or corruption) — both fail safely into needing
+// migration, rather than trusting a value never proven correct. This is
+// deliberately not "does the index exist, or the marker": a conversation
 // can have real indexed members from ordinary post-upgrade writes with no
 // backfill ever having run for it, so index-existence alone must never be
 // read as "migration complete" (that conflation is exactly the bug this
 // marker exists to prevent — see ConversationIndexMigratedKeyPrefix). A
-// single-key EXISTS check, Cluster safe.
-func (s *RedisStore) conversationMigrated(ctx context.Context, conversationID string) (bool, error) {
-	migrated, err := s.client.Exists(ctx, s.conversationIndexMigratedKey(conversationID)).Result()
+// single-key GET, Cluster safe.
+func (s *RedisStore) conversationIndexProof(ctx context.Context, conversationID string) (conversationIndexProof, bool, error) {
+	value, err := s.client.Get(ctx, s.conversationIndexMigratedKey(conversationID)).Result()
 	if err != nil {
-		return false, fmt.Errorf("failed to check conversation migrated marker: %w", err)
+		if errors.Is(err, redis.Nil) {
+			return "", false, nil
+		}
+		return "", false, fmt.Errorf("failed to read conversation migrated proof: %w", err)
 	}
 
-	return migrated > 0, nil
+	switch proof := conversationIndexProof(value); proof {
+	case conversationIndexProofEmpty, conversationIndexProofPopulated:
+		return proof, true, nil
+	default:
+		return "", false, nil
+	}
 }
 
 // ensureConversationIndex guarantees that, barring a concurrent delete of
@@ -158,11 +222,9 @@ func (s *RedisStore) backfillUnderLock(ctx context.Context, conversationID, lock
 
 	// Recheck under the lock: a backfill that started just before this one
 	// acquired it may have already migrated this conversation.
-	migrated, err := s.conversationMigrated(ctx, conversationID)
-	if err != nil {
+	if _, resolved, err := s.conversationIndexProof(ctx, conversationID); err != nil {
 		return err
-	}
-	if migrated {
+	} else if resolved {
 		return nil
 	}
 
@@ -194,11 +256,9 @@ func (s *RedisStore) awaitOrBackfillConversationIndex(ctx context.Context, conve
 		case <-time.After(lockWaitDelay):
 		}
 
-		migrated, err := s.conversationMigrated(ctx, conversationID)
-		if err != nil {
+		if _, resolved, err := s.conversationIndexProof(ctx, conversationID); err != nil {
 			return err
-		}
-		if migrated {
+		} else if resolved {
 			return nil
 		}
 	}
@@ -235,14 +295,21 @@ func (s *RedisStore) lazyBackfillConversationIndex(ctx context.Context, conversa
 	}
 
 	if len(found) == 0 {
-		s.markConversationMigrated(ctx, conversationID, false)
+		if err := s.markConversationMigrated(ctx, conversationID, conversationIndexProofEmpty); err != nil {
+			// Best-effort: correctness is preserved either way, since the
+			// next read simply re-scans rather than trust a proof that
+			// failed to write.
+			logging.Debugf("RedisStore: failed to mark conversation %s migrated (empty): %v", conversationID, err)
+		}
 		return legacyBackfillResult{Found: 0}, nil
 	}
 
 	if err := s.indexBackfilledResponses(ctx, conversationID, found); err != nil {
 		return legacyBackfillResult{}, err
 	}
-	s.markConversationMigrated(ctx, conversationID, true)
+	if err := s.markConversationMigrated(ctx, conversationID, conversationIndexProofPopulated); err != nil {
+		logging.Debugf("RedisStore: failed to mark conversation %s migrated (populated): %v", conversationID, err)
+	}
 
 	return legacyBackfillResult{Found: len(found)}, nil
 }
@@ -285,34 +352,43 @@ func (s *RedisStore) scanConversationResponses(ctx context.Context, conversation
 }
 
 // markConversationMigrated records that a legacy-scan backfill has
-// completed for conversationID — the signal ListResponsesByConversation and
-// cascade delete both check before trusting the index's current state as
-// exhaustive (ConversationIndexMigratedKeyPrefix), independent of whether
-// the index happens to already have members from earlier ordinary writes.
+// completed for conversationID with the given typed proof — the signal
+// ListResponsesByConversation and cascade delete both check before
+// trusting the index's current state as exhaustive
+// (ConversationIndexMigratedKeyPrefix), independent of whether the index
+// happens to already have members from earlier ordinary writes.
 //
-// TTL: when the scan found responses to index, the full store TTL — the
-// marker should live exactly as long as the data it now describes, and
-// indexResponse refreshes it further on every subsequent write to the same
-// conversation. When the scan found nothing, capped at
-// emptyConversationIndexMarkerMaxTTL (or the store's own TTL if that is
-// shorter) instead: an empty result is a more perishable claim, since an
-// indexing-unaware writer could still land a response later (the
-// rolling-upgrade blind spot that cap exists to bound).
+// TTL: conversationIndexProofPopulated gets the full store TTL — the proof
+// should live exactly as long as the data it now describes, and
+// indexResponse's refreshPopulatedConversationProof extends it further on
+// every subsequent write to the same conversation.
+// conversationIndexProofEmpty is capped at emptyConversationIndexMarkerMaxTTL
+// (or the store's own TTL if that is shorter) instead: an empty result is a
+// more perishable claim, since an indexing-unaware writer could still land
+// a response later (the rolling-upgrade blind spot that cap exists to
+// bound) — and, per indexResponse, an empty proof is never refreshed by an
+// ordinary write, so it must expire and force a re-scan on its own.
 //
-// Best-effort: correctness is preserved either way, since the next read
-// simply re-scans rather than trust a marker that failed to write.
-func (s *RedisStore) markConversationMigrated(ctx context.Context, conversationID string, found bool) {
+// Returns the write error rather than swallowing it, so a caller that
+// wants to know can (e.g. Phase 4's streaming backfill, which must not
+// publish a proof at all on partial failure); callers for whom this
+// remains best-effort (this file's own lazyBackfillConversationIndex) log
+// and continue, since the next read simply re-scans rather than trust a
+// proof that failed to write.
+func (s *RedisStore) markConversationMigrated(ctx context.Context, conversationID string, proof conversationIndexProof) error {
 	ttl := emptyConversationIndexMarkerMaxTTL
 	switch {
-	case found:
+	case proof == conversationIndexProofPopulated:
 		ttl = s.ttl
 	case s.ttl > 0 && s.ttl < ttl:
 		ttl = s.ttl
 	}
 
-	if err := s.client.Set(ctx, s.conversationIndexMigratedKey(conversationID), "v1", ttl).Err(); err != nil {
-		logging.Debugf("RedisStore: failed to mark conversation %s migrated: %v", conversationID, err)
+	if err := s.client.Set(ctx, s.conversationIndexMigratedKey(conversationID), string(proof), ttl).Err(); err != nil {
+		return fmt.Errorf("failed to mark conversation %s migrated: %w", conversationID, err)
 	}
+
+	return nil
 }
 
 // indexBackfilledResponses ZADDs discovered responses into the conversation
