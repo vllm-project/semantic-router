@@ -79,8 +79,9 @@ failure code, and the action the plugin applied; with `x-vsr-debug`, the
 request ones.
 
 A response-direction rule is not a decision input. Decisions are selected while
-the request is being routed, before the model has answered, so a decision rule
-that names one is rejected when the configuration loads. The observation is
+the request is being routed, before the model has answered, so a decision that
+reads one, directly in its rules or through a projection, is rejected when the
+configuration loads. The observation is
 consumed by the `response_jailbreak` plugin of the decision selected for the
 request, which applies its configured action to it. The rule is read from the
 recipe the request resolved to, so a rule declared on one entrypoint's recipe

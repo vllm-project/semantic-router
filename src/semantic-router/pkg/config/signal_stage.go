@@ -74,24 +74,89 @@ func (c *RouterConfig) SignalStageOf(signalType, name string) SignalStage {
 }
 
 // decisionReadsResponseSignal reports the first response-direction rule a
-// decision's rule tree names, wherever it sits in the tree. Decisions are
+// decision's rule tree reads, wherever it sits in the tree, and the projection
+// output it is read through when the reference is indirect. Decisions are
 // selected while the request is being routed, before the model has answered,
 // so such a rule is not a decision input: the selected decision's response
 // plugins consume the observation instead. Config validation rejects the
 // reference rather than leaving a decision that can never match.
-func (c *RouterConfig) decisionReadsResponseSignal(node *RuleNode) (string, bool) {
+func (c *RouterConfig) decisionReadsResponseSignal(node *RuleNode) (rule string, via string, ok bool) {
 	if node == nil {
-		return "", false
+		return "", "", false
 	}
 	if node.IsLeaf() {
-		if c.SignalStageOf(node.Type, node.Name) == SignalStageResponse {
-			return node.Name, true
-		}
-		return "", false
+		return c.leafReadsResponseSignal(node)
 	}
 	for i := range node.Conditions {
-		if name, ok := c.decisionReadsResponseSignal(&node.Conditions[i]); ok {
-			return name, true
+		if rule, via, ok := c.decisionReadsResponseSignal(&node.Conditions[i]); ok {
+			return rule, via, true
+		}
+	}
+	return "", "", false
+}
+
+// leafReadsResponseSignal resolves one condition: a projection through the
+// scores behind its output, any other signal by the stage of its rule.
+func (c *RouterConfig) leafReadsResponseSignal(node *RuleNode) (rule string, via string, ok bool) {
+	if strings.EqualFold(strings.TrimSpace(node.Type), SignalTypeProjection) {
+		rule, ok = c.projectionReadsResponseSignal(node.Name)
+		via = node.Name
+	} else if c.SignalStageOf(node.Type, node.Name) == SignalStageResponse {
+		rule, ok = node.Name, true
+	}
+	if !ok {
+		return "", "", false
+	}
+	return rule, via, true
+}
+
+// projectionReadsResponseSignal reports the first response-direction rule that
+// feeds the projection output a decision reads, through any depth of
+// projection scores. A projection is evaluated with the decisions, before the
+// model has answered; an input with no result yet takes its configured miss
+// value, so a response-direction rule behind a projection would shape the
+// decision as a silent miss on every request.
+func (c *RouterConfig) projectionReadsResponseSignal(outputName string) (string, bool) {
+	sourceByOutput := projectionSourcesByOutput(c.Projections.Mappings)
+	scoreByName := projectionScoresByName(c.Projections.Scores)
+	scoreName, ok := sourceByOutput[strings.ToLower(strings.TrimSpace(outputName))]
+	if !ok {
+		return "", false
+	}
+	return c.projectionScoreReadsResponseSignal(scoreName, sourceByOutput, scoreByName, map[string]bool{})
+}
+
+func (c *RouterConfig) projectionScoreReadsResponseSignal(
+	scoreName string,
+	sourceByOutput map[string]string,
+	scoreByName map[string]ProjectionScore,
+	visiting map[string]bool,
+) (string, bool) {
+	name := strings.ToLower(strings.TrimSpace(scoreName))
+	score, ok := scoreByName[name]
+	if !ok || visiting[name] {
+		// Unknown scores and cycles are projection validation's to reject;
+		// this walk only has to terminate on them.
+		return "", false
+	}
+	visiting[name] = true
+	defer delete(visiting, name)
+	for _, input := range score.Inputs {
+		switch strings.ToLower(strings.TrimSpace(input.Type)) {
+		case ProjectionInputKBMetric:
+			continue
+		case SignalTypeProjection:
+			dependency := strings.ToLower(strings.TrimSpace(input.Name))
+			if strings.EqualFold(strings.TrimSpace(input.ValueSource), ProjectionValueSourceConfidence) {
+				dependency = sourceByOutput[dependency]
+			}
+			if rule, ok := c.projectionScoreReadsResponseSignal(dependency, sourceByOutput, scoreByName, visiting); ok {
+				return rule, true
+			}
+		default:
+			if c.SignalStageOf(input.Type, input.Name) == SignalStageResponse {
+				return input.Name, true
+			}
 		}
 	}
 	return "", false

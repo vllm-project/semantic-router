@@ -41,17 +41,25 @@ func warnResponseJailbreakPluginOwnsDetection(cfg *RouterConfig) {
 	}
 }
 
-// validateDecisionsReadRequestStageSignals rejects a decision rule that names a
-// response-direction jailbreak rule. Decisions are selected while the request
-// is being routed and the model has not answered, so the rule could only ever
-// read as unknown there; the observation is consumed by the selected decision's
-// response_jailbreak plugin once the response exists. Caught at load rather
-// than as a decision that silently never matches.
+// validateDecisionsReadRequestStageSignals rejects a decision that reads a
+// response-direction jailbreak rule, directly in its rule tree or through a
+// projection it reads. Decisions and projections are evaluated while the
+// request is being routed and the model has not answered, so the rule could
+// only ever read as unknown there, and a projection would turn that into its
+// configured miss value; the observation is consumed by the selected
+// decision's response_jailbreak plugin once the response exists. Caught at
+// load rather than as a decision that silently never matches.
 func validateDecisionsReadRequestStageSignals(cfg *RouterConfig) error {
 	for _, decision := range cfg.AllRoutingDecisions() {
-		if rule, ok := cfg.decisionReadsResponseSignal(&decision.Rules); ok {
-			return fmt.Errorf("decision %q reads jailbreak rule %q, which has direction: response; a response-direction rule is consumed by the selected decision's response_jailbreak plugin, not by decision rules", decision.Name, rule)
+		rule, via, ok := cfg.decisionReadsResponseSignal(&decision.Rules)
+		if !ok {
+			continue
 		}
+		through := ""
+		if via != "" {
+			through = fmt.Sprintf(" through projection %q", via)
+		}
+		return fmt.Errorf("decision %q reads jailbreak rule %q%s, which has direction: response; a response-direction rule is consumed by the selected decision's response_jailbreak plugin, not by decision rules", decision.Name, rule, through)
 	}
 	return nil
 }

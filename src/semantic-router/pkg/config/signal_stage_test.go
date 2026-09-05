@@ -78,6 +78,64 @@ func TestValidateRejectsDecisionReadingResponseDirectionRule(t *testing.T) {
 	}
 }
 
+// A projection is evaluated with the decisions, before the model has answered,
+// and an input with no result takes its miss value. A response-direction rule
+// behind a projection output a decision reads is therefore rejected at load,
+// through a score, a score of scores, and a confidence-valued output.
+func TestValidateRejectsProjectionReadingResponseDirectionRule(t *testing.T) {
+	cfg := stagedConfig()
+	cfg.Projections = Projections{
+		Scores: []ProjectionScore{
+			{Name: "completion_risk", Method: "weighted_sum", Inputs: []ProjectionScoreInput{
+				{Type: SignalTypeJailbreak, Name: "unsafe_completion", Weight: 1},
+			}},
+			{Name: "combined_risk", Method: "weighted_sum", Inputs: []ProjectionScoreInput{
+				{Type: SignalTypeProjection, Name: "completion_risk", Weight: 1},
+			}},
+			{Name: "confidence_risk", Method: "weighted_sum", Inputs: []ProjectionScoreInput{
+				{Type: SignalTypeProjection, Name: "completion_flagged", ValueSource: ProjectionValueSourceConfidence, Weight: 1},
+			}},
+		},
+		Mappings: []ProjectionMapping{
+			{Name: "completion_band", Source: "completion_risk", Method: "threshold_bands", Outputs: []ProjectionMappingOutput{
+				{Name: "completion_flagged", GTE: float64PtrForRoutingSignalUsageTest(0.5)},
+			}},
+			{Name: "combined_band", Source: "combined_risk", Method: "threshold_bands", Outputs: []ProjectionMappingOutput{
+				{Name: "combined_flagged", GTE: float64PtrForRoutingSignalUsageTest(0.5)},
+			}},
+			{Name: "confidence_band", Source: "confidence_risk", Method: "threshold_bands", Outputs: []ProjectionMappingOutput{
+				{Name: "confidence_flagged", GTE: float64PtrForRoutingSignalUsageTest(0.5)},
+			}},
+		},
+	}
+	outputs := []string{"completion_flagged", "combined_flagged", "confidence_flagged"}
+
+	for _, output := range outputs {
+		cfg.Decisions = []Decision{{Name: "guard", Rules: RuleCombination{
+			Operator: "AND",
+			Conditions: []RuleCondition{
+				{Type: SignalTypeKeyword, Name: "probe"},
+				{Type: SignalTypeProjection, Name: output},
+			},
+		}}}
+		err := validateSignalStageContracts(cfg)
+		if err == nil ||
+			!strings.Contains(err.Error(), `decision "guard"`) ||
+			!strings.Contains(err.Error(), `"unsafe_completion"`) ||
+			!strings.Contains(err.Error(), `through projection "`+output+`"`) {
+			t.Fatalf("output %q: expected the response-direction rule behind the projection to be rejected, got %v", output, err)
+		}
+	}
+
+	cfg.Projections.Scores[0].Inputs[0].Name = "prompt_injection"
+	for _, output := range outputs {
+		cfg.Decisions = []Decision{{Name: "guard", Rules: RuleCombination{Type: SignalTypeProjection, Name: output}}}
+		if err := validateSignalStageContracts(cfg); err != nil {
+			t.Fatalf("output %q: a request-direction rule behind a projection is a decision input, got %v", output, err)
+		}
+	}
+}
+
 func TestValidateJailbreakContractsDirection(t *testing.T) {
 	cases := []struct {
 		name string
