@@ -66,3 +66,28 @@ size. A small `--limit` run is a functional smoke test, not a quality result.
 configuration fragments. Review the generated thresholds and model references
 before deployment; generation does not prove that the fragment is suitable for
 your workload.
+
+## Quality baseline
+
+`quality_baseline.py` measures the artifact a maintained configuration actually
+loads, resolved from `config/config.yaml` rather than from `constants.py`. It
+takes the class order from the artifact's own mapping, reports calibration and
+threshold behaviour alongside accuracy, and writes provenance manifests next to
+the result.
+
+```
+python src/training/model_eval/quality_baseline.py \
+    --task jailbreak --device cuda --output-dir baseline/jailbreak
+
+python -m provenance.cli validate baseline/jailbreak/manifests
+
+python src/training/model_eval/gap_report.py \
+    --baseline baseline/*/*_baseline.json --output baseline/gap-report.md
+```
+
+`--artifact-repo` measures a candidate instead of the served artifact, and
+`--artifact-dir` with `--artifact-manifest` measures a locally trained artifact
+before anything is published. Both are recorded in the result, so a candidate
+number is never mistaken for the baseline.
+
+See `provenance/README.md` for the manifest contract and what fails validation.

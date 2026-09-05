@@ -1,0 +1,178 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vllm-project.github.io/semantic-router/schemas/router-model-evaluation-v1.schema.json",
+  "title": "Router Model evaluation manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "kind",
+    "id",
+    "task",
+    "artifact_ref",
+    "dataset_ref",
+    "harness",
+    "label_mapping",
+    "metrics",
+    "calibration",
+    "abstention",
+    "performance"
+  ],
+  "properties": {
+    "schema_version": {"const": "v1"},
+    "kind": {"const": "evaluation"},
+    "id": {"$ref": "router-model-common-v1.schema.json#/$defs/manifestId"},
+    "task": {"$ref": "router-model-common-v1.schema.json#/$defs/task"},
+    "description": {"type": "string", "maxLength": 2000},
+    "artifact_ref": {"$ref": "router-model-common-v1.schema.json#/$defs/artifactRef"},
+    "dataset_ref": {"$ref": "router-model-common-v1.schema.json#/$defs/datasetRef"},
+    "harness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "device",
+        "batch_size",
+        "max_length",
+        "sample_limit",
+        "seed",
+        "dependencies"
+      ],
+      "properties": {
+        "code": {"$ref": "router-model-common-v1.schema.json#/$defs/codeRevision"},
+        "device": {"type": "string", "enum": ["cpu", "cuda", "rocm", "mps"]},
+        "device_name": {"type": "string", "minLength": 1},
+        "batch_size": {"type": "integer", "minimum": 1},
+        "max_length": {"type": "integer", "minimum": 1},
+        "sample_limit": {"type": ["integer", "null"], "minimum": 1},
+        "seed": {"type": "integer", "minimum": 0},
+        "dependencies": {"$ref": "router-model-common-v1.schema.json#/$defs/dependencies"}
+      }
+    },
+    "label_mapping": {"$ref": "router-model-common-v1.schema.json#/$defs/labelMapping"},
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rows", "accuracy", "macro_f1", "weighted_f1", "per_label"],
+      "properties": {
+        "rows": {"type": "integer", "minimum": 1},
+        "accuracy": {"$ref": "#/$defs/unitInterval"},
+        "macro_f1": {"$ref": "#/$defs/unitInterval"},
+        "weighted_f1": {"$ref": "#/$defs/unitInterval"},
+        "per_label": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["precision", "recall", "f1", "support"],
+            "properties": {
+              "precision": {"$ref": "#/$defs/unitInterval"},
+              "recall": {"$ref": "#/$defs/unitInterval"},
+              "f1": {"$ref": "#/$defs/unitInterval"},
+              "support": {"type": "integer", "minimum": 0}
+            }
+          }
+        },
+        "confusion_matrix": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"type": "integer", "minimum": 0}
+          }
+        }
+      }
+    },
+    "calibration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bin_count", "ece", "mce", "brier", "bins"],
+      "properties": {
+        "bin_count": {"type": "integer", "minimum": 2, "maximum": 100},
+        "ece": {"$ref": "#/$defs/unitInterval"},
+        "mce": {"$ref": "#/$defs/unitInterval"},
+        "brier": {"type": "number", "minimum": 0, "maximum": 2},
+        "bins": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["lower", "upper", "count", "confidence", "accuracy"],
+            "properties": {
+              "lower": {"$ref": "#/$defs/unitInterval"},
+              "upper": {"$ref": "#/$defs/unitInterval"},
+              "count": {"type": "integer", "minimum": 0},
+              "confidence": {"$ref": "#/$defs/unitIntervalOrNull"},
+              "accuracy": {"$ref": "#/$defs/unitIntervalOrNull"}
+            }
+          }
+        }
+      }
+    },
+    "abstention": {
+      "description": "Coverage/risk as a function of the confidence threshold the router would apply.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["curve"],
+      "properties": {
+        "curve": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["threshold", "coverage", "selective_accuracy", "abstained"],
+            "properties": {
+              "threshold": {"$ref": "#/$defs/unitInterval"},
+              "coverage": {"$ref": "#/$defs/unitInterval"},
+              "selective_accuracy": {"$ref": "#/$defs/unitIntervalOrNull"},
+              "abstained": {"type": "integer", "minimum": 0}
+            }
+          }
+        }
+      }
+    },
+    "slices": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "kind", "rows", "accuracy", "macro_f1"],
+        "properties": {
+          "name": {"type": "string", "minLength": 1},
+          "kind": {"type": "string", "enum": ["language", "length", "robustness", "label"]},
+          "rows": {"type": "integer", "minimum": 0},
+          "accuracy": {"$ref": "#/$defs/unitIntervalOrNull"},
+          "macro_f1": {"$ref": "#/$defs/unitIntervalOrNull"}
+        }
+      }
+    },
+    "performance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["latency_ms", "peak_memory_mb"],
+      "properties": {
+        "latency_ms": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mean", "p50", "p95", "p99"],
+          "properties": {
+            "mean": {"type": "number", "minimum": 0},
+            "p50": {"type": "number", "minimum": 0},
+            "p95": {"type": "number", "minimum": 0},
+            "p99": {"type": "number", "minimum": 0}
+          }
+        },
+        "peak_memory_mb": {"type": "number", "minimum": 0},
+        "throughput_rows_per_s": {"type": "number", "minimum": 0}
+      }
+    }
+  },
+  "$defs": {
+    "unitInterval": {"type": "number", "minimum": 0, "maximum": 1},
+    "unitIntervalOrNull": {"type": ["number", "null"], "minimum": 0, "maximum": 1}
+  }
+}

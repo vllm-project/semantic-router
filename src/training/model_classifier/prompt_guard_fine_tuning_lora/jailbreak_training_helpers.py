@@ -4,6 +4,7 @@ import json
 import os
 
 import torch
+from jailbreak_provenance import emit_training_manifests
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 from transformers import TrainingArguments
 
@@ -66,8 +67,17 @@ def save_training_artifacts(
     id_to_label: dict,
     lora_config: dict,
     logger,
+    *,
+    model_name: str,
+    base_model_repo: str,
+    seed: int,
+    training_args: TrainingArguments,
+    max_samples: int,
+    train_data: list[dict],
+    val_data: list[dict],
+    manifest_dir: str | None = None,
 ) -> None:
-    """Persist LoRA adapters plus label/config metadata."""
+    """Persist LoRA adapters, label metadata, and the run's provenance manifests."""
     model.save_pretrained(output_dir)
     tokenizer.save_pretrained(output_dir)
 
@@ -84,6 +94,22 @@ def save_training_artifacts(
 
     with open(os.path.join(output_dir, "lora_config.json"), "w") as f:
         json.dump(lora_config, f)
+
+    emit_training_manifests(
+        output_dir=output_dir,
+        manifest_dir=manifest_dir,
+        model_name=model_name,
+        base_model_repo=base_model_repo,
+        label_to_id=label_to_id,
+        seed=seed,
+        training_args=training_args,
+        lora_config=lora_config,
+        max_samples=max_samples,
+        train_data=train_data,
+        val_data=val_data,
+        model=model,
+        logger=logger,
+    )
 
 
 def log_training_summary(

@@ -77,6 +77,7 @@ from transformers import (
     AutoModelForSequenceClassification,
     AutoTokenizer,
     Trainer,
+    set_seed,
 )
 
 # Import common LoRA utilities
@@ -488,9 +489,14 @@ def main(
     learning_rate: float = 3e-4,  # LoRA requires higher LR than full fine-tuning (PEFT LoRA.ipynb official example)
     max_samples: int = 1000,
     output_dir: str | None = None,
+    seed: int = 42,
+    manifest_dir: str | None = None,
 ):
     """Main training function for LoRA security detection."""
     logger.info("Starting Enhanced LoRA Security Detection Training")
+
+    # Seed before any sampling so the recorded seed actually describes the run.
+    set_seed(seed)
 
     _device, _ = set_gpu_device(gpu_id=None, auto_select=True)
     clear_gpu_memory()
@@ -537,7 +543,21 @@ def main(
     logger.info("Starting training...")
     trainer.train()
     save_training_artifacts(
-        output_dir, model, tokenizer, label_to_id, id_to_label, lora_config, logger
+        output_dir,
+        model,
+        tokenizer,
+        label_to_id,
+        id_to_label,
+        lora_config,
+        logger,
+        model_name=model_name,
+        base_model_repo=model_path,
+        seed=seed,
+        training_args=training_args,
+        max_samples=max_samples,
+        train_data=train_data,
+        val_data=val_data,
+        manifest_dir=manifest_dir,
     )
     eval_results = trainer.evaluate()
     log_training_summary(eval_results, output_dir, model_path, logger)
@@ -733,6 +753,18 @@ if __name__ == "__main__":
         help="Maximum samples from jailbreak datasets",
     )
     parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Random seed recorded in the run manifest",
+    )
+    parser.add_argument(
+        "--manifest-dir",
+        type=str,
+        default=None,
+        help="Directory for provenance manifests (default: <output-dir>/manifests)",
+    )
+    parser.add_argument(
         "--output-dir",
         type=str,
         default=None,
@@ -758,6 +790,8 @@ if __name__ == "__main__":
             learning_rate=args.learning_rate,
             max_samples=args.max_samples,
             output_dir=args.output_dir,
+            seed=args.seed,
+            manifest_dir=args.manifest_dir,
         )
     elif args.mode == "test":
         demo_inference(args.model_path)
