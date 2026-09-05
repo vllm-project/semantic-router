@@ -39,6 +39,30 @@ func TestDynamoNVExtBufferedChatRoundTrip(t *testing.T) {
 	assertNestedJSONField(t, responseResult.Body, "nvext", "completion_token_ids", []any{float64(10), float64(11)})
 }
 
+func TestDynamoRequestIDAnnotationBypassesChatChunkDecoding(t *testing.T) {
+	stream := newDynamoTestStream(t, llmprotocol.DefaultPolicy(), llmprotocol.OpenAIChatV1)
+	annotation := []byte("event: request_id\n: \"req-123\"\n\n")
+
+	frames, events, _, err := stream.Push(annotation)
+	if err != nil {
+		t.Fatalf("Push() error = %v", err)
+	}
+	if len(events) != 1 || !events[0].DynamoRequestID || events[0].Type != llmprotocol.EventProviderOpaque {
+		t.Fatalf("decoded request_id events = %+v", events)
+	}
+	if len(frames) != 1 || !bytes.Equal(frames[0], annotation) {
+		t.Fatalf("request_id frame = %q, want %q", frames, annotation)
+	}
+}
+
+func TestDynamoRequestIDAnnotationRejectsCrossFormatTranslation(t *testing.T) {
+	stream := newDynamoTestStream(t, llmprotocol.DefaultPolicy(), llmprotocol.OpenAIResponsesV1)
+	annotation := []byte("event: request_id\n: \"req-123\"\n\n")
+
+	_, _, _, err := stream.Push(annotation)
+	assertProtocolError(t, err, llmprotocol.ErrorUnsupportedFeature, "unsupported_dynamo_request_id_translation")
+}
+
 func TestDynamoNVExtBufferedResponsesRoundTrip(t *testing.T) {
 	codec := OpenAIResponsesCodec{}
 	policy := llmprotocol.DefaultPolicy()
