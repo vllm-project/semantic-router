@@ -16,11 +16,22 @@ import (
 )
 
 // indexResponse adds a response to its conversation index, scored by
-// created_at; refreshes the index TTL; and clears the empty-conversation
-// marker so a newly indexed write is never hidden behind a stale "scanned,
-// found nothing" marker (checked here best-effort — a marker left behind by
-// this call failing is harmless, because every read checks the index before
-// the marker).
+// created_at, and refreshes the TTL of both the index and — if one already
+// exists — the migrated marker.
+//
+// Deliberately does not set or clear the migrated marker itself, only
+// refreshes an existing one's TTL: this call proves nothing about whether a
+// legacy-scan backfill has ever run for conversationID (a fresh
+// conversation's very first write reaches this exact path), so it must
+// never be mistaken for the signal that makes the index trustworthy as
+// exhaustive. If a migrated marker already exists, though, a completed
+// backfill's "exhaustive as of scan time" guarantee stays true across this
+// correctly-indexed incremental write — the two states are additive, not
+// competing — so keeping the marker alive as long as the data it now also
+// describes (rather than letting it lapse on its own separate, possibly
+// shorter TTL) avoids forcing a needless re-scan on an actively-written
+// conversation. EXPIRE on a marker that was never set is a documented no-op
+// (returns 0), not an error, so this is safe to call unconditionally.
 //
 // Returns an error instead of swallowing it: the payload this indexes is
 // already durable by the time this runs (StoreResponse writes it first), so
@@ -42,10 +53,8 @@ func (s *RedisStore) indexResponse(ctx context.Context, conversationID, response
 	if s.ttl > 0 {
 		// Outlive the newest member. Guarded: EXPIRE with 0 deletes the key.
 		pipe.Expire(ctx, indexKey, s.ttl)
+		pipe.Expire(ctx, s.conversationIndexMigratedKey(conversationID), s.ttl)
 	}
-	// Single-key DEL, never combined with another key: Cluster safe. A no-op
-	// (returns 0, not an error) when no marker exists.
-	pipe.Del(ctx, s.emptyConversationIndexMarkerKey(conversationID))
 
 	if _, err := pipe.Exec(ctx); err != nil {
 		return fmt.Errorf("failed to index response %s in conversation %s: %w", responseID, conversationID, err)
@@ -78,36 +87,37 @@ func (s *RedisStore) unindexResponse(ctx context.Context, conversationID string,
 // and indexed for a conversation, mainly for logging.
 type legacyBackfillResult struct {
 	// Found is the number of responses discovered belonging to the scanned
-	// conversation. Zero means the empty marker was set instead.
+	// conversation. Zero means the scan confirmed the conversation empty.
 	Found int
 }
 
-// indexOrMarkerExists reports whether a conversation's index or its empty
-// marker exists, via two single-key EXISTS calls. Deliberately not a
-// variadic Exists(ctx, indexKey, markerKey): the two keys have different
-// prefixes and are not guaranteed to share a Cluster hash slot.
-func (s *RedisStore) indexOrMarkerExists(ctx context.Context, conversationID string) (bool, error) {
-	indexExists, err := s.client.Exists(ctx, s.conversationIndexKey(conversationID)).Result()
+// conversationMigrated reports whether a legacy-scan backfill has ever
+// completed for conversationID — the single signal that makes the index's
+// current state (populated, or absent entirely) trustworthy as exhaustive.
+//
+// Deliberately not "does the index exist, or the marker": a conversation
+// can have real indexed members from ordinary post-upgrade writes with no
+// backfill ever having run for it, so index-existence alone must never be
+// read as "migration complete" (that conflation is exactly the bug this
+// marker exists to prevent — see ConversationIndexMigratedKeyPrefix). A
+// single-key EXISTS check, Cluster safe.
+func (s *RedisStore) conversationMigrated(ctx context.Context, conversationID string) (bool, error) {
+	migrated, err := s.client.Exists(ctx, s.conversationIndexMigratedKey(conversationID)).Result()
 	if err != nil {
-		return false, fmt.Errorf("failed to check conversation index: %w", err)
-	}
-	if indexExists > 0 {
-		return true, nil
+		return false, fmt.Errorf("failed to check conversation migrated marker: %w", err)
 	}
 
-	emptyExists, err := s.client.Exists(ctx, s.emptyConversationIndexMarkerKey(conversationID)).Result()
-	if err != nil {
-		return false, fmt.Errorf("failed to check conversation index empty marker: %w", err)
-	}
-
-	return emptyExists > 0, nil
+	return migrated > 0, nil
 }
 
 // ensureConversationIndex guarantees that, barring a concurrent delete of
-// both immediately afterward, either the conversation's index or its empty
-// marker exists once this returns without error. It runs the O(N) legacy
-// scan (lazyBackfillConversationIndex) at most once per conversation per
-// marker/index lifetime.
+// the marker immediately afterward, the conversation is marked migrated
+// once this returns without error — meaning its index (populated or
+// absent) may now be trusted as exhaustive. It runs the O(N) legacy scan
+// (lazyBackfillConversationIndex) at most once per conversation per
+// marker lifetime, and runs it unconditionally when not yet migrated, even
+// if the index already has some members from earlier post-upgrade writes:
+// those members alone do not prove nothing legacy is left to discover.
 //
 // A short migration lock (SET NX PX conversationIndexMigrationLockTTL)
 // keeps concurrent readers of the same missing index from all scanning at
@@ -146,13 +156,13 @@ func (s *RedisStore) backfillUnderLock(ctx context.Context, conversationID, lock
 		}
 	}()
 
-	// Recheck under the lock: a writer, or a backfill that started just
-	// before this one acquired it, may have already resolved this conversation.
-	exists, err := s.indexOrMarkerExists(ctx, conversationID)
+	// Recheck under the lock: a backfill that started just before this one
+	// acquired it may have already migrated this conversation.
+	migrated, err := s.conversationMigrated(ctx, conversationID)
 	if err != nil {
 		return err
 	}
-	if exists {
+	if migrated {
 		return nil
 	}
 
@@ -168,9 +178,9 @@ func (s *RedisStore) backfillUnderLock(ctx context.Context, conversationID, lock
 
 // awaitOrBackfillConversationIndex backs off briefly waiting for another
 // reader's lock-held backfill to finish, then runs the scan itself if the
-// index/marker still hasn't appeared — the holder may have died mid-scan
-// (pod restart, deadline). Correctness wins over avoiding duplicate work,
-// which is the lock's only job.
+// conversation still isn't marked migrated — the holder may have died
+// mid-scan (pod restart, deadline). Correctness wins over avoiding
+// duplicate work, which is the lock's only job.
 func (s *RedisStore) awaitOrBackfillConversationIndex(ctx context.Context, conversationID string) error {
 	const (
 		lockWaitAttempts = 5
@@ -184,11 +194,11 @@ func (s *RedisStore) awaitOrBackfillConversationIndex(ctx context.Context, conve
 		case <-time.After(lockWaitDelay):
 		}
 
-		exists, err := s.indexOrMarkerExists(ctx, conversationID)
+		migrated, err := s.conversationMigrated(ctx, conversationID)
 		if err != nil {
 			return err
 		}
-		if exists {
+		if migrated {
 			return nil
 		}
 	}
@@ -204,14 +214,16 @@ func (s *RedisStore) awaitOrBackfillConversationIndex(ctx context.Context, conve
 }
 
 // lazyBackfillConversationIndex performs the one-time O(N) scan that makes a
-// pre-index conversation's responses discoverable: it walks every response
-// payload once, keeps the ones matching conversationID, and either indexes
-// them or — if none match — sets the empty marker so the next read does not
-// scan again.
+// conversation's full response set discoverable: it walks every response
+// payload once, keeps the ones matching conversationID — whether or not
+// they were already indexed by an ordinary post-upgrade write — indexes
+// them, and marks the conversation migrated so future reads trust the
+// index without re-scanning.
 //
-// Idempotent and additive: it only ZADDs discovered members and never
-// deletes, so a concurrently indexed write (e.g. a StoreResponse racing this
-// scan) is never undone by it, no matter which finishes first.
+// Idempotent and additive: it only ZADDs discovered members (including ones
+// already present, harmlessly re-adding the same score) and never deletes,
+// so a concurrently indexed write racing this scan is never undone by it,
+// no matter which finishes first.
 func (s *RedisStore) lazyBackfillConversationIndex(ctx context.Context, conversationID string) (legacyBackfillResult, error) {
 	if s.lazyBackfillPreScanHook != nil {
 		s.lazyBackfillPreScanHook()
@@ -223,13 +235,14 @@ func (s *RedisStore) lazyBackfillConversationIndex(ctx context.Context, conversa
 	}
 
 	if len(found) == 0 {
-		s.setEmptyConversationIndexMarker(ctx, conversationID)
+		s.markConversationMigrated(ctx, conversationID, false)
 		return legacyBackfillResult{Found: 0}, nil
 	}
 
 	if err := s.indexBackfilledResponses(ctx, conversationID, found); err != nil {
 		return legacyBackfillResult{}, err
 	}
+	s.markConversationMigrated(ctx, conversationID, true)
 
 	return legacyBackfillResult{Found: len(found)}, nil
 }
@@ -271,34 +284,41 @@ func (s *RedisStore) scanConversationResponses(ctx context.Context, conversation
 	return found, nil
 }
 
-// setEmptyConversationIndexMarker records that a completed scan found no
-// live responses for conversationID. TTL is capped at
-// emptyConversationIndexMarkerMaxTTL regardless of the store's data TTL —
-// including when s.ttl == 0 (a persistent store, no data TTL at all): the
-// marker's job is stampede protection, not data retention, and letting it
-// outlive that bounded purpose is exactly the rolling-upgrade blind spot
-// the cap exists to close (see its doc comment). When s.ttl is positive but
-// shorter than the cap, use s.ttl instead — there is no point marking a
-// conversation empty for longer than its own data would live.
+// markConversationMigrated records that a legacy-scan backfill has
+// completed for conversationID — the signal ListResponsesByConversation and
+// cascade delete both check before trusting the index's current state as
+// exhaustive (ConversationIndexMigratedKeyPrefix), independent of whether
+// the index happens to already have members from earlier ordinary writes.
+//
+// TTL: when the scan found responses to index, the full store TTL — the
+// marker should live exactly as long as the data it now describes, and
+// indexResponse refreshes it further on every subsequent write to the same
+// conversation. When the scan found nothing, capped at
+// emptyConversationIndexMarkerMaxTTL (or the store's own TTL if that is
+// shorter) instead: an empty result is a more perishable claim, since an
+// indexing-unaware writer could still land a response later (the
+// rolling-upgrade blind spot that cap exists to bound).
 //
 // Best-effort: correctness is preserved either way, since the next read
-// simply scans again rather than trust a marker that failed to write.
-func (s *RedisStore) setEmptyConversationIndexMarker(ctx context.Context, conversationID string) {
-	markerTTL := emptyConversationIndexMarkerMaxTTL
-	if s.ttl > 0 && s.ttl < markerTTL {
-		markerTTL = s.ttl
+// simply re-scans rather than trust a marker that failed to write.
+func (s *RedisStore) markConversationMigrated(ctx context.Context, conversationID string, found bool) {
+	ttl := emptyConversationIndexMarkerMaxTTL
+	switch {
+	case found:
+		ttl = s.ttl
+	case s.ttl > 0 && s.ttl < ttl:
+		ttl = s.ttl
 	}
 
-	if err := s.client.Set(ctx, s.emptyConversationIndexMarkerKey(conversationID), "v1", markerTTL).Err(); err != nil {
-		logging.Debugf("RedisStore: failed to set empty conversation index marker for %s: %v", conversationID, err)
+	if err := s.client.Set(ctx, s.conversationIndexMigratedKey(conversationID), "v1", ttl).Err(); err != nil {
+		logging.Debugf("RedisStore: failed to mark conversation %s migrated: %v", conversationID, err)
 	}
 }
 
 // indexBackfilledResponses ZADDs discovered responses into the conversation
-// index in redisBackfillBatchSize batches, refreshes the index TTL, and
-// best-effort clears the empty marker — the index now exists, and every
-// read checks it before the marker, so a marker left behind by a failed
-// clear here is harmless.
+// index in redisBackfillBatchSize batches and refreshes the index TTL.
+// Idempotent for members already indexed by an earlier ordinary write —
+// re-adding one with the same score is a no-op.
 func (s *RedisStore) indexBackfilledResponses(ctx context.Context, conversationID string, found []discoveredConversationResponse) error {
 	indexKey := s.conversationIndexKey(conversationID)
 
@@ -319,11 +339,6 @@ func (s *RedisStore) indexBackfilledResponses(ctx context.Context, conversationI
 			logging.Warnf("RedisStore: failed to refresh TTL on backfilled conversation index %s: %v",
 				conversationID, err)
 		}
-	}
-
-	if err := s.client.Del(ctx, s.emptyConversationIndexMarkerKey(conversationID)).Err(); err != nil {
-		logging.Debugf("RedisStore: failed to clear empty conversation index marker for %s: %v",
-			conversationID, err)
 	}
 
 	return nil

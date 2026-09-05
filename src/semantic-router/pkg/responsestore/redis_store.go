@@ -77,15 +77,29 @@ const (
 	// ListConversations would read these sorted sets as conversation JSON.
 	ConversationIndexKeyPrefix = "conversation-index:"
 
-	// ConversationIndexEmptyMarkerKeyPrefix marks a conversation ID for which a
-	// completed lazy legacy scan found no live response payloads to index:
-	// sr:conversation-index-empty:conv_xxxxx, value "v1".
+	// ConversationIndexMigratedKeyPrefix marks a conversation ID for which a
+	// legacy-scan backfill has completed — found responses to index, or
+	// confirmed none exist: sr:conversation-index-migrated:conv_xxxxx,
+	// value "v1".
 	//
-	// Prevents a caller from forcing repeated full keyspace scans by repeatedly
-	// listing the same empty or unknown conversation. Must not start with
-	// ConversationKeyPrefix or ResponseKeyPrefix, for the same scan-isolation
-	// reason as ConversationIndexKeyPrefix.
-	ConversationIndexEmptyMarkerKeyPrefix = "conversation-index-empty:"
+	// This is deliberately a *different* signal from "the index key exists":
+	// a conversation can accumulate real indexed members from ordinary
+	// post-upgrade StoreResponse writes long before any backfill scan ever
+	// runs for it (e.g. a pre-existing legacy conversation's first
+	// post-upgrade turn). Treating index-existence alone as "fully migrated"
+	// would let that write's indexResponse call create the index with only
+	// the new member, after which every future read would trust that index
+	// as complete and never discover the older, still-unindexed responses —
+	// silently and permanently. This marker is the only thing
+	// ListResponsesByConversation and cascade delete trust to mean "the
+	// index (or its absence) is exhaustive as of now"; see
+	// ensureConversationIndex and conversationMigrated.
+	//
+	// Also prevents a caller from forcing repeated full keyspace scans by
+	// repeatedly listing the same empty or unknown conversation. Must not
+	// start with ConversationKeyPrefix or ResponseKeyPrefix, for the same
+	// scan-isolation reason as ConversationIndexKeyPrefix.
+	ConversationIndexMigratedKeyPrefix = "conversation-index-migrated:"
 
 	// ConversationIndexLockKeyPrefix guards the one-time lazy legacy scan for a
 	// conversation against a stampede of concurrent readers all missing the
@@ -101,22 +115,19 @@ const (
 	// the lazy-scan migration lock before it is considered abandoned.
 	conversationIndexMigrationLockTTL = 30 * time.Second
 
-	// emptyConversationIndexMarkerMaxTTL caps how long an empty-conversation
-	// marker survives, independent of the store's data-retention TTL
-	// (s.ttl, which can be a day or 30 days). The marker's only job is to
-	// stop a stampede of repeated legacy scans against the same empty or
-	// unknown conversation; it does not need to, and must not, outlive that
-	// purpose by as much as the data retention window does.
+	// emptyConversationIndexMarkerMaxTTL caps how long a migrated marker
+	// survives when its backfill found nothing to index, independent of the
+	// store's data-retention TTL (s.ttl, which can be a day or 30 days).
+	// Confirming a conversation empty is a weaker, more perishable claim
+	// than confirming what its live responses are: an indexing-unaware
+	// writer (see ConversationIndexMigratedKeyPrefix) could still land a
+	// response into that same conversation later, and this bounds how long
+	// such a write can stay hidden behind a stale "confirmed empty" result.
 	//
-	// This matters most during the rollout of this very feature: while old
-	// (pre-index) and new (this) code run side by side in a rolling
-	// deployment, an old pod can write a response directly to
-	// response:<id> with no index write and no marker awareness at all. If
-	// a new pod had already set an empty marker for that conversation with
-	// the full data TTL, the old pod's write would stay invisible to every
-	// new-pod reader for up to that entire TTL. Capping the marker here
-	// bounds that blind spot to at most this duration, letting the next
-	// read past it re-scan and discover the write.
+	// Does not apply once the backfill actually finds responses: that
+	// marker gets the full store TTL instead (markConversationMigrated),
+	// since there is no analogous blind spot once real data has already
+	// been discovered and indexed.
 	emptyConversationIndexMarkerMaxTTL = 5 * time.Minute
 
 	// redisScanCount is the SCAN COUNT hint used when walking the response
@@ -394,13 +405,13 @@ func (s *RedisStore) conversationIndexKey(conversationID string) string {
 	return s.buildKey(ConversationIndexKeyPrefix + conversationID)
 }
 
-// emptyConversationIndexMarkerKey returns the marker set after a completed
-// lazy legacy scan finds no live response payloads for a conversation. Its
-// presence means "already scanned, confirmed empty or unknown" — checked
-// only after the index key itself is confirmed absent, so a stale marker can
-// never hide an index created concurrently.
-func (s *RedisStore) emptyConversationIndexMarkerKey(conversationID string) string {
-	return s.buildKey(ConversationIndexEmptyMarkerKeyPrefix + conversationID)
+// conversationIndexMigratedKey returns the marker set once a legacy-scan
+// backfill has completed for a conversation, whether or not it found
+// anything to index. Its presence — not the index key's — is what makes the
+// index's current state (populated or absent) trustworthy as exhaustive;
+// see ConversationIndexMigratedKeyPrefix and conversationMigrated.
+func (s *RedisStore) conversationIndexMigratedKey(conversationID string) string {
+	return s.buildKey(ConversationIndexMigratedKeyPrefix + conversationID)
 }
 
 // conversationIndexLockKey returns the short-lived lock guarding a
