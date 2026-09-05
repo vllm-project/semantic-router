@@ -296,6 +296,54 @@ func TestRedisUpdateResponseRollbackConflictPreservesNewerWrite(t *testing.T) {
 	assert.Equal(t, []string{responseID}, conversationIndexMembers(t, store, "conv_update_conflict_newer"))
 }
 
+// TestRedisUpdateResponseRollbackRestoresImmediatePredecessor covers the
+// opposite overlap from the conflict test: two updates begin from the same
+// original payload, the first replacement succeeds, and the second
+// replacement later fails its index write. The failed update must restore the
+// first update, not the value that existed before both calls began.
+func TestRedisUpdateResponseRollbackRestoresImmediatePredecessor(t *testing.T) {
+	store := newConversationIndexStore(t)
+	ctx := context.Background()
+
+	const responseID = "resp_update_immediate_predecessor"
+	key := store.buildKey(ResponseKeyPrefix + responseID)
+	original := &responseapi.StoredResponse{
+		ID: responseID, ConversationID: "conv_original", Status: "original", CreatedAt: time.Now().Unix(),
+	}
+	directSetResponsePayload(t, store, original)
+
+	first := &responseapi.StoredResponse{
+		ID: responseID, ConversationID: "conv_first", Status: "first-success", CreatedAt: time.Now().Unix() + 1,
+	}
+	firstData, err := json.Marshal(first)
+	require.NoError(t, err)
+	_, err = store.replaceResponseAndSnapshot(ctx, key, responseID, firstData)
+	require.NoError(t, err)
+
+	second := &responseapi.StoredResponse{
+		ID: responseID, ConversationID: "conv_second", Status: "second-failed", CreatedAt: time.Now().Unix() + 2,
+	}
+	secondData, err := json.Marshal(second)
+	require.NoError(t, err)
+	secondSnapshot, err := store.replaceResponseAndSnapshot(ctx, key, responseID, secondData)
+	require.NoError(t, err)
+	assert.JSONEq(t, string(firstData), string(secondSnapshot.data),
+		"the atomic replacement must snapshot its immediate predecessor")
+
+	// The first update can finish its index write while the second update is
+	// still in flight. The second update then fails and rolls itself back.
+	require.NoError(t, store.indexResponse(ctx, first.ConversationID, responseID, first.CreatedAt))
+	injectedErr := errors.New("injected second update index failure")
+	err = store.rollbackUpdatePayload(ctx, key, responseID, secondData, secondSnapshot, injectedErr)
+	require.ErrorIs(t, err, injectedErr)
+
+	current, err := store.GetResponse(ctx, responseID)
+	require.NoError(t, err)
+	assert.Equal(t, "first-success", current.Status)
+	assert.Equal(t, "conv_first", current.ConversationID)
+	assert.Equal(t, []string{responseID}, conversationIndexMembers(t, store, "conv_first"))
+}
+
 // TestRedisUpdateResponseRollbackPreservesRemainingTTL covers that a
 // rollback restores the snapshot's approximate remaining lifetime, not a
 // freshly reset full retention TTL.
