@@ -88,11 +88,9 @@ func (s *RedisStore) ensureConversationResolvedForRead(ctx context.Context, conv
 		return nil
 	}
 
-	migrated, err := s.conversationMigrated(ctx, conversationID)
-	if err != nil {
+	if _, resolved, err := s.conversationIndexProof(ctx, conversationID); err != nil {
 		return err
-	}
-	if migrated {
+	} else if resolved {
 		return nil
 	}
 
