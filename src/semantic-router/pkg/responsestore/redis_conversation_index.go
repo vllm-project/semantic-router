@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
+	"sync/atomic"
 
 	"github.com/redis/go-redis/v9"
 
@@ -135,14 +135,6 @@ func (s *RedisStore) unindexResponse(ctx context.Context, conversationID string,
 	return nil
 }
 
-// legacyBackfillResult reports how many responses a lazy backfill scan found
-// and indexed for a conversation, mainly for logging.
-type legacyBackfillResult struct {
-	// Found is the number of responses discovered belonging to the scanned
-	// conversation. Zero means the scan confirmed the conversation empty.
-	Found int
-}
-
 // conversationIndexProof reads a conversation's migrated marker with GET,
 // not EXISTS, and reports its typed value along with whether that value is
 // actually resolved. resolved=false covers both "no marker at all" and "a
@@ -206,12 +198,12 @@ func (s *RedisStore) ensureConversationIndex(ctx context.Context, conversationID
 			return nil
 		}
 
-		result, err := s.lazyBackfillConversationIndex(leaseCtx, conversationID)
+		found, err := s.lazyBackfillConversationIndex(leaseCtx, conversationID)
 		if err != nil {
 			return err
 		}
 		logging.Debugf("RedisStore: lazy-backfilled conversation %s index with %d response(s)",
-			conversationID, result.Found)
+			conversationID, found)
 
 		return nil
 	})
@@ -234,80 +226,125 @@ func (s *RedisStore) conversationIndexResolved(ctx context.Context, conversation
 
 // lazyBackfillConversationIndex performs the one-time O(N) scan that makes a
 // conversation's full response set discoverable: it walks every response
-// payload once, keeps the ones matching conversationID — whether or not
-// they were already indexed by an ordinary post-upgrade write — indexes
-// them, and marks the conversation migrated so future reads trust the
-// index without re-scanning.
+// payload once (scanResponsePayloads, Cluster-aware via ForEachMaster) and,
+// for each decoded batch, streams the matching members straight into the
+// index via indexBackfillBatch — never accumulating the scan's findings
+// into one shared slice first. That matters specifically because
+// ForEachMaster invokes its per-master callback concurrently in Cluster
+// mode: any shared, unsynchronized state written from inside the visit
+// callback (as a single accumulated slice would be) is a data race,
+// whereas a callback-local batch flushed immediately, plus only an
+// atomic.Int64 running total, has no shared mutable state to race on.
 //
-// Idempotent and additive: it only ZADDs discovered members (including ones
-// already present, harmlessly re-adding the same score) and never deletes,
-// so a concurrently indexed write racing this scan is never undone by it,
-// no matter which finishes first.
-func (s *RedisStore) lazyBackfillConversationIndex(ctx context.Context, conversationID string) (legacyBackfillResult, error) {
+// Idempotent and additive: every ZADD (including one re-adding a member an
+// ordinary write already indexed, harmlessly, with the same score) only
+// ever adds, so a concurrently indexed write racing this scan is never
+// undone by it, no matter which finishes first, and concurrent per-master
+// ZADDs from different callback invocations are independent, idempotent
+// operations that need no coordination between themselves.
+//
+// The typed proof is set only after the scan and every ZADD succeed —
+// on any error, this returns without marking migrated, matching blueprint
+// §5 Phase 3's "no proof on partial success"; the next call is a safe,
+// fully idempotent retry.
+func (s *RedisStore) lazyBackfillConversationIndex(ctx context.Context, conversationID string) (int64, error) {
 	if s.lazyBackfillPreScanHook != nil {
 		s.lazyBackfillPreScanHook()
 	}
 
-	found, err := s.scanConversationResponses(ctx, conversationID)
+	var total atomic.Int64
+	err := s.scanResponsePayloads(ctx, func(batch []*responseapi.StoredResponse) error {
+		return s.indexBackfillMatches(ctx, conversationID, batch, &total)
+	})
 	if err != nil {
-		return legacyBackfillResult{}, fmt.Errorf("failed to backfill conversation index: %w", err)
+		return 0, fmt.Errorf("failed to backfill conversation index: %w", err)
 	}
 
-	if len(found) == 0 {
-		if err := s.markConversationMigrated(ctx, conversationID, conversationIndexProofEmpty); err != nil {
-			// Best-effort: correctness is preserved either way, since the
-			// next read simply re-scans rather than trust a proof that
-			// failed to write.
-			logging.Debugf("RedisStore: failed to mark conversation %s migrated (empty): %v", conversationID, err)
+	found := total.Load()
+	if found == 0 {
+		s.finishEmptyBackfill(ctx, conversationID)
+		return 0, nil
+	}
+
+	s.finishPopulatedBackfill(ctx, conversationID)
+	return found, nil
+}
+
+// indexBackfillMatches filters one scanned batch down to the members
+// belonging to conversationID and flushes them to the index in chunks
+// bounded by redisBackfillBatchSize, adding each flushed chunk's size to
+// total. The members slice is callback-local: safe even when ForEachMaster
+// invokes this concurrently across masters, since each invocation gets its
+// own slice, and total is the only state shared between them — updated
+// exclusively through atomic.Int64.
+func (s *RedisStore) indexBackfillMatches(ctx context.Context, conversationID string, batch []*responseapi.StoredResponse, total *atomic.Int64) error {
+	members := make([]redis.Z, 0, min(len(batch), redisBackfillBatchSize))
+	for _, response := range batch {
+		if response.ConversationID != conversationID {
+			continue
 		}
-		return legacyBackfillResult{Found: 0}, nil
+		members = append(members, redis.Z{Score: float64(response.CreatedAt), Member: response.ID})
+		if len(members) >= redisBackfillBatchSize {
+			if err := s.indexBackfillBatch(ctx, conversationID, members); err != nil {
+				return err
+			}
+			total.Add(int64(len(members)))
+			members = members[:0]
+		}
 	}
+	if len(members) == 0 {
+		return nil
+	}
+	if err := s.indexBackfillBatch(ctx, conversationID, members); err != nil {
+		return err
+	}
+	total.Add(int64(len(members)))
+	return nil
+}
 
-	if err := s.indexBackfilledResponses(ctx, conversationID, found); err != nil {
-		return legacyBackfillResult{}, err
+// finishEmptyBackfill marks conversationID migrated with the empty proof
+// after a completed scan found no live responses for it. Best-effort: see
+// markConversationMigrated's own doc comment for why a failed write here is
+// logged and swallowed rather than returned.
+func (s *RedisStore) finishEmptyBackfill(ctx context.Context, conversationID string) {
+	if err := s.markConversationMigrated(ctx, conversationID, conversationIndexProofEmpty); err != nil {
+		logging.Debugf("RedisStore: failed to mark conversation %s migrated (empty): %v", conversationID, err)
+	}
+}
+
+// finishPopulatedBackfill refreshes the backfilled index's TTL once — after
+// every batch across every master has already succeeded, not per batch,
+// which would be redundant work for no additional safety — and marks
+// conversationID migrated with the populated proof. Both steps are
+// best-effort; see markConversationMigrated.
+func (s *RedisStore) finishPopulatedBackfill(ctx context.Context, conversationID string) {
+	if s.ttl > 0 {
+		if err := s.client.Expire(ctx, s.conversationIndexKey(conversationID), s.ttl).Err(); err != nil {
+			logging.Warnf("RedisStore: failed to refresh TTL on backfilled conversation index %s: %v",
+				conversationID, err)
+		}
 	}
 	if err := s.markConversationMigrated(ctx, conversationID, conversationIndexProofPopulated); err != nil {
 		logging.Debugf("RedisStore: failed to mark conversation %s migrated (populated): %v", conversationID, err)
 	}
-
-	return legacyBackfillResult{Found: len(found)}, nil
 }
 
-// discoveredConversationResponse is one response scanConversationResponses
-// found belonging to a specific conversation.
-type discoveredConversationResponse struct {
-	id        string
-	createdAt int64
-}
-
-// scanConversationResponses walks every response payload once via
-// scanResponsePayloads, collecting the ones belonging to conversationID in
-// deterministic order: primary by created_at, tie-broken by response ID
-// (blueprint §3.6) — never fabricating sub-second ordering from wall clock
-// time.
-func (s *RedisStore) scanConversationResponses(ctx context.Context, conversationID string) ([]discoveredConversationResponse, error) {
-	var found []discoveredConversationResponse
-
-	err := s.scanResponsePayloads(ctx, func(batch []*responseapi.StoredResponse) error {
-		for _, response := range batch {
-			if response.ConversationID == conversationID {
-				found = append(found, discoveredConversationResponse{id: response.ID, createdAt: response.CreatedAt})
-			}
-		}
+// indexBackfillBatch ZADDs one bounded batch (at most redisBackfillBatchSize
+// members, enforced by lazyBackfillConversationIndex's caller-side
+// allocation) into a conversation's index. A thin wrapper — its only job is
+// giving this one Redis call its own name and error context, since
+// lazyBackfillConversationIndex now calls it once per flushed batch per
+// callback invocation, potentially from several concurrent goroutines (one
+// per Cluster master) at once; each call is independent and idempotent, so
+// no coordination between concurrent callers is needed.
+func (s *RedisStore) indexBackfillBatch(ctx context.Context, conversationID string, members []redis.Z) error {
+	if len(members) == 0 {
 		return nil
-	})
-	if err != nil {
-		return nil, err
 	}
-
-	sort.Slice(found, func(i, j int) bool {
-		if found[i].createdAt != found[j].createdAt {
-			return found[i].createdAt < found[j].createdAt
-		}
-		return found[i].id < found[j].id
-	})
-
-	return found, nil
+	if err := s.client.ZAdd(ctx, s.conversationIndexKey(conversationID), members...).Err(); err != nil {
+		return fmt.Errorf("failed to backfill conversation index: %w", err)
+	}
+	return nil
 }
 
 // markConversationMigrated records that a legacy-scan backfill has
@@ -345,35 +382,6 @@ func (s *RedisStore) markConversationMigrated(ctx context.Context, conversationI
 
 	if err := s.client.Set(ctx, s.conversationIndexMigratedKey(conversationID), string(proof), ttl).Err(); err != nil {
 		return fmt.Errorf("failed to mark conversation %s migrated: %w", conversationID, err)
-	}
-
-	return nil
-}
-
-// indexBackfilledResponses ZADDs discovered responses into the conversation
-// index in redisBackfillBatchSize batches and refreshes the index TTL.
-// Idempotent for members already indexed by an earlier ordinary write —
-// re-adding one with the same score is a no-op.
-func (s *RedisStore) indexBackfilledResponses(ctx context.Context, conversationID string, found []discoveredConversationResponse) error {
-	indexKey := s.conversationIndexKey(conversationID)
-
-	for start := 0; start < len(found); start += redisBackfillBatchSize {
-		end := min(start+redisBackfillBatchSize, len(found))
-
-		members := make([]redis.Z, end-start)
-		for i, d := range found[start:end] {
-			members[i] = redis.Z{Score: float64(d.createdAt), Member: d.id}
-		}
-		if err := s.client.ZAdd(ctx, indexKey, members...).Err(); err != nil {
-			return fmt.Errorf("failed to backfill conversation index: %w", err)
-		}
-	}
-
-	if s.ttl > 0 {
-		if err := s.client.Expire(ctx, indexKey, s.ttl).Err(); err != nil {
-			logging.Warnf("RedisStore: failed to refresh TTL on backfilled conversation index %s: %v",
-				conversationID, err)
-		}
 	}
 
 	return nil

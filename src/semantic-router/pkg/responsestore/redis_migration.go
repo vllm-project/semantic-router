@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"sort"
+	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -52,15 +52,19 @@ func (s *RedisStore) isMigrationComplete(ctx context.Context) (bool, error) {
 // indexed by its own StoreResponse call mid-sweep is simply rediscovered and
 // harmlessly re-added with the same score.
 //
-// Holds the entire sweep's discovered (conversation ID, response ID,
-// created_at) triples in memory before writing any of them, grouped by
-// conversation — proportional to the total number of responses across the
-// whole keyspace, not any one conversation. For a very large deployment
-// this is a real memory cost; this issue does not attempt to bound it
-// further (e.g. by streaming per-conversation batches to Redis as they are
-// discovered), since doing so would need to buffer per-conversation state
-// across an unbounded, cursor-ordered scan for comparatively little benefit
-// at the scale this store otherwise targets.
+// Holds the entire sweep's discovered (conversation ID -> redis.Z) members
+// in memory before writing any of them, grouped by conversation —
+// proportional to the total number of responses across the whole keyspace,
+// not any one conversation. For a very large deployment this is a real
+// memory cost; a stepping stone ahead of Phase 6's fuller redesign
+// (ConversationIndexFinalizationStats, streamed per-batch indexing sharing
+// indexBackfillBatch's per-call cap, and the global scan lease in place of
+// this function's own dedicated lock) rather than this phase's concern,
+// which is specifically lazyBackfillConversationIndex's per-conversation
+// path. The map write below is mutex-guarded because scanResponsePayloads'
+// visit callback can run concurrently across Cluster masters
+// (ForEachMaster) — a plain map write here would otherwise race exactly
+// like the per-conversation accumulation this phase removes.
 func (s *RedisStore) FinalizeConversationIndexMigration(ctx context.Context) error {
 	if complete, err := s.isMigrationComplete(ctx); err != nil {
 		return err
@@ -97,32 +101,17 @@ func (s *RedisStore) FinalizeConversationIndexMigration(ctx context.Context) err
 		return nil
 	}
 
-	byConversation := make(map[string][]discoveredConversationResponse)
+	var mu sync.Mutex
+	byConversation := make(map[string][]redis.Z)
 	if err := s.scanResponsePayloads(ctx, func(batch []*responseapi.StoredResponse) error {
-		for _, response := range batch {
-			if response.ConversationID == "" {
-				continue
-			}
-			byConversation[response.ConversationID] = append(byConversation[response.ConversationID], discoveredConversationResponse{
-				id:        response.ID,
-				createdAt: response.CreatedAt,
-			})
-		}
+		accumulateMigrationSweepBatch(&mu, byConversation, batch)
 		return nil
 	}); err != nil {
 		return fmt.Errorf("failed to sweep response payloads for migration finalization: %w", err)
 	}
 
-	for conversationID, found := range byConversation {
-		sort.Slice(found, func(i, j int) bool {
-			if found[i].createdAt != found[j].createdAt {
-				return found[i].createdAt < found[j].createdAt
-			}
-			return found[i].id < found[j].id
-		})
-		if err := s.indexBackfilledResponses(ctx, conversationID, found); err != nil {
-			return fmt.Errorf("failed to index conversation %s during migration finalization: %w", conversationID, err)
-		}
+	if err := s.flushMigrationSweepIndex(ctx, byConversation); err != nil {
+		return err
 	}
 
 	// Persistent: this status, unlike the per-conversation migrated marker,
@@ -132,5 +121,37 @@ func (s *RedisStore) FinalizeConversationIndexMigration(ctx context.Context) err
 		return fmt.Errorf("failed to mark conversation index migration complete: %w", err)
 	}
 
+	return nil
+}
+
+// accumulateMigrationSweepBatch adds one scanned batch's members to
+// byConversation, grouped by conversation ID. Mutex-guarded: scanResponsePayloads'
+// visit callback can run concurrently across Cluster masters (ForEachMaster),
+// and this map is shared across every invocation for the whole sweep — see
+// FinalizeConversationIndexMigration's doc comment for why this is a
+// stepping-stone rather than Phase 6's fuller streamed redesign.
+func accumulateMigrationSweepBatch(mu *sync.Mutex, byConversation map[string][]redis.Z, batch []*responseapi.StoredResponse) {
+	mu.Lock()
+	defer mu.Unlock()
+	for _, response := range batch {
+		if response.ConversationID == "" {
+			continue
+		}
+		byConversation[response.ConversationID] = append(byConversation[response.ConversationID],
+			redis.Z{Score: float64(response.CreatedAt), Member: response.ID})
+	}
+}
+
+// flushMigrationSweepIndex ZADDs every discovered conversation's members
+// into its index, chunked to indexBackfillBatch's own bound.
+func (s *RedisStore) flushMigrationSweepIndex(ctx context.Context, byConversation map[string][]redis.Z) error {
+	for conversationID, members := range byConversation {
+		for start := 0; start < len(members); start += redisBackfillBatchSize {
+			end := min(start+redisBackfillBatchSize, len(members))
+			if err := s.indexBackfillBatch(ctx, conversationID, members[start:end]); err != nil {
+				return fmt.Errorf("failed to index conversation %s during migration finalization: %w", conversationID, err)
+			}
+		}
+	}
 	return nil
 }
