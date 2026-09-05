@@ -16,6 +16,7 @@ For an interpretation of maintained benchmark coverage, see the
 | Does the router improve reasoning-task selection over a direct backend? | `vllm-semantic-router-bench` |
 | Does a model benefit from its reasoning mode, and what does that cost? | `reasoning-mode-eval` |
 | Does session routing preserve continuity and tool-loop invariants? | `agentic_routing_experiment.py` and `agentic_routing_live_benchmark.py` |
+| Does production protection obey maintained per-turn contracts? | [`make bench-agent-routing-protection`](../website/docs/benchmarking/agent-routing-protection.md) |
 | Does a routed model complete maintained multi-turn agent tasks? | `agent_task_live_benchmark.py` |
 | Does a backend report prompt-cache usage through the router? | `cache_token_probe.py` |
 | Do Router Flow arms improve answer quality? | [`router_flow/`](router_flow/README.md) |

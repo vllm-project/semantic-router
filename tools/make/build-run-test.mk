@@ -206,6 +206,15 @@ bench-router-learning:
 		--learning-architecture --profile $(PROFILE) \
 		--output-dir .agent-harness/router-learning-eval
 
+# Exercise production protection with maintained single-request/session fixtures.
+bench-agent-routing-protection: rust-ci ## Gate production protection and write a deterministic session report
+	@mkdir -p .agent-harness/agent-routing-protection
+	@cd src/semantic-router && \
+		CGO_ENABLED=1 \
+		LD_LIBRARY_PATH="$(CURDIR)/candle-binding/target/release:$(CURDIR)/ml-binding/target/release:$(CURDIR)/nlp-binding/target/release" \
+		ROUTER_PROTECTION_REPORT="$(CURDIR)/.agent-harness/agent-routing-protection/report.json" \
+		go test ./pkg/extproc -run '^TestRouterLearningSession' -count=1 -v
+
 # Run hallucination detection benchmark
 # Requires: router running with hallucination config, vLLM endpoint, envoy proxy
 bench-hallucination: ## Run hallucination detection benchmark (requires router + vLLM + envoy running)
