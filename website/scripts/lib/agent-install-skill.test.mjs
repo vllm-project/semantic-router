@@ -261,16 +261,36 @@ test('VLLM_SR_PIP_SPEC presence stops the flow and its value is never printed', 
     'Detection must use a presence-only check for VLLM_SR_PIP_SPEC',
   )
 
-  // Defense in depth: the install step must unset the override explicitly
-  // so an inherited value cannot change what the installer installs. The
-  // unset must apply to the installer's shell, not just to curl.
+  // Defense in depth: the install step must clear the installer's entire
+  // documented VLLM_SR_* override surface so no inherited value can change
+  // what gets installed or how. The unset must apply to the installer's
+  // shell, not just to curl.
+  const installBlock = workflow.match(/```bash\n([\s\S]*?)```/)
+  assert.ok(installBlock, 'Install step must include the install bash block')
+  const overrideSurface = [
+    'VLLM_SR_INSTALL_MODE',
+    'VLLM_SR_RUNTIME',
+    'VLLM_SR_INSTALL_ROOT',
+    'VLLM_SR_BIN_DIR',
+    'VLLM_SR_INSTALL_CHANNEL',
+    'VLLM_SR_PIP_SPEC',
+    'VLLM_SR_PYTHON',
+    'VLLM_SR_INSTALL_PLATFORM',
+    'VLLM_SR_INSTALL_AUTO_LAUNCH',
+  ]
+  for (const overrideVar of overrideSurface) {
+    assert.ok(
+      installBlock[1].includes(overrideVar),
+      `Install step must unset ${overrideVar}`,
+    )
+  }
   assert.ok(
-    workflow.includes('unset VLLM_SR_PIP_SPEC'),
-    'Install step must explicitly unset VLLM_SR_PIP_SPEC before installing',
+    /unset /.test(installBlock[1]),
+    'Install step must unset the overrides in the installer shell',
   )
   assert.ok(
-    !workflow.includes('env -u VLLM_SR_PIP_SPEC'),
-    'Install step must not use env -u on the pipeline (it would leave the override set for the installer shell)',
+    !workflow.includes('env -u VLLM_SR'),
+    'Install step must not use env -u on the pipeline (it would leave the overrides set for the installer shell)',
   )
 })
 
