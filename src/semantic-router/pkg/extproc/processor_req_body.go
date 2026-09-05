@@ -128,6 +128,10 @@ func (r *OpenAIRouter) handleModelRouting(request *llmprotocol.Request, original
 		},
 	}
 
+	// The primary destination is decided; shadow arms observe the same
+	// normalized request without blocking or altering this response.
+	r.dispatchShadowArms(ctx)
+
 	if !isEntrypoint {
 		return r.handleSpecifiedModelRouting(request, originalModel, decisionName, ctx)
 	}
