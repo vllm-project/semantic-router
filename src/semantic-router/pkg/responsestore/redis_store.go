@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -35,7 +36,13 @@ type RedisStore struct {
 	// test-only seam proving the O(N) legacy scan runs at most once per
 	// conversation per empty-marker/index lifetime, not on every read of an
 	// empty or unknown conversation. Not read anywhere outside _test.go.
-	scanInvocations int
+	//
+	// Atomic: scanResponsePayloads is a production code path reachable
+	// concurrently from multiple simultaneous requests missing the same or
+	// different conversations' indexes, so a plain int would race under
+	// -race (and, more to the point, under real concurrent traffic) even
+	// though only tests ever read the value back.
+	scanInvocations atomic.Int64
 
 	// lazyBackfillPreScanHook, when non-nil, runs once at the top of
 	// lazyBackfillConversationIndex before the scan starts. Unexported
@@ -93,6 +100,24 @@ const (
 	// conversationIndexMigrationLockTTL bounds how long a single reader holds
 	// the lazy-scan migration lock before it is considered abandoned.
 	conversationIndexMigrationLockTTL = 30 * time.Second
+
+	// emptyConversationIndexMarkerMaxTTL caps how long an empty-conversation
+	// marker survives, independent of the store's data-retention TTL
+	// (s.ttl, which can be a day or 30 days). The marker's only job is to
+	// stop a stampede of repeated legacy scans against the same empty or
+	// unknown conversation; it does not need to, and must not, outlive that
+	// purpose by as much as the data retention window does.
+	//
+	// This matters most during the rollout of this very feature: while old
+	// (pre-index) and new (this) code run side by side in a rolling
+	// deployment, an old pod can write a response directly to
+	// response:<id> with no index write and no marker awareness at all. If
+	// a new pod had already set an empty marker for that conversation with
+	// the full data TTL, the old pod's write would stay invisible to every
+	// new-pod reader for up to that entire TTL. Capping the marker here
+	// bounds that blind spot to at most this duration, letting the next
+	// read past it re-scan and discover the write.
+	emptyConversationIndexMarkerMaxTTL = 5 * time.Minute
 
 	// redisScanCount is the SCAN COUNT hint used when walking the response
 	// keyspace for lazy legacy backfill. A hint, not a hard limit — Redis may
@@ -406,5 +431,3 @@ func (s *RedisStore) Close() error {
 func (s *RedisStore) IsEnabled() bool {
 	return s.enabled
 }
-
-// Response Store Methods
