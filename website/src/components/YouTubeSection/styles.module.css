@@ -18,7 +18,7 @@
   font-weight: var(--site-font-weight-semibold);
   line-height: 1.18;
   letter-spacing: -0.025em;
-  text-wrap: pretty;
+  text-wrap: balance;
 }
 
 .heading p {

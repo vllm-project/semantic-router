@@ -29,6 +29,7 @@ func buildReplayRouteDiagnostics(
 		DecisionPriority:               decisionPriority,
 		SelectionMethod:                ctx.VSRSelectionMethod,
 		SelectionReasoning:             ctx.VSRSelectionReasoning,
+		FusionQuorum:                   ctx.VSRFusionQuorum,
 		PromptHelperModel:              ctx.VSRPromptHelperModel,
 		PromptHelperPromptTokens:       ctx.VSRPromptHelperPromptTokens,
 		PromptHelperCompletionTokens:   ctx.VSRPromptHelperCompletionTokens,
