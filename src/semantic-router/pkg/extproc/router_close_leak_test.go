@@ -2,12 +2,19 @@ package extproc
 
 import (
 	"context"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/openai/openai-go"
+	"github.com/stretchr/testify/require"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
 
@@ -47,6 +54,46 @@ func TestOpenAIRouterCloseClosesOwnedResources(t *testing.T) {
 
 	if got := fakeCache.closeCount(); got != 1 {
 		t.Fatalf("Cache.Close() called %d times, want 1", got)
+	}
+}
+
+func TestOpenAIRouterOwnsOneLooperConnectorPerGeneration(t *testing.T) {
+	connectionClosed := make(chan struct{}, 1)
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"ok"}}]}`))
+	}))
+	server.Config.ConnState = func(_ net.Conn, state http.ConnState) {
+		if state == http.StateClosed {
+			select {
+			case connectionClosed <- struct{}{}:
+			default:
+			}
+		}
+	}
+	server.Start()
+	defer server.Close()
+
+	components, err := buildRouterComponents(&config.RouterConfig{
+		Looper: config.LooperConfig{Endpoint: server.URL},
+	})
+	require.NoError(t, err)
+	router := components.buildRouter()
+	require.Same(t, components.looperClient, router.looperModelClient())
+	require.Same(t, router.looperModelClient(), router.looperModelClient())
+
+	_, err = router.looperModelClient().CallModelWithOptions(
+		context.Background(),
+		openai.ChatCompletionNewParams{},
+		looper.ModelTarget{Name: "model-a"},
+		looper.CallOptions{Iteration: 1},
+	)
+	require.NoError(t, err)
+	require.NoError(t, router.Close())
+
+	select {
+	case <-connectionClosed:
+	case <-time.After(time.Second):
+		t.Fatal("router close did not close the Looper connector's idle connection")
 	}
 }
 
