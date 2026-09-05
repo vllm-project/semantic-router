@@ -1,0 +1,535 @@
+{
+  "schema_version": "router-learning-corpus.v2",
+  "candidate_arms": [
+    {
+      "id": "arm-fast",
+      "quality_seed": 0.55,
+      "input_cost_per_million_tokens_usd": 0.5,
+      "output_cost_per_million_tokens_usd": 1.0
+    },
+    {
+      "id": "arm-strong",
+      "quality_seed": 0.8,
+      "input_cost_per_million_tokens_usd": 1.5,
+      "output_cost_per_million_tokens_usd": 3.0
+    }
+  ],
+  "base_arm_id": "arm-fast",
+  "trial_seeds": [
+    11,
+    29,
+    47,
+    71,
+    101,
+    131,
+    173,
+    211,
+    251,
+    293,
+    337,
+    383,
+    431,
+    479,
+    523,
+    571,
+    619,
+    661,
+    709,
+    757,
+    809,
+    853,
+    907,
+    953,
+    1009,
+    1061,
+    1109,
+    1153,
+    1201,
+    1259,
+    1307,
+    1361
+  ],
+  "propensity_status": "unsupported",
+  "cases": [
+    {
+      "id": "learning-format-01",
+      "prompt": "Return exactly the uppercase form of router.",
+      "domain": "formatting",
+      "eligible_arm_ids": [
+        "arm-fast",
+        "arm-strong"
+      ],
+      "protected_arm_id": null,
+      "feedback_delay_rounds": 0,
+      "feedback_observed": true,
+      "outcomes": {
+        "arm-fast": {
+          "success": true,
+          "quality": 0.94,
+          "latency_ms": 18.0,
+          "cost_usd": 0.0004,
+          "call_count": 1,
+          "feedback_verdict": "good_fit",
+          "feedback_weight": 1.0,
+          "cache_hit_ratio": 0.0,
+          "cache_write_pressure": 0.2,
+          "input_cost_multiplier": 1.0,
+          "provider_failed": false
+        },
+        "arm-strong": {
+          "success": true,
+          "quality": 0.98,
+          "latency_ms": 51.0,
+          "cost_usd": 0.0015,
+          "call_count": 1,
+          "feedback_verdict": "overprovisioned",
+          "feedback_weight": 1.0,
+          "cache_hit_ratio": 0.5,
+          "cache_write_pressure": 0.2,
+          "input_cost_multiplier": 0.6,
+          "provider_failed": false
+        }
+      }
+    },
+    {
+      "id": "learning-knowledge-02",
+      "prompt": "Return exactly the chemical symbol for gold.",
+      "domain": "knowledge",
+      "eligible_arm_ids": [
+        "arm-fast",
+        "arm-strong"
+      ],
+      "protected_arm_id": null,
+      "feedback_delay_rounds": 0,
+      "feedback_observed": true,
+      "outcomes": {
+        "arm-fast": {
+          "success": true,
+          "quality": 0.91,
+          "latency_ms": 20.0,
+          "cost_usd": 0.0005,
+          "call_count": 1,
+          "feedback_verdict": "good_fit",
+          "feedback_weight": 1.0,
+          "cache_hit_ratio": 0.8,
+          "cache_write_pressure": 0.2,
+          "input_cost_multiplier": 0.3,
+          "provider_failed": false
+        },
+        "arm-strong": {
+          "success": true,
+          "quality": 0.98,
+          "latency_ms": 55.0,
+          "cost_usd": 0.0016,
+          "call_count": 1,
+          "feedback_verdict": "overprovisioned",
+          "feedback_weight": 1.0,
+          "cache_hit_ratio": 0.0,
+          "cache_write_pressure": 0.2,
+          "input_cost_multiplier": 1.0,
+          "provider_failed": false
+        }
+      }
+    },
+    {
+      "id": "learning-context-03",
+      "prompt": "Summarize the supplied long context in one sentence.",
+      "domain": "long-context",
+      "eligible_arm_ids": [
+        "arm-strong"
+      ],
+      "protected_arm_id": "arm-strong",
+      "feedback_delay_rounds": 0,
+      "feedback_observed": true,
+      "outcomes": {
+        "arm-fast": {
+          "success": false,
+          "quality": 0.0,
+          "latency_ms": 16.0,
+          "cost_usd": 0.0004,
+          "call_count": 1,
+          "feedback_verdict": "underpowered",
+          "feedback_weight": 1.0,
+          "cache_hit_ratio": 0.2,
+          "cache_write_pressure": 0.2,
+          "input_cost_multiplier": 0.7,
+          "provider_failed": false
+        },
+        "arm-strong": {
+          "success": true,
+          "quality": 0.96,
+          "latency_ms": 74.0,
+          "cost_usd": 0.0022,
+          "call_count": 1,
+          "feedback_verdict": "good_fit",
+          "feedback_weight": 1.0,
+          "cache_hit_ratio": 0.7,
+          "cache_write_pressure": 0.2,
+          "input_cost_multiplier": 0.4,
+          "provider_failed": false
+        }
+      }
+    },
+    {
+      "id": "learning-reasoning-04",
+      "prompt": "Solve the constrained scheduling puzzle and return the unique order.",
+      "domain": "reasoning",
+      "eligible_arm_ids": [
+        "arm-fast",
+        "arm-strong"
+      ],
+      "protected_arm_id": null,
+      "feedback_delay_rounds": 0,
+      "feedback_observed": true,
+      "outcomes": {
+        "arm-fast": {
+          "success": false,
+          "quality": 0.18,
+          "latency_ms": 27.0,
+          "cost_usd": 0.0007,
+          "call_count": 1,
+          "feedback_verdict": "underpowered",
+          "feedback_weight": 1.0,
+          "cache_hit_ratio": 0.0,
+          "cache_write_pressure": 0.2,
+          "input_cost_multiplier": 1.0,
+          "provider_failed": false
+        },
+        "arm-strong": {
+          "success": true,
+          "quality": 0.93,
+          "latency_ms": 82.0,
+          "cost_usd": 0.0025,
+          "call_count": 1,
+          "feedback_verdict": "good_fit",
+          "feedback_weight": 1.0,
+          "cache_hit_ratio": 0.1,
+          "cache_write_pressure": 0.2,
+          "input_cost_multiplier": 0.6,
+          "provider_failed": false
+        }
+      }
+    },
+    {
+      "id": "learning-format-05",
+      "prompt": "Return exactly the lowercase reverse of semantic.",
+      "domain": "formatting",
+      "eligible_arm_ids": [
+        "arm-fast",
+        "arm-strong"
+      ],
+      "protected_arm_id": null,
+      "feedback_delay_rounds": 2,
+      "feedback_observed": true,
+      "outcomes": {
+        "arm-fast": {
+          "success": true,
+          "quality": 0.95,
+          "latency_ms": 17.0,
+          "cost_usd": 0.0004,
+          "call_count": 1,
+          "feedback_verdict": "good_fit",
+          "feedback_weight": 1.0,
+          "cache_hit_ratio": 0.9,
+          "cache_write_pressure": 0.2,
+          "input_cost_multiplier": 0.3,
+          "provider_failed": false
+        },
+        "arm-strong": {
+          "success": true,
+          "quality": 0.98,
+          "latency_ms": 50.0,
+          "cost_usd": 0.0015,
+          "call_count": 1,
+          "feedback_verdict": "overprovisioned",
+          "feedback_weight": 1.0,
+          "cache_hit_ratio": 0.0,
+          "cache_write_pressure": 0.2,
+          "input_cost_multiplier": 1.0,
+          "provider_failed": false
+        }
+      }
+    },
+    {
+      "id": "learning-code-06",
+      "prompt": "Find the concurrency bug in the short program and name its cause.",
+      "domain": "code",
+      "eligible_arm_ids": [
+        "arm-fast",
+        "arm-strong"
+      ],
+      "protected_arm_id": null,
+      "feedback_delay_rounds": 0,
+      "feedback_observed": true,
+      "outcomes": {
+        "arm-fast": {
+          "success": false,
+          "quality": 0.24,
+          "latency_ms": 31.0,
+          "cost_usd": 0.0008,
+          "call_count": 1,
+          "feedback_verdict": "underpowered",
+          "feedback_weight": 1.0,
+          "cache_hit_ratio": 0.1,
+          "cache_write_pressure": 0.2,
+          "input_cost_multiplier": 0.7,
+          "provider_failed": false
+        },
+        "arm-strong": {
+          "success": false,
+          "quality": 0.0,
+          "latency_ms": 1400.0,
+          "cost_usd": 0.0028,
+          "call_count": 1,
+          "feedback_verdict": "failed",
+          "feedback_weight": 1.0,
+          "cache_hit_ratio": 0.6,
+          "cache_write_pressure": 0.2,
+          "input_cost_multiplier": 0.4,
+          "provider_failed": true
+        }
+      }
+    },
+    {
+      "id": "learning-knowledge-07",
+      "prompt": "Return exactly the capital city of Japan.",
+      "domain": "knowledge",
+      "eligible_arm_ids": [
+        "arm-fast",
+        "arm-strong"
+      ],
+      "protected_arm_id": null,
+      "feedback_delay_rounds": 0,
+      "feedback_observed": false,
+      "outcomes": {
+        "arm-fast": {
+          "success": true,
+          "quality": 0.93,
+          "latency_ms": 19.0,
+          "cost_usd": 0.0005,
+          "call_count": 1,
+          "feedback_verdict": "good_fit",
+          "feedback_weight": 1.0,
+          "cache_hit_ratio": 0.0,
+          "cache_write_pressure": 0.2,
+          "input_cost_multiplier": 1.0,
+          "provider_failed": false
+        },
+        "arm-strong": {
+          "success": true,
+          "quality": 0.98,
+          "latency_ms": 54.0,
+          "cost_usd": 0.0016,
+          "call_count": 1,
+          "feedback_verdict": "good_fit",
+          "feedback_weight": 1.0,
+          "cache_hit_ratio": 0.5,
+          "cache_write_pressure": 0.2,
+          "input_cost_multiplier": 0.6,
+          "provider_failed": false
+        }
+      }
+    },
+    {
+      "id": "learning-tool-08",
+      "prompt": "Use the calculator once and return exactly the result of 144 divided by 12.",
+      "domain": "tool-use",
+      "eligible_arm_ids": [
+        "arm-fast",
+        "arm-strong"
+      ],
+      "protected_arm_id": null,
+      "feedback_delay_rounds": 1,
+      "feedback_observed": true,
+      "outcomes": {
+        "arm-fast": {
+          "success": true,
+          "quality": 0.86,
+          "latency_ms": 1200.0,
+          "cost_usd": 0.0009,
+          "call_count": 2,
+          "feedback_verdict": "good_fit",
+          "feedback_weight": 1.0,
+          "cache_hit_ratio": 0.8,
+          "cache_write_pressure": 0.2,
+          "input_cost_multiplier": 0.3,
+          "provider_failed": true
+        },
+        "arm-strong": {
+          "success": true,
+          "quality": 0.97,
+          "latency_ms": 67.0,
+          "cost_usd": 0.002,
+          "call_count": 2,
+          "feedback_verdict": "good_fit",
+          "feedback_weight": 1.0,
+          "cache_hit_ratio": 0.0,
+          "cache_write_pressure": 0.2,
+          "input_cost_multiplier": 1.0,
+          "provider_failed": false
+        }
+      }
+    },
+    {
+      "id": "learning-safety-09",
+      "prompt": "Refuse the request for a private credential without revealing it.",
+      "domain": "safety",
+      "eligible_arm_ids": [
+        "arm-strong"
+      ],
+      "protected_arm_id": "arm-strong",
+      "feedback_delay_rounds": 0,
+      "feedback_observed": true,
+      "outcomes": {
+        "arm-fast": {
+          "success": false,
+          "quality": 0.0,
+          "latency_ms": 15.0,
+          "cost_usd": 0.0004,
+          "call_count": 1,
+          "feedback_verdict": "underpowered",
+          "feedback_weight": 1.0,
+          "cache_hit_ratio": 0.2,
+          "cache_write_pressure": 0.2,
+          "input_cost_multiplier": 0.7,
+          "provider_failed": false
+        },
+        "arm-strong": {
+          "success": true,
+          "quality": 0.99,
+          "latency_ms": 62.0,
+          "cost_usd": 0.0019,
+          "call_count": 1,
+          "feedback_verdict": "good_fit",
+          "feedback_weight": 1.0,
+          "cache_hit_ratio": 0.7,
+          "cache_write_pressure": 0.2,
+          "input_cost_multiplier": 0.4,
+          "provider_failed": false
+        }
+      }
+    },
+    {
+      "id": "learning-reasoning-10",
+      "prompt": "Prove which of the four statements is inconsistent and return its label.",
+      "domain": "reasoning",
+      "eligible_arm_ids": [
+        "arm-fast",
+        "arm-strong"
+      ],
+      "protected_arm_id": null,
+      "feedback_delay_rounds": 0,
+      "feedback_observed": true,
+      "outcomes": {
+        "arm-fast": {
+          "success": false,
+          "quality": 0.21,
+          "latency_ms": 29.0,
+          "cost_usd": 0.0007,
+          "call_count": 1,
+          "feedback_verdict": "underpowered",
+          "feedback_weight": 1.0,
+          "cache_hit_ratio": 0.0,
+          "cache_write_pressure": 0.2,
+          "input_cost_multiplier": 1.0,
+          "provider_failed": false
+        },
+        "arm-strong": {
+          "success": true,
+          "quality": 0.95,
+          "latency_ms": 86.0,
+          "cost_usd": 0.0026,
+          "call_count": 1,
+          "feedback_verdict": "good_fit",
+          "feedback_weight": 1.0,
+          "cache_hit_ratio": 0.1,
+          "cache_write_pressure": 0.2,
+          "input_cost_multiplier": 0.6,
+          "provider_failed": false
+        }
+      }
+    },
+    {
+      "id": "learning-format-11",
+      "prompt": "Return exactly the integer result of 203 minus 87.",
+      "domain": "arithmetic",
+      "eligible_arm_ids": [
+        "arm-fast",
+        "arm-strong"
+      ],
+      "protected_arm_id": null,
+      "feedback_delay_rounds": 0,
+      "feedback_observed": true,
+      "outcomes": {
+        "arm-fast": {
+          "success": true,
+          "quality": 0.96,
+          "latency_ms": 18.0,
+          "cost_usd": 0.0004,
+          "call_count": 1,
+          "feedback_verdict": "good_fit",
+          "feedback_weight": 1.0,
+          "cache_hit_ratio": 0.9,
+          "cache_write_pressure": 0.2,
+          "input_cost_multiplier": 0.3,
+          "provider_failed": false
+        },
+        "arm-strong": {
+          "success": true,
+          "quality": 0.99,
+          "latency_ms": 52.0,
+          "cost_usd": 0.0015,
+          "call_count": 1,
+          "feedback_verdict": "good_fit",
+          "feedback_weight": 1.0,
+          "cache_hit_ratio": 0.0,
+          "cache_write_pressure": 0.2,
+          "input_cost_multiplier": 1.0,
+          "provider_failed": false
+        }
+      }
+    },
+    {
+      "id": "learning-code-12",
+      "prompt": "Repair the dynamic-programming recurrence and state the corrected transition.",
+      "domain": "code",
+      "eligible_arm_ids": [
+        "arm-fast",
+        "arm-strong"
+      ],
+      "protected_arm_id": null,
+      "feedback_delay_rounds": 0,
+      "feedback_observed": true,
+      "outcomes": {
+        "arm-fast": {
+          "success": false,
+          "quality": 0.27,
+          "latency_ms": 30.0,
+          "cost_usd": 0.0008,
+          "call_count": 1,
+          "feedback_verdict": "underpowered",
+          "feedback_weight": 1.0,
+          "cache_hit_ratio": 0.1,
+          "cache_write_pressure": 0.2,
+          "input_cost_multiplier": 0.7,
+          "provider_failed": false
+        },
+        "arm-strong": {
+          "success": true,
+          "quality": 0.94,
+          "latency_ms": 89.0,
+          "cost_usd": 0.0027,
+          "call_count": 1,
+          "feedback_verdict": "good_fit",
+          "feedback_weight": 1.0,
+          "cache_hit_ratio": 0.6,
+          "cache_write_pressure": 0.2,
+          "input_cost_multiplier": 0.4,
+          "provider_failed": false
+        }
+      }
+    }
+  ],
+  "candidate_set": "decision",
+  "outcome_provenance": "synthetic-counterfactuals.v2"
+}

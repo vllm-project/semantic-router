@@ -29,29 +29,10 @@ from cli.evaluation.evidence import (
 )
 
 ROUTER_LEARNING_CASE_COUNT = 12
+ROUTER_LEARNING_TRIAL_COUNT = 32
 _CANDIDATE_ARM_COUNT = 2
 
-_RESOURCE_PATH = ("resources", "router_learning_core.v1.json")
-_SCHEMA_VERSION = "router-learning-corpus.v1"
-_COLUMNS = (
-    "id",
-    "prompt",
-    "domain",
-    "eligible_arm_ids",
-    "protected_arm_id",
-    "feedback_delay_rounds",
-    "feedback_observed",
-    "fast_success",
-    "fast_quality",
-    "fast_latency_ms",
-    "fast_cost_usd",
-    "fast_call_count",
-    "strong_success",
-    "strong_quality",
-    "strong_latency_ms",
-    "strong_cost_usd",
-    "strong_call_count",
-)
+_RESOURCE_PATH = ("resources", "router_learning_core.v2.json")
 
 
 class RouterLearningArm(StrictModel):
@@ -69,6 +50,12 @@ class RouterLearningOutcome(StrictModel):
     latency_ms: float = Field(ge=0)
     cost_usd: float = Field(ge=0)
     call_count: int = Field(ge=1)
+    feedback_verdict: Literal["good_fit", "underpowered", "overprovisioned", "failed"]
+    feedback_weight: float = Field(ge=0)
+    cache_hit_ratio: float | None = Field(ge=0, le=1)
+    cache_write_pressure: float = Field(ge=0, le=1)
+    input_cost_multiplier: float | None = Field(gt=0, le=1)
+    provider_failed: bool
 
 
 class RouterLearningCase(StrictModel):
@@ -85,7 +72,9 @@ class RouterLearningCase(StrictModel):
 
 
 class RouterLearningCorpus(StrictModel):
-    schema_version: Literal["router-learning-corpus.v1"]
+    schema_version: Literal["router-learning-corpus.v2"]
+    candidate_set: Literal["decision"]
+    outcome_provenance: Literal["synthetic-counterfactuals.v2"]
     candidate_arms: tuple[RouterLearningArm, ...] = Field(min_length=2)
     base_arm_id: str
     trial_seeds: tuple[int, ...] = Field(min_length=2)
@@ -128,47 +117,9 @@ def _load_corpus() -> RouterLearningCorpus:
     raw = strict_json_loads(
         files("cli.evaluation").joinpath(*_RESOURCE_PATH).read_bytes()
     )
-    if not isinstance(raw, dict) or set(raw) != {
-        "schema_version",
-        "candidate_arms",
-        "base_arm_id",
-        "trial_seeds",
-        "propensity_status",
-        "columns",
-        "cases",
-    }:
-        raise RuntimeError(
-            "Router Learning corpus must use the versioned object schema"
-        )
-    if raw["schema_version"] != _SCHEMA_VERSION or tuple(raw["columns"]) != _COLUMNS:
-        raise RuntimeError("Router Learning corpus schema is unsupported")
-    arm_ids = tuple(arm["id"] for arm in raw["candidate_arms"])
-    cases: list[dict[str, object]] = []
-    for index, row in enumerate(raw["cases"]):
-        if not isinstance(row, list) or len(row) != len(_COLUMNS):
-            raise RuntimeError(f"Router Learning case row {index} is malformed")
-        values = dict(zip(_COLUMNS, row, strict=True))
-        outcomes = {
-            arm_ids[0]: {
-                "success": values.pop("fast_success"),
-                "quality": values.pop("fast_quality"),
-                "latency_ms": values.pop("fast_latency_ms"),
-                "cost_usd": values.pop("fast_cost_usd"),
-                "call_count": values.pop("fast_call_count"),
-            },
-            arm_ids[1]: {
-                "success": values.pop("strong_success"),
-                "quality": values.pop("strong_quality"),
-                "latency_ms": values.pop("strong_latency_ms"),
-                "cost_usd": values.pop("strong_cost_usd"),
-                "call_count": values.pop("strong_call_count"),
-            },
-        }
-        cases.append({**values, "outcomes": outcomes})
-    corpus = RouterLearningCorpus.model_validate(
-        {key: value for key, value in raw.items() if key not in {"columns", "cases"}}
-        | {"cases": cases}
-    )
+    corpus = RouterLearningCorpus.model_validate(raw)
+    if len(corpus.trial_seeds) != ROUTER_LEARNING_TRIAL_COUNT:
+        raise RuntimeError("Router Learning corpus trial count drifted")
     if len(corpus.cases) != ROUTER_LEARNING_CASE_COUNT:
         raise RuntimeError("Router Learning corpus case count drifted")
     return corpus

@@ -222,7 +222,7 @@ def test_evaluation_resources_are_declared_and_present_in_a_built_wheel(
         packaged = wheel.read("cli/evaluation/golden/metric_analysis_catalog.v1.json")
         live_mom_cases = wheel.read("cli/evaluation/resources/live_mom_cases.v1.json")
         router_learning_cases = wheel.read(
-            "cli/evaluation/resources/router_learning_core.v1.json"
+            "cli/evaluation/resources/router_learning_core.v2.json"
         )
     assert packaged == catalog.metric_analysis_catalog_bytes()
     assert (
@@ -232,6 +232,6 @@ def test_evaluation_resources_are_declared_and_present_in_a_built_wheel(
     assert (
         router_learning_cases
         == (
-            project / "cli/evaluation/resources/router_learning_core.v1.json"
+            project / "cli/evaluation/resources/router_learning_core.v2.json"
         ).read_bytes()
     )

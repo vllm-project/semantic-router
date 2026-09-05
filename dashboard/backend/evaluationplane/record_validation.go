@@ -209,6 +209,11 @@ func validateRecordsAndFailureSummary(
 	if err != nil {
 		return recordAttestation{}, err
 	}
+	if executor.ID == routerLearningReplayExecutorID {
+		if err := validateRouterLearningRunPlan(attestation.JointRecords, cases.CaseIDsByTrack["joint"], manifest.Seed); err != nil {
+			return recordAttestation{}, fmt.Errorf("%w: %w", ErrInvalid, err)
+		}
+	}
 	if manifest.Target.Mixture != nil && containsTrack(manifest.TrackIDs, "model_pool") {
 		arms := make([]string, len(manifest.Target.Mixture.ModelArms))
 		for index, arm := range manifest.Target.Mixture.ModelArms {

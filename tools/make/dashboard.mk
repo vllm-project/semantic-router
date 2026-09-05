@@ -126,10 +126,13 @@ dashboard-test-backend: ## Run dashboard backend Go tests (run from repo root: m
 	cd $(DASHBOARD_BACKEND_DIR) && \
 		VLLM_SR_EVALUATION_TEST_PYTHON="$${VLLM_SR_EVALUATION_TEST_PYTHON:-python3}" go test ./...
 
+dashboard-test-router-learning: ## Check replay parity against the production Go scoring helpers
+	cd src/vllm-sr && "$${VLLM_SR_EVALUATION_TEST_PYTHON:-python3}" -m pytest tests/test_router_learning_policy_parity.py tests/test_router_learning_benchmark.py -q
+
 dashboard-evaluation-catalog-check: ## Check generated Evaluation catalog mirrors
 	@python3 tools/ci/sync_evaluation_catalogs.py --check
 
-dashboard-check: dashboard-evaluation-catalog-check dashboard-lint dashboard-type-check dashboard-test-frontend dashboard-test-backend dashboard-go-mod-tidy ## Run all dashboard checks (catalogs, lint, type-check, frontend + backend tests, go mod tidy)
+dashboard-check: dashboard-test-router-learning dashboard-evaluation-catalog-check dashboard-lint dashboard-type-check dashboard-test-frontend dashboard-test-backend dashboard-go-mod-tidy ## Run all dashboard checks (catalogs, lint, type-check, frontend + backend tests, go mod tidy)
 	@$(LOG_TARGET)
 	@echo "All dashboard checks passed"
 
@@ -148,7 +151,7 @@ dashboard-clean: ## Clean dashboard build artifacts (frontend dist + backend bin
 
 .PHONY: dashboard-install dashboard-dev-frontend dashboard-dev-backend \
 	dashboard-build dashboard-build-wasm dashboard-build-frontend dashboard-build-backend \
-	dashboard-test-backend dashboard-test-frontend dashboard-test-e2e-evaluation \
+	dashboard-test-backend dashboard-test-frontend dashboard-test-e2e-evaluation dashboard-test-router-learning \
 	dashboard-evaluation-catalog-check \
 	dashboard-lint dashboard-lint-fix dashboard-type-check dashboard-go-mod-tidy \
 	dashboard-check dashboard-clean

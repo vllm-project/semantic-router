@@ -52,7 +52,7 @@ jobs:
       # The dashboard backend shells out to the vllm-sr CLI to regenerate Envoy
       # config, so its Go tests need the CLI's Python dependencies importable.
       - name: Install vllm-sr CLI
-        run: pip install -e src/vllm-sr
+        run: pip install -e src/vllm-sr pytest
 
       - name: Set up golangci-lint
         uses: golangci/golangci-lint-action@v7

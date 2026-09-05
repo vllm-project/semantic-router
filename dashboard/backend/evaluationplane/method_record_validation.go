@@ -90,7 +90,7 @@ func validateMethodRecord(record executionRecordEvidence, executor executorContr
 
 func validateRouterLearningMethod(method routerLearningMethodEvidence, record executionRecordEvidence) error {
 	if method.ContractVersion != "evaluation-router-learning-method.v1" ||
-		method.CorpusRevision != "router-learning-core-v1" ||
+		method.CorpusRevision != "router-learning-core-v2" ||
 		(method.PolicyID != "static-base" && method.PolicyID != "routing-sampling" && method.PolicyID != "beta-bernoulli") ||
 		!evidenceIDPattern.MatchString(method.TrialID) || method.TrialSeed < 0 || method.TrialSeed > 1<<32-1 || method.RoundIndex < 0 ||
 		method.FeedbackDelayRounds < 0 || method.CallCount < 1 || !finiteFloat(method.LifecycleCostUSD) || method.LifecycleCostUSD < 0 ||

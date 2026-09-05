@@ -7,11 +7,12 @@ import (
 	"sort"
 )
 
-const routerLearningZ95 = 1.959963984540054
+// Two-sided 95% Student t critical value for the frozen 32-trial protocol (df=31).
+const routerLearningT95DF31 = 2.0395134463964077
 
 var routerLearningPolicyIDs = []string{"static-base", "routing-sampling", "beta-bernoulli"}
 
-const routerLearningTrialCount = 8
+const routerLearningTrialCount = 32
 
 type routerLearningPolicyAttestation struct {
 	PolicyID                    string
@@ -80,12 +81,15 @@ func reduceRouterLearningMethod(records []executionRecordEvidence) (routerLearni
 	if len(byPolicy) != len(routerLearningPolicyIDs) {
 		return routerLearningMethodAttestation{}, fmt.Errorf("router learning replay requires every policy")
 	}
+	if err := validateRouterLearningTrialSets(byPolicy); err != nil {
+		return routerLearningMethodAttestation{}, err
+	}
 	var paired map[string]routerLearningTrialRows
 	result := routerLearningMethodAttestation{Policies: make(map[string]routerLearningPolicyAttestation)}
 	for _, policyID := range routerLearningPolicyIDs {
 		trials := byPolicy[policyID]
 		if len(trials) != routerLearningTrialCount {
-			return routerLearningMethodAttestation{}, fmt.Errorf("router learning replay requires eight paired trials")
+			return routerLearningMethodAttestation{}, fmt.Errorf("router learning replay requires 32 paired trials")
 		}
 		if paired == nil {
 			paired = make(map[string]routerLearningTrialRows, len(trials))
@@ -213,7 +217,7 @@ func optionalRouterLearningMean(values []float64) *float64 {
 }
 
 func routerLearningInterval(values []float64, bounded bool) []float64 {
-	if len(values) < 2 {
+	if len(values) != routerLearningTrialCount {
 		return nil
 	}
 	center := routerLearningMean(values)
@@ -223,7 +227,7 @@ func routerLearningInterval(values []float64, bounded bool) []float64 {
 		variance += delta * delta
 	}
 	variance /= float64(len(values) - 1)
-	margin := routerLearningZ95 * math.Sqrt(variance/float64(len(values)))
+	margin := routerLearningT95DF31 * math.Sqrt(variance/float64(len(values)))
 	lower, upper := center-margin, center+margin
 	if bounded {
 		lower = math.Max(0, lower)

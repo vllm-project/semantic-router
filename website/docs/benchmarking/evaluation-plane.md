@@ -98,7 +98,7 @@ that target, and every run contains exactly one executor cohort.
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
 | `evaluation-smoke`                 | deterministic four-case replay across all eight track schemas through `fixture-replay.v1`                                                  | E0 vertical-slice diagnostics only                                                                                                  |
 | `live-mom-core`                    | the same immutable 64-case hidden-label cohort through `mom-cohort-replay.v1` or `live-runtime.v1`, with routing, a dense case-by-frozen-arm matrix, and routed outcomes | replay is E0; a complete server-attested live run can seal routing E3, model-pool E4, and joint E5 (run-level E3). Those levels do not by themselves satisfy G3, which requires a server-controlled pair |
-| `router-learning-core`             | deterministic 12-round sequential replay through `router-learning-replay.v1`, comparing static-base, the seeded replay adapter for the current `routing_sampling` score equation, and simple Beta-Bernoulli over eight paired seeds | E0 policy diagnostics only; outcomes are frozen counterfactuals, action propensities are explicitly unsupported, and results are neither live-runtime parity nor causal production evidence |
+| `router-learning-core`             | deterministic 12-round sequential replay through `router-learning-replay.v1`, comparing static-base, the complete production `routing_sampling` equation (with Go differential parity tests), and simple Beta-Bernoulli over 32 paired seeds | E0 policy diagnostics only; outcomes are frozen counterfactuals, action propensities are explicitly unsupported, and results are neither live-runtime parity nor causal production evidence |
 | `live-agent-tasks`                 | complete `evaluation-agent-task-ledger.v1` evidence with `evaluation-agent-task-attempt.v1` repeated-task trajectories observed by an external production agent runtime, including grading, privacy, cost, and real-tool execution receipts bound to the exact Mixture | agentic E5 task-quality evidence after server validation and reduction; the evaluation worker does not execute tools, `benchmark_parity_claim` remains `none`, and this method has no Campaign gate and never qualifies G6 |
 | `live-fault-recovery`              | complete brokered exact-step fault ledger with paired baseline/treatment receipts, repeated seeds, state, side effects, retry, and latency | E5 only after the server re-reduces at least 20 pairs across at least 5 seeds; Continuity labeled failover is diagnostic only        |
 | `live-multimodal`                  | bounded eligible non-text requests through the active runtime                                                                              | E0 media transport and response diagnostics                                                                                         |
@@ -137,21 +137,93 @@ qualification comes from sealed run evidence, never from catalog presence.
 Evaluation create/start/report flow. Its versioned corpus freezes two logical
 arms, per-round eligibility and protection, delayed or censored feedback, and
 the hidden outcome for each arm. Every policy receives the same ordered rounds
-and the same eight trial seeds. Feedback updates only the arm that was selected,
+and the same 32 trial seeds. Feedback updates only the arm that was selected,
 and only after its declared delay; censored feedback never updates policy state.
 
 The report publishes, for each policy, solve rate, mean lifecycle cost, mean
 latency, mean model calls, protection-violation rate, hard-eligibility-violation
 rate, recorded action-propensity coverage, and paired trial count. Rate and mean
 uncertainty uses the trial as the cluster and weights trials uniformly. The
+32-trial protocol uses two-sided Student's t intervals with 31 degrees of freedom
+(critical value 2.0395134464), rather than a large-sample normal approximation.
+These approximate intervals describe variation across seeds on this fixed corpus;
+they do not measure uncertainty over unseen workloads or guarantee normal trial
+means. See [NIST's confidence limits for the mean](https://www.itl.nist.gov/div898/handbook/eda/section3/eda352.htm). The
 protection denominator contains only protected rounds; solve, cost, latency,
 calls, hard eligibility, and propensity coverage use all attempted rounds.
 
-The `routing-sampling` policy is a deterministic replay adapter: it preserves
-the current Beta-posterior score, cost penalty, cold-start preference, and
-base-arm tie-break, but replaces the production wall-clock random seed with the
-frozen trial seed. It therefore tests the learning policy contract, not exact
-Go RNG draws or the live outcome API. A zero propensity-coverage value means
+Before sealing a report, the server requires every policy and all 32 expected
+trial IDs, checks each seed against the manifest seed plus its frozen corpus
+offset (modulo 2^32), and requires every planned case exactly once in corpus
+order in every trial. Sampled runs must complete their entire selected case set.
+Missing, duplicated, reordered, or unplanned rounds and repeated or substituted
+seeds fail validation; they are not dropped or filled in. Recover by rerunning
+the complete affected trial from fresh state. The current executor regenerates
+all trials when the evaluation is rerun; there is no partial-trial resume API.
+
+The `routing-sampling` policy reproduces the complete production scoring equation:
+Beta posterior; candidate-scope catalog cost and input-cost EWMA penalties;
+overprovisioning and failure penalties; latency and cache-hit adjustments; and
+the base-arm bias. It also matches ascending model-name ties, scope/cost switch
+margins, cold-start precedence, and the posterior-mean path when protection
+suppresses sampling. Configured quality seeds apply only before any good-fit or
+underpowered observations; stored experience otherwise uses the runtime prior.
+
+Corpus revision `router-learning-core-v2` freezes explicit outcome verdicts and
+weights separately from task success, plus per-arm latency, cache, input-cost,
+and provider-failure telemetry. Only selected-arm telemetry is observed, at the
+end of the round. Quality feedback arrives after its declared delay or remains
+censored; censoring quality feedback does not censor observed usage telemetry.
+The Beta-Bernoulli baseline updates from binary task success, while production
+sampling updates its separate good-fit/underpowered/overprovisioned/failed counts.
+All policies share the same frozen counterfactuals and feedback schedule.
+
+The maintained Python contract test executes the **same Go scoring and feedback
+helpers called by the production runtime**, using identical experience snapshots
+and injected posterior samples. It compares every score component, posterior
+parameters, final selection, and every intermediate feedback/telemetry update.
+The cases exercise all three candidate scopes, individual and combined penalties,
+clamps, missing pricing, absent bases, ties, and protected/cold-start paths.
+The bounded replay itself uses one decision scope and the two fixed candidates;
+it does not simulate hierarchical lookup, session lifecycle, or replica state.
+Python and Go use different seeded random streams; equality is asserted for
+identical posterior samples, not for equal numeric seeds across languages.
+
+Run the parity and replay contracts from the repository root (Go is required):
+
+```bash
+cd src/vllm-sr
+python -m pytest tests/test_router_learning_policy_parity.py tests/test_router_learning_benchmark.py -q
+```
+
+The server create/start/report integration additionally runs the real Python
+worker and independently attests all 1,152 rows and policy metrics:
+
+```bash
+cd dashboard/backend
+VLLM_SR_EVALUATION_TEST_PYTHON=/absolute/path/to/python go test ./evaluationplane -run 'TestCommandProcessRouterLearningEndToEnd' -count=1
+```
+
+These are synthetic E0 comparisons of the production policy's calculations,
+not measurements of live backend quality or evidence authorizing apply mode.
+The success-constrained policy remains excluded until its implementation is
+available through #3412/#3480. The broader
+scenario, calibration, resource, and graduation requirements of #2346 remain
+outside this first delivery. Earlier v1 results do not describe this v2 corpus.
+
+For a full v2 run with manifest seed `17` (1,152 records), the deterministic
+reference means are:
+
+| Policy | Solve rate | Lifecycle cost / round | Latency / round |
+| --- | --- | --- | --- |
+| `static-base` | 0.6667 | $0.0008500 | 128.75 ms |
+| `routing-sampling` | 0.7995 | $0.0015065 | 174.83 ms |
+| `beta-bernoulli` | 0.8307 | $0.0016531 | 181.19 ms |
+
+The two adaptive solve-rate confidence intervals overlap. This small synthetic
+run does not establish that either adaptive policy is superior.
+
+A zero propensity-coverage value means
 off-policy IPS/SNIPS estimates are unsupported for this corpus; it is not a
 measured zero probability.
 

@@ -10,7 +10,7 @@ from cli.evaluation.contract_primitives import StrictModel
 from cli.evaluation.contract_validation import validate_portable_id
 
 ROUTER_LEARNING_EVIDENCE_VERSION = "evaluation-router-learning-method.v1"
-ROUTER_LEARNING_CORPUS_REVISION = "router-learning-core-v1"
+ROUTER_LEARNING_CORPUS_REVISION = "router-learning-core-v2"
 ROUTER_LEARNING_POLICY_IDS = (
     "static-base",
     "routing-sampling",
@@ -22,7 +22,7 @@ class RouterLearningMethodEvidence(StrictModel):
     contract_version: Literal["evaluation-router-learning-method.v1"] = (
         ROUTER_LEARNING_EVIDENCE_VERSION
     )
-    corpus_revision: Literal["router-learning-core-v1"] = (
+    corpus_revision: Literal["router-learning-core-v2"] = (
         ROUTER_LEARNING_CORPUS_REVISION
     )
     policy_id: Literal["static-base", "routing-sampling", "beta-bernoulli"]

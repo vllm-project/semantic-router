@@ -192,20 +192,6 @@ func cloneLearningOutcomeMetadata(values map[string]string) map[string]string {
 	return cloned
 }
 
-type routerLearningModelExperience struct {
-	QualitySeed             float64
-	SeedWeight              float64
-	GoodFitCount            int
-	UnderpoweredCount       int
-	OverprovisionedCount    int
-	FailedCount             int
-	LatencyEWMA             float64
-	CacheHitEWMA            float64
-	CacheWriteEWMA          float64
-	InputCostMultiplierEWMA float64
-	LastUpdated             time.Time
-}
-
 func routerOutcomeVerdict(verdict routerruntime.RouterOutcomeVerdict) (routerLearningOutcomeVerdict, bool) {
 	switch verdict {
 	case routerruntime.RouterOutcomeVerdictGoodFit:
@@ -332,27 +318,8 @@ func (rt *routerLearningRuntime) recordModelExperienceLocked(
 		}
 		rt.shared.experience[key] = exp
 	}
-	switch verdict {
-	case routerLearningOutcomeGoodFit:
-		exp.GoodFitCount += outcomeCount(score)
-	case routerLearningOutcomeUnderpowered:
-		exp.UnderpoweredCount += outcomeCount(score)
-	case routerLearningOutcomeOverprovisioned:
-		exp.OverprovisionedCount += outcomeCount(score)
-	case routerLearningOutcomeFailed:
-		exp.FailedCount += outcomeCount(score)
-	}
+	applyRouterLearningOutcome(exp, verdict, score)
 	exp.LastUpdated = time.Now()
-}
-
-func outcomeCount(score float64) int {
-	if score <= 0 {
-		return 1
-	}
-	if score < 1 {
-		return 1
-	}
-	return int(score)
 }
 
 func (rt *routerLearningRuntime) experienceSnapshot(decisionName string, decisionTier int, model string) routerLearningModelExperience {

@@ -8,10 +8,12 @@ from math import sqrt
 
 from cli.evaluation.evidence import ExecutionRecord
 from cli.evaluation.metric_core import MetricDraft, canonical_ordered_float_sum
+from cli.evaluation.router_learning_corpus import ROUTER_LEARNING_TRIAL_COUNT
 from cli.evaluation.router_learning_evidence import ROUTER_LEARNING_POLICY_IDS
 
-_Z_95 = 1.959963984540054
-_MIN_INTERVAL_TRIALS = 2
+# Two-sided 95% Student t critical value, 31 degrees of freedom.
+# The versioned replay contract requires exactly 32 independent seed trials.
+_T_95_DF31 = 2.0395134463964077
 
 
 def _mean(values: list[float]) -> float | None:
@@ -21,14 +23,16 @@ def _mean(values: list[float]) -> float | None:
 def _cluster_interval(
     values: list[float], *, bounds: tuple[float, float] | None = None
 ) -> tuple[float, float] | None:
-    if len(values) < _MIN_INTERVAL_TRIALS:
+    if not values:
         return None
+    if len(values) != ROUTER_LEARNING_TRIAL_COUNT:
+        raise ValueError("Router Learning intervals require 32 complete trials")
     center = _mean(values)
     if center is None:
         return None
     variance = canonical_ordered_float_sum((value - center) ** 2 for value in values)
     variance /= len(values) - 1
-    margin = _Z_95 * sqrt(variance / len(values))
+    margin = _T_95_DF31 * sqrt(variance / len(values))
     lower, upper = center - margin, center + margin
     if bounds is not None:
         lower = max(bounds[0], lower)

@@ -185,10 +185,9 @@ _BUILTIN_SUITES = (
         id="router-learning-core",
         name="Router Learning policy comparison",
         description=(
-            "A deterministic sequential replay comparing a static base policy, the "
-            "current routing_sampling score equation, and a simple Beta-Bernoulli "
-            "policy over paired trial seeds. It is diagnostic and not a production "
-            "causal claim."
+            "Replays 32 seeded trials comparing static/base routing, full production "
+            "routing_sampling scoring, and Beta-Bernoulli. Uses synthetic outcomes "
+            "for diagnostic comparisons; does not measure live production performance."
         ),
         track_ids=("joint",),
         modes=("replay",),

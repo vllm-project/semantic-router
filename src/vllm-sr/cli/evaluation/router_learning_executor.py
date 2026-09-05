@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import random
 from collections import defaultdict
-from dataclasses import dataclass, replace
+from dataclasses import replace
 
 from cli.evaluation.case_plan import project_visible_case_set
 from cli.evaluation.contracts import RunManifest
@@ -15,22 +15,23 @@ from cli.evaluation.resolution import sample_case_sets
 from cli.evaluation.router_learning_corpus import (
     ROUTER_LEARNING_CORPUS,
     RouterLearningCase,
+    RouterLearningOutcome,
     router_learning_case_sets,
 )
 from cli.evaluation.router_learning_evidence import (
     ROUTER_LEARNING_POLICY_IDS,
     RouterLearningMethodEvidence,
 )
-
-
-@dataclass
-class _ArmState:
-    good_fit: int = 0
-    underpowered: int = 0
-
-    @property
-    def observations(self) -> int:
-        return self.good_fit + self.underpowered
+from cli.evaluation.router_learning_policy import (
+    ArmState as _ArmState,
+)
+from cli.evaluation.router_learning_policy import (
+    apply_outcome,
+    apply_telemetry,
+    cost_penalty,
+    score_candidate,
+    select_winner,
+)
 
 
 def _beta_sample(rng: random.Random, alpha: float, beta: float) -> float:
@@ -51,8 +52,8 @@ def _beta_bernoulli_proposal(
         key=lambda arm_id: (
             _beta_sample(
                 rng,
-                1.0 + state[arm_id].good_fit,
-                1.0 + state[arm_id].underpowered,
+                1.0 + state[arm_id].successes,
+                1.0 + state[arm_id].failures,
             ),
             arm_id,
         ),
@@ -64,62 +65,37 @@ def _routing_sampling_proposal(
     state: dict[str, _ArmState],
     rng: random.Random,
 ) -> str:
-    """Seeded replay adapter for the current routing_sampling score equation.
+    """Complete production equation; distribution-equivalent seeded Beta draws.
 
-    The production runtime intentionally seeds Go's sampler from wall-clock time.
-    Replay substitutes a frozen RNG while preserving the posterior, cost penalty,
-    cold-start preference, and base-arm tie-break terms.
+    Parity checks compare the production Go helpers with identical posterior
+    samples, state, telemetry, candidate scope, and base route. Python and Go
+    random streams are deliberately not claimed to be bit-identical.
     """
-
     corpus = ROUTER_LEARNING_CORPUS
     arms = {arm.id: arm for arm in corpus.candidate_arms}
-    max_cost = max(
-        arms[arm_id].input_cost_per_million_tokens_usd
+    costs = {
+        arm_id: arms[arm_id].input_cost_per_million_tokens_usd
         + arms[arm_id].output_cost_per_million_tokens_usd
         for arm_id in case.eligible_arm_ids
+    }
+    # A protected apply-mode request suppresses sampling in production.
+    use_sampling = case.protected_arm_id is None
+    sample = (
+        (lambda alpha, beta: _beta_sample(rng, alpha, beta)) if use_sampling else None
     )
-    scores: dict[str, float] = {}
-    for arm_id in case.eligible_arm_ids:
-        arm = arms[arm_id]
-        experience = state[arm_id]
-        alpha = 2.0 * arm.quality_seed + experience.good_fit + 1.0
-        beta = 2.0 * (1.0 - arm.quality_seed) + experience.underpowered + 1.0
-        predicted = _beta_sample(rng, alpha, beta)
-        arm_cost = (
-            arm.input_cost_per_million_tokens_usd
-            + arm.output_cost_per_million_tokens_usd
+    scores = [
+        score_candidate(
+            arm_id,
+            state[arm_id],
+            cost_penalty(costs[arm_id], max(costs.values()), corpus.candidate_set),
+            arm_id == corpus.base_arm_id,
+            sample,
         )
-        score = predicted - 0.04 * arm_cost / max_cost
-        if arm_id == corpus.base_arm_id:
-            score += 0.001
-        scores[arm_id] = score
-    cold = [
-        arm_id for arm_id in case.eligible_arm_ids if not state[arm_id].observations
+        for arm_id in case.eligible_arm_ids
     ]
-    pool = cold or list(case.eligible_arm_ids)
-    winner = max(pool, key=lambda arm_id: (scores[arm_id], arm_id))
-    if corpus.base_arm_id in case.eligible_arm_ids and winner != corpus.base_arm_id:
-        winner_cost = (
-            0.04
-            * (
-                arms[winner].input_cost_per_million_tokens_usd
-                + arms[winner].output_cost_per_million_tokens_usd
-            )
-            / max_cost
-        )
-        base_cost = (
-            0.04
-            * (
-                arms[corpus.base_arm_id].input_cost_per_million_tokens_usd
-                + arms[corpus.base_arm_id].output_cost_per_million_tokens_usd
-            )
-            / max_cost
-        )
-        if scores[winner] < scores[corpus.base_arm_id] + max(
-            0.0, winner_cost - base_cost
-        ):
-            return corpus.base_arm_id
-    return winner
+    return select_winner(
+        scores, corpus.base_arm_id, corpus.candidate_set, use_sampling
+    ).model
 
 
 def _proposal(
@@ -137,11 +113,28 @@ def _proposal(
     raise ValueError(f"unknown Router Learning policy: {policy_id}")
 
 
-def _apply_feedback(state: dict[str, _ArmState], arm_id: str, success: bool) -> None:
-    if success:
-        state[arm_id].good_fit += 1
+def _apply_feedback(
+    state: dict[str, _ArmState],
+    arm_id: str,
+    outcome: RouterLearningOutcome,
+) -> None:
+    experience = state[arm_id]
+    apply_outcome(experience, outcome.feedback_verdict, outcome.feedback_weight)
+    if outcome.success:
+        experience.successes += 1
     else:
-        state[arm_id].underpowered += 1
+        experience.failures += 1
+
+
+def _observe_telemetry(experience: _ArmState, outcome: RouterLearningOutcome) -> None:
+    apply_telemetry(
+        experience,
+        latency_seconds=outcome.latency_ms / 1000 if outcome.latency_ms > 0 else None,
+        cache_hit_ratio=outcome.cache_hit_ratio,
+        cache_write_pressure=outcome.cache_write_pressure,
+        input_cost_multiplier=outcome.input_cost_multiplier,
+        provider_failed=outcome.provider_failed,
+    )
 
 
 def _execute_policy_trial(
@@ -154,13 +147,13 @@ def _execute_policy_trial(
     corpus = ROUTER_LEARNING_CORPUS
     rng = random.Random(trial_seed)
     state = {arm.id: _ArmState() for arm in corpus.candidate_arms}
-    pending: dict[int, list[tuple[str, bool]]] = defaultdict(list)
+    pending: dict[int, list[tuple[str, RouterLearningOutcome]]] = defaultdict(list)
     records: list[ExecutionRecord] = []
     candidate_ids = tuple(arm.id for arm in corpus.candidate_arms)
     trial_id = f"trial-{trial_index + 1:02d}"
     for round_index, case in enumerate(cases):
-        for arm_id, success in pending.pop(round_index, ()):
-            _apply_feedback(state, arm_id, success)
+        for arm_id, feedback in pending.pop(round_index, ()):
+            _apply_feedback(state, arm_id, feedback)
         proposed = _proposal(policy_id, case, state, rng)
         selected = proposed
         if selected not in case.eligible_arm_ids:
@@ -168,9 +161,10 @@ def _execute_policy_trial(
         if case.protected_arm_id is not None:
             selected = case.protected_arm_id
         outcome = case.outcomes[selected]
+        _observe_telemetry(state[selected], outcome)
         if case.feedback_observed:
             due_round = round_index + case.feedback_delay_rounds + 1
-            pending[due_round].append((selected, outcome.success))
+            pending[due_round].append((selected, outcome))
         protection_violation = (
             case.protected_arm_id is not None and selected != case.protected_arm_id
         )
