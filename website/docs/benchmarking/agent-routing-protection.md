@@ -31,6 +31,13 @@ cd src/semantic-router
 go test ./pkg/extproc -run '^TestRouterLearningSession' -count=1 -v
 ```
 
+CI runs `make bench-agent-routing-protection` explicitly in the core
+`Test And Build` job after building CPU bindings and before starting external
+services or downloading model weights. Its exit status gates the job. The
+`agent-routing-protection` artifact contains the JSON report, including per-turn
+failures when a contract regresses. Upload is attempted even after failure;
+if setup fails before a report exists, the upload warns about the missing file.
+
 The tests also run in the normal core `make test-semantic-router` gate. Any
 per-turn model, sampling permission, hard-lock status, preflight reason, Replay action or reason mismatch fails the
 gate. Each run executes the corpus twice and compares report bytes.
