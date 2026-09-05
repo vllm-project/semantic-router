@@ -44,14 +44,18 @@ type SequenceClassificationRequest struct {
 	Inputs []string
 }
 
-func (r SequenceClassificationRequest) Capability() Capability { return CapabilitySequenceClassification }
+func (r SequenceClassificationRequest) Capability() Capability {
+	return CapabilitySequenceClassification
+}
 
 // SequenceClassificationResponse is the typed response for sequence classification.
 type SequenceClassificationResponse struct {
 	Predictions [][]float32
 }
 
-func (r SequenceClassificationResponse) Capability() Capability { return CapabilitySequenceClassification }
+func (r SequenceClassificationResponse) Capability() Capability {
+	return CapabilitySequenceClassification
+}
 
 // ModelHandle represents an opaque handle to a loaded model in a backend.
 type ModelHandle interface {

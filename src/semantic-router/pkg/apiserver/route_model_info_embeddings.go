@@ -7,8 +7,8 @@ import (
 	"path"
 	"strings"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 )
