@@ -302,18 +302,23 @@ func groundingVerifierCandidates(panel []*ModelResponse) ([]VerifierCandidate, [
 // groundingScoresFromVerifier rebuilds per-index grounding scores from a
 // verifier result using the candidate order established by
 // groundingVerifierCandidates. Peer-consistency flags reference peers by their
-// internal candidate ID; they are remapped to caller-visible model labels so
-// observability traces, grounding spans, and the synthesis notes stay
-// associated with real responses (regression #2857).
+// internal candidate ID and are remapped to caller-visible model labels so
+// traces, grounding spans, and the synthesis notes stay associated with real
+// responses. Only peer-consistency flags are ID-based; faithfulness flags are
+// arbitrary unsupported text spans and pass through verbatim (a literal span
+// like "panel-0" must never be rewritten) (regression #2857).
 func groundingScoresFromVerifier(res *VerifierResult, panel []*ModelResponse, idx []int) []groundingScore {
 	scores := make([]groundingScore, len(panel))
 	byID := make(map[string]groundingScore, len(res.Scores))
 	for _, s := range res.Scores {
 		byID[s.CandidateID] = groundingScore{Score: s.Confidence, FlaggedSpans: s.Flags}
 	}
-	idToModel := make(map[string]string, len(idx))
-	for _, i := range idx {
-		idToModel[fmt.Sprintf("panel-%d", i)] = modelName(panel[i])
+	var idToModel map[string]string
+	if res.Kind == VerifierKindPeerConsistency {
+		idToModel = make(map[string]string, len(idx))
+		for _, i := range idx {
+			idToModel[fmt.Sprintf("panel-%d", i)] = modelName(panel[i])
+		}
 	}
 	for _, i := range idx {
 		id := fmt.Sprintf("panel-%d", i)

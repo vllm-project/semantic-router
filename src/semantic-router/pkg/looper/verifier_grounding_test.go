@@ -173,3 +173,26 @@ func TestGroundingScoresFromVerifierAlignsNilSlots(t *testing.T) {
 		}
 	}
 }
+
+func TestGroundingScoresPreserveLiteralFaithfulnessSpans(t *testing.T) {
+	// Regression (#2857): faithfulness flags are arbitrary unsupported text
+	// spans. A span that literally equals an internal candidate ID must pass
+	// through verbatim; only peer-consistency flags are ID-remapped.
+	panel := []*ModelResponse{{Model: "a", Content: "aa"}}
+	candidates, idx := groundingVerifierCandidates(panel)
+	res := &VerifierResult{
+		Disposition: DispositionApprove,
+		Kind:        VerifierKindFaithfulness,
+		Scores: []CandidateScore{
+			{CandidateID: candidates[0].ID, Confidence: 0.5, Flags: []string{"panel-0", "unsupported claim"}},
+		},
+	}
+	scores := groundingScoresFromVerifier(res, panel, idx)
+	if len(scores) != 1 {
+		t.Fatalf("scores = %+v", scores)
+	}
+	got := scores[0].FlaggedSpans
+	if len(got) != 2 || got[0] != "panel-0" || got[1] != "unsupported claim" {
+		t.Fatalf("faithfulness spans must pass through verbatim, got %v", got)
+	}
+}
