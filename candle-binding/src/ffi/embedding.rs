@@ -4,6 +4,7 @@
 //! intelligent embedding generation with automatic model selection.
 
 use crate::classifiers::unified::{DualPathUnifiedClassifier, EmbeddingRequirements};
+use crate::core::resolve_device;
 use crate::ffi::types::{
     BatchSimilarityResult, EmbeddingResult, EmbeddingSimilarityResult, SimilarityMatch,
 };
@@ -263,8 +264,6 @@ where
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn init_mmbert_embedding_model(model_path: *const c_char, use_cpu: bool) -> bool {
-    use candle_core::Device;
-
     if model_path.is_null() {
         eprintln!("Error: model_path is null");
         return false;
@@ -289,11 +288,7 @@ pub extern "C" fn init_mmbert_embedding_model(model_path: *const c_char, use_cpu
     }
 
     // Determine device
-    let device = if use_cpu {
-        Device::Cpu
-    } else {
-        Device::cuda_if_available(0).unwrap_or(Device::Cpu)
-    };
+    let device = resolve_device(use_cpu);
 
     // Create or get factory
     let factory = if GLOBAL_MODEL_FACTORY.get().is_some() {
@@ -340,8 +335,6 @@ pub extern "C" fn init_embedding_models_with_mmbert(
     mmbert_model_path: *const c_char,
     use_cpu: bool,
 ) -> bool {
-    use candle_core::Device;
-
     if GLOBAL_MODEL_FACTORY.get().is_some() {
         eprintln!("WARNING: ModelFactory already initialized");
         return true;
@@ -386,11 +379,7 @@ pub extern "C" fn init_embedding_models_with_mmbert(
         return false;
     }
 
-    let device = if use_cpu {
-        Device::Cpu
-    } else {
-        Device::cuda_if_available(0).unwrap_or(Device::Cpu)
-    };
+    let device = resolve_device(use_cpu);
 
     let mut factory = ModelFactory::new(device);
 
@@ -439,8 +428,6 @@ pub extern "C" fn init_embedding_models(
     gemma_model_path: *const c_char,
     use_cpu: bool,
 ) -> bool {
-    use candle_core::Device;
-
     // Check if already initialized (OnceLock can only be set once)
     if GLOBAL_MODEL_FACTORY.get().is_some() {
         eprintln!("WARNING: ModelFactory already initialized");
@@ -477,11 +464,7 @@ pub extern "C" fn init_embedding_models(
     }
 
     // Determine device
-    let device = if use_cpu {
-        Device::Cpu
-    } else {
-        Device::cuda_if_available(0).unwrap_or(Device::Cpu)
-    };
+    let device = resolve_device(use_cpu);
 
     // Create ModelFactory
     let mut factory = ModelFactory::new(device);
@@ -1942,8 +1925,6 @@ pub extern "C" fn init_embedding_models_batched(
     max_wait_ms: u64,
     use_cpu: bool,
 ) -> bool {
-    use candle_core::Device;
-
     // Check if already initialized
     if GLOBAL_BATCHED_MODEL.get().is_some() {
         eprintln!("Warning: batched embedding model already initialized");
@@ -1967,11 +1948,7 @@ pub extern "C" fn init_embedding_models_batched(
     };
 
     // Determine device
-    let device = if use_cpu {
-        Device::Cpu
-    } else {
-        Device::cuda_if_available(0).unwrap_or(Device::Cpu)
-    };
+    let device = resolve_device(use_cpu);
 
     // Load tokenizer
     let tokenizer_path = format!("{}/tokenizer.json", model_path);
@@ -2199,8 +2176,6 @@ pub extern "C" fn init_multimodal_embedding_model(
     model_path: *const c_char,
     use_cpu: bool,
 ) -> bool {
-    use candle_core::Device;
-
     if model_path.is_null() {
         eprintln!("Error: model_path is null");
         return false;
@@ -2222,11 +2197,7 @@ pub extern "C" fn init_multimodal_embedding_model(
         return true;
     }
 
-    let device = if use_cpu {
-        Device::Cpu
-    } else {
-        Device::cuda_if_available(0).unwrap_or(Device::Cpu)
-    };
+    let device = resolve_device(use_cpu);
 
     // If the main factory is NOT yet set, create a new one with the multimodal model.
     if GLOBAL_MODEL_FACTORY.get().is_none() {
