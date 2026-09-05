@@ -5,14 +5,21 @@ import (
 	"strings"
 	"testing"
 
+	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/baggage"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 )
 
 // These tests pin the shadow trust boundary for headers. A decision's
 // header_mutation runs for the primary backend and may carry its credential,
 // so nothing it sets reaches the shadow unless forward_headers names it, and
 // credential carriers never do. Only shadowAuthorizer sets the shadow's key.
+// Client headers never reach the shadow either, including baggage the trace
+// propagator extracts from the client: only the span context crosses.
 
 const shadowTestPrimaryAuthHeader = "x-primary-token"
 
@@ -135,6 +142,60 @@ func TestShadowDispatchNeverForwardsCredentialsEvenWhenListed(t *testing.T) {
 	if got := wire.Get("x-tenant"); got != "acme" {
 		t.Fatalf("x-tenant = %q, want the harmless allowlisted header kept", got)
 	}
+}
+
+// installTracingPropagator installs the propagator InitTracing sets, W3C
+// trace context plus baggage, so the request phase extracts client baggage
+// exactly as it does on a router with tracing enabled.
+func installTracingPropagator(t *testing.T) {
+	t.Helper()
+	previous := otel.GetTextMapPropagator()
+	otel.SetTextMapPropagator(tracing.DefaultPropagator())
+	t.Cleanup(func() { otel.SetTextMapPropagator(previous) })
+}
+
+const shadowTestClientTraceID = "4bf92f3577b34da6a3ce929d0e0e4736"
+
+// shadowClientTraceHeaders runs the request-header phase with the trace
+// headers a client sent, so ctx.TraceContext holds the client's span context
+// and baggage the same way it does on a live request.
+func shadowClientTraceHeaders(t *testing.T) func(ctx *RequestContext) {
+	t.Helper()
+	return func(ctx *RequestContext) {
+		request := newRequestHeaders("POST", "/v1/chat/completions")
+		request.RequestHeaders.Headers.Headers = append(
+			request.RequestHeaders.Headers.Headers,
+			&core.HeaderValue{Key: "traceparent", Value: "00-" + shadowTestClientTraceID + "-00f067aa0ba902b7-01"},
+			&core.HeaderValue{Key: "tracestate", Value: "vendor=abc"},
+			&core.HeaderValue{Key: "baggage", Value: "token=client-secret,tenant=acme"},
+		)
+		startRequestHeaderSpan(request, ctx).End()
+		if got := baggage.FromContext(ctx.TraceContext).Member("token").Value(); got != "client-secret" {
+			t.Fatalf("request phase did not extract client baggage (token=%q), so nothing could leak", got)
+		}
+	}
+}
+
+func TestShadowDispatchNeverForwardsClientBaggage(t *testing.T) {
+	installTracingPropagator(t)
+	backend, router, primaryModel := newShadowHeaderTestRouter(t)
+
+	run := runShadowRequest(t, router, primaryModel, shadowTestPluginConfig(), shadowClientTraceHeaders(t))
+	waitForShadow(t, router)
+	if outcome := singleShadowOutcome(t, run); outcome.Verdict != shadowVerdictCompleted {
+		t.Fatalf("shadow verdict=%q reason=%q, want completed", outcome.Verdict, outcome.Reason)
+	}
+	wire := backend.headers[0]
+	if got := wire.Values("baggage"); len(got) != 0 {
+		t.Fatalf("client baggage reached the shadow with an empty forward_headers: %q", got)
+	}
+	if got := wire.Get("traceparent"); !strings.Contains(got, shadowTestClientTraceID) {
+		t.Fatalf("traceparent = %q, want the client's trace %s still propagated", got, shadowTestClientTraceID)
+	}
+	if got := wire.Get("tracestate"); got != "vendor=abc" {
+		t.Fatalf("tracestate = %q, want the client's trace state kept", got)
+	}
+	assertNoShadowCredentialHeaders(t, wire)
 }
 
 func TestShadowCallHeadersDropsShadowAuthHeaderMutation(t *testing.T) {

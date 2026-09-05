@@ -295,13 +295,17 @@ func shadowProfileAuthHeader(profile *config.ProviderProfile) string {
 	return authHeader
 }
 
-// shadowExtraHeaders carries the trace context to the shadow backend plus the
-// decision header mutations the plugin explicitly allowlists in
-// forward_headers. Everything else a decision sets for the primary backend
-// stays on the primary path, so a custom credential such as X-Internal-Token
-// can never cross into the shadow backend, which is a less trusted
-// candidate. Known credential carriers and either profile's auth header are
-// dropped even when listed. Client headers are never included.
+// shadowExtraHeaders carries the span context to the shadow backend, the W3C
+// traceparent and tracestate headers only, plus the decision header mutations
+// the plugin explicitly allowlists in forward_headers. Baggage is never
+// propagated: with tracing enabled the request phase extracts client baggage
+// into the trace context, so injecting through the global propagator would
+// hand a client-supplied member such as token=... to the shadow ahead of the
+// forward_headers filter. Everything else a decision sets for the primary
+// backend stays on the primary path, so a custom credential such as
+// X-Internal-Token can never cross into the shadow backend, which is a less
+// trusted candidate. Known credential carriers and either profile's auth
+// header are dropped even when listed. Client headers are never included.
 func (r *OpenAIRouter) shadowExtraHeaders(
 	ctx *RequestContext,
 	dispatch *providerDispatch,
@@ -309,7 +313,7 @@ func (r *OpenAIRouter) shadowExtraHeaders(
 ) map[string]string {
 	extra := make(map[string]string)
 	if ctx.TraceContext != nil {
-		for _, pair := range tracing.InjectTraceContextToSlice(ctx.TraceContext) {
+		for _, pair := range tracing.InjectSpanContextToSlice(ctx.TraceContext) {
 			extra[pair[0]] = pair[1]
 		}
 	}
