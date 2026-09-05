@@ -39,6 +39,12 @@ jobs:
     name: Unassign inactive assignees
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # The caller groups concurrency by task, so the scheduled sweep, task=all,
+    # and task=unassign can overlap; two sweeps would both read an absent marker
+    # and both write. Queue rather than cancel so in-flight writes still land.
+    concurrency:
+      group: unassign-inactive-assignees
+      cancel-in-progress: false
     permissions:
       contents: read # checkout, so github-script can require the helper
       issues: write

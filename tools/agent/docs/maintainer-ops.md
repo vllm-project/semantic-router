@@ -310,6 +310,10 @@ The reusable workflow also accepts `dry_run`, `warn_after_days`,
 `unassign_after_days`, and `exempt_labels`; invoke it directly from the Actions
 UI or CLI to preview a sweep without mutations.
 
+Sweeps are serialized repository-wide by a single concurrency group, so a manual
+dispatch queues behind an in-flight scheduled sweep instead of racing it and
+double-posting a warning or removal notice.
+
 The workflow logic lives in `.github/scripts/unassign-inactive.js` and is
 covered by `.github/scripts/__tests__/`, run in CI by the `github-scripts-tests`
 pre-commit hook. Run it locally with `npm --prefix .github/scripts ci && npm
