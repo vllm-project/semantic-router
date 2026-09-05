@@ -88,7 +88,10 @@ scores only that entrypoint's responses. The plugin's own `threshold` is ignored
 once a response-direction rule is declared, and the load reports that; the rule
 owns the threshold. A decision whose `response_jailbreak` plugin runs with no
 response-direction rule declared is also reported at load: the plugin is then
-classifying the response itself, which is the compatibility path.
+classifying the response itself, which is the compatibility path. Either
+consumer is enough to provision `prompt_guard` for the recipe: the jailbreak
+model and its label mapping are loaded for the response stage even when no
+decision rule reads a jailbreak signal.
 
 An unresolved detector (backend failure, or a response with no text to score)
 is reported through `SignalErrors`, the way every other signal reports one,

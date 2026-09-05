@@ -373,3 +373,119 @@ func loadGenericMultiRecipeModelNeedsTestConfig(t *testing.T) *RouterConfig {
 func float64PtrForRoutingSignalUsageTest(v float64) *float64 {
 	return &v
 }
+
+func responseJailbreakPluginForRoutingSignalUsageTest(enabled bool) DecisionPlugin {
+	return DecisionPlugin{
+		Type: "response_jailbreak",
+		Configuration: MustStructuredPayload(map[string]interface{}{
+			"enabled": enabled,
+			"action":  "block",
+		}),
+	}
+}
+
+func keywordDecisionsForRoutingSignalUsageTest(plugins ...DecisionPlugin) []Decision {
+	return []Decision{{
+		Name:    "keyword-route",
+		Rules:   RuleNode{Operator: "OR", Conditions: []RuleNode{{Type: SignalTypeKeyword, Name: "probe"}}},
+		Plugins: plugins,
+	}}
+}
+
+// A response-direction rule is consumed by the selected decision's
+// response_jailbreak plugin, never by a decision rule, so the mapping has to
+// load on the rule (or on a plugin that classifies the response itself) alone.
+func TestNeedsJailbreakMappingForResponseStageConsumers(t *testing.T) {
+	responseRule := JailbreakRule{Name: "unsafe_completion", Direction: SignalDirectionResponse}
+
+	tests := []struct {
+		name        string
+		promptGuard bool
+		rules       []JailbreakRule
+		decisions   []Decision
+		want        bool
+	}{
+		{
+			name:        "response-direction rule with no decision reading it",
+			promptGuard: true,
+			rules:       []JailbreakRule{responseRule},
+			decisions:   keywordDecisionsForRoutingSignalUsageTest(),
+			want:        true,
+		},
+		{
+			name:        "response_jailbreak plugin classifies the response itself",
+			promptGuard: true,
+			decisions:   keywordDecisionsForRoutingSignalUsageTest(responseJailbreakPluginForRoutingSignalUsageTest(true)),
+			want:        true,
+		},
+		{
+			name:        "disabled response_jailbreak plugin",
+			promptGuard: true,
+			decisions:   keywordDecisionsForRoutingSignalUsageTest(responseJailbreakPluginForRoutingSignalUsageTest(false)),
+			want:        false,
+		},
+		{
+			name:        "request-direction rule nothing reads",
+			promptGuard: true,
+			rules:       []JailbreakRule{{Name: "prompt_injection"}},
+			decisions:   keywordDecisionsForRoutingSignalUsageTest(),
+			want:        false,
+		},
+		{
+			name:        "prompt_guard disabled",
+			promptGuard: false,
+			rules:       []JailbreakRule{responseRule},
+			decisions:   keywordDecisionsForRoutingSignalUsageTest(responseJailbreakPluginForRoutingSignalUsageTest(true)),
+			want:        false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := newRoutingSignalUsageTestConfig()
+			cfg.PromptGuard.Enabled = tt.promptGuard
+			cfg.JailbreakRules = tt.rules
+			cfg.Decisions = tt.decisions
+			if got := cfg.NeedsJailbreakMappingForRouting(); got != tt.want {
+				t.Fatalf("NeedsJailbreakMappingForRouting() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNeedsJailbreakMappingForResponseStageConsumersFollowsRecipeReachability(t *testing.T) {
+	profile := func(rules []JailbreakRule, plugins ...DecisionPlugin) RoutingProfile {
+		return RoutingProfile{
+			Signals:   Signals{JailbreakRules: rules},
+			Decisions: keywordDecisionsForRoutingSignalUsageTest(plugins...),
+		}
+	}
+	responseRule := []JailbreakRule{{Name: "unsafe_completion", Direction: SignalDirectionResponse}}
+
+	cfg := newRoutingSignalUsageTestConfig()
+	cfg.Recipes = []RoutingRecipe{
+		{Name: DefaultRecipeName, Profile: profile(nil)},
+		{Name: "guarded", Profile: profile(responseRule)},
+		{Name: "plugin-owned", Profile: profile(nil, responseJailbreakPluginForRoutingSignalUsageTest(true))},
+	}
+	if cfg.NeedsJailbreakMappingForRouting() {
+		t.Fatal("response-stage consumers in recipes without an entrypoint must not load the jailbreak mapping")
+	}
+
+	cfg.Entrypoints = []EntrypointMapping{{ModelNames: []string{"vllm-sr/guarded"}, Recipe: "guarded"}}
+	if !cfg.NeedsJailbreakMappingForRouting() {
+		t.Fatal("a response-direction rule in a reachable recipe must load the jailbreak mapping")
+	}
+
+	cfg.Entrypoints = []EntrypointMapping{{ModelNames: []string{"vllm-sr/plugin-owned"}, Recipe: "plugin-owned"}}
+	if !cfg.NeedsJailbreakMappingForRouting() {
+		t.Fatal("a response_jailbreak plugin in a reachable recipe must load the jailbreak mapping")
+	}
+
+	for i, want := range []bool{false, true, true} {
+		scoped := cfg.ConfigForRecipe(&cfg.Recipes[i])
+		if got := scoped.NeedsJailbreakMappingForRouting(); got != want {
+			t.Fatalf("recipe %q scoped NeedsJailbreakMappingForRouting() = %v, want %v", cfg.Recipes[i].Name, got, want)
+		}
+	}
+}
