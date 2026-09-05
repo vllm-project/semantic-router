@@ -73,6 +73,7 @@ func (c *Classifier) initializeJailbreakClassifier() error {
 			"mode":      c.Config.PromptGuard.Protocol,
 			"model_ref": externalCfg.ModelName,
 		})
+		c.jailbreakModelReady = true
 		return nil
 	}
 
@@ -92,7 +93,11 @@ func (c *Classifier) initializeJailbreakClassifier() error {
 		"use_cpu":   c.Config.PromptGuard.UseCPU,
 	})
 
-	return c.jailbreakInitializer.Init(c.Config.PromptGuard.ModelID, c.Config.PromptGuard.UseCPU, numClasses)
+	if err := c.jailbreakInitializer.Init(c.Config.PromptGuard.ModelID, c.Config.PromptGuard.UseCPU, numClasses); err != nil {
+		return err
+	}
+	c.jailbreakModelReady = true
+	return nil
 }
 
 // CheckForJailbreak analyzes the given text for jailbreak attempts.
@@ -215,5 +220,9 @@ func (c *Classifier) initializePIIClassifier() error {
 		"use_cpu":   c.Config.PIIModel.UseCPU,
 	})
 
-	return c.piiInitializer.Init(c.Config.PIIModel.ModelID, c.Config.PIIModel.UseCPU, numPIIClasses)
+	if err := c.piiInitializer.Init(c.Config.PIIModel.ModelID, c.Config.PIIModel.UseCPU, numPIIClasses); err != nil {
+		return err
+	}
+	c.piiModelReady = true
+	return nil
 }
