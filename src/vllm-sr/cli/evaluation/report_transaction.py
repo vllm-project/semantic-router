@@ -9,7 +9,6 @@ from typing import Any, Final, Literal
 
 from pydantic import Field, field_validator, model_validator
 
-from cli.evaluation.artifact_store_error import StoreError
 from cli.evaluation.bundle import (
     REPORT_TRANSACTION_ARTIFACT_NAMES,
     REPORT_TRANSACTION_REQUIRED_NAMES,
@@ -24,7 +23,8 @@ from cli.evaluation.canonical import (
 )
 from cli.evaluation.contract_primitives import ArtifactRef, StrictModel
 from cli.evaluation.contract_validation import validate_canonical_uuid
-from cli.evaluation.private_filesystem import DurablePrivateFilesystem
+from cli.evaluation.errors import StoreError
+from cli.evaluation.private_filesystem_publication import DurablePrivateFilesystem
 
 _TRANSACTION_SCHEMA: Final = "evaluation-report-transaction.v1"
 _PREPARING_DIRECTORY = ".report-preparing"

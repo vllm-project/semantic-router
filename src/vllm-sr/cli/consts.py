@@ -1,7 +1,5 @@
 """Constants for vLLM Semantic Router CLI."""
 
-from cli import __version__
-
 # Docker image configuration
 VLLM_SR_CONTAINER_IMAGE_DEFAULT = "ghcr.io/vllm-project/semantic-router/vllm-sr:latest"
 VLLM_SR_CONTAINER_IMAGE_ROCM = (
@@ -10,14 +8,10 @@ VLLM_SR_CONTAINER_IMAGE_ROCM = (
 VLLM_SR_CONTAINER_IMAGE_CUDA = (
     "ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:latest"
 )
-VLLM_SR_ROUTER_CONTAINER_IMAGE_DEFAULT = VLLM_SR_CONTAINER_IMAGE_DEFAULT
-VLLM_SR_ROUTER_CONTAINER_IMAGE_ROCM = VLLM_SR_CONTAINER_IMAGE_ROCM
 VLLM_SR_ENVOY_CONTAINER_IMAGE_DEFAULT = "envoyproxy/envoy:v1.34-latest"
 VLLM_SR_DASHBOARD_CONTAINER_IMAGE_DEFAULT = (
     "ghcr.io/vllm-project/semantic-router/dashboard:latest"
 )
-VLLM_SR_CONTAINER_IMAGE_DEV = "vllm-sr:dev"
-VLLM_SR_CONTAINER_IMAGE_RELEASE = f"vllm-sr:{__version__}"
 DEFAULT_STACK_NAME = "vllm-sr"
 PLATFORM_AMD = "amd"
 PLATFORM_NVIDIA = "nvidia"
@@ -31,10 +25,6 @@ IMAGE_PULL_POLICY_IF_NOT_PRESENT = "ifnotpresent"
 IMAGE_PULL_POLICY_NEVER = "never"
 DEFAULT_IMAGE_PULL_POLICY = IMAGE_PULL_POLICY_ALWAYS
 
-# Service names
-SERVICE_NAME_ROUTER = "router"
-SERVICE_NAME_ENVOY = "envoy"
-
 # Default ports
 DEFAULT_ENVOY_PORT = 9901
 DEFAULT_ROUTER_PORT = 50051
@@ -47,11 +37,6 @@ DEFAULT_MILVUS_PORT = 19530
 # Health check
 HEALTH_CHECK_TIMEOUT = 1800  # 5 minutes (increased for model loading)
 HEALTH_CHECK_INTERVAL = 2
-
-# Log prefixes
-LOG_PREFIX_ROUTER = "[router]"
-LOG_PREFIX_ENVOY = "[envoy]"
-LOG_PREFIX_ACCESS = "[access_logs]"
 
 # File descriptor limits
 DEFAULT_NOFILE_LIMIT = 65536
