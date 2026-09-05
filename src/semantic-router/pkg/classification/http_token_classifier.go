@@ -129,8 +129,9 @@ func (h *HTTPTokenClassifierInference) classifyTokens(ctx context.Context, text 
 	return alignTokenSpans(h.known, text, spans, truncatedAt)
 }
 
-// decodeTokenSpansResponse accepts either a bare JSON list of spans or the
-// envelope form that can also carry truncated_at.
+// decodeTokenSpansResponse accepts either a bare JSON list of spans, which is
+// what a stock HuggingFace token-classification pipeline returns, or the
+// envelope form that can also carry truncated_at and model.
 func decodeTokenSpansResponse(body []byte) ([]tokenSpanWire, *int, error) {
 	if trimmed := bytes.TrimSpace(body); len(trimmed) > 0 && trimmed[0] == '[' {
 		var spans []tokenSpanWire
