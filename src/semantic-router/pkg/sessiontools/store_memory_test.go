@@ -255,82 +255,104 @@ func TestMemoryStore_ExpiredReadmission_ABARace(t *testing.T) {
 	quota := QuotaKey{Principal: "user-1", Namespace: "recipe-a"}
 
 	for attempt := 0; attempt < attempts; attempt++ {
-		clock := newSyntheticClock(time.Unix(int64(attempt+1), 0))
-		store := newTestStore(t, clock, 1000, 1000, 60)
-		key := fmt.Sprintf("aba-race-%d", attempt)
+		runExpiredReadmissionAttempt(t, ctx, attempt, quota, casWorkers, loadWorkers)
+	}
+}
 
-		initial := newTestState(0)
-		initial.PolicyFingerprint = "expired"
-		if applied, err := store.CompareAndSwap(ctx, key, 0, initial, time.Second, quota); err != nil || !applied {
-			t.Fatalf("attempt %d: initial create applied=%v err=%v", attempt, applied, err)
-		}
+func runExpiredReadmissionAttempt(t *testing.T, ctx context.Context, attempt int, quota QuotaKey, casWorkers, loadWorkers int) {
+	clock := newSyntheticClock(time.Unix(int64(attempt+1), 0))
+	store := newTestStore(t, clock, 1000, 1000, 60)
+	key := fmt.Sprintf("aba-race-%d", attempt)
 
-		clock.Advance(2 * time.Second)
+	initial := newTestState(0)
+	initial.PolicyFingerprint = "expired"
+	if applied, err := store.CompareAndSwap(ctx, key, 0, initial, time.Second, quota); err != nil || !applied {
+		t.Fatalf("attempt %d: initial create applied=%v err=%v", attempt, applied, err)
+	}
 
-		start := make(chan struct{})
-		var wg sync.WaitGroup
-		var mu sync.Mutex
-		appliedCAS := 0
-		errs := make(chan error, casWorkers+loadWorkers)
+	clock.Advance(2 * time.Second)
 
-		for i := 0; i < casWorkers; i++ {
-			wg.Add(1)
-			go func(i int) {
-				defer wg.Done()
-				<-start
+	appliedCAS, err := executeReadmissionWorkers(ctx, store, key, quota, attempt, casWorkers, loadWorkers)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-				next := newTestState(0)
-				next.PolicyFingerprint = fmt.Sprintf("fresh-%d-%d", attempt, i)
-				ok, err := store.CompareAndSwap(ctx, key, 0, next, time.Minute, quota)
-				if err != nil && !errors.Is(err, ErrRevisionMismatch) {
-					errs <- fmt.Errorf("cas worker %d: unexpected err: %w", i, err)
-					return
-				}
-				if ok {
-					mu.Lock()
-					appliedCAS++
-					mu.Unlock()
-				}
-			}(i)
-		}
+	assertReadmissionState(t, ctx, store, key, attempt, appliedCAS)
+}
 
-		for i := 0; i < loadWorkers; i++ {
-			wg.Add(1)
-			go func(i int) {
-				defer wg.Done()
-				<-start
+func executeReadmissionWorkers(
+	ctx context.Context,
+	store *MemoryStore,
+	key string,
+	quota QuotaKey,
+	attempt, casWorkers, loadWorkers int,
+) (int, error) {
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	appliedCAS := 0
+	errs := make(chan error, casWorkers+loadWorkers)
 
-				if _, err := store.Load(ctx, key); err != nil {
-					errs <- fmt.Errorf("load worker %d: unexpected err: %w", i, err)
-				}
-			}(i)
-		}
+	for i := 0; i < casWorkers; i++ {
+		wg.Add(1)
+		go func(workerID int) {
+			defer wg.Done()
+			<-start
 
-		close(start)
-		wg.Wait()
-		close(errs)
+			next := newTestState(0)
+			next.PolicyFingerprint = fmt.Sprintf("fresh-%d-%d", attempt, workerID)
+			ok, err := store.CompareAndSwap(ctx, key, 0, next, time.Minute, quota)
+			if err != nil && !errors.Is(err, ErrRevisionMismatch) {
+				errs <- fmt.Errorf("cas worker %d: unexpected err: %w", workerID, err)
+				return
+			}
+			if ok {
+				mu.Lock()
+				appliedCAS++
+				mu.Unlock()
+			}
+		}(i)
+	}
 
-		for err := range errs {
-			t.Fatal(err)
-		}
+	for i := 0; i < loadWorkers; i++ {
+		wg.Add(1)
+		go func(workerID int) {
+			defer wg.Done()
+			<-start
 
-		if appliedCAS != 1 {
-			t.Fatalf("attempt %d: CAS(0) successes = %d, want exactly 1", attempt, appliedCAS)
-		}
+			if _, err := store.Load(ctx, key); err != nil {
+				errs <- fmt.Errorf("load worker %d: unexpected err: %w", workerID, err)
+			}
+		}(i)
+	}
 
-		final, err := store.Load(ctx, key)
-		if err != nil {
-			t.Fatalf("attempt %d: final load err: %v", attempt, err)
-		}
-		if !final.Found {
-			t.Fatalf("attempt %d: fresh state was pruned by expired cleanup", attempt)
-		}
-		if final.State.Revision != 1 {
-			t.Fatalf("attempt %d: final revision = %d, want 1", attempt, final.State.Revision)
-		}
-		if final.State.PolicyFingerprint == "expired" {
-			t.Fatalf("attempt %d: expired state survived readmission", attempt)
-		}
+	close(start)
+	wg.Wait()
+	close(errs)
+
+	for err := range errs {
+		return appliedCAS, err
+	}
+	return appliedCAS, nil
+}
+
+func assertReadmissionState(t *testing.T, ctx context.Context, store *MemoryStore, key string, attempt, appliedCAS int) {
+	if appliedCAS != 1 {
+		t.Fatalf("attempt %d: CAS(0) successes = %d, want exactly 1", attempt, appliedCAS)
+	}
+
+	final, err := store.Load(ctx, key)
+	if err != nil {
+		t.Fatalf("attempt %d: final load err: %v", attempt, err)
+	}
+	if !final.Found {
+		t.Fatalf("attempt %d: fresh state was pruned by expired cleanup", attempt)
+	}
+	if final.State.Revision != 1 {
+		t.Fatalf("attempt %d: final revision = %d, want 1", attempt, final.State.Revision)
+	}
+	if final.State.PolicyFingerprint == "expired" {
+		t.Fatalf("attempt %d: expired state survived readmission", attempt)
 	}
 }
 
