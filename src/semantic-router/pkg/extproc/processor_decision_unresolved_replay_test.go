@@ -20,11 +20,13 @@ func TestRespondDecisionUnresolvedFinalizesReplayAsFailed(t *testing.T) {
 	replayConfig.Enabled = true
 	replayConfig.CaptureResponseBody = true
 	ctx := &RequestContext{
-		RequestID:                 "unresolved-request",
-		SourceFormat:              llmprotocol.OpenAIChatV1,
-		SemanticRequest:           testNeutralRequest("entrypoint-model", "hello"),
-		RouterReplayPluginConfig:  &replayConfig,
-		VSRAppliedUnknownPolicies: map[string]string{"guarded": "fail_request"},
+		RequestID:                "unresolved-request",
+		SourceFormat:             llmprotocol.OpenAIChatV1,
+		SemanticRequest:          testNeutralRequest("entrypoint-model", "hello"),
+		RouterReplayPluginConfig: &replayConfig,
+		VSRDecisionDiagnostics: decision.EvaluationDiagnostics{
+			AppliedUnknownPolicies: map[string]string{"guarded": "fail_request"},
+		},
 	}
 
 	decisionErr := fmt.Errorf(

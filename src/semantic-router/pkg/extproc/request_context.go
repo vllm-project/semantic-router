@@ -9,6 +9,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/projectiontrace"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
@@ -125,6 +126,7 @@ type RequestContext struct {
 	VSRSelectedModel                string                                      // The model selected by VSR
 	VSRSelectionMethod              string                                      // Model selection algorithm used (e.g., "elo", "static", "router_dc")
 	VSRSelectionReasoning           string                                      // Bounded human-readable selector rationale for replay
+	VSRFusionQuorum                 *routerreplay.FusionQuorumDiagnostics       // Content-free Fusion panel quorum evidence for replay
 	VSRPromptHelperModel            string                                      // Concrete prompt-selector helper model
 	VSRPromptHelperPromptTokens     int64                                       // Prompt tokens consumed by the helper
 	VSRPromptHelperCompletionTokens int64                                       // Completion tokens consumed by the helper
@@ -190,7 +192,7 @@ type RequestContext struct {
 	VSRSignalConfidences      map[string]float64
 	VSRSignalValues           map[string]float64
 	VSRSignalErrors           map[string]string
-	VSRAppliedUnknownPolicies map[string]string
+	VSRDecisionDiagnostics    decision.EvaluationDiagnostics
 	VSRProjectionTrace        *projectiontrace.Trace
 
 	// Hallucination mitigation tracking

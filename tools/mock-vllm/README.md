@@ -6,6 +6,7 @@ A FastAPI provider simulator for the Router E2E suite:
 - GET /v1/models
 - POST /v1/chat/completions
 - POST /v1/responses
+- POST /classify
 
 The request boundary is closed against the pinned OpenAI schema revision and the
 pinned vLLM OpenAI-compatible provider revision in `schema_contract.json`.
@@ -23,3 +24,6 @@ unknown-field behavior.
 `provider_boundary.py` owns HTTP validation and bounded request observation;
 `chat_request.py` contains the small typed view used by deterministic Chat
 responses. The provider contract itself remains in `provider_contract.py`.
+`classify.py` serves the `prompt_guard` `http_classify` stand-in on `/classify`;
+it scores only the first window of the posted text, so the response-jailbreak E2E
+can tell a whole-response scan from a first-chunk-only one.

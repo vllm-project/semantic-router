@@ -33,7 +33,22 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       items: [
         'installation/installation',
-        'installation/deployment-options',
+        {
+          type: 'category',
+          label: 'Plan a Deployment',
+          items: [
+            'installation/deployment-options',
+            'installation/support-matrix',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Compatibility',
+          items: [
+            'installation/protocol-compatibility',
+            'installation/backend-target-compatibility',
+          ],
+        },
       ],
     },
     {
@@ -375,6 +390,7 @@ const sidebars: SidebarsConfig = {
           label: 'Workflows, Memory & Tools',
           items: [
             'proposals/router-flow-workflows',
+            'proposals/agent-based-routing',
             'proposals/deliberation-algorithms',
             'proposals/agentic-memory',
             'proposals/agentic-rag',

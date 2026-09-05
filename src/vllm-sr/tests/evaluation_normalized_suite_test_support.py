@@ -75,6 +75,7 @@ def _catalog(store: NormalizedSuiteStore) -> NormalizedSuiteCatalog:
 def _trusted_source_verifier(monkeypatch: pytest.MonkeyPatch) -> None:
     def verified(descriptor: Any, _source_root: Path) -> BenchmarkSourceReceipt:
         return BenchmarkSourceReceipt(
+            source_kind="registered_adapter",
             adapter_id=descriptor.id,
             expected_source_revision=descriptor.source_revision,
             observed_source_revision=descriptor.source_revision,
@@ -152,6 +153,7 @@ def _artifact(root: Path, role: SuiteArtifactRole) -> SuiteArtifactInstall:
 def _receipt(adapter_id: str) -> BenchmarkSourceReceipt:
     descriptor = get_benchmark_adapter(adapter_id)
     return BenchmarkSourceReceipt(
+        source_kind="registered_adapter",
         adapter_id=adapter_id,
         expected_source_revision=descriptor.source_revision,
         observed_source_revision=descriptor.source_revision,
