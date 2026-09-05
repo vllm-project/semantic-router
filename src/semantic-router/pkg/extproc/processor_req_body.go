@@ -90,7 +90,7 @@ func (r *OpenAIRouter) handleModelRoutingWithPersonalizedCache(
 	if targetModel == "" {
 		targetModel = originalModel
 	}
-	if err := validateDynamoBackendPool(r.Config, targetModel, ctx.ProtocolEnvelope); err != nil {
+	if err := validateDynamoBackendPool(r.Config, targetModel, ctx, ctx.ProtocolEnvelope); err != nil {
 		if protocolError, ok := err.(*llmprotocol.ProtocolError); ok {
 			copy := *protocolError
 			ctx.ImmediateProtocolError = &copy

@@ -1,8 +1,12 @@
 package extproc
 
 import (
+	"context"
 	"strings"
 	"testing"
+
+	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+	"google.golang.org/protobuf/types/known/structpb"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
@@ -72,7 +76,7 @@ func TestValidateDynamoBackendPoolRequiresEveryCandidateToBeDynamo(t *testing.T)
 		{"empty", nil, "unsupported_dynamo_nvext_backend"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			err := validateDynamoBackendPool(dynamoBackendConfig{endpoints: test.endpoints}, "model-a", dynamoEnvelope)
+			err := validateDynamoBackendPool(dynamoBackendConfig{endpoints: test.endpoints}, "model-a", nil, dynamoEnvelope)
 			if test.wantCode == "" && err != nil {
 				t.Fatalf("validateDynamoBackendPool() error = %v", err)
 			}
@@ -85,7 +89,131 @@ func TestValidateDynamoBackendPoolRequiresEveryCandidateToBeDynamo(t *testing.T)
 
 func TestValidateDynamoBackendPoolDoesNotAffectOrdinaryRequests(t *testing.T) {
 	config := dynamoBackendConfig{endpoints: []config.VLLMEndpoint{{Name: "vllm", Type: "vllm"}}}
-	if err := validateDynamoBackendPool(config, "model-a", llmprotocol.Envelope{}); err != nil {
+	if err := validateDynamoBackendPool(config, "model-a", nil, llmprotocol.Envelope{}); err != nil {
 		t.Fatalf("ordinary request rejected: %v", err)
 	}
+}
+
+func TestValidateDynamoBackendPoolIncludesHeaderOnlyExtensions(t *testing.T) {
+	ctx := &RequestContext{Headers: map[string]string{headers.DynamoDPRank: "1"}}
+	for _, test := range []struct {
+		name      string
+		endpoints []config.VLLMEndpoint
+		wantError bool
+	}{
+		{"dynamo", []config.VLLMEndpoint{{Name: "dynamo", Type: "dynamo"}}, false},
+		{"vllm", []config.VLLMEndpoint{{Name: "vllm", Type: "vllm"}}, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			err := validateDynamoBackendPool(dynamoBackendConfig{endpoints: test.endpoints}, "model-a", ctx, llmprotocol.Envelope{})
+			if (err != nil) != test.wantError {
+				t.Fatalf("validateDynamoBackendPool() error = %v, wantError = %v", err, test.wantError)
+			}
+		})
+	}
+}
+
+func TestValidateDynamoResponseBackendRequiresActualDynamoEndpoint(t *testing.T) {
+	envelope := llmprotocol.Envelope{Dynamo: &llmprotocol.DynamoEnvelope{
+		ResponseNVExt: &llmprotocol.DynamoResponseNVExt{TokenIDs: []uint32{1}},
+	}}
+	for _, test := range []struct {
+		name        string
+		backendType string
+		wantError   bool
+	}{
+		{"dynamo", "dynamo", false},
+		{"vllm", "vllm", true},
+		{"missing identity", "", true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			err := validateDynamoResponseBackend(&RequestContext{
+				RequestModel: "model-a", UpstreamBackendType: test.backendType,
+			}, envelope)
+			if (err != nil) != test.wantError {
+				t.Fatalf("validateDynamoResponseBackend() error = %v, wantError = %v", err, test.wantError)
+			}
+		})
+	}
+}
+
+func TestCaptureUpstreamBackendIdentityFromResponseAttributes(t *testing.T) {
+	identity, err := structpb.NewStruct(map[string]any{
+		upstreamHostMetadataAttribute: map[string]any{
+			"filter_metadata": map[string]any{
+				backendIdentityNamespace: map[string]any{
+					"backend_name": "dynamo-a",
+					"backend_type": " DYNAMO ",
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := &ext_proc.ProcessingRequest{
+		Request: &ext_proc.ProcessingRequest_ResponseHeaders{
+			ResponseHeaders: &ext_proc.HttpHeaders{},
+		},
+		Attributes: map[string]*structpb.Struct{extProcAttributesNamespace: identity},
+	}
+	ctx := &RequestContext{}
+
+	captureUpstreamBackendIdentity(req, ctx)
+
+	if ctx.UpstreamBackendName != "dynamo-a" || ctx.UpstreamBackendType != "dynamo" {
+		t.Fatalf("captured backend identity = %q/%q", ctx.UpstreamBackendName, ctx.UpstreamBackendType)
+	}
+}
+
+func TestDecodeClientResponseRejectsDynamoNVExtFromNonDynamoBackend(t *testing.T) {
+	router := dynamoBoundaryTestRouter("vllm")
+	ctx := &RequestContext{
+		SourceFormat:        llmprotocol.OpenAIChatV1,
+		TargetFormat:        llmprotocol.OpenAIChatV1,
+		RequestModel:        "model-a",
+		UpstreamBackendName: "vllm-a",
+		UpstreamBackendType: "vllm",
+	}
+	body := []byte(`{"id":"chatcmpl-1","object":"chat.completion","created":1,"model":"model-a","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"nvext":{"token_ids":[1]}}`)
+
+	_, err := router.decodeClientResponse(body, ctx)
+	if err == nil || !strings.Contains(err.Error(), "unexpected_dynamo_nvext_backend") {
+		t.Fatalf("decodeClientResponse() error = %v, want unexpected_dynamo_nvext_backend", err)
+	}
+}
+
+func TestSemanticStreamRejectsDynamoNVExtFromNonDynamoBackend(t *testing.T) {
+	router := dynamoBoundaryTestRouter("vllm")
+	ctx := &RequestContext{
+		SourceFormat:        llmprotocol.OpenAIChatV1,
+		TargetFormat:        llmprotocol.OpenAIChatV1,
+		RequestModel:        "model-a",
+		UpstreamBackendName: "vllm-a",
+		UpstreamBackendType: "vllm",
+		TraceContext:        context.Background(),
+		SemanticRequest:     &llmprotocol.Request{},
+	}
+	body := []byte("data: {\"id\":\"chatcmpl-1\",\"object\":\"chat.completion.chunk\",\"model\":\"model-a\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\"},\"finish_reason\":null}],\"nvext\":{\"token_ids\":[1]}}\n\n")
+
+	response := router.handleSemanticStreamingResponseBody(body, false, ctx)
+	if !ctx.StreamingAborted {
+		t.Fatal("stream carrying Dynamo nvext from a non-Dynamo backend was not aborted")
+	}
+	mutation := response.GetResponseBody().GetResponse().GetBodyMutation()
+	if mutation == nil {
+		t.Fatal("aborted stream did not suppress the invalid upstream frame")
+	}
+	if strings.Contains(string(mutation.GetBody()), `"nvext"`) {
+		t.Fatalf("invalid upstream nvext leaked to the client: %s", mutation.GetBody())
+	}
+}
+
+func dynamoBoundaryTestRouter(backendType string) *OpenAIRouter {
+	return &OpenAIRouter{Config: &config.RouterConfig{BackendModels: config.BackendModels{
+		ModelConfig: map[string]config.ModelParams{
+			"model-a": {PreferredEndpoints: []string{"backend"}},
+		},
+		VLLMEndpoints: []config.VLLMEndpoint{{Name: "backend", Type: backendType}},
+	}}}
 }

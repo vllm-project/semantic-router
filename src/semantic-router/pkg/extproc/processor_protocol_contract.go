@@ -247,6 +247,9 @@ func (r *OpenAIRouter) decodeClientResponse(
 	if err != nil {
 		return nil, err
 	}
+	if err := validateDynamoResponseBackend(ctx, decoded.Envelope); err != nil {
+		return nil, err
+	}
 	ctx.SemanticResponse = &decoded.Response
 	ctx.ResponseEnvelope = decoded.Envelope
 	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, decoded.Diagnostics...)

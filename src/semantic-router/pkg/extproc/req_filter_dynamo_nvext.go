@@ -82,26 +82,78 @@ func validateDynamoBackendPool(
 		GetEndpointsForModel(string) []config.VLLMEndpoint
 	},
 	model string,
+	ctx *RequestContext,
 	envelope llmprotocol.Envelope,
 ) error {
-	if !hasDynamoRequestExtension(envelope) {
+	if !hasDynamoRequestExtension(ctx, envelope) {
 		return nil
 	}
-	endpoints := cfg.GetEndpointsForModel(model)
-	for _, endpoint := range endpoints {
-		if !strings.EqualFold(strings.TrimSpace(endpoint.Type), "dynamo") {
-			return unsupportedDynamoBackendError(model)
-		}
-	}
-	if len(endpoints) == 0 {
+	if !modelHasOnlyDynamoBackends(cfg, model) {
 		return unsupportedDynamoBackendError(model)
 	}
 	return nil
 }
 
-func hasDynamoRequestExtension(envelope llmprotocol.Envelope) bool {
-	return envelope.Dynamo != nil &&
-		(envelope.Dynamo.RequestNVExt != nil || envelope.Dynamo.RequestTopLevelCacheSalt != nil)
+func hasDynamoRequestExtension(ctx *RequestContext, envelope llmprotocol.Envelope) bool {
+	if envelope.Dynamo != nil &&
+		(envelope.Dynamo.RequestNVExt != nil || envelope.Dynamo.RequestTopLevelCacheSalt != nil) {
+		return true
+	}
+	return hasDynamoRoutingHeader(ctx)
+}
+
+func hasDynamoRoutingHeader(ctx *RequestContext) bool {
+	for _, name := range []string{
+		headers.DynamoWorkerInstanceID, headers.DynamoPrefillInstanceID,
+		headers.DynamoDPRank, headers.DynamoPrefillDPRank,
+		headers.DynamoRequestPriority, headers.DynamoRequestStrictPriority,
+		headers.DynamoTenantID, headers.DynamoWorkerInstanceIDLegacy,
+		headers.DynamoPrefillInstanceIDLegacy, headers.DynamoDPRankLegacy,
+		headers.DynamoDataParallelRankLegacy, headers.DynamoPrefillDPRankLegacy,
+	} {
+		if strings.TrimSpace(headerValueCI(ctx, name)) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func modelHasOnlyDynamoBackends(
+	cfg interface {
+		GetEndpointsForModel(string) []config.VLLMEndpoint
+	},
+	model string,
+) bool {
+	endpoints := cfg.GetEndpointsForModel(model)
+	if len(endpoints) == 0 {
+		return false
+	}
+	for _, endpoint := range endpoints {
+		if !strings.EqualFold(strings.TrimSpace(endpoint.Type), "dynamo") {
+			return false
+		}
+	}
+	return true
+}
+
+func validateDynamoResponseBackend(ctx *RequestContext, envelope llmprotocol.Envelope) error {
+	if envelope.Dynamo == nil || envelope.Dynamo.ResponseNVExt == nil {
+		return nil
+	}
+	if ctx != nil && strings.EqualFold(strings.TrimSpace(ctx.UpstreamBackendType), "dynamo") {
+		return nil
+	}
+	return unexpectedDynamoResponseError(ctx)
+}
+
+func validateDynamoResponseEvents(ctx *RequestContext, events []llmprotocol.Event) error {
+	for _, event := range events {
+		if event.DynamoNVExt != nil &&
+			(ctx == nil || !strings.EqualFold(strings.TrimSpace(ctx.UpstreamBackendType), "dynamo")) {
+			return unexpectedDynamoResponseError(ctx)
+		}
+	}
+	return nil
 }
 
 func unsupportedDynamoBackendError(model string) error {
@@ -109,6 +161,21 @@ func unsupportedDynamoBackendError(model string) error {
 		llmprotocol.ErrorUnsupportedFeature,
 		"unsupported_dynamo_nvext_backend",
 		fmt.Sprintf("model %q is not backed exclusively by Dynamo endpoints", model),
+		nil,
+	)
+}
+
+func unexpectedDynamoResponseError(ctx *RequestContext) error {
+	model := ""
+	backend := ""
+	if ctx != nil {
+		model = ctx.RequestModel
+		backend = ctx.UpstreamBackendName
+	}
+	return llmprotocol.NewError(
+		llmprotocol.ErrorUpstreamUnavailable,
+		"unexpected_dynamo_nvext_backend",
+		fmt.Sprintf("model %q returned Dynamo nvext from non-Dynamo backend %q", model, backend),
 		nil,
 	)
 }
