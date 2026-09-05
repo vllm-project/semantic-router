@@ -2,7 +2,6 @@ package responsestore
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -141,9 +140,15 @@ func TestRedisDeleteConversationCascadeBatched(t *testing.T) {
 }
 
 // TestRedisDeleteConversationCascadeFailureLeavesConversation covers
-// blueprint §5 Phase 5: a cascade failure must be reported to the caller,
-// and the conversation record must survive as the retry anchor rather than
-// be deleted ahead of (and regardless of) the cascade's outcome.
+// blueprint §5 Phase 5, and Phase 5's ownership-verified rewrite's "malformed
+// payload blocks completion, leaves conversation record" requirement: a
+// cascade failure must be reported to the caller, and the conversation
+// record must survive as the retry anchor rather than be deleted ahead of
+// (and regardless of) the cascade's outcome. The failure here is a genuinely
+// malformed payload (not decodable as a StoredResponse) sitting behind an
+// otherwise-valid index member — deleteConversationResponseBatch must
+// preserve both the payload and the index member rather than guess at
+// ownership it cannot actually verify.
 func TestRedisDeleteConversationCascadeFailureLeavesConversation(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -155,25 +160,29 @@ func TestRedisDeleteConversationCascadeFailureLeavesConversation(t *testing.T) {
 	require.NoError(t, store.StoreResponse(ctx, &responseapi.StoredResponse{
 		ID: "resp_cascade_failure", ConversationID: convID, Status: "completed", CreatedAt: time.Now().Unix(),
 	}))
-
-	injectedErr := errors.New("injected cascade delete failure")
-	store.deleteResponseBatchOverride = func(context.Context, []string) error {
-		return injectedErr
-	}
+	// Corrupt the payload in place, after indexing, so the index member is
+	// genuine but the payload it points at can no longer be parsed to
+	// verify ownership.
+	require.NoError(t, store.client.Set(ctx, store.buildKey(ResponseKeyPrefix+"resp_cascade_failure"),
+		[]byte("not valid json"), store.ttl).Err())
 
 	err := store.DeleteConversation(ctx, convID, true)
 	require.Error(t, err)
-	assert.ErrorIs(t, err, injectedErr)
 
 	// The conversation record must still be there: the caller can retry.
 	_, getErr := store.GetConversation(ctx, convID)
 	assert.NoError(t, getErr)
-	// The response and its index entry are untouched by the failed batch.
-	_, getErr = store.GetResponse(ctx, "resp_cascade_failure")
-	assert.NoError(t, getErr)
+	// The malformed payload and its index entry are untouched.
 	assert.Equal(t, []string{"resp_cascade_failure"}, conversationIndexMembers(t, store, convID))
+	raw, getErr := store.client.Get(ctx, store.buildKey(ResponseKeyPrefix+"resp_cascade_failure")).Bytes()
+	require.NoError(t, getErr)
+	assert.Equal(t, []byte("not valid json"), raw)
 
-	store.deleteResponseBatchOverride = nil
+	// Repair the payload and retry: the cascade completes cleanly.
+	require.NoError(t, store.client.Set(ctx, store.buildKey(ResponseKeyPrefix+"resp_cascade_failure"),
+		mustMarshalResponse(t, &responseapi.StoredResponse{
+			ID: "resp_cascade_failure", ConversationID: convID, Status: "completed", CreatedAt: time.Now().Unix(),
+		}), store.ttl).Err())
 	require.NoError(t, store.DeleteConversation(ctx, convID, true))
 	_, getErr = store.GetConversation(ctx, convID)
 	assert.ErrorIs(t, getErr, ErrNotFound)

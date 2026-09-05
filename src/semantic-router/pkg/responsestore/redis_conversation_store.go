@@ -150,13 +150,16 @@ func (s *RedisStore) DeleteConversation(ctx context.Context, conversationID stri
 // is genuinely empty.
 //
 // Each iteration reads rank 0..redisDeleteBatchSize-1 again (not an
-// offsetting range): the ZREM at the end of the previous iteration already
-// removed those members, so the next read naturally advances. If a batch's
-// payload deletes or index removal fails, this returns the error and stops
-// rather than silently logging and reporting success — per blueprint §5
-// Phase 5, the caller needs to know the cascade was only partially applied.
-// The failure is safely retryable: undeleted response keys are unaffected,
-// and a Del of an already-deleted key is a no-op, not an error.
+// offsetting range): deleteConversationResponseBatch's own ZREM at the end
+// of the previous iteration already removed every member it resolved, so
+// the next read naturally advances past them. If a batch reports any
+// unresolved response (see deleteConversationResponseBatch — ownership
+// verified per response, never a blind delete), this returns the error and
+// stops rather than silently logging and reporting success — per blueprint
+// §5 Phase 5, the caller needs to know the cascade was only partially
+// applied. The failure is safely retryable: an already-resolved response's
+// index member is gone, so a retry's ZRange only ever re-reads the
+// responses still genuinely unresolved.
 func (s *RedisStore) deleteConversationResponses(ctx context.Context, conversationID string) error {
 	indexKey := s.conversationIndexKey(conversationID)
 
@@ -173,12 +176,8 @@ func (s *RedisStore) deleteConversationResponses(ctx context.Context, conversati
 			break
 		}
 
-		if err := s.deleteResponsePayloadBatch(ctx, conversationID, responseIDs); err != nil {
+		if err := s.deleteConversationResponseBatch(ctx, conversationID, responseIDs); err != nil {
 			return err
-		}
-
-		if err := s.unindexResponse(ctx, conversationID, responseIDs...); err != nil {
-			return fmt.Errorf("failed to remove deleted responses from conversation %s index: %w", conversationID, err)
 		}
 	}
 
@@ -216,26 +215,6 @@ func (s *RedisStore) ensureConversationIndexResolved(ctx context.Context, conver
 		return nil
 	}
 	return s.ensureConversationIndex(ctx, conversationID)
-}
-
-// deleteResponsePayloadBatch deletes one batch of response payload keys,
-// pipelined, unless a test override replaces the deletion entirely.
-func (s *RedisStore) deleteResponsePayloadBatch(ctx context.Context, conversationID string, responseIDs []string) error {
-	if s.deleteResponseBatchOverride != nil {
-		if err := s.deleteResponseBatchOverride(ctx, responseIDs); err != nil {
-			return fmt.Errorf("failed to delete %d response(s) of conversation %s: %w", len(responseIDs), conversationID, err)
-		}
-		return nil
-	}
-
-	pipe := s.client.Pipeline()
-	for _, responseID := range responseIDs {
-		pipe.Del(ctx, s.buildKey(ResponseKeyPrefix+responseID))
-	}
-	if _, err := pipe.Exec(ctx); err != nil {
-		return fmt.Errorf("failed to delete %d response(s) of conversation %s: %w", len(responseIDs), conversationID, err)
-	}
-	return nil
 }
 
 func (s *RedisStore) ListConversations(ctx context.Context, opts ListOptions) ([]*responseapi.StoredConversation, error) {
