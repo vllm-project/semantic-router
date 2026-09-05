@@ -1,5 +1,5 @@
 import { getPolicySignalFieldSchema } from './dslPolicySignalSchemas'
-import { getCapabilityPluginFieldSchema } from './dslCapabilityPluginSchemas'
+import { resolveCapabilityPluginFieldSchema } from './dslCapabilityPluginSchemas'
 import type { FieldSchema } from './dslSchemaTypes'
 export type { FieldSchema } from './dslSchemaTypes'
 
@@ -451,7 +451,7 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
 }
 
 export function getPluginFieldSchema(pluginType: string): FieldSchema[] {
-  const capabilityFields = getCapabilityPluginFieldSchema(pluginType)
+  const capabilityFields = resolveCapabilityPluginFieldSchema(pluginType)
   if (capabilityFields) return capabilityFields
   switch (pluginType) {
     case 'memory':

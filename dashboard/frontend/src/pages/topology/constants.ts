@@ -86,6 +86,7 @@ export const PLUGIN_ICONS: Record<PluginType, string> = {
   tools: 'TL',
   tool_selection: 'TS',
   context_compression: 'CC',
+  shadow_dispatch: 'SD',
 }
 
 // ============== Plugin Colors (Graphite Theme) ==============
@@ -103,6 +104,7 @@ export const PLUGIN_COLORS: Record<PluginType, { background: string; border: str
   tools: { background: '#5a6c7d', border: '#3d4a59' },
   tool_selection: { background: '#4b6f7f', border: '#344f5c' },
   context_compression: { background: '#606c7a', border: '#3d4a59' },
+  shadow_dispatch: { background: '#5b5f7a', border: '#3f4259' },
 }
 
 // ============== Algorithm Icons ==============

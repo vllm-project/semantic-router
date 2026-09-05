@@ -425,6 +425,9 @@ func validateOneDecisionPluginContracts(
 			return fmt.Errorf("decision '%s': %w", decision.Name, err)
 		}
 	}
+	if err := validateDecisionShadowDispatchPlugin(cfg, decision); err != nil {
+		return err
+	}
 	return validateDecisionRAGAndMemoryPlugins(cfg, decision)
 }
 

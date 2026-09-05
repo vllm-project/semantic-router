@@ -340,6 +340,7 @@ export interface PluginConfig {
     | 'request_params'
     | 'response_jailbreak'
     | 'context_compression'
+    | 'shadow_dispatch'
   configuration: Record<string, unknown>
 }
 

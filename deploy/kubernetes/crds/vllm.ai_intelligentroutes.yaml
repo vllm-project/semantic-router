@@ -146,6 +146,7 @@ spec:
                             - request_params
                             - response_jailbreak
                             - router_replay
+                            - shadow_dispatch
                             - response_cache
                             - response-cache
                             - semantic_cache

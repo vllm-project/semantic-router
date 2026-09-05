@@ -60,6 +60,9 @@ type OpenAIRouter struct {
 	ResponseAPIFilter *ResponseAPIFilter
 	ReplayRecorder    *routerreplay.Recorder
 	ReplayStoreShared bool
+	// ShadowDispatcher runs bounded, fail-open shadow model calls after the
+	// primary dispatch is finalized. nil disables the shadow_dispatch plugin.
+	ShadowDispatcher *shadowDispatcher
 	// ModelSelector is the registry of advanced model selection algorithms
 	// initialized from config.IntelligentRouting.ModelSelection.
 	ModelSelector *selection.Registry

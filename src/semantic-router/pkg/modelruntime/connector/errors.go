@@ -1,6 +1,13 @@
 package connector
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
+
+// ErrResponseTooLarge marks a KindResponse failure whose body exceeded
+// Options.MaxResponseBytes, so callers can classify it without parsing text.
+var ErrResponseTooLarge = errors.New("response body exceeds limit")
 
 // ErrorKind identifies the stage at which a connector operation failed.
 type ErrorKind string

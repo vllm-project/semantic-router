@@ -268,6 +268,7 @@ func (r *OpenAIRouter) applyDecisionResultToContext(result *decision.DecisionRes
 	if pluginCfg := r.Config.EffectiveRouterReplayConfig(result.Decision); pluginCfg != nil {
 		ctx.RouterReplayPluginConfig = pluginCfg
 	}
+	ctx.ShadowDispatchPluginConfig = result.Decision.GetShadowDispatchConfig()
 
 	// Snapshot the retention directive emitted by this decision (deep clone)
 	// and observe every declared field via log + trace. Both helpers are

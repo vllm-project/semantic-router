@@ -316,10 +316,21 @@ func doRouterReplayManagementGET(
 	managementSession *fixtures.ServiceSession,
 	requestTarget string,
 ) (*fixtures.HTTPResponse, error) {
+	return doRouterReplayManagementGETAs(ctx, managementSession, requestTarget, routerReplayManagementToken)
+}
+
+// doRouterReplayManagementGETAs issues a management GET with an explicit
+// bearer token, so a case can pick the role its assertions need.
+func doRouterReplayManagementGETAs(
+	ctx context.Context,
+	managementSession *fixtures.ServiceSession,
+	requestTarget string,
+	token string,
+) (*fixtures.HTTPResponse, error) {
 	return fixtures.DoGETRequestWithHeaders(
 		ctx,
 		managementSession.HTTPClient(30*time.Second),
 		managementSession.BaseURL()+requestTarget,
-		map[string]string{"Authorization": "Bearer " + routerReplayManagementToken},
+		map[string]string{"Authorization": "Bearer " + token},
 	)
 }
