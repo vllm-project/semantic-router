@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -461,4 +462,72 @@ func TestTLSConfig(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
 	})
+}
+
+// TestRedisConversationIndexKeyIsolation guards the invariant that index,
+// migrated-marker, and scan-lease keys are invisible to the sr:conversation:*
+// and sr:response:* scans in ListConversations/legacy backfill, which would
+// otherwise read a sorted set or marker string as conversation/response
+// JSON. Needs no Redis.
+func TestRedisConversationIndexKeyIsolation(t *testing.T) {
+	store := &RedisStore{keyPrefix: "sr:"}
+
+	indexKey := store.conversationIndexKey("conv_123")
+	assert.Equal(t, "sr:conversation-index:conv_123", indexKey)
+
+	migratedKey := store.conversationIndexMigratedKey("conv_123")
+	assert.Equal(t, "sr:conversation-index-migrated:conv_123", migratedKey)
+
+	leaseKey := store.conversationIndexScanLeaseKey()
+	assert.Equal(t, "sr:conversation-index-scan-lease:v1", leaseKey)
+
+	// Each scan pattern is a literal prefix plus "*", so matching == having it.
+	scanPrefixes := []string{
+		store.buildKey(ConversationKeyPrefix),
+		store.buildKey(ResponseKeyPrefix),
+	}
+	for _, key := range []string{indexKey, migratedKey, leaseKey} {
+		for _, scanPrefix := range scanPrefixes {
+			assert.Falsef(t, strings.HasPrefix(key, scanPrefix),
+				"key %q must not be matched by the %q* scan pattern", key, scanPrefix)
+		}
+	}
+
+	// The migrated marker and scan-lease key families must also be distinct
+	// from the index key family itself: either one accidentally matching
+	// the index scan prefix would let a marker or lease be read back as
+	// sorted-set data by anything that scans "conversation-index:*" (e.g. a
+	// future admin tool).
+	indexScanPrefix := store.buildKey(ConversationIndexKeyPrefix)
+	require.True(t, strings.HasPrefix(indexKey, indexScanPrefix))
+	assert.Falsef(t, strings.HasPrefix(migratedKey, indexScanPrefix),
+		"migrated marker key %q must not be matched by the %q* index scan pattern", migratedKey, indexScanPrefix)
+	assert.Falsef(t, strings.HasPrefix(leaseKey, indexScanPrefix),
+		"scan lease key %q must not be matched by the %q* index scan pattern", leaseKey, indexScanPrefix)
+}
+
+// TestRedisConversationIndexMigrationKeyIsolation covers the global
+// completion and scan-lease keys used by FinalizeConversationIndex:
+// same scan-isolation invariant as the per-conversation key families. Needs
+// no Redis.
+func TestRedisConversationIndexMigrationKeyIsolation(t *testing.T) {
+	store := &RedisStore{keyPrefix: "sr:"}
+
+	statusKey := store.conversationIndexCompletionKey()
+	assert.Equal(t, "sr:conversation-index-complete:v1", statusKey)
+
+	lockKey := store.conversationIndexScanLeaseKey()
+	assert.Equal(t, "sr:conversation-index-scan-lease:v1", lockKey)
+
+	scanPrefixes := []string{
+		store.buildKey(ConversationKeyPrefix),
+		store.buildKey(ResponseKeyPrefix),
+		store.buildKey(ConversationIndexKeyPrefix),
+	}
+	for _, key := range []string{statusKey, lockKey} {
+		for _, scanPrefix := range scanPrefixes {
+			assert.Falsef(t, strings.HasPrefix(key, scanPrefix),
+				"key %q must not be matched by the %q* scan pattern", key, scanPrefix)
+		}
+	}
 }
