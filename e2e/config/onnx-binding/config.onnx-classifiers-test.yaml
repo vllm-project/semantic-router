@@ -172,7 +172,7 @@ global:
         enabled: true
         use_mmbert_32k: true
         model_id: models/mmbert32k-feedback-detector-merged-onnx
-        feedback_mapping_path: models/mmbert32k-feedback-detector-merged-onnx/label_mapping.json
+        feedback_mapping_path: ''
         use_cpu: true
         threshold: 0.5
         model_ref: feedback_detector
