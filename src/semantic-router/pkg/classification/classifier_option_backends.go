@@ -105,12 +105,39 @@ func buildJailbreakDependencies(cfg *config.RouterConfig, jailbreakMapping *Jail
 	}
 }
 
-func buildPIIDependencies(cfg *config.RouterConfig) (PIIInitializer, PIIInference) {
+func buildPIIDependencies(cfg *config.RouterConfig, piiMapping *PIIMapping) (PIIInitializer, PIIInference, error) {
+	if cfg.PIIModel.Backend != nil {
+		// Remote inference is fully constructed here and has no local model
+		// lifecycle, so the initializer is nil, as it is for a remote category
+		// backend.
+		backendCfg := cfg.PIIModel.Backend
+		external, err := config.ResolveRemoteClassifierBackend(
+			cfg,
+			backendCfg,
+			config.ModelRoleClassification,
+			config.RemoteClassifierContractTokenSpans,
+		)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to resolve PII backend: %w", err)
+		}
+		if backendCfg.Protocol != config.RemoteClassifierProtocolHTTPClassify {
+			return nil, nil, fmt.Errorf("PII backend protocol %q is not supported", backendCfg.Protocol)
+		}
+		timeout := time.Duration(backendCfg.EffectiveDeadlineMs()) * time.Millisecond
+		inference, err := newPIIHTTPBackend(external, piiMapping, timeout)
+		if err != nil {
+			return nil, nil, err
+		}
+		logging.ComponentEvent("classifier", "pii_detector_backend_selected", map[string]interface{}{
+			"backend": "token_spans_http",
+		})
+		return nil, inference, nil
+	}
 	if cfg.PIIModel.UseMmBERT32K {
 		logging.ComponentEvent("classifier", "pii_detector_backend_selected", map[string]interface{}{
 			"backend": "mmbert_32k",
 		})
-		return createMmBERT32KPIIInitializer(), createMmBERT32KPIIInference()
+		return createMmBERT32KPIIInitializer(), createMmBERT32KPIIInference(), nil
 	}
-	return createPIIInitializer(), createPIIInference()
+	return createPIIInitializer(), createPIIInference(), nil
 }

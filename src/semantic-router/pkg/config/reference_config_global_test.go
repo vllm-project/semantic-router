@@ -321,7 +321,10 @@ func assertReferenceConfigClassifierModuleCoverage(t testingT, classifier map[st
 	// to force a variant line that users must delete before adding a backend.
 	assertMapCoversStructFields(t, mustMapAt(t, classifier, "domain"), reflect.TypeOf(CanonicalCategoryModule{}), "global.model_catalog.modules.classifier.domain", "backend", "variant", "use_modernbert", "use_mmbert_32k")
 	assertMapCoversStructFields(t, mustMapAt(t, classifier, "mcp"), reflect.TypeOf(MCPCategoryModel{}), "global.model_catalog.modules.classifier.mcp")
-	assertMapCoversStructFields(t, mustMapAt(t, classifier, "pii"), reflect.TypeOf(CanonicalPIIModule{}), "global.model_catalog.modules.classifier.pii")
+	// pii.backend is the remote token_spans.v1 attachment and is mutually
+	// exclusive with the local use_mmbert_32k path the reference config shows,
+	// same as domain.backend above.
+	assertMapCoversStructFields(t, mustMapAt(t, classifier, "pii"), reflect.TypeOf(CanonicalPIIModule{}), "global.model_catalog.modules.classifier.pii", "backend")
 	assertMapCoversStructFields(t, mustMapAt(t, classifier, "preference"), reflect.TypeOf(PreferenceModelConfig{}), "global.model_catalog.modules.classifier.preference")
 	assertMapCoversStructFields(
 		t,

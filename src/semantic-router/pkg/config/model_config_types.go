@@ -45,6 +45,9 @@ type PIIModel struct {
 	UseCPU         bool    `yaml:"use_cpu"`
 	UseMmBERT32K   bool    `yaml:"use_mmbert_32k"`
 	PIIMappingPath string  `yaml:"pii_mapping_path"`
+	// Backend attaches a named remote token classifier speaking token_spans.v1.
+	// Its absence preserves local PII inference exactly as before.
+	Backend *RemoteClassifierBackend `yaml:"backend,omitempty"`
 }
 
 type EmbeddingModels struct {

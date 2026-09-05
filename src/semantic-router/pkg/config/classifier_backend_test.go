@@ -422,3 +422,69 @@ func TestCanonicalCategoryVariantExportUsesCanonicalSelector(t *testing.T) {
 		t.Fatalf("canonical export retained deprecated selectors: %s", encoded)
 	}
 }
+
+func piiBackendTestConfig(backend *RemoteClassifierBackend) *RouterConfig {
+	cfg := &RouterConfig{}
+	cfg.PIIModel = PIIModel{Backend: backend, PIIMappingPath: "models/pii/pii_type_mapping.json"}
+	cfg.ExternalModels = []ExternalModelConfig{{
+		Name:          "named-pii",
+		ModelRole:     ModelRoleClassification,
+		ModelEndpoint: ClassifierVLLMEndpoint{Address: "10.0.0.5", Port: 8000},
+		ModelName:     "pii-spans",
+	}}
+	return cfg
+}
+
+func TestRemoteClassifierBackendAcceptsTokenSpansContract(t *testing.T) {
+	b := &RemoteClassifierBackend{Protocol: RemoteClassifierProtocolHTTPClassify, Contract: RemoteClassifierContractTokenSpans, Model: "named-pii"}
+	if err := b.Validate(); err != nil {
+		t.Fatalf("token_spans.v1 rejected: %v", err)
+	}
+	if got := b.EffectiveContract(RemoteClassifierContractLabelDistribution); got != RemoteClassifierContractTokenSpans {
+		t.Fatalf("explicit contract %q overridden to %q", RemoteClassifierContractTokenSpans, got)
+	}
+}
+
+func TestValidatePIIModelBackend(t *testing.T) {
+	if err := ValidatePIIModelBackend(&RouterConfig{}); err != nil {
+		t.Fatalf("absent backend must be a no-op: %v", err)
+	}
+	valid := &RemoteClassifierBackend{Protocol: RemoteClassifierProtocolHTTPClassify, Model: "named-pii"}
+	if err := ValidatePIIModelBackend(piiBackendTestConfig(valid)); err != nil {
+		t.Fatalf("valid backend with defaulted contract rejected: %v", err)
+	}
+	tests := []struct {
+		name   string
+		mutate func(*RouterConfig)
+		want   string
+	}{
+		{name: "label distribution is the wrong shape for PII", mutate: func(cfg *RouterConfig) {
+			cfg.PIIModel.Backend.Contract = RemoteClassifierContractLabelDistribution
+		}, want: "incompatible"},
+		{name: "unknown contract", mutate: func(cfg *RouterConfig) {
+			cfg.PIIModel.Backend.Contract = "token_spans.v0"
+		}, want: "unsupported"},
+		{name: "chat protocol not supported", mutate: func(cfg *RouterConfig) {
+			cfg.PIIModel.Backend.Protocol = RemoteClassifierProtocolHTTPChat
+		}, want: "not supported"},
+		{name: "wrong role", mutate: func(cfg *RouterConfig) {
+			cfg.ExternalModels[0].ModelRole = ModelRoleGuardrail
+		}, want: "model_role"},
+		{name: "missing named model", mutate: func(cfg *RouterConfig) {
+			cfg.PIIModel.Backend.Model = "missing"
+		}, want: "not declared"},
+		{name: "local selector alongside backend", mutate: func(cfg *RouterConfig) {
+			cfg.PIIModel.UseMmBERT32K = true
+		}, want: "mutually exclusive"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := piiBackendTestConfig(&RemoteClassifierBackend{Protocol: RemoteClassifierProtocolHTTPClassify, Model: "named-pii"})
+			tt.mutate(cfg)
+			err := ValidatePIIModelBackend(cfg)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("want error containing %q, got %v", tt.want, err)
+			}
+		})
+	}
+}

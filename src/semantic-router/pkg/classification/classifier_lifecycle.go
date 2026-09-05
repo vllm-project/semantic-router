@@ -23,11 +23,17 @@ func BuildClassifier(
 	if err := config.ValidateCategoryModelBackend(cfg); err != nil {
 		return nil, err
 	}
+	if err := config.ValidatePIIModelBackend(cfg); err != nil {
+		return nil, err
+	}
 	jailbreakInitializer, jailbreakInference, err := buildJailbreakDependencies(cfg, jailbreakMapping)
 	if err != nil {
 		return nil, err
 	}
-	piiInitializer, piiInference := buildPIIDependencies(cfg)
+	piiInitializer, piiInference, err := buildPIIDependencies(cfg, piiMapping)
+	if err != nil {
+		return nil, err
+	}
 	builder := newClassifierOptionBuilder(cfg, []option{
 		withJailbreak(jailbreakMapping, jailbreakInitializer, jailbreakInference),
 		withPII(piiMapping, piiInitializer, piiInference),
@@ -149,6 +155,7 @@ func (c *Classifier) Close() error {
 
 	closeResource("MCP category classifier", c.mcpCategoryInitializer)
 	closeResource("jailbreak classifier", c.jailbreakInference)
+	closeResource("PII classifier", c.piiInference)
 	genericNames := make([]string, 0, len(c.genericClassifiers))
 	for name := range c.genericClassifiers {
 		genericNames = append(genericNames, name)

@@ -195,11 +195,17 @@ func (c *Classifier) AnalyzeContentForJailbreakWithThreshold(ctx context.Context
 
 // IsPIIEnabled checks if PII detection is properly configured.
 func (c *Classifier) IsPIIEnabled() bool {
-	return c.Config.PIIModel.Active() && c.Config.PIIModel.ModelID != "" && c.Config.PIIMappingPath != "" && c.PIIMapping != nil
+	modelConfigured := c.Config.PIIModel.ModelID != "" || c.Config.PIIModel.Backend != nil
+	return c.Config.PIIModel.Active() && modelConfigured && c.Config.PIIMappingPath != "" && c.PIIMapping != nil
 }
 
 // initializePIIClassifier initializes the PII token classification model.
 func (c *Classifier) initializePIIClassifier() error {
+	if c.Config.PIIModel.Backend != nil {
+		// Remote inference is fully constructed during classifier assembly and has
+		// no local model lifecycle to execute.
+		return nil
+	}
 	if !c.IsPIIEnabled() || c.piiInitializer == nil {
 		return fmt.Errorf("PII detection is not properly configured")
 	}

@@ -519,8 +519,8 @@ type ClassResultWithProbs struct {
 // TokenEntity represents a single detected entity in token classification
 type TokenEntity struct {
 	EntityType string  // Type of entity (e.g., "PERSON", "EMAIL", "PHONE")
-	Start      int     // Start character position in original text
-	End        int     // End character position in original text
+	Start      int     // Start byte offset in original text (UTF-8 bytes, not characters)
+	End        int     // End byte offset in original text (exclusive)
 	Text       string  // Actual entity text
 	Confidence float32 // Confidence score (0.0 to 1.0)
 }
