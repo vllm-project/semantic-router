@@ -2443,7 +2443,7 @@ global:
         use_cpu: true
         use_modernbert: false
         use_mmbert_32k: true
-        feedback_mapping_path: models/mmbert32k-feedback-detector-merged/feedback_mapping.json
+        feedback_mapping_path: ''
       modality_detector:
         enabled: true
         method: hybrid
