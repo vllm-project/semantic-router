@@ -203,7 +203,19 @@ func (s *RedisStore) deleteConversationResponses(ctx context.Context, conversati
 // conversation record itself is gone. Resolves the ambiguity exactly as a
 // read would: backfill from a legacy scan (additive — never removes what
 // the index already has), or confirm the conversation is genuinely empty.
+//
+// Once the whole store is marked migration-complete
+// (ConversationIndexMigrationStatusKey), this returns immediately without
+// even checking the per-conversation marker: the index is trusted
+// unconditionally, so cascade delete never scans, matching the read path in
+// ListResponsesByConversation.
 func (s *RedisStore) ensureConversationIndexResolved(ctx context.Context, conversationID string) error {
+	if storeComplete, err := s.isMigrationComplete(ctx); err != nil {
+		return err
+	} else if storeComplete {
+		return nil
+	}
+
 	migrated, err := s.conversationMigrated(ctx, conversationID)
 	if err != nil {
 		return err
