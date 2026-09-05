@@ -17,7 +17,6 @@ const {
   buildRemovalComment,
   warningMarker,
   removalMarker,
-  MAX_LINKED_PULL_REQUESTS,
 } = require("../unassign-inactive");
 
 // -- Fixtures ---------------------------------------------------------------
@@ -63,6 +62,15 @@ function timelineComment(login, at) {
   return { event: "commented", actor: { login, type: "User" }, created_at: at };
 }
 
+function commitBy(login, at, gitName = "Someone Else") {
+  return {
+    sha: `sha-${login}-${at}`,
+    author: login ? { login } : null,
+    committer: login ? { login } : null,
+    commit: { author: { name: gitName, date: at }, committer: { name: gitName, date: at } },
+  };
+}
+
 /**
  * Fake Octokit. `timelines` and `comments` are keyed by issue/PR number, so a
  * pull-request timeline is distinguishable from its issue's timeline.
@@ -71,13 +79,16 @@ function makeGitHub({
   issues = [],
   timelines = {},
   comments = {},
+  commits = {},
   failListForRepo = false,
   failTimelineFor = [],
   failCommentsFor = [],
+  failCommitsFor = [],
   failCreateComment = false,
   failRemoveAssignees = false,
 } = {}) {
   const rest = {
+    pulls: { listCommits: Symbol("listCommits") },
     issues: {
       listForRepo: Symbol("listForRepo"),
       listEventsForTimeline: Symbol("listEventsForTimeline"),
@@ -109,6 +120,12 @@ function makeGitHub({
         throw new Error("comments failed");
       }
       return comments[params.issue_number] || [];
+    }
+    if (endpoint === rest.pulls.listCommits) {
+      if (failCommitsFor.includes(params.pull_number)) {
+        throw new Error("commits failed");
+      }
+      return commits[params.pull_number] || [];
     }
     throw new Error("unexpected endpoint");
   });
@@ -314,24 +331,51 @@ describe("collectPullRequestActivity", () => {
     expect(result.lastActivityAt.toISOString()).toBe(pullRequest.createdAt.toISOString());
   });
 
-  test("credits the assignee's commits on their own pull request", async () => {
+  test("credits a commit the assignee authored", async () => {
     const at = daysAgo(3);
-    const github = makeGitHub({
-      timelines: {
-        100: [{ event: "committed", author: { name: "Alice A", date: at } }],
-      },
-    });
+    const github = makeGitHub({ timelines: { 100: [] }, commits: { 100: [commitBy("alice", at)] } });
     const result = await collectPullRequestActivity(github, "o", "r", pullRequest, "alice");
     expect(result.lastActivityAt.toISOString()).toBe(new Date(at).toISOString());
   });
 
-  test("does not credit commits on somebody else's pull request", async () => {
-    const foreign = { ...pullRequest, authorLogin: "bob" };
+  test("does not credit somebody else's commit on the assignee's own pull request", async () => {
     const github = makeGitHub({
       timelines: {
+        // The timeline reports the commit but carries no login to attribute it by.
         100: [{ event: "committed", author: { name: "Bob B", date: daysAgo(1) } }],
       },
+      commits: { 100: [commitBy("bob", daysAgo(1))] },
     });
+    const result = await collectPullRequestActivity(github, "o", "r", pullRequest, "alice");
+    expect(result.lastActivityAt.toISOString()).toBe(pullRequest.createdAt.toISOString());
+  });
+
+  test("credits a commit the assignee committed but did not author", async () => {
+    const at = daysAgo(2);
+    const rebased = { ...commitBy("bob", at), committer: { login: "alice" } };
+    const github = makeGitHub({ timelines: { 100: [] }, commits: { 100: [rebased] } });
+    const result = await collectPullRequestActivity(github, "o", "r", pullRequest, "alice");
+    expect(result.lastActivityAt.toISOString()).toBe(new Date(at).toISOString());
+  });
+
+  test("ignores a commit with no GitHub identity attached", async () => {
+    const github = makeGitHub({
+      timelines: { 100: [] },
+      commits: { 100: [commitBy(null, daysAgo(1))] },
+    });
+    const result = await collectPullRequestActivity(github, "o", "r", pullRequest, "alice");
+    expect(result.lastActivityAt.toISOString()).toBe(pullRequest.createdAt.toISOString());
+  });
+
+  test("fails closed when the commit list cannot be read", async () => {
+    const github = makeGitHub({ timelines: { 100: [] }, failCommitsFor: [100] });
+    const result = await collectPullRequestActivity(github, "o", "r", pullRequest, "alice");
+    expect(result.error).toBe(true);
+  });
+
+  test("does not credit commits on somebody else's pull request", async () => {
+    const foreign = { ...pullRequest, authorLogin: "bob" };
+    const github = makeGitHub({ timelines: { 100: [] }, commits: { 100: [commitBy("bob", daysAgo(1))] } });
     const result = await collectPullRequestActivity(github, "o", "r", foreign, "alice");
     expect(result.lastActivityAt).toBeNull();
   });
@@ -620,11 +664,32 @@ describe("evaluateAssignee", () => {
             referencedAt: daysAgo(50),
           }),
         ],
-        100: [{ event: "committed", author: { name: "Alice", date: daysAgo(2) } }],
+        100: [],
       },
+      commits: { 100: [commitBy("alice", daysAgo(2))] },
     });
     const record = await evaluateAssignee(github, "o", "r", issueFixture({ created_at: daysAgo(400) }), "alice", CONFIG);
     expect(record.action).toBe("skipped");
+  });
+
+  test("somebody else's commit on the assignee's linked pull request does not keep the assignment", async () => {
+    const github = makeGitHub({
+      timelines: {
+        42: [
+          crossReference({
+            number: 100,
+            author: "alice",
+            createdAt: daysAgo(50),
+            referencedAt: daysAgo(50),
+          }),
+        ],
+        100: [{ event: "committed", author: { name: "Bob B", date: daysAgo(1) } }],
+      },
+      commits: { 100: [commitBy("bob", daysAgo(1))] },
+    });
+    const record = await evaluateAssignee(github, "o", "r", issueFixture({ created_at: daysAgo(400) }), "alice", CONFIG);
+    expect(record.action).toBe("warned");
+    expect(Math.floor(record.inactiveDays)).toBe(50);
   });
 
   test("other people's traffic on a linked pull request does not keep the assignment", async () => {
@@ -689,30 +754,60 @@ describe("evaluateAssignee", () => {
     expect(record.action).toBe("warned");
   });
 
-  test("caps how many linked pull requests it inspects", async () => {
+  test("evaluates every linked pull request, including the oldest reference", async () => {
     const references = [];
     const timelines = { 42: references };
-    for (let i = 0; i < MAX_LINKED_PULL_REQUESTS + 5; i += 1) {
+    const commits = {};
+    const total = 40;
+    for (let i = 0; i < total; i += 1) {
       const number = 200 + i;
       references.push(
         crossReference({
           number,
           author: "alice",
           createdAt: daysAgo(60),
-          referencedAt: daysAgo(60 - i),
+          // Descending referencedAt, so number 200 sorts last.
+          referencedAt: daysAgo(20 + i),
           actor: "carol",
         })
       );
       timelines[number] = [];
+      commits[number] = [];
     }
-    const github = makeGitHub({ timelines });
-    await evaluateAssignee(github, "o", "r", issueFixture({ created_at: daysAgo(400) }), "alice", CONFIG);
+    // The only qualifying work sits on the oldest-referenced pull request.
+    commits[200 + total - 1] = [commitBy("alice", daysAgo(2))];
 
-    const prTimelineReads = github.paginate.mock.calls.filter(
+    const github = makeGitHub({ timelines, commits });
+    const record = await evaluateAssignee(github, "o", "r", issueFixture({ created_at: daysAgo(400) }), "alice", CONFIG);
+
+    expect(record.action).toBe("skipped");
+    const prReads = github.paginate.mock.calls.filter(
       ([endpoint, params]) =>
         endpoint === github.rest.issues.listEventsForTimeline && params.issue_number !== 42
     );
-    expect(prTimelineReads).toHaveLength(MAX_LINKED_PULL_REQUESTS);
+    expect(prReads).toHaveLength(total);
+  });
+
+  test("stops scanning linked pull requests once the assignee is provably active", async () => {
+    const github = makeGitHub({
+      timelines: {
+        42: [
+          crossReference({ number: 100, author: "alice", createdAt: daysAgo(50), referencedAt: daysAgo(2), actor: "carol" }),
+          crossReference({ number: 101, author: "alice", createdAt: daysAgo(50), referencedAt: daysAgo(40), actor: "carol" }),
+        ],
+        100: [],
+        101: [],
+      },
+      commits: { 100: [commitBy("alice", daysAgo(1))], 101: [] },
+    });
+    const record = await evaluateAssignee(github, "o", "r", issueFixture({ created_at: daysAgo(400) }), "alice", CONFIG);
+
+    expect(record.action).toBe("skipped");
+    const prReads = github.paginate.mock.calls.filter(
+      ([endpoint, params]) =>
+        endpoint === github.rest.issues.listEventsForTimeline && params.issue_number !== 42
+    );
+    expect(prReads.map(([, params]) => params.issue_number)).toEqual([100]);
   });
 
   test("dry run reports the transition without mutating anything", async () => {

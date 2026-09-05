@@ -12,10 +12,6 @@ const ACCEPTED_LABEL = "accepted";
 const MARKER_NAMESPACE = "unassign-inactive";
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-// Each linked pull request costs a paginated timeline read; the most recently
-// referenced ones dominate the activity date anyway.
-const MAX_LINKED_PULL_REQUESTS = 20;
-
 // Triage noise (labels, milestones, mentions, renames) is deliberately absent.
 // `assigned` is handled separately: its actor is the maintainer, not the assignee.
 const HUMAN_EVENT_TYPES = new Set([
@@ -124,6 +120,21 @@ async function fetchComments(octokit, owner, repo, issueNumber) {
   }
 }
 
+/** Every commit on a pull request, with GitHub logins attached; null on failure. */
+async function fetchPullRequestCommits(octokit, owner, repo, pullNumber) {
+  try {
+    return await octokit.paginate(octokit.rest.pulls.listCommits, {
+      owner,
+      repo,
+      pull_number: pullNumber,
+      per_page: 100,
+    });
+  } catch (err) {
+    console.warn(`[fetchPullRequestCommits] #${pullNumber}: ${err.message}`);
+    return null;
+  }
+}
+
 // -- Activity attribution ---------------------------------------------------
 
 /** Reduce an issue timeline to { lastActivityAt, linkedPullRequests }. */
@@ -205,12 +216,9 @@ async function collectPullRequestActivity(
     const at = eventTimestamp(event);
     if (!at) continue;
 
-    // Commits carry a git identity, not a login, so they cannot be attributed
-    // by actor. Credit them only on a pull request the assignee opened.
-    if (event.event === "committed") {
-      if (authoredByAssignee) lastActivityAt = laterOf(lastActivityAt, at);
-      continue;
-    }
+    // Timeline `committed` events carry only a git identity, so they are
+    // attributed below from the commit list instead.
+    if (event.event === "committed") continue;
 
     const actor = event.actor || event.user;
     if (isBotActor(actor)) continue;
@@ -220,19 +228,41 @@ async function collectPullRequestActivity(
     lastActivityAt = laterOf(lastActivityAt, at);
   }
 
+  const commits = await fetchPullRequestCommits(octokit, owner, repo, pullRequest.number);
+  if (commits === null) return { error: true };
+
+  for (const item of commits) {
+    const detail = item.commit || {};
+    const authored = sameLogin(item.author && item.author.login, assigneeLogin);
+    const committed = sameLogin(item.committer && item.committer.login, assigneeLogin);
+    if (!authored && !committed) continue;
+
+    lastActivityAt = laterOf(
+      lastActivityAt,
+      toDate(
+        (authored && detail.author && detail.author.date) ||
+          (detail.committer && detail.committer.date) ||
+          (detail.author && detail.author.date)
+      )
+    );
+  }
+
   return { lastActivityAt };
 }
 
 /**
- * One assignee's last activity across the issue and its linked pull requests,
- * or { error: true } if a read that could have proven activity failed.
+ * One assignee's last activity across the issue and every linked pull request,
+ * or { error: true } if a read that could have proven activity failed. Scanning
+ * stops only once activity newer than activeSince settles the outcome as
+ * active, so no linked pull request is skipped while it could change it.
  */
 async function resolveLastActivity(
   octokit,
   owner,
   repo,
   issue,
-  assigneeLogin
+  assigneeLogin,
+  activeSince
 ) {
   const timeline = await fetchTimeline(octokit, owner, repo, issue.number);
   if (timeline === null) return { error: true };
@@ -248,14 +278,17 @@ async function resolveLastActivity(
       (pr) =>
         !pr.repositoryFullName || pr.repositoryFullName === repositoryFullName
     )
+    // Most recently referenced first, so the early exit below usually lands on
+    // the first pull request.
     .sort(
       (a, b) =>
         (b.referencedAt ? b.referencedAt.getTime() : 0) -
         (a.referencedAt ? a.referencedAt.getTime() : 0)
-    )
-    .slice(0, MAX_LINKED_PULL_REQUESTS);
+    );
 
   for (const pullRequest of candidates) {
+    if (activeSince && lastActivityAt && lastActivityAt >= activeSince) break;
+
     const activity = await collectPullRequestActivity(
       octokit,
       owner,
@@ -374,7 +407,8 @@ async function evaluateAssignee(octokit, owner, repo, issue, assigneeLogin, conf
     owner,
     repo,
     issue,
-    assigneeLogin
+    assigneeLogin,
+    new Date(now.getTime() - warnAfterDays * DAY_MS)
   );
   if (activity.error) {
     record.action = "error";
@@ -710,5 +744,4 @@ module.exports = {
   buildRunSummary,
   warningMarker,
   removalMarker,
-  MAX_LINKED_PULL_REQUESTS,
 };

@@ -256,10 +256,17 @@ sweep's first encounter with them.
 
 Activity is attributed to one assignee at a time, from Timeline API events:
 
-- their own comments, reviews, and commits on the issue;
-- their own comments, reviews, force-pushes, and commits on a pull request
+- their own comments and reviews on the issue;
+- their own comments, reviews, and force-pushes on a pull request
   cross-referenced from the issue, plus opening such a pull request;
+- commits on those pull requests whose GitHub author or committer is that
+  assignee, read from the commit list rather than the timeline, which carries
+  only a git identity;
 - being assigned to the issue, which starts or restarts their clock.
+
+Every cross-referenced pull request in the same repository is evaluated, not
+just the most recent; the scan stops early only once activity recent enough to
+settle the outcome as active has been found.
 
 Deliberately excluded: bot writes, label and milestone churn, mentions, and
 anything done by another person. A linked pull request's `updated_at` is not

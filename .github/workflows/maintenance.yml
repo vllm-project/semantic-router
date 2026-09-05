@@ -92,5 +92,6 @@ jobs:
     permissions:
       contents: read
       issues: write
+      pull-requests: read
     uses: ./.github/workflows/unassign-inactive-assignees.yml
     secrets: inherit

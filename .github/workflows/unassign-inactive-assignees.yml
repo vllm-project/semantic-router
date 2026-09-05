@@ -42,6 +42,7 @@ jobs:
     permissions:
       contents: read # checkout, so github-script can require the helper
       issues: write
+      pull-requests: read # attribute linked-PR commits to their GitHub author
 
     steps:
       - name: Check out repository
