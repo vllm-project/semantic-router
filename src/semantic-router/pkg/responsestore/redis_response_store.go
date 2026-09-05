@@ -78,6 +78,27 @@ end
 return {value, redis.call("PTTL", KEYS[1])}
 `)
 
+// replaceAndSnapshotResponseScript atomically captures the payload and PTTL
+// that this update is replacing and installs the update's new payload. Keeping
+// the read and write in one single-key script prevents two overlapping updates
+// from both retaining the same stale rollback snapshot. ARGV[2] is the new
+// payload TTL in milliseconds; zero means persistent. Single-key: KEYS[1]
+// only, so the script is Redis Cluster safe.
+var replaceAndSnapshotResponseScript = redis.NewScript(`
+local previous = redis.call("GET", KEYS[1])
+if not previous then
+	return nil
+end
+local previous_ttl = redis.call("PTTL", KEYS[1])
+local new_ttl = tonumber(ARGV[2])
+if new_ttl > 0 then
+	redis.call("SET", KEYS[1], ARGV[1], "PX", new_ttl)
+else
+	redis.call("SET", KEYS[1], ARGV[1])
+end
+return {previous, previous_ttl}
+`)
+
 // compareRestoreScript is StoreResponse's compareDeleteScript's counterpart
 // for UpdateResponse's rollback: restore ARGV[2] with TTL ARGV[3]
 // (milliseconds; 0 deletes instead, negative means persistent) only if the
@@ -276,18 +297,14 @@ func (s *RedisStore) UpdateResponse(ctx context.Context, response *responseapi.S
 
 	key := s.buildKey(ResponseKeyPrefix + response.ID)
 
-	snapshot, err := s.readPreviousResponseForUpdate(ctx, key, response.ID)
-	if err != nil {
-		return err
-	}
-
 	data, err := json.Marshal(response)
 	if err != nil {
 		return fmt.Errorf("failed to serialize response: %w", err)
 	}
 
-	if err := s.client.Set(ctx, key, data, s.ttl).Err(); err != nil {
-		return fmt.Errorf("failed to update response in Redis: %w", err)
+	snapshot, err := s.replaceResponseAndSnapshot(ctx, key, response.ID, data)
+	if err != nil {
+		return err
 	}
 
 	if response.ConversationID != "" {
@@ -309,6 +326,28 @@ func (s *RedisStore) UpdateResponse(ctx context.Context, response *responseapi.S
 	return nil
 }
 
+// replaceResponseAndSnapshot serializes concurrent payload replacements at
+// Redis and returns the exact state displaced by this update. A failed update
+// can therefore restore only its immediate predecessor, never a snapshot that
+// another successful overlapping update had already superseded.
+func (s *RedisStore) replaceResponseAndSnapshot(ctx context.Context, key, responseID string, data []byte) (responseUpdateSnapshot, error) {
+	capturedAt := time.Now()
+	ttlMillis := s.ttl.Milliseconds()
+	if s.ttl > 0 && ttlMillis == 0 {
+		ttlMillis = 1
+	}
+
+	result, err := replaceAndSnapshotResponseScript.Run(ctx, s.client, []string{key}, data, ttlMillis).Result()
+	if err != nil {
+		if errors.Is(err, redis.Nil) {
+			return responseUpdateSnapshot{}, ErrNotFound
+		}
+		return responseUpdateSnapshot{}, fmt.Errorf("failed to replace response %s: %w", responseID, err)
+	}
+
+	return decodeResponseUpdateSnapshot(result, capturedAt, responseID)
+}
+
 // readPreviousResponseForUpdate atomically snapshots a response's current
 // payload bytes and remaining PTTL — doubling as the existence check — and
 // best-effort parses its previous ConversationID/CreatedAt. All of this is
@@ -327,6 +366,10 @@ func (s *RedisStore) readPreviousResponseForUpdate(ctx context.Context, key, res
 		return responseUpdateSnapshot{}, fmt.Errorf("failed to snapshot response %s for update: %w", responseID, err)
 	}
 
+	return decodeResponseUpdateSnapshot(result, capturedAt, responseID)
+}
+
+func decodeResponseUpdateSnapshot(result interface{}, capturedAt time.Time, responseID string) (responseUpdateSnapshot, error) {
 	items, ok := result.([]interface{})
 	if !ok || len(items) != 2 {
 		return responseUpdateSnapshot{}, fmt.Errorf("unexpected snapshot result shape for response %s: %#v", responseID, result)
