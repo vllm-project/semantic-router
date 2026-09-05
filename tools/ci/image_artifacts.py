@@ -299,6 +299,8 @@ def main() -> None:
                         "copy",
                         "--all",
                         "--preserve-digests",
+                        "--digestfile",
+                        str(args.directory / "published-digest.txt"),
                         f"oci-archive:{args.directory / 'image.tar'}",
                         f"docker://ghcr.io/{owner}/semantic-router/{args.image}:{tag}",
                     ],

@@ -98,6 +98,56 @@ class ImageArtifactTests(unittest.TestCase):
             ["v1.2.3", "latest"],
         )
 
+    def test_promotion_records_the_copied_digest_for_each_tag(self):
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch.object(
+                sys,
+                "argv",
+                [
+                    "image_artifacts.py",
+                    "promote",
+                    "--image",
+                    "dashboard",
+                    "--directory",
+                    tmp,
+                    "--mode",
+                    "release",
+                    "--tag",
+                    "v1.2.3",
+                    "--latest",
+                ],
+            ),
+            patch.dict(images.os.environ, {"GITHUB_REPOSITORY_OWNER": "Example"}),
+            patch.object(
+                images,
+                "verify",
+                return_value={
+                    "mode": "release",
+                    "tag": "v1.2.3",
+                    "date": "",
+                },
+            ),
+            patch.object(images.subprocess, "run") as run,
+        ):
+            images.main()
+            self.assertEqual(run.call_count, 2)
+            for call, tag in zip(run.call_args_list, ["v1.2.3", "latest"]):
+                self.assertEqual(
+                    call.args[0],
+                    [
+                        "skopeo",
+                        "copy",
+                        "--all",
+                        "--preserve-digests",
+                        "--digestfile",
+                        str(Path(tmp) / "published-digest.txt"),
+                        f"oci-archive:{tmp}/image.tar",
+                        f"docker://ghcr.io/example/semantic-router/dashboard:{tag}",
+                    ],
+                )
+                self.assertTrue(call.kwargs["check"])
+
     def test_import_verifies_content_for_both_docker_image_id_formats(self):
         with tempfile.TemporaryDirectory() as directory:
             archive = Path(directory) / "image.tar"
