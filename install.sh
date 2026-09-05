@@ -185,7 +185,7 @@ print_install_plan() {
 
 usage() {
   cat <<'EOF'
-Usage: install.sh [--mode cli|serve] [--runtime auto|docker|skip]
+Usage: install.sh [--mode cli|serve] [--runtime auto|docker|podman|skip]
                   [--install-root PATH] [--bin-dir PATH]
                   [--channel stable|dev] [--pip-spec SPEC]
                   [--python PATH] [--platform PLATFORM] [--no-launch]
@@ -196,10 +196,11 @@ links a launcher into ~/.local/bin by default.
 Options:
   --mode cli|serve         Install the CLI only, or prepare a local runtime for
                            `vllm-sr serve` as well. Default: serve
-  --runtime auto|docker|skip
+  --runtime auto|docker|podman|skip
                            Runtime strategy for serve mode. Default: auto
                            macOS auto -> docker via colima
                            Linux auto -> docker
+                           podman -> use Podman, skip Docker detection
   --install-root PATH      Installation root. Default:
                            ~/.local/share/vllm-sr
   --bin-dir PATH           Launcher directory. Default: ~/.local/bin
@@ -417,11 +418,14 @@ print_restart_command() {
   if [ -z "$LAUNCH_PLATFORM" ]; then
     LAUNCH_PLATFORM="$(resolve_launch_platform)"
   fi
+  local cmd="vllm-sr serve"
   if [ -n "$LAUNCH_PLATFORM" ]; then
-    printf '  vllm-sr serve --platform %s\n' "$LAUNCH_PLATFORM"
-  else
-    printf '  vllm-sr serve\n'
+    cmd+=" --platform $LAUNCH_PLATFORM"
   fi
+  if [ -n "${SELECTED_RUNTIME:-}" ]; then
+    cmd+=" --runtime $SELECTED_RUNTIME"
+  fi
+  printf '  %s\n' "$cmd"
   printf '  vllm-sr dashboard\n'
 }
 
@@ -493,15 +497,31 @@ detect_package_manager_label() {
 }
 
 detect_existing_runtime() {
-  if docker_ready; then
-    printf 'docker\n'
-    return
-  fi
+  case "${REQUESTED_RUNTIME:-auto}" in
+    docker)
+      if docker_ready; then
+        printf 'docker\n'
+        return
+      fi
+      ;;
+    podman)
+      if podman_ready; then
+        printf 'podman\n'
+        return
+      fi
+      ;;
+    auto)
+      if docker_ready; then
+        printf 'docker\n'
+        return
+      fi
 
-  if podman_ready; then
-    printf 'podman\n'
-    return
-  fi
+      if podman_ready; then
+        printf 'podman\n'
+        return
+      fi
+      ;;
+  esac
 
   return 1
 }
@@ -790,6 +810,18 @@ ensure_runtime() {
     return
   fi
 
+  if [ "$REQUESTED_RUNTIME" = "podman" ]; then
+    if podman_ready; then
+      SELECTED_RUNTIME="podman"
+      write_runtime_env "podman"
+      done_step "Using existing Podman runtime"
+      return
+    else
+      write_runtime_env ""
+      die "Podman was requested but is not reachable. Install Podman or use --runtime auto."
+    fi
+  fi
+
   if docker_ready; then
     SELECTED_RUNTIME="docker"
     write_runtime_env
@@ -839,8 +871,15 @@ launch_first_session() {
   LAUNCH_PLATFORM="$(resolve_launch_platform)"
   launch_dir="$(resolve_launch_dir)"
 
+  local serve_args=()
   if [ -n "$LAUNCH_PLATFORM" ]; then
-    info "First-run serve command: vllm-sr serve --platform $LAUNCH_PLATFORM"
+    serve_args+=(--platform "$LAUNCH_PLATFORM")
+  fi
+  if [ -n "$SELECTED_RUNTIME" ]; then
+    serve_args+=(--runtime "$SELECTED_RUNTIME")
+  fi
+  if [ ${#serve_args[@]} -gt 0 ]; then
+    info "First-run serve command: vllm-sr serve ${serve_args[*]}"
   else
     info "First-run serve command: vllm-sr serve"
   fi
@@ -851,11 +890,7 @@ launch_first_session() {
   serve_log_file="$(make_temp_log)"
   if (
     cd "$launch_dir"
-    if [ -n "$LAUNCH_PLATFORM" ]; then
-      "$BIN_DIR/vllm-sr" serve --platform "$LAUNCH_PLATFORM"
-    else
-      "$BIN_DIR/vllm-sr" serve
-    fi
+    "$BIN_DIR/vllm-sr" serve "${serve_args[@]}"
   ) >"$serve_log_file" 2>&1; then
     rm -f "$serve_log_file"
     AUTO_LAUNCH_RAN="1"
@@ -932,10 +967,14 @@ print_next_steps() {
     fi
     printf '  stop         vllm-sr stop\n'
     if [ -n "$LAUNCH_PLATFORM" ]; then
-      printf '  restart      vllm-sr serve --platform %s\n' "$LAUNCH_PLATFORM"
+      printf '  restart      vllm-sr serve --platform %s' "$LAUNCH_PLATFORM"
     else
-      printf '  restart      vllm-sr serve\n'
+      printf '  restart      vllm-sr serve'
     fi
+    if [ -n "${SELECTED_RUNTIME:-}" ]; then
+      printf ' --runtime %s' "$SELECTED_RUNTIME"
+    fi
+    printf '\n'
     if is_remote_session; then
       host_label="$(detect_host_label)"
       printf '  tunnel       ssh -L 8700:localhost:8700 %s@%s\n' "${USER:-user}" "$host_label"
@@ -944,10 +983,14 @@ print_next_steps() {
     printf '  verify       vllm-sr --version\n'
     if [ "$MODE" = "serve" ]; then
       if [ -n "$LAUNCH_PLATFORM" ]; then
-        printf '  start        vllm-sr serve --platform %s\n' "$LAUNCH_PLATFORM"
+        printf '  start        vllm-sr serve --platform %s' "$LAUNCH_PLATFORM"
       else
-        printf '  start        vllm-sr serve\n'
+        printf '  start        vllm-sr serve'
       fi
+      if [ -n "${SELECTED_RUNTIME:-}" ]; then
+        printf ' --runtime %s' "$SELECTED_RUNTIME"
+      fi
+      printf '\n'
       printf '  open         vllm-sr dashboard\n'
     fi
   fi
@@ -1022,10 +1065,10 @@ validate_args() {
   esac
 
   case "$REQUESTED_RUNTIME" in
-    auto|docker|skip)
+    auto|docker|podman|skip)
       ;;
     *)
-      die "--runtime must be one of: auto, docker, skip"
+      die "--runtime must be one of: auto, docker, podman, skip"
       ;;
   esac
 

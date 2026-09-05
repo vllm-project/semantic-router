@@ -13,7 +13,12 @@
 #                                -> Podman fallback must kick in.
 #   explicit-docker-both-ready   Docker + Podman present, --runtime docker
 #                                -> Docker wins, Podman branch must not run.
+#   explicit-podman-both-ready   Docker + Podman present, --runtime podman
+#                                -> Podman wins, Docker detection must not run.
 #   skip                         --runtime skip -> no runtime.env written.
+#   print-command-podman         --runtime podman with both stubs ready
+#                                -> asserts printed restart/start commands
+#                                   include `--runtime podman`.
 
 set -u
 
@@ -39,15 +44,17 @@ cleanup() {
 trap cleanup EXIT
 
 # Emit a stub binary that either reports a healthy daemon (ready) or a
-# broken/missing one (absent). Only `info` is consulted by install.sh.
+# broken/missing one (absent). Each invocation is logged to a call-trace
+# file so the Python side can assert which runtime was (or was not) probed.
+CALL_TRACE="$INSTALL_ROOT_TMP/calls.log"
 write_stub() {
   local name="$1"
   local state="$2"
   local path="$STUB_BIN/$name"
   if [ "$state" = "ready" ]; then
-    printf '#!/usr/bin/env bash\nexit 0\n' > "$path"
+    printf '#!/usr/bin/env bash\nprintf "%%s\\n" "%s" >> "%s"\nexit 0\n' "$name" "$CALL_TRACE" > "$path"
   else
-    printf '#!/usr/bin/env bash\nexit 1\n' > "$path"
+    printf '#!/usr/bin/env bash\nprintf "%%s\\n" "%s" >> "%s"\nexit 1\n' "$name" "$CALL_TRACE" > "$path"
   fi
   chmod +x "$path"
 }
@@ -72,10 +79,20 @@ case "$SCENARIO" in
     write_stub podman ready
     export VLLM_SR_RUNTIME="docker"
     ;;
+  explicit-podman-both-ready)
+    write_stub docker ready
+    write_stub podman ready
+    export VLLM_SR_RUNTIME="podman"
+    ;;
   skip)
     write_stub docker ready
     write_stub podman ready
     export VLLM_SR_RUNTIME="skip"
+    ;;
+  print-command-podman)
+    write_stub docker ready
+    write_stub podman ready
+    export VLLM_SR_RUNTIME="podman"
     ;;
   *)
     printf 'unknown scenario: %s\n' "$SCENARIO" >&2
@@ -108,9 +125,31 @@ ensure_runtime
 # Report the selected runtime and the exact runtime.env contents so the
 # Python side can assert both behavior and persisted state.
 printf 'SELECTED_RUNTIME=%s\n' "$SELECTED_RUNTIME"
+# Replay the call trace so the Python side can assert which runtime probes
+# were (or were not) invoked.
+if [ -f "$CALL_TRACE" ]; then
+  printf 'CALLS=%s\n' "$(tr '\n' ',' < "$CALL_TRACE" | sed 's/,$//')"
+else
+  printf 'CALLS=\n'
+fi
 if [ -f "$INSTALL_ROOT_TMP/runtime.env" ]; then
   printf 'RUNTIME_ENV_FILE=present\n'
   cat "$INSTALL_ROOT_TMP/runtime.env"
 else
   printf 'RUNTIME_ENV_FILE=absent\n'
+fi
+
+# For scenarios that need to verify printed commands, invoke the full
+# installer path that prints plans + restart/start commands. This also
+# exercises detect_existing_runtime() so CALLS reflects whether Docker
+# was probed during print_install_plan, not just during ensure_runtime.
+if [ "$SCENARIO" = "print-command-podman" ]; then
+  LAUNCH_PLATFORM=""
+  printf '[PRINT_INSTALL_PLAN]\n'
+  print_install_plan
+  printf '[PRINT_RESTART_COMMAND]\n'
+  print_restart_command
+  printf '[PRINT_NEXT_STEPS]\n'
+  AUTO_LAUNCH_RAN=0
+  print_next_steps
 fi

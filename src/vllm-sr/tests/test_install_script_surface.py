@@ -22,9 +22,8 @@ OPENCLAW_INSTALL_DOC_PATH = (
 def test_install_script_runtime_contract_supports_podman_fallback() -> None:
     content = INSTALL_SCRIPT_PATH.read_text(encoding="utf-8")
 
-    # User-facing --runtime choices are unchanged: Podman is an internal
-    # fallback during auto detection, not a first-class option.
-    assert "--runtime auto|docker|skip" in content
+    # Podman is now a first-class --runtime option alongside docker.
+    assert "--runtime auto|docker|podman|skip" in content
 
     # Auto detection must prefer Docker but fall back to Podman when Docker
     # is not reachable. The fallback has to be gated on --runtime auto so
