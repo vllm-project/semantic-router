@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -32,7 +33,9 @@ var ErrTokenSpansTruncated = errors.New("token_spans.v1 response is partial: pro
 type HTTPTokenClassifierInference struct {
 	connector *connector.Client
 	timeout   time.Duration
-	mapping   *PIIMapping
+	// known is the mapping's label set with BIO prefixes stripped, built once
+	// so each response is checked against a ready map.
+	known map[string]struct{}
 }
 
 func newHTTPTokenClassifierInference(cfg *config.ExternalModelConfig, mapping *PIIMapping, deadline time.Duration) (*HTTPTokenClassifierInference, error) {
@@ -69,7 +72,7 @@ func newHTTPTokenClassifierInference(cfg *config.ExternalModelConfig, mapping *P
 	if err != nil {
 		return nil, fmt.Errorf("create token_spans connector: %w", err)
 	}
-	return &HTTPTokenClassifierInference{connector: remote, timeout: timeout, mapping: mapping}, nil
+	return &HTTPTokenClassifierInference{connector: remote, timeout: timeout, known: knownPIILabels(mapping)}, nil
 }
 
 // tokenSpanWire is one span as the provider sends it. entity_group and word
@@ -123,14 +126,13 @@ func (h *HTTPTokenClassifierInference) classifyTokens(ctx context.Context, text 
 	if err != nil {
 		return nil, err
 	}
-	return alignTokenSpans(h.mapping, text, spans, truncatedAt)
+	return alignTokenSpans(h.known, text, spans, truncatedAt)
 }
 
 // decodeTokenSpansResponse accepts either a bare JSON list of spans or the
 // envelope form that can also carry truncated_at.
 func decodeTokenSpansResponse(body []byte) ([]tokenSpanWire, *int, error) {
-	trimmed := strings.TrimSpace(string(body))
-	if strings.HasPrefix(trimmed, "[") {
+	if trimmed := bytes.TrimSpace(body); len(trimmed) > 0 && trimmed[0] == '[' {
 		var spans []tokenSpanWire
 		if err := json.Unmarshal(body, &spans); err != nil {
 			return nil, nil, fmt.Errorf("failed to parse token_spans response: %w", err)
@@ -148,13 +150,12 @@ func decodeTokenSpansResponse(body []byte) ([]tokenSpanWire, *int, error) {
 // code-point offsets to the byte offsets TokenEntity carries internally. Any
 // violation rejects the whole response: a provider whose offsets are off by
 // one is redacting the wrong characters, and that must not be a warning.
-func alignTokenSpans(mapping *PIIMapping, text string, spans []tokenSpanWire, truncatedAt *int) ([]candle_binding.TokenEntity, error) {
+func alignTokenSpans(known map[string]struct{}, text string, spans []tokenSpanWire, truncatedAt *int) ([]candle_binding.TokenEntity, error) {
 	input := newSpanInput(text)
 	if err := input.checkTruncatedAt(truncatedAt); err != nil {
 		return nil, err
 	}
 
-	known := knownPIILabels(mapping)
 	seen := make(map[spanKey]struct{}, len(spans))
 	entities := make([]candle_binding.TokenEntity, 0, len(spans))
 	for i, sp := range spans {
