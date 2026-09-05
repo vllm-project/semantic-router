@@ -66,18 +66,6 @@ const (
 	compareRestoreExpired compareRestoreResult = 2
 )
 
-// snapshotResponseScript atomically reads a key's value and remaining PTTL
-// in one round trip, so the two are consistent with each other (a separate
-// GET then PTTL could observe the key expiring, or a concurrent write
-// changing its TTL, in between the two commands). Single-key: KEYS[1] only.
-var snapshotResponseScript = redis.NewScript(`
-local value = redis.call("GET", KEYS[1])
-if not value then
-	return nil
-end
-return {value, redis.call("PTTL", KEYS[1])}
-`)
-
 // replaceAndSnapshotResponseScript atomically captures the payload and PTTL
 // that this update is replacing and installs the update's new payload. Keeping
 // the read and write in one single-key script prevents two overlapping updates
@@ -348,27 +336,11 @@ func (s *RedisStore) replaceResponseAndSnapshot(ctx context.Context, key, respon
 	return decodeResponseUpdateSnapshot(result, capturedAt, responseID)
 }
 
-// readPreviousResponseForUpdate atomically snapshots a response's current
-// payload bytes and remaining PTTL — doubling as the existence check — and
-// best-effort parses its previous ConversationID/CreatedAt. All of this is
-// needed if the update's own index write later fails and the payload must
-// be restored with an equivalent remaining lifetime and reindexed. A parse
-// failure is not fatal to the update: the snapshot's bytes are still usable
-// for restore, it just has nothing to unindex or reindex.
-func (s *RedisStore) readPreviousResponseForUpdate(ctx context.Context, key, responseID string) (responseUpdateSnapshot, error) {
-	capturedAt := time.Now()
-
-	result, err := snapshotResponseScript.Run(ctx, s.client, []string{key}).Result()
-	if err != nil {
-		if errors.Is(err, redis.Nil) {
-			return responseUpdateSnapshot{}, ErrNotFound
-		}
-		return responseUpdateSnapshot{}, fmt.Errorf("failed to snapshot response %s for update: %w", responseID, err)
-	}
-
-	return decodeResponseUpdateSnapshot(result, capturedAt, responseID)
-}
-
+// decodeResponseUpdateSnapshot turns replaceAndSnapshotResponseScript's
+// {value, pttl} reply into the snapshot a failed update's rollback needs,
+// best-effort parsing the displaced payload's ConversationID/CreatedAt. A
+// parse failure is not fatal to the update: the snapshot's bytes are still
+// usable for restore, it just has nothing to unindex or reindex.
 func decodeResponseUpdateSnapshot(result interface{}, capturedAt time.Time, responseID string) (responseUpdateSnapshot, error) {
 	items, ok := result.([]interface{})
 	if !ok || len(items) != 2 {
