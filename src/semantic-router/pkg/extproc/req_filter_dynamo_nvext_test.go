@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"bytes"
 	"context"
 	"strings"
 	"testing"
@@ -119,16 +120,16 @@ func TestValidateDynamoResponseBackendRequiresActualDynamoEndpoint(t *testing.T)
 	}}
 	for _, test := range []struct {
 		name        string
-		backendType string
+		allowDynamo bool
 		wantError   bool
 	}{
-		{"dynamo", "dynamo", false},
-		{"vllm", "vllm", true},
-		{"missing identity", "", true},
+		{"dynamo", true, false},
+		{"vllm", false, true},
+		{"missing identity", false, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			err := validateDynamoResponseBackend(&RequestContext{
-				RequestModel: "model-a", UpstreamBackendType: test.backendType,
+				RequestModel: "model-a", AllowDynamoExtensions: test.allowDynamo,
 			}, envelope)
 			if (err != nil) != test.wantError {
 				t.Fatalf("validateDynamoResponseBackend() error = %v, wantError = %v", err, test.wantError)
@@ -163,6 +164,38 @@ func TestCaptureUpstreamBackendIdentityFromResponseAttributes(t *testing.T) {
 
 	if ctx.UpstreamBackendName != "dynamo-a" || ctx.UpstreamBackendType != "dynamo" {
 		t.Fatalf("captured backend identity = %q/%q", ctx.UpstreamBackendName, ctx.UpstreamBackendType)
+	}
+	if !ctx.AllowDynamoExtensions {
+		t.Fatal("Dynamo endpoint should allow response extensions")
+	}
+}
+
+func TestCaptureUpstreamBackendIdentityDisallowsNonDynamoExtensions(t *testing.T) {
+	identity, err := structpb.NewStruct(map[string]any{
+		upstreamHostMetadataAttribute: map[string]any{
+			"filter_metadata": map[string]any{
+				backendIdentityNamespace: map[string]any{
+					"backend_name": "vllm-a",
+					"backend_type": "vllm",
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := &ext_proc.ProcessingRequest{
+		Request: &ext_proc.ProcessingRequest_ResponseHeaders{
+			ResponseHeaders: &ext_proc.HttpHeaders{},
+		},
+		Attributes: map[string]*structpb.Struct{extProcAttributesNamespace: identity},
+	}
+	ctx := &RequestContext{AllowDynamoExtensions: true}
+
+	captureUpstreamBackendIdentity(req, ctx)
+
+	if ctx.AllowDynamoExtensions {
+		t.Fatal("non-Dynamo endpoint should not allow response extensions")
 	}
 }
 
@@ -206,6 +239,56 @@ func TestSemanticStreamRejectsDynamoNVExtFromNonDynamoBackend(t *testing.T) {
 	}
 	if strings.Contains(string(mutation.GetBody()), `"nvext"`) {
 		t.Fatalf("invalid upstream nvext leaked to the client: %s", mutation.GetBody())
+	}
+}
+
+func TestSemanticStreamPreservesDynamoRequestIDFromDynamoBackend(t *testing.T) {
+	router := dynamoBoundaryTestRouter("dynamo")
+	ctx := &RequestContext{
+		SourceFormat:          llmprotocol.OpenAIChatV1,
+		TargetFormat:          llmprotocol.OpenAIChatV1,
+		RequestModel:          "model-a",
+		UpstreamBackendName:   "dynamo-a",
+		UpstreamBackendType:   "dynamo",
+		AllowDynamoExtensions: true,
+		TraceContext:          context.Background(),
+		SemanticRequest:       &llmprotocol.Request{},
+	}
+	body := []byte("event: request_id\n: \"req-123\"\n\n")
+
+	response := router.handleSemanticStreamingResponseBody(body, false, ctx)
+	if ctx.StreamingAborted {
+		t.Fatal("Dynamo request_id annotation was rejected")
+	}
+	mutation := response.GetResponseBody().GetResponse().GetBodyMutation()
+	if mutation == nil || !bytes.Equal(mutation.GetBody(), body) {
+		t.Fatalf("forwarded request_id frame = %q, want %q", mutation.GetBody(), body)
+	}
+}
+
+func TestSemanticStreamRejectsDynamoRequestIDFromNonDynamoBackend(t *testing.T) {
+	router := dynamoBoundaryTestRouter("vllm")
+	ctx := &RequestContext{
+		SourceFormat:        llmprotocol.OpenAIChatV1,
+		TargetFormat:        llmprotocol.OpenAIChatV1,
+		RequestModel:        "model-a",
+		UpstreamBackendName: "vllm-a",
+		UpstreamBackendType: "vllm",
+		TraceContext:        context.Background(),
+		SemanticRequest:     &llmprotocol.Request{},
+	}
+	body := []byte("event: request_id\n: \"req-123\"\n\n")
+
+	response := router.handleSemanticStreamingResponseBody(body, false, ctx)
+	if !ctx.StreamingAborted {
+		t.Fatal("Dynamo request_id annotation from a non-Dynamo backend was not rejected")
+	}
+	mutation := response.GetResponseBody().GetResponse().GetBodyMutation()
+	if mutation == nil {
+		t.Fatal("aborted stream did not suppress the request_id frame")
+	}
+	if bytes.Contains(mutation.GetBody(), []byte("req-123")) {
+		t.Fatalf("invalid request_id annotation leaked to the client: %s", mutation.GetBody())
 	}
 }
 

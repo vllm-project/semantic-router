@@ -363,6 +363,12 @@ func (encoder *responsesStreamEncoder) encodeResponsesReasoningDelta(
 }
 
 func (encoder *responsesStreamEncoder) encodeResponsesOpaque(event llmprotocol.Event) ([][]byte, error) {
+	if event.DynamoRequestID {
+		return nil, llmprotocol.NewError(
+			llmprotocol.ErrorUnsupportedFeature, "unsupported_dynamo_request_id_translation",
+			"Dynamo request_id SSE events cannot be translated across wire formats", nil,
+		)
+	}
 	if event.DynamoNVExt != nil {
 		return nil, llmprotocol.NewError(
 			llmprotocol.ErrorUnsupportedFeature, "unsupported_dynamo_nvext_translation",
