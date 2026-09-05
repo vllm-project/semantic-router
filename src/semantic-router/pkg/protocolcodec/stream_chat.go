@@ -143,20 +143,24 @@ func (decoder *chatStreamDecoder) pushFrame(frame []byte) ([]llmprotocol.Event, 
 		return []llmprotocol.Event{event}, nil, err
 	}
 	var chunk chatChunkWire
-	if err := decodeProviderWire(parsed.Data, &chunk, decoder.policy); err != nil {
+	vendorExtensions, err := decodeProviderWireVendorAware(parsed.Data, &chunk, decoder.policy)
+	if err != nil {
 		return nil, nil, err
 	}
+	var diagnostics llmprotocol.Diagnostics
+	appendVendorExtensionDiagnostics(&diagnostics, decoder.policy, llmprotocol.OpenAIChatV1, vendorExtensions)
 	if err := validateChatStreamChunk(chunk); err != nil {
-		return nil, nil, err
+		return nil, diagnostics, err
 	}
 	if err := decoder.observeProviderIdentity(chunk.ID, chunk.Model); err != nil {
-		return nil, nil, err
+		return nil, diagnostics, err
 	}
 	if chunk.Error != nil {
 		event, err := decoder.next(chatStreamFailureEvent(chunk.Error))
-		return []llmprotocol.Event{event}, nil, err
+		return []llmprotocol.Event{event}, diagnostics, err
 	}
-	events, diagnostics, err := decoder.decodeChunkEvents(chunk)
+	events, chunkDiagnostics, err := decoder.decodeChunkEvents(chunk)
+	diagnostics = appendDiagnostics(diagnostics, chunkDiagnostics, decoder.policy.Limits.Diagnostics)
 	diagnostics = decoder.appendProviderChunkDiagnostics(chunk, diagnostics)
 	return events, diagnostics, err
 }

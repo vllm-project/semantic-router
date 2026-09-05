@@ -28,12 +28,21 @@ const (
 	SourceBoundedSameFormat SourcePreservationPolicy = "bounded_same_format"
 )
 
+// ResponseVendor identifies a provider with response-only wire extensions.
+type ResponseVendor string
+
+// ResponseVendorAzure permits Azure OpenAI response extensions.
+const ResponseVendorAzure ResponseVendor = "azure"
+
 type Policy struct {
 	UnknownFields      UnknownFieldPolicy
 	LossyFeatures      LossyPolicy
 	MissingStableIDs   MissingIDPolicy
 	SourcePreservation SourcePreservationPolicy
 	Limits             Limits
+	// ResponseVendor permits provider-specific fields at the response boundary.
+	// Empty keeps strict canonical decoding.
+	ResponseVendor ResponseVendor
 }
 
 type Limits struct {

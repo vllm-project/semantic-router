@@ -249,6 +249,7 @@ type RequestContext struct {
 	ProtocolEnvelope         llmprotocol.Envelope
 	ResponseEnvelope         llmprotocol.Envelope
 	ProtocolDiagnostics      llmprotocol.Diagnostics
+	ResponseVendor           llmprotocol.ResponseVendor
 	ImmediateProtocolError   *llmprotocol.ProtocolError
 	ImmediateResponseEncoded bool
 

@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"errors"
 	"strings"
 	"time"
 
@@ -22,12 +23,17 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 	semanticResponse, err := r.decodeClientResponse(responseBody, ctx)
 	if err != nil {
 		metrics.RecordRequestError(ctx.RequestModel, "parse_error")
-		logging.ComponentErrorEvent("extproc", "neutral_response_decode_failed", map[string]interface{}{
+		decodeEvent := map[string]interface{}{
 			"request_id":     ctx.RequestID,
 			"backend_format": ctx.TargetFormat,
 			"client_format":  ctx.SourceFormat,
 			"error":          err.Error(),
-		})
+		}
+		// Log the private cause while keeping the client-facing message generic.
+		if cause := errors.Unwrap(err); cause != nil {
+			decodeEvent["cause"] = cause.Error()
+		}
+		logging.ComponentErrorEvent("extproc", "neutral_response_decode_failed", decodeEvent)
 		return r.createErrorResponse(502, "The selected model returned an invalid response")
 	}
 	clientBody := responseBody
