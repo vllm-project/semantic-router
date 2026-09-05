@@ -21,24 +21,19 @@ import (
 const defaultExternalRAGMaxResponseBytes int64 = 4 * 1024 * 1024
 
 var (
-	// Shared HTTP client for external API requests with connection pooling
-	externalAPIClient     *http.Client
-	externalAPIClientOnce sync.Once
+	externalAPITransport     *http.Transport
+	externalAPITransportOnce sync.Once
 )
 
-// getExternalAPIClient returns a shared HTTP client for external API requests
-func getExternalAPIClient() *http.Client {
-	externalAPIClientOnce.Do(func() {
-		externalAPIClient = &http.Client{
-			Timeout: 30 * time.Second,
-			Transport: &http.Transport{
-				MaxIdleConns:        100,
-				MaxIdleConnsPerHost: 10,
-				IdleConnTimeout:     90 * time.Second,
-			},
+func externalAPIClient(timeout time.Duration) *http.Client {
+	externalAPITransportOnce.Do(func() {
+		externalAPITransport = &http.Transport{
+			MaxIdleConns:        100,
+			MaxIdleConnsPerHost: 10,
+			IdleConnTimeout:     90 * time.Second,
 		}
 	})
-	return externalAPIClient
+	return &http.Client{Timeout: timeout, Transport: externalAPITransport}
 }
 
 // validateHeaderName validates a header name to prevent header injection
@@ -163,16 +158,7 @@ func (r *OpenAIRouter) retrieveFromExternalAPI(traceCtx context.Context, ctx *Re
 		req.Header.Set(k, sanitizedValue)
 	}
 
-	// Use shared HTTP client with connection pooling
-	client := getExternalAPIClient()
-
-	// Override timeout if specified in config
-	if apiConfig.TimeoutSeconds != nil {
-		timeout := time.Duration(*apiConfig.TimeoutSeconds) * time.Second
-		reqCtx, cancel := context.WithTimeout(traceCtx, timeout)
-		defer cancel()
-		req = req.WithContext(reqCtx)
-	}
+	client := externalAPIClient(apiConfig.GetTimeout())
 
 	// Execute request
 	start := time.Now()
