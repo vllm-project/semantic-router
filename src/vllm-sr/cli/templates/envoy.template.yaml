@@ -62,8 +62,12 @@ static_resources:
                     retry_on: {{ model.reliability.retry_on | default('connect-failure,refused-stream') }}
                     num_retries: {{ model.reliability.retry_count }}
                   {% endif %}
-                  # Rewrite Host header to match upstream server
+                  # Rewrite Host header to match the endpoint Envoy selected.
+                  {% if model.auto_host_rewrite %}
+                  auto_host_rewrite: true
+                  {% else %}
                   host_rewrite_literal: "{{ model.endpoints[0].host_authority }}"
+                  {% endif %}
                   {% if model.path_prefix %}
                   # Prepend path prefix to /v1 requests (e.g., /compatible-mode + /v1/chat/completions = /compatible-mode/v1/chat/completions).
                   # Match only the complete /v1 segment so route recomputation cannot rewrite /v1beta/... again.
@@ -114,8 +118,12 @@ static_resources:
                     num_retries: {{ models[0].reliability.retry_count }}
                   {% endif %}
                   {% if models %}
-                  # Rewrite Host header to match upstream server
+                  # Rewrite Host header to match the endpoint Envoy selected.
+                  {% if models[0].auto_host_rewrite %}
+                  auto_host_rewrite: true
+                  {% else %}
                   host_rewrite_literal: "{{ models[0].endpoints[0].host_authority }}"
+                  {% endif %}
                   {% endif %}
                   {% if models and models[0].path_prefix %}
                   # Prepend path prefix to /v1 requests (e.g., /compatible-mode + /v1/chat/completions = /compatible-mode/v1/chat/completions).
@@ -276,7 +284,9 @@ static_resources:
               socket_address:
                 address: {{ endpoint.address }}
                 port_value: {{ endpoint.port }}
-            {% if endpoint.is_domain %}
+            {% if model.auto_host_rewrite %}
+            hostname: "{{ endpoint.host_authority }}"
+            {% elif endpoint.is_domain %}
             hostname: "{{ endpoint.address }}"
             {% endif %}
           load_balancing_weight: {{ endpoint.weight | default(1) }}

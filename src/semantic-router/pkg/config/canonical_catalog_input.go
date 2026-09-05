@@ -61,10 +61,16 @@ func (builder *catalogInputBuilder) addModel(model CanonicalProviderModel, model
 	if strings.TrimSpace(model.Catalog) != "" && model.Reasoning != nil {
 		return fmt.Errorf("providers.models[%d].reasoning is only valid for a custom model without catalog", modelIndex)
 	}
+	if model.APIFormat != "" && catalogProtocolForAPIFormat(model.APIFormat) == "" {
+		return fmt.Errorf(
+			"providers.models[%d].api_format %q is unsupported; use openai, responses, or anthropic",
+			modelIndex, model.APIFormat,
+		)
+	}
 	cardID := effectiveCanonicalCardID(model)
 	alias := catalogModelAlias(model, cardID)
 	for backendIndex, backend := range model.BackendRefs {
-		instance, binding := catalogProviderBinding(model, backend, backendIndex)
+		instance, binding := catalogProviderBinding(builder.builtIn, model, backend, backendIndex)
 		builder.input.Providers = append(builder.input.Providers, instance)
 		alias.Providers = append(alias.Providers, binding)
 	}
@@ -90,6 +96,7 @@ func catalogModelAlias(model CanonicalProviderModel, cardID string) modelcatalog
 }
 
 func catalogProviderBinding(
+	builtIn *modelcatalog.Registry,
 	model CanonicalProviderModel,
 	backend CanonicalBackendRef,
 	backendIndex int,
@@ -103,7 +110,23 @@ func catalogProviderBinding(
 		Name: instanceName, Catalog: providerID, BaseURL: canonicalBackendURL(backend),
 		Credentials: modelcatalog.CredentialsRef{APIKey: backend.APIKey, APIKeyEnv: backend.APIKeyEnv},
 		Headers:     copyStringMap(backend.ExtraHeaders), APIVersion: backend.APIVersion,
-		AuthHeader: backend.AuthHeader, AuthPrefix: backend.AuthPrefix, ChatPath: backend.ChatPath,
+		AuthHeader: backend.AuthHeader, ChatPath: backend.ChatPath,
+	}
+	if backend.AuthPrefix != nil {
+		instance.AuthPrefix = *backend.AuthPrefix
+		instance.AuthPrefixSet = true
+	}
+	if backend.Weight != 0 {
+		endpointURL := instance.BaseURL
+		if endpointURL == "" {
+			if definition, ok := builtIn.Provider(providerID); ok {
+				endpointURL = definition.DefaultBaseURL
+			}
+		}
+		instance.BaseURL = ""
+		instance.Endpoints = []modelcatalog.Endpoint{{
+			Name: "primary", URL: endpointURL, Weight: backend.Weight,
+		}}
 	}
 	binding := modelcatalog.ModelProviderBinding{
 		Name: instanceName, ModelID: catalogProviderModelID(model, providerID),
@@ -342,7 +365,8 @@ func applyCatalogCardReasoning(model CanonicalProviderModel, overlay *modelcatal
 		} else {
 			overlay.Reasoning = &modelcatalog.ReasoningFamilyDefinition{
 				Type: model.Reasoning.Type, Parameter: model.Reasoning.Parameter,
-				Levels: append([]string(nil), model.Reasoning.Levels...), Default: model.Reasoning.Default,
+				ActivationParameter: model.Reasoning.ActivationParameter,
+				Levels:              append([]string(nil), model.Reasoning.Levels...), Default: model.Reasoning.Default,
 				Disabled: model.Reasoning.Disabled,
 			}
 		}

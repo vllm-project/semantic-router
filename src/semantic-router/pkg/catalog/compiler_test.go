@@ -60,7 +60,8 @@ func TestBuiltInEvaluationPreservesOpenSubjectMetadata(t *testing.T) {
 			continue
 		}
 		if evaluation.Subject["variant"] != "Qwen3.8-Max" ||
-			evaluation.Subject["terminal_harness"] != "Claude Code" {
+			evaluation.Subject["source_kind"] != "official_model_card" ||
+			evaluation.Subject["reasoning_effort"] != "xhigh" {
 			t.Fatalf("benchmark-specific subject metadata was lost: %+v", evaluation.Subject)
 		}
 		evaluation.Subject["variant"] = "mutated"
@@ -115,6 +116,75 @@ func providerBindsModel(provider ProviderDefinition, modelID string) bool {
 		}
 	}
 	return false
+}
+
+func TestBuiltInProviderBindingsDeclareRelationships(t *testing.T) {
+	registry, err := BuiltIn()
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertProviderBindingRelationshipsValid(t, registry)
+	assertProviderBindingRelationships(t, registry, map[string]map[string]CatalogModelRelationship{
+		"bedrock": {
+			"amazon/nova-2-lite": CatalogModelRelationshipFirstParty,
+		},
+		"baidu-qianfan": {
+			"baidu/ernie-5.0":        CatalogModelRelationshipFirstParty,
+			"deepseek/deepseek-v3.2": CatalogModelRelationshipManagedCloud,
+		},
+		"openrouter": {
+			"anthropic/claude-sonnet-5": CatalogModelRelationshipGateway,
+		},
+		"vllm": {
+			"baidu/ernie-4.5-300b-a47b": CatalogModelRelationshipSelfHosted,
+		},
+	})
+}
+
+func assertProviderBindingRelationshipsValid(t *testing.T, registry *Registry) {
+	t.Helper()
+	valid := map[CatalogModelRelationship]bool{
+		CatalogModelRelationshipFirstParty:   true,
+		CatalogModelRelationshipManagedCloud: true,
+		CatalogModelRelationshipGateway:      true,
+		CatalogModelRelationshipSelfHosted:   true,
+	}
+	for _, provider := range registry.Providers() {
+		for _, binding := range provider.Models {
+			if !valid[binding.Relationship] {
+				t.Fatalf("%s/%s has invalid relationship %q", provider.ID, binding.Catalog, binding.Relationship)
+			}
+		}
+	}
+}
+
+func assertProviderBindingRelationships(
+	t *testing.T,
+	registry *Registry,
+	wants map[string]map[string]CatalogModelRelationship,
+) {
+	t.Helper()
+	for providerID, catalogWants := range wants {
+		provider, ok := registry.Provider(providerID)
+		if !ok || len(provider.Models) == 0 {
+			t.Fatalf("%s has no built-in bindings", providerID)
+		}
+		for catalogID, want := range catalogWants {
+			found := false
+			for _, binding := range provider.Models {
+				if binding.Catalog != catalogID {
+					continue
+				}
+				found = true
+				if binding.Relationship != want {
+					t.Fatalf("%s/%s relationship = %q, want %q", providerID, binding.Catalog, binding.Relationship, want)
+				}
+			}
+			if !found {
+				t.Fatalf("%s has no binding for %s", providerID, catalogID)
+			}
+		}
+	}
 }
 
 func TestEvaluationCoverageReturnsDefensiveValues(t *testing.T) {
@@ -185,6 +255,64 @@ func TestCompileCustomRuntimeCardAndBuiltInReasoning(t *testing.T) {
 	}
 }
 
+func TestCompileAcceptsOpenEndedInlineReasoningFamily(t *testing.T) {
+	registry, err := BuiltIn()
+	if err != nil {
+		t.Fatal(err)
+	}
+	effective, err := registry.Compile(CompileInput{
+		Models: []ModelAlias{{Name: "private", Catalog: "private"}},
+		ModelCards: []ModelCardOverlay{{
+			Name: "private",
+			Reasoning: &ReasoningFamilyDefinition{
+				Type: "chat_template_kwargs", Parameter: "enable_thinking",
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("compile open-ended inline reasoning family: %v", err)
+	}
+	model, ok := effective.Model("private")
+	if !ok {
+		t.Fatal("compiled custom model is missing")
+	}
+	var family ReasoningFamilyDefinition
+	found := false
+	for _, candidate := range effective.ReasoningFamilies() {
+		if candidate.ID == model.Card.Card.ReasoningFamily {
+			family = candidate
+			found = true
+			break
+		}
+	}
+	if !found || family.Parameter != "enable_thinking" || len(family.Levels) != 0 {
+		t.Fatalf("open-ended inline reasoning family changed: %+v", family)
+	}
+}
+
+func TestCompileDefaultsPreserveReasoningEffortOmission(t *testing.T) {
+	registry, err := BuiltIn()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	effective, err := registry.Compile(CompileInput{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := effective.Defaults().ReasoningEffort; got != "" {
+		t.Fatalf("omitted reasoning effort became %q", got)
+	}
+
+	effective, err = registry.Compile(CompileInput{Defaults: Defaults{ReasoningEffort: "high"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := effective.Defaults().ReasoningEffort; got != "high" {
+		t.Fatalf("explicit reasoning effort became %q", got)
+	}
+}
+
 func TestCompileRejectsImplicitNameJoin(t *testing.T) {
 	registry, err := BuiltIn()
 	if err != nil {
@@ -196,6 +324,185 @@ func TestCompileRejectsImplicitNameJoin(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), "has no built-in or handwritten model card") {
 		t.Fatalf("expected explicit catalog/card error, got %v", err)
+	}
+}
+
+func TestCompileInfersProtocolFromCatalogModelBinding(t *testing.T) {
+	registry := protocolInferenceTestRegistry()
+
+	for _, test := range []struct {
+		name             string
+		catalog          string
+		explicitProtocol string
+		wantProtocol     string
+		wantModelID      string
+	}{
+		{
+			name:         "responses-only model",
+			catalog:      "acme/responses-only",
+			wantProtocol: "openai/responses@1",
+			wantModelID:  "responses-only-v1",
+		},
+		{
+			name:         "provider default is valid for multi-protocol model",
+			catalog:      "acme/multi-protocol",
+			wantProtocol: "openai/chat-completions@1",
+			wantModelID:  "multi-protocol-v1",
+		},
+		{
+			name:             "explicit protocol wins for multi-protocol model",
+			catalog:          "acme/multi-protocol",
+			explicitProtocol: "openai/responses@1",
+			wantProtocol:     "openai/responses@1",
+			wantModelID:      "multi-protocol-v1",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			effective, compileErr := registry.Compile(CompileInput{
+				Providers: []ProviderInstance{{Name: "primary", Catalog: "test-provider"}},
+				Models: []ModelAlias{{
+					Name: "production", Catalog: test.catalog,
+					Providers: []ModelProviderBinding{{Name: "primary", Protocol: test.explicitProtocol}},
+				}},
+			})
+			if compileErr != nil {
+				t.Fatal(compileErr)
+			}
+			model, ok := effective.Model("production")
+			if !ok || len(model.Providers) != 1 {
+				t.Fatalf("compiled provider binding is missing: %+v", model)
+			}
+			binding := model.Providers[0]
+			if binding.Binding.Protocol != test.wantProtocol || binding.Binding.ModelID != test.wantModelID {
+				t.Fatalf("binding = %+v, want protocol %q and model %q", binding.Binding, test.wantProtocol, test.wantModelID)
+			}
+			if binding.CatalogBinding == nil {
+				t.Fatal("inferred binding lost provider-owned catalog metadata")
+			}
+		})
+	}
+}
+
+func TestCompileRejectsExplicitProtocolWithoutCatalogModelBinding(t *testing.T) {
+	registry := protocolInferenceTestRegistry()
+	_, err := registry.Compile(CompileInput{
+		Providers: []ProviderInstance{{Name: "primary", Catalog: "test-provider"}},
+		Models: []ModelAlias{{
+			Name: "production", Catalog: "acme/responses-only",
+			Providers: []ModelProviderBinding{{Name: "primary", Protocol: "openai/chat-completions@1"}},
+		}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "available protocols: openai/responses@1") {
+		t.Fatalf("expected actionable protocol mismatch, got %v", err)
+	}
+}
+
+func TestCompileDeploymentNameBindingRequiresExplicitProviderModelID(t *testing.T) {
+	registry := protocolInferenceTestRegistry()
+	input := CompileInput{
+		Providers: []ProviderInstance{{Name: "primary", Catalog: "test-provider"}},
+		Models: []ModelAlias{{
+			Name: "production", Catalog: "acme/deployment-name",
+			Providers: []ModelProviderBinding{{Name: "primary"}},
+		}},
+	}
+
+	_, err := registry.Compile(input)
+	if err == nil || !strings.Contains(err.Error(), "providers.models[].provider_model_id") ||
+		!strings.Contains(err.Error(), "operator-defined deployment name") {
+		t.Fatalf("expected an actionable deployment-name error, got %v", err)
+	}
+
+	input.Models[0].Providers[0].ModelID = "operator-mai-production"
+	effective, err := registry.Compile(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	model, ok := effective.Model("production")
+	if !ok || len(model.Providers) != 1 {
+		t.Fatalf("compiled provider binding is missing: %+v", model)
+	}
+	binding := model.Providers[0]
+	if binding.Binding.ModelID != "operator-mai-production" || binding.Binding.Protocol != "openai/chat-completions@1" {
+		t.Fatalf("deployment binding = %+v", binding.Binding)
+	}
+	if binding.CatalogBinding == nil || binding.CatalogBinding.ID != "catalog-deployment-placeholder" {
+		t.Fatalf("deployment binding lost availability metadata: %+v", binding.CatalogBinding)
+	}
+}
+
+func protocolInferenceTestRegistry() *Registry {
+	const (
+		chat      = "openai/chat-completions@1"
+		responses = "openai/responses@1"
+	)
+	return &Registry{
+		providers: map[string]ProviderDefinition{
+			"test-provider": {
+				ID:                  "test-provider",
+				DefaultBaseURL:      "https://models.example/v1",
+				Protocols:           []string{chat, responses},
+				DefaultProtocol:     chat,
+				SupportedOperations: []string{chat + "#create", responses + "#create"},
+				Models: []CatalogModelBinding{
+					{Catalog: "acme/responses-only", ID: "responses-only-v1", Protocols: []string{responses}},
+					{Catalog: "acme/multi-protocol", ID: "multi-protocol-v1", Protocols: []string{chat, responses}},
+					{
+						Catalog: "acme/deployment-name", ID: "catalog-deployment-placeholder", Protocols: []string{chat},
+						Restrictions: map[string]any{"provider_model_id_kind": "deployment_name"},
+					},
+				},
+			},
+		},
+		models: map[string]ModelCard{
+			"acme/responses-only":  {ID: "acme/responses-only", Kind: "physical"},
+			"acme/multi-protocol":  {ID: "acme/multi-protocol", Kind: "physical"},
+			"acme/deployment-name": {ID: "acme/deployment-name", Kind: "physical"},
+		},
+	}
+}
+
+func TestCompileRejectsAmbiguousCatalogModelProtocol(t *testing.T) {
+	registry := &Registry{
+		providers: map[string]ProviderDefinition{
+			"mixed": {
+				ID: "mixed", DefaultBaseURL: "https://models.example/v1",
+				Protocols: []string{
+					"openai/chat-completions@1",
+					"openai/responses@1",
+					"anthropic/messages@1",
+				},
+				DefaultProtocol: "openai/chat-completions@1",
+				SupportedOperations: []string{
+					"openai/chat-completions@1#create",
+					"openai/responses@1#create",
+					"anthropic/messages@1#create",
+				},
+				Models: []CatalogModelBinding{{
+					Catalog: "acme/ambiguous", ID: "ambiguous-v1",
+					Protocols: []string{"openai/responses@1", "anthropic/messages@1"},
+				}},
+			},
+		},
+		models: map[string]ModelCard{
+			"acme/ambiguous": {
+				ID: "acme/ambiguous", DisplayName: "Ambiguous", Kind: "physical",
+				Lifecycle: "active", Capabilities: []string{"chat"},
+				Modalities: Modalities{Input: []string{"text"}, Output: []string{"text"}},
+			},
+		},
+	}
+
+	_, err := registry.Compile(CompileInput{
+		Providers: []ProviderInstance{{Name: "primary", Catalog: "mixed"}},
+		Models: []ModelAlias{{
+			Name: "production", Catalog: "acme/ambiguous",
+			Providers: []ModelProviderBinding{{Name: "primary"}},
+		}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "protocol is ambiguous") ||
+		!strings.Contains(err.Error(), "set protocol explicitly") {
+		t.Fatalf("expected actionable ambiguity error, got %v", err)
 	}
 }
 
@@ -219,9 +526,9 @@ func TestExplicitCustomCardMayShareBuiltInName(t *testing.T) {
 	builtIn := false
 	capabilities := []string{"chat", "operator-only-capability"}
 	effective, err := registry.Compile(CompileInput{
-		Models: []ModelAlias{{Name: "local-gpt", Catalog: "openai/gpt-5"}},
+		Models: []ModelAlias{{Name: "local-gpt", Catalog: "openai/gpt-5.4"}},
 		ModelCards: []ModelCardOverlay{{
-			Name: "openai/gpt-5", BuiltIn: &builtIn, Capabilities: &capabilities,
+			Name: "openai/gpt-5.4", BuiltIn: &builtIn, Capabilities: &capabilities,
 		}},
 	})
 	if err != nil {
@@ -254,9 +561,27 @@ func TestIndexComputationPreservesMissingAndLineage(t *testing.T) {
 		Models:     []ModelAlias{{Name: "measured", Catalog: "acme/measured", Providers: []ModelProviderBinding{{Name: "lab", ModelID: "measured"}}}},
 		ModelCards: []ModelCardOverlay{{Name: "acme/measured", DisplayName: &displayName, Description: &description, Capabilities: &capabilities, Modalities: &modalities}},
 		Evaluations: EvaluationConfig{
-			Benchmarks: []BenchmarkDefinition{{ID: "acme/support@1.0.0", DisplayName: "Support", Domain: "support", Metrics: []BenchmarkMetric{{ID: "resolution", Unit: "proportion", Direction: "higher_is_better", Range: [2]float64{0, 1}}}}},
-			Records:    []EvaluationRecord{{ID: "acme/run-1", Model: "acme/measured", Status: "available", Metrics: map[string]float64{"acme/support@1.0.0#resolution": 0.82}, Evidence: EvaluationEvidence{Provenance: "operator", Verification: "reproduced", Redistributable: true}}},
-			Indices:    []IndexDefinition{{ID: "acme/readiness@1.0.0", DisplayName: "Readiness", Aggregation: "weighted_mean", Scale: [2]float64{0, 100}, Missing: MissingPolicy{Policy: "require_all"}, Components: []IndexComponent{{Metric: "acme/support@1.0.0#resolution", Weight: 1, Normalization: Normalization{Type: "identity"}}}}},
+			Benchmarks: []BenchmarkDefinition{{
+				ID: "acme/support@1.0.0", DisplayName: "Support", Domain: "support",
+				DefaultProfile: "published", Profiles: []BenchmarkProfile{{
+					ID: "published", DisplayName: "Published", Description: "Publisher-reported result",
+				}},
+				Metrics: []BenchmarkMetric{{ID: "resolution", Unit: "proportion", Direction: "higher_is_better", Range: [2]float64{0, 1}}},
+			}},
+			Records: []EvaluationRecord{{
+				ID: "acme/run-1", Model: "acme/measured", Benchmark: "acme/support@1.0.0",
+				BenchmarkProfile: "published", ReasoningEffort: "default", Status: "available",
+				Metrics:  map[string]float64{"resolution": 0.82},
+				Evidence: EvaluationEvidence{Provenance: "operator", Verification: "reproduced", Redistributable: true},
+			}},
+			Indices: []IndexDefinition{{
+				ID: "acme/readiness@1.0.0", DisplayName: "Readiness", Aggregation: "weighted_mean",
+				Scale: [2]float64{0, 100}, Missing: MissingPolicy{Policy: "require_all"},
+				Components: []IndexComponent{{
+					Benchmark: "acme/support@1.0.0", Metric: "resolution", BenchmarkProfile: "published",
+					Weight: 1, Normalization: Normalization{Type: "identity"},
+				}},
+			}},
 		},
 	})
 	if err != nil {
@@ -323,7 +648,7 @@ func TestCustomOpenWeightsCardRequiresLicense(t *testing.T) {
 	}
 }
 
-func TestVirtualModelIndicesAreNotApplicable(t *testing.T) {
+func TestVirtualModelIndicesRemainMissingWithoutRecipeEvaluation(t *testing.T) {
 	registry, err := BuiltIn()
 	if err != nil {
 		t.Fatal(err)
@@ -339,7 +664,7 @@ func TestVirtualModelIndicesAreNotApplicable(t *testing.T) {
 		t.Fatal("compiled virtual alias is missing")
 	}
 	result := model.Indices["vllm-sr/intelligence@1.0.0"]
-	if result.Status != "not_applicable" || result.Score != nil {
+	if result.Status != "missing" || result.Score != nil {
 		t.Fatalf("virtual model received an intelligence score: %+v", result)
 	}
 }

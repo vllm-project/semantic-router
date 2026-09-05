@@ -71,9 +71,6 @@ func (registry *Registry) compileDefaults(
 	models map[string]EffectiveModel,
 	indices map[string]IndexDefinition,
 ) (Defaults, error) {
-	if defaults.ReasoningEffort == "" {
-		defaults.ReasoningEffort = "medium"
-	}
 	if defaults.QualityIndex == "" {
 		defaults.QualityIndex = registry.header.DefaultIntelligenceIndex
 	}
@@ -247,16 +244,51 @@ func (registry *Registry) compileReasoningFamilies(inputs []ReasoningFamilyDefin
 }
 
 func validateReasoningFamily(definition ReasoningFamilyDefinition, path string) error {
-	switch definition.Type {
-	case "chat_template_kwargs", "reasoning_effort", "top_level_reasoning_effort":
-	default:
-		return fmt.Errorf("%s.type %q is unsupported", path, definition.Type)
+	if err := validateReasoningFamilyType(definition.Type, path); err != nil {
+		return err
 	}
 	if strings.TrimSpace(definition.Parameter) == "" {
 		return fmt.Errorf("%s.parameter cannot be empty", path)
 	}
+	if err := validateReasoningActivationParameter(definition, path); err != nil {
+		return err
+	}
+	return validateReasoningLevels(definition, path)
+}
+
+func validateReasoningFamilyType(familyType, path string) error {
+	switch familyType {
+	case "chat_template_kwargs", "reasoning_effort", "top_level_reasoning_effort":
+		return nil
+	default:
+		return fmt.Errorf("%s.type %q is unsupported", path, familyType)
+	}
+}
+
+func validateReasoningActivationParameter(definition ReasoningFamilyDefinition, path string) error {
+	if definition.ActivationParameter == "" {
+		return nil
+	}
+	if strings.TrimSpace(definition.ActivationParameter) == "" {
+		return fmt.Errorf("%s.activation_parameter cannot be blank", path)
+	}
+	if definition.ActivationParameter == definition.Parameter {
+		return fmt.Errorf("%s.activation_parameter must differ from parameter", path)
+	}
+	if definition.Type != "reasoning_effort" {
+		return fmt.Errorf("%s.activation_parameter requires reasoning_effort type", path)
+	}
+	return nil
+}
+
+func validateReasoningLevels(definition ReasoningFamilyDefinition, path string) error {
 	if len(definition.Levels) == 0 {
-		return fmt.Errorf("%s.levels cannot be empty", path)
+		if definition.Default != "" || definition.Disabled != "" {
+			return fmt.Errorf("%s.levels must be set when default or disabled is set", path)
+		}
+		// Legacy and operator-defined reasoning controls may accept an open
+		// value set. Built-in families still publish their complete ladder.
+		return nil
 	}
 	seen := map[string]struct{}{}
 	for _, level := range definition.Levels {
@@ -651,104 +683,4 @@ func (registry *Registry) compileModel(
 		IndicesByEffort: indicesByEffort,
 		BindingDefaults: input.BindingDefaults,
 	}, nil
-}
-
-func (registry *Registry) compileModelProviders(
-	bindings []ModelProviderBinding,
-	modelPath string,
-	providers map[string]EffectiveProvider,
-	card EffectiveModelCard,
-) ([]EffectiveModelProvider, error) {
-	result := make([]EffectiveModelProvider, 0, len(bindings))
-	seen := map[string]struct{}{}
-	selectedProtocol := ""
-	for index, binding := range bindings {
-		path := fmt.Sprintf("%s.providers[%d]", modelPath, index)
-		effective, err := registry.compileModelProvider(binding, path, providers, card, seen, selectedProtocol)
-		if err != nil {
-			return nil, err
-		}
-		selectedProtocol = effective.Binding.Protocol
-		result = append(result, effective)
-	}
-	return result, nil
-}
-
-func (registry *Registry) compileModelProvider(
-	binding ModelProviderBinding,
-	path string,
-	providers map[string]EffectiveProvider,
-	card EffectiveModelCard,
-	seen map[string]struct{},
-	selectedProtocol string,
-) (EffectiveModelProvider, error) {
-	provider, ok := providers[binding.Name]
-	if !ok {
-		return EffectiveModelProvider{}, fmt.Errorf("%s.name %q does not reference providers[].name", path, binding.Name)
-	}
-	if _, duplicate := seen[binding.Name]; duplicate {
-		return EffectiveModelProvider{}, fmt.Errorf("%s.name %q is duplicated", path, binding.Name)
-	}
-	seen[binding.Name] = struct{}{}
-	if binding.Protocol == "" {
-		binding.Protocol = provider.Definition.DefaultProtocol
-	}
-	if err := validateModelProviderProtocol(binding.Protocol, path, selectedProtocol, provider); err != nil {
-		return EffectiveModelProvider{}, err
-	}
-	catalogBinding := registry.findCatalogBinding(provider.Definition.ID, card.Card.ID, binding.ModelID, binding.Protocol)
-	if binding.ModelID == "" && catalogBinding != nil {
-		binding.ModelID = catalogBinding.ID
-	}
-	if card.Card.Kind == "physical" && binding.ModelID == "" {
-		return EffectiveModelProvider{}, fmt.Errorf("%s.model_id is required when the provider catalog has no matching model", path)
-	}
-	return EffectiveModelProvider{Binding: binding, Provider: provider, CatalogBinding: catalogBinding}, nil
-}
-
-func validateModelProviderProtocol(
-	protocol string,
-	path string,
-	selected string,
-	provider EffectiveProvider,
-) error {
-	if !contains(provider.Definition.Protocols, protocol) {
-		return fmt.Errorf("%s.protocol %q is not supported by provider %q", path, protocol, provider.Definition.ID)
-	}
-	if !contains(provider.Definition.SupportedOperations, protocol+"#create") {
-		return fmt.Errorf("%s.protocol %q cannot create requests through provider %q", path, protocol, provider.Definition.ID)
-	}
-	if selected != "" && protocol != selected {
-		return fmt.Errorf("%s.protocol %q conflicts with %q; one alias must use one wire protocol", path, protocol, selected)
-	}
-	return nil
-}
-
-func (registry *Registry) findCatalogBinding(providerID, modelID, nativeModelID, protocol string) *CatalogModelBinding {
-	provider, ok := registry.providers[providerID]
-	if !ok {
-		return nil
-	}
-	for _, catalogBinding := range provider.Models {
-		if catalogBinding.Catalog != modelID || !contains(catalogBinding.Protocols, protocol) {
-			continue
-		}
-		if nativeModelID != "" && catalogBinding.ID != nativeModelID {
-			continue
-		}
-		copy := catalogBinding
-		copy.Protocols = append([]string(nil), catalogBinding.Protocols...)
-		copy.Restrictions = cloneMap(catalogBinding.Restrictions)
-		return &copy
-	}
-	return nil
-}
-
-func contains(values []string, target string) bool {
-	for _, value := range values {
-		if value == target {
-			return true
-		}
-	}
-	return false
 }

@@ -33,7 +33,9 @@ global: {}
 - `listeners` exposes inference and management endpoints.
 - `providers.defaults` defines shared provider behavior;
   `providers.models[]` binds model names to concrete backends and owns their
-  deployment pricing metadata.
+  deployment pricing metadata. A built-in model may add an optional `catalog`
+  identity, while `backend_refs[].provider` selects the stable runtime Provider
+  ID. Custom vLLM/SGLang models continue to omit `catalog`.
 - `routing` owns model cards, signals, projections, decisions, and the routing
   strategy for the default profile.
 - `entrypoints` maps request-facing model names to isolated `recipes`. Each
@@ -96,6 +98,14 @@ runtime dependency; they do not define routing behavior by themselves.
 
 - Model backend credentials belong in environment references, not literal YAML
   values.
+- Catalog-backed models materialize their built-in Model Card, reasoning family,
+  provider protocol, path, and non-secret defaults automatically. A handwritten
+  override uses the canonical `catalog` identity as `routing.modelCards[].name`;
+  a fully custom model uses its request alias as the card name.
+- Multiple `backend_refs` on one alias are homogeneous replicas. Host, port,
+  and weight may vary, but Provider ID, wire protocol, native model ID,
+  credentials, headers, request path, and TLS semantics may not; use separate
+  aliases for heterogeneous providers.
 - `routing.modelCards` describes semantic capabilities; concrete URLs,
   credentials, and pricing belong in `providers.models`.
 - Protocol controls such as `tool_choice` enter routing as conversation facts;

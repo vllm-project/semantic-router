@@ -22,32 +22,4 @@ presentation:
   monochrome: false
 conformance:
   status: unverified
-models:
-- catalog: perplexity/sonar
-  id: sonar
-  protocols: &sonar-protocols [openai/chat-completions@1]
-  pricing: {currency: USD, prompt_per_1m: 1.00, completion_per_1m: 1.00}
-  lifecycle: active
-  verification: &sonar-verification
-    status: claimed
-    verified_at: 2026-09-05
-    source: https://docs.perplexity.ai/docs/sonar/models
-- catalog: perplexity/sonar-pro
-  id: sonar-pro
-  protocols: *sonar-protocols
-  pricing: {currency: USD, prompt_per_1m: 3.00, completion_per_1m: 15.00}
-  lifecycle: active
-  verification: *sonar-verification
-- catalog: perplexity/sonar-reasoning-pro
-  id: sonar-reasoning-pro
-  protocols: *sonar-protocols
-  pricing: {currency: USD, prompt_per_1m: 2.00, completion_per_1m: 8.00}
-  lifecycle: active
-  verification: *sonar-verification
-- catalog: perplexity/sonar-deep-research
-  id: sonar-deep-research
-  protocols: *sonar-protocols
-  reasoning_transport: top_level_effort
-  pricing: {currency: USD, prompt_per_1m: 2.00, completion_per_1m: 8.00}
-  lifecycle: active
-  verification: *sonar-verification
+models: []

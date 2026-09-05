@@ -47,7 +47,13 @@ const backendRefFields: ObjectEditorField<BackendRefEntry>[] = [
     fullWidth: true,
   },
   { key: 'auth_header', label: 'Authentication header', placeholder: 'Authorization' },
-  { key: 'auth_prefix', label: 'Authentication prefix', placeholder: 'Bearer' },
+  {
+    key: 'auth_prefix',
+    label: 'Authentication prefix',
+    placeholder: 'Bearer',
+    preserveEmpty: true,
+    helpText: 'An explicit empty value disables the provider catalog default prefix.',
+  },
   {
     key: 'extra_headers',
     label: 'Extra headers',
@@ -59,6 +65,8 @@ const backendRefFields: ObjectEditorField<BackendRefEntry>[] = [
 
 interface EditableModelEvaluation {
   benchmark?: string
+  benchmark_profile?: string
+  reasoning_effort?: string
   metrics?: Record<string, string>
   source?: string
   measured_at?: string
@@ -72,6 +80,16 @@ const evaluationFields: ObjectEditorField<EditableModelEvaluation>[] = [
     placeholder: 'organization/benchmark@1.0.0',
     required: true,
     fullWidth: true,
+  },
+  {
+    key: 'benchmark_profile',
+    label: 'Benchmark profile',
+    placeholder: 'published-standard',
+  },
+  {
+    key: 'reasoning_effort',
+    label: 'Reasoning effort',
+    placeholder: 'medium',
   },
   {
     key: 'metrics',
@@ -443,6 +461,8 @@ export function ModelEvaluationsEditor({
         )
         .map((entry) => ({
           benchmark: entry.benchmark,
+          benchmark_profile: entry.benchmark_profile,
+          reasoning_effort: entry.reasoning_effort,
           metrics: Object.fromEntries(
             Object.entries(entry.metrics ?? {}).map(([metric, metricValue]) => [
               metric,

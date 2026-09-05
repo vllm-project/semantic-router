@@ -37,6 +37,15 @@ from catalog_evaluations import (  # noqa: E402, F401 - tested compatibility sea
     normalize_component as _normalize_component,
 )
 from catalog_evaluations import validate_indices as _validate_indices  # noqa: E402
+from catalog_inventory import (  # noqa: E402
+    validate_evaluation_resource_layout as _validate_evaluation_resource_layout_impl,
+)
+from catalog_inventory import (  # noqa: E402
+    validate_inventory_policy as _validate_inventory_policy,
+)
+from catalog_inventory import (  # noqa: E402
+    validate_model_resource_layout as _validate_model_resource_layout_impl,
+)
 from catalog_io import load_json as _load_json  # noqa: E402
 from catalog_io import load_yaml as _load_yaml  # noqa: E402
 from catalog_io import validate_schema as _validate_schema  # noqa: E402
@@ -46,6 +55,7 @@ from catalog_validation import (  # noqa: E402
 from catalog_validation import (  # noqa: E402
     validate_provider_bindings as _validate_provider_bindings,
 )
+from catalog_validation import validate_security as _validate_security  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SOURCE_ROOT = REPO_ROOT / "config" / "catalog"
@@ -225,7 +235,7 @@ def _validate_providers(
         path = f"providers[{index}]"
         protocols = _validate_provider_identity(item, path, protocol_ids)
         auth = _validate_provider_auth(item, path)
-        _validate_provider_presentation(item, path)
+        _validate_provider_presentation(item, path, allow_featured=True)
         _validate_provider_conformance(item, path)
         _validate_provider_operations(item, path, protocols, protocol_definitions)
         _validate_provider_headers(item, path, auth)
@@ -253,6 +263,7 @@ def _validate_provider_identity(
         "top_level_boolean",
         "reasoning_object",
         "thinking_object",
+        "output_config_effort",
         "deepseek_thinking",
     }:
         raise CatalogBuildError(f"{path}.reasoning_transport is unsupported")
@@ -269,11 +280,16 @@ def _validate_provider_auth(item: dict[str, Any], path: str) -> dict[str, Any]:
     return auth
 
 
-def _validate_provider_presentation(item: dict[str, Any], path: str) -> None:
+def _validate_provider_presentation(
+    item: dict[str, Any], path: str, *, allow_featured: bool = False
+) -> None:
     presentation = _mapping(item.get("presentation"), f"{path}.presentation")
-    _reject_unknown(
-        presentation, {"logo", "monogram", "monochrome"}, f"{path}.presentation"
-    )
+    allowed_fields = {"logo", "monogram", "monochrome"}
+    if allow_featured:
+        allowed_fields.add("featured")
+    _reject_unknown(presentation, allowed_fields, f"{path}.presentation")
+    if "featured" in presentation and not isinstance(presentation["featured"], bool):
+        raise CatalogBuildError(f"{path}.presentation.featured must be a boolean")
     logo = _nonempty_string(presentation.get("logo"), f"{path}.presentation.logo")
     if not logo.startswith(("package:", "public:", "url:")) and logo != "monogram":
         raise CatalogBuildError(f"{path}.presentation.logo has an unsupported source")
@@ -377,7 +393,17 @@ def _validate_reasoning(items: list[dict[str, Any]]) -> None:
     for index, item in enumerate(items):
         path = f"reasoning_families[{index}]"
         _reject_unknown(
-            item, {"id", "type", "parameter", "levels", "default", "disabled"}, path
+            item,
+            {
+                "id",
+                "type",
+                "parameter",
+                "activation_parameter",
+                "levels",
+                "default",
+                "disabled",
+            },
+            path,
         )
         if not SLUG.fullmatch(_nonempty_string(item.get("id"), f"{path}.id")):
             raise CatalogBuildError(f"{path}.id must be a lowercase slug")
@@ -396,6 +422,17 @@ def _validate_reasoning(items: list[dict[str, Any]]) -> None:
             raise CatalogBuildError(f"{path}.levels/default is invalid")
         if item.get("disabled") is not None and item.get("disabled") not in levels:
             raise CatalogBuildError(f"{path}.disabled must be listed in levels")
+        activation_parameter = item.get("activation_parameter")
+        if activation_parameter is not None:
+            _nonempty_string(activation_parameter, f"{path}.activation_parameter")
+            if activation_parameter == item.get("parameter"):
+                raise CatalogBuildError(
+                    f"{path}.activation_parameter must differ from parameter"
+                )
+            if item.get("type") != "reasoning_effort":
+                raise CatalogBuildError(
+                    f"{path}.activation_parameter requires reasoning_effort type"
+                )
 
 
 def _validate_models(
@@ -526,31 +563,6 @@ def _validate_physical_model(item: dict[str, Any], path: str) -> None:
         raise CatalogBuildError(f"{path}.verification.source is required")
 
 
-def _validate_security(value: Any, path: str = "catalog") -> None:
-    blocked_keys = {"api_key", "token", "password", "secret", "credentials"}
-    blocked_literals = (
-        re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----"),
-        re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._~+/=-]{12,}"),
-        re.compile(r"(?i)https?://[^\s/:@]+:[^\s/@]+@"),
-        re.compile(r"\bsk-[A-Za-z0-9_-]{16,}\b"),
-    )
-    if isinstance(value, dict):
-        for key, item in value.items():
-            normalized = str(key).lower().replace("-", "_")
-            if normalized in blocked_keys:
-                raise CatalogBuildError(
-                    f"secret-like field is forbidden at {path}.{key}"
-                )
-            _validate_security(item, f"{path}.{key}")
-    elif isinstance(value, list):
-        for index, item in enumerate(value):
-            _validate_security(item, f"{path}[{index}]")
-    elif isinstance(value, str) and any(
-        pattern.search(value) for pattern in blocked_literals
-    ):
-        raise CatalogBuildError(f"credential-like literal is forbidden at {path}")
-
-
 def load_and_validate() -> (
     tuple[dict[str, Any], dict[str, list[dict[str, Any]]], list[dict[str, str]]]
 ):
@@ -566,12 +578,15 @@ def load_and_validate() -> (
             "compatibility",
             "defaults",
             "assets",
+            "inventory",
             "resources",
         },
         "catalog",
     )
     if manifest.get("schema_version") != SOURCE_SCHEMA:
         raise CatalogBuildError(f"schema_version must be {SOURCE_SCHEMA}")
+    _validate_model_resource_layout_impl(manifest, SOURCE_ROOT, REPO_ROOT)
+    _validate_evaluation_resource_layout_impl(manifest, SOURCE_ROOT, REPO_ROOT)
     resources = _resource_documents(manifest)
     resource_schema = _load_json(RESOURCE_SCHEMA_PATH)
     for kind, items in resources.items():
@@ -618,6 +633,7 @@ def load_and_validate() -> (
     _validate_reasoning(resources["reasoning_families"])
     reasoning_ids = {item["id"] for item in resources["reasoning_families"]}
     _validate_models(resources["models"], asset_ids, reasoning_ids)
+    _validate_inventory_policy(manifest, resources["models"])
     model_ids = {item["id"] for item in resources["models"]}
     providers = {item["id"]: item for item in resources["providers"]}
     models = {item["id"]: item for item in resources["models"]}

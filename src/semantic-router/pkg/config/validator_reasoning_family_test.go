@@ -56,6 +56,15 @@ func TestValidateReasoningFamilyContracts(t *testing.T) {
 			},
 			wantErr: `parameter must be "reasoning_effort"`,
 		},
+		{
+			name: "activation parameter cannot duplicate effort parameter",
+			family: ReasoningFamilyConfig{
+				Type:                ReasoningFamilyTypeReasoningEffort,
+				Parameter:           "reasoning_effort",
+				ActivationParameter: "reasoning_effort",
+			},
+			wantErr: "activation_parameter must differ from parameter",
+		},
 	}
 
 	for _, tt := range tests {

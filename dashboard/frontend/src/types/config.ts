@@ -31,7 +31,7 @@ export interface ProviderModel {
   backend_refs?: ProviderEndpoint[]
   endpoints?: ProviderEndpoint[]
   access_key?: string
-  api_format?: 'anthropic'
+  api_format?: 'openai' | 'responses' | 'anthropic'
   external_model_ids?: Record<string, string>
   pricing?: {
     currency?: string
@@ -61,8 +61,10 @@ export interface ProviderDefaults {
 export interface ReasoningFamily {
   type: 'reasoning_effort' | 'chat_template_kwargs' | 'top_level_reasoning_effort'
   parameter: string // e.g., "reasoning_effort", "enable_thinking"
+  activation_parameter?: string
   levels?: string[]
   default?: string
+  disabled?: string
 }
 
 export interface ReasoningConfig extends Partial<ReasoningFamily> {

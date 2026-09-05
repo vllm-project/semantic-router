@@ -18,43 +18,82 @@ func validateReasoningFamilyContracts(cfg *RouterConfig) error {
 	sort.Strings(familyNames)
 
 	for _, familyName := range familyNames {
-		family := cfg.ReasoningFamilies[familyName]
-		if strings.TrimSpace(familyName) == "" {
-			return fmt.Errorf("providers.defaults.reasoning_families: family name must not be empty")
-		}
-		switch family.Type {
-		case ReasoningFamilyTypeChatTemplateKwargs,
-			ReasoningFamilyTypeReasoningEffort,
-			ReasoningFamilyTypeTopLevelReasoningEffort:
-		default:
-			return fmt.Errorf(
-				"providers.defaults.reasoning_families[%q].type: unsupported value %q (supported: %s, %s, %s)",
-				familyName,
-				family.Type,
-				ReasoningFamilyTypeChatTemplateKwargs,
-				ReasoningFamilyTypeReasoningEffort,
-				ReasoningFamilyTypeTopLevelReasoningEffort,
-			)
-		}
-		if strings.TrimSpace(family.Parameter) == "" {
-			return fmt.Errorf(
-				"providers.defaults.reasoning_families[%q].parameter must not be empty",
-				familyName,
-			)
-		}
-		if family.Type == ReasoningFamilyTypeTopLevelReasoningEffort && family.Parameter != "reasoning_effort" {
-			return fmt.Errorf(
-				"providers.defaults.reasoning_families[%q].parameter must be %q for type %s",
-				familyName,
-				"reasoning_effort",
-				ReasoningFamilyTypeTopLevelReasoningEffort,
-			)
-		}
-		if err := validateReasoningFamilyLevels(familyName, family); err != nil {
+		if err := validateReasoningFamilyContract(familyName, cfg.ReasoningFamilies[familyName]); err != nil {
 			return err
 		}
 	}
 
+	return nil
+}
+
+func validateReasoningFamilyContract(name string, family ReasoningFamilyConfig) error {
+	if strings.TrimSpace(name) == "" {
+		return fmt.Errorf("providers.defaults.reasoning_families: family name must not be empty")
+	}
+	if err := validateReasoningFamilyType(name, family.Type); err != nil {
+		return err
+	}
+	if strings.TrimSpace(family.Parameter) == "" {
+		return fmt.Errorf(
+			"providers.defaults.reasoning_families[%q].parameter must not be empty",
+			name,
+		)
+	}
+	if err := validateReasoningFamilyActivationParameter(name, family); err != nil {
+		return err
+	}
+	if family.Type == ReasoningFamilyTypeTopLevelReasoningEffort && family.Parameter != "reasoning_effort" {
+		return fmt.Errorf(
+			"providers.defaults.reasoning_families[%q].parameter must be %q for type %s",
+			name,
+			"reasoning_effort",
+			ReasoningFamilyTypeTopLevelReasoningEffort,
+		)
+	}
+	return validateReasoningFamilyLevels(name, family)
+}
+
+func validateReasoningFamilyType(name, familyType string) error {
+	switch familyType {
+	case ReasoningFamilyTypeChatTemplateKwargs,
+		ReasoningFamilyTypeReasoningEffort,
+		ReasoningFamilyTypeTopLevelReasoningEffort:
+		return nil
+	default:
+		return fmt.Errorf(
+			"providers.defaults.reasoning_families[%q].type: unsupported value %q (supported: %s, %s, %s)",
+			name,
+			familyType,
+			ReasoningFamilyTypeChatTemplateKwargs,
+			ReasoningFamilyTypeReasoningEffort,
+			ReasoningFamilyTypeTopLevelReasoningEffort,
+		)
+	}
+}
+
+func validateReasoningFamilyActivationParameter(name string, family ReasoningFamilyConfig) error {
+	if family.ActivationParameter == "" {
+		return nil
+	}
+	if strings.TrimSpace(family.ActivationParameter) == "" {
+		return fmt.Errorf(
+			"providers.defaults.reasoning_families[%q].activation_parameter must not be blank",
+			name,
+		)
+	}
+	if family.ActivationParameter == family.Parameter {
+		return fmt.Errorf(
+			"providers.defaults.reasoning_families[%q].activation_parameter must differ from parameter",
+			name,
+		)
+	}
+	if family.Type != ReasoningFamilyTypeReasoningEffort {
+		return fmt.Errorf(
+			"providers.defaults.reasoning_families[%q].activation_parameter requires type %s",
+			name,
+			ReasoningFamilyTypeReasoningEffort,
+		)
+	}
 	return nil
 }
 

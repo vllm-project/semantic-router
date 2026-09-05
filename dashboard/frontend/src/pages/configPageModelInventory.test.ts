@@ -186,6 +186,18 @@ describe('model structured field validation', () => {
     ).toThrow(/inherit reasoning/i)
     expect(() =>
       validateModelStructuredFields({
+        catalog: 'vendor/model',
+        reasoning_disabled: 'disabled',
+      }),
+    ).toThrow(/inherit reasoning/i)
+    expect(() =>
+      validateModelStructuredFields({
+        reasoning_family: 'qwen3',
+        reasoning_activation_parameter: 'enable_thinking',
+      }),
+    ).toThrow(/family or inline reasoning/i)
+    expect(() =>
+      validateModelStructuredFields({
         evaluations: [{ benchmark: 'support', metrics: { score: 0.8 } }],
       }),
     ).toThrow(/namespaced, versioned benchmark/i)

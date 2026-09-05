@@ -7,25 +7,16 @@ from urllib.parse import urlparse
 
 from jinja2 import Environment, FileSystemLoader
 
+from cli.catalog_provider_projection import project_provider_models_for_envoy
 from cli.consts import DEFAULT_LISTENER_PORT, EXTERNAL_API_MODEL_FORMATS
+from cli.envoy_backend_pool import (
+    backend_route_semantics,
+    validate_homogeneous_backend_group,
+)
 from cli.models import UserConfig
 from cli.utils import get_logger
 
 log = get_logger(__name__)
-
-
-def _uses_shared_anthropic_cluster(model) -> bool:
-    """Use api.anthropic.com only when no custom upstream host is configured."""
-    if not model.backend_refs:
-        return True
-    for backend in model.backend_refs:
-        upstream = (backend.endpoint or backend.base_url or "").lower()
-        if not upstream:
-            continue
-        if "api.anthropic.com" in upstream:
-            continue
-        return False
-    return True
 
 
 def _is_ip_address(host: str) -> bool:
@@ -123,12 +114,14 @@ def generate_envoy_config_from_user_config(
     models = []
     anthropic_models = []  # Anthropic models use a shared cluster
 
-    for model in user_config.providers.models:
+    for model in project_provider_models_for_envoy(user_config):
         # Handle external API models (e.g., Anthropic) - they use shared clusters
         if model.api_format and model.api_format in EXTERNAL_API_MODEL_FORMATS:
-            if model.api_format == "anthropic" and _uses_shared_anthropic_cluster(
-                model
-            ):
+            # Only the legacy API-only form uses the shared fallback. An
+            # authored or catalog-materialized backend carries credentials,
+            # default headers, path, and TLS semantics that must reach the
+            # dedicated route below.
+            if model.api_format == "anthropic" and not model.backend_refs:
                 anthropic_models.append({"name": model.name})
                 if log_summary:
                     log.info(
@@ -140,13 +133,17 @@ def generate_envoy_config_from_user_config(
                 log.info(f"  Anthropic model: {model.name} (dedicated cluster)")
 
         endpoints = []
+        backend_semantics = []
         has_https = False
         uses_dns = False
 
         backend_refs = model.backend_refs
         for index, backend in enumerate(backend_refs):
             # Parse endpoint: can be "host", "host:port", or "host/path" or "host:port/path"
-            endpoint_str = backend.endpoint or backend.base_url or ""
+            # Match the Router's canonical binding precedence. ``base_url`` can
+            # include a provider path prefix while ``endpoint`` is retained as
+            # the legacy host shorthand.
+            endpoint_str = backend.base_url or backend.endpoint or ""
             if not endpoint_str:
                 continue
             path = ""
@@ -188,48 +185,51 @@ def generate_envoy_config_from_user_config(
                 uses_dns = True
 
             extra_headers = dict(backend.extra_headers or {})
-            api_key = backend.resolve_api_key()
-            if api_key and backend.auth_header:
-                auth_prefix = (backend.auth_prefix or "").strip()
-                extra_headers[str(backend.auth_header)] = (
-                    f"{auth_prefix} {api_key}".strip() if auth_prefix else str(api_key)
-                )
-
-            endpoints.append(
-                {
-                    "name": backend.name or f"backend-{index + 1}",
-                    "address": host,
-                    "port": int(port),
-                    "host_authority": (
-                        f"{host}:{port}" if int(port) not in (80, 443) else host
-                    ),
-                    "path": path,
-                    "weight": backend.weight,
-                    "protocol": protocol,
-                    "is_https": is_https,
-                    "is_domain": is_domain,
-                    "extra_headers": extra_headers,
-                }
-            )
+            endpoint = {
+                "name": backend.name or f"backend-{index + 1}",
+                "address": host,
+                "port": int(port),
+                "host_authority": (
+                    f"{host}:{port}" if int(port) not in (80, 443) else host
+                ),
+                "path": path,
+                "weight": backend.weight,
+                "protocol": protocol,
+                "is_https": is_https,
+                "is_domain": is_domain,
+                "extra_headers": extra_headers,
+            }
+            endpoints.append(endpoint)
+            backend_semantics.append(backend_route_semantics(backend, endpoint))
 
         # Sanitize model name for cluster name (replace / with _)
         if not endpoints:
             continue
 
+        validate_homogeneous_backend_group(model.name, backend_semantics)
+
         cluster_name = model.name.replace("/", "_").replace("-", "_")
 
         # Determine cluster type based on whether endpoints use domain names
         # Domain names → LOGICAL_DNS, IP addresses → STATIC
-        cluster_type = "LOGICAL_DNS" if uses_dns else "STATIC"
+        cluster_type = (
+            "STRICT_DNS"
+            if uses_dns and len(endpoints) > 1
+            else "LOGICAL_DNS" if uses_dns else "STATIC"
+        )
 
         # Determine path prefix - use the first endpoint's path if all endpoints have the same path
         path_prefix = ""
         route_request_headers = []
         if endpoints:
             first_path = endpoints[0].get("path", "")
-            if first_path and all(ep.get("path", "") == first_path for ep in endpoints):
+            if first_path:
                 path_prefix = first_path
             route_request_headers = _route_request_headers(endpoints[0])
+
+        auto_host_rewrite = (
+            len({endpoint["host_authority"] for endpoint in endpoints}) > 1
+        )
 
         models.append(
             {
@@ -240,6 +240,7 @@ def generate_envoy_config_from_user_config(
                 "has_https": has_https,
                 "path_prefix": path_prefix,
                 "route_request_headers": route_request_headers,
+                "auto_host_rewrite": auto_host_rewrite,
                 "reliability": (
                     model.reliability.model_dump()
                     if model.reliability is not None

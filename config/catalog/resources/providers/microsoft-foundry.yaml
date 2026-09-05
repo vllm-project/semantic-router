@@ -18,12 +18,15 @@ presentation:
   logo: package:microsoft
   monogram: MS
   monochrome: false
+  featured: true
 conformance:
   status: unverified
 models:
 - catalog: microsoft/mai-thinking-1
+  relationship: first_party
   id: mai-thinking-1
-  protocols: [openai/chat-completions@1]
+  protocols:
+  - openai/chat-completions@1
   restrictions:
     provider_model_id_kind: deployment_name
     catalog_model_name: MAI-Thinking-1

@@ -1,6 +1,8 @@
 import anthropic from '@lobehub/icons-static-svg/icons/anthropic.svg'
 import ai2 from '@lobehub/icons-static-svg/icons/ai2-color.svg'
 import ai21 from '@lobehub/icons-static-svg/icons/ai21-brand-color.svg'
+import baidu from '@lobehub/icons-static-svg/icons/baidu-color.svg'
+import bedrock from '@lobehub/icons-static-svg/icons/bedrock-color.svg'
 import bytedance from '@lobehub/icons-static-svg/icons/bytedance-color.svg'
 import cerebras from '@lobehub/icons-static-svg/icons/cerebras-color.svg'
 import cohere from '@lobehub/icons-static-svg/icons/cohere-color.svg'
@@ -11,6 +13,7 @@ import featherless from '@lobehub/icons-static-svg/icons/featherless-color.svg'
 import fireworks from '@lobehub/icons-static-svg/icons/fireworks-color.svg'
 import friendli from '@lobehub/icons-static-svg/icons/friendli.svg'
 import gemini from '@lobehub/icons-static-svg/icons/gemini-color.svg'
+import google from '@lobehub/icons-static-svg/icons/google-color.svg'
 import groq from '@lobehub/icons-static-svg/icons/groq.svg'
 import huggingface from '@lobehub/icons-static-svg/icons/huggingface-color.svg'
 import internlm from '@lobehub/icons-static-svg/icons/internlm-color.svg'
@@ -23,6 +26,7 @@ import mistral from '@lobehub/icons-static-svg/icons/mistral-color.svg'
 import moonshot from '@lobehub/icons-static-svg/icons/moonshot.svg'
 import nebius from '@lobehub/icons-static-svg/icons/nebius.svg'
 import novita from '@lobehub/icons-static-svg/icons/novita-color.svg'
+import nova from '@lobehub/icons-static-svg/icons/nova-color.svg'
 import nvidia from '@lobehub/icons-static-svg/icons/nvidia-color.svg'
 import ollama from '@lobehub/icons-static-svg/icons/ollama.svg'
 import openai from '@lobehub/icons-static-svg/icons/openai.svg'
@@ -48,6 +52,8 @@ export const modelProviderIconAssets: Record<string, string> = {
   ai2,
   ai21,
   anthropic,
+  baidu,
+  bedrock,
   bytedance,
   cerebras,
   cohere,
@@ -58,6 +64,7 @@ export const modelProviderIconAssets: Record<string, string> = {
   fireworks,
   friendli,
   gemini,
+  google,
   groq,
   huggingface,
   internlm,
@@ -71,6 +78,7 @@ export const modelProviderIconAssets: Record<string, string> = {
   moonshot,
   nebius,
   novita,
+  nova,
   nvidia,
   ollama,
   openai,
@@ -92,20 +100,6 @@ export const modelProviderIconAssets: Record<string, string> = {
   yi,
   zai,
 }
-
-export const monochromeModelProviderIcons = new Set([
-  anthropic,
-  friendli,
-  groq,
-  lmstudio,
-  moonshot,
-  nebius,
-  ollama,
-  openai,
-  vercel,
-  xai,
-  zai,
-])
 
 export const resolveModelCatalogIcon = (source: string): string => {
   if (source.startsWith('package:')) {

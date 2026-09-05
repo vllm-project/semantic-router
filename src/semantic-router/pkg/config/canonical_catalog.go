@@ -26,12 +26,17 @@ func applyEffectiveModelRegistry(
 	cfg.ReasoningFamilies = map[string]ReasoningFamilyConfig{}
 	for _, family := range registry.ReasoningFamilies() {
 		cfg.ReasoningFamilies[family.ID] = ReasoningFamilyConfig{
-			Type:      family.Type,
-			Parameter: family.Parameter,
-			Levels:    append([]string(nil), family.Levels...),
-			Default:   family.Default,
-			Disabled:  family.Disabled,
+			Type:                family.Type,
+			Parameter:           family.Parameter,
+			ActivationParameter: family.ActivationParameter,
+			Levels:              append([]string(nil), family.Levels...),
+			Default:             family.Default,
+			Disabled:            family.Disabled,
 		}
+	}
+	models := registry.Models()
+	if err := validateEffectiveBackendPools(models); err != nil {
+		return err
 	}
 	cfg.ModelConfig = make(map[string]ModelParams)
 	cfg.ProviderProfiles = make(map[string]ProviderProfile)
@@ -41,7 +46,7 @@ func applyEffectiveModelRegistry(
 		authoredByAlias[model.Name] = cloneCanonicalProviderModel(&model)
 	}
 
-	for _, model := range registry.Models() {
+	for _, model := range models {
 		params := modelParamsFromEffectiveModel(model, defaults.QualityIndex, defaults.ReasoningEffort)
 		params.AuthoredModel = authoredByAlias[model.Alias]
 		if model.BindingDefaults.Protocol != "" {
@@ -246,7 +251,8 @@ func materializedProviderProfile(
 		ReasoningTransport: reasoningTransport,
 		ExtraHeaders:       mergeProviderHeaders(provider.Definition.DefaultHeaders, provider.Instance.Headers),
 		APIVersion:         provider.Instance.APIVersion, AuthHeader: provider.Instance.AuthHeader,
-		AuthPrefix: provider.Instance.AuthPrefix, ChatPath: provider.Instance.ChatPath,
+		AuthPrefix: provider.Instance.AuthPrefix, AuthPrefixSet: provider.Instance.AuthPrefixSet,
+		ChatPath: provider.Instance.ChatPath,
 	}
 }
 
@@ -387,6 +393,39 @@ func cloneCatalogIndexResults(source map[string]modelcatalog.IndexResult) map[st
 		return nil
 	}
 	result := make(map[string]modelcatalog.IndexResult, len(source))
+	for key, value := range source {
+		result[key] = cloneCatalogIndexResult(value)
+	}
+	return result
+}
+
+func cloneCatalogIndexResult(value modelcatalog.IndexResult) modelcatalog.IndexResult {
+	result := value
+	if value.Score != nil {
+		score := *value.Score
+		result.Score = &score
+	}
+	result.Components = append([]modelcatalog.IndexComponentResult(nil), value.Components...)
+	for index := range result.Components {
+		if value.Components[index].Value != nil {
+			componentValue := *value.Components[index].Value
+			result.Components[index].Value = &componentValue
+		}
+		if value.Components[index].Normalized != nil {
+			normalized := *value.Components[index].Normalized
+			result.Components[index].Normalized = &normalized
+		}
+	}
+	result.Domains = copyStringFloatMap(value.Domains)
+	result.Provenance = append([]string(nil), value.Provenance...)
+	return result
+}
+
+func copyStringFloatMap(source map[string]float64) map[string]float64 {
+	if source == nil {
+		return nil
+	}
+	result := make(map[string]float64, len(source))
 	for key, value := range source {
 		result[key] = value
 	}

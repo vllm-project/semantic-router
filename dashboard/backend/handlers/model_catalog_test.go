@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 )
 
 type fakeModelCatalogSource struct {
@@ -176,6 +178,38 @@ func TestModelCatalogHandlerRejectsMalformedCLIContract(t *testing.T) {
 	}
 }
 
+func TestCatalogProviderBindingRelationshipIsClosed(t *testing.T) {
+	t.Parallel()
+
+	provider := modelcatalog.ProviderDefinition{
+		ID:        "example",
+		Protocols: []string{"openai/chat-completions@1"},
+		Models: []modelcatalog.CatalogModelBinding{{
+			Catalog:      "example/model",
+			Relationship: modelcatalog.CatalogModelRelationshipGateway,
+			ID:           "example/model",
+			Protocols:    []string{"openai/chat-completions@1"},
+			Lifecycle:    "active",
+			Verification: modelcatalog.CatalogBindingVerification{Status: "claimed"},
+		}},
+	}
+	models := map[string]struct{}{"example/model": {}}
+	protocols := map[string]struct{}{"openai/chat-completions@1": {}}
+	definitions := []modelcatalog.ModelCard{{ID: "example/model", Kind: "physical", Lifecycle: "active"}}
+	if err := validateCatalogProviderBindings(
+		[]modelcatalog.ProviderDefinition{provider}, models, protocols, definitions,
+	); err != nil {
+		t.Fatalf("valid relationship rejected: %v", err)
+	}
+
+	provider.Models[0].Relationship = "brokered"
+	if err := validateCatalogProviderBindings(
+		[]modelcatalog.ProviderDefinition{provider}, models, protocols, definitions,
+	); err == nil || !strings.Contains(err.Error(), "malformed provider catalog model") {
+		t.Fatalf("unsupported relationship accepted: %v", err)
+	}
+}
+
 func TestModelCatalogHandlerEnforcesCanonicalReadOnlyRoute(t *testing.T) {
 	t.Parallel()
 
@@ -199,6 +233,22 @@ func TestPackagedModelCatalogSourceUsesIsolatedExporter(t *testing.T) {
 		t.Skip("fake executable contract uses a POSIX shell")
 	}
 
+	const formerCatalogLimit = 4 << 20
+	largeDescription := strings.Repeat("x", formerCatalogLimit)
+	payloadPath := filepath.Join(t.TempDir(), "catalog.json")
+	largePayload := strings.Replace(
+		validModelCatalogPayload(""),
+		"Balanced routing.",
+		largeDescription,
+		1,
+	)
+	if len(largePayload) <= formerCatalogLimit {
+		t.Fatalf("large fixture is %d bytes, want more than %d", len(largePayload), formerCatalogLimit)
+	}
+	if err := os.WriteFile(payloadPath, []byte(largePayload), 0o600); err != nil {
+		t.Fatalf("write large catalog fixture: %v", err)
+	}
+
 	executable := filepath.Join(t.TempDir(), "python3")
 	script := `#!/bin/sh
 set -eu
@@ -206,16 +256,19 @@ set -eu
 [ "$1" = "-m" ]
 [ "$2" = "cli.model_catalog_export" ]
 [ ! -e config.yaml ]
-printf '%s' "$MODEL_CATALOG_TEST_PAYLOAD"
+cat "$MODEL_CATALOG_TEST_PAYLOAD_PATH"
 `
 	if err := os.WriteFile(executable, []byte(script), 0o700); err != nil {
 		t.Fatalf("write fake CLI: %v", err)
 	}
-	t.Setenv("MODEL_CATALOG_TEST_PAYLOAD", validModelCatalogPayload(""))
+	t.Setenv("MODEL_CATALOG_TEST_PAYLOAD_PATH", payloadPath)
 
 	payload, err := NewPackagedModelCatalogSource(executable).Load(context.Background())
 	if err != nil {
 		t.Fatalf("load catalog through real command seam: %v", err)
+	}
+	if len(payload) <= formerCatalogLimit {
+		t.Fatalf("loaded payload is %d bytes, want more than %d", len(payload), formerCatalogLimit)
 	}
 	if _, err := normalizeModelCatalogDocument(payload); err != nil {
 		t.Fatalf("normalize command payload: %v", err)
@@ -244,6 +297,7 @@ func validModelCatalogPayload(extra string) string {
     "protocols":["openai/chat-completions@1"],
     "default_protocol":"openai/chat-completions@1",
     "supported_operations":["openai/chat-completions@1#create"],
+    "reasoning_transport":"output_config_effort",
     "auth":{"strategy":"bearer","header":"Authorization","prefix":"Bearer"},
     "presentation":{"logo":"package:openai","monogram":"O","monochrome":true},
     "conformance":{"status":"fixture_verified","verified_at":"2026-09-04"}

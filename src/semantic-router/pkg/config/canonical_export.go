@@ -102,12 +102,19 @@ func routingModelsFromRouterConfig(cfg *RouterConfig) []RoutingModel {
 }
 
 func routingModelOverridesFromEffectiveRegistry(cfg *RouterConfig) []RoutingModel {
-	models := make([]RoutingModel, 0)
+	modelsByCard := make(map[string]RoutingModel)
 	for _, effective := range cfg.EffectiveModelRegistry.Models() {
 		if !hasOperatorModelCardData(effective.Card) {
 			continue
 		}
-		models = append(models, routingModelFromEffectiveModel(effective))
+		if _, exported := modelsByCard[effective.Catalog]; exported {
+			continue
+		}
+		modelsByCard[effective.Catalog] = routingModelFromEffectiveModel(effective)
+	}
+	models := make([]RoutingModel, 0, len(modelsByCard))
+	for _, model := range modelsByCard {
+		models = append(models, model)
 	}
 	sort.Slice(models, func(i, j int) bool { return models[i].Name < models[j].Name })
 	return models
@@ -156,12 +163,32 @@ func routingModelFromEffectiveModel(effective modelcatalog.EffectiveModel) Routi
 	if provenance["description"] == "operator" {
 		model.Description = card.Description
 	}
+	applyOperatorModelCardRelease(&model, card, provenance)
 	applyOperatorModelCardLimits(&model, card, provenance)
 	applyOperatorModelCardCollections(&model, card, provenance)
 	if provenance["runtime_modality"] == "operator" {
 		model.Modality = effective.Card.RuntimeModality
 	}
 	return model
+}
+
+func applyOperatorModelCardRelease(
+	model *RoutingModel,
+	card modelcatalog.ModelCard,
+	provenance modelcatalog.FieldProvenance,
+) {
+	if provenance["revision"] == "operator" {
+		model.Revision = card.Revision
+	}
+	if provenance["released_at"] == "operator" {
+		model.ReleasedAt = card.ReleasedAt
+	}
+	if provenance["knowledge_cutoff"] == "operator" {
+		model.KnowledgeCutoff = card.KnowledgeCutoff
+	}
+	if provenance["lifecycle"] == "operator" {
+		model.Lifecycle = card.Lifecycle
+	}
 }
 
 func applyOperatorModelCardLimits(
@@ -559,10 +586,13 @@ func canonicalBackendRefFromRuntime(endpoint VLLMEndpoint, fallbackAPIKey string
 		Provider:   profile.Type,
 		BaseURL:    profile.BaseURL,
 		AuthHeader: profile.AuthHeader,
-		AuthPrefix: profile.AuthPrefix,
 		APIVersion: profile.APIVersion,
 		ChatPath:   profile.ChatPath,
 		APIKey:     endpoint.APIKey,
+	}
+	if profile.AuthPrefixSet || profile.AuthPrefix != "" {
+		prefix := profile.AuthPrefix
+		ref.AuthPrefix = &prefix
 	}
 	if ref.Provider == "" {
 		ref.Provider = endpoint.Type

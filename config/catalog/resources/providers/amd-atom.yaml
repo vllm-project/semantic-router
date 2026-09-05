@@ -16,5 +16,6 @@ presentation:
   logo: public:/amd.png
   monogram: A
   monochrome: false
+  featured: true
 conformance:
   status: unverified

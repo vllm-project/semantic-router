@@ -49,8 +49,9 @@ export function normalizeModelBackendRefs(value: unknown): BackendRefEntry[] {
         normalized.provider = entry.provider.trim()
       if (typeof entry.auth_header === 'string' && entry.auth_header.trim())
         normalized.auth_header = entry.auth_header.trim()
-      if (typeof entry.auth_prefix === 'string' && entry.auth_prefix.trim())
-        normalized.auth_prefix = entry.auth_prefix.trim()
+      // Presence is semantic: an explicit empty prefix disables a provider's
+      // catalog default instead of falling back to it.
+      if (typeof entry.auth_prefix === 'string') normalized.auth_prefix = entry.auth_prefix.trim()
       if (
         entry.extra_headers &&
         typeof entry.extra_headers === 'object' &&
@@ -87,11 +88,12 @@ export function normalizeModelEvaluations(value: unknown): ModelEvaluationConfig
         entry.metrics && typeof entry.metrics === 'object' && !Array.isArray(entry.metrics)
           ? Object.fromEntries(
               Object.entries(entry.metrics as Record<string, unknown>)
-                .filter(([, metric]) =>
-                  (typeof metric === 'number' && Number.isFinite(metric)) ||
-                  (typeof metric === 'string' &&
-                    metric.trim() !== '' &&
-                    Number.isFinite(Number(metric))),
+                .filter(
+                  ([, metric]) =>
+                    (typeof metric === 'number' && Number.isFinite(metric)) ||
+                    (typeof metric === 'string' &&
+                      metric.trim() !== '' &&
+                      Number.isFinite(Number(metric))),
                 )
                 .map(([key, metric]) => [key.trim(), Number(metric)] as const)
                 .filter(([key]) => key.length > 0),
@@ -101,26 +103,32 @@ export function normalizeModelEvaluations(value: unknown): ModelEvaluationConfig
         entry.metadata && typeof entry.metadata === 'object' && !Array.isArray(entry.metadata)
           ? Object.fromEntries(
               Object.entries(entry.metadata as Record<string, unknown>)
-                .filter(([key, item]) =>
-                  Boolean(key.trim()) &&
-                  (typeof item === 'string' ||
-                    typeof item === 'number' ||
-                    typeof item === 'boolean' ||
-                    item === null),
+                .filter(
+                  ([key, item]) =>
+                    Boolean(key.trim()) &&
+                    (typeof item === 'string' ||
+                      typeof item === 'number' ||
+                      typeof item === 'boolean' ||
+                      item === null),
                 )
                 .map(
-                  ([key, item]) =>
-                    [key.trim(), item as string | number | boolean | null] as const,
+                  ([key, item]) => [key.trim(), item as string | number | boolean | null] as const,
                 ),
             )
           : undefined
       return {
         benchmark: typeof entry.benchmark === 'string' ? entry.benchmark.trim() : '',
+        benchmark_profile:
+          typeof entry.benchmark_profile === 'string' && entry.benchmark_profile.trim()
+            ? entry.benchmark_profile.trim()
+            : undefined,
+        reasoning_effort:
+          typeof entry.reasoning_effort === 'string' && entry.reasoning_effort.trim()
+            ? entry.reasoning_effort.trim()
+            : undefined,
         metrics,
         source:
-          typeof entry.source === 'string' && entry.source.trim()
-            ? entry.source.trim()
-            : undefined,
+          typeof entry.source === 'string' && entry.source.trim() ? entry.source.trim() : undefined,
         measured_at:
           typeof entry.measured_at === 'string' && entry.measured_at.trim()
             ? entry.measured_at.trim()
@@ -131,13 +139,27 @@ export function normalizeModelEvaluations(value: unknown): ModelEvaluationConfig
     .filter((entry) => entry.benchmark && Object.keys(entry.metrics).length > 0)
 }
 
+export function modelReasoningFormData(reasoning?: ModelReasoningConfig): Record<string, string> {
+  return {
+    reasoning_family: reasoning?.family || '',
+    reasoning_type: reasoning?.type || '',
+    reasoning_parameter: reasoning?.parameter || '',
+    reasoning_activation_parameter: reasoning?.activation_parameter || '',
+    reasoning_levels: reasoning?.levels?.join(', ') || '',
+    reasoning_default: reasoning?.default || '',
+    reasoning_disabled: reasoning?.disabled || '',
+  }
+}
+
 function normalizeReasoning(data: Record<string, unknown>): ModelReasoningConfig | undefined {
   const family = typeof data.reasoning_family === 'string' ? data.reasoning_family.trim() : ''
   const type = typeof data.reasoning_type === 'string' ? data.reasoning_type.trim() : ''
   const parameter =
     typeof data.reasoning_parameter === 'string' ? data.reasoning_parameter.trim() : ''
-  if (family) return { family }
-  if (!type && !parameter) return undefined
+  const activationParameter =
+    typeof data.reasoning_activation_parameter === 'string'
+      ? data.reasoning_activation_parameter.trim()
+      : ''
   const levels =
     typeof data.reasoning_levels === 'string'
       ? data.reasoning_levels
@@ -147,11 +169,26 @@ function normalizeReasoning(data: Record<string, unknown>): ModelReasoningConfig
       : []
   const defaultLevel =
     typeof data.reasoning_default === 'string' ? data.reasoning_default.trim() : ''
+  const disabledLevel =
+    typeof data.reasoning_disabled === 'string' ? data.reasoning_disabled.trim() : ''
+  if (family) return { family }
+  if (
+    !type &&
+    !parameter &&
+    !activationParameter &&
+    levels.length === 0 &&
+    !defaultLevel &&
+    !disabledLevel
+  ) {
+    return undefined
+  }
   return {
     type,
     parameter,
+    activation_parameter: activationParameter || undefined,
     levels: levels.length > 0 ? levels : undefined,
     default: defaultLevel || undefined,
+    disabled: disabledLevel || undefined,
   }
 }
 
@@ -224,17 +261,17 @@ export function buildProviderModelPayload(
   existingModel?: NonNullable<NonNullable<ConfigData['providers']>['models']>[number],
 ) {
   const catalog =
-    typeof data.catalog === 'string'
-      ? data.catalog.trim() || undefined
-      : existingModel?.catalog
+    typeof data.catalog === 'string' ? data.catalog.trim() || undefined : existingModel?.catalog
+  const explicitProviderModelID =
+    typeof data.provider_model_id === 'string' && data.provider_model_id.trim()
+      ? data.provider_model_id.trim()
+      : undefined
   return {
     name,
     catalog,
     reasoning: catalog ? undefined : normalizeReasoning(data),
     provider_model_id:
-      typeof data.provider_model_id === 'string' && data.provider_model_id.trim()
-        ? data.provider_model_id.trim()
-        : existingModel?.provider_model_id || name,
+      explicitProviderModelID || (catalog ? undefined : existingModel?.provider_model_id || name),
     api_format:
       typeof data.api_format === 'string' && data.api_format.trim()
         ? data.api_format.trim()

@@ -3,6 +3,12 @@
   parameter: thinking
   levels: [low, high, max]
   default: high
+- id: deepseek-v3.2
+  type: chat_template_kwargs
+  parameter: thinking
+  levels: [disabled, enabled]
+  default: enabled
+  disabled: disabled
 - id: qwen3
   type: chat_template_kwargs
   parameter: enable_thinking
@@ -12,15 +18,21 @@
 - id: qwen3.8
   type: reasoning_effort
   parameter: reasoning_effort
-  levels: [none, low, medium, xhigh]
+  activation_parameter: enable_thinking
+  levels: [low, medium, xhigh]
   default: xhigh
-  disabled: none
 - id: glm
   type: chat_template_kwargs
   parameter: enable_thinking
   levels: [disabled, enabled]
   default: enabled
   disabled: disabled
+- id: glm-5.2
+  type: reasoning_effort
+  parameter: reasoning_effort
+  activation_parameter: enable_thinking
+  levels: [high, max]
+  default: max
 - id: glm-5.3
   type: reasoning_effort
   parameter: reasoning_effort
@@ -41,7 +53,7 @@
 - id: hunyuan-hy4
   type: reasoning_effort
   parameter: reasoning_effort
-  levels: [no_think, low, high]
+  levels: [no_think, high]
   default: high
   disabled: no_think
 - id: longcat-2
@@ -72,6 +84,71 @@
   parameter: reasoning_effort
   levels: [none, low, medium, high, xhigh, max]
   default: medium
+- id: gpt-5.4
+  type: reasoning_effort
+  parameter: reasoning_effort
+  levels: [none, low, medium, high, xhigh]
+  default: none
+  disabled: none
+- id: grok-4.3
+  type: reasoning_effort
+  parameter: reasoning_effort
+  levels: [none, low, medium, high, xhigh]
+  default: low
+  disabled: none
+- id: grok-4.6
+  type: reasoning_effort
+  parameter: reasoning_effort
+  levels: [low, medium, high, xhigh]
+  default: high
+- id: claude-effort
+  type: reasoning_effort
+  parameter: effort
+  levels: [low, medium, high]
+  default: high
+- id: claude-effort-max
+  type: reasoning_effort
+  parameter: effort
+  levels: [low, medium, high, max]
+  default: high
+- id: claude-effort-xhigh-max
+  type: reasoning_effort
+  parameter: effort
+  levels: [low, medium, high, xhigh, max]
+  default: high
+- id: kimi-k3
+  type: reasoning_effort
+  parameter: reasoning_effort
+  levels: [low, high, max]
+  default: max
+- id: kimi-k2
+  type: chat_template_kwargs
+  parameter: thinking
+  levels: [disabled, enabled]
+  default: enabled
+  disabled: disabled
+- id: step-3.7
+  type: reasoning_effort
+  parameter: reasoning_effort
+  levels: [low, medium, high]
+  default: medium
+- id: minimax-m3
+  type: reasoning_effort
+  parameter: thinking
+  levels: [disabled, adaptive, enabled]
+  default: adaptive
+  disabled: disabled
+- id: muse-glimmer
+  type: reasoning_effort
+  parameter: reasoning_strength
+  levels: [low, medium, high, xhigh]
+  default: high
+- id: mistral-none-high
+  type: reasoning_effort
+  parameter: reasoning_effort
+  levels: [none, high]
+  default: none
+  disabled: none
 - id: mistral
   type: top_level_reasoning_effort
   parameter: reasoning_effort
@@ -97,8 +174,9 @@
 - id: inkling
   type: reasoning_effort
   parameter: reasoning_effort
-  levels: [minimal, low, medium, high, xhigh, max]
-  default: xhigh
+  levels: [none, minimal, low, medium, high, xhigh]
+  default: high
+  disabled: none
 - id: muse
   type: reasoning_effort
   parameter: reasoning_effort
@@ -116,6 +194,12 @@
   default: high
   disabled: none
 - id: gemma4
+  type: chat_template_kwargs
+  parameter: enable_thinking
+  levels: [disabled, enabled]
+  default: enabled
+  disabled: disabled
+- id: nemotron-3.5-lightning
   type: chat_template_kwargs
   parameter: enable_thinking
   levels: [disabled, enabled]

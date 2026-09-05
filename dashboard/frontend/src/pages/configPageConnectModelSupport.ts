@@ -1,3 +1,5 @@
+import type { ModelPricing, ProviderModelConfig, ProviderReliability } from './configPageSupport'
+
 export interface ConnectModelAdvancedValues {
   namePrefix: string
   reasoningFamily: string
@@ -60,4 +62,60 @@ export function resolveConnectedModelName(
   let suffix = 2
   while (reservedNames.has(`${providerScoped}-${suffix}`)) suffix += 1
   return `${providerScoped}-${suffix}`
+}
+
+interface ConnectedProviderModelOptions {
+  name: string
+  catalog?: string
+  providerModelID: string
+  providerID: string
+  providerAPIFormat: string
+  baseURL: string
+  apiKey: string
+  reasoningFamily?: string
+  pricing?: ModelPricing
+  reliability?: ProviderReliability
+}
+
+/**
+ * Builds the user-authored provider model entry for Quick Connect.
+ *
+ * Catalog-backed entries intentionally retain only the catalog identity and
+ * backend provider. The canonical materializer owns the provider binding's
+ * upstream model ID and protocol, including models that support Responses but
+ * not Chat Completions. Custom models have no such binding, so they keep the
+ * provider-wide defaults selected by the user.
+ */
+export function buildConnectedProviderModel({
+  name,
+  catalog,
+  providerModelID,
+  providerID,
+  providerAPIFormat,
+  baseURL,
+  apiKey,
+  reasoningFamily,
+  pricing,
+  reliability,
+}: ConnectedProviderModelOptions): ProviderModelConfig {
+  return {
+    name,
+    ...(catalog
+      ? { catalog }
+      : {
+          ...(reasoningFamily ? { reasoning: { family: reasoningFamily } } : {}),
+          provider_model_id: providerModelID,
+          api_format: providerAPIFormat,
+        }),
+    pricing,
+    reliability,
+    backend_refs: [
+      {
+        name: `${providerID}-primary`,
+        base_url: baseURL,
+        provider: providerID,
+        ...(apiKey ? { api_key: apiKey } : {}),
+      },
+    ],
+  }
 }

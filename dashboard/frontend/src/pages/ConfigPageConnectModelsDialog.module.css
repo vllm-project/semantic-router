@@ -243,6 +243,24 @@
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
+.moreProvidersButton {
+  width: 100%;
+  min-height: 42px;
+  margin-top: 1rem;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 650;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px dashed rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+}
+.moreProvidersButton:hover,
+.moreProvidersButton:focus-visible {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.3);
+  outline: none;
+}
 .connectionPanel {
   padding: 1rem;
   border: 1px solid var(--border-subtle);

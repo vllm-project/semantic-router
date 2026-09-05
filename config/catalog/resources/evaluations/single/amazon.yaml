@@ -1,0 +1,544 @@
+- id: independent/nova-pro-critpt@1.0.0
+  model: amazon/nova-pro-v1
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: default
+  subject:
+    source_model: Amazon Nova Pro
+    source_model_slug: nova-pro
+    run_kind: independent
+  metrics:
+    score: 0
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/nova-pro-artificial-analysis-long-context-reasoning@1.1.0
+  model: amazon/nova-pro-v1
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: default
+  subject:
+    source_model: Amazon Nova Pro
+    source_model_slug: nova-pro
+    run_kind: independent
+  metrics:
+    score: .21
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/nova-pro-omniscience@1.0.0
+  model: amazon/nova-pro-v1
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: default
+  subject:
+    source_model: Amazon Nova Pro
+    source_model_slug: nova-pro
+    run_kind: independent
+  metrics:
+    index: -47.7333333333333
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/nova-pro-humanitys-last-exam@1.0.0
+  model: amazon/nova-pro-v1
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: default
+  subject:
+    source_model: Amazon Nova Pro
+    source_model_slug: nova-pro
+    run_kind: independent
+  metrics:
+    accuracy: .0319
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/nova-pro-gpqa-diamond@1.0.0
+  model: amazon/nova-pro-v1
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: default
+  subject:
+    source_model: Amazon Nova Pro
+    source_model_slug: nova-pro
+    run_kind: independent
+  metrics:
+    accuracy: .498989898989899
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/nova-2-0-lite-reasoning-critpt@1.0.0
+  model: amazon/nova-2-lite
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Nova 2.0 Lite (high)
+    source_model_slug: nova-2-0-lite-reasoning
+    run_kind: independent
+  metrics:
+    score: 0.00285714285714286
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/nova-2-0-lite-reasoning-gdpval-aa@2.0.0
+  model: amazon/nova-2-lite
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: Nova 2.0 Lite (high)
+    source_model_slug: nova-2-0-lite-reasoning
+    run_kind: independent
+  metrics:
+    elo: 538.84
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/nova-2-0-lite-reasoning-artificial-analysis-long-context-reasoning@1.1.0
+  model: amazon/nova-2-lite
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Nova 2.0 Lite (high)
+    source_model_slug: nova-2-0-lite-reasoning
+    run_kind: independent
+  metrics:
+    score: 0.603333333333333
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/nova-2-0-lite-reasoning-omniscience@1.0.0
+  model: amazon/nova-2-lite
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Nova 2.0 Lite (high)
+    source_model_slug: nova-2-0-lite-reasoning
+    run_kind: independent
+  metrics:
+    index: -54.9833333333333
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/nova-2-0-lite-reasoning-humanitys-last-exam@1.0.0
+  model: amazon/nova-2-lite
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Nova 2.0 Lite (high)
+    source_model_slug: nova-2-0-lite-reasoning
+    run_kind: independent
+  metrics:
+    accuracy: 0.11631139944393
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/nova-2-0-lite-reasoning-terminalbench-v2-1@1.0.0
+  model: amazon/nova-2-lite
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: Nova 2.0 Lite (high)
+    source_model_slug: nova-2-0-lite-reasoning
+    run_kind: independent
+  metrics:
+    resolved: 0.161048689138577
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/nova-2-0-lite-reasoning-gpqa-diamond@1.0.0
+  model: amazon/nova-2-lite
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Nova 2.0 Lite (high)
+    source_model_slug: nova-2-0-lite-reasoning
+    run_kind: independent
+  metrics:
+    accuracy: 0.811111111111111
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/nova-2-0-lite-reasoning-low-critpt@1.0.0
+  model: amazon/nova-2-lite
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: Nova 2.0 Lite (low)
+    source_model_slug: nova-2-0-lite-reasoning-low
+    run_kind: independent
+  metrics:
+    score: 0
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/nova-2-0-lite-reasoning-low-artificial-analysis-long-context-reasoning@1.1.0
+  model: amazon/nova-2-lite
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: Nova 2.0 Lite (low)
+    source_model_slug: nova-2-0-lite-reasoning-low
+    run_kind: independent
+  metrics:
+    score: 0.543333333333333
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/nova-2-0-lite-reasoning-low-omniscience@1.0.0
+  model: amazon/nova-2-lite
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: Nova 2.0 Lite (low)
+    source_model_slug: nova-2-0-lite-reasoning-low
+    run_kind: independent
+  metrics:
+    index: -54.1
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/nova-2-0-lite-reasoning-low-humanitys-last-exam@1.0.0
+  model: amazon/nova-2-lite
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: Nova 2.0 Lite (low)
+    source_model_slug: nova-2-0-lite-reasoning-low
+    run_kind: independent
+  metrics:
+    accuracy: 0.0403151065801668
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/nova-2-0-lite-reasoning-low-gpqa-diamond@1.0.0
+  model: amazon/nova-2-lite
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: Nova 2.0 Lite (low)
+    source_model_slug: nova-2-0-lite-reasoning-low
+    run_kind: independent
+  metrics:
+    accuracy: 0.697979797979798
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/nova-2-0-lite-reasoning-medium-critpt@1.0.0
+  model: amazon/nova-2-lite
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: Nova 2.0 Lite (medium)
+    source_model_slug: nova-2-0-lite-reasoning-medium
+    run_kind: independent
+  metrics:
+    score: 0
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/nova-2-0-lite-reasoning-medium-artificial-analysis-long-context-reasoning@1.1.0
+  model: amazon/nova-2-lite
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: Nova 2.0 Lite (medium)
+    source_model_slug: nova-2-0-lite-reasoning-medium
+    run_kind: independent
+  metrics:
+    score: 0.6
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/nova-2-0-lite-reasoning-medium-omniscience@1.0.0
+  model: amazon/nova-2-lite
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: Nova 2.0 Lite (medium)
+    source_model_slug: nova-2-0-lite-reasoning-medium
+    run_kind: independent
+  metrics:
+    index: -56.9666666666667
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/nova-2-0-lite-reasoning-medium-humanitys-last-exam@1.0.0
+  model: amazon/nova-2-lite
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: Nova 2.0 Lite (medium)
+    source_model_slug: nova-2-0-lite-reasoning-medium
+    run_kind: independent
+  metrics:
+    accuracy: 0.0898980537534754
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/nova-2-0-lite-reasoning-medium-gpqa-diamond@1.0.0
+  model: amazon/nova-2-lite
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: Nova 2.0 Lite (medium)
+    source_model_slug: nova-2-0-lite-reasoning-medium
+    run_kind: independent
+  metrics:
+    accuracy: 0.767676767676768
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/nova-2-0-lite-critpt@1.0.0
+  model: amazon/nova-2-lite
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: none
+  subject:
+    source_model: Nova 2.0 Lite (Non-reasoning)
+    source_model_slug: nova-2-0-lite
+    run_kind: independent
+  metrics:
+    score: 0
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/nova-2-0-lite-artificial-analysis-long-context-reasoning@1.1.0
+  model: amazon/nova-2-lite
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: none
+  subject:
+    source_model: Nova 2.0 Lite (Non-reasoning)
+    source_model_slug: nova-2-0-lite
+    run_kind: independent
+  metrics:
+    score: 0.186666666666667
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/nova-2-0-lite-omniscience@1.0.0
+  model: amazon/nova-2-lite
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: none
+  subject:
+    source_model: Nova 2.0 Lite (Non-reasoning)
+    source_model_slug: nova-2-0-lite
+    run_kind: independent
+  metrics:
+    index: -59.8166666666667
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/nova-2-0-lite-humanitys-last-exam@1.0.0
+  model: amazon/nova-2-lite
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: none
+  subject:
+    source_model: Nova 2.0 Lite (Non-reasoning)
+    source_model_slug: nova-2-0-lite
+    run_kind: independent
+  metrics:
+    accuracy: 0.0287303058387396
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/nova-2-0-lite-gpqa-diamond@1.0.0
+  model: amazon/nova-2-lite
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: none
+  subject:
+    source_model: Nova 2.0 Lite (Non-reasoning)
+    source_model_slug: nova-2-0-lite
+    run_kind: independent
+  metrics:
+    accuracy: 0.603030303030303
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/nova-premier-critpt@1.0.0
+  model: amazon/nova-premier-v1
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: Nova Premier
+    source_model_slug: nova-premier
+    run_kind: independent
+  metrics:
+    score: 0
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/nova-premier-artificial-analysis-long-context-reasoning@1.1.0
+  model: amazon/nova-premier-v1
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: Nova Premier
+    source_model_slug: nova-premier
+    run_kind: independent
+  metrics:
+    score: 0.343333333333333
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/nova-premier-omniscience@1.0.0
+  model: amazon/nova-premier-v1
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: Nova Premier
+    source_model_slug: nova-premier
+    run_kind: independent
+  metrics:
+    index: -35.3833333333333
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/nova-premier-humanitys-last-exam@1.0.0
+  model: amazon/nova-premier-v1
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: Nova Premier
+    source_model_slug: nova-premier
+    run_kind: independent
+  metrics:
+    accuracy: 0.0417052826691381
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/nova-premier-gpqa-diamond@1.0.0
+  model: amazon/nova-premier-v1
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: Nova Premier
+    source_model_slug: nova-premier
+    run_kind: independent
+  metrics:
+    accuracy: 0.568686868686869
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true

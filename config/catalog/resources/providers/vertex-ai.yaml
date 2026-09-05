@@ -19,6 +19,7 @@ presentation:
   logo: package:gemini
   monogram: V
   monochrome: false
+  featured: true
 conformance:
   status: fixture_verified
   verified_at: 2026-09-04

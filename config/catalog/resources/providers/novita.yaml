@@ -22,6 +22,7 @@ conformance:
   status: unverified
 models:
 - catalog: xiaomi/mimo-v2-flash
+  relationship: gateway
   id: xiaomimimo/mimo-v2-flash
   protocols:
   - openai/chat-completions@1

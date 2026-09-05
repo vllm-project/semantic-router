@@ -74,6 +74,48 @@ func TestTopLevelBooleanReasoningTransport(t *testing.T) {
 	assert.False(t, hasTemplate)
 }
 
+func TestReasoningEffortWithIndependentActivationControl(t *testing.T) {
+	router := newReasoningRouter(
+		config.ReasoningConfig{
+			ReasoningFamilies: map[string]config.ReasoningFamilyConfig{
+				"qwen3.8": {
+					Type: config.ReasoningFamilyTypeReasoningEffort, Parameter: "reasoning_effort",
+					ActivationParameter: "enable_thinking",
+					Levels:              []string{"low", "medium", "xhigh"}, Default: "xhigh",
+				},
+			},
+		},
+		[]config.Decision{reasoningDecision("qwen", "", 0, "qwen-model", boolPtr(true), "xhigh")},
+		map[string]config.ModelParams{"qwen-model": {ReasoningFamily: "qwen3.8"}},
+	)
+
+	local := setReasoningModeForProvider(
+		t, router, "qwen-model", nil, true, "qwen", localVLLMProviderProfile(),
+	)
+	assertChatTemplateReasoningField(t, local, "reasoning_effort", "xhigh")
+	assertChatTemplateReasoningField(t, local, "enable_thinking", true)
+
+	disabled := setReasoningModeForProvider(
+		t, router, "qwen-model", nil, false, "qwen", localVLLMProviderProfile(),
+	)
+	assertChatTemplateReasoningField(t, disabled, "enable_thinking", false)
+	kwargs := disabled["chat_template_kwargs"].(map[string]interface{})
+	_, hasEffort := kwargs["reasoning_effort"]
+	assert.False(t, hasEffort)
+
+	hosted := setReasoningModeForProvider(
+		t,
+		router,
+		"qwen-model",
+		nil,
+		true,
+		"qwen",
+		&config.ProviderProfile{ReasoningTransport: modelcatalog.ReasoningTransportTopLevelEffort},
+	)
+	assert.Equal(t, "xhigh", hosted["reasoning_effort"])
+	assert.Equal(t, true, hosted["enable_thinking"])
+}
+
 func newReasoningObjectRouter() *OpenAIRouter {
 	return newReasoningRouter(
 		config.ReasoningConfig{

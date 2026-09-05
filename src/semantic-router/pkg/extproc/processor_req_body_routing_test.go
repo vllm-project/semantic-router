@@ -9,12 +9,95 @@ import (
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
 )
+
+func TestProviderCredentialIsInjectedOnceWithOverwriteSemantics(t *testing.T) {
+	cfg, err := config.ParseYAMLBytes([]byte(`
+version: v0.3
+providers:
+  models:
+    - name: private
+      provider_model_id: private
+      api_format: openai
+      backend_refs:
+        - provider: vllm
+          endpoint: https://private.example/v1
+          auth_header: x-api-key
+          auth_prefix: ""
+          api_key: static-secret
+routing: {}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	router := &OpenAIRouter{
+		Config: cfg,
+		CredentialResolver: authz.NewCredentialResolver(
+			authz.NewStaticConfigProvider(cfg),
+		),
+	}
+	profile, err := cfg.GetProviderProfileForEndpoint("private_primary")
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := &routeHeaderState{profile: profile}
+
+	if response := router.appendProviderCredential(
+		state, "private", "private_primary", &RequestContext{Headers: map[string]string{}},
+	); response != nil {
+		t.Fatalf("appendProviderCredential() returned error response: %#v", response)
+	}
+	if len(state.setHeaders) != 1 {
+		t.Fatalf("credential header count = %d, want 1", len(state.setHeaders))
+	}
+	header := state.setHeaders[0]
+	if header.GetHeader().GetKey() != "x-api-key" || string(header.GetHeader().GetRawValue()) != "static-secret" {
+		t.Fatalf("credential header = %#v, want raw x-api-key", header)
+	}
+	if header.GetAppendAction() != core.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD {
+		t.Fatalf("credential append action = %v, want overwrite", header.GetAppendAction())
+	}
+}
+
+func TestProviderWithNoAuthDoesNotRequireCredentialInFailClosedMode(t *testing.T) {
+	cfg, err := config.ParseYAMLBytes([]byte(`
+version: v0.3
+providers:
+  models:
+    - name: local
+      provider_model_id: llama3.2
+      api_format: openai
+      backend_refs:
+        - provider: ollama
+          endpoint: http://127.0.0.1:11434/v1
+routing: {}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile, err := cfg.GetProviderProfileForEndpoint("local_primary")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolver := authz.NewCredentialResolver(authz.NewStaticConfigProvider(cfg))
+	router := &OpenAIRouter{Config: cfg, CredentialResolver: resolver}
+	state := &routeHeaderState{profile: profile}
+
+	if response := router.appendProviderCredential(
+		state, "local", "local_primary", &RequestContext{Headers: map[string]string{}},
+	); response != nil {
+		t.Fatalf("auth.strategy=none returned error response: %#v", response)
+	}
+	if len(state.setHeaders) != 0 {
+		t.Fatalf("auth.strategy=none injected headers: %#v", state.setHeaders)
+	}
+}
 
 func TestProviderDispatchEncodesEveryClientBackendProtocolPair(t *testing.T) {
 	formats := []llmprotocol.WireFormat{

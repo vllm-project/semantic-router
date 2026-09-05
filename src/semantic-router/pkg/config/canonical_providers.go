@@ -31,12 +31,13 @@ type CanonicalProviderModel struct {
 // request projection for a private/custom model inline. Family is mutually
 // exclusive with the inline fields.
 type CanonicalReasoning struct {
-	Family    string   `yaml:"family,omitempty"`
-	Type      string   `yaml:"type,omitempty"`
-	Parameter string   `yaml:"parameter,omitempty"`
-	Levels    []string `yaml:"levels,omitempty"`
-	Default   string   `yaml:"default,omitempty"`
-	Disabled  string   `yaml:"disabled,omitempty"`
+	Family              string   `yaml:"family,omitempty"`
+	Type                string   `yaml:"type,omitempty"`
+	Parameter           string   `yaml:"parameter,omitempty"`
+	ActivationParameter string   `yaml:"activation_parameter,omitempty"`
+	Levels              []string `yaml:"levels,omitempty"`
+	Default             string   `yaml:"default,omitempty"`
+	Disabled            string   `yaml:"disabled,omitempty"`
 }
 
 // ProviderReliability controls generated data-plane load balancing and retry behavior.
@@ -54,14 +55,16 @@ type ProviderReliability struct {
 
 // CanonicalBackendRef defines one physical backend target for a provider model.
 type CanonicalBackendRef struct {
-	Name         string            `yaml:"name,omitempty"`
-	Endpoint     string            `yaml:"endpoint,omitempty"`
-	Protocol     string            `yaml:"protocol,omitempty"`
-	Weight       int               `yaml:"weight,omitempty"`
-	BaseURL      string            `yaml:"base_url,omitempty"`
-	Provider     string            `yaml:"provider,omitempty"`
-	AuthHeader   string            `yaml:"auth_header,omitempty"`
-	AuthPrefix   string            `yaml:"auth_prefix,omitempty"`
+	Name       string `yaml:"name,omitempty"`
+	Endpoint   string `yaml:"endpoint,omitempty"`
+	Protocol   string `yaml:"protocol,omitempty"`
+	Weight     int    `yaml:"weight,omitempty"`
+	BaseURL    string `yaml:"base_url,omitempty"`
+	Provider   string `yaml:"provider,omitempty"`
+	AuthHeader string `yaml:"auth_header,omitempty"`
+	// AuthPrefix is presence-aware so an explicit empty string can disable a
+	// catalog provider's default prefix (for example, a raw x-api-key value).
+	AuthPrefix   *string           `yaml:"auth_prefix,omitempty"`
 	ExtraHeaders map[string]string `yaml:"extra_headers,omitempty"`
 	APIVersion   string            `yaml:"api_version,omitempty"`
 	ChatPath     string            `yaml:"chat_path,omitempty"`

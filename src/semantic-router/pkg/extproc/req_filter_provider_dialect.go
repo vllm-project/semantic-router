@@ -34,6 +34,10 @@ func usesReasoningObjectTransport(transport modelcatalog.ReasoningTransport) boo
 	return transport == modelcatalog.ReasoningTransportReasoningObject
 }
 
+func usesOutputConfigEffortTransport(transport modelcatalog.ReasoningTransport) bool {
+	return transport == modelcatalog.ReasoningTransportOutputConfig
+}
+
 func isDeepSeekThinkingTransport(transport modelcatalog.ReasoningTransport) bool {
 	return transport == modelcatalog.ReasoningTransportDeepSeekThinking
 }

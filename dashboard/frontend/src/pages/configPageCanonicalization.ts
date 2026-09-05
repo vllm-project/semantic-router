@@ -2,6 +2,7 @@ import type {
   BackendRefEntry,
   ConfigData,
   ModelConfigEntry,
+  ModelReasoningConfig,
   RoutingModelCard,
 } from './configPageSupport'
 
@@ -135,6 +136,34 @@ export const removeRoutingModelCard = (cfg: ConfigData, name: string) => {
   routing.modelCards = (routing.modelCards || []).filter((card) => card.name !== name)
 }
 
+export const hasRoutingModelCardMetadata = (card: Omit<RoutingModelCard, 'name'>): boolean =>
+  Object.values(card).some((value) =>
+    Array.isArray(value) ? value.length > 0 : value !== undefined && value !== '',
+  )
+
+export const writeRoutingModelCard = (
+  cfg: ConfigData,
+  name: string,
+  card: Omit<RoutingModelCard, 'name'>,
+  options: { removeWhenEmpty?: boolean } = {},
+) => {
+  if (hasRoutingModelCardMetadata(card)) {
+    upsertRoutingModelCard(cfg, name, card)
+  } else if (options.removeWhenEmpty) {
+    removeRoutingModelCard(cfg, name)
+  }
+}
+
+export const routingModelCardReferenceCount = (cfg: ConfigData, name: string): number =>
+  (cfg.providers?.models || []).filter((model) => (model.catalog?.trim() || model.name) === name)
+    .length
+
+export const removeRoutingModelCardIfUnreferenced = (cfg: ConfigData, name: string) => {
+  if (routingModelCardReferenceCount(cfg, name) === 0) {
+    removeRoutingModelCard(cfg, name)
+  }
+}
+
 const promoteLegacySignals = (cfg: ConfigData) => {
   const routing = ensureRoutingConfig(cfg)
   const signals = { ...(routing.signals || {}) }
@@ -228,13 +257,42 @@ const legacyBackendRefsForModel = (
   return backendRefs
 }
 
+const legacyReasoningForModel = (
+  family: string | undefined,
+  reasoningFamilies: ConfigData['reasoning_families'],
+): ModelReasoningConfig | undefined => {
+  if (!family) {
+    return undefined
+  }
+  const definition = reasoningFamilies?.[family]
+  return definition ? cloneUnknown(definition) : { family }
+}
+
+const legacyReasoningFamilies = (
+  cfg: ConfigData,
+): NonNullable<ConfigData['reasoning_families']> => ({
+  ...(cfg.reasoning_families || {}),
+  ...(cfg.providers?.defaults?.reasoning_families || {}),
+})
+
+const promoteLegacyProviderModelReasoning = (cfg: ConfigData) => {
+  const reasoningFamilies = legacyReasoningFamilies(cfg)
+  for (const model of cfg.providers?.models || []) {
+    if (!model.reasoning && model.reasoning_family) {
+      model.reasoning = legacyReasoningForModel(model.reasoning_family, reasoningFamilies)
+    }
+    delete model.reasoning_family
+  }
+}
+
 const mergeLegacyModelIntoProviderModel = (
   existing: NonNullable<ConfigData['providers']>['models'][number],
   modelConfig: ModelConfigEntry,
   backendCatalog: Record<string, BackendRefEntry>,
+  reasoningFamilies: ConfigData['reasoning_families'],
 ) => {
   if (!existing.reasoning && modelConfig.reasoning_family) {
-    existing.reasoning = { family: modelConfig.reasoning_family }
+    existing.reasoning = legacyReasoningForModel(modelConfig.reasoning_family, reasoningFamilies)
   }
   if (!existing.provider_model_id && modelConfig.model_id) {
     existing.provider_model_id = modelConfig.model_id
@@ -264,6 +322,7 @@ const promoteLegacyModelBindings = (cfg: ConfigData) => {
   const providers = ensureProvidersConfig(cfg)
   const providerModelsByName = new Map(providers.models.map((model) => [model.name, model]))
   const backendCatalog = buildLegacyBackendCatalog(cfg)
+  const reasoningFamilies = legacyReasoningFamilies(cfg)
 
   for (const [modelName, modelConfig] of Object.entries(cfg.model_config)) {
     const cardPatch: Partial<RoutingModelCard> = {}
@@ -300,15 +359,13 @@ const promoteLegacyModelBindings = (cfg: ConfigData) => {
 
     const existing = providerModelsByName.get(modelName)
     if (existing) {
-      mergeLegacyModelIntoProviderModel(existing, modelConfig, backendCatalog)
+      mergeLegacyModelIntoProviderModel(existing, modelConfig, backendCatalog, reasoningFamilies)
       continue
     }
 
     const providerModel = {
       name: modelName,
-      reasoning: modelConfig.reasoning_family
-        ? { family: modelConfig.reasoning_family }
-        : undefined,
+      reasoning: legacyReasoningForModel(modelConfig.reasoning_family, reasoningFamilies),
       provider_model_id: modelConfig.model_id,
       backend_refs: legacyBackendRefsForModel(modelConfig, backendCatalog),
       pricing: modelConfig.pricing ? cloneUnknown(modelConfig.pricing) : undefined,
@@ -323,6 +380,9 @@ const promoteLegacyModelBindings = (cfg: ConfigData) => {
 }
 
 const promoteLegacyProviderDefaults = (cfg: ConfigData) => {
+  if (!cfg.providers?.defaults && !cfg.default_model && !cfg.default_reasoning_effort) {
+    return
+  }
   const defaults = ensureProviderDefaultsConfig(cfg)
   if (!defaults.model && cfg.default_model) defaults.model = cfg.default_model
   if (!defaults.reasoning_effort && cfg.default_reasoning_effort) {
@@ -474,6 +534,12 @@ const stripLegacyRootFields = (cfg: ConfigData) => {
   delete rawConfig.categories
   delete rawConfig.default_model
   delete rawConfig.reasoning_families
+  if (cfg.providers?.defaults) {
+    delete cfg.providers.defaults.reasoning_families
+    if (Object.keys(cfg.providers.defaults).length === 0) {
+      delete cfg.providers.defaults
+    }
+  }
   delete rawConfig.default_reasoning_effort
   delete rawConfig.model_config
   delete rawConfig.vllm_endpoints
@@ -501,6 +567,7 @@ export const canonicalizeConfigForManagerSave = (updatedConfig: ConfigData): Con
 
   promoteLegacySignals(next)
   promoteLegacyProviderDefaults(next)
+  promoteLegacyProviderModelReasoning(next)
   promoteLegacyModelBindings(next)
   promoteLegacyGlobalBlocks(next)
   stripLegacyRootFields(next)

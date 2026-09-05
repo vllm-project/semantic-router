@@ -24,78 +24,63 @@ presentation:
 conformance:
   status: unverified
 models:
-- catalog: multiverse/quasar-438b
-  id: quasar-438b
-  protocols: &compactifai-protocols [openai/chat-completions@1, openai/responses@1]
+- catalog: zai/glm-5.2
+  relationship: gateway
+  id: glm-5-2
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
   pricing:
     currency: USD
-    prompt_per_1m: 0.60
-    completion_per_1m: 1.80
+    prompt_per_1m: 1.1
+    completion_per_1m: 3.5
   lifecycle: active
-  verification: &compactifai-verification
+  verification:
     status: claimed
     verified_at: 2026-09-05
     source: https://docs.compactif.ai/models/
-- catalog: multiverse/hypernova-60b-2605
-  id: hypernova-60b
-  protocols: *compactifai-protocols
-  pricing:
-    currency: USD
-    prompt_per_1m: 0.04
-    completion_per_1m: 0.14
-  lifecycle: active
-  verification: *compactifai-verification
-- catalog: multiverse/carina-60b
-  id: carina-60b
-  protocols: *compactifai-protocols
-  pricing:
-    currency: USD
-    prompt_per_1m: 0.05
-    completion_per_1m: 0.08
-  lifecycle: active
-  verification: *compactifai-verification
-- catalog: zai/glm-5.2
-  id: glm-5-2
-  protocols: *compactifai-protocols
-  pricing:
-    currency: USD
-    prompt_per_1m: 1.10
-    completion_per_1m: 3.50
-  lifecycle: active
-  verification: *compactifai-verification
 - catalog: zai/glm-5.3
+  relationship: gateway
   id: glm-5-3
-  protocols: *compactifai-protocols
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
   pricing:
     currency: USD
-    prompt_per_1m: 1.10
-    completion_per_1m: 3.50
+    prompt_per_1m: 1.1
+    completion_per_1m: 3.5
   lifecycle: active
-  verification: *compactifai-verification
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.compactif.ai/models/
 - catalog: qwen/qwen3.8-27b
+  relationship: gateway
   id: qwen-3-8-27b
-  protocols: *compactifai-protocols
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
   pricing:
     currency: USD
-    prompt_per_1m: 0.40
-    completion_per_1m: 2.00
+    prompt_per_1m: 0.4
+    completion_per_1m: 2.0
   lifecycle: active
-  verification: *compactifai-verification
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.compactif.ai/models/
 - catalog: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
+  relationship: gateway
   id: nemotron-3-nano-omni
-  protocols: *compactifai-protocols
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
   pricing:
     currency: USD
-    prompt_per_1m: 0.20
-    completion_per_1m: 0.80
+    prompt_per_1m: 0.2
+    completion_per_1m: 0.8
   lifecycle: active
-  verification: *compactifai-verification
-- catalog: mistral/mistral-small-3.1-24b-instruct
-  id: mistral-small-3-1
-  protocols: [openai/chat-completions@1]
-  pricing:
-    currency: USD
-    prompt_per_1m: 0.11
-    completion_per_1m: 0.17
-  lifecycle: active
-  verification: *compactifai-verification
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.compactif.ai/models/

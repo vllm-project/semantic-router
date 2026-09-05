@@ -119,6 +119,25 @@ def test_operator_evaluation_requires_versioned_identity_and_finite_metrics():
         )
 
 
+def test_operator_evaluation_preserves_profile_and_reasoning_effort():
+    evaluation = ModelEvaluation(
+        benchmark="acme/support@1.0.0",
+        benchmark_profile="published-standard",
+        reasoning_effort="high",
+        metrics={"score": 0.82},
+    )
+
+    assert evaluation.benchmark_profile == "published-standard"
+    assert evaluation.reasoning_effort == "high"
+
+
+def test_omitted_provider_defaults_do_not_invent_reasoning_effort():
+    config = UserConfig.model_validate({"version": "v0.3"})
+
+    assert config.providers.defaults.reasoning_effort is None
+    assert config.providers.defaults.model_dump(exclude_none=True) == {}
+
+
 def test_recipe_decision_tier_survives_schema_parse():
     config = recipe_config()
 

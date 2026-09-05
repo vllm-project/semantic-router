@@ -17,7 +17,12 @@ import {
 } from './configPageConnectModelSupport'
 import type { ConnectedModelInput } from './configPageConnectModelsDialogTypes'
 import type { ModelPricing, ProviderReliability, RoutingModelCard } from './configPageSupport'
-import { modelProviderPresetsFromCatalog, type ModelProviderPreset } from './modelProviderCatalog'
+import {
+  filterModelProviderPresets,
+  hiddenModelProviderPresetCount,
+  modelProviderPresetsFromCatalog,
+  type ModelProviderPreset,
+} from './modelProviderCatalog'
 
 interface DiscoveryResponse {
   models?: unknown
@@ -32,6 +37,8 @@ interface DialogState {
   setStage: Dispatch<SetStateAction<Stage>>
   search: string
   setSearch: Dispatch<SetStateAction<string>>
+  showAllProviders: boolean
+  setShowAllProviders: Dispatch<SetStateAction<boolean>>
   provider: ModelProviderPreset | null
   setProvider: Dispatch<SetStateAction<ModelProviderPreset | null>>
   baseUrl: string
@@ -62,6 +69,7 @@ function useConnectDialogState(isOpen: boolean, onClose: () => void): DialogStat
   const titleId = useId()
   const [stage, setStage] = useState<Stage>('provider')
   const [search, setSearch] = useState('')
+  const [showAllProviders, setShowAllProviders] = useState(false)
   const [provider, setProvider] = useState<ModelProviderPreset | null>(null)
   const [baseUrl, setBaseUrl] = useState('')
   const [apiKey, setAPIKey] = useState('')
@@ -80,6 +88,7 @@ function useConnectDialogState(isOpen: boolean, onClose: () => void): DialogStat
     if (!isOpen) return
     setStage('provider')
     setSearch('')
+    setShowAllProviders(false)
     setProvider(null)
     setBaseUrl('')
     setAPIKey('')
@@ -97,6 +106,8 @@ function useConnectDialogState(isOpen: boolean, onClose: () => void): DialogStat
     setStage,
     search,
     setSearch,
+    showAllProviders,
+    setShowAllProviders,
     provider,
     setProvider,
     baseUrl,
@@ -134,12 +145,12 @@ function useConnectDialogDerived(
     [catalog.providers],
   )
   const visibleProviders = useMemo(() => {
-    const query = state.search.trim().toLocaleLowerCase()
-    if (!query) return providerCatalog
-    return providerCatalog.filter((item) =>
-      `${item.name} ${item.description}`.toLocaleLowerCase().includes(query),
-    )
-  }, [providerCatalog, state.search])
+    return filterModelProviderPresets(providerCatalog, state.search, state.showAllProviders)
+  }, [providerCatalog, state.search, state.showAllProviders])
+  const hiddenProviderCount = useMemo(
+    () => hiddenModelProviderPresetCount(providerCatalog),
+    [providerCatalog],
+  )
   const existing = useMemo(() => new Set(existingModelNames), [existingModelNames])
   const visibleModels = useMemo(() => {
     const query = state.modelSearch.trim().toLocaleLowerCase()
@@ -170,7 +181,14 @@ function useConnectDialogDerived(
     () => new Map(catalog.models.map((model) => [model.id, model.display_name])),
     [catalog.models],
   )
-  return { visibleProviders, visibleModels, resolvedModelNames, catalogModels, modelDisplayNames }
+  return {
+    visibleProviders,
+    hiddenProviderCount,
+    visibleModels,
+    resolvedModelNames,
+    catalogModels,
+    modelDisplayNames,
+  }
 }
 
 export function modelsForProvider(catalog: BuiltInModelCatalog, providerID?: string) {
@@ -206,7 +224,7 @@ export function useConnectModelsDialogController(
   return {
     ...state,
     ...derived,
-    chooseProvider: (provider: ModelProviderPreset) => chooseProvider(state, provider),
+    chooseProvider: (provider: ModelProviderPreset) => chooseProvider(state, provider, catalog),
     discover: () => discoverModels(state),
     addManualModel: () => addManualModel(state),
     submit: () => submitModels(state, derived, onImport, onClose),
@@ -215,11 +233,26 @@ export function useConnectModelsDialogController(
 
 export type ConnectModelsDialogController = ReturnType<typeof useConnectModelsDialogController>
 
-function chooseProvider(state: DialogState, provider: ModelProviderPreset): void {
+export function modelInventoryForProvider(
+  catalog: BuiltInModelCatalog,
+  providerID?: string,
+): string[] {
+  return [...modelsForProvider(catalog, providerID).keys()]
+}
+
+export function mergeModelInventory(current: string[], discovered: string[]): string[] {
+  return [...new Set([...current, ...discovered])]
+}
+
+function chooseProvider(
+  state: DialogState,
+  provider: ModelProviderPreset,
+  catalog: BuiltInModelCatalog,
+): void {
   state.setProvider(provider)
   state.setBaseUrl(provider.baseUrl)
   state.setAPIKey('')
-  state.setModels([])
+  state.setModels(modelInventoryForProvider(catalog, provider.id))
   state.setSelected(new Set())
   state.setModelSearch('')
   state.setError(null)
@@ -259,12 +292,17 @@ async function discoverModels(state: DialogState): Promise<void> {
           (model): model is string => typeof model === 'string' && model.trim() !== '',
         )
       : []
-    state.setModels(discovered)
-    state.setSelected(new Set(discovered.length === 1 ? discovered : []))
-    if (discovered.length === 0) state.setError('No models were returned. Add a model ID manually.')
+    const merged = mergeModelInventory(state.models, discovered)
+    state.setModels(merged)
+    state.setSelected((current) => {
+      const next = new Set([...current].filter((model) => merged.includes(model)))
+      if (merged.length === 1 && discovered.length === 1) next.add(discovered[0])
+      return next
+    })
+    if (discovered.length === 0 && merged.length === 0) {
+      state.setError('No models were returned. Add a model ID manually.')
+    }
   } catch (cause) {
-    state.setModels([])
-    state.setSelected(new Set())
     state.setError(cause instanceof Error ? cause.message : 'Models could not be loaded.')
   } finally {
     state.setDiscovering(false)

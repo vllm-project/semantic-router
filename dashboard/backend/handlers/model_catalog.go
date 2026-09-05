@@ -1,11 +1,11 @@
 package handlers
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -14,12 +14,7 @@ import (
 	"time"
 )
 
-const (
-	modelCatalogTimeout        = 10 * time.Second
-	maxModelCatalogOutputBytes = 4 << 20
-)
-
-var errModelCatalogOutputTooLarge = errors.New("model catalog output exceeded the size limit")
+const modelCatalogTimeout = 30 * time.Second
 
 // ModelCatalogSource supplies the canonical JSON emitted from the packaged
 // model assets. Keeping this seam injectable lets the Dashboard consume the
@@ -62,29 +57,38 @@ func (source *packagedModelCatalogSource) Load(ctx context.Context) ([]byte, err
 	// contaminated by a process working directory containing config.yaml.
 	command.Dir = workingDirectory
 	command.Env = append(os.Environ(), "PYTHONUNBUFFERED=1")
-	stdout := &boundedCatalogBuffer{limit: maxModelCatalogOutputBytes}
-	stderr := &boundedCatalogBuffer{limit: maxModelCatalogOutputBytes}
-	command.Stdout = stdout
-	command.Stderr = stderr
-	if err := command.Run(); err != nil {
+
+	// Spool the generated snapshot directly to disk. Catalog size grows with
+	// every model, evaluation, and reasoning effort, so a fixed stdout buffer is
+	// not a valid contract boundary. The service validates and compacts this
+	// document before caching it in memory.
+	output, err := os.CreateTemp("", "vllm-sr-model-catalog-output-*.json")
+	if err != nil {
+		return nil, errors.New("model catalog output is unavailable")
+	}
+	defer func() {
+		_ = output.Close()
+		_ = os.Remove(output.Name())
+	}()
+	command.Stdout = output
+	// Exporter diagnostics are intentionally not exposed through the API. Do not
+	// retain an unbounded stderr payload containing installation details.
+	command.Stderr = io.Discard
+	if runErr := command.Run(); runErr != nil {
+		_ = output.Close()
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			return nil, errors.New("model catalog command timed out")
 		}
-		return nil, fmt.Errorf("model catalog command failed: %w", err)
+		return nil, fmt.Errorf("model catalog command failed: %w", runErr)
 	}
-	return stdout.Bytes(), nil
-}
-
-type boundedCatalogBuffer struct {
-	bytes.Buffer
-	limit int
-}
-
-func (buffer *boundedCatalogBuffer) Write(value []byte) (int, error) {
-	if len(value) > buffer.limit-buffer.Len() {
-		return 0, errModelCatalogOutputTooLarge
+	if closeErr := output.Close(); closeErr != nil {
+		return nil, errors.New("model catalog output could not be finalized")
 	}
-	return buffer.Buffer.Write(value)
+	payload, err := os.ReadFile(output.Name())
+	if err != nil {
+		return nil, errors.New("model catalog output could not be read")
+	}
+	return payload, nil
 }
 
 type modelCatalogService struct {

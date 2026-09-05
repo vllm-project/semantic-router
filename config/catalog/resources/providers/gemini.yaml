@@ -20,83 +20,13 @@ presentation:
   logo: package:gemini
   monogram: G
   monochrome: false
+  featured: true
 conformance:
   status: fixture_verified
   verified_at: 2026-09-04
 models:
-- catalog: google/gemini-2.5-pro
-  id: gemini-2.5-pro
-  protocols:
-  - openai/chat-completions@1
-  lifecycle: active
-  verification:
-    status: claimed
-    verified_at: 2026-09-05
-    source: https://ai.google.dev/gemini-api/docs/models
-- catalog: google/gemini-2.5-flash
-  id: gemini-2.5-flash
-  protocols:
-  - openai/chat-completions@1
-  lifecycle: active
-  verification:
-    status: claimed
-    verified_at: 2026-09-05
-    source: https://ai.google.dev/gemini-api/docs/models
-- catalog: google/gemini-2.5-flash-lite
-  id: gemini-2.5-flash-lite
-  protocols:
-  - openai/chat-completions@1
-  lifecycle: active
-  verification:
-    status: claimed
-    verified_at: 2026-09-05
-    source: https://ai.google.dev/gemini-api/docs/models
-- catalog: google/gemini-3-pro-preview
-  id: gemini-3-pro-preview
-  protocols:
-  - openai/chat-completions@1
-  lifecycle: removed
-  verification:
-    status: claimed
-    verified_at: 2026-09-05
-    source: https://ai.google.dev/gemini-api/docs/models
-- catalog: google/gemini-3-flash-preview
-  id: gemini-3-flash-preview
-  protocols:
-  - openai/chat-completions@1
-  lifecycle: experimental
-  verification:
-    status: claimed
-    verified_at: 2026-09-05
-    source: https://ai.google.dev/gemini-api/docs/models
-- catalog: google/gemini-3.1-pro-preview
-  id: gemini-3.1-pro-preview
-  protocols:
-  - openai/chat-completions@1
-  lifecycle: experimental
-  verification:
-    status: claimed
-    verified_at: 2026-09-05
-    source: https://ai.google.dev/gemini-api/docs/models
-- catalog: google/gemini-3.1-flash-lite-preview
-  id: gemini-3.1-flash-lite-preview
-  protocols:
-  - openai/chat-completions@1
-  lifecycle: removed
-  verification:
-    status: claimed
-    verified_at: 2026-09-05
-    source: https://ai.google.dev/gemini-api/docs/models
-- catalog: google/gemini-3.5-flash
-  id: gemini-3.5-flash
-  protocols:
-  - openai/chat-completions@1
-  lifecycle: active
-  verification:
-    status: claimed
-    verified_at: 2026-09-05
-    source: https://ai.google.dev/gemini-api/docs/models
 - catalog: google/gemini-3.6-flash
+  relationship: first_party
   id: gemini-3.6-flash
   protocols:
   - openai/chat-completions@1
@@ -106,6 +36,7 @@ models:
     verified_at: 2026-09-05
     source: https://ai.google.dev/gemini-api/docs/models
 - catalog: google/gemini-3.7-flash
+  relationship: first_party
   id: gemini-3.7-flash
   protocols:
   - openai/chat-completions@1
@@ -114,16 +45,8 @@ models:
     status: claimed
     verified_at: 2026-09-05
     source: https://ai.google.dev/gemini-api/docs/latest-model
-- catalog: google/gemini-3.5-flash-lite
-  id: gemini-3.5-flash-lite
-  protocols:
-  - openai/chat-completions@1
-  lifecycle: active
-  verification:
-    status: claimed
-    verified_at: 2026-09-05
-    source: https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite
 - catalog: google/gemini-3.8-flash
+  relationship: first_party
   id: gemini-3.8-flash
   protocols:
   - openai/chat-completions@1
@@ -132,48 +55,3 @@ models:
     status: claimed
     verified_at: 2026-09-05
     source: https://ai.google.dev/gemini-api/docs/models
-- catalog: google/gemini-3.1-flash-lite
-  id: gemini-3.1-flash-lite
-  protocols:
-  - openai/chat-completions@1
-  lifecycle: active
-  verification:
-    status: claimed
-    verified_at: 2026-09-05
-    source: https://ai.google.dev/gemini-api/docs/models
-- catalog: google/gemini-2.0-flash
-  id: gemini-2.0-flash
-  protocols:
-  - openai/chat-completions@1
-  lifecycle: removed
-  verification:
-    status: claimed
-    verified_at: 2026-09-05
-    source: https://ai.google.dev/gemini-api/docs/models
-- catalog: google/gemini-2.0-flash-lite
-  id: gemini-2.0-flash-lite
-  protocols:
-  - openai/chat-completions@1
-  lifecycle: removed
-  verification:
-    status: claimed
-    verified_at: 2026-09-05
-    source: https://ai.google.dev/gemini-api/docs/models
-- catalog: google/gemini-1.5-pro
-  id: gemini-1.5-pro
-  protocols:
-  - openai/chat-completions@1
-  lifecycle: removed
-  verification:
-    status: claimed
-    verified_at: 2026-09-05
-    source: https://ai.google.dev/gemini-api/docs/deprecations
-- catalog: google/gemini-1.5-flash
-  id: gemini-1.5-flash
-  protocols:
-  - openai/chat-completions@1
-  lifecycle: removed
-  verification:
-    status: claimed
-    verified_at: 2026-09-05
-    source: https://ai.google.dev/gemini-api/docs/deprecations

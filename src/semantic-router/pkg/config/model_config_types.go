@@ -345,9 +345,12 @@ type ProviderProfile struct {
 	BaseURL            string                          `yaml:"base_url,omitempty"`
 	AuthHeader         string                          `yaml:"auth_header,omitempty"`
 	AuthPrefix         string                          `yaml:"auth_prefix,omitempty"`
-	ExtraHeaders       map[string]string               `yaml:"extra_headers,omitempty"`
-	APIVersion         string                          `yaml:"api_version,omitempty"`
-	ChatPath           string                          `yaml:"chat_path,omitempty"`
+	// AuthPrefixSet distinguishes an omitted override from an explicit empty
+	// prefix after canonical config has been materialized.
+	AuthPrefixSet bool              `yaml:"-"`
+	ExtraHeaders  map[string]string `yaml:"extra_headers,omitempty"`
+	APIVersion    string            `yaml:"api_version,omitempty"`
+	ChatPath      string            `yaml:"chat_path,omitempty"`
 }
 
 type ModelPricing struct {
@@ -403,11 +406,12 @@ type LoRAAdapter struct {
 }
 
 type ReasoningFamilyConfig struct {
-	Type      string   `yaml:"type"`
-	Parameter string   `yaml:"parameter"`
-	Levels    []string `yaml:"levels,omitempty"`
-	Default   string   `yaml:"default,omitempty"`
-	Disabled  string   `yaml:"disabled,omitempty"`
+	Type                string   `yaml:"type"`
+	Parameter           string   `yaml:"parameter"`
+	ActivationParameter string   `yaml:"activation_parameter,omitempty"`
+	Levels              []string `yaml:"levels,omitempty"`
+	Default             string   `yaml:"default,omitempty"`
+	Disabled            string   `yaml:"disabled,omitempty"`
 }
 
 type PIIPolicy struct {

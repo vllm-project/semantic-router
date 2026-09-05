@@ -1,0 +1,527 @@
+- id: independent/mistral-large-3-critpt@1.0.0
+  model: mistral/mistral-large-3
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: default
+  subject:
+    source_model: Mistral Large 3 (Non-reasoning)
+    source_model_slug: mistral-large-3
+    run_kind: independent
+  metrics:
+    score: 0
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/mistral-large-3-gdpval-aa@2.0.0
+  model: mistral/mistral-large-3
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: default
+  subject:
+    source_model: Mistral Large 3 (Non-reasoning)
+    source_model_slug: mistral-large-3
+    run_kind: independent
+  metrics:
+    elo: 591.06
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/mistral-large-3-artificial-analysis-long-context-reasoning@1.1.0
+  model: mistral/mistral-large-3
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: default
+  subject:
+    source_model: Mistral Large 3 (Non-reasoning)
+    source_model_slug: mistral-large-3
+    run_kind: independent
+  metrics:
+    score: .36
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/mistral-large-3-omniscience@1.0.0
+  model: mistral/mistral-large-3
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: default
+  subject:
+    source_model: Mistral Large 3 (Non-reasoning)
+    source_model_slug: mistral-large-3
+    run_kind: independent
+  metrics:
+    index: -39.5666666666667
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/mistral-large-3-humanitys-last-exam@1.0.0
+  model: mistral/mistral-large-3
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: default
+  subject:
+    source_model: Mistral Large 3 (Non-reasoning)
+    source_model_slug: mistral-large-3
+    run_kind: independent
+  metrics:
+    accuracy: .0417052826691381
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/mistral-large-3-terminalbench-v2-1@1.0.0
+  model: mistral/mistral-large-3
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: default
+  subject:
+    source_model: Mistral Large 3 (Non-reasoning)
+    source_model_slug: mistral-large-3
+    run_kind: independent
+  metrics:
+    resolved: .119850187265918
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/mistral-large-3-gpqa-diamond@1.0.0
+  model: mistral/mistral-large-3
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: default
+  subject:
+    source_model: Mistral Large 3 (Non-reasoning)
+    source_model_slug: mistral-large-3
+    run_kind: independent
+  metrics:
+    accuracy: .67979797979798
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/mistral-large-3-scicode@1.0.0
+  model: mistral/mistral-large-3
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: default
+  subject:
+    source_model: Mistral Large 3 (Non-reasoning)
+    source_model_slug: mistral-large-3
+    run_kind: independent
+  metrics:
+    score: .365740740740741
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/mistral-large-3-tau3-banking@1.0.0
+  model: mistral/mistral-large-3
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: default
+  subject:
+    source_model: Mistral Large 3 (Non-reasoning)
+    source_model_slug: mistral-large-3
+    run_kind: independent
+  metrics:
+    score: .0577319587628866
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/mistral-small-4-critpt@1.0.0
+  model: mistral/mistral-small-4
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Mistral Small 4 (Reasoning)
+    source_model_slug: mistral-small-4
+    run_kind: independent
+  metrics:
+    score: 0.00285714285714286
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/mistral-small-4-gdpval-aa@2.0.0
+  model: mistral/mistral-small-4
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: Mistral Small 4 (Reasoning)
+    source_model_slug: mistral-small-4
+    run_kind: independent
+  metrics:
+    elo: 538.91
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/mistral-small-4-artificial-analysis-long-context-reasoning@1.1.0
+  model: mistral/mistral-small-4
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Mistral Small 4 (Reasoning)
+    source_model_slug: mistral-small-4
+    run_kind: independent
+  metrics:
+    score: 0.496666666666667
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/mistral-small-4-omniscience@1.0.0
+  model: mistral/mistral-small-4
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Mistral Small 4 (Reasoning)
+    source_model_slug: mistral-small-4
+    run_kind: independent
+  metrics:
+    index: -30.4
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/mistral-small-4-humanitys-last-exam@1.0.0
+  model: mistral/mistral-small-4
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Mistral Small 4 (Reasoning)
+    source_model_slug: mistral-small-4
+    run_kind: independent
+  metrics:
+    accuracy: 0.0987025023169602
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/mistral-small-4-terminalbench-v2-1@1.0.0
+  model: mistral/mistral-small-4
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: Mistral Small 4 (Reasoning)
+    source_model_slug: mistral-small-4
+    run_kind: independent
+  metrics:
+    resolved: 0.209737827715356
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/mistral-small-4-gpqa-diamond@1.0.0
+  model: mistral/mistral-small-4
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Mistral Small 4 (Reasoning)
+    source_model_slug: mistral-small-4
+    run_kind: independent
+  metrics:
+    accuracy: 0.768686868686869
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/mistral-small-4-tau3-banking@1.0.0
+  model: mistral/mistral-small-4
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: Mistral Small 4 (Reasoning)
+    source_model_slug: mistral-small-4
+    run_kind: independent
+  metrics:
+    score: 0.0494845360824742
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/mistral-small-4-non-reasoning-critpt@1.0.0
+  model: mistral/mistral-small-4
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: none
+  subject:
+    source_model: Mistral Small 4 (Non-reasoning)
+    source_model_slug: mistral-small-4-non-reasoning
+    run_kind: independent
+  metrics:
+    score: 0.00285714285714286
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/mistral-small-4-non-reasoning-artificial-analysis-long-context-reasoning@1.1.0
+  model: mistral/mistral-small-4
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: none
+  subject:
+    source_model: Mistral Small 4 (Non-reasoning)
+    source_model_slug: mistral-small-4-non-reasoning
+    run_kind: independent
+  metrics:
+    score: 0.283333333333333
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/mistral-small-4-non-reasoning-omniscience@1.0.0
+  model: mistral/mistral-small-4
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: none
+  subject:
+    source_model: Mistral Small 4 (Non-reasoning)
+    source_model_slug: mistral-small-4-non-reasoning
+    run_kind: independent
+  metrics:
+    index: -48.5166666666667
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/mistral-small-4-non-reasoning-humanitys-last-exam@1.0.0
+  model: mistral/mistral-small-4
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: none
+  subject:
+    source_model: Mistral Small 4 (Non-reasoning)
+    source_model_slug: mistral-small-4-non-reasoning
+    run_kind: independent
+  metrics:
+    accuracy: 0.0379981464318814
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/mistral-small-4-non-reasoning-gpqa-diamond@1.0.0
+  model: mistral/mistral-small-4
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: none
+  subject:
+    source_model: Mistral Small 4 (Non-reasoning)
+    source_model_slug: mistral-small-4-non-reasoning
+    run_kind: independent
+  metrics:
+    accuracy: 0.570707070707071
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/mistral-medium-3-5-critpt@1.0.0
+  model: mistral/mistral-medium-3.5
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Mistral Medium 3.5
+    source_model_slug: mistral-medium-3-5
+    run_kind: independent
+  metrics:
+    score: 0
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/mistral-medium-3-5-gdpval-aa@2.0.0
+  model: mistral/mistral-medium-3.5
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: Mistral Medium 3.5
+    source_model_slug: mistral-medium-3-5
+    run_kind: independent
+  metrics:
+    elo: 878.92
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/mistral-medium-3-5-artificial-analysis-long-context-reasoning@1.1.0
+  model: mistral/mistral-medium-3.5
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Mistral Medium 3.5
+    source_model_slug: mistral-medium-3-5
+    run_kind: independent
+  metrics:
+    score: 0.693333333333333
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/mistral-medium-3-5-omniscience@1.0.0
+  model: mistral/mistral-medium-3.5
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Mistral Medium 3.5
+    source_model_slug: mistral-medium-3-5
+    run_kind: independent
+  metrics:
+    index: -36.8
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/mistral-medium-3-5-humanitys-last-exam@1.0.0
+  model: mistral/mistral-medium-3.5
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Mistral Medium 3.5
+    source_model_slug: mistral-medium-3-5
+    run_kind: independent
+  metrics:
+    accuracy: 0.137627432808156
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/mistral-medium-3-5-terminalbench-v2-1@1.0.0
+  model: mistral/mistral-medium-3.5
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: Mistral Medium 3.5
+    source_model_slug: mistral-medium-3-5
+    run_kind: independent
+  metrics:
+    resolved: 0.50561797752809
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/mistral-medium-3-5-gpqa-diamond@1.0.0
+  model: mistral/mistral-medium-3.5
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Mistral Medium 3.5
+    source_model_slug: mistral-medium-3-5
+    run_kind: independent
+  metrics:
+    accuracy: 0.748484848484849
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/mistral-medium-3-5-scicode@1.0.0
+  model: mistral/mistral-medium-3.5
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: high
+  subject:
+    source_model: Mistral Medium 3.5
+    source_model_slug: mistral-medium-3-5
+    run_kind: independent
+  metrics:
+    score: 0.40162037037037
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/mistral-medium-3-5-tau3-banking@1.0.0
+  model: mistral/mistral-medium-3.5
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: Mistral Medium 3.5
+    source_model_slug: mistral-medium-3-5
+    run_kind: independent
+  metrics:
+    score: 0.150515463917526
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true

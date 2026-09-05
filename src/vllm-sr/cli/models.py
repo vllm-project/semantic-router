@@ -1645,12 +1645,21 @@ class Reasoning(BaseModel):
         ]
     ] = None
     parameter: Optional[str] = None
+    activation_parameter: Optional[str] = None
     levels: List[str] = Field(default_factory=list)
     default: Optional[str] = None
+    disabled: Optional[str] = None
 
     @model_validator(mode="after")
     def validate_shape(self):
-        inline = bool(self.type or self.parameter or self.levels or self.default)
+        inline = bool(
+            self.type
+            or self.parameter
+            or self.activation_parameter
+            or self.levels
+            or self.default
+            or self.disabled
+        )
         if self.family and inline:
             raise ValueError(
                 "family and inline reasoning fields are mutually exclusive"
@@ -1661,8 +1670,23 @@ class Reasoning(BaseModel):
             )
         if inline and (not self.type or not self.parameter):
             raise ValueError("inline reasoning requires type and parameter")
+        if self.activation_parameter:
+            if not self.activation_parameter.strip():
+                raise ValueError(
+                    "inline reasoning activation_parameter cannot be blank"
+                )
+            if self.activation_parameter == self.parameter:
+                raise ValueError(
+                    "inline reasoning activation_parameter must differ from parameter"
+                )
+            if self.type != "reasoning_effort":
+                raise ValueError(
+                    "inline reasoning activation_parameter requires reasoning_effort type"
+                )
         if inline and self.levels and self.default not in self.levels:
             raise ValueError("inline reasoning default must be listed in levels")
+        if inline and self.disabled and self.disabled not in self.levels:
+            raise ValueError("inline reasoning disabled value must be listed in levels")
         return self
 
 
@@ -1698,6 +1722,8 @@ class ModelEvaluation(BaseModel):
         min_length=1,
         pattern=r"^[a-z0-9][a-z0-9._-]*(?:/[a-z0-9][a-z0-9._-]*)+@[0-9]+(?:\.[0-9]+\.[0-9]+)?$",
     )
+    benchmark_profile: Optional[str] = None
+    reasoning_effort: Optional[str] = None
     metrics: Dict[str, float]
     source: Optional[str] = None
     measured_at: Optional[str] = None
@@ -1730,6 +1756,26 @@ class ModelEvaluation(BaseModel):
         return self
 
 
+class RoutingModelPresentation(BaseModel):
+    """Optional product presentation for a handwritten model card."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    logo: str
+    monogram: str
+    monochrome: bool = False
+
+
+class RoutingModelDistribution(BaseModel):
+    """Distribution metadata for a handwritten physical or virtual model."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["open_weights", "proprietary_api", "router_recipe"]
+    source: str
+    license: Optional[str] = None
+
+
 class RoutingModel(BaseModel):
     """Handwritten custom card or explicit overlay of a built-in card."""
 
@@ -1737,6 +1783,9 @@ class RoutingModel(BaseModel):
 
     name: str
     display_name: Optional[str] = None
+    publisher: Optional[str] = None
+    presentation: Optional[RoutingModelPresentation] = None
+    distribution: Optional[RoutingModelDistribution] = None
     family: Optional[str] = None
     revision: Optional[str] = None
     released_at: Optional[str] = None
@@ -1766,6 +1815,10 @@ class ReasoningFamily(BaseModel):
 
     type: str
     parameter: str
+    activation_parameter: Optional[str] = None
+    levels: List[str] = Field(default_factory=list)
+    default: Optional[str] = None
+    disabled: Optional[str] = None
 
 
 class BackendRef(BaseModel):
@@ -1776,7 +1829,7 @@ class BackendRef(BaseModel):
     name: Optional[str] = None
     endpoint: Optional[str] = None
     protocol: str = "http"
-    weight: int = 1
+    weight: int = Field(default=1, ge=0)
     base_url: Optional[str] = None
     provider: str = "vllm"
     auth_header: Optional[str] = None
@@ -1803,7 +1856,7 @@ class ProviderDefaults(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     model: Optional[str] = None
-    reasoning_effort: Optional[str] = "medium"
+    reasoning_effort: Optional[str] = None
 
 
 class Providers(BaseModel):

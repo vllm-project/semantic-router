@@ -13,32 +13,11 @@ reasoning_transport: top_level_effort
 auth:
   strategy: api_key_header
   header: api-subscription-key
-  prefix: ""
+  prefix: ''
 presentation:
   logo: monogram
   monogram: S
   monochrome: false
 conformance:
   status: unverified
-models:
-- catalog: sarvam/sarvam-105b
-  id: sarvam-105b
-  protocols: [openai/chat-completions@1]
-  lifecycle: active
-  verification: &sarvam-verification
-    status: claimed
-    verified_at: 2026-09-05
-    source: https://docs.sarvam.ai/api/getting-started/models/sarvam-105b
-- catalog: sarvam/sarvam-105b-conversations
-  id: sarvam-105b-conversations
-  protocols: [openai/chat-completions@1]
-  lifecycle: active
-  verification: *sarvam-verification
-- catalog: sarvam/sarvam-30b
-  id: sarvam-30b
-  protocols: [openai/chat-completions@1]
-  lifecycle: deprecated
-  verification:
-    status: claimed
-    verified_at: 2026-09-05
-    source: https://docs.sarvam.ai/changelog
+models: []

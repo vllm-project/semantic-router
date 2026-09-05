@@ -12,17 +12,19 @@ Day-0 support updates every product surface from one source.
 - Implement schemas, compiler, provenance, and immutable effective registry.
 - Replace duplicated Router, CLI, Dashboard, and website inventories.
 - Replace scalar quality metadata with evaluation records and versioned indices.
-- Generate the Dashboard Add Model experience and public Models/leaderboard
-  views from the catalog.
-- Establish a broad current-and-previous-generation physical-model baseline;
-  keep GPT-6 Astra for the separate representative Day-0 change.
+- Generate the Dashboard Add Model experience, Model Hub, and benchmark-specific
+  comparison views from the catalog.
+- Establish a curated physical-model baseline across roughly twenty mainstream
+  model creator companies—not twenty individual models—with an explicit reviewed set of
+  current generation or representative-line anchors per creator; keep GPT-6
+  Astra for the separate representative Day-0 change.
 - Validate the contribution flow with representative model and provider work.
 
 ## Non-Goals
 
 - Runtime discovery of arbitrary internet models.
 - A compatibility claim for every Dashboard provider preset.
-- Redistribution of benchmark data without permission.
+- Fabricated, inferred, or cross-effort benchmark values.
 - Combining intelligence, efficiency, cost, and availability into one opaque
   score.
 - A new top-level configuration hierarchy or catalog build metadata in user
@@ -37,7 +39,8 @@ Day-0 support updates every product surface from one source.
 - The default intelligence index exposes components, version, coverage,
   status, and provenance, and missing data never becomes zero.
 - The Dashboard and website render generated provider/model support data,
-  presentation assets, and evidence-backed leaderboards.
+  presentation assets, and benchmark-specific model-and-effort comparisons
+  without an overall public rank.
 - A model-only Day-0 change is complete through catalog data, conformance,
   generated surfaces, documentation, and selected CI gates.
 
@@ -54,7 +57,7 @@ Day-0 support updates every product surface from one source.
 - [x] `TASK-05` Add evaluation records, the default intelligence index, score
   resolver, missing-data policy, and runtime observed-quality separation.
 - [x] `TASK-06` Move Dashboard Add Model and provider logos to the catalog API;
-  generate the public Models support matrix and leaderboards.
+  generate the Model Hub and benchmark-specific comparisons.
 - [ ] `TASK-07` Complete config, protocol, UI, website, and affected E2E
   validation. The representative new-model Day-0 change lands separately after
   this architecture PR.
@@ -63,10 +66,10 @@ Day-0 support updates every product surface from one source.
 
 ## Next Action
 
-Format and validate the complete v0.3 vertical slice and broad baseline catalog
-on the AMD validation host, exercise a real catalog-backed model through the
-Router and Dashboard, then close the plan and TD058. GPT-6 Astra remains the
-separate focused Day-0 follow-up.
+Finish exact evaluation-gap review for the curated creator baseline, validate
+the complete v0.3 vertical slice on the AMD validation host, exercise a real
+catalog-backed model through the Router and Dashboard, then close the plan and
+TD058. GPT-6 Astra remains the separate focused Day-0 follow-up.
 
 ## Operating Rules
 
@@ -74,7 +77,7 @@ separate focused Day-0 follow-up.
   views separate.
 - Keep missing, failed, unavailable, not-applicable, and zero distinct.
 - Add code adapters only for real wire-semantic differences.
-- Preserve benchmark license, provenance, and redistribution boundaries.
+- Preserve exact benchmark identity, profile, effort, provenance, and source.
 - Run the smallest harness-selected gate first and expand only after it passes.
 - Keep implementation modules narrow and extract from existing hotspots before
   adding responsibility.

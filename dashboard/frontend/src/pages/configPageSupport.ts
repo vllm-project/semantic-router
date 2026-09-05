@@ -101,8 +101,10 @@ export interface Tool {
 export interface ReasoningFamily {
   type: string
   parameter: string
+  activation_parameter?: string
   levels?: string[]
   default?: string
+  disabled?: string
 }
 
 export interface ModelPricing {
@@ -168,12 +170,16 @@ export interface ModelReasoningConfig {
   family?: string
   type?: string
   parameter?: string
+  activation_parameter?: string
   levels?: string[]
   default?: string
+  disabled?: string
 }
 
 export interface ModelEvaluationConfig {
   benchmark: string
+  benchmark_profile?: string
+  reasoning_effort?: string
   metrics: Record<string, number>
   source?: string
   measured_at?: string
@@ -184,6 +190,8 @@ export interface ProviderModelConfig {
   name: string
   catalog?: string
   reasoning?: ModelReasoningConfig
+  /** @deprecated Use reasoning. */
+  reasoning_family?: string
   provider_model_id?: string
   api_format?: string
   external_model_ids?: Record<string, string>
@@ -202,6 +210,8 @@ export interface ProviderModelConfig {
 export interface ProviderDefaultsConfig {
   model?: string
   reasoning_effort?: string
+  /** @deprecated Reasoning definitions are now catalog-backed or inline on a provider model. */
+  reasoning_families?: Record<string, ReasoningFamily>
 }
 
 export interface ProvidersConfig {
@@ -1564,8 +1574,10 @@ export const getReasoningFamiliesMap = (
         {
           type: family.type,
           parameter: family.parameter,
+          activation_parameter: family.activation_parameter,
           levels: [...family.levels],
           default: family.default,
+          disabled: family.disabled,
         },
       ]),
     )

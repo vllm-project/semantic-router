@@ -9,6 +9,9 @@ providers:
         - name: openai
           base_url: https://api.openai.com/v1
           provider: openai
+    - name: gpt-4o-azure
+      provider_model_id: gpt-4o
+      backend_refs:
         - name: azure-east
           base_url: https://my-resource.openai.azure.com/openai/deployments/gpt-4o
           provider: azure-openai
@@ -56,7 +59,7 @@ routing:
         - model: Qwen/Qwen2.5-14B-Instruct
           use_reasoning: false
     - name: general_to_cloud
-      description: General queries → GPT-4o (cloud, with failover)
+      description: General queries → provider-specific GPT-4o aliases
       priority: 100
       rules:
         operator: OR
@@ -65,6 +68,8 @@ routing:
             name: general_keywords
       modelRefs:
         - model: gpt-4o
+          use_reasoning: false
+        - model: gpt-4o-azure
           use_reasoning: false
   signals:
     keywords:
@@ -93,7 +98,9 @@ routing:
         description: General knowledge and conversation
   modelCards:
     - name: gpt-4o
-      description: GPT-4o — prefers OpenAI, fails over to Azure
+      description: GPT-4o — OpenAI
+    - name: gpt-4o-azure
+      description: GPT-4o — Azure OpenAI deployment
     - name: gpt-4o-mini
       description: GPT-4o Mini — OpenAI only
     - name: claude-sonnet-4-20250514

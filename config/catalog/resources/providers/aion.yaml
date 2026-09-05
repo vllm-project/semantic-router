@@ -24,37 +24,4 @@ presentation:
   monochrome: true
 conformance:
   status: unverified
-models:
-- catalog: aion/aion-2.0
-  id: aion-labs/aion-2.0
-  protocols: &aion-protocols [openai/chat-completions@1, openai/responses@1]
-  pricing:
-    currency: USD
-    prompt_per_1m: 0.80
-    cached_input_per_1m: 0.20
-    completion_per_1m: 1.60
-  lifecycle: active
-  verification: &aion-binding-verification
-    status: claimed
-    verified_at: 2026-09-05
-    source: https://www.aionlabs.ai/docs/models/
-- catalog: aion/aion-3.0
-  id: aion-labs/aion-3.0
-  protocols: *aion-protocols
-  pricing:
-    currency: USD
-    prompt_per_1m: 3.00
-    cached_input_per_1m: 0.75
-    completion_per_1m: 6.00
-  lifecycle: active
-  verification: *aion-binding-verification
-- catalog: aion/aion-3.0-mini
-  id: aion-labs/aion-3.0-mini
-  protocols: *aion-protocols
-  pricing:
-    currency: USD
-    prompt_per_1m: 0.70
-    cached_input_per_1m: 0.18
-    completion_per_1m: 1.40
-  lifecycle: active
-  verification: *aion-binding-verification
+models: []

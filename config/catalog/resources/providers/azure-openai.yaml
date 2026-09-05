@@ -20,6 +20,7 @@ presentation:
   logo: package:openai
   monogram: Az
   monochrome: true
+  featured: true
 conformance:
   status: fixture_verified
   verified_at: 2026-09-04

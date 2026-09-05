@@ -370,7 +370,7 @@ func TestBuildReasoningRequestFields(t *testing.T) {
 			},
 		},
 		{
-			name:               "OpenRouter provider model ID uses top-level effort",
+			name:               "OpenRouter provider model ID uses reasoning object",
 			model:              "gpt-5-mini",
 			useReasoning:       true,
 			categoryName:       "test",
@@ -378,9 +378,11 @@ func TestBuildReasoningRequestFields(t *testing.T) {
 			profile:            &config.ProviderProfile{Type: "openrouter", BaseURL: "https://openrouter.ai/api/v1"},
 			verifyFunc: func(t *testing.T, fields map[string]interface{}) {
 				require.NotNil(t, fields)
-				reasoningEffort, exists := fields["reasoning_effort"]
+				reasoning, exists := fields["reasoning"]
 				require.True(t, exists)
-				assert.Equal(t, "high", reasoningEffort)
+				assert.Equal(t, "high", reasoning.(map[string]interface{})["effort"])
+				_, hasTopLevelEffort := fields["reasoning_effort"]
+				assert.False(t, hasTopLevelEffort)
 				_, hasChatTemplate := fields["chat_template_kwargs"]
 				assert.False(t, hasChatTemplate)
 			},

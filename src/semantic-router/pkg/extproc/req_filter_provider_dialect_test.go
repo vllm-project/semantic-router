@@ -18,6 +18,7 @@ func TestResolveProviderReasoningTransport(t *testing.T) {
 		wantThink  bool
 		wantDeep   bool
 		wantObject bool
+		wantOutput bool
 	}{
 		{
 			name: "endpoint without profile uses template kwargs",
@@ -55,6 +56,12 @@ func TestResolveProviderReasoningTransport(t *testing.T) {
 			wantObject: true,
 		},
 		{
+			name:       "explicit anthropic transport uses output config effort",
+			profile:    &config.ProviderProfile{ReasoningTransport: modelcatalog.ReasoningTransportOutputConfig},
+			want:       modelcatalog.ReasoningTransportOutputConfig,
+			wantOutput: true,
+		},
+		{
 			name:    "generic compatible provider uses template kwargs regardless of hostname",
 			profile: &config.ProviderProfile{Type: "openai-compatible", BaseURL: "https://api.openai.com/v1"},
 			want:    modelcatalog.ReasoningTransportChatTemplate,
@@ -69,6 +76,7 @@ func TestResolveProviderReasoningTransport(t *testing.T) {
 			assert.Equal(t, tt.wantThink, usesThinkingObjectTransport(transport))
 			assert.Equal(t, tt.wantDeep, isDeepSeekThinkingTransport(transport))
 			assert.Equal(t, tt.wantObject, usesReasoningObjectTransport(transport))
+			assert.Equal(t, tt.wantOutput, usesOutputConfigEffortTransport(transport))
 		})
 	}
 }

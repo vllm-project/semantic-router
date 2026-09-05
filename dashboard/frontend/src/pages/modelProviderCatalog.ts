@@ -1,6 +1,6 @@
 import catalog from '../generated/modelCatalog.json'
 import type { CatalogProvider } from '../types/modelCatalog'
-import { monochromeModelProviderIcons, resolveModelCatalogIcon } from './modelProviderIcons'
+import { resolveModelCatalogIcon } from './modelProviderIcons'
 
 export interface ModelProviderPreset {
   id: string
@@ -15,6 +15,8 @@ export interface ModelProviderPreset {
   supportTier: 'native' | 'compatible' | 'runtime'
   protocols: string[]
   supportsModelDiscovery: boolean
+  featured: boolean
+  monochrome: boolean
 }
 
 const categoryName = (category: CatalogProvider['category']): ModelProviderPreset['category'] => {
@@ -28,9 +30,6 @@ const apiFormat = (protocol: string): string => {
   if (protocol === 'openai/responses@1') return 'responses'
   return 'openai'
 }
-
-export const isMonochromeModelProviderIcon = (icon: string): boolean =>
-  monochromeModelProviderIcons.has(icon)
 
 // This is a projection, not a second inventory. Provider identity, order,
 // support level, protocols, defaults, auth, and presentation all come from the
@@ -53,7 +52,32 @@ export const modelProviderPresetsFromCatalog = (
     supportsModelDiscovery: provider.supported_operations.includes(
       `${provider.default_protocol}#list_models`,
     ),
+    featured: Boolean(provider.presentation.featured),
+    monochrome: provider.presentation.monochrome,
   }))
+
+export const filterModelProviderPresets = (
+  providers: readonly ModelProviderPreset[],
+  search: string,
+  showAll: boolean,
+): ModelProviderPreset[] => {
+  const query = search.trim().toLocaleLowerCase()
+  if (query) {
+    return providers.filter((provider) =>
+      `${provider.id} ${provider.name} ${provider.description}`.toLocaleLowerCase().includes(query),
+    )
+  }
+  const featured = providers.filter((provider) => provider.featured)
+  if (showAll || featured.length === 0) return [...providers]
+  return featured
+}
+
+export const hiddenModelProviderPresetCount = (
+  providers: readonly ModelProviderPreset[],
+): number => {
+  const featuredCount = providers.filter((provider) => provider.featured).length
+  return featuredCount === 0 ? 0 : providers.length - featuredCount
+}
 
 // Generated fallback keeps Add Model usable while the authenticated API is
 // loading. Both projections are generated from the same repository source.
@@ -96,9 +120,7 @@ export function findModelProviderPreset({
 
   const host = providerHost(baseUrl)
   if (host) {
-    const hostMatch = providers.find(
-      (provider) => providerHost(provider.baseUrl) === host,
-    )
+    const hostMatch = providers.find((provider) => providerHost(provider.baseUrl) === host)
     if (hostMatch) return hostMatch
   }
 

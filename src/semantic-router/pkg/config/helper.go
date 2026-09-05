@@ -230,8 +230,7 @@ func (c *RouterConfig) GetModelAccessKeyForProvider(modelName, provider string) 
 		if rawKey := modelConfig.AccessKeys[provider]; rawKey != "" {
 			return os.ExpandEnv(rawKey)
 		}
-		rawKey := modelConfig.AccessKey
-		if rawKey != "" {
+		if rawKey := modelConfig.AccessKey; provider == "" && rawKey != "" {
 			expandedKey := os.ExpandEnv(rawKey)
 			return expandedKey
 		}
@@ -240,7 +239,7 @@ func (c *RouterConfig) GetModelAccessKeyForProvider(modelName, provider string) 
 		if rawKey := baseConfig.AccessKeys[provider]; rawKey != "" {
 			return os.ExpandEnv(rawKey)
 		}
-		if baseConfig.AccessKey != "" {
+		if provider == "" && baseConfig.AccessKey != "" {
 			return os.ExpandEnv(baseConfig.AccessKey)
 		}
 	}
@@ -261,7 +260,7 @@ func (c *RouterConfig) GetModelIndexResult(modelName, index string) (modelcatalo
 		index = c.DefaultQualityIndex
 	}
 	result, ok := params.IndexResults[index]
-	return result, ok
+	return cloneCatalogIndexResult(result), ok
 }
 
 // GetDecisionPIIPolicy returns the PII policy for a given decision by looking at

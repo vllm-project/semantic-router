@@ -20,20 +20,27 @@ presentation:
   logo: package:bytedance
   monogram: S
   monochrome: true
+  featured: true
 conformance:
   status: unverified
 models:
 - catalog: bytedance/seed-2.1-pro
+  relationship: first_party
   id: doubao-seed-2-1-pro-260628
-  protocols: [openai/chat-completions@1, openai/responses@1]
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
   lifecycle: active
   verification:
     status: claimed
     verified_at: 2026-09-05
     source: https://www.volcengine.com/docs/82379/2549861
 - catalog: bytedance/seed-2.0-pro
+  relationship: first_party
   id: doubao-seed-2-0-pro-260215
-  protocols: [openai/chat-completions@1, openai/responses@1]
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
   lifecycle: active
   verification:
     status: claimed

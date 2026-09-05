@@ -2,12 +2,8 @@ export type ModelCatalogChannel = 'latest' | 'release'
 export type ProviderSupportTier = 'native' | 'compatible' | 'runtime'
 export type ModelCatalogLifecycle = 'experimental' | 'active' | 'deprecated' | 'removed'
 export type CatalogEvidenceStatus = 'claimed' | 'imported' | 'reproduced'
-export type CatalogResultStatus =
-  | 'available'
-  | 'missing'
-  | 'failed'
-  | 'not_applicable'
-  | 'withheld'
+export type CatalogResultStatus = 'available' | 'missing' | 'failed' | 'not_applicable' | 'withheld'
+export type CatalogModelRelationship = 'first_party' | 'managed_cloud' | 'gateway' | 'self_hosted'
 
 export interface BuiltInModelCatalogVersion {
   catalog_version: string
@@ -49,6 +45,7 @@ export interface CatalogProvider {
     | 'top_level_boolean'
     | 'reasoning_object'
     | 'thinking_object'
+    | 'output_config_effort'
     | 'deepseek_thinking'
   api_version_query?: boolean
   auth: {
@@ -61,6 +58,7 @@ export interface CatalogProvider {
     logo: string
     monogram: string
     monochrome: boolean
+    featured?: boolean
   }
   conformance: {
     status: 'unverified' | 'fixture_verified' | 'live_verified'
@@ -71,6 +69,7 @@ export interface CatalogProvider {
 
 export interface CatalogModelBinding {
   catalog: string
+  relationship: CatalogModelRelationship
   id: string
   protocols: string[]
   reasoning_transport?:
@@ -79,6 +78,7 @@ export interface CatalogModelBinding {
     | 'top_level_boolean'
     | 'reasoning_object'
     | 'thinking_object'
+    | 'output_config_effort'
     | 'deepseek_thinking'
   pricing?: Record<string, string | number | boolean>
   restrictions?: Record<string, unknown>
@@ -94,6 +94,7 @@ export interface CatalogReasoningFamily {
   id: string
   type: 'chat_template_kwargs' | 'reasoning_effort' | 'top_level_reasoning_effort'
   parameter: string
+  activation_parameter?: string
   levels: string[]
   default: string
   disabled?: string
@@ -202,13 +203,7 @@ export interface CatalogIndexComponent {
   index?: string
   weight: number
   normalization: {
-    type:
-      | 'identity'
-      | 'one_minus'
-      | 'linear_clamp'
-      | 'piecewise_linear'
-      | 'logistic'
-      | 'lookup'
+    type: 'identity' | 'one_minus' | 'linear_clamp' | 'piecewise_linear' | 'logistic' | 'lookup'
     min?: number
     max?: number
     k?: number

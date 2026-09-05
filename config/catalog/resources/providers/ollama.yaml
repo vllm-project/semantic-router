@@ -17,5 +17,6 @@ presentation:
   logo: package:ollama
   monogram: O
   monochrome: true
+  featured: true
 conformance:
   status: unverified

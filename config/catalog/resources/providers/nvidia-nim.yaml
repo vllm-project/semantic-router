@@ -18,5 +18,6 @@ presentation:
   logo: package:nvidia
   monogram: N
   monochrome: false
+  featured: true
 conformance:
   status: unverified

@@ -93,6 +93,8 @@ describe('model structured editors', () => {
         value: [
           {
             benchmark: 'idavidrein/gpqa-diamond@1.0.0',
+            benchmark_profile: 'published-standard',
+            reasoning_effort: 'high',
             metrics: { pass_at_1: 0.72 },
           },
         ],
@@ -101,6 +103,10 @@ describe('model structured editors', () => {
     )
 
     expect(markup).toContain('idavidrein/gpqa-diamond@1.0.0')
+    expect(markup).toContain('published-standard')
+    expect(markup).toContain('high')
+    expect(markup).toContain('Benchmark profile')
+    expect(markup).toContain('Reasoning effort')
     expect(markup).toContain('pass_at_1')
     expect(markup).toContain('0.72')
   })

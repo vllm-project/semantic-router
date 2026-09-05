@@ -18,58 +18,48 @@ presentation:
   logo: package:moonshot
   monogram: K
   monochrome: true
+  featured: true
 conformance:
   status: unverified
 models:
-- catalog: moonshot/kimi-k2-instruct-0905
-  id: kimi-k2-0905-preview
-  protocols:
-  - openai/chat-completions@1
-  lifecycle: active
-  verification:
-    status: claimed
-    verified_at: 2026-09-05
-    source: https://platform.moonshot.ai/docs/api/chat
-- catalog: moonshot/kimi-k2-thinking
-  id: kimi-k2-thinking
-  protocols:
-  - openai/chat-completions@1
-  lifecycle: active
-  verification:
-    status: claimed
-    verified_at: 2026-09-05
-    source: https://platform.moonshot.ai/docs/api/chat
 - catalog: moonshot/kimi-k2.5
+  relationship: first_party
   id: kimi-k2.5
   protocols:
   - openai/chat-completions@1
+  reasoning_transport: thinking_object
   lifecycle: active
   verification:
     status: claimed
     verified_at: 2026-09-05
     source: https://platform.moonshot.ai/docs/api/chat
 - catalog: moonshot/kimi-k2.6
+  relationship: first_party
   id: kimi-k2.6
   protocols:
   - openai/chat-completions@1
+  reasoning_transport: thinking_object
   lifecycle: active
   verification:
     status: claimed
     verified_at: 2026-09-05
     source: https://platform.moonshot.ai/docs/api/chat
 - catalog: moonshot/kimi-k2.7-code
+  relationship: first_party
   id: kimi-k2.7-code
   protocols:
   - openai/chat-completions@1
   lifecycle: active
   verification:
     status: claimed
-    verified_at: 2026-09-05
-    source: https://platform.moonshot.ai/docs/api/chat
+    verified_at: 2026-09-06
+    source: https://huggingface.co/moonshotai/Kimi-K2.7-Code
 - catalog: moonshot/kimi-k3
+  relationship: first_party
   id: kimi-k3
   protocols:
   - openai/chat-completions@1
+  reasoning_transport: top_level_effort
   lifecycle: active
   verification:
     status: claimed

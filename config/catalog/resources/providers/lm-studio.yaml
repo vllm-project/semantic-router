@@ -17,5 +17,6 @@ presentation:
   logo: package:lmstudio
   monogram: LM
   monochrome: true
+  featured: true
 conformance:
   status: unverified

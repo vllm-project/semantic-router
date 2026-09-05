@@ -10,7 +10,6 @@ import (
 	"path"
 	"sort"
 	"strings"
-	"time"
 
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 )
@@ -35,13 +34,7 @@ type ModelDiscoveryResponse struct {
 // read-only model inventory and returns identifiers that can be compiled into
 // providers.models. Neither credentials nor provider state are retained here.
 func ModelDiscoveryHandler(client *http.Client) http.HandlerFunc {
-	if client == nil {
-		client = &http.Client{Timeout: 12 * time.Second}
-	}
-	discoveryClient := *client
-	discoveryClient.CheckRedirect = func(_ *http.Request, _ []*http.Request) error {
-		return http.ErrUseLastResponse
-	}
+	discoveryClient := secureModelDiscoveryClient(client)
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		if r.URL.Path != modelDiscoveryPath {
@@ -71,13 +64,14 @@ func ModelDiscoveryHandler(client *http.Client) http.HandlerFunc {
 			writeModelDiscoveryError(w, http.StatusBadRequest, "Choose a supported provider.")
 			return
 		}
-		endpoint, err := modelInventoryURL(input.BaseURL, registry, provider)
+		target, err := modelInventoryTarget(input.BaseURL, registry, provider)
 		if err != nil {
 			writeModelDiscoveryError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 
-		request, err := http.NewRequestWithContext(r.Context(), http.MethodGet, endpoint, nil)
+		requestContext := withModelDiscoveryNetworkPolicy(r.Context(), target.policy)
+		request, err := http.NewRequestWithContext(requestContext, http.MethodGet, target.url, nil)
 		if err != nil {
 			writeModelDiscoveryError(w, http.StatusBadRequest, "The provider URL is invalid.")
 			return
@@ -111,21 +105,25 @@ func ModelDiscoveryHandler(client *http.Client) http.HandlerFunc {
 	}
 }
 
-func modelInventoryURL(raw string, registry *modelcatalog.Registry, provider modelcatalog.ProviderDefinition) (string, error) {
+func modelInventoryTarget(raw string, registry *modelcatalog.Registry, provider modelcatalog.ProviderDefinition) (modelDiscoveryTarget, error) {
 	parsed, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
-		return "", errors.New("enter a complete HTTP or HTTPS base URL")
+		return modelDiscoveryTarget{}, errors.New("enter a complete HTTP or HTTPS base URL")
 	}
 	if parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
-		return "", errors.New("the base URL cannot contain credentials, query parameters, or a fragment")
+		return modelDiscoveryTarget{}, errors.New("the base URL cannot contain credentials, query parameters, or a fragment")
 	}
 	operationPath, err := registry.ResolveOperationPath(provider.ID, provider.DefaultProtocol, "list_models", parsed.Path)
 	if err != nil {
-		return "", errors.New("this provider does not declare model discovery support")
+		return modelDiscoveryTarget{}, errors.New("this provider does not declare model discovery support")
+	}
+	policy, err := modelDiscoveryNetworkPolicyForProvider(parsed, provider)
+	if err != nil {
+		return modelDiscoveryTarget{}, err
 	}
 	parsed.Path = path.Clean(operationPath)
 	parsed.RawPath = ""
-	return parsed.String(), nil
+	return modelDiscoveryTarget{url: parsed.String(), policy: policy}, nil
 }
 
 func applyModelDiscoveryHeaders(request *http.Request, provider modelcatalog.ProviderDefinition, apiKey string) {
@@ -143,9 +141,13 @@ func applyModelDiscoveryHeaders(request *http.Request, provider modelcatalog.Pro
 }
 
 func decodeProviderModelIDs(body []byte) ([]string, error) {
+	type modelListItem struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
 	var payload struct {
-		Data   []map[string]any `json:"data"`
-		Models []map[string]any `json:"models"`
+		Data   []modelListItem `json:"data"`
+		Models []modelListItem `json:"models"`
 	}
 	if err := json.Unmarshal(body, &payload); err != nil {
 		return nil, errors.New("the provider returned an invalid model list")
@@ -156,13 +158,12 @@ func decodeProviderModelIDs(body []byte) ([]string, error) {
 	}
 	unique := make(map[string]struct{}, len(items))
 	for _, item := range items {
-		for _, field := range []string{"id", "name"} {
-			value, ok := item[field].(string)
-			value = strings.TrimSpace(value)
-			if ok && value != "" {
-				unique[strings.TrimPrefix(value, "models/")] = struct{}{}
-				break
-			}
+		value := strings.TrimSpace(item.ID)
+		if value == "" {
+			value = strings.TrimSpace(item.Name)
+		}
+		if value != "" {
+			unique[strings.TrimPrefix(value, "models/")] = struct{}{}
 		}
 	}
 	if len(unique) == 0 {

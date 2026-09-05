@@ -9,7 +9,7 @@ afterEach(() => {
 
 const validCatalog = generatedCatalog as unknown as Record<string, unknown>
 
-describe('built-in model catalog API', () => {
+describe('built-in model catalog API transport', () => {
   it('loads the authenticated read-only catalog endpoint with abort support', async () => {
     const controller = new AbortController()
     const fetchMock = vi.fn(async () => new Response(JSON.stringify(validCatalog), { status: 200 }))
@@ -18,7 +18,9 @@ describe('built-in model catalog API', () => {
     await expect(getBuiltInModelCatalog(controller.signal)).resolves.toEqual(validCatalog)
     expect(fetchMock).toHaveBeenCalledWith('/api/models/catalog', { signal: controller.signal })
   })
+})
 
+describe('built-in model catalog API snapshot identity', () => {
   it('fails closed when the server omits version or model inventory', async () => {
     vi.stubGlobal(
       'fetch',
@@ -48,7 +50,43 @@ describe('built-in model catalog API', () => {
       status: 502,
     })
   })
+})
 
+describe('built-in model catalog API evaluation records', () => {
+  it.each(['missing', 'failed', 'withheld', 'not_applicable'])(
+    'accepts %s evaluation records without fabricated metrics',
+    async (status) => {
+      const sparse = structuredClone(validCatalog)
+      const evaluations = sparse.evaluations as Array<Record<string, unknown>>
+      evaluations[0].status = status
+      evaluations[0].metrics = {}
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => new Response(JSON.stringify(sparse), { status: 200 })),
+      )
+
+      await expect(getBuiltInModelCatalog()).resolves.toEqual(sparse)
+    },
+  )
+
+  it('rejects an available evaluation without metrics', async () => {
+    const malformed = structuredClone(validCatalog)
+    const evaluations = malformed.evaluations as Array<Record<string, unknown>>
+    evaluations[0].status = 'available'
+    evaluations[0].metrics = {}
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify(malformed), { status: 200 })),
+    )
+
+    await expect(getBuiltInModelCatalog()).rejects.toMatchObject({
+      name: 'ModelCatalogApiError',
+      status: 502,
+    })
+  })
+})
+
+describe('built-in model catalog API nested metadata', () => {
   it.each([
     [
       'protocol operations',
@@ -62,6 +100,32 @@ describe('built-in model catalog API', () => {
       (payload: Record<string, unknown>) => {
         const families = payload.reasoning_families as Array<Record<string, unknown>>
         families[0].levels = []
+      },
+    ],
+    [
+      'reasoning activation parameter',
+      (payload: Record<string, unknown>) => {
+        const families = payload.reasoning_families as Array<Record<string, unknown>>
+        families[0].activation_parameter = families[0].parameter
+      },
+    ],
+    [
+      'provider featured presentation flag',
+      (payload: Record<string, unknown>) => {
+        const providers = payload.providers as Array<Record<string, unknown>>
+        const presentation = providers[0].presentation as Record<string, unknown>
+        presentation.featured = 'yes'
+      },
+    ],
+    [
+      'model access relationship',
+      (payload: Record<string, unknown>) => {
+        const providers = payload.providers as Array<Record<string, unknown>>
+        const provider = providers.find(
+          (candidate) => Array.isArray(candidate.models) && candidate.models.length > 0,
+        )
+        const models = provider?.models as Array<Record<string, unknown>>
+        models[0].relationship = 'brokered'
       },
     ],
     [
@@ -85,7 +149,9 @@ describe('built-in model catalog API', () => {
       status: 502,
     })
   })
+})
 
+describe('built-in model catalog API transport failures', () => {
   it('does not echo an arbitrary backend error body', async () => {
     vi.stubGlobal(
       'fetch',

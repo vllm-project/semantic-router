@@ -18,29 +18,13 @@ presentation:
   logo: package:minimax
   monogram: M
   monochrome: false
+  featured: true
 conformance:
   status: fixture_verified
   verified_at: 2026-09-04
 models:
-- catalog: minimax/minimax-m2
-  id: MiniMax-M2
-  protocols:
-  - openai/chat-completions@1
-  lifecycle: active
-  verification:
-    status: claimed
-    verified_at: 2026-09-05
-    source: https://platform.minimax.io/docs/guides/models-intro
-- catalog: minimax/minimax-m2.1
-  id: MiniMax-M2.1
-  protocols:
-  - openai/chat-completions@1
-  lifecycle: active
-  verification:
-    status: claimed
-    verified_at: 2026-09-05
-    source: https://platform.minimax.io/docs/guides/models-intro
 - catalog: minimax/minimax-m2.5
+  relationship: first_party
   id: MiniMax-M2.5
   protocols:
   - openai/chat-completions@1
@@ -50,6 +34,7 @@ models:
     verified_at: 2026-09-05
     source: https://platform.minimax.io/docs/guides/models-intro
 - catalog: minimax/minimax-m2.7
+  relationship: first_party
   id: MiniMax-M2.7
   protocols:
   - openai/chat-completions@1
@@ -59,9 +44,11 @@ models:
     verified_at: 2026-09-05
     source: https://platform.minimax.io/docs/guides/models-intro
 - catalog: minimax/minimax-m3
+  relationship: first_party
   id: MiniMax-M3
   protocols:
   - openai/chat-completions@1
+  reasoning_transport: top_level_effort
   lifecycle: active
   verification:
     status: claimed

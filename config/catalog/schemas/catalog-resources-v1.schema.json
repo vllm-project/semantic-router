@@ -7,7 +7,7 @@
     "slug": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$"},
     "modelID": {
       "type": "string",
-      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:+-]*/[A-Za-z0-9][A-Za-z0-9._:+/-]*$"
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:+-]*(?:/[A-Za-z0-9][A-Za-z0-9._:+-]*)+$"
     },
     "protocolID": {
       "type": "string",
@@ -45,12 +45,26 @@
         "monochrome": {"type": "boolean"}
       }
     },
+    "providerPresentation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["logo", "monogram", "monochrome"],
+      "properties": {
+        "logo": {"$ref": "#/$defs/nonEmptyString"},
+        "monogram": {"$ref": "#/$defs/nonEmptyString"},
+        "monochrome": {"type": "boolean"},
+        "featured": {"type": "boolean"}
+      }
+    },
     "modelBinding": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["catalog", "id", "protocols", "lifecycle", "verification"],
+      "required": ["catalog", "relationship", "id", "protocols", "lifecycle", "verification"],
       "properties": {
         "catalog": {"$ref": "#/$defs/modelID"},
+        "relationship": {
+          "enum": ["first_party", "managed_cloud", "gateway", "self_hosted"]
+        },
         "id": {"$ref": "#/$defs/nonEmptyString"},
         "protocols": {
           "type": "array",
@@ -59,13 +73,25 @@
           "items": {"$ref": "#/$defs/protocolID"}
         },
         "reasoning_transport": {
-          "enum": ["chat_template_kwargs", "top_level_effort", "top_level_boolean", "reasoning_object", "thinking_object", "deepseek_thinking"]
+          "enum": ["chat_template_kwargs", "top_level_effort", "top_level_boolean", "reasoning_object", "thinking_object", "output_config_effort", "deepseek_thinking"]
         },
         "pricing": {
           "type": "object",
           "additionalProperties": {"type": ["number", "string", "boolean"]}
         },
-        "restrictions": {"type": "object"},
+        "restrictions": {
+          "type": "object",
+          "properties": {
+            "provider_model_id_kind": {"const": "deployment_name"},
+            "catalog_model_name": {"$ref": "#/$defs/nonEmptyString"}
+          },
+          "allOf": [
+            {
+              "if": {"required": ["provider_model_id_kind"]},
+              "then": {"required": ["catalog_model_name"]}
+            }
+          ]
+        },
         "lifecycle": {"enum": ["experimental", "active", "deprecated", "removed"]},
         "verification": {
           "type": "object",
@@ -176,7 +202,7 @@
             "additionalProperties": {"$ref": "#/$defs/nonEmptyString"}
           },
           "reasoning_transport": {
-            "enum": ["chat_template_kwargs", "top_level_effort", "top_level_boolean", "reasoning_object", "thinking_object", "deepseek_thinking"]
+            "enum": ["chat_template_kwargs", "top_level_effort", "top_level_boolean", "reasoning_object", "thinking_object", "output_config_effort", "deepseek_thinking"]
           },
           "api_version_query": {"type": "boolean"},
           "auth": {
@@ -190,7 +216,7 @@
               "injected_header": {"type": "string", "minLength": 1}
             }
           },
-          "presentation": {"$ref": "#/$defs/presentation"},
+          "presentation": {"$ref": "#/$defs/providerPresentation"},
           "conformance": {
             "type": "object",
             "additionalProperties": false,
@@ -218,6 +244,7 @@
           "id": {"$ref": "#/$defs/slug"},
           "type": {"enum": ["chat_template_kwargs", "reasoning_effort", "top_level_reasoning_effort"]},
           "parameter": {"$ref": "#/$defs/nonEmptyString"},
+          "activation_parameter": {"$ref": "#/$defs/nonEmptyString"},
           "levels": {"$ref": "#/$defs/stringSet"},
           "default": {"$ref": "#/$defs/nonEmptyString"},
           "disabled": {"$ref": "#/$defs/nonEmptyString"}

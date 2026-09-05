@@ -23,6 +23,31 @@ providers:
 	}
 }
 
+func TestProviderFeaturedMetadataIsNotAUserModelCardField(t *testing.T) {
+	raw, err := parseRawConfigMap([]byte(`
+version: v0.3
+providers:
+  defaults:
+    model: private-model
+routing:
+  modelCards:
+    - name: private-model
+      presentation:
+        logo: monogram
+        monogram: P
+        monochrome: false
+        featured: true
+`))
+	if err != nil {
+		t.Fatalf("parse canonical config: %v", err)
+	}
+
+	warnings := collectUnknownFields(raw, reflect.TypeOf(CanonicalConfig{}))
+	if len(warnings) != 1 || !strings.Contains(warnings[0], `Unknown field "featured"`) {
+		t.Fatalf("featured must remain repository-only Provider metadata, warnings: %v", warnings)
+	}
+}
+
 func TestParseYAMLBytesRejectsLegacyUserConfigLayout(t *testing.T) {
 	legacyYAML := []byte(`
 version: v0.3

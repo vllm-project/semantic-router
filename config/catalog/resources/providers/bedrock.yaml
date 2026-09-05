@@ -19,29 +19,13 @@ presentation:
   logo: monogram
   monogram: AWS
   monochrome: false
+  featured: true
 conformance:
   status: fixture_verified
   verified_at: 2026-09-04
 models:
-- catalog: amazon/nova-micro-v1
-  id: amazon.nova-micro-v1:0
-  protocols:
-  - openai/chat-completions@1
-  lifecycle: active
-  verification:
-    status: claimed
-    verified_at: 2026-09-05
-    source: https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html
-- catalog: amazon/nova-lite-v1
-  id: amazon.nova-lite-v1:0
-  protocols:
-  - openai/chat-completions@1
-  lifecycle: active
-  verification:
-    status: claimed
-    verified_at: 2026-09-05
-    source: https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html
 - catalog: amazon/nova-pro-v1
+  relationship: first_party
   id: amazon.nova-pro-v1:0
   protocols:
   - openai/chat-completions@1
@@ -51,6 +35,7 @@ models:
     verified_at: 2026-09-05
     source: https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html
 - catalog: amazon/nova-premier-v1
+  relationship: first_party
   id: amazon.nova-premier-v1:0
   protocols:
   - openai/chat-completions@1
@@ -60,6 +45,7 @@ models:
     verified_at: 2026-09-05
     source: https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html
 - catalog: amazon/nova-2-lite
+  relationship: first_party
   id: amazon.nova-2-lite-v1:0
   protocols:
   - openai/chat-completions@1

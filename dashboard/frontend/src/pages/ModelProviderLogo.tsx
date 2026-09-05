@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 
-import { isMonochromeModelProviderIcon, type ModelProviderPreset } from './modelProviderCatalog'
+import type { ModelProviderPreset } from './modelProviderCatalog'
 import styles from './ModelProviderLogo.module.css'
 
 interface ModelProviderLogoProps {
@@ -46,7 +46,7 @@ export default function ModelProviderLogo({
           src={source}
           alt=""
           referrerPolicy="no-referrer"
-          data-monochrome={isMonochromeModelProviderIcon(source)}
+          data-monochrome={Boolean(provider?.monochrome)}
           onError={handleError}
         />
       ) : (

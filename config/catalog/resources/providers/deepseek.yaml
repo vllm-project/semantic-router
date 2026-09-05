@@ -22,11 +22,13 @@ presentation:
   logo: package:deepseek
   monogram: D
   monochrome: false
+  featured: true
 conformance:
   status: fixture_verified
   verified_at: 2026-09-04
 models:
 - catalog: deepseek/deepseek-v4-flash
+  relationship: first_party
   id: deepseek-v4-flash
   protocols:
   - openai/chat-completions@1
@@ -37,6 +39,7 @@ models:
     verified_at: 2026-09-05
     source: https://api-docs.deepseek.com/quick_start/pricing
 - catalog: deepseek/deepseek-v4-pro
+  relationship: first_party
   id: deepseek-v4-pro
   protocols:
   - openai/chat-completions@1
@@ -46,11 +49,3 @@ models:
     status: claimed
     verified_at: 2026-09-05
     source: https://api-docs.deepseek.com/quick_start/pricing
-- catalog: deepseek/deepseek-v4-flash-vision-exp
-  id: deepseek-v4-flash-vision-exp
-  protocols: [openai/chat-completions@1, openai/responses@1]
-  lifecycle: experimental
-  verification:
-    status: claimed
-    verified_at: 2026-09-05
-    source: https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash-Vision-Exp

@@ -13,7 +13,7 @@
     license: Apache-2.0
   family: inkling
   parameter_size: 975B (41B active)
-  released_at: 2026-07-15
+  released_at: '2026-07-15'
   reasoning_family: inkling
   lifecycle: active
   limits:
@@ -59,7 +59,7 @@
     license: Apache-2.0
   family: inkling
   parameter_size: 276B (12B active)
-  released_at: 2026-07-30
+  released_at: '2026-07-30'
   reasoning_family: inkling
   lifecycle: active
   limits:

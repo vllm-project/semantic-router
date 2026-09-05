@@ -1,64 +1,343 @@
-- id: minimax/minimax-m1-80k-model-card-mmlu-pro@1.0.0
-  model: minimax/minimax-m1-80k
-  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-  benchmark_profile: published-standard
-  reasoning_effort: default
-  subject: &id001
-    variant: MiniMax-M1-80K
-    hle_mode: text_only
-    swe_harness: agentless_486_task_subset
-    source_kind: official_model_card
+- id: independent/minimax-m3-aa-briefcase@1.0.0
+  model: minimax/minimax-m3
+  benchmark: artificial-analysis/briefcase@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: adaptive
+  subject:
+    source_model: MiniMax-M3
+    source_model_slug: minimax-m3
+    run_kind: independent
   metrics:
-    accuracy: 0.811
+    elo: 1101.15
+    elo_lower: 1094.8
+    elo_upper: 1107.89
   status: available
-  evidence: &id002
-    provenance: vendor_claimed
-    verification: claimed
-    source: https://huggingface.co/MiniMaxAI/MiniMax-M1-80k
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/aa-briefcase
     redistributable: true
-- id: minimax/minimax-m1-80k-model-card-gpqa-diamond@1.0.0
-  model: minimax/minimax-m1-80k
-  benchmark: idavidrein/gpqa-diamond@1.0.0
+- id: independent/minimax-m3-critpt@1.0.0
+  model: minimax/minimax-m3
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: adaptive
+  subject:
+    source_model: MiniMax-M3
+    source_model_slug: minimax-m3
+    run_kind: independent
+  metrics:
+    score: 0.0371428571428571
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/minimax-m3-gdp-pdf@1.0.0
+  model: minimax/minimax-m3
+  benchmark: artificial-analysis/gdp-pdf@1.0.0
   benchmark_profile: published-standard
+  reasoning_effort: adaptive
+  subject:
+    source_model: MiniMax-M3
+    source_model_slug: minimax-m3
+    run_kind: independent
+  metrics:
+    all_pass: 0.104
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdp-pdf
+    redistributable: true
+- id: independent/minimax-m3-gdpval-aa@2.0.0
+  model: minimax/minimax-m3
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: adaptive
+  subject:
+    source_model: MiniMax-M3
+    source_model_slug: minimax-m3
+    run_kind: independent
+  metrics:
+    elo: 1308.15
+    elo_lower: 1294.48
+    elo_upper: 1321.81
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/minimax-m3-artificial-analysis-long-context-reasoning@1.1.0
+  model: minimax/minimax-m3
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: adaptive
+  subject:
+    source_model: MiniMax-M3
+    source_model_slug: minimax-m3
+    run_kind: independent
+  metrics:
+    score: 0.83
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/minimax-m3-omniscience@1.0.0
+  model: minimax/minimax-m3
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: adaptive
+  subject:
+    source_model: MiniMax-M3
+    source_model_slug: minimax-m3
+    run_kind: independent
+  metrics:
+    index: 1.35
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/minimax-m3-humanitys-last-exam@1.0.0
+  model: minimax/minimax-m3
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: adaptive
+  subject:
+    source_model: MiniMax-M3
+    source_model_slug: minimax-m3
+    run_kind: independent
+  metrics:
+    accuracy: 0.389712696941613
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/minimax-m3-terminalbench-v2-1@1.0.0
+  model: minimax/minimax-m3
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: adaptive
+  subject:
+    source_model: MiniMax-M3
+    source_model_slug: minimax-m3
+    run_kind: independent
+  metrics:
+    resolved: 0.651685393258427
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/minimax-m3-gpqa-diamond@1.0.0
+  model: minimax/minimax-m3
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: adaptive
+  subject:
+    source_model: MiniMax-M3
+    source_model_slug: minimax-m3
+    run_kind: independent
+  metrics:
+    accuracy: 0.929292929292929
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/minimax-m3-scicode@1.0.0
+  model: minimax/minimax-m3
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: adaptive
+  subject:
+    source_model: MiniMax-M3
+    source_model_slug: minimax-m3
+    run_kind: independent
+  metrics:
+    score: 0.471064814814815
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/minimax-m3-tau3-banking@1.0.0
+  model: minimax/minimax-m3
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: adaptive
+  subject:
+    source_model: MiniMax-M3
+    source_model_slug: minimax-m3
+    run_kind: independent
+  metrics:
+    score: 0.152577319587629
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/minimax-m2-7-critpt@1.0.0
+  model: minimax/minimax-m2.7
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: MiniMax-M2.7
+    source_model_slug: minimax-m2-7
+    run_kind: independent
+  metrics:
+    score: 0.00571428571428571
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/minimax-m2-7-gdpval-aa@2.0.0
+  model: minimax/minimax-m2.7
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: enabled
+  subject:
+    source_model: MiniMax-M2.7
+    source_model_slug: minimax-m2-7
+    run_kind: independent
+  metrics:
+    elo: 1091.44
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/minimax-m2-7-artificial-analysis-long-context-reasoning@1.1.0
+  model: minimax/minimax-m2.7
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: MiniMax-M2.7
+    source_model_slug: minimax-m2-7
+    run_kind: independent
+  metrics:
+    score: 0.783333333333333
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/minimax-m2-7-omniscience@1.0.0
+  model: minimax/minimax-m2.7
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: MiniMax-M2.7
+    source_model_slug: minimax-m2-7
+    run_kind: independent
+  metrics:
+    index: 0.766666666666667
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/minimax-m2-7-humanitys-last-exam@1.0.0
+  model: minimax/minimax-m2.7
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: MiniMax-M2.7
+    source_model_slug: minimax-m2-7
+    run_kind: independent
+  metrics:
+    accuracy: 0.29610750695088
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/minimax-m2-7-terminalbench-v2-1@1.0.0
+  model: minimax/minimax-m2.7
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: enabled
+  subject:
+    source_model: MiniMax-M2.7
+    source_model_slug: minimax-m2-7
+    run_kind: independent
+  metrics:
+    resolved: 0.554307116104869
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/minimax-m2-7-gpqa-diamond@1.0.0
+  model: minimax/minimax-m2.7
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: MiniMax-M2.7
+    source_model_slug: minimax-m2-7
+    run_kind: independent
+  metrics:
+    accuracy: 0.873737373737374
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/minimax-m2-7-tau3-banking@1.0.0
+  model: minimax/minimax-m2.7
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: enabled
+  subject:
+    source_model: MiniMax-M2.7
+    source_model_slug: minimax-m2-7
+    run_kind: independent
+  metrics:
+    score: 0.0989690721649484
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: minimax/minimax-m2.5-model-card-ifbench@1.0.0
+  model: minimax/minimax-m2.5
+  benchmark: allenai/ifbench@1.0.0
+  benchmark_profile: prompt-loose
   reasoning_effort: default
-  subject: *id001
+  subject:
+    variant: MiniMax-M2.5
+    evaluation_unit: prompt
+    source_kind: official_model_card
   metrics:
     accuracy: 0.7
   status: available
-  evidence: *id002
-- id: minimax/minimax-m1-80k-model-card-humanitys-last-exam@1.0.0
-  model: minimax/minimax-m1-80k
-  benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
-  reasoning_effort: default
-  subject: *id001
-  metrics:
-    accuracy: 0.084
-  status: available
-  evidence: *id002
-- id: minimax/minimax-m1-80k-model-card-verified@1.0.0
-  model: minimax/minimax-m1-80k
-  benchmark: swe-bench/verified@1.0.0
-  benchmark_profile: published-agent
-  reasoning_effort: default
-  subject: *id001
-  metrics:
-    resolved: 0.56
-  status: available
-  evidence: *id002
-- id: minimax/minimax-m2.5-model-card-gpqa-diamond@1.0.0
-  model: minimax/minimax-m2.5
-  benchmark: idavidrein/gpqa-diamond@1.0.0
-  benchmark_profile: published-standard
-  reasoning_effort: default
-  subject: &id003
-    variant: MiniMax-M2.5
-    hle_mode: no_tools
-    source_kind: official_model_card
-  metrics:
-    accuracy: 0.852
-  status: available
-  evidence: &id004
+  evidence:
     provenance: vendor_claimed
     verification: claimed
     source: https://huggingface.co/MiniMaxAI/MiniMax-M2.5
@@ -68,18 +347,149 @@
   benchmark: cais/humanitys-last-exam@1.0.0
   benchmark_profile: no-tools
   reasoning_effort: default
-  subject: *id003
+  subject:
+    variant: MiniMax-M2.5
+    hle_mode: no_tools
+    source_kind: official_model_card
   metrics:
     accuracy: 0.194
   status: available
-  evidence: *id004
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/MiniMaxAI/MiniMax-M2.5
+    redistributable: true
+- id: minimax/minimax-m2.5-model-card-gpqa-diamond@1.0.0
+  model: minimax/minimax-m2.5
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject:
+    variant: MiniMax-M2.5
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.852
+  status: available
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/MiniMaxAI/MiniMax-M2.5
+    redistributable: true
+- id: minimax/minimax-m2.5-model-card-scicode@1.0.0
+  model: minimax/minimax-m2.5
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject:
+    variant: MiniMax-M2.5
+    evaluation_unit: subtask
+    source_kind: official_model_card
+  metrics:
+    score: 0.444
+  status: available
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/MiniMaxAI/MiniMax-M2.5
+    redistributable: true
 - id: minimax/minimax-m2.5-model-card-verified@1.0.0
   model: minimax/minimax-m2.5
   benchmark: swe-bench/verified@1.0.0
   benchmark_profile: published-agent
   reasoning_effort: default
-  subject: *id003
+  subject:
+    variant: MiniMax-M2.5
+    source_kind: official_model_card
   metrics:
     resolved: 0.802
   status: available
-  evidence: *id004
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/MiniMaxAI/MiniMax-M2.5
+    redistributable: true
+- id: independent/minimax-m2-5-critpt@1.0.0
+  model: minimax/minimax-m2.5
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: MiniMax-M2.5
+    source_model_slug: minimax-m2-5
+    run_kind: independent
+  metrics:
+    score: 0.0114285714285714
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/minimax-m2-5-artificial-analysis-long-context-reasoning@1.1.0
+  model: minimax/minimax-m2.5
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: MiniMax-M2.5
+    source_model_slug: minimax-m2-5
+    run_kind: independent
+  metrics:
+    score: 0.733333333333333
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/minimax-m2-5-omniscience@1.0.0
+  model: minimax/minimax-m2.5
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: MiniMax-M2.5
+    source_model_slug: minimax-m2-5
+    run_kind: independent
+  metrics:
+    index: -38.8666666666667
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/minimax-m2-5-humanitys-last-exam@1.0.0
+  model: minimax/minimax-m2.5
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: MiniMax-M2.5
+    source_model_slug: minimax-m2-5
+    run_kind: independent
+  metrics:
+    accuracy: 0.205282669138091
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/minimax-m2-5-gpqa-diamond@1.0.0
+  model: minimax/minimax-m2.5
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: MiniMax-M2.5
+    source_model_slug: minimax-m2-5
+    run_kind: independent
+  metrics:
+    accuracy: 0.848484848484848
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true

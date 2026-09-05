@@ -23,14 +23,4 @@ presentation:
   monochrome: false
 conformance:
   status: unverified
-models:
-- catalog: celeris/celeris-1
-  id: celeris-1
-  protocols:
-  - openai/chat-completions@1
-  - openai/responses@1
-  lifecycle: active
-  verification:
-    status: claimed
-    verified_at: 2026-09-05
-    source: https://docs.celeris.ai/making-requests
+models: []

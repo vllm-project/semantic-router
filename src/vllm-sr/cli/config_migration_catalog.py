@@ -11,11 +11,13 @@ def migrate_v03_catalog_contract(canonical: dict[str, Any]) -> None:
     defaults = _as_dict(providers.get("defaults"))
     _rename_if_missing(defaults, "default_model", "model")
     _rename_if_missing(defaults, "default_reasoning_effort", "reasoning_effort")
-    defaults.pop("reasoning_families", None)
+    reasoning_families = _as_dict(defaults.pop("reasoning_families", None))
     if defaults:
         providers["defaults"] = defaults
+    else:
+        providers.pop("defaults", None)
 
-    catalog_by_alias = _migrate_provider_models(providers)
+    catalog_by_alias = _migrate_provider_models(providers, reasoning_families)
     routing = _as_dict(canonical.get("routing"))
     _migrate_model_cards(routing, catalog_by_alias)
 
@@ -30,7 +32,9 @@ def _rename_if_missing(target: dict[str, Any], old: str, new: str) -> None:
     target.pop(old, None)
 
 
-def _migrate_provider_models(providers: dict[str, Any]) -> dict[str, str]:
+def _migrate_provider_models(
+    providers: dict[str, Any], reasoning_families: dict[str, Any]
+) -> dict[str, str]:
     catalog_by_alias: dict[str, str] = {}
     provider_models = providers.get("models")
     if not isinstance(provider_models, list):
@@ -45,7 +49,12 @@ def _migrate_provider_models(providers: dict[str, Any]) -> dict[str, str]:
             catalog_by_alias[alias] = catalog
         family = model.pop("reasoning_family", None)
         if family and "reasoning" not in model:
-            model["reasoning"] = {"family": family}
+            definition = reasoning_families.get(str(family))
+            model["reasoning"] = (
+                deepcopy(definition)
+                if isinstance(definition, dict)
+                else {"family": family}
+            )
         _migrate_backend_refs(model)
     return catalog_by_alias
 
@@ -68,6 +77,7 @@ def _migrate_model_cards(
     routing: dict[str, Any], catalog_by_alias: dict[str, str]
 ) -> None:
     migrated_cards: list[dict[str, Any]] = []
+    migrated_by_name: dict[str, dict[str, Any]] = {}
     for card in _clone_list(routing.get("modelCards")):
         if not isinstance(card, dict):
             continue
@@ -75,13 +85,60 @@ def _migrate_model_cards(
         if alias in catalog_by_alias:
             card["name"] = catalog_by_alias[alias]
         _migrate_quality_score(card)
-        if set(card) != {"name"}:
-            migrated_cards.append(card)
+        if set(card) == {"name"}:
+            continue
+        card_name = str(card.get("name") or "").strip()
+        existing = migrated_by_name.get(card_name)
+        if existing is not None:
+            _merge_model_card(existing, card, card_name)
+            continue
+        migrated_cards.append(card)
+        migrated_by_name[card_name] = card
 
     if migrated_cards:
         routing["modelCards"] = migrated_cards
     else:
         routing.pop("modelCards", None)
+
+
+def _merge_model_card(
+    target: dict[str, Any], source: dict[str, Any], card_name: str
+) -> None:
+    """Coalesce aliases that now share one canonical Model Card identity."""
+
+    for key, value in source.items():
+        if key == "name":
+            continue
+        if key not in target:
+            target[key] = deepcopy(value)
+            continue
+        _merge_model_card_value(target, key, value, card_name, key)
+
+
+def _merge_model_card_value(
+    target: dict[str, Any],
+    key: str,
+    value: Any,
+    card_name: str,
+    field_path: str,
+) -> None:
+    current = target[key]
+    if current == value:
+        return
+    if isinstance(current, dict) and isinstance(value, dict):
+        for nested_key, nested_value in value.items():
+            nested_path = f"{field_path}.{nested_key}"
+            if nested_key not in current:
+                current[nested_key] = deepcopy(nested_value)
+            else:
+                _merge_model_card_value(
+                    current, nested_key, nested_value, card_name, nested_path
+                )
+        return
+    raise ValueError(
+        "routing.modelCards aliases collapse to "
+        f"{card_name!r} with conflicting field {field_path!r}"
+    )
 
 
 def _migrate_quality_score(card: dict[str, Any]) -> None:

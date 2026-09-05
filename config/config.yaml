@@ -42,7 +42,19 @@ providers:
           weight: 80
           provider: vllm
           api_key_env: VLLM_SR_PRIMARY_API_KEY
-        - name: remote-secondary
+        - name: local-secondary
+          endpoint: 127.0.0.1:8004
+          protocol: http
+          provider: vllm
+          api_key_env: VLLM_SR_PRIMARY_API_KEY
+          weight: 20
+    # Keep remote-provider access fields visible without mixing incompatible
+    # request semantics into the weighted qwen3-8b replica pool above.
+    - name: remote-openai-reference
+      provider_model_id: remote-openai-reference
+      api_format: openai
+      backend_refs:
+        - name: remote-primary
           base_url: https://api.example.com/v1
           provider: openai
           auth_header: Authorization
@@ -52,11 +64,12 @@ providers:
           api_version: "2025-03-01"
           chat_path: /chat/completions
           api_key: static-demo-key
-          weight: 20
+          weight: 100
     - name: qwen3-32b
       reasoning:
         type: reasoning_effort
         parameter: reasoning.effort
+        activation_parameter: enable_thinking
         levels: [none, low, medium, high]
         default: medium
         disabled: none

@@ -38,15 +38,39 @@ type ProviderPresentation struct {
 	Monochrome bool   `json:"monochrome" yaml:"monochrome"`
 }
 
+// ProviderDefinitionPresentation contains repository-owned Provider picker
+// metadata. It is distinct from ProviderPresentation so featured never becomes
+// part of the operator-authored Model Card schema.
+type ProviderDefinitionPresentation struct {
+	Logo       string `json:"logo"`
+	Monogram   string `json:"monogram"`
+	Monochrome bool   `json:"monochrome"`
+	// Featured is repository-owned discovery metadata for concise provider
+	// pickers. It does not affect runtime behavior or operator configuration.
+	Featured bool `json:"featured,omitempty"`
+}
+
 type Conformance struct {
 	Status     string `json:"status"`
 	VerifiedAt string `json:"verified_at,omitempty"`
 }
 
+// CatalogModelRelationship describes how a creator's model is exposed by one
+// serving channel. It is repository-owned catalog metadata, not user config.
+type CatalogModelRelationship string
+
+const (
+	CatalogModelRelationshipFirstParty   CatalogModelRelationship = "first_party"
+	CatalogModelRelationshipManagedCloud CatalogModelRelationship = "managed_cloud"
+	CatalogModelRelationshipGateway      CatalogModelRelationship = "gateway"
+	CatalogModelRelationshipSelfHosted   CatalogModelRelationship = "self_hosted"
+)
+
 // CatalogModelBinding is a provider-owned mapping from one canonical model
 // card to the provider-native identifier exposed by that API or runtime.
 type CatalogModelBinding struct {
 	Catalog            string                     `json:"catalog"`
+	Relationship       CatalogModelRelationship   `json:"relationship"`
 	ID                 string                     `json:"id"`
 	Protocols          []string                   `json:"protocols"`
 	ReasoningTransport ReasoningTransport         `json:"reasoning_transport,omitempty"`
@@ -64,27 +88,28 @@ const (
 	ReasoningTransportTopLevelBoolean  ReasoningTransport = "top_level_boolean"
 	ReasoningTransportReasoningObject  ReasoningTransport = "reasoning_object"
 	ReasoningTransportThinkingObject   ReasoningTransport = "thinking_object"
+	ReasoningTransportOutputConfig     ReasoningTransport = "output_config_effort"
 	ReasoningTransportDeepSeekThinking ReasoningTransport = "deepseek_thinking"
 )
 
 type ProviderDefinition struct {
-	ID                  string                `json:"id"`
-	DisplayName         string                `json:"display_name"`
-	Description         string                `json:"description"`
-	Category            string                `json:"category"`
-	SupportTier         string                `json:"support_tier"`
-	DefaultBaseURL      string                `json:"default_base_url,omitempty"`
-	Protocols           []string              `json:"protocols"`
-	DefaultProtocol     string                `json:"default_protocol"`
-	SupportedOperations []string              `json:"supported_operations"`
-	PathOverrides       map[string]string     `json:"path_overrides,omitempty"`
-	DefaultHeaders      map[string]string     `json:"default_headers,omitempty"`
-	ReasoningTransport  ReasoningTransport    `json:"reasoning_transport,omitempty"`
-	APIVersionQuery     bool                  `json:"api_version_query,omitempty"`
-	Auth                ProviderAuth          `json:"auth"`
-	Presentation        ProviderPresentation  `json:"presentation"`
-	Conformance         Conformance           `json:"conformance"`
-	Models              []CatalogModelBinding `json:"models,omitempty"`
+	ID                  string                         `json:"id"`
+	DisplayName         string                         `json:"display_name"`
+	Description         string                         `json:"description"`
+	Category            string                         `json:"category"`
+	SupportTier         string                         `json:"support_tier"`
+	DefaultBaseURL      string                         `json:"default_base_url,omitempty"`
+	Protocols           []string                       `json:"protocols"`
+	DefaultProtocol     string                         `json:"default_protocol"`
+	SupportedOperations []string                       `json:"supported_operations"`
+	PathOverrides       map[string]string              `json:"path_overrides,omitempty"`
+	DefaultHeaders      map[string]string              `json:"default_headers,omitempty"`
+	ReasoningTransport  ReasoningTransport             `json:"reasoning_transport,omitempty"`
+	APIVersionQuery     bool                           `json:"api_version_query,omitempty"`
+	Auth                ProviderAuth                   `json:"auth"`
+	Presentation        ProviderDefinitionPresentation `json:"presentation"`
+	Conformance         Conformance                    `json:"conformance"`
+	Models              []CatalogModelBinding          `json:"models,omitempty"`
 }
 
 // CredentialsRef keeps secrets out of the catalog and lets configuration name
@@ -115,7 +140,10 @@ type ProviderInstance struct {
 	APIVersion  string            `json:"api_version,omitempty" yaml:"api_version,omitempty"`
 	AuthHeader  string            `json:"auth_header,omitempty" yaml:"auth_header,omitempty"`
 	AuthPrefix  string            `json:"auth_prefix,omitempty" yaml:"auth_prefix,omitempty"`
-	ChatPath    string            `json:"chat_path,omitempty" yaml:"chat_path,omitempty"`
+	// AuthPrefixSet preserves an operator-authored empty prefix while keeping
+	// ProviderInstance an internal materialization contract.
+	AuthPrefixSet bool   `json:"-" yaml:"-"`
+	ChatPath      string `json:"chat_path,omitempty" yaml:"chat_path,omitempty"`
 }
 
 // ModelProviderBinding binds a request-facing model alias to one provider
@@ -142,11 +170,12 @@ type ModelAlias struct {
 }
 
 type ReasoningFamilyDefinition struct {
-	ID        string   `json:"id" yaml:"name"`
-	Type      string   `json:"type" yaml:"type"`
-	Parameter string   `json:"parameter" yaml:"parameter"`
-	Levels    []string `json:"levels" yaml:"levels,omitempty"`
-	Default   string   `json:"default" yaml:"default,omitempty"`
+	ID                  string   `json:"id" yaml:"name"`
+	Type                string   `json:"type" yaml:"type"`
+	Parameter           string   `json:"parameter" yaml:"parameter"`
+	ActivationParameter string   `json:"activation_parameter,omitempty" yaml:"activation_parameter,omitempty"`
+	Levels              []string `json:"levels" yaml:"levels,omitempty"`
+	Default             string   `json:"default" yaml:"default,omitempty"`
 	// Disabled is the provider/model-native level that explicitly turns
 	// reasoning off. It is empty for always-reasoning families.
 	Disabled string `json:"disabled,omitempty" yaml:"disabled,omitempty"`

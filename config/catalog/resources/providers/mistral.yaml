@@ -18,22 +18,16 @@ presentation:
   logo: package:mistral
   monogram: M
   monochrome: false
+  featured: true
 conformance:
   status: unverified
 models:
-- catalog: mistral/mistral-medium-3.1
-  id: mistral-medium-2508
-  protocols:
-  - openai/chat-completions@1
-  lifecycle: active
-  verification:
-    status: claimed
-    verified_at: 2026-09-05
-    source: https://docs.mistral.ai/getting-started/models/models_overview/
 - catalog: mistral/mistral-medium-3.5
+  relationship: first_party
   id: mistral-medium-3.5
   protocols:
   - openai/chat-completions@1
+  reasoning_transport: top_level_effort
   lifecycle: active
   verification:
     status: claimed

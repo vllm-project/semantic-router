@@ -20,25 +20,4 @@ presentation:
   monochrome: true
 conformance:
   status: unverified
-models:
-- catalog: reka/reka-edge-2603
-  id: reka-edge
-  protocols: [openai/chat-completions@1]
-  pricing:
-    currency: USD
-    prompt_per_1m: 0.10
-    completion_per_1m: 0.10
-  lifecycle: active
-  verification: &reka-binding-verification
-    status: claimed
-    verified_at: 2026-09-05
-    source: https://docs.reka.ai/quickstart
-- catalog: reka/reka-flash-3
-  id: reka-flash
-  protocols: [openai/chat-completions@1]
-  pricing:
-    currency: USD
-    prompt_per_1m: 0.80
-    completion_per_1m: 2.00
-  lifecycle: active
-  verification: *reka-binding-verification
+models: []

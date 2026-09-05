@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from catalog_common import SHA256, SLUG, CatalogBuildError
@@ -17,8 +18,49 @@ REASONING_TRANSPORTS = {
     "top_level_boolean",
     "reasoning_object",
     "thinking_object",
+    "output_config_effort",
     "deepseek_thinking",
 }
+PROVIDER_MODEL_ID_KINDS = {"deployment_name"}
+MODEL_BINDING_RELATIONSHIPS = {
+    "first_party",
+    "managed_cloud",
+    "gateway",
+    "self_hosted",
+}
+BENCHMARK_SCOPED_SUBJECT_KEYS = {
+    "hle_judge": ("cais/humanitys-last-exam",),
+    "hle_mode": ("cais/humanitys-last-exam",),
+    "terminal_harness": ("harbor/terminal-bench",),
+    "swe_harness": ("swe-bench/", "datacurve/deep-swe@"),
+}
+
+
+def validate_security(value: Any, path: str = "catalog") -> None:
+    """Reject secret-bearing fields and credential-like literals from source data."""
+
+    blocked_keys = {"api_key", "token", "password", "secret", "credentials"}
+    blocked_literals = (
+        re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----"),
+        re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._~+/=-]{12,}"),
+        re.compile(r"(?i)https?://[^\s/:@]+:[^\s/@]+@"),
+        re.compile(r"\bsk-[A-Za-z0-9_-]{16,}\b"),
+    )
+    if isinstance(value, dict):
+        for key, item in value.items():
+            normalized = str(key).lower().replace("-", "_")
+            if normalized in blocked_keys:
+                raise CatalogBuildError(
+                    f"secret-like field is forbidden at {path}.{key}"
+                )
+            validate_security(item, f"{path}.{key}")
+    elif isinstance(value, list):
+        for index, item in enumerate(value):
+            validate_security(item, f"{path}[{index}]")
+    elif isinstance(value, str) and any(
+        pattern.search(value) for pattern in blocked_literals
+    ):
+        raise CatalogBuildError(f"credential-like literal is forbidden at {path}")
 
 
 def validate_provider_bindings(
@@ -52,6 +94,7 @@ def _validate_provider_binding(
         item,
         {
             "catalog",
+            "relationship",
             "id",
             "protocols",
             "reasoning_transport",
@@ -63,6 +106,9 @@ def _validate_provider_binding(
         path,
     )
     model_id = _nonempty_string(item.get("catalog"), f"{path}.catalog")
+    relationship = _nonempty_string(item.get("relationship"), f"{path}.relationship")
+    if relationship not in MODEL_BINDING_RELATIONSHIPS:
+        raise CatalogBuildError(f"{path}.relationship is unsupported")
     native_id = _nonempty_string(item.get("id"), f"{path}.id")
     if (
         item.get("reasoning_transport", "chat_template_kwargs")
@@ -76,6 +122,7 @@ def _validate_provider_binding(
             f"{path}.id duplicates a provider-native model identifier"
         )
     native_ids.add(native_id)
+    _validate_provider_model_id_policy(item, path)
     protocols = _sequence(item.get("protocols"), f"{path}.protocols")
     _validate_binding_protocols(protocols, path, provider, protocol_ids)
     for protocol in protocols:
@@ -85,6 +132,23 @@ def _validate_provider_binding(
                 f"{path} duplicates catalog model {model_id} for {protocol}"
             )
         pairs.add(pair)
+
+
+def _validate_provider_model_id_policy(item: dict[str, Any], path: str) -> None:
+    if "restrictions" not in item:
+        return
+    restrictions = _mapping(item["restrictions"], f"{path}.restrictions")
+    kind = restrictions.get("provider_model_id_kind")
+    if kind is None:
+        return
+    if kind not in PROVIDER_MODEL_ID_KINDS:
+        raise CatalogBuildError(
+            f"{path}.restrictions.provider_model_id_kind is unsupported"
+        )
+    _nonempty_string(
+        restrictions.get("catalog_model_name"),
+        f"{path}.restrictions.catalog_model_name",
+    )
 
 
 def _validate_binding_protocols(
@@ -190,10 +254,28 @@ def _validate_evaluation(
     _validate_reasoning_effort(
         effort, models[model_id], reasoning_families, f"{path}.reasoning_effort"
     )
+    subject = _mapping(item.get("subject"), f"{path}.subject")
+    _validate_benchmark_scoped_subject_keys(subject, benchmark, path)
     values = _mapping(item.get("metrics", {}), f"{path}.metrics")
     _validate_evaluation_values(values, benchmark, profile, path, metrics)
     _validate_evaluation_evidence(item, values, path)
     return model_id, effort, benchmark, profile, values
+
+
+def _validate_benchmark_scoped_subject_keys(
+    subject: dict[str, Any], benchmark: str, path: str
+) -> None:
+    """Keep benchmark-specific run metadata off unrelated measurements."""
+
+    for key, benchmark_prefixes in BENCHMARK_SCOPED_SUBJECT_KEYS.items():
+        if key not in subject or any(
+            benchmark.startswith(prefix) for prefix in benchmark_prefixes
+        ):
+            continue
+        expected = ", ".join(benchmark_prefixes)
+        raise CatalogBuildError(
+            f"{path}.subject.{key} is only valid for benchmark families: {expected}"
+        )
 
 
 def _validate_reasoning_effort(
@@ -208,7 +290,13 @@ def _validate_reasoning_effort(
     family = reasoning_families.get(str(family_id))
     if family is None:
         raise CatalogBuildError(f"{path} references an unknown reasoning family")
-    if effort not in {*family["levels"], "published"}:
+    allowed_efforts = {*family["levels"], "unspecified"}
+    # A family with an independent activation parameter keeps its effort ladder
+    # separate from the off state. Evaluation evidence may still describe an
+    # explicitly disabled run without making "disabled" a selectable effort.
+    if family.get("activation_parameter"):
+        allowed_efforts.add("disabled")
+    if effort not in allowed_efforts:
         raise CatalogBuildError(
             f"{path} {effort!r} is not supported by model {model['id']}"
         )
@@ -262,3 +350,32 @@ def _validate_evaluation_evidence(
     artifact = evidence.get("artifact")
     if artifact and not SHA256.fullmatch(str(artifact)):
         raise CatalogBuildError(f"{path}.evidence.artifact must be a SHA-256 digest")
+    if evidence.get("provenance") == "third_party":
+        _validate_third_party_run(item, evidence, path)
+
+
+def _validate_third_party_run(
+    item: dict[str, Any], evidence: dict[str, Any], path: str
+) -> None:
+    """Require an auditable identity for measurements made outside the publisher."""
+
+    source = _nonempty_string(evidence.get("source"), f"{path}.evidence.source")
+    if not source.startswith("https://"):
+        raise CatalogBuildError(f"{path}.evidence.source must use HTTPS")
+    subject = _mapping(item.get("subject"), f"{path}.subject")
+    if subject.get("source_kind") in {
+        "official_vendor_republication",
+        "official_cross-vendor_comparison",
+        "official_model_card",
+    }:
+        return
+    if subject.get("run_kind") != "independent":
+        raise CatalogBuildError(
+            f"{path}.subject.run_kind must identify an independent third-party run"
+        )
+    _nonempty_string(subject.get("source_model"), f"{path}.subject.source_model")
+    source_slug = _nonempty_string(
+        subject.get("source_model_slug"), f"{path}.subject.source_model_slug"
+    )
+    if not SLUG.fullmatch(source_slug):
+        raise CatalogBuildError(f"{path}.subject.source_model_slug must be a slug")

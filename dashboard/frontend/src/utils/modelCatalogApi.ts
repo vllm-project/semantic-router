@@ -153,9 +153,15 @@ function isCatalogProvider(value: unknown): value is CatalogProvider {
     isStringArray(value.supported_operations) &&
     value.supported_operations.length > 0 &&
     (value.reasoning_transport === undefined ||
-      ['chat_template_kwargs', 'top_level_effort', 'top_level_boolean', 'reasoning_object', 'thinking_object', 'deepseek_thinking'].includes(
-        String(value.reasoning_transport),
-      )) &&
+      [
+        'chat_template_kwargs',
+        'top_level_effort',
+        'top_level_boolean',
+        'reasoning_object',
+        'thinking_object',
+        'output_config_effort',
+        'deepseek_thinking',
+      ].includes(String(value.reasoning_transport))) &&
     isRecord(value.auth) &&
     ['none', 'bearer', 'api_key_header'].includes(String(value.auth.strategy)) &&
     typeof value.auth.header === 'string' &&
@@ -164,8 +170,12 @@ function isCatalogProvider(value: unknown): value is CatalogProvider {
     isNonEmptyString(value.presentation.logo) &&
     isNonEmptyString(value.presentation.monogram) &&
     typeof value.presentation.monochrome === 'boolean' &&
+    (value.presentation.featured === undefined ||
+      typeof value.presentation.featured === 'boolean') &&
     isRecord(value.conformance) &&
-    ['unverified', 'fixture_verified', 'live_verified'].includes(String(value.conformance.status)) &&
+    ['unverified', 'fixture_verified', 'live_verified'].includes(
+      String(value.conformance.status),
+    ) &&
     (value.models === undefined ||
       (Array.isArray(value.models) && value.models.every(isCatalogModelBinding)))
   )
@@ -179,6 +189,9 @@ function isReasoningFamily(value: unknown): value is CatalogReasoningFamily {
       String(value.type),
     ) &&
     isNonEmptyString(value.parameter) &&
+    (value.activation_parameter === undefined ||
+      (isNonEmptyString(value.activation_parameter) &&
+        value.activation_parameter !== value.parameter)) &&
     isStringArray(value.levels) &&
     isNonEmptyString(value.default) &&
     value.levels.includes(value.default)
@@ -190,6 +203,9 @@ function isCatalogModelBinding(value: unknown): value is CatalogModelBinding {
     isRecord(value) &&
     isNonEmptyString(value.id) &&
     isNonEmptyString(value.catalog) &&
+    ['first_party', 'managed_cloud', 'gateway', 'self_hosted'].includes(
+      String(value.relationship),
+    ) &&
     isStringArray(value.protocols) &&
     ['experimental', 'active', 'deprecated', 'removed'].includes(String(value.lifecycle)) &&
     isRecord(value.verification) &&
@@ -229,19 +245,20 @@ function isBenchmark(value: unknown): value is CatalogBenchmark {
 }
 
 function isEvaluation(value: unknown): value is CatalogEvaluation {
+  if (!isRecord(value)) return false
+  const status = String(value.status)
+  const metricsAreValid =
+    isNumberRecord(value.metrics) &&
+    (status !== 'available' || Object.keys(value.metrics).length > 0)
   return (
-    isRecord(value) &&
     isNonEmptyString(value.id) &&
     isNonEmptyString(value.model) &&
     isNonEmptyString(value.benchmark) &&
     isNonEmptyString(value.benchmark_profile) &&
     isNonEmptyString(value.reasoning_effort) &&
     isRecord(value.subject) &&
-    isNumberRecord(value.metrics) &&
-    Object.keys(value.metrics).length > 0 &&
-    ['available', 'missing', 'failed', 'not_applicable', 'withheld'].includes(
-      String(value.status),
-    ) &&
+    metricsAreValid &&
+    ['available', 'missing', 'failed', 'not_applicable', 'withheld'].includes(status) &&
     isRecord(value.evidence) &&
     ['vendor_claimed', 'third_party', 'vllm_sr_reproduced', 'operator'].includes(
       String(value.evidence.provenance),
@@ -304,27 +321,25 @@ function isIndex(value: unknown): value is CatalogIndex {
     isNumberRecord(value.domains) &&
     Array.isArray(value.components) &&
     value.components.length > 0 &&
-    value.components.every(
-      (component) => {
-        if (!isRecord(component)) return false
-        const metricReference =
-          isNonEmptyString(component.benchmark) &&
-          isNonEmptyString(component.metric) &&
-          isNonEmptyString(component.benchmark_profile) &&
-          !isNonEmptyString(component.index)
-        const indexReference =
-          isNonEmptyString(component.index) &&
-          !isNonEmptyString(component.benchmark) &&
-          !isNonEmptyString(component.metric) &&
-          !isNonEmptyString(component.benchmark_profile)
-        return (
-          (metricReference || indexReference) &&
-          typeof component.weight === 'number' &&
-          component.weight > 0 &&
-          isNormalization(component.normalization)
-        )
-      },
-    )
+    value.components.every((component) => {
+      if (!isRecord(component)) return false
+      const metricReference =
+        isNonEmptyString(component.benchmark) &&
+        isNonEmptyString(component.metric) &&
+        isNonEmptyString(component.benchmark_profile) &&
+        !isNonEmptyString(component.index)
+      const indexReference =
+        isNonEmptyString(component.index) &&
+        !isNonEmptyString(component.benchmark) &&
+        !isNonEmptyString(component.metric) &&
+        !isNonEmptyString(component.benchmark_profile)
+      return (
+        (metricReference || indexReference) &&
+        typeof component.weight === 'number' &&
+        component.weight > 0 &&
+        isNormalization(component.normalization)
+      )
+    })
   )
 }
 
@@ -342,35 +357,33 @@ function isIndexResult(value: unknown): value is CatalogIndexResult {
     value.coverage >= 0 &&
     value.coverage <= 1 &&
     Array.isArray(value.components) &&
-    value.components.every(
-      (component) => {
-        if (!isRecord(component)) return false
-        const metricReference =
-          isNonEmptyString(component.benchmark) &&
-          isNonEmptyString(component.metric) &&
-          isNonEmptyString(component.benchmark_profile) &&
-          !isNonEmptyString(component.index)
-        const indexReference =
-          isNonEmptyString(component.index) &&
-          !isNonEmptyString(component.benchmark) &&
-          !isNonEmptyString(component.metric) &&
-          !isNonEmptyString(component.benchmark_profile)
-        return (
-          (metricReference || indexReference) &&
-          typeof component.weight === 'number' &&
-          ['available', 'missing', 'failed', 'not_applicable', 'withheld'].includes(
-            String(component.status),
-          ) &&
-          (component.value === null ||
-            component.value === undefined ||
-            typeof component.value === 'number') &&
-          (component.normalized === null ||
-            component.normalized === undefined ||
-            typeof component.normalized === 'number') &&
-          (component.evaluation === undefined || isNonEmptyString(component.evaluation))
-        )
-      },
-    ) &&
+    value.components.every((component) => {
+      if (!isRecord(component)) return false
+      const metricReference =
+        isNonEmptyString(component.benchmark) &&
+        isNonEmptyString(component.metric) &&
+        isNonEmptyString(component.benchmark_profile) &&
+        !isNonEmptyString(component.index)
+      const indexReference =
+        isNonEmptyString(component.index) &&
+        !isNonEmptyString(component.benchmark) &&
+        !isNonEmptyString(component.metric) &&
+        !isNonEmptyString(component.benchmark_profile)
+      return (
+        (metricReference || indexReference) &&
+        typeof component.weight === 'number' &&
+        ['available', 'missing', 'failed', 'not_applicable', 'withheld'].includes(
+          String(component.status),
+        ) &&
+        (component.value === null ||
+          component.value === undefined ||
+          typeof component.value === 'number') &&
+        (component.normalized === null ||
+          component.normalized === undefined ||
+          typeof component.normalized === 'number') &&
+        (component.evaluation === undefined || isNonEmptyString(component.evaluation))
+      )
+    }) &&
     isStringArray(value.provenance, true)
   )
 }

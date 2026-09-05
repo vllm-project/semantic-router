@@ -93,22 +93,30 @@ func (profile *ProviderProfile) ProviderType() (string, error) {
 	return definition.ID, nil
 }
 
-// ResolveAuthHeader combines catalog auth defaults with explicit profile
-// overrides. An explicitly empty prefix is represented by the catalog value;
-// Explicit v0.3 backend overrides take precedence over catalog defaults.
-func (profile *ProviderProfile) ResolveAuthHeader() (string, string, error) {
+// ResolveAuth combines catalog auth defaults with explicit profile overrides.
+// AuthPrefixSet makes an authored empty prefix distinct from omission.
+func (profile *ProviderProfile) ResolveAuth() (modelcatalog.ProviderAuth, error) {
 	definition, err := profile.catalogDefinition()
+	if err != nil {
+		return modelcatalog.ProviderAuth{}, err
+	}
+	auth := definition.Auth
+	if profile.AuthHeader != "" {
+		auth.Header = profile.AuthHeader
+	}
+	if profile.AuthPrefixSet || profile.AuthPrefix != "" {
+		auth.Prefix = profile.AuthPrefix
+	}
+	return auth, nil
+}
+
+// ResolveAuthHeader returns the resolved wire header and prefix.
+func (profile *ProviderProfile) ResolveAuthHeader() (string, string, error) {
+	auth, err := profile.ResolveAuth()
 	if err != nil {
 		return "", "", err
 	}
-	header, prefix := definition.Auth.Header, definition.Auth.Prefix
-	if profile.AuthHeader != "" {
-		header = profile.AuthHeader
-	}
-	if profile.AuthPrefix != "" {
-		prefix = profile.AuthPrefix
-	}
-	return header, prefix, nil
+	return auth.Header, auth.Prefix, nil
 }
 
 // ResolveReasoningTransport returns the catalog-owned request projection for
@@ -138,6 +146,7 @@ func validReasoningTransport(transport modelcatalog.ReasoningTransport) bool {
 		modelcatalog.ReasoningTransportTopLevelBoolean,
 		modelcatalog.ReasoningTransportReasoningObject,
 		modelcatalog.ReasoningTransportThinkingObject,
+		modelcatalog.ReasoningTransportOutputConfig,
 		modelcatalog.ReasoningTransportDeepSeekThinking:
 		return true
 	default:

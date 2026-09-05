@@ -56,10 +56,6 @@ def migrate_config_data(data: dict[str, Any]) -> dict[str, Any]:
         canonical["global"] = global_config
     if "setup" in source:
         canonical["setup"] = deepcopy(source["setup"])
-    if "entrypoints" in source:
-        canonical["entrypoints"] = deepcopy(source["entrypoints"])
-    if "recipes" in source:
-        canonical["recipes"] = deepcopy(source["recipes"])
     _normalize_response_cache_plugins(canonical)
     migrate_v03_catalog_contract(canonical)
 
@@ -210,12 +206,16 @@ def _normalize_existing_provider_model(
     provider_model = {"name": model_name}
     access = _as_dict(model.get("access"))
 
+    _set_if_missing(provider_model, "catalog", model.get("catalog"))
+    _set_if_missing(provider_model, "reasoning", model.get("reasoning"))
     _set_if_missing(
         provider_model, "provider_model_id", access.get("provider_model_id")
     )
     _set_if_missing(provider_model, "provider_model_id", model.get("provider_model_id"))
     _set_if_missing(provider_model, "pricing", access.get("pricing"))
     _set_if_missing(provider_model, "pricing", model.get("pricing"))
+    _set_if_missing(provider_model, "reliability", access.get("reliability"))
+    _set_if_missing(provider_model, "reliability", model.get("reliability"))
     _set_if_missing(provider_model, "api_format", access.get("api_format"))
     _set_if_missing(provider_model, "api_format", model.get("api_format"))
     _set_if_missing(

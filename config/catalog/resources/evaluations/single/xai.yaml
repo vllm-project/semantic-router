@@ -1,0 +1,1266 @@
+- id: independent/grok-4-3-non-reasoning-critpt@1.0.0
+  model: xai/grok-4.3
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: none
+  subject:
+    source_model: Grok 4.3 (non-reasoning)
+    source_model_slug: grok-4-3-non-reasoning
+    run_kind: independent
+  metrics:
+    score: 0
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/grok-4-3-non-reasoning-gdpval-aa@2.0.0
+  model: xai/grok-4.3
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: none
+  subject:
+    source_model: Grok 4.3 (non-reasoning)
+    source_model_slug: grok-4-3-non-reasoning
+    run_kind: independent
+  metrics:
+    elo: 1035.31
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/grok-4-3-non-reasoning-artificial-analysis-long-context-reasoning@1.1.0
+  model: xai/grok-4.3
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: none
+  subject:
+    source_model: Grok 4.3 (non-reasoning)
+    source_model_slug: grok-4-3-non-reasoning
+    run_kind: independent
+  metrics:
+    score: .323333333333333
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/grok-4-3-non-reasoning-omniscience@1.0.0
+  model: xai/grok-4.3
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: none
+  subject:
+    source_model: Grok 4.3 (non-reasoning)
+    source_model_slug: grok-4-3-non-reasoning
+    run_kind: independent
+  metrics:
+    index: -33.0833333333333
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/grok-4-3-non-reasoning-humanitys-last-exam@1.0.0
+  model: xai/grok-4.3
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: none
+  subject:
+    source_model: Grok 4.3 (non-reasoning)
+    source_model_slug: grok-4-3-non-reasoning
+    run_kind: independent
+  metrics:
+    accuracy: .0676552363299351
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/grok-4-3-non-reasoning-terminalbench-v2-1@1.0.0
+  model: xai/grok-4.3
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: none
+  subject:
+    source_model: Grok 4.3 (non-reasoning)
+    source_model_slug: grok-4-3-non-reasoning
+    run_kind: independent
+  metrics:
+    resolved: .340823970037453
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/grok-4-3-non-reasoning-gpqa-diamond@1.0.0
+  model: xai/grok-4.3
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: none
+  subject:
+    source_model: Grok 4.3 (non-reasoning)
+    source_model_slug: grok-4-3-non-reasoning
+    run_kind: independent
+  metrics:
+    accuracy: .657575757575758
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/grok-4-3-non-reasoning-tau3-banking@1.0.0
+  model: xai/grok-4.3
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: none
+  subject:
+    source_model: Grok 4.3 (non-reasoning)
+    source_model_slug: grok-4-3-non-reasoning
+    run_kind: independent
+  metrics:
+    score: .0804123711340206
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/grok-4-3-low-critpt@1.0.0
+  model: xai/grok-4.3
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: Grok 4.3 (low)
+    source_model_slug: grok-4-3-low
+    run_kind: independent
+  metrics:
+    score: .00571428571428571
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/grok-4-3-low-artificial-analysis-long-context-reasoning@1.1.0
+  model: xai/grok-4.3
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: Grok 4.3 (low)
+    source_model_slug: grok-4-3-low
+    run_kind: independent
+  metrics:
+    score: .74
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/grok-4-3-low-omniscience@1.0.0
+  model: xai/grok-4.3
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: Grok 4.3 (low)
+    source_model_slug: grok-4-3-low
+    run_kind: independent
+  metrics:
+    index: 13.9333333333333
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/grok-4-3-low-humanitys-last-exam@1.0.0
+  model: xai/grok-4.3
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: Grok 4.3 (low)
+    source_model_slug: grok-4-3-low
+    run_kind: independent
+  metrics:
+    accuracy: .183503243744208
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/grok-4-3-low-gpqa-diamond@1.0.0
+  model: xai/grok-4.3
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: Grok 4.3 (low)
+    source_model_slug: grok-4-3-low
+    run_kind: independent
+  metrics:
+    accuracy: .843434343434343
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/grok-4-3-medium-critpt@1.0.0
+  model: xai/grok-4.3
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: Grok 4.3 (medium)
+    source_model_slug: grok-4-3-medium
+    run_kind: independent
+  metrics:
+    score: .0485714285714286
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/grok-4-3-medium-artificial-analysis-long-context-reasoning@1.1.0
+  model: xai/grok-4.3
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: Grok 4.3 (medium)
+    source_model_slug: grok-4-3-medium
+    run_kind: independent
+  metrics:
+    score: .75
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/grok-4-3-medium-omniscience@1.0.0
+  model: xai/grok-4.3
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: Grok 4.3 (medium)
+    source_model_slug: grok-4-3-medium
+    run_kind: independent
+  metrics:
+    index: 16.7
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/grok-4-3-medium-humanitys-last-exam@1.0.0
+  model: xai/grok-4.3
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: Grok 4.3 (medium)
+    source_model_slug: grok-4-3-medium
+    run_kind: independent
+  metrics:
+    accuracy: .299814643188137
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/grok-4-3-medium-gpqa-diamond@1.0.0
+  model: xai/grok-4.3
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: Grok 4.3 (medium)
+    source_model_slug: grok-4-3-medium
+    run_kind: independent
+  metrics:
+    accuracy: .88989898989899
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/grok-4-3-critpt@1.0.0
+  model: xai/grok-4.3
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Grok 4.3 (high)
+    source_model_slug: grok-4-3
+    run_kind: independent
+  metrics:
+    score: .08
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/grok-4-3-gdpval-aa@2.0.0
+  model: xai/grok-4.3
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: Grok 4.3 (high)
+    source_model_slug: grok-4-3
+    run_kind: independent
+  metrics:
+    elo: 1022.82
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/grok-4-3-artificial-analysis-long-context-reasoning@1.1.0
+  model: xai/grok-4.3
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Grok 4.3 (high)
+    source_model_slug: grok-4-3
+    run_kind: independent
+  metrics:
+    score: .73
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/grok-4-3-omniscience@1.0.0
+  model: xai/grok-4.3
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Grok 4.3 (high)
+    source_model_slug: grok-4-3
+    run_kind: independent
+  metrics:
+    index: 17.9833333333333
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/grok-4-3-humanitys-last-exam@1.0.0
+  model: xai/grok-4.3
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Grok 4.3 (high)
+    source_model_slug: grok-4-3
+    run_kind: independent
+  metrics:
+    accuracy: .372103799814643
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/grok-4-3-terminalbench-v2-1@1.0.0
+  model: xai/grok-4.3
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: Grok 4.3 (high)
+    source_model_slug: grok-4-3
+    run_kind: independent
+  metrics:
+    resolved: .397003745318352
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/grok-4-3-gpqa-diamond@1.0.0
+  model: xai/grok-4.3
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Grok 4.3 (high)
+    source_model_slug: grok-4-3
+    run_kind: independent
+  metrics:
+    accuracy: .901010101010101
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/grok-4-3-tau3-banking@1.0.0
+  model: xai/grok-4.3
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: Grok 4.3 (high)
+    source_model_slug: grok-4-3
+    run_kind: independent
+  metrics:
+    score: .123711340206186
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/grok-4-6-aa-briefcase@1.0.0
+  model: xai/grok-4.6
+  benchmark: artificial-analysis/briefcase@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: Grok 4.6 (high)
+    source_model_slug: grok-4-6
+    run_kind: independent
+  metrics:
+    elo: 1540.16
+    elo_lower: 1533.93
+    elo_upper: 1547.46
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/aa-briefcase
+    redistributable: true
+- id: independent/grok-4-6-critpt@1.0.0
+  model: xai/grok-4.6
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Grok 4.6 (high)
+    source_model_slug: grok-4-6
+    run_kind: independent
+  metrics:
+    score: 0.171428571428571
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/grok-4-6-gdp-pdf@1.0.0
+  model: xai/grok-4.6
+  benchmark: artificial-analysis/gdp-pdf@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: high
+  subject:
+    source_model: Grok 4.6 (high)
+    source_model_slug: grok-4-6
+    run_kind: independent
+  metrics:
+    all_pass: 0.188
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdp-pdf
+    redistributable: true
+- id: independent/grok-4-6-gdpval-aa@2.0.0
+  model: xai/grok-4.6
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: Grok 4.6 (high)
+    source_model_slug: grok-4-6
+    run_kind: independent
+  metrics:
+    elo: 1647.85
+    elo_lower: 1633.61
+    elo_upper: 1662.1
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/grok-4-6-artificial-analysis-long-context-reasoning@1.1.0
+  model: xai/grok-4.6
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Grok 4.6 (high)
+    source_model_slug: grok-4-6
+    run_kind: independent
+  metrics:
+    score: 0.803333333333333
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/grok-4-6-omniscience@1.0.0
+  model: xai/grok-4.6
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Grok 4.6 (high)
+    source_model_slug: grok-4-6
+    run_kind: independent
+  metrics:
+    index: 30.4833333333333
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/grok-4-6-humanitys-last-exam@1.0.0
+  model: xai/grok-4.6
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Grok 4.6 (high)
+    source_model_slug: grok-4-6
+    run_kind: independent
+  metrics:
+    accuracy: 0.429101019462465
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/grok-4-6-terminalbench-v2-1@1.0.0
+  model: xai/grok-4.6
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: Grok 4.6 (high)
+    source_model_slug: grok-4-6
+    run_kind: independent
+  metrics:
+    resolved: 0.883895131086142
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/grok-4-6-gpqa-diamond@1.0.0
+  model: xai/grok-4.6
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Grok 4.6 (high)
+    source_model_slug: grok-4-6
+    run_kind: independent
+  metrics:
+    accuracy: 0.94949494949495
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/grok-4-6-scicode@1.0.0
+  model: xai/grok-4.6
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: high
+  subject:
+    source_model: Grok 4.6 (high)
+    source_model_slug: grok-4-6
+    run_kind: independent
+  metrics:
+    score: 0.564814814814815
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/grok-4-6-tau3-banking@1.0.0
+  model: xai/grok-4.6
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: Grok 4.6 (high)
+    source_model_slug: grok-4-6
+    run_kind: independent
+  metrics:
+    score: 0.507216494845361
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/grok-4-6-low-critpt@1.0.0
+  model: xai/grok-4.6
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: Grok 4.6 (low)
+    source_model_slug: grok-4-6-low
+    run_kind: independent
+  metrics:
+    score: 0.0571428571428571
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/grok-4-6-low-gdpval-aa@2.0.0
+  model: xai/grok-4.6
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: low
+  subject:
+    source_model: Grok 4.6 (low)
+    source_model_slug: grok-4-6-low
+    run_kind: independent
+  metrics:
+    elo: 1467.28
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/grok-4-6-low-artificial-analysis-long-context-reasoning@1.1.0
+  model: xai/grok-4.6
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: Grok 4.6 (low)
+    source_model_slug: grok-4-6-low
+    run_kind: independent
+  metrics:
+    score: 0.806666666666667
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/grok-4-6-low-omniscience@1.0.0
+  model: xai/grok-4.6
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: Grok 4.6 (low)
+    source_model_slug: grok-4-6-low
+    run_kind: independent
+  metrics:
+    index: 25.9
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/grok-4-6-low-humanitys-last-exam@1.0.0
+  model: xai/grok-4.6
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: Grok 4.6 (low)
+    source_model_slug: grok-4-6-low
+    run_kind: independent
+  metrics:
+    accuracy: 0.276181649675626
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/grok-4-6-low-terminalbench-v2-1@1.0.0
+  model: xai/grok-4.6
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: low
+  subject:
+    source_model: Grok 4.6 (low)
+    source_model_slug: grok-4-6-low
+    run_kind: independent
+  metrics:
+    resolved: 0.752808988764045
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/grok-4-6-low-gpqa-diamond@1.0.0
+  model: xai/grok-4.6
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: Grok 4.6 (low)
+    source_model_slug: grok-4-6-low
+    run_kind: independent
+  metrics:
+    accuracy: 0.878787878787879
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/grok-4-6-low-scicode@1.0.0
+  model: xai/grok-4.6
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: low
+  subject:
+    source_model: Grok 4.6 (low)
+    source_model_slug: grok-4-6-low
+    run_kind: independent
+  metrics:
+    score: 0.494212962962963
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/grok-4-6-low-tau3-banking@1.0.0
+  model: xai/grok-4.6
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: low
+  subject:
+    source_model: Grok 4.6 (low)
+    source_model_slug: grok-4-6-low
+    run_kind: independent
+  metrics:
+    score: 0.381443298969072
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/grok-4-6-medium-critpt@1.0.0
+  model: xai/grok-4.6
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: Grok 4.6 (medium)
+    source_model_slug: grok-4-6-medium
+    run_kind: independent
+  metrics:
+    score: 0.177142857142857
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/grok-4-6-medium-gdpval-aa@2.0.0
+  model: xai/grok-4.6
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: medium
+  subject:
+    source_model: Grok 4.6 (medium)
+    source_model_slug: grok-4-6-medium
+    run_kind: independent
+  metrics:
+    elo: 1647.49
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/grok-4-6-medium-artificial-analysis-long-context-reasoning@1.1.0
+  model: xai/grok-4.6
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: Grok 4.6 (medium)
+    source_model_slug: grok-4-6-medium
+    run_kind: independent
+  metrics:
+    score: 0.81
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/grok-4-6-medium-omniscience@1.0.0
+  model: xai/grok-4.6
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: Grok 4.6 (medium)
+    source_model_slug: grok-4-6-medium
+    run_kind: independent
+  metrics:
+    index: 28
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/grok-4-6-medium-humanitys-last-exam@1.0.0
+  model: xai/grok-4.6
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: Grok 4.6 (medium)
+    source_model_slug: grok-4-6-medium
+    run_kind: independent
+  metrics:
+    accuracy: 0.421223354958295
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/grok-4-6-medium-terminalbench-v2-1@1.0.0
+  model: xai/grok-4.6
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: medium
+  subject:
+    source_model: Grok 4.6 (medium)
+    source_model_slug: grok-4-6-medium
+    run_kind: independent
+  metrics:
+    resolved: 0.842696629213483
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/grok-4-6-medium-gpqa-diamond@1.0.0
+  model: xai/grok-4.6
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: Grok 4.6 (medium)
+    source_model_slug: grok-4-6-medium
+    run_kind: independent
+  metrics:
+    accuracy: 0.935353535353535
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/grok-4-6-medium-scicode@1.0.0
+  model: xai/grok-4.6
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: medium
+  subject:
+    source_model: Grok 4.6 (medium)
+    source_model_slug: grok-4-6-medium
+    run_kind: independent
+  metrics:
+    score: 0.559027777777778
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/grok-4-6-medium-tau3-banking@1.0.0
+  model: xai/grok-4.6
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: medium
+  subject:
+    source_model: Grok 4.6 (medium)
+    source_model_slug: grok-4-6-medium
+    run_kind: independent
+  metrics:
+    score: 0.443298969072165
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/grok-4-6-xhigh-aa-briefcase@1.0.0
+  model: xai/grok-4.6
+  benchmark: artificial-analysis/briefcase@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: Grok 4.6 (xhigh)
+    source_model_slug: grok-4-6-xhigh
+    run_kind: independent
+  metrics:
+    elo: 1551.26
+    elo_lower: 1544.03
+    elo_upper: 1558.84
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/aa-briefcase
+    redistributable: true
+- id: independent/grok-4-6-xhigh-critpt@1.0.0
+  model: xai/grok-4.6
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Grok 4.6 (xhigh)
+    source_model_slug: grok-4-6-xhigh
+    run_kind: independent
+  metrics:
+    score: 0.197142857142857
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/grok-4-6-xhigh-gdpval-aa@2.0.0
+  model: xai/grok-4.6
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: Grok 4.6 (xhigh)
+    source_model_slug: grok-4-6-xhigh
+    run_kind: independent
+  metrics:
+    elo: 1667.19
+    elo_lower: 1651.6
+    elo_upper: 1682.78
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/grok-4-6-xhigh-artificial-analysis-long-context-reasoning@1.1.0
+  model: xai/grok-4.6
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Grok 4.6 (xhigh)
+    source_model_slug: grok-4-6-xhigh
+    run_kind: independent
+  metrics:
+    score: 0.81
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/grok-4-6-xhigh-omniscience@1.0.0
+  model: xai/grok-4.6
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Grok 4.6 (xhigh)
+    source_model_slug: grok-4-6-xhigh
+    run_kind: independent
+  metrics:
+    index: 29.3166666666667
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/grok-4-6-xhigh-humanitys-last-exam@1.0.0
+  model: xai/grok-4.6
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Grok 4.6 (xhigh)
+    source_model_slug: grok-4-6-xhigh
+    run_kind: independent
+  metrics:
+    accuracy: 0.440685820203893
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/grok-4-6-xhigh-terminalbench-v2-1@1.0.0
+  model: xai/grok-4.6
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: Grok 4.6 (xhigh)
+    source_model_slug: grok-4-6-xhigh
+    run_kind: independent
+  metrics:
+    resolved: 0.880149812734082
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/grok-4-6-xhigh-gpqa-diamond@1.0.0
+  model: xai/grok-4.6
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Grok 4.6 (xhigh)
+    source_model_slug: grok-4-6-xhigh
+    run_kind: independent
+  metrics:
+    accuracy: 0.935353535353535
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/grok-4-6-xhigh-scicode@1.0.0
+  model: xai/grok-4.6
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: xhigh
+  subject:
+    source_model: Grok 4.6 (xhigh)
+    source_model_slug: grok-4-6-xhigh
+    run_kind: independent
+  metrics:
+    score: 0.530092592592593
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/grok-4-6-xhigh-tau3-banking@1.0.0
+  model: xai/grok-4.6
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: Grok 4.6 (xhigh)
+    source_model_slug: grok-4-6-xhigh
+    run_kind: independent
+  metrics:
+    score: 0.43298969072165
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/grok-4-5-critpt@1.0.0
+  model: xai/grok-4.5
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Grok 4.5 (high)
+    source_model_slug: grok-4-5
+    run_kind: independent
+  metrics:
+    score: 0.154285714285714
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/grok-4-5-gdpval-aa@2.0.0
+  model: xai/grok-4.5
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: Grok 4.5 (high)
+    source_model_slug: grok-4-5
+    run_kind: independent
+  metrics:
+    elo: 1434.94
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/grok-4-5-artificial-analysis-long-context-reasoning@1.1.0
+  model: xai/grok-4.5
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Grok 4.5 (high)
+    source_model_slug: grok-4-5
+    run_kind: independent
+  metrics:
+    score: 0.793333333333333
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/grok-4-5-omniscience@1.0.0
+  model: xai/grok-4.5
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Grok 4.5 (high)
+    source_model_slug: grok-4-5
+    run_kind: independent
+  metrics:
+    index: 25.3166666666667
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/grok-4-5-humanitys-last-exam@1.0.0
+  model: xai/grok-4.5
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Grok 4.5 (high)
+    source_model_slug: grok-4-5
+    run_kind: independent
+  metrics:
+    accuracy: 0.42678405931418
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/grok-4-5-terminalbench-v2-1@1.0.0
+  model: xai/grok-4.5
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: Grok 4.5 (high)
+    source_model_slug: grok-4-5
+    run_kind: independent
+  metrics:
+    resolved: 0.816479400749064
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/grok-4-5-gpqa-diamond@1.0.0
+  model: xai/grok-4.5
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Grok 4.5 (high)
+    source_model_slug: grok-4-5
+    run_kind: independent
+  metrics:
+    accuracy: 0.931313131313131
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/grok-4-5-scicode@1.0.0
+  model: xai/grok-4.5
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: high
+  subject:
+    source_model: Grok 4.5 (high)
+    source_model_slug: grok-4-5
+    run_kind: independent
+  metrics:
+    score: 0.549768518518518
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/grok-4-5-tau3-banking@1.0.0
+  model: xai/grok-4.5
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: Grok 4.5 (high)
+    source_model_slug: grok-4-5
+    run_kind: independent
+  metrics:
+    score: 0.420618556701031
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true

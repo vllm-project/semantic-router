@@ -26,20 +26,4 @@ presentation:
   monochrome: false
 conformance:
   status: unverified
-models:
-- catalog: apodex/apodex-1.1
-  id: apodex-1.1
-  protocols: &apodex-protocols
-  - openai/chat-completions@1
-  - openai/responses@1
-  - anthropic/messages@1
-  lifecycle: active
-  verification: &apodex-verification
-    status: claimed
-    verified_at: 2026-09-05
-    source: https://platform.apodex.ai/docs/models
-- catalog: apodex/apodex-1.1-mini
-  id: apodex-1.1-mini
-  protocols: *apodex-protocols
-  lifecycle: active
-  verification: *apodex-verification
+models: []

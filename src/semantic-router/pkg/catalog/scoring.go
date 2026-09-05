@@ -218,7 +218,7 @@ func preferredEvaluationEffort(
 			return family.Default
 		}
 	}
-	for _, effort := range []string{"default", "medium", "high", "max", "xhigh", "published"} {
+	for _, effort := range []string{"default", "medium", "high", "max", "xhigh", "unspecified"} {
 		if _, ok := values[effort]; ok {
 			return effort
 		}
@@ -329,9 +329,9 @@ func (selected *selectedEvaluationRecords) addMetric(
 	}
 	selected.ensureEffort(record.Model, record.ReasoningEffort)
 	key := evaluationMetricKey(record.Benchmark, record.BenchmarkProfile, metricID)
-	if previous, exists := selected.values[record.Model][record.ReasoningEffort][key]; exists && previous != value {
+	if _, exists := selected.values[record.Model][record.ReasoningEffort][key]; exists {
 		return fmt.Errorf(
-			"%s conflicts with another available value for model %q effort %q metric %q",
+			"%s duplicates another available value for model %q effort %q metric %q",
 			path, record.Model, record.ReasoningEffort, fullMetricID,
 		)
 	}

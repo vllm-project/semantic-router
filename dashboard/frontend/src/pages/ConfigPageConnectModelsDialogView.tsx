@@ -120,6 +120,18 @@ function ProviderStage({ controller }: Pick<Props, 'controller'>) {
           onChoose={controller.chooseProvider}
         />
       ))}
+      {!controller.search.trim() && controller.hiddenProviderCount > 0 ? (
+        <button
+          type="button"
+          className={styles.moreProvidersButton}
+          aria-expanded={controller.showAllProviders}
+          onClick={() => controller.setShowAllProviders((current) => !current)}
+        >
+          {controller.showAllProviders
+            ? 'Show featured providers'
+            : `More providers (${controller.hiddenProviderCount})`}
+        </button>
+      ) : null}
     </div>
   )
 }
@@ -185,7 +197,9 @@ function ConnectionPanel({ controller }: Pick<Props, 'controller'>) {
           <span>
             {provider.supportsModelDiscovery
               ? 'Credentials stay private and are only used for this provider.'
-              : 'This provider does not expose catalog-backed discovery; enter a model ID below.'}
+              : controller.catalogModels.size > 0
+                ? 'Choose from the built-in inventory or enter a custom model ID below.'
+                : 'This provider does not expose catalog-backed discovery; enter a model ID below.'}
           </span>
         </div>
         {provider.supportsModelDiscovery ? (

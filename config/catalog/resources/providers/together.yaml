@@ -18,5 +18,6 @@ presentation:
   logo: package:together
   monogram: T
   monochrome: false
+  featured: true
 conformance:
   status: unverified

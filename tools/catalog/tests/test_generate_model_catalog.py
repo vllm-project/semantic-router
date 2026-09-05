@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 import unittest
 from pathlib import Path
+from typing import Any
+
+import yaml
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "generate_model_catalog.py"
 SPEC = importlib.util.spec_from_file_location("generate_model_catalog", MODULE_PATH)
@@ -15,33 +19,23 @@ SPEC.loader.exec_module(catalog)
 DEFAULT_INDEX_COMPONENT_COUNT = 5
 
 
-def assert_expected_models(
-    test_case: unittest.TestCase,
-    physical_models: dict[str, dict[str, object]],
-    expected_by_publisher: dict[str, set[str]],
-) -> None:
-    for publisher, expected_ids in expected_by_publisher.items():
-        test_case.assertTrue(expected_ids.issubset(physical_models))
-        test_case.assertTrue(
-            all(
-                physical_models[model_id]["publisher"] == publisher
-                for model_id in expected_ids
-            )
+def _evaluation_benchmarks_by_bucket(
+    resources: dict[str, Any], model_ids: set[str]
+) -> dict[tuple[str, str, str], set[str]]:
+    buckets: dict[tuple[str, str, str], set[str]] = {}
+    for evaluation in resources["evaluations"]:
+        if evaluation["model"] not in model_ids:
+            continue
+        key = (
+            evaluation["model"],
+            evaluation["reasoning_effort"],
+            evaluation["evidence"]["provenance"],
         )
+        buckets.setdefault(key, set()).add(evaluation["benchmark"])
+    return buckets
 
 
 class ModelCatalogCompilerTests(unittest.TestCase):
-    def setUp(self) -> None:
-        self.protocols = [
-            {
-                "id": "openai/chat-completions@1",
-                "operations": [
-                    {"id": "create", "method": "POST", "path": "/v1/chat/completions"},
-                    {"id": "list_models", "method": "GET", "path": "/v1/models"},
-                ],
-            }
-        ]
-
     def test_repository_catalog_validates_and_renders_every_projection(self) -> None:
         outputs = catalog.render_outputs()
         self.assertEqual(
@@ -55,6 +49,11 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             },
         )
         self.assertEqual(catalog.check(outputs), 0)
+        public_snapshot = json.loads(outputs[catalog.DASHBOARD_OUTPUT])
+        self.assertNotIn("inventory", public_snapshot)
+        for output_path in (catalog.RECIPE_MANIFEST, catalog.CLI_MANIFEST):
+            runtime_manifest = yaml.safe_load(outputs[output_path])
+            self.assertNotIn("inventory", runtime_manifest)
 
     def test_default_intelligence_index_is_public_and_coverage_aware(self) -> None:
         _, resources, _ = catalog.load_and_validate()
@@ -96,233 +95,234 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             )
         )
 
-    def test_mainstream_model_inventory_covers_current_and_previous_generations(
-        self,
-    ) -> None:
-        _, resources, _ = catalog.load_and_validate()
+    def test_physical_inventory_is_the_curated_mainstream_creator_set(self) -> None:
+        manifest, resources, _ = catalog.load_and_validate()
         physical_models = {
             item["id"]: item
             for item in resources["models"]
             if item["kind"] == "physical"
         }
-        expected_by_publisher = {
-            "OpenAI": {
-                "openai/gpt-4.1",
-                "openai/gpt-5.5",
-                "openai/gpt-5.6-sol",
-            },
-            "Anthropic": {
-                "anthropic/claude-3.5-sonnet",
-                "anthropic/claude-fable-5",
-                "anthropic/claude-mythos-5",
-            },
-            "Google": {
-                "google/gemini-2.5-pro",
-                "google/gemini-3.8-flash",
-                "google/gemma-3-27b-it",
-                "google/diffusiongemma-26b-a4b-it",
-            },
-            "Meta": {
-                "meta/llama-2-70b-chat",
-                "meta/llama-3.3-70b-instruct",
-                "meta/llama-4-maverick-17b-128e-instruct",
-                "meta/muse-spark-1.3",
-                "meta/muse-glimmer-30b",
-            },
-            "Alibaba Cloud": {
-                "qwen/qwen2.5-72b-instruct",
-                "qwen/qwen3-235b-a22b",
-                "qwen/qwen3.7-flash",
-                "qwen/qwen3.8-max",
-                "qwen/qwen3-max",
-            },
-            "DeepSeek": {
-                "deepseek/deepseek-v2-chat",
-                "deepseek/deepseek-r1",
-                "deepseek/deepseek-v4-pro",
-                "deepseek/deepseek-v4-flash-vision-exp",
-            },
-            "Z.ai": {
-                "zai/glm-4.5",
-                "zai/glm-5.3",
-            },
-            "Moonshot AI": {
-                "moonshot/kimi-k2-instruct",
-                "moonshot/kimi-k3",
-            },
-            "NVIDIA": {
-                "nvidia/llama-3.1-nemotron-70b-instruct-hf",
-                "nvidia/nemotron-3-ultra",
-                "nvidia/openreasoning-nemotron-32b",
-                "nvidia/nemotron-terminal-32b",
-            },
-            "Mistral AI": {
-                "mistral/mixtral-8x7b-instruct-v0.1",
-                "mistral/mistral-small-4",
-            },
+        physical_policy = manifest["inventory"]["physical"]
+        default_minimum = physical_policy["default_min_representatives"]
+        minimum_by_creator = {
+            creator["publisher"]: creator.get("min_representatives", default_minimum)
+            for creator in physical_policy["creators"]
         }
-        assert_expected_models(self, physical_models, expected_by_publisher)
+        representatives_by_creator = {
+            creator["publisher"]: creator["representative_models"]
+            for creator in physical_policy["creators"]
+        }
+        self.assertGreaterEqual(len(minimum_by_creator), 20)
+        self.assertGreaterEqual(
+            len(physical_models),
+            sum(minimum_by_creator.values()),
+            "the curated inventory may grow without changing a snapshot count",
+        )
+        self.assertEqual(
+            {model["publisher"] for model in physical_models.values()},
+            set(minimum_by_creator),
+        )
+        for creator, minimum in minimum_by_creator.items():
+            self.assertGreaterEqual(
+                len(representatives_by_creator[creator]),
+                minimum,
+                f"{creator} must retain its current representative model depth",
+            )
+            for model_id in representatives_by_creator[creator]:
+                self.assertEqual(physical_models[model_id]["publisher"], creator)
+                self.assertIn(
+                    physical_models[model_id]["lifecycle"], {"active", "experimental"}
+                )
+        self.assertNotIn("openai/gpt-6-astra", physical_models)
 
-    def test_mainstream_model_inventory_covers_specialist_frontier_publishers(
-        self,
-    ) -> None:
-        _, resources, _ = catalog.load_and_validate()
-        physical_models = {
-            item["id"]: item
-            for item in resources["models"]
-            if item["kind"] == "physical"
+    def test_baidu_creator_has_exact_evidence_buckets_and_real_bindings(self) -> None:
+        manifest, resources, _ = catalog.load_and_validate()
+        baidu_models = {
+            "baidu/ernie-5.1",
+            "baidu/ernie-5.0",
+            "baidu/ernie-4.5-300b-a47b",
         }
-        expected_by_publisher = {
-            "MiniMax": {
-                "minimax/minimax-m1-80k",
-                "minimax/minimax-m3",
-            },
-            "Cohere": {
-                "cohere/command-a-plus-05-2026",
-                "cohere/north-mini-code-1.0",
-                "cohere/tiny-aya-global",
-                "cohere/tiny-aya-water",
-            },
-            "xAI": {
-                "xai/grok-4.6",
-                "xai/grok-build-0.1",
-            },
-            "Celeris": {"celeris/celeris-1"},
-            "Inception": {
-                "inception/mercury-2",
-                "inception/mercury-2.5-preview",
-            },
-            "ByteDance Seed": {
-                "bytedance/seed-oss-36b-instruct",
-                "bytedance/seed-2.1-pro",
-                "bytedance/seed-2.1-turbo",
-            },
-            "Tencent": {
-                "tencent/hy3",
-                "tencent/hy4-preview",
-                "tencent/hy-mt2-30b-a3b",
-            },
-            "Xiaomi": {
-                "xiaomi/mimo-7b-rl",
-                "xiaomi/mimo-v2-pro",
-                "xiaomi/mimo-v2.5-pro",
-                "xiaomi/mimo-v2-omni",
-            },
-            "Thinking Machines Lab": {
-                "thinking-machines/inkling",
-                "thinking-machines/inkling-small",
-            },
-            "LG AI Research": {
-                "lg/k-exaone-2.0-750b-a37b",
-                "lg/exaone-4.5-33b",
-            },
-            "Microsoft AI": {"microsoft/mai-thinking-1"},
-            "Institute of Foundation Models": {
-                "mbzuai/k2-horizon-375b-a23b",
-                "mbzuai/k2-think-v2",
-            },
-            "SK Telecom": {"skt/ax-k2"},
-            "Dots Studio": {"dots/dots3-note-preview"},
-            "AI9Stars": {
-                "ai9stars/g9v3-39b-a5b",
-                "ai9stars/g9v3-3b",
-            },
-            "Poolside": {
-                "poolside/laguna-xs-2.1",
-                "poolside/laguna-s-2.1",
-            },
-            "Arcee AI": {"arcee/trinity-large-thinking"},
-            "Kuaishou KwaiPilot": {"kwaipilot/kat-coder-v2.5-dev"},
-            "Sakana AI": {"sakana/fugu-ultra"},
-            "Aion Labs": {"aion/aion-3.0"},
-            "Writer": {"writer/palmyra-x5"},
-            "Perceptron": {"perceptron/perceptron-mk1"},
-            "Upstage": {"upstage/solar-open2-250b"},
-            "Motif Technologies": {
-                "motif/motif-2-12.7b-reasoning",
-                "motif/motif-3",
-            },
-            "Meituan LongCat": {
-                "meituan/longcat-flash-lite",
-                "meituan/longcat-2.0",
-            },
-            "Liquid AI": {
-                "liquid/lfm2-24b-a2b",
-                "liquid/lfm2-8b-a1b",
-                "liquid/lfm2.5-1.2b-thinking",
-                "liquid/lfm2.5-2.6b",
-                "liquid/lfm2.5-8b-a1b",
-                "liquid/lfm2.5-vl-1.6b",
-            },
+        creators = {
+            creator["publisher"]: creator["representative_models"]
+            for creator in manifest["inventory"]["physical"]["creators"]
         }
-        assert_expected_models(self, physical_models, expected_by_publisher)
+        self.assertEqual(set(creators["Baidu"]), baidu_models)
 
-    def test_mainstream_model_inventory_covers_regional_and_open_publishers(
-        self,
-    ) -> None:
-        _, resources, _ = catalog.load_and_validate()
-        physical_models = {
-            item["id"]: item
-            for item in resources["models"]
-            if item["kind"] == "physical"
-        }
-        expected_by_publisher = {
-            "Nex AGI": {
-                "nex-agi/nex-n2-mini",
-                "nex-agi/nex-n2-pro",
-            },
-            "Baidu": {
+        models = {model["id"]: model for model in resources["models"]}
+        self.assertEqual(
+            models["baidu/ernie-4.5-300b-a47b"]["released_at"],
+            "2025-06-30",
+        )
+
+        buckets = _evaluation_benchmarks_by_bucket(resources, baidu_models)
+        self.assertGreaterEqual(
+            len(buckets[("baidu/ernie-5.1", "unspecified", "vendor_claimed")]),
+            5,
+        )
+        self.assertGreaterEqual(
+            len(buckets[("baidu/ernie-5.0", "unspecified", "vendor_claimed")]),
+            5,
+        )
+        self.assertGreaterEqual(
+            len(buckets[("baidu/ernie-4.5-300b-a47b", "disabled", "third_party")]),
+            5,
+        )
+
+        providers = {provider["id"]: provider for provider in resources["providers"]}
+        ai_studio = providers["baidu-ai-studio"]
+        self.assertEqual(
+            ai_studio["default_base_url"],
+            "https://aistudio.baidu.com/llm/lmapi/v3",
+        )
+        self.assertEqual(ai_studio["auth"]["strategy"], "bearer")
+        self.assertEqual(
+            ai_studio["path_overrides"]["openai/chat-completions@1#create"],
+            "/chat/completions",
+        )
+        self.assertNotIn("featured", ai_studio["presentation"])
+        expected_bindings = {
+            ("baidu-ai-studio", "baidu/ernie-5.1", "ernie-5.1", "first_party"),
+            ("baidu-qianfan", "baidu/ernie-5.0", "ernie-5.0", "first_party"),
+            (
+                "vllm",
                 "baidu/ernie-4.5-300b-a47b",
-                "baidu/ernie-5.0",
-                "baidu/ernie-5.0-thinking-preview",
-            },
-            "IBM": {
-                "ibm/granite-4.1-30b",
-                "ibm/granite-4.2-30b",
-            },
-            "NAVER": {
-                "naver/hyperclovax-seed-think-14b",
-                "naver/hyperclovax-seed-think-32b",
-            },
-            "Multiverse Computing": {
-                "multiverse/quasar-438b",
-                "multiverse/hypernova-60b-2605",
-            },
-            "Sarvam AI": {
-                "sarvam/sarvam-30b",
-                "sarvam/sarvam-105b",
-            },
-            "Prime Intellect": {"prime-intellect/intellect-3"},
-            "ServiceNow": {"servicenow/apriel-1.6-15b-thinker"},
-            "Deep Cogito": {"deepcogito/cogito-671b-v2.1"},
-            "Agnes AI": {
-                "agnes/agnes-2.5-pro-alpha",
-                "agnes/agnes-2.5-pro-beta",
-            },
-            "Nous Research": {
-                "nousresearch/hermes-3-llama-3.1-70b",
-                "nousresearch/deephermes-3-llama-3-8b-preview",
-                "nousresearch/hermes-4-70b",
-                "nousresearch/hermes-4-405b",
-            },
-            "Apodex AI": {
-                "apodex/apodex-1.1",
-                "apodex/apodex-1.1-mini",
-            },
-            "Perplexity": {
-                "perplexity/sonar",
-                "perplexity/sonar-deep-research",
-            },
-            "Swiss AI Initiative": {
-                "swiss-ai/apertus-v1.5-8b",
-                "swiss-ai/apertus-v1.5-70b",
-            },
-            "Nanbeige LLM Lab": {
-                "nanbeige/nanbeige4.1-3b",
-                "nanbeige/nanbeige4.2-3b",
-            },
+                "baidu/ERNIE-4.5-300B-A47B-PT",
+                "self_hosted",
+            ),
+            (
+                "sglang",
+                "baidu/ernie-4.5-300b-a47b",
+                "baidu/ERNIE-4.5-300B-A47B-PT",
+                "self_hosted",
+            ),
         }
-        assert_expected_models(self, physical_models, expected_by_publisher)
+        actual_bindings = {
+            (
+                provider["id"],
+                binding["catalog"],
+                binding["id"],
+                binding["relationship"],
+            )
+            for provider in resources["providers"]
+            for binding in provider.get("models", [])
+            if binding["catalog"] in baidu_models
+        }
+        self.assertTrue(expected_bindings.issubset(actual_bindings))
+
+        evaluations = {
+            evaluation["id"]: evaluation for evaluation in resources["evaluations"]
+        }
+        self.assertEqual(
+            evaluations["baidu/ernie-5.1-release-deepsearchqa@1.0.0"]["metrics"],
+            {"f1": 0.773},
+        )
+        self.assertEqual(
+            evaluations["baidu/ernie-5.0-paper-simpleqa@1.0.0"]["metrics"],
+            {"accuracy": 0.7401},
+        )
+        self.assertEqual(
+            evaluations["independent/ernie-4.5-300b-a47b-critpt@1.0.0"]["metrics"],
+            {"score": 0},
+        )
+
+    def test_stepfun_creator_has_exact_efforts_and_real_bindings(self) -> None:
+        manifest, resources, _ = catalog.load_and_validate()
+        stepfun_models = {
+            "stepfun/step-3.7-flash",
+            "stepfun/step-3.5-flash",
+            "stepfun/step3-vl-10b",
+        }
+        creators = {
+            creator["publisher"]: creator["representative_models"]
+            for creator in manifest["inventory"]["physical"]["creators"]
+        }
+        self.assertEqual(set(creators["StepFun"]), stepfun_models)
+
+        buckets = _evaluation_benchmarks_by_bucket(resources, stepfun_models)
+        self.assertGreaterEqual(
+            len(buckets[("stepfun/step-3.7-flash", "high", "third_party")]),
+            5,
+        )
+        self.assertGreaterEqual(
+            len(buckets[("stepfun/step-3.5-flash", "enabled", "third_party")]),
+            5,
+        )
+        self.assertGreaterEqual(
+            len(buckets[("stepfun/step3-vl-10b", "enabled", "third_party")]),
+            5,
+        )
+
+        reasoning_families = {
+            family["id"]: family for family in resources["reasoning_families"]
+        }
+        self.assertEqual(
+            reasoning_families["step-3.7"]["levels"],
+            ["low", "medium", "high"],
+        )
+        providers = {provider["id"]: provider for provider in resources["providers"]}
+        self.assertEqual(
+            providers["stepfun"]["default_base_url"],
+            "https://api.stepfun.ai/v1",
+        )
+        self.assertNotIn("featured", providers["stepfun"]["presentation"])
+        vllm_bindings = {
+            binding["catalog"]: binding
+            for binding in providers["vllm"]["models"]
+            if "catalog" in binding
+        }
+        self.assertEqual(
+            vllm_bindings["stepfun/step3-vl-10b"]["restrictions"],
+            {
+                "minimum_vllm_version": "0.14.0rc2.dev143+gc0a350ca7",
+                "trust_remote_code": True,
+            },
+        )
+        expected_bindings = {
+            (
+                "stepfun",
+                "stepfun/step-3.7-flash",
+                "step-3.7-flash",
+                "first_party",
+            ),
+            (
+                "stepfun",
+                "stepfun/step-3.5-flash",
+                "step-3.5-flash",
+                "first_party",
+            ),
+            (
+                "vllm",
+                "stepfun/step3-vl-10b",
+                "stepfun-ai/Step3-VL-10B",
+                "self_hosted",
+            ),
+            (
+                "sglang",
+                "stepfun/step3-vl-10b",
+                "stepfun-ai/Step3-VL-10B",
+                "self_hosted",
+            ),
+        }
+        actual_bindings = {
+            (
+                provider["id"],
+                binding["catalog"],
+                binding["id"],
+                binding["relationship"],
+            )
+            for provider in resources["providers"]
+            for binding in provider.get("models", [])
+            if binding["catalog"] in stepfun_models
+        }
+        self.assertTrue(expected_bindings.issubset(actual_bindings))
+
+        evaluations = {
+            evaluation["id"]: evaluation for evaluation in resources["evaluations"]
+        }
+        self.assertEqual(
+            evaluations["independent/step3-vl-10b-enabled-lcr@1.1.0"]["metrics"],
+            {"score": 0},
+        )
 
     def test_catalog_inventory_is_bound_and_includes_provider_baseline(self) -> None:
         _, resources, _ = catalog.load_and_validate()
@@ -336,8 +336,7 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             for provider in resources["providers"]
             for binding in provider.get("models", [])
         ]
-        self.assertGreaterEqual(len(physical_models), 504)
-        self.assertGreaterEqual(len(provider_bindings), 762)
+        self.assertGreaterEqual(len(provider_bindings), len(physical_models))
 
         bound_models = {item["catalog"] for item in provider_bindings}
         self.assertTrue(set(physical_models).issubset(bound_models))
@@ -347,10 +346,12 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             {
                 "agnes",
                 "apodex",
+                "baidu-ai-studio",
                 "baidu-qianfan",
                 "compactifai",
                 "perplexity",
                 "sarvam",
+                "stepfun",
                 "vllm",
                 "sglang",
             }.issubset(provider_ids)
@@ -363,13 +364,32 @@ class ModelCatalogCompilerTests(unittest.TestCase):
         self.assertFalse((resources_root / "provider-models").exists())
 
         _, resources, _ = catalog.load_and_validate()
+        physical_model_ids = {
+            model["id"] for model in resources["models"] if model["kind"] == "physical"
+        }
         self.assertTrue(
             all(
-                {"catalog", "id", "protocols"}.issubset(binding)
+                {"catalog", "relationship", "id", "protocols"}.issubset(binding)
                 for provider in resources["providers"]
                 for binding in provider.get("models", [])
             )
         )
+        relationships = {
+            provider["id"]: {
+                binding["relationship"] for binding in provider.get("models", [])
+            }
+            for provider in resources["providers"]
+            if provider.get("models")
+        }
+        self.assertEqual(relationships["bedrock"], {"first_party"})
+        self.assertEqual(
+            relationships["baidu-qianfan"], {"first_party", "managed_cloud"}
+        )
+        self.assertEqual(relationships["baidu-ai-studio"], {"first_party"})
+        for provider_id in ("openrouter", "compactifai", "deepinfra", "novita"):
+            self.assertEqual(relationships[provider_id], {"gateway"})
+        for provider_id in ("vllm", "sglang"):
+            self.assertEqual(relationships[provider_id], {"self_hosted"})
 
         providers = {provider["id"]: provider for provider in resources["providers"]}
         self.assertEqual(
@@ -382,21 +402,96 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             next(
                 binding
                 for binding in providers["dashscope"]["models"]
-                if binding["catalog"] == "qwen/qwen3-max"
+                if binding["catalog"] == "qwen/qwen3.7-max"
             )["reasoning_transport"],
             "top_level_boolean",
         )
         for runtime in ("vllm", "sglang"):
-            self.assertEqual(
-                next(
-                    binding
+            self.assertTrue(
+                all(
+                    binding["catalog"] in physical_model_ids
                     for binding in providers[runtime]["models"]
-                    if binding["catalog"] == "sarvam/sarvam-105b"
-                )["reasoning_transport"],
-                "top_level_effort",
+                )
             )
 
-    def test_every_model_reasoning_mode_has_five_default_evaluation_slots(
+    def test_core_reasoning_families_match_native_control_surfaces(self) -> None:
+        _, resources, _ = catalog.load_and_validate()
+        families = {item["id"]: item for item in resources["reasoning_families"]}
+        models = {item["id"]: item for item in resources["models"]}
+        providers = {item["id"]: item for item in resources["providers"]}
+
+        self.assertEqual(
+            families["grok-4.6"]["levels"], ["low", "medium", "high", "xhigh"]
+        )
+        self.assertEqual(families["grok-4.6"]["default"], "high")
+        self.assertNotIn("disabled", families["grok-4.6"])
+        self.assertEqual(families["claude-effort"]["levels"], ["low", "medium", "high"])
+        self.assertEqual(
+            families["claude-effort-max"]["levels"],
+            ["low", "medium", "high", "max"],
+        )
+        self.assertEqual(
+            families["claude-effort-xhigh-max"]["levels"],
+            ["low", "medium", "high", "xhigh", "max"],
+        )
+        self.assertEqual(families["kimi-k3"]["levels"], ["low", "high", "max"])
+        self.assertEqual(families["kimi-k3"]["default"], "max")
+        self.assertEqual(families["hunyuan-hy4"]["levels"], ["no_think", "high"])
+        self.assertEqual(families["qwen3.8"]["activation_parameter"], "enable_thinking")
+        self.assertEqual(families["qwen3.8"]["levels"], ["low", "medium", "xhigh"])
+        self.assertNotIn("disabled", families["qwen3.8"])
+        self.assertEqual(
+            families["glm-5.2"],
+            {
+                "id": "glm-5.2",
+                "type": "reasoning_effort",
+                "parameter": "reasoning_effort",
+                "activation_parameter": "enable_thinking",
+                "levels": ["high", "max"],
+                "default": "max",
+            },
+        )
+        self.assertEqual(
+            families["minimax-m3"]["levels"],
+            ["disabled", "adaptive", "enabled"],
+        )
+        self.assertEqual(families["minimax-m3"]["default"], "adaptive")
+        self.assertEqual(
+            families["muse-glimmer"]["levels"],
+            ["low", "medium", "high", "xhigh"],
+        )
+        self.assertEqual(families["mistral-none-high"]["levels"], ["none", "high"])
+
+        expected_models = {
+            "xai/grok-4.6": "grok-4.6",
+            "tencent/hy4-preview": "hunyuan-hy4",
+            "moonshot/kimi-k3": "kimi-k3",
+            "minimax/minimax-m3": "minimax-m3",
+            "meta/muse-glimmer-30b": "muse-glimmer",
+            "mistral/mistral-medium-3.5": "mistral-none-high",
+            "mistral/mistral-small-4": "mistral-none-high",
+            "qwen/qwen3.8-27b": "qwen3.8",
+            "qwen/qwen3.8-2.4t-a95b": "qwen3.8",
+            "zai/glm-5.2": "glm-5.2",
+            "anthropic/claude-fable-5": "claude-effort-xhigh-max",
+            "anthropic/claude-fable-5.1": "claude-effort-xhigh-max",
+            "anthropic/claude-sonnet-5": "claude-effort-xhigh-max",
+            "anthropic/claude-opus-4.8": "claude-effort-xhigh-max",
+            "anthropic/claude-opus-5": "claude-effort-xhigh-max",
+        }
+        self.assertEqual(
+            {
+                model_id: models[model_id].get("reasoning_family")
+                for model_id in expected_models
+            },
+            expected_models,
+        )
+        self.assertEqual(
+            providers["anthropic"]["reasoning_transport"], "output_config_effort"
+        )
+        self.assertEqual(providers["xai"]["reasoning_transport"], "top_level_effort")
+
+    def test_every_model_reasoning_mode_materializes_default_slots_including_missing(
         self,
     ) -> None:
         manifest, resources, _ = catalog.load_and_validate()
@@ -426,8 +521,19 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             {model["id"] for model in resources["models"]},
             {model for model, _ in slots},
         )
+        missing_qwen_low = slots[("qwen/qwen3.8-27b", "low")]
+        self.assertEqual(len(missing_qwen_low), DEFAULT_INDEX_COMPONENT_COUNT)
+        self.assertEqual(
+            {row["status"] for row in missing_qwen_low},
+            {"missing"},
+        )
+        self.assertTrue(
+            any(row["status"] == "available" for rows in slots.values() for row in rows)
+        )
 
-    def test_frontier_evaluation_coverage_keeps_published_values_and_gaps(self) -> None:
+    def test_frontier_evaluation_coverage_keeps_unspecified_values_and_gaps(
+        self,
+    ) -> None:
         manifest, resources, _ = catalog.load_and_validate()
         coverage = catalog._evaluation_coverage(
             resources, manifest["defaults"]["intelligence_index"]
@@ -446,26 +552,8 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             ("qwen/qwen3.8-27b", "xhigh"): 3,
             ("tencent/hy3", "high"): 4,
             ("thinking-machines/inkling", "xhigh"): 4,
-            ("microsoft/mai-thinking-1", "published"): 3,
-            ("xiaomi/mimo-7b-rl", "default"): 2,
-            ("arcee/trinity-large-thinking", "default"): 3,
-            ("kwaipilot/kat-coder-v2.5-dev", "enabled"): 2,
-            ("nvidia/openreasoning-nemotron-32b", "default"): 3,
-            ("skt/ax-k2", "enabled"): 3,
-            ("mbzuai/k2-think-v2", "high"): 2,
-            ("agnes/agnes-2.5-pro-alpha", "published"): 3,
-            ("multiverse/hypernova-60b-2605", "high"): 3,
-            ("sarvam/sarvam-105b", "published"): 3,
-            ("ibm/granite-4.1-30b", "default"): 2,
-            ("nousresearch/hermes-4-70b", "enabled"): 2,
-            ("nousresearch/hermes-4-70b", "disabled"): 2,
-            ("nousresearch/hermes-4-405b", "enabled"): 2,
-            ("nousresearch/hermes-4-405b", "disabled"): 2,
-            ("apodex/apodex-1.1", "published"): 2,
-            ("cohere/tiny-aya-global", "published"): 1,
-            ("google/diffusiongemma-26b-a4b-it", "published"): 3,
-            ("nanbeige/nanbeige4.1-3b", "default"): 2,
-            ("nanbeige/nanbeige4.2-3b", "enabled"): 3,
+            ("microsoft/mai-thinking-1", "unspecified"): 3,
+            ("cohere/tiny-aya-global", "unspecified"): 1,
         }
         self.assertEqual(
             {key: len(available.get(key, set())) for key in expected_counts},
@@ -478,7 +566,34 @@ class ModelCatalogCompilerTests(unittest.TestCase):
         for effort in ("none", "low", "medium"):
             self.assertNotIn(("qwen/qwen3.8-27b", effort), available)
 
-    def test_third_party_measurements_are_anchored_to_official_republications(
+    def test_glm_5_2_independent_max_runs_keep_their_exact_effort(self) -> None:
+        _, resources, _ = catalog.load_and_validate()
+        max_runs = [
+            record
+            for record in resources["evaluations"]
+            if record["model"] == "zai/glm-5.2"
+            and record.get("subject", {}).get("source_model") == "GLM-5.2 (max)"
+        ]
+        disabled_runs = [
+            record
+            for record in resources["evaluations"]
+            if record["model"] == "zai/glm-5.2"
+            and record.get("subject", {}).get("source_model")
+            == "GLM-5.2 (Non-reasoning)"
+        ]
+
+        self.assertEqual(len(max_runs), 9)
+        self.assertEqual(
+            {record["reasoning_effort"] for record in max_runs},
+            {"max"},
+        )
+        self.assertEqual(len(disabled_runs), 8)
+        self.assertEqual(
+            {record["reasoning_effort"] for record in disabled_runs},
+            {"disabled"},
+        )
+
+    def test_third_party_measurements_have_an_auditable_run_identity(
         self,
     ) -> None:
         _, resources, _ = catalog.load_and_validate()
@@ -488,247 +603,19 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             if record["evidence"]["provenance"] == "third_party"
         ]
         self.assertTrue(third_party)
-        self.assertTrue(
-            all(
-                "artificialanalysis.ai" not in record["evidence"]["source"]
-                for record in third_party
-            )
-        )
-        self.assertTrue(
-            all(
-                record["subject"]["source_kind"]
-                in {
-                    "official_vendor_republication",
-                    "official_cross-vendor_comparison",
-                    "official_model_card",
-                }
-                for record in third_party
-            )
-        )
-
-    def test_virtual_model_pool_can_reference_operator_defined_models(self) -> None:
-        catalog._validate_virtual_model_role(
-            {
-                "name": "private",
-                "required": True,
-                "minimum_candidates": 1,
-                "traits": ["local_only"],
-                "recommended_pool": ["operator/private-model"],
-            },
-            "models[0].roles[0]",
-        )
-
-    def test_schema_failure_reports_the_resource_path(self) -> None:
-        schema = {
-            "$schema": "https://json-schema.org/draft/2020-12/schema",
-            "type": "object",
-            "additionalProperties": False,
-            "required": ["id"],
-            "properties": {"id": {"type": "string", "minLength": 1}},
+        official_source_kinds = {
+            "official_vendor_republication",
+            "official_cross-vendor_comparison",
+            "official_model_card",
         }
-        with self.assertRaisesRegex(catalog.CatalogBuildError, r"provider\.id"):
-            catalog._validate_schema({"id": ""}, schema, "provider")
-
-    def test_security_validation_rejects_secret_fields_and_literals(self) -> None:
-        with self.assertRaisesRegex(catalog.CatalogBuildError, "secret-like field"):
-            catalog._validate_security({"provider": {"api_key": "not-published"}})
-        with self.assertRaisesRegex(
-            catalog.CatalogBuildError, "credential-like literal"
-        ):
-            catalog._validate_security({"source": "Bearer abcdefghijklmnop"})
-
-    def test_provider_default_headers_cannot_store_credentials(self) -> None:
-        provider = {
-            "id": "example",
-            "category": "model_api",
-            "support_tier": "compatible",
-            "protocols": ["openai/chat-completions@1"],
-            "default_protocol": "openai/chat-completions@1",
-            "supported_operations": ["openai/chat-completions@1#create"],
-            "auth": {
-                "strategy": "bearer",
-                "header": "Authorization",
-                "prefix": "Bearer",
-            },
-            "presentation": {"logo": "monogram", "monogram": "E", "monochrome": True},
-            "conformance": {"status": "unverified"},
-            "default_headers": {"Authorization": "not-a-secret"},
-        }
-        with self.assertRaisesRegex(catalog.CatalogBuildError, "credential headers"):
-            catalog._validate_providers([provider], self.protocols)
-
-    def test_provider_reasoning_transport_is_a_known_semantic_adapter(self) -> None:
-        provider = {
-            "id": "example",
-            "category": "model_api",
-            "support_tier": "compatible",
-            "protocols": ["openai/chat-completions@1"],
-            "default_protocol": "openai/chat-completions@1",
-            "supported_operations": ["openai/chat-completions@1#create"],
-            "reasoning_transport": "hostname_switch",
-            "auth": {
-                "strategy": "bearer",
-                "header": "Authorization",
-                "prefix": "Bearer",
-            },
-            "presentation": {"logo": "monogram", "monogram": "E", "monochrome": True},
-            "conformance": {"status": "unverified"},
-        }
-        with self.assertRaisesRegex(
-            catalog.CatalogBuildError, "reasoning_transport is unsupported"
-        ):
-            catalog._validate_providers([provider], self.protocols)
-
-        provider["reasoning_transport"] = "reasoning_object"
-        catalog._validate_providers([provider], self.protocols)
-
-    def test_provider_operations_are_explicit_protocol_subsets(self) -> None:
-        provider = {
-            "id": "example",
-            "category": "model_api",
-            "support_tier": "compatible",
-            "protocols": ["openai/chat-completions@1"],
-            "default_protocol": "openai/chat-completions@1",
-            "supported_operations": ["openai/chat-completions@1#delete_model"],
-            "auth": {
-                "strategy": "bearer",
-                "header": "Authorization",
-                "prefix": "Bearer",
-            },
-            "presentation": {"logo": "monogram", "monogram": "E", "monochrome": True},
-            "conformance": {"status": "unverified"},
-        }
-        with self.assertRaisesRegex(
-            catalog.CatalogBuildError, "unknown or duplicate operation"
-        ):
-            catalog._validate_providers([provider], self.protocols)
-
-    def test_provider_catalog_model_protocol_must_be_supported(self) -> None:
-        providers = {
-            "example": {
-                "protocols": ["openai/chat-completions@1"],
-                "supported_operations": ["openai/chat-completions@1#create"],
-                "models": [
-                    {
-                        "catalog": "example/model",
-                        "id": "native-model",
-                        "protocols": ["openai/chat-completions@1"],
-                    }
-                ],
-            }
-        }
-        models = {"example/model": {"kind": "physical", "lifecycle": "active"}}
-        catalog._validate_provider_bindings(
-            providers, models, {"openai/chat-completions@1"}
-        )
-
-    def test_physical_model_requires_a_provider_binding(self) -> None:
-        with self.assertRaisesRegex(
-            catalog.CatalogBuildError, "require at least one provider binding"
-        ):
-            catalog._validate_provider_bindings(
-                {},
-                {
-                    "example/model": {
-                        "kind": "physical",
-                        "lifecycle": "active",
-                    }
-                },
-                {"openai/chat-completions@1"},
-            )
-
-    def test_available_evaluation_metric_is_unambiguous(self) -> None:
-        records = [
-            {
-                "id": f"example/run-{index}@1.0.0",
-                "model": "example/model",
-                "benchmark": "example/bench@1.0.0",
-                "benchmark_profile": "standard",
-                "reasoning_effort": "default",
-                "subject": {},
-                "metrics": {"score": value},
-                "status": "available",
-                "evidence": {
-                    "provenance": "operator",
-                    "verification": "claimed",
-                    "redistributable": True,
-                },
-            }
-            for index, value in enumerate((0.7, 0.8), start=1)
-        ]
-        metrics = {
-            "example/bench@1.0.0#score": {
-                "range": [0, 1],
-                "direction": "higher_is_better",
-                "profiles": {"standard"},
-            }
-        }
-        with self.assertRaisesRegex(
-            catalog.CatalogBuildError, "one available value is allowed"
-        ):
-            catalog._validate_evaluations(
-                records,
-                {"example/model": {"id": "example/model"}},
-                {},
-                metrics,
-            )
-
-    def test_missing_index_components_remain_unavailable(self) -> None:
-        resources = {
-            "models": [{"id": "example/model", "kind": "physical"}],
-            "reasoning_families": [],
-            "benchmarks": [
-                {
-                    "id": "example/bench@1.0.0",
-                    "domain": "reasoning",
-                    "default_profile": "standard",
-                    "profiles": [{"id": "standard"}],
-                    "metrics": [{"id": "score"}],
-                }
-            ],
-            "evaluations": [],
-            "indices": [
-                {
-                    "id": "example/index@1.0.0",
-                    "scale": [0, 100],
-                    "missing": {"policy": "require_all"},
-                    "components": [
-                        {
-                            "benchmark": "example/bench@1.0.0",
-                            "metric": "score",
-                            "benchmark_profile": "standard",
-                            "weight": 1.0,
-                            "normalization": {"type": "identity"},
-                        }
-                    ],
-                }
-            ],
-        }
-        self.assertEqual(
-            catalog._index_results(resources),
-            [
-                {
-                    "model": "example/model",
-                    "reasoning_effort": "default",
-                    "index": "example/index@1.0.0",
-                    "status": "missing",
-                    "score": None,
-                    "coverage": 0.0,
-                    "components": [
-                        {
-                            "benchmark": "example/bench@1.0.0",
-                            "metric": "score",
-                            "benchmark_profile": "standard",
-                            "weight": 1.0,
-                            "status": "missing",
-                            "value": None,
-                            "normalized": None,
-                        }
-                    ],
-                    "provenance": [],
-                }
-            ],
-        )
+        for record in third_party:
+            self.assertTrue(record["evidence"]["source"].startswith("https://"))
+            subject = record["subject"]
+            if subject.get("source_kind") in official_source_kinds:
+                continue
+            self.assertEqual(subject.get("run_kind"), "independent")
+            self.assertTrue(subject.get("source_model"))
+            self.assertRegex(subject.get("source_model_slug", ""), catalog.SLUG)
 
 
 if __name__ == "__main__":

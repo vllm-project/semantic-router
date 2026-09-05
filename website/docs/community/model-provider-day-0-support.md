@@ -26,6 +26,21 @@ Model Card must therefore have at least one provider mapping. Virtual recipes ar
 recommended pools may name operator-defined custom models and are not foreign
 keys into the built-in catalog.
 
+## Curated catalog admission
+
+The built-in physical catalog is curated by mainstream model creator, not by a
+global top-model count. For an existing creator, a Day-0 contribution normally
+adds or rotates the catalog toward roughly its latest three generations or
+representative product lines. Adding a new creator changes the reviewed
+baseline in `catalog.yaml.inventory.physical`; it should explain why the company
+belongs in the mainstream set and which current lines form a useful operator
+surface. The generator enforces creator membership and minimum depth, while the
+human review decides recency and relevance.
+
+Provider support is independent. A new Provider ID may have no built-in model
+mapping and still be valuable for handwritten custom models in Add Model. Do
+not add an obscure Model Card merely to make a provider card look populated.
+
 ## Add a model
 
 1. Add or update a focused family file under
@@ -60,6 +75,11 @@ rejected. Vendor-published results retain their exact model variant, reasoning
 mode, tool mode, and harness metadata and are labeled claimed; only a frozen
 vLLM-SR run with its artifact can be labeled reproduced.
 
+`reasoning_effort` names a runtime control, not an evidence source. If a score
+does not disclose the runtime effort, use `unspecified`; keep whether the result
+was vendor-published or independently measured in `evidence.provenance` and
+`evidence.verification`.
+
 Generation emits exactly those five benchmark slots for every model and every
 selectable reasoning effort. A slot without trustworthy evidence is explicit
 `missing`, never zero. When a source reports several efforts, author a separate
@@ -82,6 +102,9 @@ silently entering this version of the default index.
    `reasoning_transport` only when the provider changes reasoning-field
    placement. Secrets and credential-bearing default headers are rejected by
    generation.
+   Reuse `output_config_effort` when the provider carries the selected level as
+   `output_config.effort`. Use `activation_parameter` only when activation is a
+   separate boolean control from the model's effort ladder.
 4. Add display name, category, logo source or monogram fallback, and
    conformance status. A missing image must never block configuration.
 5. Add code only when generic protocol, URL, and auth handling cannot represent
@@ -96,6 +119,13 @@ verification resolve paths, auth, and non-secret headers from these same
 definitions. Provider-specific reasoning placement reuses one of the catalog's
 validated transport modes; endpoint hostnames are never used as provider
 identity.
+
+Dashboard discovery applies a stricter network boundary than ordinary runtime
+dispatch. A cloud Model API must use the exact built-in origin. A self-hosted
+runtime may intentionally use a private or loopback address, but link-local and
+metadata endpoints are rejected. Redirects and environment proxies are disabled,
+and resolved addresses are checked again by the dialer before credentials are
+sent.
 
 ## Built-in and custom user configuration
 
@@ -127,6 +157,20 @@ routing:
     - name: organization/model
       tags: [production, approved]
 ```
+
+When a provider binding declares an operator-defined `deployment_name`, its
+catalog ID only records availability; the user must set
+`providers.models[].provider_model_id` (or that provider's
+`external_model_ids` entry) explicitly.
+
+Treat multiple `backend_refs` on one alias as homogeneous replicas in one
+Envoy pool. Endpoint address, port, and weight may differ; Provider ID,
+protocol/model mapping, credential source, auth and default headers, effective
+request path, and DNS/TLS behavior must not. Split heterogeneous providers or
+credentials into separate aliases so Router request shaping cannot diverge
+from the endpoint Envoy selects. The config loader and CLI generator reject an
+unsafe mixed pool with the differing semantic fields named and never include
+credential values in the error.
 
 Built-in reasoning comes from that card. A `providers.models[].reasoning`
 block is accepted only when `catalog` is omitted for a custom model.
@@ -160,14 +204,19 @@ routing:
       capabilities: [chat, tools, reasoning]
       evaluations:
         - benchmark: organization/private-eval@1.0.0
+          benchmark_profile: published-standard
+          reasoning_effort: high
           metrics:
             pass_rate: 0.82
 ```
 
 User-authored evaluations intentionally have a small surface: `benchmark` and
-`metrics`, plus optional `source`, `measured_at`, and scalar `metadata`. Catalog
-records retain richer evidence and provenance internally. Custom benchmark
-identities remain namespaced and versioned, while metric values must be finite.
+`metrics`, plus optional `benchmark_profile`, `reasoning_effort`, `source`,
+`measured_at`, and scalar `metadata`. Omit `benchmark_profile` to use a known
+benchmark's default profile; set `reasoning_effort` when the measurement came
+from a specific model effort. Catalog records retain richer evidence and
+provenance internally. Custom benchmark identities remain namespaced and
+versioned, while metric values must be finite.
 
 ## Generate and validate
 
@@ -184,7 +233,7 @@ request demonstrates:
 - stable identities and valid references;
 - protocol and capability conformance for every support claim;
 - generated Dashboard provider/model cards and logo fallback;
-- generated website support and leaderboard rows;
+- generated website support and benchmark-comparison rows;
 - no secrets or restricted benchmark data;
 - explicit missing evaluation status rather than a fabricated score.
 

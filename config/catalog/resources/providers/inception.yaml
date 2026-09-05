@@ -21,18 +21,4 @@ presentation:
   monochrome: false
 conformance:
   status: unverified
-models:
-- catalog: inception/mercury-2
-  id: mercury-2
-  protocols:
-  - openai/chat-completions@1
-  pricing:
-    currency: USD
-    prompt_per_1m: 0.25
-    cached_input_per_1m: 0.025
-    completion_per_1m: 0.75
-  lifecycle: active
-  verification:
-    status: claimed
-    verified_at: 2026-09-05
-    source: https://docs.inceptionlabs.ai/get-started/models
+models: []

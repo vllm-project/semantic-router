@@ -196,20 +196,22 @@ function validateModelReasoningFields(data: Record<string, unknown>): void {
   const reasoningFamily = textValue(data.reasoning_family)
   const reasoningType = textValue(data.reasoning_type)
   const reasoningParameter = textValue(data.reasoning_parameter)
-  const customReasoning = [
-    reasoningFamily,
+  const inlineReasoning = [
     reasoningType,
     reasoningParameter,
+    textValue(data.reasoning_activation_parameter),
     textValue(data.reasoning_default),
+    textValue(data.reasoning_disabled),
     textValue(data.reasoning_levels),
   ].some(Boolean)
+  const customReasoning = reasoningFamily || inlineReasoning
   if (catalog && customReasoning) {
     throw new Error('Built-in catalog models inherit reasoning; clear the custom reasoning fields.')
   }
-  if (reasoningFamily && (reasoningType || reasoningParameter)) {
+  if (reasoningFamily && inlineReasoning) {
     throw new Error('Choose a built-in reasoning family or inline reasoning fields, not both.')
   }
-  if ((reasoningType || reasoningParameter) && (!reasoningType || !reasoningParameter)) {
+  if (inlineReasoning && (!reasoningType || !reasoningParameter)) {
     throw new Error('Inline reasoning requires both type and parameter.')
   }
 }

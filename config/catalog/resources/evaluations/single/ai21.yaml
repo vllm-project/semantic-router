@@ -1,36 +1,325 @@
-- id: ai21/jamba-1.5-mini-model-card-mmlu-pro@1.0.0
-  model: ai21/jamba-1.5-mini
-  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-  benchmark_profile: published-standard
+- id: independent/ai21-jamba2-mini-careqa-medmarks-v1@1.0.0
+  model: ai21/jamba2-mini
+  benchmark: hpai-bsc/careqa@1.0.0
+  benchmark_profile: medmarks-v1-three-order-average
   reasoning_effort: default
   subject:
-    variant: Jamba 1.5 Mini
-    harness: vendor_evaluation
-    prompting: chain_of_thought
-    source_kind: official_model_card
+    source_model: ai21labs/AI21-Jamba2-Mini
+    source_model_slug: ai21-jamba2-mini
+    model_revision: unspecified_by_source
+    suite: Medmarks v1
+    run_kind: independent
+    dataset_variant: CareQA_en
+    dataset_split: test
+    sampling_temperature: 0.6
+    sampling_top_p: 1.0
+    rollouts: [original, shuffle-1618, shuffle-9331]
+    source_snapshot_date: '2026-09-05'
+    source_snapshot_sha256: ff910d1c24e93b4952038058a97760cdbe3c0ae3cca78ff45928ef3f0aca2896
   metrics:
-    accuracy: 0.425
+    accuracy: 0.7877008835912944
   status: available
   evidence:
-    provenance: vendor_claimed
-    verification: claimed
-    source: https://huggingface.co/ai21labs/AI21-Jamba-Mini-1.5
+    provenance: third_party
+    verification: imported
+    source: https://medmarks.ai/leaderboard_data.csv
     redistributable: true
-- id: ai21/jamba-1.5-large-model-card-mmlu-pro@1.0.0
-  model: ai21/jamba-1.5-large
-  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-  benchmark_profile: published-standard
+- id: independent/ai21-jamba2-mini-head-qa-v2-medmarks-v1@1.0.0
+  model: ai21/jamba2-mini
+  benchmark: alesi12/head-qa-v2@1.0.0
+  benchmark_profile: medmarks-v1-single-run
   reasoning_effort: default
   subject:
-    variant: Jamba 1.5 Large
-    harness: vendor_evaluation
-    prompting: chain_of_thought
-    source_kind: official_model_card
+    source_model: ai21labs/AI21-Jamba2-Mini
+    source_model_slug: ai21-jamba2-mini
+    model_revision: unspecified_by_source
+    suite: Medmarks v1
+    run_kind: independent
+    dataset_variant: en
+    dataset_split: train_as_evaluation
+    sampling_temperature: 0.6
+    sampling_top_p: 1.0
+    rollouts: [original]
+    source_snapshot_date: '2026-09-05'
+    source_snapshot_sha256: ff910d1c24e93b4952038058a97760cdbe3c0ae3cca78ff45928ef3f0aca2896
   metrics:
-    accuracy: 0.535
+    accuracy: 0.6927611412402735
   status: available
   evidence:
-    provenance: vendor_claimed
-    verification: claimed
-    source: https://huggingface.co/ai21labs/AI21-Jamba-Large-1.5
+    provenance: third_party
+    verification: imported
+    source: https://medmarks.ai/leaderboard_data.csv
+    redistributable: true
+- id: independent/ai21-jamba2-mini-medmcqa-medmarks-v1@1.0.0
+  model: ai21/jamba2-mini
+  benchmark: openlifescienceai/medmcqa@1.0.0
+  benchmark_profile: medmarks-v1-three-order-average
+  reasoning_effort: default
+  subject:
+    source_model: ai21labs/AI21-Jamba2-Mini
+    source_model_slug: ai21-jamba2-mini
+    model_revision: unspecified_by_source
+    suite: Medmarks v1
+    run_kind: independent
+    dataset_split: validation
+    sampling_temperature: 0.6
+    sampling_top_p: 1.0
+    rollouts: [original, shuffle-1618, shuffle-9331]
+    source_snapshot_date: '2026-09-05'
+    source_snapshot_sha256: ff910d1c24e93b4952038058a97760cdbe3c0ae3cca78ff45928ef3f0aca2896
+  metrics:
+    accuracy: 0.5978962467128854
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://medmarks.ai/leaderboard_data.csv
+    redistributable: true
+- id: independent/ai21-jamba2-mini-medqa-usmle-medmarks-v1@1.0.0
+  model: ai21/jamba2-mini
+  benchmark: gbaker/medqa-usmle@1.0.0
+  benchmark_profile: medmarks-v1-three-order-average
+  reasoning_effort: default
+  subject:
+    source_model: ai21labs/AI21-Jamba2-Mini
+    source_model_slug: ai21-jamba2-mini
+    model_revision: unspecified_by_source
+    suite: Medmarks v1
+    run_kind: independent
+    dataset_variant: four_options
+    dataset_split: test
+    sampling_temperature: 0.6
+    sampling_top_p: 1.0
+    rollouts: [original, shuffle-1618, shuffle-9331]
+    source_snapshot_date: '2026-09-05'
+    source_snapshot_sha256: ff910d1c24e93b4952038058a97760cdbe3c0ae3cca78ff45928ef3f0aca2896
+  metrics:
+    accuracy: 0.7174653050536788
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://medmarks.ai/leaderboard_data.csv
+    redistributable: true
+- id: independent/ai21-jamba2-mini-mmlu-pro-health-medmarks-v1@1.0.0
+  model: ai21/jamba2-mini
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: medmarks-v1-three-order-average
+  reasoning_effort: default
+  subject:
+    source_model: ai21labs/AI21-Jamba2-Mini
+    source_model_slug: ai21-jamba2-mini
+    model_revision: unspecified_by_source
+    suite: Medmarks v1
+    run_kind: independent
+    dataset_subset: health
+    dataset_split: test
+    sampling_temperature: 0.6
+    sampling_top_p: 1.0
+    rollouts: [original, shuffle-1618, shuffle-9331]
+    source_snapshot_date: '2026-09-05'
+    source_snapshot_sha256: ff910d1c24e93b4952038058a97760cdbe3c0ae3cca78ff45928ef3f0aca2896
+  metrics:
+    accuracy: 0.6067644661776691
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://medmarks.ai/leaderboard_data.csv
+    redistributable: true
+- id: independent/ai21-jamba2-mini-pubmedqa-medmarks-v1@1.0.0
+  model: ai21/jamba2-mini
+  benchmark: qiaojin/pubmedqa@1.0.0
+  benchmark_profile: medmarks-v1-three-order-average
+  reasoning_effort: default
+  subject:
+    source_model: ai21labs/AI21-Jamba2-Mini
+    source_model_slug: ai21-jamba2-mini
+    model_revision: unspecified_by_source
+    suite: Medmarks v1
+    run_kind: independent
+    dataset_variant: pqa_labeled
+    sample_count: 500
+    sampling_temperature: 0.6
+    sampling_top_p: 1.0
+    rollouts: [original, shuffle-1618, shuffle-9331]
+    source_snapshot_date: '2026-09-05'
+    source_snapshot_sha256: ff910d1c24e93b4952038058a97760cdbe3c0ae3cca78ff45928ef3f0aca2896
+  metrics:
+    accuracy: 0.7386666666666666
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://medmarks.ai/leaderboard_data.csv
+    redistributable: true
+- id: independent/jamba-reasoning-3b-critpt@1.0.0
+  model: ai21/jamba-reasoning-3b
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Jamba Reasoning 3B
+    source_model_slug: jamba-reasoning-3b
+    run_kind: independent
+  metrics:
+    score: 0
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/jamba-reasoning-3b-artificial-analysis-long-context-reasoning@1.1.0
+  model: ai21/jamba-reasoning-3b
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Jamba Reasoning 3B
+    source_model_slug: jamba-reasoning-3b
+    run_kind: independent
+  metrics:
+    score: 0.0633333333333333
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/jamba-reasoning-3b-omniscience@1.0.0
+  model: ai21/jamba-reasoning-3b
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Jamba Reasoning 3B
+    source_model_slug: jamba-reasoning-3b
+    run_kind: independent
+  metrics:
+    index: -57.7166666666667
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/jamba-reasoning-3b-humanitys-last-exam@1.0.0
+  model: ai21/jamba-reasoning-3b
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Jamba Reasoning 3B
+    source_model_slug: jamba-reasoning-3b
+    run_kind: independent
+  metrics:
+    accuracy: 0.0375347544022243
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/jamba-reasoning-3b-gpqa-diamond@1.0.0
+  model: ai21/jamba-reasoning-3b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Jamba Reasoning 3B
+    source_model_slug: jamba-reasoning-3b
+    run_kind: independent
+  metrics:
+    accuracy: 0.333333333333333
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/jamba-1-7-large-critpt@1.0.0
+  model: ai21/jamba-large-1.7
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: Jamba 1.7 Large
+    source_model_slug: jamba-1-7-large
+    run_kind: independent
+  metrics:
+    score: 0
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/jamba-1-7-large-artificial-analysis-long-context-reasoning@1.1.0
+  model: ai21/jamba-large-1.7
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: Jamba 1.7 Large
+    source_model_slug: jamba-1-7-large
+    run_kind: independent
+  metrics:
+    score: 0.193333333333333
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/jamba-1-7-large-omniscience@1.0.0
+  model: ai21/jamba-large-1.7
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: Jamba 1.7 Large
+    source_model_slug: jamba-1-7-large
+    run_kind: independent
+  metrics:
+    index: -54.9166666666667
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/jamba-1-7-large-humanitys-last-exam@1.0.0
+  model: ai21/jamba-large-1.7
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: Jamba 1.7 Large
+    source_model_slug: jamba-1-7-large
+    run_kind: independent
+  metrics:
+    accuracy: 0.0366079703429101
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/jamba-1-7-large-gpqa-diamond@1.0.0
+  model: ai21/jamba-large-1.7
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: Jamba 1.7 Large
+    source_model_slug: jamba-1-7-large
+    run_kind: independent
+  metrics:
+    accuracy: 0.38989898989899
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
     redistributable: true

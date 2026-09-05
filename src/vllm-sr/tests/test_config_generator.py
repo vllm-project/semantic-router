@@ -189,13 +189,22 @@ routing:
         {"address": "10.0.0.1", "port_value": 8000},
         {"address": "10.0.0.2", "port_value": 8001},
     ]
+    assert [endpoint["endpoint"]["hostname"] for endpoint in lb_endpoints] == [
+        "10.0.0.1:8000",
+        "10.0.0.2:8001",
+    ]
 
     # --- route assertions ---
     route = _model_route(rendered, "test-model")
     route_action = route["route"]
-    assert route_action["host_rewrite_literal"] == "10.0.0.1:8000"
+    assert route_action["auto_host_rewrite"] is True
+    assert "host_rewrite_literal" not in route_action
     assert route_action["regex_rewrite"]["pattern"]["regex"] == r"^/v1([/?].*)?$"
     assert route_action["regex_rewrite"]["substitution"] == "/v1\\1"
+
+    default_route_action = _default_route(rendered)["route"]
+    assert default_route_action["auto_host_rewrite"] is True
+    assert "host_rewrite_literal" not in default_route_action
 
 
 def test_base_url_path_rewrite_is_idempotent(tmp_path, monkeypatch):
@@ -506,9 +515,10 @@ routing:
         item["header"]["key"]: item["header"]["value"]
         for item in route["request_headers_to_add"]
     }
-    assert headers["Authorization"] == "Bearer sk-test-openrouter"
     assert headers["X-Test-Trace"] == "router-flow"
     assert headers["X-Test-Tenant"] == "eval"
+    assert "Authorization" not in headers
+    assert "sk-test-openrouter" not in yaml.safe_dump(rendered)
 
 
 def test_generate_envoy_config_custom_anthropic_upstream_rewrites_host(

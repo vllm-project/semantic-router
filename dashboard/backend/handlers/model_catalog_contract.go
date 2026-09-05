@@ -195,7 +195,7 @@ func validateCatalogProviders(
 			len(provider.SupportedOperations) == 0 ||
 			provider.Presentation.Logo == "" || provider.Presentation.Monogram == "" ||
 			!oneOf(provider.Auth.Strategy, "none", "bearer", "api_key_header") ||
-			(provider.ReasoningTransport != "" && !oneOf(string(provider.ReasoningTransport), "chat_template_kwargs", "top_level_effort", "top_level_boolean", "reasoning_object", "thinking_object", "deepseek_thinking")) ||
+			(provider.ReasoningTransport != "" && !oneOf(string(provider.ReasoningTransport), "chat_template_kwargs", "top_level_effort", "top_level_boolean", "reasoning_object", "thinking_object", "output_config_effort", "deepseek_thinking")) ||
 			!oneOf(provider.Conformance.Status, "unverified", "fixture_verified", "live_verified") {
 			return nil, fmt.Errorf("malformed provider")
 		}
@@ -363,9 +363,10 @@ func validateCatalogProviderBindings(
 		pairs := map[string]struct{}{}
 		for _, binding := range provider.Models {
 			if binding.ID == "" || binding.Catalog == "" || len(binding.Protocols) == 0 ||
+				!oneOf(string(binding.Relationship), "first_party", "managed_cloud", "gateway", "self_hosted") ||
 				!oneOf(binding.Lifecycle, "experimental", "active", "deprecated", "removed") ||
 				!oneOf(binding.Verification.Status, "claimed", "imported", "reproduced") ||
-				(binding.ReasoningTransport != "" && !oneOf(string(binding.ReasoningTransport), "chat_template_kwargs", "top_level_effort", "top_level_boolean", "reasoning_object", "thinking_object", "deepseek_thinking")) ||
+				(binding.ReasoningTransport != "" && !oneOf(string(binding.ReasoningTransport), "chat_template_kwargs", "top_level_effort", "top_level_boolean", "reasoning_object", "thinking_object", "output_config_effort", "deepseek_thinking")) ||
 				(binding.Verification.Source != "" && !validHTTPSURL(binding.Verification.Source)) {
 				return fmt.Errorf("malformed provider catalog model")
 			}
