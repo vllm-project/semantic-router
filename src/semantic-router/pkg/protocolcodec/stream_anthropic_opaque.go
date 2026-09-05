@@ -5,6 +5,12 @@ import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmproto
 func (encoder *anthropicStreamEncoder) encodeAnthropicOpaque(
 	event llmprotocol.Event,
 ) ([][]byte, llmprotocol.Diagnostics, error) {
+	if event.DynamoRequestID {
+		return nil, nil, llmprotocol.NewError(
+			llmprotocol.ErrorUnsupportedFeature, "unsupported_dynamo_request_id_translation",
+			"Dynamo request_id SSE events cannot be translated across wire formats", nil,
+		)
+	}
 	if event.DynamoNVExt != nil {
 		return nil, nil, llmprotocol.NewError(
 			llmprotocol.ErrorUnsupportedFeature, "unsupported_dynamo_nvext_translation",

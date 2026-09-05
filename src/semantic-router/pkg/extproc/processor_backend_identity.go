@@ -30,6 +30,7 @@ func captureUpstreamBackendIdentity(req *ext_proc.ProcessingRequest, ctx *Reques
 	}
 	ctx.UpstreamBackendName = strings.TrimSpace(stringField(identity, "backend_name"))
 	ctx.UpstreamBackendType = strings.ToLower(strings.TrimSpace(stringField(identity, "backend_type")))
+	ctx.AllowDynamoExtensions = ctx.UpstreamBackendType == "dynamo"
 }
 
 func structField(value *structpb.Struct, name string) *structpb.Struct {

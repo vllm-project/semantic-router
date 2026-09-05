@@ -140,7 +140,7 @@ func validateDynamoResponseBackend(ctx *RequestContext, envelope llmprotocol.Env
 	if envelope.Dynamo == nil || envelope.Dynamo.ResponseNVExt == nil {
 		return nil
 	}
-	if ctx != nil && strings.EqualFold(strings.TrimSpace(ctx.UpstreamBackendType), "dynamo") {
+	if ctx != nil && ctx.AllowDynamoExtensions {
 		return nil
 	}
 	return unexpectedDynamoResponseError(ctx)
@@ -148,12 +148,29 @@ func validateDynamoResponseBackend(ctx *RequestContext, envelope llmprotocol.Env
 
 func validateDynamoResponseEvents(ctx *RequestContext, events []llmprotocol.Event) error {
 	for _, event := range events {
-		if event.DynamoNVExt != nil &&
-			(ctx == nil || !strings.EqualFold(strings.TrimSpace(ctx.UpstreamBackendType), "dynamo")) {
+		if event.DynamoRequestID && (ctx == nil || !ctx.AllowDynamoExtensions) {
+			return unexpectedDynamoStreamEventError(ctx)
+		}
+		if event.DynamoNVExt != nil && (ctx == nil || !ctx.AllowDynamoExtensions) {
 			return unexpectedDynamoResponseError(ctx)
 		}
 	}
 	return nil
+}
+
+func unexpectedDynamoStreamEventError(ctx *RequestContext) error {
+	model := ""
+	backend := ""
+	if ctx != nil {
+		model = ctx.RequestModel
+		backend = ctx.UpstreamBackendName
+	}
+	return llmprotocol.NewError(
+		llmprotocol.ErrorUpstreamUnavailable,
+		"unexpected_dynamo_request_id_backend",
+		fmt.Sprintf("model %q returned a Dynamo request_id SSE event from non-Dynamo backend %q", model, backend),
+		nil,
+	)
 }
 
 func unsupportedDynamoBackendError(model string) error {

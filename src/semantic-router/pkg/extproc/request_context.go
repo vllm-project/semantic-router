@@ -105,6 +105,9 @@ type RequestContext struct {
 	// to the first response-path ext_proc message, not from caller headers.
 	UpstreamBackendName string
 	UpstreamBackendType string
+	// AllowDynamoExtensions is computed once when upstream response metadata is
+	// captured. Every response nvext/event consults this cached boundary decision.
+	AllowDynamoExtensions bool
 
 	// TTFT tracking
 	TTFTRecorded bool

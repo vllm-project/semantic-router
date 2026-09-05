@@ -134,8 +134,20 @@ func (decoder *chatStreamDecoder) Push(chunk []byte) ([]llmprotocol.Event, llmpr
 
 func (decoder *chatStreamDecoder) pushFrame(frame []byte) ([]llmprotocol.Event, llmprotocol.Diagnostics, error) {
 	parsed, err := decoder.parseProviderSSEFrame(frame)
-	if err != nil || !parsed.HasData {
+	if err != nil {
 		return nil, nil, err
+	}
+	if parsed.Event == "request_id" {
+		if decoder.terminal {
+			return nil, nil, invalidProviderResponse("stream_event_after_terminal", "Chat stream emitted a request_id event after its terminal sentinel")
+		}
+		event, eventErr := decoder.next(llmprotocol.Event{
+			Type: llmprotocol.EventProviderOpaque, Opaque: append([]byte(nil), frame...), DynamoRequestID: true,
+		})
+		return []llmprotocol.Event{event}, nil, eventErr
+	}
+	if !parsed.HasData {
+		return nil, nil, nil
 	}
 	if decoder.terminal {
 		return nil, nil, invalidProviderResponse("stream_event_after_terminal", "Chat stream emitted data after its terminal sentinel")
@@ -662,6 +674,18 @@ func (encoder *chatStreamEncoder) encodeDirectEvent(event llmprotocol.Event) ([]
 }
 
 func (encoder *chatStreamEncoder) encodeProviderOpaqueEvent(event llmprotocol.Event) ([][]byte, llmprotocol.Diagnostics, error) {
+	if event.DynamoRequestID {
+		if encoder.context.Source != llmprotocol.OpenAIChatV1 || encoder.context.Target != llmprotocol.OpenAIChatV1 {
+			return nil, nil, llmprotocol.NewError(
+				llmprotocol.ErrorUnsupportedFeature, "unsupported_dynamo_request_id_translation",
+				"Dynamo request_id SSE events cannot be translated across wire formats", nil,
+			)
+		}
+		if len(event.Opaque) == 0 {
+			return nil, nil, llmprotocol.NewError(llmprotocol.ErrorInternal, "invalid_dynamo_request_id_event", "Dynamo request_id SSE event has no source frame", nil)
+		}
+		return [][]byte{append([]byte(nil), event.Opaque...)}, nil, nil
+	}
 	if event.DynamoNVExt != nil {
 		return encoder.encodeDynamoProviderEvent(event)
 	}
