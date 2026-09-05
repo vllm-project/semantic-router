@@ -2,9 +2,12 @@ package responsestore
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -461,4 +464,229 @@ func TestTLSConfig(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
 	})
+}
+
+// TestRedisConversationIndexKeyIsolation guards the invariant that index keys are
+// invisible to the sr:conversation:* scan in ListConversations, which would
+// otherwise read a sorted set as conversation JSON. Needs no Redis.
+func TestRedisConversationIndexKeyIsolation(t *testing.T) {
+	store := &RedisStore{keyPrefix: "sr:"}
+
+	indexKey := store.conversationIndexKey("conv_123")
+	assert.Equal(t, "sr:conversation-index:conv_123", indexKey)
+
+	// Each scan pattern is a literal prefix plus "*", so matching == having it.
+	for _, scanPrefix := range []string{
+		store.buildKey(ConversationKeyPrefix),
+		store.buildKey(ResponseKeyPrefix),
+	} {
+		assert.Falsef(t, strings.HasPrefix(indexKey, scanPrefix),
+			"index key %q must not be matched by the %q* scan pattern", indexKey, scanPrefix)
+	}
+}
+
+// conversationIndexMembers reads the index directly, so tests can assert on it
+// and not only on what a listing happens to return.
+func conversationIndexMembers(t *testing.T, store *RedisStore, conversationID string) []string {
+	t.Helper()
+
+	members, err := store.client.ZRange(context.Background(), store.conversationIndexKey(conversationID), 0, -1).Result()
+	require.NoError(t, err)
+	return members
+}
+
+// newConversationIndexStore scopes the store to a key prefix unique to this run,
+// so it cannot collide with the other suites sharing DB 0. Skips without Redis.
+func newConversationIndexStore(t *testing.T) *RedisStore {
+	t.Helper()
+
+	cfg := StoreConfig{
+		Enabled:     true,
+		TTLSeconds:  300,
+		BackendType: RedisStoreType,
+		Redis: RedisStoreConfig{
+			Address:   "localhost:6379",
+			DB:        0,
+			KeyPrefix: fmt.Sprintf("srtest:%d:", time.Now().UnixNano()),
+		},
+	}
+
+	store, err := NewRedisStore(cfg)
+	if err != nil {
+		t.Skipf("Redis not available: %v", err)
+	}
+
+	t.Cleanup(func() {
+		ctx := context.Background()
+		iter := store.client.Scan(ctx, 0, store.buildKey("*"), 0).Iterator()
+		for iter.Next(ctx) {
+			store.client.Del(ctx, iter.Val())
+		}
+		_ = store.Close()
+	})
+
+	return store
+}
+
+// TestRedisConversationIndexListing covers the index-backed read path: what it
+// returns, in what order, and how it converges when index and payloads disagree.
+func TestRedisConversationIndexListing(t *testing.T) {
+	store := newConversationIndexStore(t)
+	ctx := context.Background()
+
+	now := time.Now().Unix()
+	storeResponse := func(t *testing.T, id, convID string, createdAt int64) {
+		t.Helper()
+		require.NoError(t, store.StoreResponse(ctx, &responseapi.StoredResponse{
+			ID:             id,
+			ConversationID: convID,
+			Status:         "completed",
+			CreatedAt:      createdAt,
+			Output:         []responseapi.OutputItem{{ID: "item_" + id}},
+		}))
+	}
+
+	t.Run("returns only the requested conversation, oldest first", func(t *testing.T) {
+		storeResponse(t, "resp_idx_a1", "conv_idx_a", now)
+		storeResponse(t, "resp_idx_a2", "conv_idx_a", now+1)
+		storeResponse(t, "resp_idx_b1", "conv_idx_b", now)
+		// A response with no conversation must not land in any index.
+		storeResponse(t, "resp_idx_orphan", "", now)
+
+		responses, err := store.ListResponsesByConversation(ctx, "conv_idx_a", ListOptions{})
+		require.NoError(t, err)
+		require.Len(t, responses, 2)
+		// The index is scored by created_at, so it reads back chronologically.
+		assert.Equal(t, "resp_idx_a1", responses[0].ID)
+		assert.Equal(t, "resp_idx_a2", responses[1].ID)
+
+		assert.Equal(t, []string{"resp_idx_a1", "resp_idx_a2"}, conversationIndexMembers(t, store, "conv_idx_a"))
+		assert.Equal(t, []string{"resp_idx_b1"}, conversationIndexMembers(t, store, "conv_idx_b"))
+	})
+
+	t.Run("unknown conversation returns nothing", func(t *testing.T) {
+		responses, err := store.ListResponsesByConversation(ctx, "conv_idx_missing", ListOptions{})
+		assert.NoError(t, err)
+		assert.Empty(t, responses)
+	})
+
+	t.Run("empty conversation ID is rejected", func(t *testing.T) {
+		_, err := store.ListResponsesByConversation(ctx, "", ListOptions{})
+		assert.ErrorIs(t, err, ErrInvalidInput)
+	})
+
+	t.Run("deleting a response drops its index entry", func(t *testing.T) {
+		require.NoError(t, store.DeleteResponse(ctx, "resp_idx_a1"))
+
+		assert.Equal(t, []string{"resp_idx_a2"}, conversationIndexMembers(t, store, "conv_idx_a"))
+
+		responses, err := store.ListResponsesByConversation(ctx, "conv_idx_a", ListOptions{})
+		require.NoError(t, err)
+		require.Len(t, responses, 1)
+		assert.Equal(t, "resp_idx_a2", responses[0].ID)
+	})
+
+	t.Run("moving a response between conversations reindexes it", func(t *testing.T) {
+		moved, err := store.GetResponse(ctx, "resp_idx_a2")
+		require.NoError(t, err)
+
+		moved.ConversationID = "conv_idx_b"
+		require.NoError(t, store.UpdateResponse(ctx, moved))
+
+		fromOld, err := store.ListResponsesByConversation(ctx, "conv_idx_a", ListOptions{})
+		require.NoError(t, err)
+		assert.Empty(t, fromOld)
+		assert.Empty(t, conversationIndexMembers(t, store, "conv_idx_a"))
+
+		toNew, err := store.ListResponsesByConversation(ctx, "conv_idx_b", ListOptions{})
+		require.NoError(t, err)
+		require.Len(t, toNew, 2)
+		assert.Equal(t, []string{"resp_idx_b1", "resp_idx_a2"}, []string{toNew[0].ID, toNew[1].ID})
+	})
+
+	t.Run("listing prunes entries whose payload is gone", func(t *testing.T) {
+		// Drop the payload behind the store's back, the way a TTL expiry would.
+		require.NoError(t, store.client.Del(ctx, store.buildKey(ResponseKeyPrefix+"resp_idx_b1")).Err())
+
+		responses, err := store.ListResponsesByConversation(ctx, "conv_idx_b", ListOptions{})
+		require.NoError(t, err)
+		require.Len(t, responses, 1)
+		assert.Equal(t, "resp_idx_a2", responses[0].ID)
+
+		assert.Equal(t, []string{"resp_idx_a2"}, conversationIndexMembers(t, store, "conv_idx_b"))
+	})
+}
+
+// TestRedisDeleteConversationCascade uses more responses than one page: the
+// cascade reads the index directly, so it must not stop at DefaultListLimit.
+func TestRedisDeleteConversationCascade(t *testing.T) {
+	store := newConversationIndexStore(t)
+	ctx := context.Background()
+
+	const (
+		convID      = "conv_cascade"
+		responseCnt = DefaultListLimit + 5
+		otherConvID = "conv_cascade_other"
+		otherRespID = "resp_cascade_other"
+	)
+
+	require.NoError(t, store.CreateConversation(ctx, &responseapi.StoredConversation{
+		ID:        convID,
+		CreatedAt: time.Now().Unix(),
+	}))
+
+	for i := 0; i < responseCnt; i++ {
+		require.NoError(t, store.StoreResponse(ctx, &responseapi.StoredResponse{
+			ID:             fmt.Sprintf("resp_cascade_%d", i),
+			ConversationID: convID,
+			Status:         "completed",
+			CreatedAt:      time.Now().Unix() + int64(i),
+			Output:         []responseapi.OutputItem{{ID: fmt.Sprintf("item_%d", i)}},
+		}))
+	}
+
+	// A response in a different conversation must survive the cascade.
+	require.NoError(t, store.StoreResponse(ctx, &responseapi.StoredResponse{
+		ID:             otherRespID,
+		ConversationID: otherConvID,
+		Status:         "kept",
+		CreatedAt:      time.Now().Unix(),
+	}))
+
+	require.NoError(t, store.DeleteConversation(ctx, convID, true))
+
+	for i := 0; i < responseCnt; i++ {
+		_, err := store.GetResponse(ctx, fmt.Sprintf("resp_cascade_%d", i))
+		assert.ErrorIsf(t, err, ErrNotFound, "response %d should have been deleted with its conversation", i)
+	}
+	assert.Empty(t, conversationIndexMembers(t, store, convID))
+
+	survivor, err := store.GetResponse(ctx, otherRespID)
+	require.NoError(t, err)
+	assert.Equal(t, "kept", survivor.Status)
+}
+
+// TestRedisStoreResponseRejectsDuplicate covers the SET NX path: it enforces the
+// no-duplicate contract and orders the payload write ahead of the index write.
+func TestRedisStoreResponseRejectsDuplicate(t *testing.T) {
+	store := newConversationIndexStore(t)
+	ctx := context.Background()
+
+	response := &responseapi.StoredResponse{
+		ID:             "resp_duplicate",
+		ConversationID: "conv_duplicate",
+		Status:         "completed",
+		CreatedAt:      time.Now().Unix(),
+	}
+	require.NoError(t, store.StoreResponse(ctx, response))
+
+	duplicate := *response
+	duplicate.Status = "overwritten"
+	assert.ErrorIs(t, store.StoreResponse(ctx, &duplicate), ErrAlreadyExists)
+
+	// The original payload must be untouched, and indexed exactly once.
+	stored, err := store.GetResponse(ctx, response.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "completed", stored.Status)
+	assert.Equal(t, []string{"resp_duplicate"}, conversationIndexMembers(t, store, "conv_duplicate"))
 }
