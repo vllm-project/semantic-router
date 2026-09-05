@@ -233,7 +233,7 @@ impl MmBertSequenceClassifier {
             .map_err(|e| errors::tokenization_error(&e.to_string()))?;
 
         // Find ONNX model candidates and initialize with fallback.
-        let onnx_candidates = Self::find_onnx_models(&model_path)?;
+        let onnx_candidates = Self::find_onnx_models(&model_path, provider)?;
         let (session, onnx_path) =
             Self::create_session_with_fallback(onnx_candidates, provider, &model_path_str)?;
         println!(
@@ -250,7 +250,10 @@ impl MmBertSequenceClassifier {
     }
 
     /// Find ONNX model candidates in priority order.
-    fn find_onnx_models<P: AsRef<Path>>(model_path: P) -> UnifiedResult<Vec<std::path::PathBuf>> {
+    fn find_onnx_models<P: AsRef<Path>>(
+        model_path: P,
+        provider: ClassifierExecutionProvider,
+    ) -> UnifiedResult<Vec<std::path::PathBuf>> {
         let dir = model_path.as_ref();
         let onnx_subdir = dir.join("onnx");
         let search_dirs = [dir, onnx_subdir.as_path()];
@@ -260,7 +263,24 @@ impl MmBertSequenceClassifier {
             .ok()
             .filter(|s| !s.is_empty())
             .is_some();
-        let candidates: &[&str] = if has_fa {
+        // The CPU provider has no FP16 kernels for these operators and runs an
+        // FP16 graph by casting around each one, so there it is the slowest
+        // candidate rather than the fastest. Keep it last instead of dropping it,
+        // so a model that publishes only that file still loads.
+        let cpu_only = match provider {
+            ClassifierExecutionProvider::Cpu => true,
+            // Without a GPU feature compiled in, Auto can only resolve to CPU.
+            ClassifierExecutionProvider::Auto => !cfg!(any(feature = "cuda", feature = "rocm")),
+            _ => false,
+        };
+        let candidates: &[&str] = if cpu_only {
+            &[
+                "model.onnx",
+                "classifier.onnx",
+                "model_optimized.onnx",
+                "model_sdpa_fp16.onnx",
+            ]
+        } else if has_fa {
             &[
                 "model_fa_fp16.onnx",
                 "model_fa.onnx",
@@ -912,7 +932,7 @@ impl MmBertTokenClassifier {
             }))
             .map_err(|e| errors::tokenization_error(&e.to_string()))?;
 
-        let onnx_candidates = MmBertSequenceClassifier::find_onnx_models(&model_path)?;
+        let onnx_candidates = MmBertSequenceClassifier::find_onnx_models(&model_path, provider)?;
         let (session, onnx_path) = MmBertSequenceClassifier::create_session_with_fallback(
             onnx_candidates,
             provider,
@@ -1100,6 +1120,55 @@ fn bio_decode_entities(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn write_onnx_dir(files: &[&str]) -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        let onnx = dir.path().join("onnx");
+        std::fs::create_dir_all(&onnx).unwrap();
+        for f in files {
+            std::fs::write(onnx.join(f), b"").unwrap();
+        }
+        dir
+    }
+
+    fn first_candidate(dir: &tempfile::TempDir, provider: ClassifierExecutionProvider) -> String {
+        let found = MmBertSequenceClassifier::find_onnx_models(dir.path(), provider).unwrap();
+        found[0].file_name().unwrap().to_string_lossy().into_owned()
+    }
+
+    #[test]
+    fn cpu_provider_ranks_the_fp32_graph_first() {
+        let dir = write_onnx_dir(&["model.onnx", "model_sdpa_fp16.onnx"]);
+        assert_eq!(
+            first_candidate(&dir, ClassifierExecutionProvider::Cpu),
+            "model.onnx"
+        );
+    }
+
+    #[test]
+    fn cpu_provider_still_loads_an_fp16_only_model() {
+        let dir = write_onnx_dir(&["model_sdpa_fp16.onnx"]);
+        assert_eq!(
+            first_candidate(&dir, ClassifierExecutionProvider::Cpu),
+            "model_sdpa_fp16.onnx"
+        );
+    }
+
+    #[test]
+    fn gpu_providers_keep_the_fp16_graph_first() {
+        let dir = write_onnx_dir(&["model.onnx", "model_sdpa_fp16.onnx"]);
+        for provider in [
+            ClassifierExecutionProvider::Cuda,
+            ClassifierExecutionProvider::Rocm,
+        ] {
+            assert_eq!(
+                first_candidate(&dir, provider),
+                "model_sdpa_fp16.onnx",
+                "provider {:?} should be unchanged",
+                provider
+            );
+        }
+    }
 
     #[test]
     fn test_config_defaults() {

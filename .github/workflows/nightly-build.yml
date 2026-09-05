@@ -15,16 +15,25 @@ concurrency:
 jobs:
   core:
     name: Nightly core gate
+    if: >-
+      github.repository == 'vllm-project/semantic-router'
+      || github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/test-and-build.yml
     secrets: inherit
 
   dashboard:
     name: Nightly dashboard
+    if: >-
+      github.repository == 'vllm-project/semantic-router'
+      || github.event_name == 'workflow_dispatch'
     needs: core
     uses: ./.github/workflows/dashboard-test.yml
 
   e2e:
     name: Nightly E2E
+    if: >-
+      github.repository == 'vllm-project/semantic-router'
+      || github.event_name == 'workflow_dispatch'
     needs: core
     uses: ./.github/workflows/integration-test-k8s.yml
     with:
@@ -33,16 +42,25 @@ jobs:
 
   cli:
     name: Nightly CLI
+    if: >-
+      github.repository == 'vllm-project/semantic-router'
+      || github.event_name == 'workflow_dispatch'
     needs: core
     uses: ./.github/workflows/integration-test-vllm-sr-cli.yml
 
   memory:
     name: Nightly memory
+    if: >-
+      github.repository == 'vllm-project/semantic-router'
+      || github.event_name == 'workflow_dispatch'
     needs: core
     uses: ./.github/workflows/integration-test-memory.yml
 
   operator:
     name: Nightly operator
+    if: >-
+      github.repository == 'vllm-project/semantic-router'
+      || github.event_name == 'workflow_dispatch'
     needs: core
     uses: ./.github/workflows/operator-ci.yml
     with:
@@ -58,11 +76,17 @@ jobs:
 
   performance:
     name: Nightly performance
+    if: >-
+      github.repository == 'vllm-project/semantic-router'
+      || github.event_name == 'workflow_dispatch'
     needs: core
     uses: ./.github/workflows/performance-test.yml
 
   router-learning:
     name: Nightly router learning
+    if: >-
+      github.repository == 'vllm-project/semantic-router'
+      || github.event_name == 'workflow_dispatch'
     needs: core
     uses: ./.github/workflows/router-learning-eval.yml
     with:
@@ -70,6 +94,9 @@ jobs:
 
   docker:
     name: Nightly Docker images
+    if: >-
+      github.repository == 'vllm-project/semantic-router'
+      || github.event_name == 'workflow_dispatch'
     needs: core
     permissions:
       contents: read
@@ -83,6 +110,9 @@ jobs:
 
   helm:
     name: Nightly Helm chart
+    if: >-
+      github.repository == 'vllm-project/semantic-router'
+      || github.event_name == 'workflow_dispatch'
     needs: core
     permissions:
       contents: read

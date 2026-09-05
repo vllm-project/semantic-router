@@ -1198,7 +1198,6 @@ routing:
               collection: docs
               reuse_cache_connection: true
               content_field: content
-              metadata_field: metadata
               filter_expression: locale == "es"
 
     - name: admin_adaptive_route
@@ -1433,6 +1432,25 @@ routing:
               - name: x-escalation-reason
                 value: repeated-question
 
+    # A route action sends every request matching this decision to
+    # action.destination, overriding a caller-pinned model, so a detected
+    # prompt attack cannot bypass the guard by naming a model. The action
+    # requires an explicit jailbreak condition in rules, and destination must
+    # be defined in model_config. If the destination cannot satisfy the
+    # request context window, the decision falls back to its normal candidate
+    # policy (modelRefs/default selection).
+    - name: prompt_attack_guard_route
+      description: Route detected prompt attacks to a safe fallback model.
+      priority: 120
+      rules:
+        type: jailbreak
+        name: prompt_injection
+      action:
+        type: route
+        destination: qwen3-8b
+      modelRefs:
+        - model: qwen3-8b
+          use_reasoning: false
     - name: safe_only_svm_route
       description: SVM route that only matches when prompt-injection signals are absent.
       priority: 110
@@ -1585,11 +1603,6 @@ global:
         cost_weight: 0.1
         quality_gap_threshold: 0.08
         normalize_scores: true
-      momentum:
-        enabled: false
-        attack: 0.7
-        release: 0.3
-        threshold: 0.6
       ml:
         models_path: models/model-selection
         model_type: mmbert
@@ -1700,7 +1713,6 @@ global:
           enabled: true
           time_windows: [1m, 5m, 1h]
           update_interval: 30s
-          model_metrics: true
           queue_depth_estimation: true
           max_models: 50
       profiling:
@@ -2399,7 +2411,6 @@ global:
           margin_threshold: 0.0
       hallucination_mitigation:
         enabled: true
-        on_hallucination_detected: annotate
         fact_check:
           model_ref: fact_check_classifier
           model_id: models/mmbert32k-factcheck-classifier-merged
@@ -2435,10 +2446,6 @@ global:
         feedback_mapping_path: models/mmbert32k-feedback-detector-merged/feedback_mapping.json
       modality_detector:
         enabled: true
-        prompt_prefixes:
-          - generate an image of
-          - draw
-          - create a picture of
         method: hybrid
         classifier:
           model_path: models/mmbert32k-modality-router-merged

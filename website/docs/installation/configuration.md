@@ -50,6 +50,14 @@ Provider pricing belongs beside each concrete model under
 `cached_input_per_1m`, and `cache_write_per_1m` rates. Routing model cards do not
 repeat deployment prices or credentials.
 
+Use [Protocol Compatibility](protocol-compatibility) to choose the model's
+backend `api_format`. Then see
+[Backend Target Compatibility](backend-target-compatibility) before moving its
+bindings between Docker, Helm, the Operator, and Dashboard workflows. The
+target matrix distinguishes canonical pass-through from Kubernetes discovery
+and records which URL, path, weight, and provider fields each surface
+preserves.
+
 Router-wide debugging surfaces stay closed by default.
 `global.services.observability.profiling` serves Go `pprof` endpoints, and only
 when it is explicitly enabled; it then binds `127.0.0.1:6060` so profiles never

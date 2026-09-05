@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { EvaluationRun } from '../../types/evaluationPlane'
-import { filterEvaluationRuns } from './evaluationRunLedger'
+import { filterEvaluationRuns } from './evaluationRunLedgerModel'
 
 function run(overrides: Partial<EvaluationRun>): EvaluationRun {
   const id = overrides.id || 'run'

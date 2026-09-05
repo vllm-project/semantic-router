@@ -311,8 +311,9 @@ The benchmark registry pins 13 descriptors from the Intelligent Routing
 Landscape. Their source inventory is 15 external checkouts: 13 code
 repositories plus the separate CodeRouterBench and xRouteBench dataset
 repositories. The research descriptor records each benchmark's native
-ambition. The normalizer registry separately contains 13 descriptors for the
-smaller evidence surface that can be safely derived from those pins today.
+ambition. The built-in normalization catalog separately contains 13
+definitions for the smaller evidence surface that can be safely derived from
+those pins today.
 
 Eleven normalizers are executable. The RouteJudge/ORBIT and RouterEval
 descriptors are diagnostic-only because their pinned checkouts do not expose
@@ -412,6 +413,78 @@ narrow G4 statement concerns the
 current Mixture on the exact pinned corpus; it does not claim that upstream code
 ran or that an upstream leaderboard was reproduced.
 
+## Installing a third-party Benchmark Pack
+
+A benchmark that already emits the Evaluation Plane's normalized records does
+not need a source-code plugin or an entry in the built-in normalization
+catalog. Publish one data-only Git repository with this fixed layout:
+
+```text
+benchmark.yaml
+bundle/
+  visible/cases.jsonl
+  grading/cases.jsonl
+  metadata/licenses.json
+  grading/...                 # optional normalized evidence roles
+  metadata/media.jsonl        # required for live multimodal cases
+```
+
+The minimal manifest describes the workload, not a command to run:
+
+```yaml
+schema_version: evaluation-benchmark-pack.v1
+id: acme-routing-v1
+benchmark_id: acme.routing
+name: Acme routing benchmark
+decision_unit: request
+action_space: one model
+track_ids: [routing]
+split_protocol: fixed hidden test split
+arm_ids: [small, large]
+data_classification: restricted
+redistribution: metadata_only
+limitations:
+  - Covers the declared routing domain only.
+```
+
+Install it from the repository root, with the private suite store outside that
+checkout:
+
+```bash
+vllm-sr eval benchmark-install \
+  --pack <clean-benchmark-pack-checkout> \
+  --suite-store <private-suite-store>
+```
+
+The installer requires one clean Git checkout root and records its exact
+commit. `benchmark.yaml` and every file under `bundle/` must be tracked by that
+commit. The bundle has a closed file/role inventory: aliases, symlinks,
+unknown files, executable runners, arbitrary media types, duplicate YAML keys,
+malformed JSONL, mismatched visible/grading counts, and incomplete track plans
+are rejected. Installation copies only validated content-addressed data; it
+never imports modules, launches a shell, or executes code from the pack.
+
+Every installed pack can be replayed as exploratory E0 evidence. A pack can
+also drive the existing `normalized-suite-live.v1` executor against a selected,
+frozen Mixture-of-Models when its data is sufficient:
+
+- routing cases need an `expected_route` hidden label that identifies a frozen
+  Mixture arm by arm ID or model name, and produce broker-bound routing
+  diagnostics up to E3;
+- model-pool and joint cases need an `expected_answer` hidden label and produce
+  exact-answer grades, the complete direct-arm matrix up to E4, and
+  routed-system evidence up to E5;
+- multimodal cases need one inline image per case, an exact media manifest, and
+  hidden answers, and produce server-graded evidence up to E4;
+- capacity cases use the platform-owned closed-loop load protocol and can reach
+  E5 only when the server validates the full frozen SLO attestation.
+
+Agentic, online-preference, and hard-policy claims need richer managed
+execution or production ledgers. Declaring those tracks in a pack preserves
+their normalized replay value but does not expose a misleading generic live
+method. Adding genuinely new execution semantics remains a reviewed platform
+change; adding a new dataset does not.
+
 ## Evidence levels
 
 | Level | Observation depth                                                                                                 |
@@ -432,8 +505,10 @@ source or executor ceiling all resolve to E0. The built-in live registry admits
 only these source contracts: routing diagnostic E3, model-pool outcome E4,
 routed joint outcome E5, provider agent-task ledger E5, fault-recovery ledger
 E5, hard-policy ledger E4, production experiment ledger E5, and closed-loop
-capacity E5. The normalized-live executor separately admits exact multimodal
-outcomes and declared-shift routing evidence at E4.
+capacity E5. The normalized-live executor separately admits Benchmark Pack
+routing, model-pool, joint, multimodal, and capacity workloads through those
+same server-owned source contracts. Its exact multimodal outcomes and
+registered declared-shift routing evidence can reach E4.
 
 Evidence strength is not a score. E5 can fail and E0 can be structurally
 perfect. A run with routing E3 and model-pool E4 reports both track levels and a
@@ -841,19 +916,22 @@ The Dashboard exposes only the current resources:
 - `GET|POST /api/evaluation/v1/campaigns/{id}/lifecycle`
 
 The CLI surface under `vllm-sr eval` provides catalog, benchmark/normalizer
-inventory, source verification, suite normalization/install/list/show,
-manifest validation, execution, local worker-draft inspection, comparison, and
-gate checks.
+inventory, source verification, built-in suite normalization/install,
+third-party `benchmark-install`, suite list/show, manifest validation,
+execution, local worker-draft inspection, comparison, and gate checks.
 `vllm-sr eval --help` is the exact command reference for the installed build.
 
 ## Scale and extension admission
 
 The current orchestrator remains small by admitting extensions through narrow
-versioned registries:
+versioned contracts:
 
-- benchmark normalizers declare a closed native-export schema, required
-  artifacts, exact parser, metric mappings, limitations, source pins, and
-  parity tests;
+- built-in benchmark normalization definitions declare a closed native-export
+  schema, required artifacts, exact trusted parser, metric mappings,
+  limitations, source pins, and parity tests;
+- third-party Benchmark Packs declare only metadata and normalized data in one
+  fixed layout; they reuse platform executors and cannot supply executable
+  hooks;
 - executors declare supported modes/tracks and consume one typed
   `EvaluationInputs` boundary;
 - target providers declare server-owned origins, credentials by reference,
@@ -866,9 +944,10 @@ versioned registries:
 - reducers declare typed input records, exact metric/gate ownership, and
   cross-language golden tests.
 
-An extension enters planning only after its immutable identity, capability
-contract, trusted derivation, bounded inputs/outputs, evidence ceiling, and
-tests are registered. An unsupported capability is rejected during planning;
+New execution behavior enters planning only after its immutable identity,
+capability contract, trusted derivation, bounded inputs/outputs, evidence
+ceiling, and tests are built into the platform. A new dataset enters through a
+Benchmark Pack without a code registration step. An unsupported capability is rejected during planning;
 an admitted run or Campaign uses `unavailable` only for an executed cell with
 no observation or a gate whose valid report lacks its required typed proof. The
 core does not infer observations or gate verdicts.

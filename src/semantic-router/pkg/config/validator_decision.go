@@ -38,6 +38,9 @@ func validateDecisionModelContracts(cfg *RouterConfig) error {
 		if err := validateDecisionModelRefs(cfg, decision); err != nil {
 			return err
 		}
+		if err := validateDecisionAction(cfg, decision); err != nil {
+			return err
+		}
 		if err := validateDecisionAlgorithmConfig(decision.Name, decision.ModelRefs, decision.Algorithm); err != nil {
 			return err
 		}
