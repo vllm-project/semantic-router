@@ -592,6 +592,24 @@ config:
               enabled: true
               system_prompt: You are handling a critical event alert. Prioritize a fast, precise, and factual response.
               mode: replace
+      - name: spanish_language
+        description: Spanish-language requests requiring specialized handling
+        priority: 25
+        rules:
+          operator: OR
+          conditions:
+            - type: language
+              name: es
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
+        plugins:
+          - type: system_prompt
+            configuration:
+              enabled: true
+              system_prompt: You are responding to a Spanish-language query. Respond in Spanish.
+              mode: replace
       - name: other_decision
         description: General knowledge and miscellaneous topics
         priority: 1
@@ -680,6 +698,9 @@ config:
             - critical
           action_codes:
             - TXN_DECLINE
+      language:
+        - name: es
+          description: Spanish-language requests.
       domains:
         - name: business
           description: Business, corporate strategy, management, finance, marketing
