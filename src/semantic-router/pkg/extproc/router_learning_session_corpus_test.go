@@ -3,54 +3,58 @@ package extproc
 import (
 	"bytes"
 	"crypto/sha256"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"slices"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
-const protectionCorpusPath = "testdata/router_learning_sessions.v1.json"
+const protectionCorpusPath = "testdata/router_learning_sessions.v1.yaml"
 
 type protectionCorpus struct {
-	Schema          string               `json:"schema_version"`
-	MissingCoverage []string             `json:"missing_coverage"`
-	Scenarios       []protectionScenario `json:"scenarios"`
+	Schema          string               `json:"schema_version" yaml:"schema_version"`
+	MissingCoverage []string             `json:"missing_coverage" yaml:"missing_coverage"`
+	Scenarios       []protectionScenario `json:"scenarios" yaml:"scenarios"`
 }
 
 type protectionScenario struct {
-	ID    string           `json:"id"`
-	Scope string           `json:"scope"`
-	Mode  string           `json:"mode"`
-	Steps []protectionStep `json:"steps"`
+	ID    string           `json:"id" yaml:"id"`
+	Scope string           `json:"scope" yaml:"scope"`
+	Mode  string           `json:"mode" yaml:"mode"`
+	Steps []protectionStep `json:"steps" yaml:"steps"`
 }
 
 type protectionStep struct {
-	ID                 string                `json:"id"`
-	Messages           []protectionMessage   `json:"append_messages"`
-	Candidates         []string              `json:"candidates"`
-	Proposal           string                `json:"proposal"`
-	Scores             map[string]float64    `json:"scores"`
-	PreviousResponseID string                `json:"previous_response_id"`
-	CacheWarmth        float64               `json:"cache_warmth"`
-	MissingIdentity    bool                  `json:"missing_identity"`
-	Conversation       string                `json:"conversation"`
-	Expected           protectionExpectation `json:"expected"`
+	Coverage           []string              `json:"coverage" yaml:"coverage"`
+	ID                 string                `json:"id" yaml:"id"`
+	Messages           []protectionMessage   `json:"append_messages" yaml:"append_messages"`
+	Candidates         []string              `json:"candidates" yaml:"candidates"`
+	Proposal           string                `json:"proposal" yaml:"proposal"`
+	Scores             map[string]float64    `json:"scores" yaml:"scores"`
+	PreviousResponseID string                `json:"previous_response_id" yaml:"previous_response_id"`
+	CacheWarmth        float64               `json:"cache_warmth" yaml:"cache_warmth"`
+	MissingIdentity    bool                  `json:"missing_identity" yaml:"missing_identity"`
+	Conversation       string                `json:"conversation" yaml:"conversation"`
+	Expected           protectionExpectation `json:"expected" yaml:"expected"`
 }
 
 type protectionMessage struct {
-	Role       string `json:"role"`
-	Text       string `json:"text"`
-	ToolCallID string `json:"tool_call_id"`
+	Role       string `json:"role" yaml:"role"`
+	Text       string `json:"text" yaml:"text"`
+	ToolCallID string `json:"tool_call_id" yaml:"tool_call_id"`
 }
 
 type protectionExpectation struct {
-	Model    string `json:"model"`
-	Sampling bool   `json:"sampling_allowed"`
-	Action   string `json:"action"`
-	Reason   string `json:"reason"`
-	Category string `json:"category"`
+	HardLocked      *bool  `json:"hard_locked" yaml:"hard_locked"`
+	PreflightReason string `json:"preflight_reason" yaml:"preflight_reason"`
+	Model           string `json:"model" yaml:"model"`
+	Sampling        bool   `json:"sampling_allowed" yaml:"sampling_allowed"`
+	Action          string `json:"action" yaml:"action"`
+	Reason          string `json:"reason" yaml:"reason"`
+	Category        string `json:"category" yaml:"category"`
 }
 
 func loadProtectionCorpus(t *testing.T) (protectionCorpus, string) {
@@ -68,13 +72,13 @@ func loadProtectionCorpus(t *testing.T) (protectionCorpus, string) {
 
 func decodeProtectionCorpus(raw []byte) (protectionCorpus, error) {
 	var corpus protectionCorpus
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
+	decoder := yaml.NewDecoder(bytes.NewReader(raw))
+	decoder.KnownFields(true)
 	if err := decoder.Decode(&corpus); err != nil {
 		return corpus, err
 	}
 	if err := decoder.Decode(new(any)); err != io.EOF {
-		return corpus, fmt.Errorf("corpus must contain exactly one JSON object")
+		return corpus, fmt.Errorf("corpus must contain exactly one YAML document")
 	}
 	if corpus.Schema != "agent-routing-protection.v1" || len(corpus.Scenarios) == 0 || len(corpus.MissingCoverage) == 0 {
 		return corpus, fmt.Errorf("corpus requires a supported version, scenarios and missing coverage")
@@ -106,7 +110,7 @@ func validateProtectionScenarios(scenarios []protectionScenario) error {
 			return fmt.Errorf("missing required category %s", category)
 		}
 	}
-	return nil
+	return validateProtectionCoverage(scenarios)
 }
 
 func validateProtectionStep(step protectionStep, ids map[string]bool) error {
@@ -145,7 +149,7 @@ func validateProtectionExpectation(step protectionStep) error {
 	if !slices.Contains(step.Candidates, step.Proposal) || !slices.Contains(step.Candidates, step.Expected.Model) {
 		return fmt.Errorf("%s: proposal and expectation must be eligible", step.ID)
 	}
-	if step.Expected.Action == "" || step.Expected.Reason == "" {
+	if step.Expected.Action == "" || step.Expected.Reason == "" || step.Expected.PreflightReason == "" || step.Expected.HardLocked == nil {
 		return fmt.Errorf("%s: missing assertion", step.ID)
 	}
 	if !slices.Contains([]string{"baseline", "blocked", "opportunity", "hold", "boundary", "observe", "bypass", "missing_identity"}, step.Expected.Category) {

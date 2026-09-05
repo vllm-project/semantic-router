@@ -32,14 +32,14 @@ go test ./pkg/extproc -run '^TestRouterLearningSession' -count=1 -v
 ```
 
 The tests also run in the normal core `make test-semantic-router` gate. Any
-per-turn model, sampling permission, Replay action or reason mismatch fails the
+per-turn model, sampling permission, hard-lock status, preflight reason, Replay action or reason mismatch fails the
 gate. Each run executes the corpus twice and compares report bytes.
 
 ## What runs
 
 The corpus lives at
-`src/semantic-router/pkg/extproc/testdata/router_learning_sessions.v1.json`.
-Each scenario declares its scope and protection mode. Each step appends semantic
+`src/semantic-router/pkg/extproc/testdata/router_learning_sessions.v1.yaml`.
+The YAML accepts comments, rejects unknown fields and duplicate keys, and must contain exactly one document. Each scenario declares its scope and protection mode. Each step appends semantic
 messages and supplies the already-eligible candidates, the upstream algorithm's
 proposal and scores, and any provider-state reference or cache-warmth input.
 Expected results are separate grading fields and never supply routing state.
@@ -47,7 +47,9 @@ Expected results are separate grading fields and never supply routing state.
 The runner uses production message fact extraction, protection preflight,
 switch protection, Replay diagnostic conversion and session-memory writes.
 The next turn reads the previous **actual** model selection. Memory is reset
-between scenarios and repetitions. The model-choice proposal is scripted;
+between scenarios and repetitions. A companion integration test sends the maintained tool-loop history through the production Router Learning orchestration with adaptation enabled. It checks actual sampling invocations and final-model continuity, plus a bypass control that samples during the same tool loop. This covers the in-process orchestration, not HTTP or Envoy dispatch.
+
+The model-choice proposal is scripted;
 the protection decision is not simulated or reimplemented in the runner.
 
 Covered contracts include:
@@ -88,8 +90,10 @@ model latency. Those claims require paired task runs and measured outcomes.
 
 Add short scenarios with stable IDs and incremental message histories. Pair a
 blocked state with its released state so a policy that never switches cannot
-pass. Include exact expectations for the final model, sampling permission and
-Replay explanation. Preserve scenario isolation and deterministic reports.
+pass. Include exact expectations for the final model, sampling permission, hard-lock
+status, preflight reason and Replay explanation. Steps carry semantic coverage
+tags; validation rejects missing required capabilities and unknown tags. Adding
+or renaming scenarios does not require a fixed scenario count. Preserve scenario isolation and deterministic reports.
 
 The corpus carries an explicit missing-coverage list, copied into every report.
 It includes adaptation learning and outcome delivery, rescue and failure paths,
@@ -99,3 +103,20 @@ Delegated roles, multi-arm shadow execution and future evidence-calibrated
 session switching must be added only when their owning features land.
 
 Keep issue #2338 open after this baseline: these gaps are not passing results.
+
+## Remaining issue criteria
+
+This PR gates the current protection baseline and leaves issue #2338 open.
+Follow-up work is split by the evidence it must produce:
+
+| Issue criterion | Follow-up evidence |
+| --- | --- |
+| Multi-turn sessions and delegated roles | Add role facts and selected/final-role assertions when the owning contract lands. |
+| Safe exploration and missed opportunities | Add missing outcomes, sustained improvement/degradation, oscillating evidence, cooldown, timeouts, failed switches, and failure/fallback provenance. |
+| Hard protection constraints | Exercise upstream authorization, safety, residency, context, capability and budget conflicts as well as candidate eligibility. |
+| Quality, cost, latency, cache and uncertainty | Run paired baseline/exploration tasks with actual model outcomes, repeated measurements and agreed acceptance thresholds. |
+| PR and release validation | Keep deterministic protection checks in PR tests; integrate measured evidence into a separate release or scheduled benchmark gate. |
+
+Existing live agent-task scripts can provide task examples for the measured
+runner, but their completion rubrics are not protection assertions. Shared
+scenario loading and measurement design belong in that follow-up.

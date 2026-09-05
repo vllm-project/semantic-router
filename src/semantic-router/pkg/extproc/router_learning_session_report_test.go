@@ -52,6 +52,7 @@ func protectionFailures(row protectionRow, expected protectionExpectation) []str
 		{"model", row.Selected, expected.Model},
 		{"action", row.Action, expected.Action},
 		{"reason", row.Reason, expected.Reason},
+		{"preflight_reason", row.PreflightReason, expected.PreflightReason},
 	} {
 		if check.got != check.want {
 			failures = append(failures, fmt.Sprintf("%s: got %q, want %q", check.field, check.got, check.want))
@@ -59,6 +60,9 @@ func protectionFailures(row protectionRow, expected protectionExpectation) []str
 	}
 	if row.SamplingAllowed != expected.Sampling {
 		failures = append(failures, "sampling permission differs from expectation")
+	}
+	if expected.HardLocked == nil || row.HardLocked != *expected.HardLocked {
+		failures = append(failures, "hard-lock status differs from expectation")
 	}
 	return failures
 }

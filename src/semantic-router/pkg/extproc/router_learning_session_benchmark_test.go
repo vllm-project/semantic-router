@@ -116,7 +116,7 @@ func TestRouterLearningSessionDetectsDisabledProtection(t *testing.T) {
 
 func TestRouterLearningSessionReportDetectsRegressions(t *testing.T) {
 	corpus, digest := loadProtectionCorpus(t)
-	expected := protectionExpectation{Model: "protection-cheap", Sampling: false, Action: "hold_current", Reason: "tool_or_protocol_state"}
+	expected := protectionExpectation{HardLocked: extprocBoolPtr(false), Model: "protection-cheap", Sampling: false, Action: "hold_current", Reason: "tool_or_protocol_state"}
 	unsafe := protectionRow{Category: "blocked", Previous: "protection-cheap", Proposal: "protection-frontier", Selected: "protection-frontier", SamplingAllowed: true}
 	unsafe.Failures = protectionFailures(unsafe, expected)
 	missed := protectionRow{Category: "opportunity", Previous: "protection-cheap", Proposal: "protection-frontier", Selected: "protection-cheap"}
