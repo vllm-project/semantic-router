@@ -62,6 +62,7 @@ Every entry uses these sections:
 - [TD046: ONNX binding CI coverage](td-046-onnx-binding-ci-coverage-gap.md)
 - [TD047: Response-cache polarity guard surface mirrors](td-047-response-cache-polarity-guard-surface-mirrors.md)
 - [TD057: Backend-target producer parity](td-057-backend-target-producer-parity-gap.md)
+- [TD058: Observability metrics module boundaries](td-058-observability-metrics-module-boundaries.md)
 
 ### PL-0039: Evaluation Plane
 
