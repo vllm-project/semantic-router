@@ -9,6 +9,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/projectiontrace"
@@ -245,6 +246,10 @@ type RequestContext struct {
 	SourceFormat             llmprotocol.WireFormat
 	TargetFormat             llmprotocol.WireFormat
 	SemanticRequest          *llmprotocol.Request
+	OriginalContextHistory   *contextcompression.HistorySnapshot
+	ContextRequestIR         *contextcompression.RequestIR
+	ContextHistorySteps      []contextcompression.TransformationStep
+	ProtectedContextMessages map[int]contextcompression.Protection
 	SemanticResponse         *llmprotocol.Response
 	ProtocolEnvelope         llmprotocol.Envelope
 	ResponseEnvelope         llmprotocol.Envelope
