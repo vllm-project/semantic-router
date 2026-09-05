@@ -19,6 +19,7 @@ package looper
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"regexp"
@@ -1069,8 +1070,6 @@ func (l *ConfidenceLooper) performAutoMixEntailment(
 		return 0, false, fmt.Errorf("could not extract user question from request")
 	}
 
-	client := getAutoMixVerifierClient(evaluator.VerifierServerURL, evaluator.VerifierTimeoutSeconds, evaluator.MaxResponseBytes)
-
 	logging.ComponentDebugEvent("looper", "automix_entailment_started", map[string]interface{}{
 		"looper":     "confidence",
 		"decision":   req.DecisionName,
@@ -1078,11 +1077,25 @@ func (l *ConfidenceLooper) performAutoMixEntailment(
 		"server_url": evaluator.VerifierServerURL,
 	})
 
-	verifyResp, err := client.Verify(ctx, question, responseContent, "", evaluator.Threshold)
+	// Verify through the shared verifier contract so the AutoMix HTTP adapter
+	// is the single verifier seam (issue #2857). Public behavior is unchanged:
+	// the returned confidence and accept decision are identical.
+	verifier := NewAutoMixVerifier(evaluator.VerifierServerURL, evaluator.VerifierTimeoutSeconds, evaluator.MaxResponseBytes, evaluator.Threshold)
+	result, err := verifier.Verify(ctx, &VerifierRequest{
+		Task: question,
+		Candidates: []VerifierCandidate{
+			{ID: modelName, Content: responseContent},
+		},
+	})
 	if err != nil {
+		var verr *VerifierError
+		if errors.As(err, &verr) && verr.Code == VerifierFailureTimeout {
+			return 0, false, fmt.Errorf("verifier call failed (timeout): %w", err)
+		}
 		return 0, false, fmt.Errorf("verifier call failed: %w", err)
 	}
-
-	accepted := verifyResp.Confidence >= evaluator.Threshold
-	return verifyResp.Confidence, accepted, nil
+	if result.Confidence == nil {
+		return 0, false, fmt.Errorf("verifier returned no confidence")
+	}
+	return *result.Confidence, result.Disposition == DispositionApprove, nil
 }

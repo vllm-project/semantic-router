@@ -1,6 +1,7 @@
 package looper
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -152,7 +153,9 @@ const (
 )
 
 // scoreByPanel scores each response by how well its peers entail (vs contradict)
-// it — the panel as its own mutual reference.
+// it — the panel as its own mutual reference. It routes through the shared
+// peer-consistency verifier contract (issue #2857); the scoring math is
+// unchanged.
 func scoreByPanel(panel []*ModelResponse, cfg fusionExecutionConfig) ([]groundingScore, error) {
 	if groundingNLIClassify == nil {
 		return nil, fmt.Errorf("nli backend not configured")
@@ -161,50 +164,27 @@ func scoreByPanel(panel []*ModelResponse, cfg fusionExecutionConfig) ([]groundin
 	if penalty <= 0 {
 		penalty = 1.0
 	}
-	scores := make([]groundingScore, len(panel))
-	for i, r := range panel {
-		scores[i].Model = modelName(r)
-		if r == nil {
-			continue
-		}
-		var sum float64
-		var n int
-		var flagged []string
-		for j, p := range panel {
-			if i == j || p == nil {
-				continue
-			}
-			// Directional consistency: does peer p (premise) entail/contradict
-			// response r (hypothesis)?
-			entail, contradict, err := nliPairSignal(p.Content, r.Content)
-			if err != nil {
-				return nil, err
-			}
-			sum += entail - penalty*contradict
-			n++
-			if contradict > entail && contradict >= 0.5 {
-				flagged = append(flagged, p.Model)
-			}
-		}
-		raw := 0.0
-		if n > 0 {
-			raw = sum / float64(n)
-		}
-		// raw is in [-penalty, 1]; map to [0,1].
-		scores[i].Score = clamp01((raw + penalty) / (1.0 + penalty))
-		scores[i].FlaggedSpans = flagged
+	candidates, idx := groundingVerifierCandidates(panel)
+	res, err := NewPeerConsistencyVerifier(groundingNLIClassify, penalty).
+		Verify(context.Background(), &VerifierRequest{Candidates: candidates})
+	if err != nil {
+		return nil, err
 	}
-	return scores, nil
+	return groundingScoresFromVerifier(res, panel, idx), nil
 }
 
-// nliPairSignal returns the mean entailment and contradiction of premise toward
-// hypothesis. Short inputs use a single NLI call (preserving the cheap path);
-// long inputs are chunked so the hypothesis is never truncated away: each
-// hypothesis sentence is scored against every bounded premise window and credited
-// with its best-supporting window, then averaged over sentences.
-func nliPairSignal(premise, hypothesis string) (entail, contradict float64, err error) {
+// nliPairSignalWith is nliPairSignal against an explicit NLI backend so
+// verifier adapters can score without touching the process-wide global. Short
+// inputs use a single NLI call (preserving the cheap path); long inputs are
+// chunked so the hypothesis is never truncated away: each hypothesis sentence
+// is scored against every bounded premise window and credited with its
+// best-supporting window, then averaged over sentences.
+func nliPairSignalWith(nli NLIClassifyFunc, premise, hypothesis string) (entail, contradict float64, err error) {
+	if nli == nil {
+		return 0, 0, fmt.Errorf("nli backend not configured")
+	}
 	if runeLen(premise)+runeLen(hypothesis) <= nliSingleCallBudget {
-		e, c, err := groundingNLIClassify(premise, hypothesis)
+		e, c, err := nli(premise, hypothesis)
 		return float64(e), float64(c), err
 	}
 
@@ -212,7 +192,7 @@ func nliPairSignal(premise, hypothesis string) (entail, contradict float64, err 
 	windows := chunkTextCapped(premise, nliPremiseWindowChars, nliMaxPremiseWindows)
 	if len(sentences) == 0 || len(windows) == 0 {
 		// Nothing usable to chunk; fall back to a single (truncated) call.
-		e, c, err := groundingNLIClassify(premise, hypothesis)
+		e, c, err := nli(premise, hypothesis)
 		return float64(e), float64(c), err
 	}
 
@@ -222,7 +202,7 @@ func nliPairSignal(premise, hypothesis string) (entail, contradict float64, err 
 		bestSignal := math.Inf(-1)
 		var bestE, bestC float64
 		for _, w := range windows {
-			e, c, err := groundingNLIClassify(w, s)
+			e, c, err := nli(w, s)
 			if err != nil {
 				return 0, 0, err
 			}
@@ -288,26 +268,85 @@ func truncateRunes(s string, max int) string {
 }
 
 // scoreByContext scores each response by its faithfulness to the provided context
-// (fewer unsupported spans => higher score).
+// (fewer unsupported spans => higher score). It routes through the shared
+// faithfulness verifier contract (issue #2857); scoring is unchanged.
 func scoreByContext(contextText, question string, panel []*ModelResponse, cfg fusionExecutionConfig) ([]groundingScore, error) {
 	if groundingDetect == nil {
 		return nil, fmt.Errorf("hallucination detector backend not configured")
 	}
-	scores := make([]groundingScore, len(panel))
+	candidates, idx := groundingVerifierCandidates(panel)
+	res, err := NewFaithfulnessVerifier(groundingDetect).
+		Verify(context.Background(), &VerifierRequest{Task: question, TrustedContext: contextText, Candidates: candidates})
+	if err != nil {
+		return nil, err
+	}
+	return groundingScoresFromVerifier(res, panel, idx), nil
+}
+
+// groundingVerifierCandidates converts the panel to contract candidates with
+// index-tagged opaque IDs, preserving order and skipping nil slots so results
+// map back by index exactly like the legacy path.
+func groundingVerifierCandidates(panel []*ModelResponse) ([]VerifierCandidate, []int) {
+	candidates := make([]VerifierCandidate, 0, len(panel))
+	idx := make([]int, 0, len(panel))
 	for i, r := range panel {
-		scores[i].Model = modelName(r)
 		if r == nil {
 			continue
 		}
-		spans, _, err := groundingDetect(contextText, question, r.Content)
-		if err != nil {
-			return nil, err
-		}
-		// 0 unsupported spans => 1.0; degrades as unsupported spans accumulate.
-		scores[i].Score = 1.0 / (1.0 + float64(len(spans)))
-		scores[i].FlaggedSpans = spans
+		candidates = append(candidates, VerifierCandidate{ID: fmt.Sprintf("panel-%d", i), Content: r.Content})
+		idx = append(idx, i)
 	}
-	return scores, nil
+	return candidates, idx
+}
+
+// groundingScoresFromVerifier rebuilds per-index grounding scores from a
+// verifier result using the candidate order established by
+// groundingVerifierCandidates. Peer-consistency flags reference peers by their
+// internal candidate ID and are remapped to caller-visible model labels so
+// traces, grounding spans, and the synthesis notes stay associated with real
+// responses. Only peer-consistency flags are ID-based; faithfulness flags are
+// arbitrary unsupported text spans and pass through verbatim (a literal span
+// like "panel-0" must never be rewritten) (regression #2857).
+func groundingScoresFromVerifier(res *VerifierResult, panel []*ModelResponse, idx []int) []groundingScore {
+	scores := make([]groundingScore, len(panel))
+	byID := make(map[string]groundingScore, len(res.Scores))
+	for _, s := range res.Scores {
+		byID[s.CandidateID] = groundingScore{Score: s.Confidence, FlaggedSpans: s.Flags}
+	}
+	var idToModel map[string]string
+	if res.Kind == VerifierKindPeerConsistency {
+		idToModel = make(map[string]string, len(idx))
+		for _, i := range idx {
+			idToModel[fmt.Sprintf("panel-%d", i)] = modelName(panel[i])
+		}
+	}
+	for _, i := range idx {
+		id := fmt.Sprintf("panel-%d", i)
+		scores[i] = groundingScore{Model: modelName(panel[i])}
+		if gs, ok := byID[id]; ok {
+			scores[i].Score = gs.Score
+			scores[i].FlaggedSpans = remapFlaggedSpans(gs.FlaggedSpans, idToModel)
+		}
+	}
+	return scores
+}
+
+// remapFlaggedSpans resolves internal candidate IDs in flag spans to their
+// caller-visible model labels; textual spans (e.g. hallucination-detector
+// output) pass through unchanged.
+func remapFlaggedSpans(spans []string, idToModel map[string]string) []string {
+	if len(spans) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(spans))
+	for _, s := range spans {
+		if model, ok := idToModel[s]; ok {
+			out = append(out, model)
+		} else {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // filterPanelByScore returns the panel ranked by score (desc), dropping responses
