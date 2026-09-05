@@ -3,8 +3,6 @@ package handlers
 import (
 	"fmt"
 	"strings"
-
-	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 type topologySignalMapping struct {
@@ -15,7 +13,10 @@ type topologySignalMapping struct {
 	addPath           bool
 }
 
-// convertRouterResponse converts Router API response to TestQueryResult.
+// convertRouterResponse converts Router API response to TestQueryResult. The
+// router's eval_trace is the source of truth for decision/rule state; the
+// flat config-derived reconstruction only runs when the router did not
+// return a trace, and can never mark the result as accurate.
 func convertRouterResponse(req TestQueryRequest, routerResp *RouterEvalResponse, configPath string) *TestQueryResult {
 	result := newTestQueryResult(req)
 
@@ -23,7 +24,13 @@ func convertRouterResponse(req TestQueryRequest, routerResp *RouterEvalResponse,
 	appendSignalGroupHighlights(result)
 	applyRouterDecision(result, routerResp)
 	applyRecommendedModels(result, routerResp.RecommendedModels)
-	appendEvaluatedRulesFromConfig(result, configPath, req.Model)
+	verifyRecipeScope(result, routerResp, configPath, req.Model)
+
+	if !applyEvalTrace(result, routerResp) {
+		result.IsAccurate = false
+		appendWarning(result, "Router did not return an eval trace; rule display is a derived approximation and may be incomplete.")
+		appendEvaluatedRulesFromConfig(result, configPath, req.Model)
+	}
 
 	return result
 }
@@ -141,6 +148,7 @@ func appendSignalGroupHighlights(result *TestQueryResult) {
 func applyRouterDecision(result *TestQueryResult, routerResp *RouterEvalResponse) {
 	if routerResp.DecisionResult != nil {
 		result.MatchedDecision = routerResp.DecisionResult.DecisionName
+		result.Algorithm = routerResp.DecisionResult.Algorithm
 		result.HighlightedPath = append(result.HighlightedPath, fmt.Sprintf("decision-%s", routerResp.DecisionResult.DecisionName))
 	}
 
@@ -168,83 +176,4 @@ func applyRecommendedModels(result *TestQueryResult, recommendedModels []string)
 			fmt.Sprintf("model-%s", normalizeModelName(recommendedModel)),
 		)
 	}
-}
-
-func appendEvaluatedRulesFromConfig(result *TestQueryResult, configPath, requestModel string) {
-	parsedConfig, err := routerconfig.Parse(configPath)
-	if err != nil || parsedConfig == nil {
-		return
-	}
-
-	parsedConfig = topologyConfigForRequestModel(parsedConfig, requestModel)
-	matchedSignalNames := buildMatchedSignalNameSet(result.MatchedSignals)
-	for _, decision := range parsedConfig.IntelligentRouting.Decisions {
-		if result.MatchedDecision != "" && decision.Name == result.MatchedDecision {
-			continue
-		}
-		result.EvaluatedRules = append(result.EvaluatedRules, buildEvaluatedRule(decision, matchedSignalNames))
-	}
-}
-
-func topologyConfigForRequestModel(
-	parsedConfig *routerconfig.RouterConfig,
-	requestModel string,
-) *routerconfig.RouterConfig {
-	if parsedConfig == nil {
-		return nil
-	}
-	recipe, ok := parsedConfig.RecipeForRoutingModel(requestModel)
-	if !ok {
-		return parsedConfig
-	}
-	scoped := parsedConfig.ConfigForRecipe(recipe)
-	if scoped == nil {
-		return parsedConfig
-	}
-	return scoped
-}
-
-func buildMatchedSignalNameSet(signals []MatchedSignal) map[string]bool {
-	matchedSignalNames := make(map[string]bool, len(signals)*2)
-	for _, signal := range signals {
-		key := fmt.Sprintf("%s:%s", signal.Type, signal.Name)
-		normalizedKey := fmt.Sprintf("%s:%s", signal.Type, normalizeSignalName(signal.Name))
-		matchedSignalNames[key] = true
-		matchedSignalNames[normalizedKey] = true
-	}
-	return matchedSignalNames
-}
-
-func buildEvaluatedRule(decision routerconfig.Decision, matchedSignalNames map[string]bool) EvaluatedRule {
-	rule := EvaluatedRule{
-		DecisionName: decision.Name,
-		RuleOperator: strings.ToUpper(decision.Rules.Operator),
-		Conditions:   []string{},
-		IsMatch:      false,
-		Priority:     decision.Priority,
-	}
-	if rule.RuleOperator == "" {
-		rule.RuleOperator = "AND"
-	}
-
-	for _, condition := range decision.Rules.Conditions {
-		conditionKey := fmt.Sprintf("%s:%s", condition.Type, condition.Name)
-		normalizedConditionKey := fmt.Sprintf("%s:%s", condition.Type, normalizeSignalName(condition.Name))
-		rule.Conditions = append(rule.Conditions, conditionKey)
-		rule.TotalCount++
-		if matchedSignalNames[conditionKey] || matchedSignalNames[normalizedConditionKey] {
-			rule.MatchedCount++
-		}
-	}
-
-	switch {
-	case rule.TotalCount == 0:
-		rule.IsMatch = true
-	case rule.RuleOperator == "OR":
-		rule.IsMatch = rule.MatchedCount > 0
-	default:
-		rule.IsMatch = rule.MatchedCount == rule.TotalCount
-	}
-
-	return rule
 }

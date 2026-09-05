@@ -1,0 +1,95 @@
+.trace {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.decision {
+  padding: 8px;
+  background: var(--bg-secondary, #141414);
+  border: 1px solid var(--border-color, #333);
+  border-radius: 4px;
+}
+
+.decisionSelected {
+  border-color: rgba(76, 175, 80, 0.6);
+  background: rgba(76, 175, 80, 0.06);
+}
+
+.decisionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.decisionName {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary, #e8e8e8);
+}
+
+.decisionMatched {
+  font-size: 10px;
+  color: #4caf50;
+}
+
+.decisionUnmatched {
+  font-size: 10px;
+  color: var(--text-secondary, #999);
+}
+
+.node {
+  display: flex;
+  flex-direction: column;
+}
+
+.nodeRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  font-size: 11px;
+}
+
+.matched {
+  color: var(--text-primary, #e8e8e8);
+}
+
+.unmatched {
+  color: var(--text-secondary, #999);
+}
+
+.nodeMark {
+  width: 12px;
+  flex-shrink: 0;
+}
+
+.nodeOperator {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.nodeLabel {
+  font-family: var(--font-mono, monospace);
+}
+
+.nodeBadge {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 10px;
+}
+
+.nodeConfidence {
+  margin-left: auto;
+  color: var(--text-secondary, #999);
+  font-size: 10px;
+}
+
+.children {
+  border-left: 1px solid var(--border-color, #333);
+  padding-left: 4px;
+}

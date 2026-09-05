@@ -3,6 +3,7 @@
 import React from 'react'
 import { TestQueryResult, SignalType } from '../../types'
 import { SIGNAL_COLORS, SIGNAL_ICONS } from '../../constants'
+import { DecisionTraceView } from '../TraceView'
 import styles from './ResultCard.module.css'
 
 interface ResultCardProps {
@@ -13,7 +14,7 @@ interface ResultCardProps {
 export const ResultCard: React.FC<ResultCardProps> = ({ result, onClose }) => {
   if (!result) return null
 
-  const matchedSignals = result.matchedSignals.filter(signal => signal.matched)
+  const matchedSignals = result.matchedSignals.filter((signal) => signal.matched)
 
   const getSignalColor = (type: SignalType): string => {
     return SIGNAL_COLORS[type]?.background || '#607D8B'
@@ -40,7 +41,9 @@ export const ResultCard: React.FC<ResultCardProps> = ({ result, onClose }) => {
           {result.routingLatency !== undefined && (
             <span className={styles.latencyBadge}>{result.routingLatency}ms</span>
           )}
-          <button className={styles.closeBtn} onClick={onClose}>✕</button>
+          <button className={styles.closeBtn} onClick={onClose}>
+            ✕
+          </button>
         </div>
 
         {/* Warning Banner */}
@@ -52,32 +55,56 @@ export const ResultCard: React.FC<ResultCardProps> = ({ result, onClose }) => {
 
         {/* Content */}
         <div className={styles.content}>
-          {/* Decision & Model in one row */}
+          {/* Decision & Algorithm in one row */}
           <div className={styles.compactRow}>
             <div className={styles.compactItem}>
               <span className={styles.label}>Decision:</span>
-              <span className={styles.value}>
-                {result.matchedDecision || 'Default'}
-              </span>
+              <span className={styles.value}>{result.matchedDecision || 'Default'}</span>
             </div>
-            <div className={styles.compactItem}>
-              <span className={styles.label}>Model:</span>
-              <span className={styles.value}>
-                {result.matchedModels[0]?.split('/').pop() || 'N/A'}
-              </span>
-            </div>
+            {result.algorithm && (
+              <div className={styles.compactItem}>
+                <span className={styles.label}>Algorithm:</span>
+                <span className={styles.value}>{result.algorithm}</span>
+              </div>
+            )}
           </div>
+
+          {/* Candidate pool: Eval returns every candidate the matched
+              decision references, not a single selected model. */}
+          {result.matchedModels.length > 0 && (
+            <div className={styles.section}>
+              <span className={styles.sectionTitle}>
+                Candidate pool ({result.matchedModels.length}):
+              </span>
+              <div className={styles.candidateList}>
+                {result.matchedModels.map((model) => (
+                  <span key={model} className={styles.candidateBadge}>
+                    {model.split('/').pop()}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Recursive eval trace: the router's exact evaluation tree,
+              replacing the flat signal-name heuristic. */}
+          {result.evalTrace && result.evalTrace.length > 0 && (
+            <div className={styles.section}>
+              <span className={styles.sectionTitle}>Decision trace:</span>
+              <DecisionTraceView
+                traces={result.evalTrace}
+                selectedDecisionName={result.matchedDecision}
+              />
+            </div>
+          )}
 
           {/* Matched Signals */}
           {matchedSignals.length > 0 && (
             <div className={styles.section}>
               <span className={styles.sectionTitle}>Signals:</span>
               <div className={styles.signalList}>
-                {matchedSignals.map(signal => (
-                  <div
-                    key={`${signal.type}-${signal.name}`}
-                    className={styles.signalCard}
-                  >
+                {matchedSignals.map((signal) => (
+                  <div key={`${signal.type}-${signal.name}`} className={styles.signalCard}>
                     <div className={styles.signalCardHeader}>
                       <span
                         className={styles.signalTag}
@@ -89,7 +116,9 @@ export const ResultCard: React.FC<ResultCardProps> = ({ result, onClose }) => {
                     </div>
                     <div className={styles.signalMeta}>
                       {signal.value !== undefined && (
-                        <span className={styles.signalMetric}>Value {formatValue(signal.value)}</span>
+                        <span className={styles.signalMetric}>
+                          Value {formatValue(signal.value)}
+                        </span>
                       )}
                       {(signal.score ?? signal.confidence) !== undefined && (
                         <span className={styles.signalMetric}>
@@ -106,9 +135,7 @@ export const ResultCard: React.FC<ResultCardProps> = ({ result, onClose }) => {
 
           {/* Fallback Reason */}
           {result.isFallbackDecision && result.fallbackReason && (
-            <div className={styles.fallbackReason}>
-              💡 {result.fallbackReason}
-            </div>
+            <div className={styles.fallbackReason}>💡 {result.fallbackReason}</div>
           )}
         </div>
       </div>

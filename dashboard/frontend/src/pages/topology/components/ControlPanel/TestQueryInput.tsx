@@ -8,6 +8,9 @@ interface TestQueryInputProps {
   onChange: (value: string) => void
   onTest: () => void
   isLoading: boolean
+  /** When set, the selected scope cannot be run (e.g. a recipe with no
+   * entrypoint) — the send action stays disabled and this explains why. */
+  disabledReason?: string
 }
 
 export const TestQueryInput: React.FC<TestQueryInputProps> = ({
@@ -15,6 +18,7 @@ export const TestQueryInput: React.FC<TestQueryInputProps> = ({
   onChange,
   onTest,
   isLoading,
+  disabledReason,
 }) => {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && e.metaKey) {
@@ -40,11 +44,17 @@ export const TestQueryInput: React.FC<TestQueryInputProps> = ({
         <button
           className={styles.testBtn}
           onClick={onTest}
-          disabled={isLoading || !value.trim()}
+          disabled={isLoading || !value.trim() || Boolean(disabledReason)}
+          title={disabledReason}
         >
           {isLoading ? 'Testing...' : 'Send'}
         </button>
       </div>
+      {disabledReason && (
+        <p className={styles.testQueryDisabledNote} role="note">
+          {disabledReason}
+        </p>
+      )}
     </div>
   )
 }

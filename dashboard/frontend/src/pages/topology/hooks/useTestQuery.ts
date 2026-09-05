@@ -12,11 +12,16 @@ interface UseTestQueryResult {
   isLoading: boolean
   runTest: () => Promise<void>
   clearResult: () => void
+  /** Set when the selected scope cannot be tested (e.g. a named recipe with
+   * no entrypoint), so the caller can disable the run action and show why
+   * instead of silently evaluating the default recipe. */
+  disabledReason?: string
 }
 
 export function useTestQuery(
   topologyData: ParsedTopology | null,
   routingModel?: string,
+  disabledReason?: string,
 ): UseTestQueryResult {
   const [testQuery, setTestQuery] = useState('')
   const [testResult, setTestResult] = useState<TestQueryResult | null>(null)
@@ -25,11 +30,24 @@ export function useTestQuery(
   // Always use backend verification, with frontend fallback
   const runTest = useCallback(async () => {
     if (!testQuery.trim()) return
+    if (disabledReason) {
+      setTestResult({
+        query: testQuery,
+        mode: 'dry-run',
+        matchedSignals: [],
+        matchedDecision: null,
+        matchedModels: [],
+        highlightedPath: ['client'],
+        isAccurate: false,
+        warning: disabledReason,
+      })
+      return
+    }
 
     setIsLoading(true)
     try {
       const result = await testQueryDryRun(testQuery, routingModel)
-      setTestResult({ ...result, mode: 'dry-run', isAccurate: true })
+      setTestResult({ ...result, mode: 'dry-run' })
     } catch (error) {
       console.warn('Backend verification failed, falling back to simulation:', error)
       // Fallback to frontend simulation if backend unavailable
@@ -45,7 +63,7 @@ export function useTestQuery(
     } finally {
       setIsLoading(false)
     }
-  }, [testQuery, topologyData, routingModel])
+  }, [testQuery, topologyData, routingModel, disabledReason])
 
   const clearResult = useCallback(() => {
     setTestResult(null)
@@ -58,5 +76,6 @@ export function useTestQuery(
     isLoading,
     runTest,
     clearResult,
+    disabledReason,
   }
 }
