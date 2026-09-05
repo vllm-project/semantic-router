@@ -29,10 +29,7 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 			"client_format":  ctx.SourceFormat,
 			"error":          err.Error(),
 		}
-		// ProtocolError.Error() renders only "code: message", and message is
-		// what reaches the client, so it stays generic. The cause carries the
-		// detail an operator needs — which field the upstream response failed
-		// on — and is logged here rather than returned.
+		// Log the private cause while keeping the client-facing message generic.
 		if cause := errors.Unwrap(err); cause != nil {
 			decodeEvent["cause"] = cause.Error()
 		}

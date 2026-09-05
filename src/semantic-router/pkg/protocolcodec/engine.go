@@ -486,6 +486,9 @@ func validatePolicy(policy llmprotocol.Policy) error {
 	if policy.SourcePreservation != llmprotocol.SourceDisabled && policy.SourcePreservation != llmprotocol.SourceBoundedSameFormat {
 		return fmt.Errorf("source-preservation policy is invalid")
 	}
+	if policy.ResponseVendor != "" && policy.ResponseVendor != llmprotocol.ResponseVendorAzure {
+		return fmt.Errorf("response-vendor policy is invalid")
+	}
 	if !positiveProtocolLimits(policy.Limits) {
 		return fmt.Errorf("protocol limits must be positive")
 	}

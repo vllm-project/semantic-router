@@ -95,10 +95,7 @@ func (r *OpenAIRouter) protocolEngine() (*protocolcodec.Engine, error) {
 	return protocolcodec.NewEngine(registry, llmprotocol.DefaultPolicy())
 }
 
-// protocolEngineForBackend builds an engine whose policy carries the selected
-// backend's vendor allowance. Only paths that decode a live provider response
-// use it; cache replay and client-facing encodes keep the strict default so a
-// backend allowance can never widen a contract it does not own.
+// protocolEngineForBackend permits extensions only for live provider responses.
 func (r *OpenAIRouter) protocolEngineForBackend(ctx *RequestContext) (*protocolcodec.Engine, error) {
 	if r == nil {
 		return nil, fmt.Errorf("protocol runtime is unavailable")

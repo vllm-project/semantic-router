@@ -82,10 +82,7 @@ func decodeProviderWire(body []byte, target any, policy llmprotocol.Policy) erro
 	return err
 }
 
-// decodeProviderWireVendorAware is decodeProviderWire for callers that can
-// raise diagnostics. It returns the vendor extension fields dropped from the
-// response so nothing is discarded unobserved; the fields are always empty for
-// a backend with no vendor allowance.
+// decodeProviderWireVendorAware returns any extensions removed during decode.
 func decodeProviderWireVendorAware(body []byte, target any, policy llmprotocol.Policy) ([]string, error) {
 	return decodeProviderJSON(body, target, policy, true)
 }
@@ -107,16 +104,10 @@ func decodeProviderJSON(body []byte, target any, policy llmprotocol.Policy, requ
 	if rejectUnknownFields(body, policy) {
 		canonical := body
 		if providerVendorExtensionsAllowed(policy) {
-			// A vendor-identified backend may decorate its responses, so its
-			// extras are removed before the canonical check instead of failing
-			// the request. Every backend without an allowance is untouched.
 			canonical, dropped = stripProviderVendorExtensions(body, reflect.TypeOf(target))
 		}
 		if err := validateExactJSONFieldNames(canonical, reflect.TypeOf(target)); err != nil {
-			// The offending field name stays in the cause, never in Message:
-			// Message is serialized into the client-facing error body, and the
-			// upstream response shape is not the caller's to see. Operators get
-			// it from the decode log, which unwraps the cause.
+			// Keep field details in the private cause, not the client message.
 			return nil, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_json", "upstream response JSON contains a non-canonical field", err)
 		}
 		decoder = json.NewDecoder(bytes.NewReader(canonical))

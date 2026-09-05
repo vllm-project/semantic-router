@@ -248,7 +248,7 @@ type RequestContext struct {
 	ProtocolEnvelope         llmprotocol.Envelope
 	ResponseEnvelope         llmprotocol.Envelope
 	ProtocolDiagnostics      llmprotocol.Diagnostics
-	ResponseVendor           string // Response-decoration allowance from the selected backend dialect; empty stays strict
+	ResponseVendor           llmprotocol.ResponseVendor
 	ImmediateProtocolError   *llmprotocol.ProtocolError
 	ImmediateResponseEncoded bool
 

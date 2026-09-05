@@ -313,7 +313,7 @@ func (OpenAIChatCodec) DecodeTransportError(
 	body []byte,
 	policy llmprotocol.Policy,
 ) (llmprotocol.TransportError, llmprotocol.Diagnostics, error) {
-	return decodeOpenAITransportError(body, policy)
+	return decodeOpenAITransportError(body, policy, llmprotocol.OpenAIChatV1)
 }
 
 func (OpenAIChatCodec) EncodeTransportError(transportError llmprotocol.TransportError) []byte {

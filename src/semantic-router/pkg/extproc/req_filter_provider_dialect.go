@@ -19,23 +19,11 @@ const (
 	openAIBackendDialectGenericOpenAICompat openAIBackendDialectKind = "generic_openai_compatible"
 )
 
-// azureOpenAIHostSuffixes are the host suffixes Azure serves its
-// OpenAI-compatible endpoints from. Azure resources are per-tenant subdomains,
-// so unlike the other dialects it is matched by suffix rather than exact host.
-var azureOpenAIHostSuffixes = []string{
-	".openai.azure.com",
-	".services.ai.azure.com",
-	".cognitiveservices.azure.com",
-}
-
 type openAIBackendDialect struct {
 	kind                            openAIBackendDialectKind
 	supportsTopLevelReasoningEffort bool
 	supportsTopLevelDeepSeekThink   bool
-	// vendorExtensions names the provider whose documented response
-	// decorations this backend is allowed to emit. Empty means the backend gets
-	// no allowance and every non-canonical response field is rejected.
-	vendorExtensions string
+	vendorExtensions                llmprotocol.ResponseVendor
 }
 
 // resolveOpenAIBackendDialect captures request-shaping differences between
@@ -44,6 +32,9 @@ type openAIBackendDialect struct {
 func resolveOpenAIBackendDialect(profile *config.ProviderProfile) openAIBackendDialect {
 	if profile == nil {
 		return newOpenAIBackendDialect(openAIBackendDialectVLLM)
+	}
+	if strings.EqualFold(profile.Type, "azure-openai") {
+		return newOpenAIBackendDialect(openAIBackendDialectAzureOpenAI)
 	}
 	if !strings.EqualFold(profile.Type, "openai") {
 		return newOpenAIBackendDialect(openAIBackendDialectGenericOpenAICompat)
@@ -63,23 +54,16 @@ func resolveOpenAIBackendDialect(profile *config.ProviderProfile) openAIBackendD
 	}
 
 	if isAzureOpenAIHost(normalizedProfileHost(profile)) {
-		// Azure OpenAI and Azure AI Foundry speak the OpenAI request contract
-		// but decorate every response with their own fields.
 		return newOpenAIBackendDialect(openAIBackendDialectAzureOpenAI)
 	}
 	return newOpenAIBackendDialect(openAIBackendDialectGenericOpenAICompat)
 }
 
 func isAzureOpenAIHost(host string) bool {
-	if host == "" {
-		return false
-	}
-	for _, suffix := range azureOpenAIHostSuffixes {
-		if strings.HasSuffix(host, suffix) {
-			return true
-		}
-	}
-	return false
+	return host != "" &&
+		(strings.HasSuffix(host, ".openai.azure.com") ||
+			strings.HasSuffix(host, ".services.ai.azure.com") ||
+			strings.HasSuffix(host, ".cognitiveservices.azure.com"))
 }
 
 func newOpenAIBackendDialect(kind openAIBackendDialectKind) openAIBackendDialect {
@@ -95,18 +79,12 @@ func newOpenAIBackendDialect(kind openAIBackendDialectKind) openAIBackendDialect
 	case openAIBackendDialectOpenRouter:
 		dialect.supportsTopLevelReasoningEffort = true
 	case openAIBackendDialectAzureOpenAI:
-		// Request shaping is deliberately identical to the generic
-		// OpenAI-compatible dialect; only response decoration differs, which is
-		// all issue #3496 covers. Any Azure request-side quirk needs its own
-		// evidence before it is claimed here.
-		dialect.vendorExtensions = llmprotocol.VendorAzure
+		dialect.vendorExtensions = llmprotocol.ResponseVendorAzure
 	}
 	return dialect
 }
 
-// vendorExtensionProvider reports which provider's documented response
-// decorations the response decoder may ignore for this backend.
-func (d openAIBackendDialect) vendorExtensionProvider() string {
+func (d openAIBackendDialect) vendorExtensionProvider() llmprotocol.ResponseVendor {
 	return d.vendorExtensions
 }
 
