@@ -37,10 +37,10 @@ type AnalysisPlan struct {
 	Missingness   string     `json:"missingness"`
 }
 
-// EvaluationMethodPlugin makes the execution and evidentiary limits of an
+// EvaluationMethodDefinition makes the execution and evidentiary limits of an
 // advertised method explicit.  A live method is only cataloguable when both
 // its input and its grading are complete.
-type EvaluationMethodPlugin struct {
+type EvaluationMethodDefinition struct {
 	SchemaVersion       string        `json:"schema_version"`
 	ID                  string        `json:"id"`
 	Version             string        `json:"version"`
@@ -59,7 +59,7 @@ type EvaluationMethodPlugin struct {
 	AnalysisPlan        AnalysisPlan  `json:"analysis_plan"`
 }
 
-var evaluationMethodPluginRequiredFields = [...]string{
+var evaluationMethodRequiredFields = [...]string{
 	"schema_version",
 	"id",
 	"version",
@@ -83,7 +83,7 @@ var evaluationMethodPluginRequiredFields = [...]string{
 // zero value as an explicit false/empty declaration. Preserve typed registry
 // construction while making every JSON declaration prove the complete v2
 // contract before it can enter a report or admission path.
-func (plugin *EvaluationMethodPlugin) UnmarshalJSON(data []byte) error {
+func (method *EvaluationMethodDefinition) UnmarshalJSON(data []byte) error {
 	if err := rejectDuplicateJSONKeys(data); err != nil {
 		return fmt.Errorf("decode evaluation method: %w", err)
 	}
@@ -95,7 +95,7 @@ func (plugin *EvaluationMethodPlugin) UnmarshalJSON(data []byte) error {
 	if err := ensureJSONEOF(fieldDecoder); err != nil {
 		return err
 	}
-	for _, name := range evaluationMethodPluginRequiredFields {
+	for _, name := range evaluationMethodRequiredFields {
 		value, present := fields[name]
 		if !present {
 			return fmt.Errorf("evaluation method field %q is required", name)
@@ -105,8 +105,8 @@ func (plugin *EvaluationMethodPlugin) UnmarshalJSON(data []byte) error {
 		}
 	}
 
-	type methodPluginWire EvaluationMethodPlugin
-	var decoded methodPluginWire
+	type methodDefinitionWire EvaluationMethodDefinition
+	var decoded methodDefinitionWire
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&decoded); err != nil {
@@ -115,11 +115,11 @@ func (plugin *EvaluationMethodPlugin) UnmarshalJSON(data []byte) error {
 	if err := ensureJSONEOF(decoder); err != nil {
 		return err
 	}
-	candidate := EvaluationMethodPlugin(decoded)
-	if err := ValidateEvaluationMethodPlugin(candidate); err != nil {
+	candidate := EvaluationMethodDefinition(decoded)
+	if err := ValidateEvaluationMethodDefinition(candidate); err != nil {
 		return err
 	}
-	*plugin = candidate
+	*method = candidate
 	return nil
 }
 
@@ -175,34 +175,34 @@ func validMethodTrackID(value TrackID) bool {
 	return false
 }
 
-// ValidateEvaluationMethodPlugin is the catalog/planner admission boundary.
-func ValidateEvaluationMethodPlugin(plugin EvaluationMethodPlugin) error {
+// ValidateEvaluationMethodDefinition is the catalog/planner admission boundary.
+func ValidateEvaluationMethodDefinition(method EvaluationMethodDefinition) error {
 	owners := map[string]bool{"server": true, "worker": true, "provider": true, "benchmark_native": true}
 	parities := map[string]bool{"native": true, "source_qualified": true, "none": true}
 	statuses := map[string]bool{"native-qualified": true, "exploratory-import": true, "data-required": true, "blocked": true}
-	if plugin.SchemaVersion != EvaluationMethodContractVersion || plugin.Version != EvaluationMethodContractVersion ||
-		!validMethodID(plugin.ID) || !statuses[plugin.Status] || !owners[plugin.ExecutionOwner] || !validMethodID(plugin.InputSchema) ||
-		!validMethodID(plugin.ExportSchema) ||
-		!validEvidenceCeiling(plugin.EvidenceCeiling) || !parities[plugin.NativeParity] {
-		return fmt.Errorf("evaluation method plugin is invalid")
+	if method.SchemaVersion != EvaluationMethodContractVersion || method.Version != EvaluationMethodContractVersion ||
+		!validMethodID(method.ID) || !statuses[method.Status] || !owners[method.ExecutionOwner] || !validMethodID(method.InputSchema) ||
+		!validMethodID(method.ExportSchema) ||
+		!validEvidenceCeiling(method.EvidenceCeiling) || !parities[method.NativeParity] {
+		return fmt.Errorf("evaluation method definition is invalid")
 	}
-	if plugin.NativeParity == "native" && plugin.ExecutionOwner != "benchmark_native" {
+	if method.NativeParity == "native" && method.ExecutionOwner != "benchmark_native" {
 		return fmt.Errorf("native method parity requires benchmark-native execution")
 	}
-	if len(plugin.ApplicableTracks) == 0 || len(plugin.ProducedMetricIDs) == 0 {
-		return fmt.Errorf("evaluation method plugin needs produced metrics")
+	if len(method.ApplicableTracks) == 0 || len(method.ProducedMetricIDs) == 0 {
+		return fmt.Errorf("evaluation method definition needs produced metrics")
 	}
-	if len(plugin.RequiredArtifactIDs) == 0 {
-		return fmt.Errorf("evaluation method plugin needs required artifacts")
+	if len(method.RequiredArtifactIDs) == 0 {
+		return fmt.Errorf("evaluation method definition needs required artifacts")
 	}
-	if plugin.Status == "native-qualified" && (!plugin.LiveInputComplete || !plugin.LiveGrader || len(plugin.LiveTracks) == 0) {
+	if method.Status == "native-qualified" && (!method.LiveInputComplete || !method.LiveGrader || len(method.LiveTracks) == 0) {
 		return fmt.Errorf("native-qualified method needs complete graded live execution")
 	}
-	if plugin.Status != "native-qualified" && (plugin.LiveInputComplete || plugin.LiveGrader) {
+	if method.Status != "native-qualified" && (method.LiveInputComplete || method.LiveGrader) {
 		return fmt.Errorf("non-qualified method cannot claim complete live execution")
 	}
-	seenApplicableTracks := make(map[TrackID]struct{}, len(plugin.ApplicableTracks))
-	for _, track := range plugin.ApplicableTracks {
+	seenApplicableTracks := make(map[TrackID]struct{}, len(method.ApplicableTracks))
+	for _, track := range method.ApplicableTracks {
 		if !validMethodTrackID(track) {
 			return fmt.Errorf("evaluation method applicable track is invalid")
 		}
@@ -211,8 +211,8 @@ func ValidateEvaluationMethodPlugin(plugin EvaluationMethodPlugin) error {
 		}
 		seenApplicableTracks[track] = struct{}{}
 	}
-	seenTracks := make(map[TrackID]struct{}, len(plugin.LiveTracks))
-	for _, track := range plugin.LiveTracks {
+	seenTracks := make(map[TrackID]struct{}, len(method.LiveTracks))
+	for _, track := range method.LiveTracks {
 		if !validMethodTrackID(track) {
 			return fmt.Errorf("evaluation method track is invalid")
 		}
@@ -224,8 +224,8 @@ func ValidateEvaluationMethodPlugin(plugin EvaluationMethodPlugin) error {
 		}
 		seenTracks[track] = struct{}{}
 	}
-	seenMetrics := make(map[string]struct{}, len(plugin.ProducedMetricIDs))
-	for _, metric := range plugin.ProducedMetricIDs {
+	seenMetrics := make(map[string]struct{}, len(method.ProducedMetricIDs))
+	for _, metric := range method.ProducedMetricIDs {
 		if metric == "" || metric != strings.TrimSpace(metric) {
 			return fmt.Errorf("evaluation method metric id is invalid")
 		}
@@ -234,8 +234,8 @@ func ValidateEvaluationMethodPlugin(plugin EvaluationMethodPlugin) error {
 		}
 		seenMetrics[metric] = struct{}{}
 	}
-	seenArtifacts := make(map[string]struct{}, len(plugin.RequiredArtifactIDs))
-	for _, artifact := range plugin.RequiredArtifactIDs {
+	seenArtifacts := make(map[string]struct{}, len(method.RequiredArtifactIDs))
+	for _, artifact := range method.RequiredArtifactIDs {
 		if !validMethodID(artifact) {
 			return fmt.Errorf("evaluation method artifact id is invalid")
 		}
@@ -244,7 +244,7 @@ func ValidateEvaluationMethodPlugin(plugin EvaluationMethodPlugin) error {
 		}
 		seenArtifacts[artifact] = struct{}{}
 	}
-	return validateAnalysisPlan(plugin.AnalysisPlan)
+	return validateAnalysisPlan(method.AnalysisPlan)
 }
 
 type CompoundModelBudgetOutcome struct {
@@ -263,71 +263,33 @@ type SharedDomainCurvePoint struct {
 }
 
 type CompoundModelBudgetReport struct {
-	Method                       EvaluationMethodPlugin   `json:"method"`
-	AnalysisPlan                 AnalysisPlan             `json:"analysis_plan"`
-	ActionRefs                   []ActionRef              `json:"action_refs"`
-	SliceRefs                    []SliceRef               `json:"slice_refs"`
-	RawSharedDomainCurve         []SharedDomainCurvePoint `json:"raw_shared_domain_curve"`
-	AUDC                         float64                  `json:"audc"`
-	NAUC                         float64                  `json:"nauc"`
-	Peak                         float64                  `json:"peak"`
-	QNC                          float64                  `json:"qnc"`
-	MissingCaseActionBudgetCells int                      `json:"missing_case_action_budget_cells"`
+	Method                       EvaluationMethodDefinition `json:"method"`
+	AnalysisPlan                 AnalysisPlan               `json:"analysis_plan"`
+	ActionRefs                   []ActionRef                `json:"action_refs"`
+	SliceRefs                    []SliceRef                 `json:"slice_refs"`
+	RawSharedDomainCurve         []SharedDomainCurvePoint   `json:"raw_shared_domain_curve"`
+	AUDC                         float64                    `json:"audc"`
+	NAUC                         float64                    `json:"nauc"`
+	Peak                         float64                    `json:"peak"`
+	QNC                          float64                    `json:"qnc"`
+	MissingCaseActionBudgetCells int                        `json:"missing_case_action_budget_cells"`
 }
 
-func R2CompoundModelBudgetPlugin() EvaluationMethodPlugin {
+func R2CompoundModelBudgetMethod() EvaluationMethodDefinition {
 	benchmark, found := researchBenchmarkByAdapter("r2-router")
 	if !found {
 		panic("research benchmark inventory is missing r2-router")
 	}
-	return researchBenchmarkMethodPlugin(benchmark)
-}
-
-// InstalledMethodPlugin returns a method declaration from either the canonical
-// research inventory or the explicit supplemental import registry. Every
-// declaration remains fail-closed; supplemental imports never imply research
-// inventory membership, native parity, or live readiness.
-func InstalledMethodPlugin(adapterID string) (EvaluationMethodPlugin, bool) {
-	if benchmark, found := researchBenchmarkByAdapter(adapterID); found {
-		return researchBenchmarkMethodPlugin(benchmark), true
-	}
-	return supplementalInstalledMethodPlugin(adapterID)
-}
-
-// supplementalInstalledMethodPlugin keeps non-research imports in an explicit
-// registry. They require source data and cannot represent a benchmark
-// readiness claim or act as an implicit compatibility fallback.
-func supplementalInstalledMethodPlugin(adapterID string) (EvaluationMethodPlugin, bool) {
-	type declaration struct {
-		artifact, metric string
-		tracks           []TrackID
-	}
-	declarations := map[string]declaration{
-		"lcr":        {"records", "lcr.success", []TrackID{"routing", "joint"}},
-		"swe-bench":  {"tasks", "swe.resolved", []TrackID{"agentic"}},
-		"agentbench": {"traces", "agentbench.score", []TrackID{"agentic"}},
-	}
-	declared, found := declarations[adapterID]
-	if !found {
-		return EvaluationMethodPlugin{}, false
-	}
-	return EvaluationMethodPlugin{
-		SchemaVersion: EvaluationMethodContractVersion, ID: adapterID + ".normalized.v2", Version: EvaluationMethodContractVersion,
-		Status: "data-required", ExecutionOwner: "worker", InputSchema: adapterID + "-normalized-input",
-		ExportSchema: adapterID + "-normalized-report", LiveTracks: []TrackID{}, ProducedMetricIDs: []string{declared.metric},
-		ApplicableTracks: declared.tracks,
-		EvidenceCeiling:  "E0", NativeParity: "none", RequiredArtifactIDs: []string{declared.artifact},
-		AnalysisPlan: AnalysisPlan{SchemaVersion: EvaluationMethodContractVersion, ID: adapterID + "-case-cluster", AnalysisUnit: "case_action", ClusterUnit: "case", Slices: []SliceRef{{SchemaVersion: EvaluationMethodContractVersion, ID: "all"}}, CurveDomain: "not_applicable", Missingness: "fail_closed"},
-	}, true
+	return researchBenchmarkMethod(benchmark)
 }
 
 // ReduceCompoundModelBudget refuses a ragged cohort.  This preserves both the
 // supplied ActionRef identity and a truly shared case×action×budget domain.
-func ReduceCompoundModelBudget(plugin EvaluationMethodPlugin, outcomes []CompoundModelBudgetOutcome) (CompoundModelBudgetReport, error) {
-	if plugin.ID != R2CompoundModelBudgetMethodID {
-		return CompoundModelBudgetReport{}, fmt.Errorf("compound reducer requires the R2 compound method plugin")
+func ReduceCompoundModelBudget(method EvaluationMethodDefinition, outcomes []CompoundModelBudgetOutcome) (CompoundModelBudgetReport, error) {
+	if method.ID != R2CompoundModelBudgetMethodID {
+		return CompoundModelBudgetReport{}, fmt.Errorf("compound reducer requires the R2 compound method")
 	}
-	if err := ValidateEvaluationMethodPlugin(plugin); err != nil {
+	if err := ValidateEvaluationMethodDefinition(method); err != nil {
 		return CompoundModelBudgetReport{}, err
 	}
 	if len(outcomes) == 0 {
@@ -335,8 +297,8 @@ func ReduceCompoundModelBudget(plugin EvaluationMethodPlugin, outcomes []Compoun
 	}
 	cases, actions, budgets, slices := make(map[string]struct{}), make(map[string]struct{}), make(map[int]struct{}), make(map[string]struct{})
 	cells := make(map[string]float64)
-	expectedSlices := make(map[string]struct{}, len(plugin.AnalysisPlan.Slices))
-	for _, slice := range plugin.AnalysisPlan.Slices {
+	expectedSlices := make(map[string]struct{}, len(method.AnalysisPlan.Slices))
+	for _, slice := range method.AnalysisPlan.Slices {
 		expectedSlices[slice.ID] = struct{}{}
 	}
 	for _, outcome := range outcomes {
@@ -413,7 +375,7 @@ func ReduceCompoundModelBudget(plugin EvaluationMethodPlugin, outcomes []Compoun
 	for index, id := range sliceIDs {
 		sliceRefs[index] = SliceRef{SchemaVersion: EvaluationMethodContractVersion, ID: id}
 	}
-	return CompoundModelBudgetReport{Method: plugin, AnalysisPlan: plugin.AnalysisPlan, ActionRefs: actionRefs, SliceRefs: sliceRefs, RawSharedDomainCurve: curve, AUDC: audc, NAUC: nauc, Peak: peak, QNC: qnc}, nil
+	return CompoundModelBudgetReport{Method: method, AnalysisPlan: method.AnalysisPlan, ActionRefs: actionRefs, SliceRefs: sliceRefs, RawSharedDomainCurve: curve, AUDC: audc, NAUC: nauc, Peak: peak, QNC: qnc}, nil
 }
 
 // ReduceSealedMethodReports is the only publication path for v2 method
@@ -424,7 +386,7 @@ func ReduceSealedMethodReports(methods methodRecordAttestation) ([]CompoundModel
 	if len(methods.R2Outcomes) == 0 {
 		return reports, nil
 	}
-	report, err := ReduceCompoundModelBudget(R2CompoundModelBudgetPlugin(), methods.R2Outcomes)
+	report, err := ReduceCompoundModelBudget(R2CompoundModelBudgetMethod(), methods.R2Outcomes)
 	if err != nil {
 		return nil, err
 	}
