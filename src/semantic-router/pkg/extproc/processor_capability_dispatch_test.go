@@ -355,6 +355,46 @@ func TestPrepareProviderDispatchReroutesToImagesWireSibling(t *testing.T) {
 	}
 }
 
+// An explicit tool_choice: none forbids all tools, including the hosted
+// image_generation operation, so the request must NOT be rerouted to an
+// images sibling: no image backend call may occur for a request whose caller
+// forbade all tools (Xun review 5119851642).
+func TestPrepareProviderDispatchNoneToolChoiceDoesNotRerouteToImages(t *testing.T) {
+	router, primary := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
+	imageBackend := "image-backend"
+	router.Config.ModelConfig[imageBackend] = config.ModelParams{
+		PreferredEndpoints: []string{"backend"},
+		APIFormat:          config.APIFormatImages,
+		ExternalModelIDs:   map[string]string{"vllm": "provider-image"},
+	}
+	decision := &config.Decision{
+		Name: "Omni",
+		ModelRefs: []config.ModelRef{
+			{Model: primary},
+			{Model: imageBackend},
+		},
+	}
+	request := testNeutralRequest(primary, "draw a cat")
+	request.ToolChoice = llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceNone}
+	request.ImageGeneration = &llmprotocol.ImageGenerationOptions{Size: "1024x1024"}
+	ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
+	ctx.VSRSelectedDecision = decision
+
+	dispatch, err := router.prepareProviderDispatch(request, primary, decision.Name, false, ctx)
+	if err != nil {
+		t.Fatalf("tool_choice none must dispatch on the primary chat wire, got error: %v", err)
+	}
+	if dispatch.logicalModel != primary {
+		t.Fatalf("logical model = %s, want %s (must not reroute to images backend)", dispatch.logicalModel, primary)
+	}
+	if dispatch.targetFormat != llmprotocol.OpenAIChatV1 {
+		t.Fatalf("target format = %s, want %s", dispatch.targetFormat, llmprotocol.OpenAIChatV1)
+	}
+	if request.ToolChoice.Mode != llmprotocol.ToolChoiceNone {
+		t.Fatalf("explicit no-tool choice must be preserved, got %v", request.ToolChoice.Mode)
+	}
+}
+
 func TestWireFormatForImagesAPIFormat(t *testing.T) {
 	format, err := wireFormatForModel(config.APIFormatImages)
 	if err != nil {

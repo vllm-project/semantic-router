@@ -167,7 +167,7 @@ func rejectUnsupportedTools(request llmprotocol.Request) error {
 		return unsupportedDownstreamTranslation(fmt.Errorf("images wire does not support function tools"))
 	}
 	switch request.ToolChoice.Mode {
-	case "", llmprotocol.ToolChoiceNone, llmprotocol.ToolChoiceImageGeneration:
+	case "", llmprotocol.ToolChoiceImageGeneration:
 		return nil
 	default:
 		return unsupportedDownstreamTranslation(fmt.Errorf("images wire does not support tool choice %q", request.ToolChoice.Mode))

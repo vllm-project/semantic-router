@@ -147,7 +147,11 @@ func (set CapabilitySet) Names() []string {
 
 func RequiredCapabilities(request Request) CapabilitySet {
 	required := requestOptionCapabilities(request)
-	if request.ImageGeneration != nil || request.ToolChoice.Mode == ToolChoiceImageGeneration {
+	// An explicit tool_choice: none forbids all tools, including the hosted
+	// image_generation operation, so a declared ImageGeneration must not
+	// require the images capability (Xun: preserve the no-tool choice).
+	if request.ImageGeneration != nil && request.ToolChoice.Mode != ToolChoiceNone ||
+		request.ToolChoice.Mode == ToolChoiceImageGeneration {
 		required.bits |= CapabilityImageGeneration
 	}
 	required.bits |= toolCapabilities(request.Tools)

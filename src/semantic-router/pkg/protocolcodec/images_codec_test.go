@@ -155,7 +155,7 @@ func TestImagesCodecEncodeRequestRejectsMixedTools(t *testing.T) {
 		t.Fatalf("mixed tools request must fail closed, got success")
 	}
 	for _, mode := range []llmprotocol.ToolChoiceMode{
-		llmprotocol.ToolChoiceAuto, llmprotocol.ToolChoiceRequired, llmprotocol.ToolChoiceNamed,
+		llmprotocol.ToolChoiceNone, llmprotocol.ToolChoiceAuto, llmprotocol.ToolChoiceRequired, llmprotocol.ToolChoiceNamed,
 	} {
 		named := base()
 		named.ToolChoice = llmprotocol.ToolChoice{Mode: mode, Name: "get_weather"}
