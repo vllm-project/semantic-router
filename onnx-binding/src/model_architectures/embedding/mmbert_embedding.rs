@@ -658,6 +658,17 @@ impl MmBertEmbeddingModel {
         &self.config
     }
 
+    /// Return the output width declared by the loaded checkpoint.
+    pub fn embedding_dimension(&self) -> usize {
+        self.config.hidden_size
+    }
+
+    /// Return the dimensions supported by the loaded model's Matryoshka
+    /// configuration.
+    pub fn matryoshka_dimensions(&self) -> Vec<usize> {
+        self.matryoshka_config.dimensions.clone()
+    }
+
     /// Get the tokenizer
     pub fn tokenizer(&self) -> &Tokenizer {
         &self.tokenizer

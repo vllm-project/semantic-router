@@ -8,6 +8,61 @@ use hf_hub::{api::sync::Api, Repo, RepoType};
 use std::path::Path;
 use tokenizers::{Tokenizer, TruncationDirection, TruncationParams, TruncationStrategy};
 
+type ModelFiles = (String, String, String, bool);
+
+fn resolve_model_files(model_id: &str) -> Result<ModelFiles> {
+    if Path::new(model_id).exists() {
+        let config_path = Path::new(model_id).join("config.json");
+        let tokenizer_path = Path::new(model_id).join("tokenizer.json");
+        let weights_path = if Path::new(model_id).join("model.safetensors").exists() {
+            (
+                Path::new(model_id)
+                    .join("model.safetensors")
+                    .to_string_lossy()
+                    .to_string(),
+                false,
+            )
+        } else if Path::new(model_id).join("pytorch_model.bin").exists() {
+            (
+                Path::new(model_id)
+                    .join("pytorch_model.bin")
+                    .to_string_lossy()
+                    .to_string(),
+                true,
+            )
+        } else {
+            return Err(E::msg(format!("No model weights found in {model_id}")));
+        };
+
+        return Ok((
+            config_path.to_string_lossy().to_string(),
+            tokenizer_path.to_string_lossy().to_string(),
+            weights_path.0,
+            weights_path.1,
+        ));
+    }
+
+    let repo = Repo::with_revision(model_id.to_string(), RepoType::Model, "main".to_string());
+    let api = Api::new()?.repo(repo);
+    let config = api.get("config.json")?;
+    let tokenizer = api.get("tokenizer.json")?;
+    let (weights, use_pth) = if model_id.starts_with("BAAI/") {
+        (api.get("pytorch_model.bin")?, true)
+    } else {
+        match api.get("model.safetensors") {
+            Ok(weights) => (weights, false),
+            Err(_) => (api.get("pytorch_model.bin")?, true),
+        }
+    };
+
+    Ok((
+        config.to_string_lossy().to_string(),
+        tokenizer.to_string_lossy().to_string(),
+        weights.to_string_lossy().to_string(),
+        use_pth,
+    ))
+}
+
 /// Structure to hold BERT model and tokenizer for semantic similarity
 ///
 /// This is the core similarity computation engine that provides embedding
@@ -20,6 +75,8 @@ pub struct BertSimilarity {
     tokenizer: Tokenizer,
     /// Computing device (CPU or CUDA)
     device: Device,
+    /// Output width established by the loaded checkpoint configuration.
+    embedding_dimension: usize,
 }
 
 impl BertSimilarity {
@@ -51,67 +108,7 @@ impl BertSimilarity {
         };
 
         let (config_filename, tokenizer_filename, weights_filename, use_pth) =
-            if Path::new(model_id).exists() {
-                // Local model path
-                let config_path = Path::new(model_id).join("config.json");
-                let tokenizer_path = Path::new(model_id).join("tokenizer.json");
-
-                // Check for safetensors first, fall back to PyTorch
-                let weights_path = if Path::new(model_id).join("model.safetensors").exists() {
-                    (
-                        Path::new(model_id)
-                            .join("model.safetensors")
-                            .to_string_lossy()
-                            .to_string(),
-                        false,
-                    )
-                } else if Path::new(model_id).join("pytorch_model.bin").exists() {
-                    (
-                        Path::new(model_id)
-                            .join("pytorch_model.bin")
-                            .to_string_lossy()
-                            .to_string(),
-                        true,
-                    )
-                } else {
-                    return Err(E::msg(format!("No model weights found in {model_id}")));
-                };
-
-                (
-                    config_path.to_string_lossy().to_string(),
-                    tokenizer_path.to_string_lossy().to_string(),
-                    weights_path.0,
-                    weights_path.1,
-                )
-            } else {
-                // HuggingFace Hub model
-                let repo =
-                    Repo::with_revision(model_id.to_string(), RepoType::Model, "main".to_string());
-
-                let api = Api::new()?;
-                let api = api.repo(repo);
-                let config = api.get("config.json")?;
-                let tokenizer = api.get("tokenizer.json")?;
-
-                // Try to get safetensors first, if that fails, fall back to pytorch_model.bin. This is for BAAI models
-                // create a special case for BAAI to download the correct weights to avoid downloading the wrong weights
-                let (weights, use_pth) = if model_id.starts_with("BAAI/") {
-                    // BAAI models typically use PyTorch model format
-                    (api.get("pytorch_model.bin")?, true)
-                } else {
-                    match api.get("model.safetensors") {
-                        Ok(weights) => (weights, false),
-                        Err(_) => (api.get("pytorch_model.bin")?, true),
-                    }
-                };
-
-                (
-                    config.to_string_lossy().to_string(),
-                    tokenizer.to_string_lossy().to_string(),
-                    weights.to_string_lossy().to_string(),
-                    use_pth,
-                )
-            };
+            resolve_model_files(model_id)?;
 
         let config = std::fs::read_to_string(config_filename)?;
         let config: Config = serde_json::from_str(&config)?;
@@ -125,20 +122,27 @@ impl BertSimilarity {
         } else {
             unsafe {
                 VarBuilder::from_mmaped_safetensors(
-                    &[weights_filename.clone()],
+                    std::slice::from_ref(&weights_filename),
                     DType::F32,
                     &device,
                 )?
             }
         };
 
+        let embedding_dimension = config.hidden_size;
         let model = BertModel::load(vb, &config)?;
 
         Ok(Self {
             model,
             tokenizer,
             device,
+            embedding_dimension,
         })
+    }
+
+    /// Return the output width declared by the loaded checkpoint.
+    pub fn embedding_dimension(&self) -> usize {
+        self.embedding_dimension
     }
 
     /// Tokenize a text string into token IDs and token strings

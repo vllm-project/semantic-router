@@ -1058,13 +1058,18 @@ impl MultiModalEmbeddingModel {
         // Audio encoder: weights under audio_encoder.encoder.* (optional)
         let audio_encoder = WhisperEncoder::load(vb.pp("audio_encoder.encoder"), config).ok();
 
+        let mut matryoshka_config = MultiModalMatryoshkaConfig::default();
+        if !config.matryoshka_dims.is_empty() {
+            matryoshka_config.dimensions = config.matryoshka_dims.clone();
+        }
+
         Ok(Self {
             text_encoder,
             image_encoder,
             image_projection,
             audio_encoder,
             config: config.clone(),
-            matryoshka_config: MultiModalMatryoshkaConfig::default(),
+            matryoshka_config,
             device: device.clone(),
         })
     }

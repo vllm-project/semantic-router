@@ -10,6 +10,8 @@ import (
 	"sync"
 
 	"github.com/openai/openai-go"
+
+	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 )
 
 // extractUserContent returns the text portion of a user message's content.
@@ -180,21 +182,25 @@ func normalizeEmbeddingModel(model string) string {
 	return normalized
 }
 
-func semanticCacheEmbeddingDimension(configured int, embeddingModel string) int {
+func semanticCacheEmbeddingDimension(configured int, embeddingModel string) (int, error) {
+	// Preserve explicit dimensions from existing cache configurations. The
+	// Milvus constructor validates explicit dimensions before it can use them;
+	// the remaining cache backends keep their existing explicit-dimension
+	// behavior while propagating contract lookup failures for omitted values.
 	if configured > 0 {
-		return configured
+		return configured, nil
 	}
 
-	switch normalizeEmbeddingModel(embeddingModel) {
-	case "qwen3":
-		return 1024
-	case "gemma":
-		return 768
-	case "mmbert":
-		return 768
-	case "multimodal":
-		return 384
-	default:
-		return 384
+	dimension, err := candle_binding.ResolveEmbeddingDimension(
+		normalizeEmbeddingModel(embeddingModel),
+		configured,
+	)
+	if err != nil {
+		return 0, fmt.Errorf(
+			"failed to resolve semantic cache embedding dimension for model %q: %w",
+			normalizeEmbeddingModel(embeddingModel),
+			err,
+		)
 	}
+	return dimension, nil
 }

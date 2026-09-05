@@ -110,7 +110,10 @@ func (c *QdrantCache) ensureCollection() error {
 		return nil
 	}
 
-	dim := semanticCacheEmbeddingDimension(0, c.embeddingModel)
+	dim, err := semanticCacheEmbeddingDimension(0, c.embeddingModel)
+	if err != nil {
+		return err
+	}
 
 	if err := c.client.CreateCollection(ctx, &qdrant.CreateCollection{
 		CollectionName: c.collectionName,
@@ -145,28 +148,32 @@ func (c *QdrantCache) getEmbedding(ctx context.Context, text string) ([]float32,
 		return nil, err
 	}
 	modelName := c.embeddingModel
+	dimension, err := c.embeddingDimension()
+	if err != nil {
+		return nil, err
+	}
 
 	switch modelName {
 	case "qwen3":
-		out, err := candle_binding.GetEmbeddingBatched(text, "qwen3", c.embeddingDimension())
+		out, err := candle_binding.GetEmbeddingBatched(text, "qwen3", dimension)
 		if err != nil {
 			return nil, err
 		}
 		return out.Embedding, nil
 	case "gemma":
-		out, err := candle_binding.GetEmbeddingWithModelType(text, "gemma", c.embeddingDimension())
+		out, err := candle_binding.GetEmbeddingWithModelType(text, "gemma", dimension)
 		if err != nil {
 			return nil, err
 		}
 		return out.Embedding, nil
 	case "mmbert":
-		out, err := candle_binding.GetEmbeddingWithModelType(text, "mmbert", c.embeddingDimension())
+		out, err := candle_binding.GetEmbeddingWithModelType(text, "mmbert", dimension)
 		if err != nil {
 			return nil, err
 		}
 		return out.Embedding, nil
 	case "multimodal":
-		out, err := candle_binding.GetEmbeddingWithModelType(text, "multimodal", c.embeddingDimension())
+		out, err := candle_binding.GetEmbeddingWithModelType(text, "multimodal", dimension)
 		if err != nil {
 			return nil, err
 		}
@@ -178,7 +185,7 @@ func (c *QdrantCache) getEmbedding(ctx context.Context, text string) ([]float32,
 	}
 }
 
-func (c *QdrantCache) embeddingDimension() int {
+func (c *QdrantCache) embeddingDimension() (int, error) {
 	if c == nil {
 		return semanticCacheEmbeddingDimension(0, "")
 	}

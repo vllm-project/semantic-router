@@ -132,6 +132,32 @@ impl Default for EmbeddingModelsInfoResult {
     }
 }
 
+/// Dimension contract for one loaded embedding model.
+///
+/// The arrays are allocated by the native binding and must be released with
+/// `free_embedding_dimension_contract` after the caller has copied them.
+#[repr(C)]
+#[derive(Debug)]
+pub struct EmbeddingDimensionContractResult {
+    pub model_name: *mut c_char,
+    pub native_dimension: i32,
+    pub supported_dimensions: *mut i32,
+    pub num_supported_dimensions: i32,
+    pub error: bool,
+}
+
+impl Default for EmbeddingDimensionContractResult {
+    fn default() -> Self {
+        Self {
+            model_name: std::ptr::null_mut(),
+            native_dimension: 0,
+            supported_dimensions: std::ptr::null_mut(),
+            num_supported_dimensions: 0,
+            error: true,
+        }
+    }
+}
+
 /// Matryoshka configuration info for FFI
 #[repr(C)]
 pub struct MatryoshkaInfo {
