@@ -21,14 +21,6 @@ use crate::ffi::memory::{
 };
 use crate::ffi::types::BertTokenEntity;
 use crate::ffi::types::*;
-use crate::model_architectures::traditional::bert::{
-    TRADITIONAL_BERT_CLASSIFIER, TRADITIONAL_BERT_TOKEN_CLASSIFIER,
-};
-use crate::model_architectures::traditional::modernbert::{
-    TRADITIONAL_MODERNBERT_CLASSIFIER, TRADITIONAL_MODERNBERT_FACT_CHECK_CLASSIFIER,
-    TRADITIONAL_MODERNBERT_JAILBREAK_CLASSIFIER, TRADITIONAL_MODERNBERT_PII_CLASSIFIER,
-    TRADITIONAL_MODERNBERT_TOKEN_CLASSIFIER,
-};
 use crate::registry::get_registry;
 use crate::BertClassifier;
 use std::ffi::CString;
@@ -652,7 +644,7 @@ pub extern "C" fn classify_candle_bert_tokens_with_labels(
     // Intelligent routing: Check LoRA token classifier first, then fall back to traditional
 
     // Try LoRA token classifier first
-    if let Some(classifier) = crate::ffi::init::get_registry()
+    if let Some(classifier) = crate::registry::get_registry()
         .get::<crate::classifiers::lora::token_lora::LoRATokenClassifier>(
         "lora_token_classifier",
     ) {
@@ -741,7 +733,7 @@ pub extern "C" fn classify_candle_bert_tokens(
 
     // Use intelligent routing to determine which classifier to use
     // First check if LoRA token classifier is available
-    if let Some(lora_classifier) = crate::ffi::init::get_registry()
+    if let Some(lora_classifier) = crate::registry::get_registry()
         .get::<crate::classifiers::lora::token_lora::LoRATokenClassifier>(
         "lora_token_classifier",
     ) {
@@ -1681,7 +1673,7 @@ pub extern "C" fn detect_hallucinations(
     };
 
     // Check if model is initialized
-    let classifier = match crate::ffi::init::get_registry().get::<crate::model_architectures::traditional::modernbert::TraditionalModernBertTokenClassifier>("hallucination_classifier") {
+    let classifier = match crate::registry::get_registry().get::<crate::model_architectures::traditional::modernbert::TraditionalModernBertTokenClassifier>("hallucination_classifier") {
         Some(c) => c.clone(),
         None => {
             return HallucinationDetectionResult {
@@ -1937,7 +1929,7 @@ pub extern "C" fn classify_nli(premise: *const c_char, hypothesis: *const c_char
     };
 
     // Check if NLI model is initialized
-    let classifier = match crate::ffi::init::get_registry().get::<crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier>("nli_classifier") {
+    let classifier = match crate::registry::get_registry().get::<crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier>("nli_classifier") {
         Some(c) => c.clone(),
         None => {
             return NLIResult {
@@ -2102,7 +2094,7 @@ pub extern "C" fn detect_hallucinations_with_nli(
     }
 
     // Check if NLI model is available
-    let nli_available = crate::ffi::init::get_registry().get::<crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier>("nli_classifier").is_some();
+    let nli_available = crate::registry::get_registry().get::<crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier>("nli_classifier").is_some();
 
     // Step 2: Process each span with NLI
     let mut enhanced_spans: Vec<EnhancedHallucinationSpan> = Vec::new();
