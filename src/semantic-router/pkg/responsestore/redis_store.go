@@ -121,20 +121,26 @@ const (
 	conversationIndexScanLeaseMinBackoff = 50 * time.Millisecond
 	conversationIndexScanLeaseMaxBackoff = 1 * time.Second
 
-	// emptyConversationIndexMarkerMaxTTL caps how long a migrated marker
-	// survives when its backfill found nothing to index, independent of the
-	// store's data-retention TTL (s.ttl, which can be a day or 30 days).
-	// Confirming a conversation empty is a weaker, more perishable claim
-	// than confirming what its live responses are: an indexing-unaware
-	// writer (see ConversationIndexMigratedKeyPrefix) could still land a
-	// response into that same conversation later, and this bounds how long
-	// such a write can stay hidden behind a stale "confirmed empty" result.
+	// conversationIndexProofMaxTTL caps how long any per-conversation
+	// migrated proof survives — empty and populated alike — independent of
+	// the store's data-retention TTL (s.ttl, which can be a day or 30
+	// days), and nothing refreshes a proof once written.
 	//
-	// Does not apply once the backfill actually finds responses: that
-	// marker gets the full store TTL instead (markConversationMigrated),
-	// since there is no analogous blind spot once real data has already
-	// been discovered and indexed.
-	emptyConversationIndexMarkerMaxTTL = 5 * time.Minute
+	// This is what bounds the rolling-upgrade blind spot. Until
+	// FinalizeConversationIndex has swept the whole keyspace, an
+	// index-unaware writer (see ConversationIndexMigratedKeyPrefix) can land
+	// an unindexed response into any conversation — empty or already
+	// populated — at any moment, including just after the scan that produced
+	// the current proof passed that shard. Only the proof expiring forces
+	// the re-scan that finds it, so no proof may be trusted for longer than
+	// this, and no ordinary write may extend one (see indexResponse).
+	//
+	// The cost is one re-scan per conversation per cap while a rolling
+	// upgrade is in progress, serialized store-wide by the scan lease. That
+	// cost is the reason FinalizeConversationIndex exists: once the
+	// completion record is set, proofs are not consulted at all and no read
+	// ever scans again.
+	conversationIndexProofMaxTTL = 5 * time.Minute
 
 	// redisScanCount is the SCAN COUNT hint used when walking the response
 	// keyspace for lazy legacy backfill. A hint, not a hard limit — Redis may

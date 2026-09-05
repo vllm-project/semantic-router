@@ -433,7 +433,7 @@ func TestRedisListResponsesByConversationConcurrentMissingScansOnce(t *testing.T
 // sharing a long data TTL (a day, 30 days) could hide a response written by
 // an older, pre-index pod during a rolling deployment for that entire
 // window — capping the marker independently bounds the blind spot to
-// emptyConversationIndexMarkerMaxTTL regardless of how long data itself
+// conversationIndexProofMaxTTL regardless of how long data itself
 // lives.
 func TestRedisConversationMigratedMarkerTTLBoundedWhenEmpty(t *testing.T) {
 	store := newConversationIndexStoreWithTTLSeconds(t, 24*60*60) // 24h data TTL
@@ -446,7 +446,7 @@ func TestRedisConversationMigratedMarkerTTLBoundedWhenEmpty(t *testing.T) {
 	ttl, err := store.client.TTL(ctx, markerKey).Result()
 	require.NoError(t, err)
 	assert.Positive(t, ttl)
-	assert.LessOrEqualf(t, ttl, emptyConversationIndexMarkerMaxTTL,
+	assert.LessOrEqualf(t, ttl, conversationIndexProofMaxTTL,
 		"migrated marker TTL for a confirmed-empty conversation must be capped, not inherit the store's %s data TTL", store.ttl)
 }
 

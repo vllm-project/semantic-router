@@ -149,6 +149,21 @@ func directSetResponsePayload(t *testing.T, store *RedisStore, response *respons
 	require.NoError(t, store.client.Set(context.Background(), key, data, store.ttl).Err())
 }
 
+// directSetResponsePayloadWithTTL is directSetResponsePayload with an
+// explicit payload lifetime, for tests that need the payload to outlive the
+// store's own (deliberately tiny) data TTL — e.g. proving what happens once
+// a proof capped by that TTL expires, while the responses it described are
+// still there to be rediscovered.
+func directSetResponsePayloadWithTTL(t *testing.T, store *RedisStore, response *responseapi.StoredResponse, ttl time.Duration) {
+	t.Helper()
+
+	data, err := json.Marshal(response)
+	require.NoError(t, err)
+
+	key := store.buildKey(ResponseKeyPrefix + response.ID)
+	require.NoError(t, store.client.Set(context.Background(), key, data, ttl).Err())
+}
+
 // exists reports whether a raw Redis key exists, for asserting on marker/
 // index presence directly rather than only through store methods.
 func exists(t *testing.T, store *RedisStore, key string) int64 {
