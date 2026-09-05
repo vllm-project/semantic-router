@@ -1,59 +1,74 @@
 # Semantic Router Configuration for Dashboard E2E Profile
-# Minimal config — dashboard tests exercise the dashboard API, not routing logic.
+#
+# Canonical v0.3 shape (prerequisite for issue #3233). The pre-v0.3 file kept
+# model_config/categories/decisions/strategy/default_model/bert_model/
+# classifier/prompt_guard/response_cache at top level; the loader dropped all
+# of them, so the router actually ran on chart-default placeholders
+# (replace-with-your-model). This file states the intent those legacy keys
+# declared, in the schema the loader reads: one base-model with a
+# general-expert LoRA, one "other" domain, one catch-all decision, priority
+# strategy, response cache disabled, no jailbreak or PII signals.
+#
+# Minimal on purpose: dashboard tests exercise the dashboard API, not routing
+# logic. routing.modelCards is the model surface deploy validation checks
+# merged fragments against (dashboard-deploy-safe-failure), so keep it
+# declared here rather than in per-test fragments.
 config:
-  model_config:
-    "base-model":
-      reasoning_family: "qwen3"
-      loras:
-        - name: "general-expert"
-          description: "General-purpose adapter"
-
-  categories:
-    - name: other
-      description: "General knowledge and miscellaneous topics"
-
-  decisions:
-    - name: "other_decision"
-      description: "Default decision for all requests"
-      priority: 1
-      rules:
-        operator: "OR"
-        conditions:
-          - type: "domain"
-            name: "other"
-      modelRefs:
-        - model: base-model
-          lora_name: general-expert
-          use_reasoning: false
-
-  strategy: "priority"
-  default_model: general-expert
-
-  bert_model:
-    model_id: models/mom-embedding-light
-    threshold: 0.6
-    use_cpu: true
-
-  classifier:
-    category_model:
-      model_id: "models/mom-domain-classifier"
-      use_modernbert: true
-      threshold: 0.6
-      use_cpu: true
-      category_mapping_path: "models/mom-domain-classifier/category_mapping.json"
-    pii_model:
-      model_id: "models/mom-pii-classifier"
-      use_modernbert: false
-      threshold: 0.9
-      use_cpu: true
-      pii_mapping_path: "models/mom-pii-classifier/pii_type_mapping.json"
-
-  prompt_guard:
-    enabled: false
-
-  response_cache:
-    enabled: false
-
+  version: v0.3
+  listeners: []
+  providers:
+    defaults:
+      default_model: general-expert
+      reasoning_families:
+        deepseek:
+          type: chat_template_kwargs
+          parameter: thinking
+        qwen3:
+          type: chat_template_kwargs
+          parameter: enable_thinking
+        gpt-oss:
+          type: reasoning_effort
+          parameter: reasoning_effort
+        gpt:
+          type: reasoning_effort
+          parameter: reasoning_effort
+      default_reasoning_effort: high
+    models:
+      - name: base-model
+        reasoning_family: qwen3
+        backend_refs:
+          - name: local-vllm
+            endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
+            weight: 1
+  routing:
+    modelCards:
+      - name: base-model
+        loras:
+          - name: general-expert
+            description: General-purpose adapter
+      - name: general-expert
+    signals:
+      domains:
+        - name: other
+          description: General knowledge and miscellaneous topics
+    decisions:
+      - name: other_decision
+        description: Default decision for all requests
+        priority: 1
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: other
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
   global:
+    router:
+      strategy: priority
     model_catalog:
       kbs: []
+    stores:
+      response_cache:
+        enabled: false
