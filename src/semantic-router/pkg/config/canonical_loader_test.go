@@ -582,7 +582,7 @@ routing:
     - name: default
       priority: 1
       rules:
-        operator: OR
+        operator: AND
         conditions: []
       modelRefs:
         - model: gpt-worker

@@ -51,6 +51,17 @@ routing:
           use_reasoning: false
 ```
 
+Each `rules` node is either a leaf (`type` and `name`) or a combination
+(`operator` and `conditions`). The operator must be `AND`, `OR`, or `NOT`;
+case and surrounding whitespace are normalized, and an omitted operator on a
+node with conditions means `AND`. `NOT` is strictly unary and takes exactly one
+child condition; nest `NOT` around `OR` or `AND` for NOR or NAND. Config
+validation rejects any other operator, a `NOT` with zero or several children,
+a node that mixes leaf and combination fields, and a childless combination
+anywhere except a root `AND`, which is the explicit match-all form. Errors name
+the decision and the node path, for example
+`decision "billing": rules.conditions[1]: NOT requires exactly one child condition, got 2`.
+
 Classifier failures evaluate as `Unknown`, not `False`. `NOT Unknown` remains
 `Unknown`; `False AND Unknown` is `False`, and `True OR Unknown` is `True`.
 When the final result is still unknown, `rules.on_unknown` chooses `no_match`,

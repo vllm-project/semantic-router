@@ -211,8 +211,9 @@ spec:
                           type: string
                         operator:
                           description: |-
-                            Operator defines the logical operator for combining conditions (AND/OR/NOT)
-                            NOT uses NOR semantics: matches only when none of the conditions match.
+                            Operator defines the logical operator for combining conditions (AND/OR/NOT).
+                            NOT is strictly unary: it takes exactly one child condition and negates its result.
+                            Compose NOR/NAND by nesting NOT around OR/AND.
                           enum:
                           - AND
                           - OR
