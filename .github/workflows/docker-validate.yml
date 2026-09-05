@@ -26,6 +26,11 @@ jobs:
       - name: Free disk space
         uses: ./.github/actions/free-disk-space
 
+      - uses: docker/setup-qemu-action@v3
+        if: matrix.image == 'dashboard'
+        with:
+          platforms: arm64
+
       - uses: docker/setup-buildx-action@v3
         with:
           driver-opts: |
@@ -37,6 +42,7 @@ jobs:
         env:
           IMAGE: ${{ matrix.image }}
         run: |
+          PLATFORMS="linux/amd64"
           case "$IMAGE" in
             anthropic-shim)
               CONTEXT="./e2e/testing/anthropic-shim"
@@ -45,6 +51,7 @@ jobs:
             dashboard)
               CONTEXT="."
               DOCKERFILE="./dashboard/backend/Dockerfile"
+              PLATFORMS="linux/amd64,linux/arm64"
               ;;
             extproc)
               CONTEXT="."
@@ -90,6 +97,7 @@ jobs:
           {
             echo "context=$CONTEXT"
             echo "dockerfile=$DOCKERFILE"
+            echo "platforms=$PLATFORMS"
           } >> "$GITHUB_OUTPUT"
 
       - name: Resolve build arguments
@@ -106,7 +114,7 @@ jobs:
         with:
           context: ${{ steps.definition.outputs.context }}
           file: ${{ steps.definition.outputs.dockerfile }}
-          platforms: linux/amd64
+          platforms: ${{ steps.definition.outputs.platforms }}
           push: false
           load: false
           tags: semantic-router/${{ matrix.image }}:pr-${{ github.event.pull_request.number }}
