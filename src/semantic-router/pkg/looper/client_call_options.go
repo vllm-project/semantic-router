@@ -78,18 +78,17 @@ func (c *Client) CallModelWithOptions(
 	target ModelTarget,
 	options CallOptions,
 ) (*ModelResponse, error) {
+	if c == nil {
+		return nil, fmt.Errorf("looper client is required")
+	}
 	if err := options.validate(target); err != nil {
 		return nil, err
 	}
-	return c.callModel(
-		ctx,
-		&request,
-		target.Name,
-		options.Mode == ResponseSSE,
-		int(options.Iteration),
-		options.Logprobs,
-		target.AccessKey,
-		options.DecisionName,
-		int(options.FusionDepth),
-	)
+	if c.initErr != nil {
+		return nil, c.initErr
+	}
+	if c.connector == nil {
+		return nil, fmt.Errorf("looper connector is required")
+	}
+	return c.callModel(ctx, &request, target, options)
 }

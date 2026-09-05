@@ -156,17 +156,33 @@ var algorithmConstructors = map[string]algorithmConstructor{
 
 // Factory creates a Looper instance based on the authoritative config catalog.
 func Factory(cfg *config.LooperConfig, algorithmType string) (Looper, error) {
-	return FactoryWithClient(cfg, algorithmType, NewClient(cfg))
+	constructor, err := constructorFor(algorithmType)
+	if err != nil {
+		return nil, err
+	}
+	client, err := NewConnectorClient(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return constructor(cfg, client), nil
 }
 
 // FactoryWithClient creates a Looper that reuses the supplied client.
 func FactoryWithClient(cfg *config.LooperConfig, algorithmType string, client *Client) (Looper, error) {
-	constructor, ok := algorithmConstructors[algorithmType]
-	if !config.IsLooperAlgorithmType(algorithmType) || !ok {
-		return nil, &UnsupportedAlgorithmError{AlgorithmType: algorithmType}
+	constructor, err := constructorFor(algorithmType)
+	if err != nil {
+		return nil, err
 	}
 	if client == nil {
 		return nil, fmt.Errorf("looper client is required")
 	}
 	return constructor(cfg, client), nil
+}
+
+func constructorFor(algorithmType string) (algorithmConstructor, error) {
+	constructor, ok := algorithmConstructors[algorithmType]
+	if !config.IsLooperAlgorithmType(algorithmType) || !ok {
+		return nil, &UnsupportedAlgorithmError{AlgorithmType: algorithmType}
+	}
+	return constructor, nil
 }

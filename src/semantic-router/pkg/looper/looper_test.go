@@ -39,7 +39,7 @@ func TestFactoryConstructsAllSupportedAlgorithms(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.algorithmType, func(t *testing.T) {
-			got, err := Factory(&config.LooperConfig{}, tt.algorithmType)
+			got, err := Factory(&config.LooperConfig{Endpoint: "http://unused.invalid"}, tt.algorithmType)
 			if err != nil {
 				t.Fatalf("Factory(%q) returned error: %v", tt.algorithmType, err)
 			}
@@ -64,7 +64,7 @@ func TestFactoryRegistryMatchesConfigCatalog(t *testing.T) {
 }
 
 func TestFactoryWithClientSharesClientAcrossAlgorithms(t *testing.T) {
-	client := NewClient(&config.LooperConfig{})
+	client := NewClient(&config.LooperConfig{Endpoint: "http://unused.invalid"})
 	for _, algorithmType := range config.SupportedLooperAlgorithmTypes() {
 		constructed, err := FactoryWithClient(&config.LooperConfig{}, algorithmType, client)
 		if err != nil {
@@ -73,6 +73,16 @@ func TestFactoryWithClientSharesClientAcrossAlgorithms(t *testing.T) {
 		if got := baseLooperClient(constructed); got != client {
 			t.Fatalf("FactoryWithClient(%q) client = %p, want %p", algorithmType, got, client)
 		}
+	}
+}
+
+func TestFactoryRejectsInvalidConnectorConfig(t *testing.T) {
+	got, err := Factory(&config.LooperConfig{}, config.DecisionAlgorithmFusion)
+	if got != nil {
+		t.Fatalf("Factory returned %T for invalid config; want nil", got)
+	}
+	if err == nil {
+		t.Fatal("Factory returned nil error for invalid connector config")
 	}
 }
 
