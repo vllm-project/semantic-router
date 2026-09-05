@@ -107,7 +107,9 @@ func TestToolDefinitionFingerprint_NameWhitespaceNormalized(t *testing.T) {
 
 func TestToolCatalogFingerprint_Deterministic(t *testing.T) {
 	catalog := []llmprotocol.Tool{sampleTool("search"), sampleTool("lookup")}
-	if ToolCatalogFingerprint(catalog) != ToolCatalogFingerprint(catalog) {
+	first := ToolCatalogFingerprint(catalog)
+	second := ToolCatalogFingerprint(catalog)
+	if first != second {
 		t.Fatal("catalog fingerprint must be deterministic")
 	}
 }
@@ -138,7 +140,9 @@ func TestToolCatalogFingerprint_EmptyCatalog(t *testing.T) {
 
 func TestToolPolicyFingerprint_Deterministic(t *testing.T) {
 	cfg := &config.ToolSelectionPluginConfig{Enabled: true, Mode: "add", TopK: 5}
-	if ToolPolicyFingerprint(cfg) != ToolPolicyFingerprint(cfg) {
+	first := ToolPolicyFingerprint(cfg)
+	second := ToolPolicyFingerprint(cfg)
+	if first != second {
 		t.Fatal("policy fingerprint must be deterministic")
 	}
 }
