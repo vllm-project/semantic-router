@@ -27,8 +27,9 @@ func (ImagesCodec) Capabilities() llmprotocol.CapabilitySet {
 		// tool-bearing requests carry CapabilityTools in the required set
 		// (llmprotocol.requestTransportCapabilities), so the dialect must
 		// advertise it to be selected for such requests by capability-driven
-		// rerouting.
+		// rerouting; mixed-tools requests are rejected in EncodeRequest.
 		llmprotocol.CapabilityTools,
+		llmprotocol.CapabilityMultipleCandidates,
 	)
 }
 
@@ -121,6 +122,9 @@ func (ImagesCodec) EncodeRequest(request llmprotocol.Request, _ llmprotocol.Enve
 	if err := rejectUnsupportedImageOptions(*request.ImageGeneration); err != nil {
 		return nil, nil, err
 	}
+	if err := rejectUnsupportedTools(request); err != nil {
+		return nil, nil, err
+	}
 	prompt, ok := lastUserRequestText(request)
 	if !ok {
 		return nil, nil, unsupportedDownstreamTranslation(fmt.Errorf("images prompt is unavailable"))
@@ -149,6 +153,25 @@ func (ImagesCodec) EncodeRequest(request llmprotocol.Request, _ llmprotocol.Enve
 		return nil, nil, fmt.Errorf("encode images request: %w", err)
 	}
 	return body, nil, nil
+}
+
+// rejectUnsupportedTools fails closed on tool-bearing requests the images
+// dialect cannot express: any ordinary function tool, or a tool choice that
+// asks for something other than the hosted image_generation operation. The
+// codec still advertises CapabilityTools so capability-driven rerouting can
+// select it for pure image-generation requests (whose required set carries
+// that capability), but mixed-tools requests are rejected here instead of
+// being silently rewritten.
+func rejectUnsupportedTools(request llmprotocol.Request) error {
+	if len(request.Tools) > 0 {
+		return unsupportedDownstreamTranslation(fmt.Errorf("images wire does not support function tools"))
+	}
+	switch request.ToolChoice.Mode {
+	case "", llmprotocol.ToolChoiceNone, llmprotocol.ToolChoiceImageGeneration:
+		return nil
+	default:
+		return unsupportedDownstreamTranslation(fmt.Errorf("images wire does not support tool choice %q", request.ToolChoice.Mode))
+	}
 }
 
 // rejectUnsupportedImageOptions fails closed on neutral image-generation

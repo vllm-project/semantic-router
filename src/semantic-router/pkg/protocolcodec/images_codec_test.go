@@ -134,6 +134,42 @@ func TestImagesCodecEncodeRequestRejectsUnsupportedOptions(t *testing.T) {
 	}
 }
 
+// Mixed tool-bearing requests must fail closed instead of being silently
+// rewritten: the images dialect has no way to carry an ordinary function
+// tool, and a tool choice naming one is equally unrepresentable. A pure
+// image-generation request still encodes, including an explicit
+// image_generation tool choice.
+func TestImagesCodecEncodeRequestRejectsMixedTools(t *testing.T) {
+	codec := ImagesCodec{}
+	base := func() llmprotocol.Request {
+		return llmprotocol.Request{
+			Messages: []llmprotocol.Message{{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{
+				{Kind: llmprotocol.ContentText, Text: "a horse"},
+			}}},
+			ImageGeneration: &llmprotocol.ImageGenerationOptions{},
+		}
+	}
+	mixed := base()
+	mixed.Tools = []llmprotocol.Tool{{Name: "get_weather"}}
+	if _, _, err := codec.EncodeRequest(mixed, llmprotocol.Envelope{}, llmprotocol.Policy{}); err == nil {
+		t.Fatalf("mixed tools request must fail closed, got success")
+	}
+	for _, mode := range []llmprotocol.ToolChoiceMode{
+		llmprotocol.ToolChoiceAuto, llmprotocol.ToolChoiceRequired, llmprotocol.ToolChoiceNamed,
+	} {
+		named := base()
+		named.ToolChoice = llmprotocol.ToolChoice{Mode: mode, Name: "get_weather"}
+		if _, _, err := codec.EncodeRequest(named, llmprotocol.Envelope{}, llmprotocol.Policy{}); err == nil {
+			t.Fatalf("tool choice %s must fail closed, got success", mode)
+		}
+	}
+	pure := base()
+	pure.ToolChoice = llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceImageGeneration}
+	if _, _, err := codec.EncodeRequest(pure, llmprotocol.Envelope{}, llmprotocol.Policy{}); err != nil {
+		t.Fatalf("image_generation tool choice must encode: %v", err)
+	}
+}
+
 // Images-native neutral options must reach the wire untouched; only the
 // response format is forced to b64_json.
 func TestImagesCodecEncodeRequestCarriesImagesOptions(t *testing.T) {
@@ -267,8 +303,12 @@ func TestImagesCodecCapabilitiesEnableCapabilityDrivenSelection(t *testing.T) {
 	if !set.Supports(llmprotocol.CapabilityTools) {
 		t.Fatalf("images codec must advertise tools (hosted tool requests carry CapabilityTools)")
 	}
+	if !set.Supports(llmprotocol.CapabilityMultipleCandidates) {
+		t.Fatalf("images codec must advertise multiple candidates (n > 1 maps to CandidateCount)")
+	}
 	required := llmprotocol.RequiredCapabilities(llmprotocol.Request{
-		ToolChoice: llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceImageGeneration},
+		ToolChoice:     llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceImageGeneration},
+		CandidateCount: llmprotocol.Int64(3),
 	})
 	if !set.Contains(required) {
 		t.Fatalf("images capabilities %v must contain required %v", set.Names(), required.Names())
