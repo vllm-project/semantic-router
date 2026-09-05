@@ -252,6 +252,17 @@ structure_exceptions:
       - candle-binding/src/model_architectures/embedding/qwen3_embedding_test.rs
     file_checks: relaxed
     function_checks: relaxed
+  # These models predate the gate; moving their attention onto the shared
+  # chunked kernel (#3382) shrank them without splitting them, so retain a
+  # no-growth ratchet. base_model.rs only needs its pre-existing trait
+  # tolerated.
+  - paths:
+      - candle-binding/src/model_architectures/embedding/gemma3_model.rs
+      - candle-binding/src/model_architectures/embedding/qwen3_embedding.rs
+    file_checks: relaxed
+  - paths:
+      - candle-binding/src/model_architectures/traditional/base_model.rs
+    interface_checks: relaxed
   # Standalone MCP reference servers keep protocol dispatch visible in one
   # executable file; shared routing policy and runtime ownership are extracted.
   - paths:

@@ -19,7 +19,20 @@ RUST_CI_LIB_TESTS ?= \
 	model_architectures::embedding::multimodal_embedding::tests::test_siglip_vision_encoder_loads_with_head_weights \
 	model_architectures::embedding::multimodal_embedding::tests::test_siglip_vision_encoder_requires_pooling_head \
 	model_architectures::traditional::candle_models::modernbert::tests::test_chunked_attention_matches_dense \
-	model_architectures::traditional::candle_models::modernbert::tests::test_chunked_attention_matches_dense_with_padding
+	model_architectures::traditional::candle_models::modernbert::tests::test_chunked_attention_matches_dense_with_padding \
+	model_architectures::attention::chunked_sdpa_test::test_chunked_sdpa_single_query_over_many_keys \
+	model_architectures::attention::chunked_sdpa_test::test_chunked_sdpa_matches_dense_with_decode_offset \
+	model_architectures::attention::chunked_sdpa_test::test_chunked_sdpa_offset_prefill_equals_split_prefill \
+	model_architectures::attention::chunked_sdpa_test::test_chunked_sdpa_rejects_a_block_with_no_keys \
+	model_architectures::embedding::gemma3_model::chunked_attention_tests::test_chunked_attention_matches_dense \
+	model_architectures::embedding::qwen3_embedding::chunked_attention_tests::test_chunked_attention_matches_dense \
+	model_architectures::embedding::qwen3_embedding::chunked_attention_tests::test_chunked_attention_matches_dense_on_real_rows_with_left_padding \
+	model_architectures::embedding::multimodal_embedding::tests::test_bert_self_attention_matches_dense \
+	model_architectures::embedding::multimodal_embedding::tests::test_siglip_and_whisper_self_attention_match_dense \
+	model_architectures::embedding::multimodal_embedding::tests::test_siglip_head_attention_matches_dense \
+	model_architectures::generative::qwen3_with_lora::chunked_attention_tests::test_prefill_and_decode_match_dense \
+	model_architectures::generative::qwen3_with_lora::chunked_attention_tests::test_cached_suffix_generation_matches_uncached \
+	model_architectures::traditional::base_model_test::test_self_attention_matches_dense_reference
 
 test-rust-ci:
 	@$(LOG_TARGET)
