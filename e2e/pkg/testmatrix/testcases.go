@@ -80,6 +80,7 @@ var AnthropicShimContract = []string{
 	"chat-completions-request",
 	"anthropic-messages-cache-cycle",
 	"anthropic-chat-cache-control",
+	"anthropic-messages-context-management",
 	"anthropic-messages-stop-sequence",
 	"anthropic-messages-streaming",
 	"anthropic-chat-completions-streaming",

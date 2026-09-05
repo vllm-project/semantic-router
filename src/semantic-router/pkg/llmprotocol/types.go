@@ -232,7 +232,11 @@ type Request struct {
 	Truncation         string
 	Store              *bool
 	AutoStore          *bool
-	Trusted            TrustedMetadata
+	// AnthropicContextManagement is the Anthropic Messages context_management
+	// directive, carried opaquely. Anthropic-only; it affects what the upstream
+	// bills for a turn.
+	AnthropicContextManagement json.RawMessage
+	Trusted                    TrustedMetadata
 }
 
 type StopReason string

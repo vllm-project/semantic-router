@@ -50,9 +50,9 @@ func TestOfficialRequestFieldInventoriesAreClosed(t *testing.T) {
 			name: "Anthropic Messages",
 			wire: anthropicRequestWire{},
 			official: fields(
-				"cache_control", "container", "inference_geo", "max_tokens", "messages", "metadata", "model",
-				"output_config", "service_tier", "stop_sequences", "stream", "system", "temperature", "thinking",
-				"tool_choice", "tools", "top_k", "top_p",
+				"cache_control", "container", "context_management", "inference_geo", "max_tokens", "messages",
+				"metadata", "model", "output_config", "service_tier", "stop_sequences", "stream", "system",
+				"temperature", "thinking", "tool_choice", "tools", "top_k", "top_p",
 			),
 		},
 	}
@@ -76,6 +76,7 @@ func TestOfficialRequestFieldDispositionsAreClosed(t *testing.T) {
 		transport   []string
 		unsupported []string
 		extensions  []string
+		preserved   []string
 	}{
 		{
 			name: "OpenAI Chat Completions",
@@ -117,6 +118,9 @@ func TestOfficialRequestFieldDispositionsAreClosed(t *testing.T) {
 				"system", "temperature", "thinking", "tool_choice", "tools", "top_k", "top_p",
 			),
 			unsupported: fields("cache_control", "container", "inference_geo", "service_tier"),
+			// context_management is modeled and preserved rather than interpreted.
+			// Cross-format targets omit it with an explicit diagnostic.
+			preserved: fields("context_management"),
 		},
 	}
 	for _, test := range tests {
@@ -124,6 +128,7 @@ func TestOfficialRequestFieldDispositionsAreClosed(t *testing.T) {
 			assertClosedFieldDisposition(t, test.name, jsonFieldNames(reflect.TypeOf(test.wire)), map[string][]string{
 				"semantic": test.semantic, "transport": test.transport,
 				"unsupported": test.unsupported, "extension": test.extensions,
+				"preserved": test.preserved,
 			})
 		})
 	}
@@ -165,8 +170,8 @@ func TestOfficialResponseFieldInventoriesAreClosed(t *testing.T) {
 			name: "Anthropic Messages",
 			wire: anthropicResponseWire{},
 			official: fields(
-				"container", "content", "id", "model", "role", "stop_details", "stop_reason",
-				"stop_sequence", "type", "usage",
+				"container", "content", "context_management", "id", "model", "role", "stop_details",
+				"stop_reason", "stop_sequence", "type", "usage",
 			),
 			extensions: fields("error"),
 		},
