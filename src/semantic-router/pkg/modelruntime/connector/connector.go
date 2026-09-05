@@ -14,7 +14,8 @@ import (
 	"time"
 )
 
-// Operation describes one static operation in a remote model protocol.
+// Operation describes one static operation in a remote model protocol. An
+// empty Path targets the configured base URL exactly.
 type Operation struct {
 	Name      string
 	Method    string
@@ -136,7 +137,8 @@ func validateOperation(operation Operation) error {
 	if strings.TrimSpace(operation.Method) == "" {
 		return fmt.Errorf("operation method is required")
 	}
-	if !strings.HasPrefix(operation.Path, "/") || strings.ContainsAny(operation.Path, "?#") {
+	if operation.Path != "" &&
+		(!strings.HasPrefix(operation.Path, "/") || strings.ContainsAny(operation.Path, "?#")) {
 		return fmt.Errorf("operation path must be an absolute path without query or fragment")
 	}
 	return nil
@@ -181,8 +183,10 @@ func (c *Client) newRequest(
 	attempt int,
 ) (*http.Request, *Error) {
 	target := *c.baseURL
-	target.Path = path.Join(c.baseURL.Path, operation.Path)
-	target.RawPath = ""
+	if operation.Path != "" {
+		target.Path = path.Join(c.baseURL.Path, operation.Path)
+		target.RawPath = ""
+	}
 	request, err := http.NewRequestWithContext(ctx, operation.Method, target.String(), bytes.NewReader(body))
 	if err != nil {
 		return nil, &Error{Kind: KindRequest, Operation: operation.Name, Attempt: attempt, Cause: err}

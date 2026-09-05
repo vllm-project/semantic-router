@@ -35,7 +35,7 @@ type modelConnector interface {
 var chatCompletionOperation = connector.Operation{
 	Name:      "looper_chat_completion",
 	Method:    http.MethodPost,
-	Path:      "/",
+	Path:      "",
 	RetrySafe: false,
 }
 
@@ -45,11 +45,14 @@ func NewConnectorClient(cfg *config.LooperConfig) (*Client, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("looper config is required")
 	}
+	// Looper has no separate request-size setting. Reuse its existing response
+	// ceiling to bound the other buffered side without expanding config schema.
+	bodyLimit := cfg.GetMaxResponseBytes()
 	remote, err := connector.New(cfg.Endpoint, nil, connector.Options{
 		AttemptTimeout:   time.Duration(cfg.GetTimeout()) * time.Second,
 		MaxRetries:       0,
-		MaxRequestBytes:  cfg.GetMaxResponseBytes(),
-		MaxResponseBytes: cfg.GetMaxResponseBytes(),
+		MaxRequestBytes:  bodyLimit,
+		MaxResponseBytes: bodyLimit,
 		MaxErrorBytes:    maxErrorBodyBytes,
 	})
 	if err != nil {

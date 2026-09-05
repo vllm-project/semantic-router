@@ -110,6 +110,28 @@ func TestDoAppliesAuthAndPreservesBasePath(t *testing.T) {
 	}
 }
 
+func TestDoUsesExactBaseURLWhenOperationPathIsEmpty(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if got := request.URL.EscapedPath(); got != "/v1/chat/completions" {
+			t.Errorf("path = %q, want /v1/chat/completions", got)
+		}
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer server.Close()
+
+	client, err := New(server.URL+"/v1/chat/completions", nil, testOptions())
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	defer client.Close()
+
+	operation := testOperation
+	operation.Path = ""
+	if _, err := client.Do(context.Background(), operation, nil); err != nil {
+		t.Fatalf("Do() error = %v", err)
+	}
+}
+
 func TestDoWithHeadersAppliesRequestScopedHeadersBeforeAuthorization(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		if got := request.Header.Get("X-Request-Scope"); got != "request-a" {
