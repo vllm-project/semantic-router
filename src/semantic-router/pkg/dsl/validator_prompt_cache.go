@@ -3,17 +3,15 @@ package dsl
 import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 
 func (v *Validator) checkPromptCachePluginRefConstraints(plugin *PluginRef) {
-	if config.NormalizeDecisionPluginType(plugin.Name) == config.DecisionPluginPromptCache {
-		v.checkPromptCachePluginConstraints(plugin.Pos, plugin.Fields)
-		return
-	}
-	if len(plugin.Fields) == 0 {
-		return
-	}
 	for _, template := range v.prog.Plugins {
-		if template.Name != plugin.Name ||
-			config.NormalizeDecisionPluginType(template.PluginType) != config.DecisionPluginPromptCache {
+		if template.Name != plugin.Name {
 			continue
+		}
+		if config.NormalizeDecisionPluginType(template.PluginType) != config.DecisionPluginPromptCache {
+			return
+		}
+		if len(plugin.Fields) == 0 {
+			return
 		}
 		fields := make(map[string]Value, len(template.Fields)+len(plugin.Fields))
 		for name, value := range template.Fields {
@@ -24,6 +22,9 @@ func (v *Validator) checkPromptCachePluginRefConstraints(plugin *PluginRef) {
 		}
 		v.checkPromptCachePluginConstraints(plugin.Pos, fields)
 		return
+	}
+	if config.NormalizeDecisionPluginType(plugin.Name) == config.DecisionPluginPromptCache {
+		v.checkPromptCachePluginConstraints(plugin.Pos, plugin.Fields)
 	}
 }
 

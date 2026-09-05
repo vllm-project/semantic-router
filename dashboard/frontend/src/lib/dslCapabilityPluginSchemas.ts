@@ -21,9 +21,9 @@ const promptCacheFields: FieldSchema[] = [
   },
 ]
 
-const additionalCapabilityPluginFields: Record<string, FieldSchema[]> = {
-  prompt_cache: promptCacheFields,
-}
+const additionalCapabilityPluginFields = new Map<string, FieldSchema[]>([
+  ['prompt_cache', promptCacheFields],
+])
 
 export function getCapabilityPluginFieldSchema(pluginType: string): FieldSchema[] | null {
   switch (pluginType) {
@@ -223,6 +223,6 @@ export function getCapabilityPluginFieldSchema(pluginType: string): FieldSchema[
         },
       ]
     default:
-      return additionalCapabilityPluginFields[pluginType] ?? null
+      return additionalCapabilityPluginFields.get(pluginType) ?? null
   }
 }

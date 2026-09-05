@@ -41,4 +41,8 @@ describe('capability plugin field schemas', () => {
       'on_unsupported',
     ])
   })
+
+  it.each(['constructor', 'toString', '__proto__'])('rejects prototype key %s', (pluginType) => {
+    expect(getCapabilityPluginFieldSchema(pluginType)).toBeNull()
+  })
 })
