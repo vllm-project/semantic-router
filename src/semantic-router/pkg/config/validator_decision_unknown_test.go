@@ -29,3 +29,16 @@ func TestValidateDecisionOnUnknown(t *testing.T) {
 		})
 	}
 }
+
+func TestUnguardedClassifierConditions(t *testing.T) {
+	rules := RuleNode{Operator: "AND", Conditions: []RuleNode{
+		{Type: SignalTypeClassifier, Name: "risk", Label: "RISKY"},
+		{Type: SignalTypeClassifier, Name: "safe", Label: "SAFE", OnError: "match"},
+		{Operator: "OR", Conditions: []RuleNode{{Type: SignalTypeClassifier, Name: "nested"}}},
+		{Type: SignalTypeKeyword, Name: "kw"},
+	}}
+	got := unguardedClassifierConditions(&rules)
+	if len(got) != 2 || got[0] != "risk" || got[1] != "nested" {
+		t.Fatalf("unguarded = %v", got)
+	}
+}
