@@ -210,13 +210,7 @@ func (s *RedisStore) deleteConversationResponses(ctx context.Context, conversati
 // unconditionally, so cascade delete never scans, matching the read path in
 // ListResponsesByConversation.
 func (s *RedisStore) ensureConversationIndexResolved(ctx context.Context, conversationID string) error {
-	if storeComplete, err := s.isMigrationComplete(ctx); err != nil {
-		return err
-	} else if storeComplete {
-		return nil
-	}
-
-	if _, resolved, err := s.conversationIndexProof(ctx, conversationID); err != nil {
+	if resolved, err := s.conversationIndexResolved(ctx, conversationID); err != nil {
 		return err
 	} else if resolved {
 		return nil

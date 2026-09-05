@@ -77,18 +77,10 @@ func (s *RedisStore) ListResponsesByConversation(ctx context.Context, conversati
 // without error, conversationID's index may be trusted as exhaustive for a
 // read: either the whole store is marked migration-complete
 // (ConversationIndexMigrationStatusKey), or this specific conversation
-// already is (conversationMigrated), or ensureConversationIndex has just
-// made it so.
+// already carries a resolved proof (conversationIndexResolved), or
+// ensureConversationIndex has just made it so.
 func (s *RedisStore) ensureConversationResolvedForRead(ctx context.Context, conversationID string) error {
-	storeComplete, err := s.isMigrationComplete(ctx)
-	if err != nil {
-		return err
-	}
-	if storeComplete {
-		return nil
-	}
-
-	if _, resolved, err := s.conversationIndexProof(ctx, conversationID); err != nil {
+	if resolved, err := s.conversationIndexResolved(ctx, conversationID); err != nil {
 		return err
 	} else if resolved {
 		return nil
