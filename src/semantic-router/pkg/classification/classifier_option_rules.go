@@ -45,7 +45,7 @@ func (b *classifierOptionBuilder) buildEmbeddingClassifierOption() (option, erro
 	}
 	if backendOverride == "openvino" {
 		modelType := strings.ToLower(strings.TrimSpace(optConfig.ModelType))
-		if err := initOpenVINOModel(modelType, b.cfg.MmBertModelPath, b.cfg.Qwen3ModelPath, b.cfg.UseCPU); err != nil {
+		if err := initOpenVINOModel(modelType, b.cfg.MmBertModelPath, b.cfg.Qwen3ModelPath, b.cfg.UseCPU); err != nil { //nolint:staticcheck
 			logging.ComponentWarnEvent("classifier", "openvino_eager_init_failed", map[string]interface{}{
 				"error": err.Error(),
 			})

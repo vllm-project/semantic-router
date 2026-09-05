@@ -11,6 +11,17 @@ type LocalImageBuild struct {
 	Dockerfile   string
 	Tag          string
 	BuildContext string
+	// RolloutRestarts lists deployments to restart after profile setup.
+	// Required when imagePullPolicy is Never and the tag is reused (e.g. :latest).
+	// Missing deployments are skipped so profiles can share an image without
+	// sharing the same Deployment name.
+	RolloutRestarts []RolloutRestartTarget
+}
+
+// RolloutRestartTarget identifies a deployment to restart after a local image reload.
+type RolloutRestartTarget struct {
+	Namespace  string
+	Deployment string
 }
 
 // ProfileCapabilities declares runner-level behavior a profile requires.

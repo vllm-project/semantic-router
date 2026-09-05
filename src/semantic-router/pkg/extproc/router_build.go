@@ -7,6 +7,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
@@ -50,6 +51,7 @@ type routerComponents struct {
 	rateLimiter          *ratelimit.RateLimitResolver
 	lookupTableCancel    func()
 	routerSessionStore   *sessiontelemetry.RouterSessionStateStoreSlot
+	workflowStateService *looper.WorkflowStateService
 	resources            *resourceScope
 }
 
@@ -240,6 +242,11 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 		})
 	}
 
+	components.workflowStateService = newWorkflowStateServiceIfEnabled(cfg)
+	if components.workflowStateService != nil {
+		components.resources.add(components.workflowStateService.Close)
+	}
+
 	return components, nil
 }
 
@@ -347,6 +354,7 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 		RateLimiter:             components.rateLimiter,
 		lookupTableCancel:       components.lookupTableCancel,
 		routerSessionStateStore: components.routerSessionStore,
+		WorkflowStateService:    components.workflowStateService,
 		resources:               components.resources,
 	}
 	if components.classificationSvc != nil {
@@ -371,4 +379,14 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 	})
 
 	return router
+}
+
+// newWorkflowStateServiceIfEnabled owns one workflow tool-state store for the
+// router generation when any routing profile uses algorithm.type=workflows,
+// including recipe-only configs whose decisions are not on the flat list.
+func newWorkflowStateServiceIfEnabled(cfg *config.RouterConfig) *looper.WorkflowStateService {
+	if cfg == nil || !cfg.HasFlowDecision() {
+		return nil
+	}
+	return looper.NewWorkflowStateService(&cfg.Looper)
 }

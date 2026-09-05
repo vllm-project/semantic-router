@@ -16,6 +16,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
@@ -88,6 +89,11 @@ type OpenAIRouter struct {
 	routerLearningRuntime   *routerLearningRuntime
 	lookupTableCancel       func()
 	routerSessionStateStore *sessiontelemetry.RouterSessionStateStoreSlot
+
+	// WorkflowStateService owns the shared workflow tool-state store so that
+	// pause/resume works across independent HTTP requests without leaking
+	// backend connections. Closed with the rest of the generation resources.
+	WorkflowStateService *looper.WorkflowStateService
 
 	resources *resourceScope
 }
