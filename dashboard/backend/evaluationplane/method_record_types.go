@@ -182,3 +182,26 @@ type hardPolicyMethodEvidence struct {
 	Violations        int64                         `json:"violations"`
 	ObservedAt        time.Time                     `json:"observed_at"`
 }
+
+type routerLearningMethodEvidence struct {
+	ContractVersion         string   `json:"contract_version"`
+	CorpusRevision          string   `json:"corpus_revision"`
+	PolicyID                string   `json:"policy_id"`
+	TrialID                 string   `json:"trial_id"`
+	TrialSeed               int64    `json:"trial_seed"`
+	RoundIndex              int64    `json:"round_index"`
+	CandidateArmIDs         []string `json:"candidate_arm_ids"`
+	EligibleArmIDs          []string `json:"eligible_arm_ids"`
+	ProtectedArmID          *string  `json:"protected_arm_id,omitempty"`
+	ProposedArmID           string   `json:"proposed_arm_id"`
+	SelectedArmID           string   `json:"selected_arm_id"`
+	OutcomeSuccess          bool     `json:"outcome_success"`
+	FeedbackDelayRounds     int64    `json:"feedback_delay_rounds"`
+	FeedbackObserved        bool     `json:"feedback_observed"`
+	ProtectionRequired      bool     `json:"protection_required"`
+	ProtectionViolation     bool     `json:"protection_violation"`
+	HardConstraintViolation bool     `json:"hard_constraint_violation"`
+	CallCount               int64    `json:"call_count"`
+	LifecycleCostUSD        float64  `json:"lifecycle_cost_usd"`
+	PropensityStatus        string   `json:"propensity_status"`
+}

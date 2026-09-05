@@ -19,6 +19,7 @@ def test_catalog_is_complete_sorted_and_fail_closed() -> None:
         "capacity-level",
         "model-pool-arm",
         "multimodal-modality",
+        "router-learning-policy",
         "routing-recipe-e1-input",
         "routing-recipe-e2-projection",
         "routing-recipe-e2-recall",
@@ -220,8 +221,17 @@ def test_evaluation_resources_are_declared_and_present_in_a_built_wheel(
     with zipfile.ZipFile(output / wheel_name) as wheel:
         packaged = wheel.read("cli/evaluation/golden/metric_analysis_catalog.v1.json")
         live_mom_cases = wheel.read("cli/evaluation/resources/live_mom_cases.v1.json")
+        router_learning_cases = wheel.read(
+            "cli/evaluation/resources/router_learning_core.v1.json"
+        )
     assert packaged == catalog.metric_analysis_catalog_bytes()
     assert (
         live_mom_cases
         == (project / "cli/evaluation/resources/live_mom_cases.v1.json").read_bytes()
+    )
+    assert (
+        router_learning_cases
+        == (
+            project / "cli/evaluation/resources/router_learning_core.v1.json"
+        ).read_bytes()
     )

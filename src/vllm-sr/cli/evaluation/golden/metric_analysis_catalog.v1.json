@@ -1065,6 +1065,108 @@
       }
     },
     {
+      "id": "joint.router-learning.protected-round-cluster-rate",
+      "track_id": "joint",
+      "estimator_id": "router-learning-protected-round-cluster-rate-normal-95",
+      "estimator_version": "v1",
+      "analysis_unit": "protected_router_learning_round",
+      "cluster_unit": "trial_id",
+      "weighting": "uniform_trial",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "method_ledger",
+        "track_id": "joint",
+        "coordinates": [
+          "router_learning.trial_id",
+          "router_learning.round_index"
+        ],
+        "required_dimensions": [
+          "router_learning.protection_required"
+        ],
+        "filters": [
+          {
+            "field": "router_learning.policy_id",
+            "capture": "policy_id"
+          }
+        ]
+      }
+    },
+    {
+      "id": "joint.router-learning.round-cluster-mean",
+      "track_id": "joint",
+      "estimator_id": "router-learning-round-cluster-mean-normal-95",
+      "estimator_version": "v1",
+      "analysis_unit": "router_learning_round",
+      "cluster_unit": "trial_id",
+      "weighting": "uniform_trial",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "method_ledger",
+        "track_id": "joint",
+        "coordinates": [
+          "router_learning.trial_id",
+          "router_learning.round_index"
+        ],
+        "filters": [
+          {
+            "field": "router_learning.policy_id",
+            "capture": "policy_id"
+          }
+        ]
+      }
+    },
+    {
+      "id": "joint.router-learning.round-cluster-rate",
+      "track_id": "joint",
+      "estimator_id": "router-learning-round-cluster-rate-normal-95",
+      "estimator_version": "v1",
+      "analysis_unit": "router_learning_round",
+      "cluster_unit": "trial_id",
+      "weighting": "uniform_trial",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "method_ledger",
+        "track_id": "joint",
+        "coordinates": [
+          "router_learning.trial_id",
+          "router_learning.round_index"
+        ],
+        "filters": [
+          {
+            "field": "router_learning.policy_id",
+            "capture": "policy_id"
+          }
+        ]
+      }
+    },
+    {
+      "id": "joint.router-learning.trial-count",
+      "track_id": "joint",
+      "estimator_id": "router-learning-distinct-trial-count",
+      "estimator_version": "v1",
+      "analysis_unit": "router_learning_trial",
+      "cluster_unit": "trial_id",
+      "weighting": "uniform_trial",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "method_ledger",
+        "track_id": "joint",
+        "coordinates": [
+          "router_learning.trial_id"
+        ],
+        "filters": [
+          {
+            "field": "router_learning.policy_id",
+            "capture": "policy_id"
+          }
+        ]
+      }
+    },
+    {
       "id": "model-pool.arm.case-mean",
       "track_id": "model_pool",
       "estimator_id": "model-pool-frozen-arm-case-mean",
@@ -2863,6 +2965,78 @@
             "statistic": "support_rate"
           },
           "analysis_ref": "multimodal.modality.case-ratio"
+        }
+      ]
+    },
+    {
+      "id": "router-learning-policy",
+      "literal_prefix": "joint.router_learning.",
+      "pattern": "^joint\\.router_learning\\.([A-Za-z0-9][A-Za-z0-9_-]{0,172})\\.(hard_constraint_violation_rate|latency_mean_ms|lifecycle_cost_mean_usd|model_call_mean|propensity_coverage|protection_violation_rate|solve_rate|trial_count)$",
+      "captures": [
+        {
+          "name": "policy_id",
+          "group": 1,
+          "type": "encoded_portable_id"
+        },
+        {
+          "name": "statistic",
+          "group": 2,
+          "type": "enum",
+          "values": [
+            "hard_constraint_violation_rate",
+            "latency_mean_ms",
+            "lifecycle_cost_mean_usd",
+            "model_call_mean",
+            "propensity_coverage",
+            "protection_violation_rate",
+            "solve_rate",
+            "trial_count"
+          ]
+        }
+      ],
+      "selector_capture": "statistic",
+      "variants": [
+        {
+          "value": "hard_constraint_violation_rate",
+          "analysis_ref": "joint.router-learning.round-cluster-rate"
+        },
+        {
+          "value": "latency_mean_ms",
+          "analysis_ref": "joint.router-learning.round-cluster-mean"
+        },
+        {
+          "value": "lifecycle_cost_mean_usd",
+          "analysis_ref": "joint.router-learning.round-cluster-mean"
+        },
+        {
+          "value": "model_call_mean",
+          "analysis_ref": "joint.router-learning.round-cluster-mean"
+        },
+        {
+          "value": "propensity_coverage",
+          "analysis_ref": "joint.router-learning.round-cluster-rate"
+        },
+        {
+          "value": "protection_violation_rate",
+          "analysis_ref": "joint.router-learning.protected-round-cluster-rate"
+        },
+        {
+          "value": "solve_rate",
+          "analysis_ref": "joint.router-learning.round-cluster-rate"
+        },
+        {
+          "value": "trial_count",
+          "analysis_ref": "joint.router-learning.trial-count"
+        }
+      ],
+      "examples": [
+        {
+          "metric_id": "joint.router_learning.routing-sampling.solve_rate",
+          "captures": {
+            "policy_id": "routing-sampling",
+            "statistic": "solve_rate"
+          },
+          "analysis_ref": "joint.router-learning.round-cluster-rate"
         }
       ]
     },

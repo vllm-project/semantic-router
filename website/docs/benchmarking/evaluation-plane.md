@@ -98,6 +98,7 @@ that target, and every run contains exactly one executor cohort.
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
 | `evaluation-smoke`                 | deterministic four-case replay across all eight track schemas through `fixture-replay.v1`                                                  | E0 vertical-slice diagnostics only                                                                                                  |
 | `live-mom-core`                    | the same immutable 64-case hidden-label cohort through `mom-cohort-replay.v1` or `live-runtime.v1`, with routing, a dense case-by-frozen-arm matrix, and routed outcomes | replay is E0; a complete server-attested live run can seal routing E3, model-pool E4, and joint E5 (run-level E3). Those levels do not by themselves satisfy G3, which requires a server-controlled pair |
+| `router-learning-core`             | deterministic 12-round sequential replay through `router-learning-replay.v1`, comparing static-base, the seeded replay adapter for the current `routing_sampling` score equation, and simple Beta-Bernoulli over eight paired seeds | E0 policy diagnostics only; outcomes are frozen counterfactuals, action propensities are explicitly unsupported, and results are neither live-runtime parity nor causal production evidence |
 | `live-agent-tasks`                 | complete `evaluation-agent-task-ledger.v1` evidence with `evaluation-agent-task-attempt.v1` repeated-task trajectories observed by an external production agent runtime, including grading, privacy, cost, and real-tool execution receipts bound to the exact Mixture | agentic E5 task-quality evidence after server validation and reduction; the evaluation worker does not execute tools, `benchmark_parity_claim` remains `none`, and this method has no Campaign gate and never qualifies G6 |
 | `live-fault-recovery`              | complete brokered exact-step fault ledger with paired baseline/treatment receipts, repeated seeds, state, side effects, retry, and latency | E5 only after the server re-reduces at least 20 pairs across at least 5 seeds; Continuity labeled failover is diagnostic only        |
 | `live-multimodal`                  | bounded eligible non-text requests through the active runtime                                                                              | E0 media transport and response diagnostics                                                                                         |
@@ -129,6 +130,30 @@ the typed proof for a gate leaves that gate `unavailable`; an observed eligible
 regression is `fail`; and a gate excluded by the selected change profile is
 `not_applicable`. Catalog methods report only `configured` or `data_required`;
 qualification comes from sealed run evidence, never from catalog presence.
+
+### Interpret Router Learning replay
+
+`router-learning-core` uses the built-in recorded-source target and the normal
+Evaluation create/start/report flow. Its versioned corpus freezes two logical
+arms, per-round eligibility and protection, delayed or censored feedback, and
+the hidden outcome for each arm. Every policy receives the same ordered rounds
+and the same eight trial seeds. Feedback updates only the arm that was selected,
+and only after its declared delay; censored feedback never updates policy state.
+
+The report publishes, for each policy, solve rate, mean lifecycle cost, mean
+latency, mean model calls, protection-violation rate, hard-eligibility-violation
+rate, recorded action-propensity coverage, and paired trial count. Rate and mean
+uncertainty uses the trial as the cluster and weights trials uniformly. The
+protection denominator contains only protected rounds; solve, cost, latency,
+calls, hard eligibility, and propensity coverage use all attempted rounds.
+
+The `routing-sampling` policy is a deterministic replay adapter: it preserves
+the current Beta-posterior score, cost penalty, cold-start preference, and
+base-arm tie-break, but replaces the production wall-clock random seed with the
+frozen trial seed. It therefore tests the learning policy contract, not exact
+Go RNG draws or the live outcome API. A zero propensity-coverage value means
+off-policy IPS/SNIPS estimates are unsupported for this corpus; it is not a
+measured zero probability.
 
 ### Configure production evidence services
 

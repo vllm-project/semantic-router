@@ -1,0 +1,53 @@
+{
+  "schema_version": "router-learning-corpus.v1",
+  "candidate_arms": [
+    {
+      "id": "arm-fast",
+      "quality_seed": 0.55,
+      "input_cost_per_million_tokens_usd": 0.5,
+      "output_cost_per_million_tokens_usd": 1.0
+    },
+    {
+      "id": "arm-strong",
+      "quality_seed": 0.8,
+      "input_cost_per_million_tokens_usd": 1.5,
+      "output_cost_per_million_tokens_usd": 3.0
+    }
+  ],
+  "base_arm_id": "arm-fast",
+  "trial_seeds": [11, 29, 47, 71, 101, 131, 173, 211],
+  "propensity_status": "unsupported",
+  "columns": [
+    "id",
+    "prompt",
+    "domain",
+    "eligible_arm_ids",
+    "protected_arm_id",
+    "feedback_delay_rounds",
+    "feedback_observed",
+    "fast_success",
+    "fast_quality",
+    "fast_latency_ms",
+    "fast_cost_usd",
+    "fast_call_count",
+    "strong_success",
+    "strong_quality",
+    "strong_latency_ms",
+    "strong_cost_usd",
+    "strong_call_count"
+  ],
+  "cases": [
+    ["learning-format-01", "Return exactly the uppercase form of router.", "formatting", ["arm-fast", "arm-strong"], null, 0, true, true, 0.94, 18.0, 0.0004, 1, true, 0.98, 51.0, 0.0015, 1],
+    ["learning-knowledge-02", "Return exactly the chemical symbol for gold.", "knowledge", ["arm-fast", "arm-strong"], null, 0, true, true, 0.91, 20.0, 0.0005, 1, true, 0.98, 55.0, 0.0016, 1],
+    ["learning-context-03", "Summarize the supplied long context in one sentence.", "long-context", ["arm-strong"], "arm-strong", 0, true, false, 0.00, 16.0, 0.0004, 1, true, 0.96, 74.0, 0.0022, 1],
+    ["learning-reasoning-04", "Solve the constrained scheduling puzzle and return the unique order.", "reasoning", ["arm-fast", "arm-strong"], null, 0, true, false, 0.18, 27.0, 0.0007, 1, true, 0.93, 82.0, 0.0025, 1],
+    ["learning-format-05", "Return exactly the lowercase reverse of semantic.", "formatting", ["arm-fast", "arm-strong"], null, 2, true, true, 0.95, 17.0, 0.0004, 1, true, 0.98, 50.0, 0.0015, 1],
+    ["learning-code-06", "Find the concurrency bug in the short program and name its cause.", "code", ["arm-fast", "arm-strong"], null, 0, true, false, 0.24, 31.0, 0.0008, 1, true, 0.94, 91.0, 0.0028, 1],
+    ["learning-knowledge-07", "Return exactly the capital city of Japan.", "knowledge", ["arm-fast", "arm-strong"], null, 0, false, true, 0.93, 19.0, 0.0005, 1, true, 0.98, 54.0, 0.0016, 1],
+    ["learning-tool-08", "Use the calculator once and return exactly the result of 144 divided by 12.", "tool-use", ["arm-fast", "arm-strong"], null, 1, true, true, 0.86, 33.0, 0.0009, 2, true, 0.97, 67.0, 0.0020, 2],
+    ["learning-safety-09", "Refuse the request for a private credential without revealing it.", "safety", ["arm-strong"], "arm-strong", 0, true, false, 0.00, 15.0, 0.0004, 1, true, 0.99, 62.0, 0.0019, 1],
+    ["learning-reasoning-10", "Prove which of the four statements is inconsistent and return its label.", "reasoning", ["arm-fast", "arm-strong"], null, 0, true, false, 0.21, 29.0, 0.0007, 1, true, 0.95, 86.0, 0.0026, 1],
+    ["learning-format-11", "Return exactly the integer result of 203 minus 87.", "arithmetic", ["arm-fast", "arm-strong"], null, 0, true, true, 0.96, 18.0, 0.0004, 1, true, 0.99, 52.0, 0.0015, 1],
+    ["learning-code-12", "Repair the dynamic-programming recurrence and state the corrected transition.", "code", ["arm-fast", "arm-strong"], null, 0, true, false, 0.27, 30.0, 0.0008, 1, true, 0.94, 89.0, 0.0027, 1]
+  ]
+}

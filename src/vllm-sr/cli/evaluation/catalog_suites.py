@@ -29,10 +29,15 @@ from cli.evaluation.execution_contract import (
     FIXTURE_REPLAY_EXECUTOR_ID,
     LIVE_RUNTIME_EXECUTOR_ID,
     MOM_REPLAY_EXECUTOR_ID,
+    ROUTER_LEARNING_REPLAY_EXECUTOR_ID,
 )
 from cli.evaluation.executor_contracts import ExecutorContract
 from cli.evaluation.live_mom_cases import LIVE_MOM_CASE_COUNT
 from cli.evaluation.reporting import EvidenceLevel, TrackID
+from cli.evaluation.router_learning_corpus import (
+    ROUTER_LEARNING_CASE_COUNT,
+)
+from cli.evaluation.router_learning_evidence import ROUTER_LEARNING_CORPUS_REVISION
 
 _ALL_TRACK_IDS = tuple(track.id for track in CATALOG_TRACKS)
 
@@ -174,6 +179,35 @@ _BUILTIN_SUITES = (
             _method("routing.live-diagnostic.v1", "routing"),
             _method("model-pool.live-dense.v1", "model_pool"),
             _method("joint.live-routed-outcome.v1", "joint"),
+        ),
+    ),
+    CatalogSuite(
+        id="router-learning-core",
+        name="Router Learning policy comparison",
+        description=(
+            "A deterministic sequential replay comparing a static base policy, the "
+            "current routing_sampling score equation, and a simple Beta-Bernoulli "
+            "policy over paired trial seeds. It is diagnostic and not a production "
+            "causal claim."
+        ),
+        track_ids=("joint",),
+        modes=("replay",),
+        evidence_level="E0",
+        executors={"replay": ROUTER_LEARNING_REPLAY_EXECUTOR_ID},
+        case_count=ROUTER_LEARNING_CASE_COUNT,
+        revision=ROUTER_LEARNING_CORPUS_REVISION,
+        tags=(
+            "router-learning",
+            "paired-seeds",
+            "deterministic",
+            "diagnostic-only",
+        ),
+        methods=(
+            _method(
+                "joint.router-learning-policy-comparison.v1",
+                "joint",
+                evidence_source=CatalogMethodEvidenceSource.DIAGNOSTIC_FIXTURE,
+            ),
         ),
     ),
     CatalogSuite(
