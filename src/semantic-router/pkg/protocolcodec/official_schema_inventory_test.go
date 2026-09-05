@@ -31,7 +31,7 @@ func TestOfficialRequestFieldInventoriesAreClosed(t *testing.T) {
 				"stream_options", "temperature", "tool_choice", "tools", "top_logprobs", "top_p", "user",
 				"verbosity", "web_search_options",
 			),
-			extensions: fields("reasoning_budget_tokens"),
+			extensions: fields("cache_salt", "nvext", "reasoning_budget_tokens"),
 		},
 		{
 			name: "OpenAI Responses",
@@ -90,7 +90,7 @@ func TestOfficialRequestFieldDispositionsAreClosed(t *testing.T) {
 				"prediction", "prompt_cache_key", "prompt_cache_options", "prompt_cache_retention",
 				"safety_identifier", "service_tier", "top_logprobs", "verbosity", "web_search_options",
 			),
-			extensions: fields("reasoning_budget_tokens"),
+			extensions: fields("cache_salt", "nvext", "reasoning_budget_tokens"),
 			transport:  fields("stream_options"),
 		},
 		{
@@ -144,7 +144,7 @@ func TestOfficialResponseFieldInventoriesAreClosed(t *testing.T) {
 			),
 			extensions: fields(
 				"do_remote_decode", "do_remote_prefill", "ec_transfer_params", "error", "kv_transfer_params", "metrics",
-				"prompt_logprobs", "prompt_text", "prompt_token_ids", "remote_block_ids", "remote_engine_id",
+				"nvext", "prompt_logprobs", "prompt_text", "prompt_token_ids", "remote_block_ids", "remote_engine_id",
 				"remote_host", "remote_port",
 			),
 		},

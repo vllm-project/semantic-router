@@ -85,6 +85,18 @@ func (r *OpenAIRouter) handleModelRoutingWithPersonalizedCache(
 	decisionState requestDecisionState,
 	ctx *RequestContext,
 ) (*ext_proc.ProcessingResponse, error) {
+	targetModel := decisionState.selectedModel
+	if targetModel == "" {
+		targetModel = originalModel
+	}
+	if err := validateDynamoBackendPool(r.Config, targetModel, ctx.ProtocolEnvelope); err != nil {
+		if protocolError, ok := err.(*llmprotocol.ProtocolError); ok {
+			copy := *protocolError
+			ctx.ImmediateProtocolError = &copy
+		}
+		metrics.RecordRequestError(targetModel, "unsupported_dynamo_nvext_backend")
+		return r.createErrorResponse(http.StatusBadRequest, err.Error()), nil
+	}
 	if response, hit := r.lookupPersonalizedExactCache(ctx, decisionState.decisionName, decisionState.selectedModel); hit {
 		inflight.End(decisionState.selectedModel, ctx.InflightToken)
 		ctx.InflightToken = 0

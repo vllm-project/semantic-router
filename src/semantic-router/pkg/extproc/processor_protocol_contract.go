@@ -118,6 +118,16 @@ func (r *OpenAIRouter) prepareProtocolRequest(
 		}
 		return nil, r.createErrorResponse(400, "invalid inference request")
 	}
+	if ctx.SourceFormat == llmprotocol.OpenAIChatV1 {
+		if err := validateDynamoRoutingHeaders(ctx, llmprotocol.DefaultPolicy().Limits); err != nil {
+			recordIngressProtocolError(ctx, err)
+			if protocolError, ok := err.(*llmprotocol.ProtocolError); ok {
+				copy := *protocolError
+				ctx.ImmediateProtocolError = &copy
+			}
+			return nil, r.createErrorResponse(400, "invalid Dynamo routing header")
+		}
+	}
 	request.Trusted.SourceFormat = ctx.SourceFormat
 	request.Trusted.CorrelationID = ctx.RequestID
 	ctx.IngressBodyBytes = len(body)

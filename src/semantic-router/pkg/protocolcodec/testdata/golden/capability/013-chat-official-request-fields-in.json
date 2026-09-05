@@ -6,6 +6,7 @@
   },
   "cases": [
     {"name": "audio", "patch": {"audio": {"format": "wav", "voice": "alloy"}}},
+    {"name": "cache_salt", "patch": {"cache_salt": "legacy-tenant-a"}},
     {"name": "frequency_penalty", "patch": {"frequency_penalty": 0.25}},
     {"name": "function_call", "patch": {"function_call": "auto"}},
     {"name": "functions", "patch": {"functions": [{"name": "lookup", "parameters": {"type": "object"}}]}},
@@ -19,6 +20,7 @@
     {"name": "model", "patch": {"model": "alternate-client-model"}},
     {"name": "moderation", "patch": {"moderation": {"mode": "auto"}}},
     {"name": "n", "patch": {"n": 2}},
+    {"name": "nvext", "patch": {"nvext": {"greed_sampling": true, "use_raw_prompt": false, "annotations": ["worker_id", "timing"], "backend_instance_id": 1, "token_data": [10, 11], "max_thinking_tokens": 128, "cache_salt": "tenant-a", "extra_fields": ["worker_id", "timing"], "metadata_upload": {"url": "https://metadata.example/upload"}, "prefill_worker_id": 2, "decode_worker_id": 3, "dp_rank": 0, "prefill_dp_rank": 1, "agent_hints": {"priority": -2, "strict_priority": 1, "osl": 2048, "speculative_prefill": true, "latency_sensitivity": 0.5}, "request_timestamp_ms": 123.5, "routing_constraints": {"required_taints": ["gpu"], "preferred_taints": {"zone-a": 0.75}}, "router": {"ttft_target": 100, "itl_target": 20}}}},
     {"name": "parallel_tool_calls", "patch": {"parallel_tool_calls": false}},
     {"name": "prediction", "patch": {"prediction": {"type": "content", "content": "expected"}}},
     {"name": "presence_penalty", "patch": {"presence_penalty": 0.5}},

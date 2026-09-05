@@ -51,6 +51,24 @@ const (
 	// omits or demotes to replay are emitted inline for that request — the
 	// debug/replay-mode trigger for the v0.4 header surface. See issue #2216.
 	VSRDebug = "x-vsr-debug"
+
+	// NVIDIA Dynamo routing headers override their corresponding request-body
+	// nvext fields at the Dynamo frontend. They are routing inputs, not proof of
+	// authentication or authorization.
+	DynamoWorkerInstanceID      = "x-dynamo-worker-instance-id"
+	DynamoPrefillInstanceID     = "x-dynamo-prefill-instance-id"
+	DynamoDPRank                = "x-dynamo-dp-rank"
+	DynamoPrefillDPRank         = "x-dynamo-prefill-dp-rank"
+	DynamoRequestPriority       = "x-dynamo-request-priority"
+	DynamoRequestStrictPriority = "x-dynamo-request-strict-priority"
+	DynamoTenantID              = "x-tenant-id"
+
+	// Compatibility aliases retained by Dynamo but planned for deprecation.
+	DynamoWorkerInstanceIDLegacy  = "x-worker-instance-id"
+	DynamoPrefillInstanceIDLegacy = "x-prefill-instance-id"
+	DynamoDPRankLegacy            = "x-dp-rank"
+	DynamoDataParallelRankLegacy  = "x-data-parallel-rank"
+	DynamoPrefillDPRankLegacy     = "x-prefill-dp-rank"
 )
 
 // VSR Decision Tracking Headers

@@ -68,6 +68,8 @@ type chatRequestWire struct {
 	TopLogprobs          json.RawMessage        `json:"top_logprobs,omitempty"`
 	Verbosity            json.RawMessage        `json:"verbosity,omitempty"`
 	WebSearchOptions     json.RawMessage        `json:"web_search_options,omitempty"`
+	CacheSalt            *string                `json:"cache_salt,omitempty"`
+	NVExt                json.RawMessage        `json:"nvext,omitempty"`
 }
 
 type chatStreamOptionsWire struct {
@@ -190,7 +192,23 @@ func (OpenAIChatCodec) DecodeRequest(body []byte, policy llmprotocol.Policy) (ll
 	if err := decodeChatRequestOptions(wire, &request, policy); err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
-	return request, requestEnvelope(llmprotocol.OpenAIChatV1, body, request.Generation, policy), nil, nil
+	envelope := requestEnvelope(llmprotocol.OpenAIChatV1, body, request.Generation, policy)
+	dynamoNVExt, err := decodeDynamoRequestNVExt(wire.NVExt, policy)
+	if err != nil {
+		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
+	}
+	if dynamoNVExt != nil || wire.CacheSalt != nil {
+		envelope.Dynamo = &llmprotocol.DynamoEnvelope{
+			RequestNVExt: dynamoNVExt, RequestTopLevelCacheSalt: wire.CacheSalt,
+		}
+		if wire.CacheSalt != nil && policy.Limits.DynamoNVExtStringBytes > 0 && len(*wire.CacheSalt) > policy.Limits.DynamoNVExtStringBytes {
+			return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, llmprotocol.NewError(
+				llmprotocol.ErrorInvalidRequest, "dynamo_nvext_string_limit",
+				"Dynamo top-level cache_salt exceeds the configured limit", nil,
+			)
+		}
+	}
+	return request, envelope, nil, nil
 }
 
 func validateChatRequestWire(wire chatRequestWire) error {

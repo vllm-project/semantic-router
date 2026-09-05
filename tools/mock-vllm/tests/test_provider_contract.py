@@ -235,6 +235,81 @@ async def test_debug_endpoint_preserves_the_native_provider_request() -> None:
 
 
 @pytest.mark.asyncio
+async def test_dynamo_nvext_buffered_contract_and_request_observation() -> None:
+    session_id = "dynamo-buffered-contract"
+    body = {
+        "model": "provider-model",
+        "messages": [{"role": "user", "content": "hello"}],
+        "cache_salt": "tenant-cache-a",
+        "nvext": {
+            "cache_salt": "tenant-cache-b",
+            "extra_fields": [
+                "worker_id",
+                "timing",
+                "prompt_token_ids",
+                "completion_token_ids",
+            ],
+        },
+    }
+    headers = {"x-vsr-test-session-id": session_id}
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://simulator"
+    ) as client:
+        response = await client.post("/v1/chat/completions", json=body, headers=headers)
+        observed = await client.get("/debug/last-request", headers=headers)
+
+    assert response.status_code == HTTPStatus.OK
+    assert observed.status_code == HTTPStatus.OK
+    assert observed.json()["body"] == body
+    assert response.json()["nvext"] == {
+        "worker_id": {
+            "prefill_worker_id": 11,
+            "prefill_dp_rank": 1,
+            "decode_worker_id": 22,
+            "decode_dp_rank": 2,
+        },
+        "timing": {
+            "request_received_ms": 1000,
+            "prefill_wait_time_ms": 1.25,
+            "prefill_time_ms": 2.5,
+            "ttft_ms": 3.75,
+            "total_time_ms": 8.0,
+        },
+        "prompt_token_ids": [11, 12],
+        "completion_token_ids": [101, 102],
+    }
+
+
+@pytest.mark.asyncio
+async def test_dynamo_nvext_streaming_contract() -> None:
+    body = {
+        "model": "provider-model",
+        "messages": [{"role": "user", "content": "hello"}],
+        "stream": True,
+        "nvext": {"extra_fields": ["stop_reason", "engine_data", "prompt_token_ids"]},
+    }
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://simulator"
+    ) as client:
+        response = await client.post("/v1/chat/completions", json=body)
+
+    assert response.status_code == HTTPStatus.OK
+    payloads = [
+        json.loads(line.removeprefix("data: "))
+        for line in response.text.splitlines()
+        if line.startswith("data: {")
+    ]
+    extension_chunks = [payload["nvext"] for payload in payloads if "nvext" in payload]
+    assert extension_chunks == [
+        {
+            "stop_reason": "stop",
+            "engine_data": {"mock": "dynamo"},
+            "prompt_token_ids": [11, 12],
+        }
+    ]
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("path", ["/v1/chat/completions", "/v1/responses"])
 async def test_simulator_rejects_unknown_provider_fields(path: str) -> None:
     body: dict[str, Any]

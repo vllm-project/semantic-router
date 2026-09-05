@@ -7,7 +7,9 @@ from typing import Any
 
 import uvicorn
 from chat_request import ChatRequest, build_chat_content
+from chat_response import build_chat_response
 from classify import router as classify_router
+from dynamo_contract import build_dynamo_response_nvext
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from provider_boundary import (
@@ -81,59 +83,6 @@ def build_chat_usage(req: ChatRequest, content: str) -> dict:
     }
 
 
-def build_chat_response(
-    req: ChatRequest, content: str, usage: dict, created_ts: int
-) -> dict:
-    return {
-        "id": "cmpl-mock-123",
-        "object": "chat.completion",
-        "created": created_ts,
-        "model": req.model,
-        "system_fingerprint": "mock-vllm",
-        "choices": [
-            {
-                "index": 0,
-                "message": {"role": "assistant", "content": content},
-                "finish_reason": "stop",
-                "logprobs": build_chat_logprobs(req, content),
-            }
-        ],
-        "usage": usage,
-    }
-
-
-def build_chat_logprobs(req: ChatRequest, content: str) -> dict[str, Any] | None:
-    if not req.logprobs:
-        return None
-    token = content[:8] or "mock"
-    requested = max(1, min(req.top_logprobs or 1, 5))
-    alternatives = [
-        {"token": token, "logprob": -1.5, "bytes": list(token.encode())},
-        {"token": "other", "logprob": -1.6, "bytes": list(b"other")},
-    ]
-    while len(alternatives) < requested:
-        index = len(alternatives)
-        alternative = f"alt-{index}"
-        alternatives.append(
-            {
-                "token": alternative,
-                "logprob": -1.6 - index,
-                "bytes": list(alternative.encode()),
-            }
-        )
-    return {
-        "content": [
-            {
-                "token": token,
-                "logprob": -1.5,
-                "bytes": list(token.encode()),
-                "top_logprobs": alternatives[:requested],
-            }
-        ],
-        "refusal": [],
-    }
-
-
 def build_chat_stream_chunk(
     req: ChatRequest,
     response_id: str,
@@ -141,6 +90,7 @@ def build_chat_stream_chunk(
     delta: dict,
     finish_reason: str | None,
     usage: dict | None = None,
+    nvext: dict[str, Any] | None = None,
 ) -> str:
     payload = {
         "id": response_id,
@@ -159,6 +109,8 @@ def build_chat_stream_chunk(
     }
     if usage is not None:
         payload["usage"] = usage
+    if nvext is not None:
+        payload["nvext"] = nvext
     return "data: " + json.dumps(payload, separators=(",", ":")) + "\n\n"
 
 
@@ -182,7 +134,15 @@ def generate_chat_stream(
         )
         if not complete:
             return
-    yield build_chat_stream_chunk(req, response_id, created_ts, {}, "stop", usage)
+    yield build_chat_stream_chunk(
+        req,
+        response_id,
+        created_ts,
+        {},
+        "stop",
+        usage,
+        build_dynamo_response_nvext(req),
+    )
     yield "data: [DONE]\n\n"
 
 
