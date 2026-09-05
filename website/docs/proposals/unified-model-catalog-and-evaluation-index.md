@@ -763,7 +763,7 @@ A model-only support change follows one bounded sequence:
 3. **Offerings:** add every verified provider/model offering with provider model
    ID, protocols, parameter constraints, pricing when known, and evidence.
 4. **Reasoning behavior:** reference an existing built-in family or add a new
-   family with per-protocol request-shaping fixtures. Users do not re-declare it.
+   family with per-protocol request-shaping fixtures. Users do not redeclare it.
 5. **Adapters:** add code only for a true wire-semantic difference. Compatible
    offerings remain data-only.
 6. **Conformance fixtures:** cover accepted and rejected parameters, tools,
