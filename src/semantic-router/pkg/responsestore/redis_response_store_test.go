@@ -2,6 +2,7 @@ package responsestore
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -240,4 +241,181 @@ func TestRedisUpdateResponseRestoresOnIndexFailure(t *testing.T) {
 		"the failed new conversation must never gain an index entry")
 	assert.Equal(t, []string{"resp_update_rollback"}, conversationIndexMembers(t, store, "conv_update_from"),
 		"the previous conversation must be reindexed after rollback")
+}
+
+// TestRedisUpdateResponseRollbackConflictPreservesNewerWrite is the direct
+// regression test for the CAS-safe rollback (Phase 1): if a newer write
+// lands on top of a failed update's own payload before that update's
+// rollback runs, the rollback's compare-and-swap must detect the mismatch,
+// leave the newer payload untouched, and must not reindex the stale
+// snapshot's previous conversation.
+func TestRedisUpdateResponseRollbackConflictPreservesNewerWrite(t *testing.T) {
+	store := newConversationIndexStore(t)
+	ctx := context.Background()
+
+	const responseID = "resp_update_conflict"
+	key := store.buildKey(ResponseKeyPrefix + responseID)
+
+	// Written unindexed (not via StoreResponse), so "conv_update_conflict_from"
+	// starts with an empty index — making "rollback must not reindex it"
+	// an observable assertion below, rather than one an unrelated prior
+	// index write would satisfy by coincidence.
+	original := &responseapi.StoredResponse{
+		ID: responseID, ConversationID: "conv_update_conflict_from", Status: "original", CreatedAt: time.Now().Unix(),
+	}
+	directSetResponsePayload(t, store, original)
+
+	snapshot, err := store.readPreviousResponseForUpdate(ctx, key, responseID)
+	require.NoError(t, err)
+	require.Equal(t, "conv_update_conflict_from", snapshot.conversationID)
+	require.Empty(t, conversationIndexMembers(t, store, "conv_update_conflict_from"))
+
+	// The failed update's own write (what its rollback will try to
+	// compare-and-swap against), then a newer, fully successful concurrent
+	// update landing on top of it before the first update's rollback runs.
+	failedUpdateData, err := json.Marshal(&responseapi.StoredResponse{
+		ID: responseID, ConversationID: "conv_update_conflict_failed", Status: "failed-update", CreatedAt: time.Now().Unix(),
+	})
+	require.NoError(t, err)
+	require.NoError(t, store.client.Set(ctx, key, failedUpdateData, store.ttl).Err())
+
+	newer := &responseapi.StoredResponse{
+		ID: responseID, ConversationID: "conv_update_conflict_newer", Status: "newer-update", CreatedAt: time.Now().Unix(),
+	}
+	newerData, err := json.Marshal(newer)
+	require.NoError(t, err)
+	require.NoError(t, store.client.Set(ctx, key, newerData, store.ttl).Err())
+	require.NoError(t, store.indexResponse(ctx, newer.ConversationID, responseID, newer.CreatedAt))
+
+	injectedErr := errors.New("injected index failure")
+	err = store.rollbackUpdatePayload(ctx, key, responseID, failedUpdateData, snapshot, injectedErr)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, injectedErr)
+
+	current, err := store.GetResponse(ctx, responseID)
+	require.NoError(t, err)
+	assert.Equal(t, "newer-update", current.Status, "a newer concurrent write must survive an older update's failed rollback")
+	assert.Equal(t, "conv_update_conflict_newer", current.ConversationID)
+
+	assert.Empty(t, conversationIndexMembers(t, store, "conv_update_conflict_from"),
+		"a CAS conflict must not reindex the stale snapshot's previous conversation")
+	assert.Equal(t, []string{responseID}, conversationIndexMembers(t, store, "conv_update_conflict_newer"))
+}
+
+// TestRedisUpdateResponseRollbackPreservesRemainingTTL covers that a
+// rollback restores the snapshot's approximate remaining lifetime, not a
+// freshly reset full retention TTL.
+func TestRedisUpdateResponseRollbackPreservesRemainingTTL(t *testing.T) {
+	store := newConversationIndexStore(t)
+	ctx := context.Background()
+
+	const responseID = "resp_update_ttl"
+	key := store.buildKey(ResponseKeyPrefix + responseID)
+
+	original := &responseapi.StoredResponse{
+		ID: responseID, ConversationID: "conv_update_ttl", Status: "original", CreatedAt: time.Now().Unix(),
+	}
+	require.NoError(t, store.StoreResponse(ctx, original))
+	require.NoError(t, store.client.Expire(ctx, key, 100*time.Second).Err())
+
+	snapshot, err := store.readPreviousResponseForUpdate(ctx, key, responseID)
+	require.NoError(t, err)
+	require.InDelta(t, (100 * time.Second).Milliseconds(), snapshot.pttlMillis, 2000)
+
+	failedData, err := json.Marshal(&responseapi.StoredResponse{
+		ID: responseID, ConversationID: "conv_update_ttl_failed", Status: "failed", CreatedAt: time.Now().Unix(),
+	})
+	require.NoError(t, err)
+	require.NoError(t, store.client.Set(ctx, key, failedData, store.ttl).Err())
+
+	injectedErr := errors.New("injected index failure")
+	err = store.rollbackUpdatePayload(ctx, key, responseID, failedData, snapshot, injectedErr)
+	require.ErrorIs(t, err, injectedErr)
+
+	ttl, err := store.client.TTL(ctx, key).Result()
+	require.NoError(t, err)
+	assert.InDelta(t, 100.0, ttl.Seconds(), 5,
+		"restored TTL must approximate the snapshot's remaining lifetime (100s), not the store's full 300s retention TTL")
+}
+
+// TestRedisUpdateResponseRollbackPreservesPersistentTTL covers the
+// persistent (no-expiry) case: a snapshot with pttlMillis == -1 must be
+// restored persistent, not given the store's default TTL.
+func TestRedisUpdateResponseRollbackPreservesPersistentTTL(t *testing.T) {
+	store := newConversationIndexStore(t)
+	ctx := context.Background()
+
+	const responseID = "resp_update_persistent"
+	key := store.buildKey(ResponseKeyPrefix + responseID)
+
+	original := &responseapi.StoredResponse{
+		ID: responseID, ConversationID: "conv_update_persistent", Status: "original", CreatedAt: time.Now().Unix(),
+	}
+	data, err := json.Marshal(original)
+	require.NoError(t, err)
+	require.NoError(t, store.client.Set(ctx, key, data, 0).Err())
+
+	snapshot, err := store.readPreviousResponseForUpdate(ctx, key, responseID)
+	require.NoError(t, err)
+	require.EqualValues(t, -1, snapshot.pttlMillis)
+
+	failedData, err := json.Marshal(&responseapi.StoredResponse{
+		ID: responseID, ConversationID: "conv_update_persistent_failed", Status: "failed", CreatedAt: time.Now().Unix(),
+	})
+	require.NoError(t, err)
+	require.NoError(t, store.client.Set(ctx, key, failedData, store.ttl).Err())
+
+	injectedErr := errors.New("injected index failure")
+	err = store.rollbackUpdatePayload(ctx, key, responseID, failedData, snapshot, injectedErr)
+	require.ErrorIs(t, err, injectedErr)
+
+	ttl, err := store.client.TTL(ctx, key).Result()
+	require.NoError(t, err)
+	assert.Equal(t, time.Duration(-1), ttl, "a persistent payload restored by rollback must remain persistent")
+}
+
+// TestRedisUpdateResponseRollbackDeletesWhenSnapshotTTLElapsed covers
+// compareRestoreExpired: if the snapshot's own remaining TTL has run out by
+// the time rollback runs, the failed update's payload is deleted rather
+// than resurrected with a value whose intended lifetime already ended, and
+// nothing is reindexed.
+func TestRedisUpdateResponseRollbackDeletesWhenSnapshotTTLElapsed(t *testing.T) {
+	store := newConversationIndexStore(t)
+	ctx := context.Background()
+
+	const responseID = "resp_update_expired"
+	key := store.buildKey(ResponseKeyPrefix + responseID)
+
+	// Written unindexed, so "conv_update_expired" starts with an empty
+	// index — making "rollback must not reindex it" observable below.
+	original := &responseapi.StoredResponse{
+		ID: responseID, ConversationID: "conv_update_expired", Status: "original", CreatedAt: time.Now().Unix(),
+	}
+	directSetResponsePayload(t, store, original)
+
+	snapshot, err := store.readPreviousResponseForUpdate(ctx, key, responseID)
+	require.NoError(t, err)
+	require.Empty(t, conversationIndexMembers(t, store, "conv_update_expired"))
+
+	// Force the snapshot to look like its captured TTL has (almost)
+	// elapsed, then let a moment actually pass, rather than waiting out a
+	// real TTL in a unit test.
+	snapshot.pttlMillis = 1
+	time.Sleep(5 * time.Millisecond)
+
+	failedData, err := json.Marshal(&responseapi.StoredResponse{
+		ID: responseID, ConversationID: "conv_update_expired_failed", Status: "failed", CreatedAt: time.Now().Unix(),
+	})
+	require.NoError(t, err)
+	require.NoError(t, store.client.Set(ctx, key, failedData, store.ttl).Err())
+
+	injectedErr := errors.New("injected index failure")
+	err = store.rollbackUpdatePayload(ctx, key, responseID, failedData, snapshot, injectedErr)
+	require.ErrorIs(t, err, injectedErr)
+
+	_, getErr := store.GetResponse(ctx, responseID)
+	assert.ErrorIs(t, getErr, ErrNotFound,
+		"a rollback whose snapshot TTL already elapsed must delete rather than resurrect the payload")
+	assert.Empty(t, conversationIndexMembers(t, store, "conv_update_expired"),
+		"an expired rollback must not reindex the deleted payload")
 }
