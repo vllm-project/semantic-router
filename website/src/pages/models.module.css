@@ -1209,10 +1209,16 @@
   font-size: 0.56rem;
 }
 .evalList a {
-  display: inline-block;
-  margin-top: 0.45rem;
   font-size: 0.58rem;
   font-weight: 700;
+}
+
+.evidenceMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.45rem;
 }
 
 .metricChips {

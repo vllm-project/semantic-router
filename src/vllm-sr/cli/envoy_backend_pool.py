@@ -48,8 +48,9 @@ def backend_route_semantics(
         transport=str(endpoint["protocol"]),
         discovery="dns" if endpoint["is_domain"] else "ip",
         path=str(endpoint["path"]),
-        # TLS context is cluster-wide today. Distinct HTTPS names would use the
-        # first endpoint's SNI even when Envoy selected another endpoint.
+        # Envoy 1.34 shares one TLS context and session cache per cluster. Keep
+        # that context bound to one server identity; distinct HTTPS hosts must
+        # use separate aliases/clusters.
         tls_server_name=(str(endpoint["address"]) if endpoint["is_https"] else ""),
         credential=_credential_identity(backend),
         auth_header=backend.auth_header or "",

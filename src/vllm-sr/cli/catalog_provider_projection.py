@@ -32,6 +32,42 @@ _PROTOCOL_TO_API_FORMAT = {
 _PROVIDER_MODEL_ID_KIND_DEPLOYMENT_NAME = "deployment_name"
 
 
+def resolve_builtin_provider_id(
+    candidate: str,
+    *,
+    required_protocol: str,
+    compatible_fallback: str = "openai-compatible",
+) -> str:
+    """Resolve an external provider name without conflating it with its API.
+
+    Exact catalog Provider IDs preserve identity (for example ``vllm`` or
+    ``openai``).  Unknown names using an OpenAI-compatible wire contract map to
+    the generic compatibility provider, never to the OpenAI first-party API.
+    """
+
+    normalized = candidate.strip().lower()
+    providers = _catalog_provider_index().providers
+    provider_id = normalized if normalized in providers else compatible_fallback
+    provider = providers.get(provider_id)
+    if provider is None:
+        raise CatalogProviderProjectionError(
+            f"built-in compatible provider {provider_id!r} is unavailable"
+        )
+    protocols = _string_list(provider.get("protocols"), f"provider {provider_id!r}")
+    operations = _string_list(
+        provider.get("supported_operations"), f"provider {provider_id!r}"
+    )
+    if (
+        required_protocol not in protocols
+        or f"{required_protocol}#create" not in operations
+    ):
+        raise CatalogProviderProjectionError(
+            f"Provider ID {provider_id!r} cannot create requests using "
+            f"{required_protocol!r}"
+        )
+    return provider_id
+
+
 def project_provider_models_for_envoy(user_config: UserConfig) -> tuple[Model, ...]:
     """Return immutable-input, catalog-materialized models for Envoy rendering.
 
@@ -45,6 +81,7 @@ def project_provider_models_for_envoy(user_config: UserConfig) -> tuple[Model, .
     for model_index, authored_model in enumerate(user_config.providers.models):
         projected = authored_model.model_copy(deep=True)
         card = _resolve_model_card(catalog, authored_model, model_index)
+        _validate_envoy_physical_backend(projected, card, model_index)
         selected_protocol = ""
         for backend_index, backend in enumerate(projected.backend_refs):
             path = f"providers.models[{model_index}].backend_refs[{backend_index}]"
@@ -76,6 +113,22 @@ def project_provider_models_for_envoy(user_config: UserConfig) -> tuple[Model, .
             )
         projected_models.append(projected)
     return tuple(projected_models)
+
+
+def _validate_envoy_physical_backend(
+    model: Model,
+    card: dict[str, Any],
+    model_index: int,
+) -> None:
+    """Require an explicit provider whenever the CLI is building Envoy transport."""
+
+    if model.backend_refs or card.get("kind") == "virtual":
+        return
+    raise CatalogProviderProjectionError(
+        f"providers.models[{model_index}] {model.name!r} is a physical model used "
+        "by a router-owned listener and must define backend_refs with an explicit "
+        "Provider ID; api_format selects only the upstream wire format"
+    )
 
 
 def _resolve_model_card(

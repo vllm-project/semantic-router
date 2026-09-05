@@ -49,9 +49,9 @@ The old Dashboard therefore contained 40 provider presets, while the Router
 had seven hard-coded runtime types and the packaged catalog had no
 general-purpose physical-model registry. The implemented snapshot compiles 60
 serving providers, three protocol definitions, 83 physical Model Cards, five
-virtual Model Cards, 166 provider-owned model mappings, 60 benchmark
-definitions, and 1,285 exact evaluation records. The five default benchmark
-components produce 1,315 explicit slots over 263 model/effort rows; 116 slots
+virtual Model Cards, 166 provider-owned model mappings, 64 benchmark
+definitions, and 1,360 exact evaluation records. The five default benchmark
+components produce 1,315 explicit slots over 263 model/effort rows; 124 slots
 are currently measured and every other slot stays explicitly missing. Support
 tier, lifecycle, and conformance remain independent, so catalog inclusion is
 not flattened into a native-support or benchmark claim.
@@ -60,8 +60,8 @@ All 83 physical cards pass the hard admission rule: at least one exact
 model, reasoning-effort, and evidence-provenance bucket contains five distinct
 benchmark identities.
 That does not mean every runtime-selectable effort has five published results.
-Across 180 selectable effort levels, 105 currently have at least five
-benchmarks, four are partial, and 71 are unmeasured. The audit exposes those
+Across 180 selectable effort levels, 110 currently have at least five
+benchmarks, 31 are partial, and 39 are unmeasured. The audit exposes those
 three states and offers a stricter selectable-effort gate for future data work;
 the current release keeps the gaps visible instead of copying a score from
 another effort or deleting a valid runtime control. Conditions recorded for a
@@ -72,11 +72,11 @@ Dashboard controls.
 
 The initial physical catalog is curated by **model creator**, not by taking the
 first 20 individual models from any ranking or endpoint inventory. It focuses
-on roughly twenty mainstream creator companies (22 in this snapshot) and represents roughly their latest three
-generations or product lines. Closely related sizes or reasoning variants are
-included only when they are separately selectable and materially useful to
-operators. GPT-6 Astra remains intentionally absent for the separate Day-0
-example change.
+on roughly twenty mainstream creator companies (22 in this snapshot) and
+represents roughly their latest three generations or product lines. Closely
+related sizes or reasoning variants are included only when they are separately
+selectable and materially useful to operators. GPT-6 Astra remains
+intentionally absent for the separate Day-0 example change.
 
 | Model creator (`publisher`) | Recent generations and representative lines | Models |
 | --- | --- | ---: |
@@ -229,7 +229,7 @@ none owns an independent provider or model inventory.
 | `ModelCard` | Canonical model identity, creator in `publisher`, presentation/distribution, family/revision, release and knowledge dates, input/output limits, modalities, capabilities, reasoning behavior reference, lifecycle | Endpoint URL, credentials, serving-provider price |
 | `ReasoningFamilyDefinition` | Request projection type/parameter plus effort vocabulary and default | Operator credentials, benchmark comparison |
 | `BenchmarkDefinition` | Benchmark/version identity, domain, source, and metric direction/range/units | A model's result |
-| `EvaluationRecord` | Exact model subject, raw measurements, optional measurement date, status, source/artifact, provenance, and verification | Aggregation policy |
+| `EvaluationRecord` | Exact model subject, raw measurements, measurement or observation date, status, source/artifact, provenance, and verification | Aggregation policy |
 | `IndexDefinition` | Versioned components, weights, normalization, missing-data policy, scale | Raw benchmark output |
 | `IndexResult` | Computed score, domain subscores, coverage, per-component status/value, and source-record lineage | Mutable operator preference |
 
@@ -302,6 +302,18 @@ support claims. The identities are deliberately separate:
 - `backend_refs[].provider` is a repository Provider ID; omission retains the
   existing local-runtime shorthand and materializes as `vllm`.
 
+`api_format` selects only the upstream wire contract and never infers a
+Provider from the set of compatible registry entries. When the Router owns a
+listener, every physical model must declare `backend_refs` with an explicit
+Provider ID (or use the existing local-runtime shorthand). A metadata-only
+external-gateway config with `listeners: []` and a built-in virtual model may
+remain backendless because transport is resolved outside that physical model
+binding.
+The local `vllm-sr serve` workflow always owns its Envoy transport (and retains
+the existing default-listener behavior for an empty list), so Envoy projection
+rejects a backendless physical model. Metadata-only profiles run through the
+external-gateway deployment rather than a generated standalone Envoy route.
+
 The materializer joins those explicit references. It never joins two resources
 because their `name` strings happen to match. No `deployment`,
 `routing_overrides`, top-level `models`, or top-level `defaults` block is added.
@@ -310,10 +322,11 @@ reasoning-family default wins; canonical export does not synthesize or write
 back a global effort that the user did not configure.
 
 Multiple `backend_refs` under one alias form one Envoy load-balancing pool, so
-they must be homogeneous replicas. They may vary in network target and weight,
-but must resolve to the same Provider ID, wire protocol, native model ID,
-credential source, auth convention, effective headers, base/request path,
-reasoning transport, and compatible DNS/TLS semantics. Envoy selects the
+they must be homogeneous replicas. HTTP replicas may vary in network target
+and weight; HTTPS replicas may vary by port and weight but share one DNS
+hostname. Every replica must resolve to the same Provider ID, wire protocol,
+native model ID, credential source, auth convention, effective headers,
+base/request path, reasoning transport, and compatible DNS/TLS semantics. Envoy selects the
 physical endpoint after the Router has selected one provider profile; mixing
 those request semantics would otherwise send the first backend's metadata to a
 different upstream. Materialization therefore fails clearly instead of
@@ -609,8 +622,10 @@ a new benchmark version.
 ### Evaluation records
 
 An evaluation record freezes the canonical model, explicit
-`reasoning_effort`, raw versioned metric IDs and values, status, an optional
-measurement date, and evidence. Its typed subject can additionally record
+`reasoning_effort`, raw versioned metric IDs and values, status, a calendar
+anchor, and evidence. `measured_at` is the actual run date when known;
+`observed_at` is the date an already-published value was reviewed and is never
+presented as the run date. Its typed subject can additionally record
 model revision, provider mapping, runtime/version, quantization, precision,
 tensor parallelism, protocol, tool policy, harness, and other material
 parameters. Evidence records provenance, verification, and an optional
@@ -632,10 +647,10 @@ separate `unspecified` evidence row rather than being guessed into a selectable
 row. The same contract applies to virtual models, which can receive scores from
 executions of their packaged recipes.
 
-The initial population audit makes both coverage and gaps visible. The 60
+The initial population audit makes both coverage and gaps visible. The 64
 benchmark definitions retain all exact measurements as detail records, while
 the default five-component matrix materializes 1,315 slots over 263
-model/effort rows. At this snapshot, 116 of those slots have an exact
+model/effort rows. At this snapshot, 124 of those slots have an exact
 measurement. Other rows remain explicitly `missing`, `failed`,
 `not_applicable`, or `withheld`; none is fabricated as zero.
 
@@ -963,6 +978,7 @@ field cleanups:
 | `providers.defaults.reasoning_families` + `providers.models[].reasoning_family` | Built-in family from `catalog`, or local `providers.models[].reasoning` |
 | `routing.modelCards[].quality_score` | `routing.modelCards[].evaluations[]` |
 | `backend_refs[].type` / free-form provider spelling | `backend_refs[].provider` using a catalog Provider ID |
+| Router-owned `api_format: anthropic` model with the legacy implicit public endpoint | Explicit `backend_refs[].provider: anthropic`; `api_format` remains only the wire format |
 
 `api_format: openai|responses|anthropic`, `provider_model_id`, pricing,
 reliability, endpoint fields, decision model aliases, and the surrounding
@@ -971,8 +987,10 @@ above. A legacy custom reasoning-family definition is copied in full into each
 referencing model's inline `reasoning` block; a family reference without an
 operator definition remains a built-in family reference. A legacy scalar
 becomes a `vllm-sr/operator-rating@1.0.0` evaluation so it is not misrepresented
-as a public benchmark result. Steady-state loading rejects the retired fields
-after migration.
+as a public benchmark result. The Anthropic endpoint rewrite runs only in the
+explicit migration path when the Router owns (or historically synthesized) a
+listener; an explicit `listeners: []` external-gateway configuration remains
+transport-free. Steady-state loading rejects the retired fields after migration.
 
 ## Repository layout and ownership
 

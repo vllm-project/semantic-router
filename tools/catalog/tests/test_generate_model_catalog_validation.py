@@ -321,34 +321,6 @@ class ModelCatalogValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(catalog.CatalogBuildError, r"provider\.id"):
             catalog._validate_schema({"id": ""}, schema, "provider")
 
-    def test_security_validation_rejects_secret_fields_and_literals(self) -> None:
-        with self.assertRaisesRegex(catalog.CatalogBuildError, "secret-like field"):
-            catalog._validate_security({"provider": {"api_key": "not-published"}})
-        with self.assertRaisesRegex(
-            catalog.CatalogBuildError, "credential-like literal"
-        ):
-            catalog._validate_security({"source": "Bearer abcdefghijklmnop"})
-
-    def test_provider_default_headers_cannot_store_credentials(self) -> None:
-        provider = {
-            "id": "example",
-            "category": "model_api",
-            "support_tier": "compatible",
-            "protocols": ["openai/chat-completions@1"],
-            "default_protocol": "openai/chat-completions@1",
-            "supported_operations": ["openai/chat-completions@1#create"],
-            "auth": {
-                "strategy": "bearer",
-                "header": "Authorization",
-                "prefix": "Bearer",
-            },
-            "presentation": {"logo": "monogram", "monogram": "E", "monochrome": True},
-            "conformance": {"status": "unverified"},
-            "default_headers": {"Authorization": "not-a-secret"},
-        }
-        with self.assertRaisesRegex(catalog.CatalogBuildError, "credential headers"):
-            catalog._validate_providers([provider], self.protocols)
-
     def test_provider_reasoning_transport_is_a_known_semantic_adapter(self) -> None:
         provider = {
             "id": "example",
@@ -549,6 +521,7 @@ class ModelCatalogValidationTests(unittest.TestCase):
                 "subject": {},
                 "metrics": {"score": value},
                 "status": "available",
+                "observed_at": "2026-09-06",
                 "evidence": {
                     "provenance": "operator",
                     "verification": "claimed",
@@ -603,6 +576,7 @@ class ModelCatalogValidationTests(unittest.TestCase):
                             "subject": {subject_key: "configured"},
                             "metrics": {"score": 0.8},
                             "status": "available",
+                            "observed_at": "2026-09-06",
                             "evidence": {
                                 "provenance": "operator",
                                 "verification": "claimed",
@@ -637,6 +611,7 @@ class ModelCatalogValidationTests(unittest.TestCase):
                             "subject": {subject_key: "configured"},
                             "metrics": {"score": 0.8},
                             "status": "available",
+                            "observed_at": "2026-09-06",
                             "evidence": {
                                 "provenance": "operator",
                                 "verification": "claimed",
@@ -654,6 +629,45 @@ class ModelCatalogValidationTests(unittest.TestCase):
                         }
                     },
                 )
+
+    def test_available_evaluation_requires_calendar_anchor(self) -> None:
+        record = {
+            "id": "example/run@1.0.0",
+            "model": "example/model",
+            "benchmark": "example/bench@1.0.0",
+            "benchmark_profile": "standard",
+            "reasoning_effort": "default",
+            "subject": {},
+            "metrics": {"score": 0.8},
+            "status": "available",
+            "evidence": {
+                "provenance": "operator",
+                "verification": "claimed",
+                "redistributable": True,
+            },
+        }
+        models = {"example/model": {"id": "example/model"}}
+        metrics = {
+            "example/bench@1.0.0#score": {
+                "range": [0, 1],
+                "direction": "higher_is_better",
+                "profiles": {"standard"},
+            }
+        }
+        with self.assertRaisesRegex(
+            catalog.CatalogBuildError,
+            "must define measured_at or observed_at",
+        ):
+            catalog._validate_evaluations([record], models, {}, metrics)
+
+        record["observed_at"] = "2026-09-06"
+        catalog._validate_evaluations([record], models, {}, metrics)
+        record["observed_at"] = "2026-09-31"
+        with self.assertRaisesRegex(
+            catalog.CatalogBuildError,
+            "observed_at must use YYYY-MM-DD",
+        ):
+            catalog._validate_evaluations([record], models, {}, metrics)
 
     def test_missing_index_components_remain_unavailable(self) -> None:
         resources = {

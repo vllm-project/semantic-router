@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from datetime import date
 from typing import Any
 
 from catalog_common import SHA256, SLUG, CatalogBuildError
@@ -11,6 +12,7 @@ from catalog_common import mapping as _mapping
 from catalog_common import nonempty_string as _nonempty_string
 from catalog_common import reject_unknown as _reject_unknown
 from catalog_common import sequence as _sequence
+from catalog_common import validate_https_url as _validate_https_url
 
 REASONING_TRANSPORTS = {
     "chat_template_kwargs",
@@ -122,6 +124,10 @@ def _validate_provider_binding(
             f"{path}.id duplicates a provider-native model identifier"
         )
     native_ids.add(native_id)
+    if item.get("verification") is not None:
+        verification = _mapping(item["verification"], f"{path}.verification")
+        if verification.get("source") is not None:
+            _validate_https_url(verification["source"], f"{path}.verification.source")
     _validate_provider_model_id_policy(item, path)
     protocols = _sequence(item.get("protocols"), f"{path}.protocols")
     _validate_binding_protocols(protocols, path, provider, protocol_ids)
@@ -229,6 +235,7 @@ def _validate_evaluation(
             "metrics",
             "status",
             "measured_at",
+            "observed_at",
             "evidence",
         },
         path,
@@ -258,8 +265,28 @@ def _validate_evaluation(
     _validate_benchmark_scoped_subject_keys(subject, benchmark, path)
     values = _mapping(item.get("metrics", {}), f"{path}.metrics")
     _validate_evaluation_values(values, benchmark, profile, path, metrics)
+    _validate_evaluation_dates(item, path)
     _validate_evaluation_evidence(item, values, path)
     return model_id, effort, benchmark, profile, values
+
+
+def _validate_evaluation_dates(item: dict[str, Any], path: str) -> None:
+    for field in ("measured_at", "observed_at"):
+        value = item.get(field)
+        if value is None:
+            continue
+        if not isinstance(value, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+            raise CatalogBuildError(f"{path}.{field} must use YYYY-MM-DD")
+        try:
+            date.fromisoformat(value)
+        except ValueError as error:
+            raise CatalogBuildError(f"{path}.{field} must use YYYY-MM-DD") from error
+    if item.get("status") == "available" and not (
+        item.get("measured_at") or item.get("observed_at")
+    ):
+        raise CatalogBuildError(
+            f"{path} must define measured_at or observed_at for an available record"
+        )
 
 
 def _validate_benchmark_scoped_subject_keys(
@@ -350,6 +377,8 @@ def _validate_evaluation_evidence(
     artifact = evidence.get("artifact")
     if artifact and not SHA256.fullmatch(str(artifact)):
         raise CatalogBuildError(f"{path}.evidence.artifact must be a SHA-256 digest")
+    if evidence.get("source") is not None:
+        _validate_https_url(evidence["source"], f"{path}.evidence.source")
     if evidence.get("provenance") == "third_party":
         _validate_third_party_run(item, evidence, path)
 
@@ -359,9 +388,7 @@ def _validate_third_party_run(
 ) -> None:
     """Require an auditable identity for measurements made outside the publisher."""
 
-    source = _nonempty_string(evidence.get("source"), f"{path}.evidence.source")
-    if not source.startswith("https://"):
-        raise CatalogBuildError(f"{path}.evidence.source must use HTTPS")
+    _validate_https_url(evidence.get("source"), f"{path}.evidence.source")
     subject = _mapping(item.get("subject"), f"{path}.subject")
     if subject.get("source_kind") in {
         "official_vendor_republication",

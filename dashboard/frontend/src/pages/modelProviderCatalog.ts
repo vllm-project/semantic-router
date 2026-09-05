@@ -8,7 +8,7 @@ export interface ModelProviderPreset {
   description: string
   category: 'Start here' | 'Model APIs' | 'Private runtimes'
   baseUrl: string
-  apiFormat: string
+  apiFormat: 'openai' | 'responses' | 'anthropic'
   authStrategy: CatalogProvider['auth']['strategy']
   icon: string
   monogram: string
@@ -25,10 +25,11 @@ const categoryName = (category: CatalogProvider['category']): ModelProviderPrese
   return 'Private runtimes'
 }
 
-const apiFormat = (protocol: string): string => {
+const apiFormat = (protocol: string): ModelProviderPreset['apiFormat'] => {
+  if (protocol === 'openai/chat-completions@1') return 'openai'
   if (protocol === 'anthropic/messages@1') return 'anthropic'
   if (protocol === 'openai/responses@1') return 'responses'
-  return 'openai'
+  throw new Error(`unsupported default provider protocol: ${protocol}`)
 }
 
 // This is a projection, not a second inventory. Provider identity, order,
@@ -86,49 +87,20 @@ export const modelProviderCatalog = modelProviderPresetsFromCatalog(
 )
 
 interface ProviderLookupInput {
-  backendName?: string
-  baseUrl?: string
-  apiFormat?: string
+  providerID?: string
   providers?: readonly ModelProviderPreset[]
 }
 
 function normalizedProviderID(value?: string): string {
-  return (value ?? '')
-    .trim()
-    .toLowerCase()
-    .replace(/-primary$/, '')
-}
-
-function providerHost(value?: string): string {
-  if (!value) return ''
-  try {
-    return new URL(value).hostname.toLowerCase()
-  } catch {
-    return ''
-  }
+  return (value ?? '').trim().toLowerCase()
 }
 
 export function findModelProviderPreset({
-  backendName,
-  baseUrl,
-  apiFormat: format,
+  providerID,
   providers = modelProviderCatalog,
 }: ProviderLookupInput): ModelProviderPreset | undefined {
-  const providerID = normalizedProviderID(backendName)
-  const exact = providers.find((provider) => provider.id === providerID)
-  if (exact) return exact
-
-  const host = providerHost(baseUrl)
-  if (host) {
-    const hostMatch = providers.find((provider) => providerHost(provider.baseUrl) === host)
-    if (hostMatch) return hostMatch
-  }
-
-  if (format === 'anthropic') {
-    return providers.find((provider) => provider.id === 'anthropic')
-  }
-  if (format === 'openai' || format === 'responses') {
-    return providers.find((provider) => provider.id === 'openai-compatible')
-  }
-  return undefined
+  const normalized = normalizedProviderID(providerID)
+  return normalized
+    ? providers.find((provider) => provider.id === normalized)
+    : undefined
 }

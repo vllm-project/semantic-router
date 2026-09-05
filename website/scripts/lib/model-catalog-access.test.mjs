@@ -50,3 +50,17 @@ test('model details present human-readable access relationship labels', () => {
   }
   assert.match(page, /relationshipLabel\[binding\.relationship\]/)
 })
+
+test('model hub resolves creator marks only from catalog presentation', () => {
+  const page = readFileSync(
+    resolve(repositoryRoot, 'website/src/pages/models.tsx'),
+    'utf8',
+  )
+
+  assert.doesNotMatch(page, /publisherIcons/)
+  assert.doesNotMatch(page, /publisher=\{/)
+  assert.match(page, /const Icon = packageIcons\[packageID\]/)
+  assert.match(page, /directLogo && !logoFailed/)
+  assert.match(page, /onError=\{\(\) => setLogoFailed\(true\)\}/)
+  assert.match(page, /presentation\.monogram/)
+})

@@ -25,7 +25,6 @@ import Gemini from '@lobehub/icons/es/Gemini/components/Mono'
 import Grok from '@lobehub/icons/es/Grok/components/Mono'
 import Groq from '@lobehub/icons/es/Groq/components/Mono'
 import HuggingFace from '@lobehub/icons/es/HuggingFace/components/Mono'
-import IBM from '@lobehub/icons/es/IBM/components/Mono'
 import InternLM from '@lobehub/icons/es/InternLM/components/Mono'
 import Kimi from '@lobehub/icons/es/Kimi/components/Mono'
 import LG from '@lobehub/icons/es/LG/components/Mono'
@@ -64,7 +63,10 @@ import {
   modelHubChartHues,
   preferredModelHubBenchmarkSelection,
 } from '../data/modelHubBenchmarkSupport'
-import { modelHubEvaluationConditionLabel } from '../data/modelHubEvaluationLabel'
+import {
+  modelHubEvaluationConditionLabel,
+  modelHubEvaluationDateLabel,
+} from '../data/modelHubEvaluationLabel'
 import styles from './models.module.css'
 
 type SupportTier = 'native' | 'compatible' | 'runtime'
@@ -154,7 +156,7 @@ interface CatalogBenchmark {
   display_name: string
   domain: string
   default_profile: string
-  source: string
+  source?: string
   profiles: Array<{ id: string, display_name: string, description?: string }>
   metrics: BenchmarkMetric[]
 }
@@ -166,6 +168,8 @@ interface CatalogEvaluation {
   benchmark_profile: string
   reasoning_effort: string
   status: 'available' | 'missing'
+  measured_at?: string
+  observed_at?: string
   metrics?: Record<string, number | null>
   subject: Record<string, unknown>
   evidence: {
@@ -274,39 +278,6 @@ const packageIcons: Record<string, typeof OpenAI> = {
   zai: Zhipu,
 }
 
-const publisherIcons: Record<string, typeof OpenAI> = {
-  'Ai2': Ai2,
-  'AI21 Labs': Ai21,
-  'Alibaba / Qwen': Qwen,
-  'Amazon': Nova,
-  'Anthropic': Claude,
-  'ByteDance / Seed': ByteDance,
-  'Cohere': Cohere,
-  'DeepSeek': DeepSeek,
-  'Google': Gemini,
-  'IBM': IBM,
-  'LG AI Research': LG,
-  'Shanghai AI Laboratory': InternLM,
-  'Meta': Meta,
-  'Microsoft': Microsoft,
-  'Microsoft AI': Microsoft,
-  'MiniMax': Minimax,
-  'Mistral AI': Mistral,
-  'Moonshot / Kimi': Kimi,
-  'NVIDIA': Nvidia,
-  'OpenAI': OpenAI,
-  'Snowflake': Snowflake,
-  'StepFun': Stepfun,
-  'Technology Innovation Institute': TII,
-  'Tencent / Hunyuan': Tencent,
-  'Upstage': Upstage,
-  'vllm-sr.ai': Vllm,
-  'Xiaomi': XiaomiMiMo,
-  '01.AI': Yi,
-  'xAI': Grok,
-  'Z.ai / GLM': Zhipu,
-}
-
 const readable = (value: string) => value.replace(/_/g, ' ')
 
 const formatTokens = (value?: number) => {
@@ -351,11 +322,9 @@ const chartDomain = (
 
 function CatalogMark({
   presentation,
-  publisher,
   large = false,
 }: {
   presentation: CatalogPresentation
-  publisher?: string
   large?: boolean
 }) {
   const logo = presentation.logo ?? ''
@@ -373,9 +342,7 @@ function CatalogMark({
       : ''
   const [logoFailed, setLogoFailed] = useState(false)
   useEffect(() => setLogoFailed(false), [directLogo])
-  const Icon
-    = packageIcons[packageID]
-      ?? (publisher ? publisherIcons[publisher] : undefined)
+  const Icon = packageIcons[packageID]
   return (
     <span
       className={`${styles.catalogMark} ${large ? styles.catalogMarkLarge : ''}`}
@@ -961,13 +928,17 @@ export default function ModelsPage() {
                         }
                       </p>
                     </div>
-                    <a
-                      href={selectedBenchmark.source}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      Benchmark source ↗
-                    </a>
+                    {selectedBenchmark.source
+                      ? (
+                          <a
+                            href={selectedBenchmark.source}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Benchmark source ↗
+                          </a>
+                        )
+                      : null}
                   </div>
                   <div className={styles.chartHeader}>
                     <span>Rank · model · evaluation condition</span>
@@ -1115,10 +1086,7 @@ function ModelCard({
         aria-label={`Open ${model.display_name} details`}
       >
         <span className={styles.cardTopline}>
-          <CatalogMark
-            presentation={model.presentation}
-            publisher={model.publisher}
-          />
+          <CatalogMark presentation={model.presentation} />
           <span className={styles.lifecycleDot} data-status={model.lifecycle}>
             {readable(model.lifecycle)}
           </span>
@@ -1209,10 +1177,7 @@ function ModelTable({
                     if (event.key === ' ') onSelect(model.id)
                   }}
                 >
-                  <CatalogMark
-                    presentation={model.presentation}
-                    publisher={model.publisher}
-                  />
+                  <CatalogMark presentation={model.presentation} />
                   <span>
                     <strong>{model.display_name}</strong>
                     <small>
@@ -1281,10 +1246,7 @@ function BenchmarkBar({
     >
       <span className={styles.barIdentity}>
         <b className={styles.barRank}>{rank}</b>
-        <CatalogMark
-          presentation={row.model.presentation}
-          publisher={row.model.publisher}
-        />
+        <CatalogMark presentation={row.model.presentation} />
         <span>
           <strong>{row.model.display_name}</strong>
           <small>
@@ -1476,11 +1438,7 @@ function ModelDetail({
           ×
         </button>
         <div className={styles.detailHero}>
-          <CatalogMark
-            presentation={model.presentation}
-            publisher={model.publisher}
-            large
-          />
+          <CatalogMark presentation={model.presentation} large />
           <span>
             <small>{model.publisher}</small>
             <h2 id="model-detail-title">{model.display_name}</h2>
@@ -1572,10 +1530,7 @@ function ModelDetail({
                   </span>
                 </div>
                 <div className={styles.poolEntrypoint}>
-                  <CatalogMark
-                    presentation={model.presentation}
-                    publisher={model.publisher}
-                  />
+                  <CatalogMark presentation={model.presentation} />
                   <span>
                     <strong>{model.display_name}</strong>
                     <small>Request entrypoint</small>
@@ -1598,7 +1553,6 @@ function ModelDetail({
                                 ? (
                                     <CatalogMark
                                       presentation={candidateModel.presentation}
-                                      publisher={candidateModel.publisher}
                                     />
                                   )
                                 : (
@@ -1660,6 +1614,7 @@ function ModelDetail({
                 <div className={styles.evalList}>
                   {evaluations.map((evaluation) => {
                     const benchmark = benchmarkByID.get(evaluation.benchmark)
+                    const dateLabel = modelHubEvaluationDateLabel(evaluation)
                     return (
                       <article key={evaluation.id}>
                         <div>
@@ -1698,15 +1653,22 @@ function ModelDetail({
                             )}
                           </span>
                         </div>
-                        {evaluation.evidence.source
+                        {dateLabel || evaluation.evidence.source
                           ? (
-                              <a
-                                href={evaluation.evidence.source}
-                                target="_blank"
-                                rel="noreferrer"
-                              >
-                                Evidence source ↗
-                              </a>
+                              <footer className={styles.evidenceMeta}>
+                                {dateLabel ? <small>{dateLabel}</small> : null}
+                                {evaluation.evidence.source
+                                  ? (
+                                      <a
+                                        href={evaluation.evidence.source}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                      >
+                                        Evidence source ↗
+                                      </a>
+                                    )
+                                  : null}
+                              </footer>
                             )
                           : null}
                       </article>

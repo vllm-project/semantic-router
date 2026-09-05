@@ -9,10 +9,12 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from cli.config_generator import generate_envoy_config_from_user_config  # noqa: E402
 from cli.config_migration import migrate_config_data  # noqa: E402
 from cli.main import main  # noqa: E402
 from cli.models import UserConfig  # noqa: E402
 from cli.parser import ConfigParseError, parse_user_config  # noqa: E402
+from cli.validator import validate_user_config  # noqa: E402
 
 
 def test_migrate_preserves_recipes_entrypoints_and_explicit_empty_auto_aliases():
@@ -109,6 +111,63 @@ def test_migrate_is_idempotent_for_catalog_and_custom_provider_models():
     assert by_name["lab-model"]["reasoning"]["disabled"] == "disabled"
     assert by_name["lab-model"]["reliability"] == {"retry_count": 1}
     UserConfig.model_validate(migrated)
+
+
+def test_migrate_materializes_legacy_router_owned_anthropic_backend(tmp_path):
+    source = {
+        "version": "v0.3",
+        "listeners": [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
+        "providers": {
+            "models": [
+                {
+                    "name": "claude-legacy",
+                    "api_format": "anthropic",
+                }
+            ]
+        },
+        "routing": {},
+    }
+
+    migrated = migrate_config_data(source)
+
+    assert migrated["providers"]["models"][0]["backend_refs"] == [
+        {"provider": "anthropic"}
+    ]
+    parsed = UserConfig.model_validate(migrated)
+    assert validate_user_config(parsed, log_summary=False) == []
+    output = tmp_path / "envoy.yaml"
+    generate_envoy_config_from_user_config(parsed, str(output))
+    rendered = yaml.safe_load(output.read_text(encoding="utf-8"))
+    anthropic_cluster = next(
+        cluster
+        for cluster in rendered["static_resources"]["clusters"]
+        if cluster["name"] == "claude_legacy_cluster"
+    )
+    endpoint = anthropic_cluster["load_assignment"]["endpoints"][0]["lb_endpoints"][0][
+        "endpoint"
+    ]["address"]["socket_address"]
+    assert endpoint == {"address": "api.anthropic.com", "port_value": 443}
+
+
+def test_migrate_keeps_external_gateway_anthropic_metadata_backendless():
+    source = {
+        "version": "v0.3",
+        "listeners": [],
+        "providers": {
+            "models": [
+                {
+                    "name": "claude-metadata-only",
+                    "api_format": "anthropic",
+                }
+            ]
+        },
+        "routing": {},
+    }
+
+    migrated = migrate_config_data(source)
+
+    assert "backend_refs" not in migrated["providers"]["models"][0]
+    assert migrate_config_data(migrated) == migrated
 
 
 def test_migrate_coalesces_non_conflicting_alias_cards_by_catalog_identity():

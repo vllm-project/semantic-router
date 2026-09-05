@@ -4,8 +4,15 @@ from copy import deepcopy
 from typing import Any
 
 
-def migrate_v03_catalog_contract(canonical: dict[str, Any]) -> None:
+def migrate_v03_catalog_contract(
+    canonical: dict[str, Any],
+    *,
+    router_owns_transport: bool | None = None,
+) -> None:
     """Migrate legacy model metadata into the compact catalog-backed surface."""
+
+    if router_owns_transport is None:
+        router_owns_transport = bool(canonical.get("listeners"))
 
     providers = _as_dict(canonical.get("providers"))
     defaults = _as_dict(providers.get("defaults"))
@@ -17,7 +24,11 @@ def migrate_v03_catalog_contract(canonical: dict[str, Any]) -> None:
     else:
         providers.pop("defaults", None)
 
-    catalog_by_alias = _migrate_provider_models(providers, reasoning_families)
+    catalog_by_alias = _migrate_provider_models(
+        providers,
+        reasoning_families,
+        router_owns_transport=router_owns_transport,
+    )
     routing = _as_dict(canonical.get("routing"))
     _migrate_model_cards(routing, catalog_by_alias)
 
@@ -33,7 +44,10 @@ def _rename_if_missing(target: dict[str, Any], old: str, new: str) -> None:
 
 
 def _migrate_provider_models(
-    providers: dict[str, Any], reasoning_families: dict[str, Any]
+    providers: dict[str, Any],
+    reasoning_families: dict[str, Any],
+    *,
+    router_owns_transport: bool,
 ) -> dict[str, str]:
     catalog_by_alias: dict[str, str] = {}
     provider_models = providers.get("models")
@@ -55,13 +69,21 @@ def _migrate_provider_models(
                 if isinstance(definition, dict)
                 else {"family": family}
             )
-        _migrate_backend_refs(model)
+        _migrate_backend_refs(model, router_owns_transport=router_owns_transport)
     return catalog_by_alias
 
 
-def _migrate_backend_refs(model: dict[str, Any]) -> None:
+def _migrate_backend_refs(
+    model: dict[str, Any], *, router_owns_transport: bool
+) -> None:
     backend_refs = model.get("backend_refs")
-    if not isinstance(backend_refs, list):
+    if not isinstance(backend_refs, list) or not backend_refs:
+        # This is the one historical implicit endpoint that v0.3 exposed.  It
+        # belongs in explicit migration only: api_format remains a wire-format
+        # selector and steady-state materialization never infers a Provider ID
+        # from it.  External-gateway metadata (listeners: []) stays untouched.
+        if router_owns_transport and model.get("api_format") == "anthropic":
+            model["backend_refs"] = [{"provider": "anthropic"}]
         return
     for backend in backend_refs:
         if not isinstance(backend, dict):

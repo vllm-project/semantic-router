@@ -40,6 +40,12 @@ function isNumberRecord(value: unknown): value is Record<string, number> {
   return isRecord(value) && Object.values(value).every((item) => typeof item === 'number')
 }
 
+function isISOCalendarDate(value: unknown): value is string {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  const parsed = new Date(`${value}T00:00:00Z`)
+  return !Number.isNaN(parsed.valueOf()) && parsed.toISOString().slice(0, 10) === value
+}
+
 function isCatalogChannel(value: unknown): value is ModelCatalogChannel {
   return value === 'latest' || value === 'release'
 }
@@ -250,6 +256,12 @@ function isEvaluation(value: unknown): value is CatalogEvaluation {
   const metricsAreValid =
     isNumberRecord(value.metrics) &&
     (status !== 'available' || Object.keys(value.metrics).length > 0)
+  const measuredAtIsValid = value.measured_at === undefined || isISOCalendarDate(value.measured_at)
+  const observedAtIsValid = value.observed_at === undefined || isISOCalendarDate(value.observed_at)
+  const availableHasCalendarAnchor =
+    status !== 'available' ||
+    isISOCalendarDate(value.measured_at) ||
+    isISOCalendarDate(value.observed_at)
   return (
     isNonEmptyString(value.id) &&
     isNonEmptyString(value.model) &&
@@ -258,6 +270,9 @@ function isEvaluation(value: unknown): value is CatalogEvaluation {
     isNonEmptyString(value.reasoning_effort) &&
     isRecord(value.subject) &&
     metricsAreValid &&
+    measuredAtIsValid &&
+    observedAtIsValid &&
+    availableHasCalendarAnchor &&
     ['available', 'missing', 'failed', 'not_applicable', 'withheld'].includes(status) &&
     isRecord(value.evidence) &&
     ['vendor_claimed', 'third_party', 'vllm_sr_reproduced', 'operator'].includes(

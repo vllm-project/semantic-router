@@ -19,6 +19,7 @@
   metrics:
     accuracy: 0.7877008835912944
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -45,6 +46,7 @@
   metrics:
     accuracy: 0.6927611412402735
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -70,6 +72,7 @@
   metrics:
     accuracy: 0.5978962467128854
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -96,6 +99,7 @@
   metrics:
     accuracy: 0.7174653050536788
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -122,6 +126,7 @@
   metrics:
     accuracy: 0.6067644661776691
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -148,6 +153,7 @@
   metrics:
     accuracy: 0.7386666666666666
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -165,6 +171,7 @@
   metrics:
     score: 0
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -182,6 +189,7 @@
   metrics:
     score: 0.0633333333333333
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -199,6 +207,7 @@
   metrics:
     index: -57.7166666666667
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -216,6 +225,7 @@
   metrics:
     accuracy: 0.0375347544022243
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -233,6 +243,7 @@
   metrics:
     accuracy: 0.333333333333333
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -250,6 +261,7 @@
   metrics:
     score: 0
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -267,6 +279,7 @@
   metrics:
     score: 0.193333333333333
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -284,6 +297,7 @@
   metrics:
     index: -54.9166666666667
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -301,6 +315,7 @@
   metrics:
     accuracy: 0.0366079703429101
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -318,6 +333,7 @@
   metrics:
     accuracy: 0.38989898989899
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported

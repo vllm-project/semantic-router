@@ -119,6 +119,6 @@ resources:
 # Force multimodal embedding model so image-modality rules fire.
 # Without this override the chart default selects qwen3 (text-only)
 # and the e2e profile cannot exercise image-modality routing.
-env:
+extraEnv:
   - name: EMBEDDING_MODEL_OVERRIDE
     value: multimodal

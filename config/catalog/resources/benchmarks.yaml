@@ -106,6 +106,69 @@
       unit: proportion
       direction: higher_is_better
       range: [0, 1]
+- id: cognition/frontiercode@1.1.0
+  display_name: FrontierCode 1.1
+  domain: software_engineering
+  source: https://cognition.com/frontiercode
+  default_profile: main
+  profiles:
+    - id: main
+      display_name: Main
+      description: Score and pass rate over the 100-task Main subset, averaged across five runs per task at the named reasoning effort.
+    - id: extended
+      display_name: Extended
+      description: Score and pass rate over the 150-task Extended subset, averaged across five runs per task at the named reasoning effort.
+  metrics:
+    - id: score
+      unit: proportion
+      direction: higher_is_better
+      range: [0, 1]
+    - id: pass_rate
+      unit: proportion
+      direction: higher_is_better
+      range: [0, 1]
+- id: cursor/cursorbench@3.2.0
+  display_name: CursorBench 3.2
+  domain: software_engineering
+  source: https://cursor.com/cursorbench
+  default_profile: production-agent
+  profiles:
+    - id: production-agent
+      display_name: Production agent
+      description: Score measured by Cursor on ambiguous multi-file tasks from real Cursor sessions at the named reasoning effort.
+  metrics:
+    - id: score
+      unit: proportion
+      direction: higher_is_better
+      range: [0, 1]
+- id: duellab/gamebench@2.0.0
+  display_name: GameBench 2
+  domain: agentic_systems
+  source: https://benchmarks.duellab.org/methodology
+  default_profile: public-games
+  profiles:
+    - id: public-games
+      display_name: Public games
+      description: Normalized standing across the public games for programs generated at the named reasoning setting; the immutable public-release identity remains on each evaluation record.
+  metrics:
+    - id: score
+      unit: score
+      direction: higher_is_better
+      range: [0, 100]
+- id: matharena/usamo@2026.0.0
+  display_name: USAMO 2026
+  domain: mathematical_reasoning
+  source: https://github.com/eth-sri/matharena
+  default_profile: proof-panel
+  profiles:
+    - id: proof-panel
+      display_name: Proof panel
+      description: Proof score using the published MathArena rewrite-and-judge-panel methodology with run conditions retained on the evaluation record.
+  metrics:
+    - id: score
+      unit: proportion
+      direction: higher_is_better
+      range: [0, 1]
 - id: harbor/terminal-bench@2.0.0
   display_name: Terminal-Bench 2.0
   domain: agentic_systems

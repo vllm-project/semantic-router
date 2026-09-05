@@ -10,6 +10,7 @@
   metrics:
     score: 0
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -27,6 +28,7 @@
   metrics:
     elo: 1035.31
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -44,6 +46,7 @@
   metrics:
     score: .323333333333333
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -61,6 +64,7 @@
   metrics:
     index: -33.0833333333333
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -78,6 +82,7 @@
   metrics:
     accuracy: .0676552363299351
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -95,6 +100,7 @@
   metrics:
     resolved: .340823970037453
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -112,6 +118,7 @@
   metrics:
     accuracy: .657575757575758
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -129,6 +136,7 @@
   metrics:
     score: .0804123711340206
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -146,6 +154,7 @@
   metrics:
     score: .00571428571428571
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -163,6 +172,7 @@
   metrics:
     score: .74
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -180,6 +190,7 @@
   metrics:
     index: 13.9333333333333
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -197,6 +208,7 @@
   metrics:
     accuracy: .183503243744208
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -214,6 +226,7 @@
   metrics:
     accuracy: .843434343434343
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -231,6 +244,7 @@
   metrics:
     score: .0485714285714286
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -248,6 +262,7 @@
   metrics:
     score: .75
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -265,6 +280,7 @@
   metrics:
     index: 16.7
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -282,6 +298,7 @@
   metrics:
     accuracy: .299814643188137
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -299,6 +316,7 @@
   metrics:
     accuracy: .88989898989899
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -316,6 +334,7 @@
   metrics:
     score: .08
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -333,6 +352,7 @@
   metrics:
     elo: 1022.82
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -350,6 +370,7 @@
   metrics:
     score: .73
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -367,6 +388,7 @@
   metrics:
     index: 17.9833333333333
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -384,6 +406,7 @@
   metrics:
     accuracy: .372103799814643
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -401,6 +424,7 @@
   metrics:
     resolved: .397003745318352
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -418,6 +442,7 @@
   metrics:
     accuracy: .901010101010101
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -435,6 +460,7 @@
   metrics:
     score: .123711340206186
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -454,6 +480,7 @@
     elo_lower: 1533.93
     elo_upper: 1547.46
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -471,6 +498,7 @@
   metrics:
     score: 0.171428571428571
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -488,6 +516,7 @@
   metrics:
     all_pass: 0.188
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -507,6 +536,7 @@
     elo_lower: 1633.61
     elo_upper: 1662.1
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -524,6 +554,7 @@
   metrics:
     score: 0.803333333333333
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -541,6 +572,7 @@
   metrics:
     index: 30.4833333333333
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -558,6 +590,7 @@
   metrics:
     accuracy: 0.429101019462465
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -575,6 +608,7 @@
   metrics:
     resolved: 0.883895131086142
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -592,6 +626,7 @@
   metrics:
     accuracy: 0.94949494949495
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -609,6 +644,7 @@
   metrics:
     score: 0.564814814814815
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -626,6 +662,7 @@
   metrics:
     score: 0.507216494845361
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -643,6 +680,7 @@
   metrics:
     score: 0.0571428571428571
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -660,6 +698,7 @@
   metrics:
     elo: 1467.28
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -677,6 +716,7 @@
   metrics:
     score: 0.806666666666667
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -694,6 +734,7 @@
   metrics:
     index: 25.9
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -711,6 +752,7 @@
   metrics:
     accuracy: 0.276181649675626
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -728,6 +770,7 @@
   metrics:
     resolved: 0.752808988764045
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -745,6 +788,7 @@
   metrics:
     accuracy: 0.878787878787879
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -762,6 +806,7 @@
   metrics:
     score: 0.494212962962963
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -779,6 +824,7 @@
   metrics:
     score: 0.381443298969072
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -796,6 +842,7 @@
   metrics:
     score: 0.177142857142857
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -813,6 +860,7 @@
   metrics:
     elo: 1647.49
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -830,6 +878,7 @@
   metrics:
     score: 0.81
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -847,6 +896,7 @@
   metrics:
     index: 28
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -864,6 +914,7 @@
   metrics:
     accuracy: 0.421223354958295
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -881,6 +932,7 @@
   metrics:
     resolved: 0.842696629213483
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -898,6 +950,7 @@
   metrics:
     accuracy: 0.935353535353535
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -915,6 +968,7 @@
   metrics:
     score: 0.559027777777778
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -932,6 +986,7 @@
   metrics:
     score: 0.443298969072165
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -951,6 +1006,7 @@
     elo_lower: 1544.03
     elo_upper: 1558.84
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -968,6 +1024,7 @@
   metrics:
     score: 0.197142857142857
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -987,6 +1044,7 @@
     elo_lower: 1651.6
     elo_upper: 1682.78
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -1004,6 +1062,7 @@
   metrics:
     score: 0.81
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -1021,6 +1080,7 @@
   metrics:
     index: 29.3166666666667
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -1038,6 +1098,7 @@
   metrics:
     accuracy: 0.440685820203893
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -1055,6 +1116,7 @@
   metrics:
     resolved: 0.880149812734082
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -1072,6 +1134,7 @@
   metrics:
     accuracy: 0.935353535353535
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -1089,6 +1152,7 @@
   metrics:
     score: 0.530092592592593
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -1106,6 +1170,7 @@
   metrics:
     score: 0.43298969072165
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -1123,6 +1188,7 @@
   metrics:
     score: 0.154285714285714
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -1140,6 +1206,7 @@
   metrics:
     elo: 1434.94
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -1157,6 +1224,7 @@
   metrics:
     score: 0.793333333333333
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -1174,6 +1242,7 @@
   metrics:
     index: 25.3166666666667
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -1191,6 +1260,7 @@
   metrics:
     accuracy: 0.42678405931418
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -1208,6 +1278,7 @@
   metrics:
     resolved: 0.816479400749064
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -1225,6 +1296,7 @@
   metrics:
     accuracy: 0.931313131313131
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -1242,6 +1314,7 @@
   metrics:
     score: 0.549768518518518
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -1259,8 +1332,51 @@
   metrics:
     score: 0.420618556701031
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
     source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: duellab/grok-4-5-low-gamebench-2@1.0.0
+  model: xai/grok-4.5
+  benchmark: duellab/gamebench@2.0.0
+  benchmark_profile: public-games
+  reasoning_effort: low
+  subject:
+    source_model: Grok 4.5
+    source_model_slug: x-ai-grok-4-5-low
+    run_kind: independent
+    benchmark_release: gb2-20260824-e05a1ff89a26
+    provider_setting: Low
+    result_status: tested_and_included
+  metrics:
+    score: 46.4
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://benchmarks.duellab.org/model-x-ai-grok-4-5
+    redistributable: true
+- id: duellab/grok-4-5-medium-gamebench-2@1.0.0
+  model: xai/grok-4.5
+  benchmark: duellab/gamebench@2.0.0
+  benchmark_profile: public-games
+  reasoning_effort: medium
+  subject:
+    source_model: Grok 4.5
+    source_model_slug: x-ai-grok-4-5-medium
+    run_kind: independent
+    benchmark_release: gb2-20260824-e05a1ff89a26
+    provider_setting: Medium
+    result_status: tested_and_included
+  metrics:
+    score: 57.2
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://benchmarks.duellab.org/model-x-ai-grok-4-5
     redistributable: true

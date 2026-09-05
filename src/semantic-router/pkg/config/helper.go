@@ -199,8 +199,8 @@ func (c *RouterConfig) GetMostExpensivePricedModel() (modelName string, promptPe
 	return modelName, pricing.PromptPer1M, pricing.CompletionPer1M, pricing.Currency, true
 }
 
-// GetModelAPIFormat returns the API format for the given model.
-// Returns APIFormatAnthropic if configured, otherwise APIFormatOpenAI (default).
+// GetModelAPIFormat returns the explicitly configured wire format for the
+// model, or APIFormatOpenAI when the model has no override.
 func (c *RouterConfig) GetModelAPIFormat(modelName string) string {
 	if c == nil || c.ModelConfig == nil {
 		return APIFormatOpenAI

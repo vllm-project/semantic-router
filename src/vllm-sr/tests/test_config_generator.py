@@ -9,6 +9,9 @@ CLI_ROOT = Path(__file__).resolve().parents[1]
 if str(CLI_ROOT) not in sys.path:
     sys.path.insert(0, str(CLI_ROOT))
 
+from cli.catalog_provider_projection import (  # noqa: E402
+    CatalogProviderProjectionError,
+)
 from cli.config_generator import generate_envoy_config_from_user_config  # noqa: E402
 from cli.parser import parse_user_config  # noqa: E402
 from cli.validator import validate_user_config  # noqa: E402
@@ -128,6 +131,52 @@ def _default_route(rendered_config):
         if not route.get("match", {}).get("headers"):
             return route
     raise AssertionError("default route not found")
+
+
+def test_listener_api_key_is_removed_before_no_auth_upstream(tmp_path, monkeypatch):
+    rendered = _render_envoy_config(
+        tmp_path,
+        monkeypatch,
+        """
+version: v0.3
+listeners:
+  - name: http-8899
+    address: 0.0.0.0
+    port: 8899
+    api_keys:
+      - router-client-secret
+providers:
+  defaults:
+    model: local-model
+  models:
+    - name: local-model
+      backend_refs:
+        - provider: vllm
+          endpoint: 127.0.0.1:8000
+routing: {}
+""",
+        extproc_host="localhost",
+        router_api_host="localhost",
+    )
+
+    listener = rendered["static_resources"]["listeners"][0]
+    http_filters = listener["filter_chains"][0]["filters"][0]["typed_config"][
+        "http_filters"
+    ]
+    inline_code = next(
+        item["typed_config"]["inline_code"]
+        for item in http_filters
+        if "inline_code" in item.get("typed_config", {})
+    )
+    accepted = "if token and VALID_KEYS[token] then"
+    strip = 'request_handle:headers():remove("authorization")'
+    assert accepted in inline_code
+    assert strip in inline_code
+    assert (
+        inline_code.index(accepted)
+        < inline_code.index(strip)
+        < inline_code.index("return", inline_code.index(accepted))
+    )
 
 
 def test_weighted_backend_refs_preserve_weights_and_shared_path(tmp_path, monkeypatch):
@@ -505,6 +554,16 @@ routing:
     cluster = _cluster_by_name(rendered, "test_model_cluster")
     assert cluster["type"] == "LOGICAL_DNS"
     assert cluster["transport_socket"]["name"] == "envoy.transport_sockets.tls"
+    tls_context = cluster["transport_socket"]["typed_config"]
+    assert tls_context["sni"] == "openrouter.ai"
+    assert tls_context["auto_sni_san_validation"] is True
+    assert (
+        tls_context["common_tls_context"]["validation_context"]["trusted_ca"][
+            "filename"
+        ]
+        == "/etc/ssl/certs/ca-certificates.crt"
+    )
+    assert "typed_extension_protocol_options" not in cluster
 
     route = _model_route(rendered, "test-model")
     route_action = route["route"]
@@ -519,6 +578,82 @@ routing:
     assert headers["X-Test-Tenant"] == "eval"
     assert "Authorization" not in headers
     assert "sk-test-openrouter" not in yaml.safe_dump(rendered)
+
+
+def test_https_pool_rejects_distinct_tls_server_names(tmp_path, monkeypatch):
+    with pytest.raises(ValueError, match="TLS server name differ"):
+        _render_envoy_config(
+            tmp_path,
+            monkeypatch,
+            """
+version: v0.3
+listeners:
+  - name: "http-8899"
+    address: "0.0.0.0"
+    port: 8899
+providers:
+  defaults:
+    model: "test-model"
+  models:
+    - name: "test-model"
+      provider_model_id: "openai/gpt-4o-mini"
+      backend_refs:
+        - name: "primary"
+          base_url: "https://primary.example.com/v1"
+          provider: "openai"
+          api_key_env: "OPENAI_API_KEY"
+          weight: 1
+        - name: "secondary"
+          base_url: "https://secondary.example.com/v1"
+          provider: "openai"
+          api_key_env: "OPENAI_API_KEY"
+          weight: 1
+routing:
+  modelCards:
+    - name: "test-model"
+  decisions:
+    - name: "default-route"
+      description: "default route"
+      priority: 100
+      rules:
+        operator: "AND"
+        conditions: []
+      modelRefs:
+        - model: "test-model"
+          use_reasoning: false
+""",
+            extproc_host="localhost",
+            router_api_host="localhost",
+        )
+
+
+def test_https_backend_rejects_ip_literal_certificate_identity(tmp_path, monkeypatch):
+    with pytest.raises(
+        ValueError,
+        match="HTTPS endpoint must use a DNS hostname",
+    ):
+        _render_envoy_config(
+            tmp_path,
+            monkeypatch,
+            """
+version: v0.3
+listeners:
+  - name: http-8899
+    address: 0.0.0.0
+    port: 8899
+providers:
+  defaults:
+    model: test-model
+  models:
+    - name: test-model
+      backend_refs:
+        - provider: openai-compatible
+          base_url: https://192.0.2.1/v1
+routing: {}
+""",
+            extproc_host="localhost",
+            router_api_host="localhost",
+        )
 
 
 def test_generate_envoy_config_custom_anthropic_upstream_rewrites_host(
@@ -572,13 +707,17 @@ routing:
         _cluster_by_name(rendered, "anthropic_api_cluster")
 
 
-def test_generate_envoy_config_uses_logical_dns_for_api_only_router_fallback(
+def test_generate_envoy_config_rejects_backendless_physical_model(
     tmp_path, monkeypatch
 ):
-    rendered = _render_envoy_config(
-        tmp_path,
-        monkeypatch,
-        """
+    with pytest.raises(
+        CatalogProviderProjectionError,
+        match="must define backend_refs with an explicit Provider ID",
+    ):
+        _render_envoy_config(
+            tmp_path,
+            monkeypatch,
+            """
 version: v0.3
 listeners:
   - name: "http-8899"
@@ -604,16 +743,14 @@ routing:
         - model: "claude-test"
           use_reasoning: false
 """,
-        extproc_host="vllm-sr-router-container",
-        router_api_host="vllm-sr-router-container",
-    )
+            extproc_host="vllm-sr-router-container",
+            router_api_host="vllm-sr-router-container",
+        )
 
-    cluster = _cluster_by_name(rendered, "vllm_static_cluster")
 
-    assert cluster["type"] == "LOGICAL_DNS"
-    assert cluster["dns_lookup_family"] == "V4_ONLY"
-    endpoint = cluster["load_assignment"]["endpoints"][0]["lb_endpoints"][0]["endpoint"]
-    assert (
-        endpoint["address"]["socket_address"]["address"] == "vllm-sr-router-container"
-    )
-    assert endpoint["hostname"] == "vllm-sr-router-container"
+def test_envoy_template_has_no_provider_specific_anthropic_inventory():
+    template = (REPO_ROOT / "src/vllm-sr/cli/templates/envoy.template.yaml").read_text()
+
+    assert "anthropic_models" not in template
+    assert "anthropic_api_cluster" not in template
+    assert "api.anthropic.com" not in template

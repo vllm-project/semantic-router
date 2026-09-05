@@ -2,6 +2,11 @@ export interface EvaluationConditionModel {
   reasoning_family?: string
 }
 
+export interface EvaluationDate {
+  measured_at?: string
+  observed_at?: string
+}
+
 const publishedConditionLabels: Record<string, string> = {
   unspecified: 'Effort not reported',
   default: 'Published default',
@@ -24,4 +29,12 @@ export function modelHubEvaluationConditionLabel(
   if (publishedLabel) return publishedLabel
   if (!readableCondition) return publishedConditionLabels.unspecified
   return `${readableCondition.charAt(0).toLocaleUpperCase()}${readableCondition.slice(1)} run`
+}
+
+export function modelHubEvaluationDateLabel(
+  evaluation: EvaluationDate,
+): string {
+  if (evaluation.measured_at) return `Measured ${evaluation.measured_at}`
+  if (evaluation.observed_at) return `Observed ${evaluation.observed_at}`
+  return ''
 }

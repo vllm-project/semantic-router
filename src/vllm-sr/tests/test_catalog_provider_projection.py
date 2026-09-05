@@ -15,6 +15,7 @@ from cli.catalog_provider_projection import (  # noqa: E402
 )
 from cli.config_generator import generate_envoy_config_from_user_config  # noqa: E402
 from cli.parser import ConfigParseError, parse_user_config  # noqa: E402
+from cli.validator import validate_user_config  # noqa: E402
 
 REPO_ROOT = CLI_ROOT.parents[1]
 
@@ -158,6 +159,99 @@ routing: {}
     assert "catalog-anthropic-key" not in yaml.safe_dump(rendered)
     with pytest.raises(AssertionError):
         _cluster_by_name(rendered, "anthropic_api_cluster")
+
+
+@pytest.mark.parametrize(
+    ("api_format", "model_name"),
+    (("anthropic", "claude-test"), ("openai", "generic-chat-model")),
+)
+def test_router_owned_physical_model_requires_explicit_provider(
+    tmp_path, api_format, model_name
+):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        f"""
+version: v0.3
+listeners:
+  - name: public
+    address: 0.0.0.0
+    port: 8899
+providers:
+  models:
+    - name: {model_name}
+      api_format: {api_format}
+routing: {{}}
+"""
+    )
+    config = parse_user_config(str(config_path))
+
+    errors = validate_user_config(config, log_summary=False)
+    assert any(
+        error.field == f"providers.models.{model_name}.backend_refs"
+        and "must define backend_refs with an explicit Provider ID" in error.message
+        for error in errors
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="must define backend_refs with an explicit Provider ID",
+    ):
+        generate_envoy_config_from_user_config(
+            config,
+            str(tmp_path / "envoy.yaml"),
+        )
+
+
+def test_router_owned_virtual_model_may_resolve_its_recipe_pool(tmp_path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        """
+version: v0.3
+listeners:
+  - name: public
+    address: 0.0.0.0
+    port: 8899
+providers:
+  models:
+    - name: auto
+      catalog: vllm-sr/mom-v1-lite
+routing: {}
+"""
+    )
+
+    errors = validate_user_config(
+        parse_user_config(str(config_path)),
+        log_summary=False,
+    )
+
+    assert not any(error.field.endswith(".backend_refs") for error in errors)
+
+
+def test_backendless_api_model_is_valid_metadata_but_cannot_generate_envoy(tmp_path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        """
+version: v0.3
+listeners: []
+providers:
+  models:
+    - name: claude-test
+      api_format: anthropic
+routing: {}
+"""
+    )
+
+    config = parse_user_config(str(config_path))
+
+    assert validate_user_config(config, log_summary=False) == []
+    with pytest.raises(
+        ValueError,
+        match="must define backend_refs with an explicit Provider ID",
+    ):
+        generate_envoy_config_from_user_config(
+            config,
+            str(tmp_path / "envoy.yaml"),
+        )
 
 
 def test_catalog_openai_responses_binding_keeps_header_and_base_path(

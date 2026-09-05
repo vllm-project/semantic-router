@@ -33,6 +33,30 @@ describe('model hub detail', () => {
     expect(markup).not.toContain('enabled effort')
   })
 
+  it('shows the measurement date before the catalog observation date', () => {
+    const model = catalog.models.find((candidate) => candidate.kind === 'physical')!
+    const evaluation = catalog.evaluations.find((candidate) => candidate.model === model.id)!
+    const benchmark = catalog.benchmarks.find((candidate) => candidate.id === evaluation.benchmark)
+    const observedMarkup = renderToStaticMarkup(
+      <EvaluationCard
+        model={model}
+        evaluation={{ ...evaluation, measured_at: undefined, observed_at: '2026-09-06' }}
+        benchmark={benchmark}
+      />,
+    )
+    const measuredMarkup = renderToStaticMarkup(
+      <EvaluationCard
+        model={model}
+        evaluation={{ ...evaluation, measured_at: '2026-08-31', observed_at: '2026-09-06' }}
+        benchmark={benchmark}
+      />,
+    )
+
+    expect(observedMarkup).toContain('observed 2026-09-06')
+    expect(measuredMarkup).toContain('measured 2026-08-31')
+    expect(measuredMarkup).not.toContain('observed 2026-09-06')
+  })
+
   it('renders every virtual-model role and recommended backend candidate', () => {
     const row = modelHubRows(catalog, virtualFilters).find(
       (candidate) => candidate.model.id === 'vllm-sr/mom-v1-blend',

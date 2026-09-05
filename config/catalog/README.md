@@ -55,6 +55,12 @@ versioned benchmark profile, and metric are rejected instead of choosing a
 hidden winner; revise the evaluation identity or resolve the conflicting
 evidence explicitly.
 
+Every available repository record carries a calendar anchor. Use
+`measured_at` when the evaluation run date is known; otherwise use
+`observed_at` for the date the published value was reviewed. The latter is not
+silently presented as a run date, and neither field belongs in the minimal
+user-authored evidence surface unless the operator actually knows the run date.
+
 The generator creates exactly five default-index slots for every Model Card and
 every selectable reasoning effort: MMLU-Pro, GPQA Diamond, Humanity's Last Exam
 without tools, SWE-bench Verified, and Terminal-Bench 2.1. A slot links only to
@@ -117,6 +123,13 @@ Catalog adoption is additive within the existing v0.3 hierarchy:
 - `backend_refs[].provider` selects the stable runtime Provider ID. The
   provider's `models[]` mapping connects the canonical card to a native model
   ID when that provider has a built-in mapping.
+- `api_format` only selects a wire format. It does not infer a Provider from
+  whichever compatible registry entry happens to exist. A physical model used
+  by a Router-owned listener therefore has an explicit `backend_refs` entry;
+  external-gateway metadata and built-in virtual models may remain backendless.
+  Because `vllm-sr serve` owns its local Envoy transport, that command requires
+  physical backends even when it supplies the legacy default listener for an
+  empty listener list.
 - A catalog-backed model materializes its card and reasoning family
   automatically. An intentional `routing.modelCards` override uses the
   canonical `catalog` value as its `name`.

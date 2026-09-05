@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import re
 import sys
 import tempfile
 from pathlib import Path
@@ -28,6 +27,7 @@ from catalog_common import mapping as _mapping  # noqa: E402
 from catalog_common import nonempty_string as _nonempty_string  # noqa: E402
 from catalog_common import reject_unknown as _reject_unknown  # noqa: E402
 from catalog_common import sequence as _sequence  # noqa: E402
+from catalog_common import validate_https_url as _validate_https_url  # noqa: E402
 from catalog_evaluations import (  # noqa: E402
     evaluation_coverage as _evaluation_coverage,
 )
@@ -49,6 +49,12 @@ from catalog_inventory import (  # noqa: E402
 from catalog_io import load_json as _load_json  # noqa: E402
 from catalog_io import load_yaml as _load_yaml  # noqa: E402
 from catalog_io import validate_schema as _validate_schema  # noqa: E402
+from catalog_provider_definitions import (  # noqa: E402
+    validate_provider_presentation as _validate_provider_presentation,
+)
+from catalog_provider_definitions import (  # noqa: E402
+    validate_providers as _validate_providers,
+)
 from catalog_validation import (  # noqa: E402
     validate_evaluations as _validate_evaluations,
 )
@@ -206,189 +212,6 @@ def _validate_protocols(items: list[dict[str, Any]]) -> None:
                 )
 
 
-_PROVIDER_FIELDS = {
-    "id",
-    "display_name",
-    "description",
-    "category",
-    "support_tier",
-    "default_base_url",
-    "protocols",
-    "default_protocol",
-    "supported_operations",
-    "path_overrides",
-    "default_headers",
-    "reasoning_transport",
-    "api_version_query",
-    "auth",
-    "presentation",
-    "conformance",
-    "models",
-}
-
-
-def _validate_providers(
-    items: list[dict[str, Any]], protocol_definitions: list[dict[str, Any]]
-) -> None:
-    protocol_ids = {protocol["id"] for protocol in protocol_definitions}
-    for index, item in enumerate(items):
-        path = f"providers[{index}]"
-        protocols = _validate_provider_identity(item, path, protocol_ids)
-        auth = _validate_provider_auth(item, path)
-        _validate_provider_presentation(item, path, allow_featured=True)
-        _validate_provider_conformance(item, path)
-        _validate_provider_operations(item, path, protocols, protocol_definitions)
-        _validate_provider_headers(item, path, auth)
-
-
-def _validate_provider_identity(
-    item: dict[str, Any], path: str, protocol_ids: set[str]
-) -> list[str]:
-    _reject_unknown(item, _PROVIDER_FIELDS, path)
-    identity = _nonempty_string(item.get("id"), f"{path}.id")
-    if not SLUG.fullmatch(identity):
-        raise CatalogBuildError(f"{path}.id must be a lowercase slug")
-    if item.get("category") not in {"start_here", "model_api", "private_runtime"}:
-        raise CatalogBuildError(f"{path}.category is unsupported")
-    if item.get("support_tier") not in {"native", "compatible", "runtime"}:
-        raise CatalogBuildError(f"{path}.support_tier is unsupported")
-    protocols = _sequence(item.get("protocols"), f"{path}.protocols")
-    if not protocols or any(protocol not in protocol_ids for protocol in protocols):
-        raise CatalogBuildError(f"{path}.protocols references an unknown protocol")
-    if item.get("default_protocol") not in protocols:
-        raise CatalogBuildError(f"{path}.default_protocol must be listed in protocols")
-    if item.get("reasoning_transport", "chat_template_kwargs") not in {
-        "chat_template_kwargs",
-        "top_level_effort",
-        "top_level_boolean",
-        "reasoning_object",
-        "thinking_object",
-        "output_config_effort",
-        "deepseek_thinking",
-    }:
-        raise CatalogBuildError(f"{path}.reasoning_transport is unsupported")
-    return protocols
-
-
-def _validate_provider_auth(item: dict[str, Any], path: str) -> dict[str, Any]:
-    auth = _mapping(item.get("auth"), f"{path}.auth")
-    _reject_unknown(
-        auth, {"strategy", "header", "prefix", "injected_header"}, f"{path}.auth"
-    )
-    if auth.get("strategy") not in {"none", "bearer", "api_key_header"}:
-        raise CatalogBuildError(f"{path}.auth.strategy is unsupported")
-    return auth
-
-
-def _validate_provider_presentation(
-    item: dict[str, Any], path: str, *, allow_featured: bool = False
-) -> None:
-    presentation = _mapping(item.get("presentation"), f"{path}.presentation")
-    allowed_fields = {"logo", "monogram", "monochrome"}
-    if allow_featured:
-        allowed_fields.add("featured")
-    _reject_unknown(presentation, allowed_fields, f"{path}.presentation")
-    if "featured" in presentation and not isinstance(presentation["featured"], bool):
-        raise CatalogBuildError(f"{path}.presentation.featured must be a boolean")
-    logo = _nonempty_string(presentation.get("logo"), f"{path}.presentation.logo")
-    if not logo.startswith(("package:", "public:", "url:")) and logo != "monogram":
-        raise CatalogBuildError(f"{path}.presentation.logo has an unsupported source")
-    if logo.startswith("url:") and not logo.startswith("url:https://"):
-        raise CatalogBuildError(
-            f"{path}.presentation.logo external URLs must use HTTPS"
-        )
-
-
-def _validate_provider_conformance(item: dict[str, Any], path: str) -> None:
-    conformance = _mapping(item.get("conformance"), f"{path}.conformance")
-    _reject_unknown(conformance, {"status", "verified_at"}, f"{path}.conformance")
-    status = conformance.get("status")
-    if status not in {"unverified", "fixture_verified", "live_verified"}:
-        raise CatalogBuildError(f"{path}.conformance.status is unsupported")
-    if status != "unverified" and not conformance.get("verified_at"):
-        raise CatalogBuildError(f"{path}.conformance.verified_at is required")
-
-
-def _validate_provider_operations(
-    item: dict[str, Any],
-    path: str,
-    protocols: list[str],
-    protocol_definitions: list[dict[str, Any]],
-) -> None:
-    overrides = item.get("path_overrides", {})
-    if not isinstance(overrides, dict):
-        raise CatalogBuildError(f"{path}.path_overrides must be a mapping")
-    valid_operations = {
-        f"{protocol['id']}#{operation['id']}"
-        for protocol in protocol_definitions
-        if protocol["id"] in protocols
-        for operation in protocol["operations"]
-    }
-    supported = _sequence(
-        item.get("supported_operations"), f"{path}.supported_operations"
-    )
-    if not supported or len(supported) != len(set(supported)):
-        raise CatalogBuildError(
-            f"{path}.supported_operations references an unknown or duplicate operation"
-        )
-    if any(operation not in valid_operations for operation in supported):
-        raise CatalogBuildError(
-            f"{path}.supported_operations references an unknown or duplicate operation"
-        )
-    missing_create = [
-        protocol for protocol in protocols if f"{protocol}#create" not in supported
-    ]
-    if missing_create:
-        raise CatalogBuildError(
-            f"{path}.supported_operations must include create for: {', '.join(missing_create)}"
-        )
-    if any(operation not in supported for operation in overrides):
-        raise CatalogBuildError(
-            f"{path}.path_overrides references an unknown operation"
-        )
-
-
-def _validate_provider_headers(
-    item: dict[str, Any], path: str, auth: dict[str, Any]
-) -> None:
-    headers = item.get("default_headers", {})
-    if not isinstance(headers, dict):
-        raise CatalogBuildError(f"{path}.default_headers must be a mapping")
-    forbidden = {
-        "authorization",
-        "proxy-authorization",
-        "cookie",
-        "set-cookie",
-        str(auth.get("header", "")).lower(),
-    }
-    for header, value in headers.items():
-        _validate_provider_header(header, value, forbidden, path)
-
-
-def _validate_provider_header(
-    header: Any, value: Any, forbidden: set[str], path: str
-) -> None:
-    if not isinstance(header, str) or not re.fullmatch(
-        r"[!#$%&'*+.^_`|~0-9A-Za-z-]+", header
-    ):
-        raise CatalogBuildError(
-            f"{path}.default_headers contains an invalid header name"
-        )
-    if header.lower() in forbidden:
-        raise CatalogBuildError(
-            f"{path}.default_headers cannot contain credential headers"
-        )
-    if (
-        not isinstance(value, str)
-        or not value.strip()
-        or "\r" in value
-        or "\n" in value
-    ):
-        raise CatalogBuildError(
-            f"{path}.default_headers contains an invalid header value"
-        )
-
-
 def _validate_reasoning(items: list[dict[str, Any]]) -> None:
     for index, item in enumerate(items):
         path = f"reasoning_families[{index}]"
@@ -497,6 +320,7 @@ def _validate_model_identity(
     _validate_provider_presentation(item, path)
     distribution = _mapping(item.get("distribution"), f"{path}.distribution")
     _reject_unknown(distribution, {"type", "source", "license"}, f"{path}.distribution")
+    _validate_https_url(distribution.get("source"), f"{path}.distribution.source")
     if distribution.get("type") not in {
         "proprietary_api",
         "open_weights",
@@ -520,6 +344,8 @@ def _validate_model_verification(item: dict[str, Any], path: str) -> None:
     )
     if verification.get("status") not in {"claimed", "imported", "reproduced"}:
         raise CatalogBuildError(f"{path}.verification.status is unsupported")
+    if verification.get("source") is not None:
+        _validate_https_url(verification["source"], f"{path}.verification.source")
 
 
 def _validate_virtual_model(

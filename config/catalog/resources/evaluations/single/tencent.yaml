@@ -9,6 +9,7 @@
   metrics:
     pass_at_1: .873
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: vendor_claimed
     verification: claimed
@@ -25,6 +26,7 @@
   metrics:
     pass_at_1: .768
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: vendor_claimed
     verification: claimed
@@ -41,6 +43,7 @@
   metrics:
     accuracy: .943
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: vendor_claimed
     verification: claimed
@@ -57,6 +60,7 @@
   metrics:
     accuracy: .712
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: vendor_claimed
     verification: claimed
@@ -73,6 +77,7 @@
   metrics:
     accuracy: .827
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: vendor_claimed
     verification: claimed
@@ -90,6 +95,7 @@
   metrics:
     accuracy: 0.434
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: vendor_claimed
     verification: claimed
@@ -108,6 +114,7 @@
   metrics:
     resolved: 0.643
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: vendor_claimed
     verification: claimed
@@ -126,6 +133,7 @@
   metrics:
     resolved: 0.854
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: vendor_claimed
     verification: claimed
@@ -143,6 +151,7 @@
   metrics:
     accuracy: 0.923
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: vendor_claimed
     verification: claimed
@@ -161,6 +170,7 @@
   metrics:
     resolved: 0.657
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: vendor_claimed
     verification: claimed
@@ -178,6 +188,7 @@
   metrics:
     score: 0.0485714285714286
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -195,6 +206,7 @@
   metrics:
     elo: 1140.21
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -212,6 +224,7 @@
   metrics:
     score: 0.79
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -229,6 +242,7 @@
   metrics:
     index: -18.4666666666667
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -246,6 +260,7 @@
   metrics:
     accuracy: 0.334569045412419
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -263,6 +278,7 @@
   metrics:
     accuracy: 0.37
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: vendor_claimed
     verification: claimed
@@ -281,6 +297,7 @@
   metrics:
     resolved: 0.28
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: vendor_claimed
     verification: claimed
@@ -298,6 +315,7 @@
   metrics:
     resolved: 0.644194756554307
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -316,6 +334,7 @@
   metrics:
     resolved: 0.717
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: vendor_claimed
     verification: claimed
@@ -333,6 +352,7 @@
   metrics:
     accuracy: 0.896969696969697
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -350,6 +370,7 @@
   metrics:
     accuracy: 0.904
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: vendor_claimed
     verification: claimed
@@ -368,6 +389,7 @@
   metrics:
     resolved: 0.579
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: vendor_claimed
     verification: claimed
@@ -386,6 +408,7 @@
   metrics:
     resolved: 0.78
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: vendor_claimed
     verification: claimed
@@ -403,6 +426,7 @@
   metrics:
     score: 0.228865979381443
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -419,6 +443,7 @@
   metrics:
     accuracy: 0.6723
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: vendor_claimed
     verification: claimed

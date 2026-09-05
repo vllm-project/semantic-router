@@ -84,6 +84,39 @@ describe('built-in model catalog API evaluation records', () => {
       status: 502,
     })
   })
+
+  it.each([
+    ['without a calendar anchor', undefined],
+    ['with an invalid calendar anchor', '2026-09-31'],
+  ])('rejects an available evaluation %s', async (_name, observedAt) => {
+    const malformed = structuredClone(validCatalog)
+    const evaluations = malformed.evaluations as Array<Record<string, unknown>>
+    delete evaluations[0].measured_at
+    if (observedAt === undefined) delete evaluations[0].observed_at
+    else evaluations[0].observed_at = observedAt
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify(malformed), { status: 200 })),
+    )
+
+    await expect(getBuiltInModelCatalog()).rejects.toMatchObject({
+      name: 'ModelCatalogApiError',
+      status: 502,
+    })
+  })
+
+  it('accepts a valid measured date as the available evaluation anchor', async () => {
+    const measured = structuredClone(validCatalog)
+    const evaluations = measured.evaluations as Array<Record<string, unknown>>
+    delete evaluations[0].observed_at
+    evaluations[0].measured_at = '2026-09-06'
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify(measured), { status: 200 })),
+    )
+
+    await expect(getBuiltInModelCatalog()).resolves.toEqual(measured)
+  })
 })
 
 describe('built-in model catalog API nested metadata', () => {

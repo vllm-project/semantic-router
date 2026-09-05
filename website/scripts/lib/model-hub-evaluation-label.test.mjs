@@ -21,9 +21,27 @@ const helperJavaScript = ts.transpileModule(helperSource, {
   },
   fileName: helperPath,
 }).outputText
-const { modelHubEvaluationConditionLabel } = await import(
+const {
+  modelHubEvaluationConditionLabel,
+  modelHubEvaluationDateLabel,
+} = await import(
   `data:text/javascript;base64,${Buffer.from(helperJavaScript).toString('base64')}`,
 )
+
+test('model hub labels the measurement date before the evidence observation date', () => {
+  assert.equal(
+    modelHubEvaluationDateLabel({
+      measured_at: '2026-08-31',
+      observed_at: '2026-09-05',
+    }),
+    'Measured 2026-08-31',
+  )
+  assert.equal(
+    modelHubEvaluationDateLabel({ observed_at: '2026-09-05' }),
+    'Observed 2026-09-05',
+  )
+  assert.equal(modelHubEvaluationDateLabel({}), '')
+})
 
 test('model hub distinguishes configurable effort from published run conditions', () => {
   const configurable = { reasoning_family: 'openai-reasoning' }

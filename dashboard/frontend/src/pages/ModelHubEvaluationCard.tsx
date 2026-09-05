@@ -40,6 +40,11 @@ export const EvaluationCard: React.FC<{
     <footer>
       <span>
         {readable(evaluation.evidence.provenance)} · {evaluation.evidence.verification}
+        {evaluation.measured_at
+          ? ` · measured ${evaluation.measured_at}`
+          : evaluation.observed_at
+            ? ` · observed ${evaluation.observed_at}`
+            : ''}
       </span>
       {evaluation.evidence.source ? (
         <a href={evaluation.evidence.source} target="_blank" rel="noreferrer">

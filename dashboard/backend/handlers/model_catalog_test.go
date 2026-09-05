@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -207,6 +208,106 @@ func TestCatalogProviderBindingRelationshipIsClosed(t *testing.T) {
 		[]modelcatalog.ProviderDefinition{provider}, models, protocols, definitions,
 	); err == nil || !strings.Contains(err.Error(), "malformed provider catalog model") {
 		t.Fatalf("unsupported relationship accepted: %v", err)
+	}
+}
+
+func TestCatalogHTTPSURLsAllowDocumentFragments(t *testing.T) {
+	t.Parallel()
+
+	for _, value := range []string{
+		"https://huggingface.co/example/model#evaluation-results",
+		"https://example.test/model-card?revision=1#benchmarks",
+	} {
+		if !validHTTPSURL(value) {
+			t.Fatalf("valid source URL with document fragment rejected: %s", value)
+		}
+	}
+	for _, value := range []string{
+		"http://example.test/model-card#benchmarks",
+		"https://user:secret@example.test/model-card#benchmarks",
+		"#benchmarks",
+	} {
+		if validHTTPSURL(value) {
+			t.Fatalf("unsafe or non-absolute source URL accepted: %s", value)
+		}
+	}
+	if validHTTPSTransportURL("https://api.example.test/v1#documentation") {
+		t.Fatal("provider transport URL with a fragment was accepted")
+	}
+	if !validHTTPSTransportURL("https://api.example.test/v1") {
+		t.Fatal("valid provider transport URL was rejected")
+	}
+	for _, value := range []string{
+		"https://:443/v1",
+		"https://example.test:bad/v1",
+		"https://example.test:65536/v1",
+		"https://example.test:0/v1",
+		"\nhttps://example.test/v1",
+		"https://example.test/v1 ",
+	} {
+		if validHTTPSTransportURL(value) {
+			t.Fatalf("malformed provider transport URL accepted: %q", value)
+		}
+	}
+}
+
+func TestGeneratedPublicModelCatalogSatisfiesDashboardContract(t *testing.T) {
+	t.Parallel()
+
+	repositoryRoot := filepath.Clean(filepath.Join(packageWorkingDirectory(t), "..", "..", ".."))
+	payload, err := os.ReadFile(filepath.Join(repositoryRoot, "website", "static", "model-catalog", "catalog.json"))
+	if err != nil {
+		t.Fatalf("read generated public catalog: %v", err)
+	}
+	normalized, err := normalizeModelCatalogDocument(payload)
+	if err != nil {
+		t.Fatalf("generated public catalog violates Dashboard API contract: %v", err)
+	}
+	var document modelCatalogEnvelope
+	if unmarshalErr := json.Unmarshal(normalized, &document); unmarshalErr != nil {
+		t.Fatalf("decode normalized public catalog: %v", unmarshalErr)
+	}
+	if len(document.Models) != 88 || len(document.Providers) != 60 || len(document.Evaluations) != 1360 {
+		t.Fatalf(
+			"unexpected generated inventory: models=%d providers=%d evaluations=%d",
+			len(document.Models),
+			len(document.Providers),
+			len(document.Evaluations),
+		)
+	}
+}
+
+func TestDashboardRejectsAvailableEvaluationWithoutValidCalendarAnchor(t *testing.T) {
+	t.Parallel()
+
+	repositoryRoot := filepath.Clean(filepath.Join(packageWorkingDirectory(t), "..", "..", ".."))
+	payload, err := os.ReadFile(filepath.Join(repositoryRoot, "website", "static", "model-catalog", "catalog.json"))
+	if err != nil {
+		t.Fatalf("read generated public catalog: %v", err)
+	}
+	var document map[string]any
+	if unmarshalErr := json.Unmarshal(payload, &document); unmarshalErr != nil {
+		t.Fatalf("decode generated public catalog: %v", unmarshalErr)
+	}
+	evaluations := document["evaluations"].([]any)
+	first := evaluations[0].(map[string]any)
+	delete(first, "measured_at")
+	delete(first, "observed_at")
+	withoutAnchor, err := json.Marshal(document)
+	if err != nil {
+		t.Fatalf("encode catalog without anchor: %v", err)
+	}
+	if _, normalizeErr := normalizeModelCatalogDocument(withoutAnchor); normalizeErr == nil {
+		t.Fatal("available evaluation without a calendar anchor was accepted")
+	}
+
+	first["observed_at"] = "2026-09-31"
+	invalidAnchor, err := json.Marshal(document)
+	if err != nil {
+		t.Fatalf("encode catalog with invalid anchor: %v", err)
+	}
+	if _, normalizeErr := normalizeModelCatalogDocument(invalidAnchor); normalizeErr == nil {
+		t.Fatal("available evaluation with an invalid calendar date was accepted")
 	}
 }
 

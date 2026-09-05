@@ -187,6 +187,7 @@ export interface CatalogEvaluation {
   metrics: Record<string, number>
   status: CatalogResultStatus
   measured_at?: string
+  observed_at?: string
   evidence: {
     provenance: 'vendor_claimed' | 'third_party' | 'vllm_sr_reproduced' | 'operator'
     verification: CatalogEvidenceStatus

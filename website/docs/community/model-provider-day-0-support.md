@@ -58,7 +58,10 @@ not add an obscure Model Card merely to make a provider card look populated.
 4. Add benchmark records under `evaluations/single/` only when the result is
    attributable to a primary model source and redistributable. Keep each
    benchmark version, exact subject, and raw metric explicit. Virtual-model
-   recipe runs use the identical schema under `evaluations/virtual/`.
+   recipe runs use the identical schema under `evaluations/virtual/`. Record
+   `measured_at` when the run date is known; otherwise record `observed_at` as
+   the date the published value was reviewed, without presenting it as a run
+   date.
 5. Add conformance fixtures for capabilities or protocol behavior claimed by
    the card/provider mapping.
 
@@ -158,15 +161,21 @@ routing:
       tags: [production, approved]
 ```
 
+`api_format` only selects the upstream wire contract; never use it to infer the
+Provider from the current registry contents. A physical model behind a
+Router-owned listener must have an explicit `backend_refs[].provider` so a
+future Provider addition cannot change the meaning of existing YAML.
+
 When a provider binding declares an operator-defined `deployment_name`, its
 catalog ID only records availability; the user must set
 `providers.models[].provider_model_id` (or that provider's
 `external_model_ids` entry) explicitly.
 
 Treat multiple `backend_refs` on one alias as homogeneous replicas in one
-Envoy pool. Endpoint address, port, and weight may differ; Provider ID,
+Envoy pool. HTTP endpoint address, port, and weight may differ; HTTPS replicas
+may vary by port and weight but keep one DNS hostname. Provider ID,
 protocol/model mapping, credential source, auth and default headers, effective
-request path, and DNS/TLS behavior must not. Split heterogeneous providers or
+request path, and DNS/TLS behavior must otherwise match. Split heterogeneous providers or
 credentials into separate aliases so Router request shaping cannot diverge
 from the endpoint Envoy selects. The config loader and CLI generator reject an
 unsafe mixed pool with the differing semantic fields named and never include

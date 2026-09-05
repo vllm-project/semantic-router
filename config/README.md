@@ -102,10 +102,18 @@ runtime dependency; they do not define routing behavior by themselves.
   provider protocol, path, and non-secret defaults automatically. A handwritten
   override uses the canonical `catalog` identity as `routing.modelCards[].name`;
   a fully custom model uses its request alias as the card name.
-- Multiple `backend_refs` on one alias are homogeneous replicas. Host, port,
-  and weight may vary, but Provider ID, wire protocol, native model ID,
-  credentials, headers, request path, and TLS semantics may not; use separate
-  aliases for heterogeneous providers.
+- `api_format` selects the upstream wire format; it never selects a Provider.
+  When this config declares a listener, every physical model must use
+  `backend_refs` with an explicit Provider ID. Metadata-only external-gateway
+  configs (`listeners: []`) and built-in virtual models may remain backendless.
+  The local `vllm-sr serve` path manages an Envoy listener, so it rejects a
+  backendless physical model even when the authored listener list is empty;
+  deploy state-only metadata through the external-gateway integration instead.
+- Multiple `backend_refs` on one alias are homogeneous replicas. HTTP targets
+  may vary by host, port, and weight. HTTPS targets may vary by port and weight
+  but must keep one DNS hostname. Provider ID, wire protocol, native model ID,
+  credentials, headers, request path, and TLS semantics must also match; use
+  separate aliases for heterogeneous providers.
 - `routing.modelCards` describes semantic capabilities; concrete URLs,
   credentials, and pricing belong in `providers.models`.
 - Protocol controls such as `tool_choice` enter routing as conversation facts;

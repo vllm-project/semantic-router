@@ -30,6 +30,9 @@ from catalog_common import (
 from catalog_common import (
     sequence as _sequence,
 )
+from catalog_common import (
+    validate_https_url as _validate_https_url,
+)
 
 
 def metric_catalog(benchmarks: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
@@ -54,6 +57,8 @@ def metric_catalog(benchmarks: list[dict[str, Any]]) -> dict[str, dict[str, Any]
             raise CatalogBuildError(
                 f"{path}.id must be a namespaced semantic-version identity"
             )
+        if benchmark.get("source") is not None:
+            _validate_https_url(benchmark["source"], f"{path}.source")
         profiles = _benchmark_profiles(benchmark, path)
         for metric_index, raw_metric in enumerate(
             _sequence(benchmark.get("metrics"), f"{path}.metrics")
@@ -186,6 +191,8 @@ def _validate_index_header(
         )
     if item.get("aggregation") != "weighted_mean":
         raise CatalogBuildError(f"{path}.aggregation is unsupported")
+    if item.get("methodology") is not None:
+        _validate_https_url(item["methodology"], f"{path}.methodology")
     _validate_index_scale(item, path)
     _validate_index_missing_policy(item, path)
     return identity, _validate_index_domains(item, path)

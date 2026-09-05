@@ -12,6 +12,7 @@
     elo_lower: 829.5
     elo_upper: 846.07
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -29,6 +30,7 @@
   metrics:
     score: 0.0542857142857143
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -46,6 +48,7 @@
   metrics:
     all_pass: 0.126
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -65,6 +68,7 @@
     elo_lower: 1152.1
     elo_upper: 1185.7
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -82,6 +86,7 @@
   metrics:
     score: 0.773333333333333
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -99,6 +104,7 @@
   metrics:
     index: 2
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -116,6 +122,7 @@
   metrics:
     accuracy: 0.318813716404078
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -133,6 +140,7 @@
   metrics:
     accuracy: 0.297
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: vendor_claimed
     verification: claimed
@@ -150,6 +158,7 @@
   metrics:
     resolved: 0.550561797752809
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -168,6 +177,7 @@
   metrics:
     resolved: 0.638
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: vendor_claimed
     verification: claimed
@@ -185,6 +195,7 @@
   metrics:
     accuracy: 0.871717171717172
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -202,6 +213,7 @@
   metrics:
     accuracy: 0.872
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: vendor_claimed
     verification: claimed
@@ -219,6 +231,7 @@
   metrics:
     score: 0.469907407407407
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -236,6 +249,7 @@
   metrics:
     resolved: 0.543
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: vendor_claimed
     verification: claimed
@@ -254,6 +268,7 @@
   metrics:
     resolved: 0.776
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: vendor_claimed
     verification: claimed
@@ -271,6 +286,7 @@
   metrics:
     score: 0.290721649484536
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: third_party
     verification: imported
@@ -288,6 +304,7 @@
   metrics:
     accuracy: 0.316
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: vendor_claimed
     verification: claimed
@@ -306,6 +323,7 @@
   metrics:
     resolved: 0.647
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: vendor_claimed
     verification: claimed
@@ -323,6 +341,7 @@
   metrics:
     accuracy: 0.895
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: vendor_claimed
     verification: claimed
@@ -340,6 +359,7 @@
   metrics:
     resolved: 0.559
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: vendor_claimed
     verification: claimed
@@ -358,8 +378,93 @@
   metrics:
     resolved: 0.802
   status: available
+  observed_at: 2026-09-06
   evidence:
     provenance: vendor_claimed
     verification: claimed
     source: https://thinkingmachines.ai/news/inkling-small/
+    redistributable: true
+- id: duellab/inkling-none-gamebench-2@1.0.0
+  model: thinking-machines/inkling
+  benchmark: duellab/gamebench@2.0.0
+  benchmark_profile: public-games
+  reasoning_effort: none
+  subject:
+    source_model: Inkling
+    source_model_slug: thinkingmachines-inkling-none
+    run_kind: independent
+    benchmark_release: gb2-20260824-e05a1ff89a26
+    provider_setting: None
+    result_status: tested_and_included
+  metrics:
+    score: 34.0
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://benchmarks.duellab.org/model-thinkingmachines-inkling
+    redistributable: true
+- id: duellab/inkling-medium-gamebench-2@1.0.0
+  model: thinking-machines/inkling
+  benchmark: duellab/gamebench@2.0.0
+  benchmark_profile: public-games
+  reasoning_effort: medium
+  subject:
+    source_model: Inkling
+    source_model_slug: thinkingmachines-inkling-medium
+    run_kind: independent
+    benchmark_release: gb2-20260824-e05a1ff89a26
+    provider_setting: Medium
+    result_status: tested_and_included
+  metrics:
+    score: 24.7
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://benchmarks.duellab.org/model-thinkingmachines-inkling
+    redistributable: true
+- id: duellab/inkling-small-none-gamebench-2@1.0.0
+  model: thinking-machines/inkling-small
+  benchmark: duellab/gamebench@2.0.0
+  benchmark_profile: public-games
+  reasoning_effort: none
+  subject:
+    source_model: Inkling Small
+    source_model_slug: thinkingmachines-inkling-small-none
+    run_kind: independent
+    benchmark_release: gb2-20260824-e05a1ff89a26
+    provider_setting: None
+    result_status: tested_and_included
+  metrics:
+    score: 31.9
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://benchmarks.duellab.org/model-thinkingmachines-inkling-small
+    redistributable: true
+- id: duellab/inkling-small-medium-gamebench-2@1.0.0
+  model: thinking-machines/inkling-small
+  benchmark: duellab/gamebench@2.0.0
+  benchmark_profile: public-games
+  reasoning_effort: medium
+  subject:
+    source_model: Inkling Small
+    source_model_slug: thinkingmachines-inkling-small-medium
+    run_kind: independent
+    benchmark_release: gb2-20260824-e05a1ff89a26
+    provider_setting: Medium
+    result_status: tested_and_included
+  metrics:
+    score: 31.9
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://benchmarks.duellab.org/model-thinkingmachines-inkling-small
     redistributable: true

@@ -9,7 +9,9 @@ import (
 	"math"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
+	"time"
 
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 )
@@ -243,7 +245,7 @@ func validateCatalogProviders(
 			}
 		}
 		if !defaultPresent || !validCatalogPresentationURL(provider.Presentation.Logo) ||
-			(provider.DefaultBaseURL != "" && !validHTTPSURL(provider.DefaultBaseURL)) ||
+			(provider.DefaultBaseURL != "" && !validHTTPSTransportURL(provider.DefaultBaseURL)) ||
 			!validCatalogDefaultHeaders(provider) {
 			return nil, fmt.Errorf("provider transport or presentation is unsafe")
 		}
@@ -463,6 +465,9 @@ func validateCatalogEvaluations(
 			!oneOf(evaluation.Status, "available", "missing", "failed", "not_applicable", "withheld") ||
 			!oneOf(evaluation.Evidence.Provenance, "vendor_claimed", "third_party", "vllm_sr_reproduced", "operator") ||
 			!oneOf(evaluation.Evidence.Verification, "claimed", "imported", "reproduced") ||
+			!validOptionalCatalogDate(evaluation.MeasuredAt) ||
+			!validOptionalCatalogDate(evaluation.ObservedAt) ||
+			(evaluation.Status == "available" && evaluation.MeasuredAt == "" && evaluation.ObservedAt == "") ||
 			(evaluation.Evidence.Source != "" && !validHTTPSURL(evaluation.Evidence.Source)) {
 			return fmt.Errorf("malformed evaluation")
 		}
@@ -496,6 +501,17 @@ func validateCatalogEvaluations(
 		}
 	}
 	return nil
+}
+
+func validOptionalCatalogDate(value string) bool {
+	if value == "" {
+		return true
+	}
+	if len(value) != len(time.DateOnly) {
+		return false
+	}
+	_, err := time.Parse(time.DateOnly, value)
+	return err == nil
 }
 
 func validateCatalogEvaluationCoverage(
@@ -637,9 +653,30 @@ func validCatalogPresentationURL(value string) bool {
 }
 
 func validHTTPSURL(value string) bool {
+	return validHTTPSURLKind(value, true)
+}
+
+func validHTTPSTransportURL(value string) bool {
+	return validHTTPSURLKind(value, false)
+}
+
+func validHTTPSURLKind(value string, allowFragment bool) bool {
+	for index := 0; index < len(value); index++ {
+		if value[index] <= 0x20 || value[index] == 0x7f {
+			return false
+		}
+	}
 	parsed, err := url.Parse(value)
-	return err == nil && parsed.Scheme == "https" && parsed.Host != "" &&
-		parsed.User == nil && parsed.Fragment == ""
+	if err != nil || parsed.Scheme != "https" || parsed.Hostname() == "" ||
+		parsed.User != nil || (!allowFragment && (parsed.Fragment != "" || parsed.RawFragment != "")) {
+		return false
+	}
+	port := parsed.Port()
+	if port == "" {
+		return !strings.HasSuffix(parsed.Host, ":")
+	}
+	portNumber, err := strconv.Atoi(port)
+	return err == nil && portNumber >= 1 && portNumber <= 65535
 }
 
 func oneOf(value string, options ...string) bool {

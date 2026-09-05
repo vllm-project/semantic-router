@@ -383,6 +383,7 @@ type EvaluationRecord struct {
 	Metrics          map[string]float64 `json:"metrics" yaml:"metrics"`
 	Status           string             `json:"status" yaml:"status"`
 	MeasuredAt       string             `json:"measured_at,omitempty" yaml:"measured_at,omitempty"`
+	ObservedAt       string             `json:"observed_at,omitempty" yaml:"observed_at,omitempty"`
 	Evidence         EvaluationEvidence `json:"evidence" yaml:"evidence"`
 }
 

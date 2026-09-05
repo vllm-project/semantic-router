@@ -2,7 +2,7 @@
 
 package catalog
 
-const builtInCatalogDigest = "sha256:686385215e44f3005c797c38761bdbd5ede893d968e3b216e99033ac43f73b10"
+const builtInCatalogDigest = "sha256:b462f6109de7d146d263807aaeeb9977463b1f14ccacb90ed23f1f630d864db4"
 
 const builtInCatalogJSON = `{
   "benchmarks": [
@@ -195,6 +195,120 @@ const builtInCatalogJSON = `{
         }
       ],
       "source": "https://scale.com/leaderboard/swe_bench_pro_public"
+    },
+    {
+      "default_profile": "main",
+      "display_name": "FrontierCode 1.1",
+      "domain": "software_engineering",
+      "id": "cognition/frontiercode@1.1.0",
+      "metrics": [
+        {
+          "direction": "higher_is_better",
+          "id": "score",
+          "range": [
+            0,
+            1
+          ],
+          "unit": "proportion"
+        },
+        {
+          "direction": "higher_is_better",
+          "id": "pass_rate",
+          "range": [
+            0,
+            1
+          ],
+          "unit": "proportion"
+        }
+      ],
+      "profiles": [
+        {
+          "description": "Score and pass rate over the 100-task Main subset, averaged across five runs per task at the named reasoning effort.",
+          "display_name": "Main",
+          "id": "main"
+        },
+        {
+          "description": "Score and pass rate over the 150-task Extended subset, averaged across five runs per task at the named reasoning effort.",
+          "display_name": "Extended",
+          "id": "extended"
+        }
+      ],
+      "source": "https://cognition.com/frontiercode"
+    },
+    {
+      "default_profile": "production-agent",
+      "display_name": "CursorBench 3.2",
+      "domain": "software_engineering",
+      "id": "cursor/cursorbench@3.2.0",
+      "metrics": [
+        {
+          "direction": "higher_is_better",
+          "id": "score",
+          "range": [
+            0,
+            1
+          ],
+          "unit": "proportion"
+        }
+      ],
+      "profiles": [
+        {
+          "description": "Score measured by Cursor on ambiguous multi-file tasks from real Cursor sessions at the named reasoning effort.",
+          "display_name": "Production agent",
+          "id": "production-agent"
+        }
+      ],
+      "source": "https://cursor.com/cursorbench"
+    },
+    {
+      "default_profile": "public-games",
+      "display_name": "GameBench 2",
+      "domain": "agentic_systems",
+      "id": "duellab/gamebench@2.0.0",
+      "metrics": [
+        {
+          "direction": "higher_is_better",
+          "id": "score",
+          "range": [
+            0,
+            100
+          ],
+          "unit": "score"
+        }
+      ],
+      "profiles": [
+        {
+          "description": "Normalized standing across the public games for programs generated at the named reasoning setting; the immutable public-release identity remains on each evaluation record.",
+          "display_name": "Public games",
+          "id": "public-games"
+        }
+      ],
+      "source": "https://benchmarks.duellab.org/methodology"
+    },
+    {
+      "default_profile": "proof-panel",
+      "display_name": "USAMO 2026",
+      "domain": "mathematical_reasoning",
+      "id": "matharena/usamo@2026.0.0",
+      "metrics": [
+        {
+          "direction": "higher_is_better",
+          "id": "score",
+          "range": [
+            0,
+            1
+          ],
+          "unit": "proportion"
+        }
+      ],
+      "profiles": [
+        {
+          "description": "Proof score using the published MathArena rewrite-and-judge-panel methodology with run conditions retained on the evaluation record.",
+          "display_name": "Proof panel",
+          "id": "proof-panel"
+        }
+      ],
+      "source": "https://github.com/eth-sri/matharena"
     },
     {
       "default_profile": "published-agent",
@@ -2722,10 +2836,12 @@ const builtInCatalogJSON = `{
     {
       "benchmark": "harbor/terminal-bench@2.1.0",
       "benchmark_profile": "published-agent",
+      "evaluation": "anthropic/claude-sonnet-5-xhigh-terminal-bench-2-1@1.0.0",
       "metric": "resolved",
       "model": "anthropic/claude-sonnet-5",
       "reasoning_effort": "xhigh",
-      "status": "missing"
+      "status": "available",
+      "value": 0.804
     },
     {
       "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
@@ -3126,10 +3242,12 @@ const builtInCatalogJSON = `{
     {
       "benchmark": "harbor/terminal-bench@2.1.0",
       "benchmark_profile": "published-agent",
+      "evaluation": "anthropic/claude-opus-4-8-high-terminal-bench-2-1@1.0.0",
       "metric": "resolved",
       "model": "anthropic/claude-opus-4.8",
       "reasoning_effort": "high",
-      "status": "missing"
+      "status": "available",
+      "value": 0.827
     },
     {
       "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
@@ -8770,26 +8888,32 @@ const builtInCatalogJSON = `{
     {
       "benchmark": "idavidrein/gpqa-diamond@1.0.0",
       "benchmark_profile": "published-standard",
+      "evaluation": "openai/gpt-oss-120b-model-card-medium-gpqa-diamond@1.0.0",
       "metric": "accuracy",
       "model": "openai/gpt-oss-120b",
       "reasoning_effort": "medium",
-      "status": "missing"
+      "status": "available",
+      "value": 0.731
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
       "benchmark_profile": "no-tools",
+      "evaluation": "openai/gpt-oss-120b-model-card-medium-humanitys-last-exam@1.0.0",
       "metric": "accuracy",
       "model": "openai/gpt-oss-120b",
       "reasoning_effort": "medium",
-      "status": "missing"
+      "status": "available",
+      "value": 0.086
     },
     {
       "benchmark": "swe-bench/verified@1.0.0",
       "benchmark_profile": "published-agent",
+      "evaluation": "openai/gpt-oss-120b-model-card-medium-swe-bench-verified@1.0.0",
       "metric": "resolved",
       "model": "openai/gpt-oss-120b",
       "reasoning_effort": "medium",
-      "status": "missing"
+      "status": "available",
+      "value": 0.526
     },
     {
       "benchmark": "harbor/terminal-bench@2.1.0",
@@ -8890,26 +9014,32 @@ const builtInCatalogJSON = `{
     {
       "benchmark": "idavidrein/gpqa-diamond@1.0.0",
       "benchmark_profile": "published-standard",
+      "evaluation": "openai/gpt-oss-20b-model-card-medium-gpqa-diamond@1.0.0",
       "metric": "accuracy",
       "model": "openai/gpt-oss-20b",
       "reasoning_effort": "medium",
-      "status": "missing"
+      "status": "available",
+      "value": 0.66
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
       "benchmark_profile": "no-tools",
+      "evaluation": "openai/gpt-oss-20b-model-card-medium-humanitys-last-exam@1.0.0",
       "metric": "accuracy",
       "model": "openai/gpt-oss-20b",
       "reasoning_effort": "medium",
-      "status": "missing"
+      "status": "available",
+      "value": 0.07
     },
     {
       "benchmark": "swe-bench/verified@1.0.0",
       "benchmark_profile": "published-agent",
+      "evaluation": "openai/gpt-oss-20b-model-card-medium-swe-bench-verified@1.0.0",
       "metric": "resolved",
       "model": "openai/gpt-oss-20b",
       "reasoning_effort": "medium",
-      "status": "missing"
+      "status": "available",
+      "value": 0.532
     },
     {
       "benchmark": "harbor/terminal-bench@2.1.0",
@@ -12415,6 +12545,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.7877008835912944
       },
       "model": "ai21/jamba2-mini",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -12450,6 +12581,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.6927611412402735
       },
       "model": "ai21/jamba2-mini",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -12483,6 +12615,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.5978962467128854
       },
       "model": "ai21/jamba2-mini",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -12517,6 +12650,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.7174653050536788
       },
       "model": "ai21/jamba2-mini",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -12552,6 +12686,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.6067644661776691
       },
       "model": "ai21/jamba2-mini",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -12587,6 +12722,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.7386666666666666
       },
       "model": "ai21/jamba2-mini",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -12622,6 +12758,7 @@ const builtInCatalogJSON = `{
         "score": 0
       },
       "model": "ai21/jamba-reasoning-3b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -12644,6 +12781,7 @@ const builtInCatalogJSON = `{
         "score": 0.0633333333333333
       },
       "model": "ai21/jamba-reasoning-3b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -12666,6 +12804,7 @@ const builtInCatalogJSON = `{
         "index": -57.7166666666667
       },
       "model": "ai21/jamba-reasoning-3b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -12688,6 +12827,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.0375347544022243
       },
       "model": "ai21/jamba-reasoning-3b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -12710,6 +12850,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.333333333333333
       },
       "model": "ai21/jamba-reasoning-3b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -12732,6 +12873,7 @@ const builtInCatalogJSON = `{
         "score": 0
       },
       "model": "ai21/jamba-large-1.7",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -12754,6 +12896,7 @@ const builtInCatalogJSON = `{
         "score": 0.193333333333333
       },
       "model": "ai21/jamba-large-1.7",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -12776,6 +12919,7 @@ const builtInCatalogJSON = `{
         "index": -54.9166666666667
       },
       "model": "ai21/jamba-large-1.7",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -12798,6 +12942,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.0366079703429101
       },
       "model": "ai21/jamba-large-1.7",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -12820,6 +12965,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.38989898989899
       },
       "model": "ai21/jamba-large-1.7",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -12842,6 +12988,7 @@ const builtInCatalogJSON = `{
         "score": 0
       },
       "model": "amazon/nova-pro-v1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -12864,6 +13011,7 @@ const builtInCatalogJSON = `{
         "score": 0.21
       },
       "model": "amazon/nova-pro-v1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -12886,6 +13034,7 @@ const builtInCatalogJSON = `{
         "index": -47.7333333333333
       },
       "model": "amazon/nova-pro-v1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -12908,6 +13057,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.0319
       },
       "model": "amazon/nova-pro-v1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -12930,6 +13080,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.498989898989899
       },
       "model": "amazon/nova-pro-v1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -12952,6 +13103,7 @@ const builtInCatalogJSON = `{
         "score": 0.00285714285714286
       },
       "model": "amazon/nova-2-lite",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -12974,6 +13126,7 @@ const builtInCatalogJSON = `{
         "elo": 538.84
       },
       "model": "amazon/nova-2-lite",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -12996,6 +13149,7 @@ const builtInCatalogJSON = `{
         "score": 0.603333333333333
       },
       "model": "amazon/nova-2-lite",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -13018,6 +13172,7 @@ const builtInCatalogJSON = `{
         "index": -54.9833333333333
       },
       "model": "amazon/nova-2-lite",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -13040,6 +13195,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.11631139944393
       },
       "model": "amazon/nova-2-lite",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -13062,6 +13218,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.161048689138577
       },
       "model": "amazon/nova-2-lite",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -13084,6 +13241,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.811111111111111
       },
       "model": "amazon/nova-2-lite",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -13106,6 +13264,7 @@ const builtInCatalogJSON = `{
         "score": 0
       },
       "model": "amazon/nova-2-lite",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -13128,6 +13287,7 @@ const builtInCatalogJSON = `{
         "score": 0.543333333333333
       },
       "model": "amazon/nova-2-lite",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -13150,6 +13310,7 @@ const builtInCatalogJSON = `{
         "index": -54.1
       },
       "model": "amazon/nova-2-lite",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -13172,6 +13333,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.0403151065801668
       },
       "model": "amazon/nova-2-lite",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -13194,6 +13356,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.697979797979798
       },
       "model": "amazon/nova-2-lite",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -13216,6 +13379,7 @@ const builtInCatalogJSON = `{
         "score": 0
       },
       "model": "amazon/nova-2-lite",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -13238,6 +13402,7 @@ const builtInCatalogJSON = `{
         "score": 0.6
       },
       "model": "amazon/nova-2-lite",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -13260,6 +13425,7 @@ const builtInCatalogJSON = `{
         "index": -56.9666666666667
       },
       "model": "amazon/nova-2-lite",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -13282,6 +13448,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.0898980537534754
       },
       "model": "amazon/nova-2-lite",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -13304,6 +13471,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.767676767676768
       },
       "model": "amazon/nova-2-lite",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -13326,6 +13494,7 @@ const builtInCatalogJSON = `{
         "score": 0
       },
       "model": "amazon/nova-2-lite",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -13348,6 +13517,7 @@ const builtInCatalogJSON = `{
         "score": 0.186666666666667
       },
       "model": "amazon/nova-2-lite",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -13370,6 +13540,7 @@ const builtInCatalogJSON = `{
         "index": -59.8166666666667
       },
       "model": "amazon/nova-2-lite",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -13392,6 +13563,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.0287303058387396
       },
       "model": "amazon/nova-2-lite",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -13414,6 +13586,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.603030303030303
       },
       "model": "amazon/nova-2-lite",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -13436,6 +13609,7 @@ const builtInCatalogJSON = `{
         "score": 0
       },
       "model": "amazon/nova-premier-v1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -13458,6 +13632,7 @@ const builtInCatalogJSON = `{
         "score": 0.343333333333333
       },
       "model": "amazon/nova-premier-v1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -13480,6 +13655,7 @@ const builtInCatalogJSON = `{
         "index": -35.3833333333333
       },
       "model": "amazon/nova-premier-v1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -13502,6 +13678,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.0417052826691381
       },
       "model": "amazon/nova-premier-v1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -13524,6 +13701,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.568686868686869
       },
       "model": "amazon/nova-premier-v1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -13548,6 +13726,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 1593.73
       },
       "model": "anthropic/claude-fable-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -13570,6 +13749,7 @@ const builtInCatalogJSON = `{
         "score": 0.302857142857143
       },
       "model": "anthropic/claude-fable-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -13594,6 +13774,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 1674.36
       },
       "model": "anthropic/claude-fable-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -13616,6 +13797,7 @@ const builtInCatalogJSON = `{
         "score": 0.836666666666667
       },
       "model": "anthropic/claude-fable-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -13638,6 +13820,7 @@ const builtInCatalogJSON = `{
         "index": 40.8
       },
       "model": "anthropic/claude-fable-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -13660,6 +13843,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.559314179796108
       },
       "model": "anthropic/claude-fable-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -13682,6 +13866,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.898876404494382
       },
       "model": "anthropic/claude-fable-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -13704,6 +13889,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.906060606060606
       },
       "model": "anthropic/claude-fable-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -13726,6 +13912,7 @@ const builtInCatalogJSON = `{
         "score": 0.586805555555556
       },
       "model": "anthropic/claude-fable-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -13748,6 +13935,7 @@ const builtInCatalogJSON = `{
         "score": 0.430927835051546
       },
       "model": "anthropic/claude-fable-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -13770,6 +13958,7 @@ const builtInCatalogJSON = `{
         "score": 0.277142857142857
       },
       "model": "anthropic/claude-fable-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -13792,6 +13981,7 @@ const builtInCatalogJSON = `{
         "elo": 1506.86
       },
       "model": "anthropic/claude-fable-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -13814,6 +14004,7 @@ const builtInCatalogJSON = `{
         "score": 0.823333333333333
       },
       "model": "anthropic/claude-fable-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -13836,6 +14027,7 @@ const builtInCatalogJSON = `{
         "index": 34.1333333333333
       },
       "model": "anthropic/claude-fable-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -13858,6 +14050,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.48887859128823
       },
       "model": "anthropic/claude-fable-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -13880,6 +14073,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.850187265917603
       },
       "model": "anthropic/claude-fable-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -13902,6 +14096,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.880808080808081
       },
       "model": "anthropic/claude-fable-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -13924,6 +14119,7 @@ const builtInCatalogJSON = `{
         "score": 0.56712962962963
       },
       "model": "anthropic/claude-fable-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -13946,6 +14142,7 @@ const builtInCatalogJSON = `{
         "score": 0.389690721649485
       },
       "model": "anthropic/claude-fable-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -13970,6 +14167,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 1676.22
       },
       "model": "anthropic/claude-fable-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -13992,6 +14190,7 @@ const builtInCatalogJSON = `{
         "score": 0.297142857142857
       },
       "model": "anthropic/claude-fable-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -14014,6 +14213,7 @@ const builtInCatalogJSON = `{
         "all_pass": 0.262
       },
       "model": "anthropic/claude-fable-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -14038,6 +14238,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 1788.25
       },
       "model": "anthropic/claude-fable-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -14060,6 +14261,7 @@ const builtInCatalogJSON = `{
         "score": 0.853333333333333
       },
       "model": "anthropic/claude-fable-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -14082,6 +14284,7 @@ const builtInCatalogJSON = `{
         "index": 43.45
       },
       "model": "anthropic/claude-fable-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -14104,6 +14307,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.591288229842447
       },
       "model": "anthropic/claude-fable-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -14126,6 +14330,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.913857677902622
       },
       "model": "anthropic/claude-fable-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -14148,6 +14353,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.937373737373737
       },
       "model": "anthropic/claude-fable-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -14170,6 +14376,7 @@ const builtInCatalogJSON = `{
         "score": 0.630787037037037
       },
       "model": "anthropic/claude-fable-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -14192,6 +14399,7 @@ const builtInCatalogJSON = `{
         "score": 0.472164948453608
       },
       "model": "anthropic/claude-fable-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -14214,6 +14422,7 @@ const builtInCatalogJSON = `{
         "score": 0.291428571428571
       },
       "model": "anthropic/claude-fable-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -14236,6 +14445,7 @@ const builtInCatalogJSON = `{
         "elo": 1585.31
       },
       "model": "anthropic/claude-fable-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -14258,6 +14468,7 @@ const builtInCatalogJSON = `{
         "score": 0.846666666666667
       },
       "model": "anthropic/claude-fable-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -14280,6 +14491,7 @@ const builtInCatalogJSON = `{
         "index": 37.6
       },
       "model": "anthropic/claude-fable-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -14302,6 +14514,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.537998146431881
       },
       "model": "anthropic/claude-fable-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -14324,6 +14537,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.880149812734082
       },
       "model": "anthropic/claude-fable-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -14346,6 +14560,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.885858585858586
       },
       "model": "anthropic/claude-fable-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -14368,6 +14583,7 @@ const builtInCatalogJSON = `{
         "score": 0.563657407407407
       },
       "model": "anthropic/claude-fable-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -14390,6 +14606,7 @@ const builtInCatalogJSON = `{
         "score": 0.410309278350515
       },
       "model": "anthropic/claude-fable-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -14414,6 +14631,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 1668.14
       },
       "model": "anthropic/claude-fable-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -14436,6 +14654,7 @@ const builtInCatalogJSON = `{
         "score": 0.311428571428571
       },
       "model": "anthropic/claude-fable-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -14460,6 +14679,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 1770.8
       },
       "model": "anthropic/claude-fable-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -14482,6 +14702,7 @@ const builtInCatalogJSON = `{
         "score": 0.83
       },
       "model": "anthropic/claude-fable-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -14504,6 +14725,7 @@ const builtInCatalogJSON = `{
         "index": 42.3833333333333
       },
       "model": "anthropic/claude-fable-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -14526,6 +14748,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.587117701575533
       },
       "model": "anthropic/claude-fable-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -14548,6 +14771,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.910112359550562
       },
       "model": "anthropic/claude-fable-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -14570,6 +14794,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.934343434343434
       },
       "model": "anthropic/claude-fable-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -14592,6 +14817,7 @@ const builtInCatalogJSON = `{
         "score": 0.608796296296296
       },
       "model": "anthropic/claude-fable-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -14614,6 +14840,7 @@ const builtInCatalogJSON = `{
         "score": 0.457731958762887
       },
       "model": "anthropic/claude-fable-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -14638,6 +14865,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 1570.02
       },
       "model": "anthropic/claude-opus-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -14660,6 +14888,7 @@ const builtInCatalogJSON = `{
         "score": 0.282857142857143
       },
       "model": "anthropic/claude-opus-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -14682,6 +14911,7 @@ const builtInCatalogJSON = `{
         "elo": 1633.24
       },
       "model": "anthropic/claude-opus-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -14704,6 +14934,7 @@ const builtInCatalogJSON = `{
         "score": 0.79
       },
       "model": "anthropic/claude-opus-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -14726,6 +14957,7 @@ const builtInCatalogJSON = `{
         "index": 33.7166666666667
       },
       "model": "anthropic/claude-opus-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -14748,6 +14980,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.528266913809083
       },
       "model": "anthropic/claude-opus-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -14770,6 +15003,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.876404494382023
       },
       "model": "anthropic/claude-opus-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -14792,6 +15026,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.937373737373737
       },
       "model": "anthropic/claude-opus-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -14814,6 +15049,7 @@ const builtInCatalogJSON = `{
         "score": 0.554398148148148
       },
       "model": "anthropic/claude-opus-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -14836,6 +15072,7 @@ const builtInCatalogJSON = `{
         "score": 0.447422680412371
       },
       "model": "anthropic/claude-opus-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -14858,6 +15095,7 @@ const builtInCatalogJSON = `{
         "score": 0.231428571428571
       },
       "model": "anthropic/claude-opus-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -14880,6 +15118,7 @@ const builtInCatalogJSON = `{
         "elo": 1376.4
       },
       "model": "anthropic/claude-opus-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -14902,6 +15141,7 @@ const builtInCatalogJSON = `{
         "score": 0.813333333333333
       },
       "model": "anthropic/claude-opus-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -14924,6 +15164,7 @@ const builtInCatalogJSON = `{
         "index": 28.55
       },
       "model": "anthropic/claude-opus-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -14946,6 +15187,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.434198331788693
       },
       "model": "anthropic/claude-opus-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -14968,6 +15210,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.764044943820225
       },
       "model": "anthropic/claude-opus-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -14990,6 +15233,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.888888888888889
       },
       "model": "anthropic/claude-opus-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -15012,6 +15256,7 @@ const builtInCatalogJSON = `{
         "score": 0.491898148148148
       },
       "model": "anthropic/claude-opus-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -15034,6 +15279,7 @@ const builtInCatalogJSON = `{
         "score": 0.303092783505155
       },
       "model": "anthropic/claude-opus-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -15058,6 +15304,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 1657.9
       },
       "model": "anthropic/claude-opus-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -15080,6 +15327,7 @@ const builtInCatalogJSON = `{
         "score": 0.291428571428571
       },
       "model": "anthropic/claude-opus-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -15102,6 +15350,7 @@ const builtInCatalogJSON = `{
         "all_pass": 0.216
       },
       "model": "anthropic/claude-opus-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -15126,6 +15375,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 1755.25
       },
       "model": "anthropic/claude-opus-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -15148,6 +15398,7 @@ const builtInCatalogJSON = `{
         "score": 0.793333333333333
       },
       "model": "anthropic/claude-opus-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -15170,6 +15421,7 @@ const builtInCatalogJSON = `{
         "index": 37.0666666666667
       },
       "model": "anthropic/claude-opus-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -15192,6 +15444,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.548656163113994
       },
       "model": "anthropic/claude-opus-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -15214,6 +15467,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.891385767790262
       },
       "model": "anthropic/claude-opus-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -15236,6 +15490,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.932323232323232
       },
       "model": "anthropic/claude-opus-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -15258,6 +15513,7 @@ const builtInCatalogJSON = `{
         "score": 0.563657407407407
       },
       "model": "anthropic/claude-opus-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -15280,6 +15536,7 @@ const builtInCatalogJSON = `{
         "score": 0.420618556701031
       },
       "model": "anthropic/claude-opus-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -15302,6 +15559,7 @@ const builtInCatalogJSON = `{
         "score": 0.268571428571429
       },
       "model": "anthropic/claude-opus-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -15324,6 +15582,7 @@ const builtInCatalogJSON = `{
         "elo": 1529.04
       },
       "model": "anthropic/claude-opus-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -15346,6 +15605,7 @@ const builtInCatalogJSON = `{
         "score": 0.82
       },
       "model": "anthropic/claude-opus-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -15368,6 +15628,7 @@ const builtInCatalogJSON = `{
         "index": 31.0166666666667
       },
       "model": "anthropic/claude-opus-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -15390,6 +15651,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.512974976830398
       },
       "model": "anthropic/claude-opus-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -15412,6 +15674,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.861423220973783
       },
       "model": "anthropic/claude-opus-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -15434,6 +15697,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.919191919191919
       },
       "model": "anthropic/claude-opus-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -15456,6 +15720,7 @@ const builtInCatalogJSON = `{
         "score": 0.515046296296296
       },
       "model": "anthropic/claude-opus-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -15478,6 +15743,7 @@ const builtInCatalogJSON = `{
         "score": 0.385567010309278
       },
       "model": "anthropic/claude-opus-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -15502,6 +15768,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 1637.27
       },
       "model": "anthropic/claude-opus-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -15524,6 +15791,7 @@ const builtInCatalogJSON = `{
         "score": 0.277142857142857
       },
       "model": "anthropic/claude-opus-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -15548,6 +15816,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 1728.73
       },
       "model": "anthropic/claude-opus-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -15570,6 +15839,7 @@ const builtInCatalogJSON = `{
         "score": 0.803333333333333
       },
       "model": "anthropic/claude-opus-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -15592,6 +15862,7 @@ const builtInCatalogJSON = `{
         "index": 35.3833333333333
       },
       "model": "anthropic/claude-opus-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -15614,6 +15885,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.544022242817424
       },
       "model": "anthropic/claude-opus-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -15636,6 +15908,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.880149812734082
       },
       "model": "anthropic/claude-opus-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -15658,6 +15931,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.937373737373737
       },
       "model": "anthropic/claude-opus-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -15680,6 +15954,7 @@ const builtInCatalogJSON = `{
         "score": 0.556712962962963
       },
       "model": "anthropic/claude-opus-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -15702,6 +15977,7 @@ const builtInCatalogJSON = `{
         "score": 0.43298969072165
       },
       "model": "anthropic/claude-opus-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -15724,6 +16000,7 @@ const builtInCatalogJSON = `{
         "elo": 1320.08
       },
       "model": "anthropic/claude-sonnet-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -15746,6 +16023,7 @@ const builtInCatalogJSON = `{
         "elo": 1149.48
       },
       "model": "anthropic/claude-sonnet-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -15768,6 +16046,7 @@ const builtInCatalogJSON = `{
         "score": 0.168571428571429
       },
       "model": "anthropic/claude-sonnet-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -15790,6 +16069,7 @@ const builtInCatalogJSON = `{
         "elo": 1505.81
       },
       "model": "anthropic/claude-sonnet-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -15812,6 +16092,7 @@ const builtInCatalogJSON = `{
         "score": 0.82
       },
       "model": "anthropic/claude-sonnet-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -15834,6 +16115,7 @@ const builtInCatalogJSON = `{
         "index": 16.45
       },
       "model": "anthropic/claude-sonnet-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -15856,6 +16138,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.412882298424467
       },
       "model": "anthropic/claude-sonnet-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -15878,6 +16161,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.805243445692884
       },
       "model": "anthropic/claude-sonnet-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -15900,6 +16184,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.911111111111111
       },
       "model": "anthropic/claude-sonnet-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -15922,6 +16207,7 @@ const builtInCatalogJSON = `{
         "score": 0.542824074074074
       },
       "model": "anthropic/claude-sonnet-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -15944,6 +16230,7 @@ const builtInCatalogJSON = `{
         "score": 0.37319587628866
       },
       "model": "anthropic/claude-sonnet-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -15966,6 +16253,7 @@ const builtInCatalogJSON = `{
         "elo": 1226.91
       },
       "model": "anthropic/claude-sonnet-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -15988,6 +16276,7 @@ const builtInCatalogJSON = `{
         "elo": 1414.43
       },
       "model": "anthropic/claude-sonnet-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -16012,6 +16301,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 1541.89
       },
       "model": "anthropic/claude-fable-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -16034,6 +16324,7 @@ const builtInCatalogJSON = `{
         "score": 0.2857142857
       },
       "model": "anthropic/claude-fable-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -16056,6 +16347,7 @@ const builtInCatalogJSON = `{
         "all_pass": 0.24
       },
       "model": "anthropic/claude-fable-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -16080,6 +16372,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 1650.71
       },
       "model": "anthropic/claude-fable-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -16102,6 +16395,7 @@ const builtInCatalogJSON = `{
         "score": 0.823333333333333
       },
       "model": "anthropic/claude-fable-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -16124,6 +16418,7 @@ const builtInCatalogJSON = `{
         "index": 43.3
       },
       "model": "anthropic/claude-fable-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -16146,6 +16441,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.554680259499537
       },
       "model": "anthropic/claude-fable-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -16168,6 +16464,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.846441947565543
       },
       "model": "anthropic/claude-fable-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -16190,6 +16487,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.926262626262626
       },
       "model": "anthropic/claude-fable-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -16212,6 +16510,7 @@ const builtInCatalogJSON = `{
         "score": 0.609953703703704
       },
       "model": "anthropic/claude-fable-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -16234,6 +16533,7 @@ const builtInCatalogJSON = `{
         "score": 0.381443298969072
       },
       "model": "anthropic/claude-fable-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -16256,6 +16556,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.831
       },
       "model": "anthropic/claude-fable-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -16277,6 +16578,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.92
       },
       "model": "anthropic/claude-fable-5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -16298,6 +16600,7 @@ const builtInCatalogJSON = `{
         "score": 0.208571428571429
       },
       "model": "anthropic/claude-opus-4.8",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -16320,6 +16623,7 @@ const builtInCatalogJSON = `{
         "elo": 1493.78
       },
       "model": "anthropic/claude-opus-4.8",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -16342,6 +16646,7 @@ const builtInCatalogJSON = `{
         "score": 0.776666666666667
       },
       "model": "anthropic/claude-opus-4.8",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -16364,6 +16669,7 @@ const builtInCatalogJSON = `{
         "index": 28.75
       },
       "model": "anthropic/claude-opus-4.8",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -16386,6 +16692,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.486561631139944
       },
       "model": "anthropic/claude-opus-4.8",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -16408,6 +16715,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.846441947565543
       },
       "model": "anthropic/claude-opus-4.8",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -16430,6 +16738,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.92020202020202
       },
       "model": "anthropic/claude-opus-4.8",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -16452,6 +16761,7 @@ const builtInCatalogJSON = `{
         "score": 0.342268041237113
       },
       "model": "anthropic/claude-opus-4.8",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -16474,6 +16784,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.789
       },
       "model": "anthropic/claude-opus-4.8",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -16495,11 +16806,1085 @@ const builtInCatalogJSON = `{
         "accuracy": 0.941
       },
       "model": "anthropic/claude-opus-4.8",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
         "source_kind": "official_cross-vendor_comparison",
         "variant": "Claude Opus 4.8"
+      }
+    },
+    {
+      "benchmark": "cognition/frontiercode@1.1.0",
+      "benchmark_profile": "main",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://cognition.com/data/frontiercode-leaderboard/data.json",
+        "verification": "imported"
+      },
+      "id": "cognition/claude-fable-5-low-frontiercode-1-1@1.0.0",
+      "metrics": {
+        "pass_rate": 0.5282,
+        "score": 0.4801
+      },
+      "model": "anthropic/claude-fable-5",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "low",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "1.1",
+        "harness": "claude-code",
+        "internet_flagged_rate": 0.001,
+        "run_kind": "independent",
+        "source_model": "Claude Fable 5",
+        "source_model_slug": "claude-fable-5-low",
+        "subset": "main"
+      }
+    },
+    {
+      "benchmark": "cognition/frontiercode@1.1.0",
+      "benchmark_profile": "main",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://cognition.com/data/frontiercode-leaderboard/data.json",
+        "verification": "imported"
+      },
+      "id": "cognition/claude-fable-5-medium-frontiercode-1-1@1.0.0",
+      "metrics": {
+        "pass_rate": 0.546,
+        "score": 0.4982
+      },
+      "model": "anthropic/claude-fable-5",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "medium",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "1.1",
+        "harness": "claude-code",
+        "internet_flagged_rate": 0.003,
+        "run_kind": "independent",
+        "source_model": "Claude Fable 5",
+        "source_model_slug": "claude-fable-5-medium",
+        "subset": "main"
+      }
+    },
+    {
+      "benchmark": "cognition/frontiercode@1.1.0",
+      "benchmark_profile": "main",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://cognition.com/data/frontiercode-leaderboard/data.json",
+        "verification": "imported"
+      },
+      "id": "cognition/claude-fable-5-high-frontiercode-1-1@1.0.0",
+      "metrics": {
+        "pass_rate": 0.5766,
+        "score": 0.5273
+      },
+      "model": "anthropic/claude-fable-5",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "1.1",
+        "harness": "claude-code",
+        "internet_flagged_rate": 0.002,
+        "run_kind": "independent",
+        "source_model": "Claude Fable 5",
+        "source_model_slug": "claude-fable-5-high",
+        "subset": "main"
+      }
+    },
+    {
+      "benchmark": "cognition/frontiercode@1.1.0",
+      "benchmark_profile": "main",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://cognition.com/data/frontiercode-leaderboard/data.json",
+        "verification": "imported"
+      },
+      "id": "cognition/claude-fable-5-xhigh-frontiercode-1-1@1.0.0",
+      "metrics": {
+        "pass_rate": 0.5885,
+        "score": 0.5348
+      },
+      "model": "anthropic/claude-fable-5",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "xhigh",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "1.1",
+        "harness": "claude-code",
+        "internet_flagged_rate": 0.003,
+        "run_kind": "independent",
+        "source_model": "Claude Fable 5",
+        "source_model_slug": "claude-fable-5-xhigh",
+        "subset": "main"
+      }
+    },
+    {
+      "benchmark": "cognition/frontiercode@1.1.0",
+      "benchmark_profile": "main",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://cognition.com/data/frontiercode-leaderboard/data.json",
+        "verification": "imported"
+      },
+      "id": "cognition/claude-opus-4-8-low-frontiercode-1-1@1.0.0",
+      "metrics": {
+        "pass_rate": 0.3923,
+        "score": 0.3514
+      },
+      "model": "anthropic/claude-opus-4.8",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "low",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "1.1",
+        "harness": "claude-code",
+        "internet_flagged_rate": 0.001,
+        "run_kind": "independent",
+        "source_model": "Claude Opus 4.8",
+        "source_model_slug": "claude-opus-4-8-low",
+        "subset": "main"
+      }
+    },
+    {
+      "benchmark": "cognition/frontiercode@1.1.0",
+      "benchmark_profile": "main",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://cognition.com/data/frontiercode-leaderboard/data.json",
+        "verification": "imported"
+      },
+      "id": "cognition/claude-opus-4-8-medium-frontiercode-1-1@1.0.0",
+      "metrics": {
+        "pass_rate": 0.4493,
+        "score": 0.4046
+      },
+      "model": "anthropic/claude-opus-4.8",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "medium",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "1.1",
+        "harness": "claude-code",
+        "internet_flagged_rate": 0.005,
+        "run_kind": "independent",
+        "source_model": "Claude Opus 4.8",
+        "source_model_slug": "claude-opus-4-8-medium",
+        "subset": "main"
+      }
+    },
+    {
+      "benchmark": "cognition/frontiercode@1.1.0",
+      "benchmark_profile": "main",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://cognition.com/data/frontiercode-leaderboard/data.json",
+        "verification": "imported"
+      },
+      "id": "cognition/claude-opus-4-8-high-frontiercode-1-1@1.0.0",
+      "metrics": {
+        "pass_rate": 0.4565,
+        "score": 0.4102
+      },
+      "model": "anthropic/claude-opus-4.8",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "1.1",
+        "harness": "claude-code",
+        "internet_flagged_rate": 0.008,
+        "run_kind": "independent",
+        "source_model": "Claude Opus 4.8",
+        "source_model_slug": "claude-opus-4-8-high",
+        "subset": "main"
+      }
+    },
+    {
+      "benchmark": "cognition/frontiercode@1.1.0",
+      "benchmark_profile": "main",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://cognition.com/data/frontiercode-leaderboard/data.json",
+        "verification": "imported"
+      },
+      "id": "cognition/claude-opus-4-8-xhigh-frontiercode-1-1@1.0.0",
+      "metrics": {
+        "pass_rate": 0.5027,
+        "score": 0.4549
+      },
+      "model": "anthropic/claude-opus-4.8",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "xhigh",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "1.1",
+        "harness": "claude-code",
+        "internet_flagged_rate": 0.005,
+        "run_kind": "independent",
+        "source_model": "Claude Opus 4.8",
+        "source_model_slug": "claude-opus-4-8-xhigh",
+        "subset": "main"
+      }
+    },
+    {
+      "benchmark": "cognition/frontiercode@1.1.0",
+      "benchmark_profile": "main",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://cognition.com/data/frontiercode-leaderboard/data.json",
+        "verification": "imported"
+      },
+      "id": "cognition/claude-sonnet-5-low-frontiercode-1-1@1.0.0",
+      "metrics": {
+        "pass_rate": 0.32,
+        "score": 0.2871
+      },
+      "model": "anthropic/claude-sonnet-5",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "low",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "1.1",
+        "harness": "claude-code",
+        "internet_flagged_rate": 0.001,
+        "run_kind": "independent",
+        "source_model": "Claude Sonnet 5",
+        "source_model_slug": "claude-sonnet-5-low",
+        "subset": "main"
+      }
+    },
+    {
+      "benchmark": "cognition/frontiercode@1.1.0",
+      "benchmark_profile": "main",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://cognition.com/data/frontiercode-leaderboard/data.json",
+        "verification": "imported"
+      },
+      "id": "cognition/claude-sonnet-5-medium-frontiercode-1-1@1.0.0",
+      "metrics": {
+        "pass_rate": 0.3907,
+        "score": 0.352
+      },
+      "model": "anthropic/claude-sonnet-5",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "medium",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "1.1",
+        "harness": "claude-code",
+        "internet_flagged_rate": 0,
+        "run_kind": "independent",
+        "source_model": "Claude Sonnet 5",
+        "source_model_slug": "claude-sonnet-5-medium",
+        "subset": "main"
+      }
+    },
+    {
+      "benchmark": "cognition/frontiercode@1.1.0",
+      "benchmark_profile": "main",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://cognition.com/data/frontiercode-leaderboard/data.json",
+        "verification": "imported"
+      },
+      "id": "cognition/claude-sonnet-5-high-frontiercode-1-1@1.0.0",
+      "metrics": {
+        "pass_rate": 0.4366,
+        "score": 0.3935
+      },
+      "model": "anthropic/claude-sonnet-5",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "1.1",
+        "harness": "claude-code",
+        "internet_flagged_rate": 0.002,
+        "run_kind": "independent",
+        "source_model": "Claude Sonnet 5",
+        "source_model_slug": "claude-sonnet-5-high",
+        "subset": "main"
+      }
+    },
+    {
+      "benchmark": "cognition/frontiercode@1.1.0",
+      "benchmark_profile": "main",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://cognition.com/data/frontiercode-leaderboard/data.json",
+        "verification": "imported"
+      },
+      "id": "cognition/claude-sonnet-5-xhigh-frontiercode-1-1@1.0.0",
+      "metrics": {
+        "pass_rate": 0.4759,
+        "score": 0.4273
+      },
+      "model": "anthropic/claude-sonnet-5",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "xhigh",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "1.1",
+        "harness": "claude-code",
+        "internet_flagged_rate": 0.005,
+        "run_kind": "independent",
+        "source_model": "Claude Sonnet 5",
+        "source_model_slug": "claude-sonnet-5-xhigh",
+        "subset": "main"
+      }
+    },
+    {
+      "benchmark": "cursor/cursorbench@3.2.0",
+      "benchmark_profile": "production-agent",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://cursor.com/cursorbench",
+        "verification": "imported"
+      },
+      "id": "cursor/claude-fable-5-low-cursorbench-3-2@1.0.0",
+      "metrics": {
+        "score": 0.621
+      },
+      "model": "anthropic/claude-fable-5",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "low",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "3.2",
+        "harness": "cursor-production-agent",
+        "run_kind": "independent",
+        "source_model": "Claude Fable 5",
+        "source_model_slug": "claude-fable-5-low"
+      }
+    },
+    {
+      "benchmark": "cursor/cursorbench@3.2.0",
+      "benchmark_profile": "production-agent",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://cursor.com/cursorbench",
+        "verification": "imported"
+      },
+      "id": "cursor/claude-fable-5-medium-cursorbench-3-2@1.0.0",
+      "metrics": {
+        "score": 0.652
+      },
+      "model": "anthropic/claude-fable-5",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "medium",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "3.2",
+        "harness": "cursor-production-agent",
+        "run_kind": "independent",
+        "source_model": "Claude Fable 5",
+        "source_model_slug": "claude-fable-5-medium"
+      }
+    },
+    {
+      "benchmark": "cursor/cursorbench@3.2.0",
+      "benchmark_profile": "production-agent",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://cursor.com/cursorbench",
+        "verification": "imported"
+      },
+      "id": "cursor/claude-fable-5-high-cursorbench-3-2@1.0.0",
+      "metrics": {
+        "score": 0.665
+      },
+      "model": "anthropic/claude-fable-5",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "3.2",
+        "harness": "cursor-production-agent",
+        "run_kind": "independent",
+        "source_model": "Claude Fable 5",
+        "source_model_slug": "claude-fable-5-high"
+      }
+    },
+    {
+      "benchmark": "cursor/cursorbench@3.2.0",
+      "benchmark_profile": "production-agent",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://cursor.com/cursorbench",
+        "verification": "imported"
+      },
+      "id": "cursor/claude-fable-5-xhigh-cursorbench-3-2@1.0.0",
+      "metrics": {
+        "score": 0.684
+      },
+      "model": "anthropic/claude-fable-5",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "xhigh",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "3.2",
+        "harness": "cursor-production-agent",
+        "run_kind": "independent",
+        "source_model": "Claude Fable 5",
+        "source_model_slug": "claude-fable-5-xhigh"
+      }
+    },
+    {
+      "benchmark": "cursor/cursorbench@3.2.0",
+      "benchmark_profile": "production-agent",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://cursor.com/cursorbench",
+        "verification": "imported"
+      },
+      "id": "cursor/claude-opus-4-8-low-cursorbench-3-2@1.0.0",
+      "metrics": {
+        "score": 0.531
+      },
+      "model": "anthropic/claude-opus-4.8",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "low",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "3.2",
+        "harness": "cursor-production-agent",
+        "run_kind": "independent",
+        "source_model": "Claude Opus 4.8",
+        "source_model_slug": "claude-opus-4-8-low"
+      }
+    },
+    {
+      "benchmark": "cursor/cursorbench@3.2.0",
+      "benchmark_profile": "production-agent",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://cursor.com/cursorbench",
+        "verification": "imported"
+      },
+      "id": "cursor/claude-opus-4-8-medium-cursorbench-3-2@1.0.0",
+      "metrics": {
+        "score": 0.561
+      },
+      "model": "anthropic/claude-opus-4.8",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "medium",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "3.2",
+        "harness": "cursor-production-agent",
+        "run_kind": "independent",
+        "source_model": "Claude Opus 4.8",
+        "source_model_slug": "claude-opus-4-8-medium"
+      }
+    },
+    {
+      "benchmark": "cursor/cursorbench@3.2.0",
+      "benchmark_profile": "production-agent",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://cursor.com/cursorbench",
+        "verification": "imported"
+      },
+      "id": "cursor/claude-opus-4-8-high-cursorbench-3-2@1.0.0",
+      "metrics": {
+        "score": 0.58
+      },
+      "model": "anthropic/claude-opus-4.8",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "3.2",
+        "harness": "cursor-production-agent",
+        "run_kind": "independent",
+        "source_model": "Claude Opus 4.8",
+        "source_model_slug": "claude-opus-4-8-high"
+      }
+    },
+    {
+      "benchmark": "cursor/cursorbench@3.2.0",
+      "benchmark_profile": "production-agent",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://cursor.com/cursorbench",
+        "verification": "imported"
+      },
+      "id": "cursor/claude-opus-4-8-xhigh-cursorbench-3-2@1.0.0",
+      "metrics": {
+        "score": 0.594
+      },
+      "model": "anthropic/claude-opus-4.8",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "xhigh",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "3.2",
+        "harness": "cursor-production-agent",
+        "run_kind": "independent",
+        "source_model": "Claude Opus 4.8",
+        "source_model_slug": "claude-opus-4-8-xhigh"
+      }
+    },
+    {
+      "benchmark": "cursor/cursorbench@3.2.0",
+      "benchmark_profile": "production-agent",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://cursor.com/cursorbench",
+        "verification": "imported"
+      },
+      "id": "cursor/claude-sonnet-5-low-cursorbench-3-2@1.0.0",
+      "metrics": {
+        "score": 0.477
+      },
+      "model": "anthropic/claude-sonnet-5",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "low",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "3.2",
+        "harness": "cursor-production-agent",
+        "run_kind": "independent",
+        "source_model": "Claude Sonnet 5",
+        "source_model_slug": "claude-sonnet-5-low"
+      }
+    },
+    {
+      "benchmark": "cursor/cursorbench@3.2.0",
+      "benchmark_profile": "production-agent",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://cursor.com/cursorbench",
+        "verification": "imported"
+      },
+      "id": "cursor/claude-sonnet-5-medium-cursorbench-3-2@1.0.0",
+      "metrics": {
+        "score": 0.524
+      },
+      "model": "anthropic/claude-sonnet-5",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "medium",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "3.2",
+        "harness": "cursor-production-agent",
+        "run_kind": "independent",
+        "source_model": "Claude Sonnet 5",
+        "source_model_slug": "claude-sonnet-5-medium"
+      }
+    },
+    {
+      "benchmark": "cursor/cursorbench@3.2.0",
+      "benchmark_profile": "production-agent",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://cursor.com/cursorbench",
+        "verification": "imported"
+      },
+      "id": "cursor/claude-sonnet-5-high-cursorbench-3-2@1.0.0",
+      "metrics": {
+        "score": 0.569
+      },
+      "model": "anthropic/claude-sonnet-5",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "3.2",
+        "harness": "cursor-production-agent",
+        "run_kind": "independent",
+        "source_model": "Claude Sonnet 5",
+        "source_model_slug": "claude-sonnet-5-high"
+      }
+    },
+    {
+      "benchmark": "cursor/cursorbench@3.2.0",
+      "benchmark_profile": "production-agent",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://cursor.com/cursorbench",
+        "verification": "imported"
+      },
+      "id": "cursor/claude-sonnet-5-xhigh-cursorbench-3-2@1.0.0",
+      "metrics": {
+        "score": 0.587
+      },
+      "model": "anthropic/claude-sonnet-5",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "xhigh",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "3.2",
+        "harness": "cursor-production-agent",
+        "run_kind": "independent",
+        "source_model": "Claude Sonnet 5",
+        "source_model_slug": "claude-sonnet-5-xhigh"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "with-tools",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://www-cdn.anthropic.com/9e6a1044980d8c4ed85669faf9c2a8342e2e9f1e/Claude%20Sonnet%205%20System%20Card.pdf",
+        "verification": "claimed"
+      },
+      "id": "anthropic/claude-opus-4-8-low-humanitys-last-exam-with-tools@1.0.0",
+      "metrics": {
+        "accuracy": 0.502
+      },
+      "model": "anthropic/claude-opus-4.8",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "low",
+      "status": "available",
+      "subject": {
+        "reasoning_effort": "low",
+        "source_kind": "official_system_card",
+        "thinking_mode": "adaptive",
+        "tool_policy": "with_tools",
+        "tools": "web_search, web_fetch, programmatic_tool_calling, code_execution",
+        "total_token_budget": 1000000,
+        "trials": 1,
+        "variant": "Claude Opus 4.8"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "with-tools",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://www-cdn.anthropic.com/9e6a1044980d8c4ed85669faf9c2a8342e2e9f1e/Claude%20Sonnet%205%20System%20Card.pdf",
+        "verification": "claimed"
+      },
+      "id": "anthropic/claude-opus-4-8-medium-humanitys-last-exam-with-tools@1.0.0",
+      "metrics": {
+        "accuracy": 0.552
+      },
+      "model": "anthropic/claude-opus-4.8",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "medium",
+      "status": "available",
+      "subject": {
+        "reasoning_effort": "medium",
+        "source_kind": "official_system_card",
+        "thinking_mode": "adaptive",
+        "tool_policy": "with_tools",
+        "tools": "web_search, web_fetch, programmatic_tool_calling, code_execution",
+        "total_token_budget": 1000000,
+        "trials": 1,
+        "variant": "Claude Opus 4.8"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "with-tools",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://www-cdn.anthropic.com/9e6a1044980d8c4ed85669faf9c2a8342e2e9f1e/Claude%20Sonnet%205%20System%20Card.pdf",
+        "verification": "claimed"
+      },
+      "id": "anthropic/claude-opus-4-8-high-humanitys-last-exam-with-tools@1.0.0",
+      "metrics": {
+        "accuracy": 0.557
+      },
+      "model": "anthropic/claude-opus-4.8",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "reasoning_effort": "high",
+        "source_kind": "official_system_card",
+        "thinking_mode": "adaptive",
+        "tool_policy": "with_tools",
+        "tools": "web_search, web_fetch, programmatic_tool_calling, code_execution",
+        "total_token_budget": 1000000,
+        "trials": 1,
+        "variant": "Claude Opus 4.8"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "with-tools",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://www-cdn.anthropic.com/9e6a1044980d8c4ed85669faf9c2a8342e2e9f1e/Claude%20Sonnet%205%20System%20Card.pdf",
+        "verification": "claimed"
+      },
+      "id": "anthropic/claude-opus-4-8-xhigh-humanitys-last-exam-with-tools@1.0.0",
+      "metrics": {
+        "accuracy": 0.576
+      },
+      "model": "anthropic/claude-opus-4.8",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "xhigh",
+      "status": "available",
+      "subject": {
+        "reasoning_effort": "xhigh",
+        "source_kind": "official_system_card",
+        "thinking_mode": "adaptive",
+        "tool_policy": "with_tools",
+        "tools": "web_search, web_fetch, programmatic_tool_calling, code_execution",
+        "total_token_budget": 1000000,
+        "trials": 1,
+        "variant": "Claude Opus 4.8"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "with-tools",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://www-cdn.anthropic.com/9e6a1044980d8c4ed85669faf9c2a8342e2e9f1e/Claude%20Sonnet%205%20System%20Card.pdf",
+        "verification": "claimed"
+      },
+      "id": "anthropic/claude-sonnet-5-low-humanitys-last-exam-with-tools@1.0.0",
+      "metrics": {
+        "accuracy": 0.365
+      },
+      "model": "anthropic/claude-sonnet-5",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "low",
+      "status": "available",
+      "subject": {
+        "reasoning_effort": "low",
+        "source_kind": "official_system_card",
+        "thinking_mode": "adaptive",
+        "tool_policy": "with_tools",
+        "tools": "web_search, web_fetch, programmatic_tool_calling, code_execution",
+        "total_token_budget": 1000000,
+        "trials": 1,
+        "variant": "Claude Sonnet 5"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "with-tools",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://www-cdn.anthropic.com/9e6a1044980d8c4ed85669faf9c2a8342e2e9f1e/Claude%20Sonnet%205%20System%20Card.pdf",
+        "verification": "claimed"
+      },
+      "id": "anthropic/claude-sonnet-5-medium-humanitys-last-exam-with-tools@1.0.0",
+      "metrics": {
+        "accuracy": 0.472
+      },
+      "model": "anthropic/claude-sonnet-5",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "medium",
+      "status": "available",
+      "subject": {
+        "reasoning_effort": "medium",
+        "source_kind": "official_system_card",
+        "thinking_mode": "adaptive",
+        "tool_policy": "with_tools",
+        "tools": "web_search, web_fetch, programmatic_tool_calling, code_execution",
+        "total_token_budget": 1000000,
+        "trials": 1,
+        "variant": "Claude Sonnet 5"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "with-tools",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://www-cdn.anthropic.com/9e6a1044980d8c4ed85669faf9c2a8342e2e9f1e/Claude%20Sonnet%205%20System%20Card.pdf",
+        "verification": "claimed"
+      },
+      "id": "anthropic/claude-sonnet-5-high-humanitys-last-exam-with-tools@1.0.0",
+      "metrics": {
+        "accuracy": 0.528
+      },
+      "model": "anthropic/claude-sonnet-5",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "reasoning_effort": "high",
+        "source_kind": "official_system_card",
+        "thinking_mode": "adaptive",
+        "tool_policy": "with_tools",
+        "tools": "web_search, web_fetch, programmatic_tool_calling, code_execution",
+        "total_token_budget": 1000000,
+        "trials": 1,
+        "variant": "Claude Sonnet 5"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "with-tools",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://www-cdn.anthropic.com/9e6a1044980d8c4ed85669faf9c2a8342e2e9f1e/Claude%20Sonnet%205%20System%20Card.pdf",
+        "verification": "claimed"
+      },
+      "id": "anthropic/claude-sonnet-5-xhigh-humanitys-last-exam-with-tools@1.0.0",
+      "metrics": {
+        "accuracy": 0.546
+      },
+      "model": "anthropic/claude-sonnet-5",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "xhigh",
+      "status": "available",
+      "subject": {
+        "reasoning_effort": "xhigh",
+        "source_kind": "official_system_card",
+        "thinking_mode": "adaptive",
+        "tool_policy": "with_tools",
+        "tools": "web_search, web_fetch, programmatic_tool_calling, code_execution",
+        "total_token_budget": 1000000,
+        "trials": 1,
+        "variant": "Claude Sonnet 5"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://www-cdn.anthropic.com/9e6a1044980d8c4ed85669faf9c2a8342e2e9f1e/Claude%20Sonnet%205%20System%20Card.pdf",
+        "verification": "claimed"
+      },
+      "id": "anthropic/claude-sonnet-5-xhigh-terminal-bench-2-1@1.0.0",
+      "metrics": {
+        "resolved": 0.804
+      },
+      "model": "anthropic/claude-sonnet-5",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "xhigh",
+      "status": "available",
+      "subject": {
+        "attempts_per_task": 5,
+        "harness": "mini-swe-agent",
+        "reasoning_effort": "xhigh",
+        "source_kind": "official_system_card",
+        "tasks": 89,
+        "thinking_mode": "adaptive",
+        "variant": "Claude Sonnet 5"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://www-cdn.anthropic.com/d00db56fa754a1b115b6dd7cb2e3c342ee809620.pdf",
+        "verification": "claimed"
+      },
+      "id": "anthropic/claude-opus-4-8-high-terminal-bench-2-1@1.0.0",
+      "metrics": {
+        "resolved": 0.827
+      },
+      "model": "anthropic/claude-opus-4.8",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "attempts_per_task": 5,
+        "harness": "mini-swe-agent",
+        "reasoning_effort": "high",
+        "source_kind": "official_system_card",
+        "tasks": 89,
+        "thinking_mode": "adaptive",
+        "variant": "Claude Opus 4.8"
+      }
+    },
+    {
+      "benchmark": "matharena/usamo@2026.0.0",
+      "benchmark_profile": "proof-panel",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://www-cdn.anthropic.com/9e6a1044980d8c4ed85669faf9c2a8342e2e9f1e/Claude%20Sonnet%205%20System%20Card.pdf",
+        "verification": "claimed"
+      },
+      "id": "anthropic/claude-sonnet-5-high-usamo-2026@1.0.0",
+      "metrics": {
+        "score": 0.795
+      },
+      "model": "anthropic/claude-sonnet-5",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "aggregation": "minimum_judge_score",
+        "attempts_per_problem": 10,
+        "judge_panel": "Gemini 3.1 Pro, Claude Opus 4.6, Claude Mythos Preview",
+        "reasoning_effort": "high",
+        "rewrite_model": "Gemini 3.1 Pro",
+        "source_kind": "official_system_card",
+        "thinking_mode": "adaptive",
+        "token_limit": 300000,
+        "variant": "Claude Sonnet 5"
+      }
+    },
+    {
+      "benchmark": "duellab/gamebench@2.0.0",
+      "benchmark_profile": "public-games",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://benchmarks.duellab.org/model-claude-fable-5",
+        "verification": "imported"
+      },
+      "id": "duellab/claude-fable-5-medium-gamebench-2@1.0.0",
+      "metrics": {
+        "score": 66.1
+      },
+      "model": "anthropic/claude-fable-5",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "medium",
+      "status": "available",
+      "subject": {
+        "benchmark_release": "gb2-20260824-e05a1ff89a26",
+        "provider_setting": "Medium",
+        "result_status": "tested_and_included",
+        "run_kind": "independent",
+        "source_model": "Claude Fable 5",
+        "source_model_slug": "claude-fable-5-medium"
+      }
+    },
+    {
+      "benchmark": "duellab/gamebench@2.0.0",
+      "benchmark_profile": "public-games",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://benchmarks.duellab.org/model-claude-fable-5",
+        "verification": "imported"
+      },
+      "id": "duellab/claude-fable-5-xhigh-gamebench-2@1.0.0",
+      "metrics": {
+        "score": 83.3
+      },
+      "model": "anthropic/claude-fable-5",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "xhigh",
+      "status": "available",
+      "subject": {
+        "benchmark_release": "gb2-20260824-e05a1ff89a26",
+        "provider_setting": "XHigh",
+        "result_status": "tested_and_included",
+        "run_kind": "independent",
+        "source_model": "Claude Fable 5",
+        "source_model_slug": "claude-fable-5-xhigh"
+      }
+    },
+    {
+      "benchmark": "duellab/gamebench@2.0.0",
+      "benchmark_profile": "public-games",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://benchmarks.duellab.org/model-claude-opus-4-8",
+        "verification": "imported"
+      },
+      "id": "duellab/claude-opus-4-8-medium-gamebench-2@1.0.0",
+      "metrics": {
+        "score": 47.4
+      },
+      "model": "anthropic/claude-opus-4.8",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "medium",
+      "status": "available",
+      "subject": {
+        "benchmark_release": "gb2-20260824-e05a1ff89a26",
+        "provider_setting": "Medium",
+        "result_status": "tested_and_included",
+        "run_kind": "independent",
+        "source_model": "Claude Opus 4.8",
+        "source_model_slug": "claude-opus-4-8-medium"
+      }
+    },
+    {
+      "benchmark": "duellab/gamebench@2.0.0",
+      "benchmark_profile": "public-games",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://benchmarks.duellab.org/model-claude-opus-4-8",
+        "verification": "imported"
+      },
+      "id": "duellab/claude-opus-4-8-xhigh-gamebench-2@1.0.0",
+      "metrics": {
+        "score": 66.6
+      },
+      "model": "anthropic/claude-opus-4.8",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "xhigh",
+      "status": "available",
+      "subject": {
+        "benchmark_release": "gb2-20260824-e05a1ff89a26",
+        "provider_setting": "XHigh",
+        "result_status": "tested_and_included",
+        "run_kind": "independent",
+        "source_model": "Claude Opus 4.8",
+        "source_model_slug": "claude-opus-4-8-xhigh"
+      }
+    },
+    {
+      "benchmark": "duellab/gamebench@2.0.0",
+      "benchmark_profile": "public-games",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://benchmarks.duellab.org/model-claude-sonnet-5",
+        "verification": "imported"
+      },
+      "id": "duellab/claude-sonnet-5-medium-gamebench-2@1.0.0",
+      "metrics": {
+        "score": 40.9
+      },
+      "model": "anthropic/claude-sonnet-5",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "medium",
+      "status": "available",
+      "subject": {
+        "benchmark_release": "gb2-20260824-e05a1ff89a26",
+        "provider_setting": "Medium",
+        "result_status": "tested_and_included",
+        "run_kind": "independent",
+        "source_model": "Claude Sonnet 5",
+        "source_model_slug": "claude-sonnet-5-medium"
       }
     },
     {
@@ -16516,6 +17901,7 @@ const builtInCatalogJSON = `{
         "score": 0.679
       },
       "model": "baidu/ernie-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -16538,6 +17924,7 @@ const builtInCatalogJSON = `{
         "f1": 0.773
       },
       "model": "baidu/ernie-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -16559,6 +17946,7 @@ const builtInCatalogJSON = `{
         "pass_at_1": 0.725
       },
       "model": "baidu/ernie-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -16580,6 +17968,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.91
       },
       "model": "baidu/ernie-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -16602,6 +17991,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.843
       },
       "model": "baidu/ernie-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -16623,6 +18013,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.723
       },
       "model": "baidu/ernie-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -16644,6 +18035,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.7401
       },
       "model": "baidu/ernie-5.0",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -16666,6 +18058,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.838
       },
       "model": "baidu/ernie-5.0",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -16688,6 +18081,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.2581
       },
       "model": "baidu/ernie-5.0",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -16710,6 +18104,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.8636
       },
       "model": "baidu/ernie-5.0",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -16732,6 +18127,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.9335
       },
       "model": "baidu/ernie-5.0",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -16754,6 +18150,7 @@ const builtInCatalogJSON = `{
         "index": -35.1333333333333
       },
       "model": "baidu/ernie-4.5-300b-a47b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -16776,6 +18173,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.391156462585034
       },
       "model": "baidu/ernie-4.5-300b-a47b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -16798,6 +18196,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.0333642261353105
       },
       "model": "baidu/ernie-4.5-300b-a47b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -16820,6 +18219,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.811111111111111
       },
       "model": "baidu/ernie-4.5-300b-a47b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -16842,6 +18242,7 @@ const builtInCatalogJSON = `{
         "score": 0
       },
       "model": "baidu/ernie-4.5-300b-a47b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -16864,6 +18265,7 @@ const builtInCatalogJSON = `{
         "pass_at_1": 0.466666666666667
       },
       "model": "baidu/ernie-4.5-300b-a47b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -16886,6 +18288,7 @@ const builtInCatalogJSON = `{
         "pass_at_1": 0.413333333333333
       },
       "model": "baidu/ernie-4.5-300b-a47b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -16908,6 +18311,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.557
       },
       "model": "bytedance/seed-oss-36b-instruct",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -16929,6 +18333,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.889
       },
       "model": "bytedance/seed-2.0-pro",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -16950,6 +18355,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.687
       },
       "model": "bytedance/seed-2.0-pro",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -16971,6 +18377,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.324
       },
       "model": "bytedance/seed-2.0-pro",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -16992,6 +18399,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.865
       },
       "model": "bytedance/seed-2.0-pro",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -17013,6 +18421,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.87
       },
       "model": "bytedance/seed-2.1-pro",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -17034,6 +18443,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.71
       },
       "model": "bytedance/seed-2.1-pro",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -17056,6 +18466,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.483
       },
       "model": "bytedance/seed-2.1-pro",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -17077,6 +18488,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.816
       },
       "model": "bytedance/seed-2.1-pro",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -17099,6 +18511,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.708
       },
       "model": "bytedance/seed-2.1-pro",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -17120,6 +18533,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.88
       },
       "model": "bytedance/seed-2.1-turbo",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -17141,6 +18555,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.676
       },
       "model": "bytedance/seed-2.1-turbo",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -17163,6 +18578,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.466
       },
       "model": "bytedance/seed-2.1-turbo",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -17184,6 +18600,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.801
       },
       "model": "bytedance/seed-2.1-turbo",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -17206,6 +18623,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.674
       },
       "model": "bytedance/seed-2.1-turbo",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -17227,6 +18645,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.558
       },
       "model": "bytedance/seed-2.0-pro",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -17248,6 +18667,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.469
       },
       "model": "bytedance/seed-2.0-pro",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -17269,6 +18689,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.101
       },
       "model": "bytedance/seed-oss-36b-instruct",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -17291,6 +18712,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.714
       },
       "model": "bytedance/seed-oss-36b-instruct",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -17312,6 +18734,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.56
       },
       "model": "bytedance/seed-oss-36b-instruct",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -17334,6 +18757,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.827
       },
       "model": "bytedance/seed-oss-36b-instruct",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -17355,6 +18779,7 @@ const builtInCatalogJSON = `{
         "score": 0.00285714285714286
       },
       "model": "cohere/north-mini-code-1.0",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -17377,6 +18802,7 @@ const builtInCatalogJSON = `{
         "elo": 492.21
       },
       "model": "cohere/north-mini-code-1.0",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -17399,6 +18825,7 @@ const builtInCatalogJSON = `{
         "score": 0.373333333333333
       },
       "model": "cohere/north-mini-code-1.0",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -17421,6 +18848,7 @@ const builtInCatalogJSON = `{
         "index": -48.5833333333333
       },
       "model": "cohere/north-mini-code-1.0",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -17443,6 +18871,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.110750695088044
       },
       "model": "cohere/north-mini-code-1.0",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -17465,6 +18894,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.355805243445693
       },
       "model": "cohere/north-mini-code-1.0",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -17487,6 +18917,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.756565656565657
       },
       "model": "cohere/north-mini-code-1.0",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -17509,6 +18940,7 @@ const builtInCatalogJSON = `{
         "score": 0.0639175257731959
       },
       "model": "cohere/north-mini-code-1.0",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -17531,6 +18963,7 @@ const builtInCatalogJSON = `{
         "score": 0.00285714285714286
       },
       "model": "cohere/command-a-plus-05-2026",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -17553,6 +18986,7 @@ const builtInCatalogJSON = `{
         "elo": 661.27
       },
       "model": "cohere/command-a-plus-05-2026",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -17575,6 +19009,7 @@ const builtInCatalogJSON = `{
         "score": 0.526666666666667
       },
       "model": "cohere/command-a-plus-05-2026",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -17597,6 +19032,7 @@ const builtInCatalogJSON = `{
         "index": -4.01666666666667
       },
       "model": "cohere/command-a-plus-05-2026",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -17619,6 +19055,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.119555143651529
       },
       "model": "cohere/command-a-plus-05-2026",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -17641,6 +19078,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.228464419475655
       },
       "model": "cohere/command-a-plus-05-2026",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -17663,6 +19101,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.760606060606061
       },
       "model": "cohere/command-a-plus-05-2026",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -17685,6 +19124,7 @@ const builtInCatalogJSON = `{
         "score": 0.385416666666667
       },
       "model": "cohere/command-a-plus-05-2026",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -17707,6 +19147,7 @@ const builtInCatalogJSON = `{
         "score": 0.0597938144329897
       },
       "model": "cohere/command-a-plus-05-2026",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -17729,6 +19170,7 @@ const builtInCatalogJSON = `{
         "score": 0
       },
       "model": "cohere/tiny-aya-global",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -17751,6 +19193,7 @@ const builtInCatalogJSON = `{
         "score": 0
       },
       "model": "cohere/tiny-aya-global",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -17773,6 +19216,7 @@ const builtInCatalogJSON = `{
         "index": -84.3
       },
       "model": "cohere/tiny-aya-global",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -17795,6 +19239,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.0523632993512512
       },
       "model": "cohere/tiny-aya-global",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -17817,6 +19262,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.305050505050505
       },
       "model": "cohere/tiny-aya-global",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -17839,6 +19285,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.2828
       },
       "model": "cohere/tiny-aya-global",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -17860,6 +19307,7 @@ const builtInCatalogJSON = `{
         "score": 0.0285714285714286
       },
       "model": "deepseek/deepseek-v3.2",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -17882,6 +19330,7 @@ const builtInCatalogJSON = `{
         "elo": 814.15
       },
       "model": "deepseek/deepseek-v3.2",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -17904,6 +19353,7 @@ const builtInCatalogJSON = `{
         "score": 0.733333333333333
       },
       "model": "deepseek/deepseek-v3.2",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -17926,6 +19376,7 @@ const builtInCatalogJSON = `{
         "index": -22.4833333333333
       },
       "model": "deepseek/deepseek-v3.2",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -17948,6 +19399,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.245597775718258
       },
       "model": "deepseek/deepseek-v3.2",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -17970,6 +19422,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.468164794007491
       },
       "model": "deepseek/deepseek-v3.2",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -17992,6 +19445,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.84040404040404
       },
       "model": "deepseek/deepseek-v3.2",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -18014,6 +19468,7 @@ const builtInCatalogJSON = `{
         "score": 0.00857142857142857
       },
       "model": "deepseek/deepseek-v3.2",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -18036,6 +19491,7 @@ const builtInCatalogJSON = `{
         "score": 0.456666666666667
       },
       "model": "deepseek/deepseek-v3.2",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -18058,6 +19514,7 @@ const builtInCatalogJSON = `{
         "index": -46.8833333333333
       },
       "model": "deepseek/deepseek-v3.2",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -18080,6 +19537,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.112140871177016
       },
       "model": "deepseek/deepseek-v3.2",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -18102,6 +19560,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.750505050505051
       },
       "model": "deepseek/deepseek-v3.2",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -18124,6 +19583,7 @@ const builtInCatalogJSON = `{
         "score": 0.00571428571428571
       },
       "model": "deepseek/deepseek-r1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -18146,6 +19606,7 @@ const builtInCatalogJSON = `{
         "elo": 481.37
       },
       "model": "deepseek/deepseek-r1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -18168,6 +19629,7 @@ const builtInCatalogJSON = `{
         "score": 0.576666666666667
       },
       "model": "deepseek/deepseek-r1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -18190,6 +19652,7 @@ const builtInCatalogJSON = `{
         "index": -32.2166666666667
       },
       "model": "deepseek/deepseek-r1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -18212,6 +19675,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.085
       },
       "model": "deepseek/deepseek-r1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -18234,6 +19698,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.191011235955056
       },
       "model": "deepseek/deepseek-r1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -18256,6 +19721,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.708080808080808
       },
       "model": "deepseek/deepseek-r1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -18278,6 +19744,7 @@ const builtInCatalogJSON = `{
         "score": 0.0639175257731959
       },
       "model": "deepseek/deepseek-r1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -18302,6 +19769,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 1278.71
       },
       "model": "deepseek/deepseek-v4-pro",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -18324,6 +19792,7 @@ const builtInCatalogJSON = `{
         "score": 0.18
       },
       "model": "deepseek/deepseek-v4-pro",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -18346,6 +19815,7 @@ const builtInCatalogJSON = `{
         "all_pass": 0.13
       },
       "model": "deepseek/deepseek-v4-pro",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -18370,6 +19840,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 1513.68
       },
       "model": "deepseek/deepseek-v4-pro",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -18392,6 +19863,7 @@ const builtInCatalogJSON = `{
         "score": 0.803333333333333
       },
       "model": "deepseek/deepseek-v4-pro",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -18414,6 +19886,7 @@ const builtInCatalogJSON = `{
         "index": 0.833333333333333
       },
       "model": "deepseek/deepseek-v4-pro",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -18436,6 +19909,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.377
       },
       "model": "deepseek/deepseek-v4-pro",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -18459,6 +19933,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.410101946246525
       },
       "model": "deepseek/deepseek-v4-pro",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -18481,6 +19956,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.879
       },
       "model": "deepseek/deepseek-v4-pro",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -18504,6 +19980,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.786516853932584
       },
       "model": "deepseek/deepseek-v4-pro",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -18526,6 +20003,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.901
       },
       "model": "deepseek/deepseek-v4-pro",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -18548,6 +20026,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.928282828282828
       },
       "model": "deepseek/deepseek-v4-pro",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -18570,6 +20049,7 @@ const builtInCatalogJSON = `{
         "score": 0.510416666666667
       },
       "model": "deepseek/deepseek-v4-pro",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -18592,6 +20072,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.806
       },
       "model": "deepseek/deepseek-v4-pro",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -18614,6 +20095,7 @@ const builtInCatalogJSON = `{
         "score": 0.395876288659794
       },
       "model": "deepseek/deepseek-v4-pro",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -18636,6 +20118,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.875
       },
       "model": "deepseek/deepseek-v4-pro",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -18658,6 +20141,7 @@ const builtInCatalogJSON = `{
         "score": 0.0342857142857143
       },
       "model": "deepseek/deepseek-v4-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -18680,6 +20164,7 @@ const builtInCatalogJSON = `{
         "elo": 1085.26
       },
       "model": "deepseek/deepseek-v4-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -18702,6 +20187,7 @@ const builtInCatalogJSON = `{
         "score": 0.72
       },
       "model": "deepseek/deepseek-v4-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -18724,6 +20210,7 @@ const builtInCatalogJSON = `{
         "index": -23.0833333333333
       },
       "model": "deepseek/deepseek-v4-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -18746,6 +20233,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.30259499536608
       },
       "model": "deepseek/deepseek-v4-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -18768,6 +20256,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.569288389513109
       },
       "model": "deepseek/deepseek-v4-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -18790,6 +20279,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.866666666666667
       },
       "model": "deepseek/deepseek-v4-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -18812,6 +20302,7 @@ const builtInCatalogJSON = `{
         "score": 0.261855670103093
       },
       "model": "deepseek/deepseek-v4-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -18834,6 +20325,7 @@ const builtInCatalogJSON = `{
         "score": 0.165714285714286
       },
       "model": "deepseek/deepseek-v4-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -18856,6 +20348,7 @@ const builtInCatalogJSON = `{
         "elo": 1472.33
       },
       "model": "deepseek/deepseek-v4-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -18878,6 +20371,7 @@ const builtInCatalogJSON = `{
         "score": 0.796666666666667
       },
       "model": "deepseek/deepseek-v4-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -18900,6 +20394,7 @@ const builtInCatalogJSON = `{
         "index": -14.2833333333333
       },
       "model": "deepseek/deepseek-v4-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -18922,6 +20417,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.348
       },
       "model": "deepseek/deepseek-v4-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -18945,6 +20441,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.385542168674699
       },
       "model": "deepseek/deepseek-v4-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -18967,6 +20464,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.827
       },
       "model": "deepseek/deepseek-v4-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -18990,6 +20488,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.786516853932584
       },
       "model": "deepseek/deepseek-v4-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -19012,6 +20511,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.881
       },
       "model": "deepseek/deepseek-v4-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -19034,6 +20534,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.908080808080808
       },
       "model": "deepseek/deepseek-v4-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -19056,6 +20557,7 @@ const builtInCatalogJSON = `{
         "score": 0.503472222222222
       },
       "model": "deepseek/deepseek-v4-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -19078,6 +20580,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.79
       },
       "model": "deepseek/deepseek-v4-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -19100,6 +20603,7 @@ const builtInCatalogJSON = `{
         "score": 0.393814432989691
       },
       "model": "deepseek/deepseek-v4-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -19122,12 +20626,41 @@ const builtInCatalogJSON = `{
         "accuracy": 0.862
       },
       "model": "deepseek/deepseek-v4-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
         "reasoning_effort": "max",
         "source_kind": "official_model_card",
         "variant": "DeepSeek-V4-Flash"
+      }
+    },
+    {
+      "benchmark": "cognition/frontiercode@1.1.0",
+      "benchmark_profile": "main",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://cognition.com/data/frontiercode-leaderboard/data.json",
+        "verification": "imported"
+      },
+      "id": "cognition/deepseek-v4-pro-0813-high-frontiercode-1-1@1.0.0",
+      "metrics": {
+        "pass_rate": 0.318,
+        "score": 0.2855
+      },
+      "model": "deepseek/deepseek-v4-pro",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "1.1",
+        "harness": "chisel",
+        "internet_flagged_rate": 0.106,
+        "run_kind": "independent",
+        "source_model": "DeepSeek V4 Pro 0813",
+        "source_model_slug": "deepseek-v4-pro-0813-high",
+        "subset": "main"
       }
     },
     {
@@ -19144,6 +20677,7 @@ const builtInCatalogJSON = `{
         "score": 0.105714285714286
       },
       "model": "google/gemini-3.6-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -19166,6 +20700,7 @@ const builtInCatalogJSON = `{
         "elo": 1335.96
       },
       "model": "google/gemini-3.6-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -19188,6 +20723,7 @@ const builtInCatalogJSON = `{
         "score": 0.8
       },
       "model": "google/gemini-3.6-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -19210,6 +20746,7 @@ const builtInCatalogJSON = `{
         "index": 22.1333333333333
       },
       "model": "google/gemini-3.6-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -19232,6 +20769,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.408248378127896
       },
       "model": "google/gemini-3.6-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -19254,6 +20792,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.775280898876405
       },
       "model": "google/gemini-3.6-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -19276,6 +20815,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.928282828282828
       },
       "model": "google/gemini-3.6-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -19298,6 +20838,7 @@ const builtInCatalogJSON = `{
         "score": 0.533564814814815
       },
       "model": "google/gemini-3.6-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -19320,6 +20861,7 @@ const builtInCatalogJSON = `{
         "score": 0.298969072164948
       },
       "model": "google/gemini-3.6-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -19342,6 +20884,7 @@ const builtInCatalogJSON = `{
         "score": 0.0142857142857143
       },
       "model": "google/gemma-4-31b-it",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -19364,6 +20907,7 @@ const builtInCatalogJSON = `{
         "elo": 758.55
       },
       "model": "google/gemma-4-31b-it",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -19386,6 +20930,7 @@ const builtInCatalogJSON = `{
         "score": 0.696666666666667
       },
       "model": "google/gemma-4-31b-it",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -19408,6 +20953,7 @@ const builtInCatalogJSON = `{
         "index": -47.9333333333333
       },
       "model": "google/gemma-4-31b-it",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -19430,6 +20976,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.236329935125116
       },
       "model": "google/gemma-4-31b-it",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -19452,6 +20999,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.434456928838951
       },
       "model": "google/gemma-4-31b-it",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -19474,6 +21022,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.856565656565657
       },
       "model": "google/gemma-4-31b-it",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -19496,6 +21045,7 @@ const builtInCatalogJSON = `{
         "score": 0.454861111111111
       },
       "model": "google/gemma-4-31b-it",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -19518,6 +21068,7 @@ const builtInCatalogJSON = `{
         "score": 0.148453608247423
       },
       "model": "google/gemma-4-31b-it",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -19540,6 +21091,7 @@ const builtInCatalogJSON = `{
         "score": 0
       },
       "model": "google/gemma-4-31b-it",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -19562,6 +21114,7 @@ const builtInCatalogJSON = `{
         "elo": 694.67
       },
       "model": "google/gemma-4-31b-it",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -19584,6 +21137,7 @@ const builtInCatalogJSON = `{
         "score": 0.466666666666667
       },
       "model": "google/gemma-4-31b-it",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -19606,6 +21160,7 @@ const builtInCatalogJSON = `{
         "index": -51.6833333333333
       },
       "model": "google/gemma-4-31b-it",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -19628,6 +21183,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.118164967562558
       },
       "model": "google/gemma-4-31b-it",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -19650,6 +21206,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.292134831460674
       },
       "model": "google/gemma-4-31b-it",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -19672,6 +21229,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.762626262626263
       },
       "model": "google/gemma-4-31b-it",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -19694,6 +21252,7 @@ const builtInCatalogJSON = `{
         "score": 0.088659793814433
       },
       "model": "google/gemma-4-31b-it",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -19718,6 +21277,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 1215.07
       },
       "model": "google/gemini-3.8-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -19740,6 +21300,7 @@ const builtInCatalogJSON = `{
         "score": 0.182857142857143
       },
       "model": "google/gemini-3.8-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -19762,6 +21323,7 @@ const builtInCatalogJSON = `{
         "all_pass": 0.19
       },
       "model": "google/gemini-3.8-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -19786,6 +21348,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 1486.78
       },
       "model": "google/gemini-3.8-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -19808,6 +21371,7 @@ const builtInCatalogJSON = `{
         "score": 0.813333333333333
       },
       "model": "google/gemini-3.8-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -19830,6 +21394,7 @@ const builtInCatalogJSON = `{
         "index": 29.55
       },
       "model": "google/gemini-3.8-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -19852,6 +21417,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.478220574606117
       },
       "model": "google/gemini-3.8-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -19874,6 +21440,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.876404494382023
       },
       "model": "google/gemini-3.8-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -19896,6 +21463,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.952525252525253
       },
       "model": "google/gemini-3.8-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -19918,6 +21486,7 @@ const builtInCatalogJSON = `{
         "score": 0.565972222222222
       },
       "model": "google/gemini-3.8-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -19940,6 +21509,7 @@ const builtInCatalogJSON = `{
         "score": 0.449484536082474
       },
       "model": "google/gemini-3.8-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -19962,6 +21532,7 @@ const builtInCatalogJSON = `{
         "score": 0.04
       },
       "model": "google/gemini-3.8-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -19984,6 +21555,7 @@ const builtInCatalogJSON = `{
         "elo": 1363.39
       },
       "model": "google/gemini-3.8-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -20006,6 +21578,7 @@ const builtInCatalogJSON = `{
         "score": 0.806666666666667
       },
       "model": "google/gemini-3.8-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -20028,6 +21601,7 @@ const builtInCatalogJSON = `{
         "index": 21.35
       },
       "model": "google/gemini-3.8-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -20050,6 +21624,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.370713623725672
       },
       "model": "google/gemini-3.8-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -20072,6 +21647,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.831460674157303
       },
       "model": "google/gemini-3.8-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -20094,6 +21670,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.92020202020202
       },
       "model": "google/gemini-3.8-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -20116,6 +21693,7 @@ const builtInCatalogJSON = `{
         "score": 0.549768518518518
       },
       "model": "google/gemini-3.8-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -20138,6 +21716,7 @@ const builtInCatalogJSON = `{
         "score": 0.331958762886598
       },
       "model": "google/gemini-3.8-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -20160,6 +21739,7 @@ const builtInCatalogJSON = `{
         "score": 0.122857142857143
       },
       "model": "google/gemini-3.8-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -20182,6 +21762,7 @@ const builtInCatalogJSON = `{
         "elo": 1458.53
       },
       "model": "google/gemini-3.8-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -20204,6 +21785,7 @@ const builtInCatalogJSON = `{
         "score": 0.84
       },
       "model": "google/gemini-3.8-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -20226,6 +21808,7 @@ const builtInCatalogJSON = `{
         "index": 28.5833333333333
       },
       "model": "google/gemini-3.8-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -20248,6 +21831,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.421223354958295
       },
       "model": "google/gemini-3.8-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -20270,6 +21854,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.838951310861423
       },
       "model": "google/gemini-3.8-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -20292,6 +21877,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.935353535353535
       },
       "model": "google/gemini-3.8-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -20314,6 +21900,7 @@ const builtInCatalogJSON = `{
         "score": 0.550925925925926
       },
       "model": "google/gemini-3.8-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -20336,6 +21923,7 @@ const builtInCatalogJSON = `{
         "score": 0.457731958762887
       },
       "model": "google/gemini-3.8-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -20358,6 +21946,7 @@ const builtInCatalogJSON = `{
         "score": 0.142857142857143
       },
       "model": "google/gemini-3.7-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -20380,6 +21969,7 @@ const builtInCatalogJSON = `{
         "elo": 1436.97
       },
       "model": "google/gemini-3.7-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -20402,6 +21992,7 @@ const builtInCatalogJSON = `{
         "score": 0.816666666666667
       },
       "model": "google/gemini-3.7-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -20424,6 +22015,7 @@ const builtInCatalogJSON = `{
         "index": 26.4833333333333
       },
       "model": "google/gemini-3.7-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -20446,6 +22038,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.478683966635774
       },
       "model": "google/gemini-3.7-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -20468,6 +22061,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.857677902621723
       },
       "model": "google/gemini-3.7-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -20490,6 +22084,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.945454545454545
       },
       "model": "google/gemini-3.7-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -20512,6 +22107,7 @@ const builtInCatalogJSON = `{
         "score": 0.571759259259259
       },
       "model": "google/gemini-3.7-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -20534,6 +22130,7 @@ const builtInCatalogJSON = `{
         "score": 0.327835051546392
       },
       "model": "google/gemini-3.7-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -20556,6 +22153,7 @@ const builtInCatalogJSON = `{
         "score": 0.0571428571428571
       },
       "model": "google/gemini-3.7-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -20578,6 +22176,7 @@ const builtInCatalogJSON = `{
         "elo": 1359.1
       },
       "model": "google/gemini-3.7-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -20600,6 +22199,7 @@ const builtInCatalogJSON = `{
         "score": 0.786666666666667
       },
       "model": "google/gemini-3.7-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -20622,6 +22222,7 @@ const builtInCatalogJSON = `{
         "index": 22.1333333333333
       },
       "model": "google/gemini-3.7-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -20644,6 +22245,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.351251158480074
       },
       "model": "google/gemini-3.7-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -20666,6 +22268,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.797752808988764
       },
       "model": "google/gemini-3.7-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -20688,6 +22291,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.901010101010101
       },
       "model": "google/gemini-3.7-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -20710,6 +22314,7 @@ const builtInCatalogJSON = `{
         "score": 0.556712962962963
       },
       "model": "google/gemini-3.7-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -20732,6 +22337,7 @@ const builtInCatalogJSON = `{
         "score": 0.294845360824742
       },
       "model": "google/gemini-3.7-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -20754,6 +22360,7 @@ const builtInCatalogJSON = `{
         "score": 0.0942857142857143
       },
       "model": "google/gemini-3.7-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -20778,6 +22385,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 1427.15
       },
       "model": "google/gemini-3.7-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -20800,6 +22408,7 @@ const builtInCatalogJSON = `{
         "score": 0.83
       },
       "model": "google/gemini-3.7-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -20822,6 +22431,7 @@ const builtInCatalogJSON = `{
         "index": 23.7
       },
       "model": "google/gemini-3.7-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -20844,6 +22454,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.389712696941613
       },
       "model": "google/gemini-3.7-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -20866,6 +22477,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.782771535580524
       },
       "model": "google/gemini-3.7-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -20888,6 +22500,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.921212121212121
       },
       "model": "google/gemini-3.7-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -20910,6 +22523,7 @@ const builtInCatalogJSON = `{
         "score": 0.59837962962963
       },
       "model": "google/gemini-3.7-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -20932,6 +22546,7 @@ const builtInCatalogJSON = `{
         "score": 0.354639175257732
       },
       "model": "google/gemini-3.7-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -20954,6 +22569,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.195
       },
       "model": "google/gemma-4-31b-it",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -20977,6 +22593,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.843
       },
       "model": "google/gemma-4-31b-it",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -20999,12 +22616,121 @@ const builtInCatalogJSON = `{
         "accuracy": 0.852
       },
       "model": "google/gemma-4-31b-it",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
         "reasoning_mode": "enabled",
         "source_kind": "official_model_card",
         "variant": "Gemma 4 31B"
+      }
+    },
+    {
+      "benchmark": "cognition/frontiercode@1.1.0",
+      "benchmark_profile": "main",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://cognition.com/data/frontiercode-leaderboard/data.json",
+        "verification": "imported"
+      },
+      "id": "cognition/gemini-3-6-flash-low-frontiercode-1-1@1.0.0",
+      "metrics": {
+        "pass_rate": 0.2565,
+        "score": 0.2282
+      },
+      "model": "google/gemini-3.6-flash",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "low",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "1.1",
+        "harness": "chisel",
+        "internet_flagged_rate": 0,
+        "run_kind": "independent",
+        "source_model": "Gemini 3.6 Flash",
+        "source_model_slug": "gemini-3-6-flash-low",
+        "subset": "main"
+      }
+    },
+    {
+      "benchmark": "cognition/frontiercode@1.1.0",
+      "benchmark_profile": "main",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://cognition.com/data/frontiercode-leaderboard/data.json",
+        "verification": "imported"
+      },
+      "id": "cognition/gemini-3-6-flash-medium-frontiercode-1-1@1.0.0",
+      "metrics": {
+        "pass_rate": 0.389,
+        "score": 0.3437
+      },
+      "model": "google/gemini-3.6-flash",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "medium",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "1.1",
+        "harness": "chisel",
+        "internet_flagged_rate": 0,
+        "run_kind": "independent",
+        "source_model": "Gemini 3.6 Flash",
+        "source_model_slug": "gemini-3-6-flash-medium",
+        "subset": "main"
+      }
+    },
+    {
+      "benchmark": "duellab/gamebench@2.0.0",
+      "benchmark_profile": "public-games",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://benchmarks.duellab.org/model-google-gemini-3-6-flash",
+        "verification": "imported"
+      },
+      "id": "duellab/gemini-3-6-flash-minimal-gamebench-2@1.0.0",
+      "metrics": {
+        "score": 37.8
+      },
+      "model": "google/gemini-3.6-flash",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "minimal",
+      "status": "available",
+      "subject": {
+        "benchmark_release": "gb2-20260824-e05a1ff89a26",
+        "provider_setting": "Minimal",
+        "result_status": "tested_and_included",
+        "run_kind": "independent",
+        "source_model": "Gemini 3.6 Flash",
+        "source_model_slug": "google-gemini-3-6-flash-minimal"
+      }
+    },
+    {
+      "benchmark": "duellab/gamebench@2.0.0",
+      "benchmark_profile": "public-games",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://benchmarks.duellab.org/model-google-gemini-3-6-flash",
+        "verification": "imported"
+      },
+      "id": "duellab/gemini-3-6-flash-medium-gamebench-2@1.0.0",
+      "metrics": {
+        "score": 55.8
+      },
+      "model": "google/gemini-3.6-flash",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "medium",
+      "status": "available",
+      "subject": {
+        "benchmark_release": "gb2-20260824-e05a1ff89a26",
+        "provider_setting": "Medium",
+        "result_status": "tested_and_included",
+        "run_kind": "independent",
+        "source_model": "Gemini 3.6 Flash",
+        "source_model_slug": "google-gemini-3-6-flash-medium"
       }
     },
     {
@@ -21023,6 +22749,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 1571.62
       },
       "model": "meta/muse-spark-1.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -21045,6 +22772,7 @@ const builtInCatalogJSON = `{
         "score": 0.248571428571429
       },
       "model": "meta/muse-spark-1.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -21067,6 +22795,7 @@ const builtInCatalogJSON = `{
         "all_pass": 0.256
       },
       "model": "meta/muse-spark-1.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -21091,6 +22820,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 1740.37
       },
       "model": "meta/muse-spark-1.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -21113,6 +22843,7 @@ const builtInCatalogJSON = `{
         "elo": 1754
       },
       "model": "meta/muse-spark-1.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -21135,6 +22866,7 @@ const builtInCatalogJSON = `{
         "score": 0.843333333333333
       },
       "model": "meta/muse-spark-1.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -21157,6 +22889,7 @@ const builtInCatalogJSON = `{
         "index": 24.9333333333333
       },
       "model": "meta/muse-spark-1.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -21179,6 +22912,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.490732159406858
       },
       "model": "meta/muse-spark-1.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -21201,6 +22935,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.754
       },
       "model": "meta/muse-spark-1.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -21223,6 +22958,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.857677902621723
       },
       "model": "meta/muse-spark-1.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -21245,6 +22981,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.888
       },
       "model": "meta/muse-spark-1.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -21267,6 +23004,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.938383838383838
       },
       "model": "meta/muse-spark-1.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -21289,6 +23027,7 @@ const builtInCatalogJSON = `{
         "score": 0.583333333333333
       },
       "model": "meta/muse-spark-1.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -21311,6 +23050,7 @@ const builtInCatalogJSON = `{
         "score": 0.523711340206186
       },
       "model": "meta/muse-spark-1.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -21333,6 +23073,7 @@ const builtInCatalogJSON = `{
         "score": 0.496
       },
       "model": "meta/muse-spark-1.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -21357,6 +23098,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 1497.46
       },
       "model": "meta/muse-spark-1.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -21379,6 +23121,7 @@ const builtInCatalogJSON = `{
         "score": 0.26
       },
       "model": "meta/muse-spark-1.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -21401,6 +23144,7 @@ const builtInCatalogJSON = `{
         "all_pass": 0.234
       },
       "model": "meta/muse-spark-1.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -21425,6 +23169,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 1685.6
       },
       "model": "meta/muse-spark-1.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -21447,6 +23192,7 @@ const builtInCatalogJSON = `{
         "score": 0.83
       },
       "model": "meta/muse-spark-1.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -21469,6 +23215,7 @@ const builtInCatalogJSON = `{
         "index": 23.1166666666667
       },
       "model": "meta/muse-spark-1.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -21491,6 +23238,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.47451343836886
       },
       "model": "meta/muse-spark-1.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -21513,6 +23261,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.853932584269663
       },
       "model": "meta/muse-spark-1.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -21535,6 +23284,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.941414141414141
       },
       "model": "meta/muse-spark-1.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -21557,6 +23307,7 @@ const builtInCatalogJSON = `{
         "score": 0.597222222222222
       },
       "model": "meta/muse-spark-1.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -21579,6 +23330,7 @@ const builtInCatalogJSON = `{
         "score": 0.472164948453608
       },
       "model": "meta/muse-spark-1.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -21601,6 +23353,7 @@ const builtInCatalogJSON = `{
         "score": 0.177142857142857
       },
       "model": "meta/muse-spark-1.2",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -21623,6 +23376,7 @@ const builtInCatalogJSON = `{
         "elo": 1528.35
       },
       "model": "meta/muse-spark-1.2",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -21645,6 +23399,7 @@ const builtInCatalogJSON = `{
         "score": 0.79
       },
       "model": "meta/muse-spark-1.2",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -21667,6 +23422,7 @@ const builtInCatalogJSON = `{
         "index": 27.2
       },
       "model": "meta/muse-spark-1.2",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -21689,6 +23445,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.454587581093605
       },
       "model": "meta/muse-spark-1.2",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -21711,6 +23468,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.593
       },
       "model": "meta/muse-spark-1.2",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -21733,6 +23491,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.801498127340824
       },
       "model": "meta/muse-spark-1.2",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -21755,6 +23514,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.829
       },
       "model": "meta/muse-spark-1.2",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -21777,6 +23537,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.904040404040404
       },
       "model": "meta/muse-spark-1.2",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -21799,6 +23560,7 @@ const builtInCatalogJSON = `{
         "score": 0.574074074074074
       },
       "model": "meta/muse-spark-1.2",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -21821,6 +23583,7 @@ const builtInCatalogJSON = `{
         "score": 0.348453608247423
       },
       "model": "meta/muse-spark-1.2",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -21843,6 +23606,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.77
       },
       "model": "meta/muse-glimmer-30b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -21868,6 +23632,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 496.19
       },
       "model": "meta/muse-glimmer-30b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -21890,6 +23655,7 @@ const builtInCatalogJSON = `{
         "score": 0.0257142857142857
       },
       "model": "meta/muse-glimmer-30b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -21912,6 +23678,7 @@ const builtInCatalogJSON = `{
         "all_pass": 0.134
       },
       "model": "meta/muse-glimmer-30b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -21936,6 +23703,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 915.71
       },
       "model": "meta/muse-glimmer-30b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -21958,6 +23726,7 @@ const builtInCatalogJSON = `{
         "elo": 953
       },
       "model": "meta/muse-glimmer-30b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -21980,6 +23749,7 @@ const builtInCatalogJSON = `{
         "score": 0.833333333333333
       },
       "model": "meta/muse-glimmer-30b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -22002,6 +23772,7 @@ const builtInCatalogJSON = `{
         "index": -32.85
       },
       "model": "meta/muse-glimmer-30b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -22024,6 +23795,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.219647822057461
       },
       "model": "meta/muse-glimmer-30b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -22046,6 +23818,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.22
       },
       "model": "meta/muse-glimmer-30b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -22068,6 +23841,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.51685393258427
       },
       "model": "meta/muse-glimmer-30b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -22090,6 +23864,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.517
       },
       "model": "meta/muse-glimmer-30b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -22113,6 +23888,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.835353535353535
       },
       "model": "meta/muse-glimmer-30b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -22135,6 +23911,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.835
       },
       "model": "meta/muse-glimmer-30b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -22157,6 +23934,7 @@ const builtInCatalogJSON = `{
         "pass_at_1": 0.947
       },
       "model": "meta/muse-glimmer-30b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -22179,6 +23957,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.74
       },
       "model": "meta/muse-glimmer-30b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -22202,6 +23981,7 @@ const builtInCatalogJSON = `{
         "success_rate": 0.659
       },
       "model": "meta/muse-glimmer-30b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -22224,6 +24004,7 @@ const builtInCatalogJSON = `{
         "score": 0.449074074074074
       },
       "model": "meta/muse-glimmer-30b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -22246,6 +24027,7 @@ const builtInCatalogJSON = `{
         "score": 0.436
       },
       "model": "meta/muse-glimmer-30b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -22269,6 +24051,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.512
       },
       "model": "meta/muse-glimmer-30b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -22291,6 +24074,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.76
       },
       "model": "meta/muse-glimmer-30b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -22314,6 +24098,7 @@ const builtInCatalogJSON = `{
         "score": 0.235051546391753
       },
       "model": "meta/muse-glimmer-30b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -22336,6 +24121,7 @@ const builtInCatalogJSON = `{
         "score": 0
       },
       "model": "meta/llama-4-maverick-17b-128e-instruct",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -22358,6 +24144,7 @@ const builtInCatalogJSON = `{
         "elo": -42.61
       },
       "model": "meta/llama-4-maverick-17b-128e-instruct",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -22380,6 +24167,7 @@ const builtInCatalogJSON = `{
         "score": 0.5
       },
       "model": "meta/llama-4-maverick-17b-128e-instruct",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -22402,6 +24190,7 @@ const builtInCatalogJSON = `{
         "index": -41.85
       },
       "model": "meta/llama-4-maverick-17b-128e-instruct",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -22424,6 +24213,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.0491195551436515
       },
       "model": "meta/llama-4-maverick-17b-128e-instruct",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -22446,6 +24236,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.0786516853932584
       },
       "model": "meta/llama-4-maverick-17b-128e-instruct",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -22468,6 +24259,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.670707070707071
       },
       "model": "meta/llama-4-maverick-17b-128e-instruct",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -22490,6 +24282,7 @@ const builtInCatalogJSON = `{
         "score": 0.0371134020618557
       },
       "model": "meta/llama-4-maverick-17b-128e-instruct",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -22512,6 +24305,7 @@ const builtInCatalogJSON = `{
         "score": 0
       },
       "model": "meta/llama-4-scout-17b-16e-instruct",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -22534,6 +24328,7 @@ const builtInCatalogJSON = `{
         "elo": 61.06
       },
       "model": "meta/llama-4-scout-17b-16e-instruct",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -22556,6 +24351,7 @@ const builtInCatalogJSON = `{
         "score": 0.277
       },
       "model": "meta/llama-4-scout-17b-16e-instruct",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -22578,6 +24374,7 @@ const builtInCatalogJSON = `{
         "index": -52.15
       },
       "model": "meta/llama-4-scout-17b-16e-instruct",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -22600,6 +24397,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.0378
       },
       "model": "meta/llama-4-scout-17b-16e-instruct",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -22622,6 +24420,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.0374531835205993
       },
       "model": "meta/llama-4-scout-17b-16e-instruct",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -22644,6 +24443,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.586868686868687
       },
       "model": "meta/llama-4-scout-17b-16e-instruct",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -22666,12 +24466,65 @@ const builtInCatalogJSON = `{
         "score": 0.0329896907216495
       },
       "model": "meta/llama-4-scout-17b-16e-instruct",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
         "run_kind": "independent",
         "source_model": "Llama 4 Scout",
         "source_model_slug": "llama-4-scout"
+      }
+    },
+    {
+      "benchmark": "duellab/gamebench@2.0.0",
+      "benchmark_profile": "public-games",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://benchmarks.duellab.org/model-meta-muse-spark-1-2",
+        "verification": "imported"
+      },
+      "id": "duellab/muse-spark-1-2-minimal-gamebench-2@1.0.0",
+      "metrics": {
+        "score": 40.2
+      },
+      "model": "meta/muse-spark-1.2",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "minimal",
+      "status": "available",
+      "subject": {
+        "benchmark_release": "gb2-20260824-e05a1ff89a26",
+        "provider_setting": "Minimal",
+        "result_status": "tested_and_included",
+        "run_kind": "independent",
+        "source_model": "Muse Spark 1.2",
+        "source_model_slug": "meta-muse-spark-1-2-minimal"
+      }
+    },
+    {
+      "benchmark": "duellab/gamebench@2.0.0",
+      "benchmark_profile": "public-games",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://benchmarks.duellab.org/model-meta-muse-spark-1-2",
+        "verification": "imported"
+      },
+      "id": "duellab/muse-spark-1-2-medium-gamebench-2@1.0.0",
+      "metrics": {
+        "score": 52.8
+      },
+      "model": "meta/muse-spark-1.2",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "medium",
+      "status": "available",
+      "subject": {
+        "benchmark_release": "gb2-20260824-e05a1ff89a26",
+        "provider_setting": "Medium",
+        "result_status": "tested_and_included",
+        "run_kind": "independent",
+        "source_model": "Muse Spark 1.2",
+        "source_model_slug": "meta-muse-spark-1-2-medium"
       }
     },
     {
@@ -22688,6 +24541,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.848
       },
       "model": "microsoft/phi-4-reasoning-vision-15b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "adaptive",
       "status": "available",
       "subject": {
@@ -22710,6 +24564,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.833
       },
       "model": "microsoft/phi-4-reasoning-vision-15b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "adaptive",
       "status": "available",
       "subject": {
@@ -22732,6 +24587,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.752
       },
       "model": "microsoft/phi-4-reasoning-vision-15b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "adaptive",
       "status": "available",
       "subject": {
@@ -22754,6 +24610,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.543
       },
       "model": "microsoft/phi-4-reasoning-vision-15b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "adaptive",
       "status": "available",
       "subject": {
@@ -22776,6 +24633,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.76
       },
       "model": "microsoft/phi-4-reasoning-vision-15b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "adaptive",
       "status": "available",
       "subject": {
@@ -22798,6 +24656,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.882
       },
       "model": "microsoft/phi-4-reasoning-vision-15b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "adaptive",
       "status": "available",
       "subject": {
@@ -22820,6 +24679,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.847
       },
       "model": "microsoft/phi-4-reasoning-vision-15b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -22842,6 +24702,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.765
       },
       "model": "microsoft/phi-4-reasoning-vision-15b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -22864,6 +24725,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.687
       },
       "model": "microsoft/phi-4-reasoning-vision-15b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -22886,6 +24748,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.52
       },
       "model": "microsoft/phi-4-reasoning-vision-15b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -22908,6 +24771,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.756
       },
       "model": "microsoft/phi-4-reasoning-vision-15b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -22930,6 +24794,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.883
       },
       "model": "microsoft/phi-4-reasoning-vision-15b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -22952,6 +24817,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.797
       },
       "model": "microsoft/phi-4-reasoning-vision-15b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -22974,6 +24840,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.829
       },
       "model": "microsoft/phi-4-reasoning-vision-15b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -22996,6 +24863,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.741
       },
       "model": "microsoft/phi-4-reasoning-vision-15b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -23018,6 +24886,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.55
       },
       "model": "microsoft/phi-4-reasoning-vision-15b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -23040,6 +24909,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.737
       },
       "model": "microsoft/phi-4-reasoning-vision-15b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -23062,6 +24932,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.881
       },
       "model": "microsoft/phi-4-reasoning-vision-15b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -23084,6 +24955,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.69
       },
       "model": "microsoft/mai-thinking-1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -23108,6 +24980,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.46
       },
       "model": "microsoft/mai-thinking-1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -23130,6 +25003,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.842
       },
       "model": "microsoft/mai-thinking-1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -23152,6 +25026,7 @@ const builtInCatalogJSON = `{
         "pass_at_1": 0.877
       },
       "model": "microsoft/mai-thinking-1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -23180,6 +25055,7 @@ const builtInCatalogJSON = `{
         "pass_at_1": 0.97
       },
       "model": "microsoft/mai-thinking-1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -23205,6 +25081,7 @@ const builtInCatalogJSON = `{
         "pass_at_1": 0.945
       },
       "model": "microsoft/mai-thinking-1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -23230,6 +25107,7 @@ const builtInCatalogJSON = `{
         "pass_at_1": 0.849
       },
       "model": "microsoft/mai-thinking-1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -23255,6 +25133,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.528
       },
       "model": "microsoft/mai-thinking-1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -23277,6 +25156,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.735
       },
       "model": "microsoft/mai-thinking-1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -23299,6 +25179,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.85
       },
       "model": "microsoft/mai-thinking-1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -23321,6 +25202,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.4508
       },
       "model": "microsoft/phi-4-mini-flash-reasoning",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -23342,6 +25224,7 @@ const builtInCatalogJSON = `{
         "pass_at_1": 0.5229
       },
       "model": "microsoft/phi-4-mini-flash-reasoning",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -23365,6 +25248,7 @@ const builtInCatalogJSON = `{
         "pass_at_1": 0.3359
       },
       "model": "microsoft/phi-4-mini-flash-reasoning",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -23388,6 +25272,7 @@ const builtInCatalogJSON = `{
         "pass_at_1": 0.9245
       },
       "model": "microsoft/phi-4-mini-flash-reasoning",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -23411,6 +25296,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.9164473684210527
       },
       "model": "microsoft/phi-4-mini-flash-reasoning",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -23442,6 +25328,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.26149131767109296
       },
       "model": "microsoft/phi-4-mini-flash-reasoning",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -23474,6 +25361,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.23342415985467757
       },
       "model": "microsoft/phi-4-mini-flash-reasoning",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -23506,6 +25394,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.4720812182741117
       },
       "model": "microsoft/phi-4-mini-flash-reasoning",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -23538,6 +25427,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.538387920034028
       },
       "model": "microsoft/phi-4-mini-flash-reasoning",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -23570,6 +25460,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.7377659574468085
       },
       "model": "microsoft/phi-4-mini-flash-reasoning",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -23604,6 +25495,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 1107.89
       },
       "model": "minimax/minimax-m3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "adaptive",
       "status": "available",
       "subject": {
@@ -23626,6 +25518,7 @@ const builtInCatalogJSON = `{
         "score": 0.0371428571428571
       },
       "model": "minimax/minimax-m3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "adaptive",
       "status": "available",
       "subject": {
@@ -23648,6 +25541,7 @@ const builtInCatalogJSON = `{
         "all_pass": 0.104
       },
       "model": "minimax/minimax-m3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "adaptive",
       "status": "available",
       "subject": {
@@ -23672,6 +25566,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 1321.81
       },
       "model": "minimax/minimax-m3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "adaptive",
       "status": "available",
       "subject": {
@@ -23694,6 +25589,7 @@ const builtInCatalogJSON = `{
         "score": 0.83
       },
       "model": "minimax/minimax-m3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "adaptive",
       "status": "available",
       "subject": {
@@ -23716,6 +25612,7 @@ const builtInCatalogJSON = `{
         "index": 1.35
       },
       "model": "minimax/minimax-m3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "adaptive",
       "status": "available",
       "subject": {
@@ -23738,6 +25635,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.389712696941613
       },
       "model": "minimax/minimax-m3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "adaptive",
       "status": "available",
       "subject": {
@@ -23760,6 +25658,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.651685393258427
       },
       "model": "minimax/minimax-m3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "adaptive",
       "status": "available",
       "subject": {
@@ -23782,6 +25681,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.929292929292929
       },
       "model": "minimax/minimax-m3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "adaptive",
       "status": "available",
       "subject": {
@@ -23804,6 +25704,7 @@ const builtInCatalogJSON = `{
         "score": 0.471064814814815
       },
       "model": "minimax/minimax-m3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "adaptive",
       "status": "available",
       "subject": {
@@ -23826,6 +25727,7 @@ const builtInCatalogJSON = `{
         "score": 0.152577319587629
       },
       "model": "minimax/minimax-m3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "adaptive",
       "status": "available",
       "subject": {
@@ -23848,6 +25750,7 @@ const builtInCatalogJSON = `{
         "score": 0.00571428571428571
       },
       "model": "minimax/minimax-m2.7",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -23870,6 +25773,7 @@ const builtInCatalogJSON = `{
         "elo": 1091.44
       },
       "model": "minimax/minimax-m2.7",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -23892,6 +25796,7 @@ const builtInCatalogJSON = `{
         "score": 0.783333333333333
       },
       "model": "minimax/minimax-m2.7",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -23914,6 +25819,7 @@ const builtInCatalogJSON = `{
         "index": 0.766666666666667
       },
       "model": "minimax/minimax-m2.7",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -23936,6 +25842,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.29610750695088
       },
       "model": "minimax/minimax-m2.7",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -23958,6 +25865,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.554307116104869
       },
       "model": "minimax/minimax-m2.7",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -23980,6 +25888,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.873737373737374
       },
       "model": "minimax/minimax-m2.7",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -24002,6 +25911,7 @@ const builtInCatalogJSON = `{
         "score": 0.0989690721649484
       },
       "model": "minimax/minimax-m2.7",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -24024,6 +25934,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.7
       },
       "model": "minimax/minimax-m2.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -24046,6 +25957,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.194
       },
       "model": "minimax/minimax-m2.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -24068,6 +25980,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.852
       },
       "model": "minimax/minimax-m2.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -24089,6 +26002,7 @@ const builtInCatalogJSON = `{
         "score": 0.444
       },
       "model": "minimax/minimax-m2.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -24111,6 +26025,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.802
       },
       "model": "minimax/minimax-m2.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -24132,6 +26047,7 @@ const builtInCatalogJSON = `{
         "score": 0.0114285714285714
       },
       "model": "minimax/minimax-m2.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -24154,6 +26070,7 @@ const builtInCatalogJSON = `{
         "score": 0.733333333333333
       },
       "model": "minimax/minimax-m2.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -24176,6 +26093,7 @@ const builtInCatalogJSON = `{
         "index": -38.8666666666667
       },
       "model": "minimax/minimax-m2.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -24198,6 +26116,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.205282669138091
       },
       "model": "minimax/minimax-m2.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -24220,12 +26139,65 @@ const builtInCatalogJSON = `{
         "accuracy": 0.848484848484848
       },
       "model": "minimax/minimax-m2.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
         "run_kind": "independent",
         "source_model": "MiniMax-M2.5",
         "source_model_slug": "minimax-m2-5"
+      }
+    },
+    {
+      "benchmark": "duellab/gamebench@2.0.0",
+      "benchmark_profile": "public-games",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://benchmarks.duellab.org/model-minimax-minimax-m3",
+        "verification": "imported"
+      },
+      "id": "duellab/minimax-m3-disabled-gamebench-2@1.0.0",
+      "metrics": {
+        "score": 37.6
+      },
+      "model": "minimax/minimax-m3",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "benchmark_release": "gb2-20260824-e05a1ff89a26",
+        "provider_setting": "Reasoning disabled",
+        "result_status": "tested_and_included",
+        "run_kind": "independent",
+        "source_model": "MiniMax M3",
+        "source_model_slug": "minimax-minimax-m3-disabled"
+      }
+    },
+    {
+      "benchmark": "duellab/gamebench@2.0.0",
+      "benchmark_profile": "public-games",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://benchmarks.duellab.org/model-minimax-minimax-m3",
+        "verification": "imported"
+      },
+      "id": "duellab/minimax-m3-enabled-gamebench-2@1.0.0",
+      "metrics": {
+        "score": 28.0
+      },
+      "model": "minimax/minimax-m3",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "benchmark_release": "gb2-20260824-e05a1ff89a26",
+        "provider_setting": "Reasoning enabled",
+        "result_status": "tested_and_included",
+        "run_kind": "independent",
+        "source_model": "MiniMax M3",
+        "source_model_slug": "minimax-minimax-m3-enabled"
       }
     },
     {
@@ -24242,6 +26214,7 @@ const builtInCatalogJSON = `{
         "score": 0
       },
       "model": "mistral/mistral-large-3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -24264,6 +26237,7 @@ const builtInCatalogJSON = `{
         "elo": 591.06
       },
       "model": "mistral/mistral-large-3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -24286,6 +26260,7 @@ const builtInCatalogJSON = `{
         "score": 0.36
       },
       "model": "mistral/mistral-large-3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -24308,6 +26283,7 @@ const builtInCatalogJSON = `{
         "index": -39.5666666666667
       },
       "model": "mistral/mistral-large-3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -24330,6 +26306,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.0417052826691381
       },
       "model": "mistral/mistral-large-3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -24352,6 +26329,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.119850187265918
       },
       "model": "mistral/mistral-large-3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -24374,6 +26352,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.67979797979798
       },
       "model": "mistral/mistral-large-3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -24396,6 +26375,7 @@ const builtInCatalogJSON = `{
         "score": 0.365740740740741
       },
       "model": "mistral/mistral-large-3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -24418,6 +26398,7 @@ const builtInCatalogJSON = `{
         "score": 0.0577319587628866
       },
       "model": "mistral/mistral-large-3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -24440,6 +26421,7 @@ const builtInCatalogJSON = `{
         "score": 0.00285714285714286
       },
       "model": "mistral/mistral-small-4",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -24462,6 +26444,7 @@ const builtInCatalogJSON = `{
         "elo": 538.91
       },
       "model": "mistral/mistral-small-4",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -24484,6 +26467,7 @@ const builtInCatalogJSON = `{
         "score": 0.496666666666667
       },
       "model": "mistral/mistral-small-4",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -24506,6 +26490,7 @@ const builtInCatalogJSON = `{
         "index": -30.4
       },
       "model": "mistral/mistral-small-4",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -24528,6 +26513,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.0987025023169602
       },
       "model": "mistral/mistral-small-4",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -24550,6 +26536,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.209737827715356
       },
       "model": "mistral/mistral-small-4",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -24572,6 +26559,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.768686868686869
       },
       "model": "mistral/mistral-small-4",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -24594,6 +26582,7 @@ const builtInCatalogJSON = `{
         "score": 0.0494845360824742
       },
       "model": "mistral/mistral-small-4",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -24616,6 +26605,7 @@ const builtInCatalogJSON = `{
         "score": 0.00285714285714286
       },
       "model": "mistral/mistral-small-4",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -24638,6 +26628,7 @@ const builtInCatalogJSON = `{
         "score": 0.283333333333333
       },
       "model": "mistral/mistral-small-4",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -24660,6 +26651,7 @@ const builtInCatalogJSON = `{
         "index": -48.5166666666667
       },
       "model": "mistral/mistral-small-4",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -24682,6 +26674,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.0379981464318814
       },
       "model": "mistral/mistral-small-4",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -24704,6 +26697,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.570707070707071
       },
       "model": "mistral/mistral-small-4",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -24726,6 +26720,7 @@ const builtInCatalogJSON = `{
         "score": 0
       },
       "model": "mistral/mistral-medium-3.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -24748,6 +26743,7 @@ const builtInCatalogJSON = `{
         "elo": 878.92
       },
       "model": "mistral/mistral-medium-3.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -24770,6 +26766,7 @@ const builtInCatalogJSON = `{
         "score": 0.693333333333333
       },
       "model": "mistral/mistral-medium-3.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -24792,6 +26789,7 @@ const builtInCatalogJSON = `{
         "index": -36.8
       },
       "model": "mistral/mistral-medium-3.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -24814,6 +26812,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.137627432808156
       },
       "model": "mistral/mistral-medium-3.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -24836,6 +26835,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.50561797752809
       },
       "model": "mistral/mistral-medium-3.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -24858,6 +26858,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.748484848484849
       },
       "model": "mistral/mistral-medium-3.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -24880,6 +26881,7 @@ const builtInCatalogJSON = `{
         "score": 0.40162037037037
       },
       "model": "mistral/mistral-medium-3.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -24902,12 +26904,67 @@ const builtInCatalogJSON = `{
         "score": 0.150515463917526
       },
       "model": "mistral/mistral-medium-3.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
         "run_kind": "independent",
         "source_model": "Mistral Medium 3.5",
         "source_model_slug": "mistral-medium-3-5"
+      }
+    },
+    {
+      "benchmark": "cognition/frontiercode@1.1.0",
+      "benchmark_profile": "main",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://cognition.com/data/frontiercode-leaderboard/data.json",
+        "verification": "imported"
+      },
+      "id": "cognition/mistral-medium-3-5-none-frontiercode-1-1@1.0.0",
+      "metrics": {
+        "pass_rate": 0.09,
+        "score": 0.08
+      },
+      "model": "mistral/mistral-medium-3.5",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "none",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "1.1",
+        "harness": "chisel",
+        "internet_flagged_rate": 0.006,
+        "run_kind": "independent",
+        "source_model": "Mistral 3.5 Medium",
+        "source_model_slug": "mistral-3-5-medium-none",
+        "subset": "main"
+      }
+    },
+    {
+      "benchmark": "duellab/gamebench@2.0.0",
+      "benchmark_profile": "public-games",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://benchmarks.duellab.org/model-mistralai-mistral-medium-3-5",
+        "verification": "imported"
+      },
+      "id": "duellab/mistral-medium-3-5-none-gamebench-2@1.0.0",
+      "metrics": {
+        "score": 30.7
+      },
+      "model": "mistral/mistral-medium-3.5",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "none",
+      "status": "available",
+      "subject": {
+        "benchmark_release": "gb2-20260824-e05a1ff89a26",
+        "provider_setting": "None",
+        "result_status": "tested_and_included",
+        "run_kind": "independent",
+        "source_model": "Mistral Medium 3.5",
+        "source_model_slug": "mistralai-mistral-medium-3-5-none"
       }
     },
     {
@@ -24924,6 +26981,7 @@ const builtInCatalogJSON = `{
         "score": 0.0314285714285714
       },
       "model": "moonshot/kimi-k3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -24946,6 +27004,7 @@ const builtInCatalogJSON = `{
         "elo": 1201.27
       },
       "model": "moonshot/kimi-k3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -24968,6 +27027,7 @@ const builtInCatalogJSON = `{
         "score": 0.793333333333333
       },
       "model": "moonshot/kimi-k3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -24990,6 +27050,7 @@ const builtInCatalogJSON = `{
         "index": 3.91666666666667
       },
       "model": "moonshot/kimi-k3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -25012,6 +27073,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.249768303985171
       },
       "model": "moonshot/kimi-k3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -25034,6 +27096,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.823970037453184
       },
       "model": "moonshot/kimi-k3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -25056,6 +27119,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.842424242424242
       },
       "model": "moonshot/kimi-k3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -25078,6 +27142,7 @@ const builtInCatalogJSON = `{
         "score": 0.52662037037037
       },
       "model": "moonshot/kimi-k3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -25100,6 +27165,7 @@ const builtInCatalogJSON = `{
         "score": 0.416494845360825
       },
       "model": "moonshot/kimi-k3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -25124,6 +27190,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 1508.27
       },
       "model": "moonshot/kimi-k3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -25146,6 +27213,7 @@ const builtInCatalogJSON = `{
         "score": 0.234285714285714
       },
       "model": "moonshot/kimi-k3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -25168,6 +27236,7 @@ const builtInCatalogJSON = `{
         "all_pass": 0.196
       },
       "model": "moonshot/kimi-k3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -25192,6 +27261,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 1603.78
       },
       "model": "moonshot/kimi-k3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -25214,6 +27284,7 @@ const builtInCatalogJSON = `{
         "score": 0.886666666666667
       },
       "model": "moonshot/kimi-k3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -25236,6 +27307,7 @@ const builtInCatalogJSON = `{
         "index": 19.7
       },
       "model": "moonshot/kimi-k3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -25258,6 +27330,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.468952734012975
       },
       "model": "moonshot/kimi-k3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -25280,6 +27353,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.435
       },
       "model": "moonshot/kimi-k3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -25303,6 +27377,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.675
       },
       "model": "moonshot/kimi-k3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -25326,6 +27401,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.850187265917603
       },
       "model": "moonshot/kimi-k3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -25348,6 +27424,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.883
       },
       "model": "moonshot/kimi-k3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -25371,6 +27448,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.935353535353535
       },
       "model": "moonshot/kimi-k3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -25393,6 +27471,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.935
       },
       "model": "moonshot/kimi-k3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -25415,6 +27494,7 @@ const builtInCatalogJSON = `{
         "score": 0.594907407407407
       },
       "model": "moonshot/kimi-k3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -25437,6 +27517,7 @@ const builtInCatalogJSON = `{
         "score": 0.45979381443299
       },
       "model": "moonshot/kimi-k3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -25459,6 +27540,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.347
       },
       "model": "moonshot/kimi-k2.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -25481,6 +27563,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.905
       },
       "model": "moonshot/kimi-k2.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -25502,6 +27585,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.802
       },
       "model": "moonshot/kimi-k2.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -25523,6 +27607,7 @@ const builtInCatalogJSON = `{
         "score": 0.0142857142857143
       },
       "model": "moonshot/kimi-k2.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -25545,6 +27630,7 @@ const builtInCatalogJSON = `{
         "score": 0.696666666666667
       },
       "model": "moonshot/kimi-k2.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -25567,6 +27653,7 @@ const builtInCatalogJSON = `{
         "index": -9.18333333333333
       },
       "model": "moonshot/kimi-k2.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -25589,6 +27676,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.195551436515292
       },
       "model": "moonshot/kimi-k2.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -25611,6 +27699,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.787878787878788
       },
       "model": "moonshot/kimi-k2.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -25633,6 +27722,7 @@ const builtInCatalogJSON = `{
         "score": 0.08
       },
       "model": "moonshot/kimi-k2.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -25655,6 +27745,7 @@ const builtInCatalogJSON = `{
         "elo": 1120.03
       },
       "model": "moonshot/kimi-k2.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -25677,6 +27768,7 @@ const builtInCatalogJSON = `{
         "score": 0.81
       },
       "model": "moonshot/kimi-k2.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -25699,6 +27791,7 @@ const builtInCatalogJSON = `{
         "index": 5.3
       },
       "model": "moonshot/kimi-k2.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -25721,6 +27814,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.374884151992586
       },
       "model": "moonshot/kimi-k2.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -25743,6 +27837,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.659176029962547
       },
       "model": "moonshot/kimi-k2.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -25765,6 +27860,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.911111111111111
       },
       "model": "moonshot/kimi-k2.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -25787,6 +27883,7 @@ const builtInCatalogJSON = `{
         "score": 0.232989690721649
       },
       "model": "moonshot/kimi-k2.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -25809,6 +27906,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.301
       },
       "model": "moonshot/kimi-k2.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -25831,6 +27929,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.876
       },
       "model": "moonshot/kimi-k2.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -25852,6 +27951,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.768
       },
       "model": "moonshot/kimi-k2.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -25873,6 +27973,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.871
       },
       "model": "moonshot/kimi-k2.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -25894,6 +27995,7 @@ const builtInCatalogJSON = `{
         "score": 0.00571428571428571
       },
       "model": "moonshot/kimi-k2.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -25916,6 +28018,7 @@ const builtInCatalogJSON = `{
         "score": 0.673333333333333
       },
       "model": "moonshot/kimi-k2.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -25938,6 +28041,7 @@ const builtInCatalogJSON = `{
         "index": -13.7666666666667
       },
       "model": "moonshot/kimi-k2.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -25960,6 +28064,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.131603336422614
       },
       "model": "moonshot/kimi-k2.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -25982,6 +28087,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.788888888888889
       },
       "model": "moonshot/kimi-k2.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -26004,6 +28110,7 @@ const builtInCatalogJSON = `{
         "score": 0.0314285714285714
       },
       "model": "moonshot/kimi-k2.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -26026,6 +28133,7 @@ const builtInCatalogJSON = `{
         "elo": 941.66
       },
       "model": "moonshot/kimi-k2.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -26048,6 +28156,7 @@ const builtInCatalogJSON = `{
         "score": 0.78
       },
       "model": "moonshot/kimi-k2.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -26070,6 +28179,7 @@ const builtInCatalogJSON = `{
         "index": -7.33333333333333
       },
       "model": "moonshot/kimi-k2.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -26092,6 +28202,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.307228915662651
       },
       "model": "moonshot/kimi-k2.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -26114,6 +28225,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.456928838951311
       },
       "model": "moonshot/kimi-k2.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -26136,6 +28248,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.878787878787879
       },
       "model": "moonshot/kimi-k2.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -26158,6 +28271,7 @@ const builtInCatalogJSON = `{
         "score": 0.142268041237113
       },
       "model": "moonshot/kimi-k2.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -26180,6 +28294,7 @@ const builtInCatalogJSON = `{
         "score": 0.1
       },
       "model": "moonshot/kimi-k2.7-code",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -26202,6 +28317,7 @@ const builtInCatalogJSON = `{
         "elo": 1118.37
       },
       "model": "moonshot/kimi-k2.7-code",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -26224,6 +28340,7 @@ const builtInCatalogJSON = `{
         "score": 0.793333333333333
       },
       "model": "moonshot/kimi-k2.7-code",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -26246,6 +28363,7 @@ const builtInCatalogJSON = `{
         "index": -10.2166666666667
       },
       "model": "moonshot/kimi-k2.7-code",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -26268,6 +28386,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.35032437442076
       },
       "model": "moonshot/kimi-k2.7-code",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -26290,6 +28409,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.674157303370786
       },
       "model": "moonshot/kimi-k2.7-code",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -26312,6 +28432,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.895959595959596
       },
       "model": "moonshot/kimi-k2.7-code",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -26334,12 +28455,64 @@ const builtInCatalogJSON = `{
         "score": 0.202061855670103
       },
       "model": "moonshot/kimi-k2.7-code",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
         "run_kind": "independent",
         "source_model": "Kimi K2.7 Code",
         "source_model_slug": "kimi-k2-7-code"
+      }
+    },
+    {
+      "benchmark": "cursor/cursorbench@3.2.0",
+      "benchmark_profile": "production-agent",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://cursor.com/cursorbench",
+        "verification": "imported"
+      },
+      "id": "cursor/kimi-k3-high-cursorbench-3-2@1.0.0",
+      "metrics": {
+        "score": 0.597
+      },
+      "model": "moonshot/kimi-k3",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "3.2",
+        "harness": "cursor-production-agent",
+        "run_kind": "independent",
+        "source_model": "Kimi K3",
+        "source_model_slug": "kimi-k3-high"
+      }
+    },
+    {
+      "benchmark": "duellab/gamebench@2.0.0",
+      "benchmark_profile": "public-games",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://benchmarks.duellab.org/model-moonshotai-kimi-k3",
+        "verification": "imported"
+      },
+      "id": "duellab/kimi-k3-high-gamebench-2@1.0.0",
+      "metrics": {
+        "score": 47.6
+      },
+      "model": "moonshot/kimi-k3",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "benchmark_release": "gb2-20260824-e05a1ff89a26",
+        "provider_setting": "High",
+        "result_status": "tested_and_included",
+        "run_kind": "independent",
+        "source_model": "Kimi K3",
+        "source_model_slug": "moonshotai-kimi-k3-high"
       }
     },
     {
@@ -26356,6 +28529,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.8194
       },
       "model": "nvidia/nemotron-3.5-lightning",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -26378,6 +28552,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.7544
       },
       "model": "nvidia/nemotron-3.5-lightning",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -26400,6 +28575,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.1172
       },
       "model": "nvidia/nemotron-3.5-lightning",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -26422,6 +28598,7 @@ const builtInCatalogJSON = `{
         "score": 0.326
       },
       "model": "nvidia/nemotron-3.5-lightning",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -26444,6 +28621,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.5156
       },
       "model": "nvidia/nemotron-3.5-lightning",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -26466,6 +28644,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.2458
       },
       "model": "nvidia/nemotron-3.5-lightning",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -26488,6 +28667,7 @@ const builtInCatalogJSON = `{
         "elo": 832
       },
       "model": "nvidia/nemotron-3.5-lightning",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -26510,6 +28690,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.7188
       },
       "model": "nvidia/nemotron-3.5-lightning",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -26532,6 +28713,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.823
       },
       "model": "nvidia/nemotron-3-ultra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -26554,6 +28736,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.261
       },
       "model": "nvidia/nemotron-3-ultra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -26576,6 +28759,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.539
       },
       "model": "nvidia/nemotron-3-ultra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -26597,6 +28781,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.879
       },
       "model": "nvidia/nemotron-3-ultra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -26619,6 +28804,7 @@ const builtInCatalogJSON = `{
         "score": 0.435
       },
       "model": "nvidia/nemotron-3-ultra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -26642,6 +28828,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.695
       },
       "model": "nvidia/nemotron-3-ultra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "default",
       "status": "available",
       "subject": {
@@ -26663,6 +28850,7 @@ const builtInCatalogJSON = `{
         "score": 0.0314285714285714
       },
       "model": "nvidia/nemotron-3-ultra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -26685,6 +28873,7 @@ const builtInCatalogJSON = `{
         "elo": 1095.48
       },
       "model": "nvidia/nemotron-3-ultra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -26707,6 +28896,7 @@ const builtInCatalogJSON = `{
         "score": 0.793333333333333
       },
       "model": "nvidia/nemotron-3-ultra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -26729,6 +28919,7 @@ const builtInCatalogJSON = `{
         "index": -0.4
       },
       "model": "nvidia/nemotron-3-ultra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -26751,6 +28942,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.284059314179796
       },
       "model": "nvidia/nemotron-3-ultra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -26773,6 +28965,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.539325842696629
       },
       "model": "nvidia/nemotron-3-ultra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -26795,6 +28988,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.866666666666667
       },
       "model": "nvidia/nemotron-3-ultra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -26817,6 +29011,7 @@ const builtInCatalogJSON = `{
         "score": 0.402777777777778
       },
       "model": "nvidia/nemotron-3-ultra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -26839,6 +29034,7 @@ const builtInCatalogJSON = `{
         "score": 0.142268041237113
       },
       "model": "nvidia/nemotron-3-ultra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -26861,6 +29057,7 @@ const builtInCatalogJSON = `{
         "score": 0.0314285714285714
       },
       "model": "nvidia/nemotron-3-super",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -26883,6 +29080,7 @@ const builtInCatalogJSON = `{
         "elo": 647.37
       },
       "model": "nvidia/nemotron-3-super",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -26905,6 +29103,7 @@ const builtInCatalogJSON = `{
         "score": 0.656666666666667
       },
       "model": "nvidia/nemotron-3-super",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -26927,6 +29126,7 @@ const builtInCatalogJSON = `{
         "index": -41.5
       },
       "model": "nvidia/nemotron-3-super",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -26949,6 +29149,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.207599629286376
       },
       "model": "nvidia/nemotron-3-super",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -26971,6 +29172,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.385767790262172
       },
       "model": "nvidia/nemotron-3-super",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -26993,6 +29195,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.8
       },
       "model": "nvidia/nemotron-3-super",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -27015,6 +29218,7 @@ const builtInCatalogJSON = `{
         "score": 0.103092783505155
       },
       "model": "nvidia/nemotron-3-super",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -27037,6 +29241,7 @@ const builtInCatalogJSON = `{
         "score": 0
       },
       "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -27059,6 +29264,7 @@ const builtInCatalogJSON = `{
         "elo": 418.33
       },
       "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -27081,6 +29287,7 @@ const builtInCatalogJSON = `{
         "score": 0.396666666666667
       },
       "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -27103,6 +29310,7 @@ const builtInCatalogJSON = `{
         "index": -57.4333333333333
       },
       "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -27125,6 +29333,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.0481927710843374
       },
       "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -27147,6 +29356,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.0674157303370786
       },
       "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -27169,6 +29379,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.468686868686869
       },
       "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -27191,6 +29402,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.177
       },
       "model": "nvidia/nemotron-cascade-2-30b-a3b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -27213,6 +29425,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.211
       },
       "model": "nvidia/nemotron-cascade-2-30b-a3b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -27234,6 +29447,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.761
       },
       "model": "nvidia/nemotron-cascade-2-30b-a3b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -27255,6 +29469,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.502
       },
       "model": "nvidia/nemotron-cascade-2-30b-a3b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -27276,6 +29491,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.798
       },
       "model": "nvidia/nemotron-cascade-2-30b-a3b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -27297,6 +29513,7 @@ const builtInCatalogJSON = `{
         "score": 0.00571428571428571
       },
       "model": "openai/gpt-5.4",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -27319,6 +29536,7 @@ const builtInCatalogJSON = `{
         "score": 0.583333333333333
       },
       "model": "openai/gpt-5.4",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -27341,6 +29559,7 @@ const builtInCatalogJSON = `{
         "index": -15.6666666666667
       },
       "model": "openai/gpt-5.4",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -27363,6 +29582,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.112604263206673
       },
       "model": "openai/gpt-5.4",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -27385,6 +29605,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.748484848484848
       },
       "model": "openai/gpt-5.4",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -27407,6 +29628,7 @@ const builtInCatalogJSON = `{
         "score": 0.0742857142857143
       },
       "model": "openai/gpt-5.4",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -27429,6 +29651,7 @@ const builtInCatalogJSON = `{
         "score": 0.766666666666667
       },
       "model": "openai/gpt-5.4",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -27451,6 +29674,7 @@ const builtInCatalogJSON = `{
         "index": 4.78333333333333
       },
       "model": "openai/gpt-5.4",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -27473,6 +29697,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.308155699721965
       },
       "model": "openai/gpt-5.4",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -27495,6 +29720,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.870707070707071
       },
       "model": "openai/gpt-5.4",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -27517,6 +29743,7 @@ const builtInCatalogJSON = `{
         "score": 0.2342857143
       },
       "model": "openai/gpt-5.4",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -27539,6 +29766,7 @@ const builtInCatalogJSON = `{
         "elo": 1310.66
       },
       "model": "openai/gpt-5.4",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -27561,6 +29789,7 @@ const builtInCatalogJSON = `{
         "score": 0.82
       },
       "model": "openai/gpt-5.4",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -27583,6 +29812,7 @@ const builtInCatalogJSON = `{
         "index": 5.78333333333333
       },
       "model": "openai/gpt-5.4",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -27605,6 +29835,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.437442075996293
       },
       "model": "openai/gpt-5.4",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -27627,6 +29858,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.782771535580524
       },
       "model": "openai/gpt-5.4",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -27649,6 +29881,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.92020202020202
       },
       "model": "openai/gpt-5.4",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -27671,6 +29904,7 @@ const builtInCatalogJSON = `{
         "score": 0.395876288659794
       },
       "model": "openai/gpt-5.4",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -27693,6 +29927,7 @@ const builtInCatalogJSON = `{
         "score": 0.257142857142857
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -27715,6 +29950,7 @@ const builtInCatalogJSON = `{
         "all_pass": 0.278
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -27737,6 +29973,7 @@ const builtInCatalogJSON = `{
         "elo": 1528.69
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -27759,6 +29996,7 @@ const builtInCatalogJSON = `{
         "score": 0.816666666666667
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -27781,6 +30019,7 @@ const builtInCatalogJSON = `{
         "index": 20.3666666666667
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -27803,6 +30042,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.46014828544949
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -27825,6 +30065,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.872659176029963
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -27847,6 +30088,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.928282828282828
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -27869,6 +30111,7 @@ const builtInCatalogJSON = `{
         "score": 0.577546296296296
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -27891,6 +30134,7 @@ const builtInCatalogJSON = `{
         "score": 0.36701030927835
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -27913,6 +30157,7 @@ const builtInCatalogJSON = `{
         "score": 0.148571428571429
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -27935,6 +30180,7 @@ const builtInCatalogJSON = `{
         "elo": 1359.11
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -27957,6 +30203,7 @@ const builtInCatalogJSON = `{
         "score": 0.78
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -27979,6 +30226,7 @@ const builtInCatalogJSON = `{
         "index": 18.8666666666667
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -28001,6 +30249,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.393883225208526
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -28023,6 +30272,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.767790262172285
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -28045,6 +30295,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.897979797979798
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -28067,6 +30318,7 @@ const builtInCatalogJSON = `{
         "score": 0.563657407407407
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -28089,6 +30341,7 @@ const builtInCatalogJSON = `{
         "score": 0.290721649484536
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -28113,6 +30366,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 1488.59
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -28135,6 +30389,7 @@ const builtInCatalogJSON = `{
         "score": 0.322857142857143
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -28157,6 +30412,7 @@ const builtInCatalogJSON = `{
         "all_pass": 0.282
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -28181,6 +30437,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 1642.91
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -28203,6 +30460,7 @@ const builtInCatalogJSON = `{
         "score": 0.84
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -28225,6 +30483,7 @@ const builtInCatalogJSON = `{
         "index": 21.9666666666667
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -28247,6 +30506,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.494902687673772
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -28269,6 +30529,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.880149812734082
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -28291,6 +30552,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.941414141414141
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -28313,6 +30575,7 @@ const builtInCatalogJSON = `{
         "score": 0.570601851851852
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -28335,6 +30598,7 @@ const builtInCatalogJSON = `{
         "score": 0.443298969072165
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -28357,6 +30621,7 @@ const builtInCatalogJSON = `{
         "score": 0.228571428571429
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -28379,6 +30644,7 @@ const builtInCatalogJSON = `{
         "elo": 1460.35
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -28401,6 +30667,7 @@ const builtInCatalogJSON = `{
         "score": 0.803333333333333
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -28423,6 +30690,7 @@ const builtInCatalogJSON = `{
         "index": 19.4
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -28445,6 +30713,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.422150139017609
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -28467,6 +30736,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.861423220973783
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -28489,6 +30759,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.926262626262626
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -28511,6 +30782,7 @@ const builtInCatalogJSON = `{
         "score": 0.574074074074074
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -28533,6 +30805,7 @@ const builtInCatalogJSON = `{
         "score": 0.364948453608247
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -28555,6 +30828,7 @@ const builtInCatalogJSON = `{
         "score": 0.0514285714285714
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -28577,6 +30851,7 @@ const builtInCatalogJSON = `{
         "elo": 1303.09
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -28599,6 +30874,7 @@ const builtInCatalogJSON = `{
         "score": 0.623333333333333
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -28621,6 +30897,7 @@ const builtInCatalogJSON = `{
         "index": 1.1
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -28643,6 +30920,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.166821130676552
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -28665,6 +30943,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.741573033707865
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -28687,6 +30966,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.78989898989899
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -28709,6 +30989,7 @@ const builtInCatalogJSON = `{
         "score": 0.195876288659794
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -28731,6 +31012,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.888
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -28752,6 +31034,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.946
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -28773,6 +31056,7 @@ const builtInCatalogJSON = `{
         "score": 0.285714285714286
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -28795,6 +31079,7 @@ const builtInCatalogJSON = `{
         "elo": 1590.19
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -28817,6 +31102,7 @@ const builtInCatalogJSON = `{
         "score": 0.823333333333333
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -28839,6 +31125,7 @@ const builtInCatalogJSON = `{
         "index": 20.9833333333333
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -28861,6 +31148,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.473123262279889
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -28883,6 +31171,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.895131086142322
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -28905,6 +31194,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.931313131313131
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -28927,6 +31217,7 @@ const builtInCatalogJSON = `{
         "score": 0.570601851851852
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -28949,6 +31240,7 @@ const builtInCatalogJSON = `{
         "score": 0.381443298969072
       },
       "model": "openai/gpt-5.6-sol",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -28971,6 +31263,7 @@ const builtInCatalogJSON = `{
         "score": 0.228571428571429
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -28993,6 +31286,7 @@ const builtInCatalogJSON = `{
         "elo": 1419.67
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -29015,6 +31309,7 @@ const builtInCatalogJSON = `{
         "score": 0.776666666666667
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -29037,6 +31332,7 @@ const builtInCatalogJSON = `{
         "index": -3.46666666666667
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -29059,6 +31355,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.385078776645042
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -29081,6 +31378,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.756554307116105
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -29103,6 +31401,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.895959595959596
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -29125,6 +31424,7 @@ const builtInCatalogJSON = `{
         "score": 0.524305555555556
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -29147,6 +31447,7 @@ const builtInCatalogJSON = `{
         "score": 0.28659793814433
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -29169,6 +31470,7 @@ const builtInCatalogJSON = `{
         "score": 0.0942857142857143
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -29191,6 +31493,7 @@ const builtInCatalogJSON = `{
         "elo": 1183.71
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -29213,6 +31516,7 @@ const builtInCatalogJSON = `{
         "score": 0.713333333333333
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -29235,6 +31539,7 @@ const builtInCatalogJSON = `{
         "index": -6.83333333333333
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -29257,6 +31562,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.291936978683967
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -29279,6 +31585,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.625468164794007
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -29301,6 +31608,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.843434343434343
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -29323,6 +31631,7 @@ const builtInCatalogJSON = `{
         "score": 0.187628865979381
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -29347,6 +31656,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 1342.39
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -29369,6 +31679,7 @@ const builtInCatalogJSON = `{
         "score": 0.3
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -29391,6 +31702,7 @@ const builtInCatalogJSON = `{
         "all_pass": 0.256
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -29415,6 +31727,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 1495.18
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -29437,6 +31750,7 @@ const builtInCatalogJSON = `{
         "score": 0.83
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -29459,6 +31773,7 @@ const builtInCatalogJSON = `{
         "index": 0.05
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -29481,6 +31796,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.429101019462465
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -29503,6 +31819,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.880149812734082
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -29525,6 +31842,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.925252525252525
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -29547,6 +31865,7 @@ const builtInCatalogJSON = `{
         "score": 0.549768518518518
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -29569,6 +31888,7 @@ const builtInCatalogJSON = `{
         "score": 0.402061855670103
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -29591,6 +31911,7 @@ const builtInCatalogJSON = `{
         "score": 0.174285714285714
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -29613,6 +31934,7 @@ const builtInCatalogJSON = `{
         "elo": 1324.23
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -29635,6 +31957,7 @@ const builtInCatalogJSON = `{
         "score": 0.74
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -29657,6 +31980,7 @@ const builtInCatalogJSON = `{
         "index": -5.13333333333333
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -29679,6 +32003,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.332715477293791
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -29701,6 +32026,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.722846441947566
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -29723,6 +32049,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.871717171717172
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -29745,6 +32072,7 @@ const builtInCatalogJSON = `{
         "score": 0.255670103092783
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -29767,6 +32095,7 @@ const builtInCatalogJSON = `{
         "score": 0.02
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -29789,6 +32118,7 @@ const builtInCatalogJSON = `{
         "elo": 1173.65
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -29811,6 +32141,7 @@ const builtInCatalogJSON = `{
         "score": 0.586666666666667
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -29833,6 +32164,7 @@ const builtInCatalogJSON = `{
         "index": -23.2166666666667
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -29855,6 +32187,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.113994439295644
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -29877,6 +32210,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.561797752808989
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -29899,6 +32233,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.746464646464646
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -29921,6 +32256,7 @@ const builtInCatalogJSON = `{
         "score": 0.156701030927835
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -29943,6 +32279,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.874
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -29964,6 +32301,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.929
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -29985,6 +32323,7 @@ const builtInCatalogJSON = `{
         "score": 0.271428571428571
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -30007,6 +32346,7 @@ const builtInCatalogJSON = `{
         "elo": 1483.84
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -30029,6 +32369,7 @@ const builtInCatalogJSON = `{
         "score": 0.79
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -30051,6 +32392,7 @@ const builtInCatalogJSON = `{
         "index": -2.98333333333333
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -30073,6 +32415,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.418906394810009
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -30095,6 +32438,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.801498127340824
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -30117,6 +32461,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.908080808080808
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -30139,6 +32484,7 @@ const builtInCatalogJSON = `{
         "score": 0.523148148148148
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -30161,6 +32507,7 @@ const builtInCatalogJSON = `{
         "score": 0.296907216494845
       },
       "model": "openai/gpt-5.6-terra",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -30183,6 +32530,7 @@ const builtInCatalogJSON = `{
         "score": 0.165714285714286
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -30205,6 +32553,7 @@ const builtInCatalogJSON = `{
         "elo": 1380.99
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -30227,6 +32576,7 @@ const builtInCatalogJSON = `{
         "score": 0.803333333333333
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -30249,6 +32599,7 @@ const builtInCatalogJSON = `{
         "index": -12
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -30271,6 +32622,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.334105653382762
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -30293,6 +32645,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.696629213483146
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -30315,6 +32668,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.891919191919192
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -30337,6 +32691,7 @@ const builtInCatalogJSON = `{
         "score": 0.251546391752577
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -30359,6 +32714,7 @@ const builtInCatalogJSON = `{
         "score": 0.0257142857142857
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -30381,6 +32737,7 @@ const builtInCatalogJSON = `{
         "elo": 1087.12
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -30403,6 +32760,7 @@ const builtInCatalogJSON = `{
         "score": 0.7
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -30425,6 +32783,7 @@ const builtInCatalogJSON = `{
         "index": -14.65
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -30447,6 +32806,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.198331788693234
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -30469,6 +32829,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.434456928838951
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -30491,6 +32852,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.835353535353535
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -30513,6 +32875,7 @@ const builtInCatalogJSON = `{
         "score": 0.127835051546392
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -30537,6 +32900,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 1352.48
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -30559,6 +32923,7 @@ const builtInCatalogJSON = `{
         "score": 0.205714285714286
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -30581,6 +32946,7 @@ const builtInCatalogJSON = `{
         "all_pass": 0.23
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -30605,6 +32971,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 1507.53
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -30627,6 +32994,7 @@ const builtInCatalogJSON = `{
         "score": 0.836666666666667
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -30649,6 +33017,7 @@ const builtInCatalogJSON = `{
         "index": -10.2833333333333
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -30671,6 +33040,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.394810009267841
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -30693,6 +33063,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.808988764044944
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -30715,6 +33086,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.911111111111111
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -30737,6 +33109,7 @@ const builtInCatalogJSON = `{
         "score": 0.53587962962963
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -30759,6 +33132,7 @@ const builtInCatalogJSON = `{
         "score": 0.311340206185567
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -30781,6 +33155,7 @@ const builtInCatalogJSON = `{
         "score": 0.0485714285714286
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -30803,6 +33178,7 @@ const builtInCatalogJSON = `{
         "elo": 1200.47
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -30825,6 +33201,7 @@ const builtInCatalogJSON = `{
         "score": 0.75
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -30847,6 +33224,7 @@ const builtInCatalogJSON = `{
         "index": -13.1833333333333
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -30869,6 +33247,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.257645968489342
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -30891,6 +33270,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.531835205992509
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -30913,6 +33293,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.858585858585859
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -30935,6 +33316,7 @@ const builtInCatalogJSON = `{
         "score": 0.177319587628866
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -30957,6 +33339,7 @@ const builtInCatalogJSON = `{
         "score": 0.00285714285714286
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -30979,6 +33362,7 @@ const builtInCatalogJSON = `{
         "elo": 1012.56
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -31001,6 +33385,7 @@ const builtInCatalogJSON = `{
         "score": 0.426666666666667
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -31023,6 +33408,7 @@ const builtInCatalogJSON = `{
         "index": -24.95
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -31045,6 +33431,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.072289156626506
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -31067,6 +33454,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.389513108614232
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -31089,6 +33477,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.645454545454546
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -31111,6 +33500,7 @@ const builtInCatalogJSON = `{
         "score": 0.0969072164948454
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -31133,6 +33523,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.847
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -31154,6 +33545,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.923
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -31175,6 +33567,7 @@ const builtInCatalogJSON = `{
         "score": 0.205714285714286
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -31197,6 +33590,7 @@ const builtInCatalogJSON = `{
         "elo": 1433.23
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -31219,6 +33613,7 @@ const builtInCatalogJSON = `{
         "score": 0.816666666666667
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -31241,6 +33636,7 @@ const builtInCatalogJSON = `{
         "index": -10.7666666666667
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -31263,6 +33659,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.369786839666358
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -31285,6 +33682,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.779026217228464
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -31307,6 +33705,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.894949494949495
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -31329,6 +33728,7 @@ const builtInCatalogJSON = `{
         "score": 0.50462962962963
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -31351,6 +33751,7 @@ const builtInCatalogJSON = `{
         "score": 0.28659793814433
       },
       "model": "openai/gpt-5.6-luna",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -31373,6 +33774,7 @@ const builtInCatalogJSON = `{
         "score": 0.254285714285714
       },
       "model": "openai/gpt-5.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -31395,6 +33797,7 @@ const builtInCatalogJSON = `{
         "elo": 1376.08
       },
       "model": "openai/gpt-5.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -31417,6 +33820,7 @@ const builtInCatalogJSON = `{
         "score": 0.843333333333333
       },
       "model": "openai/gpt-5.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -31439,6 +33843,7 @@ const builtInCatalogJSON = `{
         "index": 18.75
       },
       "model": "openai/gpt-5.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -31461,6 +33866,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.450417052826691
       },
       "model": "openai/gpt-5.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -31483,6 +33889,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.794007490636704
       },
       "model": "openai/gpt-5.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -31505,6 +33912,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.932323232323232
       },
       "model": "openai/gpt-5.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -31527,6 +33935,7 @@ const builtInCatalogJSON = `{
         "score": 0.36701030927835
       },
       "model": "openai/gpt-5.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -31549,6 +33958,7 @@ const builtInCatalogJSON = `{
         "score": 0.08
       },
       "model": "openai/gpt-5.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -31571,6 +33981,7 @@ const builtInCatalogJSON = `{
         "elo": 1118.15
       },
       "model": "openai/gpt-5.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -31593,6 +34004,7 @@ const builtInCatalogJSON = `{
         "score": 0.81
       },
       "model": "openai/gpt-5.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -31615,6 +34027,7 @@ const builtInCatalogJSON = `{
         "index": 15.1
       },
       "model": "openai/gpt-5.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -31637,6 +34050,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.326691380908248
       },
       "model": "openai/gpt-5.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -31659,6 +34073,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.655430711610487
       },
       "model": "openai/gpt-5.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -31681,6 +34096,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.91010101010101
       },
       "model": "openai/gpt-5.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -31703,6 +34119,7 @@ const builtInCatalogJSON = `{
         "score": 0.249484536082474
       },
       "model": "openai/gpt-5.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -31725,6 +34142,7 @@ const builtInCatalogJSON = `{
         "score": 0.185714285714286
       },
       "model": "openai/gpt-5.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -31747,6 +34165,7 @@ const builtInCatalogJSON = `{
         "elo": 1293.29
       },
       "model": "openai/gpt-5.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -31769,6 +34188,7 @@ const builtInCatalogJSON = `{
         "score": 0.83
       },
       "model": "openai/gpt-5.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -31791,6 +34211,7 @@ const builtInCatalogJSON = `{
         "index": 18.1
       },
       "model": "openai/gpt-5.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -31813,6 +34234,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.42354031510658
       },
       "model": "openai/gpt-5.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -31835,6 +34257,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.805243445692884
       },
       "model": "openai/gpt-5.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -31857,6 +34280,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.926262626262626
       },
       "model": "openai/gpt-5.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -31879,6 +34303,7 @@ const builtInCatalogJSON = `{
         "score": 0.298969072164948
       },
       "model": "openai/gpt-5.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -31901,6 +34326,7 @@ const builtInCatalogJSON = `{
         "score": 0.0142857142857143
       },
       "model": "openai/gpt-5.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -31923,6 +34349,7 @@ const builtInCatalogJSON = `{
         "elo": 1058.66
       },
       "model": "openai/gpt-5.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -31945,6 +34372,7 @@ const builtInCatalogJSON = `{
         "score": 0.64
       },
       "model": "openai/gpt-5.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -31967,6 +34395,7 @@ const builtInCatalogJSON = `{
         "index": -4.75
       },
       "model": "openai/gpt-5.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -31989,6 +34418,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.137164040778499
       },
       "model": "openai/gpt-5.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -32011,6 +34441,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.610486891385768
       },
       "model": "openai/gpt-5.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -32033,6 +34464,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.767676767676768
       },
       "model": "openai/gpt-5.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -32055,6 +34487,7 @@ const builtInCatalogJSON = `{
         "score": 0.148453608247423
       },
       "model": "openai/gpt-5.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -32077,6 +34510,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.414
       },
       "model": "openai/gpt-5.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -32100,6 +34534,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.856
       },
       "model": "openai/gpt-5.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -32122,6 +34557,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.936
       },
       "model": "openai/gpt-5.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -32144,6 +34580,7 @@ const builtInCatalogJSON = `{
         "score": 0.271428571428571
       },
       "model": "openai/gpt-5.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -32166,6 +34603,7 @@ const builtInCatalogJSON = `{
         "elo": 1400.49
       },
       "model": "openai/gpt-5.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -32188,6 +34626,7 @@ const builtInCatalogJSON = `{
         "score": 0.843333333333333
       },
       "model": "openai/gpt-5.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -32210,6 +34649,7 @@ const builtInCatalogJSON = `{
         "index": 20.5166666666667
       },
       "model": "openai/gpt-5.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -32232,6 +34672,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.457831325301205
       },
       "model": "openai/gpt-5.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -32254,6 +34695,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.842696629213483
       },
       "model": "openai/gpt-5.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -32276,6 +34718,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.935353535353535
       },
       "model": "openai/gpt-5.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -32298,6 +34741,7 @@ const builtInCatalogJSON = `{
         "score": 0.389690721649485
       },
       "model": "openai/gpt-5.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -32320,6 +34764,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.398
       },
       "model": "openai/gpt-5.4",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -32342,6 +34787,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.928
       },
       "model": "openai/gpt-5.4",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -32365,6 +34811,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 17.65
       },
       "model": "openai/gpt-oss-120b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -32387,6 +34834,7 @@ const builtInCatalogJSON = `{
         "score": 0.0114285714285714
       },
       "model": "openai/gpt-oss-120b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -32409,6 +34857,7 @@ const builtInCatalogJSON = `{
         "all_pass": 0.036
       },
       "model": "openai/gpt-oss-120b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -32433,6 +34882,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 762.88
       },
       "model": "openai/gpt-oss-120b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -32455,6 +34905,7 @@ const builtInCatalogJSON = `{
         "score": 0.52
       },
       "model": "openai/gpt-oss-120b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -32477,6 +34928,7 @@ const builtInCatalogJSON = `{
         "index": -49.25
       },
       "model": "openai/gpt-oss-120b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -32499,6 +34951,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.196014828544949
       },
       "model": "openai/gpt-oss-120b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -32521,6 +34974,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.262172284644195
       },
       "model": "openai/gpt-oss-120b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -32543,6 +34997,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.781818181818182
       },
       "model": "openai/gpt-oss-120b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -32565,6 +35020,7 @@ const builtInCatalogJSON = `{
         "score": 0.340277777777778
       },
       "model": "openai/gpt-oss-120b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -32587,6 +35043,7 @@ const builtInCatalogJSON = `{
         "score": 0.127835051546392
       },
       "model": "openai/gpt-oss-120b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -32609,6 +35066,7 @@ const builtInCatalogJSON = `{
         "score": 0
       },
       "model": "openai/gpt-oss-120b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -32631,6 +35089,7 @@ const builtInCatalogJSON = `{
         "elo": 366.88
       },
       "model": "openai/gpt-oss-120b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -32653,6 +35112,7 @@ const builtInCatalogJSON = `{
         "score": 0.46
       },
       "model": "openai/gpt-oss-120b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -32675,6 +35135,7 @@ const builtInCatalogJSON = `{
         "index": -53.5
       },
       "model": "openai/gpt-oss-120b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -32697,6 +35158,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.0588507877664504
       },
       "model": "openai/gpt-oss-120b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -32719,6 +35181,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.138576779026217
       },
       "model": "openai/gpt-oss-120b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -32741,6 +35204,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.671717171717172
       },
       "model": "openai/gpt-oss-120b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -32763,6 +35227,7 @@ const builtInCatalogJSON = `{
         "score": 0.0288659793814433
       },
       "model": "openai/gpt-oss-120b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -32785,6 +35250,7 @@ const builtInCatalogJSON = `{
         "score": 0.0142857142857143
       },
       "model": "openai/gpt-oss-20b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -32807,6 +35273,7 @@ const builtInCatalogJSON = `{
         "elo": 516.54
       },
       "model": "openai/gpt-oss-20b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -32829,6 +35296,7 @@ const builtInCatalogJSON = `{
         "score": 0.346666666666667
       },
       "model": "openai/gpt-oss-20b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -32851,6 +35319,7 @@ const builtInCatalogJSON = `{
         "index": -63.05
       },
       "model": "openai/gpt-oss-20b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -32873,6 +35342,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.10982391102873
       },
       "model": "openai/gpt-oss-20b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -32895,6 +35365,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.138576779026217
       },
       "model": "openai/gpt-oss-20b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -32917,6 +35388,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.687878787878788
       },
       "model": "openai/gpt-oss-20b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -32939,6 +35411,7 @@ const builtInCatalogJSON = `{
         "score": 0.0701030927835052
       },
       "model": "openai/gpt-oss-20b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -32961,6 +35434,7 @@ const builtInCatalogJSON = `{
         "score": 0
       },
       "model": "openai/gpt-oss-20b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -32983,6 +35457,7 @@ const builtInCatalogJSON = `{
         "score": 0.31
       },
       "model": "openai/gpt-oss-20b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -33005,6 +35480,7 @@ const builtInCatalogJSON = `{
         "index": -58.55
       },
       "model": "openai/gpt-oss-20b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -33027,6 +35503,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.0528266913809083
       },
       "model": "openai/gpt-oss-20b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -33049,12 +35526,251 @@ const builtInCatalogJSON = `{
         "accuracy": 0.611111111111111
       },
       "model": "openai/gpt-oss-20b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
         "run_kind": "independent",
         "source_model": "gpt-oss-20b (low)",
         "source_model_slug": "gpt-oss-20b-low"
+      }
+    },
+    {
+      "benchmark": "matharena/aime@2024.0.0",
+      "benchmark_profile": "pass-at-1",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://cdn.openai.com/pdf/419b6906-9da6-406c-a19d-1bb078ac7637/oai_gpt-oss_model_card.pdf",
+        "verification": "claimed"
+      },
+      "id": "openai/gpt-oss-120b-model-card-medium-aime-2024@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.804
+      },
+      "model": "openai/gpt-oss-120b",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "medium",
+      "status": "available",
+      "subject": {
+        "reasoning_effort": "medium",
+        "source_kind": "official_model_card",
+        "tool_policy": "no_tools",
+        "variant": "gpt-oss-120b"
+      }
+    },
+    {
+      "benchmark": "matharena/aime@2025.0.0",
+      "benchmark_profile": "pass-at-1",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://cdn.openai.com/pdf/419b6906-9da6-406c-a19d-1bb078ac7637/oai_gpt-oss_model_card.pdf",
+        "verification": "claimed"
+      },
+      "id": "openai/gpt-oss-120b-model-card-medium-aime-2025@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.8
+      },
+      "model": "openai/gpt-oss-120b",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "medium",
+      "status": "available",
+      "subject": {
+        "reasoning_effort": "medium",
+        "source_kind": "official_model_card",
+        "tool_policy": "no_tools",
+        "variant": "gpt-oss-120b"
+      }
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://cdn.openai.com/pdf/419b6906-9da6-406c-a19d-1bb078ac7637/oai_gpt-oss_model_card.pdf",
+        "verification": "claimed"
+      },
+      "id": "openai/gpt-oss-120b-model-card-medium-gpqa-diamond@1.0.0",
+      "metrics": {
+        "accuracy": 0.731
+      },
+      "model": "openai/gpt-oss-120b",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "medium",
+      "status": "available",
+      "subject": {
+        "reasoning_effort": "medium",
+        "source_kind": "official_model_card",
+        "tool_policy": "no_tools",
+        "variant": "gpt-oss-120b"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "no-tools",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://cdn.openai.com/pdf/419b6906-9da6-406c-a19d-1bb078ac7637/oai_gpt-oss_model_card.pdf",
+        "verification": "claimed"
+      },
+      "id": "openai/gpt-oss-120b-model-card-medium-humanitys-last-exam@1.0.0",
+      "metrics": {
+        "accuracy": 0.086
+      },
+      "model": "openai/gpt-oss-120b",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "medium",
+      "status": "available",
+      "subject": {
+        "hle_mode": "no_tools",
+        "reasoning_effort": "medium",
+        "source_kind": "official_model_card",
+        "variant": "gpt-oss-120b"
+      }
+    },
+    {
+      "benchmark": "swe-bench/verified@1.0.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://cdn.openai.com/pdf/419b6906-9da6-406c-a19d-1bb078ac7637/oai_gpt-oss_model_card.pdf",
+        "verification": "claimed"
+      },
+      "id": "openai/gpt-oss-120b-model-card-medium-swe-bench-verified@1.0.0",
+      "metrics": {
+        "resolved": 0.526
+      },
+      "model": "openai/gpt-oss-120b",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "medium",
+      "status": "available",
+      "subject": {
+        "reasoning_effort": "medium",
+        "source_kind": "official_model_card",
+        "variant": "gpt-oss-120b"
+      }
+    },
+    {
+      "benchmark": "matharena/aime@2024.0.0",
+      "benchmark_profile": "pass-at-1",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://cdn.openai.com/pdf/419b6906-9da6-406c-a19d-1bb078ac7637/oai_gpt-oss_model_card.pdf",
+        "verification": "claimed"
+      },
+      "id": "openai/gpt-oss-20b-model-card-medium-aime-2024@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.8
+      },
+      "model": "openai/gpt-oss-20b",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "medium",
+      "status": "available",
+      "subject": {
+        "reasoning_effort": "medium",
+        "source_kind": "official_model_card",
+        "tool_policy": "no_tools",
+        "variant": "gpt-oss-20b"
+      }
+    },
+    {
+      "benchmark": "matharena/aime@2025.0.0",
+      "benchmark_profile": "pass-at-1",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://cdn.openai.com/pdf/419b6906-9da6-406c-a19d-1bb078ac7637/oai_gpt-oss_model_card.pdf",
+        "verification": "claimed"
+      },
+      "id": "openai/gpt-oss-20b-model-card-medium-aime-2025@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.721
+      },
+      "model": "openai/gpt-oss-20b",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "medium",
+      "status": "available",
+      "subject": {
+        "reasoning_effort": "medium",
+        "source_kind": "official_model_card",
+        "tool_policy": "no_tools",
+        "variant": "gpt-oss-20b"
+      }
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://cdn.openai.com/pdf/419b6906-9da6-406c-a19d-1bb078ac7637/oai_gpt-oss_model_card.pdf",
+        "verification": "claimed"
+      },
+      "id": "openai/gpt-oss-20b-model-card-medium-gpqa-diamond@1.0.0",
+      "metrics": {
+        "accuracy": 0.66
+      },
+      "model": "openai/gpt-oss-20b",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "medium",
+      "status": "available",
+      "subject": {
+        "reasoning_effort": "medium",
+        "source_kind": "official_model_card",
+        "tool_policy": "no_tools",
+        "variant": "gpt-oss-20b"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "no-tools",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://cdn.openai.com/pdf/419b6906-9da6-406c-a19d-1bb078ac7637/oai_gpt-oss_model_card.pdf",
+        "verification": "claimed"
+      },
+      "id": "openai/gpt-oss-20b-model-card-medium-humanitys-last-exam@1.0.0",
+      "metrics": {
+        "accuracy": 0.07
+      },
+      "model": "openai/gpt-oss-20b",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "medium",
+      "status": "available",
+      "subject": {
+        "hle_mode": "no_tools",
+        "reasoning_effort": "medium",
+        "source_kind": "official_model_card",
+        "variant": "gpt-oss-20b"
+      }
+    },
+    {
+      "benchmark": "swe-bench/verified@1.0.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://cdn.openai.com/pdf/419b6906-9da6-406c-a19d-1bb078ac7637/oai_gpt-oss_model_card.pdf",
+        "verification": "claimed"
+      },
+      "id": "openai/gpt-oss-20b-model-card-medium-swe-bench-verified@1.0.0",
+      "metrics": {
+        "resolved": 0.532
+      },
+      "model": "openai/gpt-oss-20b",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "medium",
+      "status": "available",
+      "subject": {
+        "reasoning_effort": "medium",
+        "source_kind": "official_model_card",
+        "variant": "gpt-oss-20b"
       }
     },
     {
@@ -33071,6 +35787,7 @@ const builtInCatalogJSON = `{
         "score": 0.134285714285714
       },
       "model": "qwen/qwen3.7-max",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -33093,6 +35810,7 @@ const builtInCatalogJSON = `{
         "elo": 1193.15
       },
       "model": "qwen/qwen3.7-max",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -33115,6 +35833,7 @@ const builtInCatalogJSON = `{
         "score": 0.79
       },
       "model": "qwen/qwen3.7-max",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -33137,6 +35856,7 @@ const builtInCatalogJSON = `{
         "index": 13.4833333333333
       },
       "model": "qwen/qwen3.7-max",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -33159,6 +35879,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.405004633920297
       },
       "model": "qwen/qwen3.7-max",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -33181,6 +35902,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.745318352059925
       },
       "model": "qwen/qwen3.7-max",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -33203,6 +35925,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.923232323232323
       },
       "model": "qwen/qwen3.7-max",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -33225,6 +35948,7 @@ const builtInCatalogJSON = `{
         "score": 0.117525773195876
       },
       "model": "qwen/qwen3.7-max",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -33247,6 +35971,7 @@ const builtInCatalogJSON = `{
         "score": 0.0114285714285714
       },
       "model": "qwen/qwen3.6-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -33269,6 +35994,7 @@ const builtInCatalogJSON = `{
         "elo": 1072.72
       },
       "model": "qwen/qwen3.6-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -33291,6 +36017,7 @@ const builtInCatalogJSON = `{
         "score": 0.773333333333333
       },
       "model": "qwen/qwen3.6-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -33313,6 +36040,7 @@ const builtInCatalogJSON = `{
         "index": -20.0166666666667
       },
       "model": "qwen/qwen3.6-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -33335,6 +36063,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.230769230769231
       },
       "model": "qwen/qwen3.6-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -33357,6 +36086,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.606741573033708
       },
       "model": "qwen/qwen3.6-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -33379,6 +36109,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.842424242424242
       },
       "model": "qwen/qwen3.6-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -33401,6 +36132,7 @@ const builtInCatalogJSON = `{
         "score": 0.167010309278351
       },
       "model": "qwen/qwen3.6-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -33423,6 +36155,7 @@ const builtInCatalogJSON = `{
         "score": 0.00857142857142857
       },
       "model": "qwen/qwen3.6-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -33445,6 +36178,7 @@ const builtInCatalogJSON = `{
         "elo": 1046.89
       },
       "model": "qwen/qwen3.6-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -33467,6 +36201,7 @@ const builtInCatalogJSON = `{
         "score": 0.666666666666667
       },
       "model": "qwen/qwen3.6-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -33489,6 +36224,7 @@ const builtInCatalogJSON = `{
         "index": -53.2
       },
       "model": "qwen/qwen3.6-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -33511,6 +36247,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.150602409638554
       },
       "model": "qwen/qwen3.6-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -33533,6 +36270,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.51310861423221
       },
       "model": "qwen/qwen3.6-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -33555,6 +36293,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.829292929292929
       },
       "model": "qwen/qwen3.6-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -33577,6 +36316,7 @@ const builtInCatalogJSON = `{
         "score": 0.0927835051546392
       },
       "model": "qwen/qwen3.6-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -33599,6 +36339,7 @@ const builtInCatalogJSON = `{
         "score": 0.00285714285714286
       },
       "model": "qwen/qwen3.6-35b-a3b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -33621,6 +36362,7 @@ const builtInCatalogJSON = `{
         "elo": 995.94
       },
       "model": "qwen/qwen3.6-35b-a3b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -33643,6 +36385,7 @@ const builtInCatalogJSON = `{
         "score": 0.716666666666667
       },
       "model": "qwen/qwen3.6-35b-a3b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -33665,6 +36408,7 @@ const builtInCatalogJSON = `{
         "index": -22.1833333333333
       },
       "model": "qwen/qwen3.6-35b-a3b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -33687,6 +36431,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.222428174235403
       },
       "model": "qwen/qwen3.6-35b-a3b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -33709,6 +36454,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.449438202247191
       },
       "model": "qwen/qwen3.6-35b-a3b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -33731,6 +36477,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.841414141414142
       },
       "model": "qwen/qwen3.6-35b-a3b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -33753,6 +36500,7 @@ const builtInCatalogJSON = `{
         "score": 0.0927835051546392
       },
       "model": "qwen/qwen3.6-35b-a3b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -33775,6 +36523,7 @@ const builtInCatalogJSON = `{
         "score": 0
       },
       "model": "qwen/qwen3.6-35b-a3b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -33797,6 +36546,7 @@ const builtInCatalogJSON = `{
         "elo": 957.3
       },
       "model": "qwen/qwen3.6-35b-a3b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -33819,6 +36569,7 @@ const builtInCatalogJSON = `{
         "score": 0.643333333333333
       },
       "model": "qwen/qwen3.6-35b-a3b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -33841,6 +36592,7 @@ const builtInCatalogJSON = `{
         "index": -60.0166666666667
       },
       "model": "qwen/qwen3.6-35b-a3b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -33863,6 +36615,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.139017608897127
       },
       "model": "qwen/qwen3.6-35b-a3b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -33885,6 +36638,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.415730337078652
       },
       "model": "qwen/qwen3.6-35b-a3b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -33907,6 +36661,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.817171717171717
       },
       "model": "qwen/qwen3.6-35b-a3b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -33929,6 +36684,7 @@ const builtInCatalogJSON = `{
         "score": 0.0536082474226804
       },
       "model": "qwen/qwen3.6-35b-a3b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -33951,6 +36707,7 @@ const builtInCatalogJSON = `{
         "score": 0.2
       },
       "model": "qwen/qwen3.8-max",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -33973,6 +36730,7 @@ const builtInCatalogJSON = `{
         "elo": 1634.2
       },
       "model": "qwen/qwen3.8-max",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -33995,6 +36753,7 @@ const builtInCatalogJSON = `{
         "score": 0.783333333333333
       },
       "model": "qwen/qwen3.8-max",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -34017,6 +36776,7 @@ const builtInCatalogJSON = `{
         "index": 3.4
       },
       "model": "qwen/qwen3.8-max",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -34039,6 +36799,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.430491195551437
       },
       "model": "qwen/qwen3.8-max",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -34061,6 +36822,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.436
       },
       "model": "qwen/qwen3.8-max",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -34084,6 +36846,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.812734082397004
       },
       "model": "qwen/qwen3.8-max",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -34106,6 +36869,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.866
       },
       "model": "qwen/qwen3.8-max",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -34129,6 +36893,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.927272727272727
       },
       "model": "qwen/qwen3.8-max",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -34151,6 +36916,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.926
       },
       "model": "qwen/qwen3.8-max",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -34173,6 +36939,7 @@ const builtInCatalogJSON = `{
         "score": 0.532407407407407
       },
       "model": "qwen/qwen3.8-max",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -34195,6 +36962,7 @@ const builtInCatalogJSON = `{
         "score": 0.51340206185567
       },
       "model": "qwen/qwen3.8-max",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -34217,6 +36985,7 @@ const builtInCatalogJSON = `{
         "score": 0
       },
       "model": "qwen/qwen3.8-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -34239,6 +37008,7 @@ const builtInCatalogJSON = `{
         "elo": 1407.51
       },
       "model": "qwen/qwen3.8-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -34261,6 +37031,7 @@ const builtInCatalogJSON = `{
         "score": 0.773333333333333
       },
       "model": "qwen/qwen3.8-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -34283,6 +37054,7 @@ const builtInCatalogJSON = `{
         "index": -26.6666666666667
       },
       "model": "qwen/qwen3.8-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -34305,6 +37077,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.140407784986098
       },
       "model": "qwen/qwen3.8-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -34327,6 +37100,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.674157303370786
       },
       "model": "qwen/qwen3.8-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -34349,6 +37123,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.845454545454545
       },
       "model": "qwen/qwen3.8-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -34371,6 +37146,7 @@ const builtInCatalogJSON = `{
         "score": 0.400462962962963
       },
       "model": "qwen/qwen3.8-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -34393,6 +37169,7 @@ const builtInCatalogJSON = `{
         "score": 0.321649484536082
       },
       "model": "qwen/qwen3.8-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -34415,6 +37192,7 @@ const builtInCatalogJSON = `{
         "score": 0
       },
       "model": "qwen/qwen3.8-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -34437,6 +37215,7 @@ const builtInCatalogJSON = `{
         "elo": 1434.2
       },
       "model": "qwen/qwen3.8-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -34459,6 +37238,7 @@ const builtInCatalogJSON = `{
         "score": 0.796666666666667
       },
       "model": "qwen/qwen3.8-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -34481,6 +37261,7 @@ const builtInCatalogJSON = `{
         "index": -36.15
       },
       "model": "qwen/qwen3.8-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -34503,6 +37284,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.140871177015755
       },
       "model": "qwen/qwen3.8-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -34525,6 +37307,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.651685393258427
       },
       "model": "qwen/qwen3.8-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -34547,6 +37330,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.845454545454545
       },
       "model": "qwen/qwen3.8-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -34569,6 +37353,7 @@ const builtInCatalogJSON = `{
         "score": 0.390046296296296
       },
       "model": "qwen/qwen3.8-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -34591,6 +37376,7 @@ const builtInCatalogJSON = `{
         "score": 0.474226804123711
       },
       "model": "qwen/qwen3.8-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -34615,6 +37401,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 1411.95
       },
       "model": "qwen/qwen3.8-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -34637,6 +37424,7 @@ const builtInCatalogJSON = `{
         "score": 0.0542857142857143
       },
       "model": "qwen/qwen3.8-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -34659,6 +37447,7 @@ const builtInCatalogJSON = `{
         "all_pass": 0.166
       },
       "model": "qwen/qwen3.8-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -34683,6 +37472,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 1483.71
       },
       "model": "qwen/qwen3.8-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -34705,6 +37495,7 @@ const builtInCatalogJSON = `{
         "score": 0.82
       },
       "model": "qwen/qwen3.8-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -34727,6 +37518,7 @@ const builtInCatalogJSON = `{
         "index": -9.98333333333333
       },
       "model": "qwen/qwen3.8-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -34749,6 +37541,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.33920296570899
       },
       "model": "qwen/qwen3.8-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -34771,6 +37564,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.308
       },
       "model": "qwen/qwen3.8-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -34794,6 +37588,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.422
       },
       "model": "qwen/qwen3.8-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -34817,6 +37612,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.797752808988764
       },
       "model": "qwen/qwen3.8-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -34839,6 +37635,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.73
       },
       "model": "qwen/qwen3.8-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -34862,6 +37659,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.905050505050505
       },
       "model": "qwen/qwen3.8-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -34884,6 +37682,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.892
       },
       "model": "qwen/qwen3.8-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -34906,6 +37705,7 @@ const builtInCatalogJSON = `{
         "score": 0.466435185185185
       },
       "model": "qwen/qwen3.8-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -34928,6 +37728,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.617
       },
       "model": "qwen/qwen3.8-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -34951,6 +37752,7 @@ const builtInCatalogJSON = `{
         "score": 0.480412371134021
       },
       "model": "qwen/qwen3.8-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -34975,6 +37777,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 1452.87
       },
       "model": "qwen/qwen3.8-2.4t-a95b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -34997,6 +37800,7 @@ const builtInCatalogJSON = `{
         "score": 0.2
       },
       "model": "qwen/qwen3.8-2.4t-a95b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -35019,6 +37823,7 @@ const builtInCatalogJSON = `{
         "all_pass": 0.15
       },
       "model": "qwen/qwen3.8-2.4t-a95b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -35043,6 +37848,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 1647.51
       },
       "model": "qwen/qwen3.8-2.4t-a95b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -35065,6 +37871,7 @@ const builtInCatalogJSON = `{
         "score": 0.803333333333333
       },
       "model": "qwen/qwen3.8-2.4t-a95b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -35087,6 +37894,7 @@ const builtInCatalogJSON = `{
         "index": 4.31666666666667
       },
       "model": "qwen/qwen3.8-2.4t-a95b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -35109,6 +37917,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.424467099165894
       },
       "model": "qwen/qwen3.8-2.4t-a95b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -35131,6 +37940,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.820224719101124
       },
       "model": "qwen/qwen3.8-2.4t-a95b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -35153,6 +37963,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.935353535353535
       },
       "model": "qwen/qwen3.8-2.4t-a95b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -35175,6 +37986,7 @@ const builtInCatalogJSON = `{
         "score": 0.540509259259259
       },
       "model": "qwen/qwen3.8-2.4t-a95b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -35197,6 +38009,7 @@ const builtInCatalogJSON = `{
         "score": 0.490721649484536
       },
       "model": "qwen/qwen3.8-2.4t-a95b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -35219,6 +38032,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.24
       },
       "model": "qwen/qwen3.6-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -35240,6 +38054,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.878
       },
       "model": "qwen/qwen3.6-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -35261,6 +38076,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.772
       },
       "model": "qwen/qwen3.6-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -35282,6 +38098,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.862
       },
       "model": "qwen/qwen3.6-27b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -35303,6 +38120,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.214
       },
       "model": "qwen/qwen3.6-35b-a3b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -35324,6 +38142,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.734
       },
       "model": "qwen/qwen3.6-35b-a3b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -35345,11 +38164,90 @@ const builtInCatalogJSON = `{
         "accuracy": 0.852
       },
       "model": "qwen/qwen3.6-35b-a3b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
         "source_kind": "official_model_card",
         "variant": "Qwen3.6-35B-A3B"
+      }
+    },
+    {
+      "benchmark": "duellab/gamebench@2.0.0",
+      "benchmark_profile": "public-games",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://benchmarks.duellab.org/model-qwen-qwen3-7-max",
+        "verification": "imported"
+      },
+      "id": "duellab/qwen3-7-max-disabled-gamebench-2@1.0.0",
+      "metrics": {
+        "score": 42.1
+      },
+      "model": "qwen/qwen3.7-max",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "benchmark_release": "gb2-20260824-e05a1ff89a26",
+        "provider_setting": "Reasoning disabled",
+        "result_status": "tested_and_included",
+        "run_kind": "independent",
+        "source_model": "Qwen3.7 Max",
+        "source_model_slug": "qwen-qwen3-7-max-disabled"
+      }
+    },
+    {
+      "benchmark": "duellab/gamebench@2.0.0",
+      "benchmark_profile": "public-games",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://benchmarks.duellab.org/model-qwen-qwen3-7-max",
+        "verification": "imported"
+      },
+      "id": "duellab/qwen3-7-max-enabled-gamebench-2@1.0.0",
+      "metrics": {
+        "score": 42.7
+      },
+      "model": "qwen/qwen3.7-max",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "benchmark_release": "gb2-20260824-e05a1ff89a26",
+        "provider_setting": "Reasoning enabled",
+        "result_status": "tested_and_included",
+        "run_kind": "independent",
+        "source_model": "Qwen3.7 Max",
+        "source_model_slug": "qwen-qwen3-7-max-enabled"
+      }
+    },
+    {
+      "benchmark": "duellab/gamebench@2.0.0",
+      "benchmark_profile": "public-games",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://benchmarks.duellab.org/model-qwen-qwen3-8-max",
+        "verification": "imported"
+      },
+      "id": "duellab/qwen3-8-max-medium-gamebench-2@1.0.0",
+      "metrics": {
+        "score": 40.1
+      },
+      "model": "qwen/qwen3.8-max",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "medium",
+      "status": "available",
+      "subject": {
+        "benchmark_release": "gb2-20260824-e05a1ff89a26",
+        "provider_setting": "Medium",
+        "result_status": "tested_and_included",
+        "run_kind": "independent",
+        "source_model": "Qwen3.8 Max",
+        "source_model_slug": "qwen-qwen3-8-max-medium"
       }
     },
     {
@@ -35366,6 +38264,7 @@ const builtInCatalogJSON = `{
         "index": -37.2833333333333
       },
       "model": "stepfun/step-3.7-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -35388,6 +38287,7 @@ const builtInCatalogJSON = `{
         "elo": 958.76
       },
       "model": "stepfun/step-3.7-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -35410,6 +38310,7 @@ const builtInCatalogJSON = `{
         "score": 0.119587628865979
       },
       "model": "stepfun/step-3.7-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -35432,6 +38333,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.393258426966292
       },
       "model": "stepfun/step-3.7-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -35454,6 +38356,7 @@ const builtInCatalogJSON = `{
         "score": 0.736666666666667
       },
       "model": "stepfun/step-3.7-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -35476,6 +38379,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.214087117701576
       },
       "model": "stepfun/step-3.7-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -35498,6 +38402,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.809090909090909
       },
       "model": "stepfun/step-3.7-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -35520,6 +38425,7 @@ const builtInCatalogJSON = `{
         "score": 0.0228571428571429
       },
       "model": "stepfun/step-3.7-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -35542,6 +38448,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.672789115646258
       },
       "model": "stepfun/step-3.7-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -35564,6 +38471,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.753179190751445
       },
       "model": "stepfun/step-3.7-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -35586,6 +38494,7 @@ const builtInCatalogJSON = `{
         "index": -41.8166666666667
       },
       "model": "stepfun/step-3.5-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -35608,6 +38517,7 @@ const builtInCatalogJSON = `{
         "score": 0.5
       },
       "model": "stepfun/step-3.5-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -35630,6 +38540,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.645578231292517
       },
       "model": "stepfun/step-3.5-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -35652,6 +38563,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.211306765523633
       },
       "model": "stepfun/step-3.5-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -35674,6 +38586,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.831313131313131
       },
       "model": "stepfun/step-3.5-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -35696,6 +38609,7 @@ const builtInCatalogJSON = `{
         "score": 0.0246938775510204
       },
       "model": "stepfun/step-3.5-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -35718,6 +38632,7 @@ const builtInCatalogJSON = `{
         "index": -59
       },
       "model": "stepfun/step3-vl-10b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -35740,6 +38655,7 @@ const builtInCatalogJSON = `{
         "score": 0
       },
       "model": "stepfun/step3-vl-10b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -35762,6 +38678,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.502040816326531
       },
       "model": "stepfun/step3-vl-10b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -35784,6 +38701,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.108433734939759
       },
       "model": "stepfun/step3-vl-10b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -35806,6 +38724,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.68989898989899
       },
       "model": "stepfun/step3-vl-10b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -35828,6 +38747,7 @@ const builtInCatalogJSON = `{
         "score": 0
       },
       "model": "stepfun/step3-vl-10b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -35850,12 +38770,65 @@ const builtInCatalogJSON = `{
         "accuracy": 0.639884393063584
       },
       "model": "stepfun/step3-vl-10b",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
         "run_kind": "independent",
         "source_model": "Step3-VL-10B",
         "source_model_slug": "step-3-vl-10b"
+      }
+    },
+    {
+      "benchmark": "duellab/gamebench@2.0.0",
+      "benchmark_profile": "public-games",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://benchmarks.duellab.org/model-stepfun-step-3-7-flash",
+        "verification": "imported"
+      },
+      "id": "duellab/step-3-7-flash-low-gamebench-2@1.0.0",
+      "metrics": {
+        "score": 31.0
+      },
+      "model": "stepfun/step-3.7-flash",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "low",
+      "status": "available",
+      "subject": {
+        "benchmark_release": "gb2-20260824-e05a1ff89a26",
+        "provider_setting": "Low",
+        "result_status": "tested_and_included",
+        "run_kind": "independent",
+        "source_model": "Step 3.7 Flash",
+        "source_model_slug": "stepfun-step-3-7-flash-low"
+      }
+    },
+    {
+      "benchmark": "duellab/gamebench@2.0.0",
+      "benchmark_profile": "public-games",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://benchmarks.duellab.org/model-stepfun-step-3-7-flash",
+        "verification": "imported"
+      },
+      "id": "duellab/step-3-7-flash-medium-gamebench-2@1.0.0",
+      "metrics": {
+        "score": 32.3
+      },
+      "model": "stepfun/step-3.7-flash",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "medium",
+      "status": "available",
+      "subject": {
+        "benchmark_release": "gb2-20260824-e05a1ff89a26",
+        "provider_setting": "Medium",
+        "result_status": "tested_and_included",
+        "run_kind": "independent",
+        "source_model": "Step 3.7 Flash",
+        "source_model_slug": "stepfun-step-3-7-flash-medium"
       }
     },
     {
@@ -35872,6 +38845,7 @@ const builtInCatalogJSON = `{
         "pass_at_1": 0.873
       },
       "model": "tencent/hunyuan-a13b-instruct",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -35893,6 +38867,7 @@ const builtInCatalogJSON = `{
         "pass_at_1": 0.768
       },
       "model": "tencent/hunyuan-a13b-instruct",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -35914,6 +38889,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.943
       },
       "model": "tencent/hunyuan-a13b-instruct",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -35935,6 +38911,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.712
       },
       "model": "tencent/hunyuan-a13b-instruct",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -35956,6 +38933,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.827
       },
       "model": "tencent/hunyuan-a13b-instruct",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -35977,6 +38955,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.434
       },
       "model": "tencent/hy4-preview",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -35999,6 +38978,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.643
       },
       "model": "tencent/hy4-preview",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -36022,6 +39002,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.854
       },
       "model": "tencent/hy4-preview",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -36045,6 +39026,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.923
       },
       "model": "tencent/hy4-preview",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -36067,6 +39049,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.657
       },
       "model": "tencent/hy4-preview",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -36090,6 +39073,7 @@ const builtInCatalogJSON = `{
         "score": 0.0485714285714286
       },
       "model": "tencent/hy3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -36112,6 +39096,7 @@ const builtInCatalogJSON = `{
         "elo": 1140.21
       },
       "model": "tencent/hy3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -36134,6 +39119,7 @@ const builtInCatalogJSON = `{
         "score": 0.79
       },
       "model": "tencent/hy3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -36156,6 +39142,7 @@ const builtInCatalogJSON = `{
         "index": -18.4666666666667
       },
       "model": "tencent/hy3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -36178,6 +39165,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.334569045412419
       },
       "model": "tencent/hy3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -36200,6 +39188,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.37
       },
       "model": "tencent/hy3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -36222,6 +39211,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.28
       },
       "model": "tencent/hy3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -36245,6 +39235,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.644194756554307
       },
       "model": "tencent/hy3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -36267,6 +39258,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.717
       },
       "model": "tencent/hy3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -36290,6 +39282,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.896969696969697
       },
       "model": "tencent/hy3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -36312,6 +39305,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.904
       },
       "model": "tencent/hy3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -36334,6 +39328,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.579
       },
       "model": "tencent/hy3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -36357,6 +39352,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.78
       },
       "model": "tencent/hy3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -36380,6 +39376,7 @@ const builtInCatalogJSON = `{
         "score": 0.228865979381443
       },
       "model": "tencent/hy3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -36402,6 +39399,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.6723
       },
       "model": "tencent/hunyuan-a13b-instruct",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -36425,6 +39423,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 846.07
       },
       "model": "thinking-machines/inkling",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -36447,6 +39446,7 @@ const builtInCatalogJSON = `{
         "score": 0.0542857142857143
       },
       "model": "thinking-machines/inkling",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -36469,6 +39469,7 @@ const builtInCatalogJSON = `{
         "all_pass": 0.126
       },
       "model": "thinking-machines/inkling",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -36493,6 +39494,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 1185.7
       },
       "model": "thinking-machines/inkling",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -36515,6 +39517,7 @@ const builtInCatalogJSON = `{
         "score": 0.773333333333333
       },
       "model": "thinking-machines/inkling",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -36537,6 +39540,7 @@ const builtInCatalogJSON = `{
         "index": 2
       },
       "model": "thinking-machines/inkling",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -36559,6 +39563,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.318813716404078
       },
       "model": "thinking-machines/inkling",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -36581,6 +39586,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.297
       },
       "model": "thinking-machines/inkling",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -36603,6 +39609,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.550561797752809
       },
       "model": "thinking-machines/inkling",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -36625,6 +39632,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.638
       },
       "model": "thinking-machines/inkling",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -36648,6 +39656,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.871717171717172
       },
       "model": "thinking-machines/inkling",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -36670,6 +39679,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.872
       },
       "model": "thinking-machines/inkling",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -36692,6 +39702,7 @@ const builtInCatalogJSON = `{
         "score": 0.469907407407407
       },
       "model": "thinking-machines/inkling",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -36714,6 +39725,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.543
       },
       "model": "thinking-machines/inkling",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -36736,6 +39748,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.776
       },
       "model": "thinking-machines/inkling",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -36759,6 +39772,7 @@ const builtInCatalogJSON = `{
         "score": 0.290721649484536
       },
       "model": "thinking-machines/inkling",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -36781,6 +39795,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.316
       },
       "model": "thinking-machines/inkling-small",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -36803,6 +39818,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.647
       },
       "model": "thinking-machines/inkling-small",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -36826,6 +39842,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.895
       },
       "model": "thinking-machines/inkling-small",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -36848,6 +39865,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.559
       },
       "model": "thinking-machines/inkling-small",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -36870,6 +39888,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.802
       },
       "model": "thinking-machines/inkling-small",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -36877,6 +39896,110 @@ const builtInCatalogJSON = `{
         "reasoning_effort": "xhigh",
         "source_kind": "official_model_card",
         "variant": "Inkling Small"
+      }
+    },
+    {
+      "benchmark": "duellab/gamebench@2.0.0",
+      "benchmark_profile": "public-games",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://benchmarks.duellab.org/model-thinkingmachines-inkling",
+        "verification": "imported"
+      },
+      "id": "duellab/inkling-none-gamebench-2@1.0.0",
+      "metrics": {
+        "score": 34.0
+      },
+      "model": "thinking-machines/inkling",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "none",
+      "status": "available",
+      "subject": {
+        "benchmark_release": "gb2-20260824-e05a1ff89a26",
+        "provider_setting": "None",
+        "result_status": "tested_and_included",
+        "run_kind": "independent",
+        "source_model": "Inkling",
+        "source_model_slug": "thinkingmachines-inkling-none"
+      }
+    },
+    {
+      "benchmark": "duellab/gamebench@2.0.0",
+      "benchmark_profile": "public-games",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://benchmarks.duellab.org/model-thinkingmachines-inkling",
+        "verification": "imported"
+      },
+      "id": "duellab/inkling-medium-gamebench-2@1.0.0",
+      "metrics": {
+        "score": 24.7
+      },
+      "model": "thinking-machines/inkling",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "medium",
+      "status": "available",
+      "subject": {
+        "benchmark_release": "gb2-20260824-e05a1ff89a26",
+        "provider_setting": "Medium",
+        "result_status": "tested_and_included",
+        "run_kind": "independent",
+        "source_model": "Inkling",
+        "source_model_slug": "thinkingmachines-inkling-medium"
+      }
+    },
+    {
+      "benchmark": "duellab/gamebench@2.0.0",
+      "benchmark_profile": "public-games",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://benchmarks.duellab.org/model-thinkingmachines-inkling-small",
+        "verification": "imported"
+      },
+      "id": "duellab/inkling-small-none-gamebench-2@1.0.0",
+      "metrics": {
+        "score": 31.9
+      },
+      "model": "thinking-machines/inkling-small",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "none",
+      "status": "available",
+      "subject": {
+        "benchmark_release": "gb2-20260824-e05a1ff89a26",
+        "provider_setting": "None",
+        "result_status": "tested_and_included",
+        "run_kind": "independent",
+        "source_model": "Inkling Small",
+        "source_model_slug": "thinkingmachines-inkling-small-none"
+      }
+    },
+    {
+      "benchmark": "duellab/gamebench@2.0.0",
+      "benchmark_profile": "public-games",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://benchmarks.duellab.org/model-thinkingmachines-inkling-small",
+        "verification": "imported"
+      },
+      "id": "duellab/inkling-small-medium-gamebench-2@1.0.0",
+      "metrics": {
+        "score": 31.9
+      },
+      "model": "thinking-machines/inkling-small",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "medium",
+      "status": "available",
+      "subject": {
+        "benchmark_release": "gb2-20260824-e05a1ff89a26",
+        "provider_setting": "Medium",
+        "result_status": "tested_and_included",
+        "run_kind": "independent",
+        "source_model": "Inkling Small",
+        "source_model_slug": "thinkingmachines-inkling-small-medium"
       }
     },
     {
@@ -36893,6 +40016,7 @@ const builtInCatalogJSON = `{
         "score": 0
       },
       "model": "xai/grok-4.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -36915,6 +40039,7 @@ const builtInCatalogJSON = `{
         "elo": 1035.31
       },
       "model": "xai/grok-4.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -36937,6 +40062,7 @@ const builtInCatalogJSON = `{
         "score": 0.323333333333333
       },
       "model": "xai/grok-4.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -36959,6 +40085,7 @@ const builtInCatalogJSON = `{
         "index": -33.0833333333333
       },
       "model": "xai/grok-4.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -36981,6 +40108,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.0676552363299351
       },
       "model": "xai/grok-4.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -37003,6 +40131,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.340823970037453
       },
       "model": "xai/grok-4.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -37025,6 +40154,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.657575757575758
       },
       "model": "xai/grok-4.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -37047,6 +40177,7 @@ const builtInCatalogJSON = `{
         "score": 0.0804123711340206
       },
       "model": "xai/grok-4.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "none",
       "status": "available",
       "subject": {
@@ -37069,6 +40200,7 @@ const builtInCatalogJSON = `{
         "score": 0.00571428571428571
       },
       "model": "xai/grok-4.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -37091,6 +40223,7 @@ const builtInCatalogJSON = `{
         "score": 0.74
       },
       "model": "xai/grok-4.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -37113,6 +40246,7 @@ const builtInCatalogJSON = `{
         "index": 13.9333333333333
       },
       "model": "xai/grok-4.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -37135,6 +40269,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.183503243744208
       },
       "model": "xai/grok-4.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -37157,6 +40292,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.843434343434343
       },
       "model": "xai/grok-4.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -37179,6 +40315,7 @@ const builtInCatalogJSON = `{
         "score": 0.0485714285714286
       },
       "model": "xai/grok-4.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -37201,6 +40338,7 @@ const builtInCatalogJSON = `{
         "score": 0.75
       },
       "model": "xai/grok-4.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -37223,6 +40361,7 @@ const builtInCatalogJSON = `{
         "index": 16.7
       },
       "model": "xai/grok-4.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -37245,6 +40384,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.299814643188137
       },
       "model": "xai/grok-4.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -37267,6 +40407,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.88989898989899
       },
       "model": "xai/grok-4.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -37289,6 +40430,7 @@ const builtInCatalogJSON = `{
         "score": 0.08
       },
       "model": "xai/grok-4.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -37311,6 +40453,7 @@ const builtInCatalogJSON = `{
         "elo": 1022.82
       },
       "model": "xai/grok-4.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -37333,6 +40476,7 @@ const builtInCatalogJSON = `{
         "score": 0.73
       },
       "model": "xai/grok-4.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -37355,6 +40499,7 @@ const builtInCatalogJSON = `{
         "index": 17.9833333333333
       },
       "model": "xai/grok-4.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -37377,6 +40522,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.372103799814643
       },
       "model": "xai/grok-4.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -37399,6 +40545,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.397003745318352
       },
       "model": "xai/grok-4.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -37421,6 +40568,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.901010101010101
       },
       "model": "xai/grok-4.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -37443,6 +40591,7 @@ const builtInCatalogJSON = `{
         "score": 0.123711340206186
       },
       "model": "xai/grok-4.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -37467,6 +40616,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 1547.46
       },
       "model": "xai/grok-4.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -37489,6 +40639,7 @@ const builtInCatalogJSON = `{
         "score": 0.171428571428571
       },
       "model": "xai/grok-4.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -37511,6 +40662,7 @@ const builtInCatalogJSON = `{
         "all_pass": 0.188
       },
       "model": "xai/grok-4.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -37535,6 +40687,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 1662.1
       },
       "model": "xai/grok-4.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -37557,6 +40710,7 @@ const builtInCatalogJSON = `{
         "score": 0.803333333333333
       },
       "model": "xai/grok-4.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -37579,6 +40733,7 @@ const builtInCatalogJSON = `{
         "index": 30.4833333333333
       },
       "model": "xai/grok-4.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -37601,6 +40756,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.429101019462465
       },
       "model": "xai/grok-4.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -37623,6 +40779,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.883895131086142
       },
       "model": "xai/grok-4.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -37645,6 +40802,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.94949494949495
       },
       "model": "xai/grok-4.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -37667,6 +40825,7 @@ const builtInCatalogJSON = `{
         "score": 0.564814814814815
       },
       "model": "xai/grok-4.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -37689,6 +40848,7 @@ const builtInCatalogJSON = `{
         "score": 0.507216494845361
       },
       "model": "xai/grok-4.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -37711,6 +40871,7 @@ const builtInCatalogJSON = `{
         "score": 0.0571428571428571
       },
       "model": "xai/grok-4.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -37733,6 +40894,7 @@ const builtInCatalogJSON = `{
         "elo": 1467.28
       },
       "model": "xai/grok-4.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -37755,6 +40917,7 @@ const builtInCatalogJSON = `{
         "score": 0.806666666666667
       },
       "model": "xai/grok-4.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -37777,6 +40940,7 @@ const builtInCatalogJSON = `{
         "index": 25.9
       },
       "model": "xai/grok-4.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -37799,6 +40963,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.276181649675626
       },
       "model": "xai/grok-4.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -37821,6 +40986,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.752808988764045
       },
       "model": "xai/grok-4.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -37843,6 +41009,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.878787878787879
       },
       "model": "xai/grok-4.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -37865,6 +41032,7 @@ const builtInCatalogJSON = `{
         "score": 0.494212962962963
       },
       "model": "xai/grok-4.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -37887,6 +41055,7 @@ const builtInCatalogJSON = `{
         "score": 0.381443298969072
       },
       "model": "xai/grok-4.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "low",
       "status": "available",
       "subject": {
@@ -37909,6 +41078,7 @@ const builtInCatalogJSON = `{
         "score": 0.177142857142857
       },
       "model": "xai/grok-4.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -37931,6 +41101,7 @@ const builtInCatalogJSON = `{
         "elo": 1647.49
       },
       "model": "xai/grok-4.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -37953,6 +41124,7 @@ const builtInCatalogJSON = `{
         "score": 0.81
       },
       "model": "xai/grok-4.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -37975,6 +41147,7 @@ const builtInCatalogJSON = `{
         "index": 28
       },
       "model": "xai/grok-4.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -37997,6 +41170,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.421223354958295
       },
       "model": "xai/grok-4.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -38019,6 +41193,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.842696629213483
       },
       "model": "xai/grok-4.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -38041,6 +41216,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.935353535353535
       },
       "model": "xai/grok-4.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -38063,6 +41239,7 @@ const builtInCatalogJSON = `{
         "score": 0.559027777777778
       },
       "model": "xai/grok-4.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -38085,6 +41262,7 @@ const builtInCatalogJSON = `{
         "score": 0.443298969072165
       },
       "model": "xai/grok-4.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "medium",
       "status": "available",
       "subject": {
@@ -38109,6 +41287,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 1558.84
       },
       "model": "xai/grok-4.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -38131,6 +41310,7 @@ const builtInCatalogJSON = `{
         "score": 0.197142857142857
       },
       "model": "xai/grok-4.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -38155,6 +41335,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 1682.78
       },
       "model": "xai/grok-4.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -38177,6 +41358,7 @@ const builtInCatalogJSON = `{
         "score": 0.81
       },
       "model": "xai/grok-4.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -38199,6 +41381,7 @@ const builtInCatalogJSON = `{
         "index": 29.3166666666667
       },
       "model": "xai/grok-4.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -38221,6 +41404,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.440685820203893
       },
       "model": "xai/grok-4.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -38243,6 +41427,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.880149812734082
       },
       "model": "xai/grok-4.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -38265,6 +41450,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.935353535353535
       },
       "model": "xai/grok-4.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -38287,6 +41473,7 @@ const builtInCatalogJSON = `{
         "score": 0.530092592592593
       },
       "model": "xai/grok-4.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -38309,6 +41496,7 @@ const builtInCatalogJSON = `{
         "score": 0.43298969072165
       },
       "model": "xai/grok-4.6",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -38331,6 +41519,7 @@ const builtInCatalogJSON = `{
         "score": 0.154285714285714
       },
       "model": "xai/grok-4.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -38353,6 +41542,7 @@ const builtInCatalogJSON = `{
         "elo": 1434.94
       },
       "model": "xai/grok-4.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -38375,6 +41565,7 @@ const builtInCatalogJSON = `{
         "score": 0.793333333333333
       },
       "model": "xai/grok-4.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -38397,6 +41588,7 @@ const builtInCatalogJSON = `{
         "index": 25.3166666666667
       },
       "model": "xai/grok-4.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -38419,6 +41611,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.42678405931418
       },
       "model": "xai/grok-4.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -38441,6 +41634,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.816479400749064
       },
       "model": "xai/grok-4.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -38463,6 +41657,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.931313131313131
       },
       "model": "xai/grok-4.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -38485,6 +41680,7 @@ const builtInCatalogJSON = `{
         "score": 0.549768518518518
       },
       "model": "xai/grok-4.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -38507,12 +41703,65 @@ const builtInCatalogJSON = `{
         "score": 0.420618556701031
       },
       "model": "xai/grok-4.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
         "run_kind": "independent",
         "source_model": "Grok 4.5 (high)",
         "source_model_slug": "grok-4-5"
+      }
+    },
+    {
+      "benchmark": "duellab/gamebench@2.0.0",
+      "benchmark_profile": "public-games",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://benchmarks.duellab.org/model-x-ai-grok-4-5",
+        "verification": "imported"
+      },
+      "id": "duellab/grok-4-5-low-gamebench-2@1.0.0",
+      "metrics": {
+        "score": 46.4
+      },
+      "model": "xai/grok-4.5",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "low",
+      "status": "available",
+      "subject": {
+        "benchmark_release": "gb2-20260824-e05a1ff89a26",
+        "provider_setting": "Low",
+        "result_status": "tested_and_included",
+        "run_kind": "independent",
+        "source_model": "Grok 4.5",
+        "source_model_slug": "x-ai-grok-4-5-low"
+      }
+    },
+    {
+      "benchmark": "duellab/gamebench@2.0.0",
+      "benchmark_profile": "public-games",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://benchmarks.duellab.org/model-x-ai-grok-4-5",
+        "verification": "imported"
+      },
+      "id": "duellab/grok-4-5-medium-gamebench-2@1.0.0",
+      "metrics": {
+        "score": 57.2
+      },
+      "model": "xai/grok-4.5",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "medium",
+      "status": "available",
+      "subject": {
+        "benchmark_release": "gb2-20260824-e05a1ff89a26",
+        "provider_setting": "Medium",
+        "result_status": "tested_and_included",
+        "run_kind": "independent",
+        "source_model": "Grok 4.5",
+        "source_model_slug": "x-ai-grok-4-5-medium"
       }
     },
     {
@@ -38529,6 +41778,7 @@ const builtInCatalogJSON = `{
         "score": 0.0114285714285714
       },
       "model": "xiaomi/mimo-v2.5-pro",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -38551,6 +41801,7 @@ const builtInCatalogJSON = `{
         "score": 0.416666666666667
       },
       "model": "xiaomi/mimo-v2.5-pro",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -38573,6 +41824,7 @@ const builtInCatalogJSON = `{
         "index": -37.8
       },
       "model": "xiaomi/mimo-v2.5-pro",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -38595,6 +41847,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.147822057460612
       },
       "model": "xiaomi/mimo-v2.5-pro",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -38617,6 +41870,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.761616161616162
       },
       "model": "xiaomi/mimo-v2.5-pro",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -38639,6 +41893,7 @@ const builtInCatalogJSON = `{
         "score": 0.04
       },
       "model": "xiaomi/mimo-v2.5-pro",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -38661,6 +41916,7 @@ const builtInCatalogJSON = `{
         "elo": 1190.79
       },
       "model": "xiaomi/mimo-v2.5-pro",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -38683,6 +41939,7 @@ const builtInCatalogJSON = `{
         "score": 0.796666666666667
       },
       "model": "xiaomi/mimo-v2.5-pro",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -38705,6 +41962,7 @@ const builtInCatalogJSON = `{
         "index": 3.25
       },
       "model": "xiaomi/mimo-v2.5-pro",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -38727,6 +41985,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.356811862835959
       },
       "model": "xiaomi/mimo-v2.5-pro",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -38749,6 +42008,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.34
       },
       "model": "xiaomi/mimo-v2.5-pro",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -38771,6 +42031,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.684
       },
       "model": "xiaomi/mimo-v2.5-pro",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -38793,6 +42054,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.651685393258427
       },
       "model": "xiaomi/mimo-v2.5-pro",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -38815,6 +42077,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.865656565656566
       },
       "model": "xiaomi/mimo-v2.5-pro",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -38837,6 +42100,7 @@ const builtInCatalogJSON = `{
         "score": 0.505787037037037
       },
       "model": "xiaomi/mimo-v2.5-pro",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -38859,6 +42123,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.572
       },
       "model": "xiaomi/mimo-v2.5-pro",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -38881,6 +42146,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.789
       },
       "model": "xiaomi/mimo-v2.5-pro",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -38903,6 +42169,7 @@ const builtInCatalogJSON = `{
         "score": 0.0989690721649484
       },
       "model": "xiaomi/mimo-v2.5-pro",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -38925,6 +42192,7 @@ const builtInCatalogJSON = `{
         "score": 0.0371428571428571
       },
       "model": "xiaomi/mimo-v2.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -38947,6 +42215,7 @@ const builtInCatalogJSON = `{
         "elo": 1083.38
       },
       "model": "xiaomi/mimo-v2.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -38969,6 +42238,7 @@ const builtInCatalogJSON = `{
         "score": 0.73
       },
       "model": "xiaomi/mimo-v2.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -38991,6 +42261,7 @@ const builtInCatalogJSON = `{
         "index": -9.83333333333333
       },
       "model": "xiaomi/mimo-v2.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -39013,6 +42284,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.272011121408712
       },
       "model": "xiaomi/mimo-v2.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -39035,6 +42307,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.658
       },
       "model": "xiaomi/mimo-v2.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -39057,6 +42330,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.636704119850187
       },
       "model": "xiaomi/mimo-v2.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -39079,6 +42353,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.84949494949495
       },
       "model": "xiaomi/mimo-v2.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -39101,6 +42376,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.561
       },
       "model": "xiaomi/mimo-v2.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -39123,6 +42399,7 @@ const builtInCatalogJSON = `{
         "score": 0.0865979381443299
       },
       "model": "xiaomi/mimo-v2.5",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -39145,6 +42422,7 @@ const builtInCatalogJSON = `{
         "score": 0
       },
       "model": "xiaomi/mimo-v2-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -39167,6 +42445,7 @@ const builtInCatalogJSON = `{
         "elo": 791.03
       },
       "model": "xiaomi/mimo-v2-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -39189,6 +42468,7 @@ const builtInCatalogJSON = `{
         "score": 0.363333333333333
       },
       "model": "xiaomi/mimo-v2-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -39211,6 +42491,7 @@ const builtInCatalogJSON = `{
         "index": -48.45
       },
       "model": "xiaomi/mimo-v2-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -39233,6 +42514,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.0857275254865616
       },
       "model": "xiaomi/mimo-v2-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -39255,6 +42537,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.617977528089888
       },
       "model": "xiaomi/mimo-v2-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -39277,6 +42560,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.655555555555556
       },
       "model": "xiaomi/mimo-v2-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -39299,6 +42583,7 @@ const builtInCatalogJSON = `{
         "score": 0.0428571428571429
       },
       "model": "xiaomi/mimo-v2-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -39321,6 +42606,7 @@ const builtInCatalogJSON = `{
         "score": 0.706666666666667
       },
       "model": "xiaomi/mimo-v2-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -39343,6 +42629,7 @@ const builtInCatalogJSON = `{
         "index": -45.35
       },
       "model": "xiaomi/mimo-v2-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -39365,6 +42652,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.228452270620945
       },
       "model": "xiaomi/mimo-v2-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -39387,6 +42675,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.221
       },
       "model": "xiaomi/mimo-v2-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -39409,6 +42698,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.385
       },
       "model": "xiaomi/mimo-v2-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -39431,6 +42721,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.846464646464647
       },
       "model": "xiaomi/mimo-v2-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -39453,6 +42744,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.837
       },
       "model": "xiaomi/mimo-v2-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -39475,6 +42767,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.734
       },
       "model": "xiaomi/mimo-v2-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -39497,6 +42790,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.849
       },
       "model": "xiaomi/mimo-v2-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -39521,6 +42815,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 1530.15
       },
       "model": "zai/glm-5.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -39543,6 +42838,7 @@ const builtInCatalogJSON = `{
         "score": 0.191428571428571
       },
       "model": "zai/glm-5.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -39565,6 +42861,7 @@ const builtInCatalogJSON = `{
         "all_pass": 0.118
       },
       "model": "zai/glm-5.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -39589,6 +42886,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 1696.65
       },
       "model": "zai/glm-5.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -39611,6 +42909,7 @@ const builtInCatalogJSON = `{
         "score": 0.796666666666667
       },
       "model": "zai/glm-5.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -39633,6 +42932,7 @@ const builtInCatalogJSON = `{
         "index": 14.3
       },
       "model": "zai/glm-5.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -39655,6 +42955,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.422613531047266
       },
       "model": "zai/glm-5.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -39677,6 +42978,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.838951310861423
       },
       "model": "zai/glm-5.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -39699,6 +43001,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.917171717171717
       },
       "model": "zai/glm-5.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -39721,6 +43024,7 @@ const builtInCatalogJSON = `{
         "score": 0.590277777777778
       },
       "model": "zai/glm-5.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -39743,6 +43047,7 @@ const builtInCatalogJSON = `{
         "score": 0.503092783505155
       },
       "model": "zai/glm-5.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -39765,6 +43070,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.882
       },
       "model": "zai/glm-5.3",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -39789,6 +43095,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 1470.5
       },
       "model": "zai/glm-5.3-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -39811,6 +43118,7 @@ const builtInCatalogJSON = `{
         "score": 0.154285714285714
       },
       "model": "zai/glm-5.3-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -39833,6 +43141,7 @@ const builtInCatalogJSON = `{
         "all_pass": 0.13
       },
       "model": "zai/glm-5.3-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -39857,6 +43166,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 1689.79
       },
       "model": "zai/glm-5.3-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -39879,6 +43189,7 @@ const builtInCatalogJSON = `{
         "elo": 1773
       },
       "model": "zai/glm-5.3-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -39902,6 +43213,7 @@ const builtInCatalogJSON = `{
         "score": 0.8
       },
       "model": "zai/glm-5.3-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -39924,6 +43236,7 @@ const builtInCatalogJSON = `{
         "index": 7.46666666666667
       },
       "model": "zai/glm-5.3-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -39946,6 +43259,7 @@ const builtInCatalogJSON = `{
         "pass_rate": 0.263
       },
       "model": "zai/glm-5.3-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -39968,6 +43282,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.398517145505097
       },
       "model": "zai/glm-5.3-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -39990,6 +43305,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.553
       },
       "model": "zai/glm-5.3-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -40012,6 +43328,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.634
       },
       "model": "zai/glm-5.3-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -40034,6 +43351,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.842696629213483
       },
       "model": "zai/glm-5.3-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -40056,6 +43374,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.843
       },
       "model": "zai/glm-5.3-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -40078,6 +43397,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.912121212121212
       },
       "model": "zai/glm-5.3-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -40100,6 +43420,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.912
       },
       "model": "zai/glm-5.3-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -40123,6 +43444,7 @@ const builtInCatalogJSON = `{
         "score": 0.516203703703704
       },
       "model": "zai/glm-5.3-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -40145,6 +43467,7 @@ const builtInCatalogJSON = `{
         "score": 0.472164948453608
       },
       "model": "zai/glm-5.3-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -40167,6 +43490,7 @@ const builtInCatalogJSON = `{
         "score": 0.488
       },
       "model": "zai/glm-5.3-flash",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -40189,6 +43513,7 @@ const builtInCatalogJSON = `{
         "score": 0.0314285714285714
       },
       "model": "zai/glm-5.2",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -40211,6 +43536,7 @@ const builtInCatalogJSON = `{
         "elo": 1311.7
       },
       "model": "zai/glm-5.2",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -40233,6 +43559,7 @@ const builtInCatalogJSON = `{
         "score": 0.423333333333333
       },
       "model": "zai/glm-5.2",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -40255,6 +43582,7 @@ const builtInCatalogJSON = `{
         "index": -6.56666666666667
       },
       "model": "zai/glm-5.2",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -40277,6 +43605,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.097775718257646
       },
       "model": "zai/glm-5.2",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -40299,6 +43628,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.51685393258427
       },
       "model": "zai/glm-5.2",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -40321,6 +43651,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.685858585858586
       },
       "model": "zai/glm-5.2",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -40343,6 +43674,7 @@ const builtInCatalogJSON = `{
         "score": 0.167010309278351
       },
       "model": "zai/glm-5.2",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -40365,6 +43697,7 @@ const builtInCatalogJSON = `{
         "score": 0.208571428571429
       },
       "model": "zai/glm-5.2",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -40387,6 +43720,7 @@ const builtInCatalogJSON = `{
         "elo": 1422.02
       },
       "model": "zai/glm-5.2",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -40409,6 +43743,7 @@ const builtInCatalogJSON = `{
         "score": 0.783333333333333
       },
       "model": "zai/glm-5.2",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -40431,6 +43766,7 @@ const builtInCatalogJSON = `{
         "index": 4.43333333333333
       },
       "model": "zai/glm-5.2",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -40453,6 +43789,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.411492122335496
       },
       "model": "zai/glm-5.2",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -40475,6 +43812,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.779026217228464
       },
       "model": "zai/glm-5.2",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -40497,6 +43835,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.894949494949495
       },
       "model": "zai/glm-5.2",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -40519,6 +43858,7 @@ const builtInCatalogJSON = `{
         "score": 0.511574074074074
       },
       "model": "zai/glm-5.2",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -40541,6 +43881,7 @@ const builtInCatalogJSON = `{
         "score": 0.34639175257732
       },
       "model": "zai/glm-5.2",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -40563,6 +43904,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.405
       },
       "model": "zai/glm-5.2",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -40585,6 +43927,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.81
       },
       "model": "zai/glm-5.2",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -40607,6 +43950,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.912
       },
       "model": "zai/glm-5.2",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -40628,6 +43972,7 @@ const builtInCatalogJSON = `{
         "score": 0
       },
       "model": "zai/glm-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -40650,6 +43995,7 @@ const builtInCatalogJSON = `{
         "score": 0.533333333333333
       },
       "model": "zai/glm-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -40672,6 +44018,7 @@ const builtInCatalogJSON = `{
         "index": -22.4333333333333
       },
       "model": "zai/glm-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -40694,6 +44041,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.279425393883225
       },
       "model": "zai/glm-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -40716,6 +44064,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.839393939393939
       },
       "model": "zai/glm-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "disabled",
       "status": "available",
       "subject": {
@@ -40738,6 +44087,7 @@ const builtInCatalogJSON = `{
         "score": 0.0457142857142857
       },
       "model": "zai/glm-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -40760,6 +44110,7 @@ const builtInCatalogJSON = `{
         "elo": 1186.31
       },
       "model": "zai/glm-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -40782,6 +44133,7 @@ const builtInCatalogJSON = `{
         "score": 0.736666666666667
       },
       "model": "zai/glm-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -40804,6 +44156,7 @@ const builtInCatalogJSON = `{
         "index": 0.85
       },
       "model": "zai/glm-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -40826,6 +44179,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.300741427247451
       },
       "model": "zai/glm-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -40848,6 +44202,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.617977528089888
       },
       "model": "zai/glm-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -40870,6 +44225,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.867676767676768
       },
       "model": "zai/glm-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
@@ -40892,12 +44248,38 @@ const builtInCatalogJSON = `{
         "score": 0.136082474226804
       },
       "model": "zai/glm-5.1",
+      "observed_at": "2026-09-06",
       "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
         "run_kind": "independent",
         "source_model": "GLM-5.1 (Reasoning)",
         "source_model_slug": "glm-5-1"
+      }
+    },
+    {
+      "benchmark": "cursor/cursorbench@3.2.0",
+      "benchmark_profile": "production-agent",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://cursor.com/cursorbench",
+        "verification": "imported"
+      },
+      "id": "cursor/glm-5-2-high-cursorbench-3-2@1.0.0",
+      "metrics": {
+        "score": 0.515
+      },
+      "model": "zai/glm-5.2",
+      "observed_at": "2026-09-06",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "3.2",
+        "harness": "cursor-production-agent",
+        "run_kind": "independent",
+        "source_model": "GLM 5.2",
+        "source_model_slug": "glm-5-2-high"
       }
     }
   ],
@@ -42399,17 +45781,20 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "harbor/terminal-bench@2.1.0",
           "benchmark_profile": "published-agent",
+          "evaluation": "anthropic/claude-sonnet-5-xhigh-terminal-bench-2-1@1.0.0",
           "metric": "resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
+          "normalized": 0.804,
+          "status": "available",
+          "value": 0.804,
           "weight": 0.2
         }
       ],
-      "coverage": 0.0,
+      "coverage": 0.2,
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "anthropic/claude-sonnet-5",
-      "provenance": [],
+      "provenance": [
+        "anthropic/claude-sonnet-5-xhigh-terminal-bench-2-1@1.0.0"
+      ],
       "reasoning_effort": "xhigh",
       "score": null,
       "status": "missing"
@@ -42964,17 +46349,20 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "harbor/terminal-bench@2.1.0",
           "benchmark_profile": "published-agent",
+          "evaluation": "anthropic/claude-opus-4-8-high-terminal-bench-2-1@1.0.0",
           "metric": "resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
+          "normalized": 0.827,
+          "status": "available",
+          "value": 0.827,
           "weight": 0.2
         }
       ],
-      "coverage": 0.0,
+      "coverage": 0.2,
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "anthropic/claude-opus-4.8",
-      "provenance": [],
+      "provenance": [
+        "anthropic/claude-opus-4-8-high-terminal-bench-2-1@1.0.0"
+      ],
       "reasoning_effort": "high",
       "score": null,
       "status": "missing"
@@ -50921,28 +54309,31 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "idavidrein/gpqa-diamond@1.0.0",
           "benchmark_profile": "published-standard",
+          "evaluation": "openai/gpt-oss-120b-model-card-medium-gpqa-diamond@1.0.0",
           "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
+          "normalized": 0.731,
+          "status": "available",
+          "value": 0.731,
           "weight": 0.2
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profile": "no-tools",
+          "evaluation": "openai/gpt-oss-120b-model-card-medium-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
+          "normalized": 0.086,
+          "status": "available",
+          "value": 0.086,
           "weight": 0.2
         },
         {
           "benchmark": "swe-bench/verified@1.0.0",
           "benchmark_profile": "published-agent",
+          "evaluation": "openai/gpt-oss-120b-model-card-medium-swe-bench-verified@1.0.0",
           "metric": "resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
+          "normalized": 0.526,
+          "status": "available",
+          "value": 0.526,
           "weight": 0.2
         },
         {
@@ -50955,13 +54346,22 @@ const builtInCatalogJSON = `{
           "weight": 0.2
         }
       ],
-      "coverage": 0.0,
+      "coverage": 0.6000000000000001,
+      "domains": {
+        "frontier_reasoning": 8.6,
+        "scientific_reasoning": 73.1,
+        "software_engineering": 52.6
+      },
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "openai/gpt-oss-120b",
-      "provenance": [],
+      "provenance": [
+        "openai/gpt-oss-120b-model-card-medium-gpqa-diamond@1.0.0",
+        "openai/gpt-oss-120b-model-card-medium-humanitys-last-exam@1.0.0",
+        "openai/gpt-oss-120b-model-card-medium-swe-bench-verified@1.0.0"
+      ],
       "reasoning_effort": "medium",
-      "score": null,
-      "status": "missing"
+      "score": 44.76666666666666,
+      "status": "available"
     },
     {
       "components": [
@@ -51089,28 +54489,31 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "idavidrein/gpqa-diamond@1.0.0",
           "benchmark_profile": "published-standard",
+          "evaluation": "openai/gpt-oss-20b-model-card-medium-gpqa-diamond@1.0.0",
           "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
+          "normalized": 0.66,
+          "status": "available",
+          "value": 0.66,
           "weight": 0.2
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profile": "no-tools",
+          "evaluation": "openai/gpt-oss-20b-model-card-medium-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
+          "normalized": 0.07,
+          "status": "available",
+          "value": 0.07,
           "weight": 0.2
         },
         {
           "benchmark": "swe-bench/verified@1.0.0",
           "benchmark_profile": "published-agent",
+          "evaluation": "openai/gpt-oss-20b-model-card-medium-swe-bench-verified@1.0.0",
           "metric": "resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
+          "normalized": 0.532,
+          "status": "available",
+          "value": 0.532,
           "weight": 0.2
         },
         {
@@ -51123,13 +54526,22 @@ const builtInCatalogJSON = `{
           "weight": 0.2
         }
       ],
-      "coverage": 0.0,
+      "coverage": 0.6000000000000001,
+      "domains": {
+        "frontier_reasoning": 7.000000000000001,
+        "scientific_reasoning": 66.0,
+        "software_engineering": 53.2
+      },
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "openai/gpt-oss-20b",
-      "provenance": [],
+      "provenance": [
+        "openai/gpt-oss-20b-model-card-medium-gpqa-diamond@1.0.0",
+        "openai/gpt-oss-20b-model-card-medium-humanitys-last-exam@1.0.0",
+        "openai/gpt-oss-20b-model-card-medium-swe-bench-verified@1.0.0"
+      ],
       "reasoning_effort": "medium",
-      "score": null,
-      "status": "missing"
+      "score": 42.06666666666666,
+      "status": "available"
     },
     {
       "components": [

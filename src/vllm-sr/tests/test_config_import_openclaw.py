@@ -179,12 +179,12 @@ def test_cli_config_import_openclaw_bootstraps_target_and_rewrites_source(
             "name": "qwen3-8b",
             "provider_model_id": "qwen3-8b",
             "api_format": "openai",
-            "external_model_ids": {"openai": "qwen3-8b"},
+            "external_model_ids": {"vllm": "qwen3-8b"},
             "backend_refs": [
                 {
                     "name": "vllm",
                     "base_url": "http://10.0.0.7:8000/v1",
-                    "provider": "openai",
+                    "provider": "vllm",
                     "weight": 1,
                 }
             ],
@@ -258,6 +258,10 @@ def test_cli_config_import_openclaw_merges_existing_target_and_preserves_section
         == "https://api.example.com/v1"
     )
     assert imported_remote_model["backend_refs"][0]["api_key"] == "sk-test"
+    assert imported_remote_model["backend_refs"][0]["provider"] == "openai-compatible"
+    assert imported_remote_model["external_model_ids"] == {
+        "openai-compatible": "gpt-4o-mini"
+    }
     assert imported_remote_model["backend_refs"][0]["extra_headers"] == {
         "X-Tenant": "integration"
     }
@@ -328,6 +332,14 @@ def test_cli_config_import_openclaw_prefixes_duplicate_model_ids_and_rewrites_mo
         model["provider_model_id"] for model in imported["providers"]["models"]
     }
     assert provider_model_ids == {"shared-model"}
+    providers_by_name = {
+        model["name"]: model["backend_refs"][0]["provider"]
+        for model in imported["providers"]["models"]
+    }
+    assert providers_by_name == {
+        "openai/shared-model": "openai",
+        "local/shared-model": "openai-compatible",
+    }
 
     rewritten_source = read_json(source_path)
     openai_model = rewritten_source["models"]["providers"]["openai"]["models"][0]
@@ -421,6 +433,46 @@ def test_cli_config_import_openclaw_rejects_unsupported_provider_family_without_
     )
 
     assert result.exit_code != 0
+    assert read_json(source_path) == original_source
+    assert not target_path.exists()
+    assert not (source_path.parent / "openclaw.json.bak").exists()
+
+
+def test_cli_config_import_openclaw_rejects_exact_provider_without_openai_protocol(
+    tmp_path: Path,
+) -> None:
+    source_path = tmp_path / "openclaw.json"
+    target_path = tmp_path / "config.yaml"
+    original_source = {
+        "models": {
+            "providers": {
+                "anthropic": {
+                    "baseUrl": "https://api.anthropic.com",
+                    "api": "openai-completions",
+                    "models": [{"id": "claude-incompatible-wire"}],
+                }
+            }
+        }
+    }
+    write_json(source_path, original_source)
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "config",
+            "import",
+            "--from",
+            "openclaw",
+            "--source",
+            str(source_path),
+            "--target",
+            str(target_path),
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "Provider ID 'anthropic' cannot" in result.output
+    assert "create requests using 'openai/chat-completions@1'" in result.output
     assert read_json(source_path) == original_source
     assert not target_path.exists()
     assert not (source_path.parent / "openclaw.json.bak").exists()

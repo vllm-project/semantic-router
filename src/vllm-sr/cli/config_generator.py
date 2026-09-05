@@ -8,7 +8,7 @@ from urllib.parse import urlparse
 from jinja2 import Environment, FileSystemLoader
 
 from cli.catalog_provider_projection import project_provider_models_for_envoy
-from cli.consts import DEFAULT_LISTENER_PORT, EXTERNAL_API_MODEL_FORMATS
+from cli.consts import DEFAULT_LISTENER_PORT
 from cli.envoy_backend_pool import (
     backend_route_semantics,
     validate_homogeneous_backend_group,
@@ -112,26 +112,7 @@ def generate_envoy_config_from_user_config(
     # Extract models and their endpoints
     # Group endpoints by model for cluster creation
     models = []
-    anthropic_models = []  # Anthropic models use a shared cluster
-
     for model in project_provider_models_for_envoy(user_config):
-        # Handle external API models (e.g., Anthropic) - they use shared clusters
-        if model.api_format and model.api_format in EXTERNAL_API_MODEL_FORMATS:
-            # Only the legacy API-only form uses the shared fallback. An
-            # authored or catalog-materialized backend carries credentials,
-            # default headers, path, and TLS semantics that must reach the
-            # dedicated route below.
-            if model.api_format == "anthropic" and not model.backend_refs:
-                anthropic_models.append({"name": model.name})
-                if log_summary:
-                    log.info(
-                        f"  Anthropic model: {model.name} "
-                        "(will use shared anthropic_api_cluster)"
-                    )
-                continue
-            if model.api_format == "anthropic" and log_summary:
-                log.info(f"  Anthropic model: {model.name} (dedicated cluster)")
-
         endpoints = []
         backend_semantics = []
         has_https = False
@@ -183,6 +164,12 @@ def generate_envoy_config_from_user_config(
             is_domain = not _is_ip_address(host)
             if is_domain:
                 uses_dns = True
+            if is_https and not is_domain:
+                raise ValueError(
+                    f"providers.models[{model.name!r}].backend_refs[{index}] "
+                    "HTTPS endpoint must use a DNS hostname so Envoy can "
+                    "verify its certificate identity"
+                )
 
             extra_headers = dict(backend.extra_headers or {})
             endpoint = {
@@ -268,7 +255,6 @@ def generate_envoy_config_from_user_config(
         ),
         "router_api_host_is_domain": router_api_host_is_domain,
         "models": models,
-        "anthropic_models": anthropic_models,  # Anthropic models for shared cluster
         "use_original_dst": False,  # Use static clusters for now
     }
 
@@ -286,11 +272,6 @@ def generate_envoy_config_from_user_config(
                     f"        - {ep['name']}: {ep['address']}:{ep['port']} "
                     f"(weight: {ep['weight']})"
                 )
-    if anthropic_models and log_summary:
-        log.info(f"  Found {len(anthropic_models)} Anthropic model(s):")
-        for model in anthropic_models:
-            log.info(f"    - {model['name']} (cluster: anthropic_api_cluster)")
-
     # Check if template exists
     template_path = Path(template_root) / template_file
     if not template_path.exists():

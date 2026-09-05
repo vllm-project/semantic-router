@@ -260,6 +260,66 @@ routing: {}
 	}
 }
 
+func TestRouterOwnedListenerRejectsBackendlessPhysicalModel(t *testing.T) {
+	_, err := ParseYAMLBytes([]byte(`
+version: v0.3
+listeners:
+  - name: public
+    address: 0.0.0.0
+    port: 8899
+providers:
+  models:
+    - name: claude-custom
+      api_format: anthropic
+routing: {}
+`))
+	if err == nil || !strings.Contains(err.Error(), "must define backend_refs with an explicit Provider ID") {
+		t.Fatalf("expected explicit-backend error, got %v", err)
+	}
+}
+
+func TestExternalGatewayMetadataDoesNotMaterializeCatalogProvider(t *testing.T) {
+	cfg, err := ParseYAMLBytes([]byte(`
+version: v0.3
+listeners: []
+providers:
+  models:
+    - name: claude-custom
+      api_format: anthropic
+routing: {}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if endpoints := cfg.GetEndpointsForModel("claude-custom"); len(endpoints) != 0 {
+		t.Fatalf("external-gateway metadata resolved endpoints: %#v", endpoints)
+	}
+	if len(cfg.ProviderProfiles) != 0 {
+		t.Fatalf("external-gateway metadata resolved profiles: %#v", cfg.ProviderProfiles)
+	}
+}
+
+func TestRouterOwnedListenerAllowsBackendlessVirtualCatalogModel(t *testing.T) {
+	cfg, err := ParseYAMLBytes([]byte(`
+version: v0.3
+listeners:
+  - name: public
+    address: 0.0.0.0
+    port: 8899
+providers:
+  models:
+    - name: virtual-entrypoint
+      catalog: vllm-sr/mom-v1-blend
+routing: {}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if endpoints := cfg.GetEndpointsForModel("virtual-entrypoint"); len(endpoints) != 0 {
+		t.Fatalf("virtual model resolved physical endpoints: %#v", endpoints)
+	}
+}
+
 func TestCatalogInputRejectsUnsupportedExplicitAPIFormat(t *testing.T) {
 	_, err := canonicalCatalogInput(&CanonicalConfig{
 		Providers: CanonicalProviders{Models: []CanonicalProviderModel{{

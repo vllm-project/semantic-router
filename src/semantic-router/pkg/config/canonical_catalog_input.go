@@ -16,6 +16,14 @@ func canonicalCatalogInput(canonical *CanonicalConfig) (modelcatalog.CompileInpu
 		return modelcatalog.CompileInput{}, err
 	}
 	for modelIndex, model := range canonical.Providers.Models {
+		if err := validateRouterOwnedPhysicalBackend(
+			builder.builtIn,
+			model,
+			len(canonical.Listeners) > 0,
+			modelIndex,
+		); err != nil {
+			return builder.input, err
+		}
 		if err := builder.addModel(model, modelIndex); err != nil {
 			return builder.input, err
 		}

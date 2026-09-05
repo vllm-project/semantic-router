@@ -7,6 +7,7 @@ import {
   findModelProviderPreset,
   hiddenModelProviderPresetCount,
   modelProviderCatalog,
+  modelProviderPresetsFromCatalog,
   type ModelProviderPreset,
 } from './modelProviderCatalog'
 
@@ -26,6 +27,17 @@ describe('model provider catalog contracts', () => {
   it('only emits upstream wire formats supported by the router', () => {
     const formats = new Set(modelProviderCatalog.map((provider) => provider.apiFormat))
     expect([...formats].sort()).toEqual(['anthropic', 'openai', 'responses'])
+  })
+
+  it('rejects an unknown default protocol instead of silently selecting OpenAI', () => {
+    const provider = {
+      ...(generatedCatalog.providers[0] as CatalogProvider),
+      default_protocol: 'future/unknown@1',
+    }
+
+    expect(() => modelProviderPresetsFromCatalog([provider])).toThrow(
+      'unsupported default provider protocol: future/unknown@1',
+    )
   })
 
   it('derives model discovery from the provider operation contract', () => {
@@ -87,23 +99,14 @@ describe('model provider catalog presentation', () => {
 })
 
 describe('model provider catalog lookup and filtering', () => {
-  it('resolves provider marks by stable backend identity before wire format', () => {
+  it('resolves provider marks only by stable Provider ID', () => {
     expect(
       findModelProviderPreset({
-        backendName: 'openrouter-primary',
-        baseUrl: 'https://openrouter.ai/api/v1',
-        apiFormat: 'openai',
+        providerID: 'openrouter',
       })?.id,
     ).toBe('openrouter')
-    expect(
-      findModelProviderPreset({
-        backendName: 'production',
-        baseUrl: 'https://api.deepseek.com/v1',
-        apiFormat: 'openai',
-      })?.id,
-    ).toBe('deepseek')
-    expect(findModelProviderPreset({ apiFormat: 'openai' })?.id).toBe('openai-compatible')
-    expect(findModelProviderPreset({ apiFormat: 'anthropic' })?.id).toBe('anthropic')
+    expect(findModelProviderPreset({ providerID: ' OpenRouter ' })?.id).toBe('openrouter')
+    expect(findModelProviderPreset({})).toBeUndefined()
   })
 
   it('keeps the default picker concise while search still covers the full registry', () => {

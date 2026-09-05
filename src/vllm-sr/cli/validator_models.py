@@ -11,29 +11,39 @@ from cli.validation_error import ValidationError
 
 
 @lru_cache(maxsize=1)
-def _catalog_ids() -> tuple[frozenset[str], frozenset[str], frozenset[str]]:
+def _catalog_ids() -> tuple[
+    frozenset[str],
+    frozenset[str],
+    frozenset[str],
+    frozenset[str],
+]:
     _, document = _load_catalog_document(DEFAULT_CHANNEL)
+    models = document.get("models")
     return (
         _ids(document.get("providers")),
-        _ids(document.get("models")),
+        _ids(models, kind="physical"),
+        _ids(models, kind="virtual"),
         _ids(document.get("reasoning_families")),
     )
 
 
-def _ids(values: Any) -> frozenset[str]:
+def _ids(values: Any, *, kind: str | None = None) -> frozenset[str]:
     if not isinstance(values, list):
         return frozenset()
     return frozenset(
         value["id"]
         for value in values
-        if isinstance(value, dict) and isinstance(value.get("id"), str)
+        if isinstance(value, dict)
+        and isinstance(value.get("id"), str)
+        and (kind is None or value.get("kind") == kind)
     )
 
 
 def validate_model_references(config: UserConfig) -> list[ValidationError]:
     """Validate aliases, canonical card identities, providers, and LoRAs."""
 
-    provider_ids, built_in_models, reasoning_families = _catalog_ids()
+    provider_ids, physical_models, virtual_models, reasoning_families = _catalog_ids()
+    built_in_models = physical_models | virtual_models
     aliases = {model.name for model in config.providers.models}
     cards = {card.name: card for card in config.routing.model_cards}
     catalogs_by_alias = {
@@ -52,6 +62,7 @@ def validate_model_references(config: UserConfig) -> list[ValidationError]:
             catalogs_by_alias,
             provider_ids,
             built_in_models,
+            virtual_models,
             reasoning_families,
         )
     )
@@ -92,6 +103,7 @@ def _provider_model_errors(
     catalogs_by_alias: dict[str, str],
     provider_ids: frozenset[str],
     built_in_models: frozenset[str],
+    virtual_models: frozenset[str],
     reasoning_families: frozenset[str],
 ) -> list[ValidationError]:
     errors: list[ValidationError] = []
@@ -102,6 +114,19 @@ def _provider_model_errors(
                 ValidationError(
                     f"Provider model '{model.name}' references unknown built-in catalog model '{catalog}'",
                     field=f"providers.models.{model.name}.catalog",
+                )
+            )
+        if (
+            config.listeners
+            and not model.backend_refs
+            and catalog not in virtual_models
+        ):
+            errors.append(
+                ValidationError(
+                    f"Provider model '{model.name}' is a physical model used by a "
+                    "router-owned listener and must define backend_refs with an "
+                    "explicit Provider ID",
+                    field=f"providers.models.{model.name}.backend_refs",
                 )
             )
         if model.catalog and model.name in cards and model.name != catalog:

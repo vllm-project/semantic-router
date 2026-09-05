@@ -407,6 +407,7 @@
           "metrics": {"type": "object", "additionalProperties": {"type": "number"}},
           "status": {"enum": ["available", "missing", "failed", "not_applicable", "withheld"]},
           "measured_at": {"type": "string", "format": "date"},
+          "observed_at": {"type": "string", "format": "date"},
           "evidence": {
             "type": "object",
             "additionalProperties": false,

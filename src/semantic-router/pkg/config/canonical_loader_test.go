@@ -622,10 +622,7 @@ routing:
 func TestGetModelPricingResolvesProviderModelIDFromCanonicalConfig(t *testing.T) {
 	canonicalYAML := []byte(`
 version: v0.3
-listeners:
-  - name: http
-    address: 0.0.0.0
-    port: 8888
+listeners: []
 providers:
   defaults:
     model: claude-haiku
@@ -657,7 +654,7 @@ routing:
 		t.Fatalf("ParseYAMLBytes returned error: %v", err)
 	}
 
-	// Model with no backend_refs should still have ExternalModelIDs populated
+	// An external-gateway metadata-only model should still have ExternalModelIDs populated.
 	params := cfg.ModelConfig["claude-haiku"]
 	if len(params.ExternalModelIDs) == 0 {
 		t.Fatal("expected ExternalModelIDs to be populated for metadata-only model")
