@@ -175,6 +175,33 @@ func TestEncodeDispatchRequestSkipsPromptCacheWithoutEligibleTargets(t *testing.
 	}
 }
 
+func TestInjectInstructionPromptCacheMarkerSkipsEmptyText(t *testing.T) {
+	request := &llmprotocol.Request{
+		Instructions: []llmprotocol.InstructionBlock{{
+			Content: []llmprotocol.Content{
+				{Kind: llmprotocol.ContentText, Text: "stable instructions"},
+				{Kind: llmprotocol.ContentText},
+			},
+		}},
+	}
+
+	if !injectInstructionPromptCacheMarker(request, "1h") {
+		t.Fatal("expected non-empty instruction to receive a cache marker")
+	}
+	if request.Instructions[0].Content[0].Cache == nil ||
+		request.Instructions[0].Content[0].Cache.TTL != "1h" ||
+		request.Instructions[0].Content[1].Cache != nil {
+		t.Fatalf("instruction cache markers = %#v", request.Instructions[0].Content)
+	}
+
+	request.Instructions[0].Content = []llmprotocol.Content{{
+		Kind: llmprotocol.ContentText,
+	}}
+	if injectInstructionPromptCacheMarker(request, "1h") {
+		t.Fatalf("empty instruction received a cache marker: %#v", request.Instructions)
+	}
+}
+
 func TestEncodeDispatchRequestSkipsUnsupportedPromptCacheTarget(t *testing.T) {
 	request := promptCacheTestRequest()
 	ctx := &RequestContext{

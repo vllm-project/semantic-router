@@ -134,6 +134,7 @@ func injectInstructionPromptCacheMarker(
 		content := request.Instructions[instructionIndex].Content
 		for contentIndex := len(content) - 1; contentIndex >= 0; contentIndex-- {
 			if content[contentIndex].Kind != llmprotocol.ContentText ||
+				content[contentIndex].Text == "" ||
 				content[contentIndex].Cache != nil {
 				continue
 			}
