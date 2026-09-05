@@ -44,4 +44,3 @@ type BackendAdapter interface {
 	Inference(ctx context.Context, handle ModelHandle, req InferenceRequest) (InferenceResponse, error)
 	Info() ([]ModelInfo, error)
 }
-

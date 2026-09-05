@@ -351,14 +351,14 @@ func TestNormalizeEmbeddingModelPathFallsBackToRegistryAlias(t *testing.T) {
 func TestEmbeddingModelInfo_NativeRegistryParity(t *testing.T) {
 	// Register the candle adapter explicitly to simulate runtime assembly
 	native.Registry.Register(candle.NewAdapter())
-	
+
 	apiServer := &ClassificationAPIServer{
 		config:             &config.RouterConfig{},
 		routerRuntimeState: &startupstatus.State{},
 	}
 
 	resp := apiServer.buildModelsInfoResponse()
-	
+
 	found := false
 	for _, m := range resp.Models {
 		if m.Type == "embedding" && m.Metadata["matryoshka_supported"] == "false" {

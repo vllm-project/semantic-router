@@ -60,4 +60,3 @@ func (a *Adapter) Inference(ctx context.Context, handle native.ModelHandle, req 
 func (a *Adapter) Info() ([]native.ModelInfo, error) {
 	return nil, nil
 }
-
