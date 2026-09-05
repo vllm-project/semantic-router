@@ -232,6 +232,7 @@ func (c *Compiler) compileShadowDispatchPluginConfig(fields map[string]Value) co
 	if v, ok := getBoolField(fields, "tls_skip_verify"); ok {
 		cfg.TLSSkipVerify = v
 	}
+	cfg.ForwardHeaders = stringArrayValue(fields["forward_headers"])
 	return cfg
 }
 

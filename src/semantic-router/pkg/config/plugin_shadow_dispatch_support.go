@@ -3,7 +3,37 @@ package config
 import (
 	"fmt"
 	"strings"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
+
+// shadowCredentialHeaders names the headers that carry a credential on the
+// primary path: the auth headers the provider registry knows, the per-user
+// key headers the auth backend injects, and the generic HTTP credential
+// carriers. A shadow copy never carries them, and forward_headers may not
+// list them. Names are lower-case.
+var shadowCredentialHeaders = map[string]struct{}{
+	"authorization":            {},
+	"proxy-authorization":      {},
+	"cookie":                   {},
+	"x-api-key":                {},
+	"api-key":                  {},
+	"x-goog-api-key":           {},
+	headers.UserOpenAIKey:      {},
+	headers.UserAnthropicKey:   {},
+	headers.UserAzureOpenAIKey: {},
+	headers.UserBedrockKey:     {},
+	headers.UserGeminiKey:      {},
+	headers.UserVertexAIKey:    {},
+	headers.UserMiniMaxKey:     {},
+}
+
+// IsShadowCredentialHeader reports whether a header name is a known
+// credential carrier that must never travel with a shadow copy.
+func IsShadowCredentialHeader(name string) bool {
+	_, ok := shadowCredentialHeaders[strings.ToLower(strings.TrimSpace(name))]
+	return ok
+}
 
 const (
 	defaultShadowDispatchSampleRate       = 1.0
@@ -53,6 +83,22 @@ func (c ShadowDispatchPluginConfig) WithDefaults() ShadowDispatchPluginConfig {
 	return c
 }
 
+// ForwardsHeader reports whether a decision header mutation with this name is
+// allowlisted for the shadow copy. Matching is case-insensitive. An empty
+// allowlist forwards nothing.
+func (c *ShadowDispatchPluginConfig) ForwardsHeader(name string) bool {
+	if c == nil {
+		return false
+	}
+	trimmed := strings.TrimSpace(name)
+	for _, allowed := range c.ForwardHeaders {
+		if strings.EqualFold(strings.TrimSpace(allowed), trimmed) {
+			return true
+		}
+	}
+	return false
+}
+
 // EffectiveSampleRate returns the declared sample rate, or 1.0 when omitted.
 func (c *ShadowDispatchPluginConfig) EffectiveSampleRate() float64 {
 	if c == nil || c.SampleRate == nil {
@@ -92,6 +138,25 @@ func (c *ShadowDispatchPluginConfig) Validate() error {
 	}
 	if c.MaxRetries > maxShadowDispatchRetries {
 		return fmt.Errorf("max_retries cannot exceed %d", maxShadowDispatchRetries)
+	}
+	return validateShadowForwardHeaders(c.ForwardHeaders)
+}
+
+// validateShadowForwardHeaders rejects allowlist entries that could never be
+// forwarded safely, so the mistake is visible at load time instead of being
+// silently dropped on every shadow call.
+func validateShadowForwardHeaders(names []string) error {
+	for _, name := range names {
+		trimmed := strings.TrimSpace(name)
+		if trimmed == "" {
+			return fmt.Errorf("forward_headers entries cannot be empty")
+		}
+		if strings.HasPrefix(trimmed, ":") {
+			return fmt.Errorf("forward_headers cannot include pseudo-header %q", trimmed)
+		}
+		if IsShadowCredentialHeader(trimmed) {
+			return fmt.Errorf("forward_headers cannot include credential header %q", trimmed)
+		}
 	}
 	return nil
 }

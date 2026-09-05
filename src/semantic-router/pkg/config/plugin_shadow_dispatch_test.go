@@ -42,6 +42,11 @@ func TestShadowDispatchPluginPayloadValidation(t *testing.T) {
 		{name: "negative bound", payload: map[string]interface{}{"enabled": true, "model": "m", "max_concurrency": -1}, wantErr: "max_concurrency cannot be negative"},
 		{name: "too many retries", payload: map[string]interface{}{"enabled": true, "model": "m", "max_retries": 4}, wantErr: "max_retries cannot exceed"},
 		{name: "unknown field", payload: map[string]interface{}{"enabled": true, "model": "m", "bogus": 1}, wantErr: "bogus"},
+		{name: "forward headers allowlist", payload: map[string]interface{}{"enabled": true, "model": "m", "forward_headers": []string{"x-tenant", "X-Request-Source"}}},
+		{name: "forward headers reject credentials", payload: map[string]interface{}{"enabled": true, "model": "m", "forward_headers": []string{"x-tenant", "Authorization"}}, wantErr: "forward_headers cannot include credential header"},
+		{name: "forward headers reject user keys", payload: map[string]interface{}{"enabled": true, "model": "m", "forward_headers": []string{"X-User-OpenAI-Key"}}, wantErr: "forward_headers cannot include credential header"},
+		{name: "forward headers reject pseudo headers", payload: map[string]interface{}{"enabled": true, "model": "m", "forward_headers": []string{":authority"}}, wantErr: "pseudo-header"},
+		{name: "forward headers reject blanks", payload: map[string]interface{}{"enabled": true, "model": "m", "forward_headers": []string{" "}}, wantErr: "cannot be empty"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -122,5 +127,33 @@ func TestShadowDispatchValidateSharedWithConverter(t *testing.T) {
 	var nilCfg *ShadowDispatchPluginConfig
 	if err := nilCfg.Validate(); err != nil {
 		t.Fatalf("nil Validate = %v", err)
+	}
+}
+
+func TestShadowDispatchForwardsHeaderIsAllowlistOnly(t *testing.T) {
+	var nilCfg *ShadowDispatchPluginConfig
+	if nilCfg.ForwardsHeader("x-tenant") {
+		t.Fatal("nil config must forward nothing")
+	}
+	empty := &ShadowDispatchPluginConfig{}
+	if empty.ForwardsHeader("x-tenant") {
+		t.Fatal("empty allowlist must forward nothing")
+	}
+	cfg := &ShadowDispatchPluginConfig{ForwardHeaders: []string{" X-Tenant "}}
+	if !cfg.ForwardsHeader("x-tenant") || !cfg.ForwardsHeader("X-TENANT") {
+		t.Fatal("allowlist must match case-insensitively and ignore surrounding whitespace")
+	}
+	if cfg.ForwardsHeader("x-tenant-id") {
+		t.Fatal("allowlist must match whole names only")
+	}
+	for _, name := range []string{"Authorization", "x-api-key", "API-KEY", "Cookie", "x-user-openai-key", " proxy-authorization "} {
+		if !IsShadowCredentialHeader(name) {
+			t.Errorf("IsShadowCredentialHeader(%q) = false, want true", name)
+		}
+	}
+	for _, name := range []string{"x-tenant", "traceparent", "x-authorization-hint"} {
+		if IsShadowCredentialHeader(name) {
+			t.Errorf("IsShadowCredentialHeader(%q) = true, want false", name)
+		}
 	}
 }

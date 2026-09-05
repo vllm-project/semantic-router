@@ -32,6 +32,7 @@ describe('capability plugin field schemas', () => {
       'capture_response_body',
       'max_capture_bytes',
       'tls_skip_verify',
+      'forward_headers',
     ])
   })
 

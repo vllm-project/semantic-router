@@ -1124,6 +1124,28 @@ class RouterReplayPluginConfig(BaseModel):
     )
 
 
+# Headers that carry a credential on the primary path. A shadow copy never
+# carries them and shadow_dispatch.forward_headers may not list them. Keep in
+# step with the Router's shadowCredentialHeaders in pkg/config.
+SHADOW_CREDENTIAL_HEADERS = frozenset(
+    {
+        "authorization",
+        "proxy-authorization",
+        "cookie",
+        "x-api-key",
+        "api-key",
+        "x-goog-api-key",
+        "x-user-openai-key",
+        "x-user-anthropic-key",
+        "x-user-azure-openai-key",
+        "x-user-bedrock-key",
+        "x-user-gemini-key",
+        "x-user-vertex-ai-key",
+        "x-user-minimax-key",
+    }
+)
+
+
 class ShadowDispatchPluginConfig(BaseModel):
     """Configuration for shadow_dispatch plugin.
 
@@ -1149,6 +1171,35 @@ class ShadowDispatchPluginConfig(BaseModel):
     capture_response_body: bool = False
     max_capture_bytes: int = Field(default=4096, ge=0)
     tls_skip_verify: bool = False
+    forward_headers: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Decision header_mutation names the shadow copy may carry; nothing "
+            "else a decision sets for the primary backend is forwarded"
+        ),
+    )
+
+    @field_validator("forward_headers")
+    @classmethod
+    def reject_credential_headers(cls, names: list[str]) -> list[str]:
+        # Mirrors the Router's validateShadowForwardHeaders so both admission
+        # paths refuse the same names.
+        for name in names:
+            stripped = name.strip()
+            if not stripped:
+                raise ValueError(
+                    "shadow_dispatch forward_headers entries cannot be empty"
+                )
+            if stripped.startswith(":"):
+                raise ValueError(
+                    f"shadow_dispatch forward_headers cannot include pseudo-header {stripped!r}"
+                )
+            if stripped.lower() in SHADOW_CREDENTIAL_HEADERS:
+                raise ValueError(
+                    "shadow_dispatch forward_headers cannot include credential header "
+                    f"{stripped!r}"
+                )
+        return names
 
     @model_validator(mode="after")
     def require_model_when_enabled(self):

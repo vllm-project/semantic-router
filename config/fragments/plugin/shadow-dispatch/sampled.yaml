@@ -23,3 +23,9 @@ plugin:
     # Only for https backends signed by an internal CA. Matches the primary
     # path, which reaches backends through Envoy without upstream verification.
     tls_skip_verify: false
+    # Decision header_mutation names the shadow copy may carry, matched
+    # case-insensitively. Nothing else a decision sets for the primary is
+    # forwarded, so a custom credential stays on the primary path. Known
+    # credential headers (Authorization, x-api-key, api-key, Cookie, the
+    # x-user-*-key headers) cannot be listed.
+    forward_headers: []

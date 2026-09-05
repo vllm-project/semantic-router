@@ -595,7 +595,9 @@ func TestShadowDispatchAppliesShadowReasoningAndDecisionHeaders(t *testing.T) {
 		"openai": {Type: config.ReasoningFamilyTypeTopLevelReasoningEffort, Parameter: "reasoning_effort"},
 	}
 
-	runShadowRequestWithReasoning(t, router, primaryModel, shadowTestPluginConfig(), func(ctx *RequestContext) {
+	pluginCfg := shadowTestPluginConfig()
+	pluginCfg.ForwardHeaders = []string{"x-tenant"}
+	runShadowRequestWithReasoning(t, router, primaryModel, pluginCfg, func(ctx *RequestContext) {
 		ctx.VSRSelectedDecision.Plugins = []config.DecisionPlugin{{
 			Type: config.DecisionPluginHeaderMutation,
 			Configuration: config.MustStructuredPayload(map[string]interface{}{

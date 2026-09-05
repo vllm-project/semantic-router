@@ -15,7 +15,7 @@
 
 Promoting a new model into a routing recipe needs evidence from production-shaped requests. Offline evaluation misses real prompt distributions, and gray release exposes users to an unproven model. Shadow dispatch fills the step in between: the primary model still answers every request, while a copy of the same finalized request is sent to the candidate in the background. The shadow result is stored as an immutable outcome on the request's replay record, so operators can correlate primary and shadow observations later without exposing protected content.
 
-The shadow copy starts from the same approved neutral request the primary dispatch was built from, after every request plugin has run. It is then rendered for the shadow model through the same encode and provider-adaptation steps a primary dispatch uses, so reasoning controls follow the shadow model's family, not the primary's. It is always sent non-streaming. Trace headers and decision header mutations are applied; client headers are not. Header mutations that can carry a credential are stripped before the shadow call: `Authorization`, `Proxy-Authorization`, `Cookie`, `x-api-key`, `api-key`, `x-goog-api-key`, the per-user `x-user-*-key` headers, and whichever header the primary or shadow provider profile resolves as its `auth_header`. Only the router's own static credentials for the shadow model's backend are used, so a primary credential can never cross into the shadow backend.
+The shadow copy starts from the same approved neutral request the primary dispatch was built from, after every request plugin has run. It is then rendered for the shadow model through the same encode and provider-adaptation steps a primary dispatch uses, so reasoning controls follow the shadow model's family, not the primary's. It is always sent non-streaming. Trace headers are applied; client headers are not. Decision header mutations run for the primary backend and stay there unless `forward_headers` names them, so an operator opts in per header and a custom credential the router cannot recognise is never copied by default. Known credential carriers and whichever header the primary or shadow provider profile resolves as its `auth_header` are dropped even when listed. Only the router's own static credentials for the shadow model's backend are used, so a primary credential can never cross into the shadow backend.
 
 ## When to Use
 
@@ -48,6 +48,7 @@ plugins:
       capture_response_body: false
       max_capture_bytes: 4096
       tls_skip_verify: false
+      forward_headers: []
 ```
 
 | Field | Default | Meaning |
@@ -63,6 +64,7 @@ plugins:
 | `capture_response_body` | `false` | Store a bounded excerpt of the shadow text in the outcome. Off by default; only sizes, tokens, and a SHA-256 are kept. |
 | `max_capture_bytes` | `4096` | Excerpt bound when capture is on. |
 | `tls_skip_verify` | `false` | Skip certificate verification for an https shadow backend signed by an internal CA. The primary path reaches backends through Envoy, which does not verify upstream certificates. |
+| `forward_headers` | `[]` | Decision `header_mutation` names the shadow copy may carry, matched case-insensitively. Nothing else a decision sets for the primary backend is forwarded, so a custom credential such as `X-Internal-Token` stays on the primary path. Known credential carriers (`Authorization`, `Proxy-Authorization`, `Cookie`, `x-api-key`, `api-key`, `x-goog-api-key`, the `x-user-*-key` headers) are rejected at config load and dropped at run time even if listed. |
 
 A shadow is skipped, with a metric but no outcome, when the request is sampled out or when the primary dispatch already selected the shadow model. Decisions that execute through the looper (ratings, confidence, fusion, ReMoM, workflows) reject the plugin at config load, because the shadow hook runs only on single-model provider dispatch.
 

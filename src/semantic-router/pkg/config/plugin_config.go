@@ -287,6 +287,14 @@ type ShadowDispatchPluginConfig struct {
 	// verify upstream certificates, so this matches that posture for internal
 	// CAs. Off by default.
 	TLSSkipVerify bool `json:"tls_skip_verify,omitempty" yaml:"tls_skip_verify,omitempty"`
+	// ForwardHeaders names the decision header_mutation headers a shadow copy
+	// may carry. Nothing a decision sets for the primary backend is forwarded
+	// unless listed here, so a custom credential such as X-Internal-Token
+	// stays on the primary path. Known credential carriers (Authorization,
+	// Proxy-Authorization, Cookie, x-api-key, api-key, x-goog-api-key, the
+	// x-user-*-key headers) cannot be listed. Names match case-insensitively.
+	// Empty by default.
+	ForwardHeaders []string `json:"forward_headers,omitempty" yaml:"forward_headers,omitempty"`
 }
 
 // GetPlugin returns the plugin entry for a specific plugin type.

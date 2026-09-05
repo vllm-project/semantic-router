@@ -20,6 +20,14 @@ const CAPABILITY_PLUGIN_FIELD_SCHEMAS: Record<string, FieldSchema[]> = {
     { key: 'capture_response_body', label: 'Capture Response Body', type: 'boolean' },
     { key: 'max_capture_bytes', label: 'Max Capture Bytes', type: 'number', placeholder: '4096' },
     { key: 'tls_skip_verify', label: 'Skip TLS Verification', type: 'boolean' },
+    {
+      key: 'forward_headers',
+      label: 'Forwarded Decision Headers',
+      type: 'string[]',
+      placeholder: 'x-tenant',
+      description:
+        'Decision header mutations the shadow copy may carry; credential headers are never forwarded',
+    },
   ],
 }
 

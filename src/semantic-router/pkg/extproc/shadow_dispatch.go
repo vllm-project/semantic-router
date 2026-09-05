@@ -15,7 +15,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/connector"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -215,11 +214,12 @@ func (r *OpenAIRouter) dispatchShadowIfConfigured(ctx *RequestContext, dispatch 
 	if err != nil {
 		engine = nil
 	}
-	r.ShadowDispatcher.submit(ctx, dispatch, pluginCfg.WithDefaults(), shadowSubmitDeps{
+	cfg := pluginCfg.WithDefaults()
+	r.ShadowDispatcher.submit(ctx, dispatch, cfg, shadowSubmitDeps{
 		routerConfig: r.Config,
 		engine:       engine,
 		encode:       r.shadowRequestEncoder(ctx, dispatch, engine),
-		extraHeaders: r.shadowExtraHeaders(ctx, dispatch),
+		extraHeaders: r.shadowExtraHeaders(ctx, dispatch, &cfg),
 	})
 }
 
@@ -265,36 +265,16 @@ func (r *OpenAIRouter) shadowRequestEncoder(
 	}
 }
 
-// shadowSensitiveHeaders names the headers a decision mutation may set for the
-// primary backend that must never travel with a shadow copy: every auth header
-// the provider registry knows, the per-user key headers the auth backend
-// injects, and the generic HTTP credential carriers. Names are lower-case.
-var shadowSensitiveHeaders = map[string]struct{}{
-	"authorization":            {},
-	"proxy-authorization":      {},
-	"cookie":                   {},
-	"x-api-key":                {},
-	"api-key":                  {},
-	"x-goog-api-key":           {},
-	headers.UserOpenAIKey:      {},
-	headers.UserAnthropicKey:   {},
-	headers.UserAzureOpenAIKey: {},
-	headers.UserBedrockKey:     {},
-	headers.UserGeminiKey:      {},
-	headers.UserVertexAIKey:    {},
-	headers.UserMiniMaxKey:     {},
-}
-
 // shadowHeaderIsSensitive reports whether a header name may carry a
-// credential. authHeaders are the resolved auth header names of the provider
-// profiles involved, so a custom auth_header is covered as well.
+// credential: a known credential carrier, or the resolved auth header of one
+// of the provider profiles involved, so a custom auth_header is covered too.
 func shadowHeaderIsSensitive(name string, authHeaders ...string) bool {
-	lower := strings.ToLower(strings.TrimSpace(name))
-	if _, sensitive := shadowSensitiveHeaders[lower]; sensitive {
+	if config.IsShadowCredentialHeader(name) {
 		return true
 	}
+	trimmed := strings.TrimSpace(name)
 	for _, authHeader := range authHeaders {
-		if authHeader != "" && strings.EqualFold(lower, authHeader) {
+		if authHeader != "" && strings.EqualFold(trimmed, authHeader) {
 			return true
 		}
 	}
@@ -303,7 +283,7 @@ func shadowHeaderIsSensitive(name string, authHeaders ...string) bool {
 
 // shadowProfileAuthHeader returns the auth header name a provider profile
 // resolves to, or "" when it cannot be resolved. A nil profile means the
-// OpenAI default, which shadowSensitiveHeaders already covers.
+// OpenAI default, which the credential set already covers.
 func shadowProfileAuthHeader(profile *config.ProviderProfile) string {
 	if profile == nil {
 		return ""
@@ -315,13 +295,18 @@ func shadowProfileAuthHeader(profile *config.ProviderProfile) string {
 	return authHeader
 }
 
-// shadowExtraHeaders carries the decision's header mutations and the trace
-// context to the shadow backend, the same additions the primary receives,
-// minus anything that can carry a credential. Client headers are never
-// included. A mutation that sets the primary's Authorization, x-api-key, or
-// custom auth header is dropped here so the primary's secret cannot cross
-// into the shadow backend, which is a less trusted candidate.
-func (r *OpenAIRouter) shadowExtraHeaders(ctx *RequestContext, dispatch *providerDispatch) map[string]string {
+// shadowExtraHeaders carries the trace context to the shadow backend plus the
+// decision header mutations the plugin explicitly allowlists in
+// forward_headers. Everything else a decision sets for the primary backend
+// stays on the primary path, so a custom credential such as X-Internal-Token
+// can never cross into the shadow backend, which is a less trusted
+// candidate. Known credential carriers and either profile's auth header are
+// dropped even when listed. Client headers are never included.
+func (r *OpenAIRouter) shadowExtraHeaders(
+	ctx *RequestContext,
+	dispatch *providerDispatch,
+	cfg *config.ShadowDispatchPluginConfig,
+) map[string]string {
 	extra := make(map[string]string)
 	if ctx.TraceContext != nil {
 		for _, pair := range tracing.InjectTraceContextToSlice(ctx.TraceContext) {
@@ -341,17 +326,31 @@ func (r *OpenAIRouter) shadowExtraHeaders(ctx *RequestContext, dispatch *provide
 		if header == nil || strings.HasPrefix(header.GetKey(), ":") {
 			continue
 		}
-		if shadowHeaderIsSensitive(header.GetKey(), primaryAuthHeader) {
+		name := header.GetKey()
+		if reason := shadowMutationDropReason(name, primaryAuthHeader, cfg); reason != "" {
 			logging.ComponentDebugEvent("extproc", "shadow_header_mutation_dropped", map[string]interface{}{
 				"request_id": ctx.RequestID,
 				"decision":   ctx.VSRSelectedDecision.Name,
-				"header":     header.GetKey(),
+				"header":     name,
+				"reason":     reason,
 			})
 			continue
 		}
-		extra[header.GetKey()] = string(header.GetRawValue())
+		extra[name] = string(header.GetRawValue())
 	}
 	return extra
+}
+
+// shadowMutationDropReason explains why a decision header mutation stays on
+// the primary path, or returns "" when the shadow copy may carry it.
+func shadowMutationDropReason(name, primaryAuthHeader string, cfg *config.ShadowDispatchPluginConfig) string {
+	if shadowHeaderIsSensitive(name, primaryAuthHeader) {
+		return "credential"
+	}
+	if !cfg.ForwardsHeader(name) {
+		return "not_in_forward_headers"
+	}
+	return ""
 }
 
 func (d *shadowDispatcher) submit(

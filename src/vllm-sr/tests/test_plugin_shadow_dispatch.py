@@ -43,6 +43,38 @@ class TestShadowDispatchPluginConfig:
                 enabled=True, model="candidate", **{field: value}
             )
 
+    def test_forward_headers_default_to_nothing(self):
+        cfg = ShadowDispatchPluginConfig(enabled=True, model="candidate")
+        assert cfg.forward_headers == []
+
+    def test_forward_headers_accept_custom_names(self):
+        cfg = ShadowDispatchPluginConfig(
+            enabled=True,
+            model="candidate",
+            forward_headers=["X-Tenant", "x-request-source"],
+        )
+        assert cfg.forward_headers == ["X-Tenant", "x-request-source"]
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "Authorization",
+            "proxy-authorization",
+            "x-api-key",
+            "API-KEY",
+            "Cookie",
+            "x-goog-api-key",
+            "x-user-openai-key",
+            ":authority",
+            " ",
+        ],
+    )
+    def test_forward_headers_reject_credentials(self, name):
+        with pytest.raises(PydanticValidationError, match="forward_headers"):
+            ShadowDispatchPluginConfig(
+                enabled=True, model="candidate", forward_headers=["x-tenant", name]
+            )
+
     def test_unknown_fields_rejected(self):
         with pytest.raises(PydanticValidationError):
             ShadowDispatchPluginConfig(enabled=True, model="candidate", bogus=1)

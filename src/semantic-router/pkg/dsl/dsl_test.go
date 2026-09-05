@@ -1720,7 +1720,7 @@ func TestCompileAllPluginTypes(t *testing.T) {
 		{
 			name:       "shadow_dispatch",
 			pluginType: "shadow_dispatch",
-			body:       `enabled: true model: "candidate" sample_rate: 0.1 max_concurrency: 2 timeout_seconds: 20`,
+			body:       `enabled: true model: "candidate" sample_rate: 0.1 max_concurrency: 2 timeout_seconds: 20 forward_headers: ["x-tenant"]`,
 			verifyType: "shadow_dispatch",
 		},
 		{
