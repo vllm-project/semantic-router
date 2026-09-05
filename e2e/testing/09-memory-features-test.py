@@ -53,6 +53,7 @@ from memory_tests import (
     UserIsolationTest,
 )
 from memory_tests.base import HTTP_OK
+from memory_tests.test_persistence_receipts_unit import PersistenceReceiptAssertionsTest
 
 
 def run_tests():
@@ -97,6 +98,7 @@ def run_tests():
         # P1: Per-decision plugin behavior
         PerDecisionMemoryDisabledTest,
         PerDecisionThresholdOverrideTest,
+        PersistenceReceiptAssertionsTest,
         # P2: Persistence receipts — runs last, stops the memory backend
         MemoryPersistenceReceiptTest,
     ]

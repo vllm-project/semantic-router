@@ -7,10 +7,14 @@ import subprocess
 import time
 
 import requests
-from memory_tests.base import MemoryFeaturesTest
+
+from memory_tests.base import HTTP_OK, MemoryFeaturesTest
 
 RECEIPT_METRIC = "llm_plugin_execution_total"
 RECEIPT_PLUGIN = "memory_persistence"
+RECEIPT_DECISION = "persistence_receipt_route"
+RECEIPT_MARKER = "PERSISTENCE_RECEIPT_MARKER"
+FAILURE_RECEIPTS = {"store_failed": "persist_error", "timeout": "persist_timeout"}
 MILVUS_CONTAINER = "milvus-semantic-cache"
 METRICS_CANDIDATES = (
     "http://localhost:9190/metrics",
@@ -25,6 +29,9 @@ class MemoryPersistenceReceiptTest(MemoryFeaturesTest):
     def setUp(self):
         super().setUp()
         self.metrics_url = self._resolve_metrics_url()
+        self.replay_url = os.environ.get(
+            "ROUTER_REPLAY_URL", "http://localhost:8080/v1/router_replay"
+        ).rstrip("/")
         self.container_runtime = os.environ.get("CONTAINER_RUNTIME", "docker")
 
     def _resolve_metrics_url(self) -> str:
@@ -35,9 +42,9 @@ class MemoryPersistenceReceiptTest(MemoryFeaturesTest):
                 response = requests.get(url, timeout=5)
             except requests.exceptions.RequestException:
                 continue
-            if response.status_code == 200 and RECEIPT_METRIC in response.text:
+            if response.status_code == HTTP_OK:
                 return url
-        self.skipTest("router metrics endpoint is not reachable")
+        self.fail("router metrics endpoint is not reachable")
 
     def _receipt_count(self, status: str) -> float:
         try:
@@ -45,6 +52,7 @@ class MemoryPersistenceReceiptTest(MemoryFeaturesTest):
         except requests.exceptions.RequestException as e:
             self.fail(f"metrics scrape failed: {e}")
 
+        self.assertEqual(response.status_code, HTTP_OK, "metrics scrape failed")
         total = 0.0
         prefix = RECEIPT_METRIC + "{"
         for line in response.text.splitlines():
@@ -54,6 +62,7 @@ class MemoryPersistenceReceiptTest(MemoryFeaturesTest):
             labels = dict(LABEL_PATTERN.findall(labels_part))
             if (
                 labels.get("plugin_type") == RECEIPT_PLUGIN
+                and labels.get("decision_name") == RECEIPT_DECISION
                 and labels.get("status") == status
             ):
                 total += float(value)
@@ -70,6 +79,38 @@ class MemoryPersistenceReceiptTest(MemoryFeaturesTest):
                 return latest
             time.sleep(2)
         return latest
+
+    def _wait_for_terminal_receipt(self, result: dict, timeout: int = 60) -> dict:
+        replay_id = result.get("_replay_id")
+        self.assertTrue(replay_id, "response is missing x-vsr-replay-id")
+        deadline = time.monotonic() + timeout
+        outcomes = []
+        while time.monotonic() < deadline:
+            response = requests.get(f"{self.replay_url}/{replay_id}", timeout=10)
+            self.assertEqual(response.status_code, HTTP_OK, response.text)
+            record = response.json()
+            self.assertEqual(record.get("id"), replay_id)
+            outcomes = [
+                outcome
+                for outcome in record.get("outcomes", [])
+                if outcome.get("metadata", {}).get("kind")
+                == "memory_persistence_receipt"
+            ]
+            terminal = [
+                outcome
+                for outcome in outcomes
+                if outcome.get("metadata", {}).get("phase") == "terminal"
+            ]
+            if terminal:
+                self.assertEqual(len(terminal), 1, outcomes)
+                self.assertEqual(
+                    [outcome.get("verdict") for outcome in outcomes],
+                    ["scheduled", terminal[0]["verdict"]],
+                    outcomes,
+                )
+                return terminal[0]
+            time.sleep(0.2)
+        self.fail(f"No terminal persistence receipt for replay {replay_id}: {outcomes}")
 
     def _container_available(self) -> bool:
         if not shutil.which(self.container_runtime):
@@ -99,11 +140,14 @@ class MemoryPersistenceReceiptTest(MemoryFeaturesTest):
 
         baseline = self._receipt_count("completed")
         result = self.send_memory_request(
-            message="My preferred deployment region is eu-central-1.",
+            message=f"{RECEIPT_MARKER} My preferred deployment region is eu-central-1.",
             auto_store=True,
         )
         self.assertIsNotNone(result, "auto-store request did not return a response")
 
+        receipt = self._wait_for_terminal_receipt(result)
+        self.assertEqual(receipt["verdict"], "completed", receipt)
+        self.assertEqual(receipt["reason"], "persisted", receipt)
         observed = self._wait_for_receipt("completed", baseline)
         self.assertGreater(
             observed,
@@ -113,10 +157,10 @@ class MemoryPersistenceReceiptTest(MemoryFeaturesTest):
         self.print_test_result(True, f"completed receipts {baseline} -> {observed}")
 
     def test_02_store_failure_keeps_response_fail_open(self):
-        """A dead memory backend still returns the model response and reports store_failed."""
+        """A dead backend returns model output and a request-correlated failure receipt."""
         self.print_test_header(
             "Persistence Receipt: Fail-Open",
-            "With Milvus stopped the response still succeeds and reports store_failed",
+            "With Milvus stopped the response succeeds and reports a write failure or timeout",
         )
 
         if not self._container_available():
@@ -124,11 +168,11 @@ class MemoryPersistenceReceiptTest(MemoryFeaturesTest):
                 f"{MILVUS_CONTAINER} is not a running container for this runtime"
             )
 
-        baseline = self._receipt_count("store_failed")
+        baseline = {status: self._receipt_count(status) for status in FAILURE_RECEIPTS}
         self._container_command("stop")
         try:
             result = self.send_memory_request(
-                message="My on-call rotation starts on Thursday.",
+                message=f"{RECEIPT_MARKER} My on-call rotation starts on Thursday.",
                 auto_store=True,
                 user_id=f"{self.test_user}_failopen",
             )
@@ -142,14 +186,17 @@ class MemoryPersistenceReceiptTest(MemoryFeaturesTest):
                 "fail-open response must still carry model output",
             )
 
-            observed = self._wait_for_receipt("store_failed", baseline)
-            self.assertGreater(
-                observed,
-                baseline,
-                "failed write produced no store_failed persistence receipt",
-            )
+            receipt = self._wait_for_terminal_receipt(result)
+            status = receipt["verdict"]
+            self.assertIn(status, FAILURE_RECEIPTS, receipt)
+            self.assertEqual(receipt["reason"], FAILURE_RECEIPTS[status], receipt)
+            self.assertEqual(receipt["metadata"].get("fail_open"), "true", receipt)
+            observed = self._wait_for_receipt(status, baseline[status])
+            self.assertGreater(observed, baseline[status], receipt)
         finally:
             self._container_command("start")
             time.sleep(self.storage_wait)
 
-        self.print_test_result(True, f"store_failed receipts {baseline} -> {observed}")
+        self.print_test_result(
+            True, f"{status} receipts {baseline[status]} -> {observed}"
+        )
