@@ -83,12 +83,21 @@ func compilePromptCachePluginConfig(
 	c *Compiler,
 	fields map[string]Value,
 ) (interface{}, bool) {
-	if targets, ok := fields["targets"].(ArrayValue); ok && len(targets.Items) == 0 {
-		c.addError(Position{}, "prompt_cache targets must not be empty")
+	payload, err := config.NewStructuredPayload(fieldsToMap(fields))
+	if err != nil {
+		c.addError(Position{}, "failed to encode plugin fields: %v", err)
 		return nil, false
 	}
 	cfg := &config.PromptCachePluginConfig{}
-	return compilePluginFields(c, fields, cfg)
+	if err := payload.DecodeIntoStrict(cfg); err != nil {
+		c.addError(Position{}, "failed to decode plugin fields: %v", err)
+		return nil, false
+	}
+	if err := config.ValidatePromptCachePluginConfig(cfg); err != nil {
+		c.addError(Position{}, "%v", err)
+		return nil, false
+	}
+	return cfg, true
 }
 
 func (c *Compiler) compileHeaderMutationPluginConfig(fields map[string]Value) config.HeaderMutationPluginConfig {

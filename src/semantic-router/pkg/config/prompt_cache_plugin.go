@@ -95,3 +95,16 @@ func validatePromptCachePlugin(
 	}
 	return nil
 }
+
+// ValidatePromptCachePluginConfig validates the public prompt-cache contract.
+func ValidatePromptCachePluginConfig(pluginConfig *PromptCachePluginConfig) error {
+	if pluginConfig == nil {
+		return fmt.Errorf("prompt_cache configuration is required")
+	}
+	return validatePromptCachePlugin(
+		"preview",
+		0,
+		DecisionPluginPromptCache,
+		pluginConfig,
+	)
+}

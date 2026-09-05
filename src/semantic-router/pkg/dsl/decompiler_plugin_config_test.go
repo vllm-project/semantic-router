@@ -341,11 +341,66 @@ ROUTE empty_prompt_cache_targets {
 		t.Fatal("expected empty prompt_cache targets to fail")
 	}
 	for _, err := range errs {
-		if strings.Contains(err.Error(), "prompt_cache targets must not be empty") {
+		if strings.Contains(err.Error(), "targets must not be empty") {
 			return
 		}
 	}
 	t.Fatalf("compile errors = %v", errs)
+}
+
+func TestPromptCachePluginRejectsInvalidFields(t *testing.T) {
+	tests := []struct {
+		name       string
+		pluginBody string
+		wantError  string
+	}{
+		{
+			name:       "unknown field",
+			pluginBody: `on_unsuported: "reject"`,
+			wantError:  `unknown field "on_unsuported"`,
+		},
+		{
+			name:       "invalid ttl",
+			pluginBody: `ttl: "10m"`,
+			wantError:  "ttl must be 5m or 1h",
+		},
+		{
+			name:       "invalid target",
+			pluginBody: `targets: ["messages"]`,
+			wantError:  "targets must contain only instructions or tools",
+		},
+		{
+			name:       "duplicate target",
+			pluginBody: `targets: ["tools", "tools"]`,
+			wantError:  "targets must not contain duplicates",
+		},
+		{
+			name:       "invalid unsupported behavior",
+			pluginBody: `on_unsupported: "ignore"`,
+			wantError:  "on_unsupported must be skip or reject",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, errs := Compile(`
+ROUTE invalid_prompt_cache {
+  PRIORITY 1
+  MODEL "model"
+  PLUGIN prompt_cache {
+    enabled: true
+    ` + test.pluginBody + `
+  }
+}
+`)
+			for _, err := range errs {
+				if strings.Contains(err.Error(), test.wantError) {
+					return
+				}
+			}
+			t.Fatalf("compile errors = %v, want substring %q", errs, test.wantError)
+		})
+	}
 }
 
 func assertToolsPluginDynamicRetrievalRoundTrip(t *testing.T, decision config.Decision) {
