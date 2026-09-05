@@ -172,11 +172,11 @@ func (s *RedisStore) conversationIndexProof(ctx context.Context, conversationID 
 // Waiter state machine: check whether the whole store is already
 // migration-complete or this conversation already has a resolved proof
 // (conversationIndexResolved) before ever contending for the lease; if
-// neither, block (via withConversationIndexScanLease, respecting request
-// cancellation) until this call holds the single global scan lease, then
-// recheck resolution once more — a concurrent scan may have just resolved
-// this same conversation while this call was waiting — before actually
-// running the legacy scan. Never falls back to scanning without the lease,
+// neither, block (via withConversationIndexScanLeaseUntil, respecting
+// request cancellation) until this call holds the single global scan lease,
+// rechecking resolution on every acquisition attempt so a waiter returns as
+// soon as a concurrent scan resolves this same conversation, and once more
+// under the lease before actually running the legacy scan. Never falls back to scanning without the lease,
 // at any timeout: unlike the superseded per-conversation lock, there is no
 // duplicate-scan risk to bound here, since the lease is what makes "at
 // most one full-keyspace scan running at a time" true in the first place.
@@ -387,7 +387,9 @@ func (s *RedisStore) markConversationMigrated(ctx context.Context, conversationI
 // failure aborts the scan so no completeness proof is published from an
 // incomplete observation.
 //
-// Used only by lazy legacy backfill — this is the O(N) operation the index
+// Shared by the per-conversation lazy legacy backfill
+// (lazyBackfillConversationIndex) and the whole-keyspace finalization sweep
+// (sweepAndIndexAllConversations) — this is the O(N) operation the index
 // exists to avoid on the hot read path. See scanResponseKeys for the
 // Cluster-aware key walking.
 func (s *RedisStore) scanResponsePayloads(ctx context.Context, visit func(batch []*responseapi.StoredResponse) error) error {
@@ -459,9 +461,11 @@ func scanResponseNode(
 }
 
 // getResponsesPipelined decodes the shared raw pipelined GET results used by
-// both lazy backfill and finalization. Missing keys are benign TTL races. In
-// strict mode, every other read/decode/key-identity failure aborts the scan;
-// lenient mode logs and skips it.
+// both lazy backfill and finalization. A key that expired between SCAN and
+// GET is a benign TTL race and is skipped; every other read, decode, or
+// key-identity failure aborts the whole scan rather than being logged and
+// skipped, so neither a per-conversation proof nor the global completion
+// record is ever published from an observation known to be incomplete.
 func (s *RedisStore) getResponsesPipelined(ctx context.Context, client redis.UniversalClient, keys []string) ([]*responseapi.StoredResponse, error) {
 	if len(keys) == 0 {
 		return nil, nil

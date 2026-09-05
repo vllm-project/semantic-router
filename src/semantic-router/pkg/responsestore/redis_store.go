@@ -79,7 +79,7 @@ const (
 	// silently and permanently. This marker is the only thing
 	// ListResponsesByConversation and cascade delete trust to mean "the
 	// index (or its absence) is exhaustive as of now"; see
-	// ensureConversationIndex and conversationMigrated.
+	// ensureConversationIndex and conversationIndexProof.
 	//
 	// Also prevents a caller from forcing repeated full keyspace scans by
 	// repeatedly listing the same empty or unknown conversation. Must not
@@ -454,7 +454,7 @@ func (s *RedisStore) conversationIndexKey(conversationID string) string {
 // backfill has completed for a conversation, whether or not it found
 // anything to index. Its presence — not the index key's — is what makes the
 // index's current state (populated or absent) trustworthy as exhaustive;
-// see ConversationIndexMigratedKeyPrefix and conversationMigrated.
+// see ConversationIndexMigratedKeyPrefix and conversationIndexProof.
 func (s *RedisStore) conversationIndexMigratedKey(conversationID string) string {
 	return s.buildKey(ConversationIndexMigratedKeyPrefix + conversationID)
 }
