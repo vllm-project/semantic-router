@@ -400,6 +400,12 @@ func rawToRoute(r *rawRouteDecl) *RouteDecl {
 			route.Plugins = append(route.Plugins, rawToPluginRef(item.Plugin))
 		case item.Description != nil:
 			route.Description = unquote(*item.Description)
+		case item.Action != nil:
+			route.Action = &ActionDecl{
+				Type:        item.Action.Type,
+				Destination: unquoteIdent(item.Action.Destination),
+				Pos:         posFromLexer(item.Action.Pos),
+			}
 		case item.CandidateFor != nil:
 			route.CandidateIterations = append(route.CandidateIterations, rawToCandidateIteration(item.CandidateFor))
 		case item.Emit != nil:

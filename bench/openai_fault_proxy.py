@@ -5,8 +5,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import random
 import re
 import threading
+import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -40,6 +42,8 @@ class FaultPolicy:
     fail_session_mod: int
     fail_session_remainder: int
     fail_once_per_session: bool
+    delay_ms: int = 0
+    delay_jitter_ms: int = 0
 
 
 @dataclass(frozen=True)
@@ -61,6 +65,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--fail-session-mod", type=int, default=1)
     parser.add_argument("--fail-session-remainder", type=int, default=0)
     parser.add_argument("--repeat-failures", action="store_true")
+    parser.add_argument("--delay-ms", type=int, default=0)
+    parser.add_argument("--delay-jitter-ms", type=int, default=0)
     parser.add_argument("--log-jsonl", type=Path, default=None)
     return parser.parse_args()
 
@@ -73,7 +79,19 @@ def parse_policy(args: argparse.Namespace) -> FaultPolicy:
         fail_session_mod=args.fail_session_mod,
         fail_session_remainder=args.fail_session_remainder,
         fail_once_per_session=not args.repeat_failures,
+        delay_ms=args.delay_ms,
+        delay_jitter_ms=args.delay_jitter_ms,
     )
+
+
+def delay_seconds(policy: FaultPolicy) -> float:
+    """Return the latency to apply before handling a request, in seconds."""
+    if policy.delay_ms <= 0 and policy.delay_jitter_ms <= 0:
+        return 0.0
+    total_ms = float(max(policy.delay_ms, 0))
+    if policy.delay_jitter_ms > 0:
+        total_ms += random.uniform(0.0, policy.delay_jitter_ms)
+    return total_ms / 1000.0
 
 
 def parse_int_csv(raw: str) -> set[int]:
@@ -87,6 +105,10 @@ def parse_str_csv(raw: str) -> set[str]:
 
 
 class FaultProxyHandler(BaseHTTPRequestHandler):
+    # HTTP/1.1 keep-alive avoids a TCP handshake + thread per request under soak
+    # load; safe because every response path sets an explicit Content-Length.
+    protocol_version = "HTTP/1.1"
+
     upstream: ClassVar[str]
     fault_policy: ClassVar[FaultPolicy]
     seen_failures: ClassVar[set[str]]
@@ -108,6 +130,9 @@ class FaultProxyHandler(BaseHTTPRequestHandler):
             inject_fault = should_inject_fault(
                 shape, self.fault_policy, self.seen_failures
             )
+        delay = delay_seconds(self.fault_policy)
+        if delay > 0:
+            time.sleep(delay)
         if inject_fault:
             message = (
                 f"fault proxy injected {self.fault_policy.fail_status} for "
@@ -344,6 +369,8 @@ def main() -> int:
                 "fail_session_mod": policy.fail_session_mod,
                 "fail_session_remainder": policy.fail_session_remainder,
                 "fail_once_per_session": policy.fail_once_per_session,
+                "delay_ms": policy.delay_ms,
+                "delay_jitter_ms": policy.delay_jitter_ms,
             },
             sort_keys=True,
         ),

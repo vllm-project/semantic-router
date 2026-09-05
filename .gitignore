@@ -135,6 +135,9 @@ spec/
 results/
 reports/
 test-results/
+soak-results/
+# Startup-status file the router writes next to whichever config it loads.
+router-runtime.json
 
 # Local agent harness artifacts
 .agent-harness/

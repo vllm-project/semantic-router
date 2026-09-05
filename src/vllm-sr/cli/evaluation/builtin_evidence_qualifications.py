@@ -164,37 +164,44 @@ _LIVE_CAPACITY_QUALIFICATION = EvidenceQualificationContract(
 )
 
 
+_LIVE_ROUTING_QUALIFICATION = EvidenceQualificationContract(
+    source_id=LIVE_ROUTING_EVIDENCE_SOURCE_ID,
+    allowed_tracks=("routing",),
+    level="E3",
+    ceiling="E3",
+    payload=_record_payload(_routing_payload),
+    receipt=EvidenceReceiptRequirement(scope="record"),
+    attestations=(_BROKER_ATTESTATION,),
+    batch_validator=_unique_case_records,
+)
+
+_LIVE_MODEL_POOL_QUALIFICATION = EvidenceQualificationContract(
+    source_id=LIVE_MODEL_POOL_EVIDENCE_SOURCE_ID,
+    allowed_tracks=("model_pool",),
+    level="E4",
+    ceiling="E4",
+    payload=_record_payload(_model_pool_payload),
+    receipt=EvidenceReceiptRequirement(scope="record"),
+    attestations=(_BROKER_ATTESTATION,),
+)
+
+_LIVE_JOINT_QUALIFICATION = EvidenceQualificationContract(
+    source_id=LIVE_JOINT_EVIDENCE_SOURCE_ID,
+    allowed_tracks=("joint",),
+    level="E5",
+    ceiling="E5",
+    payload=_record_payload(_joint_payload),
+    receipt=EvidenceReceiptRequirement(scope="record"),
+    attestations=(_BROKER_ATTESTATION,),
+    batch_validator=_unique_case_records,
+)
+
+
 LIVE_RUNTIME_EVIDENCE_QUALIFICATIONS = EvidenceQualificationRegistry(
     (
-        EvidenceQualificationContract(
-            source_id=LIVE_ROUTING_EVIDENCE_SOURCE_ID,
-            allowed_tracks=("routing",),
-            level="E3",
-            ceiling="E3",
-            payload=_record_payload(_routing_payload),
-            receipt=EvidenceReceiptRequirement(scope="record"),
-            attestations=(_BROKER_ATTESTATION,),
-            batch_validator=_unique_case_records,
-        ),
-        EvidenceQualificationContract(
-            source_id=LIVE_MODEL_POOL_EVIDENCE_SOURCE_ID,
-            allowed_tracks=("model_pool",),
-            level="E4",
-            ceiling="E4",
-            payload=_record_payload(_model_pool_payload),
-            receipt=EvidenceReceiptRequirement(scope="record"),
-            attestations=(_BROKER_ATTESTATION,),
-        ),
-        EvidenceQualificationContract(
-            source_id=LIVE_JOINT_EVIDENCE_SOURCE_ID,
-            allowed_tracks=("joint",),
-            level="E5",
-            ceiling="E5",
-            payload=_record_payload(_joint_payload),
-            receipt=EvidenceReceiptRequirement(scope="record"),
-            attestations=(_BROKER_ATTESTATION,),
-            batch_validator=_unique_case_records,
-        ),
+        _LIVE_ROUTING_QUALIFICATION,
+        _LIVE_MODEL_POOL_QUALIFICATION,
+        _LIVE_JOINT_QUALIFICATION,
         _LIVE_CAPACITY_QUALIFICATION,
         *LIVE_LEDGER_EVIDENCE_QUALIFICATION_CONTRACTS,
     )
@@ -202,6 +209,10 @@ LIVE_RUNTIME_EVIDENCE_QUALIFICATIONS = EvidenceQualificationRegistry(
 
 NORMALIZED_LIVE_EVIDENCE_QUALIFICATIONS = EvidenceQualificationRegistry(
     (
+        _LIVE_ROUTING_QUALIFICATION,
+        _LIVE_MODEL_POOL_QUALIFICATION,
+        _LIVE_JOINT_QUALIFICATION,
+        _LIVE_CAPACITY_QUALIFICATION,
         EvidenceQualificationContract(
             source_id=NORMALIZED_LIVE_MULTIMODAL_EVIDENCE_SOURCE_ID,
             allowed_tracks=("multimodal",),

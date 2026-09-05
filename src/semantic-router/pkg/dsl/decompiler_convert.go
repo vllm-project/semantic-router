@@ -342,6 +342,13 @@ func (d *decompiler) decisionToRoute(dec *config.Decision) *RouteDecl {
 		Tier:        dec.Tier,
 	}
 
+	if dec.Action != nil {
+		route.Action = &ActionDecl{
+			Type:        dec.Action.Type,
+			Destination: dec.Action.Destination,
+		}
+	}
+
 	// WHEN
 	route.When = decompileRuleNodeToExpr(&dec.Rules)
 

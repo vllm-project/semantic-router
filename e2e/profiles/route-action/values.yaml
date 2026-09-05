@@ -1,0 +1,161 @@
+replicaCount: 1
+image:
+  repository: ghcr.io/vllm-project/semantic-router/extproc
+  tag: latest
+  pullPolicy: Never
+config:
+  version: v0.3
+  listeners: []
+  providers:
+    defaults:
+      default_model: openai/mock-model
+    models:
+      - name: openai/mock-model
+        backend_refs:
+          - name: mock-vllm
+            endpoint: mock-vllm.default.svc.cluster.local:8000
+            weight: 1
+      - name: openai/safe-model
+        backend_refs:
+          - name: mock-vllm
+            endpoint: mock-vllm.default.svc.cluster.local:8000
+            weight: 1
+  routing:
+    decisions:
+      # prompt_guard points at an unreachable endpoint with on_error: block,
+      # so the jailbreak signal fires for every request (see the
+      # jailbreak-onerror profile). The keyword condition is what separates
+      # the detected case from the benign case: only prompts carrying the
+      # attack marker match this decision, and the route action must then
+      # send them to the safe destination.
+      - name: route_prompt_attack
+        description: Route detected prompt attacks to the safe fallback model.
+        priority: 120
+        rules:
+          operator: AND
+          conditions:
+            - type: jailbreak
+              name: guardrail_unreachable
+            - type: keyword
+              name: attack_marker
+        action:
+          type: route
+          destination: openai/safe-model
+        modelRefs:
+          - model: openai/safe-model
+            use_reasoning: false
+      - name: default_decision
+        description: Default catch-all decision for benign requests.
+        priority: 1
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: openai/mock-model
+            use_reasoning: false
+    signals:
+      jailbreak:
+        - name: guardrail_unreachable
+          threshold: 0.5
+          include_history: false
+          description: Signal rule bound to the deliberately-unreachable guardrail endpoint
+      keywords:
+        - name: attack_marker
+          operator: OR
+          keywords: ["simulated-prompt-attack"]
+          case_sensitive: false
+    modelCards:
+      - name: openai/mock-model
+      - name: openai/safe-model
+  global:
+    router:
+      strategy: priority
+    services:
+      api:
+        batch_classification:
+          max_batch_size: 100
+          concurrency_threshold: 5
+          max_concurrency: 8
+          metrics:
+            enabled: true
+            detailed_goroutine_tracking: false
+            high_resolution_timing: false
+            sample_rate: 1.0
+      observability:
+        tracing:
+          enabled: false
+    stores:
+      response_cache:
+        enabled: false
+        embedding_model: mmbert
+      memory:
+        embedding_model: mmbert
+      vector_store:
+        embedding_model: mmbert
+    integrations: {}
+    model_catalog:
+      kbs: []
+      external:
+        # Deliberately unreachable: nothing listens on 127.0.0.1:1 inside the
+        # router pod, so every http_classify call fails and on_error: block
+        # reports the jailbreak signal for every request.
+        - name: unreachable-guardrail
+          llm_provider: openai
+          model_role: guardrail
+          llm_model_name: unreachable-guardrail
+          llm_endpoint:
+            address: 127.0.0.1
+            port: 1
+            protocol: http
+          llm_timeout_seconds: 2
+      modules:
+        prompt_guard:
+          enabled: true
+          model_ref: ""
+          model_id: ""
+          variant: ""
+          protocol: http_classify
+          on_error: block
+          threshold: 0.5
+          positive_labels: [jailbreak]
+          jailbreak_mapping_path: models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json
+        classifier:
+          domain:
+            model_ref: ""
+            model_id: ""
+            category_mapping_path: ""
+            use_mmbert_32k: false
+          pii:
+            model_ref: ""
+            model_id: ""
+            pii_mapping_path: ""
+            use_mmbert_32k: false
+        hallucination_mitigation:
+          enabled: false
+# See the jailbreak-onerror profile: the router requires a
+# jailbreak_type_mapping.json on disk even for protocol: http_classify, and
+# a minimal stand-in mapping is enough because this profile never runs local
+# candle inference.
+extraVolumes:
+  - name: jailbreak-mapping
+    configMap:
+      name: route-action-mapping
+extraVolumeMounts:
+  - name: jailbreak-mapping
+    mountPath: /app/models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json
+    subPath: jailbreak_type_mapping.json
+    readOnly: true
+
+resources:
+  # Sized like the jailbreak-onerror profile: the local embedding model load
+  # at startup needs the headroom.
+  limits:
+    cpu: '2'
+    memory: 6Gi
+  requests:
+    cpu: 500m
+    memory: 2Gi
+
+# E2E/Kind: disable PVC for reliable CI (same as other e2e profiles).
+persistence:
+  enabled: false
