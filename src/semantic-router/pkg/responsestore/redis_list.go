@@ -16,12 +16,20 @@ import (
 // the keyspace or even the conversation's full history (see
 // listIndexedResponseIDs).
 //
-// Read path: index exists → read the requested page from it. Otherwise
-// check the empty-conversation marker → nothing to do. Otherwise this may
-// be a pre-index conversation, an unknown ID, or a genuinely empty one that
-// has never been checked before: ensureConversationIndex resolves which,
-// running the one-time O(N) legacy scan at most once per conversation. See
-// blueprint §5 Phase 3 for the full state diagram this implements.
+// Read path: not yet migrated → run ensureConversationIndex, which backfills
+// from a legacy scan (additively — it never removes members an ordinary
+// write already indexed) or confirms the conversation empty, then marks it
+// migrated either way. Once migrated (whether just now or already, from an
+// earlier read), the index's current state is trustworthy: read it if it
+// exists, otherwise there is nothing to return.
+//
+// Checking migrated rather than index-existence first is the fix for a
+// state the index-existence check alone cannot distinguish: a conversation
+// with unindexed legacy responses that then receives an ordinary
+// post-upgrade write has an index — created by that one write's
+// indexResponse call — containing only the new response. Trusting that
+// index as complete would silently and permanently hide the older ones.
+// See ConversationIndexMigratedKeyPrefix.
 //
 // Order/After/Before parity note: this implementation honors ListOptions.Order
 // (default "desc", newest first) and After/Before cursors, per the contract
@@ -38,32 +46,22 @@ func (s *RedisStore) ListResponsesByConversation(ctx context.Context, conversati
 		return nil, ErrInvalidInput
 	}
 
-	indexKey := s.conversationIndexKey(conversationID)
-
-	indexExists, err := s.client.Exists(ctx, indexKey).Result()
+	migrated, err := s.conversationMigrated(ctx, conversationID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to check conversation index: %w", err)
-	}
-	if indexExists > 0 {
-		return s.listIndexedResponses(ctx, conversationID, opts)
-	}
-
-	emptyExists, err := s.client.Exists(ctx, s.emptyConversationIndexMarkerKey(conversationID)).Result()
-	if err != nil {
-		return nil, fmt.Errorf("failed to check conversation index empty marker: %w", err)
-	}
-	if emptyExists > 0 {
-		return nil, nil
-	}
-
-	// Neither exists: this conversation has never been resolved. Scan once
-	// (behind a migration lock, so concurrent readers of the same missing
-	// index don't all scan at once) and recheck.
-	if err := s.ensureConversationIndex(ctx, conversationID); err != nil {
 		return nil, err
 	}
+	if !migrated {
+		if err := s.ensureConversationIndex(ctx, conversationID); err != nil {
+			return nil, err
+		}
+	}
 
-	indexExists, err = s.client.Exists(ctx, indexKey).Result()
+	// Whether migrated was already true or ensureConversationIndex just
+	// resolved it, the index's current membership is now the source of
+	// truth: read it directly rather than re-check the migrated marker,
+	// since a best-effort marker-write failure inside the backfill must not
+	// block returning what was actually just discovered.
+	indexExists, err := s.client.Exists(ctx, s.conversationIndexKey(conversationID)).Result()
 	if err != nil {
 		return nil, fmt.Errorf("failed to check conversation index: %w", err)
 	}
@@ -71,9 +69,6 @@ func (s *RedisStore) ListResponsesByConversation(ctx context.Context, conversati
 		return s.listIndexedResponses(ctx, conversationID, opts)
 	}
 
-	// The backfill (this call's own, or a concurrent one) found nothing and
-	// left the empty marker instead — or, if even that failed, the next call
-	// simply scans again. Either way there is nothing to return right now.
 	return nil, nil
 }
 

@@ -49,23 +49,30 @@ tls_enabled: false
 #     pool_size: 10
 
 # Redis Key Schema:
-# sr:response:{response_id}             → JSON blob of StoredResponse (source of truth)
-# sr:conversation:{conv_id}             → JSON blob of StoredConversation
-# sr:conversation-index:{conv_id}       → sorted set of response IDs, scored by created_at.
-#                                          Derived from sr:response:* and repairable from it;
-#                                          not itself the source of truth.
-# sr:conversation-index-empty:{conv_id} → marker (value "v1") set after a completed legacy
-#                                          scan finds no live responses for conv_id, so an
-#                                          empty or unknown conversation isn't rescanned on
-#                                          every read. TTL is capped at 5 minutes regardless
-#                                          of the data-retention TTL above (or shorter, if the
-#                                          data TTL itself is under 5 minutes) — it only needs
-#                                          to survive long enough to stop a scan stampede, and
-#                                          a short cap bounds how long a write from an older
-#                                          pod during a rolling upgrade can stay hidden.
-# sr:conversation-index-lock:{conv_id}  → short-lived (30s) lock guarding the one-time legacy
-#                                          scan against a stampede of concurrent readers. An
-#                                          optimization, not a correctness dependency.
+# sr:response:{response_id}                → JSON blob of StoredResponse (source of truth)
+# sr:conversation:{conv_id}                → JSON blob of StoredConversation
+# sr:conversation-index:{conv_id}          → sorted set of response IDs, scored by created_at.
+#                                             Derived from sr:response:* and repairable from it;
+#                                             not itself the source of truth. Can exist with only
+#                                             *some* of a conversation's responses indexed (e.g.
+#                                             right after its first post-upgrade write) — never
+#                                             trust it as exhaustive without checking the
+#                                             migrated marker below first.
+# sr:conversation-index-migrated:{conv_id} → marker (value "v1") set once a full legacy-scan
+#                                             backfill has completed for conv_id, whether or not
+#                                             it found anything to index. This — not whether the
+#                                             index key exists — is what every read and cascade
+#                                             delete checks before trusting the index's current
+#                                             membership as complete. TTL matches the data
+#                                             retention TTL above when the scan found responses
+#                                             (refreshed on every later write to the same
+#                                             conversation); capped at 5 minutes when it found
+#                                             none, so a write from an older pod during a rolling
+#                                             upgrade can't stay hidden behind a stale "confirmed
+#                                             empty" result for long.
+# sr:conversation-index-lock:{conv_id}     → short-lived (30s) lock guarding the one-time legacy
+#                                             scan against a stampede of concurrent readers. An
+#                                             optimization, not a correctness dependency.
 #
 # All four families are disjoint prefixes by design: sr:conversation-index* must never be
 # matched by the sr:conversation:* or sr:response:* scans used elsewhere, or a sorted set or

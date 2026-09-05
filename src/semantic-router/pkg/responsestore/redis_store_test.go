@@ -465,7 +465,7 @@ func TestTLSConfig(t *testing.T) {
 }
 
 // TestRedisConversationIndexKeyIsolation guards the invariant that index,
-// empty-marker, and lock keys are invisible to the sr:conversation:* and
+// migrated-marker, and lock keys are invisible to the sr:conversation:* and
 // sr:response:* scans in ListConversations/legacy backfill, which would
 // otherwise read a sorted set or marker string as conversation/response
 // JSON. Needs no Redis.
@@ -475,8 +475,8 @@ func TestRedisConversationIndexKeyIsolation(t *testing.T) {
 	indexKey := store.conversationIndexKey("conv_123")
 	assert.Equal(t, "sr:conversation-index:conv_123", indexKey)
 
-	emptyMarkerKey := store.emptyConversationIndexMarkerKey("conv_123")
-	assert.Equal(t, "sr:conversation-index-empty:conv_123", emptyMarkerKey)
+	migratedKey := store.conversationIndexMigratedKey("conv_123")
+	assert.Equal(t, "sr:conversation-index-migrated:conv_123", migratedKey)
 
 	lockKey := store.conversationIndexLockKey("conv_123")
 	assert.Equal(t, "sr:conversation-index-lock:conv_123", lockKey)
@@ -486,21 +486,22 @@ func TestRedisConversationIndexKeyIsolation(t *testing.T) {
 		store.buildKey(ConversationKeyPrefix),
 		store.buildKey(ResponseKeyPrefix),
 	}
-	for _, key := range []string{indexKey, emptyMarkerKey, lockKey} {
+	for _, key := range []string{indexKey, migratedKey, lockKey} {
 		for _, scanPrefix := range scanPrefixes {
 			assert.Falsef(t, strings.HasPrefix(key, scanPrefix),
 				"key %q must not be matched by the %q* scan pattern", key, scanPrefix)
 		}
 	}
 
-	// The empty marker and lock key families must also be distinct from the
-	// index key family itself: either one accidentally matching the index
-	// scan prefix would let a marker or lock be read back as sorted-set data
-	// by anything that scans "conversation-index:*" (e.g. a future admin tool).
+	// The migrated marker and lock key families must also be distinct from
+	// the index key family itself: either one accidentally matching the
+	// index scan prefix would let a marker or lock be read back as
+	// sorted-set data by anything that scans "conversation-index:*" (e.g. a
+	// future admin tool).
 	indexScanPrefix := store.buildKey(ConversationIndexKeyPrefix)
 	require.True(t, strings.HasPrefix(indexKey, indexScanPrefix))
-	assert.Falsef(t, strings.HasPrefix(emptyMarkerKey, indexScanPrefix),
-		"empty marker key %q must not be matched by the %q* index scan pattern", emptyMarkerKey, indexScanPrefix)
+	assert.Falsef(t, strings.HasPrefix(migratedKey, indexScanPrefix),
+		"migrated marker key %q must not be matched by the %q* index scan pattern", migratedKey, indexScanPrefix)
 	assert.Falsef(t, strings.HasPrefix(lockKey, indexScanPrefix),
 		"lock key %q must not be matched by the %q* index scan pattern", lockKey, indexScanPrefix)
 }
