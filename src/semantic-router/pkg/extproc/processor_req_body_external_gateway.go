@@ -3,8 +3,10 @@ package extproc
 import (
 	"strings"
 
+	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
@@ -60,11 +62,16 @@ func (r *OpenAIRouter) handleExternalGatewayModelRouting(
 
 	ctx.RequestModel = model
 
-	state := &routeHeaderState{removeHeaders: []string{"content-length"}}
+	state := &routeHeaderState{removeHeaders: []string{
+		"content-length",
+		headers.VSROriginalPath,
+		headers.VSRUpstreamPath,
+		headers.VSRPathNeedsPrefix,
+	}}
 	// Rewriting the protocol endpoint is part of request conversion. Envoy
 	// retains the already-selected route because this mode never clears the
 	// route cache, so upstream ownership remains with the external gateway.
-	setProviderRequestPath(&state.setHeaders, nil, targetFormat)
+	setExternalGatewayRequestPath(&state.setHeaders, targetFormat)
 	response := buildRequestBodyContinueResponse(state, nil, false)
 
 	logging.ComponentDebugEvent("extproc", "external_gateway_dispatch_prepared", map[string]interface{}{
@@ -73,4 +80,13 @@ func (r *OpenAIRouter) handleExternalGatewayModelRouting(
 		"wire_format": targetFormat,
 	})
 	return r.finalizeProviderDispatchResponse(dispatch, response, ctx)
+}
+
+func setExternalGatewayRequestPath(
+	headersOut *[]*core.HeaderValueOption,
+	format llmprotocol.WireFormat,
+) {
+	*headersOut = append(*headersOut, &core.HeaderValueOption{Header: &core.HeaderValue{
+		Key: headers.PseudoHeaderPath, RawValue: []byte(requestWirePath(format)),
+	}})
 }

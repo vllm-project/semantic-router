@@ -32,6 +32,11 @@ func authenticateLooperRequestContext(ctx *RequestContext) {
 
 	// The credential is only needed while authenticating the captured context.
 	removeHeaderValueCI(ctx, headers.VSRInternalAuth)
+	// Path carriers are filter-chain state. Never trust values supplied by a
+	// downstream caller or carry them into semantic request processing.
+	removeHeaderValueCI(ctx, headers.VSROriginalPath)
+	removeHeaderValueCI(ctx, headers.VSRUpstreamPath)
+	removeHeaderValueCI(ctx, headers.VSRPathNeedsPrefix)
 	if ctx.LooperRequest {
 		return
 	}

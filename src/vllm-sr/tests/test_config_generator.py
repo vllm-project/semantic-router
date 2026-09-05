@@ -1,4 +1,3 @@
-import re
 import sys
 from pathlib import Path
 
@@ -101,6 +100,10 @@ routing:
     )
     assert endpoint["hostname"] == "vllm-sr-router-container"
 
+    for route in (_model_route(rendered, "test-model"), _default_route(rendered)):
+        assert "regex_rewrite" not in route["route"]
+        assert _route_path_prefix(route) == ""
+
 
 def _model_route(rendered_config, model_name):
     """Find the route entry whose x-selected-model header matches *model_name*."""
@@ -127,6 +130,28 @@ def _default_route(rendered_config):
         if not route.get("match", {}).get("headers"):
             return route
     raise AssertionError("default route not found")
+
+
+def _route_path_prefix(route):
+    return route["metadata"]["filter_metadata"]["envoy.filters.http.lua"]["path_prefix"]
+
+
+def _path_finalizer_code(rendered_config):
+    """Return the Lua filter that finalizes provider paths after ext_proc."""
+    listener = rendered_config["static_resources"]["listeners"][0]
+    hcm = listener["filter_chains"][0]["filters"][0]["typed_config"]
+    filter_names = [item["name"] for item in hcm["http_filters"]]
+    lua_filters = [
+        item
+        for item in hcm["http_filters"]
+        if item["name"] == "vllm.filters.http.path_finalizer"
+        and "ORIGINAL_PATH_HEADER" in item["typed_config"].get("inline_code", "")
+    ]
+    assert len(lua_filters) == 1
+    finalizer_index = hcm["http_filters"].index(lua_filters[0])
+    assert filter_names.index("envoy.filters.http.ext_proc") < finalizer_index
+    assert finalizer_index < filter_names.index("envoy.filters.http.router")
+    return lua_filters[0]["typed_config"]["inline_code"]
 
 
 def test_weighted_backend_refs_preserve_weights_and_shared_path(tmp_path, monkeypatch):
@@ -191,8 +216,9 @@ routing:
     route = _model_route(rendered, "test-model")
     route_action = route["route"]
     assert route_action["host_rewrite_literal"] == "10.0.0.1:8000"
-    assert route_action["regex_rewrite"]["pattern"]["regex"] == r"^/v1([/?].*)?$"
-    assert route_action["regex_rewrite"]["substitution"] == "/v1\\1"
+    assert "regex_rewrite" not in route_action
+    assert _route_path_prefix(route) == "/v1"
+    assert _route_path_prefix(_default_route(rendered)) == "/v1"
 
 
 def test_base_url_path_rewrite_is_idempotent(tmp_path, monkeypatch):
@@ -235,37 +261,22 @@ routing:
     )
 
     for route in (_model_route(rendered, "gemini-model"), _default_route(rendered)):
-        rewrite = route["route"]["regex_rewrite"]
-        pattern = rewrite["pattern"]["regex"]
-        substitution = rewrite["substitution"]
+        assert "regex_rewrite" not in route["route"]
+        assert _route_path_prefix(route) == "/v1beta/openai"
 
-        assert pattern == r"^/v1([/?].*)?$"
-        for request_path, upstream_path in (
-            ("/v1", "/v1beta/openai"),
-            (
-                "/v1/chat/completions",
-                "/v1beta/openai/chat/completions",
-            ),
-            (
-                "/v1?api-version=test",
-                "/v1beta/openai?api-version=test",
-            ),
-        ):
-            rewritten_path = re.sub(pattern, substitution, request_path)
-            assert rewritten_path == upstream_path
-            assert re.sub(pattern, substitution, rewritten_path) == upstream_path
+    finalizer = _path_finalizer_code(rendered)
+    assert 'request_handle:metadata():get("path_prefix")' in finalizer
+    assert "request_headers:get(UPSTREAM_PATH_HEADER)" in finalizer
+    assert 'request_headers:get(PATH_NEEDS_PREFIX_HEADER) == "true"' in finalizer
+    assert 'if original_path ~= nil and original_path ~= "" then' in finalizer
+    assert 'original_path = request_headers:get(":path")' not in finalizer
+    assert "request_headers:remove(ORIGINAL_PATH_HEADER)" in finalizer
+    assert "request_headers:remove(UPSTREAM_PATH_HEADER)" in finalizer
+    assert "request_headers:remove(PATH_NEEDS_PREFIX_HEADER)" in finalizer
 
 
-@pytest.mark.skip(
-    reason=(
-        "TODO(issue-2885): fix root-cause rewrite idempotency for backend base "
-        "paths that still begin with the /v1 segment after rewriting."
-    )
-)
-def test_base_url_path_rewrite_idempotency_todo_for_v1_segment_prefix(
-    tmp_path, monkeypatch
-):
-    """Document the known gap: /v1/chat -> /v1/provider/chat rewrites twice today."""
+def test_base_url_path_rewrite_idempotency_for_v1_segment_prefix(tmp_path, monkeypatch):
+    """Ensure Envoy does not add a /v1-prefixed backend path twice."""
     rendered = _render_envoy_config(
         tmp_path,
         monkeypatch,
@@ -305,14 +316,16 @@ routing:
     )
 
     for route in (_model_route(rendered, "provider-model"), _default_route(rendered)):
-        rewrite = route["route"]["regex_rewrite"]
-        pattern = rewrite["pattern"]["regex"]
-        substitution = rewrite["substitution"]
-        upstream_path = "/v1/provider/chat/completions"
+        assert "regex_rewrite" not in route["route"]
+        assert _route_path_prefix(route) == "/v1/provider"
 
-        rewritten_path = re.sub(pattern, substitution, "/v1/chat/completions")
-        assert rewritten_path == upstream_path
-        assert re.sub(pattern, substitution, rewritten_path) == upstream_path
+    finalizer = _path_finalizer_code(rendered)
+    assert 'local ORIGINAL_PATH_HEADER = "x-vsr-internal-original-path"' in finalizer
+    assert 'local UPSTREAM_PATH_HEADER = "x-vsr-internal-upstream-path"' in finalizer
+    assert (
+        'local PATH_NEEDS_PREFIX_HEADER = "x-vsr-internal-path-needs-prefix"'
+        in finalizer
+    )
 
 
 def test_provider_reliability_renders_retry_outlier_and_least_request(
@@ -384,7 +397,7 @@ def test_backend_ref_domain_with_path_produces_correct_envoy_cluster_and_route(
 ):
     """Backend ref https://api.example.com/compatible-mode/v1 should produce
     address=api.example.com, port=443, host_authority=api.example.com (standard
-    port omitted), LOGICAL_DNS cluster, and regex_rewrite for path prefix."""
+    port omitted), LOGICAL_DNS cluster, and a single-owner path finalizer."""
     rendered = _render_envoy_config(
         tmp_path,
         monkeypatch,
@@ -435,8 +448,8 @@ routing:
     route_action = route["route"]
     # standard port 443 → host_authority should omit port
     assert route_action["host_rewrite_literal"] == "api.example.com"
-    assert route_action["regex_rewrite"]["pattern"]["regex"] == r"^/v1([/?].*)?$"
-    assert route_action["regex_rewrite"]["substitution"] == "/compatible-mode/v1\\1"
+    assert "regex_rewrite" not in route_action
+    assert _route_path_prefix(route) == "/compatible-mode/v1"
 
 
 def test_backend_ref_https_base_url_uses_tls_and_explicit_extra_headers(
@@ -494,7 +507,8 @@ routing:
     route = _model_route(rendered, "test-model")
     route_action = route["route"]
     assert route_action["host_rewrite_literal"] == "openrouter.ai"
-    assert route_action["regex_rewrite"]["substitution"] == "/api/v1\\1"
+    assert "regex_rewrite" not in route_action
+    assert _route_path_prefix(route) == "/api/v1"
 
     headers = {
         item["header"]["key"]: item["header"]["value"]

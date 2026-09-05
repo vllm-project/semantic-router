@@ -368,6 +368,15 @@ const (
 	// VSRInternalAuth authenticates in-process request context that must not
 	// be accepted from external callers or forwarded to model backends.
 	VSRInternalAuth = "x-vsr-internal-auth"
+
+	// VSROriginalPath carries the immutable ingress path through route
+	// recomputation. VSRUpstreamPath carries the provider path computed by
+	// ext_proc. VSRPathNeedsPrefix preserves legacy endpoint path rewriting
+	// when that path is available only to Envoy. Envoy consumes all three
+	// inside the filter chain and removes them before forwarding the request.
+	VSROriginalPath    = "x-vsr-internal-original-path"
+	VSRUpstreamPath    = "x-vsr-internal-upstream-path"
+	VSRPathNeedsPrefix = "x-vsr-internal-path-needs-prefix"
 )
 
 // Looper Request Headers

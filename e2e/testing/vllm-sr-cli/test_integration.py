@@ -142,12 +142,16 @@ class TestServeIntegration(ServeSessionMixin, CLITestBase):
         return "\n".join(diagnostics)
 
     def _send_mock_chat_completion(
-        self, mock_container: str, *, redact_values: tuple[str, ...] = ()
+        self,
+        mock_container: str,
+        *,
+        request_path: str = "/v1/chat/completions",
+        redact_values: tuple[str, ...] = (),
     ):
         """Send a chat request, retrying until the local stack is ready."""
         listener_port = 8888 + self.runtime_stack.port_offset
         request = urllib_request.Request(
-            f"http://localhost:{listener_port}/v1/chat/completions",
+            f"http://localhost:{listener_port}{request_path}",
             data=(
                 b'{"model":"test-model","messages":[{"role":"user","content":"ping"}]}'
             ),
@@ -192,6 +196,7 @@ class TestServeIntegration(ServeSessionMixin, CLITestBase):
             timeout=10,
         )
         self.assertEqual(logs.returncode, 0, logs.stderr)
+        self.assertNotIn("internal-path-carrier-leaked", logs.stdout)
         return {
             line.strip() for line in logs.stdout.splitlines() if line.startswith("/")
         }
@@ -201,15 +206,21 @@ class TestServeIntegration(ServeSessionMixin, CLITestBase):
         *,
         container_suffix: str,
         base_path: str,
+        request_path: str = "/v1/chat/completions",
+        direct_endpoint: bool = False,
     ) -> set[str]:
         """Route one chat request to a path-recording OpenAI mock upstream."""
         mock_container = f"{self.runtime_stack.stack_name}-{container_suffix}"
-        base_url = f"http://{mock_container}:{MOCK_OPENAI_SERVER_PORT}{base_path}"
+        upstream = f"{mock_container}:{MOCK_OPENAI_SERVER_PORT}{base_path}"
+        serve_kwargs = (
+            {"endpoint": upstream}
+            if direct_endpoint
+            else {"base_url": f"http://{upstream}", "provider": "openai"}
+        )
 
         with self._running_serve(
-            base_url=base_url,
-            provider="openai",
             api_only=True,
+            **serve_kwargs,
         ):
             self.assertTrue(
                 self.wait_for_health(
@@ -219,7 +230,10 @@ class TestServeIntegration(ServeSessionMixin, CLITestBase):
                 "router API did not become healthy",
             )
             with self._running_mock_upstream(mock_container):
-                self._send_mock_chat_completion(mock_container)
+                self._send_mock_chat_completion(
+                    mock_container,
+                    request_path=request_path,
+                )
                 return self._mock_upstream_paths(mock_container)
 
     @unittest.skipUnless(
@@ -267,18 +281,14 @@ class TestServeIntegration(ServeSessionMixin, CLITestBase):
 
         self.print_test_result(True, "Base URL path was applied exactly once")
 
-    @unittest.skip(
-        "TODO(issue-2885): fix root-cause rewrite idempotency for backend base "
-        "paths that still begin with the /v1 segment after rewriting."
-    )
     @unittest.skipUnless(
         os.environ.get("RUN_INTEGRATION_TESTS", "").lower() == "true",
         "Integration tests disabled. Set RUN_INTEGRATION_TESTS=true to enable.",
     )
-    def test_base_url_path_rewrite_idempotency_todo_for_v1_segment_prefix(self):
-        """Document the known gap for /v1/chat -> /v1/provider/chat rewrites."""
+    def test_base_url_path_rewrite_idempotency_for_v1_segment_prefix(self):
+        """Keep /v1/chat -> /v1/provider/chat stable after route recomputation."""
         self.print_test_header(
-            "Future Base URL Rewrite Integration Test",
+            "V1-Prefixed Base URL Rewrite Integration Test",
             "Routes /v1/chat/completions once to a /v1/provider mock upstream",
         )
 
@@ -291,7 +301,54 @@ class TestServeIntegration(ServeSessionMixin, CLITestBase):
             upstream_paths,
         )
 
-        self.print_test_result(True, "Future /v1 segment base URL was applied once")
+        self.print_test_result(True, "/v1 segment base URL was applied once")
+
+    @unittest.skipUnless(
+        os.environ.get("RUN_INTEGRATION_TESTS", "").lower() == "true",
+        "Integration tests disabled. Set RUN_INTEGRATION_TESTS=true to enable.",
+    )
+    def test_base_url_path_rewrite_with_overlapping_prefix(self):
+        """Build the upstream path once when its prefix overlaps the API path."""
+        self.print_test_header(
+            "Overlapping Base URL Rewrite Integration Test",
+            "Routes /v1/chat/completions once to a /v1/chat mock upstream",
+        )
+
+        upstream_paths = self._request_paths_for_mock_openai_base_path(
+            container_suffix="overlapping-rewrite-upstream",
+            base_path="/v1/chat",
+            request_path="/v1/chat/completions?api-version=test",
+        )
+        self.assertEqual(
+            {"/v1/chat/chat/completions?api-version=test"},
+            upstream_paths,
+        )
+
+        self.print_test_result(True, "Overlapping base URL was applied once")
+
+    @unittest.skipUnless(
+        os.environ.get("RUN_INTEGRATION_TESTS", "").lower() == "true",
+        "Integration tests disabled. Set RUN_INTEGRATION_TESTS=true to enable.",
+    )
+    def test_direct_endpoint_path_keeps_legacy_prefix_rewrite(self):
+        """Preserve endpoint URL paths that only the Envoy generator can see."""
+        self.print_test_header(
+            "Direct Endpoint Path Integration Test",
+            "Routes the target protocol path through a direct endpoint prefix",
+        )
+
+        upstream_paths = self._request_paths_for_mock_openai_base_path(
+            container_suffix="direct-endpoint-path-upstream",
+            base_path="/compatible-mode/v1",
+            request_path="/v1/chat/completions?api-version=test",
+            direct_endpoint=True,
+        )
+        self.assertEqual(
+            {"/compatible-mode/v1/chat/completions?api-version=test"},
+            upstream_paths,
+        )
+
+        self.print_test_result(True, "Direct endpoint prefix was preserved")
 
     def _check_health_endpoint(self):
         """Check health endpoint (informational, doesn't fail test)."""

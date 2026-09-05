@@ -232,7 +232,7 @@ func (r *OpenAIRouter) buildProviderDispatchResponse(
 	}
 	appendProfileHeaders(&state.setHeaders, dispatch.profile)
 	appendRoutingHeaders(&state.setHeaders, dispatch.logicalModel)
-	setProviderRequestPath(&state.setHeaders, dispatch.profile, dispatch.targetFormat)
+	setProviderUpstreamPath(&state.setHeaders, dispatch.profile, dispatch.targetFormat, ctx)
 	r.applyDecisionHeaderMutations(state, ctx)
 	return buildRequestBodyContinueResponse(state, nil, false)
 }
@@ -362,10 +362,11 @@ func appendProfileHeaders(headersOut *[]*core.HeaderValueOption, profile *config
 	}
 }
 
-func setProviderRequestPath(
+func setProviderUpstreamPath(
 	headersOut *[]*core.HeaderValueOption,
 	profile *config.ProviderProfile,
 	format llmprotocol.WireFormat,
+	ctx *RequestContext,
 ) {
 	requestPath := requestWirePath(format)
 	if profile != nil && format == llmprotocol.OpenAIChatV1 {
@@ -375,9 +376,40 @@ func setProviderRequestPath(
 	} else if profile != nil {
 		requestPath = providerProtocolPath(profile.BaseURL, requestPath)
 	}
-	*headersOut = append(*headersOut, &core.HeaderValueOption{Header: &core.HeaderValue{
-		Key: ":path", RawValue: []byte(requestPath),
-	}})
+	requestPath = appendIngressQuery(requestPath, ctx)
+	*headersOut = append(*headersOut, &core.HeaderValueOption{
+		Header: &core.HeaderValue{
+			Key: headers.VSRUpstreamPath, RawValue: []byte(requestPath),
+		},
+		AppendAction: core.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD,
+	})
+	// A direct endpoint path is parsed by the Envoy generator but is not part
+	// of the runtime ProviderProfile. Preserve the old route rewrite for that
+	// case without asking the finalizer to infer state from the path string.
+	if profile == nil || profile.BaseURL == "" {
+		*headersOut = append(*headersOut, &core.HeaderValueOption{
+			Header: &core.HeaderValue{
+				Key: headers.VSRPathNeedsPrefix, RawValue: []byte("true"),
+			},
+			AppendAction: core.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD,
+		})
+	}
+}
+
+func appendIngressQuery(requestPath string, ctx *RequestContext) string {
+	if ctx == nil {
+		return requestPath
+	}
+	ingressPath := ctx.Headers[headers.PseudoHeaderPath]
+	queryStart := strings.IndexByte(ingressPath, '?')
+	if queryStart == -1 || queryStart == len(ingressPath)-1 {
+		return requestPath
+	}
+	separator := "?"
+	if strings.Contains(requestPath, "?") {
+		separator = "&"
+	}
+	return requestPath + separator + ingressPath[queryStart+1:]
 }
 
 // providerProtocolPath preserves a provider's base path while allowing the
@@ -419,8 +451,24 @@ func (r *OpenAIRouter) applyDecisionHeaderMutations(state *routeHeaderState, ctx
 		return
 	}
 	setHeaders, removeHeaders := r.buildHeaderMutations(ctx.VSRSelectedDecision)
-	state.setHeaders = append(state.setHeaders, setHeaders...)
-	state.removeHeaders = append(state.removeHeaders, removeHeaders...)
+	for _, header := range setHeaders {
+		if header.GetHeader() == nil || isReservedPathCarrier(header.GetHeader().GetKey()) {
+			continue
+		}
+		state.setHeaders = append(state.setHeaders, header)
+	}
+	for _, header := range removeHeaders {
+		if isReservedPathCarrier(header) {
+			continue
+		}
+		state.removeHeaders = append(state.removeHeaders, header)
+	}
+}
+
+func isReservedPathCarrier(header string) bool {
+	return strings.EqualFold(header, headers.VSROriginalPath) ||
+		strings.EqualFold(header, headers.VSRUpstreamPath) ||
+		strings.EqualFold(header, headers.VSRPathNeedsPrefix)
 }
 
 func buildRequestBodyContinueResponse(

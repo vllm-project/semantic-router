@@ -51,6 +51,15 @@ func assertExternalGatewayDispatchMutation(t *testing.T, response *ext_proc.Proc
 	if got := headersByName[":path"]; got != "/v1/chat/completions" {
 		t.Fatalf("converted request path = %q, want /v1/chat/completions", got)
 	}
+	removedHeaders := make(map[string]bool)
+	for _, name := range common.GetHeaderMutation().GetRemoveHeaders() {
+		removedHeaders[name] = true
+	}
+	for _, name := range []string{headers.VSROriginalPath, headers.VSRUpstreamPath, headers.VSRPathNeedsPrefix} {
+		if !removedHeaders[name] {
+			t.Fatalf("internal path carrier %q was not removed", name)
+		}
+	}
 	for _, name := range []string{headers.SelectedModel, "authorization", "x-api-key"} {
 		if value, ok := headersByName[name]; ok {
 			t.Fatalf("external gateway-owned header %q was mutated to %q", name, value)
