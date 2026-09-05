@@ -37,7 +37,6 @@ type Client struct {
 	endpoint         string
 	headers          map[string]string
 	decisionName     string // Decision name to pass in looper requests
-	fusionDepth      int    // Recursion guard for Fusion requests
 	maxResponseBytes int64  // Ceiling for a single upstream response body
 }
 
@@ -57,11 +56,6 @@ func NewClient(cfg *config.LooperConfig) *Client {
 // SetDecisionName sets the decision name for this client
 func (c *Client) SetDecisionName(name string) {
 	c.decisionName = name
-}
-
-// SetFusionDepth sets the Fusion recursion depth marker for internal requests.
-func (c *Client) SetFusionDepth(depth int) {
-	c.fusionDepth = depth
 }
 
 // resolveEndpoint returns the configured looper endpoint.

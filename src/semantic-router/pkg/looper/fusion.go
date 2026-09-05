@@ -81,8 +81,7 @@ type FusionTrace struct {
 
 func (l *FusionLooper) Execute(ctx context.Context, req *Request) (*Response, error) {
 	l.client.SetDecisionName(req.DecisionName)
-	l.client.SetFusionDepth(1)
-	defer l.client.SetFusionDepth(0)
+	ctx = contextWithFusionDepth(ctx, 1)
 
 	cfg := l.resolveFusionExecutionConfig(req)
 	if len(cfg.AnalysisModels) == 0 {

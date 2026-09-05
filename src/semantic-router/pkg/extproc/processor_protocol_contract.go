@@ -303,6 +303,8 @@ func requestWirePath(format llmprotocol.WireFormat) string {
 	switch format {
 	case llmprotocol.OpenAIResponsesV1:
 		return "/v1/responses"
+	case llmprotocol.OpenAIImagesV1:
+		return "/v1/images/generations"
 	case llmprotocol.AnthropicMessagesV1:
 		return "/v1/messages"
 	default:
