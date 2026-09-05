@@ -178,3 +178,36 @@ func TestRedisDeleteConversationCascadeFailureLeavesConversation(t *testing.T) {
 	_, getErr = store.GetConversation(ctx, convID)
 	assert.ErrorIs(t, getErr, ErrNotFound)
 }
+
+// TestRedisDeleteConversationCascadeLegacyUnindexed covers a cascade delete
+// against a conversation whose responses were never indexed — pre-#2814
+// legacy data, or a write from an indexing-unaware pod mid rolling upgrade.
+// Before deleteConversationResponses resolved the index first, this case
+// regressed the pre-#2814 scan-based cascade: an absent index made the
+// batch-delete loop exit immediately having deleted nothing, silently
+// orphaning the legacy payload forever once the conversation record itself
+// was gone.
+func TestRedisDeleteConversationCascadeLegacyUnindexed(t *testing.T) {
+	store := newConversationIndexStore(t)
+	ctx := context.Background()
+
+	const convID = "conv_cascade_legacy"
+	require.NoError(t, store.CreateConversation(ctx, &responseapi.StoredConversation{
+		ID: convID, CreatedAt: time.Now().Unix(),
+	}))
+
+	// Bypasses StoreResponse's indexing entirely, same shape as data written
+	// before the index existed.
+	directSetResponsePayload(t, store, &responseapi.StoredResponse{
+		ID: "resp_cascade_legacy", ConversationID: convID, Status: "completed", CreatedAt: time.Now().Unix(),
+	})
+	require.Empty(t, conversationIndexMembers(t, store, convID),
+		"precondition: no index should exist yet for legacy data")
+
+	require.NoError(t, store.DeleteConversation(ctx, convID, true))
+
+	_, err := store.GetResponse(ctx, "resp_cascade_legacy")
+	assert.ErrorIs(t, err, ErrNotFound, "the legacy unindexed response must be deleted by the cascade, not orphaned")
+	_, err = store.GetConversation(ctx, convID)
+	assert.ErrorIs(t, err, ErrNotFound)
+}

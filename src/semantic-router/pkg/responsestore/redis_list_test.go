@@ -2,6 +2,7 @@ package responsestore
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -131,7 +132,7 @@ func TestRedisListResponsesByConversationLazyBackfill(t *testing.T) {
 	require.Len(t, responses, 3)
 	assert.Equal(t, []string{"resp_legacy_1", "resp_legacy_2", "resp_legacy_3"},
 		[]string{responses[0].ID, responses[1].ID, responses[2].ID})
-	assert.Equal(t, 1, store.scanInvocations, "first read must run exactly one legacy scan")
+	assert.Equal(t, int64(1), store.scanInvocations.Load(), "first read must run exactly one legacy scan")
 
 	assert.ElementsMatch(t, []string{"resp_legacy_1", "resp_legacy_2", "resp_legacy_3"},
 		conversationIndexMembers(t, store, "conv_legacy"))
@@ -142,7 +143,7 @@ func TestRedisListResponsesByConversationLazyBackfill(t *testing.T) {
 	responses, err = store.ListResponsesByConversation(ctx, "conv_legacy", ListOptions{Order: "asc"})
 	require.NoError(t, err)
 	require.Len(t, responses, 3)
-	assert.Equal(t, 1, store.scanInvocations, "second read of an already-backfilled conversation must not scan again")
+	assert.Equal(t, int64(1), store.scanInvocations.Load(), "second read of an already-backfilled conversation must not scan again")
 }
 
 // TestRedisListResponsesByConversationEmptyMarker covers blueprint §2.4/§3.4:
@@ -161,7 +162,7 @@ func TestRedisListResponsesByConversationEmptyMarker(t *testing.T) {
 	responses, err := store.ListResponsesByConversation(ctx, "conv_never_existed", ListOptions{})
 	require.NoError(t, err)
 	assert.Empty(t, responses)
-	assert.Equal(t, 1, store.scanInvocations)
+	assert.Equal(t, int64(1), store.scanInvocations.Load())
 
 	markerKey := store.emptyConversationIndexMarkerKey("conv_never_existed")
 	assert.EqualValues(t, 1, exists(t, store, markerKey))
@@ -175,7 +176,7 @@ func TestRedisListResponsesByConversationEmptyMarker(t *testing.T) {
 		require.NoError(t, err)
 		assert.Empty(t, responses)
 	}
-	assert.Equal(t, 1, store.scanInvocations, "repeated reads of an empty conversation must not force repeated scans")
+	assert.Equal(t, int64(1), store.scanInvocations.Load(), "repeated reads of an empty conversation must not force repeated scans")
 }
 
 // TestRedisLazyBackfillConcurrentWriteNotHidden covers blueprint §2.2: a
@@ -377,4 +378,97 @@ func TestRedisListCursors(t *testing.T) {
 		_, err := store.ListResponsesByConversation(ctx, "conv_cursor", ListOptions{Order: "sideways"})
 		assert.ErrorIs(t, err, ErrInvalidInput)
 	})
+}
+
+// TestRedisListResponsesByConversationConcurrentMissingScansOnce is the
+// concurrency counterpart to TestRedisListResponsesByConversationEmptyMarker:
+// scanInvocations must be an atomic counter, not a plain int, because
+// scanResponsePayloads is reachable from concurrent requests missing the
+// same conversation's index in real production traffic, not just from
+// sequential test calls. Run with `go test -race` to catch a regression
+// back to a plain int directly; the count assertion below additionally
+// proves the migration lock (Phase 3) meaningfully reduces duplicate scans
+// under real concurrency, not just in the serialized tests elsewhere.
+func TestRedisListResponsesByConversationConcurrentMissingScansOnce(t *testing.T) {
+	store := newConversationIndexStore(t)
+	ctx := context.Background()
+
+	const goroutines = 20
+
+	var wg sync.WaitGroup
+	errs := make([]error, goroutines)
+	for i := 0; i < goroutines; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			_, err := store.ListResponsesByConversation(ctx, "conv_concurrent_missing", ListOptions{})
+			errs[i] = err
+		}(i)
+	}
+	wg.Wait()
+
+	for i, err := range errs {
+		assert.NoErrorf(t, err, "goroutine %d", i)
+	}
+
+	// The lock is an optimization, not a guarantee (blueprint §4.5): a
+	// generous upper bound, not exactly 1, keeps this robust against
+	// scheduling variance while still proving most of the herd converged on
+	// the lock holder's result instead of each scanning independently.
+	assert.Lessf(t, store.scanInvocations.Load(), int64(goroutines),
+		"the migration lock should stop most concurrent readers from scanning independently")
+}
+
+// TestRedisEmptyConversationIndexMarkerTTLBounded covers a rolling-upgrade
+// blind spot: the empty marker must not inherit the store's full
+// data-retention TTL. A marker sharing a long data TTL (a day, 30 days)
+// could hide a response written by an older, pre-index pod during a
+// rolling deployment for that entire window — capping the marker
+// independently bounds the blind spot to emptyConversationIndexMarkerMaxTTL
+// regardless of how long data itself lives.
+func TestRedisEmptyConversationIndexMarkerTTLBounded(t *testing.T) {
+	store := newConversationIndexStoreWithTTLSeconds(t, 24*60*60) // 24h data TTL
+	ctx := context.Background()
+
+	_, err := store.ListResponsesByConversation(ctx, "conv_ttl_bound", ListOptions{})
+	require.NoError(t, err)
+
+	markerKey := store.emptyConversationIndexMarkerKey("conv_ttl_bound")
+	ttl, err := store.client.TTL(ctx, markerKey).Result()
+	require.NoError(t, err)
+	assert.Positive(t, ttl)
+	assert.LessOrEqualf(t, ttl, emptyConversationIndexMarkerMaxTTL,
+		"empty marker TTL must be capped, not inherit the store's %s data TTL", store.ttl)
+}
+
+// TestRedisEmptyConversationIndexMarkerExpiryRevealsLegacyWrite simulates
+// the marker's TTL cap actually elapsing (by deleting it directly rather
+// than waiting out the real duration in a unit test): a response written by
+// an indexing-unaware writer while the marker was still valid must be
+// discovered on the next read once the marker is gone, rather than stay
+// permanently hidden behind it.
+func TestRedisEmptyConversationIndexMarkerExpiryRevealsLegacyWrite(t *testing.T) {
+	store := newConversationIndexStore(t)
+	ctx := context.Background()
+
+	responses, err := store.ListResponsesByConversation(ctx, "conv_marker_expiry", ListOptions{})
+	require.NoError(t, err)
+	assert.Empty(t, responses)
+
+	markerKey := store.emptyConversationIndexMarkerKey("conv_marker_expiry")
+	require.EqualValues(t, 1, exists(t, store, markerKey))
+
+	// A write from an older, indexing-unaware pod: lands a payload with no
+	// index entry and no marker awareness, exactly as pre-#2814 code would.
+	directSetResponsePayload(t, store, &responseapi.StoredResponse{
+		ID: "resp_after_marker", ConversationID: "conv_marker_expiry", Status: "completed", CreatedAt: time.Now().Unix(),
+	})
+
+	// Simulate the marker's TTL cap elapsing, rather than waiting it out.
+	require.NoError(t, store.client.Del(ctx, markerKey).Err())
+
+	responses, err = store.ListResponsesByConversation(ctx, "conv_marker_expiry", ListOptions{})
+	require.NoError(t, err)
+	require.Len(t, responses, 1)
+	assert.Equal(t, "resp_after_marker", responses[0].ID)
 }

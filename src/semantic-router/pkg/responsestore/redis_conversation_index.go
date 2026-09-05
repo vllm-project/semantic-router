@@ -272,11 +272,24 @@ func (s *RedisStore) scanConversationResponses(ctx context.Context, conversation
 }
 
 // setEmptyConversationIndexMarker records that a completed scan found no
-// live responses for conversationID. Best-effort: correctness is preserved
-// either way, since the next read simply scans again rather than trust a
-// marker that failed to write.
+// live responses for conversationID. TTL is capped at
+// emptyConversationIndexMarkerMaxTTL regardless of the store's data TTL —
+// including when s.ttl == 0 (a persistent store, no data TTL at all): the
+// marker's job is stampede protection, not data retention, and letting it
+// outlive that bounded purpose is exactly the rolling-upgrade blind spot
+// the cap exists to close (see its doc comment). When s.ttl is positive but
+// shorter than the cap, use s.ttl instead — there is no point marking a
+// conversation empty for longer than its own data would live.
+//
+// Best-effort: correctness is preserved either way, since the next read
+// simply scans again rather than trust a marker that failed to write.
 func (s *RedisStore) setEmptyConversationIndexMarker(ctx context.Context, conversationID string) {
-	if err := s.client.Set(ctx, s.emptyConversationIndexMarkerKey(conversationID), "v1", s.ttl).Err(); err != nil {
+	markerTTL := emptyConversationIndexMarkerMaxTTL
+	if s.ttl > 0 && s.ttl < markerTTL {
+		markerTTL = s.ttl
+	}
+
+	if err := s.client.Set(ctx, s.emptyConversationIndexMarkerKey(conversationID), "v1", markerTTL).Err(); err != nil {
 		logging.Debugf("RedisStore: failed to set empty conversation index marker for %s: %v", conversationID, err)
 	}
 }
@@ -327,7 +340,7 @@ func (s *RedisStore) indexBackfilledResponses(ctx context.Context, conversationI
 // Used only by lazy legacy backfill — this is the O(N) operation the index
 // exists to avoid on the hot read path.
 func (s *RedisStore) scanResponsePayloads(ctx context.Context, visit func(batch []*responseapi.StoredResponse) error) error {
-	s.scanInvocations++
+	s.scanInvocations.Add(1)
 
 	pattern := s.buildKey(ResponseKeyPrefix + "*")
 

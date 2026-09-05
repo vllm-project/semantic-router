@@ -138,6 +138,17 @@ func (s *RedisStore) DeleteConversation(ctx context.Context, conversationID stri
 // ListResponsesByConversation, which would additionally cap the cascade at
 // a single page.
 //
+// Ensures the index is resolved before cascading: if neither the index nor
+// the empty marker exists yet, this conversation's responses may still be
+// unindexed legacy payloads (pre-#2814 data, or a write from an
+// indexing-unaware pod mid rolling upgrade). Without this,
+// ZRange below would just see a missing index, the loop would exit on its
+// first iteration having deleted nothing, and those payloads would be
+// orphaned forever — a silent regression from the pre-#2814 scan-based
+// cascade delete. ensureConversationIndex resolves the ambiguity exactly
+// as a read would: backfill from a legacy scan, or confirm the conversation
+// is genuinely empty.
+//
 // Each iteration reads rank 0..redisDeleteBatchSize-1 again (not an
 // offsetting range): the ZREM at the end of the previous iteration already
 // removed those members, so the next read naturally advances. If a batch's
@@ -149,6 +160,10 @@ func (s *RedisStore) DeleteConversation(ctx context.Context, conversationID stri
 func (s *RedisStore) deleteConversationResponses(ctx context.Context, conversationID string) error {
 	indexKey := s.conversationIndexKey(conversationID)
 
+	if err := s.ensureConversationIndexResolved(ctx, conversationID); err != nil {
+		return err
+	}
+
 	for {
 		responseIDs, err := s.client.ZRange(ctx, indexKey, 0, redisDeleteBatchSize-1).Result()
 		if err != nil {
@@ -158,20 +173,8 @@ func (s *RedisStore) deleteConversationResponses(ctx context.Context, conversati
 			break
 		}
 
-		if s.deleteResponseBatchOverride != nil {
-			if err := s.deleteResponseBatchOverride(ctx, responseIDs); err != nil {
-				return fmt.Errorf("failed to delete %d response(s) of conversation %s: %w",
-					len(responseIDs), conversationID, err)
-			}
-		} else {
-			pipe := s.client.Pipeline()
-			for _, responseID := range responseIDs {
-				pipe.Del(ctx, s.buildKey(ResponseKeyPrefix+responseID))
-			}
-			if _, err := pipe.Exec(ctx); err != nil {
-				return fmt.Errorf("failed to delete %d response(s) of conversation %s: %w",
-					len(responseIDs), conversationID, err)
-			}
+		if err := s.deleteResponsePayloadBatch(ctx, conversationID, responseIDs); err != nil {
+			return err
 		}
 
 		if err := s.unindexResponse(ctx, conversationID, responseIDs...); err != nil {
@@ -190,6 +193,46 @@ func (s *RedisStore) deleteConversationResponses(ctx context.Context, conversati
 
 	return nil
 }
+
+// ensureConversationIndexResolved backfills a conversation's index before a
+// cascade delete if neither it nor the empty marker exists yet. Without
+// this, deleteConversationResponses' batch loop would see a missing index,
+// exit on its first iteration having deleted nothing, and silently orphan
+// any still-unindexed legacy payload — a regression from the pre-#2814
+// scan-based cascade. Resolves the ambiguity exactly as a read would:
+// backfill from a legacy scan, or confirm the conversation is genuinely
+// empty.
+func (s *RedisStore) ensureConversationIndexResolved(ctx context.Context, conversationID string) error {
+	resolved, err := s.indexOrMarkerExists(ctx, conversationID)
+	if err != nil {
+		return err
+	}
+	if resolved {
+		return nil
+	}
+	return s.ensureConversationIndex(ctx, conversationID)
+}
+
+// deleteResponsePayloadBatch deletes one batch of response payload keys,
+// pipelined, unless a test override replaces the deletion entirely.
+func (s *RedisStore) deleteResponsePayloadBatch(ctx context.Context, conversationID string, responseIDs []string) error {
+	if s.deleteResponseBatchOverride != nil {
+		if err := s.deleteResponseBatchOverride(ctx, responseIDs); err != nil {
+			return fmt.Errorf("failed to delete %d response(s) of conversation %s: %w", len(responseIDs), conversationID, err)
+		}
+		return nil
+	}
+
+	pipe := s.client.Pipeline()
+	for _, responseID := range responseIDs {
+		pipe.Del(ctx, s.buildKey(ResponseKeyPrefix+responseID))
+	}
+	if _, err := pipe.Exec(ctx); err != nil {
+		return fmt.Errorf("failed to delete %d response(s) of conversation %s: %w", len(responseIDs), conversationID, err)
+	}
+	return nil
+}
+
 func (s *RedisStore) ListConversations(ctx context.Context, opts ListOptions) ([]*responseapi.StoredConversation, error) {
 	if !s.enabled {
 		return nil, ErrStoreDisabled
@@ -262,5 +305,3 @@ func (s *RedisStore) AddResponseToConversation(ctx context.Context, conversation
 
 	return nil
 }
-
-// Helper methods
