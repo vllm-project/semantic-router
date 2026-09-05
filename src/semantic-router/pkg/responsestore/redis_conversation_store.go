@@ -187,27 +187,28 @@ func (s *RedisStore) deleteConversationResponses(ctx context.Context, conversati
 	if err := s.client.Del(ctx, indexKey).Err(); err != nil {
 		return fmt.Errorf("failed to delete conversation index for %s: %w", conversationID, err)
 	}
-	if err := s.client.Del(ctx, s.emptyConversationIndexMarkerKey(conversationID)).Err(); err != nil {
-		return fmt.Errorf("failed to delete conversation index empty marker for %s: %w", conversationID, err)
+	if err := s.client.Del(ctx, s.conversationIndexMigratedKey(conversationID)).Err(); err != nil {
+		return fmt.Errorf("failed to delete conversation migrated marker for %s: %w", conversationID, err)
 	}
 
 	return nil
 }
 
 // ensureConversationIndexResolved backfills a conversation's index before a
-// cascade delete if neither it nor the empty marker exists yet. Without
-// this, deleteConversationResponses' batch loop would see a missing index,
-// exit on its first iteration having deleted nothing, and silently orphan
-// any still-unindexed legacy payload — a regression from the pre-#2814
-// scan-based cascade. Resolves the ambiguity exactly as a read would:
-// backfill from a legacy scan, or confirm the conversation is genuinely
-// empty.
+// cascade delete if it isn't marked migrated yet. Without this, a
+// conversation whose index exists only because of an ordinary post-upgrade
+// write — with older, still-unindexed legacy responses sitting alongside it
+// — would have deleteConversationResponses' batch loop delete only what the
+// index happens to already list, permanently orphaning the rest once the
+// conversation record itself is gone. Resolves the ambiguity exactly as a
+// read would: backfill from a legacy scan (additive — never removes what
+// the index already has), or confirm the conversation is genuinely empty.
 func (s *RedisStore) ensureConversationIndexResolved(ctx context.Context, conversationID string) error {
-	resolved, err := s.indexOrMarkerExists(ctx, conversationID)
+	migrated, err := s.conversationMigrated(ctx, conversationID)
 	if err != nil {
 		return err
 	}
-	if resolved {
+	if migrated {
 		return nil
 	}
 	return s.ensureConversationIndex(ctx, conversationID)

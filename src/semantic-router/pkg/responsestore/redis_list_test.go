@@ -136,7 +136,8 @@ func TestRedisListResponsesByConversationLazyBackfill(t *testing.T) {
 
 	assert.ElementsMatch(t, []string{"resp_legacy_1", "resp_legacy_2", "resp_legacy_3"},
 		conversationIndexMembers(t, store, "conv_legacy"))
-	assert.Zero(t, exists(t, store, store.emptyConversationIndexMarkerKey("conv_legacy")))
+	assert.EqualValues(t, 1, exists(t, store, store.conversationIndexMigratedKey("conv_legacy")),
+		"a completed backfill that found responses must mark the conversation migrated")
 
 	// The index now exists, so a second read must go straight through it
 	// without scanning the keyspace again.
@@ -148,7 +149,7 @@ func TestRedisListResponsesByConversationLazyBackfill(t *testing.T) {
 
 // TestRedisListResponsesByConversationEmptyMarker covers blueprint §2.4/§3.4:
 // a legitimately empty or unknown conversation must not force a full
-// keyspace scan on every read — only once, after which the empty marker
+// keyspace scan on every read — only once, after which the migrated marker
 // short-circuits subsequent reads.
 func TestRedisListResponsesByConversationEmptyMarker(t *testing.T) {
 	store := newConversationIndexStore(t)
@@ -164,11 +165,11 @@ func TestRedisListResponsesByConversationEmptyMarker(t *testing.T) {
 	assert.Empty(t, responses)
 	assert.Equal(t, int64(1), store.scanInvocations.Load())
 
-	markerKey := store.emptyConversationIndexMarkerKey("conv_never_existed")
+	markerKey := store.conversationIndexMigratedKey("conv_never_existed")
 	assert.EqualValues(t, 1, exists(t, store, markerKey))
 	ttl, err := store.client.TTL(ctx, markerKey).Result()
 	require.NoError(t, err)
-	assert.Positive(t, ttl, "empty marker must carry a positive TTL, not be immortal")
+	assert.Positive(t, ttl, "migrated marker for a confirmed-empty conversation must carry a positive TTL, not be immortal")
 
 	// Repeated reads of the same empty conversation must not scan again.
 	for i := 0; i < 3; i++ {
@@ -182,9 +183,10 @@ func TestRedisListResponsesByConversationEmptyMarker(t *testing.T) {
 // TestRedisLazyBackfillConcurrentWriteNotHidden covers blueprint §2.2: a
 // response indexed normally by a concurrent StoreResponse call, landing
 // while a lazy legacy scan for the same conversation is in flight, must
-// survive — the scan's own findings only ever add to the index, and
-// indexResponse always clears the empty marker, so neither ordering can make
-// the concurrent write disappear behind a "confirmed empty" marker.
+// survive — the scan walks every response payload regardless of whether it
+// is already indexed, so it discovers and idempotently re-adds the
+// concurrent write alongside the legacy one, and marks the conversation
+// migrated once both are captured.
 func TestRedisLazyBackfillConcurrentWriteNotHidden(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -213,8 +215,8 @@ func TestRedisLazyBackfillConcurrentWriteNotHidden(t *testing.T) {
 
 	assert.ElementsMatch(t, []string{"resp_race_legacy", "resp_race_concurrent"},
 		conversationIndexMembers(t, store, "conv_race"))
-	assert.Zero(t, exists(t, store, store.emptyConversationIndexMarkerKey("conv_race")),
-		"the concurrently indexed write must clear any empty marker, not be hidden behind one")
+	assert.EqualValues(t, 1, exists(t, store, store.conversationIndexMigratedKey("conv_race")),
+		"the completed backfill must mark the conversation migrated once both responses are captured")
 }
 
 // TestNormalizeResponseListOptions needs no Redis: pure validation/defaulting.
@@ -419,35 +421,36 @@ func TestRedisListResponsesByConversationConcurrentMissingScansOnce(t *testing.T
 		"the migration lock should stop most concurrent readers from scanning independently")
 }
 
-// TestRedisEmptyConversationIndexMarkerTTLBounded covers a rolling-upgrade
-// blind spot: the empty marker must not inherit the store's full
-// data-retention TTL. A marker sharing a long data TTL (a day, 30 days)
-// could hide a response written by an older, pre-index pod during a
-// rolling deployment for that entire window — capping the marker
-// independently bounds the blind spot to emptyConversationIndexMarkerMaxTTL
-// regardless of how long data itself lives.
-func TestRedisEmptyConversationIndexMarkerTTLBounded(t *testing.T) {
+// TestRedisConversationMigratedMarkerTTLBoundedWhenEmpty covers a
+// rolling-upgrade blind spot: a migrated marker set after a scan finds
+// nothing must not inherit the store's full data-retention TTL. A marker
+// sharing a long data TTL (a day, 30 days) could hide a response written by
+// an older, pre-index pod during a rolling deployment for that entire
+// window — capping the marker independently bounds the blind spot to
+// emptyConversationIndexMarkerMaxTTL regardless of how long data itself
+// lives.
+func TestRedisConversationMigratedMarkerTTLBoundedWhenEmpty(t *testing.T) {
 	store := newConversationIndexStoreWithTTLSeconds(t, 24*60*60) // 24h data TTL
 	ctx := context.Background()
 
 	_, err := store.ListResponsesByConversation(ctx, "conv_ttl_bound", ListOptions{})
 	require.NoError(t, err)
 
-	markerKey := store.emptyConversationIndexMarkerKey("conv_ttl_bound")
+	markerKey := store.conversationIndexMigratedKey("conv_ttl_bound")
 	ttl, err := store.client.TTL(ctx, markerKey).Result()
 	require.NoError(t, err)
 	assert.Positive(t, ttl)
 	assert.LessOrEqualf(t, ttl, emptyConversationIndexMarkerMaxTTL,
-		"empty marker TTL must be capped, not inherit the store's %s data TTL", store.ttl)
+		"migrated marker TTL for a confirmed-empty conversation must be capped, not inherit the store's %s data TTL", store.ttl)
 }
 
-// TestRedisEmptyConversationIndexMarkerExpiryRevealsLegacyWrite simulates
-// the marker's TTL cap actually elapsing (by deleting it directly rather
-// than waiting out the real duration in a unit test): a response written by
-// an indexing-unaware writer while the marker was still valid must be
-// discovered on the next read once the marker is gone, rather than stay
-// permanently hidden behind it.
-func TestRedisEmptyConversationIndexMarkerExpiryRevealsLegacyWrite(t *testing.T) {
+// TestRedisConversationMigratedMarkerExpiryRevealsLegacyWrite simulates the
+// empty-case marker's TTL cap actually elapsing (by deleting it directly
+// rather than waiting out the real duration in a unit test): a response
+// written by an indexing-unaware writer while the marker was still valid
+// must be discovered on the next read once the marker is gone, rather than
+// stay permanently hidden behind it.
+func TestRedisConversationMigratedMarkerExpiryRevealsLegacyWrite(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
 
@@ -455,7 +458,7 @@ func TestRedisEmptyConversationIndexMarkerExpiryRevealsLegacyWrite(t *testing.T)
 	require.NoError(t, err)
 	assert.Empty(t, responses)
 
-	markerKey := store.emptyConversationIndexMarkerKey("conv_marker_expiry")
+	markerKey := store.conversationIndexMigratedKey("conv_marker_expiry")
 	require.EqualValues(t, 1, exists(t, store, markerKey))
 
 	// A write from an older, indexing-unaware pod: lands a payload with no
@@ -471,4 +474,46 @@ func TestRedisEmptyConversationIndexMarkerExpiryRevealsLegacyWrite(t *testing.T)
 	require.NoError(t, err)
 	require.Len(t, responses, 1)
 	assert.Equal(t, "resp_after_marker", responses[0].ID)
+}
+
+// TestRedisListResponsesByConversationPartiallyMigrated is the direct
+// regression test for the "index exists" != "migration complete" bug: a
+// conversation with unindexed legacy responses that then receives an
+// ordinary post-upgrade write has an index — created by that one write's
+// indexResponse call — containing only the new response. Before the
+// migrated marker decoupled these two facts, every subsequent read trusted
+// that index as complete and never discovered resp_old, silently and
+// permanently.
+func TestRedisListResponsesByConversationPartiallyMigrated(t *testing.T) {
+	store := newConversationIndexStore(t)
+	ctx := context.Background()
+
+	// A legacy response, bypassing StoreResponse's indexing entirely.
+	directSetResponsePayload(t, store, &responseapi.StoredResponse{
+		ID: "resp_old", ConversationID: "conv_1", Status: "completed", CreatedAt: time.Now().Unix(),
+	})
+
+	// An ordinary post-upgrade write to the *same* conversation, before any
+	// read has ever triggered a backfill. This creates the index directly,
+	// containing only resp_new.
+	require.NoError(t, store.StoreResponse(ctx, &responseapi.StoredResponse{
+		ID: "resp_new", ConversationID: "conv_1", Status: "completed", CreatedAt: time.Now().Unix() + 1,
+	}))
+	require.Equal(t, []string{"resp_new"}, conversationIndexMembers(t, store, "conv_1"),
+		"precondition: the index exists but is not yet exhaustive")
+	require.Zero(t, exists(t, store, store.conversationIndexMigratedKey("conv_1")),
+		"precondition: no backfill has run yet, despite the index already existing")
+
+	responses, err := store.ListResponsesByConversation(ctx, "conv_1", ListOptions{Order: "asc"})
+	require.NoError(t, err)
+	require.Len(t, responses, 2, "both the legacy and the post-upgrade response must be returned")
+	assert.Equal(t, []string{"resp_old", "resp_new"}, responseIDsOf(responses))
+
+	assert.ElementsMatch(t, []string{"resp_old", "resp_new"}, conversationIndexMembers(t, store, "conv_1"))
+	assert.EqualValues(t, 1, exists(t, store, store.conversationIndexMigratedKey("conv_1")))
+
+	// A second read must not re-scan: migrated is now true.
+	_, err = store.ListResponsesByConversation(ctx, "conv_1", ListOptions{})
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), store.scanInvocations.Load(), "once migrated, a second read must not scan again")
 }
