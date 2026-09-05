@@ -51,14 +51,6 @@ type RedisStore struct {
 	// a writer's SETNX + index ZADD completing while a lazy scan for the
 	// same conversation is in flight must not be undone by the scan.
 	lazyBackfillPreScanHook func()
-
-	// deleteResponseBatchOverride, when non-nil, replaces
-	// deleteConversationResponses' per-batch response payload deletion.
-	// Unexported test-only seam for asserting that a cascade delete failure
-	// partway through is reported to the caller (and leaves the conversation
-	// record and remaining batches untouched) without needing a real Redis
-	// fault to land mid-pipeline.
-	deleteResponseBatchOverride func(ctx context.Context, responseIDs []string) error
 }
 
 const (
