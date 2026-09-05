@@ -214,7 +214,6 @@ const metricsSchema = object('Metrics', {
     enabled: boolean('Enabled'),
     time_windows: stringList('Time Windows', '5m'),
     update_interval: text('Update Interval'),
-    model_metrics: boolean('Model Metrics'),
     queue_depth_estimation: boolean('Queue Depth Estimation'),
     max_models: number('Max Models', { min: 1 }),
   }),
@@ -513,11 +512,6 @@ export const ROUTER_STRUCTURED_FIELDS: Partial<
     },
   },
   modality_detector: {
-    prompt_prefixes: {
-      label: 'Prompt Prefixes',
-      description: 'Prefixes that indicate a modality-specific request.',
-      schema: stringList('Prompt Prefix', 'generate an image of '),
-    },
     classifier: {
       label: 'Classifier',
       description: 'Modality classifier model and device.',

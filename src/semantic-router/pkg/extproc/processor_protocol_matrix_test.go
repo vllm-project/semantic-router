@@ -172,6 +172,80 @@ func assertExtProcStructuredOutputPair(
 	assertExtProcStructuredOutputRequest(t, decoded, streaming)
 }
 
+// A same-format streaming Chat request that nothing mutated is byte-replay
+// eligible: the neutral request and its source envelope share Generation 1, so
+// EncodeRequest forwards the original client bytes verbatim. The Router forces
+// stream_options.include_usage on dispatch so accounting can observe
+// authoritative tokens, and that forcing must survive replay. This pins that
+// the dispatch body carries the usage request even when the client omitted it.
+func TestExtProcDispatchForcesIncludeUsageOnReplayEligibleStream(t *testing.T) {
+	router := &OpenAIRouter{}
+	ctx := &RequestContext{
+		SourceFormat: llmprotocol.OpenAIChatV1,
+		TargetFormat: llmprotocol.OpenAIChatV1,
+		RequestID:    "request_replay_include_usage",
+		TraceContext: t.Context(),
+	}
+	// No stream_options in the client body, and no mutation before dispatch, so
+	// the request keeps decode-time Generation 1 and stays replay eligible.
+	body := []byte(`{"model":"public-model","messages":[{"role":"user","content":"hello"}],"stream":true}`)
+	request, immediate := router.prepareProtocolRequest(body, ctx)
+	if immediate != nil || request == nil {
+		t.Fatalf("streaming request was rejected: request=%+v immediate=%+v", request, immediate)
+	}
+	if request.StreamOptions.IncludeUsage != nil {
+		t.Fatalf("client omitted stream_options but decode set include_usage: %+v", request.StreamOptions)
+	}
+
+	dispatch, err := router.encodeDispatchRequest(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	decoded, _, _, err := protocolcodec.NewBuiltinEngine().DecodeRequest(llmprotocol.OpenAIChatV1, dispatch)
+	if err != nil {
+		t.Fatalf("dispatch request does not satisfy Chat Completions: %v\n%s", err, dispatch)
+	}
+	if decoded.StreamOptions.IncludeUsage == nil || !*decoded.StreamOptions.IncludeUsage {
+		t.Fatalf("dispatch dropped the forced usage request on replay: %s", dispatch)
+	}
+	// The client preference is untouched, so client-facing rendering still omits
+	// the usage chunk. Only the backend dispatch carries the forced flag.
+	if ctx.SemanticRequest.StreamOptions.IncludeUsage != nil {
+		t.Fatalf("forcing usage on dispatch mutated the retained client preference: %+v", ctx.SemanticRequest.StreamOptions)
+	}
+}
+
+// When the client already asked for usage, the forcing is a no-op and byte
+// replay must be preserved: re-encoding a large accepted body just to restate a
+// flag it already carries would defeat the optimization. This guards that the
+// dispatch body is byte-identical to the original client body in that case.
+func TestExtProcDispatchPreservesReplayWhenClientRequestsUsage(t *testing.T) {
+	router := &OpenAIRouter{}
+	ctx := &RequestContext{
+		SourceFormat: llmprotocol.OpenAIChatV1,
+		TargetFormat: llmprotocol.OpenAIChatV1,
+		RequestID:    "request_replay_client_usage",
+		TraceContext: t.Context(),
+	}
+	body := []byte(`{"model":"public-model","messages":[{"role":"user","content":"hello"}],"stream":true,"stream_options":{"include_usage":true}}`)
+	request, immediate := router.prepareProtocolRequest(body, ctx)
+	if immediate != nil || request == nil {
+		t.Fatalf("streaming request was rejected: request=%+v immediate=%+v", request, immediate)
+	}
+	if request.StreamOptions.IncludeUsage == nil || !*request.StreamOptions.IncludeUsage {
+		t.Fatalf("client requested usage but decode did not record it: %+v", request.StreamOptions)
+	}
+
+	dispatch, err := router.encodeDispatchRequest(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(dispatch, body) {
+		t.Fatalf("byte replay was not preserved for a client that already requested usage:\n got=%s\nwant=%s", dispatch, body)
+	}
+}
+
 // Streaming translation is stateful, so it needs an independent 3x3 matrix at
 // the ExtProc seam rather than relying on buffered coverage or codec-only tests.
 func TestExtProcStreamingResponseProtocolMatrix(t *testing.T) {

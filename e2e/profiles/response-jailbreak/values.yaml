@@ -1,0 +1,177 @@
+replicaCount: 1
+image:
+  repository: ghcr.io/vllm-project/semantic-router/extproc
+  tag: latest
+  pullPolicy: Never
+config:
+  version: v0.3
+  listeners: []
+  providers:
+    defaults:
+      default_model: openai/mock-model
+    models:
+      - name: openai/mock-model
+        backend_refs:
+          - name: mock-vllm
+            endpoint: mock-vllm.default.svc.cluster.local:8000
+            weight: 1
+  routing:
+    # Both response_jailbreak decisions are selected by a deterministic
+    # keyword signal, so the E2E exercises the same harness path a real
+    # request takes (auto model -> signal -> decision -> plugin) rather than
+    # a passthrough to a concrete backend model, which skips plugins
+    # entirely (see performDecisionEvaluation).
+    #
+    # There is deliberately no jailbreak signal rule here: prompt_guard is
+    # enabled for the response filter, but nothing on the request path
+    # thresholds it, so the probe prompt reaches the backend and comes back
+    # as LLM output - which is the surface under test.
+    decisions:
+      - name: response_jailbreak_block
+        description: Blocks the response when the guardrail flags LLM output
+        priority: 200
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: response_block_probe
+        modelRefs:
+          - model: openai/mock-model
+            use_reasoning: false
+        plugins:
+          - type: response_jailbreak
+            configuration:
+              enabled: true
+              threshold: 0.5
+              action: block
+      - name: response_jailbreak_warn
+        description: Warns via x-vsr-response-warnings when the guardrail flags LLM output
+        priority: 200
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: response_warn_probe
+        modelRefs:
+          - model: openai/mock-model
+            use_reasoning: false
+        plugins:
+          - type: response_jailbreak
+            configuration:
+              enabled: true
+              threshold: 0.5
+              action: header
+      - name: default_decision
+        description: Catch-all decision with response jailbreak detection disabled
+        priority: 1
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: openai/mock-model
+            use_reasoning: false
+    signals:
+      keywords:
+        - name: response_block_probe
+          operator: OR
+          keywords:
+            - __response_block_probe__
+        - name: response_warn_probe
+          operator: OR
+          keywords:
+            - __response_warn_probe__
+    modelCards:
+      - name: openai/mock-model
+  global:
+    router:
+      strategy: priority
+    services:
+      api:
+        batch_classification:
+          max_batch_size: 100
+          concurrency_threshold: 5
+          max_concurrency: 8
+          metrics:
+            enabled: true
+            detailed_goroutine_tracking: false
+            high_resolution_timing: false
+            sample_rate: 1.0
+      observability:
+        tracing:
+          enabled: false
+    stores:
+      response_cache:
+        enabled: false
+        embedding_model: mmbert
+      memory:
+        embedding_model: mmbert
+      vector_store:
+        embedding_model: mmbert
+    integrations: {}
+    model_catalog:
+      kbs: []
+      external:
+        # The same mock-vllm that serves the chat backend also serves the
+        # http_classify contract on /classify. It scores only the first
+        # CLASSIFY_WINDOW_CHARS of whatever it is sent, the way a real
+        # sequence classifier only ever sees its own sequence window - which
+        # is what lets this profile tell a whole-response scan apart from a
+        # first-chunk-only one.
+        - name: mock-guardrail
+          llm_provider: openai
+          model_role: guardrail
+          llm_model_name: mock-guardrail
+          llm_endpoint:
+            address: mock-vllm.default.svc.cluster.local
+            port: 8000
+            protocol: http
+          llm_timeout_seconds: 10
+      modules:
+        prompt_guard:
+          enabled: true
+          model_ref: ""
+          model_id: ""
+          variant: ""
+          protocol: http_classify
+          threshold: 0.5
+          positive_labels: [jailbreak]
+          jailbreak_mapping_path: models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json
+        classifier:
+          domain:
+            model_ref: ""
+            model_id: ""
+            category_mapping_path: ""
+            use_mmbert_32k: false
+          pii:
+            model_ref: ""
+            model_id: ""
+            pii_mapping_path: ""
+            use_mmbert_32k: false
+        hallucination_mitigation:
+          enabled: false
+# The router requires a jailbreak_type_mapping.json on disk even for
+# protocol: http_classify, so a minimal stand-in mapping is mounted from the
+# ConfigMap applied as a prerequisite - no need to bake the real model.
+extraVolumes:
+  - name: jailbreak-mapping
+    configMap:
+      name: response-jailbreak-mapping
+extraVolumeMounts:
+  - name: jailbreak-mapping
+    mountPath: /app/models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json
+    subPath: jailbreak_type_mapping.json
+    readOnly: true
+
+resources:
+  # Same headroom as the jailbreak-onerror profile: the startup embedding
+  # model load, not the request path, is what needs it.
+  limits:
+    cpu: '2'
+    memory: 6Gi
+  requests:
+    cpu: 500m
+    memory: 2Gi
+
+# E2E/Kind: disable PVC for reliable CI (same as other e2e profiles).
+persistence:
+  enabled: false

@@ -1,0 +1,48 @@
+misconfigurations:
+  # The scanned images are maintained in this repository's GHCR namespace.
+  # Trivy's generic trusted-registry check cannot infer that provenance.
+  - id: KSV-0125
+    paths:
+      - router-default.yaml
+      - router-production.yaml
+      - dashboard-production.yaml
+    statement: Trust the vllm-project/semantic-router GHCR namespace used by first-party chart resources.
+
+  # The Dashboard image has an explicit root bootstrap contract: it prepares
+  # writable state mounts and dynamic supplementary groups, then execs the
+  # backend as UID/GID 65532 through gosu. These exceptions are isolated to the
+  # Dashboard manifest and expire so the bootstrap design is reconsidered.
+  - id: KSV-0003
+    paths: [dashboard-production.yaml]
+    expired_at: 2027-03-01
+    statement: >-
+      The root bootstrap needs CHOWN and identity-switching capabilities;
+      a reduced chart-safe set is not available yet.
+  - id: KSV-0004
+    paths: [dashboard-production.yaml]
+    expired_at: 2027-03-01
+    statement: >-
+      The root bootstrap needs CHOWN and identity-switching capabilities;
+      a reduced chart-safe set is not available yet.
+  - id: KSV-0012
+    paths: [dashboard-production.yaml]
+    expired_at: 2027-03-01
+    statement: The entrypoint starts as root only to prepare mounts and then drops to UID/GID 65532.
+  - id: KSV-0014
+    paths: [dashboard-production.yaml]
+    expired_at: 2027-03-01
+    statement: The entrypoint currently prepares writable mounts and dynamic groups on the image filesystem.
+  - id: KSV-0020
+    paths: [dashboard-production.yaml]
+    expired_at: 2027-03-01
+    statement: The entrypoint starts as root only to prepare mounts and then drops to UID/GID 65532.
+  - id: KSV-0021
+    paths: [dashboard-production.yaml]
+    expired_at: 2027-03-01
+    statement: The entrypoint starts as root only to prepare mounts and then drops to UID/GID 65532.
+  - id: KSV-0106
+    paths: [dashboard-production.yaml]
+    expired_at: 2027-03-01
+    statement: >-
+      The root bootstrap needs CHOWN and identity-switching capabilities;
+      a reduced chart-safe set is not available yet.
