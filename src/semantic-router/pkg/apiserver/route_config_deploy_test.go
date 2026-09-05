@@ -140,6 +140,62 @@ func TestHandleConfigPutPreservesCanonicalUserDocument(t *testing.T) {
 	}
 }
 
+func TestHandleConfigPutPreservesBackendRefNameReturnedByGet(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "config.yaml")
+	if err := os.WriteFile(configPath, mustMarshalCanonicalConfigYAML(t, minimalDeployTestConfig("old_route")), 0o644); err != nil {
+		t.Fatalf("write base config: %v", err)
+	}
+
+	apiServer := &ClassificationAPIServer{configPath: configPath}
+	for round := 1; round <= 2; round++ {
+		getReq := httptest.NewRequest(http.MethodGet, "/config/router", nil)
+		getResp := httptest.NewRecorder()
+		apiServer.handleConfigGet(getResp, getReq)
+		if getResp.Code != http.StatusOK {
+			t.Fatalf("round %d: expected GET 200 OK, got %d: %s", round, getResp.Code, getResp.Body.String())
+		}
+
+		var canonicalDocument map[string]any
+		if err := json.Unmarshal(getResp.Body.Bytes(), &canonicalDocument); err != nil {
+			t.Fatalf("round %d: unmarshal GET response: %v", round, err)
+		}
+		canonicalYAML, err := yaml.Marshal(canonicalDocument)
+		if err != nil {
+			t.Fatalf("round %d: marshal GET response as YAML: %v", round, err)
+		}
+		body, err := json.Marshal(RouterConfigUpdateRequest{YAML: string(canonicalYAML)})
+		if err != nil {
+			t.Fatalf("round %d: marshal PUT request: %v", round, err)
+		}
+
+		putReq := httptest.NewRequest(http.MethodPut, "/config/router", bytes.NewReader(body))
+		putReq.Header.Set("Content-Type", "application/json")
+		putResp := httptest.NewRecorder()
+		apiServer.handleConfigPut(putResp, putReq)
+		if putResp.Code != http.StatusOK {
+			t.Fatalf("round %d: expected PUT 200 OK, got %d: %s", round, putResp.Code, putResp.Body.String())
+		}
+
+		updatedYAML, err := os.ReadFile(configPath)
+		if err != nil {
+			t.Fatalf("round %d: read updated config: %v", round, err)
+		}
+		var updatedDocument map[string]any
+		if err := yaml.Unmarshal(updatedYAML, &updatedDocument); err != nil {
+			t.Fatalf("round %d: unmarshal updated config: %v", round, err)
+		}
+		providers := updatedDocument["providers"].(map[string]any)
+		models := providers["models"].([]any)
+		model := models[0].(map[string]any)
+		backendRefs := model["backend_refs"].([]any)
+		backendRef := backendRefs[0].(map[string]any)
+		if got, want := backendRef["name"], "primary"; got != want {
+			t.Fatalf("round %d: GET then PUT changed backend ref name: got %q, want %q", round, got, want)
+		}
+	}
+}
+
 func TestHandleConfigPatchRejectsInvalidRemoteEmbeddingProvider(t *testing.T) {
 	configPath := writeDeployTestBaseConfig(t)
 	invalidCfg := minimalDeployTestConfig("new_route")
