@@ -164,9 +164,9 @@ def test_user_config_reports_context_band_path_on_error():
 @pytest.mark.parametrize("case", router_token_count_cases())
 def test_parse_token_count_matches_router_contract(case):
     """Every input the Router accepts or rejects must behave the same in the CLI."""
-    assert ("value" in case) != ("error" in case), (
-        "case must set exactly one of value or error"
-    )
+    assert ("value" in case) != (
+        "error" in case
+    ), "case must set exactly one of value or error"
     if "error" in case:
         with pytest.raises(ValueError, match=f"^{case['error']}: "):
             parse_token_count(case["input"])
