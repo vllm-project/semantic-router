@@ -4,6 +4,7 @@ These mirror the Router's ContextRule.Bounds contract so a configuration the
 CLI accepts also loads in the Router.
 """
 
+import json
 import sys
 from pathlib import Path
 
@@ -14,8 +15,27 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from cli.context_bands import parse_token_count  # noqa: E402
+from cli.context_bands import parse_go_float, parse_token_count  # noqa: E402
 from cli.models import ContextRule, UserConfig  # noqa: E402
+
+# The Router's TokenCount test loads the same file, so the CLI and Router
+# parsers are pinned to one contract and cannot drift apart silently.
+ROUTER_TOKEN_COUNT_CASES = (
+    PROJECT_ROOT.parents[1]
+    / "src"
+    / "semantic-router"
+    / "pkg"
+    / "config"
+    / "testdata"
+    / "token_count_cases.json"
+)
+
+
+def router_token_count_cases():
+    if not ROUTER_TOKEN_COUNT_CASES.is_file():
+        pytest.fail(f"shared token count contract missing: {ROUTER_TOKEN_COUNT_CASES}")
+    cases = json.loads(ROUTER_TOKEN_COUNT_CASES.read_text(encoding="utf-8"))["cases"]
+    return [pytest.param(case, id=repr(case["input"])) for case in cases]
 
 
 def test_bounded_band_still_parses():
@@ -139,3 +159,66 @@ def test_user_config_reports_context_band_path_on_error():
         )
 
     assert excinfo.value.errors()[0]["loc"][:4] == ("routing", "signals", "context", 0)
+
+
+@pytest.mark.parametrize("case", router_token_count_cases())
+def test_parse_token_count_matches_router_contract(case):
+    """Every input the Router accepts or rejects must behave the same in the CLI."""
+    assert ("value" in case) != ("error" in case), (
+        "case must set exactly one of value or error"
+    )
+    if "error" in case:
+        with pytest.raises(ValueError, match=f"^{case['error']}: "):
+            parse_token_count(case["input"])
+    else:
+        assert parse_token_count(case["input"]) == case["value"]
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("0x1p10", 1024.0),
+        ("0X1.8P3", 12.0),
+        ("1_000.5", 1000.5),
+        ("1e1_0", 1e10),
+        ("0x1p-2", 0.25),
+        ("1e400", float("inf")),
+        ("0x1p99999", float("inf")),
+    ],
+)
+def test_parse_go_float_accepts_go_syntax(text, expected):
+    assert parse_go_float(text) == expected
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "\uff11\uff12\uff18",
+        "0x10",
+        "1__0",
+        "_1",
+        "1_",
+        "1_.5",
+        "1e_5",
+        "inf",
+        "nan",
+        "1,000",
+        "",
+    ],
+)
+def test_parse_go_float_rejects_non_go_syntax(text):
+    with pytest.raises(ValueError):
+        parse_go_float(text)
+
+
+def test_hex_float_band_accepted_like_router():
+    """A pre-existing config using Go hex floats must keep loading in the CLI."""
+    rule = ContextRule(name="hex", min_tokens="0x1p10", max_tokens="0x1p20")
+
+    assert parse_token_count(rule.min_tokens) == 1024
+    assert parse_token_count(rule.max_tokens) == 1048576
+
+
+def test_full_width_digits_rejected_like_router():
+    with pytest.raises(ValidationError, match="min_tokens: invalid token count format"):
+        ContextRule(name="wide", min_tokens="\uff11\uff12\uff18")
