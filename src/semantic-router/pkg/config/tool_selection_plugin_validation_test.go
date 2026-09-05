@@ -1,6 +1,8 @@
 package config
 
 import (
+	"errors"
+	"strings"
 	"testing"
 )
 
@@ -64,14 +66,23 @@ func TestToolSelectionPluginValidate_StickyEnabledUnderDisabledPlugin_Err(t *tes
 	}
 }
 
-func TestToolSelectionPluginValidate_StickyEnabledWithDefaults_OK(t *testing.T) {
+// TestToolSelectionPluginValidate_StickyEnabledRejectedInPhase1 covers the
+// maintainer-flagged silent-no-op hazard (issue #3347 phase 1 / sub-issue
+// #3392): sticky.enabled: true must be rejected outright, not accepted and
+// then never actually activated by any request path.
+func TestToolSelectionPluginValidate_StickyEnabledRejectedInPhase1(t *testing.T) {
 	c := ToolSelectionPluginConfig{
 		Enabled: true,
 		Mode:    ToolSelectionModeAdd,
 		Sticky:  &StickyToolSelectionConfig{Enabled: true},
 	}
-	if err := c.Validate(); err != nil {
-		t.Fatal(err)
+
+	err := c.Validate()
+	if !errors.Is(err, ErrToolSelectionStickyUnsupported) {
+		t.Fatalf("error = %v, want ErrToolSelectionStickyUnsupported", err)
+	}
+	if err.Error() != ErrToolSelectionStickyUnsupported.Error() {
+		t.Fatalf("error = %q, want %q", err.Error(), ErrToolSelectionStickyUnsupported.Error())
 	}
 }
 
@@ -109,16 +120,22 @@ func TestToolSelectionPluginValidate_StickyMaxToolsExplicitZero_Err(t *testing.T
 	}
 }
 
-func TestToolSelectionPluginValidate_StickyMaxNewToolsPerTurnZero_OK(t *testing.T) {
-	// 0 is a meaningful explicit value (reuse/pin only, no relevance growth),
-	// not "unset" — must not be rejected or silently replaced by the default.
+// TestToolSelectionPluginValidate_StickyMaxNewToolsPerTurnZero_PreservesExplicitValueBeforePhaseGate
+// covers the same unset-vs-explicit-zero distinction as before
+// (EffectiveMaxNewToolsPerTurn must not silently default an explicit 0),
+// but Validate() itself now rejects sticky.enabled: true regardless — the
+// phase-support gate runs after bounds validation, so an otherwise-valid
+// explicit 0 still surfaces ErrToolSelectionStickyUnsupported, not nil.
+func TestToolSelectionPluginValidate_StickyMaxNewToolsPerTurnZero_PreservesExplicitValueBeforePhaseGate(t *testing.T) {
 	c := ToolSelectionPluginConfig{
 		Enabled: true,
 		Mode:    ToolSelectionModeAdd,
 		Sticky:  &StickyToolSelectionConfig{Enabled: true, MaxNewToolsPerTurn: intPtr(0)},
 	}
-	if err := c.Validate(); err != nil {
-		t.Fatal(err)
+
+	err := c.Validate()
+	if !errors.Is(err, ErrToolSelectionStickyUnsupported) {
+		t.Fatalf("error = %v, want ErrToolSelectionStickyUnsupported", err)
 	}
 	if got := c.Sticky.EffectiveMaxNewToolsPerTurn(); got != 0 {
 		t.Fatalf("effective max_new_tools_per_turn = %d, want 0 (explicit, not defaulted)", got)
@@ -141,10 +158,13 @@ func TestToolSelectionPluginValidate_StickyMaxNewToolsPerTurnExceedsMaxTools_Err
 }
 
 func TestToolSelectionPluginValidate_StickyPinCalledToolsExplicitFalse_OK(t *testing.T) {
+	// Enabled: false here — this test is about EffectivePinCalledTools()'s
+	// explicit-false handling, not about phase-1 runtime support, so it
+	// must not trip ErrToolSelectionStickyUnsupported.
 	c := ToolSelectionPluginConfig{
 		Enabled: true,
 		Mode:    ToolSelectionModeAdd,
-		Sticky:  &StickyToolSelectionConfig{Enabled: true, PinCalledTools: boolPtr(false)},
+		Sticky:  &StickyToolSelectionConfig{Enabled: false, PinCalledTools: boolPtr(false)},
 	}
 	if err := c.Validate(); err != nil {
 		t.Fatal(err)
@@ -154,15 +174,70 @@ func TestToolSelectionPluginValidate_StickyPinCalledToolsExplicitFalse_OK(t *tes
 	}
 }
 
-func TestToolSelectionPluginValidate_StickyDisabledIgnoresBounds(t *testing.T) {
-	// sticky.enabled: false must not trigger bound validation even with an
-	// otherwise-invalid max_tools — the block is simply inert.
+// TestToolSelectionPluginValidate_StickyDisabledWithValidBounds_OK and
+// TestToolSelectionPluginValidate_StickyDisabledInvalidBounds_Err replace
+// the old StickyDisabledIgnoresBounds test: bounds are now validated
+// whenever a sticky block is present, even when sticky.enabled is false —
+// a disabled-but-malformed block must not be able to slip through
+// validation and start failing only once switched on.
+func TestToolSelectionPluginValidate_StickyDisabledWithValidBounds_OK(t *testing.T) {
+	c := ToolSelectionPluginConfig{
+		Enabled: true,
+		Mode:    ToolSelectionModeAdd,
+		Sticky: &StickyToolSelectionConfig{
+			Enabled:            false,
+			MaxTools:           intPtr(16),
+			MaxNewToolsPerTurn: intPtr(2),
+			PinCalledTools:     boolPtr(true),
+		},
+	}
+	if err := c.Validate(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestToolSelectionPluginValidate_StickyDisabledInvalidBounds_Err(t *testing.T) {
 	c := ToolSelectionPluginConfig{
 		Enabled: true,
 		Mode:    ToolSelectionModeAdd,
 		Sticky:  &StickyToolSelectionConfig{Enabled: false, MaxTools: intPtr(999)},
 	}
-	if err := c.Validate(); err != nil {
-		t.Fatal(err)
+	if err := c.Validate(); err == nil {
+		t.Fatal("expected error: sticky.max_tools should be validated when the sticky block is present")
+	}
+}
+
+// TestToolSelectionPluginConfigContracts_StickyEnabledRejectedInPhase1
+// covers the full admission path, not just the isolated Validate() call:
+// a decision whose tool_selection plugin enables sticky must be rejected
+// by validateConfigContracts, with decision context in the error.
+func TestToolSelectionPluginConfigContracts_StickyEnabledRejectedInPhase1(t *testing.T) {
+	payload := MustStructuredPayload(&ToolSelectionPluginConfig{
+		Enabled: true,
+		Mode:    ToolSelectionModeAdd,
+		Sticky:  &StickyToolSelectionConfig{Enabled: true},
+	})
+	cfg := &RouterConfig{
+		IntelligentRouting: IntelligentRouting{
+			Decisions: []Decision{
+				{
+					Name: "sticky-decision",
+					Plugins: []DecisionPlugin{
+						{
+							Type:          DecisionPluginToolSelection,
+							Configuration: payload,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	err := validateConfigContracts(cfg)
+	if !errors.Is(err, ErrToolSelectionStickyUnsupported) {
+		t.Fatalf("error = %v, want ErrToolSelectionStickyUnsupported", err)
+	}
+	if !strings.Contains(err.Error(), "decision 'sticky-decision'") {
+		t.Fatalf("error = %q, want decision context", err.Error())
 	}
 }
