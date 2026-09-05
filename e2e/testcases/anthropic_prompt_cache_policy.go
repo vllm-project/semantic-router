@@ -56,6 +56,9 @@ func testAnthropicPromptCachePolicy(
 	if err := validatePromptCachePolicyInsertion(ctx, session, backendSession, true, opts.Verbose); err != nil {
 		return err
 	}
+	if err := validatePromptCachePolicyEmptyInstruction(ctx, session, backendSession, opts.Verbose); err != nil {
+		return err
+	}
 	if err := validatePromptCachePolicyCallerPrecedence(ctx, session, backendSession, opts.Verbose); err != nil {
 		return err
 	}
@@ -66,6 +69,7 @@ func testAnthropicPromptCachePolicy(
 		opts.SetDetails(map[string]interface{}{
 			"buffered_inserted":  true,
 			"streaming_inserted": true,
+			"empty_skipped":      true,
 			"caller_preserved":   true,
 			"disabled_unchanged": true,
 		})
@@ -124,6 +128,56 @@ func validatePromptCachePolicyInsertion(
 			promptCacheMessageMarkerCount(providerRequest.Messages),
 			promptCacheBlockMarkerTTL(providerRequest.System),
 			promptCacheToolMarkerTTL(providerRequest.Tools),
+		)
+	}
+	return nil
+}
+
+func validatePromptCachePolicyEmptyInstruction(
+	ctx context.Context,
+	session *fixtures.ServiceSession,
+	backendSession *fixtures.ServiceSession,
+	verbose bool,
+) error {
+	sessionID := fmt.Sprintf("prompt-cache-empty-%d", time.Now().UnixNano())
+	request := promptCachePolicyRequest(promptCacheEnabledProbe, false)
+	system := request["messages"].([]any)[0].(map[string]any)["content"].([]any)
+	request["messages"].([]any)[0].(map[string]any)["content"] = append(
+		system,
+		map[string]any{"type": "text", "text": ""},
+	)
+	delete(request, "tools")
+
+	response, err := sendPromptCachePolicyRequest(ctx, session, request, sessionID, false)
+	if err != nil {
+		return err
+	}
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf("empty instruction request returned HTTP %d: %s", response.StatusCode, truncateString(string(response.Body), 600))
+	}
+	if err := expectPromptCacheReceipt(response.Headers, "inserted", "", "1", ""); err != nil {
+		return fmt.Errorf("empty instruction receipt: %w", err)
+	}
+	forwarded, err := lastProviderSimulatorRequest(ctx, backendSession, sessionID)
+	if err != nil {
+		return err
+	}
+	providerRequest, err := decodePromptCacheProviderRequest(forwarded)
+	if err != nil {
+		return err
+	}
+	if len(providerRequest.System) != 3 ||
+		!matchesCacheControl(providerRequest.System[1].CacheControl, "ephemeral", "1h") ||
+		providerRequest.System[2].CacheControl != nil {
+		return fmt.Errorf("empty instruction marker mismatch: %s", truncateString(string(forwarded), 800))
+	}
+	if verbose {
+		fmt.Printf(
+			"[PromptCache] mode=empty-trailing action=%q inserted=%q instruction_markers=%d empty_marked=%t\n",
+			response.Headers.Get("x-vsr-prompt-cache-action"),
+			response.Headers.Get("x-vsr-prompt-cache-inserted"),
+			promptCacheBlockMarkerCount(providerRequest.System),
+			providerRequest.System[2].CacheControl != nil,
 		)
 	}
 	return nil
