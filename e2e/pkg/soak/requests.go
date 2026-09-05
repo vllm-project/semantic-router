@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strings"
 	"sync/atomic"
 	"time"
 )
@@ -22,6 +23,7 @@ type Client struct {
 	gatewayURL  string
 	model       string
 	highCardIDs int
+	streaming   bool
 
 	seq            atomic.Uint64
 	hcSeq          atomic.Uint64
@@ -31,7 +33,7 @@ type Client struct {
 
 // NewClient builds a client whose connection pool is sized for the load
 // generator's concurrency.
-func NewClient(gatewayURL, model string, concurrency, highCardIDs int) *Client {
+func NewClient(gatewayURL, model string, concurrency, highCardIDs int, streaming bool) *Client {
 	if concurrency < 1 {
 		concurrency = 1
 	}
@@ -56,6 +58,7 @@ func NewClient(gatewayURL, model string, concurrency, highCardIDs int) *Client {
 		gatewayURL:  gatewayURL,
 		model:       model,
 		highCardIDs: highCardIDs,
+		streaming:   streaming,
 	}
 }
 
@@ -104,7 +107,7 @@ func (c *Client) do(ctx context.Context, prompt, sessionID string) error {
 	}
 	payload := map[string]any{
 		"model":  c.model,
-		"stream": false,
+		"stream": c.streaming,
 		"messages": []map[string]string{
 			{"role": "user", "content": content},
 		},
@@ -121,6 +124,9 @@ func (c *Client) do(ctx context.Context, prompt, sessionID string) error {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if c.streaming {
+		req.Header.Set("Accept", "text/event-stream")
+	}
 	if sessionID != "" {
 		req.Header.Set("x-session-id", sessionID)
 		req.Header.Set("x-authz-user-id", sessionID)
@@ -131,9 +137,15 @@ func (c *Client) do(ctx context.Context, prompt, sessionID string) error {
 		return err
 	}
 	defer resp.Body.Close()
-	_, _ = io.Copy(io.Discard, resp.Body)
+	_, copyErr := io.Copy(io.Discard, resp.Body)
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("unexpected status %d", resp.StatusCode)
+	}
+	if copyErr != nil {
+		return fmt.Errorf("read response body: %w", copyErr)
+	}
+	if c.streaming && !strings.Contains(strings.ToLower(resp.Header.Get("Content-Type")), "text/event-stream") {
+		return fmt.Errorf("streaming response has unexpected content-type %q", resp.Header.Get("Content-Type"))
 	}
 	return nil
 }
