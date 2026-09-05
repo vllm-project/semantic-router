@@ -1,0 +1,75 @@
+{
+  "_comment": "Labelled calibration set for cmd/image-routing-calibration. Every PNG/JPEG under negative_roots at the checked-out commit is a fixture; a fixture is positive for a rule only if listed under positives, otherwise it is a negative for every rule. The set is versioned by the repository commit, which the generated report records together with the model snapshot and every resolved fixture's sha256.",
+  "negative_roots": [
+    "website/static/img",
+    "dashboard/frontend/public",
+    "e2e/testcases/testdata/image-fixtures"
+  ],
+  "positives": [
+    {
+      "image_file": "e2e/testcases/testdata/image-fixtures/conference_room.jpg",
+      "signal_name": "ambient_office_imagery",
+      "description": "depicts shipped candidate: 'photograph of a conference room or meeting space'"
+    },
+    {
+      "image_file": "e2e/testcases/testdata/image-fixtures/code_screenshot.jpg",
+      "signal_name": "code_or_terminal_imagery",
+      "description": "depicts shipped candidate: 'screenshot of source code in an editor'"
+    },
+    {
+      "image_file": "website/static/img/amd-deploy-3.png",
+      "signal_name": "code_or_terminal_imagery",
+      "description": "depicts shipped candidate: 'command-line build output or test runner output'"
+    },
+    {
+      "image_file": "website/static/img/blog/lettucedetect-v2-detection.png",
+      "signal_name": "code_or_terminal_imagery",
+      "description": "depicts shipped candidate: 'terminal or shell window screenshot'"
+    },
+    {
+      "image_file": "website/static/img/blog/vllm/semantic-router/iris-7.png",
+      "signal_name": "code_or_terminal_imagery",
+      "description": "depicts shipped candidate: 'terminal or shell window screenshot'"
+    },
+    {
+      "image_file": "website/static/img/blog/vllm/semantic-router/mom-5.png",
+      "signal_name": "code_or_terminal_imagery",
+      "description": "depicts shipped candidate: 'command-line build output or test runner output'"
+    },
+    {
+      "image_file": "website/static/img/blog/vllm/semantic-router/mom-6.png",
+      "signal_name": "code_or_terminal_imagery",
+      "description": "depicts shipped candidate: 'screenshot of a log file or stack trace'"
+    },
+    {
+      "image_file": "website/static/img/blog/vllm/semantic-router/request.png",
+      "signal_name": "code_or_terminal_imagery",
+      "description": "depicts shipped candidate: 'screenshot of an API response or HTTP request body'"
+    },
+    {
+      "image_file": "website/static/img/blog/vllm/semantic-router/signal-code-0.png",
+      "signal_name": "code_or_terminal_imagery",
+      "description": "depicts shipped candidate: 'screenshot of source code in an editor'"
+    },
+    {
+      "image_file": "website/static/img/blog/vllm/semantic-router/signal-code-1.png",
+      "signal_name": "code_or_terminal_imagery",
+      "description": "depicts shipped candidate: 'screenshot of source code in an editor'"
+    },
+    {
+      "image_file": "website/static/img/installation/ollama/ollama-api-verify.png",
+      "signal_name": "code_or_terminal_imagery",
+      "description": "depicts shipped candidate: 'screenshot of an API response or HTTP request body'"
+    },
+    {
+      "image_file": "website/static/img/installation/ollama/ollama-pull-and-list.png",
+      "signal_name": "code_or_terminal_imagery",
+      "description": "depicts shipped candidate: 'terminal or shell window screenshot'"
+    },
+    {
+      "image_file": "e2e/testcases/testdata/image-fixtures/passport_sample.jpg",
+      "signal_name": "identifier_document_imagery",
+      "description": "depicts shipped candidate: 'photograph of a passport page'"
+    }
+  ]
+}

@@ -420,7 +420,12 @@ profiles:
     owner: e2e
     coverage_role: image-modality-embedding-signal-routing
     selection: pr
-    paths: [e2e/profiles/multimodal-routing/**]
+    paths:
+      - e2e/profiles/multimodal-routing/**
+      - e2e/testcases/embedding_signal_image_routing.go
+      - e2e/testcases/testdata/embedding_signal_image_cases.json
+      - e2e/testcases/testdata/image-fixtures/**
+      - config/fragments/signal/embedding/image-routing.yaml
   remote-embedding:
     owner: e2e
     coverage_role: openai-compatible-remote-embedding-provider
