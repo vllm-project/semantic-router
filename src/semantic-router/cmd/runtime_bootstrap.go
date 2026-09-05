@@ -35,6 +35,7 @@ type runtimeOptions struct {
 	enableAPI              bool
 	secure                 bool
 	downloadOnly           bool
+	finalizeResponseIndex  bool
 }
 
 func parseRuntimeOptions() runtimeOptions {
@@ -52,6 +53,7 @@ func parseRuntimeOptions() runtimeOptions {
 		kubeconfig             = flag.String("kubeconfig", "", "Path to kubeconfig file (optional, uses in-cluster config if not specified)")
 		namespace              = flag.String("namespace", "default", "Kubernetes namespace to watch for CRDs")
 		downloadOnly           = flag.Bool("download-only", false, "Download required models and exit (useful for CI/testing)")
+		finalizeResponseIndex  = flag.Bool("finalize-response-index", false, "Run the one-shot Response API conversation-index finalization sweep against the configured Redis store, print stats, and exit. Administrative and irreversible: only run once every index-unaware writer has been drained")
 	)
 	flag.Parse()
 
@@ -69,6 +71,7 @@ func parseRuntimeOptions() runtimeOptions {
 		enableAPI:              *enableAPI,
 		secure:                 *secure,
 		downloadOnly:           *downloadOnly,
+		finalizeResponseIndex:  *finalizeResponseIndex,
 	}
 }
 

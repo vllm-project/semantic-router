@@ -22,6 +22,11 @@ func main() {
 	applyBackendRuntimeTuningDefaults()
 
 	cfg := loadRuntimeConfigOrFatal(opts.configPath)
+
+	// Administrative one-shot: needs the config, nothing else. Runs before
+	// any model download, listener or runtime registry is touched.
+	exitIfFinalizeResponseIndex(opts.finalizeResponseIndex, cfg)
+
 	config.Replace(cfg)
 	runtimeRegistry := routerruntime.NewRegistry(cfg)
 
