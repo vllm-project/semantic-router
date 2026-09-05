@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"encoding/json"
+	"strconv"
 	"time"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -507,6 +508,82 @@ func (r *OpenAIRouter) updateRouterReplayHallucinationStatus(ctx *RequestContext
 			"error":      err.Error(),
 		})
 	}
+}
+
+// recordRouterReplayResponseJailbreak appends the response-stage jailbreak
+// observation to the replay record, one outcome per response-direction rule.
+// The record is written while the request is routed, before the model has
+// answered, so the request-stage signal maps it carries cannot hold this;
+// outcomes are the append-only post-route channel every store implements.
+// Each outcome names the rule under the signal key a request-direction rule
+// uses, its verdict (detected, not_detected, unavailable), the score it
+// thresholded or the failure code when it could not resolve, and the action
+// the selected decision's plugin applied.
+func (r *OpenAIRouter) recordRouterReplayResponseJailbreak(ctx *RequestContext) {
+	if ctx == nil || ctx.RouterReplayID == "" {
+		return
+	}
+	rules := r.responseJailbreakRules(ctx)
+	if len(rules) == 0 {
+		return
+	}
+	recorder := ctx.RouterReplayRecorder
+	if recorder == nil {
+		recorder = r.ReplayRecorder
+	}
+	if recorder == nil {
+		return
+	}
+	now := time.Now().UTC()
+	action := r.responseJailbreakPluginAction(ctx)
+	for _, rule := range rules {
+		outcome := responseJailbreakReplayOutcome(ctx, rule, now, action)
+		if err := recorder.AppendOutcome(ctx.RouterReplayID, outcome); err != nil {
+			logging.ComponentErrorEvent("extproc", "router_replay_response_jailbreak_outcome_failed", map[string]interface{}{
+				"request_id": ctx.RequestID,
+				"replay_id":  ctx.RouterReplayID,
+				"rule":       rule.Name,
+				"error":      err.Error(),
+			})
+		}
+	}
+}
+
+func responseJailbreakReplayOutcome(ctx *RequestContext, rule config.JailbreakRule, now time.Time, action string) routerreplay.Outcome {
+	key := signalKey(config.SignalTypeJailbreak, rule.Name)
+	outcome := routerreplay.Outcome{
+		Timestamp: now,
+		Source:    "router",
+		Target:    key,
+		Verdict:   "not_detected",
+		Metadata: map[string]string{
+			"signal":    config.SignalTypeJailbreak,
+			"direction": config.SignalDirectionResponse,
+			"threshold": strconv.FormatFloat(float64(rule.Threshold), 'f', -1, 32),
+		},
+	}
+	if ctx.VSRSelectedDecisionName != "" {
+		outcome.Metadata["decision"] = ctx.VSRSelectedDecisionName
+	}
+	if action != "" {
+		outcome.Metadata["action"] = action
+	}
+	if code, failed := ctx.VSRSignalErrors[key]; failed {
+		outcome.Verdict = "unavailable"
+		outcome.Reason = code
+		return outcome
+	}
+	outcome.Score = ctx.VSRSignalConfidences[key]
+	for _, matched := range ctx.VSRMatchedResponseJailbreak {
+		if matched == rule.Name {
+			outcome.Verdict = "detected"
+			if ctx.VSRResponseJailbreakType != "" {
+				outcome.Metadata["type"] = ctx.VSRResponseJailbreakType
+			}
+			break
+		}
+	}
+	return outcome
 }
 
 func (r *OpenAIRouter) updateRouterReplayUsageCost(ctx *RequestContext, usage routerreplay.UsageCost) {

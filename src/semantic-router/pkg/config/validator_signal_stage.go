@@ -16,7 +16,29 @@ func validateSignalStageContracts(cfg *RouterConfig) error {
 		return err
 	}
 	warnResponseJailbreakPluginOverlap(cfg)
+	warnResponseJailbreakPluginOwnsDetection(cfg)
 	return nil
+}
+
+// warnResponseJailbreakPluginOwnsDetection reports a decision whose
+// response_jailbreak plugin runs with no response-direction rule declared. The
+// plugin then classifies the response itself, which is the compatibility path:
+// nothing is published as a signal and the plugin's threshold decides. Said at
+// load, once, rather than on every request.
+func warnResponseJailbreakPluginOwnsDetection(cfg *RouterConfig) {
+	if len(cfg.ResponseJailbreakRules()) > 0 {
+		return
+	}
+	for _, decision := range cfg.AllRoutingDecisions() {
+		plugin := decision.GetResponseJailbreakConfig()
+		if plugin == nil || !plugin.Enabled {
+			continue
+		}
+		logging.ComponentWarnEvent("config", "response_jailbreak_plugin_owns_detection", map[string]interface{}{
+			"decision": decision.Name,
+			"reason":   "no routing.signals.jailbreak rule with direction: response is declared, so the plugin classifies the response itself; declare one so the observation is published as a signal and the plugin only enforces",
+		})
+	}
 }
 
 // validateDecisionsReadRequestStageSignals rejects a decision rule that names a

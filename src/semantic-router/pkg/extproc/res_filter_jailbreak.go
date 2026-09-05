@@ -84,9 +84,6 @@ func (r *OpenAIRouter) detectAndEnforceResponseJailbreak(
 	assistantContent string,
 	decisionName string,
 ) *ext_proc.ProcessingResponse {
-	logging.Debugf("response_jailbreak is running its own detection; declare a routing.signals.jailbreak " +
-		"rule with direction: response so decisions can read the observation")
-
 	if assistantContent == "" {
 		logging.Debugf("No assistant content to check for response jailbreak")
 		return nil
@@ -205,6 +202,20 @@ func (r *OpenAIRouter) shouldPerformResponseJailbreakDetection(ctx *RequestConte
 	}
 
 	return true
+}
+
+// responseJailbreakPluginAction is the action the selected decision's
+// response_jailbreak plugin applies to a detection, or "" when the decision
+// carries no enabled plugin and the observation is recorded only.
+func (r *OpenAIRouter) responseJailbreakPluginAction(ctx *RequestContext) string {
+	if ctx == nil || ctx.VSRSelectedDecision == nil {
+		return ""
+	}
+	plugin := ctx.VSRSelectedDecision.GetResponseJailbreakConfig()
+	if plugin == nil || !plugin.Enabled {
+		return ""
+	}
+	return r.getResponseJailbreakAction(ctx.VSRSelectedDecision)
 }
 
 // getResponseJailbreakAction returns the configured action for response jailbreak.

@@ -71,8 +71,12 @@ routing:
 A response-direction rule uses the sequence classifier only: `method: contrastive`,
 the pattern lists and `include_history` are request-stage settings and are
 rejected on it. Matches, scores and failures are reported under the same
-`jailbreak:<name>` key as a request-direction rule, so Router Replay shows both
-stages in one shape.
+`jailbreak:<name>` key as a request-direction rule. Router Replay records the
+observation as one outcome per response-direction rule, with the verdict
+(`detected`, `not_detected` or `unavailable`), the score it thresholded or the
+failure code, and the action the plugin applied; with `x-vsr-debug`, the
+`x-vsr-matched-jailbreak` header carries the matched response rules after the
+request ones.
 
 A response-direction rule is not a decision input. Decisions are selected while
 the request is being routed, before the model has answered, so a decision rule
@@ -82,7 +86,9 @@ request, which applies its configured action to it. The rule is read from the
 recipe the request resolved to, so a rule declared on one entrypoint's recipe
 scores only that entrypoint's responses. The plugin's own `threshold` is ignored
 once a response-direction rule is declared, and the load reports that; the rule
-owns the threshold.
+owns the threshold. A decision whose `response_jailbreak` plugin runs with no
+response-direction rule declared is also reported at load: the plugin is then
+classifying the response itself, which is the compatibility path.
 
 An unresolved detector (backend failure, or a response with no text to score)
 is reported through `SignalErrors`, the way every other signal reports one,

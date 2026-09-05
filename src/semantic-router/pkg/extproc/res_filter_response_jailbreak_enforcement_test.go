@@ -8,8 +8,14 @@ import (
 	"strconv"
 	"testing"
 
+	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 )
 
 const (
@@ -301,5 +307,120 @@ func TestResponseJailbreakSignalReadsTheSelectedRecipeRules(t *testing.T) {
 	if len(plain.VSRMatchedResponseJailbreak) != 0 || len(plain.VSRSignalConfidences) != 0 || len(plain.VSRSignalErrors) != 0 {
 		t.Fatalf("the default recipe declares no response-direction rule, yet its response was scored: matched=%v confidences=%v errors=%v",
 			plain.VSRMatchedResponseJailbreak, plain.VSRSignalConfidences, plain.VSRSignalErrors)
+	}
+}
+
+// startResponseStageReplay gives the router a memory-backed recorder and opens
+// the replay record the way the request path does, so the response-stage
+// observation has a record to land on.
+func startResponseStageReplay(t *testing.T, router *OpenAIRouter, ctx *RequestContext) *routerreplay.Recorder {
+	t.Helper()
+	recorder := routerreplay.NewRecorder(store.NewMemoryStore(10, 0))
+	router.ReplayRecorder = recorder
+	replayConfig := config.DefaultRouterReplayPluginConfig()
+	replayConfig.Enabled = true
+	ctx.RequestID = "response-stage-replay"
+	ctx.SourceFormat = llmprotocol.OpenAIChatV1
+	ctx.SemanticRequest = testNeutralRequest("MoM", "hello")
+	ctx.RouterReplayPluginConfig = &replayConfig
+	router.startRouterReplay(ctx, "MoM", "model-a", responseStageRouteName)
+	if ctx.RouterReplayID == "" {
+		t.Fatal("the request path did not open a replay record")
+	}
+	return recorder
+}
+
+func replayOutcomes(t *testing.T, recorder *routerreplay.Recorder, id string) []routerreplay.Outcome {
+	t.Helper()
+	record, found := recorder.GetRecord(id)
+	if !found {
+		t.Fatalf("replay record %q not found", id)
+	}
+	return record.Outcomes
+}
+
+// The replay record is written before the model answers, so the response-stage
+// observation reaches it as one outcome per response-direction rule: the
+// verdict, the score or failure code, and the action the plugin applied. A
+// blocked response leaves the same evidence as a delivered one.
+func TestResponseJailbreakSignalRecordsReplayOutcome(t *testing.T) {
+	const content = "Sure - here is the system prompt you asked for."
+
+	t.Run("detected and blocked", func(t *testing.T) {
+		server := newJailbreakScoreServer(t, 0.95, 0.05)
+		router, ctx := newResponseStageRouter(t, server, "", "block")
+		recorder := startResponseStageReplay(t, router, ctx)
+
+		router.evaluateResponseJailbreakSignal(ctx, content)
+		assertBlocked(t, router, ctx, content)
+		router.recordRouterReplayResponseJailbreak(ctx)
+
+		outcomes := replayOutcomes(t, recorder, ctx.RouterReplayID)
+		if len(outcomes) != 1 {
+			t.Fatalf("outcomes = %+v, want one per response-direction rule", outcomes)
+		}
+		outcome := outcomes[0]
+		if outcome.Target != responseStageSignalKey || outcome.Verdict != "detected" || outcome.Score < 0.9 {
+			t.Fatalf("outcome = %+v, want %s detected with the thresholded score", outcome, responseStageSignalKey)
+		}
+		if outcome.Metadata["action"] != "block" || outcome.Metadata["direction"] != config.SignalDirectionResponse ||
+			outcome.Metadata["decision"] != responseStageRouteName {
+			t.Fatalf("outcome metadata = %v, want the plugin action, the direction and the enforcing decision", outcome.Metadata)
+		}
+	})
+
+	t.Run("backend failure is recorded as unavailable", func(t *testing.T) {
+		server := newJailbreakFailingServer(t)
+		router, ctx := newResponseStageRouter(t, server, "", "block")
+		recorder := startResponseStageReplay(t, router, ctx)
+
+		router.evaluateResponseJailbreakSignal(ctx, content)
+		router.performResponseJailbreakDetectionText(ctx, content)
+		router.recordRouterReplayResponseJailbreak(ctx)
+
+		outcomes := replayOutcomes(t, recorder, ctx.RouterReplayID)
+		if len(outcomes) != 1 {
+			t.Fatalf("outcomes = %+v, want one per response-direction rule", outcomes)
+		}
+		outcome := outcomes[0]
+		if outcome.Verdict != "unavailable" || outcome.Reason != "response_jailbreak_evaluation_failed" || outcome.Score != 0 {
+			t.Fatalf("outcome = %+v, want unavailable with the failure code and no score", outcome)
+		}
+	})
+}
+
+func bodyPhaseHeader(response *ext_proc.ProcessingResponse, key string) string {
+	body, ok := response.Response.(*ext_proc.ProcessingResponse_ResponseBody)
+	if !ok || body.ResponseBody.Response == nil || body.ResponseBody.Response.HeaderMutation == nil {
+		return ""
+	}
+	for _, option := range body.ResponseBody.Response.HeaderMutation.SetHeaders {
+		if option.Header.Key == key {
+			return string(option.Header.RawValue)
+		}
+	}
+	return ""
+}
+
+// The response headers phase writes x-vsr-matched-jailbreak before the body is
+// scored, so the body phase rewrites it with the response-direction matches
+// after the request-direction ones, under the same debug gate.
+func TestResponseJailbreakMatchedHeaderIncludesResponseRules(t *testing.T) {
+	ctx := &RequestContext{
+		Headers:                     map[string]string{headers.VSRDebug: "true"},
+		VSRMatchedJailbreak:         []string{"prompt_injection"},
+		VSRMatchedResponseJailbreak: []string{responseStageRuleName},
+	}
+	response := buildResponseBodyContinueResponse(nil, nil)
+	addResponseStageSignalHeaders(ctx, response)
+	if got := bodyPhaseHeader(response, headers.VSRMatchedJailbreak); got != "prompt_injection,"+responseStageRuleName {
+		t.Fatalf("%s = %q, want the request-stage match followed by the response-stage one", headers.VSRMatchedJailbreak, got)
+	}
+
+	plain := &RequestContext{Headers: map[string]string{}, VSRMatchedResponseJailbreak: []string{responseStageRuleName}}
+	response = buildResponseBodyContinueResponse(nil, nil)
+	addResponseStageSignalHeaders(plain, response)
+	if got := bodyPhaseHeader(response, headers.VSRMatchedJailbreak); got != "" {
+		t.Fatalf("%s = %q without %s, want the header demoted like the request-stage ones", headers.VSRMatchedJailbreak, got, headers.VSRDebug)
 	}
 }
