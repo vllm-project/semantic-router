@@ -62,7 +62,8 @@ Before choosing an installation path, detect and report:
 | Python ≥ 3.10 | `python3 --version` or `python --version` |
 | Existing `vllm-sr` | `command -v vllm-sr`, `test -e ~/.local/bin/vllm-sr \|\| test -L ~/.local/bin/vllm-sr`, or `test -d ~/.local/share/vllm-sr` |
 | Existing `vllm-sr` version | `vllm-sr --version` or `~/.local/bin/vllm-sr --version` (diagnostic only) |
-| Installer override env | `echo "${VLLM_SR_INSTALL_ROOT:-}"`, `echo "${VLLM_SR_BIN_DIR:-}"`, `echo "${VLLM_SR_PIP_SPEC:-}"` |
+| Installer path overrides | `echo "${VLLM_SR_INSTALL_ROOT:-}"` and `echo "${VLLM_SR_BIN_DIR:-}"` |
+| Installer package override | `test -n "${VLLM_SR_PIP_SPEC:-}"` — report **set/unset only**; never print the value |
 | Docker | `command -v docker` and `docker info` |
 | Podman | `command -v podman` and `podman info` |
 | Existing config | `test -f config.yaml` in the working directory |
@@ -88,7 +89,9 @@ curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --mode cli --runtime skip 
 
 This installs the CLI into an isolated virtual environment under
 `~/.local/share/vllm-sr`, links a launcher into `~/.local/bin`, and does **not**
-start the serving stack or launch the Dashboard.
+start the serving stack or launch the Dashboard. When invoking the installer,
+unset `VLLM_SR_PIP_SPEC` first (see Workflow) so an inherited package override
+cannot change what gets installed.
 
 The installer accepts these relevant flags:
 
@@ -162,9 +165,24 @@ completions manually later via `vllm-sr completion install`.
    Whether or not version succeeds, **stop and report**; do not reinstall,
    overwrite, or repair without explicit user approval.
    **No signal found** — continue to step 3.
+
+   **Package override** — if `test -n "${VLLM_SR_PIP_SPEC:-}"` shows that
+   `VLLM_SR_PIP_SPEC` is set, **stop and report its presence without
+   printing the value.** The installer uses any non-empty value as the pip
+   package spec and would install an alternate package instead of the
+   official vLLM-SR CLI, which is outside the supported installation path.
+   The value may embed credentials such as private index tokens, so it
+   must never be echoed, logged, or included in the report.
 3. **Present the plan** and wait for confirmation if the user has not already
    approved.
-4. **Install** using the one-line installer in agent-safe mode.
+4. **Install** using the one-line installer in agent-safe mode, explicitly
+   unsetting the package override so it cannot be inherited by the
+   installer's shell:
+
+   ```bash
+   unset VLLM_SR_PIP_SPEC
+   curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --mode cli --runtime skip --no-launch
+   ```
 5. **Validate** (see Validation below).
 6. **Report** the result and the next supported step.
 
@@ -304,8 +322,11 @@ explicit user direction — those are separate workflows.
   be reachable.
 - Do not confuse installing the CLI with starting or configuring a deployment.
 - The installer reads `VLLM_SR_INSTALL_ROOT`, `VLLM_SR_BIN_DIR`, and
-  `VLLM_SR_PIP_SPEC` from the environment. If any is set, discovery must
-  check the override path too, not only the defaults.
+  `VLLM_SR_PIP_SPEC` from the environment. If a path override is set,
+  discovery must check the override path too, not only the defaults.
+- `VLLM_SR_PIP_SPEC` changes **which package** the installer installs. If
+  it is set, stop and report its presence; never print the value, because
+  package specs may contain credentials such as private index tokens.
 - The installer unconditionally sets up shell completions, which may edit
   `~/.bashrc`, `~/.zshrc`, or equivalent shell rc files. Disclose this in
   the plan so the user can approve the change.
@@ -318,7 +339,7 @@ explicit user direction — those are separate workflows.
 
 ## Standard Commands
 
-- `curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --mode cli --runtime skip --no-launch`
+- `unset VLLM_SR_PIP_SPEC && curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --mode cli --runtime skip --no-launch`
 - `vllm-sr --version`
 - If `~/.local/bin` is not on PATH, use `~/.local/bin/vllm-sr --version`.
 
@@ -330,6 +351,8 @@ explicit user direction — those are separate workflows.
 - The installation is validated with `vllm-sr --version`.
 - Existing installations, configurations, and deployments are not overwritten
   without explicit approval.
+- A set `VLLM_SR_PIP_SPEC` stops the flow, its value is never printed, and the
+  installer is run with the variable explicitly unset.
 - `runtime.env` is reported as runtime state, not conflated with an active
   deployment.
 - No credentials, private endpoints, or secret values appear in skill output.

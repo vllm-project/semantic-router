@@ -221,6 +221,57 @@ test('Workflow detects installer override env vars', () => {
     workflow.includes('VLLM_SR_INSTALL_ROOT'),
     'Workflow must check the VLLM_SR_INSTALL_ROOT override path when set',
   )
+  assert.ok(
+    workflow.includes('VLLM_SR_PIP_SPEC'),
+    'Workflow must handle the VLLM_SR_PIP_SPEC package override',
+  )
+})
+
+test('VLLM_SR_PIP_SPEC presence stops the flow and its value is never printed', () => {
+  const content = readSkill(canonicalPath)
+
+  // The installer uses any non-empty VLLM_SR_PIP_SPEC as the pip package
+  // spec, so its presence means an alternate package could be installed
+  // instead of the official CLI. The workflow must treat presence as a
+  // stop condition.
+  const workflowMatch = content.match(/## Workflow\n([\s\S]*?)\n## /)
+  assert.ok(workflowMatch, '## Workflow section must exist')
+  const workflow = workflowMatch[1]
+  assert.ok(
+    /VLLM_SR_PIP_SPEC[\s\S]*stop/i.test(workflow),
+    'Workflow must stop when VLLM_SR_PIP_SPEC is set',
+  )
+  assert.ok(
+    /alternate package/i.test(workflow),
+    'Workflow must explain that VLLM_SR_PIP_SPEC installs an alternate package',
+  )
+
+  // The value may embed credentials such as private index tokens, so the
+  // skill must never instruct printing it — presence-only detection only.
+  assert.ok(
+    !content.includes('echo "${VLLM_SR_PIP_SPEC'),
+    'Skill must not instruct echoing the VLLM_SR_PIP_SPEC value',
+  )
+  assert.ok(
+    !content.includes('printf "${VLLM_SR_PIP_SPEC'),
+    'Skill must not instruct printing the VLLM_SR_PIP_SPEC value',
+  )
+  assert.ok(
+    /test -n "\$\{VLLM_SR_PIP_SPEC:-\}"/.test(content),
+    'Detection must use a presence-only check for VLLM_SR_PIP_SPEC',
+  )
+
+  // Defense in depth: the install step must unset the override explicitly
+  // so an inherited value cannot change what the installer installs. The
+  // unset must apply to the installer's shell, not just to curl.
+  assert.ok(
+    workflow.includes('unset VLLM_SR_PIP_SPEC'),
+    'Install step must explicitly unset VLLM_SR_PIP_SPEC before installing',
+  )
+  assert.ok(
+    !workflow.includes('env -u VLLM_SR_PIP_SPEC'),
+    'Install step must not use env -u on the pipeline (it would leave the override set for the installer shell)',
+  )
 })
 
 test('Plan discloses shell completion setup as a side effect', () => {
