@@ -90,8 +90,8 @@ curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --mode cli --runtime skip 
 This installs the CLI into an isolated virtual environment under
 `~/.local/share/vllm-sr`, links a launcher into `~/.local/bin`, and does **not**
 start the serving stack or launch the Dashboard. When invoking the installer,
-unset `VLLM_SR_PIP_SPEC` first (see Workflow) so an inherited package override
-cannot change what gets installed.
+clear the documented `VLLM_SR_*` override surface first (see Workflow) so an
+inherited value cannot change what gets installed.
 
 The installer accepts these relevant flags:
 
@@ -176,11 +176,13 @@ completions manually later via `vllm-sr completion install`.
 3. **Present the plan** and wait for confirmation if the user has not already
    approved.
 4. **Install** using the one-line installer in agent-safe mode, explicitly
-   unsetting the package override so it cannot be inherited by the
-   installer's shell:
+   unsetting the installer's entire documented `VLLM_SR_*` override surface
+   so no inherited value can change what gets installed or how:
 
    ```bash
-   unset VLLM_SR_PIP_SPEC
+   unset VLLM_SR_INSTALL_MODE VLLM_SR_RUNTIME VLLM_SR_INSTALL_ROOT \
+     VLLM_SR_BIN_DIR VLLM_SR_INSTALL_CHANNEL VLLM_SR_PIP_SPEC \
+     VLLM_SR_PYTHON VLLM_SR_INSTALL_PLATFORM VLLM_SR_INSTALL_AUTO_LAUNCH
    curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --mode cli --runtime skip --no-launch
    ```
 5. **Validate** (see Validation below).
@@ -327,6 +329,11 @@ explicit user direction — those are separate workflows.
 - `VLLM_SR_PIP_SPEC` changes **which package** the installer installs. If
   it is set, stop and report its presence; never print the value, because
   package specs may contain credentials such as private index tokens.
+- The installer reads a documented set of `VLLM_SR_*` environment overrides
+  (mode, runtime, install root, bin dir, channel, pip spec, python,
+  platform, auto-launch). Always run the installer with that surface
+  cleared (see Workflow step 4) so an inherited value cannot silently
+  change the install.
 - The installer unconditionally sets up shell completions, which may edit
   `~/.bashrc`, `~/.zshrc`, or equivalent shell rc files. Disclose this in
   the plan so the user can approve the change.
@@ -339,7 +346,7 @@ explicit user direction — those are separate workflows.
 
 ## Standard Commands
 
-- `unset VLLM_SR_PIP_SPEC && curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --mode cli --runtime skip --no-launch`
+- `unset VLLM_SR_INSTALL_MODE VLLM_SR_RUNTIME VLLM_SR_INSTALL_ROOT VLLM_SR_BIN_DIR VLLM_SR_INSTALL_CHANNEL VLLM_SR_PIP_SPEC VLLM_SR_PYTHON VLLM_SR_INSTALL_PLATFORM VLLM_SR_INSTALL_AUTO_LAUNCH && curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --mode cli --runtime skip --no-launch`
 - `vllm-sr --version`
 - If `~/.local/bin` is not on PATH, use `~/.local/bin/vllm-sr --version`.
 
@@ -352,7 +359,8 @@ explicit user direction — those are separate workflows.
 - Existing installations, configurations, and deployments are not overwritten
   without explicit approval.
 - A set `VLLM_SR_PIP_SPEC` stops the flow, its value is never printed, and the
-  installer is run with the variable explicitly unset.
+  installer is run with the full documented `VLLM_SR_*` override surface
+  cleared.
 - `runtime.env` is reported as runtime state, not conflated with an active
   deployment.
 - No credentials, private endpoints, or secret values appear in skill output.
