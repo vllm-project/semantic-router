@@ -52,6 +52,7 @@ different client and transport protocols.
 | --- | --- | --- | --- |
 | [Unified Config Contract v0.3](./unified-config-contract-v0-3) | 2026-03-17 | Implemented | One configuration contract across authoring and deployment surfaces. |
 | [Multi-Protocol Adapter Architecture](./multi-protocol-adaptor) | 2026-02-18 | Proposal | Protocol-independent access to the routing engine. |
+| [Standalone HTTP Gateway](./standalone-http-gateway) | 2026-08-31 | Proposal | A separate gateway binary linking the router packages; run routing without Envoy, simplifying deployment. |
 
 ## Serving Integrations
 
