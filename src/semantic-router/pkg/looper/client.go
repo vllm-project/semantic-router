@@ -34,6 +34,7 @@ import (
 // Client handles HTTP requests to OpenAI-compatible endpoints
 type Client struct {
 	httpClient       *http.Client
+	connector        modelConnector
 	endpoint         string
 	headers          map[string]string
 	decisionName     string // Decision name to pass in looper requests
@@ -52,6 +53,18 @@ func NewClient(cfg *config.LooperConfig) *Client {
 		maxResponseBytes: cfg.GetMaxResponseBytes(),
 	}
 	return c
+}
+
+// Close releases idle connections owned by the client.
+func (c *Client) Close() error {
+	var err error
+	if c != nil && c.connector != nil {
+		err = c.connector.Close()
+	}
+	if c != nil && c.httpClient != nil {
+		c.httpClient.CloseIdleConnections()
+	}
+	return err
 }
 
 // SetDecisionName sets the decision name for this client
@@ -154,6 +167,31 @@ type LogprobsConfig struct {
 //   - logprobsCfg: controls whether to enable logprobs and top_logprobs (nil = disabled)
 //   - accessKey: optional API key for Authorization header (Bearer token)
 func (c *Client) CallModel(ctx context.Context, req *openai.ChatCompletionNewParams, modelName string, streaming bool, iteration int, logprobsCfg *LogprobsConfig, accessKey string) (*ModelResponse, error) {
+	return c.CallModelWithOptions(
+		ctx,
+		*req,
+		ModelTarget{Name: modelName, AccessKey: accessKey},
+		CallOptions{
+			DecisionName: c.decisionName,
+			Iteration:    uint32(iteration),
+			FusionDepth:  uint32(c.fusionDepth),
+			Mode:         responseMode(streaming),
+			Logprobs:     logprobsCfg,
+		},
+	)
+}
+
+func (c *Client) callModel(
+	ctx context.Context,
+	req *openai.ChatCompletionNewParams,
+	modelName string,
+	streaming bool,
+	iteration int,
+	logprobsCfg *LogprobsConfig,
+	accessKey string,
+	decisionName string,
+	fusionDepth int,
+) (*ModelResponse, error) {
 	// Clone and modify the request with the target model
 	modifiedReq := cloneRequest(req)
 	modifiedReq.Model = modelName
@@ -186,7 +224,7 @@ func (c *Client) CallModel(ctx context.Context, req *openai.ChatCompletionNewPar
 	logprobsEnabled := logprobsCfg != nil && logprobsCfg.Enabled
 	endpoint := c.resolveEndpoint()
 	logging.ComponentDebugEvent("looper", "model_call_started", map[string]interface{}{
-		"decision":  c.decisionName,
+		"decision":  decisionName,
 		"model_ref": modelName,
 		"endpoint":  endpoint,
 		"streaming": streaming,
@@ -194,34 +232,14 @@ func (c *Client) CallModel(ctx context.Context, req *openai.ChatCompletionNewPar
 		"logprobs":  logprobsEnabled,
 	})
 
-	// Create HTTP request
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(body))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	// Set headers
-	httpReq.Header.Set("Content-Type", "application/json")
-	for k, v := range c.headers {
-		httpReq.Header.Set(k, v)
-	}
-
-	// Set Authorization header if access key is provided
-	if accessKey != "" {
-		httpReq.Header.Set("Authorization", "Bearer "+accessKey)
-	}
-
-	c.setInternalRequestHeaders(httpReq, ctx, iteration)
-
-	// Execute request
 	start := time.Now()
-	resp, err := c.httpClient.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("request failed: %w", err)
+	headers := c.requestHeaders(ctx, iteration, decisionName, fusionDepth, accessKey)
+	var respBody []byte
+	if c.connector != nil {
+		respBody, err = c.callModelThroughConnector(ctx, body, headers)
+	} else {
+		respBody, err = c.callModelThroughLegacyHTTP(ctx, body, headers)
 	}
-	defer resp.Body.Close()
-
-	respBody, err := c.readResponseBody(resp)
 	if err != nil {
 		return nil, err
 	}
@@ -237,7 +255,44 @@ func (c *Client) CallModel(ctx context.Context, req *openai.ChatCompletionNewPar
 		return nil, err
 	}
 	result.LatencyMs = time.Since(start).Milliseconds()
+	c.logModelCallCompleted(decisionName, result)
 	return result, nil
+}
+
+func (c *Client) callModelThroughLegacyHTTP(
+	ctx context.Context,
+	body []byte,
+	headers http.Header,
+) ([]byte, error) {
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.resolveEndpoint(), bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	httpReq.Header = headers.Clone()
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+	return c.readResponseBody(resp)
+}
+
+func (c *Client) logModelCallCompleted(decisionName string, result *ModelResponse) {
+	fields := map[string]interface{}{
+		"decision":      decisionName,
+		"model_ref":     result.Model,
+		"content_len":   len(result.Content),
+		"reasoning_len": len(result.ReasoningContent),
+		"streaming":     result.IsStreaming,
+	}
+	if result.IsStreaming {
+		fields["total_tokens"] = result.Usage.TotalTokens
+	} else {
+		fields["avg_logprob"] = result.AverageLogprob
+		fields["avg_margin"] = result.AverageMargin
+	}
+	logging.ComponentDebugEvent("looper", "model_call_completed", fields)
 }
 
 // parseNonStreamingResponse parses a non-streaming JSON response
@@ -278,16 +333,6 @@ func (c *Client) parseNonStreamingResponse(body []byte, modelName string) (*Mode
 	// Extract reasoning content from vLLM extra fields
 	result.ReasoningContent = extractReasoningFromRaw(body)
 
-	logging.ComponentDebugEvent("looper", "model_call_completed", map[string]interface{}{
-		"decision":      c.decisionName,
-		"model_ref":     modelName,
-		"content_len":   len(result.Content),
-		"reasoning_len": len(result.ReasoningContent),
-		"avg_logprob":   result.AverageLogprob,
-		"avg_margin":    result.AverageMargin,
-		"streaming":     false,
-	})
-
 	return result, nil
 }
 
@@ -305,15 +350,6 @@ func (c *Client) parseStreamingResponse(body []byte, modelName string) (*ModelRe
 	result.Content = content
 	result.StreamingChunks = chunks
 	result.Usage = parseStreamingUsage(body)
-
-	logging.ComponentDebugEvent("looper", "model_call_completed", map[string]interface{}{
-		"decision":      c.decisionName,
-		"model_ref":     modelName,
-		"content_len":   len(result.Content),
-		"reasoning_len": len(result.ReasoningContent),
-		"total_tokens":  result.Usage.TotalTokens,
-		"streaming":     true,
-	})
 
 	return result, nil
 }

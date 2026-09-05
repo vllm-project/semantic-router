@@ -68,6 +68,19 @@ func (l *BaseLooper) callModelWithContextGate(
 	)
 }
 
+func (l *BaseLooper) dispatchModel(
+	ctx context.Context,
+	baseReq *Request,
+	stageReq *openai.ChatCompletionNewParams,
+	target ModelTarget,
+	options CallOptions,
+) (*ModelResponse, error) {
+	if err := validateLooperStageContext(baseReq, stageReq, target.Name); err != nil {
+		return nil, err
+	}
+	return l.client.CallModelWithOptions(ctx, *stageReq, target, options)
+}
+
 func validateLooperStageContext(
 	baseReq *Request,
 	stageReq *openai.ChatCompletionNewParams,

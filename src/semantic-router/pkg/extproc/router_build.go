@@ -7,6 +7,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
@@ -46,6 +47,7 @@ type routerComponents struct {
 	memoryStore          memory.Store
 	memoryExtractor      *memory.MemoryExtractor
 	protocolCodecs       *protocolcodec.Registry
+	looperClient         *looper.Client
 	credentialResolver   *authz.CredentialResolver
 	rateLimiter          *ratelimit.RateLimitResolver
 	lookupTableCancel    func()
@@ -184,6 +186,14 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 		protocolCodecs:     protocolcodec.NewBuiltinRegistry(),
 	}
 	registerRouterSessionStore(components.resources, components.routerSessionStore)
+	if cfg.Looper.IsEnabled() {
+		looperClient, err := looper.NewConnectorClient(&cfg.Looper)
+		if err != nil {
+			return nil, rollbackResources(components.resources, err)
+		}
+		components.looperClient = looperClient
+		components.resources.add(components.looperClient.Close)
+	}
 	mappings, err := loadClassifierMappings(cfg)
 	if err != nil {
 		return nil, rollbackResources(components.resources, err)
@@ -343,6 +353,7 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 		MemoryStore:             components.memoryStore,
 		MemoryExtractor:         components.memoryExtractor,
 		ProtocolCodecs:          components.protocolCodecs,
+		looperClient:            components.looperClient,
 		CredentialResolver:      components.credentialResolver,
 		RateLimiter:             components.rateLimiter,
 		lookupTableCancel:       components.lookupTableCancel,

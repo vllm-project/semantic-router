@@ -36,8 +36,12 @@ type RatingsLooper struct {
 
 // NewRatingsLooper creates a new RatingsLooper instance
 func NewRatingsLooper(cfg *config.LooperConfig) *RatingsLooper {
+	return newRatingsLooper(cfg, nil)
+}
+
+func newRatingsLooper(cfg *config.LooperConfig, client *Client) *RatingsLooper {
 	return &RatingsLooper{
-		BaseLooper: NewBaseLooper(cfg),
+		BaseLooper: newBaseLooper(cfg, client),
 	}
 }
 
@@ -46,9 +50,6 @@ func (l *RatingsLooper) Execute(ctx context.Context, req *Request) (*Response, e
 	if len(req.ModelRefs) == 0 {
 		return nil, fmt.Errorf("no models configured")
 	}
-
-	// Set decision name in client for header transmission
-	l.client.SetDecisionName(req.DecisionName)
 
 	// Get config from algorithm
 	maxConcurrent := len(req.ModelRefs)
@@ -110,15 +111,16 @@ func (l *RatingsLooper) Execute(ctx context.Context, req *Request) (*Response, e
 
 			// Use idx+1 as iteration number for concurrent requests.
 			// RatingsLooper doesn't need logprobs (no confidence-based routing).
-			resp, err := l.callModelWithContextGate(
+			resp, err := l.dispatchModel(
 				ctx,
 				req,
 				toolFreeLooperRequest(req.OriginalRequest),
-				modelName,
-				req.IsStreaming,
-				idx+1,
-				nil,
-				accessKey,
+				ModelTarget{Name: modelName, AccessKey: accessKey},
+				CallOptions{
+					DecisionName: req.DecisionName,
+					Iteration:    uint32(idx + 1),
+					Mode:         responseMode(req.IsStreaming),
+				},
 			)
 
 			mu.Lock()
