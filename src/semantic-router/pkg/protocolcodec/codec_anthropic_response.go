@@ -19,6 +19,9 @@ type anthropicResponseWire struct {
 	Error        *anthropicErrorWire `json:"error,omitempty"`
 	Container    json.RawMessage     `json:"container"`
 	StopDetails  json.RawMessage     `json:"stop_details"`
+	// Beta context-editing echo. Covers two positions, since message_start.message
+	// reuses this struct; omitempty keeps re-encoded GA output unchanged. See #3417.
+	ContextManagement json.RawMessage `json:"context_management,omitempty"`
 }
 
 type anthropicUsageWire struct {
@@ -82,6 +85,11 @@ func anthropicResponseMetadataDiagnostics(wire anthropicResponseWire, policy llm
 	}
 	if len(wire.StopDetails) > 0 && !bytes.Equal(bytes.TrimSpace(wire.StopDetails), []byte("null")) {
 		appendProviderFieldOmission(&diagnostics, policy, llmprotocol.AnthropicMessagesV1, "stop_details", "structured refusal detail has no neutral representation")
+	}
+	if len(wire.ContextManagement) > 0 && !bytes.Equal(bytes.TrimSpace(wire.ContextManagement), []byte("null")) {
+		// Once per response, so a diagnostic is affordable here — unlike
+		// estimated_tokens, which fires per delta (D2).
+		appendProviderFieldOmission(&diagnostics, policy, llmprotocol.AnthropicMessagesV1, "context_management", "context editing echo is request metadata, not model output")
 	}
 	return diagnostics
 }
