@@ -34,15 +34,7 @@ func (s *RedisStore) StoreResponse(ctx context.Context, response *responseapi.St
 		return fmt.Errorf("failed to store response in Redis: %w", err)
 	}
 	if !stored {
-		// The payload already here is the source of truth for whether this
-		// retry needs an index repair, not the caller's attempted request:
-		// verified inside repairExistingResponseIndex.
-		if response.ConversationID != "" {
-			if repairErr := s.repairExistingResponseIndex(ctx, response); repairErr != nil {
-				return repairErr
-			}
-		}
-		return ErrAlreadyExists
+		return s.handleDuplicateResponse(ctx, response)
 	}
 
 	if response.ConversationID == "" {
@@ -50,23 +42,41 @@ func (s *RedisStore) StoreResponse(ctx context.Context, response *responseapi.St
 	}
 
 	if err := s.indexResponse(ctx, response.ConversationID, response.ID, response.CreatedAt); err != nil {
-		indexErr := fmt.Errorf("failed to index response in Redis: %w", err)
-
-		// Compare-delete rollback: never a blind DEL. Only removes the
-		// payload if it is still exactly what this call wrote, so a
-		// concurrent writer that stored a new value after this payload's TTL
-		// expired is never clobbered (the ABA race the blueprint calls out).
-		deleted, rollbackErr := s.compareDeleteResponsePayload(ctx, key, data)
-		if rollbackErr != nil {
-			return fmt.Errorf("%w (rollback failed: %v)", indexErr, rollbackErr)
-		}
-		if !deleted {
-			return fmt.Errorf("%w (payload changed before rollback, left in place)", indexErr)
-		}
-		return indexErr
+		return s.rollbackStoredPayload(ctx, key, data, err)
 	}
 
 	return nil
+}
+
+// handleDuplicateResponse runs when StoreResponse's SETNX finds the
+// response ID already stored. The payload already there is the source of
+// truth for whether this retry needs an index repair, not the caller's
+// attempted request: verified inside repairExistingResponseIndex.
+func (s *RedisStore) handleDuplicateResponse(ctx context.Context, response *responseapi.StoredResponse) error {
+	if response.ConversationID != "" {
+		if repairErr := s.repairExistingResponseIndex(ctx, response); repairErr != nil {
+			return repairErr
+		}
+	}
+	return ErrAlreadyExists
+}
+
+// rollbackStoredPayload runs when a freshly stored response's index write
+// fails. Compare-delete rollback: never a blind DEL. Only removes the
+// payload if it is still exactly what this call wrote, so a concurrent
+// writer that stored a new value after this payload's TTL expired is never
+// clobbered (the ABA race the blueprint calls out).
+func (s *RedisStore) rollbackStoredPayload(ctx context.Context, key string, data []byte, indexErr error) error {
+	wrapped := fmt.Errorf("failed to index response in Redis: %w", indexErr)
+
+	deleted, rollbackErr := s.compareDeleteResponsePayload(ctx, key, data)
+	if rollbackErr != nil {
+		return fmt.Errorf("%w (rollback failed: %v)", wrapped, rollbackErr)
+	}
+	if !deleted {
+		return fmt.Errorf("%w (payload changed before rollback, left in place)", wrapped)
+	}
+	return wrapped
 }
 
 // compareDeleteResponsePayload deletes key only if its current value equals
@@ -177,25 +187,9 @@ func (s *RedisStore) UpdateResponse(ctx context.Context, response *responseapi.S
 
 	key := s.buildKey(ResponseKeyPrefix + response.ID)
 
-	// Doubles as the existence check. Kept as raw bytes (not just the
-	// previously-parsed ConversationID storedConversationID would give) so a
-	// failed index write below can restore the exact previous payload.
-	previousData, err := s.client.Get(ctx, key).Bytes()
+	previousData, previousConversationID, previousCreatedAt, err := s.readPreviousResponseForUpdate(ctx, key, response.ID)
 	if err != nil {
-		if errors.Is(err, redis.Nil) {
-			return ErrNotFound
-		}
-		return fmt.Errorf("failed to check response existence: %w", err)
-	}
-
-	var previous responseapi.StoredResponse
-	previousConversationID := ""
-	if err := json.Unmarshal(previousData, &previous); err != nil {
-		// Not fatal: the update can still proceed, it just has nothing to
-		// unindex or restore from — same posture as storedConversationID.
-		logging.Warnf("RedisStore: failed to parse previous stored response %s during update: %v", response.ID, err)
-	} else {
-		previousConversationID = previous.ConversationID
+		return err
 	}
 
 	data, err := json.Marshal(response)
@@ -209,18 +203,7 @@ func (s *RedisStore) UpdateResponse(ctx context.Context, response *responseapi.S
 
 	if response.ConversationID != "" {
 		if err := s.indexResponse(ctx, response.ConversationID, response.ID, response.CreatedAt); err != nil {
-			indexErr := fmt.Errorf("failed to index updated response in Redis: %w", err)
-
-			if restoreErr := s.client.Set(ctx, key, previousData, s.ttl).Err(); restoreErr != nil {
-				return fmt.Errorf("%w (failed to restore previous payload: %v)", indexErr, restoreErr)
-			}
-			if previousConversationID != "" {
-				if reindexErr := s.indexResponse(ctx, previousConversationID, response.ID, previous.CreatedAt); reindexErr != nil {
-					logging.Warnf("RedisStore: failed to reindex restored response %s under previous conversation %s after update rollback: %v",
-						response.ID, previousConversationID, reindexErr)
-				}
-			}
-			return indexErr
+			return s.rollbackUpdatePayload(ctx, key, previousData, previousConversationID, response.ID, previousCreatedAt, err)
 		}
 	}
 
@@ -235,6 +218,52 @@ func (s *RedisStore) UpdateResponse(ctx context.Context, response *responseapi.S
 	}
 
 	return nil
+}
+
+// readPreviousResponseForUpdate fetches a response's current payload as raw
+// bytes — doubling as the existence check — and best-effort parses its
+// previous ConversationID/CreatedAt, needed if the update's own index write
+// later fails and the payload must be restored and reindexed. A parse
+// failure is not fatal to the update: it just has nothing to unindex or
+// restore from, the same posture storedConversationID takes elsewhere.
+func (s *RedisStore) readPreviousResponseForUpdate(ctx context.Context, key, responseID string) (previousData []byte, previousConversationID string, previousCreatedAt int64, err error) {
+	previousData, err = s.client.Get(ctx, key).Bytes()
+	if err != nil {
+		if errors.Is(err, redis.Nil) {
+			return nil, "", 0, ErrNotFound
+		}
+		return nil, "", 0, fmt.Errorf("failed to check response existence: %w", err)
+	}
+
+	var previous responseapi.StoredResponse
+	if err := json.Unmarshal(previousData, &previous); err != nil {
+		logging.Warnf("RedisStore: failed to parse previous stored response %s during update: %v", responseID, err)
+		return previousData, "", 0, nil
+	}
+
+	return previousData, previous.ConversationID, previous.CreatedAt, nil
+}
+
+// rollbackUpdatePayload runs when an update's new-conversation index write
+// fails: restores the previous payload bytes and best-effort reindexes the
+// previous conversation (using its own stored CreatedAt, never a fabricated
+// timestamp) before returning the error — an update must never leave a
+// payload pointing at a conversation whose index was never actually
+// written, matching the repairability blueprint §5 Phase 5 asks for on top
+// of StoreResponse's existing rollback/repair (Phase 2).
+func (s *RedisStore) rollbackUpdatePayload(ctx context.Context, key string, previousData []byte, previousConversationID, responseID string, previousCreatedAt int64, indexErr error) error {
+	wrapped := fmt.Errorf("failed to index updated response in Redis: %w", indexErr)
+
+	if restoreErr := s.client.Set(ctx, key, previousData, s.ttl).Err(); restoreErr != nil {
+		return fmt.Errorf("%w (failed to restore previous payload: %v)", wrapped, restoreErr)
+	}
+	if previousConversationID != "" {
+		if reindexErr := s.indexResponse(ctx, previousConversationID, responseID, previousCreatedAt); reindexErr != nil {
+			logging.Warnf("RedisStore: failed to reindex restored response %s under previous conversation %s after update rollback: %v",
+				responseID, previousConversationID, reindexErr)
+		}
+	}
+	return wrapped
 }
 func (s *RedisStore) DeleteResponse(ctx context.Context, responseID string) error {
 	if !s.enabled {

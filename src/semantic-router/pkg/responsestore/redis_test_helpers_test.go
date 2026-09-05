@@ -26,10 +26,19 @@ func conversationIndexMembers(t *testing.T, store *RedisStore, conversationID st
 // so it cannot collide with the other suites sharing DB 0. Skips without Redis.
 func newConversationIndexStore(t *testing.T) *RedisStore {
 	t.Helper()
+	return newConversationIndexStoreWithTTLSeconds(t, 300)
+}
+
+// newConversationIndexStoreWithTTLSeconds is newConversationIndexStore with
+// an explicit data-retention TTL, for tests asserting behavior that depends
+// on how the configured TTL compares to a fixed internal bound (e.g. the
+// empty-marker TTL cap).
+func newConversationIndexStoreWithTTLSeconds(t *testing.T, ttlSeconds int) *RedisStore {
+	t.Helper()
 
 	cfg := StoreConfig{
 		Enabled:     true,
-		TTLSeconds:  300,
+		TTLSeconds:  ttlSeconds,
 		BackendType: RedisStoreType,
 		Redis: RedisStoreConfig{
 			Address:   "localhost:6379",

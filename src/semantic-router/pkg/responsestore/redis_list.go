@@ -272,5 +272,3 @@ func (s *RedisStore) readIndexRange(ctx context.Context, indexKey string, ascend
 
 	return ids, nil
 }
-
-// Conversation Store Methods
