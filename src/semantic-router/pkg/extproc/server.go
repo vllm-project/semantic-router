@@ -72,19 +72,21 @@ var (
 
 // Server represents a gRPC server for the Envoy ExtProc
 type Server struct {
-	configPath  string
-	service     *RouterService
-	server      *grpc.Server
-	port        int
-	secure      bool
-	certPath    string
-	runtime     *routerruntime.Registry
-	stopOnce    sync.Once
-	stopErr     error
-	reloadMu    sync.Mutex
-	stopping    atomic.Bool
-	watchMu     sync.Mutex
-	watchCancel context.CancelFunc
+	configPath       string
+	service          *RouterService
+	server           *grpc.Server
+	port             int
+	secure           bool
+	certPath         string
+	runtime          *routerruntime.Registry
+	servingStopOnce  sync.Once
+	servingStopErr   error
+	resourceStopOnce sync.Once
+	resourceStopErr  error
+	reloadMu         sync.Mutex
+	stopping         atomic.Bool
+	watchMu          sync.Mutex
+	watchCancel      context.CancelFunc
 }
 
 // NewServer creates a new ExtProc gRPC server
@@ -245,12 +247,22 @@ func (s *Server) Shutdown(ctx context.Context) error {
 		ctx, cancel = context.WithTimeout(context.Background(), defaultGenerationDrainTimeout)
 		defer cancel()
 	}
-
-	s.stopOnce.Do(func() { s.stopErr = s.shutdown(ctx) })
-	return s.stopErr
+	return errors.Join(s.ShutdownServing(ctx), s.ShutdownResources(ctx))
 }
 
-func (s *Server) shutdown(ctx context.Context) error {
+// ShutdownServing stops accepting ExtProc requests and drains active streams.
+func (s *Server) ShutdownServing(ctx context.Context) error {
+	if ctx == nil {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(context.Background(), defaultGenerationDrainTimeout)
+		defer cancel()
+	}
+
+	s.servingStopOnce.Do(func() { s.servingStopErr = s.shutdownServing(ctx) })
+	return s.servingStopErr
+}
+
+func (s *Server) shutdownServing(ctx context.Context) error {
 	s.stopping.Store(true)
 	s.watchMu.Lock()
 	if s.watchCancel != nil {
@@ -290,10 +302,23 @@ func (s *Server) shutdown(ctx context.Context) error {
 			"port": s.port,
 		})
 	}
-	if s.service != nil {
-		shutdownErr = errors.Join(shutdownErr, s.service.Shutdown(ctx))
-	}
 	return shutdownErr
+}
+
+// ShutdownResources retires the active router generation and closes it after drain.
+func (s *Server) ShutdownResources(ctx context.Context) error {
+	if ctx == nil {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(context.Background(), defaultGenerationDrainTimeout)
+		defer cancel()
+	}
+
+	s.resourceStopOnce.Do(func() {
+		if s.service != nil {
+			s.resourceStopErr = s.service.Shutdown(ctx)
+		}
+	})
+	return s.resourceStopErr
 }
 
 // RouterService is a delegating gRPC service that forwards to the current router implementation.

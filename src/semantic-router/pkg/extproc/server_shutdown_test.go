@@ -15,6 +15,35 @@ import (
 
 type shutdownTestService interface{}
 
+func TestServerShutdownServingLeavesGenerationResourcesOpen(t *testing.T) {
+	resourcesClosed := make(chan struct{})
+	resources := newResourceScope()
+	resources.add(func() error {
+		close(resourcesClosed)
+		return nil
+	})
+	router := (&routerComponents{resources: resources}).buildRouter()
+	server := &Server{service: NewRouterService(router)}
+
+	if err := server.ShutdownServing(context.Background()); err != nil {
+		t.Fatalf("ShutdownServing() error = %v", err)
+	}
+	select {
+	case <-resourcesClosed:
+		t.Fatal("ShutdownServing() closed generation resources")
+	default:
+	}
+
+	if err := server.ShutdownResources(context.Background()); err != nil {
+		t.Fatalf("ShutdownResources() error = %v", err)
+	}
+	select {
+	case <-resourcesClosed:
+	default:
+		t.Fatal("ShutdownResources() left generation resources open")
+	}
+}
+
 func TestServerShutdownDrainsGenerationAfterForcedGRPCStopWithinDeadline(t *testing.T) {
 	resourcesClosed := make(chan struct{})
 	resources := newResourceScope()

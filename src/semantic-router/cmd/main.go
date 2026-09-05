@@ -24,10 +24,6 @@ import (
 
 const processShutdownTimeout = 30 * time.Second
 
-type contextShutdowner interface {
-	Shutdown(context.Context) error
-}
-
 func main() {
 	logo.PrintVLLMLogo()
 	opts := parseRuntimeOptions()
@@ -63,10 +59,12 @@ func runRouterProcess(ctx context.Context, opts runtimeOptions) (runErr error) {
 	if err != nil {
 		failStartup(startupWriter, "Failed to start management API: %v", err)
 	}
-	var routerServer *extproc.Server
-	var metricsServer *http.Server
-	shutdownHooks := make([]func(context.Context) error, 0)
-	shutdownTracing := func(context.Context) error { return nil }
+	var (
+		routerServer    *extproc.Server
+		metricsServer   *http.Server
+		shutdownHooks   = make([]func(context.Context) error, 0)
+		shutdownTracing = func(context.Context) error { return nil }
+	)
 	// Return errors below so deferred shutdown can release started resources.
 	defer func() {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), processShutdownTimeout)
@@ -123,20 +121,58 @@ func shutdownRouterProcess(
 	shutdownHooks *[]func(context.Context) error,
 	shutdownTracing func(context.Context) error,
 ) error {
-	servers := make([]contextShutdowner, 0, 3)
+	var managementShutdown func(context.Context) error
 	if apiServer != nil {
-		servers = append(servers, apiServer)
+		managementShutdown = apiServer.Shutdown
 	}
+	var resourceShutdown func(context.Context) error
+	servingShutdowns := make([]func(context.Context) error, 0, 2)
 	if routerServer != nil {
-		servers = append(servers, routerServer)
+		servingShutdowns = append(servingShutdowns, routerServer.ShutdownServing)
+		resourceShutdown = routerServer.ShutdownResources
 	}
 	if metricsServer != nil {
-		servers = append(servers, metricsServer)
+		servingShutdowns = append(servingShutdowns, metricsServer.Shutdown)
 	}
-	err := shutdownServers(ctx, servers...)
-	err = errors.Join(err, runShutdownHooks(ctx, shutdownHooks))
-	err = errors.Join(err, shutdownTracing(ctx))
-	return err
+	return shutdownRouterComponents(
+		ctx,
+		managementShutdown,
+		resourceShutdown,
+		shutdownHooks,
+		shutdownTracing,
+		servingShutdowns...,
+	)
+}
+
+func shutdownRouterComponents(
+	ctx context.Context,
+	managementShutdown func(context.Context) error,
+	resourceShutdown func(context.Context) error,
+	shutdownHooks *[]func(context.Context) error,
+	shutdownTracing func(context.Context) error,
+	servingShutdowns ...func(context.Context) error,
+) error {
+	managementDone := make(chan error, 1)
+	go func() {
+		if managementShutdown == nil {
+			managementDone <- nil
+			return
+		}
+		managementDone <- managementShutdown(ctx)
+	}()
+
+	servingErr := shutdownConcurrently(ctx, servingShutdowns...)
+	managementErr := <-managementDone
+	shutdownErr := errors.Join(managementErr, servingErr)
+	if errors.Is(managementErr, context.Canceled) || errors.Is(managementErr, context.DeadlineExceeded) {
+		return shutdownErr
+	}
+	if resourceShutdown != nil {
+		shutdownErr = errors.Join(shutdownErr, resourceShutdown(ctx))
+	}
+	shutdownErr = errors.Join(shutdownErr, runShutdownHooks(ctx, shutdownHooks))
+	shutdownErr = errors.Join(shutdownErr, shutdownTracing(ctx))
+	return shutdownErr
 }
 
 func recordStartupError(writer startupstatus.StatusWriter, operation string, cause error) error {
@@ -152,16 +188,16 @@ func recordStartupError(writer startupstatus.StatusWriter, operation string, cau
 	return err
 }
 
-func shutdownServers(ctx context.Context, servers ...contextShutdowner) error {
-	errorsByServer := make(chan error, len(servers))
-	for _, server := range servers {
-		go func(server contextShutdowner) {
-			errorsByServer <- server.Shutdown(ctx)
-		}(server)
+func shutdownConcurrently(ctx context.Context, shutdowns ...func(context.Context) error) error {
+	shutdownResults := make(chan error, len(shutdowns))
+	for _, shutdown := range shutdowns {
+		go func(shutdown func(context.Context) error) {
+			shutdownResults <- shutdown(ctx)
+		}(shutdown)
 	}
-	shutdownErrors := make([]error, 0, len(servers))
-	for range servers {
-		shutdownErrors = append(shutdownErrors, <-errorsByServer)
+	shutdownErrors := make([]error, 0, len(shutdowns))
+	for range shutdowns {
+		shutdownErrors = append(shutdownErrors, <-shutdownResults)
 	}
 	return errors.Join(shutdownErrors...)
 }
