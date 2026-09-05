@@ -3,7 +3,6 @@ package extproc
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/openai/openai-go"
 
@@ -11,8 +10,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 )
 
 func (r *OpenAIRouter) scheduleSemanticResponseMemoryStore(
@@ -56,23 +53,28 @@ func (r *OpenAIRouter) scheduleResponseMemoryStoreText(
 		return
 	}
 
+	// Snapshot request-owned state before dispatch. extractMemoryInfo deep-copies
+	// history; protocol encoding and parsing remain in the worker.
 	currentUserMessage := extractCurrentUserMessage(ctx)
+	sessionID, userID, history, infoErr := extractMemoryInfo(ctx)
+	historyCount := len(history)
+	extractor := r.MemoryExtractor
+	receipt := r.snapshotMemoryPersistenceReceipt(ctx)
 	r.memoryPersistence.Submit(ctx.TraceContext, memory.PersistenceJob{
 		Run: func(jobCtx context.Context) (memory.PersistenceOutcome, error) {
-			sessionID, userID, history, err := extractMemoryInfo(ctx)
-			if err != nil {
+			if infoErr != nil {
 				return memory.PersistenceOutcome{
 					Status: "skipped",
 					Reason: "memory_info_unavailable",
-				}, err
+				}, infoErr
 			}
-			extractorHistory, err := r.memoryHistoryForExtractor(history)
-			if err != nil {
+			extractorHistory, historyErr := r.memoryHistoryForExtractor(history)
+			if historyErr != nil {
 				return memory.PersistenceOutcome{
 					Status:   "extraction_failed",
 					Reason:   "history_encode_error",
 					FailOpen: true,
-				}, err
+				}, historyErr
 			}
 
 			logging.Infof(
@@ -81,10 +83,10 @@ func (r *OpenAIRouter) scheduleResponseMemoryStoreText(
 				userID,
 				len(currentUserMessage),
 				len(currentAssistantResponse),
-				len(history),
+				historyCount,
 			)
 
-			storedCount, err := r.MemoryExtractor.ProcessResponseWithHistory(
+			storedCount, err := extractor.ProcessResponseWithHistory(
 				jobCtx,
 				sessionID,
 				userID,
@@ -100,9 +102,7 @@ func (r *OpenAIRouter) scheduleResponseMemoryStoreText(
 			}
 			return memory.PersistenceOutcome{}, nil
 		},
-		Report: func(status, reason string, failOpen bool, cause error) {
-			r.recordMemoryPersistenceOutcome(ctx, status, reason, failOpen, cause)
-		},
+		Report: receipt.record,
 	})
 }
 
@@ -129,78 +129,4 @@ func (r *OpenAIRouter) memoryHistoryForExtractor(
 		return nil, fmt.Errorf("parse encoded history: %w", err)
 	}
 	return request.Messages, nil
-}
-
-func (r *OpenAIRouter) recordMemoryPersistenceOutcome(
-	ctx *RequestContext, status,
-	reason string,
-	failOpen bool,
-	cause error,
-) {
-	if status != "scheduled" {
-		metrics.RecordPluginExecution("memory_persistence", requestDecisionStateKey(ctx), status, 0)
-	}
-	r.appendMemoryPersistenceReplayOutcome(ctx, status, reason, failOpen)
-	if status == "scheduled" {
-		return
-	}
-
-	if !failOpen && cause == nil && status != "rejected" {
-		return
-	}
-
-	fields := map[string]interface{}{
-		"request_id": ctx.RequestID,
-		"status":     status,
-		"reason":     reason,
-		"fail_open":  failOpen,
-	}
-	if cause != nil {
-		fields["error_class"] = fmt.Sprintf("%T", cause)
-	}
-	logging.ComponentWarnEvent("extproc", "memory_persistence_outcome", fields)
-}
-
-func (r *OpenAIRouter) appendMemoryPersistenceReplayOutcome(
-	ctx *RequestContext,
-	status string,
-	reason string,
-	failOpen bool,
-) {
-	if ctx.RouterReplayID == "" {
-		return
-	}
-	recorder := ctx.RouterReplayRecorder
-	if recorder == nil {
-		recorder = r.ReplayRecorder
-	}
-	if recorder == nil {
-		return
-	}
-	phase := "terminal"
-	if status == "scheduled" {
-		phase = "scheduled"
-	}
-	if err := recorder.AppendOutcome(ctx.RouterReplayID, routerreplay.Outcome{
-		Timestamp: time.Now().UTC(),
-		Source:    "router",
-		Target:    "router",
-		TargetRef: "memory_persistence",
-		Verdict:   status,
-		Reason:    reason,
-		Metadata: map[string]string{
-			"kind":      "memory_persistence_receipt",
-			"phase":     phase,
-			"fail_open": fmt.Sprintf("%t", failOpen),
-		},
-	}); err != nil {
-		logging.ComponentWarnEvent("extproc", "memory_persistence_replay_outcome_failed", map[string]interface{}{
-			"request_id": ctx.RequestID,
-			"replay_id":  ctx.RouterReplayID,
-			"status":     status,
-			"reason":     reason,
-			"phase":      phase,
-			"error":      err.Error(),
-		})
-	}
 }
