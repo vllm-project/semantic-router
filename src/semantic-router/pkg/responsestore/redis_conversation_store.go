@@ -150,9 +150,9 @@ func (s *RedisStore) DeleteConversation(ctx context.Context, conversationID stri
 // is genuinely empty.
 //
 // Each iteration reads rank 0..redisDeleteBatchSize-1 again (not an
-// offsetting range): deleteConversationResponseBatch's own ZREM at the end
-// of the previous iteration already removed every member it resolved, so
-// the next read naturally advances past them. If a batch reports any
+// offsetting range): deleteConversationResponseBatch removes candidates
+// before resolving their payloads and restores only unresolved members, so
+// the next read naturally advances past resolved work. If a batch reports any
 // unresolved response (see deleteConversationResponseBatch — ownership
 // verified per response, never a blind delete), this returns the error and
 // stops rather than silently logging and reporting success — per blueprint
@@ -168,15 +168,15 @@ func (s *RedisStore) deleteConversationResponses(ctx context.Context, conversati
 	}
 
 	for {
-		responseIDs, err := s.client.ZRange(ctx, indexKey, 0, redisDeleteBatchSize-1).Result()
+		candidates, err := s.client.ZRangeWithScores(ctx, indexKey, 0, redisDeleteBatchSize-1).Result()
 		if err != nil {
 			return fmt.Errorf("failed to list responses for deletion: %w", err)
 		}
-		if len(responseIDs) == 0 {
+		if len(candidates) == 0 {
 			break
 		}
 
-		if err := s.deleteConversationResponseBatch(ctx, conversationID, responseIDs); err != nil {
+		if err := s.deleteConversationResponseBatch(ctx, conversationID, candidates); err != nil {
 			return err
 		}
 	}
@@ -204,7 +204,7 @@ func (s *RedisStore) deleteConversationResponses(ctx context.Context, conversati
 // the index already has), or confirm the conversation is genuinely empty.
 //
 // Once the whole store is marked migration-complete
-// (ConversationIndexMigrationStatusKey), this returns immediately without
+// (ConversationIndexCompletionKeySuffix), this returns immediately without
 // even checking the per-conversation marker: the index is trusted
 // unconditionally, so cascade delete never scans, matching the read path in
 // ListResponsesByConversation.

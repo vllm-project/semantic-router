@@ -8,61 +8,8 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 )
-
-// responsePayloadResult is one response ID's raw GET outcome from
-// fetchResponsePayloadsPipelined: exactly the bytes stored at key at the
-// moment of the read, for a later exact-match compare-delete, or the error
-// GET returned instead. err wraps redis.Nil (checked with errors.Is) for a
-// missing payload — deliberately distinguished from any other failure, since
-// callers must treat the two very differently: missing is safe to prune from
-// an index, any other GET failure is not.
-type responsePayloadResult struct {
-	responseID string
-	key        string
-	raw        []byte
-	err        error
-}
-
-// fetchResponsePayloadsPipelined GETs a batch of response payloads from
-// client in one round trip, returning one result per input ID in the same
-// order. Every GET is independent and single-key — never MGET — pipelined
-// only for round-trip efficiency: in Redis Cluster mode, the response IDs
-// belonging to one conversation's index can hash to any slot, and a
-// multi-key command spanning different slots fails with CROSSSLOT, whereas
-// go-redis's ClusterClient.Pipeline still routes each independent
-// single-key command to its own slot's node correctly.
-func (s *RedisStore) fetchResponsePayloadsPipelined(ctx context.Context, client redis.UniversalClient, responseIDs []string) []responsePayloadResult {
-	results := make([]responsePayloadResult, len(responseIDs))
-	if len(responseIDs) == 0 {
-		return results
-	}
-
-	pipe := client.Pipeline()
-	cmds := make([]*redis.StringCmd, len(responseIDs))
-	for i, id := range responseIDs {
-		key := s.buildKey(ResponseKeyPrefix + id)
-		results[i] = responsePayloadResult{responseID: id, key: key}
-		cmds[i] = pipe.Get(ctx, key)
-	}
-
-	if _, err := pipe.Exec(ctx); err != nil && !errors.Is(err, redis.Nil) {
-		logging.Debugf("RedisStore: cascade-delete fetch pipeline execution completed with some errors: %v", err)
-	}
-
-	for i, cmd := range cmds {
-		data, err := cmd.Bytes()
-		if err != nil {
-			results[i].err = err
-			continue
-		}
-		results[i].raw = data
-	}
-
-	return results
-}
 
 // deleteConversationResponseBatch deletes one bounded batch of a
 // conversation's indexed responses, verifying ownership before deleting any
@@ -96,53 +43,112 @@ func (s *RedisStore) fetchResponsePayloadsPipelined(ctx context.Context, client 
 // independent chance to resolve — one bad payload never blocks the rest of
 // the batch from making progress. ZREM only ever removes members proven
 // deleted, missing, or moved.
-func (s *RedisStore) deleteConversationResponseBatch(ctx context.Context, conversationID string, responseIDs []string) error {
-	if len(responseIDs) == 0 {
+func (s *RedisStore) deleteConversationResponseBatch(ctx context.Context, conversationID string, candidates []redis.Z) error {
+	if len(candidates) == 0 {
 		return nil
 	}
 
-	results := s.fetchResponsePayloadsPipelined(ctx, s.client, responseIDs)
-
-	var (
-		toUnindex []string
-		errs      []error
-	)
-	for _, result := range results {
-		switch {
-		case errors.Is(result.err, redis.Nil):
-			toUnindex = append(toUnindex, result.responseID)
-		case result.err != nil:
-			errs = append(errs, fmt.Errorf("failed to read response %s for cascade delete: %w", result.responseID, result.err))
-		default:
-			unindex, err := s.resolveCascadeDeleteOutcome(ctx, conversationID, result)
-			if err != nil {
-				errs = append(errs, err)
-				continue
-			}
-			if unindex {
-				toUnindex = append(toUnindex, result.responseID)
-			}
-		}
+	responseIDs, err := responseIDsFromCandidates(candidates)
+	if err != nil {
+		return err
 	}
 
-	if len(toUnindex) > 0 {
-		if err := s.unindexResponse(ctx, conversationID, toUnindex...); err != nil {
-			errs = append(errs, fmt.Errorf("failed to remove %d resolved response(s) from conversation %s index: %w",
-				len(toUnindex), conversationID, err))
+	// Remove the old membership before resolving payload ownership. This
+	// ordering is essential: after a successful payload delete, another
+	// writer may recreate the same response ID and ZADD it. There must be no
+	// later unconditional ZREM that can erase that fresh membership.
+	if err := s.unindexResponse(ctx, conversationID, responseIDs...); err != nil {
+		return err
+	}
+
+	keys := make([]string, len(responseIDs))
+	for i, responseID := range responseIDs {
+		keys[i] = s.buildKey(ResponseKeyPrefix + responseID)
+	}
+	results := fetchResponsePayloadsPipelined(ctx, s.client, keys)
+
+	toRestore, errs := s.resolveCascadeBatchResults(ctx, conversationID, responseIDs, candidates, results)
+	if len(toRestore) > 0 {
+		if err := s.restoreConversationIndexMembers(ctx, conversationID, toRestore); err != nil {
+			errs = append(errs, err)
 		}
 	}
 
 	return errors.Join(errs...)
 }
 
+func responseIDsFromCandidates(candidates []redis.Z) ([]string, error) {
+	responseIDs := make([]string, len(candidates))
+	for i, candidate := range candidates {
+		responseID, ok := candidate.Member.(string)
+		if !ok {
+			return nil, fmt.Errorf("unexpected conversation index member type %T", candidate.Member)
+		}
+		responseIDs[i] = responseID
+	}
+	return responseIDs, nil
+}
+
+func (s *RedisStore) resolveCascadeBatchResults(
+	ctx context.Context,
+	conversationID string,
+	responseIDs []string,
+	candidates []redis.Z,
+	results []responsePayloadResult,
+) ([]redis.Z, []error) {
+	var toRestore []redis.Z
+	var errs []error
+	for i, result := range results {
+		responseID := responseIDs[i]
+		switch {
+		case errors.Is(result.err, redis.Nil):
+			// The stale member was already removed above.
+		case result.err != nil:
+			errs = append(errs, fmt.Errorf("failed to read response %s for cascade delete: %w", responseID, result.err))
+			toRestore = append(toRestore, candidates[i])
+		default:
+			resolved, err := s.resolveCascadeDeleteOutcome(ctx, conversationID, responseID, result)
+			if err != nil {
+				errs = append(errs, err)
+				toRestore = append(toRestore, candidates[i])
+				continue
+			}
+			if !resolved {
+				toRestore = append(toRestore, candidates[i])
+			}
+		}
+	}
+	return toRestore, errs
+}
+
+// restoreConversationIndexMembers makes an interrupted cascade retryable.
+// NX is deliberate: if a concurrent writer already re-added a member with a
+// newer score, restoring the old candidate must not overwrite that score.
+func (s *RedisStore) restoreConversationIndexMembers(ctx context.Context, conversationID string, members []redis.Z) error {
+	if len(members) == 0 {
+		return nil
+	}
+	if err := s.client.ZAddArgs(ctx, s.conversationIndexKey(conversationID), redis.ZAddArgs{
+		NX:      true,
+		Members: members,
+	}).Err(); err != nil {
+		return fmt.Errorf("failed to restore %d unresolved response(s) to conversation %s index: %w",
+			len(members), conversationID, err)
+	}
+	return nil
+}
+
 // resolveCascadeDeleteOutcome decides and executes one response's cascade
 // outcome once its payload has been successfully read: prune-only if it has
 // moved to a different conversation, or compare-delete if conversationID
 // still owns it. Returns whether the index member is now safe to remove.
-func (s *RedisStore) resolveCascadeDeleteOutcome(ctx context.Context, conversationID string, result responsePayloadResult) (bool, error) {
+func (s *RedisStore) resolveCascadeDeleteOutcome(ctx context.Context, conversationID, responseID string, result responsePayloadResult) (bool, error) {
 	var stored responseapi.StoredResponse
 	if err := json.Unmarshal(result.raw, &stored); err != nil {
-		return false, fmt.Errorf("failed to parse response %s during cascade delete: %w", result.responseID, err)
+		return false, fmt.Errorf("failed to parse response %s during cascade delete: %w", responseID, err)
+	}
+	if stored.ID != responseID {
+		return false, fmt.Errorf("response %s payload identity mismatch during cascade delete", responseID)
 	}
 
 	if stored.ConversationID != conversationID {
@@ -155,13 +161,13 @@ func (s *RedisStore) resolveCascadeDeleteOutcome(ctx context.Context, conversati
 
 	deleted, err := s.compareDeleteResponsePayload(ctx, result.key, result.raw)
 	if err != nil {
-		return false, fmt.Errorf("failed to delete response %s during cascade delete: %w", result.responseID, err)
+		return false, fmt.Errorf("failed to delete response %s during cascade delete: %w", responseID, err)
 	}
 	if !deleted {
 		// A concurrent write landed between the read above and this
 		// compare-delete: the payload is no longer the bytes just read, so
 		// it was left alone rather than risk destroying that newer write.
-		return false, fmt.Errorf("response %s changed concurrently during cascade delete; left in place for retry", result.responseID)
+		return false, fmt.Errorf("response %s changed concurrently during cascade delete; left in place for retry", responseID)
 	}
 
 	return true, nil

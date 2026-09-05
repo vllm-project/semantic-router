@@ -23,13 +23,13 @@ func TestConversationIndexScanLeaseSerializesConcurrentReadersSameConversation(t
 	ctx := context.Background()
 
 	var scanning atomic.Bool
-	store.lazyBackfillPreScanHook = func() {
+	store.client.AddHook(&beforeCommandHook{name: "scan", before: func() {
 		if !scanning.CompareAndSwap(false, true) {
 			t.Error("a second scan started while one was still in flight")
 		}
 		time.Sleep(600 * time.Millisecond)
 		scanning.Store(false)
-	}
+	}})
 
 	const readers = 20
 	var wg sync.WaitGroup
@@ -63,7 +63,7 @@ func TestConversationIndexScanLeaseSerializesConcurrentNovelConversations(t *tes
 
 	var inFlight atomic.Int32
 	var maxInFlight atomic.Int32
-	store.lazyBackfillPreScanHook = func() {
+	store.client.AddHook(&beforeCommandHook{name: "scan", before: func() {
 		current := inFlight.Add(1)
 		for {
 			observed := maxInFlight.Load()
@@ -73,7 +73,7 @@ func TestConversationIndexScanLeaseSerializesConcurrentNovelConversations(t *tes
 		}
 		time.Sleep(50 * time.Millisecond)
 		inFlight.Add(-1)
-	}
+	}})
 
 	const readers = 20
 	var wg sync.WaitGroup
@@ -187,6 +187,28 @@ func TestConversationIndexScanLeaseWaiterRespectsCancellation(t *testing.T) {
 	require.Error(t, err)
 	assert.ErrorIs(t, err, context.DeadlineExceeded)
 	assert.Lessf(t, elapsed, 2*time.Second, "a cancelled waiter must return promptly, not block for a much longer default")
+}
+
+func TestConversationIndexScanLeaseWaiterReturnsWhenProofAppears(t *testing.T) {
+	store := newConversationIndexStore(t)
+	ctx := context.Background()
+
+	require.NoError(t, store.client.Set(ctx, store.conversationIndexScanLeaseKey(), "external-holder", time.Minute).Err())
+	proofWritten := make(chan struct{})
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		_ = store.markConversationMigrated(ctx, "conv_waiter_resolved", conversationIndexProofEmpty)
+		close(proofWritten)
+	}()
+
+	start := time.Now()
+	err := store.ensureConversationIndex(ctx, "conv_waiter_resolved")
+	require.NoError(t, err)
+	<-proofWritten
+	assert.Less(t, time.Since(start), 2*time.Second)
+	assert.Zero(t, store.scanInvocations.Load())
+	assert.EqualValues(t, 1, exists(t, store, store.conversationIndexScanLeaseKey()),
+		"the waiter must return from the proof check without acquiring the still-held lease")
 }
 
 // TestConversationIndexScanLeaseSequentialWaitersEachGetATurn covers "holder

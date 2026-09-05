@@ -48,9 +48,9 @@ func TestRedisStoreResponseRollsBackIndexFailure(t *testing.T) {
 	ctx := context.Background()
 
 	injectedErr := errors.New("injected index failure")
-	store.indexResponseOverride = func(context.Context, string, string, int64) error {
-		return injectedErr
-	}
+	store.client.AddHook(&pipelineFailureHook{
+		name: "zadd", key: store.conversationIndexKey("conv_rollback"), err: injectedErr,
+	})
 
 	response := &responseapi.StoredResponse{
 		ID:             "resp_rollback",
@@ -70,7 +70,6 @@ func TestRedisStoreResponseRollsBackIndexFailure(t *testing.T) {
 	assert.Empty(t, conversationIndexMembers(t, store, "conv_rollback"))
 
 	// Remove the injected failure and retry: must succeed cleanly.
-	store.indexResponseOverride = nil
 	require.NoError(t, store.StoreResponse(ctx, response))
 
 	stored, err := store.GetResponse(ctx, response.ID)
@@ -216,9 +215,9 @@ func TestRedisUpdateResponseRestoresOnIndexFailure(t *testing.T) {
 	require.Equal(t, []string{"resp_update_rollback"}, conversationIndexMembers(t, store, "conv_update_from"))
 
 	injectedErr := errors.New("injected update index failure")
-	store.indexResponseOverride = func(context.Context, string, string, int64) error {
-		return injectedErr
-	}
+	store.client.AddHook(&pipelineFailureHook{
+		name: "zadd", key: store.conversationIndexKey("conv_update_to"), err: injectedErr,
+	})
 
 	updated := *original
 	updated.ConversationID = "conv_update_to"
@@ -226,11 +225,6 @@ func TestRedisUpdateResponseRestoresOnIndexFailure(t *testing.T) {
 	err := store.UpdateResponse(ctx, &updated)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, injectedErr)
-
-	// The payload restore itself does not go through indexResponseOverride
-	// (it's a plain SET), so it must have succeeded even with the override
-	// still failing indexResponse.
-	store.indexResponseOverride = nil
 
 	restored, err := store.GetResponse(ctx, original.ID)
 	require.NoError(t, err)
