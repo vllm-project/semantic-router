@@ -512,7 +512,7 @@ func (OpenAIResponsesCodec) DecodeTransportError(
 	body []byte,
 	policy llmprotocol.Policy,
 ) (llmprotocol.TransportError, llmprotocol.Diagnostics, error) {
-	return decodeOpenAITransportError(body, policy)
+	return decodeOpenAITransportError(body, policy, llmprotocol.OpenAIResponsesV1)
 }
 
 func (OpenAIResponsesCodec) EncodeTransportError(transportError llmprotocol.TransportError) []byte {

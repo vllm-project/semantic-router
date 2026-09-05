@@ -67,19 +67,21 @@ func TestResolveOpenAIBackendDialect(t *testing.T) {
 
 func TestResolveOpenAIBackendDialectAzureHosts(t *testing.T) {
 	tests := []struct {
-		name    string
-		baseURL string
+		name         string
+		providerType string
+		baseURL      string
 	}{
-		{name: "azure openai", baseURL: "https://my-resource.openai.azure.com/openai/v1"},
-		{name: "azure ai foundry", baseURL: "https://my-resource.services.ai.azure.com/openai/v1"},
-		{name: "cognitive services", baseURL: "https://my-resource.cognitiveservices.azure.com/openai/v1"},
+		{name: "canonical azure profile", providerType: "azure-openai"},
+		{name: "azure openai host", providerType: "openai", baseURL: "https://my-resource.openai.azure.com/openai/v1"},
+		{name: "azure ai foundry host", providerType: "openai", baseURL: "https://my-resource.services.ai.azure.com/openai/v1"},
+		{name: "cognitive services host", providerType: "openai", baseURL: "https://my-resource.cognitiveservices.azure.com/openai/v1"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			dialect := resolveOpenAIBackendDialect(&config.ProviderProfile{Type: "openai", BaseURL: tt.baseURL})
+			dialect := resolveOpenAIBackendDialect(&config.ProviderProfile{Type: tt.providerType, BaseURL: tt.baseURL})
 
 			assert.Equal(t, openAIBackendDialectAzureOpenAI, dialect.kind)
-			assert.Equal(t, llmprotocol.VendorAzure, dialect.vendorExtensionProvider())
+			assert.Equal(t, llmprotocol.ResponseVendorAzure, dialect.vendorExtensionProvider())
 			// Azure request shaping is unchanged from the generic dialect.
 			assert.False(t, dialect.usesTopLevelReasoningEffort())
 			assert.False(t, dialect.usesDeepSeekOfficialReasoning())

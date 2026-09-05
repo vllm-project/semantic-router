@@ -19,13 +19,17 @@ type openAITransportErrorDetailWire struct {
 func decodeOpenAITransportError(
 	body []byte,
 	policy llmprotocol.Policy,
+	format llmprotocol.WireFormat,
 ) (llmprotocol.TransportError, llmprotocol.Diagnostics, error) {
 	var wire openAITransportErrorWire
-	if err := decodeProviderWire(body, &wire, policy); err != nil {
+	vendorExtensions, err := decodeProviderWireVendorAware(body, &wire, policy)
+	if err != nil {
 		return llmprotocol.TransportError{}, nil, err
 	}
+	var diagnostics llmprotocol.Diagnostics
+	appendVendorExtensionDiagnostics(&diagnostics, policy, format, vendorExtensions)
 	if wire.Error == nil {
-		return llmprotocol.TransportError{}, nil, llmprotocol.NewError(
+		return llmprotocol.TransportError{}, diagnostics, llmprotocol.NewError(
 			llmprotocol.ErrorUpstreamUnavailable,
 			"upstream_error_required",
 			"upstream transport error body is missing error details",
@@ -33,7 +37,7 @@ func decodeOpenAITransportError(
 		)
 	}
 	if err := validateTransportErrorDetails(wire.Error.Type, wire.Error.Message); err != nil {
-		return llmprotocol.TransportError{}, nil, err
+		return llmprotocol.TransportError{}, diagnostics, err
 	}
 	code, parameter := "", ""
 	if wire.Error.Code != nil {
@@ -47,7 +51,7 @@ func decodeOpenAITransportError(
 		Code:      code,
 		Message:   wire.Error.Message,
 		Parameter: parameter,
-	}}, nil, nil
+	}}, diagnostics, nil
 }
 
 func encodeOpenAITransportError(transportError llmprotocol.TransportError) []byte {

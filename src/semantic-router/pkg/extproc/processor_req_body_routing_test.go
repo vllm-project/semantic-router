@@ -31,6 +31,36 @@ func TestProviderDispatchEncodesEveryClientBackendProtocolPair(t *testing.T) {
 	}
 }
 
+func TestAzureProviderDispatchAcceptsDecoratedResponse(t *testing.T) {
+	router, logicalModel := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
+	profile := router.Config.ProviderProfiles["provider"]
+	profile.Type = "azure-openai"
+	router.Config.ProviderProfiles["provider"] = profile
+
+	request := testNeutralRequest(logicalModel, "hello")
+	ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
+	if _, err := router.prepareProviderDispatch(request, logicalModel, "", false, ctx); err != nil {
+		t.Fatal(err)
+	}
+	if ctx.ResponseVendor != llmprotocol.ResponseVendorAzure {
+		t.Fatalf("response vendor = %q, want Azure", ctx.ResponseVendor)
+	}
+
+	body := []byte(`{"id":"response_1","model":"provider-model","choices":[{"index":0,"message":{"role":"assistant","content":"hello"},"finish_reason":"stop","content_filter_results":{}}]}`)
+	response, err := router.decodeClientResponse(body, ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(response.Output) != 1 || len(response.Output[0].Content) != 1 || response.Output[0].Content[0].Text != "hello" {
+		t.Fatalf("response = %+v, want decoded assistant output", response)
+	}
+	if len(ctx.ProtocolDiagnostics) != 1 ||
+		ctx.ProtocolDiagnostics[0].Field != "choices[].content_filter_results" ||
+		ctx.ProtocolDiagnostics[0].Action != llmprotocol.DiagnosticDropped {
+		t.Fatalf("diagnostics = %+v, want the dropped Azure field", ctx.ProtocolDiagnostics)
+	}
+}
+
 func TestProviderDispatchAppliesReasoningBeforeExternalModelIDRewrite(t *testing.T) {
 	router, logicalModel := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
 	params := router.Config.ModelConfig[logicalModel]

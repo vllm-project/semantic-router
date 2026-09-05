@@ -1,6 +1,7 @@
 package protocolcodec
 
 import (
+	"context"
 	"errors"
 	"reflect"
 	"strings"
@@ -9,9 +10,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
-// azureChatCompletion is the shape Azure OpenAI / AI Foundry actually returns:
-// a canonical OpenAI chat completion decorated with Azure's own fields at four
-// paths. Reported in issue #3496.
+// azureChatCompletion reproduces the decorated response from issue #3496.
 const azureChatCompletion = `{
   "id": "chatcmpl-1",
   "object": "chat.completion",
@@ -33,8 +32,7 @@ const azureChatCompletion = `{
   }
 }`
 
-// azureTarget is a canonical-shaped subset: the schema decides what counts as
-// a decoration, so anything Azure adds beyond these fields is a drop.
+// azureTarget is the canonical subset used by the stripping tests.
 type azureTarget struct {
 	ID      string `json:"id"`
 	Object  string `json:"object"`
@@ -93,8 +91,6 @@ func TestStripProviderVendorExtensionsLeavesCanonicalBodyUntouched(t *testing.T)
 	}
 }
 
-// Decorations nested inside a canonical object are dropped at their real path,
-// not just at the top level.
 func TestStripProviderVendorExtensionsDropsNestedDecorations(t *testing.T) {
 	body := `{"id":"a","model":"m","choices":[{"index":0,"message":{"role":"assistant","content":"hi","azure_note":"x"}}]}`
 
@@ -110,8 +106,8 @@ func TestStripProviderVendorExtensionsDropsNestedDecorations(t *testing.T) {
 }
 
 func TestProviderVendorExtensionsAllowedOnlyForKnownVendors(t *testing.T) {
-	for _, vendor := range []string{"", "not-a-vendor", "openai"} {
-		t.Run("vendor="+vendor, func(t *testing.T) {
+	for _, vendor := range []llmprotocol.ResponseVendor{"", "not-a-vendor", "openai"} {
+		t.Run("vendor="+string(vendor), func(t *testing.T) {
 			policy := llmprotocol.DefaultPolicy()
 			policy.ResponseVendor = vendor
 
@@ -121,18 +117,16 @@ func TestProviderVendorExtensionsAllowedOnlyForKnownVendors(t *testing.T) {
 		})
 	}
 	policy := llmprotocol.DefaultPolicy()
-	policy.ResponseVendor = llmprotocol.VendorAzure
+	policy.ResponseVendor = llmprotocol.ResponseVendorAzure
 	if !providerVendorExtensionsAllowed(policy) {
 		t.Error("providerVendorExtensionsAllowed(azure) = false, want true")
 	}
 }
 
-// The point of shape 3: a decoration Azure has not shipped yet must not break
-// the router the way a fixed name list would.
 func TestDecodeProviderWireAcceptsUnanticipatedAzureFields(t *testing.T) {
 	var target azureTarget
 	policy := llmprotocol.DefaultPolicy()
-	policy.ResponseVendor = llmprotocol.VendorAzure
+	policy.ResponseVendor = llmprotocol.ResponseVendorAzure
 
 	body := `{"id":"a","object":"chat.completion","created":1,"model":"m",` +
 		`"a_field_azure_ships_next_year":{"nested":true},` +
@@ -172,7 +166,7 @@ func TestDecodeProviderWireAcceptsAzureDecoratedResponse(t *testing.T) {
 	}
 
 	policy := llmprotocol.DefaultPolicy()
-	policy.ResponseVendor = llmprotocol.VendorAzure
+	policy.ResponseVendor = llmprotocol.ResponseVendorAzure
 	if err := decodeProviderWire([]byte(azureChatCompletion), &target, policy); err != nil {
 		t.Fatalf("decodeProviderWire() error = %v, want nil", err)
 	}
@@ -187,8 +181,7 @@ func TestDecodeProviderWireAcceptsAzureDecoratedResponse(t *testing.T) {
 	}
 }
 
-// The allowlist must not become a blanket accept: an unknown field outside it
-// still fails with the canonical upstream error.
+// Strict backends still reject every unknown field.
 func TestDecodeProviderWireStillRejectsUnknownFields(t *testing.T) {
 	var target struct {
 		Model string `json:"model"`
@@ -203,8 +196,7 @@ func TestDecodeProviderWireStillRejectsUnknownFields(t *testing.T) {
 	}
 }
 
-// Without the vendor allowance the same Azure body is still rejected: the
-// backend dialect, not the field name, is what grants the exemption.
+// The backend dialect, not a field name, grants the exemption.
 func TestDecodeProviderWireRejectsAzureFieldsWithoutVendorAllowance(t *testing.T) {
 	var target struct {
 		ID    string `json:"id"`
@@ -220,9 +212,7 @@ func TestDecodeProviderWireRejectsAzureFieldsWithoutVendorAllowance(t *testing.T
 	}
 }
 
-// The field name is what an operator needs and what a caller must not see.
-// ProtocolError.Message is serialized into the client error body, so the name
-// belongs in the cause and nowhere else.
+// Field details belong in the operator-visible cause, not the client message.
 func TestDecodeProviderWireKeepsTheOffendingFieldOutOfTheClientMessage(t *testing.T) {
 	var target struct {
 		Model string `json:"model"`
@@ -245,12 +235,10 @@ func TestDecodeProviderWireKeepsTheOffendingFieldOutOfTheClientMessage(t *testin
 	}
 }
 
-// The whole point of dropping rather than rejecting is that the drop is
-// observable. Decoding a decorated Azure response must surface one
-// DiagnosticDropped per decoration.
+// Every accepted decoration must produce a dropped-field diagnostic.
 func TestDecodeResponseReportsVendorExtensionsAsDiagnostics(t *testing.T) {
 	policy := llmprotocol.DefaultPolicy()
-	policy.ResponseVendor = llmprotocol.VendorAzure
+	policy.ResponseVendor = llmprotocol.ResponseVendorAzure
 
 	_, _, diagnostics, err := OpenAIChatCodec{}.DecodeResponse([]byte(azureChatCompletion), policy)
 	if err != nil {
@@ -275,27 +263,63 @@ func TestDecodeResponseReportsVendorExtensionsAsDiagnostics(t *testing.T) {
 	}
 }
 
-// Azure decorates error envelopes too. Decoding those strictly would replace a
-// real upstream reason (content filter block, rate limit) with a generic
-// router error, so the vendor allowance has to reach this path as well.
+// Error envelopes use the same vendor policy as successful responses.
 func TestDecodeTransportErrorAcceptsDecoratedAzureErrorEnvelope(t *testing.T) {
 	body := `{"error":{"type":"invalid_request_error","code":"content_filter",` +
 		`"message":"blocked","param":null,"innererror":{"content_filter_result":{"hate":{"filtered":true}}}}}`
 
 	policy := llmprotocol.DefaultPolicy()
-	policy.ResponseVendor = llmprotocol.VendorAzure
-
-	transportError, _, err := OpenAIChatCodec{}.DecodeTransportError([]byte(body), policy)
+	policy.ResponseVendor = llmprotocol.ResponseVendorAzure
+	engine, err := NewEngine(NewBuiltinRegistry(), policy)
 	if err != nil {
-		t.Fatalf("DecodeTransportError() error = %v, want nil", err)
+		t.Fatal(err)
 	}
-	if transportError.Error == nil || transportError.Error.Code != "content_filter" {
-		t.Errorf("Error = %+v, want the upstream content_filter code preserved", transportError.Error)
+	for _, format := range []llmprotocol.WireFormat{llmprotocol.OpenAIChatV1, llmprotocol.OpenAIResponsesV1} {
+		t.Run(string(format), func(t *testing.T) {
+			transportError, diagnostics, err := engine.DecodeTransportError(format, []byte(body))
+			if err != nil {
+				t.Fatalf("DecodeTransportError() error = %v, want nil", err)
+			}
+			if transportError.Error == nil || transportError.Error.Code != "content_filter" {
+				t.Errorf("Error = %+v, want the upstream content_filter code preserved", transportError.Error)
+			}
+			if len(diagnostics) != 1 || diagnostics[0].Field != "error.innererror" ||
+				diagnostics[0].Action != llmprotocol.DiagnosticDropped || diagnostics[0].Source != format {
+				t.Errorf("diagnostics = %+v, want one dropped error.innererror field from %s", diagnostics, format)
+			}
+		})
 	}
 
 	// Without the allowance the same envelope is still rejected.
 	_, _, strictErr := OpenAIChatCodec{}.DecodeTransportError([]byte(body), llmprotocol.DefaultPolicy())
 	if strictErr == nil {
 		t.Error("DecodeTransportError() error = nil without an allowance, want rejection")
+	}
+}
+
+func TestChatStreamErrorReportsVendorExtensions(t *testing.T) {
+	policy := llmprotocol.DefaultPolicy()
+	policy.ResponseVendor = llmprotocol.ResponseVendorAzure
+	engine, err := NewEngine(NewBuiltinRegistry(), policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stream, err := engine.NewStream(llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, llmprotocol.StreamContext{
+		Context: context.Background(), PublicModel: "public-model",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	frame := []byte("data: {\"error\":{\"type\":\"server_error\",\"code\":\"blocked\",\"message\":\"blocked\"},\"azure_trace\":{}}\n\n")
+	_, events, diagnostics, err := stream.Push(frame)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 1 || events[0].Error == nil || events[0].Error.Code != "blocked" {
+		t.Fatalf("events = %+v, want the provider error", events)
+	}
+	if len(diagnostics) != 1 || diagnostics[0].Field != "azure_trace" ||
+		diagnostics[0].Action != llmprotocol.DiagnosticDropped {
+		t.Errorf("diagnostics = %+v, want one dropped azure_trace field", diagnostics)
 	}
 }

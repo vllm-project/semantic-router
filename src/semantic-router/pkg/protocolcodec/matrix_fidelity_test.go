@@ -45,6 +45,9 @@ func TestPolicyEnumsAndEveryLimitAreClosed(t *testing.T) {
 		"source preservation": func(policy *llmprotocol.Policy) {
 			policy.SourcePreservation = llmprotocol.SourcePreservationPolicy("future")
 		},
+		"response vendor": func(policy *llmprotocol.Policy) {
+			policy.ResponseVendor = llmprotocol.ResponseVendor("future")
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			policy := llmprotocol.DefaultPolicy()
