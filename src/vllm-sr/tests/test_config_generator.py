@@ -61,6 +61,8 @@ def test_helm_backend_target_fixture_is_valid_canonical_config(tmp_path):
 
     errors = validate_user_config(config, log_summary=False)
     assert [str(error) for error in errors] == []
+
+
 def test_envoy_exposes_actual_backend_type_to_response_processor(tmp_path, monkeypatch):
     rendered = _render_envoy_config(
         tmp_path,
