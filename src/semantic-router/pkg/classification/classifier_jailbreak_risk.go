@@ -114,11 +114,12 @@ func isJailbreakRiskAboveThreshold(mapping *JailbreakMapping, positiveLabels []s
 // single call only ever sees the start of a long text; every jailbreak surface
 // scans through here so none of them can silently answer on a prefix.
 //
-// A chunk that fails is skipped rather than failing the whole scan, the way the
-// routing path records it as unresolved and keeps going: a genuine match in a
-// later chunk still has to survive a transient failure in an earlier one, or
-// the surfaces disagree again. scanned is false when no chunk produced a
-// result, in which case lastErr carries the final failure if there was one.
+// A chunk that fails is skipped so a match in another chunk still counts, the
+// way the routing path keeps scanning past an unresolved chunk. lastErr keeps
+// the failure whether or not other chunks were scored: a clean verdict needs
+// every chunk, so the callers turn a partial scan without a match into an
+// error rather than a clean result. scanned is false when no chunk produced a
+// result.
 func (c *Classifier) scanJailbreakChunks(ctx context.Context, text string) (result SequenceClassificationResult, scanned bool, lastErr error) {
 	bestRisk := float32(-1)
 	for _, chunk := range jailbreakSignalChunks(text) {
@@ -166,10 +167,10 @@ func (c *Classifier) CheckForJailbreakRiskWithThreshold(ctx context.Context, tex
 	// sees the start of a long prompt. The routing path already scans the whole
 	// text in chunks and keeps the riskiest one; do the same here so both
 	// surfaces answer the same question.
-	// A chunk that fails is left out rather than failing the whole call, the
-	// way the routing path records it as unresolved and keeps scanning. A
-	// genuine match in a later chunk still has to survive a transient failure
-	// in an earlier one, or the two paths disagree again.
+	// A chunk that fails does not stop the scan: a genuine match in a later
+	// chunk still has to survive a transient failure in an earlier one, or the
+	// two paths disagree again. It does stop a clean verdict, below: text that
+	// was only partly scored has not been found clean.
 	result, scanned, lastErr := c.scanJailbreakChunks(ctx, text)
 	if !scanned {
 		if lastErr != nil {
@@ -185,6 +186,9 @@ func (c *Classifier) CheckForJailbreakRiskWithThreshold(ctx context.Context, tex
 	}
 
 	isJailbreak, riskScore := isJailbreakRiskAboveThreshold(c.JailbreakMapping, c.Config.PromptGuard.PositiveLabels, result, threshold)
+	if !isJailbreak && lastErr != nil {
+		return false, "", 0.0, 0.0, fmt.Errorf("jailbreak classification failed on part of the text: %w", lastErr)
+	}
 
 	if isJailbreak {
 		logging.Warnf("JAILBREAK DETECTED: '%s' (confidence: %.3f, risk: %.3f, threshold: %.3f)",

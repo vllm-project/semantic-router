@@ -95,7 +95,9 @@ decision rule reads a jailbreak signal.
 
 An unresolved detector (backend failure, or a response with no text to score)
 is reported through `SignalErrors`, the way every other signal reports one,
-rather than looking like a clean response. Streaming responses are not scored.
+rather than looking like a clean response. A response is clean only when every
+chunk of it was scored: a chunk the backend failed on leaves the rule
+unresolved unless another chunk matched. Streaming responses are not scored.
 
 ## Dependencies and Limitations
 

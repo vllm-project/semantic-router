@@ -394,3 +394,36 @@ func TestCheckForJailbreakWithRiskErrorsWhenEveryChunkFails(t *testing.T) {
 		t.Fatal("expected an error when no chunk could be classified")
 	}
 }
+
+// A clean verdict needs every chunk. When one was never scored and no other
+// chunk matched, the call is unresolved rather than clean, so a partly
+// inspected text cannot pass as safe; a match in a scored chunk still counts
+// (TestCheckForJailbreakWithRiskKeepsMatchAfterChunkError).
+func TestCheckForJailbreakErrorsWhenACleanVerdictNeedsAFailedChunk(t *testing.T) {
+	text := strings.Repeat("Sailors used the stars, then the compass, then radio beacons. ", 60) +
+		"That is the whole history of navigation."
+	chunks := jailbreakSignalChunks(text)
+	if len(chunks) < 2 {
+		t.Fatalf("fixture needs to chunk, got %d chunk(s)", len(chunks))
+	}
+	classifier := newRiskTestClassifier(&erroringBackend{failOn: chunks[0]})
+
+	t.Run("risk", func(t *testing.T) {
+		isJailbreak, _, _, _, err := classifier.CheckForJailbreakWithRisk(context.Background(), text)
+		if err == nil {
+			t.Fatal("a chunk that was never scored must not leave a clean verdict")
+		}
+		if isJailbreak {
+			t.Fatal("an unresolved scan is not a detection")
+		}
+	})
+	t.Run("argmax", func(t *testing.T) {
+		isJailbreak, _, _, err := classifier.CheckForJailbreak(context.Background(), text)
+		if err == nil {
+			t.Fatal("a chunk that was never scored must not leave a clean verdict")
+		}
+		if isJailbreak {
+			t.Fatal("an unresolved scan is not a detection")
+		}
+	})
+}

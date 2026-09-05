@@ -2,10 +2,14 @@ package extproc
 
 import (
 	"context"
+	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strconv"
+	"strings"
+	"sync/atomic"
 	"testing"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -35,6 +39,46 @@ func newJailbreakFailingServer(t *testing.T) *httptest.Server {
 	}))
 	t.Cleanup(server.Close)
 	return server
+}
+
+// responseStageFailingChunkMarker opens the fixture text, so it sits in the
+// first chunk and, with the overlap being a suffix, in no other.
+const responseStageFailingChunkMarker = "Chapter one."
+
+// partialScanCounts records how many classify requests carried the failing
+// chunk and how many were scored.
+type partialScanCounts struct {
+	failed atomic.Int32
+	scored atomic.Int32
+}
+
+// newJailbreakPartialFailureServer fails every request for the chunk that
+// carries responseStageFailingChunkMarker (the connector retries a failed
+// classify, so a single 500 would be retried into a success) and scores every
+// other chunk with the given probabilities.
+func newJailbreakPartialFailureServer(t *testing.T, jailbreak, benign float32) (*httptest.Server, *partialScanCounts) {
+	t.Helper()
+	counts := &partialScanCounts{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if strings.Contains(string(body), responseStageFailingChunkMarker) {
+			counts.failed.Add(1)
+			http.Error(w, "guardrail backend unavailable", http.StatusInternalServerError)
+			return
+		}
+		counts.scored.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode([]map[string]interface{}{
+			{"label": "jailbreak", "score": jailbreak},
+			{"label": "benign", "score": benign},
+		})
+	}))
+	t.Cleanup(server.Close)
+	return server, counts
 }
 
 // responseStageGuardConfig points prompt_guard at server over http_classify.
@@ -242,6 +286,49 @@ func TestResponseJailbreakBackendFailureIsNotHidden(t *testing.T) {
 		if got := ctx.VSRSignalErrors[responseStageSignalKey]; got != "response_jailbreak_evaluation_failed" {
 			t.Fatalf("delivering the response must not erase the failure, signal error = %q", got)
 		}
+	})
+}
+
+// A backend that fails on one chunk and scores the rest clean has not
+// inspected the whole response, so the result is not clean: the rule is
+// unresolved and on_error: block fails closed. A match in a chunk that was
+// scored still counts.
+func TestResponseJailbreakPartialScanFailureIsNotClean(t *testing.T) {
+	content := responseStageFailingChunkMarker + " " +
+		strings.Repeat("Sailors used the stars, then the compass, then radio beacons. ", 60) +
+		"That is the whole history of navigation."
+
+	t.Run("clean chunks after a failed one leave the rule unresolved", func(t *testing.T) {
+		server, counts := newJailbreakPartialFailureServer(t, 0.05, 0.95)
+		router, ctx := newResponseStageRouter(t, server, config.OnErrorBlock, "block")
+
+		router.evaluateResponseJailbreakSignal(ctx, content)
+
+		if counts.failed.Load() == 0 || counts.scored.Load() == 0 {
+			t.Fatalf("fixture must fail one chunk and score another, backend saw failed=%d scored=%d", counts.failed.Load(), counts.scored.Load())
+		}
+		if got := ctx.VSRSignalErrors[responseStageSignalKey]; got != "response_jailbreak_evaluation_failed" {
+			t.Fatalf("signal error = %q, want the partial scan recorded under %s", got, responseStageSignalKey)
+		}
+		if _, ok := ctx.VSRSignalConfidences[responseStageSignalKey]; ok {
+			t.Fatal("a partly scanned response must not report a score that reads as clean")
+		}
+		assertBlocked(t, router, ctx, content)
+	})
+
+	t.Run("a match in a scored chunk still counts", func(t *testing.T) {
+		server, _ := newJailbreakPartialFailureServer(t, 0.95, 0.05)
+		router, ctx := newResponseStageRouter(t, server, config.OnErrorBlock, "block")
+
+		router.evaluateResponseJailbreakSignal(ctx, content)
+
+		if got, failed := ctx.VSRSignalErrors[responseStageSignalKey]; failed {
+			t.Fatalf("a detection must not be reported as unresolved, signal error = %q", got)
+		}
+		if len(ctx.VSRMatchedResponseJailbreak) != 1 || ctx.VSRMatchedResponseJailbreak[0] != responseStageRuleName {
+			t.Fatalf("matched response rules = %v, want [%s]", ctx.VSRMatchedResponseJailbreak, responseStageRuleName)
+		}
+		assertBlocked(t, router, ctx, content)
 	})
 }
 
