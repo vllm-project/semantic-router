@@ -21,6 +21,9 @@ routing:
       modality: text
   signals:
     keywords:
+      - name: persistence_receipt_trigger
+        operator: OR
+        keywords: [PERSISTENCE_RECEIPT_MARKER]
       - name: no_memory_trigger
         operator: OR
         keywords: [NOMEM_MARKER]
@@ -28,6 +31,23 @@ routing:
         operator: OR
         keywords: [THRESHOLD_MARKER]
   decisions:
+    # Isolate response persistence from request-side retrieval during a backend outage.
+    - name: persistence_receipt_route
+      description: Write-only route for request-correlated persistence receipts
+      priority: 250
+      rules:
+        operator: OR
+        conditions:
+          - type: keyword
+            name: persistence_receipt_trigger
+      modelRefs:
+        - model: qwen3
+          use_reasoning: false
+      plugins:
+        - type: memory
+          configuration:
+            enabled: false
+            auto_store: true
     # Triggered by NOMEM_MARKER keyword. Memory explicitly disabled so retrieval
     # is skipped even though global memory.enabled=true.
     - name: no_memory_route
@@ -97,6 +117,13 @@ routing:
             auto_store: true
 global:
   services:
+    router_replay:
+      enabled: true
+      store_backend: memory
+      max_records: 256
+      async_writes: false
+      capture_request_body: false
+      capture_response_body: false
     response_api:
       enabled: true
       store_backend: memory
