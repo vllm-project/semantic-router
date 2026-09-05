@@ -42,25 +42,37 @@ func loadTokenCountCases(t *testing.T) []tokenCountCase {
 func TestTokenCountValueMatchesSharedContract(t *testing.T) {
 	for _, tc := range loadTokenCountCases(t) {
 		t.Run(tc.Input, func(t *testing.T) {
-			if (tc.Value == nil) == (tc.Error == "") {
-				t.Fatalf("case %q must set exactly one of value or error", tc.Input)
-			}
-			got, err := TokenCount(tc.Input).Value()
-			if tc.Error != "" {
-				if err == nil {
-					t.Fatalf("Value(%q) = %d, want error %q", tc.Input, got, tc.Error)
-				}
-				if !strings.HasPrefix(err.Error(), tc.Error+":") {
-					t.Fatalf("Value(%q) error = %q, want prefix %q", tc.Input, err.Error(), tc.Error)
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("Value(%q) returned error %v, want %d", tc.Input, err, *tc.Value)
-			}
-			if int64(got) != *tc.Value {
-				t.Fatalf("Value(%q) = %d, want %d", tc.Input, got, *tc.Value)
-			}
+			assertTokenCountCase(t, tc)
 		})
+	}
+}
+
+// assertTokenCountCase checks one fixture entry: an error case must fail with
+// the fixture's error prefix, a value case must parse to the fixture's value.
+func assertTokenCountCase(t *testing.T, tc tokenCountCase) {
+	t.Helper()
+	if (tc.Value == nil) == (tc.Error == "") {
+		t.Fatalf("case %q must set exactly one of value or error", tc.Input)
+	}
+	got, err := TokenCount(tc.Input).Value()
+	if tc.Error != "" {
+		assertTokenCountError(t, tc, got, err)
+		return
+	}
+	if err != nil {
+		t.Fatalf("Value(%q) returned error %v, want %d", tc.Input, err, *tc.Value)
+	}
+	if int64(got) != *tc.Value {
+		t.Fatalf("Value(%q) = %d, want %d", tc.Input, got, *tc.Value)
+	}
+}
+
+func assertTokenCountError(t *testing.T, tc tokenCountCase, got int, err error) {
+	t.Helper()
+	if err == nil {
+		t.Fatalf("Value(%q) = %d, want error %q", tc.Input, got, tc.Error)
+	}
+	if !strings.HasPrefix(err.Error(), tc.Error+":") {
+		t.Fatalf("Value(%q) error = %q, want prefix %q", tc.Input, err.Error(), tc.Error)
 	}
 }
