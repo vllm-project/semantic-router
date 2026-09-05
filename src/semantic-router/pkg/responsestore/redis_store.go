@@ -146,6 +146,53 @@ const (
 	// conversation never needs one ZRANGE 0 -1 or one pipeline sized to the
 	// whole conversation.
 	redisDeleteBatchSize = 256
+
+	// ConversationIndexMigrationStatusKey is a single global (not per-
+	// conversation) key: sr:migration:conversation-response-index, value
+	// conversationIndexMigrationCompleteValue once set. Its presence with
+	// that exact value means FinalizeConversationIndexMigration has
+	// completed a cluster-wide sweep of every response payload — from that
+	// point on, every read and cascade delete trusts the secondary index
+	// unconditionally, including a missing index meaning "empty" rather
+	// than "not yet migrated," and never falls back to a per-conversation
+	// scan again, not even for a conversation ID nothing has ZADDed since.
+	//
+	// This is a stronger, and irreversible-by-design, claim than the
+	// per-conversation ConversationIndexMigratedKeyPrefix marker: setting
+	// it before every pre-#2814 writer has stopped can permanently hide a
+	// response no future read will ever rescan for. It is intentionally
+	// not set by any request path — only an explicit, operator-triggered
+	// call to FinalizeConversationIndexMigration sets it, once the rolling
+	// deployment that introduced this index is known to be complete.
+	//
+	// Does not start with ConversationKeyPrefix, ResponseKeyPrefix, or
+	// ConversationIndexKeyPrefix, for the same scan-isolation reason as the
+	// per-conversation key families.
+	ConversationIndexMigrationStatusKey = "migration:conversation-response-index"
+
+	// conversationIndexMigrationCompleteValue is the only value of
+	// ConversationIndexMigrationStatusKey that FinalizeConversationIndexMigration
+	// treats as "complete" — an unrecognized value is treated the same as
+	// absent, so a future incompatible migration format cannot be silently
+	// mistaken for this one's completion.
+	conversationIndexMigrationCompleteValue = "complete:v1"
+
+	// ConversationIndexMigrationLockKey guards FinalizeConversationIndexMigration's
+	// cluster-wide sweep against two concurrent invocations, unlike
+	// ConversationIndexLockKeyPrefix this is a single global key, not one
+	// per conversation.
+	ConversationIndexMigrationLockKey = "migration-lock:conversation-index"
+
+	// conversationIndexGlobalMigrationLockTTL bounds how long
+	// FinalizeConversationIndexMigration holds its lock. Unlike the
+	// per-conversation conversationIndexMigrationLockTTL, this guards an
+	// operation whose runtime scales with the size of the entire response
+	// keyspace, not one conversation's history — on a large deployment this
+	// TTL may need to be longer than the sweep actually takes; if it lapses
+	// mid-sweep, a second invocation can safely proceed once the lock frees
+	// (the sweep is idempotent), but will re-do work the first one already
+	// started.
+	conversationIndexGlobalMigrationLockTTL = 5 * time.Minute
 )
 
 // compareDeleteScript deletes KEYS[1] only if its current value equals

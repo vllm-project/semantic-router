@@ -16,20 +16,26 @@ import (
 // the keyspace or even the conversation's full history (see
 // listIndexedResponseIDs).
 //
-// Read path: not yet migrated → run ensureConversationIndex, which backfills
-// from a legacy scan (additively — it never removes members an ordinary
-// write already indexed) or confirms the conversation empty, then marks it
-// migrated either way. Once migrated (whether just now or already, from an
-// earlier read), the index's current state is trustworthy: read it if it
-// exists, otherwise there is nothing to return.
+// Read path: if the whole store is marked migration-complete
+// (ConversationIndexMigrationStatusKey, set once by an operator-triggered
+// FinalizeConversationIndexMigration sweep), skip straight to reading the
+// index — no per-conversation check, and never a scan, not even for a
+// conversation ID nothing has ever indexed. Otherwise: not yet migrated for
+// this conversation specifically → run ensureConversationIndex, which
+// backfills from a legacy scan (additively — it never removes members an
+// ordinary write already indexed) or confirms the conversation empty, then
+// marks it migrated either way. Once migrated (whether just now, already
+// from an earlier read, or the whole store is finalized), the index's
+// current state is trustworthy: read it if it exists, otherwise there is
+// nothing to return.
 //
-// Checking migrated rather than index-existence first is the fix for a
-// state the index-existence check alone cannot distinguish: a conversation
-// with unindexed legacy responses that then receives an ordinary
-// post-upgrade write has an index — created by that one write's
-// indexResponse call — containing only the new response. Trusting that
-// index as complete would silently and permanently hide the older ones.
-// See ConversationIndexMigratedKeyPrefix.
+// Checking a migrated signal rather than index-existence first is the fix
+// for a state index-existence alone cannot distinguish: a conversation with
+// unindexed legacy responses that then receives an ordinary post-upgrade
+// write has an index — created by that one write's indexResponse call —
+// containing only the new response. Trusting that index as complete would
+// silently and permanently hide the older ones. See
+// ConversationIndexMigratedKeyPrefix and ConversationIndexMigrationStatusKey.
 //
 // Order/After/Before parity note: this implementation honors ListOptions.Order
 // (default "desc", newest first) and After/Before cursors, per the contract
@@ -46,21 +52,16 @@ func (s *RedisStore) ListResponsesByConversation(ctx context.Context, conversati
 		return nil, ErrInvalidInput
 	}
 
-	migrated, err := s.conversationMigrated(ctx, conversationID)
-	if err != nil {
+	if err := s.ensureConversationResolvedForRead(ctx, conversationID); err != nil {
 		return nil, err
 	}
-	if !migrated {
-		if err := s.ensureConversationIndex(ctx, conversationID); err != nil {
-			return nil, err
-		}
-	}
 
-	// Whether migrated was already true or ensureConversationIndex just
-	// resolved it, the index's current membership is now the source of
-	// truth: read it directly rather than re-check the migrated marker,
-	// since a best-effort marker-write failure inside the backfill must not
-	// block returning what was actually just discovered.
+	// Whichever path resolved it — store-wide finalization, an existing
+	// per-conversation marker, or ensureConversationIndex just now — the
+	// index's current membership is now the source of truth: read it
+	// directly rather than re-check the migrated marker, since a
+	// best-effort marker-write failure inside the backfill must not block
+	// returning what was actually just discovered.
 	indexExists, err := s.client.Exists(ctx, s.conversationIndexKey(conversationID)).Result()
 	if err != nil {
 		return nil, fmt.Errorf("failed to check conversation index: %w", err)
@@ -70,6 +71,32 @@ func (s *RedisStore) ListResponsesByConversation(ctx context.Context, conversati
 	}
 
 	return nil, nil
+}
+
+// ensureConversationResolvedForRead guarantees that, once it returns
+// without error, conversationID's index may be trusted as exhaustive for a
+// read: either the whole store is marked migration-complete
+// (ConversationIndexMigrationStatusKey), or this specific conversation
+// already is (conversationMigrated), or ensureConversationIndex has just
+// made it so.
+func (s *RedisStore) ensureConversationResolvedForRead(ctx context.Context, conversationID string) error {
+	storeComplete, err := s.isMigrationComplete(ctx)
+	if err != nil {
+		return err
+	}
+	if storeComplete {
+		return nil
+	}
+
+	migrated, err := s.conversationMigrated(ctx, conversationID)
+	if err != nil {
+		return err
+	}
+	if migrated {
+		return nil
+	}
+
+	return s.ensureConversationIndex(ctx, conversationID)
 }
 
 // listIndexedResponses reads one page of a conversation's responses through
