@@ -134,6 +134,16 @@ rules:
     feature_tests:
       - make test-binding-lora
     requires_local_smoke: false
+  - name: ck-flash-attn-rewriter
+    doc_only: false
+    loop_mode: completion
+    execution_plan_policy: long_horizon
+    paths:
+      - onnx-binding/ort-ck-flash-attn/**
+    fast_tests:
+      - make ck-rewrite-test
+    feature_tests: []
+    requires_local_smoke: false
   - name: dashboard
     doc_only: false
     loop_mode: completion

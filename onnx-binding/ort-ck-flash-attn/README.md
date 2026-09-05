@@ -47,7 +47,9 @@ rewriter keeps the weights as it finds them and, for an FP32 graph, adds fp32↔
 `CKFlashAttention` node. A rewrite of the FP32 `model.onnx` must therefore be
 named `model_fa.onnx`; `model_fa_fp16.onnx` needs an FP16 input graph. The
 script refuses an fp16 name for an FP32 graph, because `find_onnx_models`
-ranks candidates by name alone.
+ranks candidates by name alone. `make ck-rewrite-test` runs the rewriter's
+unit tests (`scripts/test_rewrite_graph.py`); the changed-file gate runs them
+for any change under this directory.
 
 The matcher expects the attention subgraph of the FP32 `model.onnx` export:
 `Softmax` fed by `Add(MatMul(Mul(q), Mul(k)), mask)` and consumed directly by
