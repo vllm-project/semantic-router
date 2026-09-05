@@ -1180,6 +1180,38 @@
       ]
     },
     {
+      "id": "router-learning-core",
+      "name": "Router Learning policy comparison",
+      "description": "A deterministic sequential replay comparing a static base policy, the current routing_sampling score equation, and a simple Beta-Bernoulli policy over paired trial seeds. It is diagnostic and not a production causal claim.",
+      "track_ids": [
+        "joint"
+      ],
+      "modes": [
+        "replay"
+      ],
+      "evidence_level": "E0",
+      "executors": {
+        "replay": "router-learning-replay.v1"
+      },
+      "case_count": 12,
+      "revision": "router-learning-core-v1",
+      "tags": [
+        "router-learning",
+        "paired-seeds",
+        "deterministic",
+        "diagnostic-only"
+      ],
+      "methods": [
+        {
+          "id": "joint.router-learning-policy-comparison.v1",
+          "track_id": "joint",
+          "qualified_gate_ids": [],
+          "evidence_source": "diagnostic_fixture",
+          "status": "configured"
+        }
+      ]
+    },
+    {
       "id": "live-agent-tasks",
       "name": "Agent task evaluation",
       "description": "Repeated tool-use and reasoning tasks with complete provider results. Measures task completion, tool-policy compliance, reliability, latency, and cost; it does not invoke tools itself or claim parity with external agent benchmarks.",
@@ -1380,7 +1412,8 @@
       ],
       "accepted_executors": {
         "replay": [
-          "fixture-replay.v1"
+          "fixture-replay.v1",
+          "router-learning-replay.v1"
         ]
       },
       "evidence_level": "E0",

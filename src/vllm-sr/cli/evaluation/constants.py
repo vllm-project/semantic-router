@@ -18,6 +18,7 @@ TRACK_IDS = (
 BUILTIN_SUITE_IDS = (
     "evaluation-smoke",
     "live-mom-core",
+    "router-learning-core",
     "live-agent-tasks",
     "live-fault-recovery",
     "live-multimodal",

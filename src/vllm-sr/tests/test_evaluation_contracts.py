@@ -124,6 +124,7 @@ def _assert_catalog_evidence_contract(
     assert tuple(suite.id for suite in catalog.suites) == (
         "evaluation-smoke",
         "live-mom-core",
+        "router-learning-core",
         "live-agent-tasks",
         "live-fault-recovery",
         "live-multimodal",
@@ -134,6 +135,7 @@ def _assert_catalog_evidence_contract(
     assert {suite.id: suite.evidence_level for suite in catalog.suites} == {
         "evaluation-smoke": "E0",
         "live-mom-core": "E0",
+        "router-learning-core": "E0",
         "live-agent-tasks": "E5",
         "live-fault-recovery": "E5",
         "live-multimodal": "E0",

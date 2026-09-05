@@ -23,6 +23,7 @@ from cli.evaluation.execution_contract import (
     MOM_REPLAY_EXECUTOR_ID,
     NORMALIZED_LIVE_EXECUTOR_ID,
     NORMALIZED_REPLAY_EXECUTOR_ID,
+    ROUTER_LEARNING_REPLAY_EXECUTOR_ID,
 )
 from cli.evaluation.reporting import EvidenceLevel
 
@@ -167,6 +168,16 @@ def builtin_executor_contracts() -> tuple[ExecutorContract, ...]:
             target_profile="brokered-runtime",
             lineage_profile="runtime",
             track_ids=("routing", "model_pool", "joint"),
+            requires_fixture_ref=True,
+            evidence_level_ceiling="E0",
+        ),
+        ExecutorContract(
+            id=ROUTER_LEARNING_REPLAY_EXECUTOR_ID,
+            mode="replay",
+            suite_class="fixture",
+            target_profile="recorded-source",
+            lineage_profile="fixture-replay",
+            track_ids=("joint",),
             requires_fixture_ref=True,
             evidence_level_ceiling="E0",
         ),

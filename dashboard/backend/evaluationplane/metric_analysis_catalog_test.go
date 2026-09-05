@@ -41,7 +41,7 @@ func TestMetricAnalysisCatalogResolvesExactAndTypedDynamicMetrics(t *testing.T) 
 	if err := ValidateMetricAnalysisCatalog(); err != nil {
 		t.Fatalf("metric analysis catalog is invalid: %v", err)
 	}
-	if len(metricAnalysisCatalogData.document.StaticMetrics) != 136 || len(metricAnalysisCatalogData.document.DynamicFamilies) != 6 {
+	if len(metricAnalysisCatalogData.document.StaticMetrics) != 136 || len(metricAnalysisCatalogData.document.DynamicFamilies) != 7 {
 		t.Fatalf("metric analysis universe has unexpected cardinality")
 	}
 	staticIDs := make([]string, 0, len(metricAnalysisCatalogData.document.StaticMetrics))
@@ -71,6 +71,7 @@ func TestMetricAnalysisCatalogResolvesExactAndTypedDynamicMetrics(t *testing.T) 
 		{"capacity.level.16.success_rate", "capacity-level", "capacity.level.request-repetition-rate-mean", "measurement_cluster", "uniform_cluster"},
 		{"capacity.level.16.error_rate_upper_bound", "capacity-level", "capacity.level.request-worst-cluster-wilson-upper", "measurement_cluster", "worst_cluster"},
 		{"capacity.level.16.error_rate_cluster_range", "capacity-level", "capacity.level.request-repetition-rate-range", "measurement_cluster", "uniform_cluster"},
+		{"joint.router_learning.routing-sampling.solve_rate", "router-learning-policy", "joint.router-learning.round-cluster-rate", "router_learning_round", "uniform_trial"},
 		{"routing_recipe.e1.signal.u-ZG9tYWluOnJlYXNvbmluZw.present_rate", "routing-recipe-e1-input", "routing-recipe.e1.input-rate", "decision_input", "uniform_case"},
 		{"routing_recipe.e2.feasible_oracle_recall_at_64", "routing-recipe-e2-recall", "routing-recipe.e2.feasible-recall", "decision_case", "uniform_case"},
 	}
