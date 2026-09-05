@@ -17,8 +17,8 @@ import (
 // listIndexedResponseIDs).
 //
 // Read path: if the whole store is marked migration-complete
-// (ConversationIndexMigrationStatusKey, set once by an operator-triggered
-// FinalizeConversationIndexMigration sweep), skip straight to reading the
+// (ConversationIndexCompletionKeySuffix, set once by an operator-triggered
+// FinalizeConversationIndex sweep), skip straight to reading the
 // index — no per-conversation check, and never a scan, not even for a
 // conversation ID nothing has ever indexed. Otherwise: not yet migrated for
 // this conversation specifically → run ensureConversationIndex, which
@@ -35,7 +35,7 @@ import (
 // write has an index — created by that one write's indexResponse call —
 // containing only the new response. Trusting that index as complete would
 // silently and permanently hide the older ones. See
-// ConversationIndexMigratedKeyPrefix and ConversationIndexMigrationStatusKey.
+// ConversationIndexMigratedKeyPrefix and ConversationIndexCompletionKeySuffix.
 //
 // Order/After/Before parity note: this implementation honors ListOptions.Order
 // (default "desc", newest first) and After/Before cursors, per the contract
@@ -52,6 +52,11 @@ func (s *RedisStore) ListResponsesByConversation(ctx context.Context, conversati
 		return nil, ErrInvalidInput
 	}
 
+	normalized, err := normalizeResponseListOptions(opts)
+	if err != nil {
+		return nil, err
+	}
+
 	if err := s.ensureConversationResolvedForRead(ctx, conversationID); err != nil {
 		return nil, err
 	}
@@ -62,21 +67,13 @@ func (s *RedisStore) ListResponsesByConversation(ctx context.Context, conversati
 	// directly rather than re-check the migrated marker, since a
 	// best-effort marker-write failure inside the backfill must not block
 	// returning what was actually just discovered.
-	indexExists, err := s.client.Exists(ctx, s.conversationIndexKey(conversationID)).Result()
-	if err != nil {
-		return nil, fmt.Errorf("failed to check conversation index: %w", err)
-	}
-	if indexExists > 0 {
-		return s.listIndexedResponses(ctx, conversationID, opts)
-	}
-
-	return nil, nil
+	return s.listIndexedResponses(ctx, conversationID, normalized)
 }
 
 // ensureConversationResolvedForRead guarantees that, once it returns
 // without error, conversationID's index may be trusted as exhaustive for a
 // read: either the whole store is marked migration-complete
-// (ConversationIndexMigrationStatusKey), or this specific conversation
+// (ConversationIndexCompletionKeySuffix), or this specific conversation
 // already carries a resolved proof (conversationIndexResolved), or
 // ensureConversationIndex has just made it so.
 func (s *RedisStore) ensureConversationResolvedForRead(ctx context.Context, conversationID string) error {
@@ -99,7 +96,7 @@ func (s *RedisStore) ensureConversationResolvedForRead(ctx context.Context, conv
 // responses exist further in the index. That is an accepted Phase 4
 // trade-off (blueprint §5 Phase 4): topping up short pages by re-reading
 // further windows would turn a bug fix into a pagination redesign.
-func (s *RedisStore) listIndexedResponses(ctx context.Context, conversationID string, opts ListOptions) ([]*responseapi.StoredResponse, error) {
+func (s *RedisStore) listIndexedResponses(ctx context.Context, conversationID string, opts normalizedListOptions) ([]*responseapi.StoredResponse, error) {
 	responseIDs, err := s.listIndexedResponseIDs(ctx, conversationID, opts)
 	if err != nil {
 		return nil, err
@@ -193,12 +190,7 @@ func normalizeResponseListOptions(opts ListOptions) (normalizedListOptions, erro
 // ID that is not currently a member of the index (evicted, wrong
 // conversation, typo'd by the caller) yields an empty page rather than an
 // error: the same behavior as an ordinary page with nothing left to return.
-func (s *RedisStore) listIndexedResponseIDs(ctx context.Context, conversationID string, opts ListOptions) ([]string, error) {
-	normalized, err := normalizeResponseListOptions(opts)
-	if err != nil {
-		return nil, err
-	}
-
+func (s *RedisStore) listIndexedResponseIDs(ctx context.Context, conversationID string, normalized normalizedListOptions) ([]string, error) {
 	indexKey := s.conversationIndexKey(conversationID)
 	ascending := normalized.Order == "asc"
 

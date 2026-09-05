@@ -2,8 +2,10 @@ package responsestore
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -79,6 +81,48 @@ type raceInjectingHook struct {
 	client    redis.UniversalClient
 	newValue  []byte
 	fired     bool
+}
+
+type recreateAfterDeleteHook struct {
+	targetKey string
+	indexKey  string
+	response  *responseapi.StoredResponse
+	client    *redis.Client
+	fired     atomic.Bool
+}
+
+func (h *recreateAfterDeleteHook) DialHook(next redis.DialHook) redis.DialHook { return next }
+func (h *recreateAfterDeleteHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
+	return next
+}
+func (h *recreateAfterDeleteHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
+	return func(ctx context.Context, cmd redis.Cmder) error {
+		err := next(ctx, cmd)
+		if err != nil || (cmd.Name() != "eval" && cmd.Name() != "evalsha") || !commandContainsArg(cmd, h.targetKey) || !h.fired.CompareAndSwap(false, true) {
+			return err
+		}
+		payload, marshalErr := json.Marshal(h.response)
+		if marshalErr != nil {
+			panic(marshalErr)
+		}
+		if setErr := h.client.Set(context.Background(), h.targetKey, payload, time.Minute).Err(); setErr != nil {
+			panic(setErr)
+		}
+		if zaddErr := h.client.ZAdd(context.Background(), h.indexKey,
+			redis.Z{Score: float64(h.response.CreatedAt), Member: h.response.ID}).Err(); zaddErr != nil {
+			panic(zaddErr)
+		}
+		return nil
+	}
+}
+
+func commandContainsArg(cmd redis.Cmder, target string) bool {
+	for _, arg := range cmd.Args() {
+		if value, ok := arg.(string); ok && value == target {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *raceInjectingHook) DialHook(next redis.DialHook) redis.DialHook { return next }
@@ -191,10 +235,8 @@ func TestCascadeDeleteGetFailurePreservesAndReports(t *testing.T) {
 }
 
 // TestCascadeDeleteZremFailureReported covers "ZREM failed -> reported":
-// even when every response in a batch resolves cleanly (deleted or pruned),
-// a failure removing them from the index itself must still surface as an
-// error rather than being swallowed, since the caller needs to know the
-// batch was not fully applied.
+// candidate membership is removed before touching payloads, so a failure
+// must preserve the payload and surface for retry.
 func TestCascadeDeleteZremFailureReported(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -213,10 +255,9 @@ func TestCascadeDeleteZremFailureReported(t *testing.T) {
 	require.Error(t, err)
 	assert.ErrorIs(t, err, injectedErr)
 
-	// The response payload was legitimately deleted (compare-delete
-	// succeeded); only removing the now-stale index member failed.
+	// Pre-removal failed, so payload and conversation both survive intact.
 	_, getErr := store.GetResponse(ctx, "resp_zrem_failure")
-	assert.ErrorIs(t, getErr, ErrNotFound)
+	assert.NoError(t, getErr)
 	_, getErr = store.GetConversation(ctx, convID)
 	assert.NoError(t, getErr, "the conversation record must survive a reported ZREM failure")
 }
@@ -324,6 +365,44 @@ func TestCascadeDeleteConcurrentUpdatePreservesNewerPayload(t *testing.T) {
 	assert.ErrorIs(t, getErr, ErrNotFound)
 	_, getErr = store.GetResponse(ctx, "resp_concurrent_update")
 	assert.ErrorIs(t, getErr, ErrNotFound)
+}
+
+// TestCascadeDeleteDoesNotEraseRecreatedMembership covers the ordering race
+// between payload deletion and index cleanup. A writer that recreates and
+// indexes the response immediately after CAS deletion must not have that new
+// membership removed by a later ZREM from the old cascade attempt.
+func TestCascadeDeleteDoesNotEraseRecreatedMembership(t *testing.T) {
+	store := newConversationIndexStore(t)
+	ctx := context.Background()
+
+	const (
+		conversationID = "conv_cascade_recreated"
+		responseID     = "resp_cascade_recreated"
+	)
+	require.NoError(t, store.CreateConversation(ctx, &responseapi.StoredConversation{
+		ID: conversationID, CreatedAt: time.Now().Unix(),
+	}))
+	require.NoError(t, store.StoreResponse(ctx, &responseapi.StoredResponse{
+		ID: responseID, ConversationID: conversationID, Status: "original", CreatedAt: time.Now().Unix(),
+	}))
+	require.NoError(t, store.ensureConversationIndexResolved(ctx, conversationID))
+
+	writer := redis.NewClient(&redis.Options{Addr: "localhost:6379"})
+	t.Cleanup(func() { _ = writer.Close() })
+	hook := &recreateAfterDeleteHook{
+		targetKey: store.buildKey(ResponseKeyPrefix + responseID),
+		indexKey:  store.conversationIndexKey(conversationID),
+		response: &responseapi.StoredResponse{
+			ID: responseID, ConversationID: conversationID, Status: "recreated", CreatedAt: time.Now().Unix() + 1,
+		},
+		client: writer,
+	}
+	store.client.AddHook(hook)
+
+	require.NoError(t, store.DeleteConversation(ctx, conversationID, true))
+	assert.True(t, hook.fired.Load(), "the response must have been recreated in the target race window")
+	_, err := store.GetResponse(ctx, responseID)
+	assert.ErrorIs(t, err, ErrNotFound, "the recreated indexed response must be observed by the next cascade batch")
 }
 
 // TestCascadeDeleteClusterCrossSlotSafe covers the Cluster-safety

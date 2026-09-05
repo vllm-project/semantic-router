@@ -506,18 +506,18 @@ func TestRedisConversationIndexKeyIsolation(t *testing.T) {
 		"scan lease key %q must not be matched by the %q* index scan pattern", leaseKey, indexScanPrefix)
 }
 
-// TestRedisConversationIndexMigrationKeyIsolation covers the two global (not
-// per-conversation) migration keys added for FinalizeConversationIndexMigration:
+// TestRedisConversationIndexMigrationKeyIsolation covers the global
+// completion and scan-lease keys used by FinalizeConversationIndex:
 // same scan-isolation invariant as the per-conversation key families. Needs
 // no Redis.
 func TestRedisConversationIndexMigrationKeyIsolation(t *testing.T) {
 	store := &RedisStore{keyPrefix: "sr:"}
 
-	statusKey := store.buildKey(ConversationIndexMigrationStatusKey)
-	assert.Equal(t, "sr:migration:conversation-response-index", statusKey)
+	statusKey := store.conversationIndexCompletionKey()
+	assert.Equal(t, "sr:conversation-index-complete:v1", statusKey)
 
-	lockKey := store.buildKey(ConversationIndexMigrationLockKey)
-	assert.Equal(t, "sr:migration-lock:conversation-index", lockKey)
+	lockKey := store.conversationIndexScanLeaseKey()
+	assert.Equal(t, "sr:conversation-index-scan-lease:v1", lockKey)
 
 	scanPrefixes := []string{
 		store.buildKey(ConversationKeyPrefix),

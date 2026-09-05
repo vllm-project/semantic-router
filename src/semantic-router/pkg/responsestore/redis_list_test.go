@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -199,13 +200,18 @@ func TestRedisLazyBackfillConcurrentWriteNotHidden(t *testing.T) {
 	concurrent := &responseapi.StoredResponse{
 		ID: "resp_race_concurrent", ConversationID: "conv_race", Status: "completed", CreatedAt: time.Now().Unix() + 1,
 	}
-	store.lazyBackfillPreScanHook = func() {
+	writer := redis.NewClient(&redis.Options{Addr: "localhost:6379"})
+	t.Cleanup(func() { _ = writer.Close() })
+	store.client.AddHook(&beforeCommandHook{name: "scan", once: true, before: func() {
 		// Runs once, before the scan walks the keyspace: lands a normal
 		// indexed write for the same conversation the backfill is about to
 		// scan for, so the scan observes both the legacy and the
 		// concurrently-indexed payload.
-		require.NoError(t, store.StoreResponse(ctx, concurrent))
-	}
+		payload := mustMarshalResponse(t, concurrent)
+		require.NoError(t, writer.Set(ctx, store.buildKey(ResponseKeyPrefix+concurrent.ID), payload, store.ttl).Err())
+		require.NoError(t, writer.ZAdd(ctx, store.conversationIndexKey(concurrent.ConversationID),
+			redis.Z{Score: float64(concurrent.CreatedAt), Member: concurrent.ID}).Err())
+	}})
 
 	responses, err := store.ListResponsesByConversation(ctx, "conv_race", ListOptions{Order: "asc"})
 	require.NoError(t, err)

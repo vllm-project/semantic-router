@@ -25,13 +25,6 @@ type RedisStore struct {
 	ttl       time.Duration
 	enabled   bool
 
-	// indexResponseOverride, when non-nil, replaces indexResponse's Redis
-	// calls entirely. Unexported test-only seam: a real Redis outage would
-	// fail the payload SETNX and the index write together, which cannot
-	// isolate "payload write succeeded, index write failed" for rollback and
-	// repair tests. Never set outside _test.go files in this package.
-	indexResponseOverride func(ctx context.Context, conversationID, responseID string, createdAt int64) error
-
 	// scanInvocations counts calls to scanResponsePayloads. Unexported
 	// test-only seam proving the O(N) legacy scan runs at most once per
 	// conversation per empty-marker/index lifetime, not on every read of an
@@ -44,13 +37,14 @@ type RedisStore struct {
 	// though only tests ever read the value back.
 	scanInvocations atomic.Int64
 
-	// lazyBackfillPreScanHook, when non-nil, runs once at the top of
-	// lazyBackfillConversationIndex before the scan starts. Unexported
-	// test-only seam for deterministically landing a concurrent indexed
-	// write in the window the blueprint calls out (§2.2 Redis concurrency):
-	// a writer's SETNX + index ZADD completing while a lazy scan for the
-	// same conversation is in flight must not be undone by the scan.
-	lazyBackfillPreScanHook func()
+	// conversationIndexFinalizedCache mirrors the persistent completion key
+	// (ConversationIndexCompletionKeySuffix) once this process has observed
+	// or just set it, so every read/cascade-delete after the first doesn't
+	// re-GET a key that, by construction, can only ever go from absent to
+	// permanently present. May only transition false -> true, matching the
+	// key's own irreversible-by-design semantics: nothing in this package
+	// ever unsets it, in Redis or in this cache.
+	conversationIndexFinalizedCache atomic.Bool
 }
 
 const (
@@ -159,52 +153,37 @@ const (
 	// whole conversation.
 	redisDeleteBatchSize = 256
 
-	// ConversationIndexMigrationStatusKey is a single global (not per-
-	// conversation) key: sr:migration:conversation-response-index, value
-	// conversationIndexMigrationCompleteValue once set. Its presence with
-	// that exact value means FinalizeConversationIndexMigration has
-	// completed a cluster-wide sweep of every response payload — from that
-	// point on, every read and cascade delete trusts the secondary index
+	// ConversationIndexCompletionKeySuffix is a single global (not per-
+	// conversation) key: sr:conversation-index-complete:v1, value
+	// conversationIndexCompletionValue once set. Its presence with that
+	// exact value means FinalizeConversationIndex has completed a strict,
+	// cluster-wide sweep of every response payload — from that point on,
+	// every read and cascade delete trusts the secondary index
 	// unconditionally, including a missing index meaning "empty" rather
 	// than "not yet migrated," and never falls back to a per-conversation
 	// scan again, not even for a conversation ID nothing has ZADDed since.
 	//
 	// This is a stronger, and irreversible-by-design, claim than the
 	// per-conversation ConversationIndexMigratedKeyPrefix marker: setting
-	// it before every pre-#2814 writer has stopped can permanently hide a
-	// response no future read will ever rescan for. It is intentionally
+	// it before every index-unaware writer has stopped can permanently hide
+	// a response no future read will ever rescan for. It is intentionally
 	// not set by any request path — only an explicit, operator-triggered
-	// call to FinalizeConversationIndexMigration sets it, once the rolling
-	// deployment that introduced this index is known to be complete.
+	// call to FinalizeConversationIndex sets it, once the rolling
+	// deployment that introduced this index is known to be complete. See
+	// FinalizeConversationIndex's doc comment for the full operational
+	// prerequisite list.
 	//
 	// Does not start with ConversationKeyPrefix, ResponseKeyPrefix, or
 	// ConversationIndexKeyPrefix, for the same scan-isolation reason as the
 	// per-conversation key families.
-	ConversationIndexMigrationStatusKey = "migration:conversation-response-index"
+	ConversationIndexCompletionKeySuffix = "conversation-index-complete:v1"
 
-	// conversationIndexMigrationCompleteValue is the only value of
-	// ConversationIndexMigrationStatusKey that FinalizeConversationIndexMigration
-	// treats as "complete" — an unrecognized value is treated the same as
-	// absent, so a future incompatible migration format cannot be silently
-	// mistaken for this one's completion.
-	conversationIndexMigrationCompleteValue = "complete:v1"
-
-	// ConversationIndexMigrationLockKey guards FinalizeConversationIndexMigration's
-	// cluster-wide sweep against two concurrent invocations, unlike
-	// ConversationIndexLockKeyPrefix this is a single global key, not one
-	// per conversation.
-	ConversationIndexMigrationLockKey = "migration-lock:conversation-index"
-
-	// conversationIndexGlobalMigrationLockTTL bounds how long
-	// FinalizeConversationIndexMigration holds its lock. Unlike the
-	// per-conversation conversationIndexMigrationLockTTL, this guards an
-	// operation whose runtime scales with the size of the entire response
-	// keyspace, not one conversation's history — on a large deployment this
-	// TTL may need to be longer than the sweep actually takes; if it lapses
-	// mid-sweep, a second invocation can safely proceed once the lock frees
-	// (the sweep is idempotent), but will re-do work the first one already
-	// started.
-	conversationIndexGlobalMigrationLockTTL = 5 * time.Minute
+	// conversationIndexCompletionValue is the only value of the completion
+	// key that FinalizeConversationIndex/conversationIndexFinalized treat
+	// as "complete" — an unrecognized value is treated the same as absent,
+	// so a future incompatible format cannot be silently mistaken for this
+	// one's completion.
+	conversationIndexCompletionValue = "v1"
 )
 
 // compareDeleteScript deletes KEYS[1] only if its current value equals
