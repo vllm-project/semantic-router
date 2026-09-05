@@ -131,8 +131,15 @@ func emitMetadataStoreWarning(cfg *config.RouterConfig) {
 }
 
 func (r *VectorStoreRuntime) Shutdown() error {
+	return r.ShutdownContext(context.Background())
+}
+
+func (r *VectorStoreRuntime) ShutdownContext(ctx context.Context) error {
 	if r == nil {
 		return nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
 	}
 	if r.Pipeline != nil {
 		// Fall back to a bounded default if drainTimeout was not configured
@@ -141,9 +148,9 @@ func (r *VectorStoreRuntime) Shutdown() error {
 		if drain <= 0 {
 			drain = defaultDrainTimeout
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), drain)
+		stopCtx, cancel := context.WithTimeout(ctx, drain)
 		defer cancel()
-		if err := r.Pipeline.Stop(ctx); err != nil {
+		if err := r.Pipeline.Stop(stopCtx); err != nil {
 			logging.Warnf("Ingestion pipeline did not drain within %s: %v", drain, err)
 			// Workers may still be inside backend or registry calls after a bounded
 			// timeout. Closing their dependencies here would create a use-after-close

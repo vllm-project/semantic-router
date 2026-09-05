@@ -3,8 +3,11 @@
 package apiserver
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"time"
 
@@ -21,6 +24,12 @@ const (
 	apiWriteTimeout = 2 * time.Minute
 	apiIdleTimeout  = 60 * time.Second
 )
+
+type Server struct {
+	httpServer *http.Server
+	done       chan struct{}
+	serveErr   error
+}
 
 // Init starts the API server.
 func Init(configPath string, port int) error {
@@ -53,11 +62,20 @@ func InitWithRuntime(configPath string, port int, runtimeRegistry *routerruntime
 
 // InitWithOptions starts the API server with explicit management listener policy.
 func InitWithOptions(opts InitOptions) error {
+	server, err := StartWithOptions(opts)
+	if err != nil {
+		return err
+	}
+	<-server.done
+	return normalizeServerError(server.serveErr)
+}
+
+func StartWithOptions(opts InitOptions) (*Server, error) {
 	// Get the global configuration instead of loading from file
 	// This ensures we use the same config as the rest of the application
 	cfg := resolveAPIServerConfig(opts.RuntimeRegistry)
 	if cfg == nil {
-		return fmt.Errorf("configuration not initialized")
+		return nil, fmt.Errorf("configuration not initialized")
 	}
 
 	managementCfg, err := cfg.ManagementAPI.ResolvedManagementAPI(config.ManagementAPIRuntimeOptions{
@@ -67,7 +85,7 @@ func InitWithOptions(opts InitOptions) error {
 		AuthMode:       opts.AuthMode,
 	})
 	if err != nil {
-		return fmt.Errorf("invalid management API configuration: %w", err)
+		return nil, fmt.Errorf("invalid management API configuration: %w", err)
 	}
 	cfg.ManagementAPI = managementCfg
 
@@ -125,7 +143,7 @@ func InitWithOptions(opts InitOptions) error {
 
 	// Create HTTP server with routes
 	mux := apiServer.setupRoutes()
-	server := &http.Server{
+	httpServer := &http.Server{
 		Addr:         managementCfg.ListenAddress(),
 		Handler:      mux,
 		ReadTimeout:  apiReadTimeout,
@@ -140,7 +158,47 @@ func InitWithOptions(opts InitOptions) error {
 		"remote_exposure": managementCfg.RemoteExposure,
 		"auth_mode":       managementCfg.Auth.Mode,
 	})
-	return server.ListenAndServe()
+	return startHTTPServer(httpServer)
+}
+
+func startHTTPServer(httpServer *http.Server) (*Server, error) {
+	listener, err := net.Listen("tcp", httpServer.Addr)
+	if err != nil {
+		return nil, err
+	}
+	server := &Server{
+		httpServer: httpServer,
+		done:       make(chan struct{}),
+	}
+	go func() {
+		server.serveErr = httpServer.Serve(listener)
+		close(server.done)
+	}()
+	return server, nil
+}
+
+func (s *Server) Shutdown(ctx context.Context) error {
+	if s == nil || s.httpServer == nil {
+		return nil
+	}
+	shutdownErr := s.httpServer.Shutdown(ctx)
+	if shutdownErr != nil {
+		_ = s.httpServer.Close()
+	}
+	select {
+	case <-s.done:
+		return errors.Join(shutdownErr, normalizeServerError(s.serveErr))
+	case <-ctx.Done():
+		_ = s.httpServer.Close()
+		return errors.Join(shutdownErr, ctx.Err())
+	}
+}
+
+func normalizeServerError(err error) error {
+	if errors.Is(err, http.ErrServerClosed) {
+		return nil
+	}
+	return err
 }
 
 func resolveAPIServerConfig(runtimeRegistry *routerruntime.Registry) *config.RouterConfig {

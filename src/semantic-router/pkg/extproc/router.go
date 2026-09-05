@@ -86,6 +86,7 @@ type OpenAIRouter struct {
 
 	routerLearningMu        sync.Mutex
 	routerLearningRuntime   *routerLearningRuntime
+	generation              *routerGeneration
 	lookupTableCancel       func()
 	routerSessionStateStore *sessiontelemetry.RouterSessionStateStoreSlot
 

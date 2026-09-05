@@ -123,7 +123,6 @@ func WarmupRouter(
 	if component == "" {
 		component = "router"
 	}
-
 	tasks := make([]Task, 0, len(warmups))
 	taskNames := make([]string, 0, len(warmups))
 	for _, warmup := range warmups {
@@ -141,7 +140,10 @@ func WarmupRouter(
 		tasks = append(tasks, Task{
 			Name:       taskName,
 			BestEffort: true,
-			Run: func(context.Context) error {
+			Run: func(ctx context.Context) error {
+				if err := ctx.Err(); err != nil {
+					return err
+				}
 				logging.ComponentEvent(component, warmup.Name+"_load_started", map[string]interface{}{})
 				return warmup.Load()
 			},
