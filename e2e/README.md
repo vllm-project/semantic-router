@@ -130,6 +130,7 @@ until the selected cases are known to be isolated.
 - **production-stack**: HA, load balancing, failover, and load checks.
 - **ml-model-selection**: trained model-selector behavior.
 - **multi-endpoint**: environment policy across several backends.
+- **no-model**: routing behavior without a model deployment.
 - **authz-rbac**: authorization routing and rate-limit behavior.
 - **streaming**: streamed request bodies and cache round trips.
 - **anthropic-shim**: affected-change Anthropic backend and cross-protocol matrix coverage.

@@ -33,6 +33,7 @@ extern bool is_similarity_model_initialized();
 extern float calculate_similarity(const char* text1, const char* text2, int max_length);
 
 extern bool init_classifier(const char* model_id, int num_classes, bool use_cpu);
+extern bool init_generic_classifier(const char* model_id, int num_classes, bool use_cpu);
 
 extern bool init_pii_classifier(const char* model_id, int num_classes, bool use_cpu);
 
@@ -268,12 +269,14 @@ extern ClassificationResultWithProbs classify_text_with_probabilities(const char
 extern void free_probabilities(float* probabilities, int num_classes);
 extern ClassificationResult classify_pii_text(const char* text);
 extern ClassificationResult classify_jailbreak_text(const char* text);
+extern ClassificationResultWithProbs classify_jailbreak_text_with_probabilities(const char* text);
 extern ClassificationResult classify_bert_text(const char* text);
 extern ModernBertClassificationResult classify_modernbert_text(const char* text);
 extern ModernBertClassificationResultWithProbs classify_modernbert_text_with_probabilities(const char* text);
 extern void free_modernbert_probabilities(float* probabilities, int num_classes);
 extern ModernBertClassificationResult classify_modernbert_pii_text(const char* text);
 extern ModernBertClassificationResult classify_modernbert_jailbreak_text(const char* text);
+extern ModernBertClassificationResultWithProbs classify_modernbert_jailbreak_text_with_probabilities(const char* text);
 extern ClassificationResult classify_deberta_jailbreak_text(const char* text);
 extern ModernBertClassificationResult classify_fact_check_text(const char* text);
 extern ModernBertClassificationResult classify_feedback_text(const char* text);
@@ -282,6 +285,7 @@ extern ModernBertClassificationResult classify_feedback_text(const char* text);
 extern ModernBertClassificationResult classify_mmbert_32k_intent(const char* text);
 extern ModernBertClassificationResult classify_mmbert_32k_factcheck(const char* text);
 extern ModernBertClassificationResult classify_mmbert_32k_jailbreak(const char* text);
+extern ModernBertClassificationResultWithProbs classify_mmbert_32k_jailbreak_with_probabilities(const char* text);
 extern ModernBertClassificationResult classify_mmbert_32k_feedback(const char* text);
 extern ModernBertTokenClassificationResult classify_mmbert_32k_pii_tokens(const char* text);
 extern ModernBertClassificationResult classify_mmbert_32k_modality(const char* text);

@@ -129,7 +129,7 @@ class PRChangeClassifierTests(unittest.TestCase):
         )
         self.assertEqual(
             result.profiles,
-            ("envoy-ai-gateway", "dashboard", "remote-embedding"),
+            ("envoy-ai-gateway", "dashboard", "no-model", "remote-embedding"),
         )
         self.assertNotIn("performance", result.selected_jobs)
 
