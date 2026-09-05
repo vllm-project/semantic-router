@@ -98,9 +98,9 @@ def test_printed_commands_include_runtime_flag() -> None:
 
     # Docker must not be probed anywhere in the full installer path.
     calls_line = [l for l in out.splitlines() if l.startswith("CALLS=")][0]
-    assert "docker" not in calls_line, (
-        f"Docker was probed despite --runtime podman: {calls_line}"
-    )
+    assert (
+        "docker" not in calls_line
+    ), f"Docker was probed despite --runtime podman: {calls_line}"
 
     restart_section = out.split("[PRINT_RESTART_COMMAND]")[1].split(
         "[PRINT_NEXT_STEPS]"
