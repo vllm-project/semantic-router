@@ -142,6 +142,7 @@ spec:
                             - hallucination
                             - header_mutation
                             - memory
+                            - prompt_cache
                             - rag
                             - request_params
                             - response_jailbreak

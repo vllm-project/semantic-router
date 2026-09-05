@@ -725,6 +725,7 @@ class PluginType(str, Enum):
     TOOLS = "tools"
     TOOL_SELECTION = "tool_selection"
     CONTEXT_COMPRESSION = "context_compression"
+    PROMPT_CACHE = "prompt_cache"
 
 
 class ResponseCacheSemanticConfig(BaseModel):
@@ -898,6 +899,27 @@ class ContextCompressionPluginConfig(BaseModel):
     recovery: Optional[ContextCompressionRecoveryConfig] = None
     request_controls: Optional[ContextCompressionRequestControlsConfig] = None
     failure_mode: Literal["fail_open", "fail_closed"] = "fail_open"
+
+
+class PromptCachePluginConfig(BaseModel):
+    """Route-local prompt-cache marker injection."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    ttl: Literal["5m", "1h"] = "5m"
+    targets: List[Literal["instructions", "tools"]] = Field(
+        default_factory=lambda: ["instructions", "tools"]
+    )
+    on_unsupported: Literal["skip", "reject"] = "skip"
+
+    @model_validator(mode="after")
+    def validate_targets(self) -> "PromptCachePluginConfig":
+        if not self.targets:
+            raise ValueError("targets must not be empty")
+        if len(set(self.targets)) != len(self.targets):
+            raise ValueError("targets must not contain duplicates")
+        return self
 
 
 class FastResponsePluginConfig(BaseModel):

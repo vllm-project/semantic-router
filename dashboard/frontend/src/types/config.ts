@@ -340,6 +340,7 @@ export interface PluginConfig {
     | 'request_params'
     | 'response_jailbreak'
     | 'context_compression'
+    | 'prompt_cache'
   configuration: Record<string, unknown>
 }
 

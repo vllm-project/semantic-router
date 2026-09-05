@@ -118,6 +118,11 @@ const (
 	// Values: "true" or "false"
 	VSRInjectedSystemPrompt = "x-vsr-injected-system-prompt"
 
+	VSRPromptCacheAction    = "x-vsr-prompt-cache-action"
+	VSRPromptCacheReason    = "x-vsr-prompt-cache-reason"
+	VSRPromptCacheInserted  = "x-vsr-prompt-cache-inserted"
+	VSRPromptCachePreserved = "x-vsr-prompt-cache-preserved"
+
 	// --- v0.4 keystone response-contract headers (issue #2203) ---
 	// These two headers are emitted on every VSR-processed response and form
 	// the foundation of the v0.4 header contract: schema-version stamps the

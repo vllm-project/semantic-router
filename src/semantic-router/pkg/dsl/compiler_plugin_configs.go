@@ -1,6 +1,8 @@
 package dsl
 
 import (
+	"fmt"
+
 	"gopkg.in/yaml.v2"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -43,6 +45,9 @@ var pluginConfigCompilers = map[string]pluginConfigCompiler{
 		cfg := &config.ContextCompressionPluginConfig{}
 		return compilePluginFields(c, fields, cfg)
 	},
+	"prompt_cache": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
+		return compilePromptCachePluginConfig(c, fields)
+	},
 	"hallucination": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
 		return c.compileHallucinationPluginConfig(fields), true
 	},
@@ -74,6 +79,35 @@ var pluginConfigCompilers = map[string]pluginConfigCompiler{
 	"tools": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
 		return c.compileToolsPlugin(fields), true
 	},
+}
+
+func compilePromptCachePluginConfig(
+	c *Compiler,
+	fields map[string]Value,
+) (interface{}, bool) {
+	cfg, err := decodePromptCachePluginFields(fields)
+	if err != nil {
+		c.addError(Position{}, "%v", err)
+		return nil, false
+	}
+	return cfg, true
+}
+
+func decodePromptCachePluginFields(
+	fields map[string]Value,
+) (*config.PromptCachePluginConfig, error) {
+	payload, err := config.NewStructuredPayload(fieldsToMap(fields))
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode plugin fields: %w", err)
+	}
+	cfg := &config.PromptCachePluginConfig{}
+	if err := payload.DecodeIntoStrict(cfg); err != nil {
+		return nil, fmt.Errorf("failed to decode plugin fields: %w", err)
+	}
+	if err := config.ValidatePromptCachePluginConfig(cfg); err != nil {
+		return nil, err
+	}
+	return cfg, nil
 }
 
 func (c *Compiler) compileHeaderMutationPluginConfig(fields map[string]Value) config.HeaderMutationPluginConfig {

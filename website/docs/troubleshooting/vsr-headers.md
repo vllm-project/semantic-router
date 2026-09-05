@@ -137,8 +137,8 @@ decision was evaluated for that response.
 ## Cache and plugin headers
 
 `x-vsr-cache-hit` and `x-vsr-fast-response` identify an immediate response on
-the default surface. Cache-similarity and tool-selection metrics require
-`x-vsr-debug`.
+the default surface. Cache-similarity, tool-selection metrics, and prompt-cache
+receipts require `x-vsr-debug`.
 
 | Header | Surface | Description |
 | ------ | ------- | ----------- |
@@ -148,6 +148,13 @@ the default surface. Cache-similarity and tool-selection metrics require
 | `x-vsr-tools-strategy` | debug | Semantic tool-selection retriever strategy used for the request. |
 | `x-vsr-tools-confidence` | debug | Highest tool-selection retriever similarity score. |
 | `x-vsr-tools-latency-ms` | debug | Tool-selection retriever latency in milliseconds. |
+| `x-vsr-prompt-cache-action` | debug | Outcome of the `prompt_cache` plugin: `inserted`, `preserved`, `skipped`, or `rejected`. |
+| `x-vsr-prompt-cache-reason` | debug | Machine-readable reason for a non-`inserted` outcome: `caller_markers`, `no_eligible_target`, or `unsupported_target`. Omitted when the action is `inserted`. |
+| `x-vsr-prompt-cache-inserted` | debug | Count of router-inserted cache markers, at most `2` (one instruction block, one tool). |
+| `x-vsr-prompt-cache-preserved` | debug | Count of caller-supplied cache markers found anywhere in the request. |
+
+These headers are content-free: they report counts and outcomes, never the
+cached text itself, and they never claim a cache hit or provider-side savings.
 
 ## Example response
 

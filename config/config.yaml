@@ -815,6 +815,15 @@ routing:
             mode: filter
             relevance_threshold: 0.25
             preserve_count: 2
+        # Disabled sample: field coverage only (reference config union coverage
+        # for PromptCachePluginConfig). qwen3-32b speaks the Anthropic Messages
+        # wire format this plugin targets; see tutorials/plugin/prompt-cache.
+        - type: prompt_cache
+          configuration:
+            enabled: false
+            ttl: 1h
+            targets: [instructions, tools]
+            on_unsupported: skip
 
     - name: health_ratings_route
       description: Ratings-based route for health requests that need fact verification.

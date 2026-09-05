@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ALGORITHM_ICONS, PLUGIN_ICONS, SIGNAL_TYPES } from './topology/constants'
+import { ALGORITHM_ICONS, PLUGIN_ICONS, PLUGIN_TYPES, SIGNAL_TYPES } from './topology/constants'
 import { parseConfigToTopology } from './topology/utils/topologyParser'
 import type { ConfigData } from './topology/types'
 
@@ -65,6 +65,8 @@ describe('topology v0.3 surface alignment', () => {
     })
     expect(PLUGIN_ICONS).toMatchObject({
       tool_selection: 'TS',
+      prompt_cache: 'PC',
     })
+    expect(PLUGIN_TYPES).toContain('prompt_cache')
   })
 })

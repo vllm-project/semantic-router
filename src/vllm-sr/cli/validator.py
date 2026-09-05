@@ -4,6 +4,7 @@ from typing import Any, List
 from cli.models import (
     UserConfig,
     PluginType,
+    PromptCachePluginConfig,
     ResponseCachePluginConfig,
     FastResponsePluginConfig,
     RequestParamsPluginConfig,
@@ -412,6 +413,7 @@ def validate_plugin_configurations(config: UserConfig) -> List[ValidationError]:
         PluginType.RAG.value: RAGPluginConfig,
         PluginType.TOOLS.value: ToolsPluginConfig,
         PluginType.TOOL_SELECTION.value: ToolSelectionPluginConfig,
+        PluginType.PROMPT_CACHE.value: PromptCachePluginConfig,
     }
 
     for field_prefix, decision in _all_decisions(config):

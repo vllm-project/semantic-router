@@ -67,6 +67,13 @@ Model-free assets can carry the declaration with empty `modelRefs`; a concrete
 Entrypoint binding must satisfy it, and request-time eligibility filters must
 preserve it before selection or multi-model execution begins.
 
+A plugin's configuration surface stays generic even when the plugin only
+targets one provider wire format. `prompt_cache`, for example, is disabled by
+default and declares `on_unsupported: skip|reject` rather than assuming every
+route resolves to an Anthropic-shaped backend; a route with no eligible target
+either leaves the request unchanged or fails with a typed error, per that
+setting.
+
 Structured request controls remain facts at the signal boundary. For example,
 conversation signals expose whether the protocol requires or forbids tool
 execution, projections reconcile those facts with text-derived observations,

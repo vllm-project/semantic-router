@@ -127,6 +127,7 @@ func assertReferenceCorePluginCoverage(t testingT, pluginsByType map[string][]ma
 	assertPluginConfigCoverage(t, pluginsByType["router_replay"], reflect.TypeOf(RouterReplayPluginConfig{}), "router_replay")
 	assertPluginConfigCoverage(t, pluginsByType["request_params"], reflect.TypeOf(RequestParamsPluginConfig{}), "request_params")
 	assertPluginConfigCoverage(t, pluginsByType["tool_selection"], reflect.TypeOf(ToolSelectionPluginConfig{}), "tool_selection")
+	assertPluginConfigCoverage(t, pluginsByType["prompt_cache"], reflect.TypeOf(PromptCachePluginConfig{}), "prompt_cache")
 }
 
 type contextCompressionReferenceConfig struct {

@@ -1970,6 +1970,7 @@ func TestVSRHeadersAddedOnSuccessfulNonCachedResponse(t *testing.T) {
 	assert.NotContains(t, headerMap, "x-vsr-selected-category", "category demoted to debug")
 	assert.NotContains(t, headerMap, "x-vsr-selected-reasoning", "reasoning demoted to debug")
 	assert.NotContains(t, headerMap, "x-vsr-injected-system-prompt", "injected demoted to debug")
+	assert.NotContains(t, headerMap, "x-vsr-prompt-cache-action", "prompt cache receipt demoted to debug")
 	assert.NotContains(t, headerMap, "x-vsr-matched-keywords", "matched signals demoted to debug")
 	assert.NotContains(t, headerMap, "x-vsr-client-protocol")
 }
@@ -1986,6 +1987,9 @@ func TestVSRDebugHeadersOnSuccessfulResponse(t *testing.T) {
 		VSRReasoningMode:        "on",
 		VSRSelectedModel:        "deepseek-v31",
 		VSRInjectedSystemPrompt: true,
+		PromptCacheAction:       promptCacheActionPreserved,
+		PromptCacheReason:       promptCacheReasonCallerMarkers,
+		PromptCachePreserved:    1,
 		VSRMatchedKeywords:      []string{"prove", "theorem"},
 	}
 
@@ -2018,6 +2022,9 @@ func TestVSRDebugHeadersOnSuccessfulResponse(t *testing.T) {
 	assert.Equal(t, "math", headerMap["x-vsr-selected-category"])
 	assert.Equal(t, "on", headerMap["x-vsr-selected-reasoning"])
 	assert.Equal(t, "true", headerMap["x-vsr-injected-system-prompt"])
+	assert.Equal(t, "preserved", headerMap["x-vsr-prompt-cache-action"])
+	assert.Equal(t, "caller_markers", headerMap["x-vsr-prompt-cache-reason"])
+	assert.Equal(t, "1", headerMap["x-vsr-prompt-cache-preserved"])
 	assert.Equal(t, "prove,theorem", headerMap["x-vsr-matched-keywords"])
 }
 
