@@ -505,3 +505,29 @@ func TestRedisConversationIndexKeyIsolation(t *testing.T) {
 	assert.Falsef(t, strings.HasPrefix(lockKey, indexScanPrefix),
 		"lock key %q must not be matched by the %q* index scan pattern", lockKey, indexScanPrefix)
 }
+
+// TestRedisConversationIndexMigrationKeyIsolation covers the two global (not
+// per-conversation) migration keys added for FinalizeConversationIndexMigration:
+// same scan-isolation invariant as the per-conversation key families. Needs
+// no Redis.
+func TestRedisConversationIndexMigrationKeyIsolation(t *testing.T) {
+	store := &RedisStore{keyPrefix: "sr:"}
+
+	statusKey := store.buildKey(ConversationIndexMigrationStatusKey)
+	assert.Equal(t, "sr:migration:conversation-response-index", statusKey)
+
+	lockKey := store.buildKey(ConversationIndexMigrationLockKey)
+	assert.Equal(t, "sr:migration-lock:conversation-index", lockKey)
+
+	scanPrefixes := []string{
+		store.buildKey(ConversationKeyPrefix),
+		store.buildKey(ResponseKeyPrefix),
+		store.buildKey(ConversationIndexKeyPrefix),
+	}
+	for _, key := range []string{statusKey, lockKey} {
+		for _, scanPrefix := range scanPrefixes {
+			assert.Falsef(t, strings.HasPrefix(key, scanPrefix),
+				"key %q must not be matched by the %q* scan pattern", key, scanPrefix)
+		}
+	}
+}
