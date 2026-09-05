@@ -185,6 +185,7 @@ completions manually later via `vllm-sr completion install`.
      VLLM_SR_PYTHON VLLM_SR_INSTALL_PLATFORM VLLM_SR_INSTALL_AUTO_LAUNCH
    curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --mode cli --runtime skip --no-launch
    ```
+
 5. **Validate** (see Validation below).
 6. **Report** the result and the next supported step.
 
@@ -214,6 +215,7 @@ adding `~/.local/bin` to `PATH`.
 An existing installation is detected by **any** of these signals:
 
 **Default paths:**
+
 - `command -v vllm-sr` finds the launcher on `PATH`.
 - `test -e ~/.local/bin/vllm-sr || test -L ~/.local/bin/vllm-sr` finds the
   default absolute launcher (common when `~/.local/bin` is absent from the
@@ -223,6 +225,7 @@ An existing installation is detected by **any** of these signals:
 - `test -d ~/.local/share/vllm-sr` finds the default install root.
 
 **Override paths (only when the corresponding env var is set):**
+
 - If `VLLM_SR_BIN_DIR` is set: `test -e "$VLLM_SR_BIN_DIR/vllm-sr" ||
   test -L "$VLLM_SR_BIN_DIR/vllm-sr"`.
 - If `VLLM_SR_INSTALL_ROOT` is set: `test -d "$VLLM_SR_INSTALL_ROOT"`.
