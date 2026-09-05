@@ -129,11 +129,22 @@ def generate_envoy_config_from_user_config(
             if model.api_format == "anthropic" and _uses_shared_anthropic_cluster(
                 model
             ):
-                anthropic_models.append({"name": model.name})
+                cluster_name = model.name.replace("-", "_").replace(".", "_")
+                anthropic_models.append(
+                    {
+                        "name": model.name,
+                        "cluster_name": cluster_name,
+                        "reliability": (
+                            model.reliability.model_dump()
+                            if model.reliability is not None
+                            else {}
+                        ),
+                    }
+                )
                 if log_summary:
                     log.info(
                         f"  Anthropic model: {model.name} "
-                        "(will use shared anthropic_api_cluster)"
+                        f"(cluster: {cluster_name}_cluster)"
                     )
                 continue
             if model.api_format == "anthropic" and log_summary:
@@ -288,7 +299,9 @@ def generate_envoy_config_from_user_config(
     if anthropic_models and log_summary:
         log.info(f"  Found {len(anthropic_models)} Anthropic model(s):")
         for model in anthropic_models:
-            log.info(f"    - {model['name']} (cluster: anthropic_api_cluster)")
+            log.info(
+                f"    - {model['name']} (cluster: {model['cluster_name']}_cluster)"
+            )
 
     # Check if template exists
     template_path = Path(template_root) / template_file

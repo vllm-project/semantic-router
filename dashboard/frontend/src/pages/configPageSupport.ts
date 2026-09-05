@@ -119,6 +119,9 @@ export interface ProviderReliability {
   health_check_path?: string
   health_check_interval?: string
   health_check_timeout?: string
+  request_timeout?: string
+  stream_idle_timeout?: string
+  connect_timeout?: string
 }
 
 export interface LoRAAdapter {

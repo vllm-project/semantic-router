@@ -49,6 +49,8 @@ var BaselineRouterContract = []string{
 	"session-pricing-response-api",
 	// Event signal rule matching and routing (issue #3178)
 	"event-routing",
+	// Reliability timeouts runtime contract (issue #3210)
+	"reliability-timeouts",
 }
 
 // DashboardContract is the canonical E2E contract for the dashboard API surface.

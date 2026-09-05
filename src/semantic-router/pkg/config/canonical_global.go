@@ -198,26 +198,7 @@ func resolveCanonicalGlobal(override *CanonicalGlobal, rawOverride *StructuredPa
 		return CanonicalGlobal{}, fmt.Errorf("failed to merge global override: %w", err)
 	}
 	categoryModel := &resolved.ModelCatalog.Modules.Classifier.Domain.CategoryModel
-	if rawDomain := rawCanonicalCategoryOverride(rawOverride); rawDomain != nil {
-		if hasRawKey(rawDomain, "backend") && !hasActiveRawCategoryLocalSelector(rawDomain) {
-			// The canonical default is a local mmBERT variant. A remote backend
-			// supplied by a sparse override must replace that inherited local
-			// selector, otherwise the merged value is rejected as a mixed local /
-			// remote configuration. Do this only when backend is present in the
-			// raw override: an unrelated sparse module override must preserve the
-			// inherited local default.
-			categoryModel.Variant = ""
-			categoryModel.UseModernBERT = false
-			categoryModel.UseMmBERT32K = false
-		}
-		if !hasRawKey(rawDomain, "variant") &&
-			(hasRawKey(rawDomain, "use_modernbert") || hasRawKey(rawDomain, "use_mmbert_32k")) {
-			// A sparse legacy override must be able to replace the canonical
-			// default variant, including the explicit false/false form used to
-			// clear it.
-			categoryModel.Variant = ""
-		}
-	}
+	applyRawDomainOverrides(rawOverride, categoryModel)
 	if err := normalizeCanonicalCategoryVariant(categoryModel); err != nil {
 		return CanonicalGlobal{}, err
 	}
@@ -281,6 +262,46 @@ func rawBoolValue(raw map[string]interface{}, key string) bool {
 	return ok && value
 }
 
+func applyRawDomainOverrides(rawOverride *StructuredPayload, categoryModel *CategoryModel) {
+	rawDomain := rawCanonicalCategoryOverride(rawOverride)
+	if rawDomain == nil {
+		return
+	}
+	if hasRawKey(rawDomain, "backend") && !hasActiveRawCategoryLocalSelector(rawDomain) {
+		// The canonical default is a local mmBERT variant. A remote backend
+		// supplied by a sparse override must replace that inherited local
+		// selector, otherwise the merged value is rejected as a mixed local /
+		// remote configuration. Do this only when backend is present in the
+		// raw override: an unrelated sparse module override must preserve the
+		// inherited local default.
+		categoryModel.Variant = ""
+		categoryModel.UseModernBERT = false
+		categoryModel.UseMmBERT32K = false
+	}
+	if !hasRawKey(rawDomain, "variant") &&
+		(hasRawKey(rawDomain, "use_modernbert") || hasRawKey(rawDomain, "use_mmbert_32k")) {
+		// A sparse legacy override must be able to replace the canonical
+		// default variant, including the explicit false/false form used to
+		// clear it.
+		categoryModel.Variant = ""
+	}
+}
+
+func applyCanonicalServicesAndStores(cfg *RouterConfig, global *CanonicalGlobal) {
+	cfg.API = global.Services.API
+	cfg.ResponseAPI = global.Services.ResponseAPI
+	cfg.Observability = global.Services.Observability
+	cfg.Authz = global.Services.Authz
+	cfg.RateLimit = global.Services.RateLimit
+	cfg.ManagementAPI = global.Services.ManagementAPI
+	cfg.RouterReplay = global.Services.RouterReplay
+	cfg.StartupStatus = global.Services.StartupStatus
+
+	cfg.SemanticCache = global.Stores.ResponseCache
+	cfg.Memory = global.Stores.Memory
+	cfg.VectorStore = global.Stores.VectorStore
+}
+
 func applyCanonicalGlobal(cfg *RouterConfig, global *CanonicalGlobal) error {
 	if global == nil {
 		return nil
@@ -302,18 +323,7 @@ func applyCanonicalGlobal(cfg *RouterConfig, global *CanonicalGlobal) error {
 	cfg.ModelSelection = global.Router.ModelSelection
 	cfg.RouterLearning = global.Router.Learning
 
-	cfg.API = global.Services.API
-	cfg.ResponseAPI = global.Services.ResponseAPI
-	cfg.Observability = global.Services.Observability
-	cfg.Authz = global.Services.Authz
-	cfg.RateLimit = global.Services.RateLimit
-	cfg.ManagementAPI = global.Services.ManagementAPI
-	cfg.RouterReplay = global.Services.RouterReplay
-	cfg.StartupStatus = global.Services.StartupStatus
-
-	cfg.SemanticCache = global.Stores.ResponseCache
-	cfg.Memory = global.Stores.Memory
-	cfg.VectorStore = global.Stores.VectorStore
+	applyCanonicalServicesAndStores(cfg, global)
 
 	cfg.Tools = global.Integrations.Tools
 	cfg.Looper = global.Integrations.Looper

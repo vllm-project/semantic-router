@@ -162,6 +162,21 @@ const reliabilityFields: ObjectEditorField<ProviderReliability>[] = [
     step: 1,
     placeholder: '50',
   },
+  {
+    key: 'request_timeout',
+    label: 'Request timeout',
+    placeholder: '300s',
+  },
+  {
+    key: 'stream_idle_timeout',
+    label: 'Stream idle timeout',
+    placeholder: '60s',
+  },
+  {
+    key: 'connect_timeout',
+    label: 'Connect timeout',
+    placeholder: '10s',
+  },
 ]
 
 function backendRefLabel(item: BackendRefEntry, index: number): string {

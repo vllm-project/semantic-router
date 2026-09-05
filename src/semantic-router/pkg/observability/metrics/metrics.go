@@ -358,9 +358,9 @@ func RecordRequestError(model, reason string) {
 	}
 	// Normalize a few common variants to canonical reasons
 	switch reason {
-	case "deadline_exceeded":
+	case "deadline_exceeded", "upstream_408", "upstream_504", "upstream_timeout":
 		reason = "timeout"
-	case "upstream_500", "upstream_502", "upstream_503", "upstream_504":
+	case "upstream_500", "upstream_502", "upstream_503":
 		reason = "upstream_5xx"
 	case "upstream_400", "upstream_401", "upstream_403", "upstream_404", "upstream_429":
 		reason = "upstream_4xx"
