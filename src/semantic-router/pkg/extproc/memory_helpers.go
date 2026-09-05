@@ -146,15 +146,6 @@ func deriveSessionIDFromRequestID(ctx *RequestContext) string {
 	return "rid-" + hex.EncodeToString(hash[:])[:16]
 }
 
-func cloneSemanticMessages(messages []llmprotocol.Message) []llmprotocol.Message {
-	result := make([]llmprotocol.Message, len(messages))
-	for index := range messages {
-		result[index] = messages[index]
-		result[index].Content = append([]llmprotocol.Content(nil), messages[index].Content...)
-	}
-	return result
-}
-
 // convertStoredResponsesToMessages converts retained response objects into the
 // same neutral conversation contract used by live requests.
 func convertStoredResponsesToMessages(storedResponses []*responseapi.StoredResponse) []llmprotocol.Message {
