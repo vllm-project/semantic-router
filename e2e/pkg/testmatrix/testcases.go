@@ -26,6 +26,8 @@ var BaselineRouterContract = []string{
 	"pii-entity-offsets",
 	// PII past the classifier's sequence limit is still detected (issue #3364)
 	"pii-long-text",
+	// A jailbreak past the classifier's sequence limit is still detected (issue #3204)
+	"security-long-text",
 	"jailbreak-detection",
 	"decision-priority-selection",
 	"plugin-chain-execution",
