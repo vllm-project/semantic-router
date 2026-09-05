@@ -7,9 +7,12 @@ import (
 
 // LegacyBackendAdapter confines the old backend API to one migration boundary.
 // Request paths and management APIs depend on TypedCacheStore instead.
+const bertEmbeddingWindow = 512
+
 type LegacyBackendAdapter struct {
-	backend      CacheBackend
-	capabilities BackendCapabilities
+	backend         CacheBackend
+	capabilities    BackendCapabilities
+	embeddingWindow int
 }
 
 func NewLegacyBackendAdapter(
@@ -22,6 +25,17 @@ func NewLegacyBackendAdapter(
 		backend:      backend,
 		capabilities: capabilities,
 	}
+}
+
+func (a *LegacyBackendAdapter) WithEmbeddingModel(model string) *LegacyBackendAdapter {
+	if normalizeEmbeddingModel(model) == defaultEmbeddingModel {
+		a.embeddingWindow = bertEmbeddingWindow
+	}
+	return a
+}
+
+func (a *LegacyBackendAdapter) exceedsEmbeddingWindow(query string) bool {
+	return a.embeddingWindow > 0 && queryTokensExceed(query, a.embeddingWindow)
 }
 
 func (a *LegacyBackendAdapter) LookupExact(
@@ -74,6 +88,9 @@ func (a *LegacyBackendAdapter) LookupSemantic(
 	ctx context.Context,
 	lookup SemanticLookup,
 ) (CacheResult, error) {
+	if a.exceedsEmbeddingWindow(lookup.Identity.SemanticQuery) {
+		return CacheResult{HitKind: HitKindMiss}, nil
+	}
 	result, err := a.backend.LookupSimilarWithThreshold(
 		ctx,
 		lookup.Identity.Partition.Key(),
@@ -104,7 +121,7 @@ func resultAge(result LookupResult) (time.Duration, bool) {
 }
 
 func (a *LegacyBackendAdapter) StoreSemantic(ctx context.Context, write CacheWrite) error {
-	if write.TTL.NoStore {
+	if write.TTL.NoStore || a.exceedsEmbeddingWindow(write.Identity.SemanticQuery) {
 		return nil
 	}
 	return a.backend.AddEntry(
