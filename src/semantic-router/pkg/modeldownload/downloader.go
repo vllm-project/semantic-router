@@ -3,12 +3,53 @@ package modeldownload
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
+
+// maxCaptureBytes bounds how much CLI output we retain for error classification.
+const maxCaptureBytes = 64 * 1024
+
+// tailWriter keeps only the most recent maxCaptureBytes written to it. The HF CLI
+// can stream a large volume of progress output, so capturing all of it would be
+// wasteful; the error text we classify on always lives at the tail.
+type tailWriter struct {
+	buf []byte
+}
+
+func (w *tailWriter) Write(p []byte) (int, error) {
+	w.buf = append(w.buf, p...)
+	if len(w.buf) > maxCaptureBytes {
+		w.buf = w.buf[len(w.buf)-maxCaptureBytes:]
+	}
+	return len(p), nil
+}
+
+func (w *tailWriter) String() string { return string(w.buf) }
+
+// errorContextBytes bounds how much captured CLI output we interpolate into a
+// returned error. The full capture can be up to maxCaptureBytes of progress
+// output; the operator only needs the trailing cause (the 429/404/dial line),
+// so we keep a short tail.
+const errorContextBytes = 2 * 1024
+
+// tailForError returns a bounded, trimmed tail of captured CLI output suitable
+// for interpolating into a returned error, or "" when there is nothing useful to
+// surface (so a bare "exit status 1" stays clean).
+func tailForError(captured string) string {
+	trimmed := strings.TrimSpace(captured)
+	if trimmed == "" {
+		return ""
+	}
+	if len(trimmed) > errorContextBytes {
+		trimmed = trimmed[len(trimmed)-errorContextBytes:]
+	}
+	return "\n" + trimmed
+}
 
 // hfCommand stores the detected HuggingFace CLI command ("hf" or "huggingface-cli")
 var hfCommand string
@@ -34,41 +75,69 @@ func DownloadModel(spec ModelSpec, config DownloadConfig) error {
 	return DownloadModelWithProgress(spec, config)
 }
 
-// IsGatedModelError checks if an error indicates a gated model that requires authentication.
-// hfToken is the HF_TOKEN value from the download config; an empty string means no token is set.
-func IsGatedModelError(err error, repoID string, hfToken string) bool {
+// IsGatedModelError reports whether a download failure is due to the model being
+// gated behind HuggingFace authentication, as opposed to a transient or public-repo
+// failure (rate limit, network error) or a missing/typo'd repo that must fail loudly.
+//
+// cliOutput is the captured stderr from the HF CLI (stdout is streamed through
+// untouched). The CLI writes its real error text to stderr rather than returning
+// it in err (which is usually just "exit status 1"), so classification must
+// inspect the captured output, not err alone. The presence or absence of an HF_TOKEN is deliberately NOT consulted: an
+// invalid repo id, a rate limit, and a gated repo are all indistinguishable by token
+// state, and HuggingFace returns 429 for several of them regardless of token.
+func IsGatedModelError(err error, cliOutput string, repoID string) bool {
 	if err == nil {
 		return false
 	}
 
-	errStr := strings.ToLower(err.Error())
-	repoIDLower := strings.ToLower(repoID)
+	haystack := strings.ToLower(err.Error() + "\n" + cliOutput)
 
-	// Known gated models
-	knownGatedModels := []string{"embeddinggemma", "gemma"}
-	isKnownGated := false
-	for _, gatedName := range knownGatedModels {
-		if strings.Contains(repoIDLower, gatedName) {
-			isKnownGated = true
-			break
+	// Access-approval anchors the HF CLI / huggingface_hub emit for gated repos.
+	// Status codes are anchored to their surrounding phrase ("403 forbidden", not
+	// bare "403") so progress bytes like "403M/896M" and proxy/CDN denials on
+	// PUBLIC repos are not misread as gated.
+	// Note: 404 / "repository not found" is intentionally absent — a missing or
+	// mistyped repo is a real error that must surface, not a graceful gated skip.
+	gatedAnchors := []string{
+		"gatedrepoerror",
+		"gated",
+		"restricted",
+		"awaiting a review",
+		"must be authenticated",
+		"access to model",
+		"access to this repo",
+		"authentication required",
+		// The Rust `hf` CLI emits this exact phrasing for gated repos
+		// (e.g. google/embeddinggemma-300m) instead of an HTTP status line.
+		"access denied",
+		"requires approval",
+		"401 client error",
+		"401 unauthorized",
+		"403 forbidden",
+		"you are trying to access a gated repo",
+	}
+	for _, p := range gatedAnchors {
+		if strings.Contains(haystack, p) {
+			return true
 		}
 	}
 
-	// Check for authentication-related error patterns
-	isAuthError := strings.Contains(errStr, "401") ||
-		strings.Contains(errStr, "unauthorized") ||
-		strings.Contains(errStr, "gated") ||
-		strings.Contains(errStr, "repository not found") ||
-		strings.Contains(errStr, "404") ||
-		strings.Contains(errStr, "authentication required")
+	// Tri-state fallback: if the CLI emitted output but nothing matched an auth
+	// anchor, the failure is NOT gated (public-repo/transient) and must surface.
+	// Only consult the known-gated repo allowlist when there is no captured
+	// output to classify on (e.g. a bare "exit status 1").
+	if strings.TrimSpace(cliOutput) != "" {
+		return false
+	}
 
-	// When no HF_TOKEN is set, the HF CLI streams its output directly to os.Stderr
-	// (not captured in err), so auth failures surface only as a plain "exit status 1".
-	// Treat any download failure without a token as a soft skip so the router
-	// degrades gracefully instead of crashing (e.g., CI forks without secrets).
-	noToken := hfToken == ""
+	repoIDLower := strings.ToLower(repoID)
+	for _, gatedName := range []string{"embeddinggemma", "gemma"} {
+		if strings.Contains(repoIDLower, gatedName) {
+			return true
+		}
+	}
 
-	return isKnownGated || isAuthError || noToken
+	return false
 }
 
 // DownloadModelWithProgress downloads a model with real-time progress output
@@ -107,19 +176,22 @@ func DownloadModelWithProgress(spec ModelSpec, config DownloadConfig) error {
 	}
 	cmd.Env = env
 
-	// Stream output in real-time to stdout/stderr
+	// Stream output in real-time while capturing stderr (bounded) so download
+	// failures can be classified. The HF CLI writes its real error text to stderr
+	// rather than returning it in err, which is usually just "exit status 1".
+	var captured tailWriter
 	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	cmd.Stderr = io.MultiWriter(os.Stderr, &captured)
 
 	// Run command with real-time output
 	if err := cmd.Run(); err != nil {
-		if IsGatedModelError(err, spec.RepoID, config.HFToken) {
-			logging.Warnf("⚠️  Skipping model '%s' (repo: %s): %v", spec.LocalPath, spec.RepoID, err)
+		if IsGatedModelError(err, captured.String(), spec.RepoID) {
+			logging.Warnf("⚠️  Skipping gated model '%s' (repo: %s): %v", spec.LocalPath, spec.RepoID, err)
 			logging.Warnf("   This is expected if HF_TOKEN is not available (e.g., PRs from forks)")
 			logging.Warnf("   To download gated models, set HF_TOKEN environment variable")
 			return fmt.Errorf("%w: %s", ErrGatedModelSkipped, spec.RepoID)
 		}
-		return fmt.Errorf("failed to download model %s: %w", spec.RepoID, err)
+		return fmt.Errorf("failed to download model %s: %w%s", spec.RepoID, err, tailForError(captured.String()))
 	}
 
 	logging.Infof("Successfully downloaded model: %s", spec.LocalPath)
