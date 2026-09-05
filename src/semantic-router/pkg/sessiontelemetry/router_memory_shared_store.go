@@ -14,7 +14,13 @@ import (
 // RouterSessionStateStore is an optional shared backing store for protection state.
 type RouterSessionStateStore interface {
 	Load(sessionID string) (RouterSessionSnapshot, bool, error)
-	Save(snapshot RouterSessionSnapshot, ttl time.Duration) error
+
+	SaveIfVersion(
+		snapshot RouterSessionSnapshot,
+		expectedVersion uint64,
+		ttl time.Duration,
+	) (bool, error)
+
 	Close() error
 }
 
@@ -34,6 +40,8 @@ type redisRouterSessionStore struct {
 	ttl       time.Duration
 	keyPrefix string
 }
+
+var errStaleRouterSessionVersion = errors.New("stale router session version")
 
 // RouterSessionStateStoreSlot owns one store generation and leases individual
 // Load/Save operations. Retirement prevents new leases, waits for in-flight
@@ -184,20 +192,59 @@ func acquireCurrentRouterSessionStateStore() (RouterSessionStateStore, func(), b
 	return stateStore, release, acquired
 }
 
-func persistRouterSessionState(sessionID string) {
-	if sessionID == "" {
+func persistRouterSessionDecision(p SessionDecisionParams) {
+	if p.SessionID == "" {
 		return
 	}
+
 	store, release, acquired := acquireCurrentRouterSessionStateStore()
 	if !acquired {
 		return
 	}
 	defer release()
-	snapshot, ok := GetRouterSessionSnapshot(sessionID, time.Now())
+
+	snapshot, ok := GetRouterSessionSnapshot(p.SessionID, time.Now())
 	if !ok {
 		return
 	}
-	_ = store.Save(snapshot, routerMemoryTTL)
+
+	// First attempt: persist the local mutation.
+	saved, err := store.SaveIfVersion(
+		snapshot,
+		snapshot.Version,
+		routerMemoryTTL,
+	)
+	if err != nil || saved {
+		if saved {
+			updateRouterSessionVersion(p.SessionID, snapshot.Version+1)
+		}
+		return
+	}
+
+	// CAS failed because another replica advanced the shared state.
+	latest, found, err := store.Load(p.SessionID)
+	if err != nil || !found {
+		return
+	}
+
+	if latest.SessionID != p.SessionID {
+		return
+	}
+
+	// Reapply this operation to the latest shared state.
+	rebased := latest
+	applySessionDecisionSnapshot(&rebased, p)
+
+	saved, err = store.SaveIfVersion(
+		rebased,
+		latest.Version,
+		routerMemoryTTL,
+	)
+	if err != nil || !saved {
+		return
+	}
+
+	updateRouterSessionVersion(p.SessionID, rebased.Version)
 }
 
 func loadSharedRouterSessionSnapshot(
@@ -242,6 +289,7 @@ func hydrateRouterSessionSnapshot(snapshot RouterSessionSnapshot) {
 	s.sessions[snapshot.SessionID] = &routerSessionState{
 		sessionID:                       snapshot.SessionID,
 		userID:                          snapshot.UserID,
+		version:                         snapshot.Version,
 		currentModel:                    snapshot.CurrentModel,
 		lastSeen:                        snapshot.LastSeen,
 		turnCount:                       snapshot.TurnCount,
@@ -279,19 +327,138 @@ func (s *redisRouterSessionStore) Load(sessionID string) (RouterSessionSnapshot,
 	return snapshot, true, nil
 }
 
-func (s *redisRouterSessionStore) Save(snapshot RouterSessionSnapshot, ttl time.Duration) error {
-	payload, err := json.Marshal(snapshot)
+func checkRouterSessionVersion(
+	ctx context.Context,
+	tx *redis.Tx,
+	key string,
+	expectedVersion uint64,
+) error {
+	payload, err := tx.Get(ctx, key).Bytes()
+	if errors.Is(err, redis.Nil) {
+		if expectedVersion != 0 {
+			return errStaleRouterSessionVersion
+		}
+		return nil
+	}
 	if err != nil {
 		return err
 	}
+
+	var current RouterSessionSnapshot
+	if err := json.Unmarshal(payload, &current); err != nil {
+		return err
+	}
+
+	if current.Version != expectedVersion {
+		return errStaleRouterSessionVersion
+	}
+
+	return nil
+}
+
+func (s *redisRouterSessionStore) SaveIfVersion(
+	snapshot RouterSessionSnapshot,
+	expectedVersion uint64,
+	ttl time.Duration,
+) (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), s.timeout)
 	defer cancel()
+
 	if s.ttl > 0 {
 		ttl = s.ttl
 	}
-	return s.client.Set(ctx, s.keyPrefix+snapshot.SessionID, payload, ttl).Err()
+
+	key := s.keyPrefix + snapshot.SessionID
+
+	err := s.client.Watch(ctx, func(tx *redis.Tx) error {
+		if err := checkRouterSessionVersion(
+			ctx,
+			tx,
+			key,
+			expectedVersion,
+		); err != nil {
+			return err
+		}
+
+		snapshot.Version = expectedVersion + 1
+
+		newPayload, err := json.Marshal(snapshot)
+		if err != nil {
+			return err
+		}
+
+		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			pipe.Set(ctx, key, newPayload, ttl)
+			return nil
+		})
+		return err
+	}, key)
+
+	if errors.Is(err, redis.TxFailedErr) ||
+		errors.Is(err, errStaleRouterSessionVersion) {
+		return false, nil
+	}
+
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
 }
 
 func (s *redisRouterSessionStore) Close() error {
 	return s.client.Close()
+}
+
+func persistRouterSessionUsage(p SessionUsageParams) {
+	if p.SessionID == "" {
+		return
+	}
+
+	store, release, acquired := acquireCurrentRouterSessionStateStore()
+	if !acquired {
+		return
+	}
+	defer release()
+
+	snapshot, ok := GetRouterSessionSnapshot(p.SessionID, time.Now())
+	if !ok {
+		return
+	}
+
+	saved, err := store.SaveIfVersion(
+		snapshot,
+		snapshot.Version,
+		routerMemoryTTL,
+	)
+	if err != nil || saved {
+		if saved {
+			updateRouterSessionVersion(p.SessionID, snapshot.Version+1)
+		}
+		return
+	}
+
+	// Another replica advanced the shared state.
+	latest, found, err := store.Load(p.SessionID)
+	if err != nil || !found {
+		return
+	}
+
+	if latest.SessionID != p.SessionID {
+		return
+	}
+
+	rebased := latest
+	applySessionUsageSnapshot(&rebased, p)
+
+	saved, err = store.SaveIfVersion(
+		rebased,
+		latest.Version,
+		routerMemoryTTL,
+	)
+	if err != nil || !saved {
+		return
+	}
+
+	updateRouterSessionVersion(p.SessionID, rebased.Version)
 }

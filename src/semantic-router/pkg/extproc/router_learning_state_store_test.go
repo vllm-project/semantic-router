@@ -26,12 +26,13 @@ func (s *trackingRouterSessionStateStore) Load(string) (sessiontelemetry.RouterS
 	return sessiontelemetry.RouterSessionSnapshot{}, false, nil
 }
 
-func (s *trackingRouterSessionStateStore) Save(
+func (s *trackingRouterSessionStateStore) SaveIfVersion(
 	sessiontelemetry.RouterSessionSnapshot,
+	uint64,
 	time.Duration,
-) error {
+) (bool, error) {
 	s.saveCalls.Add(1)
-	return nil
+	return true, nil
 }
 
 func (s *trackingRouterSessionStateStore) Close() error {
