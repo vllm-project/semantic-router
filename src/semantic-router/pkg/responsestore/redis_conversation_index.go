@@ -5,9 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"sort"
-	"time"
 
 	"github.com/redis/go-redis/v9"
 
@@ -175,102 +173,63 @@ func (s *RedisStore) conversationIndexProof(ctx context.Context, conversationID 
 }
 
 // ensureConversationIndex guarantees that, barring a concurrent delete of
-// the marker immediately afterward, the conversation is marked migrated
-// once this returns without error — meaning its index (populated or
-// absent) may now be trusted as exhaustive. It runs the O(N) legacy scan
-// (lazyBackfillConversationIndex) at most once per conversation per
-// marker lifetime, and runs it unconditionally when not yet migrated, even
+// the global scan lease immediately afterward, the conversation is marked
+// migrated once this returns without error — meaning its index (populated
+// or absent) may now be trusted as exhaustive. It runs the O(N) legacy
+// scan (lazyBackfillConversationIndex) at most once per conversation per
+// proof lifetime, and runs it unconditionally when not yet migrated, even
 // if the index already has some members from earlier post-upgrade writes:
 // those members alone do not prove nothing legacy is left to discover.
 //
-// A short migration lock (SET NX PX conversationIndexMigrationLockTTL)
-// keeps concurrent readers of the same missing index from all scanning at
-// once, but holding it is an optimization, not a correctness dependency: a
-// reader that cannot acquire it backs off briefly, rechecks, and — if the
-// holder appears to have died mid-scan (pod restart, deadline) rather than
-// finished — runs the scan itself anyway. Every path converges on the same
-// additive, idempotent backfill.
+// Waiter state machine: check whether the whole store is already
+// migration-complete or this conversation already has a resolved proof
+// (conversationIndexResolved) before ever contending for the lease; if
+// neither, block (via withConversationIndexScanLease, respecting request
+// cancellation) until this call holds the single global scan lease, then
+// recheck resolution once more — a concurrent scan may have just resolved
+// this same conversation while this call was waiting — before actually
+// running the legacy scan. Never falls back to scanning without the lease,
+// at any timeout: unlike the superseded per-conversation lock, there is no
+// duplicate-scan risk to bound here, since the lease is what makes "at
+// most one full-keyspace scan running at a time" true in the first place.
 func (s *RedisStore) ensureConversationIndex(ctx context.Context, conversationID string) error {
-	lockKey := s.conversationIndexLockKey(conversationID)
-	token := []byte(fmt.Sprintf("%d:%d", time.Now().UnixNano(), os.Getpid()))
-
-	acquired, err := s.client.SetNX(ctx, lockKey, token, conversationIndexMigrationLockTTL).Result()
-	if err != nil {
-		return fmt.Errorf("failed to acquire conversation index migration lock: %w", err)
-	}
-
-	if acquired {
-		return s.backfillUnderLock(ctx, conversationID, lockKey, token)
-	}
-
-	return s.awaitOrBackfillConversationIndex(ctx, conversationID)
-}
-
-// backfillUnderLock holds the migration lock this call just acquired,
-// rechecks whether a concurrent writer or backfill already resolved the
-// conversation, and otherwise runs the legacy scan. Always releases the
-// lock via compare-delete on return, which never releases a lock this call
-// doesn't currently hold (e.g. one that already expired and was re-acquired
-// by someone else).
-func (s *RedisStore) backfillUnderLock(ctx context.Context, conversationID, lockKey string, token []byte) error {
-	defer func() {
-		if _, releaseErr := s.compareDeleteResponsePayload(ctx, lockKey, token); releaseErr != nil {
-			logging.Debugf("RedisStore: failed to release conversation index migration lock for %s: %v",
-				conversationID, releaseErr)
-		}
-	}()
-
-	// Recheck under the lock: a backfill that started just before this one
-	// acquired it may have already migrated this conversation.
-	if _, resolved, err := s.conversationIndexProof(ctx, conversationID); err != nil {
+	if resolved, err := s.conversationIndexResolved(ctx, conversationID); err != nil {
 		return err
 	} else if resolved {
 		return nil
 	}
 
-	result, err := s.lazyBackfillConversationIndex(ctx, conversationID)
-	if err != nil {
-		return err
-	}
-	logging.Debugf("RedisStore: lazy-backfilled conversation %s index with %d response(s)",
-		conversationID, result.Found)
-
-	return nil
-}
-
-// awaitOrBackfillConversationIndex backs off briefly waiting for another
-// reader's lock-held backfill to finish, then runs the scan itself if the
-// conversation still isn't marked migrated — the holder may have died
-// mid-scan (pod restart, deadline). Correctness wins over avoiding
-// duplicate work, which is the lock's only job.
-func (s *RedisStore) awaitOrBackfillConversationIndex(ctx context.Context, conversationID string) error {
-	const (
-		lockWaitAttempts = 5
-		lockWaitDelay    = 100 * time.Millisecond
-	)
-
-	for range lockWaitAttempts {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(lockWaitDelay):
-		}
-
-		if _, resolved, err := s.conversationIndexProof(ctx, conversationID); err != nil {
+	return s.withConversationIndexScanLease(ctx, func(leaseCtx context.Context) error {
+		if resolved, err := s.conversationIndexResolved(leaseCtx, conversationID); err != nil {
 			return err
 		} else if resolved {
 			return nil
 		}
+
+		result, err := s.lazyBackfillConversationIndex(leaseCtx, conversationID)
+		if err != nil {
+			return err
+		}
+		logging.Debugf("RedisStore: lazy-backfilled conversation %s index with %d response(s)",
+			conversationID, result.Found)
+
+		return nil
+	})
+}
+
+// conversationIndexResolved reports whether a scan for conversationID would
+// be redundant: either the whole store is already marked migration-complete
+// (ConversationIndexMigrationStatusKey), or this specific conversation
+// already carries a resolved typed proof.
+func (s *RedisStore) conversationIndexResolved(ctx context.Context, conversationID string) (bool, error) {
+	if complete, err := s.isMigrationComplete(ctx); err != nil {
+		return false, err
+	} else if complete {
+		return true, nil
 	}
 
-	result, err := s.lazyBackfillConversationIndex(ctx, conversationID)
-	if err != nil {
-		return err
-	}
-	logging.Debugf("RedisStore: lazy-backfilled conversation %s index with %d response(s) after lock wait",
-		conversationID, result.Found)
-
-	return nil
+	_, resolved, err := s.conversationIndexProof(ctx, conversationID)
+	return resolved, err
 }
 
 // lazyBackfillConversationIndex performs the one-time O(N) scan that makes a
