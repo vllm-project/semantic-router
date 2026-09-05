@@ -48,6 +48,9 @@ func newWorkflowFileToolStateStore(dir string, ttl time.Duration) *workflowFileT
 	defer reg.mu.Unlock()
 	if reg.store != nil {
 		reg.refs++
+		reg.store.mu.Lock()
+		reg.store.ttl = ttl
+		reg.store.mu.Unlock()
 		return reg.store
 	}
 
