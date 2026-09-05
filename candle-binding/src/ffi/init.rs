@@ -3,67 +3,13 @@
 //! This module contains all C FFI initialization functions for dual-path architecture.
 //! Provides 13 initialization functions with 100% backward compatibility.
 
+use crate::registry::get_registry;
 use std::ffi::{c_char, c_int, CStr};
 use std::path::Path;
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 
 use crate::core::similarity::BertSimilarity;
 use crate::BertClassifier;
-
-// Global state using OnceLock for zero-cost reads after initialization
-// OnceLock<Arc<T>> pattern provides:
-// - Zero lock overhead on reads (atomic load only)
-// - Concurrent access via Arc cloning
-// - Thread-safe initialization guarantee
-// - No dependency on lazy_static
-pub static BERT_SIMILARITY: OnceLock<Arc<BertSimilarity>> = OnceLock::new();
-// Exported for use in classify.rs: classify.rs used to redeclare its own
-// module-local statics of these same names, which the initializers below
-// never wrote to (aside from BERT_CLASSIFIER, which classify.rs's own
-// init_generic_classifier happened to also write - but only to its own,
-// separate copy). Every reader in classify.rs keyed off its own dead or
-// partially-dead copy instead of the one these init_* functions populate.
-pub static BERT_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
-pub static BERT_PII_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
-pub static BERT_JAILBREAK_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
-// Feedback detector classifier (exported for use in classify.rs)
-pub static FEEDBACK_DETECTOR_CLASSIFIER: OnceLock<
-    Arc<crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier>,
-> = OnceLock::new();
-// DeBERTa v3 jailbreak/prompt injection classifier (exported for use in classify.rs)
-pub static DEBERTA_JAILBREAK_CLASSIFIER: OnceLock<
-    Arc<crate::model_architectures::traditional::deberta_v3::DebertaV3Classifier>,
-> = OnceLock::new();
-// Unified classifier for dual-path architecture (exported for use in classify.rs)
-pub static UNIFIED_CLASSIFIER: OnceLock<
-    Arc<crate::classifiers::unified::DualPathUnifiedClassifier>,
-> = OnceLock::new();
-// Parallel LoRA engine for high-performance classification (primary path for LoRA models)
-// Already wrapped in Arc for cheap cloning and concurrent access
-pub static PARALLEL_LORA_ENGINE: OnceLock<
-    Arc<crate::classifiers::lora::parallel_engine::ParallelLoRAEngine>,
-> = OnceLock::new();
-// LoRA token classifier for token-level classification
-pub static LORA_TOKEN_CLASSIFIER: OnceLock<
-    Arc<crate::classifiers::lora::token_lora::LoRATokenClassifier>,
-> = OnceLock::new();
-// LoRA intent classifier for sequence classification
-pub static LORA_INTENT_CLASSIFIER: OnceLock<
-    Arc<crate::classifiers::lora::intent_lora::IntentLoRAClassifier>,
-> = OnceLock::new();
-// Hallucination detector (ModernBERT token classifier for RAG verification)
-pub static HALLUCINATION_CLASSIFIER: OnceLock<
-    Arc<crate::model_architectures::traditional::modernbert::TraditionalModernBertTokenClassifier>,
-> = OnceLock::new();
-// ModernBERT NLI classifier for hallucination explanation (NLI post-processing)
-// Model: tasksource/ModernBERT-base-nli
-pub static NLI_CLASSIFIER: OnceLock<
-    Arc<crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier>,
-> = OnceLock::new();
-// LoRA jailbreak classifier for security threat detection
-pub static LORA_JAILBREAK_CLASSIFIER: OnceLock<
-    Arc<crate::classifiers::lora::security_lora::SecurityLoRAClassifier>,
-> = OnceLock::new();
 
 /// Model type detection for intelligent routing
 #[derive(Debug, Clone, PartialEq)]
@@ -168,7 +114,7 @@ pub unsafe extern "C" fn init_similarity_model(model_id: *const c_char, use_cpu:
     match BertSimilarity::new(model_id, use_cpu) {
         Ok(model) => {
             // Set using OnceLock - returns false if already initialized (safe to re-call)
-            BERT_SIMILARITY.set(Arc::new(model)).is_ok()
+            get_registry().register("bert_similarity", model).is_ok()
         }
         Err(e) => {
             eprintln!("Failed to initialize BERT: {e}");
@@ -186,7 +132,9 @@ pub unsafe extern "C" fn init_similarity_model(model_id: *const c_char, use_cpu:
 /// `true` if BERT_SIMILARITY OnceLock contains an initialized model, `false` otherwise
 #[no_mangle]
 pub extern "C" fn is_similarity_model_initialized() -> bool {
-    BERT_SIMILARITY.get().is_some()
+    get_registry()
+        .get::<BertSimilarity>("bert_similarity")
+        .is_some()
 }
 
 /// Initialize traditional BERT classifier
@@ -214,7 +162,7 @@ pub unsafe extern "C" fn init_classifier(
     }
 
     match BertClassifier::new(model_id, num_classes as usize, use_cpu) {
-        Ok(classifier) => BERT_CLASSIFIER.set(Arc::new(classifier)).is_ok(),
+        Ok(classifier) => get_registry().register("legacy_bert", classifier).is_ok(),
         Err(e) => {
             eprintln!("Failed to initialize BERT classifier: {e}");
             false
@@ -246,7 +194,9 @@ pub unsafe extern "C" fn init_pii_classifier(
     }
 
     match BertClassifier::new(model_id, num_classes as usize, use_cpu) {
-        Ok(classifier) => BERT_PII_CLASSIFIER.set(Arc::new(classifier)).is_ok(),
+        Ok(classifier) => get_registry()
+            .register("legacy_bert_pii", classifier)
+            .is_ok(),
         Err(e) => {
             eprintln!("Failed to initialize BERT PII classifier: {e}");
             false
@@ -281,7 +231,12 @@ pub unsafe extern "C" fn init_jailbreak_classifier(
     match model_type {
         ModelType::LoRA => {
             // Check if already initialized
-            if LORA_JAILBREAK_CLASSIFIER.get().is_some() {
+            if get_registry()
+                .get::<crate::classifiers::lora::security_lora::SecurityLoRAClassifier>(
+                    "lora_jailbreak_classifier",
+                )
+                .is_some()
+            {
                 return true; // Already initialized, return success
             }
 
@@ -289,7 +244,9 @@ pub unsafe extern "C" fn init_jailbreak_classifier(
             match crate::classifiers::lora::security_lora::SecurityLoRAClassifier::new(
                 model_path, use_cpu,
             ) {
-                Ok(classifier) => LORA_JAILBREAK_CLASSIFIER.set(Arc::new(classifier)).is_ok(),
+                Ok(classifier) => get_registry()
+                    .register("lora_jailbreak_classifier", classifier)
+                    .is_ok(),
                 Err(e) => {
                     eprintln!(
                         "  ERROR: Failed to initialize LoRA jailbreak classifier: {}",
@@ -310,7 +267,9 @@ pub unsafe extern "C" fn init_jailbreak_classifier(
 
             // Initialize Traditional BERT jailbreak classifier
             match BertClassifier::new(model_path, num_classes as usize, use_cpu) {
-                Ok(classifier) => BERT_JAILBREAK_CLASSIFIER.set(Arc::new(classifier)).is_ok(),
+                Ok(classifier) => get_registry()
+                    .register("legacy_bert_jailbreak", classifier)
+                    .is_ok(),
                 Err(e) => {
                     eprintln!("Failed to initialize BERT jailbreak classifier: {e}");
                     false
@@ -339,9 +298,7 @@ pub unsafe extern "C" fn init_modernbert_classifier(
     // Try to initialize the actual ModernBERT model using traditional architecture
     match crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier::load_from_directory(model_id, use_cpu) {
         Ok(model) => {
-            crate::model_architectures::traditional::modernbert::TRADITIONAL_MODERNBERT_CLASSIFIER
-                .set(Arc::new(model))
-                .is_ok()
+            get_registry().register("modernbert_classifier", model).is_ok()
         }
         Err(e) => {
             eprintln!("Failed to initialize ModernBERT classifier: {}", e);
@@ -369,7 +326,7 @@ pub unsafe extern "C" fn init_modernbert_pii_classifier(
     // Try to initialize the actual ModernBERT PII model
     match crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier::load_from_directory(model_id, use_cpu) {
         Ok(model) => {
-            crate::model_architectures::traditional::modernbert::TRADITIONAL_MODERNBERT_PII_CLASSIFIER.set(Arc::new(model)).is_ok()
+            get_registry().register("legacy_bert_pii", model).is_ok()
         }
         Err(e) => {
             eprintln!("Failed to initialize ModernBERT PII classifier: {}", e);
@@ -398,7 +355,7 @@ pub unsafe extern "C" fn init_modernbert_pii_token_classifier(
     // Create the token classifier
     match crate::model_architectures::traditional::modernbert::TraditionalModernBertTokenClassifier::new(model_id, use_cpu) {
         Ok(classifier) => {
-            crate::model_architectures::traditional::modernbert::TRADITIONAL_MODERNBERT_TOKEN_CLASSIFIER.set(Arc::new(classifier)).is_ok()
+            get_registry().register("modernbert_token_classifier", classifier).is_ok()
         }
         Err(e) => {
             println!("  ERROR: Failed to initialize ModernBERT PII token classifier: {}", e);
@@ -426,7 +383,7 @@ pub unsafe extern "C" fn init_modernbert_jailbreak_classifier(
     // Try to initialize the actual ModernBERT jailbreak model
     match crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier::load_from_directory(model_id, use_cpu) {
         Ok(model) => {
-            crate::model_architectures::traditional::modernbert::TRADITIONAL_MODERNBERT_JAILBREAK_CLASSIFIER.set(Arc::new(model)).is_ok()
+            get_registry().register("legacy_bert_jailbreak", model).is_ok()
         }
         Err(e) => {
             eprintln!("Failed to initialize ModernBERT jailbreak classifier: {}", e);
@@ -438,34 +395,6 @@ pub unsafe extern "C" fn init_modernbert_jailbreak_classifier(
 // ============================================================================
 // mmBERT (Multilingual ModernBERT) Initialization Functions
 // ============================================================================
-
-// Global static for mmBERT classifier (8K context)
-pub static MMBERT_CLASSIFIER: OnceLock<
-    Arc<crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier>,
-> = OnceLock::new();
-pub static MMBERT_TOKEN_CLASSIFIER: OnceLock<
-    Arc<crate::model_architectures::traditional::modernbert::TraditionalModernBertTokenClassifier>,
-> = OnceLock::new();
-
-// Global statics for mmBERT-32K classifiers (32K context with YaRN RoPE scaling)
-pub static MMBERT_32K_INTENT_CLASSIFIER: OnceLock<
-    Arc<crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier>,
-> = OnceLock::new();
-pub static MMBERT_32K_FACTCHECK_CLASSIFIER: OnceLock<
-    Arc<crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier>,
-> = OnceLock::new();
-pub static MMBERT_32K_JAILBREAK_CLASSIFIER: OnceLock<
-    Arc<crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier>,
-> = OnceLock::new();
-pub static MMBERT_32K_FEEDBACK_CLASSIFIER: OnceLock<
-    Arc<crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier>,
-> = OnceLock::new();
-pub static MMBERT_32K_PII_CLASSIFIER: OnceLock<
-    Arc<crate::model_architectures::traditional::modernbert::TraditionalModernBertTokenClassifier>,
-> = OnceLock::new();
-pub static MMBERT_32K_MODALITY_CLASSIFIER: OnceLock<
-    Arc<crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier>,
-> = OnceLock::new();
 
 /// Initialize mmBERT classifier (multilingual ModernBERT)
 ///
@@ -507,7 +436,7 @@ pub unsafe extern "C" fn init_mmbert_classifier(model_id: *const c_char, use_cpu
         Ok(model) => {
             let is_multilingual = model.is_multilingual();
             eprintln!("   mmBERT loaded (is_multilingual: {})", is_multilingual);
-            MMBERT_CLASSIFIER.set(Arc::new(model)).is_ok()
+            get_registry().register("legacy_bert", model).is_ok()
         }
         Err(e) => {
             eprintln!("   ✗ Failed to initialize mmBERT classifier: {}", e);
@@ -550,7 +479,7 @@ pub unsafe extern "C" fn init_mmbert_classifier_auto(
             let variant = model.variant();
             let is_multilingual = model.is_multilingual();
             eprintln!("   Detected variant: {:?} (multilingual: {})", variant, is_multilingual);
-            MMBERT_CLASSIFIER.set(Arc::new(model)).is_ok()
+            get_registry().register("legacy_bert", model).is_ok()
         }
         Err(e) => {
             eprintln!("   ✗ Failed to initialize classifier: {}", e);
@@ -595,7 +524,7 @@ pub unsafe extern "C" fn init_mmbert_token_classifier(
         Ok(classifier) => {
             let is_multilingual = classifier.is_multilingual();
             eprintln!("   mmBERT token classifier loaded (is_multilingual: {})", is_multilingual);
-            MMBERT_TOKEN_CLASSIFIER.set(Arc::new(classifier)).is_ok()
+            get_registry().register("mmbert_token_classifier", classifier).is_ok()
         }
         Err(e) => {
             eprintln!("   ✗ Failed to initialize mmBERT token classifier: {}", e);
@@ -669,7 +598,7 @@ pub unsafe extern "C" fn init_mmbert_32k_intent_classifier(
     ) {
         Ok(model) => {
             eprintln!("   mmBERT-32K intent classifier loaded (32K context, YaRN RoPE)");
-            MMBERT_32K_INTENT_CLASSIFIER.set(Arc::new(model)).is_ok()
+            get_registry().register("mmbert_32k_intent_classifier", model).is_ok()
         }
         Err(e) => {
             eprintln!("   ✗ Failed to initialize mmBERT-32K intent classifier: {}", e);
@@ -711,7 +640,7 @@ pub unsafe extern "C" fn init_mmbert_32k_factcheck_classifier(
     ) {
         Ok(model) => {
             eprintln!("   mmBERT-32K fact-check classifier loaded");
-            MMBERT_32K_FACTCHECK_CLASSIFIER.set(Arc::new(model)).is_ok()
+            get_registry().register("mmbert_32k_factcheck_classifier", model).is_ok()
         }
         Err(e) => {
             eprintln!("   ✗ Failed to initialize mmBERT-32K fact-check classifier: {}", e);
@@ -753,7 +682,7 @@ pub unsafe extern "C" fn init_mmbert_32k_jailbreak_classifier(
     ) {
         Ok(model) => {
             eprintln!("   mmBERT-32K jailbreak detector loaded");
-            MMBERT_32K_JAILBREAK_CLASSIFIER.set(Arc::new(model)).is_ok()
+            get_registry().register("mmbert_32k_jailbreak_classifier", model).is_ok()
         }
         Err(e) => {
             eprintln!("   ✗ Failed to initialize mmBERT-32K jailbreak detector: {}", e);
@@ -795,7 +724,7 @@ pub unsafe extern "C" fn init_mmbert_32k_feedback_classifier(
     ) {
         Ok(model) => {
             eprintln!("   mmBERT-32K feedback detector loaded");
-            MMBERT_32K_FEEDBACK_CLASSIFIER.set(Arc::new(model)).is_ok()
+            get_registry().register("mmbert_32k_feedback_classifier", model).is_ok()
         }
         Err(e) => {
             eprintln!("   ✗ Failed to initialize mmBERT-32K feedback detector: {}", e);
@@ -833,7 +762,7 @@ pub unsafe extern "C" fn init_mmbert_32k_pii_classifier(
     ) {
         Ok(classifier) => {
             eprintln!("   mmBERT-32K PII detector loaded");
-            MMBERT_32K_PII_CLASSIFIER.set(Arc::new(classifier)).is_ok()
+            get_registry().register("mmbert_32k_pii_classifier", classifier).is_ok()
         }
         Err(e) => {
             eprintln!("   ✗ Failed to initialize mmBERT-32K PII detector: {}", e);
@@ -879,7 +808,7 @@ pub unsafe extern "C" fn init_mmbert_32k_modality_classifier(
     ) {
         Ok(model) => {
             eprintln!("   mmBERT-32K modality router loaded (AR/DIFFUSION/BOTH, 32K context)");
-            MMBERT_32K_MODALITY_CLASSIFIER.set(Arc::new(model)).is_ok()
+            get_registry().register("mmbert_32k_modality_classifier", model).is_ok()
         }
         Err(e) => {
             eprintln!("   ✗ Failed to initialize mmBERT-32K modality router: {}", e);
@@ -940,7 +869,7 @@ pub unsafe extern "C" fn init_fact_check_classifier(
     use_cpu: bool,
 ) -> bool {
     // Check if already initialized - return true if so (idempotent)
-    if crate::model_architectures::traditional::modernbert::TRADITIONAL_MODERNBERT_FACT_CHECK_CLASSIFIER.get().is_some() {
+    if get_registry().get::<crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier>("fact_check_classifier").is_some() {
         println!("Fact-check classifier already initialized");
         return true;
     }
@@ -959,7 +888,7 @@ pub unsafe extern "C" fn init_fact_check_classifier(
 
     match crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier::load_from_directory(model_id, use_cpu) {
         Ok(model) => {
-            match crate::model_architectures::traditional::modernbert::TRADITIONAL_MODERNBERT_FACT_CHECK_CLASSIFIER.set(Arc::new(model)) {
+            match get_registry().register("fact_check_classifier", model) {
                 Ok(_) => {
                     println!("Fact-check classifier initialized successfully");
                     true
@@ -998,7 +927,7 @@ pub unsafe extern "C" fn init_fact_check_classifier(
 #[no_mangle]
 pub unsafe extern "C" fn init_feedback_detector(model_id: *const c_char, use_cpu: bool) -> bool {
     // Check if already initialized - return true if so (idempotent)
-    if FEEDBACK_DETECTOR_CLASSIFIER.get().is_some() {
+    if get_registry().get::<crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier>("feedback_detector").is_some() {
         println!("Feedback detector already initialized");
         return true;
     }
@@ -1014,7 +943,7 @@ pub unsafe extern "C" fn init_feedback_detector(model_id: *const c_char, use_cpu
 
     match crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier::load_from_directory(model_id, use_cpu) {
         Ok(model) => {
-            match FEEDBACK_DETECTOR_CLASSIFIER.set(Arc::new(model)) {
+            match get_registry().register("feedback_detector", model) {
                 Ok(_) => {
                     println!("Feedback detector initialized successfully");
                     true
@@ -1071,7 +1000,7 @@ pub unsafe extern "C" fn init_deberta_jailbreak_classifier(
     match crate::model_architectures::traditional::deberta_v3::DebertaV3Classifier::new(
         model_id, use_cpu,
     ) {
-        Ok(classifier) => match DEBERTA_JAILBREAK_CLASSIFIER.set(Arc::new(classifier)) {
+        Ok(classifier) => match get_registry().register("deberta_jailbreak", classifier) {
             Ok(_) => {
                 println!("DeBERTa v3 jailbreak classifier initialized successfully");
                 true
@@ -1199,7 +1128,9 @@ pub unsafe extern "C" fn init_unified_classifier_c(
         Ok(classifier) => {
             // Initialize traditional path with actual models
             match classifier.init_traditional_path() {
-                Ok(_) => UNIFIED_CLASSIFIER.set(Arc::new(classifier)).is_ok(),
+                Ok(_) => get_registry()
+                    .register("unified_classifier", classifier)
+                    .is_ok(),
                 Err(e) => {
                     eprintln!("Failed to initialize traditional path: {}", e);
                     false
@@ -1281,7 +1212,12 @@ pub unsafe extern "C" fn init_candle_bert_classifier(
     match model_type {
         ModelType::LoRA => {
             // Check if already initialized
-            if LORA_INTENT_CLASSIFIER.get().is_some() {
+            if get_registry()
+                .get::<crate::classifiers::lora::intent_lora::IntentLoRAClassifier>(
+                    "lora_intent_classifier",
+                )
+                .is_some()
+            {
                 return true; // Already initialized, return success
             }
 
@@ -1289,7 +1225,9 @@ pub unsafe extern "C" fn init_candle_bert_classifier(
             match crate::classifiers::lora::intent_lora::IntentLoRAClassifier::new(
                 model_path, use_cpu,
             ) {
-                Ok(classifier) => LORA_INTENT_CLASSIFIER.set(Arc::new(classifier)).is_ok(),
+                Ok(classifier) => get_registry()
+                    .register("lora_intent_classifier", classifier)
+                    .is_ok(),
                 Err(e) => {
                     eprintln!(
                         "  ERROR: Failed to initialize LoRA intent classifier: {}",
@@ -1306,11 +1244,7 @@ pub unsafe extern "C" fn init_candle_bert_classifier(
                 num_classes as usize,
                 use_cpu,
             ) {
-                Ok(classifier) => {
-                    crate::model_architectures::traditional::bert::TRADITIONAL_BERT_CLASSIFIER
-                        .set(Arc::new(classifier))
-                        .is_ok()
-                }
+                Ok(classifier) => get_registry().register("legacy_bert", classifier).is_ok(),
                 Err(e) => {
                     eprintln!("Failed to initialize Candle BERT classifier: {}", e);
                     false
@@ -1348,7 +1282,12 @@ pub unsafe extern "C" fn init_candle_bert_token_classifier(
     match model_type {
         ModelType::LoRA => {
             // Check if already initialized
-            if LORA_TOKEN_CLASSIFIER.get().is_some() {
+            if get_registry()
+                .get::<crate::classifiers::lora::token_lora::LoRATokenClassifier>(
+                    "lora_token_classifier",
+                )
+                .is_some()
+            {
                 return true; // Already initialized, return success
             }
 
@@ -1356,7 +1295,9 @@ pub unsafe extern "C" fn init_candle_bert_token_classifier(
             match crate::classifiers::lora::token_lora::LoRATokenClassifier::new(
                 model_path, use_cpu,
             ) {
-                Ok(classifier) => LORA_TOKEN_CLASSIFIER.set(Arc::new(classifier)).is_ok(),
+                Ok(classifier) => get_registry()
+                    .register("lora_token_classifier", classifier)
+                    .is_ok(),
                 Err(e) => {
                     eprintln!("  ERROR: Failed to initialize LoRA token classifier: {}", e);
                     false
@@ -1365,8 +1306,10 @@ pub unsafe extern "C" fn init_candle_bert_token_classifier(
         }
         ModelType::Traditional => {
             // Check if already initialized
-            if crate::model_architectures::traditional::bert::TRADITIONAL_BERT_TOKEN_CLASSIFIER
-                .get()
+            if get_registry()
+                .get::<crate::model_architectures::traditional::bert::TraditionalBertTokenClassifier>(
+                    "bert_token_classifier",
+                )
                 .is_some()
             {
                 return true; // Already initialized, return success
@@ -1378,11 +1321,9 @@ pub unsafe extern "C" fn init_candle_bert_token_classifier(
                 num_classes as usize,
                 use_cpu,
             ) {
-                Ok(classifier) => {
-                    crate::model_architectures::traditional::bert::TRADITIONAL_BERT_TOKEN_CLASSIFIER
-                        .set(Arc::new(classifier))
-                        .is_ok()
-                }
+                Ok(classifier) => get_registry()
+                    .register("bert_token_classifier", classifier)
+                    .is_ok(),
                 Err(e) => {
                     eprintln!(
                         "  ERROR: Failed to initialize Traditional BERT token classifier: {}",
@@ -1437,7 +1378,12 @@ pub unsafe extern "C" fn init_lora_unified_classifier(
     };
 
     // Check if already initialized - return success if so
-    if PARALLEL_LORA_ENGINE.get().is_some() {
+    if get_registry()
+        .get::<crate::classifiers::lora::parallel_engine::ParallelLoRAEngine>(
+            "parallel_lora_engine",
+        )
+        .is_some()
+    {
         return true;
     }
 
@@ -1482,8 +1428,14 @@ pub unsafe extern "C" fn init_lora_unified_classifier(
         Ok(engine) => {
             // Store in global static variable (Arc for efficient cloning during concurrent access)
             // Return true even if already set (race condition)
-            PARALLEL_LORA_ENGINE.set(Arc::new(engine)).is_ok()
-                || PARALLEL_LORA_ENGINE.get().is_some()
+            get_registry()
+                .register("parallel_lora_engine", engine)
+                .is_ok()
+                || get_registry()
+                    .get::<crate::classifiers::lora::parallel_engine::ParallelLoRAEngine>(
+                        "parallel_lora_engine",
+                    )
+                    .is_some()
         }
         Err(e) => {
             eprintln!(
@@ -1516,7 +1468,7 @@ pub unsafe extern "C" fn init_hallucination_model(
     };
 
     // Check if already initialized
-    if HALLUCINATION_CLASSIFIER.get().is_some() {
+    if get_registry().get::<crate::model_architectures::traditional::modernbert::TraditionalModernBertTokenClassifier>("hallucination_classifier").is_some() {
         println!("Hallucination detection model already initialized");
         return true;
     }
@@ -1533,7 +1485,7 @@ pub unsafe extern "C" fn init_hallucination_model(
         use_cpu,
     ) {
         Ok(classifier) => {
-            let success = HALLUCINATION_CLASSIFIER.set(Arc::new(classifier)).is_ok();
+            let success = get_registry().register("hallucination_classifier", classifier).is_ok();
             if success {
                 println!("Hallucination detection model initialized successfully");
             }
@@ -1568,7 +1520,7 @@ pub unsafe extern "C" fn init_nli_model(model_path: *const c_char, use_cpu: bool
     };
 
     // Check if already initialized
-    if NLI_CLASSIFIER.get().is_some() {
+    if get_registry().get::<crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier>("nli_classifier").is_some() {
         println!("NLI model already initialized");
         return true;
     }
@@ -1581,7 +1533,7 @@ pub unsafe extern "C" fn init_nli_model(model_path: *const c_char, use_cpu: bool
         use_cpu,
     ) {
         Ok(classifier) => {
-            let success = NLI_CLASSIFIER.set(Arc::new(classifier)).is_ok();
+            let success = get_registry().register("nli_classifier", classifier).is_ok();
             if success {
                 println!("NLI model (ModernBERT) initialized successfully");
             }
@@ -1597,5 +1549,5 @@ pub unsafe extern "C" fn init_nli_model(model_path: *const c_char, use_cpu: bool
 /// Check if NLI model is initialized
 #[no_mangle]
 pub extern "C" fn is_nli_model_initialized() -> bool {
-    NLI_CLASSIFIER.get().is_some()
+    get_registry().get::<crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier>("nli_classifier").is_some()
 }
