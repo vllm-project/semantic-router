@@ -84,6 +84,18 @@ func validateOptions(options Options) error {
 
 // Do invokes an operation and returns its bounded successful response body.
 func (c *Client) Do(ctx context.Context, operation Operation, body []byte) ([]byte, error) {
+	return c.DoWithHeaders(ctx, operation, body, nil)
+}
+
+// DoWithHeaders invokes an operation with request-scoped protocol headers.
+// The connector's authorization hook runs after these headers and may
+// intentionally override them.
+func (c *Client) DoWithHeaders(
+	ctx context.Context,
+	operation Operation,
+	body []byte,
+	headers http.Header,
+) ([]byte, error) {
 	if err := validateOperation(operation); err != nil {
 		return nil, &Error{Kind: KindRequest, Operation: operation.Name, Cause: err}
 	}
@@ -99,7 +111,7 @@ func (c *Client) Do(ctx context.Context, operation Operation, body []byte) ([]by
 	}
 
 	for attempt := 1; ; attempt++ {
-		responseBody, connectorErr := c.doAttempt(ctx, operation, body, attempt)
+		responseBody, connectorErr := c.doAttempt(ctx, operation, body, headers, attempt)
 		if connectorErr == nil {
 			return responseBody, nil
 		}
@@ -134,6 +146,7 @@ func (c *Client) doAttempt(
 	ctx context.Context,
 	operation Operation,
 	body []byte,
+	headers http.Header,
 	attempt int,
 ) ([]byte, *Error) {
 	if ctx == nil {
@@ -142,7 +155,7 @@ func (c *Client) doAttempt(
 	attemptCtx, cancel := context.WithTimeout(ctx, c.options.AttemptTimeout)
 	defer cancel()
 
-	request, connectorErr := c.newRequest(attemptCtx, operation, body, attempt)
+	request, connectorErr := c.newRequest(attemptCtx, operation, body, headers, attempt)
 	if connectorErr != nil {
 		return nil, connectorErr
 	}
@@ -164,6 +177,7 @@ func (c *Client) newRequest(
 	ctx context.Context,
 	operation Operation,
 	body []byte,
+	headers http.Header,
 	attempt int,
 ) (*http.Request, *Error) {
 	target := *c.baseURL
@@ -175,6 +189,9 @@ func (c *Client) newRequest(
 	}
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Accept", "application/json")
+	for name, values := range headers {
+		request.Header[http.CanonicalHeaderKey(name)] = append([]string(nil), values...)
+	}
 	if c.authorize != nil {
 		if err := c.authorize(ctx, request); err != nil {
 			return nil, &Error{Kind: KindAuthorization, Operation: operation.Name, Attempt: attempt, Cause: err}

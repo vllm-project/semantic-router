@@ -187,7 +187,11 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 	}
 	registerRouterSessionStore(components.resources, components.routerSessionStore)
 	if cfg.Looper.IsEnabled() {
-		components.looperClient = looper.NewClient(&cfg.Looper)
+		looperClient, err := looper.NewConnectorClient(&cfg.Looper)
+		if err != nil {
+			return nil, rollbackResources(components.resources, err)
+		}
+		components.looperClient = looperClient
 		components.resources.add(components.looperClient.Close)
 	}
 	mappings, err := loadClassifierMappings(cfg)

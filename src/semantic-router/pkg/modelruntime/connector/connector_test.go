@@ -110,6 +110,36 @@ func TestDoAppliesAuthAndPreservesBasePath(t *testing.T) {
 	}
 }
 
+func TestDoWithHeadersAppliesRequestScopedHeadersBeforeAuthorization(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if got := request.Header.Get("X-Request-Scope"); got != "request-a" {
+			t.Errorf("X-Request-Scope = %q, want request-a", got)
+		}
+		if got := request.Header.Get("Authorization"); got != "Bearer client" {
+			t.Errorf("Authorization = %q, want connector authorizer to win", got)
+		}
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer server.Close()
+
+	client, err := New(server.URL, func(_ context.Context, request *http.Request) error {
+		request.Header.Set("Authorization", "Bearer client")
+		return nil
+	}, testOptions())
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	defer client.Close()
+
+	headers := http.Header{
+		"Authorization":   []string{"Bearer request"},
+		"X-Request-Scope": []string{"request-a"},
+	}
+	if _, err := client.DoWithHeaders(context.Background(), testOperation, nil, headers); err != nil {
+		t.Fatalf("DoWithHeaders() error = %v", err)
+	}
+}
+
 func TestDoRejectsOversizedRequestBeforeSending(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		t.Error("server received an oversized request")
