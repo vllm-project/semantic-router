@@ -364,6 +364,9 @@ func TestValidateRequestRejectsInvalidRoleToolAndBoundedFields(t *testing.T) {
 		"conflicting conversation state": func(request *Request) {
 			request.PreviousResponseID, request.ConversationID = "response_1", "conversation_1"
 		},
+		"conversation ID too long": func(request *Request) {
+			request.ConversationID = strings.Repeat("c", limits.IdentifierBytes+1)
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			request := validSemanticRequest()
