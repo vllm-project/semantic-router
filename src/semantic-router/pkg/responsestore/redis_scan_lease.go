@@ -119,25 +119,63 @@ func (b *scanLeaseBackoff) wait(ctx context.Context) error {
 // which is exactly what one global lease (rather than the superseded
 // per-conversation lock) provides.
 func (s *RedisStore) withConversationIndexScanLease(ctx context.Context, fn func(context.Context) error) error {
+	return s.withConversationIndexScanLeaseUntil(ctx, nil, fn)
+}
+
+// withConversationIndexScanLeaseUntil is withConversationIndexScanLease with
+// an optional completion predicate. Waiters recheck completed before every
+// acquisition attempt, so readers waiting for another reader to resolve the
+// same conversation can return as soon as its proof appears instead of
+// serially acquiring and releasing the global lease afterward.
+func (s *RedisStore) withConversationIndexScanLeaseUntil(
+	ctx context.Context,
+	completed func(context.Context) (bool, error),
+	fn func(context.Context) error,
+) error {
 	token, err := randomScanLeaseToken()
 	if err != nil {
 		return err
 	}
 
-	backoff := newScanLeaseBackoff()
-	for {
-		acquired, acquireErr := s.acquireConversationIndexScanLease(ctx, token)
-		if acquireErr != nil {
-			return acquireErr
-		}
-		if acquired {
-			break
-		}
-		if waitErr := backoff.wait(ctx); waitErr != nil {
-			return waitErr
-		}
+	completedWhileWaiting, err := s.waitForConversationIndexScanLease(ctx, token, completed)
+	if err != nil || completedWhileWaiting {
+		return err
 	}
 
+	return s.runWithConversationIndexScanLease(ctx, token, fn)
+}
+
+func (s *RedisStore) waitForConversationIndexScanLease(
+	ctx context.Context,
+	token string,
+	completed func(context.Context) (bool, error),
+) (bool, error) {
+	backoff := newScanLeaseBackoff()
+	for {
+		if completed != nil {
+			done, completeErr := completed(ctx)
+			if completeErr != nil {
+				return false, completeErr
+			}
+			if done {
+				return true, nil
+			}
+		}
+
+		acquired, acquireErr := s.acquireConversationIndexScanLease(ctx, token)
+		if acquireErr != nil {
+			return false, acquireErr
+		}
+		if acquired {
+			return false, nil
+		}
+		if waitErr := backoff.wait(ctx); waitErr != nil {
+			return false, waitErr
+		}
+	}
+}
+
+func (s *RedisStore) runWithConversationIndexScanLease(ctx context.Context, token string, fn func(context.Context) error) error {
 	leaseCtx, cancel := context.WithCancel(ctx)
 	lost := make(chan struct{})
 	renewerDone := make(chan struct{})
@@ -180,7 +218,7 @@ func (s *RedisStore) renewConversationIndexScanLeaseUntilDone(ctx context.Contex
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			ok, err := s.renewConversationIndexScanLease(context.WithoutCancel(ctx), token)
+			ok, err := s.renewConversationIndexScanLease(ctx, token)
 			if err != nil {
 				logging.Warnf("RedisStore: failed to renew conversation index scan lease: %v", err)
 				close(lost)

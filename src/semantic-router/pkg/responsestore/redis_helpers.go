@@ -12,6 +12,35 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 )
 
+// responsePayloadResult is one independent GET outcome. The helper below
+// pipelines single-key GET commands, allowing go-redis to route each command
+// to its owning Cluster node without issuing a cross-slot MGET.
+type responsePayloadResult struct {
+	key string
+	raw []byte
+	err error
+}
+
+func fetchResponsePayloadsPipelined(ctx context.Context, client redis.UniversalClient, keys []string) []responsePayloadResult {
+	results := make([]responsePayloadResult, len(keys))
+	if len(keys) == 0 {
+		return results
+	}
+
+	pipe := client.Pipeline()
+	cmds := make([]*redis.StringCmd, len(keys))
+	for i, key := range keys {
+		results[i].key = key
+		cmds[i] = pipe.Get(ctx, key)
+	}
+	_, _ = pipe.Exec(ctx)
+
+	for i, cmd := range cmds {
+		results[i].raw, results[i].err = cmd.Bytes()
+	}
+	return results
+}
+
 // storedConversationID reports a response's current conversation so update and
 // delete can repair the index, and returns ErrNotFound when it is absent. An
 // unreadable payload is not fatal, it only costs the old index entry.
@@ -78,27 +107,19 @@ func (s *RedisStore) fetchResponsesPipelined(ctx context.Context, responseIDs []
 		return []*responseapi.StoredResponse{}, nil, nil
 	}
 
-	pipe := s.client.Pipeline()
-
-	cmds := make([]*redis.StringCmd, len(responseIDs))
+	keys := make([]string, len(responseIDs))
 	for i, id := range responseIDs {
-		key := s.buildKey(ResponseKeyPrefix + id)
-		cmds[i] = pipe.Get(ctx, key)
+		keys[i] = s.buildKey(ResponseKeyPrefix + id)
 	}
-
-	_, err := pipe.Exec(ctx)
-	if err != nil && !errors.Is(err, redis.Nil) {
-		// Some commands might fail, but we continue to process successful ones
-		logging.Debugf("RedisStore: pipeline execution completed with some errors: %v", err)
-	}
+	results := fetchResponsePayloadsPipelined(ctx, s.client, keys)
 
 	// Process results
 	var (
 		found      []*responseapi.StoredResponse
 		missingIDs []string
 	)
-	for i, cmd := range cmds {
-		data, err := cmd.Bytes()
+	for i, result := range results {
+		data, err := result.raw, result.err
 		if err != nil {
 			if errors.Is(err, redis.Nil) {
 				logging.Warnf("RedisStore: response %s not found (may have expired)", responseIDs[i])

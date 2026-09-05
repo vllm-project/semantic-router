@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -12,6 +13,50 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 )
+
+type pipelineFailureHook struct {
+	name string
+	key  string
+	err  error
+	used atomic.Bool
+}
+
+func (h *pipelineFailureHook) DialHook(next redis.DialHook) redis.DialHook          { return next }
+func (h *pipelineFailureHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook { return next }
+func (h *pipelineFailureHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
+	return func(ctx context.Context, cmds []redis.Cmder) error {
+		for _, cmd := range cmds {
+			args := cmd.Args()
+			if cmd.Name() == h.name && len(args) > 1 && args[1] == h.key && h.used.CompareAndSwap(false, true) {
+				for _, pipelineCmd := range cmds {
+					pipelineCmd.SetErr(h.err)
+				}
+				return h.err
+			}
+		}
+		return next(ctx, cmds)
+	}
+}
+
+type beforeCommandHook struct {
+	name   string
+	once   bool
+	before func()
+	used   atomic.Bool
+}
+
+func (h *beforeCommandHook) DialHook(next redis.DialHook) redis.DialHook { return next }
+func (h *beforeCommandHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
+	return func(ctx context.Context, cmd redis.Cmder) error {
+		if cmd.Name() == h.name && (!h.once || h.used.CompareAndSwap(false, true)) {
+			h.before()
+		}
+		return next(ctx, cmd)
+	}
+}
+func (h *beforeCommandHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
+	return next
+}
 
 // conversationIndexMembers reads the index directly, so tests can assert on it
 // and not only on what a listing happens to return.

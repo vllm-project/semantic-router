@@ -195,3 +195,17 @@ func TestIndexBackfillBatchConcurrentCallersRaceFree(t *testing.T) {
 
 	assert.Len(t, conversationIndexMembers(t, store, "conv_concurrent_backfill"), goroutines*perGoroutine)
 }
+
+func TestLazyBackfillDoesNotCertifyIncompleteScan(t *testing.T) {
+	store := newConversationIndexStore(t)
+	ctx := context.Background()
+
+	require.NoError(t, store.client.Set(ctx,
+		store.buildKey(ResponseKeyPrefix+"resp_corrupt_unrelated"), "not-json", store.ttl).Err())
+
+	_, err := store.ListResponsesByConversation(ctx, "conv_scan_must_be_complete", ListOptions{})
+	require.Error(t, err)
+	_, resolved, proofErr := store.conversationIndexProof(ctx, "conv_scan_must_be_complete")
+	require.NoError(t, proofErr)
+	assert.False(t, resolved, "a scan that skipped an unreadable response cannot prove any conversation exhaustive")
+}

@@ -69,10 +69,6 @@ func (s *RedisStore) indexResponse(ctx context.Context, conversationID, response
 	if conversationID == "" || responseID == "" {
 		return nil
 	}
-	if s.indexResponseOverride != nil {
-		return s.indexResponseOverride(ctx, conversationID, responseID, createdAt)
-	}
-
 	indexKey := s.conversationIndexKey(conversationID)
 
 	pipe := s.client.Pipeline()
@@ -191,7 +187,9 @@ func (s *RedisStore) ensureConversationIndex(ctx context.Context, conversationID
 		return nil
 	}
 
-	return s.withConversationIndexScanLease(ctx, func(leaseCtx context.Context) error {
+	return s.withConversationIndexScanLeaseUntil(ctx, func(checkCtx context.Context) (bool, error) {
+		return s.conversationIndexResolved(checkCtx, conversationID)
+	}, func(leaseCtx context.Context) error {
 		if resolved, err := s.conversationIndexResolved(leaseCtx, conversationID); err != nil {
 			return err
 		} else if resolved {
@@ -210,11 +208,11 @@ func (s *RedisStore) ensureConversationIndex(ctx context.Context, conversationID
 }
 
 // conversationIndexResolved reports whether a scan for conversationID would
-// be redundant: either the whole store is already marked migration-complete
-// (ConversationIndexMigrationStatusKey), or this specific conversation
+// be redundant: either the whole store is already marked finalized
+// (ConversationIndexCompletionKeySuffix), or this specific conversation
 // already carries a resolved typed proof.
 func (s *RedisStore) conversationIndexResolved(ctx context.Context, conversationID string) (bool, error) {
-	if complete, err := s.isMigrationComplete(ctx); err != nil {
+	if complete, err := s.conversationIndexFinalized(ctx); err != nil {
 		return false, err
 	} else if complete {
 		return true, nil
@@ -248,10 +246,6 @@ func (s *RedisStore) conversationIndexResolved(ctx context.Context, conversation
 // §5 Phase 3's "no proof on partial success"; the next call is a safe,
 // fully idempotent retry.
 func (s *RedisStore) lazyBackfillConversationIndex(ctx context.Context, conversationID string) (int64, error) {
-	if s.lazyBackfillPreScanHook != nil {
-		s.lazyBackfillPreScanHook()
-	}
-
 	var total atomic.Int64
 	err := s.scanResponsePayloads(ctx, func(batch []*responseapi.StoredResponse) error {
 		return s.indexBackfillMatches(ctx, conversationID, batch, &total)
@@ -387,100 +381,121 @@ func (s *RedisStore) markConversationMigrated(ctx context.Context, conversationI
 	return nil
 }
 
-// scanResponsePayloads walks every response payload key exactly once,
-// decoding each into a StoredResponse and delivering them to visit in
-// bounded batches (redisBackfillBatchSize).
+// scanResponsePayloads walks every response payload key exactly once and
+// delivers strictly decoded records in bounded batches. A key expiring
+// between SCAN and GET is benign; any other GET, decode, or key-identity
+// failure aborts the scan so no completeness proof is published from an
+// incomplete observation.
+//
+// Used only by lazy legacy backfill — this is the O(N) operation the index
+// exists to avoid on the hot read path. See scanResponseKeys for the
+// Cluster-aware key walking.
+func (s *RedisStore) scanResponsePayloads(ctx context.Context, visit func(batch []*responseapi.StoredResponse) error) error {
+	return s.scanResponseKeys(ctx, func(ctx context.Context, client redis.UniversalClient, keys []string) ([]*responseapi.StoredResponse, error) {
+		return s.getResponsesPipelined(ctx, client, keys)
+	}, visit)
+}
+
+// scanResponseKeys walks every response payload key exactly once via SCAN,
+// fetching each bounded batch of keys (redisBackfillBatchSize) through
+// fetch and delivering the result to visit.
 //
 // Cluster-aware: a single Redis Cluster node's keyspace only holds the slots
 // assigned to it, so in Cluster mode this scans every master via
-// ForEachMaster. Standalone mode scans the one client directly.
-//
-// Used only by lazy legacy backfill — this is the O(N) operation the index
-// exists to avoid on the hot read path.
-func (s *RedisStore) scanResponsePayloads(ctx context.Context, visit func(batch []*responseapi.StoredResponse) error) error {
+// ForEachMaster (which invokes fetch/visit concurrently across masters, so
+// callers must not share mutable callback state except through atomics).
+// Standalone mode scans the one client directly.
+func (s *RedisStore) scanResponseKeys(
+	ctx context.Context,
+	fetch func(ctx context.Context, client redis.UniversalClient, keys []string) ([]*responseapi.StoredResponse, error),
+	visit func(batch []*responseapi.StoredResponse) error,
+) error {
 	s.scanInvocations.Add(1)
 
 	pattern := s.buildKey(ResponseKeyPrefix + "*")
 
-	scanNode := func(ctx context.Context, client redis.UniversalClient) error {
-		var keys []string
-		flush := func() error {
-			if len(keys) == 0 {
-				return nil
-			}
-			batch := s.getResponsesPipelined(ctx, client, keys)
-			keys = keys[:0]
-			if len(batch) == 0 {
-				return nil
-			}
-			return visit(batch)
-		}
-
-		iter := client.Scan(ctx, 0, pattern, redisScanCount).Iterator()
-		for iter.Next(ctx) {
-			keys = append(keys, iter.Val())
-			if len(keys) >= redisBackfillBatchSize {
-				if err := flush(); err != nil {
-					return err
-				}
-			}
-		}
-		if err := iter.Err(); err != nil {
-			return fmt.Errorf("failed to scan response keys: %w", err)
-		}
-
-		return flush()
-	}
-
 	if clusterClient, ok := s.client.(*redis.ClusterClient); ok {
 		return clusterClient.ForEachMaster(ctx, func(ctx context.Context, master *redis.Client) error {
-			return scanNode(ctx, master)
+			return scanResponseNode(ctx, master, pattern, fetch, visit)
 		})
 	}
 
-	return scanNode(ctx, s.client)
+	return scanResponseNode(ctx, s.client, pattern, fetch, visit)
 }
 
-// getResponsesPipelined GETs and decodes payloads for a batch of already-
-// prefixed keys in one round trip against the given client. Malformed or
-// missing payloads are skipped with a log line rather than failing the
-// batch: a legacy scan must make forward progress even if one record is
-// corrupt or expired mid-scan.
-func (s *RedisStore) getResponsesPipelined(ctx context.Context, client redis.UniversalClient, keys []string) []*responseapi.StoredResponse {
-	if len(keys) == 0 {
-		return nil
+func scanResponseNode(
+	ctx context.Context,
+	client redis.UniversalClient,
+	pattern string,
+	fetch func(context.Context, redis.UniversalClient, []string) ([]*responseapi.StoredResponse, error),
+	visit func([]*responseapi.StoredResponse) error,
+) error {
+	keys := make([]string, 0, redisBackfillBatchSize)
+	flush := func() error {
+		if len(keys) == 0 {
+			return nil
+		}
+		batch, err := fetch(ctx, client, keys)
+		keys = keys[:0]
+		if err != nil || len(batch) == 0 {
+			return err
+		}
+		return visit(batch)
 	}
 
-	pipe := client.Pipeline()
-	cmds := make([]*redis.StringCmd, len(keys))
-	for i, key := range keys {
-		cmds[i] = pipe.Get(ctx, key)
-	}
-	if _, err := pipe.Exec(ctx); err != nil && !errors.Is(err, redis.Nil) {
-		logging.Debugf("RedisStore: scan pipeline execution completed with some errors: %v", err)
-	}
-
-	responses := make([]*responseapi.StoredResponse, 0, len(keys))
-	for i, cmd := range cmds {
-		data, err := cmd.Bytes()
-		if err != nil {
-			if !errors.Is(err, redis.Nil) {
-				logging.Warnf("RedisStore: failed to get response at key %s during scan: %v", keys[i], err)
+	iter := client.Scan(ctx, 0, pattern, redisScanCount).Iterator()
+	for iter.Next(ctx) {
+		keys = append(keys, iter.Val())
+		if len(keys) >= redisBackfillBatchSize {
+			if err := flush(); err != nil {
+				return err
 			}
-			continue
 		}
+	}
+	if err := iter.Err(); err != nil {
+		return fmt.Errorf("failed to scan response keys: %w", err)
+	}
+	return flush()
+}
 
-		var response responseapi.StoredResponse
-		if err := json.Unmarshal(data, &response); err != nil {
-			logging.Warnf("RedisStore: failed to parse response at key %s during scan: %v", keys[i], err)
-			continue
-		}
-		if response.ID == "" {
-			continue
-		}
-
-		responses = append(responses, &response)
+// getResponsesPipelined decodes the shared raw pipelined GET results used by
+// both lazy backfill and finalization. Missing keys are benign TTL races. In
+// strict mode, every other read/decode/key-identity failure aborts the scan;
+// lenient mode logs and skips it.
+func (s *RedisStore) getResponsesPipelined(ctx context.Context, client redis.UniversalClient, keys []string) ([]*responseapi.StoredResponse, error) {
+	if len(keys) == 0 {
+		return nil, nil
 	}
 
-	return responses
+	results := fetchResponsePayloadsPipelined(ctx, client, keys)
+	responses := make([]*responseapi.StoredResponse, 0, len(keys))
+	for i, result := range results {
+		response, err := s.decodeScannedResponse(keys[i], result)
+		if err != nil {
+			return nil, err
+		}
+		if response != nil {
+			responses = append(responses, response)
+		}
+	}
+
+	return responses, nil
+}
+
+func (s *RedisStore) decodeScannedResponse(key string, result responsePayloadResult) (*responseapi.StoredResponse, error) {
+	if result.err != nil {
+		if errors.Is(result.err, redis.Nil) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to read response at key %s during scan: %w", key, result.err)
+	}
+
+	var response responseapi.StoredResponse
+	if err := json.Unmarshal(result.raw, &response); err != nil {
+		return nil, fmt.Errorf("failed to parse response at key %s during scan: %w", key, err)
+	}
+	if response.ID == "" || s.buildKey(ResponseKeyPrefix+response.ID) != key {
+		return nil, fmt.Errorf("response payload identity does not match key %s", key)
+	}
+	return &response, nil
 }
