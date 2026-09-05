@@ -65,9 +65,9 @@ func TestCategoryModelRejectsContradictoryLocalSelectors(t *testing.T) {
 
 func TestCategoryModelAcceptsAgreeingCanonicalAndLegacySelectors(t *testing.T) {
 	for name, model := range map[string]CategoryModel{
-		"modernbert":                            {Variant: CategoryVariantModernBERT, UseModernBERT: true},
-		"mmbert32k":                             {Variant: CategoryVariantMmBERT32K, UseMmBERT32K: true},
-		"modernbert with explicit false mmbert": {Variant: CategoryVariantModernBERT, UseMmBERT32K: false},
+		"modernbert":                               {Variant: CategoryVariantModernBERT, UseModernBERT: true},
+		"mmbert32k":                                {Variant: CategoryVariantMmBERT32K, UseMmBERT32K: true},
+		"modernbert with explicit false mmbert":    {Variant: CategoryVariantModernBERT, UseMmBERT32K: false},
 		"mmbert32k with explicit false modernbert": {Variant: CategoryVariantMmBERT32K, UseModernBERT: false},
 	} {
 		t.Run(name, func(t *testing.T) {

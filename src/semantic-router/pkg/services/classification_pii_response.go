@@ -122,18 +122,61 @@ func buildPIIEntityValue(text string, revealEntityText bool) string {
 	return "[DETECTED]"
 }
 
+// buildMaskedPIIText replaces every detected span with its placeholder.
+//
+// token_spans.v1 allows overlapping and nested spans (PERSON inside ADDRESS,
+// EMAIL inside URL), so spans are first merged into a union of disjoint byte
+// ranges and the replacements are applied from the end of the string
+// backwards. Replacing one span at a time against an already modified string
+// would let a later-starting span change the length and push an earlier,
+// overlapping span past the end or onto the wrong boundary, leaving PII in
+// the output. A merged range takes the placeholder of its longest span, so
+// single, non-overlapping detections mask exactly as before.
 func buildMaskedPIIText(text string, detections []classification.PIIDetection, placeholders map[string]string) string {
-	sorted := make([]classification.PIIDetection, len(detections))
-	copy(sorted, detections)
-	sort.Slice(sorted, func(i, j int) bool {
-		return sorted[i].Start > sorted[j].Start
-	})
-	maskedText := text
-	for _, detection := range sorted {
-		placeholder := placeholders[detection.EntityType+"\x00"+detection.Text]
-		if detection.Start >= 0 && detection.End <= len(maskedText) && detection.Start < detection.End {
-			maskedText = maskedText[:detection.Start] + placeholder + maskedText[detection.End:]
+	type span struct {
+		start, end  int
+		placeholder string
+	}
+	spans := make([]span, 0, len(detections))
+	for _, detection := range detections {
+		if detection.Start < 0 || detection.End > len(text) || detection.Start >= detection.End {
+			continue
 		}
+		spans = append(spans, span{
+			start:       detection.Start,
+			end:         detection.End,
+			placeholder: placeholders[detection.EntityType+"\x00"+detection.Text],
+		})
+	}
+	if len(spans) == 0 {
+		return text
+	}
+	// Longest span first within the same start, so the merged range keeps the
+	// outermost placeholder when spans nest.
+	sort.Slice(spans, func(i, j int) bool {
+		if spans[i].start != spans[j].start {
+			return spans[i].start < spans[j].start
+		}
+		return spans[i].end > spans[j].end
+	})
+	merged := []span{spans[0]}
+	for _, s := range spans[1:] {
+		last := &merged[len(merged)-1]
+		if s.start < last.end {
+			if s.end > last.end {
+				if s.end-s.start > last.end-last.start {
+					last.placeholder = s.placeholder
+				}
+				last.end = s.end
+			}
+			continue
+		}
+		merged = append(merged, s)
+	}
+	maskedText := text
+	for i := len(merged) - 1; i >= 0; i-- {
+		m := merged[i]
+		maskedText = maskedText[:m.start] + m.placeholder + maskedText[m.end:]
 	}
 	return maskedText
 }
