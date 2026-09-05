@@ -24,6 +24,7 @@
     {"name": "metadata", "patch": {"metadata": {"trace": "field-matrix"}}},
     {"name": "model", "patch": {"model": "alternate-provider-model"}},
     {"name": "moderation", "patch": {"moderation": {"status": "passed"}}},
+    {"name": "nvext", "patch": {"nvext": {"token_ids": [1]}}},
     {"name": "object", "patch": {"object": "response"}},
     {"name": "output", "patch": {"output": [{"type": "message", "id": "msg_2", "role": "assistant", "status": "completed", "content": [{"type": "output_text", "text": "alternate", "annotations": []}]}]}},
     {"name": "output_text", "patch": {"output_text": "done"}},

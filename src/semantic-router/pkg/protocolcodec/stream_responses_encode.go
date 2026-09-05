@@ -182,6 +182,15 @@ func (encoder *responsesStreamEncoder) encodeResponsesStart(event llmprotocol.Ev
 	response := newResponsesResponseWire(event.ResponseID, event.Model, "in_progress", 0, encoder.context.PreviousResponseID)
 	frames := make([][]byte, 0, 2)
 	for _, eventType := range []string{"response.created", "response.in_progress"} {
+		if eventType == "response.created" && event.DynamoNVExt != nil {
+			var err error
+			response.NVExt, err = encodeDynamoResponseNVExt(event.DynamoNVExt, encoder.policy)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			response.NVExt = nil
+		}
 		wire := responsesEventWire{
 			Type: eventType, Sequence: encoder.nextWireSequence(), Response: &response,
 		}
@@ -230,6 +239,12 @@ func (encoder *responsesStreamEncoder) responsesCompletionWire(
 	}
 	response.Output = output
 	response.Usage = encodeResponsesUsage(*event.Usage)
+	if event.DynamoNVExt != nil {
+		response.NVExt, err = encodeDynamoResponseNVExt(event.DynamoNVExt, encoder.policy)
+		if err != nil {
+			return responsesEventWire{}, nil, err
+		}
+	}
 	wire := responsesEventWire{
 		Type:     "response.completed",
 		Response: &response,
@@ -271,6 +286,12 @@ func (encoder *responsesStreamEncoder) responsesFailureWire(
 	response.Error = &responsesErrorWire{Code: responsesErrorCode(event.Error), Message: event.Error.Message}
 	if event.Usage != nil && event.Usage.State == llmprotocol.UsageAvailable {
 		response.Usage = encodeResponsesUsage(*event.Usage)
+	}
+	if event.DynamoNVExt != nil {
+		response.NVExt, err = encodeDynamoResponseNVExt(event.DynamoNVExt, encoder.policy)
+		if err != nil {
+			return responsesEventWire{}, nil, err
+		}
 	}
 	return responsesEventWire{
 		Type:     "response.failed",
