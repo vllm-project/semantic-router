@@ -1,0 +1,21 @@
+id: xinference
+display_name: Xinference
+description: Connect a private Xinference endpoint.
+category: private_runtime
+support_tier: runtime
+protocols:
+- openai/chat-completions@1
+default_protocol: openai/chat-completions@1
+supported_operations:
+- openai/chat-completions@1#create
+- openai/chat-completions@1#list_models
+auth:
+  strategy: bearer
+  header: Authorization
+  prefix: Bearer
+presentation:
+  logo: package:xinference
+  monogram: X
+  monochrome: false
+conformance:
+  status: unverified

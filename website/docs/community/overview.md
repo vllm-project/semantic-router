@@ -66,6 +66,7 @@ a visual change.
 
 ## Contributor guides
 
+- [Model and Provider Day-0 Support](./model-provider-day-0-support)
 - [Development Guide](./development)
 - [Documentation Guide](./documentation)
 - [Code Style and Quality](./code-style)

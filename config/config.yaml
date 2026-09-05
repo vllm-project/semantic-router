@@ -8,21 +8,12 @@ listeners:
 
 providers:
   defaults:
-    default_model: qwen3-8b
-    default_reasoning_effort: medium
-    reasoning_families:
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-      gpt:
-        type: reasoning_effort
-        parameter: reasoning.effort
-      mistral:
-        type: top_level_reasoning_effort
-        parameter: reasoning_effort
+    model: qwen3-8b
+    reasoning_effort: medium
   models:
     - name: qwen3-8b
-      reasoning_family: qwen3
+      reasoning:
+        family: qwen3
       provider_model_id: qwen3-8b-instruct
       api_format: openai
       reliability:
@@ -49,7 +40,7 @@ providers:
           endpoint: 127.0.0.1:8000
           protocol: http
           weight: 80
-          type: chat
+          provider: vllm
           api_key_env: VLLM_SR_PRIMARY_API_KEY
         - name: remote-secondary
           base_url: https://api.example.com/v1
@@ -63,7 +54,12 @@ providers:
           api_key: static-demo-key
           weight: 20
     - name: qwen3-32b
-      reasoning_family: gpt
+      reasoning:
+        type: reasoning_effort
+        parameter: reasoning.effort
+        levels: [none, low, medium, high]
+        default: medium
+        disabled: none
       provider_model_id: qwen3-32b-instruct
       api_format: anthropic
       pricing:
@@ -75,6 +71,7 @@ providers:
         internal: qwen3-32b
       backend_refs:
         - name: large-primary
+          provider: anthropic-compatible
           endpoint: 127.0.0.1:8001
           protocol: http
           weight: 100
@@ -90,6 +87,7 @@ providers:
         openai: llava-omni-preview
       backend_refs:
         - name: omni-primary
+          provider: vllm
           endpoint: 127.0.0.1:8002
           protocol: http
           weight: 100
@@ -104,19 +102,45 @@ providers:
         openai: gpt-image-1
       backend_refs:
         - name: image-primary
+          provider: vllm
           endpoint: 127.0.0.1:8003
           protocol: http
           weight: 100
+    # Catalog-backed models do not need a handwritten routing.modelCards entry.
+    - name: built-in-catalog-example
+      catalog: vllm-sr/mom-v1-lite
 
 routing:
   strategy: priority
   modelCards:
     - name: qwen3-8b
+      display_name: Qwen3 8B reference model
+      publisher: Alibaba Cloud
+      presentation:
+        logo: package:qwen
+        monogram: Q
+        monochrome: false
+      distribution:
+        type: open_weights
+        source: https://huggingface.co/Qwen/Qwen3-8B
+        license: Apache-2.0
+      family: qwen3
+      revision: reference-v1
+      released_at: 2025-04-29
+      knowledge_cutoff: 2024-12
+      lifecycle: active
       param_size: 8B
       context_window_size: 131072
+      max_output_tokens: 32768
       description: General-purpose text model for the default routing tier.
       capabilities: [chat, reasoning, tools]
-      quality_score: 0.83
+      modalities:
+        input: [text]
+        output: [text]
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.83
       modality: ar
       tags: [default, fast]
     - name: qwen3-32b
@@ -127,7 +151,10 @@ routing:
       loras:
         - name: computer-science-expert
           description: Adapter specialized for advanced computer science and software design prompts.
-      quality_score: 0.96
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.96
       modality: ar
       tags: [premium, analysis]
     - name: llava-omni
@@ -135,7 +162,10 @@ routing:
       context_window_size: 65536
       description: Omni model that can satisfy both text and multimodal orchestration paths.
       capabilities: [chat, vision, multimodal]
-      quality_score: 0.88
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.88
       modality: omni
       tags: [multimodal, omni]
     - name: sdxl-image
@@ -143,7 +173,10 @@ routing:
       context_window_size: 8192
       description: Diffusion-style image generation backend used by image routes.
       capabilities: [image_generation]
-      quality_score: 0.79
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.79
       modality: diffusion
       tags: [image, diffusion]
 

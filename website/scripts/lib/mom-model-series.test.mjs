@@ -25,8 +25,9 @@ test('MoM V1 blog model series follows the packaged CLI catalog', () => {
     'utf8',
   )
 
-  const cliModels = [...catalog.matchAll(
-    /^  - id: (vllm-sr\/mom-v1-[a-z-]+)$/gm,
+  const modelsSection = catalog.match(/^models:\n([\s\S]*?)(?=^[a-z_]+:\n)/m)?.[1] ?? ''
+  const cliModels = [...modelsSection.matchAll(
+    /^- id: (vllm-sr\/mom-v1-[a-z-]+)$/gm,
   )].map(match => match[1])
   const blogModels = [...blog.matchAll(
     /^\| `(vllm-sr\/mom-v1-[a-z-]+)` \|/gm,

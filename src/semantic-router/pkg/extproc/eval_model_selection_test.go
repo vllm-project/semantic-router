@@ -11,8 +11,8 @@ func TestSelectModelForEvalUsesLiveMultiFactorPolicy(t *testing.T) {
 	router := &OpenAIRouter{Config: &config.RouterConfig{
 		BackendModels: config.BackendModels{
 			ModelConfig: map[string]config.ModelParams{
-				"lower-quality":  {QualityScore: 0.2},
-				"higher-quality": {QualityScore: 0.95},
+				"lower-quality":  modelParamsWithTestQuality(0.2),
+				"higher-quality": modelParamsWithTestQuality(0.95),
 			},
 		},
 	}}
@@ -80,8 +80,8 @@ func TestSelectModelForEvalDoesNotClaimBaseSelectorIsFinalWhenLearningCanChangeI
 		RouterLearning: config.RouterLearningConfig{Enabled: true},
 		BackendModels: config.BackendModels{
 			ModelConfig: map[string]config.ModelParams{
-				"model-a": {QualityScore: 0.9},
-				"model-b": {QualityScore: 0.1},
+				"model-a": modelParamsWithTestQuality(0.9),
+				"model-b": modelParamsWithTestQuality(0.1),
 			},
 		},
 	}}

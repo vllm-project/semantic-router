@@ -1,0 +1,57 @@
+- id: motif/motif-3
+  display_name: Motif 3
+  description: Open-weight sparse MoE model for long-context reasoning, coding, and agentic workloads.
+  kind: physical
+  publisher: Motif Technologies
+  presentation:
+    logo: monogram
+    monogram: M3
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/Motif-Technologies/Motif-3
+    license: MIT
+  family: motif-3
+  parameter_size: 314B (13.2B active)
+  released_at: 2026-08-12
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities:
+    input: [text]
+    output: [text]
+  verification:
+    authority: Motif Technologies
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/Motif-Technologies/Motif-3
+  tags: [open_weights, reasoning, moe, agentic, frontier]
+- id: motif/motif-2-12.7b-reasoning
+  display_name: Motif 2 12.7B Reasoning
+  description: Open-weight reasoning model with tool calling and optional 128K YaRN context extension.
+  kind: physical
+  publisher: Motif Technologies
+  presentation:
+    logo: monogram
+    monogram: M2
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/Motif-Technologies/Motif-2-12.7B-Reasoning
+    license: Apache-2.0
+  family: motif-2
+  parameter_size: 12.7B
+  lifecycle: experimental
+  limits:
+    context_window_size: 65536
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities:
+    input: [text]
+    output: [text]
+  verification:
+    authority: Motif Technologies
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/Motif-Technologies/Motif-2-12.7B-Reasoning
+  tags: [open_weights, reasoning, experimental_runtime]

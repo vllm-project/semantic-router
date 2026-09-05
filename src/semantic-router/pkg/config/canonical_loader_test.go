@@ -1,9 +1,27 @@
 package config
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 )
+
+func TestCanonicalProviderDefaultsAreKnownFields(t *testing.T) {
+	raw, err := parseRawConfigMap([]byte(`
+version: v0.3
+providers:
+  defaults:
+    model: private-model
+    reasoning_effort: medium
+`))
+	if err != nil {
+		t.Fatalf("parse canonical provider defaults: %v", err)
+	}
+
+	if warnings := collectUnknownFields(raw, reflect.TypeOf(CanonicalConfig{})); len(warnings) != 0 {
+		t.Fatalf("canonical provider defaults produced unknown-field warnings: %v", warnings)
+	}
+}
 
 func TestParseYAMLBytesRejectsLegacyUserConfigLayout(t *testing.T) {
 	legacyYAML := []byte(`
@@ -74,6 +92,70 @@ semantic_cache:
 	}
 }
 
+func TestParseYAMLBytesAllowsRoutingOnlyDefaultModel(t *testing.T) {
+	cfg, err := ParseYAMLBytes([]byte(`
+version: v0.3
+providers:
+  defaults:
+    model: private-model
+routing:
+  modelCards:
+    - name: private-model
+      description: Metadata-only routing model
+`))
+	if err != nil {
+		t.Fatalf("expected routing-only default model to be valid: %v", err)
+	}
+	if cfg.DefaultModel != "private-model" {
+		t.Fatalf("default model = %q, want private-model", cfg.DefaultModel)
+	}
+	if cfg.EffectiveModelRegistry == nil {
+		t.Fatal("expected routing-only model to be materialized")
+	}
+	if _, ok := cfg.EffectiveModelRegistry.Model("private-model"); !ok {
+		t.Fatal("expected routing-only model in effective registry")
+	}
+}
+
+func TestParseYAMLBytesMaterializesRichCustomModelCard(t *testing.T) {
+	cfg, err := ParseYAMLBytes([]byte(`
+version: v0.3
+providers:
+  defaults:
+    model: private-model
+  models:
+    - name: private-model
+      provider_model_id: acme/reasoner-awq
+      backend_refs:
+        - provider: vllm
+          endpoint: 127.0.0.1:8000/v1
+routing:
+  modelCards:
+    - name: private-model
+      publisher: Acme Research
+      presentation:
+        logo: https://models.example/acme.svg
+        monogram: A
+        monochrome: false
+      distribution:
+        type: open_weights
+        source: https://models.example/acme-reasoner
+        license: Apache-2.0
+`))
+	if err != nil {
+		t.Fatalf("expected rich custom card to be valid: %v", err)
+	}
+	model, ok := cfg.EffectiveModelRegistry.Model("private-model")
+	if !ok {
+		t.Fatal("expected custom model in effective registry")
+	}
+	if model.Card.Card.Publisher != "Acme Research" ||
+		model.Card.Card.Distribution.License != "Apache-2.0" ||
+		model.Card.Card.Presentation.Monogram != "A" {
+		t.Fatalf("unexpected custom model card: %+v", model.Card.Card)
+	}
+}
+
 func TestParseYAMLBytesRejectsDeprecatedGlobalModulesLayout(t *testing.T) {
 	canonicalYAML := []byte(`
 version: v0.3
@@ -83,11 +165,12 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: qwen2.5:3b
+    model: qwen2.5:3b
   models:
     - name: qwen2.5:3b
       backend_refs:
         - endpoint: 127.0.0.1:11434
+          provider: vllm
 routing:
   modelCards:
     - name: qwen2.5:3b
@@ -124,11 +207,12 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: qwen2.5:3b
+    model: qwen2.5:3b
   models:
     - name: qwen2.5:3b
       backend_refs:
         - endpoint: 127.0.0.1:11434
+          provider: vllm
 routing:
   modelCards:
     - name: qwen2.5:3b
@@ -168,11 +252,12 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: qwen2.5:3b
+    model: qwen2.5:3b
   models:
     - name: qwen2.5:3b
       backend_refs:
         - endpoint: 127.0.0.1:11434
+          provider: vllm
 routing:
   modelCards:
     - name: qwen2.5:3b
@@ -212,18 +297,16 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: qwen2.5:3b
-    default_reasoning_effort: low
-    reasoning_families:
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
+    model: qwen2.5:3b
+    reasoning_effort: low
   models:
     - name: qwen2.5:3b
-      reasoning_family: qwen3
+      reasoning:
+        family: qwen3
       provider_model_id: served-qwen
       backend_refs:
         - name: primary
+          provider: vllm
           endpoint: 127.0.0.1:11434
           protocol: http
 routing:
@@ -307,12 +390,13 @@ listeners:
     port: 8888
 providers:
   defaults:
-    default_model: qwen3
+    model: qwen3
   models:
     - name: qwen3
       provider_model_id: qwen3
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
 routing:
   modelCards:
     - name: qwen3
@@ -376,12 +460,13 @@ listeners:
     port: 8888
 providers:
   defaults:
-    default_model: qwen3
+    model: qwen3
   models:
     - name: qwen3
       provider_model_id: qwen3
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
 routing:
   signals:
     domains:
@@ -456,7 +541,7 @@ listeners:
     port: 8888
 providers:
   defaults:
-    default_model: qwen3
+    model: qwen3
   models:
     - name: qwen3
       provider_model_id: qwen3
@@ -468,6 +553,7 @@ providers:
         completion_per_1m: 0.96
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
 routing:
   modelCards:
     - name: qwen3
@@ -517,7 +603,7 @@ listeners:
     port: 8888
 providers:
   defaults:
-    default_model: claude-haiku
+    model: claude-haiku
   models:
     - name: claude-haiku
       provider_model_id: eu.anthropic.claude-haiku-4-5-20251001-v1:0
@@ -567,7 +653,7 @@ func TestProviderBackendRefProviderDrivesEndpointTypeForModelIDRewrite(t *testin
 version: v0.3
 providers:
   defaults:
-    default_model: gpt-worker
+    model: gpt-worker
   models:
     - name: gpt-worker
       provider_model_id: openai/gpt-5.5
@@ -706,11 +792,12 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: openai/gpt-oss-20b
+    model: openai/gpt-oss-20b
   models:
     - name: openai/gpt-oss-20b
       backend_refs:
         - name: primary
+          provider: vllm
           endpoint: localhost:8000
           protocol: http
           weight: 1
@@ -790,11 +877,12 @@ listeners:
     port: 8888
 providers:
   defaults:
-    default_model: qwen3
+    model: qwen3
   models:
     - name: qwen3
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
 routing:
   modelCards:
     - name: qwen3

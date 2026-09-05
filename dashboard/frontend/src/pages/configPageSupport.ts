@@ -1,5 +1,7 @@
 import type { Endpoint } from '../components/EndpointsEditor'
+import bundledCatalog from '../generated/modelCatalog.json'
 import type { DecisionConditionType } from '../types/config'
+import type { BuiltInModelCatalog } from '../types/modelCatalog'
 
 export interface ListenerConfig {
   name: string
@@ -99,6 +101,8 @@ export interface Tool {
 export interface ReasoningFamily {
   type: string
   parameter: string
+  levels?: string[]
+  default?: string
 }
 
 export interface ModelPricing {
@@ -149,7 +153,6 @@ export interface BackendRefEntry {
   endpoint?: string
   protocol?: 'http' | 'https'
   weight?: number
-  type?: string
   base_url?: string
   provider?: string
   auth_header?: string
@@ -161,9 +164,26 @@ export interface BackendRefEntry {
   api_key_env?: string
 }
 
+export interface ModelReasoningConfig {
+  family?: string
+  type?: string
+  parameter?: string
+  levels?: string[]
+  default?: string
+}
+
+export interface ModelEvaluationConfig {
+  benchmark: string
+  metrics: Record<string, number>
+  source?: string
+  measured_at?: string
+  metadata?: Record<string, string | number | boolean | null>
+}
+
 export interface ProviderModelConfig {
   name: string
-  reasoning_family?: string
+  catalog?: string
+  reasoning?: ModelReasoningConfig
   provider_model_id?: string
   api_format?: string
   external_model_ids?: Record<string, string>
@@ -180,9 +200,8 @@ export interface ProviderModelConfig {
 }
 
 export interface ProviderDefaultsConfig {
-  default_model?: string
-  reasoning_families?: Record<string, ReasoningFamily>
-  default_reasoning_effort?: string
+  model?: string
+  reasoning_effort?: string
 }
 
 export interface ProvidersConfig {
@@ -192,13 +211,32 @@ export interface ProvidersConfig {
 
 export interface RoutingModelCard {
   name: string
+  display_name?: string
+  publisher?: string
+  presentation?: {
+    logo: string
+    monogram: string
+    monochrome: boolean
+  }
+  distribution?: {
+    type: 'proprietary_api' | 'open_weights' | 'router_recipe'
+    source: string
+    license?: string
+  }
+  family?: string
+  revision?: string
+  released_at?: string
+  knowledge_cutoff?: string
+  lifecycle?: 'experimental' | 'active' | 'deprecated' | 'removed'
   param_size?: string
   context_window_size?: number
+  max_output_tokens?: number
   description?: string
   capabilities?: string[]
+  modalities?: { input: string[]; output: string[] }
   loras?: LoRAAdapter[]
   tags?: string[]
-  quality_score?: number
+  evaluations?: ModelEvaluationConfig[]
   modality?: string
 }
 
@@ -278,6 +316,8 @@ export interface RecipeConfig {
 
 export interface NormalizedModel {
   name: string
+  catalog?: string
+  reasoning?: ModelReasoningConfig
   reasoning_family?: string
   provider_model_id?: string
   api_format?: string
@@ -290,7 +330,8 @@ export interface NormalizedModel {
   capabilities?: string[]
   loras?: LoRAAdapter[]
   tags?: string[]
-  quality_score?: number
+  evaluations?: ModelEvaluationConfig[]
+  card_override?: RoutingModelCard
   modality?: string
   pricing?: {
     currency?: string
@@ -1505,7 +1546,7 @@ export type ConfigDecisionConditionType = DecisionConditionType
 
 export const getDefaultModelName = (config: ConfigData | null, isPythonCLI: boolean): string => {
   if (isPythonCLI) {
-    return config?.providers?.defaults?.default_model || ''
+    return config?.providers?.defaults?.model || ''
   }
   return config?.default_model || ''
 }
@@ -1513,99 +1554,20 @@ export const getDefaultModelName = (config: ConfigData | null, isPythonCLI: bool
 export const getReasoningFamiliesMap = (
   config: ConfigData | null,
   isPythonCLI: boolean,
+  catalog: BuiltInModelCatalog | null = bundledCatalog as unknown as BuiltInModelCatalog,
 ): Record<string, ReasoningFamily> => {
   if (isPythonCLI) {
-    return config?.providers?.defaults?.reasoning_families || {}
+    return Object.fromEntries(
+      (catalog?.reasoning_families ?? []).map((family) => [
+        family.id,
+        {
+          type: family.type,
+          parameter: family.parameter,
+          levels: [...family.levels],
+          default: family.default,
+        },
+      ]),
+    )
   }
   return config?.reasoning_families || {}
-}
-
-export const getNormalizedModels = (
-  config: ConfigData | null,
-  isPythonCLI: boolean,
-): NormalizedModel[] => {
-  if (isPythonCLI && config?.providers?.models) {
-    const cards = config?.routing?.modelCards || []
-    const cardByName = new Map(cards.map((card) => [card.name, card]))
-    const models = config.providers.models.map(
-      (m): NormalizedModel => ({
-        name: m.name,
-        reasoning_family: m.reasoning_family,
-        provider_model_id: m.provider_model_id,
-        api_format: m.api_format,
-        external_model_ids: m.external_model_ids,
-        backend_refs: m.backend_refs,
-        endpoints: normalizeProviderModelEndpoints(m),
-        param_size: cardByName.get(m.name)?.param_size,
-        context_window_size: cardByName.get(m.name)?.context_window_size,
-        description: cardByName.get(m.name)?.description,
-        capabilities: cardByName.get(m.name)?.capabilities,
-        loras: cardByName.get(m.name)?.loras,
-        tags: cardByName.get(m.name)?.tags,
-        quality_score: cardByName.get(m.name)?.quality_score,
-        modality: cardByName.get(m.name)?.modality,
-        pricing: m.pricing,
-        reliability: m.reliability,
-      }),
-    )
-
-    for (const card of cards) {
-      if (models.some((model) => model.name === card.name)) {
-        continue
-      }
-      models.push({
-        name: card.name,
-        reasoning_family: undefined,
-        provider_model_id: undefined,
-        api_format: undefined,
-        external_model_ids: undefined,
-        backend_refs: undefined,
-        endpoints: [],
-        param_size: card.param_size,
-        context_window_size: card.context_window_size,
-        description: card.description,
-        capabilities: card.capabilities,
-        loras: card.loras,
-        tags: card.tags,
-        quality_score: card.quality_score,
-        modality: card.modality,
-        pricing: undefined,
-        reliability: undefined,
-      })
-    }
-
-    return models
-  }
-
-  if (config?.model_config) {
-    return (Object.entries(config.model_config) as [string, ModelConfigEntry][]).map(
-      ([name, cfg]) => ({
-        name,
-        reasoning_family: cfg.reasoning_family,
-        endpoints:
-          cfg.preferred_endpoints
-            ?.map((ep: string) => {
-              const endpoint = config.vllm_endpoints?.find(
-                (entry: VLLMEndpoint) => entry.name === ep,
-              )
-              return endpoint
-                ? normalizeEndpoint(
-                    {
-                      name: ep,
-                      weight: endpoint.weight || 1,
-                      endpoint: `${endpoint.address}:${endpoint.port}`,
-                      protocol: 'http',
-                    },
-                    0,
-                  )
-                : null
-            })
-            .filter((entry): entry is NonNullable<typeof entry> => entry !== null) || [],
-        access_key: undefined,
-        pricing: cfg.pricing,
-      }),
-    )
-  }
-
-  return []
 }

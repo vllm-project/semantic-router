@@ -1,0 +1,50 @@
+- id: nanbeige/nanbeige4.1-3b
+  display_name: Nanbeige 4.1 3B
+  description: Compact open-weight reasoning and agentic model with long-horizon tool-use capabilities.
+  kind: physical
+  publisher: Nanbeige LLM Lab
+  presentation: &nanbeige-presentation
+    logo: monogram
+    monogram: NB
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/Nanbeige/Nanbeige4.1-3B
+    license: Apache-2.0
+  family: nanbeige4.1
+  parameter_size: 4B (3B non-embedding)
+  released_at: 2026-02-13
+  lifecycle: active
+  capabilities: &nanbeige-capabilities [chat, reasoning, tools, coding, long_context]
+  modalities: &nanbeige-modalities
+    input: [text]
+    output: [text]
+  verification: &nanbeige-verification
+    authority: Nanbeige LLM Lab
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/Nanbeige/Nanbeige4.1-3B
+  tags: [open_weights, reasoning, agentic, tools, efficient]
+- id: nanbeige/nanbeige4.2-3b
+  display_name: Nanbeige 4.2 3B
+  description: Compact open-weight hybrid-reasoning model for coding, tools, office agents, and local assistants.
+  kind: physical
+  publisher: Nanbeige LLM Lab
+  presentation: *nanbeige-presentation
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/Nanbeige/Nanbeige4.2-3B
+    license: Apache-2.0
+  family: nanbeige4.2
+  parameter_size: 4B (3B non-embedding)
+  reasoning_family: nanbeige4.2
+  released_at: 2026-08-27
+  lifecycle: experimental
+  limits:
+    context_window_size: 262144
+  capabilities: *nanbeige-capabilities
+  modalities: *nanbeige-modalities
+  verification:
+    <<: *nanbeige-verification
+    source: https://huggingface.co/Nanbeige/Nanbeige4.2-3B
+  tags: [open_weights, hybrid_reasoning, agentic, tools, coding, efficient]

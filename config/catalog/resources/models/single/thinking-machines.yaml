@@ -1,0 +1,92 @@
+- id: thinking-machines/inkling
+  display_name: Inkling
+  description: Thinking Machines Lab's open-weight multimodal frontier MoE model with controllable reasoning effort.
+  kind: physical
+  publisher: Thinking Machines Lab
+  presentation:
+    logo: monogram
+    monogram: TM
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/thinkingmachines/Inkling
+    license: Apache-2.0
+  family: inkling
+  parameter_size: 975B (41B active)
+  released_at: 2026-07-15
+  reasoning_family: inkling
+  lifecycle: active
+  limits:
+    context_window_size: 1048576
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - audio
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - audio
+    output:
+    - text
+  verification:
+    authority: Thinking Machines Lab
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://thinkingmachines.ai/model-card/inkling/
+  tags:
+  - open_weights
+  - frontier
+  - multimodal
+  - moe
+  - agentic
+- id: thinking-machines/inkling-small
+  display_name: Inkling Small
+  description: Efficient open-weight multimodal Inkling model for reasoning, agents, and customization.
+  kind: physical
+  publisher: Thinking Machines Lab
+  presentation:
+    logo: monogram
+    monogram: TM
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/thinkingmachines/Inkling-Small
+    license: Apache-2.0
+  family: inkling
+  parameter_size: 276B (12B active)
+  released_at: 2026-07-30
+  reasoning_family: inkling
+  lifecycle: active
+  limits:
+    context_window_size: 1048576
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - audio
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - audio
+    output:
+    - text
+  verification:
+    authority: Thinking Machines Lab
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/thinkingmachines/Inkling-Small
+  tags:
+  - open_weights
+  - multimodal
+  - moe
+  - agentic
+  - efficient

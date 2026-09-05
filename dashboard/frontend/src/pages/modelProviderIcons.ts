@@ -1,4 +1,7 @@
 import anthropic from '@lobehub/icons-static-svg/icons/anthropic.svg'
+import ai2 from '@lobehub/icons-static-svg/icons/ai2-color.svg'
+import ai21 from '@lobehub/icons-static-svg/icons/ai21-brand-color.svg'
+import bytedance from '@lobehub/icons-static-svg/icons/bytedance-color.svg'
 import cerebras from '@lobehub/icons-static-svg/icons/cerebras-color.svg'
 import cohere from '@lobehub/icons-static-svg/icons/cohere-color.svg'
 import cometapi from '@lobehub/icons-static-svg/icons/cometapi-color.svg'
@@ -10,7 +13,11 @@ import friendli from '@lobehub/icons-static-svg/icons/friendli.svg'
 import gemini from '@lobehub/icons-static-svg/icons/gemini-color.svg'
 import groq from '@lobehub/icons-static-svg/icons/groq.svg'
 import huggingface from '@lobehub/icons-static-svg/icons/huggingface-color.svg'
+import internlm from '@lobehub/icons-static-svg/icons/internlm-color.svg'
+import lg from '@lobehub/icons-static-svg/icons/lg-color.svg'
 import lmstudio from '@lobehub/icons-static-svg/icons/lmstudio.svg'
+import meta from '@lobehub/icons-static-svg/icons/meta-color.svg'
+import microsoft from '@lobehub/icons-static-svg/icons/microsoft-color.svg'
 import minimax from '@lobehub/icons-static-svg/icons/minimax-color.svg'
 import mistral from '@lobehub/icons-static-svg/icons/mistral-color.svg'
 import moonshot from '@lobehub/icons-static-svg/icons/moonshot.svg'
@@ -23,15 +30,25 @@ import openrouter from '@lobehub/icons-static-svg/icons/openrouter-color.svg'
 import perplexity from '@lobehub/icons-static-svg/icons/perplexity-color.svg'
 import qwen from '@lobehub/icons-static-svg/icons/qwen-color.svg'
 import sambanova from '@lobehub/icons-static-svg/icons/sambanova-color.svg'
+import snowflake from '@lobehub/icons-static-svg/icons/snowflake-color.svg'
+import stepfun from '@lobehub/icons-static-svg/icons/stepfun-color.svg'
+import tencent from '@lobehub/icons-static-svg/icons/tencent-color.svg'
 import together from '@lobehub/icons-static-svg/icons/together-color.svg'
+import tii from '@lobehub/icons-static-svg/icons/tii-color.svg'
+import upstage from '@lobehub/icons-static-svg/icons/upstage-color.svg'
 import vercel from '@lobehub/icons-static-svg/icons/vercel.svg'
 import vllm from '@lobehub/icons-static-svg/icons/vllm-color.svg'
 import xai from '@lobehub/icons-static-svg/icons/xai.svg'
 import xinference from '@lobehub/icons-static-svg/icons/xinference-color.svg'
+import xiaomimimo from '@lobehub/icons-static-svg/icons/xiaomimimo.svg'
+import yi from '@lobehub/icons-static-svg/icons/yi-color.svg'
 import zai from '@lobehub/icons-static-svg/icons/zai.svg'
 
 export const modelProviderIconAssets: Record<string, string> = {
+  ai2,
+  ai21,
   anthropic,
+  bytedance,
   cerebras,
   cohere,
   cometapi,
@@ -43,7 +60,12 @@ export const modelProviderIconAssets: Record<string, string> = {
   gemini,
   groq,
   huggingface,
+  internlm,
+  exaone: lg,
+  lg,
   lmstudio,
+  meta,
+  microsoft,
   minimax,
   mistral,
   moonshot,
@@ -56,11 +78,18 @@ export const modelProviderIconAssets: Record<string, string> = {
   perplexity,
   qwen,
   sambanova,
+  snowflake,
+  stepfun,
+  tencent,
   together,
+  tii,
+  upstage,
   vercel,
   vllm,
   xai,
   xinference,
+  xiaomimimo,
+  yi,
   zai,
 }
 
@@ -77,3 +106,12 @@ export const monochromeModelProviderIcons = new Set([
   xai,
   zai,
 ])
+
+export const resolveModelCatalogIcon = (source: string): string => {
+  if (source.startsWith('package:')) {
+    return modelProviderIconAssets[source.slice('package:'.length)] ?? ''
+  }
+  if (source.startsWith('public:')) return source.slice('public:'.length)
+  if (source.startsWith('url:')) return source.slice('url:'.length)
+  return ''
+}

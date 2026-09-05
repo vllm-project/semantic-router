@@ -1,0 +1,37 @@
+- id: databricks/dbrx-instruct
+  display_name: DBRX Instruct
+  description: Open enterprise MoE model from Databricks for reasoning, coding, and general chat.
+  kind: physical
+  publisher: Databricks
+  presentation:
+    logo: package:databricks
+    monogram: D
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/databricks/dbrx-instruct
+    license: DBRX-Open-Model-License
+  family: dbrx
+  parameter_size: 132B (36B active)
+  lifecycle: active
+  limits:
+    context_window_size: 32768
+  capabilities:
+  - chat
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Databricks
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/databricks/dbrx-instruct
+  tags:
+  - open_weights
+  - enterprise
+  - moe
+  - coding

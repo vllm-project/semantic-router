@@ -8,8 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"gopkg.in/yaml.v2"
-
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
@@ -600,7 +598,7 @@ SIGNAL preference pref { description: "preference" threshold: 0.7 examples: ["ke
 SIGNAL language lang { description: "English" threshold: 0.6 }
 SIGNAL context ctx { min_tokens: "1K" max_tokens: "32K" }
 SIGNAL complexity comp { threshold: 0.1 hard: { candidates: ["hard task"] } easy: { candidates: ["easy task"] } }
-SIGNAL modality mod { description: "image" }
+SIGNAL modality BOTH { description: "image" }
 SIGNAL authz auth { role: "admin" subjects: [{ kind: "User", name: "admin" }] }
 `
 	cfg, errs := Compile(input)
@@ -691,8 +689,8 @@ ROUTE math_route {
 
 	yamlStr := string(yamlBytes)
 	// Basic sanity checks on the YAML output
-	if !strings.Contains(yamlStr, "model_config:") {
-		t.Error("YAML should contain model_config")
+	if !strings.Contains(yamlStr, "modelCards:") {
+		t.Error("YAML should contain routing.modelCards")
 	}
 	if !strings.Contains(yamlStr, "name: math") {
 		t.Error("YAML should contain category name")
@@ -711,7 +709,7 @@ MODEL "qwen2.5:3b" {
   context_window_size: 32768
   description: "Compact reasoning model for general and STEM traffic"
   capabilities: ["general", "reasoning", "math"]
-  quality_score: 0.82
+  evaluations: [{ benchmark: "vllm-sr/operator-rating@1.0.0", metrics: { score: 0.82 } }]
   modality: "text"
 }
 
@@ -720,7 +718,7 @@ MODEL "qwen3:70b" {
   context_window_size: 131072
   description: "Large reasoning model for urgent and difficult AI queries"
   capabilities: ["general", "reasoning", "coding", "long_context"]
-  quality_score: 0.94
+  evaluations: [{ benchmark: "vllm-sr/operator-rating@1.0.0", metrics: { score: 0.94 } }]
   modality: "text"
 }
 
@@ -869,8 +867,8 @@ func TestCompileFullExample(t *testing.T) {
 		t.Fatalf("YAML emit error: %v", err)
 	}
 	yamlStr := string(yamlBytes)
-	if !strings.Contains(yamlStr, "model_config:") {
-		t.Error("YAML missing model_config")
+	if !strings.Contains(yamlStr, "modelCards:") {
+		t.Error("YAML missing routing.modelCards")
 	}
 	if !strings.Contains(yamlStr, "name: math") {
 		t.Error("YAML missing math category")
@@ -880,7 +878,7 @@ func TestCompileFullExample(t *testing.T) {
 // ==================== P0 Tests ====================
 
 // ---------- P0-1: YAML Round-Trip Test ----------
-// DSL → Compile → RouterConfig → EmitYAML → yaml.Unmarshal → verify all fields survive the round trip.
+// DSL → Compile → RouterConfig → canonical routing YAML → runtime config.
 
 func TestYAMLRoundTrip(t *testing.T) {
 	input := `
@@ -950,10 +948,10 @@ ROUTE urgent_ai_route {
 		t.Fatalf("emit YAML error: %v", err)
 	}
 
-	// Step 3: YAML bytes → RouterConfig (using yaml.v2 like the real loader)
-	var roundTripped config.RouterConfig
-	if err := yaml.Unmarshal(yamlBytes, &roundTripped); err != nil {
-		t.Fatalf("yaml.Unmarshal failed: %v\nYAML content:\n%s", err, string(yamlBytes))
+	// Step 3: canonical routing YAML → runtime config through the real fragment loader.
+	roundTripped, err := config.ParseRoutingYAMLBytes(yamlBytes)
+	if err != nil {
+		t.Fatalf("ParseRoutingYAMLBytes failed: %v\nYAML content:\n%s", err, string(yamlBytes))
 	}
 
 	// Step 4: Verify key routing fields survived the round trip
@@ -1130,9 +1128,9 @@ ROUTE math_route {
 	if err != nil {
 		t.Fatalf("emit YAML error: %v", err)
 	}
-	var rt config.RouterConfig
-	if err := yaml.Unmarshal(yamlBytes, &rt); err != nil {
-		t.Fatalf("yaml.Unmarshal failed: %v\nYAML:\n%s", err, string(yamlBytes))
+	rt, err := config.ParseRoutingYAMLBytes(yamlBytes)
+	if err != nil {
+		t.Fatalf("ParseRoutingYAMLBytes failed: %v\nYAML:\n%s", err, string(yamlBytes))
 	}
 
 	rtRules := rt.Decisions[0].Rules
@@ -1792,17 +1790,18 @@ ROUTE math_route {
 		if !strings.Contains(crdStr, "namespace: production") {
 			t.Error("CRD missing namespace")
 		}
-		// default_model should be inside spec.config
-		if !strings.Contains(crdStr, "default_model: qwen2.5:3b") {
-			t.Error("CRD missing spec.config.default_model")
+		// The operator chooses its default from the discovered model bindings;
+		// the retired flat default_model field must not be recreated.
+		if strings.Contains(crdStr, "default_model:") {
+			t.Error("CRD contains retired spec.config.default_model")
 		}
-		// decisions should be inside spec.config
+		// decisions should be inside spec.config.routing
 		if !strings.Contains(crdStr, "decisions:") {
-			t.Error("CRD missing spec.config.decisions")
+			t.Error("CRD missing spec.config.routing.decisions")
 		}
-		// categories (signal rules) should be inside spec.config
-		if !strings.Contains(crdStr, "categories:") {
-			t.Error("CRD missing spec.config.categories for domain signals")
+		// Domain signals use the canonical routing.signals key.
+		if !strings.Contains(crdStr, "domains:") {
+			t.Error("CRD missing spec.config.routing.signals.domains")
 		}
 	})
 
@@ -1832,6 +1831,10 @@ ROUTE math_route {
 				Model:   "qwen2.5:3b",
 			},
 		}
+		modelParams := cfgP.ModelConfig["qwen2.5:3b"]
+		modelParams.Catalog = "vllm-sr/mom-v1-lite"
+		modelParams.ReasoningFamily = "qwen3"
+		cfgP.ModelConfig["qwen2.5:3b"] = modelParams
 		crdBytes, err := EmitCRD(cfgP, "test", "ns")
 		if err != nil {
 			t.Fatalf("EmitCRD error: %v", err)
@@ -1846,6 +1849,10 @@ ROUTE math_route {
 		}
 		if !strings.Contains(crdStr, "name: vllm-qwen-svc") {
 			t.Error("CRD vllmEndpoints should have service name from address")
+		}
+		if !strings.Contains(crdStr, "catalog: vllm-sr/mom-v1-lite") ||
+			!strings.Contains(crdStr, "family: qwen3") {
+			t.Error("CRD vllmEndpoints should preserve catalog and reasoning")
 		}
 		// Should NOT have flat vllm_endpoints or model_config at top level
 		if strings.Contains(crdStr, "vllm_endpoints:") {
@@ -2392,19 +2399,19 @@ func TestDoubleRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("emit1 error: %v", err)
 	}
-	var rt1 config.RouterConfig
-	if unmarshalErr := yaml.Unmarshal(yaml1, &rt1); unmarshalErr != nil {
-		t.Fatalf("unmarshal1 error: %v", unmarshalErr)
+	rt1, err := config.ParseRoutingYAMLBytes(yaml1)
+	if err != nil {
+		t.Fatalf("parse1 error: %v", err)
 	}
 
-	// Second round-trip: marshal rt1 back to YAML using yaml.v2
-	yaml2, err := yaml.Marshal(&rt1)
+	// Second round-trip through the same canonical emitter and fragment loader.
+	yaml2, err := EmitYAMLFromConfig(rt1)
 	if err != nil {
-		t.Fatalf("marshal2 error: %v", err)
+		t.Fatalf("emit2 error: %v", err)
 	}
-	var rt2 config.RouterConfig
-	if err := yaml.Unmarshal(yaml2, &rt2); err != nil {
-		t.Fatalf("unmarshal2 error: %v", err)
+	rt2, err := config.ParseRoutingYAMLBytes(yaml2)
+	if err != nil {
+		t.Fatalf("parse2 error: %v", err)
 	}
 
 	// Compare key fields
@@ -2481,7 +2488,7 @@ SIGNAL preference pref { description: "preference" threshold: 0.7 examples: ["ke
 SIGNAL language lang { description: "English" threshold: 0.6 }
 SIGNAL context ctx { min_tokens: "1K" max_tokens: "32K" }
 SIGNAL complexity comp { threshold: 0.1 hard: { candidates: ["hard"] } easy: { candidates: ["easy"] } }
-SIGNAL modality mod { description: "image" }
+SIGNAL modality BOTH { description: "image" }
 SIGNAL authz auth { role: "admin" subjects: [{ kind: "User", name: "admin" }] }
 
 ROUTE test_route {
@@ -2500,9 +2507,9 @@ ROUTE test_route {
 		t.Fatalf("emit error: %v", err)
 	}
 
-	var rt config.RouterConfig
-	if err := yaml.Unmarshal(yamlBytes, &rt); err != nil {
-		t.Fatalf("unmarshal error: %v\nYAML:\n%s", err, string(yamlBytes))
+	rt, err := config.ParseRoutingYAMLBytes(yamlBytes)
+	if err != nil {
+		t.Fatalf("ParseRoutingYAMLBytes failed: %v\nYAML:\n%s", err, string(yamlBytes))
 	}
 
 	if len(rt.KeywordRules) != 1 {
@@ -2678,9 +2685,9 @@ func TestFullExampleYAMLRoundTrip(t *testing.T) {
 		t.Fatalf("emit YAML error: %v", err)
 	}
 
-	var rt config.RouterConfig
-	if err := yaml.Unmarshal(yamlBytes, &rt); err != nil {
-		t.Fatalf("unmarshal error: %v\nYAML:\n%s", err, string(yamlBytes))
+	rt, err := config.ParseRoutingYAMLBytes(yamlBytes)
+	if err != nil {
+		t.Fatalf("ParseRoutingYAMLBytes failed: %v\nYAML:\n%s", err, string(yamlBytes))
 	}
 
 	// Comprehensive field check
@@ -2861,9 +2868,9 @@ ROUTE my_route (description = "This is a detailed description") {
 	if err != nil {
 		t.Fatalf("emit error: %v", err)
 	}
-	var rt config.RouterConfig
-	if err := yaml.Unmarshal(yamlBytes, &rt); err != nil {
-		t.Fatalf("unmarshal error: %v", err)
+	rt, err := config.ParseRoutingYAMLBytes(yamlBytes)
+	if err != nil {
+		t.Fatalf("ParseRoutingYAMLBytes failed: %v", err)
 	}
 	if rt.Decisions[0].Description != "This is a detailed description" {
 		t.Errorf("round-trip description = %q", rt.Decisions[0].Description)
@@ -2874,6 +2881,10 @@ ROUTE my_route (description = "This is a detailed description") {
 
 func TestModelLoRACompileAndRoundTrip(t *testing.T) {
 	input := `
+MODEL "qwen2.5:3b" {
+  loras: [{ name: "math-lora-v2" }]
+}
+
 SIGNAL domain test { description: "test" }
 ROUTE test {
   PRIORITY 1
@@ -2893,9 +2904,9 @@ ROUTE test {
 	if err != nil {
 		t.Fatalf("emit error: %v", err)
 	}
-	var rt config.RouterConfig
-	if err := yaml.Unmarshal(yamlBytes, &rt); err != nil {
-		t.Fatalf("unmarshal error: %v", err)
+	rt, err := config.ParseRoutingYAMLBytes(yamlBytes)
+	if err != nil {
+		t.Fatalf("ParseRoutingYAMLBytes failed: %v", err)
 	}
 	if rt.Decisions[0].ModelRefs[0].LoRAName != "math-lora-v2" {
 		t.Errorf("round-trip lora_name = %q", rt.Decisions[0].ModelRefs[0].LoRAName)
@@ -4032,8 +4043,14 @@ func TestEmitUserYAML(t *testing.T) {
 	if !strings.Contains(yamlStr, "providers:") {
 		t.Error("expected 'providers:' section in user YAML")
 	}
-	if !strings.Contains(yamlStr, "default_model:") {
-		t.Error("expected 'default_model:' under providers")
+	if !strings.Contains(yamlStr, "model: qwen2.5:3b") {
+		t.Error("expected providers.defaults.model in user YAML")
+	}
+	if strings.Contains(yamlStr, "default_model:") {
+		t.Error("user YAML contains retired providers.defaults.default_model")
+	}
+	if strings.Contains(yamlStr, "reasoning_families:") {
+		t.Error("user YAML contains retired global reasoning-family registry")
 	}
 
 	// Should NOT have flat RouterConfig keys at top level

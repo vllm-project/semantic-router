@@ -1,0 +1,154 @@
+- id: tencent/hunyuan-a13b-instruct-model-card-mmlu-pro@1.0.0
+  model: tencent/hunyuan-a13b-instruct
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: published
+  subject:
+    variant: Hunyuan-A13B-Instruct
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.6723
+  status: available
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hunyuan-A13B-Instruct
+    redistributable: true
+- id: tencent/hy3-model-card-gpqa-diamond@1.0.0
+  model: tencent/hy3
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: high
+  subject: &hy3-subject
+    variant: Hy3
+    reasoning_effort: highest
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.904
+  status: available
+  evidence: &hy3-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hy3
+    redistributable: true
+- id: tencent/hy3-model-card-humanitys-last-exam@1.0.0
+  model: tencent/hy3
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: high
+  subject: *hy3-subject
+  metrics:
+    accuracy: 0.37
+  status: available
+  evidence: *hy3-evidence
+- id: tencent/hy3-model-card-swe-bench-verified@1.0.0
+  model: tencent/hy3
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: high
+  subject:
+    <<: *hy3-subject
+    harness: SWE-agent
+  metrics:
+    resolved: 0.78
+  status: available
+  evidence: *hy3-evidence
+- id: tencent/hy3-model-card-terminal-bench@1.0.0
+  model: tencent/hy3
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: high
+  subject:
+    <<: *hy3-subject
+    harness: Terminus-2
+  metrics:
+    resolved: 0.717
+  status: available
+  evidence: *hy3-evidence
+- id: tencent/hy3-model-card-swe-bench-pro@1.0.0
+  model: tencent/hy3
+  benchmark: swe-bench/pro@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: high
+  subject:
+    <<: *hy3-subject
+    harness: SWE-agent
+  metrics:
+    resolved: 0.579
+  status: available
+  evidence: *hy3-evidence
+- id: tencent/hy3-model-card-deep-swe@1.0.0
+  model: tencent/hy3
+  benchmark: datacurve/deep-swe@1.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: high
+  subject:
+    <<: *hy3-subject
+    harness: mini-swe-agent
+  metrics:
+    resolved: 0.28
+  status: available
+  evidence: *hy3-evidence
+- id: tencent/hy4-preview-model-card-gpqa-diamond@1.0.0
+  model: tencent/hy4-preview
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: high
+  subject: &hy4-subject
+    variant: Hy4 preview
+    reasoning_effort: highest
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.923
+  status: available
+  evidence: &hy4-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hy4-preview
+    redistributable: true
+- id: tencent/hy4-preview-model-card-humanitys-last-exam@1.0.0
+  model: tencent/hy4-preview
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: high
+  subject: *hy4-subject
+  metrics:
+    accuracy: 0.434
+  status: available
+  evidence: *hy4-evidence
+- id: tencent/hy4-preview-model-card-terminal-bench@1.0.0
+  model: tencent/hy4-preview
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: high
+  subject:
+    <<: *hy4-subject
+    harness: Terminus-2
+  metrics:
+    resolved: 0.854
+  status: available
+  evidence: *hy4-evidence
+- id: tencent/hy4-preview-model-card-swe-bench-pro@1.0.0
+  model: tencent/hy4-preview
+  benchmark: swe-bench/pro@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: high
+  subject:
+    <<: *hy4-subject
+    harness: SWE-agent
+  metrics:
+    resolved: 0.657
+  status: available
+  evidence: *hy4-evidence
+- id: tencent/hy4-preview-model-card-deep-swe@1.0.0
+  model: tencent/hy4-preview
+  benchmark: datacurve/deep-swe@1.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: high
+  subject:
+    <<: *hy4-subject
+    harness: mini-swe-agent
+  metrics:
+    resolved: 0.643
+  status: available
+  evidence: *hy4-evidence

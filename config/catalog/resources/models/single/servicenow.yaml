@@ -1,0 +1,26 @@
+- id: servicenow/apriel-1.6-15b-thinker
+  display_name: Apriel 1.6 15B Thinker
+  description: Open-weight compact multimodal reasoning model for enterprise and agentic workloads.
+  kind: physical
+  publisher: ServiceNow
+  presentation:
+    logo: monogram
+    monogram: SN
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/ServiceNow-AI/Apriel-1.6-15b-Thinker
+    license: MIT
+  family: apriel
+  parameter_size: 15B
+  lifecycle: experimental
+  capabilities: [chat, reasoning, tools, vision]
+  modalities:
+    input: [text, image]
+    output: [text]
+  verification:
+    authority: ServiceNow AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/ServiceNow-AI/Apriel-1.6-15b-Thinker
+  tags: [open_weights, reasoning, multimodal, enterprise, efficient]

@@ -1,0 +1,69 @@
+- id: aion/aion-2.0
+  display_name: Aion 2.0
+  description: Reasoning model tuned for immersive narrative and role-playing workloads.
+  kind: physical
+  publisher: Aion Labs
+  presentation: &aion-presentation
+    logo: monogram
+    monogram: Ai
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://www.aionlabs.ai/docs/models/
+  family: aion
+  reasoning_family: aion
+  released_at: 2025-12-21
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+    max_output_tokens: 32768
+  capabilities: [chat, reasoning, tools, long_context]
+  modalities: &aion-modalities
+    input: [text]
+    output: [text]
+  verification: &aion-verification
+    authority: Aion Labs
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://www.aionlabs.ai/docs/models/
+  tags: [proprietary, reasoning, roleplay, long_context]
+- id: aion/aion-3.0
+  display_name: Aion 3.0
+  description: Collaborative multi-model reasoning system built on the GLM family for narrative generation.
+  kind: physical
+  publisher: Aion Labs
+  presentation: *aion-presentation
+  distribution:
+    type: proprietary_api
+    source: https://www.aionlabs.ai/docs/models/
+  family: aion
+  reasoning_family: aion
+  released_at: 2026-05-05
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+    max_output_tokens: 32768
+  capabilities: [chat, reasoning, tools, long_context]
+  modalities: *aion-modalities
+  verification: *aion-verification
+  tags: [proprietary, reasoning, roleplay, orchestrator, long_context]
+- id: aion/aion-3.0-mini
+  display_name: Aion 3.0 Mini
+  description: Efficient collaborative reasoning system built on the DeepSeek family for narrative generation.
+  kind: physical
+  publisher: Aion Labs
+  presentation: *aion-presentation
+  distribution:
+    type: proprietary_api
+    source: https://www.aionlabs.ai/docs/models/
+  family: aion
+  reasoning_family: aion
+  released_at: 2026-05-14
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+    max_output_tokens: 32768
+  capabilities: [chat, reasoning, tools, long_context]
+  modalities: *aion-modalities
+  verification: *aion-verification
+  tags: [proprietary, reasoning, roleplay, orchestrator, efficient]

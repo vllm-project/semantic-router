@@ -1,0 +1,21 @@
+id: docker-model-runner
+display_name: Docker Model Runner
+description: Connect models running with Docker.
+category: private_runtime
+support_tier: runtime
+protocols:
+- openai/chat-completions@1
+default_protocol: openai/chat-completions@1
+supported_operations:
+- openai/chat-completions@1#create
+- openai/chat-completions@1#list_models
+auth:
+  strategy: none
+  header: ''
+  prefix: ''
+presentation:
+  logo: url:https://www.docker.com/wp-content/uploads/2022/03/Moby-logo.png
+  monogram: D
+  monochrome: false
+conformance:
+  status: unverified

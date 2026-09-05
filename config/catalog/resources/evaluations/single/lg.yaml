@@ -1,0 +1,195 @@
+- id: lg/exaone-4.0-32b-reasoning-model-card-mmlu-pro@1.0.0
+  model: lg/exaone-4.0-32b
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: published
+  subject: &id001
+    variant: EXAONE 4.0 32B
+    reasoning_mode: enabled
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.818
+  status: available
+  evidence: &id002
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/LGAI-EXAONE/EXAONE-4.0-32B
+    redistributable: true
+- id: lg/exaone-4.0-32b-reasoning-model-card-gpqa-diamond@1.0.0
+  model: lg/exaone-4.0-32b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: published
+  subject: *id001
+  metrics:
+    accuracy: 0.754
+  status: available
+  evidence: *id002
+- id: lg/exaone-4.0-1.2b-reasoning-model-card-mmlu-pro@1.0.0
+  model: lg/exaone-4.0-1.2b
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: published
+  subject: &id003
+    variant: EXAONE 4.0 1.2B
+    reasoning_mode: enabled
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.593
+  status: available
+  evidence: &id004
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/LGAI-EXAONE/EXAONE-4.0-1.2B
+    redistributable: true
+- id: lg/exaone-4.0-1.2b-reasoning-model-card-gpqa-diamond@1.0.0
+  model: lg/exaone-4.0-1.2b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: published
+  subject: *id003
+  metrics:
+    accuracy: 0.52
+  status: available
+  evidence: *id004
+- id: lg/k-exaone-2.0-model-card-mmlu-pro@1.0.0
+  model: lg/k-exaone-2.0-750b-a37b
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject: &k-exaone2-subject
+    variant: K-EXAONE-2.0-750B-A37B
+    reasoning_mode: enabled
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.835
+  status: available
+  evidence: &k-exaone2-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/LGAI-EXAONE/K-EXAONE-2.0-750B-A37B
+    redistributable: true
+- id: lg/k-exaone-2.0-model-card-gpqa-diamond@1.0.0
+  model: lg/k-exaone-2.0-750b-a37b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject: *k-exaone2-subject
+  metrics:
+    accuracy: 0.822
+  status: available
+  evidence: *k-exaone2-evidence
+- id: lg/k-exaone-2.0-model-card-humanitys-last-exam@1.0.0
+  model: lg/k-exaone-2.0-750b-a37b
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: enabled
+  subject: *k-exaone2-subject
+  metrics:
+    accuracy: 0.183
+  status: available
+  evidence: *k-exaone2-evidence
+- id: lg/k-exaone-2.0-model-card-swe-bench-verified@1.0.0
+  model: lg/k-exaone-2.0-750b-a37b
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: enabled
+  subject: *k-exaone2-subject
+  metrics:
+    resolved: 0.682
+  status: available
+  evidence: *k-exaone2-evidence
+- id: lg/k-exaone-2.0-model-card-terminal-bench@1.0.0
+  model: lg/k-exaone-2.0-750b-a37b
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: enabled
+  subject: *k-exaone2-subject
+  metrics:
+    resolved: 0.438
+  status: available
+  evidence: *k-exaone2-evidence
+- id: lg/k-exaone-model-card-mmlu-pro@1.0.0
+  model: lg/k-exaone-236b-a23b
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject: &k-exaone-subject
+    variant: K-EXAONE-236B-A23B
+    reasoning_mode: enabled
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.838
+  status: available
+  evidence: &k-exaone-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/LGAI-EXAONE/K-EXAONE-236B-A23B
+    redistributable: true
+- id: lg/k-exaone-model-card-gpqa-diamond@1.0.0
+  model: lg/k-exaone-236b-a23b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject: *k-exaone-subject
+  metrics:
+    accuracy: 0.791
+  status: available
+  evidence: *k-exaone-evidence
+- id: lg/k-exaone-model-card-humanitys-last-exam@1.0.0
+  model: lg/k-exaone-236b-a23b
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: enabled
+  subject: *k-exaone-subject
+  metrics:
+    accuracy: 0.136
+  status: available
+  evidence: *k-exaone-evidence
+- id: lg/k-exaone-model-card-swe-bench-verified@1.0.0
+  model: lg/k-exaone-236b-a23b
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: enabled
+  subject: *k-exaone-subject
+  metrics:
+    resolved: 0.494
+  status: available
+  evidence: *k-exaone-evidence
+- id: lg/k-exaone-model-card-terminal-bench-2.0@1.0.0
+  model: lg/k-exaone-236b-a23b
+  benchmark: harbor/terminal-bench@2.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: enabled
+  subject: *k-exaone-subject
+  metrics:
+    resolved: 0.29
+  status: available
+  evidence: *k-exaone-evidence
+- id: lg/exaone-4.5-model-card-mmlu-pro@1.0.0
+  model: lg/exaone-4.5-33b
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject: &exaone45-subject
+    variant: EXAONE-4.5-33B
+    reasoning_mode: enabled
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.833
+  status: available
+  evidence: &exaone45-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/LGAI-EXAONE/EXAONE-4.5-33B
+    redistributable: true
+- id: lg/exaone-4.5-model-card-gpqa-diamond@1.0.0
+  model: lg/exaone-4.5-33b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject: *exaone45-subject
+  metrics:
+    accuracy: 0.805
+  status: available
+  evidence: *exaone45-evidence

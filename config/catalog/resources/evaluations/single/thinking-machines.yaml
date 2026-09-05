@@ -1,0 +1,122 @@
+- id: thinking-machines/inkling-model-card-gpqa-diamond@1.0.0
+  model: thinking-machines/inkling
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: xhigh
+  subject: &inkling-subject
+    variant: Inkling
+    renderer_effort: 0.99
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.872
+  status: available
+  evidence: &inkling-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://thinkingmachines.ai/news/introducing-inkling/
+    redistributable: true
+- id: thinking-machines/inkling-model-card-humanitys-last-exam@1.0.0
+  model: thinking-machines/inkling
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: xhigh
+  subject: *inkling-subject
+  metrics:
+    accuracy: 0.297
+  status: available
+  evidence: *inkling-evidence
+- id: thinking-machines/inkling-model-card-swe-bench-verified@1.0.0
+  model: thinking-machines/inkling
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: xhigh
+  subject:
+    <<: *inkling-subject
+    harness: bash-only
+  metrics:
+    resolved: 0.776
+  status: available
+  evidence: *inkling-evidence
+- id: thinking-machines/inkling-model-card-terminal-bench@1.0.0
+  model: thinking-machines/inkling
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: xhigh
+  subject:
+    <<: *inkling-subject
+    harness: internal-coding-agent
+  metrics:
+    resolved: 0.638
+  status: available
+  evidence: *inkling-evidence
+- id: thinking-machines/inkling-model-card-swe-bench-pro@1.0.0
+  model: thinking-machines/inkling
+  benchmark: swe-bench/pro@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: xhigh
+  subject: *inkling-subject
+  metrics:
+    resolved: 0.543
+  status: available
+  evidence: *inkling-evidence
+- id: thinking-machines/inkling-small-model-card-gpqa-diamond@1.0.0
+  model: thinking-machines/inkling-small
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: xhigh
+  subject: &inkling-small-subject
+    variant: Inkling Small
+    reasoning_effort: xhigh
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.895
+  status: available
+  evidence: &inkling-small-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://thinkingmachines.ai/news/inkling-small/
+    redistributable: true
+- id: thinking-machines/inkling-small-model-card-humanitys-last-exam@1.0.0
+  model: thinking-machines/inkling-small
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: xhigh
+  subject: *inkling-small-subject
+  metrics:
+    accuracy: 0.316
+  status: available
+  evidence: *inkling-small-evidence
+- id: thinking-machines/inkling-small-model-card-swe-bench-verified@1.0.0
+  model: thinking-machines/inkling-small
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: xhigh
+  subject:
+    <<: *inkling-small-subject
+    harness: bash-only
+  metrics:
+    resolved: 0.802
+  status: available
+  evidence: *inkling-small-evidence
+- id: thinking-machines/inkling-small-model-card-terminal-bench@1.0.0
+  model: thinking-machines/inkling-small
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: xhigh
+  subject:
+    <<: *inkling-small-subject
+    harness: internal-coding-agent
+  metrics:
+    resolved: 0.647
+  status: available
+  evidence: *inkling-small-evidence
+- id: thinking-machines/inkling-small-model-card-swe-bench-pro@1.0.0
+  model: thinking-machines/inkling-small
+  benchmark: swe-bench/pro@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: xhigh
+  subject: *inkling-small-subject
+  metrics:
+    resolved: 0.559
+  status: available
+  evidence: *inkling-small-evidence

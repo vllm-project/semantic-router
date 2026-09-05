@@ -305,14 +305,11 @@ type ConfigSpec struct {
 	// +optional
 	Decisions []DecisionConfig `json:"decisions,omitempty"`
 
-	// Reasoning families
-	// +optional
-	ReasoningFamilies map[string]ReasoningFamily `json:"reasoning_families,omitempty"`
-
-	// Default reasoning effort
+	// ReasoningEffort is the default reasoning effort for model bindings that do
+	// not select a different effort.
 	// +kubebuilder:validation:Enum=low;medium;high
 	// +optional
-	DefaultReasoningEffort string `json:"default_reasoning_effort,omitempty"`
+	ReasoningEffort string `json:"reasoning_effort,omitempty"`
 
 	// API configuration
 	// +optional
@@ -1453,14 +1450,6 @@ type PIIModelConfig struct {
 	PIIMappingPath string `json:"pii_mapping_path,omitempty"`
 }
 
-// ReasoningFamily defines reasoning family configuration
-type ReasoningFamily struct {
-	// +optional
-	Type string `json:"type,omitempty"`
-	// +optional
-	Parameter string `json:"parameter,omitempty"`
-}
-
 // APIConfig defines API configuration
 type APIConfig struct {
 	// +optional
@@ -1720,9 +1709,15 @@ type VLLMEndpointSpec struct {
 	// +kubebuilder:validation:MinLength=1
 	Model string `json:"model"`
 
-	// Reasoning family for the model (e.g., "qwen3", "deepseek", "gpt")
+	// Catalog optionally selects a repository built-in Model Card. Model remains
+	// the request-facing alias.
 	// +optional
-	ReasoningFamily string `json:"reasoningFamily,omitempty"`
+	Catalog string `json:"catalog,omitempty"`
+
+	// Reasoning optionally selects a built-in family or defines inline wire
+	// behavior for this self-hosted model. Catalog-backed models normally omit it.
+	// +optional
+	Reasoning *ModelReasoningSpec `json:"reasoning,omitempty"`
 
 	// LoRAs declares the LoRA adapters exposed for this logical model in routing.modelCards.
 	// +optional
@@ -1736,6 +1731,27 @@ type VLLMEndpointSpec struct {
 	// +optional
 	// +kubebuilder:default=1
 	Weight int `json:"weight,omitempty"`
+}
+
+// ModelReasoningSpec selects a catalog reasoning family or defines the request
+// projection for a custom self-hosted model. Family and inline fields are
+// mutually exclusive and are validated by the Router's canonical compiler.
+type ModelReasoningSpec struct {
+	// +optional
+	Family string `json:"family,omitempty"`
+
+	// +kubebuilder:validation:Enum=chat_template_kwargs;reasoning_effort;top_level_reasoning_effort
+	// +optional
+	Type string `json:"type,omitempty"`
+
+	// +optional
+	Parameter string `json:"parameter,omitempty"`
+
+	// +optional
+	Levels []string `json:"levels,omitempty"`
+
+	// +optional
+	Default string `json:"default,omitempty"`
 }
 
 // LoRAAdapterSpec defines one LoRA adapter exposed by a VLLMEndpoint model.

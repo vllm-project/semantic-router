@@ -1,0 +1,29 @@
+- id: prime-intellect/intellect-3
+  display_name: INTELLECT-3
+  description: Open-weight 106B MoE trained with large-scale reinforcement learning for math, code, and science.
+  kind: physical
+  publisher: Prime Intellect
+  presentation:
+    logo: monogram
+    monogram: PI
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/PrimeIntellect/INTELLECT-3
+    license: MIT
+  family: intellect
+  parameter_size: 106B
+  released_at: 2025-11-26
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities:
+    input: [text]
+    output: [text]
+  verification:
+    authority: Prime Intellect
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/PrimeIntellect/INTELLECT-3
+  tags: [open_weights, reasoning, agentic, coding, moe]

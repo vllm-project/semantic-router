@@ -1,0 +1,346 @@
+- id: qwen/qwen3.5-9b-model-card-mmlu-pro@1.0.0
+  model: qwen/qwen3.5-9b
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: published
+  subject: &id001
+    variant: Qwen3.5-9B
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.825
+  status: available
+  evidence: &id002
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Qwen/Qwen3.5-9B
+    redistributable: true
+- id: qwen/qwen3.5-9b-model-card-gpqa-diamond@1.0.0
+  model: qwen/qwen3.5-9b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: published
+  subject: *id001
+  metrics:
+    accuracy: 0.817
+  status: available
+  evidence: *id002
+- id: qwen/qwen3.5-122b-a10b-model-card-mmlu-pro@1.0.0
+  model: qwen/qwen3.5-122b-a10b
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: published
+  subject: &id003
+    variant: Qwen3.5-122B-A10B
+    source_kind: official_model_card
+    hle_mode: chain_of_thought
+  metrics:
+    accuracy: 0.867
+  status: available
+  evidence: &id004
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Qwen/Qwen3.5-122B-A10B
+    redistributable: true
+- id: qwen/qwen3.5-122b-a10b-model-card-gpqa-diamond@1.0.0
+  model: qwen/qwen3.5-122b-a10b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: published
+  subject: *id003
+  metrics:
+    accuracy: 0.866
+  status: available
+  evidence: *id004
+- id: qwen/qwen3.5-122b-a10b-model-card-humanitys-last-exam@1.0.0
+  model: qwen/qwen3.5-122b-a10b
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: published
+  subject: *id003
+  metrics:
+    accuracy: 0.253
+  status: available
+  evidence: *id004
+- id: qwen/qwen3.5-122b-a10b-model-card-verified@1.0.0
+  model: qwen/qwen3.5-122b-a10b
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: published
+  subject: *id003
+  metrics:
+    resolved: 0.72
+  status: available
+  evidence: *id004
+- id: qwen/qwen3.6-27b-model-card-mmlu-pro@1.0.0
+  model: qwen/qwen3.6-27b
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: published
+  subject: &id005
+    variant: Qwen3.6-27B
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.862
+  status: available
+  evidence: &id006
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Qwen/Qwen3.6-27B
+    redistributable: true
+- id: qwen/qwen3.6-27b-model-card-gpqa-diamond@1.0.0
+  model: qwen/qwen3.6-27b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: published
+  subject: *id005
+  metrics:
+    accuracy: 0.878
+  status: available
+  evidence: *id006
+- id: qwen/qwen3.6-27b-model-card-humanitys-last-exam@1.0.0
+  model: qwen/qwen3.6-27b
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: published-unspecified
+  reasoning_effort: published
+  subject: *id005
+  metrics:
+    accuracy: 0.24
+  status: available
+  evidence: *id006
+- id: qwen/qwen3.6-27b-model-card-verified@1.0.0
+  model: qwen/qwen3.6-27b
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: published
+  subject: *id005
+  metrics:
+    resolved: 0.772
+  status: available
+  evidence: *id006
+- id: qwen/qwen3.6-35b-a3b-model-card-mmlu-pro@1.0.0
+  model: qwen/qwen3.6-35b-a3b
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: published
+  subject: &id007
+    variant: Qwen3.6-35B-A3B
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.852
+  status: available
+  evidence: &id008
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Qwen/Qwen3.6-35B-A3B
+    redistributable: true
+- id: qwen/qwen3.6-35b-a3b-model-card-humanitys-last-exam@1.0.0
+  model: qwen/qwen3.6-35b-a3b
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: published-unspecified
+  reasoning_effort: published
+  subject: *id007
+  metrics:
+    accuracy: 0.214
+  status: available
+  evidence: *id008
+- id: qwen/qwen3.6-35b-a3b-model-card-verified@1.0.0
+  model: qwen/qwen3.6-35b-a3b
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: published
+  subject: *id007
+  metrics:
+    resolved: 0.734
+  status: available
+  evidence: *id008
+- id: qwen/qwen3.8-max-model-card-gpqa-diamond@1.0.0
+  model: qwen/qwen3.8-max
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: xhigh
+  subject: &id009
+    variant: Qwen3.8-Max
+    reasoning_effort: xhigh
+    hle_mode: no_tools
+    terminal_harness: Claude Code
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.926
+  status: available
+  evidence: &id010
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Qwen/Qwen3.8-2.4T-A95B
+    redistributable: true
+- id: qwen/qwen3.8-max-model-card-humanitys-last-exam@1.0.0
+  model: qwen/qwen3.8-max
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: xhigh
+  subject: *id009
+  metrics:
+    accuracy: 0.436
+  status: available
+  evidence: *id010
+- id: qwen/qwen3.8-max-model-card-terminal-bench@1.0.0
+  model: qwen/qwen3.8-max
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: xhigh
+  subject: *id009
+  metrics:
+    resolved: 0.866
+  status: available
+  evidence: *id010
+- id: qwen/qwen3.8-27b-model-card-gpqa-diamond@1.0.0
+  model: qwen/qwen3.8-27b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: xhigh
+  subject: &qwen38-27b-subject
+    variant: Qwen3.8-27B
+    reasoning_effort: xhigh
+    hle_judge: GPT-4o
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.892
+  status: available
+  evidence: &qwen38-27b-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Qwen/Qwen3.8-27B
+    redistributable: true
+- id: qwen/qwen3.8-27b-model-card-humanitys-last-exam@1.0.0
+  model: qwen/qwen3.8-27b
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: xhigh
+  subject: *qwen38-27b-subject
+  metrics:
+    accuracy: 0.308
+  status: available
+  evidence: *qwen38-27b-evidence
+- id: qwen/qwen3.8-27b-model-card-terminal-bench@1.0.0
+  model: qwen/qwen3.8-27b
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: xhigh
+  subject:
+    <<: *qwen38-27b-subject
+    harness: Terminus
+  metrics:
+    resolved: 0.73
+  status: available
+  evidence: *qwen38-27b-evidence
+- id: qwen/qwen3.8-27b-model-card-swe-bench-pro@1.0.0
+  model: qwen/qwen3.8-27b
+  benchmark: swe-bench/pro@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: xhigh
+  subject:
+    <<: *qwen38-27b-subject
+    harness: Claude Code
+  metrics:
+    resolved: 0.617
+  status: available
+  evidence: *qwen38-27b-evidence
+- id: qwen/qwen3.8-27b-model-card-deep-swe@1.0.0
+  model: qwen/qwen3.8-27b
+  benchmark: datacurve/deep-swe@1.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: xhigh
+  subject:
+    <<: *qwen38-27b-subject
+    harness: Claude Code or mini-swe-agent
+  metrics:
+    resolved: 0.422
+  status: available
+  evidence: *qwen38-27b-evidence
+- id: qwen/qwen3.8-flash-next-model-card-gpqa-diamond@1.0.0
+  model: qwen/qwen3.8-flash-next
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: xhigh
+  subject: &qwen38-flash-next-subject
+    variant: Qwen3.8-Flash-Next
+    reasoning_effort: xhigh
+    hle_judge: GPT-4o
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.917
+  status: available
+  evidence: &qwen38-flash-next-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Qwen/Qwen3.8-Flash-Next
+    redistributable: true
+- id: qwen/qwen3.8-flash-next-model-card-humanitys-last-exam@1.0.0
+  model: qwen/qwen3.8-flash-next
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: xhigh
+  subject: *qwen38-flash-next-subject
+  metrics:
+    accuracy: 0.359
+  status: available
+  evidence: *qwen38-flash-next-evidence
+- id: qwen/qwen3.8-flash-next-model-card-swe-bench-pro@1.0.0
+  model: qwen/qwen3.8-flash-next
+  benchmark: swe-bench/pro@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: xhigh
+  subject:
+    <<: *qwen38-flash-next-subject
+    harness: Claude Code
+  metrics:
+    resolved: 0.625
+  status: available
+  evidence: *qwen38-flash-next-evidence
+- id: qwen/qwen3.8-flash-next-model-card-deep-swe@1.0.0
+  model: qwen/qwen3.8-flash-next
+  benchmark: datacurve/deep-swe@1.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: xhigh
+  subject:
+    <<: *qwen38-flash-next-subject
+    harness: Claude Code or mini-swe-agent
+  metrics:
+    resolved: 0.587
+  status: available
+  evidence: *qwen38-flash-next-evidence
+- id: qwen/qwen3-coder-next-model-card-swe-bench-verified@1.0.0
+  model: qwen/qwen3-coder-next
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: default
+  subject: &qwen3-coder-next-official-subject
+    variant: Qwen3-Coder-Next
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.706
+  status: available
+  evidence: &qwen3-coder-next-official-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Qwen/Qwen3-Coder-Next
+    redistributable: true
+- id: qwen/qwen3-coder-next-model-card-swe-bench-pro@1.0.0
+  model: qwen/qwen3-coder-next
+  benchmark: swe-bench/pro@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: default
+  subject: *qwen3-coder-next-official-subject
+  metrics:
+    resolved: 0.443
+  status: available
+  evidence: *qwen3-coder-next-official-evidence
+- id: qwen/qwen3-coder-next-model-card-terminal-bench-2.0@1.0.0
+  model: qwen/qwen3-coder-next
+  benchmark: harbor/terminal-bench@2.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: default
+  subject: *qwen3-coder-next-official-subject
+  metrics:
+    resolved: 0.362
+  status: available
+  evidence: *qwen3-coder-next-official-evidence

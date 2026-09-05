@@ -1,0 +1,89 @@
+- id: microsoft/phi-4-reasoning-plus-model-card-mmlu-pro@1.0.0
+  model: microsoft/phi-4-reasoning-plus
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject:
+    variant: Phi-4-reasoning-plus
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.76
+  status: available
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/microsoft/Phi-4-reasoning-plus
+    redistributable: true
+- id: microsoft/mai-thinking-1-report-mmlu-pro@1.0.0
+  model: microsoft/mai-thinking-1
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: published
+  subject: &mai-thinking-subject
+    variant: MAI-Thinking-1
+    reasoning_budget: published
+    source_kind: official_evaluation_report
+  metrics:
+    accuracy: 0.85
+  status: available
+  evidence: &mai-thinking-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://microsoft.ai/pdf/mai-thinking-1.pdf
+    redistributable: true
+- id: microsoft/mai-thinking-1-report-gpqa-diamond@1.0.0
+  model: microsoft/mai-thinking-1
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: published
+  subject: *mai-thinking-subject
+  metrics:
+    accuracy: 0.842
+  status: available
+  evidence: *mai-thinking-evidence
+- id: microsoft/mai-thinking-1-report-swe-bench-verified@1.0.0
+  model: microsoft/mai-thinking-1
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: published
+  subject: *mai-thinking-subject
+  metrics:
+    resolved: 0.735
+  status: available
+  evidence: *mai-thinking-evidence
+- id: microsoft/mai-thinking-1-report-swe-bench-pro@1.0.0
+  model: microsoft/mai-thinking-1
+  benchmark: swe-bench/pro@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: published
+  subject: *mai-thinking-subject
+  metrics:
+    resolved: 0.528
+  status: available
+  evidence: *mai-thinking-evidence
+- id: microsoft/mai-thinking-1-report-terminal-bench-2.0@1.0.0
+  model: microsoft/mai-thinking-1
+  benchmark: harbor/terminal-bench@2.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: published
+  subject: *mai-thinking-subject
+  metrics:
+    resolved: 0.46
+  status: available
+  evidence: *mai-thinking-evidence
+- id: microsoft/phi-4-mini-flash-reasoning-model-card-gpqa-diamond@1.0.0
+  model: microsoft/phi-4-mini-flash-reasoning
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject:
+    variant: Phi-4-mini-flash-reasoning
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.4508
+  status: available
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/microsoft/Phi-4-mini-flash-reasoning
+    redistributable: true

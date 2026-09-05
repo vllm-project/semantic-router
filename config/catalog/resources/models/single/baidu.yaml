@@ -1,0 +1,125 @@
+- id: baidu/ernie-4.5-21b-a3b
+  display_name: ERNIE 4.5 21B A3B
+  description: Efficient open-weight ERNIE text MoE model with 3B active parameters.
+  kind: physical
+  publisher: Baidu
+  presentation:
+    logo: package:baidu
+    monogram: E
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/baidu/ERNIE-4.5-21B-A3B-PT
+    license: Apache-2.0
+  family: ernie-4.5
+  parameter_size: 21B (3B active)
+  released_at: 2025-06-30
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Baidu ERNIE Team
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/baidu/ERNIE-4.5-21B-A3B-PT
+  tags:
+  - open_weights
+  - moe
+  - efficient
+- id: baidu/ernie-4.5-300b-a47b
+  display_name: ERNIE 4.5 300B A47B
+  description: Large open-weight ERNIE text MoE model with 47B active parameters.
+  kind: physical
+  publisher: Baidu
+  presentation:
+    logo: package:baidu
+    monogram: E
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/baidu/ERNIE-4.5-300B-A47B-PT
+    license: Apache-2.0
+  family: ernie-4.5
+  parameter_size: 300B (47B active)
+  released_at: 2025-06-30
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Baidu ERNIE Team
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/baidu/ERNIE-4.5-300B-A47B-PT
+  tags:
+  - open_weights
+  - moe
+- id: baidu/ernie-5.0
+  display_name: ERNIE 5.0
+  description: Baidu's production multimodal flagship with native deep-thinking output through Qianfan.
+  kind: physical
+  publisher: Baidu
+  presentation:
+    logo: package:baidu
+    monogram: E
+    monochrome: false
+  distribution:
+    type: proprietary_api
+    source: https://intl.cloud.baidu.com/en/doc/qianfan/s/7m95lyy43-intl-en
+  family: ernie-5
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+    max_output_tokens: 65536
+  capabilities: [chat, reasoning, vision, video, long_context]
+  modalities:
+    input: [text, image, video]
+    output: [text]
+  verification:
+    authority: Baidu AI Cloud
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://intl.cloud.baidu.com/en/doc/qianfan/s/7m95lyy43-intl-en
+  tags: [proprietary, frontier, reasoning, multimodal]
+- id: baidu/ernie-5.0-thinking-preview
+  display_name: ERNIE 5.0 Thinking Preview
+  description: Preview ERNIE 5 multimodal model with switchable deep thinking and a configurable thinking budget.
+  kind: physical
+  publisher: Baidu
+  presentation:
+    logo: package:baidu
+    monogram: E
+    monochrome: false
+  distribution:
+    type: proprietary_api
+    source: https://intl.cloud.baidu.com/en/doc/qianfan/s/Wm95lyynv-intl-en
+  family: ernie-5
+  reasoning_family: ernie5-preview
+  lifecycle: experimental
+  limits:
+    context_window_size: 131072
+  capabilities: [chat, reasoning, vision, video, long_context]
+  modalities:
+    input: [text, image, video]
+    output: [text]
+  verification:
+    authority: Baidu AI Cloud
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://intl.cloud.baidu.com/en/doc/qianfan/s/Wm95lyynv-intl-en
+  tags: [proprietary, preview, reasoning, multimodal]

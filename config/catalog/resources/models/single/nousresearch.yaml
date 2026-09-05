@@ -1,0 +1,150 @@
+- id: nousresearch/hermes-4-70b
+  display_name: Hermes 4 70B
+  description: Open-weight hybrid-reasoning Llama 3.1 model for chat, structured output, and tool use.
+  kind: physical
+  publisher: Nous Research
+  presentation: &hermes4-presentation
+    logo: monogram
+    monogram: NR
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/NousResearch/Hermes-4-70B
+    license: Llama-3.1-Community-License
+  family: hermes-4
+  parameter_size: 70B
+  released_at: 2025-08-25
+  reasoning_family: hermes4
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities: &hermes4-capabilities
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - long_context
+  modalities: &hermes4-modalities
+    input: [text]
+    output: [text]
+  verification:
+    authority: Nous Research
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/NousResearch/Hermes-4-70B
+  tags: &hermes4-tags
+  - open_weights
+  - hybrid_reasoning
+  - tools
+  - long_context
+- id: nousresearch/hermes-4-405b
+  display_name: Hermes 4 405B
+  description: Large open-weight hybrid-reasoning Llama 3.1 model with steerable reasoning and tool use.
+  kind: physical
+  publisher: Nous Research
+  presentation: *hermes4-presentation
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/NousResearch/Hermes-4-405B
+    license: Llama-3.1-Community-License
+  family: hermes-4
+  parameter_size: 405B
+  released_at: 2025-08-25
+  reasoning_family: hermes4
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities: *hermes4-capabilities
+  modalities: *hermes4-modalities
+  verification:
+    authority: Nous Research
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/NousResearch/Hermes-4-405B
+  tags: *hermes4-tags
+- id: nousresearch/hermes-3-llama-3.1-70b
+  display_name: Hermes 3 Llama 3.1 70B
+  description: Open-weight generalist model for agentic chat, function calling, structured output, and long context.
+  kind: physical
+  publisher: Nous Research
+  presentation: &hermes3-presentation
+    logo: monogram
+    monogram: NR
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/NousResearch/Hermes-3-Llama-3.1-70B
+    license: Llama-3.1-Community-License
+  family: hermes-3
+  parameter_size: 70B
+  lifecycle: active
+  limits: &hermes3-limits
+    context_window_size: 131072
+  capabilities: &hermes3-capabilities [chat, reasoning, tools, structured_output, long_context]
+  modalities: &nous-text-modalities
+    input: [text]
+    output: [text]
+  verification: &hermes3-verification
+    authority: Nous Research
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/NousResearch/Hermes-3-Llama-3.1-70B
+  tags: &hermes3-tags [open_weights, agentic, tools, long_context, previous_generation]
+- id: nousresearch/hermes-3-llama-3.1-405b
+  display_name: Hermes 3 Llama 3.1 405B
+  description: Large open-weight Hermes 3 generalist model for agentic chat, tools, and structured output.
+  kind: physical
+  publisher: Nous Research
+  presentation: *hermes3-presentation
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/NousResearch/Hermes-3-Llama-3.1-405B
+    license: Llama-3.1-Community-License
+  family: hermes-3
+  parameter_size: 405B
+  lifecycle: active
+  limits: *hermes3-limits
+  capabilities: *hermes3-capabilities
+  modalities: *nous-text-modalities
+  verification:
+    <<: *hermes3-verification
+    source: https://huggingface.co/NousResearch/Hermes-3-Llama-3.1-405B
+  tags: *hermes3-tags
+- id: nousresearch/deephermes-3-llama-3-8b-preview
+  display_name: DeepHermes 3 Llama 3 8B Preview
+  description: Compact preview model with system-prompt-selectable intuitive and long-form reasoning modes.
+  kind: physical
+  publisher: Nous Research
+  presentation: *hermes3-presentation
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/NousResearch/DeepHermes-3-Llama-3-8B-Preview
+    license: Llama-3-Community-License
+  family: deephermes-3
+  parameter_size: 8B
+  lifecycle: experimental
+  capabilities: *hermes3-capabilities
+  modalities: *nous-text-modalities
+  verification:
+    <<: *hermes3-verification
+    source: https://huggingface.co/NousResearch/DeepHermes-3-Llama-3-8B-Preview
+  tags: [open_weights, preview, hybrid_reasoning, tools, efficient]
+- id: nousresearch/deephermes-3-mistral-24b-preview
+  display_name: DeepHermes 3 Mistral 24B Preview
+  description: Mistral-based preview model with system-prompt-selectable intuitive and long-form reasoning modes.
+  kind: physical
+  publisher: Nous Research
+  presentation: *hermes3-presentation
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/NousResearch/DeepHermes-3-Mistral-24B-Preview
+    license: Apache-2.0
+  family: deephermes-3
+  parameter_size: 24B
+  lifecycle: experimental
+  capabilities: *hermes3-capabilities
+  modalities: *nous-text-modalities
+  verification:
+    <<: *hermes3-verification
+    source: https://huggingface.co/NousResearch/DeepHermes-3-Mistral-24B-Preview
+  tags: [open_weights, preview, hybrid_reasoning, tools]

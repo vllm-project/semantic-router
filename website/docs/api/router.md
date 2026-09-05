@@ -71,7 +71,7 @@ providers:
         - name: local-vllm
           endpoint: model-server:8000
           protocol: http
-          type: vllm
+          provider: vllm
           weight: 1
 ```
 

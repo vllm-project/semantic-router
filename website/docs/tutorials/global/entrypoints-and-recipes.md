@@ -37,7 +37,7 @@ replaced by the backend selected from that recipe.
 The top-level `routing` block remains the `default` recipe. Requests for
 `vllm-sr/auto`, `auto`, or another configured auto alias use that default
 policy. If the selected recipe has no matching decision, the Router uses
-`providers.defaults.default_model`.
+`providers.defaults.model`.
 
 Concrete backend model names are different: they select that model directly
 and bypass recipe routing. Use a virtual entrypoint when clients should ask for

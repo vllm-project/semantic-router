@@ -3,8 +3,9 @@ package config
 import (
 	"fmt"
 	"sort"
-	"strconv"
 	"strings"
+
+	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 )
 
 // CanonicalConfig is the public v0.3 config contract.
@@ -63,15 +64,26 @@ type CanonicalProjections struct {
 
 // RoutingModel defines the logical model catalog available to routing decisions.
 type RoutingModel struct {
-	Name              string        `yaml:"name"`
-	ParamSize         string        `yaml:"param_size,omitempty"`
-	ContextWindowSize int           `yaml:"context_window_size,omitempty"`
-	Description       string        `yaml:"description,omitempty"`
-	Capabilities      []string      `yaml:"capabilities,omitempty"`
-	LoRAs             []LoRAAdapter `yaml:"loras,omitempty"`
-	QualityScore      float64       `yaml:"quality_score,omitempty"`
-	Modality          string        `yaml:"modality,omitempty"`
-	Tags              []string      `yaml:"tags,omitempty"`
+	Name              string                             `yaml:"name"`
+	DisplayName       string                             `yaml:"display_name,omitempty"`
+	Publisher         string                             `yaml:"publisher,omitempty"`
+	Presentation      *modelcatalog.ProviderPresentation `yaml:"presentation,omitempty"`
+	Distribution      *modelcatalog.ModelDistribution    `yaml:"distribution,omitempty"`
+	Family            string                             `yaml:"family,omitempty"`
+	Revision          string                             `yaml:"revision,omitempty"`
+	ReleasedAt        string                             `yaml:"released_at,omitempty"`
+	KnowledgeCutoff   string                             `yaml:"knowledge_cutoff,omitempty"`
+	Lifecycle         string                             `yaml:"lifecycle,omitempty"`
+	ParamSize         string                             `yaml:"param_size,omitempty"`
+	ContextWindowSize int                                `yaml:"context_window_size,omitempty"`
+	MaxOutputTokens   int                                `yaml:"max_output_tokens,omitempty"`
+	Description       string                             `yaml:"description,omitempty"`
+	Capabilities      []string                           `yaml:"capabilities,omitempty"`
+	LoRAs             []LoRAAdapter                      `yaml:"loras,omitempty"`
+	Modalities        *modelcatalog.Modalities           `yaml:"modalities,omitempty"`
+	Modality          string                             `yaml:"modality,omitempty"`
+	Tags              []string                           `yaml:"tags,omitempty"`
+	Evaluations       []modelcatalog.UserEvaluation      `yaml:"evaluations,omitempty"`
 }
 
 func isCanonicalConfig(raw map[string]interface{}) bool {
@@ -83,6 +95,19 @@ func isCanonicalConfig(raw map[string]interface{}) bool {
 func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error) {
 	if err := validateCanonicalContract(canonical); err != nil {
 		return nil, err
+	}
+
+	input, err := canonicalCatalogInput(canonical)
+	if err != nil {
+		return nil, err
+	}
+	builtIn, err := modelcatalog.BuiltIn()
+	if err != nil {
+		return nil, fmt.Errorf("load built-in model catalog: %w", err)
+	}
+	effective, err := builtIn.Compile(input)
+	if err != nil {
+		return nil, fmt.Errorf("compile effective model registry: %w", err)
 	}
 
 	global, err := resolveCanonicalGlobal(canonical.Global, canonical.globalOverrideRaw)
@@ -99,9 +124,10 @@ func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error)
 	if err := applyCanonicalRecipeState(&cfg, canonical); err != nil {
 		return nil, err
 	}
-	if err := applyCanonicalProviderState(&cfg, canonical.Providers); err != nil {
+	if err := applyEffectiveModelRegistry(&cfg, effective, canonical.Providers.Models); err != nil {
 		return nil, err
 	}
+	cfg.EffectiveModelRegistry = effective
 
 	if cfg.VectorStore != nil {
 		cfg.VectorStore.ApplyDefaults()
@@ -120,123 +146,202 @@ func applyCanonicalRoutingState(cfg *RouterConfig, canonical *CanonicalConfig) {
 		cfg.Strategy = canonical.Routing.Strategy
 	}
 	cfg.ModelConfig = make(map[string]ModelParams)
-
-	for _, model := range canonicalRoutingModels(canonical.Routing) {
-		cfg.ModelConfig[model.Name] = ModelParams{
-			ParamSize:         model.ParamSize,
-			ContextWindowSize: model.ContextWindowSize,
-			Description:       model.Description,
-			Capabilities:      append([]string(nil), model.Capabilities...),
-			LoRAs:             copyLoRAAdapters(model.LoRAs),
-			Tags:              append([]string(nil), model.Tags...),
-			QualityScore:      model.QualityScore,
-			Modality:          model.Modality,
-		}
-	}
-}
-
-func applyCanonicalProviderState(cfg *RouterConfig, providers CanonicalProviders) error {
-	providerDefaults := canonicalProviderDefaults(providers)
-	cfg.DefaultModel = providerDefaults.DefaultModel
-	cfg.DefaultReasoningEffort = providerDefaults.DefaultReasoningEffort
-	cfg.ReasoningFamilies = copyReasoningFamilies(providerDefaults.ReasoningFamilies)
-
-	profiles, endpoints, modelParams, err := normalizeCanonicalProviderModels(providers.Models)
-	if err != nil {
-		return err
-	}
-	cfg.ProviderProfiles = profiles
-	cfg.VLLMEndpoints = endpoints
-	mergeCanonicalProviderModelParams(cfg.ModelConfig, modelParams)
-	return nil
-}
-
-func mergeCanonicalProviderModelParams(modelConfig map[string]ModelParams, modelParams map[string]ModelParams) {
-	for modelName, providerParams := range modelParams {
-		params := modelConfig[modelName]
-		if params.Pricing == (ModelPricing{}) {
-			params.Pricing = providerParams.Pricing
-		}
-		if params.Reliability == (ProviderReliability{}) {
-			params.Reliability = providerParams.Reliability
-		}
-		if params.ReasoningFamily == "" {
-			params.ReasoningFamily = providerParams.ReasoningFamily
-		}
-		if len(providerParams.PreferredEndpoints) > 0 {
-			params.PreferredEndpoints = append([]string(nil), providerParams.PreferredEndpoints...)
-		}
-		if params.AccessKey == "" {
-			params.AccessKey = providerParams.AccessKey
-		}
-		if len(params.ExternalModelIDs) == 0 {
-			params.ExternalModelIDs = copyStringMap(providerParams.ExternalModelIDs)
-		}
-		if params.APIFormat == "" {
-			params.APIFormat = providerParams.APIFormat
-		}
-		modelConfig[modelName] = params
-	}
 }
 
 func validateCanonicalContract(canonical *CanonicalConfig) error {
-	modelCards := canonicalRoutingModels(canonical.Routing)
+	if err := validateCanonicalVersion(canonical); err != nil {
+		return err
+	}
+	modelsByName, err := canonicalModelCardIndex(canonical.Routing)
+	if err != nil {
+		return err
+	}
+	aliases, cardTargets, err := canonicalProviderModelIndex(canonical.Providers.Models, modelsByName)
+	if err != nil {
+		return err
+	}
+	if err := validateCanonicalDefaultModel(canonical.Providers, aliases, modelsByName); err != nil {
+		return err
+	}
+	if err := validateCanonicalCardTargets(modelsByName, aliases, cardTargets); err != nil {
+		return err
+	}
+	return validateCanonicalDecisions(canonical.Routing.Decisions, aliases, modelsByName)
+}
+
+func validateCanonicalVersion(canonical *CanonicalConfig) error {
+	if canonical == nil {
+		return fmt.Errorf("config cannot be nil")
+	}
+	if canonical.Version != "" && canonical.Version != "v0.3" {
+		return fmt.Errorf("unsupported config version %q: v0.3 is required", canonical.Version)
+	}
+	return nil
+}
+
+func canonicalModelCardIndex(routing CanonicalRouting) (map[string]RoutingModel, error) {
+	modelCards := canonicalRoutingModels(routing)
 	modelsByName := make(map[string]RoutingModel, len(modelCards))
 	for _, model := range modelCards {
-		if model.Name == "" {
-			return fmt.Errorf("routing.modelCards.name cannot be empty")
+		if strings.TrimSpace(model.Name) == "" {
+			return nil, fmt.Errorf("routing.modelCards.name cannot be empty")
 		}
 		if _, exists := modelsByName[model.Name]; exists {
-			return fmt.Errorf("routing.modelCards[%s]: duplicate model name", model.Name)
+			return nil, fmt.Errorf("routing.modelCards[%s]: duplicate model name", model.Name)
 		}
 		modelsByName[model.Name] = model
 	}
+	return modelsByName, nil
+}
 
-	if canonicalProviderDefaults(canonical.Providers).DefaultModel != "" {
-		if !canonicalModelOrLoRAExists(
-			modelsByName,
-			modelCards,
-			canonicalProviderDefaults(canonical.Providers).DefaultModel,
-		) {
-			return fmt.Errorf(
-				"providers.defaults.default_model %q not found in routing.modelCards or routing.modelCards[].loras",
-				canonicalProviderDefaults(canonical.Providers).DefaultModel,
+func canonicalProviderModelIndex(
+	models []CanonicalProviderModel,
+	cards map[string]RoutingModel,
+) (map[string]CanonicalProviderModel, map[string]struct{}, error) {
+	aliases := make(map[string]CanonicalProviderModel, len(models))
+	cardTargets := make(map[string]struct{}, len(models))
+	catalogBackedTargets := make(map[string]bool, len(models))
+	for index, model := range models {
+		cardID, err := validateCanonicalProviderModel(model, index, cards, aliases)
+		if err != nil {
+			return nil, nil, err
+		}
+		catalogBacked := strings.TrimSpace(model.Catalog) != ""
+		if existing, duplicate := catalogBackedTargets[cardID]; duplicate && existing != catalogBacked {
+			return nil, nil, fmt.Errorf(
+				"providers.models[%d] makes model card %q ambiguous: it cannot represent both a catalog-backed and custom model",
+				index, cardID,
+			)
+		}
+		aliases[model.Name] = model
+		cardTargets[cardID] = struct{}{}
+		catalogBackedTargets[cardID] = catalogBacked
+	}
+	return aliases, cardTargets, nil
+}
+
+func validateCanonicalProviderModel(
+	model CanonicalProviderModel,
+	index int,
+	cards map[string]RoutingModel,
+	aliases map[string]CanonicalProviderModel,
+) (string, error) {
+	if strings.TrimSpace(model.Name) == "" {
+		return "", fmt.Errorf("providers.models.name cannot be empty")
+	}
+	if _, duplicate := aliases[model.Name]; duplicate {
+		return "", fmt.Errorf("providers.models[%d].name %q is duplicated", index, model.Name)
+	}
+	cardID := effectiveCanonicalCardID(model)
+	if model.Catalog != "" {
+		if _, aliasNamedCard := cards[model.Name]; aliasNamedCard && model.Name != model.Catalog {
+			return "", fmt.Errorf(
+				"routing.modelCards[%s] is ambiguous: built-in overrides must use catalog name %q",
+				model.Name, model.Catalog,
 			)
 		}
 	}
-
-	for _, model := range canonical.Providers.Models {
-		if model.Name == "" {
-			return fmt.Errorf("providers.models.name cannot be empty")
-		}
-		if _, ok := modelsByName[model.Name]; !ok {
-			return fmt.Errorf("providers.models[%s] does not match any routing.modelCards entry", model.Name)
-		}
-		if model.ReasoningFamily != "" {
-			if _, ok := canonicalProviderDefaults(canonical.Providers).ReasoningFamilies[model.ReasoningFamily]; !ok {
-				return fmt.Errorf("providers.models[%s].reasoning_family %q not found in providers.defaults.reasoning_families", model.Name, model.ReasoningFamily)
-			}
-		}
-		if err := validateProviderReliability(model.Name, model.Reliability); err != nil {
-			return err
-		}
-		if len(canonicalBackendRefs(model)) == 0 {
-			if !canonicalProviderModelHasMetadata(model) {
-				return fmt.Errorf("providers.models[%s] must define backend_refs or provider metadata such as reasoning_family, pricing, api_format, external_model_ids, or provider_model_id", model.Name)
-			}
-			continue
-		}
-		for _, backendRef := range canonicalBackendRefs(model) {
-			if strings.TrimSpace(backendRef.Endpoint) == "" && strings.TrimSpace(backendRef.BaseURL) == "" {
-				return fmt.Errorf("providers.models[%s].backend_refs requires endpoint or base_url", model.Name)
-			}
-		}
+	if err := validateCanonicalProviderModelMetadata(model); err != nil {
+		return "", err
 	}
-
-	return validateCanonicalDecisions(canonical.Routing.Decisions, modelsByName, modelCards)
+	if len(canonicalBackendRefs(model)) == 0 && !canonicalProviderModelHasMetadata(model) {
+		return "", fmt.Errorf("providers.models[%s] must define backend_refs or model metadata", model.Name)
+	}
+	return cardID, nil
 }
 
-func validateCanonicalDecisions(decisions []Decision, modelsByName map[string]RoutingModel, modelCards []RoutingModel) error {
+func effectiveCanonicalCardID(model CanonicalProviderModel) string {
+	if cardID := strings.TrimSpace(model.Catalog); cardID != "" {
+		return cardID
+	}
+	return model.Name
+}
+
+func validateCanonicalProviderModelMetadata(model CanonicalProviderModel) error {
+	if err := validateCanonicalReasoning(model.Name, model.Reasoning); err != nil {
+		return err
+	}
+	if err := validateProviderReliability(model.Name, model.Reliability); err != nil {
+		return err
+	}
+	return validateModelPricing(model.Name, model.Pricing)
+}
+
+func validateCanonicalDefaultModel(
+	providers CanonicalProviders,
+	aliases map[string]CanonicalProviderModel,
+	cards map[string]RoutingModel,
+) error {
+	defaultModel := canonicalProviderDefaults(providers).DefaultModel
+	if defaultModel == "" || canonicalDefaultModelExists(defaultModel, aliases, cards) {
+		return nil
+	}
+	return fmt.Errorf(
+		"providers.defaults.model %q not found in providers.models or routing-only modelCards/loras",
+		defaultModel,
+	)
+}
+
+func validateCanonicalCardTargets(
+	cards map[string]RoutingModel,
+	aliases map[string]CanonicalProviderModel,
+	targets map[string]struct{},
+) error {
+	for cardID := range cards {
+		_, targeted := targets[cardID]
+		if !targeted && len(aliases) > 0 && !routingLoRAAliasExists(cardID, cards) {
+			return fmt.Errorf(
+				"routing.modelCards[%s] is not referenced by providers.models[].catalog or a custom model alias",
+				cardID,
+			)
+		}
+	}
+	return nil
+}
+
+func canonicalDefaultModelExists(
+	defaultModel string,
+	aliases map[string]CanonicalProviderModel,
+	cards map[string]RoutingModel,
+) bool {
+	if _, ok := aliases[defaultModel]; ok {
+		return true
+	}
+	if len(aliases) == 0 {
+		if _, ok := cards[defaultModel]; ok {
+			return true
+		}
+	}
+	return aliasLoRAExists(defaultModel, aliases, cards)
+}
+
+func routingLoRAAliasExists(name string, cards map[string]RoutingModel) bool {
+	for _, card := range cards {
+		if routingModelHasLoRA(card, name) {
+			return true
+		}
+	}
+	return false
+}
+
+func validateCanonicalReasoning(modelName string, reasoning *CanonicalReasoning) error {
+	if reasoning == nil {
+		return nil
+	}
+	inline := reasoning.Type != "" || reasoning.Parameter != "" || len(reasoning.Levels) > 0 || reasoning.Default != "" || reasoning.Disabled != ""
+	if reasoning.Family != "" && inline {
+		return fmt.Errorf("providers.models[%s].reasoning must set either family or inline fields, not both", modelName)
+	}
+	if reasoning.Family == "" && !inline {
+		return fmt.Errorf("providers.models[%s].reasoning cannot be empty", modelName)
+	}
+	if inline && (reasoning.Type == "" || reasoning.Parameter == "") {
+		return fmt.Errorf("providers.models[%s].reasoning.type and parameter are required for inline reasoning", modelName)
+	}
+	return nil
+}
+
+func validateCanonicalDecisions(decisions []Decision, aliases map[string]CanonicalProviderModel, cards map[string]RoutingModel) error {
 	decisionNames := make(map[string]bool, len(decisions))
 	for _, decision := range decisions {
 		if decision.Name != "" {
@@ -246,7 +351,7 @@ func validateCanonicalDecisions(decisions []Decision, modelsByName map[string]Ro
 			decisionNames[decision.Name] = true
 		}
 
-		if err := validateCanonicalDecisionModelRefs(decision, modelsByName, modelCards); err != nil {
+		if err := validateCanonicalDecisionModelRefs(decision, aliases, cards); err != nil {
 			return err
 		}
 	}
@@ -254,36 +359,50 @@ func validateCanonicalDecisions(decisions []Decision, modelsByName map[string]Ro
 	return nil
 }
 
-func validateCanonicalDecisionModelRefs(decision Decision, modelsByName map[string]RoutingModel, modelCards []RoutingModel) error {
+func validateCanonicalDecisionModelRefs(decision Decision, aliases map[string]CanonicalProviderModel, cards map[string]RoutingModel) error {
 	for _, modelRef := range decision.ModelRefs {
 		if modelRef.Model == "" {
 			continue
 		}
-		// Reject modelRefs that point at a model the config does not define.
-		// Previously this was only checked when a lora_name was also set, so a
-		// plain modelRef to an unknown model slipped through and only failed at
-		// request time with a misleading upstream "401 No api key".
-		//
-		// Only enforced when the config declares a model surface (modelCards).
-		// Partial DSL fragments without modelCards (e.g. config/fragments/decision/**
-		// examples) carry no model surface to validate against and are skipped,
-		// mirroring how default_model existence is only checked when set.
-		if len(modelCards) > 0 && !canonicalModelOrLoRAExists(modelsByName, modelCards, modelRef.Model) {
-			return fmt.Errorf("routing.decisions[%s].modelRefs[%s] references unknown model %q", decision.Name, modelRef.Model, modelRef.Model)
+		if len(aliases) > 0 {
+			if _, ok := aliases[modelRef.Model]; !ok && !aliasLoRAExists(modelRef.Model, aliases, cards) {
+				return fmt.Errorf("routing.decisions[%s].modelRefs[%s] references unknown model %q", decision.Name, modelRef.Model, modelRef.Model)
+			}
 		}
 		if modelRef.LoRAName == "" {
 			continue
 		}
-		card, ok := modelsByName[modelRef.Model]
+		alias, ok := aliases[modelRef.Model]
+		if !ok {
+			continue
+		}
+		cardID := alias.Catalog
+		if cardID == "" {
+			cardID = alias.Name
+		}
+		card, ok := cards[cardID]
 		if !ok {
 			continue
 		}
 		if !routingModelHasLoRA(card, modelRef.LoRAName) {
-			return fmt.Errorf("routing.decisions[%s].modelRefs[%s].lora_name %q not found in routing.modelCards[%s].loras", decision.Name, modelRef.Model, modelRef.LoRAName, modelRef.Model)
+			return fmt.Errorf("routing.decisions[%s].modelRefs[%s].lora_name %q not found in routing.modelCards[%s].loras", decision.Name, modelRef.Model, modelRef.LoRAName, cardID)
 		}
 	}
 
 	return nil
+}
+
+func aliasLoRAExists(name string, aliases map[string]CanonicalProviderModel, cards map[string]RoutingModel) bool {
+	for _, alias := range aliases {
+		cardID := alias.Catalog
+		if cardID == "" {
+			cardID = alias.Name
+		}
+		if card, ok := cards[cardID]; ok && routingModelHasLoRA(card, name) {
+			return true
+		}
+	}
+	return false
 }
 
 func normalizeSignals(signals CanonicalSignals, decisions []Decision) Signals {
@@ -331,114 +450,11 @@ func canonicalRoutingModels(routing CanonicalRouting) []RoutingModel {
 }
 
 func canonicalProviderModelHasMetadata(model CanonicalProviderModel) bool {
-	if model.ReasoningFamily != "" || model.ProviderModelID != "" || model.APIFormat != "" || len(model.ExternalModelIDs) > 0 {
+	if model.Catalog != "" || model.Reasoning != nil || model.ProviderModelID != "" || model.APIFormat != "" || len(model.ExternalModelIDs) > 0 {
 		return true
 	}
 	return model.Pricing != (ModelPricing{}) ||
 		model.Reliability != (ProviderReliability{})
-}
-
-func normalizeCanonicalProviderModels(models []CanonicalProviderModel) (map[string]ProviderProfile, []VLLMEndpoint, map[string]ModelParams, error) {
-	if len(models) == 0 {
-		return nil, nil, nil, nil
-	}
-
-	profiles := map[string]ProviderProfile{}
-	endpoints := []VLLMEndpoint{}
-	modelParams := make(map[string]ModelParams, len(models))
-
-	for _, model := range models {
-		params := modelParams[model.Name]
-		params.ReasoningFamily = model.ReasoningFamily
-		params.Pricing = model.Pricing
-		params.Reliability = model.Reliability
-		params.APIFormat = model.APIFormat
-		params.ExternalModelIDs = normalizeExternalModelIDsFromProviderModel(model)
-
-		backendRefs := canonicalBackendRefs(model)
-		params.PreferredEndpoints = make([]string, 0, len(backendRefs))
-		for index, backendRef := range backendRefs {
-			endpointName := canonicalEndpointName(model.Name, backendRef, index)
-			backendType := canonicalBackendType(backendRef)
-			endpoint := VLLMEndpoint{
-				Name:     endpointName,
-				Weight:   backendRef.Weight,
-				Type:     backendType,
-				Protocol: defaultProtocol(backendRef.Protocol),
-				Model:    model.Name,
-				APIKey:   resolveBackendAPIKey(backendRef),
-			}
-			if endpoint.Weight == 0 {
-				endpoint.Weight = 1
-			}
-
-			if backendRef.BaseURL != "" || backendRef.Provider != "" || backendRef.AuthHeader != "" || backendRef.AuthPrefix != "" || backendRef.ChatPath != "" || len(backendRef.ExtraHeaders) > 0 || backendRef.APIVersion != "" {
-				profiles[endpointName] = ProviderProfile{
-					Type:         backendRef.Provider,
-					BaseURL:      backendRef.BaseURL,
-					AuthHeader:   backendRef.AuthHeader,
-					AuthPrefix:   backendRef.AuthPrefix,
-					ExtraHeaders: copyStringMap(backendRef.ExtraHeaders),
-					APIVersion:   backendRef.APIVersion,
-					ChatPath:     backendRef.ChatPath,
-				}
-				endpoint.ProviderProfileName = endpointName
-			}
-
-			if backendRef.Endpoint != "" {
-				address, port, err := splitEndpointAddress(backendRef.Endpoint, backendRef.Protocol)
-				if err != nil {
-					return nil, nil, nil, fmt.Errorf("providers.models[%s].backend_refs[%d]: %w", model.Name, index, err)
-				}
-				endpoint.Address = address
-				endpoint.Port = port
-			}
-
-			params.PreferredEndpoints = append(params.PreferredEndpoints, endpointName)
-			if params.AccessKey == "" {
-				params.AccessKey = endpoint.APIKey
-			}
-			endpoints = append(endpoints, endpoint)
-		}
-
-		modelParams[model.Name] = params
-	}
-
-	if len(profiles) == 0 {
-		profiles = nil
-	}
-	return profiles, endpoints, modelParams, nil
-}
-
-func normalizeExternalModelIDsFromProviderModel(model CanonicalProviderModel) map[string]string {
-	if len(model.ExternalModelIDs) > 0 {
-		return copyStringMap(model.ExternalModelIDs)
-	}
-	if model.ProviderModelID == "" {
-		return nil
-	}
-
-	result := map[string]string{}
-	for _, backendRef := range canonicalBackendRefs(model) {
-		result[canonicalBackendType(backendRef)] = model.ProviderModelID
-	}
-	// When no backend_refs are defined (metadata-only provider model),
-	// still store the provider_model_id so pricing lookups by provider
-	// model ID (e.g. from Envoy AI Gateway) can resolve to this model.
-	if len(result) == 0 {
-		result["default"] = model.ProviderModelID
-	}
-	return result
-}
-
-func canonicalBackendType(backendRef CanonicalBackendRef) string {
-	if backendRef.Type != "" {
-		return backendRef.Type
-	}
-	if backendRef.Provider != "" {
-		return backendRef.Provider
-	}
-	return "vllm"
 }
 
 func canonicalEndpointName(modelName string, backendRef CanonicalBackendRef, index int) string {
@@ -451,54 +467,6 @@ func canonicalEndpointName(modelName string, backendRef CanonicalBackendRef, ind
 		}
 	}
 	return modelName + "_" + suffix
-}
-
-func splitEndpointAddress(raw string, protocol string) (string, int, error) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return "", 0, fmt.Errorf("endpoint is required")
-	}
-
-	if strings.Contains(raw, "://") {
-		parts := strings.SplitN(raw, "://", 2)
-		protocol = parts[0]
-		raw = parts[1]
-	}
-	if slash := strings.Index(raw, "/"); slash >= 0 {
-		raw = raw[:slash]
-	}
-
-	host := raw
-	port := 0
-	if strings.Count(raw, ":") > 1 && !strings.HasPrefix(raw, "[") {
-		// Bare IPv6 literal without explicit port.
-		host = raw
-	} else if strings.Contains(raw, ":") {
-		lastColon := strings.LastIndex(raw, ":")
-		if lastColon > 0 && lastColon < len(raw)-1 {
-			if parsedPort, err := strconv.Atoi(raw[lastColon+1:]); err == nil {
-				host = raw[:lastColon]
-				port = parsedPort
-			}
-		}
-	}
-
-	if strings.HasPrefix(host, "[") && strings.HasSuffix(host, "]") {
-		host = strings.TrimPrefix(strings.TrimSuffix(host, "]"), "[")
-	}
-
-	if port == 0 {
-		if strings.EqualFold(protocol, "https") {
-			port = 443
-		} else {
-			port = 80
-		}
-	}
-
-	if host == "" {
-		return "", 0, fmt.Errorf("endpoint host cannot be empty")
-	}
-	return host, port, nil
 }
 
 func defaultProtocol(protocol string) string {
@@ -561,17 +529,6 @@ func copyDecisions(input []Decision) []Decision {
 	}
 	output := make([]Decision, len(input))
 	copy(output, input)
-	return output
-}
-
-func copyReasoningFamilies(input map[string]ReasoningFamilyConfig) map[string]ReasoningFamilyConfig {
-	if len(input) == 0 {
-		return nil
-	}
-	output := make(map[string]ReasoningFamilyConfig, len(input))
-	for key, value := range input {
-		output[key] = value
-	}
 	return output
 }
 

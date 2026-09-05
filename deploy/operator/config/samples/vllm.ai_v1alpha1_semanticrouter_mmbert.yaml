@@ -15,7 +15,8 @@ spec:
   vllmEndpoints:
     - name: my-llama-model
       model: llama3-8b
-      reasoningFamily: qwen3
+      reasoning:
+        family: qwen3
       backend:
         type: kserve
         inferenceServiceName: llama-3-8b

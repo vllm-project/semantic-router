@@ -14,11 +14,12 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: cheap
+    model: cheap
   models:
     - name: cheap
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
 routing:
   modelCards:
     - name: cheap
@@ -47,11 +48,12 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: cheap
+    model: cheap
   models:
     - name: cheap
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
 routing:
   modelCards:
     - name: cheap

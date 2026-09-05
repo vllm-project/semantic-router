@@ -6,12 +6,8 @@ listeners:
   timeout: 1200s
 providers:
   defaults:
-    default_model: local/qwen3.5-9b-economy
-    reasoning_families:
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-    default_reasoning_effort: low
+    model: local/qwen3.5-9b-economy
+    reasoning_effort: low
   models:
   - name: local/omni
     provider_model_id: local/omni
@@ -20,17 +16,18 @@ providers:
     - name: local-omni
       endpoint: vllm-omni:8000
       protocol: http
-      type: vllm
+      provider: vllm
       weight: 1
   - name: local/qwen3.5-122b-frontier
-    reasoning_family: qwen3
+    reasoning:
+      family: qwen3
     provider_model_id: qwen/qwen3.5-rocm
     backend_refs:
     - name: qwen3.5-122b_vllm_primary
       endpoint: vllm:8000
       protocol: http
       weight: 1
-      type: vllm
+      provider: vllm
     pricing:
       currency: USD
       prompt_per_1m: 0.35
@@ -39,14 +36,15 @@ providers:
     external_model_ids:
       vllm: qwen/qwen3.5-rocm
   - name: local/qwen3.5-9b-economy
-    reasoning_family: qwen3
+    reasoning:
+      family: qwen3
     provider_model_id: local/qwen3.5-9b-economy
     backend_refs:
     - name: qwen3.5-9b-economy_vllm_primary
       endpoint: vllm-qwen35-economy:8000
       protocol: http
       weight: 1
-      type: vllm
+      provider: vllm
     pricing:
       currency: USD
       prompt_per_1m: 0.02
@@ -55,14 +53,15 @@ providers:
     external_model_ids:
       vllm: local/qwen3.5-9b-economy
   - name: local/qwen3.5-9b-economy-replica
-    reasoning_family: qwen3
+    reasoning:
+      family: qwen3
     provider_model_id: local/qwen3.5-9b-economy
     backend_refs:
     - name: qwen3.5-9b-economy_vllm_replica
       endpoint: vllm-qwen35-economy-replica:8000
       protocol: http
       weight: 1
-      type: vllm
+      provider: vllm
     pricing:
       currency: USD
       prompt_per_1m: 0.02
@@ -71,14 +70,15 @@ providers:
     external_model_ids:
       vllm: local/qwen3.5-9b-economy
   - name: local/qwen3.5-9b-private
-    reasoning_family: qwen3
+    reasoning:
+      family: qwen3
     provider_model_id: local/qwen3.5-9b-private
     backend_refs:
     - name: qwen3.5-9b-private_vllm_primary
       endpoint: vllm-qwen35-economy:8000
       protocol: http
       weight: 1
-      type: vllm
+      provider: vllm
     pricing:
       currency: USD
       prompt_per_1m: 0.025
@@ -87,14 +87,15 @@ providers:
     external_model_ids:
       vllm: local/qwen3.5-9b-private
   - name: local/qwen3.6-27b-coder
-    reasoning_family: qwen3
+    reasoning:
+      family: qwen3
     provider_model_id: local/qwen3.6-27b-coder
     backend_refs:
     - name: qwen3.6-27b-coder_vllm_primary
       endpoint: vllm-qwen36-coder:8000
       protocol: http
       weight: 1
-      type: vllm
+      provider: vllm
     pricing:
       currency: USD
       prompt_per_1m: 0.14
@@ -103,14 +104,15 @@ providers:
     external_model_ids:
       vllm: local/qwen3.6-27b-coder
   - name: local/qwen3.6-35b-flash
-    reasoning_family: qwen3
+    reasoning:
+      family: qwen3
     provider_model_id: local/qwen3.6-35b-flash
     backend_refs:
     - name: qwen3.6-35b-flash_vllm_primary
       endpoint: vllm-qwen36-flash:8000
       protocol: http
       weight: 1
-      type: vllm
+      provider: vllm
     pricing:
       currency: USD
       prompt_per_1m: 0.08
@@ -125,7 +127,7 @@ providers:
       endpoint: vllm-gemma4-balanced:8000
       protocol: http
       weight: 1
-      type: vllm
+      provider: vllm
     pricing:
       currency: USD
       prompt_per_1m: 0.12
@@ -140,7 +142,7 @@ providers:
       endpoint: vllm-deepseek-v4:8000
       protocol: http
       weight: 1
-      type: vllm
+      provider: vllm
     pricing:
       currency: USD
       prompt_per_1m: 0.22
@@ -160,7 +162,10 @@ routing:
     - legal_analysis
     - high_risk_review
     - deep_synthesis
-    quality_score: 0.94
+    evaluations:
+    - benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.94
     modality: text
     tags:
     - tier:premium
@@ -174,7 +179,10 @@ routing:
     - fast_qa
     - explanation
     - general_chat
-    quality_score: 0.68
+    evaluations:
+    - benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.68
     modality: text
     tags:
     - tier:economy
@@ -189,7 +197,10 @@ routing:
     - fast_qa
     - explanation
     - general_chat
-    quality_score: 0.68
+    evaluations:
+    - benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.68
     modality: text
     tags:
     - tier:economy_replica
@@ -204,7 +215,10 @@ routing:
     - privacy_locality
     - sensitive_data
     - general_chat
-    quality_score: 0.68
+    evaluations:
+    - benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.68
     modality: text
     tags:
     - tier:private
@@ -219,7 +233,10 @@ routing:
     - coding
     - structured_output
     - tool_use
-    quality_score: 0.9
+    evaluations:
+    - benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.9
     modality: text
     tags:
     - tier:coder
@@ -233,7 +250,10 @@ routing:
     - fast_qa
     - coding
     - reasoning
-    quality_score: 0.84
+    evaluations:
+    - benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.84
     modality: text
     tags:
     - tier:flash
@@ -249,7 +269,10 @@ routing:
     - multilingual
     - structured_output
     - long_context
-    quality_score: 0.89
+    evaluations:
+    - benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.89
     modality: text
     tags:
     - tier:balanced
@@ -265,7 +288,10 @@ routing:
     - long_context
     - tool_use
     - reasoning_diversity
-    quality_score: 0.88
+    evaluations:
+    - benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.88
     modality: text
     tags:
     - tier:experimental_frontier

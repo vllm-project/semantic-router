@@ -1,0 +1,16 @@
+- id: stepfun/step-3.7-flash-model-card-terminal-bench@1.0.0
+  model: stepfun/step-3.7-flash
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: default
+  subject:
+    variant: Step-3.7-Flash
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.595
+  status: available
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/stepfun-ai/Step-3.7-Flash
+    redistributable: true

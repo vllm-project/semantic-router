@@ -1,0 +1,87 @@
+- id: mbzuai/k2-horizon-model-card-gpqa-diamond@1.0.0
+  model: mbzuai/k2-horizon-375b-a23b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: high
+  subject: &k2-subject
+    variant: K2-Horizon-375B-A23B
+    reasoning_mode: high
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.873
+  status: available
+  evidence: &k2-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/IFM/K2-Horizon-375B-A23B
+    redistributable: true
+- id: mbzuai/k2-horizon-model-card-humanitys-last-exam@1.0.0
+  model: mbzuai/k2-horizon-375b-a23b
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: high
+  subject: *k2-subject
+  metrics:
+    accuracy: 0.32
+  status: available
+  evidence: *k2-evidence
+- id: mbzuai/k2-horizon-model-card-terminal-bench@1.0.0
+  model: mbzuai/k2-horizon-375b-a23b
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: high
+  subject: *k2-subject
+  metrics:
+    resolved: 0.702
+  status: available
+  evidence: *k2-evidence
+- id: mbzuai/k2-horizon-model-card-swe-bench-pro@1.0.0
+  model: mbzuai/k2-horizon-375b-a23b
+  benchmark: swe-bench/pro@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: high
+  subject:
+    <<: *k2-subject
+    scoring: strict
+  metrics:
+    resolved: 0.426
+  status: available
+  evidence: *k2-evidence
+- id: mbzuai/k2-horizon-model-card-gdpval-aa@1.0.0
+  model: mbzuai/k2-horizon-375b-a23b
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: high
+  subject: *k2-subject
+  metrics:
+    elo: 1441
+  status: available
+  evidence: *k2-evidence
+- id: mbzuai/k2-think-v2-model-card-gpqa-diamond@1.0.0
+  model: mbzuai/k2-think-v2
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: high
+  subject: &k2-think-v2-subject
+    variant: K2-Think-V2
+    reasoning_effort: high
+    samples: 16
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.7298
+  status: available
+  evidence: &k2-think-v2-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/IFM/K2-Think-V2
+    redistributable: true
+- id: mbzuai/k2-think-v2-model-card-humanitys-last-exam@1.0.0
+  model: mbzuai/k2-think-v2
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: high
+  subject: *k2-think-v2-subject
+  metrics:
+    accuracy: 0.095
+  status: available
+  evidence: *k2-think-v2-evidence

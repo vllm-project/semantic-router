@@ -43,7 +43,8 @@ listeners:
     timeout: "60s"
 
 providers:
-  default_model: "test-model"
+  defaults:
+    model: "test-model"
   models:
     - name: "test-model"
       provider_model_id: "test-model"
@@ -52,6 +53,7 @@ providers:
           weight: 1
           endpoint: "host.docker.internal:8000"
           protocol: "http"
+          provider: "vllm"
 
 routing:
   modelCards:
@@ -140,7 +142,8 @@ listeners:
     port: 8888
     timeout: "60s"
 providers:
-  default_model: "test-model"
+  defaults:
+    model: "test-model"
   models:
     - name: "test-model"
       provider_model_id: "test-model"
@@ -148,6 +151,7 @@ providers:
         - name: "primary"
           endpoint: "host.docker.internal:8000"
           protocol: "http"
+          provider: "vllm"
 routing:
   modelCards:
     - name: "test-model"

@@ -5,6 +5,7 @@ import { normalizeStringList } from '../components/structuredFieldEditorSupport'
 import type {
   BackendRefEntry,
   LoRAAdapter,
+  ModelEvaluationConfig,
   ModelPricing,
   ProviderReliability,
 } from './configPageSupport'
@@ -20,7 +21,6 @@ interface StructuredModelFieldProps {
 
 const backendRefFields: ObjectEditorField<BackendRefEntry>[] = [
   { key: 'name', label: 'Reference name', placeholder: 'local-primary' },
-  { key: 'type', label: 'Backend type', placeholder: 'chat' },
   { key: 'endpoint', label: 'Endpoint', placeholder: '127.0.0.1:8000', fullWidth: true },
   {
     key: 'base_url',
@@ -54,6 +54,49 @@ const backendRefFields: ObjectEditorField<BackendRefEntry>[] = [
     type: 'key-value',
     fullWidth: true,
     emptyValueLabel: 'No extra headers configured.',
+  },
+]
+
+interface EditableModelEvaluation {
+  benchmark?: string
+  metrics?: Record<string, string>
+  source?: string
+  measured_at?: string
+  metadata?: Record<string, string>
+}
+
+const evaluationFields: ObjectEditorField<EditableModelEvaluation>[] = [
+  {
+    key: 'benchmark',
+    label: 'Benchmark',
+    placeholder: 'organization/benchmark@1.0.0',
+    required: true,
+    fullWidth: true,
+  },
+  {
+    key: 'metrics',
+    label: 'Metrics',
+    type: 'key-value',
+    required: true,
+    fullWidth: true,
+    emptyValueLabel: 'Add at least one numeric metric.',
+    keyLabel: 'Metric',
+    keyPlaceholder: 'pass_at_1',
+    valueLabel: 'Numeric value',
+    valuePlaceholder: '0.72',
+  },
+  { key: 'source', label: 'Source URL', placeholder: 'https://evals.example/runs/42' },
+  { key: 'measured_at', label: 'Measured at', placeholder: '2026-09-01' },
+  {
+    key: 'metadata',
+    label: 'Subject metadata',
+    type: 'key-value',
+    fullWidth: true,
+    emptyValueLabel: 'No optional subject metadata.',
+    keyLabel: 'Field',
+    keyPlaceholder: 'runtime',
+    valueLabel: 'Value',
+    valuePlaceholder: 'vllm',
   },
 ]
 
@@ -373,12 +416,73 @@ export function ModelBackendRefsEditor({
         endpoint: 'localhost:8000',
         protocol: 'http' as const,
         weight: 1,
+        provider: 'vllm',
       })}
       addLabel="Add backend"
       emptyLabel="No provider backends configured."
       itemLabel={backendRefLabel}
       itemDescription={backendRefDescription}
       validateItem={validateBackendRef}
+      disabled={disabled}
+      readOnly={readOnly}
+    />
+  )
+}
+
+export function ModelEvaluationsEditor({
+  value,
+  onChange,
+  disabled,
+  readOnly,
+}: StructuredModelFieldProps) {
+  const evaluations: EditableModelEvaluation[] = Array.isArray(value)
+    ? value
+        .filter(
+          (entry): entry is ModelEvaluationConfig =>
+            Boolean(entry) && typeof entry === 'object' && !Array.isArray(entry),
+        )
+        .map((entry) => ({
+          benchmark: entry.benchmark,
+          metrics: Object.fromEntries(
+            Object.entries(entry.metrics ?? {}).map(([metric, metricValue]) => [
+              metric,
+              String(metricValue),
+            ]),
+          ),
+          source: entry.source,
+          measured_at: entry.measured_at,
+          metadata: entry.metadata
+            ? Object.fromEntries(
+                Object.entries(entry.metadata).map(([key, item]) => [key, String(item)]),
+              )
+            : undefined,
+        }))
+    : []
+
+  return (
+    <ObjectListEditor
+      value={evaluations}
+      onChange={(nextValue) => onChange?.(nextValue)}
+      fields={evaluationFields}
+      createItem={() => ({ benchmark: '', metrics: {} })}
+      addLabel="Add evaluation"
+      emptyLabel="No operator evaluations configured. Built-in evidence is supplied by the catalog."
+      itemLabel={(item, index) => item.benchmark?.trim() || `Evaluation ${index + 1}`}
+      itemDescription={(item) =>
+        item.metrics && Object.keys(item.metrics).length > 0
+          ? `${Object.keys(item.metrics).length} metric${Object.keys(item.metrics).length === 1 ? '' : 's'}`
+          : 'Benchmark and metrics required'
+      }
+      validateItem={(item) => {
+        const errors: string[] = []
+        if (!item.benchmark?.trim()) errors.push('Benchmark is required.')
+        if (!item.metrics || Object.keys(item.metrics).length === 0) {
+          errors.push('At least one metric is required.')
+        } else if (Object.values(item.metrics).some((metric) => !Number.isFinite(Number(metric)))) {
+          errors.push('Every metric value must be numeric.')
+        }
+        return errors
+      }}
       disabled={disabled}
       readOnly={readOnly}
     />

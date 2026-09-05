@@ -1,0 +1,315 @@
+- id: ibm/granite-3.3-8b-instruct
+  display_name: Granite 3.3 8B Instruct
+  description: IBM open-weight instruction model for enterprise tools and RAG.
+  kind: physical
+  publisher: IBM
+  presentation:
+    logo: monogram
+    monogram: IBM
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/ibm-granite/granite-3.3-8b-instruct
+    license: Apache-2.0
+  family: granite-3.3
+  parameter_size: 8B
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: IBM
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/ibm-granite/granite-3.3-8b-instruct
+  tags:
+  - open_weights
+  - enterprise
+  - efficient
+- id: ibm/granite-4.0-h-micro
+  display_name: Granite 4.0 H Micro
+  description: Compact hybrid open-weight IBM model for efficient enterprise inference.
+  kind: physical
+  publisher: IBM
+  presentation:
+    logo: monogram
+    monogram: IBM
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/ibm-granite/granite-4.0-h-micro
+    license: Apache-2.0
+  family: granite-4
+  lifecycle: active
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: IBM
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/ibm-granite/granite-4.0-h-micro
+  tags:
+  - open_weights
+  - enterprise
+  - efficient
+- id: ibm/granite-4.0-h-small
+  display_name: Granite 4.0 H Small
+  description: Hybrid open-weight IBM model for capable enterprise agents and tools.
+  kind: physical
+  publisher: IBM
+  presentation:
+    logo: monogram
+    monogram: IBM
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/ibm-granite/granite-4.0-h-small
+    license: Apache-2.0
+  family: granite-4
+  lifecycle: active
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: IBM
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/ibm-granite/granite-4.0-h-small
+  tags:
+  - open_weights
+  - enterprise
+  - agentic
+- id: ibm/granite-4.2-3b
+  display_name: Granite 4.2 3B
+  description: Compact open-weight IBM reasoning model for tools, code, and multilingual agents.
+  kind: physical
+  publisher: IBM
+  presentation:
+    logo: monogram
+    monogram: IBM
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/ibm-granite/granite-4.2-3b
+    license: Apache-2.0
+  family: granite-4.2
+  parameter_size: 3B
+  released_at: 2026-08-25
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: IBM
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/ibm-granite/granite-4.2-3b
+  tags:
+  - open_weights
+  - reasoning
+  - multilingual
+  - efficient
+- id: ibm/granite-4.1-3b
+  display_name: Granite 4.1 3B
+  description: Compact long-context Granite 4.1 instruct model for multilingual enterprise assistants.
+  kind: physical
+  publisher: IBM
+  presentation:
+    logo: monogram
+    monogram: IBM
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/ibm-granite/granite-4.1-3b
+    license: Apache-2.0
+  family: granite-4.1
+  parameter_size: 3B
+  released_at: 2026-04-29
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities: [chat, tools, structured_output, long_context]
+  modalities:
+    input: [text]
+    output: [text]
+  verification:
+    authority: IBM
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/ibm-granite/granite-4.1-3b
+  tags: [open_weights, enterprise, multilingual, efficient]
+- id: ibm/granite-4.1-8b
+  display_name: Granite 4.1 8B
+  description: Long-context Granite 4.1 instruct model balancing enterprise quality and serving efficiency.
+  kind: physical
+  publisher: IBM
+  presentation:
+    logo: monogram
+    monogram: IBM
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/ibm-granite/granite-4.1-8b
+    license: Apache-2.0
+  family: granite-4.1
+  parameter_size: 8B
+  released_at: 2026-04-29
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities: [chat, tools, structured_output, long_context]
+  modalities:
+    input: [text]
+    output: [text]
+  verification:
+    authority: IBM
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/ibm-granite/granite-4.1-8b
+  tags: [open_weights, enterprise, multilingual, efficient]
+- id: ibm/granite-4.1-30b
+  display_name: Granite 4.1 30B
+  description: Largest Granite 4.1 dense instruct model for multilingual enterprise agents, tools, and code.
+  kind: physical
+  publisher: IBM
+  presentation:
+    logo: monogram
+    monogram: IBM
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/ibm-granite/granite-4.1-30b
+    license: Apache-2.0
+  family: granite-4.1
+  parameter_size: 30B
+  released_at: 2026-04-29
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities: [chat, tools, structured_output, long_context]
+  modalities:
+    input: [text]
+    output: [text]
+  verification:
+    authority: IBM
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/ibm-granite/granite-4.1-30b
+  tags: [open_weights, enterprise, multilingual, agentic]
+- id: ibm/granite-4.2-8b
+  display_name: Granite 4.2 8B
+  description: Open-weight IBM reasoning model balancing enterprise capability and serving cost.
+  kind: physical
+  publisher: IBM
+  presentation:
+    logo: monogram
+    monogram: IBM
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/ibm-granite/granite-4.2-8b
+    license: Apache-2.0
+  family: granite-4.2
+  parameter_size: 8B
+  released_at: 2026-08-25
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: IBM
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/ibm-granite/granite-4.2-8b
+  tags:
+  - open_weights
+  - reasoning
+  - multilingual
+  - enterprise
+- id: ibm/granite-4.2-30b
+  display_name: Granite 4.2 30B
+  description: Largest open-weight Granite 4.2 reasoning model for enterprise agents and coding.
+  kind: physical
+  publisher: IBM
+  presentation:
+    logo: monogram
+    monogram: IBM
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/ibm-granite/granite-4.2-30b
+    license: Apache-2.0
+  family: granite-4.2
+  parameter_size: 30B
+  released_at: 2026-08-25
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: IBM
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/ibm-granite/granite-4.2-30b
+  tags:
+  - open_weights
+  - reasoning
+  - multilingual
+  - enterprise

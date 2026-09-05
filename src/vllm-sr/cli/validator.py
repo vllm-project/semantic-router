@@ -39,6 +39,7 @@ from cli.validator_workflows import (
     validate_workflow_final_model,
 )
 from cli.validator_signal_references import validate_signal_references
+from cli.validator_models import validate_model_references
 
 log = get_logger(__name__)
 
@@ -246,103 +247,6 @@ def validate_algorithm_one_of(config: UserConfig) -> List[ValidationError]:
                     field=f"{field_prefix}.{decision.name}.algorithm.{configured_blocks[0]}",
                 )
             )
-
-    return errors
-
-
-def validate_model_references(config: UserConfig) -> List[ValidationError]:
-    """
-    Validate that all model references in decisions exist.
-
-    Args:
-        config: User configuration
-
-    Returns:
-        list: List of validation errors
-    """
-    errors = []
-
-    provider_model_names = {model.name for model in config.providers.models}
-    routing_cards = {card.name: card for card in config.routing.model_cards}
-    routing_model_names = set(routing_cards.keys())
-
-    for model in config.providers.models:
-        if model.name not in routing_model_names:
-            errors.append(
-                ValidationError(
-                    f"Provider model '{model.name}' is missing from routing.modelCards",
-                    field=f"providers.models.{model.name}",
-                )
-            )
-
-    for model in config.providers.models:
-        if (
-            model.reasoning_family
-            and model.reasoning_family not in config.providers.reasoning_families
-        ):
-            errors.append(
-                ValidationError(
-                    f"Provider model '{model.name}' references unknown reasoning family '{model.reasoning_family}'",
-                    field=f"providers.models.{model.name}.reasoning_family",
-                )
-            )
-
-    # Check decision model references
-    for field_prefix, decision in _all_decisions(config):
-        for model_ref in decision.modelRefs:
-            if model_ref.model not in provider_model_names:
-                errors.append(
-                    ValidationError(
-                        f"Decision '{decision.name}' references unknown model '{model_ref.model}'",
-                        field=f"{field_prefix}.{decision.name}.modelRefs",
-                    )
-                )
-                continue
-            if model_ref.model not in routing_model_names:
-                errors.append(
-                    ValidationError(
-                        f"Decision '{decision.name}' references model '{model_ref.model}' without a routing.modelCards entry",
-                        field=f"{field_prefix}.{decision.name}.modelRefs",
-                    )
-                )
-                continue
-            if model_ref.lora_name:
-                declared_loras = {
-                    adapter.name
-                    for adapter in (routing_cards[model_ref.model].loras or [])
-                    if adapter.name
-                }
-                if not declared_loras:
-                    errors.append(
-                        ValidationError(
-                            f"Decision '{decision.name}' references LoRA '{model_ref.lora_name}' for model '{model_ref.model}', "
-                            "but routing.modelCards declares no loras for that model",
-                            field=f"{field_prefix}.{decision.name}.modelRefs",
-                        )
-                    )
-                elif model_ref.lora_name not in declared_loras:
-                    errors.append(
-                        ValidationError(
-                            f"Decision '{decision.name}' references unknown LoRA '{model_ref.lora_name}' for model '{model_ref.model}'",
-                            field=f"{field_prefix}.{decision.name}.modelRefs",
-                        )
-                    )
-
-    # Check default model
-    if config.providers.default_model not in provider_model_names:
-        errors.append(
-            ValidationError(
-                f"Default model '{config.providers.default_model}' not found in models",
-                field="providers.defaults.default_model",
-            )
-        )
-    elif config.providers.default_model not in routing_model_names:
-        errors.append(
-            ValidationError(
-                f"Default model '{config.providers.default_model}' not found in routing.modelCards",
-                field="providers.defaults.default_model",
-            )
-        )
 
     return errors
 

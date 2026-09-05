@@ -11,15 +11,24 @@ from cli.model_catalog_types import (
     ModelCatalogError,
 )
 
-CATALOG_SCHEMA = "vllm-sr/model-catalog/v1"
+CATALOG_SCHEMA = "vllm-sr/model-catalog/v2"
 DEFAULT_CHANNEL = "latest"
 SUPPORTED_CONFIG_SCHEMAS = frozenset({"v0.3"})
 SUPPORTED_CATALOG_FEATURES = frozenset(
-    {"entrypoints", "isolated_recipes", "decision_algorithms"}
+    {
+        "entrypoints",
+        "isolated_recipes",
+        "decision_algorithms",
+        "effective_model_registry",
+    }
 )
 SUPPORTED_MODEL_KINDS = frozenset({"virtual"})
 SUPPORTED_PROTOCOLS = frozenset(
-    {"openai_chat", "openai_responses", "anthropic_messages"}
+    {
+        "openai/chat-completions@1",
+        "openai/responses@1",
+        "anthropic/messages@1",
+    }
 )
 _SEMVER = re.compile(
     r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)"
@@ -45,10 +54,18 @@ _ROOT_KEYS = frozenset(
         "compatibility",
         "defaults",
         "assets",
+        "protocols",
+        "providers",
+        "reasoning_families",
         "models",
+        "benchmarks",
+        "evaluations",
+        "evaluation_coverage",
+        "indices",
+        "index_results",
     }
 )
-_DEFAULT_KEYS = frozenset({"model", "enabled"})
+_DEFAULT_KEYS = frozenset({"model", "enabled", "intelligence_index"})
 _COMPATIBILITY_KEYS = frozenset({"cli", "router", "config_schema", "required_features"})
 _VERSION_CONSTRAINT_KEYS = frozenset({"min", "max_exclusive"})
 _ASSET_KEYS = frozenset({"id", "bundle", "sha256"})
@@ -60,21 +77,30 @@ _MODEL_KEYS = frozenset(
         "kind",
         "family",
         "generation",
+        "parameter_size",
         "policy_version",
         "asset",
         "entrypoint",
         "recipe",
-        "protocols",
         "traits",
         "roles",
         "verification",
         "compatibility",
+        "revision",
+        "released_at",
+        "knowledge_cutoff",
+        "lifecycle",
+        "limits",
+        "capabilities",
+        "modalities",
+        "reasoning_family",
+        "tags",
     }
 )
 _ROLE_KEYS = frozenset(
     {"name", "required", "minimum_candidates", "traits", "recommended_pool"}
 )
-_VERIFICATION_KEYS = frozenset({"authority", "asset_sha256"})
+_VERIFICATION_KEYS = frozenset({"authority", "asset_sha256", "status", "verified_at"})
 
 # Provider-model references inside one isolated recipe. Paths deliberately omit
 # list indexes so the recursive walker remains stable as decisions and roles are

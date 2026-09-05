@@ -51,7 +51,9 @@ metadata:
                 },
                 "model": "llama3-8b",
                 "name": "my-llama-model",
-                "reasoningFamily": "qwen3"
+                "reasoning": {
+                  "family": "qwen3"
+                }
               }
             ]
           }

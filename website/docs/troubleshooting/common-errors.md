@@ -303,15 +303,15 @@ providers:
         - name: local-vllm
           endpoint: 10.0.0.1:8000
           protocol: http
-          type: vllm
+          provider: vllm
 ```
 
 Use `base_url` when the provider requires a complete API root such as
 `https://provider.example/v1`. Use a hostname reachable from the Router
 network; `localhost` refers to the Router container itself.
 
-The version segment in that API root is accepted for every provider `type`.
-Types whose own endpoint suffix already carries the version, such as
+The version segment in that API root is accepted for every Provider ID.
+Providers whose own operation path already carries the version, such as
 `anthropic` and `minimax`, do not repeat it, so both
 `https://provider.example/v1` and `https://provider.example` resolve to the
 same upstream path.

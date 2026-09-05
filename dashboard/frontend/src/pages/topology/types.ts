@@ -722,11 +722,18 @@ export interface ConfigData {
   }>
   providers?: {
     defaults?: {
-      default_model?: string
+      model?: string
     }
     models?: Array<{
       name: string
-      reasoning_family?: string
+      catalog?: string
+      reasoning?: {
+        family?: string
+        type?: string
+        parameter?: string
+        levels?: string[]
+        default?: string
+      }
     }>
   }
   routing?: {

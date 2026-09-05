@@ -215,10 +215,11 @@ func (g *GMTRouterSelector) InitializeFromConfig(modelConfig map[string]config.M
 			}
 		}
 
-		// Store additional features: cost, quality score
+		// Store separate cost and evidence-backed intelligence features.
+		intelligence, _ := params.EvidenceScore("")
 		node.Features = []float32{
 			float32(params.Pricing.PromptPer1M),
-			float32(params.QualityScore),
+			float32(intelligence / 100),
 		}
 
 		g.nodes[nodeID] = node

@@ -1,0 +1,1397 @@
+- id: openai/gpt-5
+  display_name: GPT-5
+  description: OpenAI GPT-5 model for reasoning, coding, and agentic workloads.
+  kind: physical
+  publisher: OpenAI
+  presentation:
+    logo: package:openai
+    monogram: O
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://developers.openai.com/api/docs/models/gpt-5
+  family: gpt-5
+  lifecycle: active
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  reasoning_family: gpt
+  verification:
+    authority: OpenAI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://developers.openai.com/api/docs/models/gpt-5
+  tags:
+  - proprietary
+  - reasoning
+  - agentic
+- id: openai/gpt-5-mini
+  display_name: GPT-5 Mini
+  description: Smaller GPT-5 model for cost-sensitive reasoning and tool use.
+  kind: physical
+  publisher: OpenAI
+  presentation:
+    logo: package:openai
+    monogram: O
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://developers.openai.com/api/docs/models/gpt-5-mini
+  family: gpt-5
+  lifecycle: active
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  reasoning_family: gpt
+  verification:
+    authority: OpenAI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://developers.openai.com/api/docs/models/gpt-5-mini
+  tags:
+  - proprietary
+  - efficient
+  - reasoning
+- id: openai/gpt-5-nano
+  display_name: GPT-5 Nano
+  description: Small GPT-5 model for high-throughput classification and extraction.
+  kind: physical
+  publisher: OpenAI
+  presentation:
+    logo: package:openai
+    monogram: O
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://developers.openai.com/api/docs/models/gpt-5-nano
+  family: gpt-5
+  lifecycle: active
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  reasoning_family: gpt
+  verification:
+    authority: OpenAI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://developers.openai.com/api/docs/models/gpt-5-nano
+  tags:
+  - proprietary
+  - efficient
+- id: openai/gpt-5.1
+  display_name: GPT-5.1
+  description: OpenAI GPT-5.1 model for general reasoning and coding workloads.
+  kind: physical
+  publisher: OpenAI
+  presentation:
+    logo: package:openai
+    monogram: O
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://developers.openai.com/api/docs/models/gpt-5.1
+  family: gpt-5
+  lifecycle: active
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  reasoning_family: gpt
+  verification:
+    authority: OpenAI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://developers.openai.com/api/docs/models/gpt-5.1
+  tags:
+  - proprietary
+  - reasoning
+  - agentic
+- id: openai/gpt-5.2
+  display_name: GPT-5.2
+  description: OpenAI GPT-5.2 model for advanced reasoning, coding, and agents.
+  kind: physical
+  publisher: OpenAI
+  presentation:
+    logo: package:openai
+    monogram: O
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://developers.openai.com/api/docs/models/gpt-5.2
+  family: gpt-5
+  lifecycle: active
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  reasoning_family: gpt
+  verification:
+    authority: OpenAI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://developers.openai.com/api/docs/models/gpt-5.2
+  tags:
+  - proprietary
+  - reasoning
+  - agentic
+- id: openai/gpt-5.4
+  display_name: GPT-5.4
+  description: OpenAI frontier model for professional, coding, and agentic workloads.
+  kind: physical
+  publisher: OpenAI
+  presentation:
+    logo: package:openai
+    monogram: O
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://developers.openai.com/api/docs/models/gpt-5.4
+  family: gpt-5
+  lifecycle: active
+  limits:
+    context_window_size: 1050000
+    max_output_tokens: 128000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  reasoning_family: gpt
+  verification:
+    authority: OpenAI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://developers.openai.com/api/docs/models/gpt-5.4
+  tags:
+  - frontier
+  - proprietary
+  - agentic
+- id: openai/gpt-5.4-mini
+  display_name: GPT-5.4 Mini
+  description: Efficient GPT-5.4 model for coding, tools, and high-volume workloads.
+  kind: physical
+  publisher: OpenAI
+  presentation:
+    logo: package:openai
+    monogram: O
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://developers.openai.com/api/docs/models/gpt-5.4-mini
+  family: gpt-5
+  lifecycle: active
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  reasoning_family: gpt
+  verification:
+    authority: OpenAI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://developers.openai.com/api/docs/models/gpt-5.4-mini
+  tags:
+  - proprietary
+  - efficient
+  - agentic
+- id: openai/gpt-5.4-nano
+  display_name: GPT-5.4 Nano
+  description: Compact GPT-5.4 model for latency-sensitive structured workloads.
+  kind: physical
+  publisher: OpenAI
+  presentation:
+    logo: package:openai
+    monogram: O
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://developers.openai.com/api/docs/models/gpt-5.4-nano
+  family: gpt-5
+  lifecycle: active
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  reasoning_family: gpt
+  verification:
+    authority: OpenAI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://developers.openai.com/api/docs/models/gpt-5.4-nano
+  tags:
+  - proprietary
+  - efficient
+- id: openai/gpt-5.5
+  display_name: GPT-5.5
+  description: OpenAI frontier model for complex reasoning, coding, and agents.
+  kind: physical
+  publisher: OpenAI
+  presentation:
+    logo: package:openai
+    monogram: O
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://developers.openai.com/api/docs/models/gpt-5.5
+  family: gpt-5
+  lifecycle: active
+  limits:
+    context_window_size: 1050000
+    max_output_tokens: 128000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  reasoning_family: gpt
+  verification:
+    authority: OpenAI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://developers.openai.com/api/docs/models/gpt-5.5
+  tags:
+  - frontier
+  - proprietary
+  - agentic
+- id: openai/gpt-5.6-sol
+  display_name: GPT-5.6 Sol
+  description: OpenAI high-capability GPT-5.6 model for demanding reasoning and agentic work.
+  kind: physical
+  publisher: OpenAI
+  presentation:
+    logo: package:openai
+    monogram: O
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://developers.openai.com/api/docs/models/gpt-5.6-sol
+  family: gpt-5.6
+  lifecycle: active
+  limits:
+    context_window_size: 1050000
+    max_output_tokens: 128000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  reasoning_family: gpt
+  verification:
+    authority: OpenAI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://developers.openai.com/api/docs/models/gpt-5.6-sol
+  tags:
+  - frontier
+  - proprietary
+  - agentic
+- id: openai/gpt-5.6-terra
+  display_name: GPT-5.6 Terra
+  description: OpenAI balanced GPT-5.6 model for general reasoning, coding, and tool use.
+  kind: physical
+  publisher: OpenAI
+  presentation:
+    logo: package:openai
+    monogram: O
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://developers.openai.com/api/docs/models/gpt-5.6-terra
+  family: gpt-5.6
+  lifecycle: active
+  limits:
+    context_window_size: 1050000
+    max_output_tokens: 128000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  reasoning_family: gpt
+  verification:
+    authority: OpenAI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://developers.openai.com/api/docs/models/gpt-5.6-terra
+  tags:
+  - frontier
+  - proprietary
+  - agentic
+- id: openai/gpt-5.6-luna
+  display_name: GPT-5.6 Luna
+  description: OpenAI efficient GPT-5.6 model for low-latency general workloads.
+  kind: physical
+  publisher: OpenAI
+  presentation:
+    logo: package:openai
+    monogram: O
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://developers.openai.com/api/docs/models/gpt-5.6-luna
+  family: gpt-5.6
+  lifecycle: active
+  limits:
+    context_window_size: 1050000
+    max_output_tokens: 128000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  reasoning_family: gpt
+  verification:
+    authority: OpenAI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://developers.openai.com/api/docs/models/gpt-5.6-luna
+  tags:
+  - efficient
+  - proprietary
+  - agentic
+- id: openai/gpt-4.1
+  display_name: GPT-4.1
+  description: OpenAI previous-generation non-reasoning model for coding, instruction following, and long context.
+  kind: physical
+  publisher: OpenAI
+  presentation:
+    logo: package:openai
+    monogram: O
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://developers.openai.com/api/docs/models/gpt-4.1
+  family: gpt-4.1
+  lifecycle: active
+  limits:
+    context_window_size: 1047576
+    max_output_tokens: 32768
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: OpenAI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://developers.openai.com/api/docs/models/gpt-4.1
+  tags:
+  - proprietary
+  - coding
+  - long_context
+- id: openai/gpt-4.1-mini
+  display_name: GPT-4.1 Mini
+  description: Efficient GPT-4.1 model for high-volume coding, extraction, and tool workloads.
+  kind: physical
+  publisher: OpenAI
+  presentation:
+    logo: package:openai
+    monogram: O
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://developers.openai.com/api/docs/models/gpt-4.1-mini
+  family: gpt-4.1
+  lifecycle: active
+  limits:
+    context_window_size: 1047576
+    max_output_tokens: 32768
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: OpenAI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://developers.openai.com/api/docs/models/gpt-4.1-mini
+  tags:
+  - proprietary
+  - efficient
+  - coding
+  - long_context
+- id: openai/gpt-4.1-nano
+  display_name: GPT-4.1 Nano
+  description: Small GPT-4.1 model for latency-sensitive classification and extraction.
+  kind: physical
+  publisher: OpenAI
+  presentation:
+    logo: package:openai
+    monogram: O
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://developers.openai.com/api/docs/models/gpt-4.1-nano
+  family: gpt-4.1
+  lifecycle: deprecated
+  limits:
+    context_window_size: 1047576
+    max_output_tokens: 32768
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: OpenAI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://developers.openai.com/api/docs/models/gpt-4.1-nano
+  tags:
+  - proprietary
+  - efficient
+  - long_context
+- id: openai/o3
+  display_name: OpenAI o3
+  description: OpenAI previous-generation reasoning model for complex analysis, coding, and tool use.
+  kind: physical
+  publisher: OpenAI
+  presentation:
+    logo: package:openai
+    monogram: O
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://developers.openai.com/api/docs/models/o3
+  family: o-series
+  lifecycle: active
+  limits:
+    context_window_size: 200000
+    max_output_tokens: 100000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  reasoning_family: gpt
+  verification:
+    authority: OpenAI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://developers.openai.com/api/docs/models/o3
+  tags:
+  - proprietary
+  - reasoning
+- id: openai/o4-mini
+  display_name: OpenAI o4-mini
+  description: Efficient OpenAI reasoning model for coding, mathematics, and visual analysis.
+  kind: physical
+  publisher: OpenAI
+  presentation:
+    logo: package:openai
+    monogram: O
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://developers.openai.com/api/docs/models/o4-mini
+  family: o-series
+  lifecycle: deprecated
+  limits:
+    context_window_size: 200000
+    max_output_tokens: 100000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  reasoning_family: gpt
+  verification:
+    authority: OpenAI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://developers.openai.com/api/docs/models/o4-mini
+  tags:
+  - proprietary
+  - reasoning
+  - efficient
+- id: openai/gpt-5-pro
+  display_name: GPT-5 Pro
+  description: High-compute GPT-5 model for difficult reasoning and professional workloads.
+  kind: physical
+  publisher: OpenAI
+  presentation:
+    logo: package:openai
+    monogram: O
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://developers.openai.com/api/docs/models/gpt-5-pro
+  family: gpt-5
+  lifecycle: active
+  limits:
+    context_window_size: 400000
+    max_output_tokens: 272000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  reasoning_family: gpt
+  verification:
+    authority: OpenAI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://developers.openai.com/api/docs/models/gpt-5-pro
+  tags:
+  - frontier
+  - proprietary
+  - reasoning
+- id: openai/gpt-5.2-pro
+  display_name: GPT-5.2 Pro
+  description: High-compute GPT-5.2 model for complex reasoning and agentic work.
+  kind: physical
+  publisher: OpenAI
+  presentation:
+    logo: package:openai
+    monogram: O
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://developers.openai.com/api/docs/models/gpt-5.2-pro
+  family: gpt-5
+  lifecycle: active
+  limits:
+    context_window_size: 272000
+    max_output_tokens: 128000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  reasoning_family: gpt
+  verification:
+    authority: OpenAI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://developers.openai.com/api/docs/models/gpt-5.2-pro
+  tags:
+  - frontier
+  - proprietary
+  - reasoning
+- id: openai/gpt-5.4-pro
+  display_name: GPT-5.4 Pro
+  description: High-compute GPT-5.4 model for advanced professional reasoning and agents.
+  kind: physical
+  publisher: OpenAI
+  presentation:
+    logo: package:openai
+    monogram: O
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://developers.openai.com/api/docs/models/gpt-5.4-pro
+  family: gpt-5
+  lifecycle: active
+  limits:
+    context_window_size: 1050000
+    max_output_tokens: 128000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  reasoning_family: gpt
+  verification:
+    authority: OpenAI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://developers.openai.com/api/docs/models/gpt-5.4-pro
+  tags:
+  - frontier
+  - proprietary
+  - reasoning
+- id: openai/gpt-5.5-pro
+  display_name: GPT-5.5 Pro
+  description: High-compute GPT-5.5 model for long-running reasoning and agentic workflows.
+  kind: physical
+  publisher: OpenAI
+  presentation:
+    logo: package:openai
+    monogram: O
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://developers.openai.com/api/docs/models/gpt-5.5-pro
+  family: gpt-5
+  lifecycle: active
+  limits:
+    context_window_size: 1050000
+    max_output_tokens: 128000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  reasoning_family: gpt
+  verification:
+    authority: OpenAI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://developers.openai.com/api/docs/models/gpt-5.5-pro
+  tags:
+  - frontier
+  - proprietary
+  - reasoning
+- id: openai/gpt-5.6-cyber
+  display_name: GPT-5.6 Cyber
+  description: Specialized GPT-5.6 model for authorized cybersecurity research and testing.
+  kind: physical
+  publisher: OpenAI
+  presentation:
+    logo: package:openai
+    monogram: O
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://developers.openai.com/api/docs/models/gpt-5.6-cyber
+  family: gpt-5.6
+  lifecycle: active
+  limits:
+    context_window_size: 400000
+    max_output_tokens: 128000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  reasoning_family: gpt
+  verification:
+    authority: OpenAI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://developers.openai.com/api/docs/models/gpt-5.6-cyber
+  tags:
+  - proprietary
+  - reasoning
+  - cybersecurity
+- id: openai/gpt-5-codex
+  display_name: GPT-5 Codex
+  description: GPT-5 coding model for software-engineering agents.
+  kind: physical
+  publisher: OpenAI
+  presentation:
+    logo: package:openai
+    monogram: O
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://developers.openai.com/api/docs/models/gpt-5-codex
+  family: gpt-5-codex
+  lifecycle: deprecated
+  limits:
+    context_window_size: 272000
+    max_output_tokens: 128000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  reasoning_family: gpt
+  verification:
+    authority: OpenAI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://developers.openai.com/api/docs/models/gpt-5-codex
+  tags:
+  - proprietary
+  - coding
+  - agentic
+- id: openai/gpt-5.1-codex
+  display_name: GPT-5.1 Codex
+  description: GPT-5.1 coding model for repository-scale software tasks.
+  kind: physical
+  publisher: OpenAI
+  presentation:
+    logo: package:openai
+    monogram: O
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://developers.openai.com/api/docs/models/gpt-5.1-codex
+  family: gpt-5-codex
+  lifecycle: deprecated
+  limits:
+    context_window_size: 272000
+    max_output_tokens: 128000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  reasoning_family: gpt
+  verification:
+    authority: OpenAI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://developers.openai.com/api/docs/models/gpt-5.1-codex
+  tags:
+  - proprietary
+  - coding
+  - agentic
+- id: openai/gpt-5.1-codex-max
+  display_name: GPT-5.1 Codex Max
+  description: Higher-compute GPT-5.1 Codex model for demanding software-engineering agents.
+  kind: physical
+  publisher: OpenAI
+  presentation:
+    logo: package:openai
+    monogram: O
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://developers.openai.com/api/docs/models/gpt-5.1-codex-max
+  family: gpt-5-codex
+  lifecycle: deprecated
+  limits:
+    context_window_size: 272000
+    max_output_tokens: 128000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  reasoning_family: gpt
+  verification:
+    authority: OpenAI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://developers.openai.com/api/docs/models/gpt-5.1-codex-max
+  tags:
+  - proprietary
+  - coding
+  - agentic
+- id: openai/gpt-5.1-codex-mini
+  display_name: GPT-5.1 Codex Mini
+  description: Efficient GPT-5.1 Codex model for high-volume coding tasks.
+  kind: physical
+  publisher: OpenAI
+  presentation:
+    logo: package:openai
+    monogram: O
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://developers.openai.com/api/docs/models/gpt-5.1-codex-mini
+  family: gpt-5-codex
+  lifecycle: deprecated
+  limits:
+    context_window_size: 272000
+    max_output_tokens: 128000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  reasoning_family: gpt
+  verification:
+    authority: OpenAI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://developers.openai.com/api/docs/models/gpt-5.1-codex-mini
+  tags:
+  - proprietary
+  - coding
+  - efficient
+- id: openai/gpt-5.2-codex
+  display_name: GPT-5.2 Codex
+  description: GPT-5.2 coding model for long-horizon software agents.
+  kind: physical
+  publisher: OpenAI
+  presentation:
+    logo: package:openai
+    monogram: O
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://developers.openai.com/api/docs/models/gpt-5.2-codex
+  family: gpt-5-codex
+  lifecycle: deprecated
+  limits:
+    context_window_size: 272000
+    max_output_tokens: 128000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  reasoning_family: gpt
+  verification:
+    authority: OpenAI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://developers.openai.com/api/docs/models/gpt-5.2-codex
+  tags:
+  - proprietary
+  - coding
+  - agentic
+- id: openai/gpt-5.3-codex
+  display_name: GPT-5.3 Codex
+  description: GPT-5.3 coding model for repository-scale autonomous engineering.
+  kind: physical
+  publisher: OpenAI
+  presentation:
+    logo: package:openai
+    monogram: O
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://developers.openai.com/api/docs/models/gpt-5.3-codex
+  family: gpt-5-codex
+  lifecycle: active
+  limits:
+    context_window_size: 272000
+    max_output_tokens: 128000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  reasoning_family: gpt
+  verification:
+    authority: OpenAI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://developers.openai.com/api/docs/models/gpt-5.3-codex
+  tags:
+  - proprietary
+  - coding
+  - agentic
+- id: openai/gpt-4o
+  display_name: GPT-4o
+  description: Previous-generation multimodal OpenAI model for general chat, tools, and vision.
+  kind: physical
+  publisher: OpenAI
+  presentation:
+    logo: package:openai
+    monogram: O
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://developers.openai.com/api/docs/models/gpt-4o
+  family: gpt-4o
+  lifecycle: active
+  limits:
+    context_window_size: 128000
+    max_output_tokens: 16384
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: OpenAI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://developers.openai.com/api/docs/models/gpt-4o
+  tags:
+  - proprietary
+  - multimodal
+  - previous_generation
+- id: openai/gpt-4o-mini
+  display_name: GPT-4o Mini
+  description: Efficient previous-generation multimodal OpenAI model.
+  kind: physical
+  publisher: OpenAI
+  presentation:
+    logo: package:openai
+    monogram: O
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://developers.openai.com/api/docs/models/gpt-4o-mini
+  family: gpt-4o
+  lifecycle: active
+  limits:
+    context_window_size: 128000
+    max_output_tokens: 16384
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: OpenAI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://developers.openai.com/api/docs/models/gpt-4o-mini
+  tags:
+  - proprietary
+  - multimodal
+  - efficient
+  - previous_generation
+- id: openai/o1
+  display_name: OpenAI o1
+  description: Previous-generation OpenAI reasoning model for difficult multi-step tasks.
+  kind: physical
+  publisher: OpenAI
+  presentation:
+    logo: package:openai
+    monogram: O
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://developers.openai.com/api/docs/models/o1
+  family: openai-o
+  lifecycle: deprecated
+  limits:
+    context_window_size: 200000
+    max_output_tokens: 100000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  reasoning_family: gpt
+  verification:
+    authority: OpenAI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://developers.openai.com/api/docs/models/o1
+  tags:
+  - proprietary
+  - reasoning
+  - previous_generation
+- id: openai/o1-pro
+  display_name: OpenAI o1 Pro
+  description: High-compute o1 reasoning model for difficult professional tasks.
+  kind: physical
+  publisher: OpenAI
+  presentation:
+    logo: package:openai
+    monogram: O
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://developers.openai.com/api/docs/models/o1-pro
+  family: openai-o
+  lifecycle: deprecated
+  limits:
+    context_window_size: 200000
+    max_output_tokens: 100000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  reasoning_family: gpt
+  verification:
+    authority: OpenAI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://developers.openai.com/api/docs/models/o1-pro
+  tags:
+  - proprietary
+  - reasoning
+  - previous_generation
+- id: openai/o3-mini
+  display_name: OpenAI o3-mini
+  description: Efficient OpenAI reasoning model for math, science, and coding.
+  kind: physical
+  publisher: OpenAI
+  presentation:
+    logo: package:openai
+    monogram: O
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://developers.openai.com/api/docs/models/o3-mini
+  family: openai-o
+  lifecycle: deprecated
+  limits:
+    context_window_size: 200000
+    max_output_tokens: 100000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  reasoning_family: gpt
+  verification:
+    authority: OpenAI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://developers.openai.com/api/docs/models/o3-mini
+  tags:
+  - proprietary
+  - reasoning
+  - efficient
+- id: openai/o3-pro
+  display_name: OpenAI o3-pro
+  description: High-compute OpenAI o3 model for difficult reasoning workloads.
+  kind: physical
+  publisher: OpenAI
+  presentation:
+    logo: package:openai
+    monogram: O
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://developers.openai.com/api/docs/models/o3-pro
+  family: openai-o
+  lifecycle: active
+  limits:
+    context_window_size: 200000
+    max_output_tokens: 100000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  reasoning_family: gpt
+  verification:
+    authority: OpenAI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://developers.openai.com/api/docs/models/o3-pro
+  tags:
+  - proprietary
+  - reasoning
+- id: openai/gpt-oss-120b
+  display_name: GPT-OSS 120B
+  description: OpenAI open-weight reasoning model sized for a single 80 GB accelerator.
+  kind: physical
+  publisher: OpenAI
+  presentation:
+    logo: package:openai
+    monogram: O
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/openai/gpt-oss-120b
+    license: Apache-2.0
+  family: gpt-oss
+  parameter_size: 117B (5.1B active)
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  reasoning_family: gpt-oss
+  verification:
+    authority: OpenAI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/openai/gpt-oss-120b
+  tags:
+  - open_weights
+  - reasoning
+  - agentic
+- id: openai/gpt-oss-20b
+  display_name: GPT-OSS 20B
+  description: Compact open-weight OpenAI reasoning model for local and edge deployments.
+  kind: physical
+  publisher: OpenAI
+  presentation:
+    logo: package:openai
+    monogram: O
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/openai/gpt-oss-20b
+    license: Apache-2.0
+  family: gpt-oss
+  parameter_size: 21B (3.6B active)
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  reasoning_family: gpt-oss
+  verification:
+    authority: OpenAI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/openai/gpt-oss-20b
+  tags:
+  - open_weights
+  - reasoning
+  - efficient

@@ -1,0 +1,53 @@
+- id: swiss-ai/apertus-v1.5-8b
+  display_name: Apertus v1.5 8B
+  description: Fully open multilingual and multimodal model with optional reasoning and long-context tool use.
+  kind: physical
+  publisher: Swiss AI Initiative
+  presentation: &apertus-presentation
+    logo: monogram
+    monogram: CH
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/swiss-ai/Apertus-v1.5-8B
+    license: Apache-2.0
+  family: apertus-v1.5
+  parameter_size: 8.9B
+  released_at: 2026-07-24
+  reasoning_family: apertus-v1.5
+  lifecycle: experimental
+  limits:
+    context_window_size: 262144
+  capabilities: &apertus-capabilities [chat, reasoning, tools, vision, audio, long_context]
+  modalities: &apertus-modalities
+    input: [text, image, audio]
+    output: [text]
+  verification: &apertus-verification
+    authority: Swiss AI Initiative
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/swiss-ai/Apertus-v1.5-8B
+  tags: &apertus-tags [open_weights, open_data, multilingual, multimodal, reasoning, long_context]
+- id: swiss-ai/apertus-v1.5-70b
+  display_name: Apertus v1.5 70B
+  description: Large fully open multilingual and multimodal model with optional reasoning and long-context tool use.
+  kind: physical
+  publisher: Swiss AI Initiative
+  presentation: *apertus-presentation
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/swiss-ai/Apertus-v1.5-70B
+    license: Apache-2.0
+  family: apertus-v1.5
+  parameter_size: 72B
+  released_at: 2026-07-24
+  reasoning_family: apertus-v1.5
+  lifecycle: experimental
+  limits:
+    context_window_size: 262144
+  capabilities: *apertus-capabilities
+  modalities: *apertus-modalities
+  verification:
+    <<: *apertus-verification
+    source: https://huggingface.co/swiss-ai/Apertus-v1.5-70B
+  tags: *apertus-tags

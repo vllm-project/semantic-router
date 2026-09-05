@@ -259,7 +259,7 @@ func TestResolveToolsDBPathUsesRouterContractPath(t *testing.T) {
 	configDir := t.TempDir()
 	configPath := filepath.Join(configDir, "config.yaml")
 	if err := os.WriteFile(configPath, []byte(`
-version: "0.3"
+version: v0.3
 global:
   integrations:
     tools:
@@ -415,12 +415,12 @@ global:
     auto_model_names: [test-mom]
 providers:
   defaults:
-    default_model: model-fast
+    model: model-fast
   models:
     - name: model-fast
-      backend_refs: [{endpoint: fast.models.test:8000}]
+      backend_refs: [{provider: vllm, endpoint: fast.models.test:8000}]
     - name: model-strong
-      backend_refs: [{endpoint: strong.models.test:8000}]
+      backend_refs: [{provider: vllm, endpoint: strong.models.test:8000}]
 routing:
   modelCards:
     - {name: model-fast, modality: text}

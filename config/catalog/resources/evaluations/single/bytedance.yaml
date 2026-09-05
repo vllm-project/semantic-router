@@ -1,0 +1,126 @@
+- id: bytedance/seed-oss-36b-instruct-model-card-mmlu-pro@1.0.0
+  model: bytedance/seed-oss-36b-instruct
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject: &id001
+    variant: Seed-OSS-36B-Instruct
+    hle_mode: official_model_card
+    swe_harness: OpenHands
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.827
+  status: available
+  evidence: &id002
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/ByteDance-Seed/Seed-OSS-36B-Instruct
+    redistributable: true
+- id: bytedance/seed-oss-36b-instruct-model-card-gpqa-diamond@1.0.0
+  model: bytedance/seed-oss-36b-instruct
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject: *id001
+  metrics:
+    accuracy: 0.714
+  status: available
+  evidence: *id002
+- id: bytedance/seed-oss-36b-instruct-model-card-humanitys-last-exam@1.0.0
+  model: bytedance/seed-oss-36b-instruct
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: published-unspecified
+  reasoning_effort: default
+  subject: *id001
+  metrics:
+    accuracy: 0.101
+  status: available
+  evidence: *id002
+- id: bytedance/seed-oss-36b-instruct-model-card-verified@1.0.0
+  model: bytedance/seed-oss-36b-instruct
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: default
+  subject: *id001
+  metrics:
+    resolved: 0.56
+  status: available
+  evidence: *id002
+- id: bytedance/seed-2.1-pro-model-card-terminal-bench@1.0.0
+  model: bytedance/seed-2.1-pro
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: published
+  subject: &seed21-pro-subject
+    variant: Seed2.1 Pro
+    harness: Terminus 2
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.71
+  status: available
+  evidence: &seed21-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://seed.bytedance.com/en/seed2_1
+    redistributable: true
+- id: bytedance/seed-2.1-turbo-model-card-terminal-bench@1.0.0
+  model: bytedance/seed-2.1-turbo
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: published
+  subject:
+    variant: Seed2.1 Turbo
+    harness: Terminus 2
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.676
+  status: available
+  evidence: *seed21-evidence
+- id: bytedance/seed-2.0-pro-model-card-swe-bench-pro@1.0.0
+  model: bytedance/seed-2.0-pro
+  benchmark: swe-bench/pro@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: published
+  subject: &seed20-pro-subject
+    variant: Seed2.0 Pro 0215
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.469
+  status: available
+  evidence: &seed20-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://seed.bytedance.com/en/seed2
+    redistributable: true
+- id: bytedance/seed-2.0-pro-model-card-terminal-bench-2.0@1.0.0
+  model: bytedance/seed-2.0-pro
+  benchmark: harbor/terminal-bench@2.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: published
+  subject: *seed20-pro-subject
+  metrics:
+    resolved: 0.558
+  status: available
+  evidence: *seed20-evidence
+- id: bytedance/seed-2.0-lite-model-card-swe-bench-pro@1.0.0
+  model: bytedance/seed-2.0-lite
+  benchmark: swe-bench/pro@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: published
+  subject: &seed20-lite-subject
+    variant: Seed2.0 Lite 0428
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.466
+  status: available
+  evidence: *seed20-evidence
+- id: bytedance/seed-2.0-lite-model-card-terminal-bench-2.0@1.0.0
+  model: bytedance/seed-2.0-lite
+  benchmark: harbor/terminal-bench@2.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: published
+  subject: *seed20-lite-subject
+  metrics:
+    resolved: 0.433
+  status: available
+  evidence: *seed20-evidence

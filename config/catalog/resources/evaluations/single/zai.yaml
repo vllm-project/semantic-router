@@ -1,0 +1,251 @@
+- id: zai/glm-4.5-model-card-mmlu-pro@1.0.0
+  model: zai/glm-4.5
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: published
+  subject: &id001
+    variant: GLM-4.5
+    hle_mode: no_tools
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.846
+  status: available
+  evidence: &id002
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/zai-org/GLM-4.5
+    redistributable: true
+- id: zai/glm-4.5-model-card-humanitys-last-exam@1.0.0
+  model: zai/glm-4.5
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: published
+  subject: *id001
+  metrics:
+    accuracy: 0.0832
+  status: available
+  evidence: *id002
+- id: zai/glm-4.7-model-card-mmlu-pro@1.0.0
+  model: zai/glm-4.7
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: published
+  subject: &id003
+    variant: GLM-4.7
+    hle_mode: no_tools
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.843
+  status: available
+  evidence: &id004
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/zai-org/GLM-4.7
+    redistributable: true
+- id: zai/glm-4.7-model-card-gpqa-diamond@1.0.0
+  model: zai/glm-4.7
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: published
+  subject: *id003
+  metrics:
+    accuracy: 0.857
+  status: available
+  evidence: *id004
+- id: zai/glm-4.7-model-card-humanitys-last-exam@1.0.0
+  model: zai/glm-4.7
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: published
+  subject: *id003
+  metrics:
+    accuracy: 0.248
+  status: available
+  evidence: *id004
+- id: zai/glm-4.7-model-card-verified@1.0.0
+  model: zai/glm-4.7
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: published
+  subject: *id003
+  metrics:
+    resolved: 0.738
+  status: available
+  evidence: *id004
+- id: zai/glm-5-model-card-gpqa-diamond@1.0.0
+  model: zai/glm-5
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: published
+  subject: &id005
+    variant: GLM-5
+    hle_mode: no_tools
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.86
+  status: available
+  evidence: &id006
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/zai-org/GLM-5
+    redistributable: true
+- id: zai/glm-5-model-card-humanitys-last-exam@1.0.0
+  model: zai/glm-5
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: published
+  subject: *id005
+  metrics:
+    accuracy: 0.305
+  status: available
+  evidence: *id006
+- id: zai/glm-5-model-card-verified@1.0.0
+  model: zai/glm-5
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: published
+  subject: *id005
+  metrics:
+    resolved: 0.778
+  status: available
+  evidence: *id006
+- id: zai/glm-5.2-model-card-gpqa-diamond@1.0.0
+  model: zai/glm-5.2
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: published
+  subject: &id007
+    variant: GLM-5.2
+    hle_mode: no_tools
+    terminal_harness: Terminus-2
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.912
+  status: available
+  evidence: &id008
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/zai-org/GLM-5.2
+    redistributable: true
+- id: zai/glm-5.2-model-card-humanitys-last-exam@1.0.0
+  model: zai/glm-5.2
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: published
+  subject: *id007
+  metrics:
+    accuracy: 0.405
+  status: available
+  evidence: *id008
+- id: zai/glm-5.2-model-card-terminal-bench@1.0.0
+  model: zai/glm-5.2
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: published
+  subject: *id007
+  metrics:
+    resolved: 0.81
+  status: available
+  evidence: *id008
+- id: zai/glm-5.3-model-card-terminal-bench@1.0.0
+  model: zai/glm-5.3
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: published
+  subject:
+    variant: GLM-5.3
+    terminal_harness: Claude Code 2.1.207
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.882
+  status: available
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/zai-org/GLM-5.3
+    redistributable: true
+- id: zai/glm-5.3-flash-model-card-terminal-bench@1.0.0
+  model: zai/glm-5.3-flash
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: max
+  subject: &glm53-flash-subject
+    variant: GLM-5.3-Flash
+    reasoning_effort: max
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.843
+  status: available
+  evidence: &glm53-flash-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/zai-org/GLM-5.3-Flash
+    redistributable: true
+- id: zai/glm-5.3-flash-model-card-deep-swe@1.0.0
+  model: zai/glm-5.3-flash
+  benchmark: datacurve/deep-swe@1.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: max
+  subject: *glm53-flash-subject
+  metrics:
+    resolved: 0.634
+  status: available
+  evidence: *glm53-flash-evidence
+- id: zai/glm-5.3-flash-model-card-agents-last-exam@1.0.0
+  model: zai/glm-5.3-flash
+  benchmark: berkeley-rdi/agents-last-exam@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: max
+  subject: *glm53-flash-subject
+  metrics:
+    pass_rate: 0.263
+  status: available
+  evidence: *glm53-flash-evidence
+- id: zai/glm-5.3-flash-model-card-automation-bench@1.0.0
+  model: zai/glm-5.3-flash
+  benchmark: zapier/automation-bench@1.0.6
+  benchmark_profile: published-agent
+  reasoning_effort: max
+  subject: *glm53-flash-subject
+  metrics:
+    score: 0.488
+  status: available
+  evidence: *glm53-flash-evidence
+- id: zai/glm-5.3-flash-model-card-humanitys-last-exam-tools@1.0.0
+  model: zai/glm-5.3-flash
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: with-tools
+  reasoning_effort: max
+  subject: *glm53-flash-subject
+  metrics:
+    accuracy: 0.553
+  status: available
+  evidence: *glm53-flash-evidence
+- id: zai/glm-5.3-flash-model-card-gpqa-diamond@1.0.0
+  model: zai/glm-5.3-flash
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: max
+  subject:
+    variant: GLM-5.3-Flash
+    reasoning_effort: max
+    source_kind: official_vendor_republication
+    measurement_origin: Artificial Analysis
+  metrics:
+    accuracy: 0.912
+  status: available
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://huggingface.co/zai-org/GLM-5.3-Flash
+    redistributable: true
+- id: zai/glm-5.3-flash-model-card-gdpval-aa@1.0.0
+  model: zai/glm-5.3-flash
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: max
+  subject: *glm53-flash-subject
+  metrics:
+    elo: 1773
+  status: available
+  evidence: *glm53-flash-evidence

@@ -1,0 +1,53 @@
+id: perplexity
+display_name: Perplexity
+description: Search-grounded models and online answers.
+category: model_api
+support_tier: compatible
+default_base_url: https://api.perplexity.ai
+protocols:
+- openai/chat-completions@1
+default_protocol: openai/chat-completions@1
+supported_operations:
+- openai/chat-completions@1#create
+- openai/chat-completions@1#list_models
+path_overrides:
+  openai/chat-completions@1#create: /v1/sonar
+auth:
+  strategy: bearer
+  header: Authorization
+  prefix: Bearer
+presentation:
+  logo: package:perplexity
+  monogram: P
+  monochrome: false
+conformance:
+  status: unverified
+models:
+- catalog: perplexity/sonar
+  id: sonar
+  protocols: &sonar-protocols [openai/chat-completions@1]
+  pricing: {currency: USD, prompt_per_1m: 1.00, completion_per_1m: 1.00}
+  lifecycle: active
+  verification: &sonar-verification
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.perplexity.ai/docs/sonar/models
+- catalog: perplexity/sonar-pro
+  id: sonar-pro
+  protocols: *sonar-protocols
+  pricing: {currency: USD, prompt_per_1m: 3.00, completion_per_1m: 15.00}
+  lifecycle: active
+  verification: *sonar-verification
+- catalog: perplexity/sonar-reasoning-pro
+  id: sonar-reasoning-pro
+  protocols: *sonar-protocols
+  pricing: {currency: USD, prompt_per_1m: 2.00, completion_per_1m: 8.00}
+  lifecycle: active
+  verification: *sonar-verification
+- catalog: perplexity/sonar-deep-research
+  id: sonar-deep-research
+  protocols: *sonar-protocols
+  reasoning_transport: top_level_effort
+  pricing: {currency: USD, prompt_per_1m: 2.00, completion_per_1m: 8.00}
+  lifecycle: active
+  verification: *sonar-verification

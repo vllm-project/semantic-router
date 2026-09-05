@@ -1,0 +1,191 @@
+- id: tencent/hunyuan-a13b-instruct
+  display_name: Hunyuan A13B Instruct
+  description: Open-weight hybrid-reasoning MoE model with 13B active parameters and 256K context.
+  kind: physical
+  publisher: Tencent
+  presentation:
+    logo: package:tencent
+    monogram: H
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/tencent/Hunyuan-A13B-Instruct
+    license: Tencent-Hunyuan-A13B
+  family: hunyuan
+  parameter_size: 80B (13B active)
+  released_at: 2025-06-27
+  reasoning_family: hunyuan
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Tencent Hunyuan
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/tencent/Hunyuan-A13B-Instruct
+  tags:
+  - open_weights
+  - hybrid_reasoning
+  - moe
+  - efficient
+- id: tencent/hy3
+  display_name: Tencent Hy3
+  description: Open-weight Tencent Hy flagship MoE model for reasoning, coding, and productivity agents.
+  kind: physical
+  publisher: Tencent
+  presentation:
+    logo: package:tencent
+    monogram: Hy
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/tencent/Hy3
+    license: Apache-2.0
+  family: hy3
+  parameter_size: 295B (21B active)
+  reasoning_family: hunyuan-hy3
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Tencent Hy Team
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/tencent/Hy3
+  tags:
+  - open_weights
+  - frontier
+  - moe
+  - agentic
+- id: tencent/hy4-preview
+  display_name: Tencent Hy4 Preview
+  description: Open-weight Tencent Hy flagship MoE preview with one-million-token context.
+  kind: physical
+  publisher: Tencent
+  presentation:
+    logo: package:tencent
+    monogram: Hy
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/tencent/Hy4-preview
+    license: Apache-2.0
+  family: hy4
+  parameter_size: 770B (49B active)
+  reasoning_family: hunyuan-hy4
+  lifecycle: experimental
+  limits:
+    context_window_size: 1048576
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Tencent Hy Team
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/tencent/Hy4-preview
+  tags:
+  - open_weights
+  - frontier
+  - moe
+  - long_context
+  - preview
+- id: tencent/hy-mt2-1.8b
+  display_name: Hy-MT2 1.8B
+  description: Compact open-weight fast-thinking translation model covering 33 languages.
+  kind: physical
+  publisher: Tencent
+  presentation: &hy-mt2-presentation
+    logo: package:tencent
+    monogram: Hy
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/tencent/Hy-MT2-1.8B
+    license: Apache-2.0
+  family: hy-mt2
+  parameter_size: 1.8B
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities: [chat, reasoning, long_context]
+  modalities: &hy-mt2-modalities
+    input: [text]
+    output: [text]
+  verification: &hy-mt2-verification
+    authority: Tencent Hunyuan
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/tencent/Hy-MT2-1.8B
+  tags: [open_weights, reasoning, translation, multilingual, efficient]
+- id: tencent/hy-mt2-7b
+  display_name: Hy-MT2 7B
+  description: Open-weight fast-thinking translation model covering 33 languages.
+  kind: physical
+  publisher: Tencent
+  presentation: *hy-mt2-presentation
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/tencent/Hy-MT2-7B
+    license: Apache-2.0
+  family: hy-mt2
+  parameter_size: 7B
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities: [chat, reasoning, long_context]
+  modalities: *hy-mt2-modalities
+  verification:
+    <<: *hy-mt2-verification
+    source: https://huggingface.co/tencent/Hy-MT2-7B
+  tags: [open_weights, reasoning, translation, multilingual]
+- id: tencent/hy-mt2-30b-a3b
+  display_name: Hy-MT2 30B A3B
+  description: Open-weight sparse-MoE fast-thinking translation model covering 33 languages.
+  kind: physical
+  publisher: Tencent
+  presentation: *hy-mt2-presentation
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/tencent/Hy-MT2-30B-A3B
+    license: Apache-2.0
+  family: hy-mt2
+  parameter_size: 30B (3B active)
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities: [chat, reasoning, long_context]
+  modalities: *hy-mt2-modalities
+  verification:
+    <<: *hy-mt2-verification
+    source: https://huggingface.co/tencent/Hy-MT2-30B-A3B
+  tags: [open_weights, reasoning, translation, multilingual, moe]

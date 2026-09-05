@@ -11,8 +11,9 @@ decision uses its own weights, limits, percentile, and no-candidate policy.
 ## Key Advantages
 
 - Single-decision SLO-aware routing without orchestrating multiple selectors.
-- Each factor has an explicit source: quality from `quality_score`, latency from
-  observed percentiles, cost from pricing, and load from in-flight requests.
+- Each factor has an explicit source: quality from the release's versioned
+  intelligence index, latency from observed percentiles, cost from pricing,
+  and load from in-flight requests.
 - Min-max normalization makes the configured weights comparable across the
   candidate set.
 - No model state to train. No external service required.
@@ -94,7 +95,7 @@ algorithm:
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `weights.quality` | float | `0.25` | Weight for `quality_score` configured per model |
+| `weights.quality` | float | `0.25` | Weight for an available computed model-intelligence index result |
 | `weights.latency` | float | `0.25` | Weight for percentile latency (lower-is-better, inverted) |
 | `weights.cost` | float | `0.25` | Weight for prompt pricing (lower-is-better, inverted) |
 | `weights.load` | float | `0.25` | Weight for in-flight request count (lower-is-better, inverted) |
@@ -107,13 +108,16 @@ algorithm:
 
 ## Known Limitations
 
-- Quality scoring depends on `quality_score` being configured per model. Models without it contribute zero to the quality signal.
+- Quality scoring requires a comparable `available` index result. For a model
+  without one, that factor is omitted and the remaining available weights are
+  renormalized for that candidate.
 - Min-max normalization is **per-request across the candidate set**, so absolute scale of any signal does not matter — but if all candidates have the same value on a dimension, that dimension contributes 0.5 (neutral).
 - Load and latency are observed per Router process, not across the whole
   cluster. Replicas can therefore choose different candidates.
-- A missing quality, latency, or cost observation contributes `0` for that
-  scoring dimension. It does not trigger an SLO exclusion, because absence is
-  not evidence that the configured ceiling was exceeded.
+- A missing quality, latency, or cost observation omits that factor for the
+  candidate and renormalizes its remaining active weights. It does not trigger
+  an SLO exclusion, because absence is not evidence that the configured ceiling
+  was exceeded.
 
 See a complete example:
 [`config/fragments/algorithm/selection/multi-factor.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/multi-factor.yaml).

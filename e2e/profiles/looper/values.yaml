@@ -3,18 +3,20 @@ config:
   listeners: []
   providers:
     defaults:
-      default_model: ratings-model-a
+      model: ratings-model-a
     models:
       - name: ratings-model-a
         provider_model_id: ratings-model-a
         backend_refs:
           - name: looper-fake-backend
+            provider: vllm
             endpoint: looper-fake-backend.default.svc.cluster.local:8000
             weight: 1
       - name: ratings-model-b
         provider_model_id: ratings-model-b
         backend_refs:
           - name: looper-fake-backend
+            provider: vllm
             endpoint: looper-fake-backend.default.svc.cluster.local:8000
             weight: 1
       - name: fusion-panel-valid

@@ -1,0 +1,145 @@
+- id: inclusionai/ling-3.0-flash
+  display_name: Ling 3.0 Flash
+  description: InclusionAI's sparse open-weight frontier model for efficient reasoning and agentic workloads.
+  kind: physical
+  publisher: InclusionAI
+  presentation:
+    logo: package:inclusionai
+    monogram: IA
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/inclusionAI/Ling-3.0-flash
+    license: MIT
+  family: ling-3
+  reasoning_family: ling3
+  parameter_size: 124B (5.1B active)
+  released_at: 2026-08-04
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities:
+    input: [text]
+    output: [text]
+  verification:
+    authority: InclusionAI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/inclusionAI/Ling-3.0-flash
+  tags: [open_weights, frontier, reasoning, agentic, moe]
+- id: inclusionai/ling-3.0-tiny
+  display_name: Ling 3.0 Tiny
+  description: InclusionAI's compact sparse open-weight reasoning model for local and high-throughput use.
+  kind: physical
+  publisher: InclusionAI
+  presentation:
+    logo: package:inclusionai
+    monogram: IA
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/inclusionAI/Ling-3.0-tiny
+    license: MIT
+  family: ling-3
+  reasoning_family: ling3
+  parameter_size: 7.9B (1.3B active)
+  released_at: 2026-08-06
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities:
+    input: [text]
+    output: [text]
+  verification:
+    authority: InclusionAI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/inclusionAI/Ling-3.0-tiny
+  tags: [open_weights, compact, reasoning, efficient, moe]
+- id: inclusionai/ling-2.6-1t
+  display_name: Ling 2.6 1T
+  description: InclusionAI's trillion-parameter sparse open-weight model for coding and agentic tasks.
+  kind: physical
+  publisher: InclusionAI
+  presentation:
+    logo: package:inclusionai
+    monogram: IA
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/inclusionAI/Ling-2.6-1T
+    license: MIT
+  family: ling-2.6
+  parameter_size: 1T
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities:
+    input: [text]
+    output: [text]
+  verification:
+    authority: InclusionAI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/inclusionAI/Ling-2.6-1T
+  tags: [open_weights, frontier, coding, agentic, moe]
+- id: inclusionai/ling-2.6-flash
+  display_name: Ling 2.6 Flash
+  description: InclusionAI's efficient sparse open-weight model for coding and long-context agentic workloads.
+  kind: physical
+  publisher: InclusionAI
+  presentation:
+    logo: package:inclusionai
+    monogram: IA
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/inclusionAI/Ling-2.6-flash
+    license: MIT
+  family: ling-2.6
+  parameter_size: 104B (7.4B active)
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities:
+    input: [text]
+    output: [text]
+  verification:
+    authority: InclusionAI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/inclusionAI/Ling-2.6-flash
+  tags: [open_weights, coding, agentic, efficient, moe]
+- id: inclusionai/ring-2.6-1t
+  display_name: Ring 2.6 1T
+  description: InclusionAI's trillion-parameter open-weight reasoning model with high and xhigh effort modes.
+  kind: physical
+  publisher: InclusionAI
+  presentation:
+    logo: package:inclusionai
+    monogram: IA
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/inclusionAI/Ring-2.6-1T
+    license: MIT
+  family: ring-2.6
+  reasoning_family: ring2.6
+  parameter_size: 1T
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities:
+    input: [text]
+    output: [text]
+  verification:
+    authority: InclusionAI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/inclusionAI/Ring-2.6-1T
+  tags: [open_weights, frontier, reasoning, agentic, moe]

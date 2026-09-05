@@ -172,8 +172,7 @@ _Appears in:_
 | `complexity_rules` _[ComplexityRulesConfig](#complexityrulesconfig) array_ | Complexity rules for complexity-aware routing |  | Optional: \{\} <br /> |
 | `strategy` _string_ | Decision routing strategy ("priority" for priority-based matching) |  | Enum: [priority] <br />Optional: \{\} <br /> |
 | `decisions` _[DecisionConfig](#decisionconfig) array_ | Routing decisions based on signals (domain, complexity, etc.) |  | Optional: \{\} <br /> |
-| `reasoning_families` _object (keys:string, values:[ReasoningFamily](#reasoningfamily))_ | Reasoning families |  | Optional: \{\} <br /> |
-| `default_reasoning_effort` _string_ | Default reasoning effort |  | Enum: [low medium high] <br />Optional: \{\} <br /> |
+| `reasoning_effort` _string_ | ReasoningEffort is the default reasoning effort for model bindings that do<br />not select a different effort. |  | Enum: [low medium high] <br />Optional: \{\} <br /> |
 | `api` _[APIConfig](#apiconfig)_ | API configuration |  | Optional: \{\} <br /> |
 | `observability` _[ObservabilityConfig](#observabilityconfig)_ | Observability configuration |  | Optional: \{\} <br /> |
 
@@ -211,6 +210,7 @@ _Appears in:_
 | `api_key_env` _string_ | APIKeyEnv names the environment variable containing the provider API key. |  | Optional: \{\} <br /> |
 | `timeout_seconds` _integer_ | TimeoutSeconds is the request timeout for embedding calls. |  | Minimum: 0 <br />Optional: \{\} <br /> |
 | `max_retries` _integer_ | MaxRetries is the maximum number of retry attempts for embedding calls. |  | Minimum: 0 <br />Optional: \{\} <br /> |
+| `max_response_bytes` _integer_ | MaxResponseBytes caps the size of each embedding response body. |  | Minimum: 0 <br />Optional: \{\} <br /> |
 | `dimensions` _integer_ | Dimensions requests a provider-side output dimension when supported. |  | Minimum: 1 <br />Optional: \{\} <br /> |
 
 #### EmbeddingModelsConfig
@@ -641,6 +641,24 @@ _Appears in:_
 | `dimension` _integer_ | Dimension of the embedding vectors |  | Minimum: 1 <br />Optional: \{\} <br /> |
 | `metric_type` _string_ | MetricType for vector similarity<br />Options: "IP" (inner product), "L2", "COSINE" | IP | Enum: [IP L2 COSINE] <br />Optional: \{\} <br /> |
 
+#### ModelReasoningSpec
+
+ModelReasoningSpec selects a catalog reasoning family or defines the request
+projection for a custom self-hosted model. Family and inline fields are
+mutually exclusive and are validated by the Router's canonical compiler.
+
+_Appears in:_
+
+- [VLLMEndpointSpec](#vllmendpointspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `family` _string_ |  |  | Optional: \{\} <br /> |
+| `type` _string_ |  |  | Enum: [chat_template_kwargs reasoning_effort top_level_reasoning_effort] <br />Optional: \{\} <br /> |
+| `parameter` _string_ |  |  | Optional: \{\} <br /> |
+| `levels` _string array_ |  |  | Optional: \{\} <br /> |
+| `default` _string_ |  |  | Optional: \{\} <br /> |
+
 #### ModelRefConfig
 
 ModelRefConfig defines a model reference for routing
@@ -794,19 +812,6 @@ _Appears in:_
 | `use_tls` _boolean_ | UseTLS enables TLS for the Qdrant connection | false | Optional: \{\} <br /> |
 | `collection_name` _string_ | CollectionName is the Qdrant collection to use for semantic cache | semantic_cache | Optional: \{\} <br /> |
 | `connect_timeout` _integer_ | ConnectTimeout is the timeout in seconds for Qdrant connection | 10 | Optional: \{\} <br /> |
-
-#### ReasoningFamily
-
-ReasoningFamily defines reasoning family configuration
-
-_Appears in:_
-
-- [ConfigSpec](#configspec)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `type` _string_ |  |  | Optional: \{\} <br /> |
-| `parameter` _string_ |  |  | Optional: \{\} <br /> |
 
 #### RedisCacheConfig
 
@@ -1282,7 +1287,8 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `name` _string_ | Name of the backend ref generated under config.providers.models[].backend_refs |  | MinLength: 1 <br /> |
 | `model` _string_ | Model name as reported by vLLM (e.g., "Model-A", "llama3-8b") |  | MinLength: 1 <br /> |
-| `reasoningFamily` _string_ | Reasoning family for the model (e.g., "qwen3", "deepseek", "gpt") |  | Optional: \{\} <br /> |
+| `catalog` _string_ | Catalog optionally selects a repository built-in Model Card. Model remains<br />the request-facing alias. |  | Optional: \{\} <br /> |
+| `reasoning` _[ModelReasoningSpec](#modelreasoningspec)_ | Reasoning optionally selects a built-in family or defines inline wire<br />behavior for this self-hosted model. Catalog-backed models normally omit it. |  | Optional: \{\} <br /> |
 | `loras` _[LoRAAdapterSpec](#loraadapterspec) array_ | LoRAs declares the LoRA adapters exposed for this logical model in routing.modelCards. |  | MaxItems: 50 <br />Optional: \{\} <br /> |
 | `backend` _[VLLMBackend](#vllmbackend)_ | Backend configuration |  |  |
 | `weight` _integer_ | Weight for load balancing (default: 1) | 1 | Optional: \{\} <br /> |

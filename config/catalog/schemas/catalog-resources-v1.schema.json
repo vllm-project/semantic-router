@@ -1,0 +1,480 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vllm.ai/schemas/model-catalog/catalog-resources-v1.schema.json",
+  "title": "vLLM Semantic Router model catalog resources",
+  "$defs": {
+    "nonEmptyString": {"type": "string", "minLength": 1},
+    "slug": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$"},
+    "modelID": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:+-]*/[A-Za-z0-9][A-Za-z0-9._:+/-]*$"
+    },
+    "protocolID": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9._/-]*@[0-9]+$"
+    },
+    "versionedID": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9._/-]*@[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "stringSet": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/nonEmptyString"}
+    },
+    "verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authority", "status"],
+      "properties": {
+        "authority": {"$ref": "#/$defs/nonEmptyString"},
+        "status": {"enum": ["claimed", "imported", "reproduced"]},
+        "verified_at": {"type": "string", "format": "date"},
+        "source": {"type": "string", "format": "uri"},
+        "asset_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      }
+    },
+    "presentation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["logo", "monogram", "monochrome"],
+      "properties": {
+        "logo": {"$ref": "#/$defs/nonEmptyString"},
+        "monogram": {"$ref": "#/$defs/nonEmptyString"},
+        "monochrome": {"type": "boolean"}
+      }
+    },
+    "modelBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["catalog", "id", "protocols", "lifecycle", "verification"],
+      "properties": {
+        "catalog": {"$ref": "#/$defs/modelID"},
+        "id": {"$ref": "#/$defs/nonEmptyString"},
+        "protocols": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/protocolID"}
+        },
+        "reasoning_transport": {
+          "enum": ["chat_template_kwargs", "top_level_effort", "top_level_boolean", "reasoning_object", "thinking_object", "deepseek_thinking"]
+        },
+        "pricing": {
+          "type": "object",
+          "additionalProperties": {"type": ["number", "string", "boolean"]}
+        },
+        "restrictions": {"type": "object"},
+        "lifecycle": {"enum": ["experimental", "active", "deprecated", "removed"]},
+        "verification": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status"],
+          "properties": {
+            "status": {"enum": ["claimed", "imported", "reproduced"]},
+            "verified_at": {"type": "string", "format": "date"},
+            "source": {"type": "string", "format": "uri"}
+          }
+        }
+      }
+    },
+    "distribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "source"],
+      "properties": {
+        "type": {"enum": ["proprietary_api", "open_weights", "router_recipe"]},
+        "source": {"type": "string", "format": "uri"},
+        "license": {"$ref": "#/$defs/nonEmptyString"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"type": {"const": "open_weights"}}},
+          "then": {"required": ["license"]}
+        }
+      ]
+    },
+    "protocols": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "display_name", "wire_format", "default_base_path", "operations", "capabilities"],
+        "properties": {
+          "id": {"$ref": "#/$defs/protocolID"},
+          "display_name": {"$ref": "#/$defs/nonEmptyString"},
+          "wire_format": {"$ref": "#/$defs/nonEmptyString"},
+          "default_base_path": {"type": "string", "pattern": "^/"},
+          "operations": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "method", "path"],
+              "properties": {
+                "id": {"$ref": "#/$defs/slug"},
+                "method": {"enum": ["GET", "POST", "DELETE"]},
+                "path": {"type": "string", "pattern": "^/"}
+              }
+            }
+          },
+          "capabilities": {"$ref": "#/$defs/stringSet"}
+        }
+      }
+    },
+    "providers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "display_name",
+          "description",
+          "category",
+          "support_tier",
+          "protocols",
+          "default_protocol",
+          "supported_operations",
+          "auth",
+          "presentation",
+          "conformance"
+        ],
+        "properties": {
+          "id": {"$ref": "#/$defs/slug"},
+          "display_name": {"$ref": "#/$defs/nonEmptyString"},
+          "description": {"$ref": "#/$defs/nonEmptyString"},
+          "category": {"enum": ["start_here", "model_api", "private_runtime"]},
+          "support_tier": {"enum": ["native", "compatible", "runtime"]},
+          "default_base_url": {"type": "string", "format": "uri"},
+          "protocols": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {"$ref": "#/$defs/protocolID"}
+          },
+          "default_protocol": {"$ref": "#/$defs/protocolID"},
+          "supported_operations": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9._/-]*@[0-9]+#[a-z0-9][a-z0-9._-]*$"
+            }
+          },
+          "path_overrides": {
+            "type": "object",
+            "propertyNames": {"minLength": 1},
+            "additionalProperties": {"type": "string", "pattern": "^/"}
+          },
+          "default_headers": {
+            "type": "object",
+            "propertyNames": {"pattern": "^[!#$%&'*+.^_`|~0-9A-Za-z-]+$"},
+            "additionalProperties": {"$ref": "#/$defs/nonEmptyString"}
+          },
+          "reasoning_transport": {
+            "enum": ["chat_template_kwargs", "top_level_effort", "top_level_boolean", "reasoning_object", "thinking_object", "deepseek_thinking"]
+          },
+          "api_version_query": {"type": "boolean"},
+          "auth": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["strategy", "header", "prefix"],
+            "properties": {
+              "strategy": {"enum": ["none", "bearer", "api_key_header"]},
+              "header": {"type": "string"},
+              "prefix": {"type": "string"},
+              "injected_header": {"type": "string", "minLength": 1}
+            }
+          },
+          "presentation": {"$ref": "#/$defs/presentation"},
+          "conformance": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["status"],
+            "properties": {
+              "status": {"enum": ["unverified", "fixture_verified", "live_verified"]},
+              "verified_at": {"type": "string", "format": "date"}
+            }
+          },
+          "models": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {"$ref": "#/$defs/modelBinding"}
+          }
+        }
+      }
+    },
+    "reasoning_families": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "type", "parameter", "levels", "default"],
+        "properties": {
+          "id": {"$ref": "#/$defs/slug"},
+          "type": {"enum": ["chat_template_kwargs", "reasoning_effort", "top_level_reasoning_effort"]},
+          "parameter": {"$ref": "#/$defs/nonEmptyString"},
+          "levels": {"$ref": "#/$defs/stringSet"},
+          "default": {"$ref": "#/$defs/nonEmptyString"},
+          "disabled": {"$ref": "#/$defs/nonEmptyString"}
+        }
+      }
+    },
+    "models": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "display_name",
+          "description",
+          "kind",
+          "publisher",
+          "presentation",
+          "distribution",
+          "family",
+          "lifecycle",
+          "capabilities",
+          "modalities",
+          "verification"
+        ],
+        "properties": {
+          "id": {"$ref": "#/$defs/modelID"},
+          "display_name": {"$ref": "#/$defs/nonEmptyString"},
+          "description": {"$ref": "#/$defs/nonEmptyString"},
+          "kind": {"enum": ["physical", "virtual"]},
+          "publisher": {"$ref": "#/$defs/nonEmptyString"},
+          "presentation": {"$ref": "#/$defs/presentation"},
+          "distribution": {"$ref": "#/$defs/distribution"},
+          "family": {"$ref": "#/$defs/nonEmptyString"},
+          "generation": {"type": "integer", "minimum": 1},
+          "parameter_size": {"type": "string", "minLength": 1},
+          "policy_version": {"type": "string", "minLength": 1},
+          "revision": {"type": "string", "minLength": 1},
+          "released_at": {"type": "string", "format": "date"},
+          "knowledge_cutoff": {"type": "string", "minLength": 1},
+          "lifecycle": {"enum": ["experimental", "active", "deprecated", "removed"]},
+          "limits": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "context_window_size": {"type": "integer", "minimum": 1},
+              "max_output_tokens": {"type": "integer", "minimum": 1}
+            }
+          },
+          "capabilities": {"$ref": "#/$defs/stringSet"},
+          "modalities": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["input", "output"],
+            "properties": {
+              "input": {"$ref": "#/$defs/stringSet"},
+              "output": {"$ref": "#/$defs/stringSet"}
+            }
+          },
+          "reasoning_family": {"$ref": "#/$defs/slug"},
+          "asset": {"$ref": "#/$defs/slug"},
+          "entrypoint": {"$ref": "#/$defs/modelID"},
+          "recipe": {"$ref": "#/$defs/slug"},
+          "traits": {"$ref": "#/$defs/stringSet"},
+          "roles": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["name", "required", "minimum_candidates", "traits", "recommended_pool"],
+              "properties": {
+                "name": {"$ref": "#/$defs/slug"},
+                "required": {"type": "boolean"},
+                "minimum_candidates": {"type": "integer", "minimum": 1},
+                "traits": {"$ref": "#/$defs/stringSet"},
+                "recommended_pool": {
+                  "type": "array",
+                  "minItems": 1,
+                  "uniqueItems": true,
+                  "items": {"$ref": "#/$defs/modelID"}
+                }
+              }
+            }
+          },
+          "verification": {"$ref": "#/$defs/verification"},
+          "compatibility": {"type": "object"},
+          "tags": {"$ref": "#/$defs/stringSet"}
+        },
+        "allOf": [
+          {
+            "if": {"properties": {"kind": {"const": "virtual"}}},
+            "then": {"required": ["generation", "policy_version", "asset", "entrypoint", "recipe", "traits", "roles"]}
+          }
+        ]
+      }
+    },
+    "benchmarks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "display_name", "domain", "default_profile", "profiles", "metrics"],
+        "properties": {
+          "id": {"$ref": "#/$defs/versionedID"},
+          "display_name": {"$ref": "#/$defs/nonEmptyString"},
+          "domain": {"$ref": "#/$defs/slug"},
+          "source": {"type": "string", "format": "uri"},
+          "default_profile": {"$ref": "#/$defs/slug"},
+          "profiles": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "display_name", "description"],
+              "properties": {
+                "id": {"$ref": "#/$defs/slug"},
+                "display_name": {"$ref": "#/$defs/nonEmptyString"},
+                "description": {"$ref": "#/$defs/nonEmptyString"}
+              }
+            }
+          },
+          "metrics": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "unit", "direction", "range"],
+              "properties": {
+                "id": {"$ref": "#/$defs/slug"},
+                "unit": {"$ref": "#/$defs/nonEmptyString"},
+                "direction": {"enum": ["higher_is_better", "lower_is_better"]},
+                "range": {
+                  "type": "array",
+                  "prefixItems": [{"type": "number"}, {"type": "number"}],
+                  "minItems": 2,
+                  "maxItems": 2
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "evaluations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "model", "benchmark", "benchmark_profile", "reasoning_effort", "subject", "metrics", "status", "evidence"],
+        "properties": {
+          "id": {"$ref": "#/$defs/versionedID"},
+          "model": {"$ref": "#/$defs/modelID"},
+          "benchmark": {"$ref": "#/$defs/versionedID"},
+          "benchmark_profile": {"$ref": "#/$defs/slug"},
+          "reasoning_effort": {"$ref": "#/$defs/slug"},
+          "subject": {"type": "object"},
+          "metrics": {"type": "object", "additionalProperties": {"type": "number"}},
+          "status": {"enum": ["available", "missing", "failed", "not_applicable", "withheld"]},
+          "measured_at": {"type": "string", "format": "date"},
+          "evidence": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["provenance", "verification", "redistributable"],
+            "properties": {
+              "provenance": {"enum": ["vendor_claimed", "third_party", "vllm_sr_reproduced", "operator"]},
+              "verification": {"enum": ["claimed", "imported", "reproduced"]},
+              "source": {"type": "string", "format": "uri"},
+              "artifact": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+              "redistributable": {"type": "boolean"}
+            }
+          }
+        }
+      }
+    },
+    "indices": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "display_name", "description", "aggregation", "scale", "missing", "domains", "components"],
+        "properties": {
+          "id": {"$ref": "#/$defs/versionedID"},
+          "display_name": {"$ref": "#/$defs/nonEmptyString"},
+          "description": {"$ref": "#/$defs/nonEmptyString"},
+          "methodology": {"type": "string", "format": "uri"},
+          "aggregation": {"const": "weighted_mean"},
+          "scale": {
+            "type": "array",
+            "prefixItems": [{"type": "number"}, {"type": "number"}],
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "missing": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["policy"],
+            "properties": {
+              "policy": {"enum": ["require_all", "require_coverage", "reported_only"]},
+              "minimum": {"type": "number", "minimum": 0, "maximum": 1}
+            }
+          },
+          "domains": {"type": "object", "additionalProperties": {"type": "number", "exclusiveMinimum": 0}},
+          "components": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["weight", "normalization"],
+              "properties": {
+                "benchmark": {"$ref": "#/$defs/versionedID"},
+                "metric": {"$ref": "#/$defs/slug"},
+                "benchmark_profile": {"$ref": "#/$defs/slug"},
+                "index": {"$ref": "#/$defs/versionedID"},
+                "weight": {"type": "number", "exclusiveMinimum": 0},
+                "normalization": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["type"],
+                  "properties": {
+                    "type": {"enum": ["identity", "one_minus", "linear_clamp", "piecewise_linear", "logistic", "lookup"]},
+                    "min": {"type": "number"},
+                    "max": {"type": "number"},
+                    "k": {"type": "number"},
+                    "x0": {"type": "number"},
+                    "points": {
+                      "type": "array",
+                      "minItems": 2,
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": ["input", "output"],
+                        "properties": {
+                          "input": {"type": "number"},
+                          "output": {"type": "number", "minimum": 0, "maximum": 1}
+                        }
+                      }
+                    },
+                    "values": {
+                      "type": "object",
+                      "minProperties": 1,
+                      "additionalProperties": {"type": "number", "minimum": 0, "maximum": 1}
+                    }
+                  }
+                }
+              },
+              "oneOf": [
+                {"required": ["benchmark", "metric", "benchmark_profile"]},
+                {"required": ["index"]}
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}

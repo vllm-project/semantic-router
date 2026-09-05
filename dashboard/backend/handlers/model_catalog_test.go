@@ -36,8 +36,12 @@ func (source *fakeModelCatalogSource) callCount() int {
 func TestModelCatalogHandlerReturnsCLIContractAndCachesSuccess(t *testing.T) {
 	t.Parallel()
 
-	source := &fakeModelCatalogSource{payload: []byte(validModelCatalogPayload(`,
-    "configured": {"path":"/private/config.yaml","api_key":"must-not-render"}`))}
+	payload := []byte(validModelCatalogPayload(`,
+		"configured": {"path":"/private/config.yaml","api_key":"must-not-render"}`))
+	if _, err := normalizeModelCatalogDocument(payload); err != nil {
+		t.Fatalf("valid fixture rejected: %v", err)
+	}
+	source := &fakeModelCatalogSource{payload: payload}
 	handler := ModelCatalogHandler(source)
 
 	for attempt := 0; attempt < 2; attempt++ {
@@ -48,10 +52,14 @@ func TestModelCatalogHandlerReturnsCLIContractAndCachesSuccess(t *testing.T) {
 		}
 		body := response.Body.String()
 		for _, expected := range []string{
+			`"schema_version":"vllm-sr/model-catalog/v2"`,
 			`"catalog_version":"latest"`,
 			`"channel":"latest"`,
 			`"id":"vllm-sr/mom-v1-blend"`,
-			`"verification":{"status":"verified","authority":"vllm-sr-maintainers"`,
+			`"verification":{"authority":"vllm-sr-maintainers","status":"reproduced"`,
+			`"id":"openai"`,
+			`"id":"openai/chat-completions@1"`,
+			`"id":"example/benchmark@1.0.0"`,
 			`"recommended_pool":["local/example"]`,
 		} {
 			if !strings.Contains(body, expected) {
@@ -113,17 +121,23 @@ func TestModelCatalogHandlerRejectsMalformedCLIContract(t *testing.T) {
 	t.Parallel()
 
 	for name, payload := range map[string]string{
-		"invalid json":         `{`,
-		"empty inventory":      `{"catalogs":[],"models":[]}`,
-		"missing protocols":    validModelCatalogPayload(","),
-		"missing roles":        validModelCatalogPayload(","),
-		"missing authority":    validModelCatalogPayload(","),
-		"invalid asset digest": validModelCatalogPayload(","),
+		"invalid json":              `{`,
+		"empty inventory":           `{"schema_version":"vllm-sr/model-catalog/v2","catalogs":[],"protocols":[],"providers":[],"reasoning_families":[],"models":[],"benchmarks":[],"evaluations":[],"evaluation_coverage":[],"indices":[],"index_results":[]}`,
+		"missing protocols":         validModelCatalogPayload(","),
+		"missing default base path": validModelCatalogPayload(","),
+		"missing roles":             validModelCatalogPayload(","),
+		"missing authority":         validModelCatalogPayload(","),
+		"invalid asset digest":      validModelCatalogPayload(","),
+		"orphan physical model":     validModelCatalogPayload(","),
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			if name == "missing protocols" {
-				payload = strings.Replace(payload, `"protocols":["openai_chat"]`, `"protocols":[]`, 1)
+				payload = strings.Replace(payload, `"protocols":["openai/chat-completions@1"]`, `"protocols":[]`, 1)
+			}
+			if name == "missing default base path" {
+				payload = strings.Replace(payload, `    "default_base_path":"/v1",
+`, "", 1)
 			}
 			if name == "missing roles" {
 				payload = strings.Replace(payload, `"roles":[{"name":"balanced","required":true,"minimum_candidates":1,"traits":["chat"],"recommended_pool":["local/example"]}]`, `"roles":[]`, 1)
@@ -133,6 +147,22 @@ func TestModelCatalogHandlerRejectsMalformedCLIContract(t *testing.T) {
 			}
 			if name == "invalid asset digest" {
 				payload = strings.Replace(payload, `"asset_sha256":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"`, `"asset_sha256":"sha256:not-a-digest"`, 1)
+			}
+			if name == "orphan physical model" {
+				payload = strings.Replace(payload, `"models":[{`, `"models":[{
+    "id":"example/physical",
+    "display_name":"Example Physical",
+    "description":"Physical model without a provider model.",
+    "kind":"physical",
+    "publisher":"Example",
+    "presentation":{"logo":"package:example","monogram":"E","monochrome":true},
+    "distribution":{"type":"open_weights","source":"https://models.example/model","license":"Apache-2.0"},
+    "family":"example",
+    "lifecycle":"active",
+    "capabilities":["chat"],
+    "modalities":{"input":["text"],"output":["text"]},
+    "verification":{"status":"claimed","authority":"Example","verified_at":"2026-09-05","source":"https://models.example/model"}
+  },{`, 1)
 			}
 			response := httptest.NewRecorder()
 			ModelCatalogHandler(&fakeModelCatalogSource{payload: []byte(payload)}).ServeHTTP(
@@ -194,26 +224,80 @@ printf '%s' "$MODEL_CATALOG_TEST_PAYLOAD"
 
 func validModelCatalogPayload(extra string) string {
 	return `{
-  "catalogs":[{"catalog_version":"latest","channel":"latest","default_model":"vllm-sr/mom-v1-blend","enabled_models":["vllm-sr/mom-v1-blend"]}],
+  "schema_version":"vllm-sr/model-catalog/v2",
+  "catalogs":[{"catalog_version":"latest","channel":"latest","default_model":"vllm-sr/mom-v1-blend","enabled_models":["vllm-sr/mom-v1-blend"],"default_intelligence_index":"example/index@1.0.0"}],
+  "protocols":[{
+    "id":"openai/chat-completions@1",
+    "display_name":"OpenAI Chat Completions",
+    "wire_format":"openai.chat.v1",
+    "default_base_path":"/v1",
+    "operations":[{"id":"create","method":"POST","path":"/v1/chat/completions"}],
+    "capabilities":["chat"]
+  }],
+  "providers":[{
+    "id":"openai",
+    "display_name":"OpenAI",
+    "description":"OpenAI API.",
+    "category":"model_api",
+    "support_tier":"native",
+    "default_base_url":"https://api.openai.com/v1",
+    "protocols":["openai/chat-completions@1"],
+    "default_protocol":"openai/chat-completions@1",
+    "supported_operations":["openai/chat-completions@1#create"],
+    "auth":{"strategy":"bearer","header":"Authorization","prefix":"Bearer"},
+    "presentation":{"logo":"package:openai","monogram":"O","monochrome":true},
+    "conformance":{"status":"fixture_verified","verified_at":"2026-09-04"}
+  }],
+  "reasoning_families":[],
   "models":[{
     "id":"vllm-sr/mom-v1-blend",
     "display_name":"MoM V1 Blend",
     "description":"Balanced routing.",
     "kind":"virtual",
+    "publisher":"vllm-sr.ai",
+    "presentation":{"logo":"package:vllm","monogram":"V","monochrome":true},
+    "distribution":{"type":"router_recipe","source":"https://vllm-sr.ai/models"},
     "family":"mom",
     "generation":1,
     "policy_version":"1.0.0",
+    "asset":"mom-v1",
     "entrypoint":"vllm-sr/mom-v1-blend",
     "recipe":"balance",
-    "protocols":["openai_chat"],
+    "lifecycle":"active",
+    "capabilities":["chat"],
+    "modalities":{"input":["text"],"output":["text"]},
     "traits":["balanced","chat"],
     "roles":[{"name":"balanced","required":true,"minimum_candidates":1,"traits":["chat"],"recommended_pool":["local/example"]}],
-    "catalog_version":"latest",
-    "channel":"latest",
-    "compatible":true,
-    "compatibility_reason":"compatible",
-    "enabled_by_default":true,
-    "default":true,
-    "verification":{"status":"verified","authority":"vllm-sr-maintainers","asset_sha256":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+    "verification":{"status":"reproduced","authority":"vllm-sr-maintainers","verified_at":"2026-09-04","asset_sha256":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+  }],
+  "evaluation_coverage":[],
+  "benchmarks":[{
+    "id":"example/benchmark@1.0.0",
+    "display_name":"Example Benchmark",
+    "domain":"general",
+    "default_profile":"published-standard",
+    "profiles":[{"id":"published-standard","display_name":"Published standard","description":"Test profile."}],
+    "metrics":[{"id":"score","unit":"proportion","direction":"higher_is_better","range":[0,1]}]
+  }],
+  "evaluations":[],
+  "indices":[{
+    "id":"example/index@1.0.0",
+    "display_name":"Example Index",
+    "description":"Test index.",
+    "aggregation":"weighted_mean",
+    "scale":[0,100],
+    "missing":{"policy":"require_all"},
+    "domains":{"general":1},
+    "components":[{"benchmark":"example/benchmark@1.0.0","metric":"score","benchmark_profile":"published-standard","weight":1,"normalization":{"type":"identity"}}]
+  }],
+  "index_results":[{
+    "model":"vllm-sr/mom-v1-blend",
+    "reasoning_effort":"default",
+    "index":"example/index@1.0.0",
+    "status":"not_applicable",
+    "score":null,
+    "coverage":0,
+    "components":[],
+    "provenance":[]
   }]` + extra + `}`
 }

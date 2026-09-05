@@ -48,9 +48,11 @@ func TestGenerateConfigYAMLIncludesBackendTargetAndLoRACatalog(t *testing.T) {
 		Spec: vllmv1alpha1.SemanticRouterSpec{
 			VLLMEndpoints: []vllmv1alpha1.VLLMEndpointSpec{
 				{
-					Name:            "qwen3-primary",
-					Model:           "qwen3-32b",
-					ReasoningFamily: "qwen3",
+					Name:  "qwen3-primary",
+					Model: "qwen3-32b",
+					Reasoning: &vllmv1alpha1.ModelReasoningSpec{
+						Family: "qwen3",
+					},
 					LoRAs: []vllmv1alpha1.LoRAAdapterSpec{
 						{
 							Name:        "computer-science-expert",
@@ -120,8 +122,11 @@ func assertGeneratedBackendTarget(t *testing.T, parsed routerconfig.CanonicalCon
 	backendRef := providerModel.BackendRefs[0]
 	if backendRef.Name != "qwen3-primary" ||
 		backendRef.Endpoint != "qwen3-svc.default.svc.cluster.local:8000" ||
-		backendRef.Protocol != "http" || backendRef.Weight != 100 {
+		backendRef.Protocol != "http" || backendRef.Weight != 100 || backendRef.Provider != "vllm" {
 		t.Fatalf("unexpected generated backend ref: %#v", backendRef)
+	}
+	if providerModel.Reasoning == nil || providerModel.Reasoning.Family != "qwen3" {
+		t.Fatalf("unexpected generated reasoning: %#v", providerModel.Reasoning)
 	}
 }
 

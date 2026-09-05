@@ -1,0 +1,33 @@
+schema_version: vllm-sr/catalog-source/v1
+catalog_version: latest
+channel: latest
+release: unreleased
+compatibility:
+  cli:
+    min: 0.3.0
+    max_exclusive: 0.5.0
+  router:
+    min: 0.3.0
+    max_exclusive: 0.5.0
+  config_schema: v0.3
+  required_features:
+    - entrypoints
+    - isolated_recipes
+    - decision_algorithms
+    - effective_model_registry
+defaults:
+  model: vllm-sr/mom-v1-blend
+  enabled:
+    - vllm-sr/mom-v1-blend
+  intelligence_index: vllm-sr/intelligence@1.0.0
+assets:
+  - id: mom-v1
+    bundle: ../recipes/built-in/latest/mom-v1
+resources:
+  protocols: resources/protocols.yaml
+  providers: resources/providers
+  reasoning_families: resources/reasoning-families.yaml
+  models: resources/models
+  benchmarks: resources/benchmarks.yaml
+  evaluations: resources/evaluations
+  indices: resources/indices.yaml

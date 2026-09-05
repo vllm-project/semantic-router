@@ -1,0 +1,245 @@
+- id: xiaomi/mimo-v2-flash
+  display_name: MiMo V2 Flash
+  description: Open-weight Xiaomi MoE model for efficient reasoning and coding agents.
+  kind: physical
+  publisher: Xiaomi
+  presentation:
+    logo: monogram
+    monogram: Mi
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/XiaomiMiMo/MiMo-V2-Flash
+    license: MIT
+  family: mimo-v2
+  parameter_size: 309B (15B active)
+  reasoning_family: mimo
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Xiaomi
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/XiaomiMiMo/MiMo-V2-Flash
+  tags:
+  - open_weights
+  - reasoning
+  - efficient
+  - moe
+- id: xiaomi/mimo-v2.5
+  display_name: MiMo V2.5
+  description: Open-weight native multimodal Xiaomi model for reasoning, coding, and agentic workloads.
+  kind: physical
+  publisher: Xiaomi
+  presentation:
+    logo: monogram
+    monogram: Mi
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/XiaomiMiMo/MiMo-V2.5
+    license: MIT
+  family: mimo-v2
+  parameter_size: 310B (15B active)
+  reasoning_family: mimo
+  lifecycle: active
+  limits:
+    context_window_size: 1048576
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - audio
+  - video
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    - audio
+    output:
+    - text
+  verification:
+    authority: Xiaomi
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/XiaomiMiMo/MiMo-V2.5
+  tags:
+  - open_weights
+  - reasoning
+  - coding
+  - agentic
+  - multimodal
+- id: xiaomi/mimo-v2.5-pro
+  display_name: MiMo V2.5 Pro
+  description: High-capability open-weight Xiaomi model for complex software agents.
+  kind: physical
+  publisher: Xiaomi
+  presentation:
+    logo: monogram
+    monogram: Mi
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/XiaomiMiMo/MiMo-V2.5-Pro
+    license: MIT
+  family: mimo-v2
+  parameter_size: 1.02T (42B active)
+  reasoning_family: mimo
+  lifecycle: active
+  limits:
+    context_window_size: 1048576
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Xiaomi
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/XiaomiMiMo/MiMo-V2.5-Pro
+  tags:
+  - open_weights
+  - reasoning
+  - coding
+  - agentic
+- id: xiaomi/mimo-v2-omni
+  display_name: MiMo V2 Omni
+  description: Xiaomi's native omni-modal foundation model for perception-grounded agents across text, image, video, and audio.
+  kind: physical
+  publisher: Xiaomi
+  presentation:
+    logo: package:xiaomimimo
+    monogram: Mi
+    monochrome: false
+  distribution:
+    type: proprietary_api
+    source: https://mimo.xiaomi.com/mimo-v2-omni
+  family: mimo-v2
+  released_at: 2026-03-18
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - audio
+  - video
+  - long_context
+  modalities:
+    input: [text, image, video, audio]
+    output: [text]
+  verification:
+    authority: Xiaomi MiMo Team
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://mimo.xiaomi.com/mimo-v2-omni
+  tags: [proprietary, multimodal, agentic, frontier]
+- id: xiaomi/mimo-7b-rl
+  display_name: MiMo 7B RL
+  description: Compact open-weight Xiaomi reasoning model post-trained with reinforcement learning for mathematics and code.
+  kind: physical
+  publisher: Xiaomi
+  presentation:
+    logo: package:xiaomimimo
+    monogram: Mi
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/XiaomiMiMo/MiMo-7B-RL
+    license: MIT
+  family: mimo-7b
+  parameter_size: 7B
+  lifecycle: active
+  limits:
+    context_window_size: 32768
+  capabilities: [chat, reasoning, long_context]
+  modalities:
+    input: [text]
+    output: [text]
+  verification:
+    authority: Xiaomi MiMo Team
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/XiaomiMiMo/MiMo-7B-RL
+  tags: [open_weights, reasoning, coding, efficient]
+- id: xiaomi/mimo-vl-7b-rl-2508
+  display_name: MiMo VL 7B RL 2508
+  description: Compact open-weight Xiaomi vision-language reasoning model with controllable thinking.
+  kind: physical
+  publisher: Xiaomi
+  presentation:
+    logo: package:xiaomimimo
+    monogram: Mi
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/XiaomiMiMo/MiMo-VL-7B-RL-2508
+    license: MIT
+  family: mimo-vl
+  parameter_size: 7B
+  lifecycle: active
+  limits:
+    context_window_size: 32768
+  capabilities: [chat, reasoning, vision, structured_output]
+  modalities:
+    input: [text, image, video]
+    output: [text]
+  verification:
+    authority: Xiaomi MiMo Team
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/XiaomiMiMo/MiMo-VL-7B-RL-2508
+  tags: [open_weights, reasoning, multimodal, efficient]
+- id: xiaomi/mimo-v2-pro
+  display_name: MiMo V2 Pro
+  description: Previous-generation Xiaomi flagship foundation model for long-context agentic workloads.
+  kind: physical
+  publisher: Xiaomi
+  presentation:
+    logo: package:xiaomimimo
+    monogram: Mi
+    monochrome: false
+  distribution:
+    type: proprietary_api
+    source: https://mimo.xiaomi.com/mimo-v2-pro
+  family: mimo-v2
+  reasoning_family: mimo
+  lifecycle: deprecated
+  limits:
+    context_window_size: 1048576
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities:
+    input: [text]
+    output: [text]
+  verification:
+    authority: Xiaomi MiMo Team
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://platform.xiaomimimo.com/docs/en-US/quick-start/summary/model
+  tags: [proprietary, reasoning, coding, agentic, previous_generation]

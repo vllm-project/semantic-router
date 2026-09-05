@@ -53,8 +53,8 @@ def merge_target_payload() -> dict:
         ],
         "providers": {
             "defaults": {
-                "default_model": "existing-model",
-                "default_reasoning_effort": "medium",
+                "model": "existing-model",
+                "reasoning_effort": "medium",
             },
             "models": [
                 {
@@ -63,6 +63,7 @@ def merge_target_payload() -> dict:
                         {
                             "endpoint": "127.0.0.1:8000",
                             "protocol": "http",
+                            "provider": "vllm",
                             "weight": 1,
                         }
                     ],
@@ -172,7 +173,7 @@ def test_cli_config_import_openclaw_bootstraps_target_and_rewrites_source(
     imported = yaml.safe_load(target_path.read_text(encoding="utf-8"))
     assert imported["version"] == "v0.3"
     assert imported["listeners"][0]["port"] == 8899
-    assert imported["providers"]["defaults"]["default_model"] == "qwen3-8b"
+    assert imported["providers"]["defaults"]["model"] == "qwen3-8b"
     assert imported["providers"]["models"] == [
         {
             "name": "qwen3-8b",
@@ -242,7 +243,7 @@ def test_cli_config_import_openclaw_merges_existing_target_and_preserves_section
     assert merged["global"]["router"]["config_source"] == "file"
     assert merged["routing"]["signals"]["keywords"][0]["name"] == "keep"
     assert merged["routing"]["decisions"][0]["name"] == "existing-default"
-    assert merged["providers"]["defaults"]["default_model"] == "existing-model"
+    assert merged["providers"]["defaults"]["model"] == "existing-model"
 
     model_names = {model["name"] for model in merged["providers"]["models"]}
     assert model_names == {"existing-model", "gpt-4o-mini", "gpt-4.1"}
@@ -452,11 +453,13 @@ def test_cli_config_import_openclaw_requires_force_when_backup_exists(
                     {"name": "http-8899", "address": "0.0.0.0", "port": 8899}
                 ],
                 "providers": {
-                    "defaults": {"default_model": "demo-model"},
+                    "defaults": {"model": "demo-model"},
                     "models": [
                         {
                             "name": "demo-model",
-                            "backend_refs": [{"endpoint": "127.0.0.1:8000"}],
+                            "backend_refs": [
+                                {"endpoint": "127.0.0.1:8000", "provider": "vllm"}
+                            ],
                         }
                     ],
                 },

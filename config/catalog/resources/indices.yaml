@@ -1,0 +1,41 @@
+- id: vllm-sr/intelligence@1.0.0
+  display_name: vLLM-SR Published Intelligence Index
+  description: Directional composite of five public benchmarks reported by primary model sources.
+  methodology: https://github.com/vllm-project/semantic-router/blob/main/website/docs/proposals/unified-model-catalog-and-evaluation-index.md
+  aggregation: weighted_mean
+  scale: [0, 100]
+  missing:
+    policy: require_coverage
+    minimum: 0.6
+  domains:
+    general_reasoning: 0.20
+    scientific_reasoning: 0.20
+    frontier_reasoning: 0.20
+    software_engineering: 0.20
+    agentic_systems: 0.20
+  components:
+    - benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+      metric: accuracy
+      benchmark_profile: published-standard
+      weight: 0.20
+      normalization: {type: identity}
+    - benchmark: idavidrein/gpqa-diamond@1.0.0
+      metric: accuracy
+      benchmark_profile: published-standard
+      weight: 0.20
+      normalization: {type: identity}
+    - benchmark: cais/humanitys-last-exam@1.0.0
+      metric: accuracy
+      benchmark_profile: no-tools
+      weight: 0.20
+      normalization: {type: identity}
+    - benchmark: swe-bench/verified@1.0.0
+      metric: resolved
+      benchmark_profile: published-agent
+      weight: 0.20
+      normalization: {type: identity}
+    - benchmark: harbor/terminal-bench@2.1.0
+      metric: resolved
+      benchmark_profile: published-agent
+      weight: 0.20
+      normalization: {type: identity}

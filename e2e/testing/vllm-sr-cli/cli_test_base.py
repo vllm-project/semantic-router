@@ -345,7 +345,7 @@ class CLITestBase(unittest.TestCase):
         model_name: str = "test-model",
         endpoint: str = "host.docker.internal:8000",
         base_url: str | None = None,
-        provider: str | None = None,
+        provider: str | None = "vllm",
         api_key_env: str | None = None,
         api_only: bool = False,
         managed_storage: bool = False,
@@ -382,8 +382,8 @@ class CLITestBase(unittest.TestCase):
             ],
             "providers": {
                 "defaults": {
-                    "default_model": model_name,
-                    "default_reasoning_effort": "medium",
+                    "model": model_name,
+                    "reasoning_effort": "medium",
                 },
                 "models": [
                     {

@@ -44,9 +44,10 @@ type BackendEndpoint struct {
 // DiscoveredProviderModel represents one logical model plus its discovered
 // backend bindings and routing metadata.
 type DiscoveredProviderModel struct {
-	ReasoningFamily string `yaml:"reasoning_family,omitempty"`
-	BackendRefs     []routerconfig.CanonicalBackendRef
-	LoRAs           []vllmv1alpha1.LoRAAdapterSpec `yaml:"loras,omitempty"`
+	Catalog     string
+	Reasoning   *routerconfig.CanonicalReasoning
+	BackendRefs []routerconfig.CanonicalBackendRef
+	LoRAs       []vllmv1alpha1.LoRAAdapterSpec
 }
 
 // discoverKServeBackend discovers backend from KServe InferenceService
@@ -229,28 +230,20 @@ func discoverVLLMBackends(ctx context.Context, c client.Client, vllmEndpoints []
 	models := make(map[string]DiscoveredProviderModel)
 
 	for _, vllmEndpoint := range vllmEndpoints {
-		// Discover backend endpoint
 		endpoint, err := discoverBackendEndpoint(ctx, c, vllmEndpoint, namespace)
 		if err != nil {
 			logger.Error(err, "Failed to discover backend endpoint", "name", vllmEndpoint.Name)
 			// Continue with other endpoints instead of failing completely
 			continue
 		}
-
-		if vllmEndpoint.Model != "" {
-			modelConfig := models[vllmEndpoint.Model]
-			if modelConfig.ReasoningFamily == "" {
-				modelConfig.ReasoningFamily = vllmEndpoint.ReasoningFamily
-			}
-			modelConfig.BackendRefs = append(modelConfig.BackendRefs, routerconfig.CanonicalBackendRef{
-				Name:     endpoint.Name,
-				Endpoint: fmt.Sprintf("%s:%d", endpoint.Address, endpoint.Port),
-				Protocol: endpoint.Protocol,
-				Weight:   endpoint.Weight,
-			})
-			modelConfig.LoRAs = mergeDiscoveredLoRAs(modelConfig.LoRAs, vllmEndpoint.LoRAs)
-			models[vllmEndpoint.Model] = modelConfig
+		if vllmEndpoint.Model == "" {
+			continue
 		}
+		modelConfig, err := mergeDiscoveredProviderModel(models[vllmEndpoint.Model], vllmEndpoint, endpoint)
+		if err != nil {
+			return nil, err
+		}
+		models[vllmEndpoint.Model] = modelConfig
 	}
 
 	if len(models) == 0 {
@@ -260,6 +253,84 @@ func discoverVLLMBackends(ctx context.Context, c client.Client, vllmEndpoints []
 
 	logger.Info("Generated discovered backend refs", "count", len(models))
 	return models, nil
+}
+
+func mergeDiscoveredProviderModel(
+	existing DiscoveredProviderModel,
+	spec vllmv1alpha1.VLLMEndpointSpec,
+	endpoint *BackendEndpoint,
+) (DiscoveredProviderModel, error) {
+	catalog, err := mergeDiscoveredCatalog(existing.Catalog, spec.Catalog, spec.Model)
+	if err != nil {
+		return existing, err
+	}
+	reasoning, err := mergeDiscoveredReasoning(existing.Reasoning, spec.Reasoning, spec.Model)
+	if err != nil {
+		return existing, err
+	}
+	existing.Catalog = catalog
+	existing.Reasoning = reasoning
+	existing.BackendRefs = append(existing.BackendRefs, routerconfig.CanonicalBackendRef{
+		Name:     endpoint.Name,
+		Endpoint: fmt.Sprintf("%s:%d", endpoint.Address, endpoint.Port),
+		Protocol: endpoint.Protocol,
+		Weight:   endpoint.Weight,
+		Provider: "vllm",
+	})
+	existing.LoRAs = mergeDiscoveredLoRAs(existing.LoRAs, spec.LoRAs)
+	return existing, nil
+}
+
+func mergeDiscoveredCatalog(existing, incoming, model string) (string, error) {
+	if existing != "" && incoming != "" && existing != incoming {
+		return "", fmt.Errorf("model %q declares conflicting catalog identities %q and %q", model, existing, incoming)
+	}
+	if existing != "" {
+		return existing, nil
+	}
+	return incoming, nil
+}
+
+func mergeDiscoveredReasoning(
+	existing *routerconfig.CanonicalReasoning,
+	incoming *vllmv1alpha1.ModelReasoningSpec,
+	model string,
+) (*routerconfig.CanonicalReasoning, error) {
+	candidate := canonicalReasoning(incoming)
+	if existing != nil && candidate != nil && !sameCanonicalReasoning(existing, candidate) {
+		return nil, fmt.Errorf("model %q declares conflicting reasoning behavior", model)
+	}
+	if existing != nil {
+		return existing, nil
+	}
+	return candidate, nil
+}
+
+func canonicalReasoning(spec *vllmv1alpha1.ModelReasoningSpec) *routerconfig.CanonicalReasoning {
+	if spec == nil {
+		return nil
+	}
+	return &routerconfig.CanonicalReasoning{
+		Family: spec.Family, Type: spec.Type, Parameter: spec.Parameter,
+		Levels: append([]string(nil), spec.Levels...), Default: spec.Default,
+	}
+}
+
+func sameCanonicalReasoning(left, right *routerconfig.CanonicalReasoning) bool {
+	if left == nil || right == nil {
+		return left == right
+	}
+	if left.Family != right.Family || left.Type != right.Type ||
+		left.Parameter != right.Parameter || left.Default != right.Default ||
+		len(left.Levels) != len(right.Levels) {
+		return false
+	}
+	for index := range left.Levels {
+		if left.Levels[index] != right.Levels[index] {
+			return false
+		}
+	}
+	return true
 }
 
 func mergeDiscoveredLoRAs(existing []vllmv1alpha1.LoRAAdapterSpec, incoming []vllmv1alpha1.LoRAAdapterSpec) []vllmv1alpha1.LoRAAdapterSpec {

@@ -45,12 +45,13 @@ listeners:
     port: 8888
 providers:
   defaults:
-    default_model: qwen3
+    model: qwen3
   models:
     - name: qwen3
       provider_model_id: qwen3
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
 routing:
   signals:
     domains:
@@ -101,12 +102,13 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: gpt-4o
+    model: gpt-4o
   models:
     - name: gpt-4o
       provider_model_id: gpt-4o
       backend_refs:
         - endpoint: https://api.openai.com/v1
+          provider: vllm
           api_key: "${OPENAI_API_KEY}"
 routing:
   signals:

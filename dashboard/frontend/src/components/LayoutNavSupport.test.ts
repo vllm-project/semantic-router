@@ -18,7 +18,7 @@ describe('layout navigation route matching', () => {
     expect(findActiveLayoutMenuCategory(BUILD_MENU_CATEGORIES, pathname, false)).toBe('knowledge')
   })
 
-  it('keeps Models and Mixture-of-Models together in the first Routing column', () => {
+  it('keeps Model Hub, Models, and Mixture-of-Models together in the first Routing column', () => {
     const models = BUILD_MENU_CATEGORIES.find(
       (category) => category.key === 'routing',
     )?.sections.find((section) => section.title === 'Models')
@@ -27,6 +27,11 @@ describe('layout navigation route matching', () => {
     )
 
     expect(models?.items[0]).toMatchObject({
+      kind: 'route',
+      label: 'Model Hub',
+      to: '/models',
+    })
+    expect(models?.items[1]).toMatchObject({
       kind: 'config',
       label: 'Models',
       configSection: 'models',
@@ -36,6 +41,6 @@ describe('layout navigation route matching', () => {
       label: 'Mixture-of-Models',
       configSection: 'entrypoints-recipes',
     })
-    expect(models?.items.indexOf(entrypoints!)).toBe(1)
+    expect(models?.items.indexOf(entrypoints!)).toBe(2)
   })
 })

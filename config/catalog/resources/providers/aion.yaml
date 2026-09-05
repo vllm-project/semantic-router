@@ -1,0 +1,60 @@
+id: aion
+display_name: Aion Labs
+description: Aion reasoning models through an OpenAI-compatible API.
+category: model_api
+support_tier: compatible
+default_base_url: https://api.aionlabs.ai/v1
+protocols:
+- openai/chat-completions@1
+- openai/responses@1
+default_protocol: openai/chat-completions@1
+supported_operations:
+- openai/chat-completions@1#create
+- openai/chat-completions@1#list_models
+- openai/responses@1#create
+- openai/responses@1#list_models
+reasoning_transport: top_level_effort
+auth:
+  strategy: bearer
+  header: Authorization
+  prefix: Bearer
+presentation:
+  logo: monogram
+  monogram: Ai
+  monochrome: true
+conformance:
+  status: unverified
+models:
+- catalog: aion/aion-2.0
+  id: aion-labs/aion-2.0
+  protocols: &aion-protocols [openai/chat-completions@1, openai/responses@1]
+  pricing:
+    currency: USD
+    prompt_per_1m: 0.80
+    cached_input_per_1m: 0.20
+    completion_per_1m: 1.60
+  lifecycle: active
+  verification: &aion-binding-verification
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://www.aionlabs.ai/docs/models/
+- catalog: aion/aion-3.0
+  id: aion-labs/aion-3.0
+  protocols: *aion-protocols
+  pricing:
+    currency: USD
+    prompt_per_1m: 3.00
+    cached_input_per_1m: 0.75
+    completion_per_1m: 6.00
+  lifecycle: active
+  verification: *aion-binding-verification
+- catalog: aion/aion-3.0-mini
+  id: aion-labs/aion-3.0-mini
+  protocols: *aion-protocols
+  pricing:
+    currency: USD
+    prompt_per_1m: 0.70
+    cached_input_per_1m: 0.18
+    completion_per_1m: 1.40
+  lifecycle: active
+  verification: *aion-binding-verification

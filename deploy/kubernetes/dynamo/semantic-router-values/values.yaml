@@ -3,11 +3,12 @@ config:
   listeners: []
   providers:
     defaults:
-      default_model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+      model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
     models:
       - name: TinyLlama/TinyLlama-1.1B-Chat-v1.0
         backend_refs:
           - name: dynamo-frontend
+            provider: vllm
             endpoint: dynamo-vllm-frontend.dynamo-system.svc.cluster.local:8000
             weight: 1
   routing:

@@ -1,0 +1,64 @@
+id: xiaomi
+display_name: Xiaomi MiMo API
+description: MiMo models through Xiaomi's OpenAI-compatible API platform.
+category: model_api
+support_tier: native
+default_base_url: https://api.xiaomimimo.com/v1
+protocols:
+- openai/chat-completions@1
+default_protocol: openai/chat-completions@1
+supported_operations:
+- openai/chat-completions@1#create
+- openai/chat-completions@1#list_models
+reasoning_transport: thinking_object
+auth:
+  strategy: api_key_header
+  header: api-key
+  prefix: ''
+presentation:
+  logo: package:xiaomimimo
+  monogram: Mi
+  monochrome: false
+conformance:
+  status: unverified
+models:
+- catalog: xiaomi/mimo-v2-flash
+  id: mimo-v2-flash
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://mimo.mi.com/docs/en-US/quick-start/summary/first-api-call
+- catalog: xiaomi/mimo-v2.5
+  id: mimo-v2.5
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://platform.xiaomimimo.com/docs/en-US/usage-guide/passing-back-reasoning_content
+- catalog: xiaomi/mimo-v2.5-pro
+  id: mimo-v2.5-pro
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://platform.xiaomimimo.com/docs/en-US/usage-guide/passing-back-reasoning_content
+- catalog: xiaomi/mimo-v2-omni
+  id: mimo-v2-omni
+  protocols: [openai/chat-completions@1]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://mimo.xiaomi.com/mimo-v2-omni
+- catalog: xiaomi/mimo-v2-pro
+  id: mimo-v2-pro
+  protocols: [openai/chat-completions@1]
+  lifecycle: deprecated
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://platform.xiaomimimo.com/docs/en-US/quick-start/summary/model

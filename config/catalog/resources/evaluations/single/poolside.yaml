@@ -1,0 +1,54 @@
+- id: poolside/laguna-xs-2.1-model-card-swe-bench-verified@1.0.0
+  model: poolside/laguna-xs-2.1
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: enabled
+  subject: &laguna-xs-subject
+    variant: Laguna-XS-2.1
+    mode: thinking
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.709
+  status: available
+  evidence: &laguna-xs-evidence
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/poolside/Laguna-XS-2.1
+    redistributable: true
+- id: poolside/laguna-xs-2.1-model-card-swe-bench-pro@1.0.0
+  model: poolside/laguna-xs-2.1
+  benchmark: swe-bench/pro@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: enabled
+  subject: *laguna-xs-subject
+  metrics:
+    resolved: 0.476
+  status: available
+  evidence: *laguna-xs-evidence
+- id: poolside/laguna-xs-2.1-model-card-terminal-bench-2.0@1.0.0
+  model: poolside/laguna-xs-2.1
+  benchmark: harbor/terminal-bench@2.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: enabled
+  subject: *laguna-xs-subject
+  metrics:
+    resolved: 0.375
+  status: available
+  evidence: *laguna-xs-evidence
+- id: poolside/laguna-s-2.1-model-card-swe-bench-pro@1.0.0
+  model: poolside/laguna-s-2.1
+  benchmark: swe-bench/pro@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: enabled
+  subject:
+    variant: Laguna-S-2.1
+    mode: thinking
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.594
+  status: available
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/poolside/Laguna-S-2.1
+    redistributable: true

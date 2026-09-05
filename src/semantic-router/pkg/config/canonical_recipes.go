@@ -81,9 +81,13 @@ func applyCanonicalRecipeState(cfg *RouterConfig, canonical *CanonicalConfig) er
 
 func validateCanonicalRecipes(canonical *CanonicalConfig) error {
 	modelCards := canonicalRoutingModels(canonical.Routing)
-	modelsByName := make(map[string]RoutingModel, len(modelCards))
+	cardsByName := make(map[string]RoutingModel, len(modelCards))
 	for _, model := range modelCards {
-		modelsByName[model.Name] = model
+		cardsByName[model.Name] = model
+	}
+	aliases := make(map[string]CanonicalProviderModel, len(canonical.Providers.Models))
+	for _, model := range canonical.Providers.Models {
+		aliases[model.Name] = model
 	}
 
 	seen := make(map[RecipeName]struct{}, len(canonical.Recipes))
@@ -109,7 +113,7 @@ func validateCanonicalRecipes(canonical *CanonicalConfig) error {
 		if len(recipe.Routing.ModelCards) > 0 {
 			return fmt.Errorf("recipes[%s].routing.modelCards: the model catalog is shared; define modelCards under top-level routing", name)
 		}
-		if err := validateCanonicalDecisions(recipe.Routing.Decisions, modelsByName, modelCards); err != nil {
+		if err := validateCanonicalDecisions(recipe.Routing.Decisions, aliases, cardsByName); err != nil {
 			return fmt.Errorf("recipes[%s]: %w", name, err)
 		}
 	}
@@ -160,14 +164,37 @@ func normalizeCanonicalEntrypoints(cfg *RouterConfig, canonical *CanonicalConfig
 // routable name would silently hijack it, because requestModelActsAsAuto stops
 // treating the name as an explicitly specified model.
 func entrypointNameConflict(cfg *RouterConfig, canonical *CanonicalConfig, name string) string {
-	for _, model := range canonicalRoutingModels(canonical.Routing) {
+	if conflict := configuredEntrypointNameConflict(canonical, name); conflict != "" {
+		return conflict
+	}
+	return algorithmEntrypointNameConflict(cfg, name)
+}
+
+func configuredEntrypointNameConflict(canonical *CanonicalConfig, name string) string {
+	cards := canonicalRoutingModels(canonical.Routing)
+	for _, model := range canonical.Providers.Models {
 		if model.Name == name {
 			return "a configured model"
 		}
-		if routingModelHasLoRA(model, name) {
+		cardID := model.Catalog
+		if cardID == "" {
+			cardID = model.Name
+		}
+		for _, card := range cards {
+			if card.Name == cardID && routingModelHasLoRA(card, name) {
+				return "a configured LoRA adapter"
+			}
+		}
+	}
+	for _, card := range cards {
+		if routingModelHasLoRA(card, name) {
 			return "a configured LoRA adapter"
 		}
 	}
+	return ""
+}
+
+func algorithmEntrypointNameConflict(cfg *RouterConfig, name string) string {
 	switch {
 	case cfg.IsAutoModelName(name):
 		return "an auto-model alias"

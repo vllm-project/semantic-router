@@ -1,0 +1,215 @@
+- id: lg/exaone-4.0-32b
+  display_name: EXAONE 4.0 32B
+  description: Multilingual hybrid-reasoning model with agentic tool use and 128K context.
+  kind: physical
+  publisher: LG AI Research
+  presentation:
+    logo: package:exaone
+    monogram: E
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/LGAI-EXAONE/EXAONE-4.0-32B
+    license: EXAONE-AI-Model-License-1.2
+  family: exaone-4
+  parameter_size: 32B
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  reasoning_family: exaone
+  verification:
+    authority: LG AI Research
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/LGAI-EXAONE/EXAONE-4.0-32B
+  tags:
+  - open_weights
+  - multilingual
+  - hybrid_reasoning
+  - agentic
+- id: lg/exaone-4.0-1.2b
+  display_name: EXAONE 4.0 1.2B
+  description: On-device EXAONE model with hybrid reasoning and multilingual support.
+  kind: physical
+  publisher: LG AI Research
+  presentation:
+    logo: package:exaone
+    monogram: E
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/LGAI-EXAONE/EXAONE-4.0-1.2B
+    license: EXAONE-AI-Model-License-1.2
+  family: exaone-4
+  parameter_size: 1.2B
+  lifecycle: active
+  limits:
+    context_window_size: 65536
+  capabilities:
+  - chat
+  - reasoning
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  reasoning_family: exaone
+  verification:
+    authority: LG AI Research
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/LGAI-EXAONE/EXAONE-4.0-1.2B
+  tags:
+  - open_weights
+  - multilingual
+  - hybrid_reasoning
+  - efficient
+  - edge
+- id: lg/exaone-3.5-32b-instruct
+  display_name: EXAONE 3.5 32B Instruct
+  description: Previous-generation multilingual EXAONE instruction model for enterprise workloads.
+  kind: physical
+  publisher: LG AI Research
+  presentation:
+    logo: package:exaone
+    monogram: E
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/LGAI-EXAONE/EXAONE-3.5-32B-Instruct
+    license: EXAONE-AI-Model-License-1.1-NC
+  family: exaone-3.5
+  parameter_size: 32B
+  lifecycle: active
+  limits:
+    context_window_size: 32768
+  capabilities:
+  - chat
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: LG AI Research
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/LGAI-EXAONE/EXAONE-3.5-32B-Instruct
+  tags:
+  - open_weights
+  - multilingual
+  - previous_generation
+- id: lg/k-exaone-2.0-750b-a37b
+  display_name: K-EXAONE 2.0 750B A37B
+  description: Frontier-scale open-weight multilingual MoE from LG AI Research with hybrid reasoning and long-context agent capabilities.
+  kind: physical
+  publisher: LG AI Research
+  presentation:
+    logo: package:exaone
+    monogram: E
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/LGAI-EXAONE/K-EXAONE-2.0-750B-A37B
+    license: Apache-2.0
+  family: k-exaone-2.0
+  parameter_size: 750B (37B active)
+  knowledge_cutoff: 2025-Q2
+  reasoning_family: exaone
+  lifecycle: experimental
+  limits:
+    context_window_size: 262144
+    max_output_tokens: 32768
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input: [text]
+    output: [text]
+  verification:
+    authority: LG AI Research
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/LGAI-EXAONE/K-EXAONE-2.0-750B-A37B
+  compatibility:
+    vllm:
+      requires_custom_build: true
+  tags: [open_weights, frontier, multilingual, hybrid_reasoning, moe, agentic]
+- id: lg/k-exaone-236b-a23b
+  display_name: K-EXAONE 236B A23B
+  description: Previous K-EXAONE frontier MoE with hybrid reasoning, multilingual support, and long-context tool use.
+  kind: physical
+  publisher: LG AI Research
+  presentation:
+    logo: package:exaone
+    monogram: E
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/LGAI-EXAONE/K-EXAONE-236B-A23B
+    license: K-EXAONE-AI-Model-License
+  family: k-exaone
+  parameter_size: 236B (23B active)
+  knowledge_cutoff: 2024-12
+  reasoning_family: exaone
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities: [chat, reasoning, tools, structured_output, long_context]
+  modalities:
+    input: [text]
+    output: [text]
+  verification:
+    authority: LG AI Research
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/LGAI-EXAONE/K-EXAONE-236B-A23B
+  tags: [open_weights, multilingual, hybrid_reasoning, moe, agentic, previous_generation]
+- id: lg/exaone-4.5-33b
+  display_name: EXAONE 4.5 33B
+  description: Open-weight multimodal EXAONE generation for industrial reasoning, vision, and tool workflows.
+  kind: physical
+  publisher: LG AI Research
+  presentation:
+    logo: package:exaone
+    monogram: E
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/LGAI-EXAONE/EXAONE-4.5-33B
+    license: EXAONE-AI-Model-License-1.2-NC
+  family: exaone-4.5
+  parameter_size: 33B
+  knowledge_cutoff: 2024-12
+  reasoning_family: exaone
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities: [chat, reasoning, tools, structured_output, vision, long_context]
+  modalities:
+    input: [text, image]
+    output: [text]
+  verification:
+    authority: LG AI Research
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/LGAI-EXAONE/EXAONE-4.5-33B
+  tags: [open_weights, multimodal, multilingual, hybrid_reasoning, dense]

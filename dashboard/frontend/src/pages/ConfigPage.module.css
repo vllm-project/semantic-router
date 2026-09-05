@@ -342,6 +342,14 @@
   font-family: var(--font-mono);
 }
 
+.inlineInfo {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  color: var(--ifm-color-emphasis-700);
+  background: color-mix(in srgb, var(--ifm-color-primary) 8%, transparent);
+  border-bottom: 1px solid var(--ifm-color-emphasis-200);
+}
+
 .codeBlock {
   margin: 1rem;
   padding: 1.5rem;

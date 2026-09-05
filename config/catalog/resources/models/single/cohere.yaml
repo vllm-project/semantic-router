@@ -1,0 +1,588 @@
+- id: cohere/command-r-v01
+  display_name: Command R v01
+  description: Open-weight Command R model for retrieval-augmented generation and tools.
+  kind: physical
+  publisher: Cohere
+  presentation:
+    logo: package:cohere
+    monogram: C
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/CohereForAI/c4ai-command-r-v01
+    license: CC-BY-NC-4.0
+  family: command-r
+  parameter_size: 35B
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Cohere For AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/CohereForAI/c4ai-command-r-v01
+  tags:
+  - open_weights
+  - rag
+  - tools
+  - previous_generation
+- id: cohere/command-r-plus
+  display_name: Command R+
+  description: Large open-weight Command R model for RAG and tool use.
+  kind: physical
+  publisher: Cohere
+  presentation:
+    logo: package:cohere
+    monogram: C
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/CohereForAI/c4ai-command-r-plus
+    license: CC-BY-NC-4.0
+  family: command-r
+  parameter_size: 104B
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Cohere For AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/CohereForAI/c4ai-command-r-plus
+  tags:
+  - open_weights
+  - rag
+  - tools
+  - previous_generation
+- id: cohere/command-r7b-12-2024
+  display_name: Command R7B 12-2024
+  description: Compact open-weight Command R model for RAG and agents.
+  kind: physical
+  publisher: Cohere
+  presentation:
+    logo: package:cohere
+    monogram: C
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/CohereForAI/c4ai-command-r7b-12-2024
+    license: CC-BY-NC-4.0
+  family: command-r
+  parameter_size: 7B
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Cohere For AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/CohereForAI/c4ai-command-r7b-12-2024
+  tags:
+  - open_weights
+  - rag
+  - tools
+  - efficient
+- id: cohere/aya-expanse-8b
+  display_name: Aya Expanse 8B
+  description: Open-weight multilingual instruction model from Cohere For AI.
+  kind: physical
+  publisher: Cohere
+  presentation:
+    logo: package:cohere
+    monogram: C
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/CohereForAI/aya-expanse-8b
+    license: CC-BY-NC-4.0
+  family: aya-expanse
+  parameter_size: 8B
+  lifecycle: active
+  limits:
+    context_window_size: 8192
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Cohere For AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/CohereForAI/aya-expanse-8b
+  tags:
+  - open_weights
+  - multilingual
+  - efficient
+- id: cohere/aya-expanse-32b
+  display_name: Aya Expanse 32B
+  description: Large open-weight multilingual instruction model from Cohere For AI.
+  kind: physical
+  publisher: Cohere
+  presentation:
+    logo: package:cohere
+    monogram: C
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/CohereForAI/aya-expanse-32b
+    license: CC-BY-NC-4.0
+  family: aya-expanse
+  parameter_size: 32B
+  lifecycle: active
+  limits:
+    context_window_size: 8192
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Cohere For AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/CohereForAI/aya-expanse-32b
+  tags:
+  - open_weights
+  - multilingual
+- id: cohere/aya-23-8b
+  display_name: Aya 23 8B
+  description: Previous-generation multilingual Aya instruction model.
+  kind: physical
+  publisher: Cohere
+  presentation:
+    logo: package:cohere
+    monogram: C
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/CohereForAI/aya-23-8B
+    license: CC-BY-NC-4.0
+  family: aya-23
+  parameter_size: 8B
+  lifecycle: active
+  limits:
+    context_window_size: 8192
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Cohere For AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/CohereForAI/aya-23-8B
+  tags:
+  - open_weights
+  - multilingual
+  - previous_generation
+- id: cohere/aya-23-35b
+  display_name: Aya 23 35B
+  description: Large previous-generation multilingual Aya instruction model.
+  kind: physical
+  publisher: Cohere
+  presentation:
+    logo: package:cohere
+    monogram: C
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/CohereForAI/aya-23-35B
+    license: CC-BY-NC-4.0
+  family: aya-23
+  parameter_size: 35B
+  lifecycle: active
+  limits:
+    context_window_size: 8192
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Cohere For AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/CohereForAI/aya-23-35B
+  tags:
+  - open_weights
+  - multilingual
+  - previous_generation
+- id: cohere/command-r-plus-08-2024
+  display_name: Command R+ 08-2024
+  description: Open-weight Cohere model for retrieval, tools, and multilingual enterprise tasks.
+  kind: physical
+  publisher: Cohere
+  presentation:
+    logo: package:cohere
+    monogram: C
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/CohereForAI/c4ai-command-r-plus-08-2024
+    license: CC-BY-NC-4.0
+  family: command-r
+  parameter_size: 104B
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Cohere
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/CohereForAI/c4ai-command-r-plus-08-2024
+  tags:
+  - open_weights
+  - multilingual
+  - enterprise
+- id: cohere/command-a-03-2025
+  display_name: Command A 03-2025
+  description: Open-weight Cohere model for enterprise agents and multilingual tool use.
+  kind: physical
+  publisher: Cohere
+  presentation:
+    logo: package:cohere
+    monogram: C
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/CohereLabs/c4ai-command-a-03-2025
+    license: CC-BY-NC-4.0
+  family: command-a
+  parameter_size: 111B
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Cohere
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/CohereLabs/c4ai-command-a-03-2025
+  tags:
+  - open_weights
+  - multilingual
+  - agentic
+  - enterprise
+- id: cohere/command-a-vision-07-2025
+  display_name: Command A Vision 07-2025
+  description: Open-weight Cohere multimodal model for document and enterprise vision tasks.
+  kind: physical
+  publisher: Cohere
+  presentation:
+    logo: package:cohere
+    monogram: C
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/CohereLabs/command-a-vision-07-2025
+    license: CC-BY-NC-4.0
+  family: command-a
+  parameter_size: 112B
+  lifecycle: active
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Cohere
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/CohereLabs/command-a-vision-07-2025
+  tags:
+  - open_weights
+  - multimodal
+  - enterprise
+- id: cohere/command-a-reasoning-08-2025
+  display_name: Command A Reasoning 08-2025
+  description: Open-weight Cohere reasoning model for multilingual tools and agents.
+  kind: physical
+  publisher: Cohere
+  presentation:
+    logo: package:cohere
+    monogram: C
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/CohereLabs/command-a-reasoning-08-2025
+    license: CC-BY-NC-4.0
+  family: command-a
+  parameter_size: 111B
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+    max_output_tokens: 32768
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Cohere
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/CohereLabs/command-a-reasoning-08-2025
+  tags:
+  - open_weights
+  - reasoning
+  - multilingual
+  - agentic
+- id: cohere/command-a-plus-05-2026
+  display_name: Command A+ 05-2026
+  description: Open-weight multimodal Cohere MoE model for reasoning-heavy enterprise agents.
+  kind: physical
+  publisher: Cohere
+  presentation:
+    logo: package:cohere
+    monogram: C
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/CohereLabs/command-a-plus-05-2026-w4a4
+    license: Apache-2.0
+  family: command-a-plus
+  parameter_size: 218B (25B active)
+  released_at: 2026-05-20
+  knowledge_cutoff: 2025-04-01
+  lifecycle: active
+  limits:
+    context_window_size: 128000
+    max_output_tokens: 64000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Cohere
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.cohere.com/docs/command-a-plus
+  tags:
+  - open_weights
+  - multimodal
+  - reasoning
+  - multilingual
+  - moe
+  - agentic
+- id: cohere/north-mini-code-1.0
+  display_name: North Mini Code 1.0
+  description: Compact open-weight MoE model trained for agentic software engineering and terminal tasks.
+  kind: physical
+  publisher: Cohere
+  presentation:
+    logo: package:cohere
+    monogram: C
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/CohereLabs/North-Mini-Code-1.0
+    license: Apache-2.0
+  family: north-mini-code
+  parameter_size: 30B (3B active)
+  released_at: 2026-06-09
+  lifecycle: active
+  limits:
+    context_window_size: 256000
+    max_output_tokens: 64000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Cohere
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/CohereLabs/North-Mini-Code-1.0
+  tags:
+  - open_weights
+  - coding
+  - agentic
+  - efficient
+  - moe
+- id: cohere/tiny-aya-global
+  display_name: Tiny Aya Global
+  description: Compact globally balanced multilingual model spanning 70 languages for local and hosted chat.
+  kind: physical
+  publisher: Cohere
+  presentation: &tiny-aya-presentation
+    logo: package:cohere
+    monogram: C
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/CohereLabs/tiny-aya-global
+    license: CC-BY-NC-4.0
+  family: tiny-aya
+  parameter_size: 3.35B
+  released_at: 2026-03-12
+  lifecycle: active
+  limits: &tiny-aya-limits
+    context_window_size: 8192
+    max_output_tokens: 8192
+  capabilities: &tiny-aya-capabilities [chat, multilingual]
+  modalities: &tiny-aya-modalities
+    input: [text]
+    output: [text]
+  verification: &tiny-aya-verification
+    authority: Cohere Labs
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.cohere.com/v2/docs/tiny-aya
+  tags: &tiny-aya-tags [open_weights, multilingual, efficient, on_device]
+- id: cohere/tiny-aya-earth
+  display_name: Tiny Aya Earth
+  description: Compact Tiny Aya variant specialized for West Asian and African languages.
+  kind: physical
+  publisher: Cohere
+  presentation: *tiny-aya-presentation
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/CohereLabs/tiny-aya-earth
+    license: CC-BY-NC-4.0
+  family: tiny-aya
+  parameter_size: 3.35B
+  released_at: 2026-03-12
+  lifecycle: active
+  limits: *tiny-aya-limits
+  capabilities: *tiny-aya-capabilities
+  modalities: *tiny-aya-modalities
+  verification: *tiny-aya-verification
+  tags: *tiny-aya-tags
+- id: cohere/tiny-aya-fire
+  display_name: Tiny Aya Fire
+  description: Compact Tiny Aya variant specialized for South Asian languages.
+  kind: physical
+  publisher: Cohere
+  presentation: *tiny-aya-presentation
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/CohereLabs/tiny-aya-fire
+    license: CC-BY-NC-4.0
+  family: tiny-aya
+  parameter_size: 3.35B
+  released_at: 2026-03-12
+  lifecycle: active
+  limits: *tiny-aya-limits
+  capabilities: *tiny-aya-capabilities
+  modalities: *tiny-aya-modalities
+  verification: *tiny-aya-verification
+  tags: *tiny-aya-tags
+- id: cohere/tiny-aya-water
+  display_name: Tiny Aya Water
+  description: Compact Tiny Aya variant specialized for European and Asia-Pacific languages.
+  kind: physical
+  publisher: Cohere
+  presentation: *tiny-aya-presentation
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/CohereLabs/tiny-aya-water
+    license: CC-BY-NC-4.0
+  family: tiny-aya
+  parameter_size: 3.35B
+  released_at: 2026-03-12
+  lifecycle: active
+  limits: *tiny-aya-limits
+  capabilities: *tiny-aya-capabilities
+  modalities: *tiny-aya-modalities
+  verification: *tiny-aya-verification
+  tags: *tiny-aya-tags

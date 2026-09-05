@@ -282,12 +282,14 @@ def test_resolve_effective_config_path_injects_missing_amd_gpu_defaults_by_defau
                     }
                 ],
                 "providers": {
-                    "defaults": {"default_model": "test-model"},
+                    "defaults": {"model": "test-model"},
                     "models": [
                         {
                             "name": "test-model",
                             "provider_model_id": "test-model",
-                            "backend_refs": [{"endpoint": "127.0.0.1:8000"}],
+                            "backend_refs": [
+                                {"endpoint": "127.0.0.1:8000", "provider": "vllm"}
+                            ],
                         }
                     ],
                 },

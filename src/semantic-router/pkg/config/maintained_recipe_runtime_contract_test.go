@@ -23,7 +23,7 @@ func TestMaintainedRecipeExternalAliasesDoNotUseQwenReasoningFamily(t *testing.T
 				if !isExternalProviderModelID(model.ProviderModelID) {
 					continue
 				}
-				if model.ReasoningFamily == "qwen3" {
+				if model.Reasoning != nil && model.Reasoning.Family == "qwen3" {
 					t.Fatalf(
 						"external model %q (%s) must not receive Qwen reasoning parameters",
 						model.Name,

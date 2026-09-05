@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
@@ -79,7 +80,7 @@ func assertCanonicalRuntimeDSL(
 		t.Fatalf("decompile %s: %v", yamlPath, err)
 	}
 	if canonicalDSL != dsl {
-		t.Fatalf("%s is not the canonical DSL generated from %s", dslPath, yamlPath)
+		t.Fatalf("%s is not the canonical DSL generated from %s (-file +generated):\n%s", dslPath, yamlPath, cmp.Diff(dsl, canonicalDSL))
 	}
 }
 

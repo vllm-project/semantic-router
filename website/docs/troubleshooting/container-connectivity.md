@@ -47,7 +47,7 @@ providers:
         - name: local-vllm
           endpoint: model-server:8000
           protocol: http
-          type: vllm
+          provider: vllm
 ```
 
 Use a container DNS name when both services share a network. For a model server

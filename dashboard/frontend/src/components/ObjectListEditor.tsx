@@ -23,6 +23,10 @@ export interface ObjectEditorField<TItem extends object> {
   fullWidth?: boolean
   helpText?: string
   emptyValueLabel?: string
+  keyLabel?: string
+  keyPlaceholder?: string
+  valueLabel?: string
+  valuePlaceholder?: string
   shouldHide?: (item: TItem) => boolean
 }
 
@@ -188,10 +192,10 @@ export function ObjectListEditor<TItem extends object>({
                             }
                             onChange={(nextValue) => updateItem(index, field, nextValue)}
                             emptyLabel={field.emptyValueLabel}
-                            keyLabel="Header"
-                            keyPlaceholder="X-Header"
-                            valueLabel="Value"
-                            valuePlaceholder="Header value"
+                            keyLabel={field.keyLabel ?? 'Key'}
+                            keyPlaceholder={field.keyPlaceholder}
+                            valueLabel={field.valueLabel ?? 'Value'}
+                            valuePlaceholder={field.valuePlaceholder}
                             disabled={disabled}
                             readOnly={readOnly}
                           />

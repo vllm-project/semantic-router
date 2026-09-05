@@ -82,6 +82,7 @@ class _CatalogHeader:
     channel: str
     default_model: str
     enabled_models: tuple[str, ...]
+    default_intelligence_index: str
     compatibility: dict[str, Any]
     assets: dict[str, dict[str, str]]
 
@@ -137,6 +138,7 @@ def load_model_catalog(
         channel=header.channel,
         default_model=header.default_model,
         enabled_models=header.enabled_models,
+        default_intelligence_index=header.default_intelligence_index,
         assets=header.assets,
         models=models,
     )
@@ -178,6 +180,9 @@ def _parse_catalog_header(
     _reject_unknown_keys(defaults, _DEFAULT_KEYS, "defaults")
     default_model = _required_public_model_id(defaults, "model")
     enabled_models = _unique_model_ids(defaults.get("enabled"), "defaults.enabled")
+    default_intelligence_index = str(defaults.get("intelligence_index") or "").strip()
+    if not default_intelligence_index:
+        raise ModelCatalogError("catalog default intelligence index is required")
     if default_model not in enabled_models:
         raise ModelCatalogError("catalog default model must be enabled by default")
     catalog_compatibility = _required_mapping(document, "compatibility")
@@ -189,6 +194,7 @@ def _parse_catalog_header(
         channel=channel,
         default_model=default_model,
         enabled_models=enabled_models,
+        default_intelligence_index=default_intelligence_index,
         compatibility=catalog_compatibility,
         assets=_parse_assets(document.get("assets"), resource_version),
     )
@@ -211,6 +217,11 @@ def _parse_catalog_models(
     for raw in raw_models:
         if not isinstance(raw, dict):
             raise ModelCatalogError("catalog model entry is invalid")
+        kind = _required_enum(raw, "kind", SUPPORTED_MODEL_KINDS)
+        # Physical model cards share the package snapshot but are not CLI
+        # virtual-model bundles and therefore have no recipe asset to load.
+        if kind != "virtual":
+            continue
         _reject_unknown_keys(raw, _MODEL_KEYS, "model")
         model_id = _required_public_model_id(raw, "id")
         if model_id in seen:
@@ -269,7 +280,7 @@ def _parse_catalog_model(
         id=model_id,
         display_name=_required_string(raw, "display_name"),
         description=_required_string(raw, "description"),
-        kind=_required_enum(raw, "kind", SUPPORTED_MODEL_KINDS),
+        kind="virtual",
         family=_required_slug(raw, "family"),
         generation=_required_positive_int(raw, "generation"),
         policy_version=_required_semver(raw, "policy_version"),

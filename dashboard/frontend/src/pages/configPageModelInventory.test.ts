@@ -52,7 +52,9 @@ describe('model inventory filtering', () => {
   it('builds stable filter options without duplicates', () => {
     expect(getReasoningFamilyFilterOptions(models)).toEqual(['reasoning', 'standard'])
   })
+})
 
+describe('model inventory references', () => {
   it('protects default and decision-referenced models from destructive actions', () => {
     const referenceCounts = getModelReferenceCounts({
       routing: {
@@ -136,7 +138,9 @@ describe('model inventory filtering', () => {
       /routing decision/i,
     )
   })
+})
 
+describe('model structured field validation', () => {
   it('rejects duplicate names and malformed structured fields before saving', () => {
     expect(() => validateNewModelName('  local/model-001  ', models)).toThrow(/already exists/i)
     expect(validateNewModelName('  local/new-model  ', models)).toBe('local/new-model')
@@ -148,12 +152,14 @@ describe('model inventory filtering', () => {
     )
     expect(() =>
       validateModelStructuredFields({
-        backend_refs: [{ endpoint: 'localhost:8000', protocol: 'grpc' }],
+        backend_refs: [{ endpoint: 'localhost:8000', protocol: 'grpc', provider: 'vllm' }],
       }),
     ).toThrow(/http or https/i)
     expect(() =>
       validateModelStructuredFields({
-        backend_refs: [{ endpoint: 'localhost:8000', extra_headers: { valid: 1 } }],
+        backend_refs: [
+          { endpoint: 'localhost:8000', provider: 'vllm', extra_headers: { valid: 1 } },
+        ],
       }),
     ).toThrow(/text key\/value pairs/i)
     expect(() => validateModelStructuredFields({ tags: 'premium,fast' })).toThrow(
@@ -174,11 +180,23 @@ describe('model inventory filtering', () => {
     expect(() => validateModelStructuredFields({ pricing: [] })).toThrow(/json object/i)
     expect(() =>
       validateModelStructuredFields({
+        catalog: 'vendor/model',
+        reasoning_family: 'qwen3',
+      }),
+    ).toThrow(/inherit reasoning/i)
+    expect(() =>
+      validateModelStructuredFields({
+        evaluations: [{ benchmark: 'support', metrics: { score: 0.8 } }],
+      }),
+    ).toThrow(/namespaced, versioned benchmark/i)
+    expect(() =>
+      validateModelStructuredFields({
         backend_refs: [
           {
             endpoint: 'localhost:8000',
             protocol: 'http',
             weight: 1,
+            provider: 'vllm',
             extra_headers: { 'X-Tenant': 'demo' },
           },
         ],
@@ -187,6 +205,7 @@ describe('model inventory filtering', () => {
         external_model_ids: { openai: 'gpt-4.1' },
         tags: ['premium', 'fast'],
         pricing: { currency: 'USD', prompt_per_1m: 0.5 },
+        evaluations: [{ benchmark: 'acme/support@1', metrics: { resolution_rate: '0.82' } }],
       }),
     ).not.toThrow()
   })
