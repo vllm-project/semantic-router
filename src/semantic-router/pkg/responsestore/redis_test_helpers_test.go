@@ -38,6 +38,31 @@ func (h *pipelineFailureHook) ProcessPipelineHook(next redis.ProcessPipelineHook
 	}
 }
 
+// afterCommandHook runs after() once, immediately after the named command
+// has actually committed at Redis — the seam for asserting on what happens
+// in the window *between* two commands a single operation issues (e.g. a
+// context cancelled after a cascade batch's ZREM has already landed).
+type afterCommandHook struct {
+	name  string
+	after func()
+	used  atomic.Bool
+}
+
+func (h *afterCommandHook) DialHook(next redis.DialHook) redis.DialHook { return next }
+func (h *afterCommandHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
+	return next
+}
+
+func (h *afterCommandHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
+	return func(ctx context.Context, cmd redis.Cmder) error {
+		err := next(ctx, cmd)
+		if cmd.Name() == h.name && h.used.CompareAndSwap(false, true) {
+			h.after()
+		}
+		return err
+	}
+}
+
 type beforeCommandHook struct {
 	name   string
 	once   bool
