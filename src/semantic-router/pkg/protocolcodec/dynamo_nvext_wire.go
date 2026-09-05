@@ -195,11 +195,19 @@ func validateDynamoRequestEnvelope(envelope llmprotocol.Envelope, target llmprot
 		(envelope.Dynamo.RequestNVExt == nil && envelope.Dynamo.RequestTopLevelCacheSalt == nil) {
 		return nil
 	}
-	if envelope.Format != llmprotocol.OpenAIChatV1 || target != llmprotocol.OpenAIChatV1 {
+	if envelope.Format != target || (target != llmprotocol.OpenAIChatV1 && target != llmprotocol.OpenAIResponsesV1) {
 		return llmprotocol.NewError(
 			llmprotocol.ErrorUnsupportedFeature,
 			"unsupported_dynamo_nvext_translation",
 			"Dynamo nvext requests cannot be translated across wire formats",
+			nil,
+		)
+	}
+	if target == llmprotocol.OpenAIResponsesV1 && envelope.Dynamo.RequestTopLevelCacheSalt != nil {
+		return llmprotocol.NewError(
+			llmprotocol.ErrorUnsupportedFeature,
+			"unsupported_dynamo_cache_salt",
+			"Dynamo top-level cache_salt is only supported by Chat Completions",
 			nil,
 		)
 	}
@@ -373,7 +381,7 @@ func validateDynamoResponseEnvelope(envelope llmprotocol.Envelope, target llmpro
 	if envelope.Dynamo == nil || envelope.Dynamo.ResponseNVExt == nil {
 		return nil
 	}
-	if envelope.Format != llmprotocol.OpenAIChatV1 || target != llmprotocol.OpenAIChatV1 {
+	if envelope.Format != target || (target != llmprotocol.OpenAIChatV1 && target != llmprotocol.OpenAIResponsesV1) {
 		return llmprotocol.NewError(
 			llmprotocol.ErrorUnsupportedFeature,
 			"unsupported_dynamo_nvext_translation",

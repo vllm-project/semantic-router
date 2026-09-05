@@ -222,6 +222,31 @@
       }
     },
     {
+      "name": "nvext",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "input": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "input_text"
+                }
+              ],
+              "id": "item_6a32e29c376158d871e9638e",
+              "role": "user",
+              "type": "message"
+            }
+          ],
+          "model": "routed-model",
+          "nvext": {
+            "greed_sampling": true
+          }
+        }
+      }
+    },
+    {
       "name": "parallel_tool_calls",
       "outcome": {
         "status": "ok",

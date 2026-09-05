@@ -163,7 +163,7 @@
         "truncation",
         "user"
       ],
-      "extension_request_fields": ["auto_store"],
+      "extension_request_fields": ["auto_store", "nvext"],
       "provider_schema_revision": "6cddad414ee46796f21aaf7b8643a6e7a00c09b5",
       "provider_request_fields": {
         "cache_salt": ["string", "null"],
@@ -229,7 +229,7 @@
         "usage",
         "user"
       ],
-      "extension_response_fields": ["conversation_id", "store"],
+      "extension_response_fields": ["conversation_id", "nvext", "store"],
       "official_usage_fields": [
         "compute_units",
         "input_tokens",
