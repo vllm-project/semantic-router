@@ -1,3 +1,4 @@
+# tools/make/e2e.mk
 # ======== e2e.mk ========
 # = E2E Testing Framework =
 # ======== e2e.mk ========
@@ -22,6 +23,13 @@ build-e2e: ## Build the E2E test binary
 	@$(LOG_TARGET)
 	@echo "Building E2E test binary..."
 	@cd e2e && go build -o ../bin/e2e ./cmd/e2e
+	@$(MAKE) e2e-coverage-check
+
+.PHONY: e2e-coverage-check
+e2e-coverage-check: ## Run the runtime-derived E2E coverage drift gates (no cluster required)
+	@$(LOG_TARGET)
+	@echo "Running E2E coverage drift gates..."
+	@cd e2e && go test -count=1 ./pkg/verification/
 
 # Run E2E tests
 e2e-test: ## Run E2E tests (PROFILE=envoy-ai-gateway by default)
