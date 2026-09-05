@@ -465,8 +465,8 @@ func TestTLSConfig(t *testing.T) {
 }
 
 // TestRedisConversationIndexKeyIsolation guards the invariant that index,
-// migrated-marker, and lock keys are invisible to the sr:conversation:* and
-// sr:response:* scans in ListConversations/legacy backfill, which would
+// migrated-marker, and scan-lease keys are invisible to the sr:conversation:*
+// and sr:response:* scans in ListConversations/legacy backfill, which would
 // otherwise read a sorted set or marker string as conversation/response
 // JSON. Needs no Redis.
 func TestRedisConversationIndexKeyIsolation(t *testing.T) {
@@ -478,32 +478,32 @@ func TestRedisConversationIndexKeyIsolation(t *testing.T) {
 	migratedKey := store.conversationIndexMigratedKey("conv_123")
 	assert.Equal(t, "sr:conversation-index-migrated:conv_123", migratedKey)
 
-	lockKey := store.conversationIndexLockKey("conv_123")
-	assert.Equal(t, "sr:conversation-index-lock:conv_123", lockKey)
+	leaseKey := store.conversationIndexScanLeaseKey()
+	assert.Equal(t, "sr:conversation-index-scan-lease:v1", leaseKey)
 
 	// Each scan pattern is a literal prefix plus "*", so matching == having it.
 	scanPrefixes := []string{
 		store.buildKey(ConversationKeyPrefix),
 		store.buildKey(ResponseKeyPrefix),
 	}
-	for _, key := range []string{indexKey, migratedKey, lockKey} {
+	for _, key := range []string{indexKey, migratedKey, leaseKey} {
 		for _, scanPrefix := range scanPrefixes {
 			assert.Falsef(t, strings.HasPrefix(key, scanPrefix),
 				"key %q must not be matched by the %q* scan pattern", key, scanPrefix)
 		}
 	}
 
-	// The migrated marker and lock key families must also be distinct from
-	// the index key family itself: either one accidentally matching the
-	// index scan prefix would let a marker or lock be read back as
+	// The migrated marker and scan-lease key families must also be distinct
+	// from the index key family itself: either one accidentally matching
+	// the index scan prefix would let a marker or lease be read back as
 	// sorted-set data by anything that scans "conversation-index:*" (e.g. a
 	// future admin tool).
 	indexScanPrefix := store.buildKey(ConversationIndexKeyPrefix)
 	require.True(t, strings.HasPrefix(indexKey, indexScanPrefix))
 	assert.Falsef(t, strings.HasPrefix(migratedKey, indexScanPrefix),
 		"migrated marker key %q must not be matched by the %q* index scan pattern", migratedKey, indexScanPrefix)
-	assert.Falsef(t, strings.HasPrefix(lockKey, indexScanPrefix),
-		"lock key %q must not be matched by the %q* index scan pattern", lockKey, indexScanPrefix)
+	assert.Falsef(t, strings.HasPrefix(leaseKey, indexScanPrefix),
+		"scan lease key %q must not be matched by the %q* index scan pattern", leaseKey, indexScanPrefix)
 }
 
 // TestRedisConversationIndexMigrationKeyIsolation covers the two global (not

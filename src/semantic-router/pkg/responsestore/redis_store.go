@@ -101,19 +101,39 @@ const (
 	// scan-isolation reason as ConversationIndexKeyPrefix.
 	ConversationIndexMigratedKeyPrefix = "conversation-index-migrated:"
 
-	// ConversationIndexLockKeyPrefix guards the one-time lazy legacy scan for a
-	// conversation against a stampede of concurrent readers all missing the
-	// index at once: sr:conversation-index-lock:conv_xxxxx, TTL-bound token.
-	//
-	// An optimization against duplicate scan work, not a correctness
-	// dependency: a reader that fails to acquire it still gets correct results,
-	// see ensureConversationIndex. Same scan-isolation constraint as the marker
-	// and index key prefixes.
-	ConversationIndexLockKeyPrefix = "conversation-index-lock:"
+	// conversationIndexScanLeaseKeySuffix guards every legacy-scan backfill
+	// — for any conversation, and Phase 6's whole-keyspace finalization
+	// sweep — behind a single global renewable lease:
+	// sr:conversation-index-scan-lease:v1. Every full-keyspace scan this
+	// store can run costs the same regardless of which conversation (if
+	// any) triggered it, so serializing per-conversation (the superseded
+	// ConversationIndexLockKeyPrefix design) did not bound how many
+	// concurrent full scans could run at once for different conversation
+	// IDs — only this global lease does. An optimization against
+	// duplicate/concurrent scan work, not a correctness dependency: see
+	// withConversationIndexScanLease. Same scan-isolation constraint as the
+	// marker and index key prefixes.
+	conversationIndexScanLeaseKeySuffix = "conversation-index-scan-lease:v1"
 
-	// conversationIndexMigrationLockTTL bounds how long a single reader holds
-	// the lazy-scan migration lock before it is considered abandoned.
-	conversationIndexMigrationLockTTL = 30 * time.Second
+	// conversationIndexScanLeaseTTL bounds how long a single scan lease
+	// holder is trusted before another waiter may treat it as abandoned.
+	// Held leases are renewed well before this elapses (see
+	// conversationIndexScanRenewInterval), so under normal operation this
+	// TTL is a safety margin against a holder that stops renewing (crash,
+	// deadline), not an expected scan duration.
+	conversationIndexScanLeaseTTL = 30 * time.Second
+
+	// conversationIndexScanRenewInterval is how often a scan lease holder
+	// renews its lease while still working — well inside
+	// conversationIndexScanLeaseTTL, so an occasional slow renewal round
+	// trip does not cost the lease.
+	conversationIndexScanRenewInterval = 10 * time.Second
+
+	// conversationIndexScanLeaseMinBackoff and
+	// conversationIndexScanLeaseMaxBackoff bound the jittered exponential
+	// backoff a waiter uses between lease-acquisition attempts.
+	conversationIndexScanLeaseMinBackoff = 50 * time.Millisecond
+	conversationIndexScanLeaseMaxBackoff = 1 * time.Second
 
 	// emptyConversationIndexMarkerMaxTTL caps how long a migrated marker
 	// survives when its backfill found nothing to index, independent of the
@@ -461,10 +481,11 @@ func (s *RedisStore) conversationIndexMigratedKey(conversationID string) string 
 	return s.buildKey(ConversationIndexMigratedKeyPrefix + conversationID)
 }
 
-// conversationIndexLockKey returns the short-lived lock guarding a
-// conversation's lazy legacy scan against concurrent duplicate scans.
-func (s *RedisStore) conversationIndexLockKey(conversationID string) string {
-	return s.buildKey(ConversationIndexLockKeyPrefix + conversationID)
+// conversationIndexScanLeaseKey returns the single global lease key
+// guarding every legacy-scan backfill and the Phase 6 finalization sweep
+// against concurrent full-keyspace scans.
+func (s *RedisStore) conversationIndexScanLeaseKey() string {
+	return s.buildKey(conversationIndexScanLeaseKeySuffix)
 }
 func (s *RedisStore) CheckConnection(ctx context.Context) error {
 	if !s.enabled {
