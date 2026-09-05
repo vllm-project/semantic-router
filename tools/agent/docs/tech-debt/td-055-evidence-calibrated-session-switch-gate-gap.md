@@ -41,6 +41,11 @@ model-attributable evidence while preserving hard continuity locks.
   scorer does not consume a normalized recent-window progress contract.
 - Provider errors, tool errors, and semantic answer failures remain confounded
   if treated as one negative reward.
+- The [agent routing protection baseline](../../../../website/docs/benchmarking/agent-routing-protection.md)
+  adds deterministic production-protection contracts with maintained session
+  fixtures. Its explicit missing-coverage list still includes rescue/failure
+  attribution, evidence-calibrated switching and measured task benefit; this
+  baseline does not close TD055 or issue #2338.
 
 ## Why It Matters
 

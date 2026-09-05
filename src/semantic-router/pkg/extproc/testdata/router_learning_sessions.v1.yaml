@@ -1,0 +1,623 @@
+schema_version: agent-routing-protection.v1
+missing_coverage:
+  - Proposals are scripted; adaptation sampling, posterior updates, cold-arm exposure and delayed/missing
+    outcome learning are not exercised.
+  - Rescue-switch evidence, failure attribution, failed dispatch/fallback, timeout and idle/cooldown
+    boundaries require additional scenarios.
+  - Delegated-role contracts, multi-arm shadow execution and future evidence-calibrated session switching
+    are not validated.
+  - Authorization, residency, privacy, capability and budget eligibility computation is upstream;
+    this slice checks an already-resolved candidate boundary.
+  - Live paired task quality, model cost/latency, real cache savings and statistical uncertainty
+    require measured model runs.
+  - The runner uses in-process semantic messages and session memory; wire codecs, Envoy transport
+    and external state stores are not exercised.
+scenarios:
+  # Establish a first selection without prior session state.
+  - id: single-request-cold-start
+    scope: conversation
+    mode: apply
+    steps:
+      - id: start
+        append_messages:
+          - role: user
+            text: Calculate twelve times twelve, then explain the answer.
+        candidates:
+          - protection-cheap
+          - protection-frontier
+        proposal: protection-cheap
+        scores:
+          protection-cheap: 0.9
+          protection-frontier: 0.1
+        conversation: conversation-a
+        expected:
+          model: protection-cheap
+          sampling_allowed: true
+          action: establish_baseline
+          reason: new_conversation
+          category: baseline
+          hard_locked: false
+          preflight_reason: no_tool_or_protocol_state
+        coverage:
+          - first-request
+  # Keep the same model until the tool exchange has fully completed.
+  - id: tool-loop-and-release
+    scope: conversation
+    mode: apply
+    steps:
+      - id: start
+        append_messages:
+          - role: user
+            text: Calculate twelve times twelve, then explain the answer.
+        candidates:
+          - protection-cheap
+          - protection-frontier
+        proposal: protection-cheap
+        scores:
+          protection-cheap: 0.9
+          protection-frontier: 0.1
+        conversation: conversation-a
+        expected:
+          model: protection-cheap
+          sampling_allowed: true
+          action: establish_baseline
+          reason: new_conversation
+          category: baseline
+          hard_locked: false
+          preflight_reason: no_tool_or_protocol_state
+        coverage: []
+      - id: tool-call
+        append_messages:
+          - role: assistant
+            text: '{"a":12,"b":12}'
+            tool_call_id: call-1
+        candidates:
+          - protection-cheap
+          - protection-frontier
+        proposal: protection-frontier
+        scores:
+          protection-cheap: 0.1
+          protection-frontier: 0.9
+        conversation: conversation-a
+        expected:
+          model: protection-cheap
+          sampling_allowed: false
+          action: hold_current
+          reason: tool_or_protocol_state
+          category: blocked
+          hard_locked: true
+          preflight_reason: tool_or_protocol_state
+        coverage:
+          - active-tool-call
+      - id: tool-result
+        append_messages:
+          - role: tool
+            text: '144'
+            tool_call_id: call-1
+        candidates:
+          - protection-cheap
+          - protection-frontier
+        proposal: protection-frontier
+        scores:
+          protection-cheap: 0.1
+          protection-frontier: 0.9
+        conversation: conversation-a
+        expected:
+          model: protection-cheap
+          sampling_allowed: false
+          action: hold_current
+          reason: tool_or_protocol_state
+          category: blocked
+          hard_locked: true
+          preflight_reason: tool_or_protocol_state
+        coverage:
+          - tool-result
+      - id: user-after-result
+        append_messages:
+          - role: user
+            text: Please explain that result.
+        candidates:
+          - protection-cheap
+          - protection-frontier
+        proposal: protection-frontier
+        scores:
+          protection-cheap: 0.1
+          protection-frontier: 0.9
+        conversation: conversation-a
+        expected:
+          model: protection-cheap
+          sampling_allowed: false
+          action: hold_current
+          reason: tool_or_protocol_state
+          category: blocked
+          hard_locked: true
+          preflight_reason: tool_or_protocol_state
+        coverage:
+          - tool-followup
+      - id: completed-loop
+        append_messages:
+          - role: assistant
+            text: The result is 144.
+          - role: user
+            text: Now solve a harder problem.
+        candidates:
+          - protection-cheap
+          - protection-frontier
+        proposal: protection-frontier
+        scores:
+          protection-cheap: 0.1
+          protection-frontier: 0.9
+        conversation: conversation-a
+        expected:
+          model: protection-frontier
+          sampling_allowed: true
+          action: allow_switch
+          reason: switch_allowed
+          category: opportunity
+          hard_locked: false
+          preflight_reason: no_tool_or_protocol_state
+        coverage:
+          - tool-release
+  # Provider-bound state blocks switching; portable history releases it.
+  - id: provider-state-and-release
+    scope: conversation
+    mode: apply
+    steps:
+      - id: start
+        append_messages:
+          - role: user
+            text: Calculate twelve times twelve, then explain the answer.
+        candidates:
+          - protection-cheap
+          - protection-frontier
+        proposal: protection-cheap
+        scores:
+          protection-cheap: 0.9
+          protection-frontier: 0.1
+        conversation: conversation-a
+        expected:
+          model: protection-cheap
+          sampling_allowed: true
+          action: establish_baseline
+          reason: new_conversation
+          category: baseline
+          hard_locked: false
+          preflight_reason: no_tool_or_protocol_state
+        coverage: []
+      - id: provider-bound
+        append_messages:
+          - role: user
+            text: Please continue the task.
+        candidates:
+          - protection-cheap
+          - protection-frontier
+        proposal: protection-frontier
+        scores:
+          protection-cheap: 0.1
+          protection-frontier: 0.9
+        conversation: conversation-a
+        expected:
+          model: protection-cheap
+          sampling_allowed: false
+          action: hold_current
+          reason: tool_or_protocol_state
+          category: blocked
+          hard_locked: true
+          preflight_reason: tool_or_protocol_state
+        previous_response_id: response-1
+        coverage:
+          - provider-bound
+      - id: portable-history
+        append_messages:
+          - role: assistant
+            text: Here is the complete earlier work.
+          - role: user
+            text: Continue using the full history.
+        candidates:
+          - protection-cheap
+          - protection-frontier
+        proposal: protection-frontier
+        scores:
+          protection-cheap: 0.1
+          protection-frontier: 0.9
+        conversation: conversation-a
+        expected:
+          model: protection-frontier
+          sampling_allowed: true
+          action: allow_switch
+          reason: switch_allowed
+          category: opportunity
+          hard_locked: false
+          preflight_reason: no_tool_or_protocol_state
+        coverage:
+          - provider-release
+  # A small advantage should hold; a clear advantage should permit switching.
+  - id: small-advantage-and-recovery
+    scope: conversation
+    mode: apply
+    steps:
+      - id: start
+        append_messages:
+          - role: user
+            text: Calculate twelve times twelve, then explain the answer.
+        candidates:
+          - protection-cheap
+          - protection-frontier
+        proposal: protection-cheap
+        scores:
+          protection-cheap: 0.9
+          protection-frontier: 0.1
+        conversation: conversation-a
+        expected:
+          model: protection-cheap
+          sampling_allowed: true
+          action: establish_baseline
+          reason: new_conversation
+          category: baseline
+          hard_locked: false
+          preflight_reason: no_tool_or_protocol_state
+        coverage: []
+      - id: small-advantage
+        append_messages:
+          - role: user
+            text: Please continue the task.
+        candidates:
+          - protection-cheap
+          - protection-frontier
+        proposal: protection-frontier
+        scores:
+          protection-cheap: 0.5
+          protection-frontier: 0.51
+        conversation: conversation-a
+        expected:
+          model: protection-cheap
+          sampling_allowed: true
+          action: hold_current
+          reason: switch_margin_not_met
+          category: hold
+          hard_locked: false
+          preflight_reason: no_tool_or_protocol_state
+        coverage:
+          - small-advantage
+      - id: clear-advantage
+        append_messages:
+          - role: user
+            text: Please continue the task.
+        candidates:
+          - protection-cheap
+          - protection-frontier
+        proposal: protection-frontier
+        scores:
+          protection-cheap: 0.1
+          protection-frontier: 0.9
+        conversation: conversation-a
+        expected:
+          model: protection-frontier
+          sampling_allowed: true
+          action: allow_switch
+          reason: switch_allowed
+          category: opportunity
+          hard_locked: false
+          preflight_reason: no_tool_or_protocol_state
+        coverage:
+          - clear-advantage
+  # A warm continuation suppresses sampling to preserve cache affinity.
+  - id: warm-cache
+    scope: conversation
+    mode: apply
+    steps:
+      - id: start
+        append_messages:
+          - role: user
+            text: Calculate twelve times twelve, then explain the answer.
+        candidates:
+          - protection-cheap
+          - protection-frontier
+        proposal: protection-cheap
+        scores:
+          protection-cheap: 0.9
+          protection-frontier: 0.1
+        conversation: conversation-a
+        expected:
+          model: protection-cheap
+          sampling_allowed: true
+          action: establish_baseline
+          reason: new_conversation
+          category: baseline
+          hard_locked: false
+          preflight_reason: no_tool_or_protocol_state
+        coverage: []
+      - id: warm-followup
+        append_messages:
+          - role: user
+            text: Please continue the task.
+        candidates:
+          - protection-cheap
+          - protection-frontier
+        proposal: protection-frontier
+        scores:
+          protection-cheap: 0.5
+          protection-frontier: 0.51
+        conversation: conversation-a
+        expected:
+          model: protection-cheap
+          sampling_allowed: false
+          action: hold_current
+          reason: switch_margin_not_met
+          category: hold
+          hard_locked: false
+          preflight_reason: steady_state
+        cache_warmth: 0.9
+        coverage:
+          - warm-cache
+  # Continuity must never restore a model outside the eligible candidate set.
+  - id: candidate-boundary-over-continuity
+    scope: conversation
+    mode: apply
+    steps:
+      - id: start
+        append_messages:
+          - role: user
+            text: Calculate twelve times twelve, then explain the answer.
+        candidates:
+          - protection-cheap
+          - protection-frontier
+        proposal: protection-cheap
+        scores:
+          protection-cheap: 0.9
+          protection-frontier: 0.1
+        conversation: conversation-a
+        expected:
+          model: protection-cheap
+          sampling_allowed: true
+          action: establish_baseline
+          reason: new_conversation
+          category: baseline
+          hard_locked: false
+          preflight_reason: no_tool_or_protocol_state
+        coverage: []
+      - id: old-model-ineligible
+        append_messages:
+          - role: assistant
+            text: '{"a":12,"b":12}'
+            tool_call_id: call-1
+          - role: tool
+            text: '144'
+            tool_call_id: call-1
+        candidates:
+          - protection-frontier
+        proposal: protection-frontier
+        scores:
+          protection-frontier: 0.9
+        conversation: conversation-a
+        expected:
+          model: protection-frontier
+          sampling_allowed: false
+          action: allow_switch
+          reason: previous_model_not_in_candidates
+          category: boundary
+          hard_locked: false
+          preflight_reason: tool_or_protocol_state
+        coverage:
+          - candidate-boundary
+  # Session scope retains the actual previous selection.
+  - id: session-scope-hold
+    scope: session
+    mode: apply
+    steps:
+      - id: start
+        append_messages:
+          - role: user
+            text: Calculate twelve times twelve, then explain the answer.
+        candidates:
+          - protection-cheap
+          - protection-frontier
+        proposal: protection-cheap
+        scores:
+          protection-cheap: 0.9
+          protection-frontier: 0.1
+        conversation: conversation-a
+        expected:
+          model: protection-cheap
+          sampling_allowed: true
+          action: establish_baseline
+          reason: new_session
+          category: baseline
+          hard_locked: false
+          preflight_reason: no_tool_or_protocol_state
+        coverage: []
+      - id: same-session
+        append_messages:
+          - role: user
+            text: Please continue the task.
+        candidates:
+          - protection-cheap
+          - protection-frontier
+        proposal: protection-frontier
+        scores:
+          protection-cheap: 0.1
+          protection-frontier: 0.9
+        conversation: conversation-a
+        expected:
+          model: protection-cheap
+          sampling_allowed: true
+          action: hold_current
+          reason: session_scope_protect
+          category: hold
+          hard_locked: false
+          preflight_reason: no_tool_or_protocol_state
+        coverage:
+          - session-continuity
+  # Separate conversations keep independent model histories.
+  - id: conversation-isolation
+    scope: conversation
+    mode: apply
+    steps:
+      - id: start
+        append_messages:
+          - role: user
+            text: Calculate twelve times twelve, then explain the answer.
+        candidates:
+          - protection-cheap
+          - protection-frontier
+        proposal: protection-cheap
+        scores:
+          protection-cheap: 0.9
+          protection-frontier: 0.1
+        conversation: conversation-a
+        expected:
+          model: protection-cheap
+          sampling_allowed: true
+          action: establish_baseline
+          reason: new_conversation
+          category: baseline
+          hard_locked: false
+          preflight_reason: no_tool_or_protocol_state
+        coverage: []
+      - id: new-conversation
+        append_messages:
+          - role: user
+            text: Please continue the task.
+        candidates:
+          - protection-cheap
+          - protection-frontier
+        proposal: protection-frontier
+        scores:
+          protection-cheap: 0.1
+          protection-frontier: 0.9
+        conversation: conversation-b
+        expected:
+          model: protection-frontier
+          sampling_allowed: true
+          action: establish_baseline
+          reason: new_conversation
+          category: baseline
+          hard_locked: false
+          preflight_reason: no_tool_or_protocol_state
+        coverage: []
+      - id: return-to-first-conversation
+        append_messages:
+          - role: user
+            text: Continue our original task.
+        candidates:
+          - protection-cheap
+          - protection-frontier
+        proposal: protection-frontier
+        scores:
+          protection-cheap: 0.5
+          protection-frontier: 0.51
+        conversation: conversation-a
+        expected:
+          model: protection-cheap
+          sampling_allowed: true
+          action: hold_current
+          reason: switch_margin_not_met
+          category: hold
+          hard_locked: false
+          preflight_reason: no_tool_or_protocol_state
+        coverage:
+          - conversation-isolation
+  # Missing identity preserves the current documented policy.
+  - id: missing-identity
+    scope: conversation
+    mode: apply
+    steps:
+      - id: anonymous
+        append_messages:
+          - role: user
+            text: Please continue the task.
+        candidates:
+          - protection-cheap
+          - protection-frontier
+        proposal: protection-cheap
+        scores:
+          protection-cheap: 0.9
+          protection-frontier: 0.1
+        conversation: conversation-a
+        expected:
+          model: protection-cheap
+          sampling_allowed: false
+          action: suppress_sampling
+          reason: missing_identity
+          category: missing_identity
+          hard_locked: false
+          preflight_reason: missing_identity
+        missing_identity: true
+        coverage:
+          - missing-identity
+  # Observe reports protection without enforcing it.
+  - id: observe-does-not-enforce
+    scope: session
+    mode: observe
+    steps:
+      - id: observe-first
+        append_messages:
+          - role: user
+            text: Please continue the task.
+        candidates:
+          - protection-cheap
+          - protection-frontier
+        proposal: protection-cheap
+        scores:
+          protection-cheap: 0.9
+          protection-frontier: 0.1
+        conversation: conversation-a
+        expected:
+          model: protection-cheap
+          sampling_allowed: true
+          action: observe
+          reason: observe_only
+          category: observe
+          hard_locked: false
+          preflight_reason: observe_only
+        coverage: []
+      - id: observe-proposal
+        append_messages:
+          - role: assistant
+            text: '{"a":12,"b":12}'
+            tool_call_id: call-1
+        candidates:
+          - protection-cheap
+          - protection-frontier
+        proposal: protection-frontier
+        scores:
+          protection-cheap: 0.1
+          protection-frontier: 0.9
+        conversation: conversation-a
+        expected:
+          model: protection-frontier
+          sampling_allowed: true
+          action: observe
+          reason: observe_only
+          category: observe
+          hard_locked: false
+          preflight_reason: observe_only
+        coverage:
+          - observe
+  # Bypass leaves protection enforcement disabled.
+  - id: bypass-does-not-enforce
+    scope: conversation
+    mode: bypass
+    steps:
+      - id: bypass
+        append_messages:
+          - role: user
+            text: Please continue the task.
+        candidates:
+          - protection-cheap
+          - protection-frontier
+        proposal: protection-cheap
+        scores:
+          protection-cheap: 0.9
+          protection-frontier: 0.1
+        conversation: conversation-a
+        expected:
+          model: protection-cheap
+          sampling_allowed: false
+          action: bypass
+          reason: decision_bypass
+          category: bypass
+          hard_locked: false
+          preflight_reason: decision_bypass
+        coverage:
+          - bypass
