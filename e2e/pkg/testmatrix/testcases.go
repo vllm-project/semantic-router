@@ -24,6 +24,10 @@ var BaselineRouterContract = []string{
 	"pii-detection",
 	// PII entity positions are code-point offsets (issue #3146)
 	"pii-entity-offsets",
+	// PII past the classifier's sequence limit is still detected (issue #3364)
+	"pii-long-text",
+	// A jailbreak past the classifier's sequence limit is still detected (issue #3204)
+	"security-long-text",
 	"jailbreak-detection",
 	"decision-priority-selection",
 	"plugin-chain-execution",
@@ -45,6 +49,8 @@ var BaselineRouterContract = []string{
 	"session-telemetry-metrics",
 	"session-pricing-chat-completions",
 	"session-pricing-response-api",
+	// Event signal rule matching and routing (issue #3178)
+	"event-routing",
 }
 
 // DashboardContract is the canonical E2E contract for the dashboard API surface.
@@ -57,6 +63,8 @@ var DashboardContract = []string{
 	"dashboard-deploy-preview",
 	"dashboard-config-versions",
 	"dashboard-deploy-invalid-yaml",
+	// A semantically invalid deploy must leave the active config serving (issue #3233)
+	"dashboard-deploy-safe-failure",
 	// Evaluation Plane lifecycle, evidence, report, comparison, and cancellation.
 	"dashboard-evaluation-plane",
 	// Workflow persistence survives dashboard pod restart (requires dashboard PVC)

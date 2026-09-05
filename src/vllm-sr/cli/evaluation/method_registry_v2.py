@@ -9,14 +9,14 @@ from typing import Any
 from cli.evaluation.method_contract_v2 import (
     EVALUATION_METHOD_CONTRACT_VERSION,
     AnalysisPlan,
-    EvaluationMethodPlugin,
+    EvaluationMethodDefinition,
     SliceRef,
 )
 from cli.evaluation.research_benchmark_inventory import RESEARCH_BENCHMARKS
 
 
-def _plugin(entry: Mapping[str, Any]) -> EvaluationMethodPlugin:
-    return EvaluationMethodPlugin(
+def _definition(entry: Mapping[str, Any]) -> EvaluationMethodDefinition:
+    return EvaluationMethodDefinition(
         schema_version=EVALUATION_METHOD_CONTRACT_VERSION,
         id=entry["method_id"],
         version=EVALUATION_METHOD_CONTRACT_VERSION,
@@ -49,17 +49,17 @@ def _plugin(entry: Mapping[str, Any]) -> EvaluationMethodPlugin:
     )
 
 
-METHOD_PLUGINS = tuple(_plugin(entry) for entry in RESEARCH_BENCHMARKS)
+BUILTIN_METHODS = tuple(_definition(entry) for entry in RESEARCH_BENCHMARKS)
 
 _BY_BENCHMARK = MappingProxyType(
     {
-        entry["adapter_id"]: plugin
-        for entry, plugin in zip(RESEARCH_BENCHMARKS, METHOD_PLUGINS, strict=True)
+        entry["adapter_id"]: method
+        for entry, method in zip(RESEARCH_BENCHMARKS, BUILTIN_METHODS, strict=True)
     }
 )
 
 
-def method_plugin_for_benchmark(adapter_id: str) -> EvaluationMethodPlugin:
+def method_for_benchmark(adapter_id: str) -> EvaluationMethodDefinition:
     try:
         return _BY_BENCHMARK[adapter_id]
     except KeyError as exc:
