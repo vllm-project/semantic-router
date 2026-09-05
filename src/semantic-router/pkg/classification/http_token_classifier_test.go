@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
@@ -117,67 +118,94 @@ func newTokenSpansServer(t *testing.T, respond func(inputs string) any) (*httpte
 }
 
 func TestHTTPTokenClassifierFixtures(t *testing.T) {
-	cases := loadTokenSpansFixtures(t)
-	for _, tc := range cases {
+	for _, tc := range loadTokenSpansFixtures(t) {
 		tc := tc
 		t.Run(tc.Name, func(t *testing.T) {
-			// Sanity-check the fixture's own arithmetic against Go's view of
-			// the text, so a broken generator cannot pass a broken adapter.
-			if got := len([]rune(tc.Text)); got != tc.TextCodePoints {
-				t.Fatalf("fixture code points %d, Go counts %d", tc.TextCodePoints, got)
-			}
-			if got := len(tc.Text); got != tc.TextBytes {
-				t.Fatalf("fixture bytes %d, Go counts %d", tc.TextBytes, got)
-			}
-
-			_, cfg := newTokenSpansServer(t, func(inputs string) any {
-				if inputs != tc.Text {
-					t.Errorf("provider received %q, want the exact request string", inputs)
-				}
-				return wireSpans(tc.Spans)
-			})
-			backend, err := newHTTPTokenClassifierInference(cfg, testPIIMapping(), 0)
-			if err != nil {
-				t.Fatalf("construct backend: %v", err)
-			}
-			defer backend.Close()
-
-			entities, err := backend.ClassifyTokens(tc.Text)
-			switch tc.Expect {
-			case "accept", "accept_or_truncated_at":
-				if err != nil {
-					t.Fatalf("expected accept, got error: %v", err)
-				}
-				if len(entities) != len(tc.Spans) {
-					t.Fatalf("got %d entities, want %d", len(entities), len(tc.Spans))
-				}
-				for i, sp := range tc.Spans {
-					e := entities[i]
-					if e.EntityType != stripBIOPrefix(sp.Label) {
-						t.Errorf("span %d type %q, want %q", i, e.EntityType, sp.Label)
-					}
-					if e.Start != sp.ByteStart || e.End != sp.ByteEnd {
-						t.Errorf("span %d byte offsets [%d,%d), want [%d,%d) (code points [%d,%d))",
-							i, e.Start, e.End, sp.ByteStart, sp.ByteEnd, sp.Start, sp.End)
-					}
-					if tc.Text[e.Start:e.End] != sp.Text {
-						t.Errorf("span %d byte slice %q, want %q", i, tc.Text[e.Start:e.End], sp.Text)
-					}
-					if e.Confidence != sp.Score {
-						t.Errorf("span %d score %v, want %v", i, e.Confidence, sp.Score)
-					}
-				}
-			case "reject":
-				if err == nil {
-					t.Fatalf("expected rejection (%s), got %d entities", tc.Note, len(entities))
-				}
-				if errors.Is(err, ErrTokenSpansTruncated) {
-					t.Fatalf("rejection surfaced as truncation: %v", err)
-				}
-			default:
-				t.Fatalf("unknown expect value %q", tc.Expect)
-			}
+			runTokenSpansFixture(t, tc)
 		})
+	}
+}
+
+// runTokenSpansFixture drives one fixture through a real HTTP round trip and
+// checks the outcome the fixture declares.
+func runTokenSpansFixture(t *testing.T, tc tokenSpansFixtureCase) {
+	t.Helper()
+	assertFixtureArithmetic(t, tc)
+
+	_, cfg := newTokenSpansServer(t, func(inputs string) any {
+		if inputs != tc.Text {
+			t.Errorf("provider received %q, want the exact request string", inputs)
+		}
+		return wireSpans(tc.Spans)
+	})
+	backend, err := newHTTPTokenClassifierInference(cfg, testPIIMapping(), 0)
+	if err != nil {
+		t.Fatalf("construct backend: %v", err)
+	}
+	defer backend.Close()
+
+	entities, err := backend.ClassifyTokens(tc.Text)
+	switch tc.Expect {
+	case "accept", "accept_or_truncated_at":
+		assertFixtureAccepted(t, tc, entities, err)
+	case "reject":
+		assertFixtureRejected(t, tc, entities, err)
+	default:
+		t.Fatalf("unknown expect value %q", tc.Expect)
+	}
+}
+
+// assertFixtureArithmetic checks the fixture's own counts against Go's view of
+// the text, so a broken generator cannot pass a broken adapter.
+func assertFixtureArithmetic(t *testing.T, tc tokenSpansFixtureCase) {
+	t.Helper()
+	if got := len([]rune(tc.Text)); got != tc.TextCodePoints {
+		t.Fatalf("fixture code points %d, Go counts %d", tc.TextCodePoints, got)
+	}
+	if got := len(tc.Text); got != tc.TextBytes {
+		t.Fatalf("fixture bytes %d, Go counts %d", tc.TextBytes, got)
+	}
+}
+
+func assertFixtureAccepted(t *testing.T, tc tokenSpansFixtureCase, entities []candle_binding.TokenEntity, err error) {
+	t.Helper()
+	if err != nil {
+		t.Fatalf("expected accept, got error: %v", err)
+	}
+	if len(entities) != len(tc.Spans) {
+		t.Fatalf("got %d entities, want %d", len(entities), len(tc.Spans))
+	}
+	for i, sp := range tc.Spans {
+		assertFixtureSpan(t, tc.Text, i, sp, entities[i])
+	}
+}
+
+// assertFixtureSpan checks one returned entity against the fixture span: type,
+// byte offsets, the byte slice they select, and the score.
+func assertFixtureSpan(t *testing.T, text string, i int, sp tokenSpansFixtureSpan, e candle_binding.TokenEntity) {
+	t.Helper()
+	if e.EntityType != stripBIOPrefix(sp.Label) {
+		t.Errorf("span %d type %q, want %q", i, e.EntityType, sp.Label)
+	}
+	if e.Start != sp.ByteStart || e.End != sp.ByteEnd {
+		t.Errorf("span %d byte offsets [%d,%d), want [%d,%d) (code points [%d,%d))",
+			i, e.Start, e.End, sp.ByteStart, sp.ByteEnd, sp.Start, sp.End)
+	}
+	if text[e.Start:e.End] != sp.Text {
+		t.Errorf("span %d byte slice %q, want %q", i, text[e.Start:e.End], sp.Text)
+	}
+	if e.Confidence != sp.Score {
+		t.Errorf("span %d score %v, want %v", i, e.Confidence, sp.Score)
+	}
+}
+
+func assertFixtureRejected(t *testing.T, tc tokenSpansFixtureCase, entities []candle_binding.TokenEntity, err error) {
+	t.Helper()
+	if err == nil {
+		t.Fatalf("expected rejection (%s), got %d entities", tc.Note, len(entities))
+	}
+	if errors.Is(err, ErrTokenSpansTruncated) {
+		t.Fatalf("rejection surfaced as truncation: %v", err)
 	}
 }
 

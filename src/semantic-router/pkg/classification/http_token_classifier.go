@@ -149,85 +149,162 @@ func decodeTokenSpansResponse(body []byte) ([]tokenSpanWire, *int, error) {
 // violation rejects the whole response: a provider whose offsets are off by
 // one is redacting the wrong characters, and that must not be a warning.
 func alignTokenSpans(mapping *PIIMapping, text string, spans []tokenSpanWire, truncatedAt *int) ([]candle_binding.TokenEntity, error) {
-	runes := []rune(text)
-	// byteAt[i] is the byte offset of code point i; byteAt[len(runes)] == len(text).
-	byteAt := make([]int, len(runes)+1)
-	for i, r := range runes {
-		byteAt[i+1] = byteAt[i] + utf8.RuneLen(r)
-	}
-	if truncatedAt != nil && (*truncatedAt < 0 || *truncatedAt > len(runes)) {
-		return nil, fmt.Errorf("token_spans truncated_at %d is outside a %d code-point input", *truncatedAt, len(runes))
+	input := newSpanInput(text)
+	if err := input.checkTruncatedAt(truncatedAt); err != nil {
+		return nil, err
 	}
 
 	known := knownPIILabels(mapping)
-	type spanKey struct {
-		label      string
-		start, end int
-	}
 	seen := make(map[spanKey]struct{}, len(spans))
 	entities := make([]candle_binding.TokenEntity, 0, len(spans))
-
 	for i, sp := range spans {
-		label := sp.Label
-		if label == "" {
-			label = sp.EntityGroup
+		entity, err := alignTokenSpan(i, sp, input, known, truncatedAt)
+		if err != nil {
+			return nil, err
 		}
-		label = stripBIOPrefix(label)
-		if label == "" {
-			return nil, fmt.Errorf("token_spans span %d has no label", i)
+		key := spanKey{entity.EntityType, *sp.Start, *sp.End}
+		if _, dup := seen[key]; dup {
+			return nil, fmt.Errorf("token_spans response contains duplicate span %s [%d,%d)", key.label, key.start, key.end)
 		}
-		if _, ok := known[label]; !ok {
-			return nil, fmt.Errorf("token_spans span %d label %q is not in the configured PII mapping", i, label)
-		}
-		if sp.Start == nil || sp.End == nil {
-			return nil, fmt.Errorf("token_spans span %d (%s) is missing start or end", i, label)
-		}
-		start, end := *sp.Start, *sp.End
-		if start < 0 || start >= end || end > len(runes) {
-			return nil, fmt.Errorf("token_spans span %d (%s) has offsets [%d,%d) outside a %d code-point input", i, label, start, end, len(runes))
-		}
-		if truncatedAt != nil && end > *truncatedAt {
-			return nil, fmt.Errorf("token_spans span %d (%s) ends at %d, after truncated_at %d", i, label, end, *truncatedAt)
-		}
-		var spanText string
-		switch {
-		case sp.Text != nil:
-			spanText = *sp.Text
-		case sp.Word != nil:
-			spanText = *sp.Word
-		default:
-			return nil, fmt.Errorf("token_spans span %d (%s) is missing text", i, label)
-		}
-		if got := string(runes[start:end]); got != spanText {
-			return nil, fmt.Errorf("token_spans span %d (%s) text %q does not match input [%d,%d) %q; check the offset unit", i, label, spanText, start, end, got)
-		}
-		if sp.Score == nil || *sp.Score < 0 || *sp.Score > 1 {
-			return nil, fmt.Errorf("token_spans span %d (%s) score is missing or outside [0,1]", i, label)
-		}
-		bStart, bEnd := byteAt[start], byteAt[end]
-		if sp.ByteStart != nil && *sp.ByteStart != bStart {
-			return nil, fmt.Errorf("token_spans span %d (%s) byte_start %d disagrees with code-point start %d (byte %d)", i, label, *sp.ByteStart, start, bStart)
-		}
-		if sp.ByteEnd != nil && *sp.ByteEnd != bEnd {
-			return nil, fmt.Errorf("token_spans span %d (%s) byte_end %d disagrees with code-point end %d (byte %d)", i, label, *sp.ByteEnd, end, bEnd)
-		}
-		k := spanKey{label, start, end}
-		if _, dup := seen[k]; dup {
-			return nil, fmt.Errorf("token_spans response contains duplicate span %s [%d,%d)", label, start, end)
-		}
-		seen[k] = struct{}{}
-		entities = append(entities, candle_binding.TokenEntity{
-			EntityType: label,
-			Start:      bStart,
-			End:        bEnd,
-			Text:       spanText,
-			Confidence: *sp.Score,
-		})
+		seen[key] = struct{}{}
+		entities = append(entities, entity)
 	}
 	if truncatedAt != nil {
 		return entities, ErrTokenSpansTruncated
 	}
 	return entities, nil
+}
+
+// spanKey identifies a span for duplicate detection: same label, same
+// code-point range.
+type spanKey struct {
+	label      string
+	start, end int
+}
+
+// spanInput is the request text as the contract sees it: code points, plus
+// the byte offset of each code point so spans convert to TokenEntity once.
+type spanInput struct {
+	runes  []rune
+	byteAt []int // byteAt[i] is the byte offset of code point i; byteAt[len(runes)] == len(text)
+}
+
+func newSpanInput(text string) spanInput {
+	runes := []rune(text)
+	byteAt := make([]int, len(runes)+1)
+	for i, r := range runes {
+		byteAt[i+1] = byteAt[i] + utf8.RuneLen(r)
+	}
+	return spanInput{runes: runes, byteAt: byteAt}
+}
+
+func (in spanInput) checkTruncatedAt(truncatedAt *int) error {
+	if truncatedAt != nil && (*truncatedAt < 0 || *truncatedAt > len(in.runes)) {
+		return fmt.Errorf("token_spans truncated_at %d is outside a %d code-point input", *truncatedAt, len(in.runes))
+	}
+	return nil
+}
+
+// alignTokenSpan validates one span and converts it to a TokenEntity.
+func alignTokenSpan(i int, sp tokenSpanWire, input spanInput, known map[string]struct{}, truncatedAt *int) (candle_binding.TokenEntity, error) {
+	label, err := spanLabel(i, sp, known)
+	if err != nil {
+		return candle_binding.TokenEntity{}, err
+	}
+	start, end, err := spanBounds(i, label, sp, input, truncatedAt)
+	if err != nil {
+		return candle_binding.TokenEntity{}, err
+	}
+	text, err := spanText(i, label, sp, input, start, end)
+	if err != nil {
+		return candle_binding.TokenEntity{}, err
+	}
+	score, err := spanScore(i, label, sp)
+	if err != nil {
+		return candle_binding.TokenEntity{}, err
+	}
+	bStart, bEnd, err := spanBytes(i, label, sp, input, start, end)
+	if err != nil {
+		return candle_binding.TokenEntity{}, err
+	}
+	return candle_binding.TokenEntity{
+		EntityType: label,
+		Start:      bStart,
+		End:        bEnd,
+		Text:       text,
+		Confidence: score,
+	}, nil
+}
+
+// spanLabel resolves label / entity_group, strips any BIO prefix and checks the
+// result against the configured mapping.
+func spanLabel(i int, sp tokenSpanWire, known map[string]struct{}) (string, error) {
+	label := sp.Label
+	if label == "" {
+		label = sp.EntityGroup
+	}
+	label = stripBIOPrefix(label)
+	if label == "" {
+		return "", fmt.Errorf("token_spans span %d has no label", i)
+	}
+	if _, ok := known[label]; !ok {
+		return "", fmt.Errorf("token_spans span %d label %q is not in the configured PII mapping", i, label)
+	}
+	return label, nil
+}
+
+// spanBounds checks the code-point range and its position relative to any
+// declared truncation.
+func spanBounds(i int, label string, sp tokenSpanWire, input spanInput, truncatedAt *int) (int, int, error) {
+	if sp.Start == nil || sp.End == nil {
+		return 0, 0, fmt.Errorf("token_spans span %d (%s) is missing start or end", i, label)
+	}
+	start, end := *sp.Start, *sp.End
+	if start < 0 || start >= end || end > len(input.runes) {
+		return 0, 0, fmt.Errorf("token_spans span %d (%s) has offsets [%d,%d) outside a %d code-point input", i, label, start, end, len(input.runes))
+	}
+	if truncatedAt != nil && end > *truncatedAt {
+		return 0, 0, fmt.Errorf("token_spans span %d (%s) ends at %d, after truncated_at %d", i, label, end, *truncatedAt)
+	}
+	return start, end, nil
+}
+
+// spanText resolves text / word and requires it to equal the code-point slice;
+// a mismatch is how an off-by-one in the offset unit shows up.
+func spanText(i int, label string, sp tokenSpanWire, input spanInput, start, end int) (string, error) {
+	var text string
+	switch {
+	case sp.Text != nil:
+		text = *sp.Text
+	case sp.Word != nil:
+		text = *sp.Word
+	default:
+		return "", fmt.Errorf("token_spans span %d (%s) is missing text", i, label)
+	}
+	if got := string(input.runes[start:end]); got != text {
+		return "", fmt.Errorf("token_spans span %d (%s) text %q does not match input [%d,%d) %q; check the offset unit", i, label, text, start, end, got)
+	}
+	return text, nil
+}
+
+func spanScore(i int, label string, sp tokenSpanWire) (float32, error) {
+	if sp.Score == nil || *sp.Score < 0 || *sp.Score > 1 {
+		return 0, fmt.Errorf("token_spans span %d (%s) score is missing or outside [0,1]", i, label)
+	}
+	return *sp.Score, nil
+}
+
+// spanBytes converts the code-point range to bytes and, if the provider also
+// sent a byte pair, requires it to agree.
+func spanBytes(i int, label string, sp tokenSpanWire, input spanInput, start, end int) (int, int, error) {
+	bStart, bEnd := input.byteAt[start], input.byteAt[end]
+	if sp.ByteStart != nil && *sp.ByteStart != bStart {
+		return 0, 0, fmt.Errorf("token_spans span %d (%s) byte_start %d disagrees with code-point start %d (byte %d)", i, label, *sp.ByteStart, start, bStart)
+	}
+	if sp.ByteEnd != nil && *sp.ByteEnd != bEnd {
+		return 0, 0, fmt.Errorf("token_spans span %d (%s) byte_end %d disagrees with code-point end %d (byte %d)", i, label, *sp.ByteEnd, end, bEnd)
+	}
+	return bStart, bEnd, nil
 }
 
 // knownPIILabels collects the mapping's label names with any BIO prefix
