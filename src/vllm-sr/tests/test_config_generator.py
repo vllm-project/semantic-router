@@ -41,6 +41,15 @@ def _cluster_by_name(rendered_config, cluster_name):
     raise AssertionError(f"cluster {cluster_name!r} not found")
 
 
+def _ext_proc_config(rendered_config):
+    listener = rendered_config["static_resources"]["listeners"][0]
+    filters = listener["filter_chains"][0]["filters"][0]["typed_config"]["http_filters"]
+    for http_filter in filters:
+        if http_filter["name"] == "envoy.filters.http.ext_proc":
+            return http_filter["typed_config"]
+    raise AssertionError("ext_proc filter not found")
+
+
 def test_helm_backend_target_fixture_is_valid_canonical_config(tmp_path):
     fixture = yaml.safe_load(
         (REPO_ROOT / "deploy/helm/testdata/backend-target-values.yaml").read_text()
@@ -52,6 +61,59 @@ def test_helm_backend_target_fixture_is_valid_canonical_config(tmp_path):
 
     errors = validate_user_config(config, log_summary=False)
     assert [str(error) for error in errors] == []
+def test_envoy_exposes_actual_backend_type_to_response_processor(tmp_path, monkeypatch):
+    rendered = _render_envoy_config(
+        tmp_path,
+        monkeypatch,
+        """
+version: v0.3
+listeners:
+  - name: "http-8899"
+    address: "0.0.0.0"
+    port: 8899
+providers:
+  defaults:
+    default_model: "mixed-model"
+  models:
+    - name: "mixed-model"
+      backend_refs:
+        - name: "dynamo-a"
+          endpoint: "10.0.0.1:8000"
+          type: dynamo
+        - name: "vllm-a"
+          endpoint: "10.0.0.2:8000"
+          type: vllm
+routing:
+  modelCards:
+    - name: "mixed-model"
+  decisions:
+    - name: "default-route"
+      description: "default route"
+      priority: 100
+      rules:
+        operator: "AND"
+        conditions: []
+      modelRefs:
+        - model: "mixed-model"
+          use_reasoning: false
+""",
+        extproc_host="localhost",
+        router_api_host="localhost",
+    )
+
+    ext_proc = _ext_proc_config(rendered)
+    assert ext_proc["response_attributes"] == ["xds.upstream_host_metadata"]
+
+    cluster = _cluster_by_name(rendered, "mixed_model_cluster")
+    endpoints = cluster["load_assignment"]["endpoints"][0]["lb_endpoints"]
+    identities = [
+        endpoint["metadata"]["filter_metadata"]["semantic-router"]
+        for endpoint in endpoints
+    ]
+    assert identities == [
+        {"backend_name": "dynamo-a", "backend_type": "dynamo"},
+        {"backend_name": "vllm-a", "backend_type": "vllm"},
+    ]
 
 
 def test_generate_envoy_config_uses_logical_dns_for_split_extproc_host(

@@ -85,8 +85,16 @@ func (buffers *semanticStreamBuffers) push(responseBody []byte, ctx *RequestCont
 	}
 	if ctx.ProtocolResponseStream != nil {
 		frames, events, diagnostics, err := ctx.ProtocolResponseStream.Push(responseBody)
-		buffers.translated = appendProtocolFrames(buffers.translated, frames)
 		observeProtocolStream(ctx, events, diagnostics)
+		var boundaryErr error
+		if err == nil {
+			boundaryErr = validateDynamoResponseEvents(ctx, events)
+		}
+		if boundaryErr == nil {
+			buffers.translated = appendProtocolFrames(buffers.translated, frames)
+		} else {
+			err = boundaryErr
+		}
 		buffers.recordError(ctx, err, true)
 	}
 }
@@ -94,8 +102,16 @@ func (buffers *semanticStreamBuffers) push(responseBody []byte, ctx *RequestCont
 func (buffers *semanticStreamBuffers) finalize(ctx *RequestContext) {
 	if ctx.ProtocolResponseStream != nil {
 		frames, events, diagnostics, err := ctx.ProtocolResponseStream.Finalize(buffers.streamErr)
-		buffers.translated = appendProtocolFrames(buffers.translated, frames)
 		observeProtocolStream(ctx, events, diagnostics)
+		var boundaryErr error
+		if err == nil {
+			boundaryErr = validateDynamoResponseEvents(ctx, events)
+		}
+		if boundaryErr == nil {
+			buffers.translated = appendProtocolFrames(buffers.translated, frames)
+		} else {
+			err = boundaryErr
+		}
 		buffers.recordError(ctx, err, true)
 	}
 	if ctx.PublicChatUsageFilter != nil {
