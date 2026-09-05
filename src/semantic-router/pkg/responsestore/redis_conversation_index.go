@@ -22,43 +22,34 @@ type conversationIndexProof string
 
 const (
 	// conversationIndexProofEmpty means a completed legacy scan found no
-	// live responses for the conversation. A weaker, more perishable claim
-	// than populated — see markConversationMigrated's TTL policy.
+	// live responses for the conversation.
 	conversationIndexProofEmpty conversationIndexProof = "v1:empty"
-	// conversationIndexProofPopulated means a completed legacy scan (or,
-	// via refreshPopulatedConversationProof, a later ordinary write to an
-	// already-populated conversation) found live responses now reflected
-	// in the index.
+	// conversationIndexProofPopulated means a completed legacy scan found
+	// live responses, now reflected in the index.
+	//
+	// Both values are equally perishable, and for the same reason: either
+	// claim can be invalidated by an index-unaware writer landing a
+	// response after the scan that produced it. See markConversationMigrated
+	// for the TTL policy that bounds how long either may be trusted.
 	conversationIndexProofPopulated conversationIndexProof = "v1:populated"
 )
-
-// refreshPopulatedProofScript extends the migrated marker's TTL only if its
-// current value is still exactly ARGV[1] (conversationIndexProofPopulated).
-// Deliberately conditional rather than a blind EXPIRE: indexResponse must
-// never extend a "confirmed empty" proof's life just because an ordinary
-// write happened to land on that conversation afterward — see
-// refreshPopulatedConversationProof. Single-key: KEYS[1] only.
-var refreshPopulatedProofScript = redis.NewScript(`
-if redis.call("GET", KEYS[1]) ~= ARGV[1] then
-	return 0
-end
-return redis.call("PEXPIRE", KEYS[1], ARGV[2])
-`)
 
 // indexResponse adds a response to its conversation index, scored by
 // created_at, and refreshes the index's own TTL.
 //
-// Deliberately does not set the migrated proof itself: this call proves
-// nothing about whether a legacy-scan backfill has ever run for
-// conversationID (a fresh conversation's very first write reaches this
-// exact path), so it must never be mistaken for the signal that makes the
-// index trustworthy as exhaustive. It does best-effort refresh an
-// *existing* conversationIndexProofPopulated proof's TTL via
-// refreshPopulatedConversationProof, so an actively-written conversation's
-// proof doesn't need to outlive its own separate TTL and force a needless
-// re-scan — but it will never refresh, let alone set, a
-// conversationIndexProofEmpty proof: that value is stale the moment a real
-// write lands, and extending its life would be exactly backwards.
+// Deliberately touches no migrated proof at all — neither setting one nor
+// extending one. Setting: this call proves nothing about whether a
+// legacy-scan backfill has ever run for conversationID (a fresh
+// conversation's very first write reaches this exact path), so it must
+// never be mistaken for the signal that makes the index trustworthy as
+// exhaustive. Extending: a pre-finalization proof is a *time-bounded*
+// claim (see markConversationMigrated), and letting ordinary writes push
+// its deadline out would defeat that bound entirely — a conversation
+// written to more often than once every conversationIndexProofMaxTTL
+// would keep its proof alive indefinitely, so a response an index-unaware
+// writer landed after the scan's cursor passed would never be rediscovered.
+// Every proof must expire on its own schedule until FinalizeConversationIndex
+// seals the store; after that, proofs are not consulted at all.
 //
 // Returns an error instead of swallowing it: the payload this indexes is
 // already durable by the time this runs (StoreResponse writes it first), so
@@ -80,32 +71,6 @@ func (s *RedisStore) indexResponse(ctx context.Context, conversationID, response
 
 	if _, err := pipe.Exec(ctx); err != nil {
 		return fmt.Errorf("failed to index response %s in conversation %s: %w", responseID, conversationID, err)
-	}
-
-	if err := s.refreshPopulatedConversationProof(ctx, conversationID); err != nil {
-		// Best-effort, by design: the ZADD above is what every read
-		// actually consults for correctness. A missed refresh here only
-		// risks the proof lapsing early and forcing one avoidable rescan.
-		logging.Debugf("RedisStore: failed to refresh conversation %s migrated proof: %v", conversationID, err)
-	}
-
-	return nil
-}
-
-// refreshPopulatedConversationProof best-effort extends a conversation's
-// migrated marker TTL, but only when its current value is exactly
-// conversationIndexProofPopulated — see refreshPopulatedProofScript and
-// indexResponse's doc comment for why an empty proof must never be
-// refreshed this way. A no-op against a persistent store (s.ttl <= 0),
-// since a populated proof there was set with no TTL to refresh.
-func (s *RedisStore) refreshPopulatedConversationProof(ctx context.Context, conversationID string) error {
-	if s.ttl <= 0 {
-		return nil
-	}
-
-	key := s.conversationIndexMigratedKey(conversationID)
-	if _, err := refreshPopulatedProofScript.Run(ctx, s.client, []string{key}, string(conversationIndexProofPopulated), s.ttl.Milliseconds()).Result(); err != nil {
-		return fmt.Errorf("failed to refresh conversation %s migrated proof: %w", conversationID, err)
 	}
 
 	return nil
@@ -176,8 +141,9 @@ func (s *RedisStore) conversationIndexProof(ctx context.Context, conversationID 
 // request cancellation) until this call holds the single global scan lease,
 // rechecking resolution on every acquisition attempt so a waiter returns as
 // soon as a concurrent scan resolves this same conversation, and once more
-// under the lease before actually running the legacy scan. Never falls back to scanning without the lease,
-// at any timeout: unlike the superseded per-conversation lock, there is no
+// under the lease before actually running the legacy scan. Never falls back
+// to scanning without the lease, at any timeout: unlike the superseded
+// per-conversation lock, there is no
 // duplicate-scan risk to bound here, since the lease is what makes "at
 // most one full-keyspace scan running at a time" true in the first place.
 func (s *RedisStore) ensureConversationIndex(ctx context.Context, conversationID string) error {
@@ -348,16 +314,24 @@ func (s *RedisStore) indexBackfillBatch(ctx context.Context, conversationID stri
 // (ConversationIndexMigratedKeyPrefix), independent of whether the index
 // happens to already have members from earlier ordinary writes.
 //
-// TTL: conversationIndexProofPopulated gets the full store TTL — the proof
-// should live exactly as long as the data it now describes, and
-// indexResponse's refreshPopulatedConversationProof extends it further on
-// every subsequent write to the same conversation.
-// conversationIndexProofEmpty is capped at emptyConversationIndexMarkerMaxTTL
-// (or the store's own TTL if that is shorter) instead: an empty result is a
-// more perishable claim, since an indexing-unaware writer could still land
-// a response later (the rolling-upgrade blind spot that cap exists to
-// bound) — and, per indexResponse, an empty proof is never refreshed by an
-// ordinary write, so it must expire and force a re-scan on its own.
+// TTL: every proof this writes — populated as well as empty — is capped at
+// conversationIndexProofMaxTTL (or the store's own TTL if that is
+// shorter), and nothing ever extends it afterwards.
+//
+// A populated proof used to get the full store TTL, on the reasoning that
+// there is no blind spot once real data has been discovered and indexed.
+// That reasoning does not survive a rolling upgrade. An index-unaware
+// writer can land an unindexed response into an *already populated*
+// conversation just as easily as into an empty one — and if it lands after
+// this scan's cursor has passed its shard, only the proof expiring can
+// force the re-scan that discovers it. With a full-TTL proof that
+// indexResponse refreshed on every subsequent write, a conversation written
+// to more often than the store TTL would hold a proof that never expires,
+// hiding that response permanently. So every pre-finalization proof is a
+// deliberately short-lived, self-revalidating claim: the store re-scans a
+// conversation at most once per cap until FinalizeConversationIndex seals
+// the whole keyspace, after which proofs stop being consulted entirely and
+// the re-scan cost disappears with them.
 //
 // Returns the write error rather than swallowing it, so a caller that
 // wants to know can (e.g. Phase 4's streaming backfill, which must not
@@ -366,11 +340,8 @@ func (s *RedisStore) indexBackfillBatch(ctx context.Context, conversationID stri
 // and continue, since the next read simply re-scans rather than trust a
 // proof that failed to write.
 func (s *RedisStore) markConversationMigrated(ctx context.Context, conversationID string, proof conversationIndexProof) error {
-	ttl := emptyConversationIndexMarkerMaxTTL
-	switch {
-	case proof == conversationIndexProofPopulated:
-		ttl = s.ttl
-	case s.ttl > 0 && s.ttl < ttl:
+	ttl := conversationIndexProofMaxTTL
+	if s.ttl > 0 && s.ttl < ttl {
 		ttl = s.ttl
 	}
 

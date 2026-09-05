@@ -9,15 +9,22 @@ import (
 	mathrand "math/rand/v2"
 	"time"
 
+	"github.com/redis/go-redis/v9"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 // conditionalRefreshScript extends KEYS[1]'s TTL by ARGV[2] milliseconds
-// only if its current value is still exactly ARGV[1] — the shared shape
-// behind both refreshPopulatedConversationProof (Phase 2) and this file's
-// scan-lease renewal: "prove you still own this key before touching it."
-// Single-key: KEYS[1] only.
-var conditionalRefreshScript = refreshPopulatedProofScript
+// only if its current value is still exactly ARGV[1] — "prove you still own
+// this key before touching it," which is what makes lease renewal safe
+// against a holder that has already lost the lease to someone else.
+// Single-key: KEYS[1] only, so it stays legal in Redis Cluster.
+var conditionalRefreshScript = redis.NewScript(`
+if redis.call("GET", KEYS[1]) ~= ARGV[1] then
+	return 0
+end
+return redis.call("PEXPIRE", KEYS[1], ARGV[2])
+`)
 
 // randomScanLeaseToken generates a cryptographically random lease token, so
 // two concurrent acquisition attempts can never collide on a guessable
