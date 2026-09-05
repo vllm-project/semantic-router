@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
@@ -108,6 +109,71 @@ func seedPageResponses(t *testing.T, store *RedisStore, convID string, count int
 	}
 	return ids
 }
+
+// clusterTestAddr is the seed address of a single-node Redis Cluster
+// started alongside this suite's standalone sr-test-redis instance,
+// specifically for tests that must prove no command they issue is ever
+// cross-slot: Redis enforces per-command slot-locality independent of node
+// count, so even one node in cluster mode genuinely rejects a multi-key
+// command (e.g. MGET) spanning different slots with CROSSSLOT, making it a
+// faithful (if minimal) Cluster-safety testbed.
+const clusterTestAddr = "127.0.0.1:7000"
+
+// newConversationIndexClusterStore builds a RedisStore backed by a real
+// Redis Cluster client (see clusterTestAddr). Skips (not fails) if that
+// cluster isn't reachable, since most environments running this package's
+// tests only provide the standalone sr-test-redis container.
+func newConversationIndexClusterStore(t *testing.T) *RedisStore {
+	t.Helper()
+
+	cfg := StoreConfig{
+		Enabled:     true,
+		TTLSeconds:  300,
+		BackendType: RedisStoreType,
+		Redis: RedisStoreConfig{
+			ClusterMode:      true,
+			ClusterAddresses: []string{clusterTestAddr},
+			KeyPrefix:        fmt.Sprintf("srtestcluster:%d:", time.Now().UnixNano()),
+		},
+	}
+
+	store, err := NewRedisStore(cfg)
+	if err != nil {
+		t.Skipf("Redis Cluster not available at %s: %v", clusterTestAddr, err)
+	}
+
+	t.Cleanup(func() {
+		ctx := context.Background()
+		clusterClient, ok := store.client.(interface {
+			ForEachMaster(ctx context.Context, fn func(context.Context, *redis.Client) error) error
+		})
+		if ok {
+			_ = clusterClient.ForEachMaster(ctx, func(ctx context.Context, master *redis.Client) error {
+				iter := master.Scan(ctx, 0, store.buildKey("*"), 0).Iterator()
+				for iter.Next(ctx) {
+					master.Del(ctx, iter.Val())
+				}
+				return nil
+			})
+		}
+		_ = store.Close()
+	})
+
+	return store
+}
+
+// mustMarshalResponse JSON-marshals a StoredResponse for tests writing a
+// payload's raw bytes directly (e.g. repairing a deliberately corrupted
+// payload, or constructing a raw value to compare-delete/compare-restore
+// against), failing the test immediately on a marshal error rather than
+// letting a malformed fixture masquerade as a real one.
+func mustMarshalResponse(t *testing.T, response *responseapi.StoredResponse) []byte {
+	t.Helper()
+	data, err := json.Marshal(response)
+	require.NoError(t, err)
+	return data
+}
+
 func responseIDsOf(responses []*responseapi.StoredResponse) []string {
 	ids := make([]string, len(responses))
 	for i, r := range responses {
