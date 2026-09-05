@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -78,6 +79,39 @@ func TestValidateStickyToolSelectionSecret_StickyEnabledSecretConfigured_OK(t *t
 	}
 }
 
+// TestValidateStickyToolSelectionPhaseSupport_StickyEnabledSecretConfigured_Err
+// covers the maintainer-flagged silent-no-op hazard directly (issue #3347
+// phase 1 / sub-issue #3392): sticky.enabled: true must be rejected even
+// when USER_SCOPE_NAMESPACE_SECRET is configured — the narrow secret
+// validator above accepts this config (correctly, for its own scope), but
+// no request path consumes ResolveStickyToolIdentity or the sessiontools
+// store yet, so a configured secret alone must not be enough to let sticky
+// through as a silent no-op.
+func TestValidateStickyToolSelectionPhaseSupport_StickyEnabledSecretConfigured_Err(t *testing.T) {
+	t.Setenv("USER_SCOPE_NAMESPACE_SECRET", "test-secret")
+	cfg := &config.RouterConfig{
+		IntelligentRouting: config.IntelligentRouting{
+			Decisions: []config.Decision{stickyEnabledDecision(t, "d1")},
+		},
+	}
+
+	err := validateStickyToolSelectionPhaseSupport(cfg)
+	if !errors.Is(err, config.ErrToolSelectionStickyUnsupported) {
+		t.Fatalf("error = %v, want ErrToolSelectionStickyUnsupported", err)
+	}
+}
+
+func TestValidateStickyToolSelectionPhaseSupport_NoStickyDecisions_OK(t *testing.T) {
+	cfg := &config.RouterConfig{
+		IntelligentRouting: config.IntelligentRouting{
+			Decisions: []config.Decision{stickyDisabledDecision(t, "d1")},
+		},
+	}
+	if err := validateStickyToolSelectionPhaseSupport(cfg); err != nil {
+		t.Fatalf("no decision enables sticky, expected no error, got: %v", err)
+	}
+}
+
 func TestValidateStickyToolSelectionSecret_NilConfig_OK(t *testing.T) {
 	t.Setenv("USER_SCOPE_NAMESPACE_SECRET", "")
 	if err := validateStickyToolSelectionSecret(nil); err != nil {
@@ -85,24 +119,25 @@ func TestValidateStickyToolSelectionSecret_NilConfig_OK(t *testing.T) {
 	}
 }
 
-// TestBuildOpenAIRouterFromConfig_StickyEnabledSecretMissing_FailsBeforeComponentBuild
-// covers the actual router-construction entry point, not only the
-// narrower validator: a config with sticky enabled and no secret must be
-// rejected before buildRouterComponents runs (which would otherwise fail
-// for unrelated reasons — missing providers, models, etc. — masking
-// whether this specific gate actually fired).
-func TestBuildOpenAIRouterFromConfig_StickyEnabledSecretMissing_FailsBeforeComponentBuild(t *testing.T) {
-	t.Setenv("USER_SCOPE_NAMESPACE_SECRET", "")
+// TestBuildOpenAIRouterFromConfig_StickyEnabledSecretConfigured_FailsUnsupportedBeforeComponentBuild
+// is the direct regression for the maintainer's reported issue (#3392): a
+// config with sticky enabled — and, notably, USER_SCOPE_NAMESPACE_SECRET
+// *configured* — must still be rejected before buildRouterComponents runs.
+// Before this fix, a configured secret was enough to let sticky.enabled:
+// true pass both config validation and router construction, even though no
+// request path consumed it — a silent no-op. Setting the secret here rules
+// that variable out, so a failure can only come from the phase-support
+// gate, not the secret gate.
+func TestBuildOpenAIRouterFromConfig_StickyEnabledSecretConfigured_FailsUnsupportedBeforeComponentBuild(t *testing.T) {
+	t.Setenv("USER_SCOPE_NAMESPACE_SECRET", "test-secret")
 	cfg := &config.RouterConfig{
 		IntelligentRouting: config.IntelligentRouting{
 			Decisions: []config.Decision{stickyEnabledDecision(t, "d1")},
 		},
 	}
+
 	_, err := buildOpenAIRouterFromConfig(cfg)
-	if err == nil {
-		t.Fatal("expected buildOpenAIRouterFromConfig to fail when sticky is enabled with no secret configured")
-	}
-	if !strings.Contains(err.Error(), "USER_SCOPE_NAMESPACE_SECRET") {
-		t.Fatalf("error = %q, want it to name USER_SCOPE_NAMESPACE_SECRET", err.Error())
+	if !errors.Is(err, config.ErrToolSelectionStickyUnsupported) {
+		t.Fatalf("error = %v, want ErrToolSelectionStickyUnsupported", err)
 	}
 }
