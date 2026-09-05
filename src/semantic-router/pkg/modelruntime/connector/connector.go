@@ -15,12 +15,14 @@ import (
 )
 
 // Operation describes one static operation in a remote model protocol. An
-// empty Path targets the configured base URL exactly.
+// empty Path targets the configured base URL exactly. SuccessStatusCode
+// narrows success to one 2xx status; zero accepts any 2xx.
 type Operation struct {
-	Name      string
-	Method    string
-	Path      string
-	RetrySafe bool
+	Name              string
+	Method            string
+	Path              string
+	SuccessStatusCode int
+	RetrySafe         bool
 }
 
 // Options defines bounded transport behavior. Byte limits and AttemptTimeout
@@ -141,6 +143,10 @@ func validateOperation(operation Operation) error {
 		(!strings.HasPrefix(operation.Path, "/") || strings.ContainsAny(operation.Path, "?#")) {
 		return fmt.Errorf("operation path must be an absolute path without query or fragment")
 	}
+	if operation.SuccessStatusCode != 0 &&
+		(operation.SuccessStatusCode < http.StatusOK || operation.SuccessStatusCode >= http.StatusMultipleChoices) {
+		return fmt.Errorf("operation success status code must be between 200 and 299")
+	}
 	return nil
 }
 
@@ -210,7 +216,7 @@ func (c *Client) readResponse(
 	response *http.Response,
 	attempt int,
 ) ([]byte, *Error) {
-	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+	if !operationAcceptsStatus(operation, response.StatusCode) {
 		errorBody, truncated, readErr := readBounded(response.Body, c.options.MaxErrorBytes)
 		if readErr != nil {
 			return nil, &Error{
@@ -254,6 +260,13 @@ func (c *Client) readResponse(
 		}
 	}
 	return responseBody, nil
+}
+
+func operationAcceptsStatus(operation Operation, statusCode int) bool {
+	if operation.SuccessStatusCode != 0 {
+		return statusCode == operation.SuccessStatusCode
+	}
+	return statusCode >= http.StatusOK && statusCode < http.StatusMultipleChoices
 }
 
 func readBounded(reader io.Reader, limit int64) ([]byte, bool, error) {

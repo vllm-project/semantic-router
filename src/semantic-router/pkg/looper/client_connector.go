@@ -33,10 +33,11 @@ type modelConnector interface {
 }
 
 var chatCompletionOperation = connector.Operation{
-	Name:      "looper_chat_completion",
-	Method:    http.MethodPost,
-	Path:      "",
-	RetrySafe: false,
+	Name:              "looper_chat_completion",
+	Method:            http.MethodPost,
+	Path:              "",
+	SuccessStatusCode: http.StatusOK,
+	RetrySafe:         false,
 }
 
 // NewConnectorClient creates a Looper client backed by the shared remote

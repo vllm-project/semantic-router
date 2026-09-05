@@ -124,3 +124,29 @@ func TestConnectorClientDoesNotRetryGenerativeCalls(t *testing.T) {
 		t.Fatalf("error exposed provider body: %v", err)
 	}
 }
+
+func TestConnectorClientRejectsNoContentStreamingResponse(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	client, err := NewConnectorClient(&config.LooperConfig{Endpoint: server.URL})
+	if err != nil {
+		t.Fatalf("NewConnectorClient() error = %v", err)
+	}
+	defer client.Close()
+
+	_, err = client.CallModelWithOptions(
+		context.Background(),
+		openai.ChatCompletionNewParams{},
+		ModelTarget{Name: "model-a"},
+		CallOptions{Iteration: 1, Mode: ResponseSSE},
+	)
+	if err == nil {
+		t.Fatal("CallModelWithOptions() error = nil")
+	}
+	if !strings.Contains(err.Error(), "status 204") {
+		t.Fatalf("CallModelWithOptions() error = %q, want status 204", err)
+	}
+}

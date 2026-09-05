@@ -132,6 +132,27 @@ func TestDoUsesExactBaseURLWhenOperationPathIsEmpty(t *testing.T) {
 	}
 }
 
+func TestDoRejectsUnexpectedSuccessfulStatus(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	client := newTestClient(t, server, testOptions())
+	if _, err := client.Do(context.Background(), testOperation, nil); err != nil {
+		t.Fatalf("Do() with default success policy error = %v", err)
+	}
+
+	operation := testOperation
+	operation.SuccessStatusCode = http.StatusOK
+
+	_, err := client.Do(context.Background(), operation, nil)
+	connectorErr := assertConnectorError(t, err, KindStatus, 1, false)
+	if connectorErr.StatusCode != http.StatusNoContent {
+		t.Fatalf("status code = %d, want %d", connectorErr.StatusCode, http.StatusNoContent)
+	}
+}
+
 func TestDoWithHeadersAppliesRequestScopedHeadersBeforeAuthorization(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		if got := request.Header.Get("X-Request-Scope"); got != "request-a" {
