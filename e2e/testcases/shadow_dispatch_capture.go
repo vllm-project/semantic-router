@@ -21,6 +21,10 @@ const (
 	shadowDispatchOutcomeSource = "shadow_dispatch"
 	shadowDispatchPollTimeout   = 45 * time.Second
 	shadowDispatchPollInterval  = 2 * time.Second
+	// routerReplayDetailToken carries the operator role from the profile
+	// values. The viewer role lacks replay.detail, and the API then redacts
+	// outcome reason, target_ref, and metadata, which these cases assert on.
+	routerReplayDetailToken = "router-replay-e2e-operator-token"
 )
 
 func init() {
@@ -149,12 +153,13 @@ func runShadowDispatchScenario(
 }
 
 type shadowReplayOutcome struct {
-	Source    string            `json:"source"`
-	Target    string            `json:"target"`
-	TargetRef string            `json:"target_ref"`
-	Verdict   string            `json:"verdict"`
-	Reason    string            `json:"reason"`
-	Metadata  map[string]string `json:"metadata"`
+	Source          string            `json:"source"`
+	Target          string            `json:"target"`
+	TargetRef       string            `json:"target_ref"`
+	Verdict         string            `json:"verdict"`
+	Reason          string            `json:"reason"`
+	Metadata        map[string]string `json:"metadata"`
+	ContentRedacted bool              `json:"content_redacted"`
 }
 
 type shadowReplayRecord struct {
@@ -203,7 +208,7 @@ func fetchShadowOutcome(
 	if len(items) != 1 {
 		return nil, fmt.Errorf("expected one replay row for session %q, got %d", sessionID, len(items))
 	}
-	raw, err := doRouterReplayManagementGET(ctx, apiSession, "/v1/router_replay/"+items[0].ID)
+	raw, err := doRouterReplayManagementGETAs(ctx, apiSession, "/v1/router_replay/"+items[0].ID, routerReplayDetailToken)
 	if err != nil {
 		return nil, fmt.Errorf("GET replay record: %w", err)
 	}
@@ -222,6 +227,9 @@ func fetchShadowOutcome(
 	}
 	if len(found) != 1 {
 		return nil, fmt.Errorf("replay record %s has %d shadow outcomes, want 1", record.ID, len(found))
+	}
+	if found[0].ContentRedacted {
+		return nil, fmt.Errorf("replay record %s shadow outcome was redacted; the detail token lacks replay.detail", record.ID)
 	}
 	return &found[0], nil
 }

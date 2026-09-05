@@ -175,6 +175,10 @@ config:
           tokens:
             - env: VSR_E2E_REPLAY_MANAGEMENT_TOKEN
               role: viewer
+            # Shadow dispatch cases read outcome reason, target_ref, and
+            # metadata, which the API redacts without replay.detail.
+            - env: VSR_E2E_REPLAY_DETAIL_TOKEN
+              role: operator
       response_api:
         enabled: true
         store_backend: memory
@@ -245,3 +249,5 @@ resources:
 extraEnv:
   - name: VSR_E2E_REPLAY_MANAGEMENT_TOKEN
     value: router-replay-e2e-viewer-token
+  - name: VSR_E2E_REPLAY_DETAIL_TOKEN
+    value: router-replay-e2e-operator-token
