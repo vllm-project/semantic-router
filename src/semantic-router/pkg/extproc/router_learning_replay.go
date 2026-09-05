@@ -42,6 +42,39 @@ func (p routerLearningPolicy) toReplayAdaptation() *routerreplay.LearningAdaptat
 		Seed: diag.sampling.seed,
 	}
 	out.Scores = replayCandidateScores(diag.scores)
+	out.SnapshotIdentity = strings.TrimSpace(diag.snapshotIdentity)
+	out.SuccessEstimates = replaySuccessEstimates(diag.successEstimates)
+	return out
+}
+
+func replaySuccessEstimates(estimates []successEstimate) map[string]routerreplay.LearningSuccessEstimate {
+	if len(estimates) == 0 {
+		return nil
+	}
+	out := make(map[string]routerreplay.LearningSuccessEstimate, len(estimates))
+	for _, estimate := range estimates {
+		model := strings.TrimSpace(estimate.CandidateModel)
+		if model == "" {
+			continue
+		}
+		row := routerreplay.LearningSuccessEstimate{
+			Status:             string(estimate.Status),
+			SampleCount:        estimate.SampleCount,
+			EvidenceScope:      strings.TrimSpace(estimate.EvidenceScope),
+			FreshnessSeconds:   estimate.FreshnessSeconds,
+			CalibrationVersion: strings.TrimSpace(estimate.CalibrationVersion),
+			FallbackReason:     strings.TrimSpace(estimate.FallbackReason),
+		}
+		if estimate.Status == successEstimateCalibrated {
+			row.Probability = roundLearningFloat(estimate.Probability)
+			row.Uncertainty = roundLearningFloat(estimate.Uncertainty)
+			row.Coverage = roundLearningFloat(estimate.Coverage)
+		}
+		out[model] = row
+	}
+	if len(out) == 0 {
+		return nil
+	}
 	return out
 }
 

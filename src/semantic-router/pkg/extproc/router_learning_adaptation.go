@@ -12,14 +12,16 @@ import (
 )
 
 type routerLearningAdaptationDiagnostics struct {
-	candidateSet  string
-	strategy      string
-	baseModel     string
-	proposalModel string
-	decision      string
-	decisionTier  int
-	sampling      routerLearningSamplingDiagnostics
-	scores        []routerLearningCandidateScore
+	candidateSet     string
+	strategy         string
+	baseModel        string
+	proposalModel    string
+	decision         string
+	decisionTier     int
+	sampling         routerLearningSamplingDiagnostics
+	scores           []routerLearningCandidateScore
+	snapshotIdentity string
+	successEstimates []successEstimate
 }
 
 type routerLearningSamplingDiagnostics struct {

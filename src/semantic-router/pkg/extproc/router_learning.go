@@ -41,12 +41,16 @@ func (r *OpenAIRouter) applyLearningAdaptation(
 	mode := adaptationMode(input.ctx)
 	strategy, ok := routerLearningAdaptationStrategies.Strategy(cfg)
 	if !ok {
-		return baseAdaptationDecision(
+		decision := baseAdaptationDecision(
 			input,
 			adaptationPolicy(mode, routerLearningActionKeepBase, "strategy_unavailable", nil),
 		)
+		r.attachSuccessEstimateObserveDiagnostics(input, cfg, &decision)
+		return decision
 	}
-	return strategy.Select(r, input, preflight, cfg)
+	decision := strategy.Select(r, input, preflight, cfg)
+	r.attachSuccessEstimateObserveDiagnostics(input, cfg, &decision)
+	return decision
 }
 
 func recordRouterLearningPolicies(

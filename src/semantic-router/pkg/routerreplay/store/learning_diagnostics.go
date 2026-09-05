@@ -23,14 +23,30 @@ type LearningPolicyDiagnostics struct {
 type LearningAdaptationDiagnostics struct {
 	LearningPolicyDiagnostics
 
-	CandidateSet  string                            `json:"candidate_set,omitempty"`
-	Strategy      string                            `json:"strategy,omitempty"`
-	BaseModel     string                            `json:"base_model,omitempty"`
-	ProposalModel string                            `json:"proposal_model,omitempty"`
-	Decision      string                            `json:"decision,omitempty"`
-	DecisionTier  int                               `json:"decision_tier,omitempty"`
-	Sampling      *LearningSamplingDiagnostics      `json:"sampling,omitempty"`
-	Scores        map[string]LearningCandidateScore `json:"scores,omitempty"`
+	CandidateSet     string                             `json:"candidate_set,omitempty"`
+	Strategy         string                             `json:"strategy,omitempty"`
+	BaseModel        string                             `json:"base_model,omitempty"`
+	ProposalModel    string                             `json:"proposal_model,omitempty"`
+	Decision         string                             `json:"decision,omitempty"`
+	DecisionTier     int                                `json:"decision_tier,omitempty"`
+	Sampling         *LearningSamplingDiagnostics       `json:"sampling,omitempty"`
+	Scores           map[string]LearningCandidateScore  `json:"scores,omitempty"`
+	SnapshotIdentity string                             `json:"snapshot_identity,omitempty"`
+	SuccessEstimates map[string]LearningSuccessEstimate `json:"success_estimates,omitempty"`
+}
+
+// LearningSuccessEstimate is the replay-facing typed success estimate.
+// Probability is present only when Status is calibrated.
+type LearningSuccessEstimate struct {
+	Status             string  `json:"status,omitempty"`
+	Probability        float64 `json:"probability,omitempty"`
+	Uncertainty        float64 `json:"uncertainty,omitempty"`
+	Coverage           float64 `json:"coverage,omitempty"`
+	SampleCount        int     `json:"sample_count,omitempty"`
+	EvidenceScope      string  `json:"evidence_scope,omitempty"`
+	FreshnessSeconds   int64   `json:"freshness_seconds,omitempty"`
+	CalibrationVersion string  `json:"calibration_version,omitempty"`
+	FallbackReason     string  `json:"fallback_reason,omitempty"`
 }
 
 // LearningSamplingDiagnostics records whether routing_sampling used a random
