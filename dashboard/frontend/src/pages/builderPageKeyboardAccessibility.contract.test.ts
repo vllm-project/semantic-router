@@ -28,7 +28,7 @@ const collapsibleHeaders: ReadonlyArray<{
     name: 'expression builder toolbox',
     source: '../components/ExpressionBuilderToolbox.tsx',
     className: 'styles.toolboxHeader',
-    expandedState: '!toolboxCollapsed',
+    expandedState: '!collapsed',
   },
   {
     name: 'builder sidebar section',
@@ -67,20 +67,32 @@ describe('collapsible headers are keyboard operable', () => {
       expect(contents).not.toMatch(
         new RegExp(`<div[^>]*className=\\{${className.replace('.', '\\.')}\\}[^>]*onClick`)
       )
+
+      // The button element itself must name the region it controls, so removing
+      // aria-controls fails here even when the id is still referenced elsewhere.
+      const buttonStart = contents.lastIndexOf('<button', contents.indexOf(`className={${className}}`))
+      const buttonEnd = contents.indexOf('>', contents.indexOf(`className={${className}}`))
+      const openingTag = contents.slice(buttonStart, buttonEnd)
+
+      expect(openingTag).toContain('aria-controls=')
     }
   )
 
-  it('keeps every collapsible header attached to the region it controls', () => {
+  it('wires every generated id to a region and to a control', () => {
+    // Headers and their regions may live in different components once a file is
+    // split, so the durable invariant is the generated id itself: it must label
+    // a region and be referenced by something that points at it.
     for (const { source } of collapsibleHeaders) {
       const contents = read(source)
-      // Matches both `aria-controls={id}` and `aria-controls={cond ? id : undefined}`.
-      const controlled = [
-        ...contents.matchAll(/aria-controls=\{(?:[A-Za-z]+ \? )?([A-Za-z]+)/g),
-      ].map((match) => match[1])
+      const generated = [...contents.matchAll(/const (\w+) = useId\(\)/g)].map(
+        (match) => match[1]
+      )
 
-      expect(controlled.length).toBeGreaterThan(0)
-      for (const id of controlled) {
+      expect(generated.length).toBeGreaterThan(0)
+      for (const id of generated) {
         expect(contents).toContain(`id={${id}}`)
+        const references = contents.split(`{${id}}`).length - 1
+        expect(references).toBeGreaterThan(1)
       }
     }
   })

@@ -16,6 +16,74 @@ interface ExpressionBuilderToolboxProps {
   onToggleGroup: (group: string) => void
 }
 
+interface ToolboxOperatorsProps {
+  onClear: () => void
+}
+
+/** Draggable operator palette. Extracted to keep the toolbox body on its own seam. */
+function ToolboxOperators({ onClear }: ToolboxOperatorsProps) {
+  return (
+    <div className={styles.toolboxOperators}>
+      {OPERATOR_ORDER.map(operator => {
+        const meta = OPERATOR_META[operator]
+        return (
+          <div
+            key={operator}
+            className={`${styles.toolboxOp} ${styles[`toolboxOp${operator}`]}`}
+            draggable
+            onDragStart={event => {
+              event.dataTransfer.setData(
+                DRAG_MIME,
+                encodeDrag({ kind: 'operator', operator })
+              )
+              event.dataTransfer.effectAllowed = 'copyMove'
+            }}
+            onClick={event => event.stopPropagation()}
+            title={`Drag ${operator} gate to canvas`}
+          >
+            <span className={styles.toolboxOpIcon} style={{ color: meta.color }}>
+              {meta.icon}
+            </span>
+            {operator}
+          </div>
+        )
+      })}
+      <button
+        className={styles.clearBtn}
+        onClick={event => {
+          event.stopPropagation()
+          onClear()
+        }}
+      >
+        Clear
+      </button>
+    </div>
+  )
+}
+
+interface ToolboxHeaderProps {
+  collapsed: boolean
+  contentId: string
+  signalCount: number
+  onToggle: () => void
+}
+
+/** Toggle for the signal toolbox. Extracted to keep the toolbox body on its own seam. */
+function ToolboxHeader({ collapsed, contentId, signalCount, onToggle }: ToolboxHeaderProps) {
+  return (
+    <button
+      type="button"
+      className={styles.toolboxHeader}
+      onClick={onToggle}
+      aria-expanded={!collapsed}
+      aria-controls={contentId}
+    >
+      <span className={styles.toolboxHeaderTitle}>{collapsed ? '▶' : '▼'} Toolbox</span>
+      <span className={styles.toolboxHeaderCount}>{signalCount} signals</span>
+    </button>
+  )
+}
+
 export default function ExpressionBuilderToolbox({
   collapsedGroups,
   filteredGroups,
@@ -31,54 +99,16 @@ export default function ExpressionBuilderToolbox({
 
   return (
     <div className={`${styles.toolbox} ${toolboxCollapsed ? styles.toolboxCollapsed : ''}`}>
-      <button
-        type="button"
-        className={styles.toolboxHeader}
-        onClick={onToggleCollapsed}
-        aria-expanded={!toolboxCollapsed}
-        aria-controls={contentId}
-      >
-        <span className={styles.toolboxHeaderTitle}>{toolboxCollapsed ? '▶' : '▼'} Toolbox</span>
-        <span className={styles.toolboxHeaderCount}>{signalCount} signals</span>
-      </button>
+      <ToolboxHeader
+        collapsed={toolboxCollapsed}
+        contentId={contentId}
+        signalCount={signalCount}
+        onToggle={onToggleCollapsed}
+      />
 
       {!toolboxCollapsed ? (
         <div id={contentId} className={styles.toolboxContent}>
-          <div className={styles.toolboxOperators}>
-            {OPERATOR_ORDER.map(operator => {
-              const meta = OPERATOR_META[operator]
-              return (
-                <div
-                  key={operator}
-                  className={`${styles.toolboxOp} ${styles[`toolboxOp${operator}`]}`}
-                  draggable
-                  onDragStart={event => {
-                    event.dataTransfer.setData(
-                      DRAG_MIME,
-                      encodeDrag({ kind: 'operator', operator })
-                    )
-                    event.dataTransfer.effectAllowed = 'copyMove'
-                  }}
-                  onClick={event => event.stopPropagation()}
-                  title={`Drag ${operator} gate to canvas`}
-                >
-                  <span className={styles.toolboxOpIcon} style={{ color: meta.color }}>
-                    {meta.icon}
-                  </span>
-                  {operator}
-                </div>
-              )
-            })}
-            <button
-              className={styles.clearBtn}
-              onClick={event => {
-                event.stopPropagation()
-                onClear()
-              }}
-            >
-              Clear
-            </button>
-          </div>
+          <ToolboxOperators onClear={onClear} />
 
           <div className={styles.toolboxSearch}>
             <input
