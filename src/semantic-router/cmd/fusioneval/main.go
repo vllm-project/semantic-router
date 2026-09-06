@@ -183,8 +183,23 @@ func run(opt options) error {
 	looper.SetGroundingBackends(realNLI(), nil)
 
 	looperCfg := &config.LooperConfig{Endpoint: opt.endpoint}
-	client := looper.NewClient(looperCfg)
-	fusion := looper.NewFusionLooper(looperCfg)
+	client, err := looper.NewConnectorClient(looperCfg)
+	if err != nil {
+		return fmt.Errorf("create Looper client: %w", err)
+	}
+	defer func() { _ = client.Close() }()
+	fusionLooper, err := looper.FactoryWithClient(
+		looperCfg,
+		config.DecisionAlgorithmFusion,
+		client,
+	)
+	if err != nil {
+		return fmt.Errorf("create Fusion Looper: %w", err)
+	}
+	fusion, ok := fusionLooper.(*looper.FusionLooper)
+	if !ok {
+		return fmt.Errorf("fusion factory returned %T", fusionLooper)
+	}
 
 	// Phase 1: build (or resume) the panel cache — generate each panel ONCE.
 	cache, err := buildPanelCache(client, opt, items)

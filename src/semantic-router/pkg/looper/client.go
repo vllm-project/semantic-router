@@ -159,10 +159,10 @@ func (c *Client) CallModel(
 		*req,
 		ModelTarget{Name: modelName, AccessKey: accessKey},
 		CallOptions{
-			Iteration:    iteration,
-			FusionDepth:  fusionDepthFromContext(ctx),
-			Mode:         responseMode(streaming),
-			Logprobs:     logprobs,
+			Iteration:   iteration,
+			FusionDepth: fusionDepthFromContext(ctx),
+			Mode:        responseMode(streaming),
+			Logprobs:    logprobs,
 		},
 	)
 }
