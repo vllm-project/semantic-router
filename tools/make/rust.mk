@@ -13,6 +13,7 @@ TEST_GPU_DEVICE ?= 2
 # Keep this list explicit. Do not include tests whose fixtures initialize
 # models from ../models unless those tests have been converted to skip cleanly.
 RUST_CI_LIB_TESTS ?= \
+	ffi::embedding::init_order_tests::embedding_init_order_regressions \
 	core::tokenization_test::test_tokenization_config_default \
 	core::tokenization_test::test_tokenization_config_custom \
 	ffi::embedding_test::test_truncate_embedding_renormalizes_prefix \

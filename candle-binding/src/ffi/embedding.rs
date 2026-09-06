@@ -13,7 +13,7 @@ use std::ffi::{c_char, CStr};
 //Import embedding models and model factory
 use crate::model_architectures::config::{DualPathConfig, EmbeddingConfig};
 use crate::model_architectures::model_factory::ModelFactory;
-use std::sync::OnceLock;
+use std::sync::{MutexGuard, OnceLock};
 
 // ============================================================================
 // Refactoring: Shared embedding generation logic
@@ -30,6 +30,22 @@ enum PaddingSide {
 
 /// Global singleton for ModelFactory
 pub(crate) static GLOBAL_MODEL_FACTORY: OnceLock<ModelFactory> = OnceLock::new();
+
+/// Serialize every factory-owning initializer from availability check through
+/// publication. OnceLock protects publication, but not the preceding model load:
+/// without this guard a losing initializer can discard a fully loaded mmBERT.
+/// Embedding inference only reads OnceLocks and never takes this startup lock.
+static EMBEDDING_INIT_LOCK: Mutex<()> = Mutex::new(());
+
+fn lock_embedding_init() -> Option<MutexGuard<'static, ()>> {
+    match EMBEDDING_INIT_LOCK.lock() {
+        Ok(guard) => Some(guard),
+        Err(error) => {
+            eprintln!("ERROR: Embedding initialization lock poisoned: {}", error);
+            None
+        }
+    }
+}
 
 use crate::model_architectures::embedding::MultiModalEmbeddingModel;
 use tokenizers::Tokenizer as MmTokenizer;
@@ -91,6 +107,72 @@ fn get_multimodal_refs() -> Option<(&'static MultiModalEmbeddingModel, &'static 
         }
     }
     None
+}
+
+use crate::model_architectures::embedding::MmBertEmbeddingModel;
+
+/// mmBERT can be loaded after a different model has claimed the immutable factory.
+static STANDALONE_MMBERT: OnceLock<(MmBertEmbeddingModel, MmTokenizer)> = OnceLock::new();
+
+/// Prefer the already-registered factory model; never replace it on repeated init.
+fn get_mmbert_refs() -> Option<(&'static MmBertEmbeddingModel, &'static MmTokenizer)> {
+    if let Some(factory) = GLOBAL_MODEL_FACTORY.get() {
+        if let (Some(model), Some(tokenizer)) =
+            (factory.get_mmbert_model(), factory.get_mmbert_tokenizer())
+        {
+            return Some((model, tokenizer));
+        }
+    }
+    STANDALONE_MMBERT
+        .get()
+        .map(|(model, tokenizer)| (model, tokenizer))
+}
+
+/// The caller must hold the initialization guard across the check, load and set.
+/// A failed model/tokenizer load publishes nothing, so a later call can retry.
+fn init_mmbert_standalone(
+    model_path: &str,
+    use_cpu: bool,
+    _init_guard: &MutexGuard<'_, ()>,
+) -> bool {
+    use candle_core::Device;
+
+    if get_mmbert_refs().is_some() {
+        return true;
+    }
+    let device = if use_cpu {
+        Device::Cpu
+    } else {
+        Device::cuda_if_available(0).unwrap_or(Device::Cpu)
+    };
+    let model = match MmBertEmbeddingModel::load(model_path, &device) {
+        Ok(model) => model,
+        Err(error) => {
+            eprintln!("ERROR: Failed to load standalone mmBERT model: {:?}", error);
+            return false;
+        }
+    };
+    let tokenizer_path = format!("{}/tokenizer.json", model_path);
+    let tokenizer = match MmTokenizer::from_file(&tokenizer_path) {
+        Ok(tokenizer) => tokenizer,
+        Err(error) => {
+            eprintln!(
+                "ERROR: Failed to load standalone mmBERT tokenizer: {:?}",
+                error
+            );
+            return false;
+        }
+    };
+    match STANDALONE_MMBERT.set((model, tokenizer)) {
+        Ok(()) => {
+            println!("INFO: mmBERT embedding model registered in standalone storage");
+            true
+        }
+        Err(_) => {
+            eprintln!("ERROR: Standalone mmBERT storage changed while initialization was locked");
+            false
+        }
+    }
 }
 
 /// Generic internal helper for single text embedding generation
@@ -265,6 +347,10 @@ where
 pub extern "C" fn init_mmbert_embedding_model(model_path: *const c_char, use_cpu: bool) -> bool {
     use candle_core::Device;
 
+    let Some(init_guard) = lock_embedding_init() else {
+        return false;
+    };
+
     if model_path.is_null() {
         eprintln!("Error: model_path is null");
         return false;
@@ -280,12 +366,9 @@ pub extern "C" fn init_mmbert_embedding_model(model_path: *const c_char, use_cpu
         }
     };
 
-    // Check if already initialized
-    if let Some(factory) = GLOBAL_MODEL_FACTORY.get() {
-        if factory.get_mmbert_model().is_some() {
-            eprintln!("WARNING: mmBERT model already initialized");
-            return true;
-        }
+    // Repeated initialization must not reload or switch model path/device.
+    if get_mmbert_refs().is_some() {
+        return true;
     }
 
     // Determine device
@@ -297,9 +380,9 @@ pub extern "C" fn init_mmbert_embedding_model(model_path: *const c_char, use_cpu
 
     // Create or get factory
     let factory = if GLOBAL_MODEL_FACTORY.get().is_some() {
-        // Factory exists but mmbert not loaded - we can't modify OnceLock
-        eprintln!("Error: ModelFactory already initialized without mmBERT. Initialize mmBERT first or use init_embedding_models_with_mmbert.");
-        return false;
+        // Another model owns the immutable factory. Keep mmBERT reachable
+        // through standalone storage without replacing that factory.
+        return init_mmbert_standalone(&path, use_cpu, &init_guard);
     } else {
         let mut factory = ModelFactory::new(device);
         match factory.register_mmbert_embedding_model(&path) {
@@ -342,9 +425,22 @@ pub extern "C" fn init_embedding_models_with_mmbert(
 ) -> bool {
     use candle_core::Device;
 
+    let Some(init_guard) = lock_embedding_init() else {
+        return false;
+    };
+
     if GLOBAL_MODEL_FACTORY.get().is_some() {
-        eprintln!("WARNING: ModelFactory already initialized");
-        return true;
+        // Preserve the loaded-model fast path before parsing any replacement path.
+        if get_mmbert_refs().is_some() || mmbert_model_path.is_null() {
+            return true;
+        }
+        let path = unsafe {
+            match CStr::from_ptr(mmbert_model_path).to_str() {
+                Ok(path) if !path.is_empty() => path,
+                _ => return true, // No optional mmBERT path, as on first init.
+            }
+        };
+        return init_mmbert_standalone(path, use_cpu, &init_guard);
     }
 
     // Parse paths
@@ -418,7 +514,10 @@ pub extern "C" fn init_embedding_models_with_mmbert(
 
     match GLOBAL_MODEL_FACTORY.set(factory) {
         Ok(_) => true,
-        Err(_) => true, // Already initialized
+        Err(_) => {
+            eprintln!("ERROR: ModelFactory changed while embedding initialization was locked");
+            false
+        }
     }
 }
 
@@ -440,6 +539,10 @@ pub extern "C" fn init_embedding_models(
     use_cpu: bool,
 ) -> bool {
     use candle_core::Device;
+
+    let Some(_init_guard) = lock_embedding_init() else {
+        return false;
+    };
 
     // Check if already initialized (OnceLock can only be set once)
     if GLOBAL_MODEL_FACTORY.get().is_some() {
@@ -521,8 +624,8 @@ pub extern "C" fn init_embedding_models(
     match GLOBAL_MODEL_FACTORY.set(factory) {
         Ok(_) => true,
         Err(_) => {
-            // Already initialized - idempotent behavior
-            true
+            eprintln!("ERROR: ModelFactory changed while embedding initialization was locked");
+            false
         }
     }
 }
@@ -719,20 +822,15 @@ fn generate_gemma_embedding(
 
 /// Internal helper to generate embedding for mmBERT with 2D Matryoshka
 fn generate_mmbert_embedding(
-    factory: &ModelFactory,
+    _factory: &ModelFactory,
     text: &str,
     target_layer: Option<usize>,
     target_dim: Option<usize>,
 ) -> Result<Vec<f32>, String> {
     use candle_core::Tensor;
 
-    let model = factory
-        .get_mmbert_model()
-        .ok_or_else(|| "mmBERT model not available".to_string())?;
-
-    let tokenizer = factory
-        .get_mmbert_tokenizer()
-        .ok_or_else(|| "mmBERT tokenizer not available".to_string())?;
+    let (model, tokenizer) =
+        get_mmbert_refs().ok_or_else(|| "mmBERT model not available".to_string())?;
 
     // Tokenize
     let encoding = tokenizer
@@ -770,18 +868,13 @@ fn generate_mmbert_embedding(
 
 /// Generate embeddings for multiple texts in a single batch (mmBERT)
 fn generate_mmbert_embeddings_batch(
-    factory: &ModelFactory,
+    _factory: &ModelFactory,
     texts: &[&str],
     target_layer: Option<usize>,
     target_dim: Option<usize>,
 ) -> Result<Vec<Vec<f32>>, String> {
-    let model = factory
-        .get_mmbert_model()
-        .ok_or_else(|| "mmBERT model not available".to_string())?;
-
-    let tokenizer = factory
-        .get_mmbert_tokenizer()
-        .ok_or_else(|| "mmBERT tokenizer not available".to_string())?;
+    let (model, tokenizer) =
+        get_mmbert_refs().ok_or_else(|| "mmBERT model not available".to_string())?;
 
     // Batch encode
     let embeddings = model
@@ -961,7 +1054,7 @@ pub extern "C" fn get_embedding_with_dim(
         ModelType::Qwen3Embedding => {
             if factory.is_some_and(|f| f.get_qwen3_model().is_some()) {
                 "qwen3"
-            } else if factory.is_some_and(|f| f.get_mmbert_model().is_some()) {
+            } else if get_mmbert_refs().is_some() {
                 eprintln!("INFO: Qwen3 not available, falling back to mmbert");
                 "mmbert"
             } else if factory.is_some_and(|f| f.get_gemma_model().is_some()) {
@@ -980,7 +1073,7 @@ pub extern "C" fn get_embedding_with_dim(
         ModelType::GemmaEmbedding => {
             if factory.is_some_and(|f| f.get_gemma_model().is_some()) {
                 "gemma"
-            } else if factory.is_some_and(|f| f.get_mmbert_model().is_some()) {
+            } else if get_mmbert_refs().is_some() {
                 eprintln!("INFO: Gemma not available, falling back to mmbert");
                 "mmbert"
             } else if factory.is_some_and(|f| f.get_qwen3_model().is_some()) {
@@ -997,7 +1090,7 @@ pub extern "C" fn get_embedding_with_dim(
             }
         }
         ModelType::MmBertEmbedding => {
-            if factory.is_some_and(|f| f.get_mmbert_model().is_some()) {
+            if get_mmbert_refs().is_some() {
                 "mmbert"
             } else {
                 eprintln!("Error: MmBertEmbedding selected but not available");
@@ -2201,6 +2294,10 @@ pub extern "C" fn init_multimodal_embedding_model(
 ) -> bool {
     use candle_core::Device;
 
+    let Some(_init_guard) = lock_embedding_init() else {
+        return false;
+    };
+
     if model_path.is_null() {
         eprintln!("Error: model_path is null");
         return false;
@@ -2957,3 +3054,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "embedding_init_test.rs"]
+mod init_order_tests;
